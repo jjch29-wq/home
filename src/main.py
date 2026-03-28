@@ -36,10 +36,16 @@ thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin
 
 if getattr(sys, 'frozen', False):
     SCRIPT_HOME = os.path.dirname(sys.executable)
+    BASE_DIR = SCRIPT_HOME
+    CONFIG_DIR = SCRIPT_HOME
+    RESOURCE_DIR = SCRIPT_HOME
 else:
     SCRIPT_HOME = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.path.dirname(SCRIPT_HOME)
+    CONFIG_DIR = os.path.join(BASE_DIR, "config")
+    RESOURCE_DIR = os.path.join(BASE_DIR, "resources")
 
-SETTINGS_FILE = os.path.join(SCRIPT_HOME, "logo_settings_unified.json")
+SETTINGS_FILE = os.path.join(CONFIG_DIR, "logo_settings_unified.json")
 
 class PMIReportApp:
     def __init__(self, root):
@@ -49,7 +55,7 @@ class PMIReportApp:
         self.root.configure(background="#f9fafb")
         
         # --- State Variables ---
-        self.logo_folder_path = tk.StringVar(value=SCRIPT_HOME)
+        self.logo_folder_path = tk.StringVar(value=RESOURCE_DIR)
         self.target_file_path = tk.StringVar()
         self.template_file_path = tk.StringVar()
         self.sequence_filter = tk.StringVar()
@@ -1448,11 +1454,11 @@ class PMIReportApp:
             self.tab_notebook.select(self.tab_preview)
 
     def _browse_dir(self, var):
-        path = filedialog.askdirectory(initialdir=var.get() or SCRIPT_HOME)
+        path = filedialog.askdirectory(initialdir=var.get() or RESOURCE_DIR)
         if path: var.set(path)
 
     def _browse_file(self, var, types):
-        path = filedialog.askopenfilename(initialdir=os.path.dirname(var.get() or SCRIPT_HOME), filetypes=types)
+        path = filedialog.askopenfilename(initialdir=os.path.dirname(var.get() or BASE_DIR), filetypes=types)
         if path: var.set(path)
 
     def show_bulk_update_dialog(self):
