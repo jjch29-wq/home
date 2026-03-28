@@ -50,23 +50,11 @@ SETTINGS_FILE = os.path.join(CONFIG_DIR, "logo_settings_unified.json")
 class PMIReportApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PMI 성적서 자동 생성기 (V2 Unified - 통합 버전)")
-        self.root.geometry("850x800")
+        self.root.title("SITCO 통합 성적서 자동 생성기 (PMI & PAUT)")
+        self.root.geometry("950x850") # Slightly wider/taller for multi-tab
         self.root.configure(background="#f9fafb")
         
-        # --- State Variables ---
-        self.logo_folder_path = tk.StringVar(value=RESOURCE_DIR)
-        self.target_file_path = tk.StringVar()
-        self.template_file_path = tk.StringVar()
-        self.sequence_filter = tk.StringVar()
-        self.extraction_mode = tk.StringVar(value="전체")  # 추가: 추출 방식
-        self.auto_verify = tk.BooleanVar(value=True) # 재질 자동 판정 기본 활성화
-        self.show_selected_only = tk.BooleanVar(value=False) # [NEW] 선택 항목만 보기 필터 변수
-        self.extracted_data = [] # 현재 추출된 데이터 저장용
-        self.sort_column = "" # [NEW] 현재 정렬 중인 컬럼
-        self.sort_reverse = False # [NEW] 정렬 방향 (True: 내림차순, False: 오름차순)
-        
-        # Default Settings (Synced with logo_settings_unified.json for 'Fixed' behavior)
+        # 1. Initialize Configuration first (needed for state variables)
         self.config = {
             # 갑지 (Cover)
             'SEOUL_COVER_ANCHOR': "E5", 'SEOUL_COVER_W': 200.0, 'SEOUL_COVER_H': 18.0, 'SEOUL_COVER_X': 30.0, 'SEOUL_COVER_Y': 15.0,
@@ -79,15 +67,40 @@ class PMIReportApp:
             'FOOTER_DATA_ANCHOR': "M46", 'FOOTER_DATA_W': 100.0, 'FOOTER_DATA_H': 15.0, 'FOOTER_DATA_X': 25.0, 'FOOTER_DATA_Y': 10.0,
             'FOOTER_PT_DATA_ANCHOR': "A46", 'FOOTER_PT_DATA_W': 100.0, 'FOOTER_PT_DATA_H': 25.0, 'FOOTER_PT_DATA_X': 3.0, 'FOOTER_PT_DATA_Y': 7.0,
             'MARGIN_DATA_TOP': 0.2, 'MARGIN_DATA_BOTTOM': 0.0, 'MARGIN_DATA_LEFT': 0.5, 'MARGIN_DATA_RIGHT': 0.3, 'PRINT_SCALE_DATA': 95,
-            'START_ROW': 19, 'DATA_END_ROW': 45, 'PRINT_END_ROW': 47, # 17 -> 19 (Synced with latest template)
+            'START_ROW': 19, 'DATA_END_ROW': 45, 'PRINT_END_ROW': 47,
             # [NEW] 선택적 행/열 조절용 설정
             'CUSTOM_ROWS_COVER': '23-38', 'CUSTOM_ROW_HEIGHT_COVER': 21.0,
             'CUSTOM_COLS_COVER': '', 'CUSTOM_COL_WIDTH_COVER': 10.0,
             'CUSTOM_ROWS_DATA': '', 'CUSTOM_ROW_HEIGHT_DATA': 20.55,
-            'CUSTOM_COLS_DATA': '', 'CUSTOM_COL_WIDTH_DATA': 10.0
+            'CUSTOM_COLS_DATA': '', 'CUSTOM_COL_WIDTH_DATA': 10.0,
+            
+            # PAUT Specific (B31.1)
+            'PAUT_START_ROW': 11, 'PAUT_DATA_END_ROW': 40, 'PAUT_PRINT_END_ROW': 45
         }
-        
         self.load_settings()
+
+        # 2. State Variables
+        self.logo_folder_path = tk.StringVar(value=RESOURCE_DIR)
+        self.target_file_path = tk.StringVar()
+        self.template_file_path = tk.StringVar()
+        self.sequence_filter = tk.StringVar()
+        self.extraction_mode = tk.StringVar(value="전체")
+        self.auto_verify = tk.BooleanVar(value=True)
+        self.show_selected_only = tk.BooleanVar(value=False)
+        self.extracted_data = [] 
+        self.sort_column = "" 
+        self.sort_reverse = False 
+        
+        # --- PAUT State Variables ---
+        self.paut_target_file_path = tk.StringVar(value=self.config.get('PAUT_TARGET_PATH', ""))
+        self.paut_template_file_path = tk.StringVar(value=self.config.get('PAUT_TEMPLATE_PATH', ""))
+        self.paut_manual_vars = {
+            't': tk.StringVar(), 'h': tk.StringVar(), 'l': tk.StringVar(), 'd': tk.StringVar(),
+            'nature': tk.StringVar(value="Slag"), 'loc': tk.StringVar(value="-")
+        }
+        self.paut_extracted_data = []
+        
+        # 3. UI Initialization
         self.create_widgets()
         self.log("[INFO] 통합 버전을 시작했습니다.")
         
@@ -126,6 +139,13 @@ class PMIReportApp:
                 except Exception as e:
                     print(f"WARNING: 내장 설정 불러오기 실패: {e}")
 
+        # [NEW] PAUT 마이그레이션 (UT_* -> PAUT_*)
+        for k in list(self.config.keys()):
+            if k.startswith("UT_"):
+                new_k = k.replace("UT_", "PAUT_")
+                if new_k not in self.config:
+                    self.config[new_k] = self.config[k]
+
     def save_settings(self):
         try:
             if hasattr(self, 'setting_vars'):
@@ -146,6 +166,75 @@ class PMIReportApp:
         except Exception as e:
             self.log(f"[WARNING] 설정 저장 실패: {e}")
 
+    def evaluate_paut_flaw(self, t, h, l, depth, flaw_nature):
+        """
+        ASME B31.1 (2024) - UT Acceptance Criteria Logic (Ported from archive)
+        """
+        try:
+            t_val = float(t)
+            h_val = float(h)
+            l_val = float(l)
+            d_val = float(depth)
+        except (ValueError, TypeError):
+            return "Error (Invalid Dimension)", "Unknown"
+
+        # 0. Automatic Location Determination
+        s_top = d_val
+        s_bottom = t_val - (d_val + h_val)
+        s = min(s_top, s_bottom)
+        s_limit = 0.4 * (h_val / 2)
+        
+        loc = "Surface" if s <= s_limit else "Subsurface"
+
+        # 1. Immediate Rejection (Crack, LOF, IP)
+        unacceptable_types = ['crack', 'lof', 'lack of fusion', 'ip', 'incomplete penetration']
+        if str(flaw_nature).strip().lower() in unacceptable_types:
+            return "Reject (Fatal Flaw Type)", loc
+        
+        if l_val <= 0 or h_val <= 0 or t_val <= 0:
+            return "Error (Zero/Negative Value)", loc
+
+        # 1.1 Special Rules for 6mm <= t < 13mm
+        if 6 <= t_val < 13:
+            if l_val > 6.4: return f"Reject (L: {l_val} > 6.4mm)", loc
+            if t_val < 10: h_surf_max, h_sub_max = 0.95, 0.96
+            elif t_val < 12: h_surf_max, h_sub_max = 1.04, 1.04
+            else: h_surf_max, h_sub_max = 1.13, 1.14
+                
+            limit = h_surf_max if loc == "Surface" else h_sub_max
+            if h_val > limit: return f"Reject ({loc} h: {h_val} > {limit}mm)", loc
+            return "Accept", loc
+
+        # 1.2 Special Rules for 13mm <= t < 25.4mm
+        if 13 <= t_val < 25.4:
+            if l_val > 6.4: return f"Reject (L: {l_val} > 6.4mm)", loc
+            actual_h_t = h_val / t_val
+            allowed_h_t = 0.087 if loc == "Surface" else 0.143 
+            if actual_h_t > allowed_h_t: return f"Reject ({loc} h/t: {actual_h_t:.3f} > {allowed_h_t:.3f})", loc
+            return "Accept", loc
+                
+        # 2. Aspect Ratio (a/l) logic for t >= 25.4mm
+        a_val = h_val if loc == "Surface" else h_val / 2
+        aspect_ratio_a_l = a_val / l_val
+        
+        master_table = [
+            (0.00, 0.031, 0.034), (0.05, 0.033, 0.038), (0.10, 0.036, 0.043),
+            (0.15, 0.041, 0.054), (0.20, 0.047, 0.066), (0.25, 0.055, 0.078),
+            (0.30, 0.064, 0.090), (0.35, 0.074, 0.103), (0.40, 0.083, 0.116),
+            (0.45, 0.085, 0.129), (0.50, 0.087, 0.143)
+        ]
+        
+        allowed_a_t = 0
+        for ar_limit, surf_a_t, sub_a_t in master_table:
+            if aspect_ratio_a_l <= ar_limit:
+                allowed_a_t = surf_a_t if loc == 'Surface' else sub_a_t
+                break
+        if allowed_a_t == 0: allowed_a_t = master_table[-1][1] if loc == 'Surface' else master_table[-1][2]
+
+        actual_a_t = a_val / t_val
+        if actual_a_t <= allowed_a_t: return "Accept", loc
+        return f"Reject ({loc} a/t: {actual_a_t:.3f} > {allowed_a_t:.3f})", loc
+
     def create_widgets(self):
         style = ttk.Style()
         style.theme_use('clam')
@@ -155,12 +244,14 @@ class PMIReportApp:
         style.configure("TLabelframe.Label", background="#f9fafb", font=("Malgun Gothic", 10, "bold"))
         style.configure("Action.TButton", font=("Malgun Gothic", 11, "bold"), padding=10)
         
-        # [NEW] 텍스트 선택 시 시인성 확보를 위한 스타일 설정
+        # [NEW] 탭 스타일 설정
+        style.configure("Main.TNotebook.Tab", font=("Malgun Gothic", 11, "bold"), padding=[15, 5])
+        
         style.map("TEntry", 
                   selectbackground=[('focus', '#3b82f6'), ('!focus', '#3b82f6')],
                   selectforeground=[('focus', 'white'), ('!focus', 'white')])
 
-        # --- Main Scrollable Container (FOR LOW RESOLUTION) ---
+        # --- Main Scrollable Container ---
         self.canvas = tk.Canvas(self.root, background="#f9fafb", highlightthickness=0, yscrollincrement=40)
         self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
         self.scrollable_frame = tk.Frame(self.canvas, background="#f9fafb")
@@ -173,92 +264,104 @@ class PMIReportApp:
         self.canvas_frame_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
-        # Stretch internally: Keep frame width synced with canvas width
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.canvas_frame_window, width=e.width))
-
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
         
-        # [NEW] 마우스 선택 영역 강제 시인성 (TEntry/Entry 공통)
         self.root.option_add('*selectBackground', '#3b82f6')
         self.root.option_add('*selectForeground', 'white')
 
-        # Treeview Style for Grid Lines (Excel-like)
+        # Treeview Style
         style.configure("Treeview", rowheight=28, font=("Malgun Gothic", 10))
-        # [CRITICAL] Ensure selected rows always use blue background even if tags are applied
-        style.map("Treeview", 
-                  background=[('selected', '#3b82f6')], 
-                  foreground=[('selected', 'white')])
+        style.map("Treeview", background=[('selected', '#3b82f6')], foreground=[('selected', 'white')])
         style.configure("Treeview.Heading", font=("Malgun Gothic", 10, "bold"))
 
-        # [REFINED] Focus-based Mouse Wheel Support (Faster & Intuitive)
+        # Mouse Wheel Support
         def _on_mousewheel(event):
             try:
-                # 현재 키보드 포커스가 있는 위젯 확인
                 focused = self.root.focus_get()
-                
-                # 포커스된 위젯(또는 그 부모)이 Treeview 등 스크롤 가능 위젯인지 확인
                 curr = focused
                 while curr:
                     try:
                         c_name = curr.winfo_class()
                         if c_name in ('Treeview', 'Text', 'Listbox'):
-                            # 리스트가 선택된 상태라면 리스트를 빠르게 스크롤 (factor 4.0)
                             curr.yview_scroll(int(-1*(event.delta/120)*4.0), "units")
                             return "break"
                     except: pass
                     curr = curr.master
             except Exception: pass
-            
-            # 그 외 기본 상태(리스트 미선택 등)에서는 항상 메인 화면을 스크롤 (factor 2.0)
             self.canvas.yview_scroll(int(-1*(event.delta/120)*2.0), "units")
             return "break"
-            
         self.root.bind_all("<MouseWheel>", _on_mousewheel, add="+")
 
-        # [NEW] Focus-drop: Click on background to return focus to root (restores main scroll)
         def _on_root_click(event):
             try:
-                # [CRITICAL] If clicking the Treeview or its children, DO NOT steal focus.
-                # Stealing focus on Button-1 kills the drag-selection before it can start.
-                if "treeview" in str(event.widget).lower():
-                    return
+                if "treeview" in str(event.widget).lower(): return
                 w_class = event.widget.winfo_class()
                 if w_class in ('Frame', 'TFrame', 'Label', 'TLabel', 'Canvas', 'Labelframe', 'TLabelframe'):
                     self.root.focus_set()
             except: pass
         self.root.bind_all("<Button-1>", _on_root_click, add="+")
 
-        # (Removed global focus-stealing click drop)
+        # Main Container
         main_container = tk.Frame(self.scrollable_frame, background="#f9fafb", padx=20, pady=20)
         main_container.pack(fill='both', expand=True)
         
-        # Ensure scrollregion updates on all child changes
-        def _on_child_configure(event):
-            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        self.scrollable_frame.bind("<Configure>", _on_child_configure, add="+")
+        # --- Top Notebook (Multi-Mode) ---
+        self.mode_notebook = ttk.Notebook(main_container, style="Main.TNotebook")
+        self.mode_notebook.pack(fill='both', expand=True, pady=(0, 10))
         
-        # [NEW] 스크롤 영역 끝단 보정용 더미 프레임
+        self.pmi_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
+        self.paut_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
+        
+        self.mode_notebook.add(self.pmi_mode_frame, text="  PMI (성분 분석)  ")
+        self.mode_notebook.add(self.paut_mode_frame, text="  PAUT (ASME B31.1)  ")
+        
+        # Setup each mode
+        self._setup_pmi_ui(self.pmi_mode_frame)
+        self._setup_paut_ui(self.paut_mode_frame)
+
+        # Bottom Section (Common)
+        bottom_frame = tk.Frame(main_container, background="#f9fafb")
+        bottom_frame.pack(fill='x', side='bottom')
+
+        self.progress = ttk.Progressbar(bottom_frame, orient="horizontal", mode="determinate")
+        self.progress.pack(fill='x', pady=(10, 5))
+
+        log_frame = ttk.LabelFrame(bottom_frame, text=" 작업 로그 (Status Log) ", padding=10)
+        log_frame.pack(fill='both', expand=True)
+
+        self.status_log = tk.Text(log_frame, height=8, font=("Consolas", 9), state='disabled', background="#000000", foreground="#10b981", padx=5, pady=5)
+        vsb = ttk.Scrollbar(log_frame, orient="vertical", command=self.status_log.yview)
+        self.status_log.configure(yscrollcommand=vsb.set)
+        self.status_log.pack(side='left', fill='both', expand=True)
+        vsb.pack(side='right', fill='y')
+
+        # Dummy frame for scroll padding
         tk.Frame(self.scrollable_frame, height=50, background="#f9fafb").pack(side='bottom', fill='x')
 
-        tk.Label(main_container, text="PMI 성적서 자동 생성 및 검증 통합 도구 (V2)", font=("Malgun Gothic", 16, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 20), anchor='w')
+    def _setup_pmi_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        container.pack(fill='both', expand=True)
+
+        tk.Label(container, text="PMI 성적서 생성 및 관리", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
 
         # 1. File Selection
-        file_frame = ttk.LabelFrame(main_container, text=" 파일 및 폴더 선택 ", padding=15)
+        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
         file_frame.pack(fill='x', pady=(0, 20))
 
-        def _add_file_row(parent, label, var, row, is_dir=False, types=None):
-            ttk.Label(parent, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
-            ttk.Entry(parent, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
+        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
+            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
+            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
             cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
-            ttk.Button(parent, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
+            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
 
         _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
         _add_file_row(file_frame, "RFI 데이터:", self.target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_file_row(file_frame, "성적서 양식:", self.template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
 
         # 2. Configuration Tabs
-        config_frame = ttk.LabelFrame(main_container, text=" 리포트 세부 설정 ", padding=5)
+        config_frame = ttk.LabelFrame(container, text=" 리포트 세부 설정 ", padding=5)
         config_frame.pack(fill='both', expand=False, pady=(0, 20))
 
         self.tab_notebook = ttk.Notebook(config_frame)
@@ -273,7 +376,6 @@ class PMIReportApp:
         self.tab_notebook.add(tab_data, text="을지 (Data)")
         self.tab_notebook.add(tab_rows, text="행 설정 (Rows)")
 
-        # 2.4 Preview Tab (Added)
         self.tab_preview = ttk.Frame(self.tab_notebook, padding=5)
         self.tab_notebook.add(self.tab_preview, text="미리보기 (Preview)")
         self._create_preview_ui(self.tab_preview)
@@ -284,25 +386,19 @@ class PMIReportApp:
         self._create_margin_settings(tab_data, "DATA")
         self._create_row_settings(tab_rows)
 
-        # 3. Action Section (Integrated Options)
-        action_outer = tk.Frame(main_container, background="#f9fafb")
-        action_outer.pack(fill='x', pady=(0, 10))
+        # 3. Action Section
+        action_frame = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb", padx=15, pady=15)
+        action_frame.pack(fill='x', pady=(0, 10))
 
-        action_frame = tk.Frame(action_outer, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb", padx=15, pady=15)
-        action_frame.pack(fill='x')
-
-        # Option: Sequence Filter
         filter_row = tk.Frame(action_frame, background="#ffffff")
         filter_row.pack(fill='x', pady=(0, 10))
         ttk.Label(filter_row, text="특정 순번(NO)만 추출 (예: 1, 3, 5-10):", background="#ffffff").pack(side='left', padx=(0, 10))
         ttk.Entry(filter_row, textvariable=self.sequence_filter, width=30, exportselection=False).pack(side='left')
 
-        # Option: Auto Verify Toggle
         verify_row = tk.Frame(action_frame, background="#ffffff")
         verify_row.pack(fill='x', pady=(0, 10))
         tk.Checkbutton(verify_row, text="재질 자동 판정 (성분 비교 알고리즘 적용, 10% 허용오차)", variable=self.auto_verify, background="#ffffff", font=("Malgun Gothic", 10)).pack(side='left')
         
-        # Option: Extraction Mode (추출 방식)
         mode_row = tk.Frame(action_frame, background="#ffffff")
         mode_row.pack(fill='x', pady=(0, 10))
         ttk.Label(mode_row, text="추출 방식 (Extraction Method):", background="#ffffff").pack(side='left', padx=(0, 10))
@@ -310,32 +406,263 @@ class PMIReportApp:
         mode_combo['values'] = ("전체", "SS304 만", "SS316 만", "DUPLEX 만", "SS310 만", "미분류(기타) 만")
         mode_combo.pack(side='left')
 
-        # Buttons (Extract & Generate)
         btn_frame = tk.Frame(action_frame, background="#ffffff")
         btn_frame.pack(side='right')
 
-        btn_extract = ttk.Button(btn_frame, text="데이터 추가 추출 (Add)", style="Action.TButton", command=self.extract_only)
-        btn_extract.pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="데이터 추출 (Extract)", style="Action.TButton", command=self.extract_only).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="성적서 생성 시작 (Generate)", style="Action.TButton", command=self.run_process).pack(side='left', padx=5)
 
-        btn_start = ttk.Button(btn_frame, text="성적서 생성 시작 (Generate)", style="Action.TButton", command=self.run_process)
-        btn_start.pack(side='left', padx=5)
+    def _setup_paut_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        container.pack(fill='both', expand=True)
 
-        # 4. Progress bar
-        self.progress = ttk.Progressbar(main_container, orient="horizontal", mode="determinate")
-        self.progress.pack(fill='x', pady=(5, 15))
+        tk.Label(container, text="PAUT (ASME B31.1) 성적서 생성 및 판정", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
 
-        # 5. Status Log Area
-        log_frame = ttk.LabelFrame(main_container, text=" 작업 로그 (Status Log) ", padding=10)
-        log_frame.pack(fill='both', expand=True)
+        # 1. File Selection
+        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
+        file_frame.pack(fill='x', pady=(0, 15))
 
-        self.status_log = tk.Text(log_frame, height=8, font=("Consolas", 9), state='disabled', background="#000000", foreground="#10b981", padx=5, pady=5)
-        vsb = ttk.Scrollbar(log_frame, orient="vertical", command=self.status_log.yview)
-        self.status_log.configure(yscrollcommand=vsb.set)
-        self.status_log.pack(side='left', fill='both', expand=True)
-        vsb.pack(side='right', fill='y')
+        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
+            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
+            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
+            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
+            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
 
-        # [REMOVED] Conflicting focus/scroll overrides preserved standard OS behavior
-        pass
+        _add_file_row(file_frame, "PAUT 데이터 (Excel):", self.paut_target_file_path, 0, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "성적서 양식 (Template):", self.paut_template_file_path, 1, types=[("Excel Template", "*.xlsx;*.xlsm")])
+
+        # 2. Vertical Layout: Manual Eval (Top) & Preview/Batch (Bottom)
+        # 2.1 Manual Evaluation (Top)
+        manual_frame = ttk.LabelFrame(container, text=" 개별 판정 (Manual Evaluation) ", padding=15)
+        manual_frame.pack(fill='x', pady=(0, 15))
+        
+        # Grid inside manual_frame
+        m_inputs = [
+            ("모재 두께 (t):", "t"), ("결함 높이 (h):", "h"), ("결함 길이 (l):", "l"), 
+            ("결함 깊이 (d):", "d"), ("결함 종류:", "nature")
+        ]
+        
+        for i, (lbl, key) in enumerate(m_inputs):
+            ttk.Label(manual_frame, text=lbl).grid(row=0, column=i*2, sticky='w', padx=(10, 2), pady=5)
+            if key == "nature":
+                cb = ttk.Combobox(manual_frame, textvariable=self.paut_manual_vars[key], values=["Crack", "LOF", "IP", "Slag", "Porosity", "Others"], width=10)
+                cb.grid(row=0, column=i*2+1, padx=5, sticky='w')
+            else:
+                ent = ttk.Entry(manual_frame, textvariable=self.paut_manual_vars[key], width=10)
+                ent.grid(row=0, column=i*2+1, padx=5, sticky='w')
+                if key != "l": 
+                    ent.bind("<KeyRelease>", lambda e: self._update_paut_auto_loc())
+
+        ttk.Label(manual_frame, text="판정 위치:").grid(row=1, column=0, sticky='w', padx=(10, 2), pady=10)
+        ttk.Label(manual_frame, textvariable=self.paut_manual_vars['loc'], font=("Malgun Gothic", 10, "bold"), foreground="#3b82f6").grid(row=1, column=1, padx=5, sticky='w')
+
+        btn_eval = ttk.Button(manual_frame, text="판정 실행", command=self._run_manual_paut_eval)
+        btn_eval.grid(row=1, column=2, padx=20)
+
+        self.paut_res_label = tk.Label(manual_frame, text="데이터를 입력하세요", font=("Malgun Gothic", 11, "bold"), background="#f3f4f6", height=2)
+        self.paut_res_label.grid(row=1, column=3, columnspan=7, sticky='ew', padx=10)
+
+        # 2.2 Preview & Batch (Bottom)
+        batch_frame = ttk.LabelFrame(container, text=" 일괄 판정 및 미리보기 (Batch & Preview) ", padding=10)
+        batch_frame.pack(fill='both', expand=True)
+
+        # PAUT Preview Tree
+        self.paut_preview_tree = ttk.Treeview(batch_frame, columns=("V", "No", "ISO/DWG", "Joint", "t", "h", "l", "d", "Location", "Nature", "Result"), show='headings', height=10)
+        paut_widths = {"V": 30, "No": 40, "ISO/DWG": 120, "Joint": 80, "t": 40, "h": 40, "l": 40, "d": 40, "Location": 70, "Nature": 70, "Result": 80}
+        for col in self.paut_preview_tree["columns"]:
+            self.paut_preview_tree.heading(col, text=col)
+            self.paut_preview_tree.column(col, width=paut_widths.get(col, 60), anchor='center')
+        
+        self.paut_preview_tree.pack(side='left', fill='both', expand=True)
+        
+        scroll = ttk.Scrollbar(batch_frame, orient="vertical", command=self.paut_preview_tree.yview)
+        scroll.pack(side='right', fill='y')
+        self.paut_preview_tree.configure(yscrollcommand=scroll.set)
+
+        # Buttons
+        btn_box = tk.Frame(container, background="#f9fafb")
+        btn_box.pack(fill='x', pady=10)
+        
+        ttk.Button(btn_box, text="데이터 추출", command=self._extract_paut_data).pack(side='left', padx=5)
+        ttk.Button(btn_box, text="일괄 판정 실행", command=self._run_batch_paut_eval).pack(side='left', padx=5)
+        ttk.Button(btn_box, text="성적서 생성", command=self._generate_paut_report).pack(side='right', padx=5)
+
+    def _update_paut_auto_loc(self):
+        try:
+            t = float(self.paut_manual_vars['t'].get() or 0)
+            d = float(self.paut_manual_vars['d'].get() or 0)
+            h = float(self.paut_manual_vars['h'].get() or 0)
+            if t > 0:
+                is_surface = (d <= 0.1 * t) or (d + h >= 0.9 * t)
+                loc = "Surface" if is_surface else "Subsurface"
+                self.paut_manual_vars['loc'].set(loc)
+        except: pass
+
+    def _run_manual_paut_eval(self):
+        try:
+            t = float(self.paut_manual_vars['t'].get() or 0)
+            h = float(self.paut_manual_vars['h'].get() or 0)
+            l = float(self.paut_manual_vars['l'].get() or 0)
+            d = float(self.paut_manual_vars['d'].get() or 0)
+            nat = self.paut_manual_vars['nature'].get()
+            
+            res, loc = self.evaluate_paut_flaw(t, h, l, d, nat)
+            self.paut_manual_vars['loc'].set(loc)
+            if res == "Accept":
+                self.paut_res_label.config(text=f"{res} (위치: {loc})", fg="white", bg="#27ae60")
+            else:
+                self.paut_res_label.config(text=f"{res} (위치: {loc})", fg="white", bg="#e74c3c")
+        except Exception as e:
+            messagebox.showerror("입력 오류", f"입력값을 확인해주세요: {e}")
+
+    def _populate_paut_preview(self, data):
+        self.paut_preview_tree.delete(*self.paut_preview_tree.get_children())
+        for i, item in enumerate(data):
+            v = "√" if item.get('selected', True) else ""
+            self.paut_preview_tree.insert("", "end", values=(
+                v, i + 1, item.get('ISO', ''), item.get('Joint', ''),
+                item.get('t', ''), item.get('h', ''), item.get('l', ''),
+                item.get('d', ''), item.get('Location', ''), item.get('Nature', ''), item.get('Result', '')
+            ))
+
+    def _extract_paut_data(self):
+        file_path = self.paut_target_file_path.get()
+        if not file_path:
+            messagebox.showwarning("파일 미선택", "PAUT 데이터 엑셀 파일을 먼저 선택해주세요.")
+            return
+            
+        try:
+            self.log(f"📂 PAUT 데이터 불러오는 중: {os.path.basename(file_path)}")
+            self.progress['value'] = 20
+            
+            df = pd.read_excel(file_path)
+            cols = df.columns.tolist()
+            
+            mapping = {
+                "t": next((c for c in cols if any(x in c.upper() for x in ["THK", "두께", "THICKNESS"])), None),
+                "h": next((c for c in cols if any(x in c.upper() for x in ["HEIGHT", "높이", "FLAW_HEIGHT"])), None),
+                "l": next((c for c in cols if any(x in c.upper() for x in ["LENGTH", "길이", "FLAW_LENGTH"])), None),
+                "d": next((c for c in cols if any(x in c.upper() for x in ["DEPTH", "깊이", "FLAW_DEPTH"])), None),
+                "nature": next((c for c in cols if any(x in c.upper() for x in ["NAT", "종류", "FLAW_NATURE"])), None),
+                "iso": next((c for c in cols if any(x in c.upper() for x in ["ISO", "DWG", "DRAWING"])), None),
+                "joint": next((c for c in cols if any(x in c.upper() for x in ["JOINT", "WELD"])), None)
+            }
+            
+            if not all([mapping["t"], mapping["h"], mapping["l"], mapping["d"]]):
+                self.log("⚠️ 필수 컬럼을 모두 찾을 수 없어 자동 매핑에 실패했습니다.")
+                
+            self.paut_extracted_data = []
+            for _, row in df.iterrows():
+                item = {
+                    'selected': True,
+                    'ISO': str(row.get(mapping["iso"], "")) if mapping["iso"] else "",
+                    'Joint': str(row.get(mapping["joint"], "")) if mapping["joint"] else "",
+                    't': row.get(mapping["t"], 0),
+                    'h': row.get(mapping["h"], 0),
+                    'l': row.get(mapping["l"], 0),
+                    'd': row.get(mapping["d"], 0),
+                    'Nature': str(row.get(mapping["nature"], "Slag")) if mapping["nature"] else "Slag",
+                    'Result': ""
+                }
+                self.paut_extracted_data.append(item)
+            
+            self.progress['value'] = 100
+            self._populate_paut_preview(self.paut_extracted_data)
+            self.log(f"✅ PAUT 데이터 추출 완료: {len(self.paut_extracted_data)} 건")
+            
+        except Exception as e:
+            self.log(f"❌ PAUT 데이터 추출 오류: {e}")
+
+    def _run_batch_paut_eval(self):
+        if not self.paut_extracted_data:
+            messagebox.showwarning("데이터 없음", "먼저 데이터를 추출해주세요.")
+            return
+            
+        self.log("🚀 PAUT 일괄 판정 시작...")
+        count_ok, count_ng = 0, 0
+        
+        for item in self.paut_extracted_data:
+            res, loc = self.evaluate_paut_flaw(item['t'], item['h'], item['l'], item['d'], item['Nature'])
+            item['Result'] = res
+            item['Location'] = loc
+            if res == "Accept": count_ok += 1
+            else: count_ng += 1
+            
+        self._populate_paut_preview(self.paut_extracted_data)
+        self.log(f"✅ 판정 완료: 총 {len(self.paut_extracted_data)} 건 (합격: {count_ok}, 불합격: {count_ng})")
+
+    def _generate_paut_report(self):
+        template_path = self.paut_template_file_path.get()
+        if not template_path or not os.path.exists(template_path):
+            messagebox.showwarning("파일 미선택", "PAUT 성적서 양식 파일을 선택해주세요.")
+            return
+
+        final_list = [d for d in self.paut_extracted_data if d.get('selected', True)]
+        if not final_list:
+            messagebox.showwarning("항목 미선택", "선택된 데이터가 없습니다.")
+            return
+
+        self.log(f"🚀 PAUT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        self.progress['value'] = 0
+        
+        try:
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            ws = wb.worksheets[0]
+            ws.title = f"PAUT_Report_001"
+            
+            self.add_logos_to_sheet(ws, is_cover=False)
+            self.force_print_settings(ws, context="DATA")
+            
+            start_row = int(self.config.get('PAUT_START_ROW', 11))
+            end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
+            
+            curr_row = start_row
+            data_font = Font(size=9)
+            
+            for i, item in enumerate(final_list):
+                if curr_row > end_row:
+                    ws = self.prepare_next_paut_sheet(wb, ws.title, i//(end_row-start_row+1))
+                    curr_row = start_row
+                
+                mapping = {
+                    1: item.get('No', i+1), 2: item.get('ISO', ''), 3: item.get('Joint', ''),
+                    4: item.get('t', ''), 5: item.get('h', ''), 6: item.get('l', ''),
+                    7: item.get('d', ''), 8: item.get('Nature', ''), 9: item.get('Result', ''),
+                    10: item.get('Location', '')
+                }
+                
+                for col_idx, val in mapping.items():
+                    cell = ws.cell(row=curr_row, column=col_idx, value=val)
+                    cell.font = data_font
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    # Set border if needed
+                
+                curr_row += 1
+                self.progress['value'] = (i+1) / len(final_list) * 100
+            
+            out_name = f"PAUT_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            out_path = os.path.join(BASE_DIR, "output", out_name) if os.path.exists(os.path.join(BASE_DIR, "output")) else os.path.join(BASE_DIR, out_name)
+            
+            if not os.path.exists(os.path.dirname(out_path)): os.makedirs(os.path.dirname(out_path))
+            wb.save(out_path)
+            self.log(f"✅ PAUT 성적서 생성 완료: {out_name}")
+            os.startfile(os.path.dirname(out_path))
+            
+        except Exception as e:
+            self.log(f"❌ PAUT 성적서 생성 오류: {e}")
+
+    def prepare_next_paut_sheet(self, wb, prev_title, page_num):
+        source_sheet = wb[prev_title]
+        new_sheet = wb.copy_worksheet(source_sheet)
+        new_sheet.title = f"PAUT_Report_{page_num+1:03d}"
+        
+        start_row = int(self.config.get('PAUT_START_ROW', 11))
+        end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
+        for r in range(start_row, end_row + 1):
+            for c in range(1, 11): new_sheet.cell(row=r, column=c).value = None
+        
+        self.add_logos_to_sheet(new_sheet, is_cover=False)
+        return new_sheet
 
     def _create_entry_context_menu(self):
         self.entry_popup = tk.Menu(self.root, tearoff=0)
@@ -480,13 +807,37 @@ class PMIReportApp:
 
 
     def _create_row_settings(self, parent):
-        rows = [("데이터 시작 행", "START_ROW", "실제 데이터가 입력되는 첫 행"), ("데이터 종료 행", "DATA_END_ROW", "한 페이지에서 데이터 입력이 끝나는 행"), ("인쇄 영역 종료 행", "PRINT_END_ROW", "페이지 구분선이 위치할 마지막 행")]
-        for i, (label, key, tip) in enumerate(rows):
-            ttk.Label(parent, text=label + ":").grid(row=i, column=0, sticky='e', padx=5, pady=8)
+        # PMI Rows
+        pmi_frame = ttk.LabelFrame(parent, text=" PMI 행 설정 ", padding=10)
+        pmi_frame.pack(fill='x', pady=5)
+        
+        pmi_rows = [
+            ("데이터 시작 행", "START_ROW", "PMI 데이터 시작"), 
+            ("데이터 종료 행", "DATA_END_ROW", "PMI 데이터 종료"), 
+            ("인쇄 영역 종료 행", "PRINT_END_ROW", "PMI 인쇄 끝")
+        ]
+        for i, (label, key, tip) in enumerate(pmi_rows):
+            ttk.Label(pmi_frame, text=label + ":").grid(row=i, column=0, sticky='e', padx=5, pady=5)
             v = tk.StringVar(value=str(self.config.get(key, 0)))
-            ttk.Entry(parent, textvariable=v, width=10, exportselection=False).grid(row=i, column=1, sticky='w', padx=5)
+            ttk.Entry(pmi_frame, textvariable=v, width=10).grid(row=i, column=1, sticky='w', padx=5)
             self.setting_vars[key] = v
-            ttk.Label(parent, text=f"({tip})", foreground="gray", font=("Malgun Gothic", 9)).grid(row=i, column=2, sticky='w')
+            ttk.Label(pmi_frame, text=f"({tip})", foreground="gray", font=("Malgun Gothic", 9)).grid(row=i, column=2, sticky='w')
+
+        # PAUT Rows
+        ut_row_frame = ttk.LabelFrame(parent, text=" PAUT 행 설정 ", padding=10)
+        ut_row_frame.pack(fill='x', pady=5)
+        
+        ut_rows = [
+            ("PAUT 데이터 시작 행", "UT_START_ROW", "PAUT 데이터 시작"), 
+            ("PAUT 데이터 종료 행", "UT_DATA_END_ROW", "PAUT 데이터 종료"), 
+            ("PAUT 인쇄 영역 종료 행", "UT_PRINT_END_ROW", "PAUT 인쇄 끝")
+        ]
+        for i, (label, key, tip) in enumerate(ut_rows):
+            ttk.Label(ut_row_frame, text=label + ":").grid(row=i, column=0, sticky='e', padx=5, pady=5)
+            v = tk.StringVar(value=str(self.config.get(key, 0)))
+            ttk.Entry(ut_row_frame, textvariable=v, width=10).grid(row=i, column=1, sticky='w', padx=5)
+            self.setting_vars[key] = v
+            ttk.Label(ut_row_frame, text=f"({tip})", foreground="gray", font=("Malgun Gothic", 9)).grid(row=i, column=2, sticky='w')
 
     def _create_preview_ui(self, parent):
         container = tk.Frame(parent, background="#f9fafb")
