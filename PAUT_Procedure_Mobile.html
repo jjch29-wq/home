@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAUT Procedure | Premium Mobile View</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --secondary: #10b981;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(148, 163, 184, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #8b5cf6;
+            --glass: rgba(255, 255, 255, 0.03);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            background-image:
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        header {
+            padding: 40px 20px 60px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, transparent 100%);
+            position: relative;
+        }
+
+        header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        header p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: -30px auto 40px;
+            padding: 0 20px;
+        }
+
+        section {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            animation: fadeInUp 0.6s ease-out both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            color: #fff;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 2px;
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        h3 {
+            font-size: 1rem;
+            color: var(--primary);
+            margin: 20px 0 10px;
+            font-weight: 600;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 12px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+        }
+
+        li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-weight: 700;
+            opacity: 0.7;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: rgba(99, 102, 241, 0.1);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 16px;
+            padding: 16px;
+            margin: 16px 0;
+            font-size: 0.9rem;
+        }
+
+        .highlight-box strong {
+            color: #818cf8;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 20px -24px;
+            padding: 0 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.85rem;
+            min-width: 450px;
+        }
+
+        th {
+            background: rgba(148, 163, 184, 0.05);
+            color: var(--text-muted);
+            text-align: left;
+            padding: 12px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        td {
+            padding: 14px 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.05);
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .img-container {
+            margin: 20px 0;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            background: #fff;
+            padding: 10px;
+        }
+
+        .img-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .caption {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 8px;
+            font-style: italic;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        /* Nav Dots for quick access */
+        .nav-dots {
+            position: fixed;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .dot:hover,
+        .dot.active {
+            background: var(--primary);
+            box-shadow: 0 0 10px var(--primary-glow);
+            transform: scale(1.4);
+        }
+
+        @media (max-width: 480px) {
+            header {
+                padding: 30px 20px 50px;
+            }
+
+            header h1 {
+                font-size: 1.75rem;
+            }
+
+            section {
+                padding: 20px;
+                border-radius: 20px;
+            }
+
+            .nav-dots {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="nav-dots">
+        <div class="dot active" onclick="scrollToSection('header')"></div>
+        <div class="dot" onclick="scrollToSection('equipment')"></div>
+        <div class="dot" onclick="scrollToSection('calibration')"></div>
+        <div class="dot" onclick="scrollToSection('scanplan')"></div>
+        <div class="dot" onclick="scrollToSection('acceptance')"></div>
+    </div>
+
+    <header id="header">
+        <div class="badge">ASME B31.3 (2024) Compliant</div>
+        <h1>PAUT 검사 절차서</h1>
+        <p>Phased Array Ultrasonic Testing Specialist Guide</p>
+    </header>
+
+    <div class="container">
+        <section id="toc">
+            <h2>목차 (Contents)</h2>
+            <div class="highlight-box" style="padding: 10px 20px;">
+                <ul style="margin: 0; padding: 0;">
+                    <li><a href="#basics" style="color: inherit; text-decoration: none;">1. 개요 및 규격</a></li>
+                    <li><a href="#qualification" style="color: inherit; text-decoration: none;">3. 자격 및 인정</a></li>
+                    <li><a href="#equipment" style="color: inherit; text-decoration: none;">4. 장비 및 재료</a></li>
+                    <li><a href="#calibration" style="color: inherit; text-decoration: none;">6. 교정 및 설정</a></li>
+                    <li><a href="#scanplan" style="color: inherit; text-decoration: none;">7. 스캔 계획 및 측정</a></li>
+                    <li><a href="#acceptance" style="color: inherit; text-decoration: none;">8. 판정 기준</a></li>
+                    <li><a href="#appendix" style="color: inherit; text-decoration: none;">Appendix I: Scan Plan</a>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="basics">
+            <h2>1. 개요 및 적용 범위</h2>
+            <p>본 절차서는 배관 용접부의 비파괴 검사를 위한 최신 <strong>ASME 규정</strong>을 준수합니다.</p>
+            <ul>
+                <li>내부 결함 정밀 검출 (Crack, LOF, IP 등)</li>
+                <li>Phased Array 기술을 활용한 3D 가시화</li>
+                <li>결정적 크기 측정 (Sizing) 및 정량 분석</li>
+            </ul>
+        </section>
+
+        <section id="standards">
+            <h2>2. 참조 규격</h2>
+            <ul>
+                <li><strong>ASME B31.3 (2024 Edition)</strong>: Process Piping</li>
+                <li><strong>ASME BPVC Sec. V Art. 4 (2023)</strong></li>
+                <li><strong>Mandatory Appendix V</strong>: Encoded Scanning</li>
+                <li><strong>ASME SE-2491 / SE-2700</strong></li>
+            </ul>
+        </section>
+
+        <section id="qualification">
+            <h2>3. 자격 및 인정</h2>
+            <div class="highlight-box">
+                <p><strong>3.1 검사원 자격</strong>: ASNT Level II 이상 (최소 320시간 실무 경험)</p>
+                <p><strong>3.2 절차서 인정</strong>: ASME Sec.V Table V-421 준수</p>
+            </div>
+
+            <div style="overflow-x: auto; margin-top: 15px;">
+                <table
+                    style="width: 100%; border-collapse: collapse; font-size: 0.9em; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                    <thead>
+                        <tr style="background: rgba(129, 140, 248, 0.2);">
+                            <th style="padding: 10px; border: 1px solid rgba(255,255,255,0.1); text-align: left;">구분
+                            </th>
+                            <th style="padding: 10px; border: 1px solid rgba(255,255,255,0.1); text-align: left;">주요 항목
+                                (Essential Variables)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td
+                                style="padding: 10px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; color: #f87171;">
+                                필수 변수<br>(Essential)</td>
+                            <td style="padding: 10px; border: 1px solid rgba(255,255,255,0.1);">두께/형상, 탐촉자/웨지 사양, 장비 모델,
+                                포컬 로(각도/초점), 스캔 기술(E/S-Scan), 인코더 사용, 시험편 사양, 스캔 속도</td>
+                        </tr>
+                        <tr>
+                            <td
+                                style="padding: 10px; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; color: #9ca3af;">
+                                비필수 변수<br>(Non-ess.)</td>
+                            <td style="padding: 10px; border: 1px solid rgba(255,255,255,0.1);">표면 청소 방법, 접촉매질 브랜드(동일
+                                타입), 스캐너 모델(수동), 소프트웨어 버전, 케이블 길이</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p style="font-size: 0.8em; color: #9ca3af; margin-top: 10px;">* 필수 변수 변경 시 재인정(Re-qualification)이 반드시
+                필요합니다.</p>
+        </section>
+
+        <section id="equipment">
+            <h2>4. 장비 및 재료</h2>
+            <div class="highlight-box">
+                <strong>Main Unit:</strong> Olympus OmniScan MX2 (32:128PR)
+            </div>
+            <h3>시스템 구성</h3>
+            <ul>
+                <li><strong>Scanner</strong>: Jireh Microbe (Integrated Encoder)</li>
+                <li><strong>Probes</strong>: 5L64-A2 / 7.5CCEV-A15</li>
+                <li><strong>Wedges</strong>: SA2-N55S-IHC / SA15-IHC</li>
+            </ul>
+        </section>
+
+        <section id="calibration">
+            <h2>6. 교정 및 설정</h2>
+            <div class="highlight-box">
+                <strong>Mandatory Appendix V 요건 준수</strong>
+            </div>
+            <ul>
+                <li><strong>Velocity & Wedge Delay</strong>: 빔 경로 정밀 동기화</li>
+                <li><strong>Sensitivity (ACG)</strong>: 모든 각도 감도 균일화 (80% FSH)</li>
+                <li><strong>TCG (Time Corrected Gain)</strong>: 깊이별 감도 보정</li>
+                <li><strong>Encoder Calibration</strong>: 이동 거리 오차 ±1% 이내 확인</li>
+            </ul>
+        </section>
+
+        <section id="scanplan">
+            <h2>7. 스캔 계획 (Scan Plan)</h2>
+            <p>전체 체적(Full Volume) 커버리지를 위한 최적화된 스캔 경로 설계</p>
+
+            <div class="highlight-box">
+                <strong>Appendix I:</strong> Weld configuration sketches shall be referred to Appendix I.
+            </div>
+
+            <div class="img-container">
+                <img src="C:/Users/jjch2/.gemini/antigravity/brain/59ce4598-6b1d-4535-ac57-f93d71763173/paut_scan_plan_diagram_1770446769365.png"
+                    alt="PAUT Scan Plan">
+            </div>
+            <p class="caption">그림 1. PAUT 스캔 계획 및 빔 커버리지 모식도</p>
+
+            <div class="img-container">
+                <img src="C:/Users/jjch2/.gemini/antigravity/brain/59ce4598-6b1d-4535-ac57-f93d71763173/paut_sscan_diagram_1770447436355.png"
+                    alt="PAUT S-Scan">
+            </div>
+            <p class="caption">그림 2. S-Scan (45° ~ 75°) 각도 범위 모식도</p>
+
+            <h3>주요 파라미터</h3>
+            <ul>
+                <li><strong>Index Offset</strong>: 용접부 두께 및 베벨 고려</li>
+                <li><strong>Scan Resolution</strong>: 1.0mm 이하 (Manual/Auto)</li>
+                <li><strong>Focusing</strong>: 다중 초점(Multi-focus) 적용 가능</li>
+            </ul>
+
+            <h3>7.3 결함 측정 및 Sizing</h3>
+            <div class="highlight-box">
+                <p><strong>Length Sizing</strong>: -6dB Drop Method (50% DAC) 적용</p>
+                <p><strong>Height/Depth Sizing</strong>: Tip Diffraction 및 Peak Amplitude 기법 사용</p>
+                <p><strong>통합 분석</strong>: Cursors(A,B,C,D)를 활용한 X, Y, Z, L, H 정량 계측</p>
+            </div>
+        </section>
+
+        <section id="acceptance">
+            <h2>8. 판정 기준 (Table 341.3.2)</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>결함 유형</th>
+                            <th>합격 기준 (Normal Fluid)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>균열 / 미용융</strong></td>
+                            <td style="color:#f87171">허용 불임 (Not Acceptable)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>미투과 (IP)</strong></td>
+                            <td>깊이 ≤ 1mm & 0.2Tw 미만</td>
+                        </tr>
+                        <tr>
+                            <td><strong>선상 지시 (Slag)</strong></td>
+                            <td>길이 ≤ Tw / 3</td>
+                        </tr>
+                        <tr>
+                            <td><strong>언더컷</strong></td>
+                            <td>≤ 1mm 또는 Tw / 4 중 최소값</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="safety">
+            <h2>10. 후처리 및 안전</h2>
+            <ul>
+                <li><strong>Couplant 제거</strong>: 부식 방지를 위한 표면 클리닝</li>
+                <li><strong>안전 관리</strong>: 고소 작업 및 PPE 착용 필수</li>
+            </ul>
+        </section>
+
+        <section id="appendix">
+            <h2>Appendix I: Scan Plan</h2>
+            <h3>A1. Weld Configuration & Coverage</h3>
+            <div class="img-container">
+                <img src="C:/Users/jjch2/.gemini/antigravity/brain/59ce4598-6b1d-4535-ac57-f93d71763173/paut_scan_plan_diagram_1770446769365.png"
+                    alt="PAUT Scan Plan">
+                <img src="C:/Users/jjch2/.gemini/antigravity/brain/59ce4598-6b1d-4535-ac57-f93d71763173/jireh_microbe_final_precision_1770459974182.png"
+                    alt="Jireh Microbe Scanner">
+            </div>
+            <p class="caption">Jireh Microbe™ Manual Magnetic Scanner</p>
+
+            <h3>A2. Sectorial Scan (S-Scan)</h3>
+            <div class="img-container">
+                <img src="C:/Users/jjch2/.gemini/antigravity/brain/59ce4598-6b1d-4535-ac57-f93d71763173/jireh_microbe_final_precision_1770459974182.png"
+                    alt="Jireh Microbe Scanner">
+            </div>
+            <p class="caption">Jireh Microbe™ Manual Magnetic Scanner</p>
+        </section>
+    </div>
+
+    <footer>
+        &copy; 2026 Project PROVIDENCE | Advanced NDT Solutions
+    </footer>
+
+    <script>
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+
+            // Update active dot
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach(dot => dot.classList.remove('active'));
+            // This is simple logic, can be improved with IntersectionObserver
+        }
+
+        // Simple scroll spy logic
+        window.addEventListener('scroll', () => {
+            const sections = ['basics', 'equipment', 'calibration', 'scanplan', 'acceptance'];
+            const dots = document.querySelectorAll('.dot');
+
+            let current = '';
+            sections.forEach(s => {
+                const rect = document.getElementById(s).getBoundingClientRect();
+                if (rect.top <= 100) current = s;
+            });
+
+            // Update dots (matching indices)
+            // ...
+        });
+    </script>
+</body>
+
+</html>
