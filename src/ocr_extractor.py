@@ -1,15 +1,19 @@
 import os
 import sys
+import traceback
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 from PIL import Image, ImageTk
 
 # OCR Libraries Check
+IMPORT_ERRORS = []
+
 try:
     import easyocr
     EASYOCR_AVAILABLE = True
-except ImportError:
+except Exception as e:
     EASYOCR_AVAILABLE = False
+    IMPORT_ERRORS.append(f"EasyOCR Error: {e}")
 
 try:
     import pytesseract
@@ -18,8 +22,9 @@ try:
     if os.path.exists(tesseract_cmd):
         pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
     PYTESSERACT_AVAILABLE = True
-except ImportError:
+except Exception as e:
     PYTESSERACT_AVAILABLE = False
+    IMPORT_ERRORS.append(f"PyTesseract Error: {e}")
 
 class OCRExtractorApp:
     def __init__(self, root):
@@ -31,6 +36,7 @@ class OCRExtractorApp:
         self.reader = None # EasyOCR reader instance
         
         self.setup_ui()
+        self.check_initial_errors()
         
     def setup_ui(self):
         # Top Control Frame
@@ -70,6 +76,12 @@ class OCRExtractorApp:
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief="sunken", anchor="w")
         status_bar.pack(side="bottom", fill="x")
         
+    def check_initial_errors(self):
+        if IMPORT_ERRORS:
+            error_msg = "프로그램 시작 중 일부 모듈에서 오류가 발생했습니다:\n\n" + "\n".join(IMPORT_ERRORS)
+            self.update_results(error_msg + "\n\n(위 내용을 복사하여 담당자에게 전달해주세요.)")
+            self.status_var.set("모듈 로드 오류 발생")
+
     def load_image(self):
         path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.tiff")])
         if path:
@@ -78,13 +90,16 @@ class OCRExtractorApp:
             self.status_var.set(f"파일 로드됨: {os.path.basename(path)}")
             
     def display_image(self, path):
-        img = Image.open(path)
-        # Resize for preview
-        img.thumbnail((500, 600))
-        self.tk_img = ImageTk.PhotoImage(img)
-        self.canvas.delete("all")
-        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img)
-        
+        try:
+            img = Image.open(path)
+            # Resize for preview
+            img.thumbnail((500, 600))
+            self.tk_img = ImageTk.PhotoImage(img)
+            self.canvas.delete("all")
+            self.canvas.create_image(0, 0, anchor="nw", image=self.tk_img)
+        except Exception as e:
+            self.show_detailed_error(f"이미지 표시 중 오류: {e}")
+
     def run_ocr(self):
         if not self.image_path:
             messagebox.showwarning("오류", "먼저 이미지를 선택해주세요.")
@@ -106,7 +121,7 @@ class OCRExtractorApp:
                     return
                 self.extract_tesseract()
         except Exception as e:
-            messagebox.showerror("추출 오류", f"작업 중 오류 발생: {e}")
+            self.show_detailed_error(f"작업 중 오류 발생: {e}")
             self.status_var.set("오류 발생")
 
     def extract_easyocr(self):
@@ -142,13 +157,20 @@ class OCRExtractorApp:
         self.result_text.delete("1.0", tk.END)
         self.result_text.insert(tk.END, text.strip())
         
+    def show_detailed_error(self, message):
+        """오류 내용을 결과창에 출력하여 복사 가능하게 함"""
+        err_details = traceback.format_exc()
+        full_msg = f"!!! 오류 발생 (ERROR Details) !!!\n\n{message}\n\n--- 상세 로그 (Traceback) ---\n{err_details}"
+        self.update_results(full_msg)
+        messagebox.showerror("오류", f"{message}\n\n상세 내용은 결과창을 확인하여 복사해주세요.")
+
     def copy_to_clipboard(self):
         content = self.result_text.get("1.0", tk.END).strip()
         if content:
             self.root.clipboard_clear()
             self.root.clipboard_append(content)
             self.root.update()
-            messagebox.showinfo("복사 완료", "텍스트가 클립보드에 복사되었습니다.")
+            messagebox.showinfo("복사 완료", "텍스트 또는 오류 로그가 클립보드에 복사되었습니다.")
 
 if __name__ == "__main__":
     root = tk.Tk()
