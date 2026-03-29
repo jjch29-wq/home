@@ -194,7 +194,7 @@ class PMIReportApp:
         """재질명을 표준 포맷으로 변환"""
         t_str = str(t).upper()
         if t_str == 'NAN': return ""
-        t_str = t_str.replace('A312-TP304', 'S/S').replace('A312-304L', 'S/S').replace('A312-305L', 'S/S').replace('A53-B', 'C/S')
+        t_str = t_str.replace('A312-TP304', 'S/S').replace('A312-304L', 'S/S').replace('A312-305L', 'S/S').replace('A53-B', 'C/S').replace('A106-B', 'C/S')
         return t_str.replace('C2','C/S').replace('C4','C/S').replace('CS','C/S').replace('S99','S/S').replace('SS','S/S')
 
     def force_two_digit(self, val):
@@ -2727,14 +2727,30 @@ class PMIReportApp:
                     if header_idx is None: continue
                     
                     df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
-                def _find_col(df, keywords):
+                    
+                    # [NEW] [Refinement] Two-line header detection and merging
+                    if not df.empty and len(df) > 0:
+                        row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)])
+                        if any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
+                            self.log(f"   ℹ️ [자동보정] 두 줄 헤더 감지됨 (시트: {sheet_name})")
+                            new_cols = []
+                            for col, val in zip(df.columns, df.iloc[0]):
+                                c_txt = str(col) if pd.notna(col) and "Unnamed" not in str(col) else ""
+                                v_txt = str(val) if pd.notna(val) else ""
+                                new_cols.append(f"{c_txt} {v_txt}".strip())
+                            df.columns = new_cols
+                            df = df.iloc[1:].reset_index(drop=True)
+
+                def _find_col(df, keywords, exclude=None):
                     # 1. 우선 정확히 일치하는 컬럼을 찾음
                     for col in df.columns:
                         c_up = str(col).upper().strip()
+                        if exclude and any(ex in c_up for ex in exclude): continue
                         if any(k == c_up for k in keywords): return col
                     # 2. 포함된 컬럼을 찾되, NI의 경우 UNIT 등 오진 가능성 차단
                     for col in df.columns:
                         c_up = str(col).upper().strip()
+                        if exclude and any(ex in c_up for ex in exclude): continue
                         if any(k in c_up for k in keywords):
                             if "NI" in keywords and ("UNIT" in c_up or "LINE" in c_up): continue
                             return col
@@ -2918,6 +2934,17 @@ class PMIReportApp:
                         
                         if len(all_extracted_data) != original_count:
                              self.log(f"🔍 원소 필터 적용 ({f_key}: {f_min}~{f_max}): {original_count} -> {len(all_extracted_data)}건 남음")
+
+            if mode == "PT":
+                # [NEW] [Refinement] Duplicate removal for PT (ISO + Joint)
+                seen = set()
+                unique_data = []
+                for d in all_extracted_data:
+                    key = (str(d['Dwg']).strip(), str(d['Joint']).strip())
+                    if key not in seen:
+                        seen.add(key)
+                        unique_data.append(d)
+                all_extracted_data = unique_data
 
             if target_no_list:
                 all_extracted_data.sort(key=lambda x: target_no_list.index(str(x['No'])) if str(x['No']) in target_no_list else 999999)
@@ -3390,12 +3417,24 @@ class PMIReportApp:
             start_row = int(self.config.get('PT_START_ROW', 18))
             end_row = int(self.config.get('PT_END_ROW', 37))
             
+            # 스타일 설정
+            thin_side = Side(style='thin')
+            thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+            
             # [Smart Detection] 템플릿에서 헤더를 찾아 시작 행 자동 보정
             detected_start = -1
+            iso_col_idx = 2 # 기본값 B컬럼
             for r in range(1, 40):
-                line_str = "".join([str(ws.cell(row=r, column=c).value) for c in range(1, 12)]).upper()
+                line_cells = [str(ws.cell(row=r, column=c).value).upper() for c in range(1, 15)]
+                line_str = "".join(line_cells)
                 if (("JOINT" in line_str or "WELD" in line_str) and ("ISO" in line_str or "LINE" in line_str)) or ("DWG" in line_str and "RESULT" in line_str):
-                    detected_start = r + 1; break
+                    detected_start = r + 1
+                    # ISO 컬럼 위치 동적 확인
+                    for c_idx, val in enumerate(line_cells):
+                        if any(k in val for k in ["ISO", "LINE", "DWG", "DRAWING"]) and not any(k in val for k in ["JOINT", "WELD"]):
+                            iso_col_idx = c_idx + 1
+                            break
+                    break
             if detected_start > 0: start_row = detected_start
 
             current_row = start_row
@@ -3412,10 +3451,10 @@ class PMIReportApp:
                 
                 # 데이터 기입 (B, C, D 컬럼 병합 대응)
                 self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('No', ''))
-                # ISO Drawing No. (B컬럼에 쓰고 B,C,D 병합)
-                iso_cell = ws.cell(row=current_row, column=2)
+                # ISO Drawing No. (병합된 칸 반영)
+                iso_cell = ws.cell(row=current_row, column=iso_col_idx)
                 self.safe_set_value(ws, iso_cell.coordinate, item.get('Dwg', ''))
-                self.safe_merge_cells(ws, current_row, 2, current_row, 4)
+                self.safe_merge_cells(ws, current_row, iso_col_idx, current_row, iso_col_idx + 2)
                 
                 self.safe_set_value(ws, ws.cell(row=current_row, column=5).coordinate, item.get('Joint', ''))
                 self.safe_set_value(ws, ws.cell(row=current_row, column=6).coordinate, item.get('NPS', ''))
