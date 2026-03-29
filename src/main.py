@@ -29,6 +29,53 @@ warnings.simplefilter("ignore")
 NAN_PATTERN = re.compile(r'^nan(\.0+)?$|^none$|^null$|^0\.0+|-0\.0+$', re.IGNORECASE)
 DOT_ZERO_PATTERN = re.compile(r'\.0$')
 
+# [PT] SCH -> 두께(mm) 변환 테이블
+SCH_TO_THK = {
+    "1/2": {"5S": 1.65, "10S": 2.11, "40": 2.77, "80": 3.73, "160": 4.75, "XXS": 7.47},
+    "3/4": {"5S": 1.65, "10S": 2.11, "40": 2.87, "80": 3.91, "160": 5.56, "XXS": 7.82},
+    "1": {"5S": 1.65, "10S": 2.77, "40": 3.38, "80": 4.55, "160": 6.35, "XXS": 9.09},
+    "1-1/4": {"5S": 1.65, "10S": 2.77, "40": 3.56, "80": 4.85, "160": 6.35, "XXS": 9.70},
+    "1-1/2": {"5S": 1.65, "10S": 2.77, "40": 3.68, "80": 5.08, "160": 7.14, "XXS": 10.16},
+    "2": {"5S": 1.65, "10S": 2.77, "40": 3.91, "80": 5.54, "160": 8.74, "XXS": 11.07},
+    "2-1/2": {"5S": 2.11, "10S": 3.05, "40": 5.16, "80": 7.01, "160": 9.53, "XXS": 14.02},
+    "3": {"5S": 2.11, "10S": 3.05, "40": 5.49, "80": 7.62, "160": 11.13, "XXS": 15.24},
+    "4": {"5S": 2.11, "10S": 3.05, "40": 6.02, "80": 8.56, "160": 13.49, "XXS": 17.12},
+    "5": {"5S": 2.77, "10S": 3.40, "40": 6.55, "80": 9.53, "120": 12.70, "160": 15.88},
+    "6": {"5S": 2.77, "10S": 3.40, "40": 7.11, "80": 10.97, "120": 14.27, "160": 18.26, "XXS": 21.95},
+    "8": {"5S": 2.77, "10S": 3.76, "20": 6.35, "30": 7.04, "40": 8.18, "60": 10.31, "80": 12.70, "100": 15.09, "120": 18.26, "140": 20.62, "160": 23.01, "XXS": 22.23},
+    "10": {"5S": 3.40, "10S": 4.19, "20": 6.35, "30": 7.80, "40": 9.27, "60": 12.70, "80": 15.09, "100": 18.26, "120": 21.44, "140": 25.40, "160": 28.58},
+    "12": {"5S": 3.96, "10S": 4.57, "20": 6.35, "30": 8.38, "40": 10.31, "60": 14.27, "80": 17.48, "100": 21.44, "120": 25.40, "140": 28.58, "160": 33.32},
+    "14": {"5S": 3.96, "10S": 4.78, "10": 6.35, "20": 7.92, "30": 9.53, "40": 11.13, "60": 15.09, "80": 19.05, "100": 23.83, "120": 27.79, "140": 31.75, "160": 35.71},
+    "16": {"5S": 4.19, "10S": 4.78, "10": 6.35, "20": 7.92, "30": 9.53, "40": 12.70, "60": 16.66, "80": 21.44, "100": 26.19, "120": 30.96, "140": 36.53, "160": 40.49},
+    "18": {"5S": 4.19, "10S": 4.78, "10": 6.35, "20": 7.92, "30": 11.13, "40": 14.27, "60": 19.05, "80": 23.83, "100": 29.36, "120": 34.93, "140": 39.67, "160": 45.24},
+    "20": {"5S": 4.78, "10S": 5.54, "10": 6.35, "20": 9.53, "30": 12.70, "40": 15.09, "60": 20.62, "80": 26.19, "100": 32.54, "120": 38.10, "140": 44.45, "160": 50.01},
+    "24": {"5S": 5.54, "10S": 6.35, "10": 6.35, "20": 9.53, "30": 14.27, "40": 17.48, "60": 24.61, "80": 30.96, "100": 38.89, "120": 46.02, "140": 52.37, "160": 59.54},
+}
+
+def convert_sch_to_thk(size_val, thk_val):
+    """SCH 값을 두께(mm)로 변환"""
+    if pd.isna(thk_val) or str(thk_val).strip() == "": return ""
+    thk_str = str(thk_val).strip().upper()
+    try:
+        val = float(thk_str.replace("MM", "").replace("T", "").strip())
+        if 0 < val < 100: return f"{val:.2f}"
+    except: pass
+    sch_match = re.search(r'(?:SCH[.\s]?|S/)?(\d+S?|XXS|XS)', thk_str, re.IGNORECASE)
+    if not sch_match: return thk_str
+    sch = sch_match.group(1).upper()
+    if sch.endswith('S') and sch not in ['5S', '10S', 'XXS', 'XS']: sch = sch[:-1]
+    if pd.isna(size_val) or str(size_val).strip() == "": return thk_str
+    size_str = str(size_val).strip().replace('"', '').replace("'", "")
+    size_str = re.sub(r'\s+', '-', size_str)
+    if size_str in SCH_TO_THK and sch in SCH_TO_THK[size_str]:
+        return f"{SCH_TO_THK[size_str][sch]:.2f}"
+    try:
+        size_int = str(int(float(size_str)))
+        if size_int in SCH_TO_THK and sch in SCH_TO_THK[size_int]:
+            return f"{SCH_TO_THK[size_int][sch]:.2f}"
+    except: pass
+    return thk_str
+
 # 공통 스타일 (테두리 등)
 thin_side = Side(style='thin')
 medium_side = Side(style='medium')
@@ -50,7 +97,7 @@ SETTINGS_FILE = os.path.join(CONFIG_DIR, "logo_settings_unified.json")
 class PMIReportApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("SITCO 통합 성적서 자동 생성기 (PMI & PAUT)")
+        self.root.title("SITCO 통합 성적서 자동 생성기 (PMI, RT, PAUT)")
         self.root.geometry("950x850") # Slightly wider/taller for multi-tab
         self.root.configure(background="#f9fafb")
         
@@ -75,7 +122,10 @@ class PMIReportApp:
             'CUSTOM_COLS_DATA': '', 'CUSTOM_COL_WIDTH_DATA': 10.0,
             
             # PAUT Specific (B31.1)
-            'PAUT_START_ROW': 11, 'PAUT_DATA_END_ROW': 40, 'PAUT_PRINT_END_ROW': 45
+            'PAUT_START_ROW': 11, 'PAUT_DATA_END_ROW': 40, 'PAUT_PRINT_END_ROW': 45,
+            
+            # RT Specific (Radiographic Testing)
+            'RT_START_ROW': 11, 'RT_DATA_END_ROW': 45, 'RT_PRINT_END_ROW': 47
         }
         self.load_settings()
 
@@ -91,6 +141,16 @@ class PMIReportApp:
         self.sort_column = "" 
         self.sort_reverse = False 
         
+        # [NEW] 원소 함량 필터링용 상태 변수 (PMI 전용)
+        self.element_filters = [] # list of dict: {'key': StringVar, 'min': StringVar, 'max': StringVar}
+        # 기본 필터 추가 (Cr, Ni, Mo)
+        for k in ["Cr", "Ni", "Mo"]:
+            self.element_filters.append({
+                'key': tk.StringVar(value=k),
+                'min': tk.StringVar(),
+                'max': tk.StringVar()
+            })
+        
         # --- PAUT State Variables ---
         self.paut_target_file_path = tk.StringVar(value=self.config.get('PAUT_TARGET_PATH', ""))
         self.paut_template_file_path = tk.StringVar(value=self.config.get('PAUT_TEMPLATE_PATH', ""))
@@ -100,6 +160,22 @@ class PMIReportApp:
         }
         self.paut_extracted_data = []
         
+        # --- RT State Variables ---
+        self.rt_target_file_path = tk.StringVar(value=self.config.get('RT_TARGET_PATH', ""))
+        self.rt_template_file_path = tk.StringVar(value=self.config.get('RT_TEMPLATE_PATH', ""))
+        self.rt_extracted_data = []
+        
+        # --- PT State Variables ---
+        self.pt_target_file_path = tk.StringVar(value=self.config.get('PT_TARGET_PATH', ""))
+        self.pt_template_file_path = tk.StringVar(value=self.config.get('PT_TEMPLATE_PATH', ""))
+        self.pt_extracted_data = []
+        self.pt_item_idx_map = []
+
+        # --- Column Definitions ---
+        self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Accept", "Reject", "Grade", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "Welder", "WType", "Result"]
+
         # 3. UI Initialization
         self.create_widgets()
         self.log("[INFO] 통합 버전을 시작했습니다.")
@@ -114,6 +190,22 @@ class PMIReportApp:
         else:
             print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}")
 
+    def fix_material_name(self, t):
+        """재질명을 표준 포맷으로 변환"""
+        t_str = str(t).upper()
+        if t_str == 'NAN': return ""
+        t_str = t_str.replace('A312-TP304', 'S/S').replace('A312-304L', 'S/S').replace('A312-305L', 'S/S').replace('A53-B', 'C/S')
+        return t_str.replace('C2','C/S').replace('C4','C/S').replace('CS','C/S').replace('S99','S/S').replace('SS','S/S')
+
+    def force_two_digit(self, val):
+        """숫자 값을 2자리 문자열로 변환 (예: 1 -> 01)"""
+        try:
+            s = str(val).strip()
+            f = float(s)
+            if f.is_integer(): return f"{int(f):02d}"
+            return s
+        except: return str(val).strip()
+
     def load_settings(self):
         # [NEW] 로고 위치 고정(Fixed)을 위해 내장된 최적 설정을 우선시합니다.
         
@@ -124,6 +216,27 @@ class PMIReportApp:
                     saved_data = json.load(f)
                     self.config.update(saved_data)
                 print("SUCCESS: 외부 저장된 설정을 불러왔습니다.")
+                
+                # [NEW] 탭별 전용 행 설정 불러오기
+                for tab in ["PMI", "PAUT"]:
+                    for row_key in ['START_ROW', 'DATA_END_ROW', 'PRINT_END_ROW']:
+                        tab_specific_key = f"{tab}_{row_key}"
+                        if tab_specific_key in saved_data:
+                            # 현재 탭에 맞는 설정이면 config에 직접 반영 (PAUT는 별도 변수 PAUT_START_ROW 등을 쓰므로 통합 처리)
+                            pass 
+
+                # [NEW] 저장된 필터 불러오기 (PMI)
+                filter_key = "PMI_FILTERS"
+                if filter_key in saved_data:
+                    saved_filters = saved_data[filter_key]
+                    if isinstance(saved_filters, list):
+                        self.element_filters = []
+                        for f_data in saved_filters:
+                            self.element_filters.append({
+                                'key': tk.StringVar(value=f_data.get('key', '')),
+                                'min': tk.StringVar(value=f_data.get('min', '')),
+                                'max': tk.StringVar(value=f_data.get('max', ''))
+                            })
             except Exception as e:
                 print(f"WARNING: 외부 설정 불러오기 실패: {e}")
 
@@ -159,6 +272,22 @@ class PMIReportApp:
                         else:
                             self.config[key] = str(val)
                     except: pass
+
+            # [NEW] 필터 설정 저장 (PMI)
+            if hasattr(self, 'element_filters'):
+                filter_data = []
+                for f_item in self.element_filters:
+                    filter_data.append({
+                        'key': f_item['key'].get(),
+                        'min': f_item['min'].get(),
+                        'max': f_item['max'].get()
+                    })
+                self.config["PMI_FILTERS"] = filter_data
+
+            # [NEW] 탭별 전용 행 설정 강제 저장
+            self.config["PMI_START_ROW"] = self.config.get("START_ROW", 19)
+            self.config["PMI_DATA_END_ROW"] = self.config.get("DATA_END_ROW", 45)
+            self.config["PMI_PRINT_END_ROW"] = self.config.get("PRINT_END_ROW", 47)
 
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=4)
@@ -276,6 +405,9 @@ class PMIReportApp:
         style.map("Treeview", background=[('selected', '#3b82f6')], foreground=[('selected', 'white')])
         style.configure("Treeview.Heading", font=("Malgun Gothic", 10, "bold"))
 
+        # [NEW] 전역 엔트리 우클릭 메뉴
+        self._create_entry_context_menu()
+
         # Mouse Wheel Support
         def _on_mousewheel(event):
             try:
@@ -312,13 +444,19 @@ class PMIReportApp:
         self.mode_notebook.pack(fill='both', expand=True, pady=(0, 10))
         
         self.pmi_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
+        self.rt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
+        self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.paut_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         
         self.mode_notebook.add(self.pmi_mode_frame, text="  PMI (성분 분석)  ")
+        self.mode_notebook.add(self.rt_mode_frame, text="  RT (방사선 투과)  ")
+        self.mode_notebook.add(self.pt_mode_frame, text="  PT (침투 탐상)  ")
         self.mode_notebook.add(self.paut_mode_frame, text="  PAUT (ASME B31.1)  ")
         
         # Setup each mode
         self._setup_pmi_ui(self.pmi_mode_frame)
+        self._setup_rt_ui(self.rt_mode_frame)
+        self._setup_pt_ui(self.pt_mode_frame)
         self._setup_paut_ui(self.paut_mode_frame)
 
         # Bottom Section (Common)
@@ -399,6 +537,46 @@ class PMIReportApp:
         verify_row.pack(fill='x', pady=(0, 10))
         tk.Checkbutton(verify_row, text="재질 자동 판정 (성분 비교 알고리즘 적용, 10% 허용오차)", variable=self.auto_verify, background="#ffffff", font=("Malgun Gothic", 10)).pack(side='left')
         
+        # [NEW] 원소 함량 필터 UI (PMI 전용)
+        filter_ui_frame = tk.Frame(action_frame, background="#ffffff", pady=5)
+        filter_ui_frame.pack(fill='x', pady=(0, 10))
+        
+        ttk.Label(filter_ui_frame, text="원소/컬럼 함량 필터 (Min~Max):", background="#ffffff", font=("Malgun Gothic", 10, "bold")).pack(side='left', padx=(0, 10))
+        
+        self.filter_container = tk.Frame(filter_ui_frame, background="#ffffff")
+        self.filter_container.pack(side='left')
+        
+        def refresh_filter_ui():
+            for widget in self.filter_container.winfo_children():
+                widget.destroy()
+            
+            for i, f_item in enumerate(self.element_filters):
+                unit_frame = tk.Frame(self.filter_container, background="#ffffff", padx=5)
+                unit_frame.pack(side='left')
+                
+                ttk.Entry(unit_frame, textvariable=f_item['key'], width=5, exportselection=False).pack(side='left')
+                ttk.Label(unit_frame, text=":", background="#ffffff").pack(side='left')
+                ttk.Entry(unit_frame, textvariable=f_item['min'], width=5, exportselection=False).pack(side='left')
+                ttk.Label(unit_frame, text="~", background="#ffffff").pack(side='left')
+                ttk.Entry(unit_frame, textvariable=f_item['max'], width=5, exportselection=False).pack(side='left')
+                
+                # 삭제 버튼
+                btn_del = tk.Button(unit_frame, text="×", command=lambda idx=i: remove_filter(idx), 
+                                    relief='flat', background="#ffffff", foreground="red", font=("Arial", 10, "bold"))
+                btn_del.pack(side='left', padx=(2, 0))
+
+        def add_filter():
+            self.element_filters.append({'key': tk.StringVar(), 'min': tk.StringVar(), 'max': tk.StringVar()})
+            refresh_filter_ui()
+
+        def remove_filter(idx):
+            if len(self.element_filters) > 0:
+                self.element_filters.pop(idx)
+                refresh_filter_ui()
+
+        ttk.Button(filter_ui_frame, text="+ 필터 추가", command=add_filter, width=10).pack(side='left', padx=10)
+        refresh_filter_ui()
+        
         mode_row = tk.Frame(action_frame, background="#ffffff")
         mode_row.pack(fill='x', pady=(0, 10))
         ttk.Label(mode_row, text="추출 방식 (Extraction Method):", background="#ffffff").pack(side='left', padx=(0, 10))
@@ -411,6 +589,155 @@ class PMIReportApp:
 
         ttk.Button(btn_frame, text="데이터 추출 (Extract)", style="Action.TButton", command=self.extract_only).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="성적서 생성 시작 (Generate)", style="Action.TButton", command=self.run_process).pack(side='left', padx=5)
+
+    def _setup_rt_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        container.pack(fill='both', expand=True)
+
+        tk.Label(container, text="RT 성적서 생성 및 관리", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
+
+        # 1. File Selection
+        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
+        file_frame.pack(fill='x', pady=(0, 20))
+
+        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
+            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
+            # RT 탭에서도 엔트리 우클릭 메뉴를 지원하도록 exportselection=False 설정 유지
+            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
+            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
+            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
+
+        _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
+        _add_file_row(file_frame, "RT 데이터 (Excel):", self.rt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "RT 성적서 양식:", self.rt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+
+        # 2. Configuration Tabs
+        rt_config_frame = ttk.LabelFrame(container, text=" RT 리포트 세부 설정 ", padding=5)
+        rt_config_frame.pack(fill='both', expand=False, pady=(0, 20))
+
+        self.rt_tab_notebook = ttk.Notebook(rt_config_frame)
+        self.rt_tab_notebook.pack(fill='both', expand=True)
+
+        rt_tab_cover = ttk.Frame(self.rt_tab_notebook, padding=10)
+        rt_tab_data = ttk.Frame(self.rt_tab_notebook, padding=10)
+        rt_tab_rows = ttk.Frame(self.rt_tab_notebook, padding=10)
+
+        self.rt_tab_notebook.add(rt_tab_cover, text="갑지 (Cover)")
+        self.rt_tab_notebook.add(rt_tab_data, text="을지 (Data)")
+        self.rt_tab_notebook.add(rt_tab_rows, text="행 설정 (Rows)")
+
+        self.rt_tab_preview = ttk.Frame(self.rt_tab_notebook, padding=5)
+        self.rt_tab_notebook.add(self.rt_tab_preview, text="미리보기 (Preview)")
+        self._create_rt_preview_ui(self.rt_tab_preview)
+
+        self._create_setting_grid(rt_tab_cover, "COVER")
+        self._create_setting_grid(rt_tab_data, "DATA")
+        self._create_margin_settings(rt_tab_cover, "COVER")
+        self._create_margin_settings(rt_tab_data, "DATA")
+        self._create_row_settings(rt_tab_rows)
+
+        # 3. Action Section
+        action_frame = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb", padx=15, pady=15)
+        action_frame.pack(fill='x', pady=(0, 10))
+
+        filter_row = tk.Frame(action_frame, background="#ffffff")
+        filter_row.pack(fill='x', pady=(0, 10))
+        ttk.Label(filter_row, text="특정 순번(NO)만 추출 (예: 1, 3, 5-10):", background="#ffffff").pack(side='left', padx=(0, 10))
+        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=30, exportselection=False).pack(side='left')
+
+        btn_frame = tk.Frame(action_frame, background="#ffffff")
+        btn_frame.pack(side='right')
+
+        ttk.Button(btn_frame, text="데이터 추출 (Extract)", style="Action.TButton", command=self.extract_only).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="성적서 생성 (Generate)", style="Action.TButton", command=self.run_process).pack(side='left', padx=5)
+
+    def _setup_pt_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        container.pack(fill='both', expand=True)
+
+        tk.Label(container, text="PT 성적서 생성 및 관리", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
+
+        # 1. File Selection
+        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
+        file_frame.pack(fill='x', pady=(0, 20))
+
+        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
+            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
+            # PT 탭에서도 엔트리 우클릭 메뉴를 지원하도록 exportselection=False 설정 유지
+            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
+            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
+            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
+
+        _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
+        _add_file_row(file_frame, "PT 데이터 (Excel):", self.pt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "PT 성적서 양식:", self.pt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+
+        # 2. Configuration Tabs
+        pt_config_frame = ttk.LabelFrame(container, text=" PT 리포트 세부 설정 ", padding=5)
+        pt_config_frame.pack(fill='both', expand=False, pady=(0, 20))
+
+        self.pt_tab_notebook = ttk.Notebook(pt_config_frame)
+        self.pt_tab_notebook.pack(fill='both', expand=True)
+
+        pt_tab_cover = ttk.Frame(self.pt_tab_notebook, padding=10)
+        pt_tab_data = ttk.Frame(self.pt_tab_notebook, padding=10)
+        pt_tab_rows = ttk.Frame(self.pt_tab_notebook, padding=10)
+
+        self.pt_tab_notebook.add(pt_tab_cover, text="갑지 (Cover)")
+        self.pt_tab_notebook.add(pt_tab_data, text="을지 (Data)")
+        self.pt_tab_notebook.add(pt_tab_rows, text="행 설정 (Rows)")
+
+        self.pt_tab_preview = ttk.Frame(self.pt_tab_notebook, padding=5)
+        self.pt_tab_notebook.add(self.pt_tab_preview, text="미리보기 (Preview)")
+        self._create_pt_preview_ui(self.pt_tab_preview)
+
+        self._create_setting_grid(pt_tab_cover, "COVER")
+        self._create_setting_grid(pt_tab_data, "DATA")
+        self._create_margin_settings(pt_tab_cover, "COVER")
+        self._create_margin_settings(pt_tab_data, "DATA")
+        self._create_row_settings(pt_tab_rows)
+
+        # 3. Action Section
+        action_frame = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb", padx=15, pady=15)
+        action_frame.pack(fill='x', pady=(0, 10))
+
+        filter_row = tk.Frame(action_frame, background="#ffffff")
+        filter_row.pack(fill='x', pady=(0, 10))
+        ttk.Label(filter_row, text="특정 순번(NO)만 추출 (예: 1, 3, 5-10):", background="#ffffff").pack(side='left', padx=(0, 10))
+        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=30, exportselection=False).pack(side='left')
+
+        btn_frame = tk.Frame(action_frame, background="#ffffff")
+        btn_frame.pack(side='right')
+
+        ttk.Button(btn_frame, text="데이터 추출 (Extract)", style="Action.TButton", command=self.extract_only).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text="성적서 생성 (Generate)", style="Action.TButton", command=self.run_process).pack(side='left', padx=5)
+
+    def _create_pt_preview_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb")
+        container.pack(fill='both', expand=True)
+
+        self.pt_display_cols = ["V", "No", "Date", "ISO Drawing No.", "Joint", "NPS", "Thk.", "Material", "Welder", "Weld Type", "Result"]
+        self.pt_widths = {"V": 40, "No": 50, "Date": 90, "ISO Drawing No.": 200, "Joint": 100, "NPS": 80, "Thk.": 80, "Material": 100, "Welder": 100, "Weld Type": 100, "Result": 80}
+
+        tree_frame = tk.Frame(container, background="#f9fafb")
+        tree_frame.pack(side='left', fill='both', expand=True)
+
+        self.pt_preview_tree = ttk.Treeview(tree_frame, columns=self.pt_display_cols, show='headings', height=10, selectmode='extended')
+        for col in self.pt_preview_tree["columns"]:
+            self.pt_preview_tree.heading(col, text=col)
+            self.pt_preview_tree.column(col, width=self.pt_widths.get(col, 100), anchor='center', stretch=False)
+        
+        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.pt_preview_tree.yview)
+        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.pt_preview_tree.xview)
+        self.pt_preview_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        
+        self.pt_preview_tree.grid(row=0, column=0, sticky='nsew')
+        scroll_y.grid(row=0, column=1, sticky='ns')
+        scroll_x.grid(row=1, column=0, sticky='ew')
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        self._setup_preview_sidebar(self.pt_preview_tree, container, mode="PT")
 
     def _setup_paut_ui(self, parent):
         container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
@@ -839,267 +1166,313 @@ class PMIReportApp:
             self.setting_vars[key] = v
             ttk.Label(ut_row_frame, text=f"({tip})", foreground="gray", font=("Malgun Gothic", 9)).grid(row=i, column=2, sticky='w')
 
+        # RT Rows
+        rt_row_frame = ttk.LabelFrame(parent, text=" RT 행 설정 ", padding=10)
+        rt_row_frame.pack(fill='x', pady=5)
+        
+        rt_rows = [
+            ("RT 데이터 시작 행", "RT_START_ROW", "RT 데이터 시작"), 
+            ("RT 데이터 종료 행", "RT_DATA_END_ROW", "RT 데이터 종료"), 
+            ("RT 인쇄 영역 종료 행", "RT_PRINT_END_ROW", "RT 인쇄 끝")
+        ]
+        for i, (label, key, tip) in enumerate(rt_rows):
+            ttk.Label(rt_row_frame, text=label + ":").grid(row=i, column=0, sticky='e', padx=5, pady=5)
+            v = tk.StringVar(value=str(self.config.get(key, 0)))
+            ttk.Entry(rt_row_frame, textvariable=v, width=10).grid(row=i, column=1, sticky='w', padx=5)
+            self.setting_vars[key] = v
+            ttk.Label(rt_row_frame, text=f"({tip})", foreground="gray", font=("Malgun Gothic", 9)).grid(row=i, column=2, sticky='w')
+            
+        # PT Rows
+        pt_row_frame = ttk.LabelFrame(parent, text=" PT 행 설정 ", padding=10)
+        pt_row_frame.pack(fill='x', pady=5)
+        
+        pt_rows = [
+            ("PT 데이터 시작 행", "PT_START_ROW", "PT 데이터 시작"), 
+            ("PT 데이터 종료 행", "PT_DATA_END_ROW", "PT 데이터 종료"), 
+            ("PT 인쇄 영역 종료 행", "PT_PRINT_END_ROW", "PT 인쇄 끝")
+        ]
+        for i, (label, key, tip) in enumerate(pt_rows):
+            ttk.Label(pt_row_frame, text=label + ":").grid(row=i, column=0, sticky='e', padx=5, pady=5)
+            v = tk.StringVar(value=str(self.config.get(key, 18)))
+            ttk.Entry(pt_row_frame, textvariable=v, width=10).grid(row=i, column=1, sticky='w', padx=5)
+            self.setting_vars[key] = v
+            ttk.Label(pt_row_frame, text=f"({tip})", foreground="gray", font=("Malgun Gothic", 9)).grid(row=i, column=2, sticky='w')
+
     def _create_preview_ui(self, parent):
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        # Left: Treeview (Added 'V', 'Joint No', and 'Test Location' columns)
         self.preview_tree = ttk.Treeview(container, columns=("V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"), show='headings', height=10, selectmode='extended')
         widths = {"V": 40, "No": 50, "Date": 90, "ISO/DWG": 180, "Joint No": 100, "Test Location": 100, "Ni": 60, "Cr": 60, "Mo": 60, "Grade": 100}
         for col in self.preview_tree["columns"]:
-            # [NEW] 헤더 클릭 시 정렬 기능 추가
             self.preview_tree.heading(col, text=col, command=lambda c=col: self.sort_by_column(c))
             self.preview_tree.column(col, width=widths.get(col, 80), anchor='center')
         
-        # [MANUAL DRAG] Manually implement drag-selection since native is broken
+        self._setup_preview_sidebar(self.preview_tree, container, mode="PMI")
+
+    def _create_rt_preview_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb")
+        container.pack(fill='both', expand=True)
+
+        self.rt_display_cols = ["V", "No", "Date", "Drawing No.", "Film Ident. No.", "Film Location", "Acc", "Rej", "Deg", "① Crack", "② IP", "③ LF", "④ Slag", "⑤ Por", "⑥ U/C", "⑦ RUC", "⑧ BT", "⑨ TI", "⑩ CP", "⑪ RC", "⑫ Mis", "⑬ EP", "⑭ SD", "⑮ Oth", "Welder No", "Remarks"]
+        self.rt_widths = {"V": 40, "No": 50, "Date": 90, "Drawing No.": 150, "Film Ident. No.": 120, "Film Location": 100, "Acc": 40, "Rej": 40, "Deg": 40, "Welder No": 100, "Remarks": 120}
+
+        # Inner frame for horizontal/vertical scroll
+        tree_frame = tk.Frame(container, background="#f9fafb")
+        tree_frame.pack(side='left', fill='both', expand=True)
+
+        self.rt_preview_tree = ttk.Treeview(tree_frame, columns=self.rt_display_cols, show='headings', height=10, selectmode='extended')
+        for col in self.rt_preview_tree["columns"]:
+            self.rt_preview_tree.heading(col, text=col)
+            self.rt_preview_tree.column(col, width=self.rt_widths.get(col, 60), anchor='center', stretch=False)
+        
+        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.rt_preview_tree.yview)
+        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.rt_preview_tree.xview)
+        self.rt_preview_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        
+        self.rt_preview_tree.grid(row=0, column=0, sticky='nsew')
+        scroll_y.grid(row=0, column=1, sticky='ns')
+        scroll_x.grid(row=1, column=0, sticky='ew')
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        self._setup_preview_sidebar(self.rt_preview_tree, container, mode="RT")
+
+    def _setup_preview_sidebar(self, tree, container, mode):
+        # 1. Event Bindings
         self.drag_start_item = None
         
-        def _on_tree_press(event):
-            self.preview_tree.focus_set()
-            item = self.preview_tree.identify_row(event.y)
-            self.start_col = self.preview_tree.identify_column(event.x)
-            if item:
-                self.drag_start_item = item
-                # Start new selection on click if no Shift/Ctrl
-                if not (event.state & 0x0001 or event.state & 0x0004):
-                    self.preview_tree.selection_set(item)
+        def _on_tree_press(event, t=tree, m=mode):
+            t.focus_set()
+            item_id = t.identify_row(event.y)
+            column = t.identify_column(event.x)
+            
+            if item_id:
+                try:
+                    col_idx = int(column.replace("#", "")) - 1
+                    keys = self.rt_column_keys if m == "RT" else self.column_keys
+                    data = self.rt_extracted_data if m == "RT" else self.extracted_data
+                    idx_map = self.rt_item_idx_map if m == "RT" else self.item_idx_map
+                    
+                    if 0 <= col_idx < len(keys):
+                        key = keys[col_idx]
+                        view_idx = t.index(item_id)
+                        actual_idx = idx_map[view_idx]
+                        
+                        # (1) Selection Toggle
+                        if key == "selected":
+                            data[actual_idx]['selected'] = not data[actual_idx].get('selected', True)
+                            self.populate_preview(data, switch_tab=False, mode=m)
+                            return "break"
+                            
+                        # (2) RT Specific Defect/Result Toggle
+                        elif m == "RT" and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Accept", "Reject"])):
+                            old_v = data[actual_idx].get(key, "")
+                            new_v = "√" if old_v == "" else ""
+                            data[actual_idx][key] = new_v
+                            if key in ["Accept", "Reject"] and new_v == "√":
+                                other = "Reject" if key == "Accept" else "Accept"
+                                data[actual_idx][other] = ""
+                            self.populate_preview(data, switch_tab=False, mode="RT")
+                            return "break"
+                except: pass
 
-        def _on_tree_drag(event):
+                self.drag_start_item = item_id
+                if not (event.state & 0x0001 or event.state & 0x0004):
+                    t.selection_set(item_id)
+
+        def _on_tree_drag(event, t=tree):
             if not self.drag_start_item: return
-            curr_item = self.preview_tree.identify_row(event.y)
+            curr_item = t.identify_row(event.y)
             if not curr_item: return
-            
-            # Record current column for area copy
-            self.end_col = self.preview_tree.identify_column(event.x)
-            
-            # Calculate range between start and current
-            all_items = self.preview_tree.get_children('')
+            all_items = t.get_children('')
             try:
-                idx_start = all_items.index(self.drag_start_item)
-                idx_curr = all_items.index(curr_item)
-                
-                # Select everything in between
-                low = min(idx_start, idx_curr)
-                high = max(idx_start, idx_curr)
-                range_items = all_items[low:high+1]
-                self.preview_tree.selection_set(range_items)
+                low = min(all_items.index(self.drag_start_item), all_items.index(curr_item))
+                high = max(all_items.index(self.drag_start_item), all_items.index(curr_item))
+                t.selection_set(all_items[low:high+1])
             except: pass
 
         def _on_tree_release(event):
-            self.end_col = self.preview_tree.identify_column(event.x)
-            # [NEW] Single click on 'V' column toggles selection
-            item_id = self.preview_tree.identify_row(event.y)
-            if item_id and self.start_col == self.end_col == "#1":
-                self.toggle_item_selection(item_id)
-            
             self.drag_start_item = None
-            self.on_tree_select(event)
 
-        self.preview_tree.bind("<Button-1>", _on_tree_press)
-        self.preview_tree.bind("<B1-Motion>", _on_tree_drag)
-        self.preview_tree.bind("<ButtonRelease-1>", _on_tree_release)
-        self.preview_tree.bind("<<TreeviewSelect>>", self.on_tree_select)
-        self.preview_tree.bind("<Double-1>", self.on_tree_double_click)
-        self.preview_tree.bind("<Button-3>", self.show_context_menu)
-        self.preview_tree.bind("<Control-c>", lambda e: self.copy_cell())
-        self.preview_tree.bind("<Control-v>", lambda e: self.paste_cell())
-        
-        scroll_y = ttk.Scrollbar(container, orient="vertical", command=self.preview_tree.yview)
-        self.preview_tree.configure(yscrollcommand=scroll_y.set)
-        
-        # [REMOVED] Custom auto-scroll handler to restore native stable drag-selection
-        # self.preview_tree.bind("<B1-Motion>", _on_tree_drag_scroll, add="+")
-        
-        self.preview_tree.pack(side='left', fill='both', expand=True)
-        scroll_y.pack(side='left', fill='y')
+        tree.bind("<Button-1>", _on_tree_press)
+        tree.bind("<B1-Motion>", _on_tree_drag)
+        tree.bind("<ButtonRelease-1>", _on_tree_release)
+        tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        tree.bind("<Double-1>", lambda e, m=mode: self.on_tree_double_click(e, m))
+        tree.bind("<Button-3>", lambda e, m=mode: self.show_context_menu(e, m))
+        tree.bind("<Control-c>", lambda e, m=mode: self.copy_cell(m))
+        tree.bind("<Control-v>", lambda e, m=mode: self.paste_cell(m))
 
-        # Right: Sidebar buttons
+        # Basic Tree Scroll (if not already handled in grid)
+        if mode == "PMI":
+            scroll_y = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=scroll_y.set)
+            tree.pack(side='left', fill='both', expand=True)
+            scroll_y.pack(side='left', fill='y')
+
+        # 2. Sidebar buttons
         sidebar = tk.Frame(container, background="#f9fafb", padx=10)
         sidebar.pack(side='right', fill='y')
 
-        ttk.Label(sidebar, text="데이터 관리", font=("Malgun Gothic", 9, "bold")).pack(pady=(0, 10))
-        # [NEW] Date Filter Listbox
         ttk.Label(sidebar, text="날짜 선택 필터", font=("Malgun Gothic", 9, "bold")).pack(pady=(5, 2))
-        list_frame = tk.Frame(sidebar)
-        list_frame.pack(fill='x', pady=5)
-        self.date_listbox = tk.Listbox(list_frame, selectmode='single', height=4, exportselection=False, 
-                                       font=("Malgun Gothic", 9), selectbackground="#ffffff", 
-                                       selectforeground="#000000", activestyle="none")
-        self.date_listbox.pack(side='left', fill='both', expand=True)
-        sb = ttk.Scrollbar(list_frame, orient='vertical', command=self.date_listbox.yview)
+        date_frame = tk.Frame(sidebar, background="#f9fafb")
+        date_frame.pack(fill='x', pady=5)
+        
+        # Mode specific date listbox
+        listbox = tk.Listbox(date_frame, selectmode='single', height=6, exportselection=False, font=("Malgun Gothic", 9))
+        listbox.pack(side='left', fill='both', expand=True)
+        sb = ttk.Scrollbar(date_frame, orient='vertical', command=listbox.yview)
         sb.pack(side='right', fill='y')
-        self.date_listbox.config(yscrollcommand=sb.set)
+        listbox.config(yscrollcommand=sb.set)
         
-        def toggle_date(event):
-            idx = self.date_listbox.nearest(event.y)
+        if mode == "RT": self.rt_date_listbox = listbox
+        else: self.date_listbox = listbox
+        
+        def _toggle_date(event, lb=listbox):
+            idx = lb.nearest(event.y)
             if idx >= 0:
-                val = self.date_listbox.get(idx)
+                val = lb.get(idx)
                 if val.startswith("[v]"):
-                    self.date_listbox.delete(idx)
-                    self.date_listbox.insert(idx, val.replace("[v] ", "[ ] "))
+                    lb.delete(idx); lb.insert(idx, val.replace("[v] ", "[ ] "))
                 elif val.startswith("[ ]"):
-                    self.date_listbox.delete(idx)
-                    self.date_listbox.insert(idx, val.replace("[ ] ", "[v] "))
-                self.date_listbox.selection_clear(0, tk.END)
+                    lb.delete(idx); lb.insert(idx, val.replace("[ ] ", "[v] "))
+                lb.selection_clear(0, tk.END)
         
-        self.date_listbox.bind("<ButtonRelease-1>", toggle_date)
+        listbox.bind("<ButtonRelease-1>", _toggle_date)
         
-        def apply_date_filter():
-            selected_dates = [self.date_listbox.get(i).replace("[v] ", "").replace("[ ] ", "") for i in range(self.date_listbox.size()) if self.date_listbox.get(i).startswith("[v]")]
-            for item in self.extracted_data:
-                item['date_filtered'] = (item.get('Date', '') in selected_dates)
+        def _apply_date_filter(m=mode, lb=listbox):
+            sel_dates = [lb.get(i).replace("[v] ", "").replace("[ ] ", "") for i in range(lb.size()) if lb.get(i).startswith("[v]")]
+            data = self.rt_extracted_data if m == "RT" else self.extracted_data
+            for item in data:
+                item['date_filtered'] = (item.get('Date', '') in sel_dates)
+            self.populate_preview(data, switch_tab=False, mode=m)
             
-            self.populate_preview(self.extracted_data, switch_tab=False)
-            
-        ttk.Button(sidebar, text="선택 날짜 적용", command=apply_date_filter).pack(fill='x', pady=(0, 10))
+        ttk.Button(sidebar, text="선택 날짜 적용", command=_apply_date_filter).pack(fill='x', pady=(0, 10))
         
-        
-        # [NEW] View Selection Only Toggle
         tk.Checkbutton(sidebar, text="선택 항목만 보기", variable=self.show_selected_only, 
-                       command=lambda: self.populate_preview(self.extracted_data, switch_tab=False),
+                       command=lambda: self.populate_preview(self.rt_extracted_data if mode=="RT" else self.extracted_data, switch_tab=False, mode=mode),
                        background="#f9fafb", font=("Malgun Gothic", 9)).pack(pady=(0, 5), anchor='w')
 
-        ttk.Button(sidebar, text="전체 선택", width=15, command=self.select_all).pack(pady=2)
-        ttk.Button(sidebar, text="선택 해제", width=15, command=self.deselect_all).pack(pady=(2, 5))
+        ttk.Button(sidebar, text="전체 선택", width=15, command=lambda: self.select_all(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="선택 해제", width=15, command=lambda: self.deselect_all(mode)).pack(pady=(2, 5))
         
-        # [NEW] Merge & Bulk Update Button
-        ttk.Button(sidebar, text="선택 항목 병합", width=15, command=self.merge_selected_iso).pack(pady=2)
-        ttk.Button(sidebar, text="일괄 변경 (Bulk)", width=15, command=self.show_bulk_update_dialog).pack(pady=(2, 10))
+        ttk.Button(sidebar, text="선택 항목 병합", width=15, command=lambda: self.merge_selected_iso(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="일괄 변경 (Bulk)", width=15, command=lambda: self.show_bulk_update_dialog(mode)).pack(pady=(2, 10))
 
-        tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5) # Separator
+        tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
+        ttk.Button(sidebar, text="▲ 위로", width=10, command=lambda: self.move_item(-1, mode)).pack(pady=2)
+        ttk.Button(sidebar, text="▼ 아래로", width=10, command=lambda: self.move_item(1, mode)).pack(pady=2)
+        tk.Frame(sidebar, height=10, background="#f9fafb").pack()
+        ttk.Button(sidebar, text="선택 삭제", width=12, command=lambda: self.delete_item(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="전체 초기화", width=12, command=lambda: self.clear_all(mode)).pack(pady=(2, 10))
 
-        ttk.Button(sidebar, text="▲ 위로", width=10, command=lambda: self.move_item(-1)).pack(pady=2)
-        ttk.Button(sidebar, text="▼ 아래로", width=10, command=lambda: self.move_item(1)).pack(pady=2)
-        tk.Frame(sidebar, height=10, background="#f9fafb").pack() # Spacer
-        ttk.Button(sidebar, text="선택 삭제", width=12, command=self.delete_item).pack(pady=2)
-        ttk.Button(sidebar, text="전체 초기화", width=12, command=self.clear_all).pack(pady=(2, 10))
+        tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
+        ttk.Button(sidebar, text="💾 현재 내용 저장", width=18, command=lambda: self.save_preview_data(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="📂 저장된 내용 열기", width=18, command=lambda: self.load_preview_data(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="📊 엑셀 파일로 추출", width=18, command=lambda: self.export_to_excel(mode)).pack(pady=(10, 2))
 
-        tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5) # Separator
-        
-        # [NEW] Data Save/Load Buttons
-        ttk.Label(sidebar, text="내용 저장/불러오기", font=("Malgun Gothic", 9, "bold")).pack(pady=(5, 2))
-        ttk.Button(sidebar, text="💾 현재 내용 저장", width=18, command=self.save_preview_data).pack(pady=2)
-        ttk.Button(sidebar, text="📂 저장된 내용 열기", width=18, command=self.load_preview_data).pack(pady=2)
-        ttk.Button(sidebar, text="📊 엑셀 파일로 추출", width=18, command=self.export_to_excel).pack(pady=(10, 2))
+        # 3. Context Menu Config
+        for t in ["evenrow", "oddrow", "group_even", "group_odd", "grouped_even", "grouped_odd", "item_even", "item_odd"]:
+            tree.tag_configure(t, background="", foreground="black")
+        tree.tag_configure('group_even', font=("Malgun Gothic", 10, "bold"))
+        tree.tag_configure('group_odd', font=("Malgun Gothic", 10, "bold"))
 
-        tk.Frame(sidebar, height=10, background="#f9fafb").pack() # Spacer
-        
-        # [ContextMenu]
-        self.ctx_menu = tk.Menu(self.root, tearoff=0)
-        self.ctx_menu.add_command(label="선택 항목 체크/해제 토글 (Toggle Check)", command=self.toggle_selected_items)
-        self.ctx_menu.add_separator()
-        self.ctx_menu.add_command(label="셀 내용 복사 (Copy)", command=self.copy_cell)
-        self.ctx_menu.add_command(label="셀 내용 붙여넣기 (Paste)", command=self.paste_cell)
-        self.ctx_menu.add_separator()
-        self.ctx_menu.add_command(label="선택 항목 ISO 병합 (Merge ISO)", command=self.merge_selected_iso)
-        self.ctx_menu.add_command(label="선택 항목 Joint 병합 (Merge Joint)", command=self.merge_selected_joint)
-        self.ctx_menu.add_command(label="선택 항목 Joint 시각적 그룹화 (Group Joint)", command=self.group_selected_joint)
-        self.ctx_menu.add_command(label="선택 항목 Joint 그룹 해제 (Ungroup Joint)", command=self.ungroup_selected_joint)
-        self.ctx_menu.add_separator()
-        self.ctx_menu.add_command(label="선택 항목 일괄 변경 (Bulk Update)", command=self.show_bulk_update_dialog)
-
-        # [NEW] 그룹 시인성을 위한 태그 색상 정의
-        self.preview_tree.tag_configure("evenrow", background="#f9fafb")
-        self.preview_tree.tag_configure("oddrow", background="#ffffff")
-        # [NEW] Configure tags for visual selection persistence
-        # This ensures that even with row colors, selection is clearly blue
-        self.preview_tree.tag_configure('group_even', background="#d4e6f1") # Original color for group_even
-        self.preview_tree.tag_configure('group_odd', background="#eaf2f8")  # Original color for group_odd
-        self.preview_tree.tag_configure('grouped_even', background="#d4e6f1") # Use original group color for consistency
-        self.preview_tree.tag_configure('grouped_odd', background="#eaf2f8")  # Use original group color for consistency
-        self.preview_tree.tag_configure('item_even', background="#f9fafb") # Use original evenrow color
-        self.preview_tree.tag_configure('item_odd', background="#ffffff")  # Use original oddrow color
-        
-        # Ensure 'selected' state on tags uses the blue color
-        # The style.map takes care of the selection background in most themes, 
-        # but tag-specific background for selected can be forced if needed.
-        # [REFINED] Selection Visibility: Background colors are removed from tags to allow 
-        # the native blue selection highlight to be clearly visible on Windows.
-        for tag in ['evenrow', 'oddrow', 'group_even', 'group_odd', 'grouped_even', 'grouped_odd', 'item_even', 'item_odd']:
-            self.preview_tree.tag_configure(tag, background="", foreground="black")
-        
-        # Use Bold for ISO group distinction instead of background colors
-        self.preview_tree.tag_configure('group_even', font=("Malgun Gothic", 10, "bold"))
-        self.preview_tree.tag_configure('group_odd', font=("Malgun Gothic", 10, "bold"))
-
-        # [NEW] 모든 UI 생성이 끝난 후 Entry 위젯들을 찾아가서 우클릭 메뉴를 붙임
-        self._create_entry_context_menu()
 
     def on_tree_select(self, event):
         """항목 선택 시 체크박스 상태와 동기화 (현재는 드래그 안정성을 위해 드래그 중에는 무시)"""
         pass
 
-    def toggle_item_selection(self, item_id):
+    def toggle_item_selection(self, item_id, mode="PMI"):
         """단일 항목의 체크 상태를 토글"""
-        view_idx = self.preview_tree.index(item_id)
-        if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-            actual_idx = self.item_idx_map[view_idx]
-            self.extracted_data[actual_idx]['selected'] = not self.extracted_data[actual_idx].get('selected', True)
-            self.populate_preview(self.extracted_data, switch_tab=False)
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        view_idx = tree.index(item_id)
+        if 0 <= view_idx < len(idx_map):
+            actual_idx = idx_map[view_idx]
+            data[actual_idx]['selected'] = not data[actual_idx].get('selected', True)
+            self.populate_preview(data, switch_tab=False, mode=mode)
             
-            # 선택 상태 복구 (re-populate 후에는 선택이 풀리므로)
-            new_items = self.preview_tree.get_children()
-            if view_idx < len(new_items):
-                self.preview_tree.selection_set(new_items[view_idx])
-                self.preview_tree.focus(new_items[view_idx])
+            # 선택 상태 복구
+            num_items = len(tree.get_children())
+            if view_idx < num_items:
+                new_item = tree.get_children()[view_idx]
+                tree.selection_set(new_item)
+                tree.focus(new_item)
 
-    def toggle_selected_items(self):
+    def toggle_selected_items(self, mode="PMI"):
         """선택된 모든 항목의 체크 상태를 토글"""
-        selected_ids = self.preview_tree.selection()
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        selected_ids = tree.selection()
         if not selected_ids: return
         
         for item_id in selected_ids:
-            view_idx = self.preview_tree.index(item_id)
-            if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-                actual_idx = self.item_idx_map[view_idx]
-                self.extracted_data[actual_idx]['selected'] = not self.extracted_data[actual_idx].get('selected', True)
+            view_idx = tree.index(item_id)
+            if 0 <= view_idx < len(idx_map):
+                actual_idx = idx_map[view_idx]
+                data[actual_idx]['selected'] = not data[actual_idx].get('selected', True)
         
-        self.populate_preview(self.extracted_data, switch_tab=False)
-        # 선택 상태 복원 (단순화를 위해 첫번째 항목 기준 근처로 포커스 유지)
-        if selected_ids:
-            new_items = self.preview_tree.get_children()
-            for sid in selected_ids:
-                try: self.preview_tree.selection_add(sid) # sid가 바뀔 수 있어 복잡하지만 populate_preview가 index를 유지하므로 index로 복원 가능
-                except: pass
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        # 선택 보존
+        for sid in selected_ids:
+            try: tree.selection_add(sid)
+            except: pass
 
     def on_tree_click_checkbox(self, event):
         """Reserved for future coordinate-based checkbox toggle if needed without blocking drag."""
         pass
 
-    def on_tree_double_click(self, event):
+    def on_tree_double_click(self, event, mode="PMI"):
         """#1(토글), ISO/DWG(#4), Joint No(#5), Test Location(#6), 또는 Grade(#10) 컬럼 더블 클릭 처리"""
-        region = self.preview_tree.identify_region(event.x, event.y)
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        region = tree.identify_region(event.x, event.y)
         if region != "cell": return
         
-        column = self.preview_tree.identify_column(event.x)
-        item_id = self.preview_tree.identify_row(event.y)
+        column = tree.identify_column(event.x)
+        item_id = tree.identify_row(event.y)
         if not item_id: return
 
         if column == "#1": # Checkbox Column
-            self.toggle_item_selection(item_id)
+            self.toggle_item_selection(item_id, mode)
             return
 
-        if column not in ["#2", "#3", "#4", "#5", "#6", "#7", "#8", "#9", "#10"]: return # Editable columns (No, Date, Dwg, Joint, Loc, Ni, Cr, Mo, Grade)
-        
-        x, y, w, h = self.preview_tree.bbox(item_id, column)
-        
-        # [MOD] Treeview에서 값을 가져오지 않고 실제 데이터에서 가져옴 (중복 표시 생략 대응)
-        view_idx = self.preview_tree.index(item_id)
-        if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-            actual_idx = self.item_idx_map[view_idx]
+        # Editable columns mapping
+        if mode == "RT":
+            # RT: No(#2), Date(#3), Drawing No(#4), Film Ident(#5), Film Loc(#6), Deg(#9), Welder No(#25), Remarks(#26)
+            key_map = {
+                "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "Loc",
+                "#9": "Grade", "#25": "Welder", "#26": "Remarks"
+            }
+        else:
+            # PMI: No, Date, Dwg, Joint, Loc, Ni, Cr, Mo, Grade
             key_map = {
                 "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "Loc",
                 "#7": "Ni", "#8": "Cr", "#9": "Mo", "#10": "Grade"
             }
-            key = key_map.get(column)
-            old_val = self.extracted_data[actual_idx].get(key, "")
-            # 숫자 필드는 포맷팅해서 보여줌 (편집 시 편리함)
+        
+        key = key_map.get(column)
+        if not key: return 
+        
+        x, y, w, h = tree.bbox(item_id, column)
+        
+        view_idx = tree.index(item_id)
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+
+        if 0 <= view_idx < len(idx_map):
+            actual_idx = idx_map[view_idx]
+            old_val = data[actual_idx].get(key, "")
             if key in ["Ni", "Cr", "Mo"] and isinstance(old_val, (int, float)) and old_val > 0:
                 old_val = f"{old_val:.2f}"
         else:
-            old_val = self.preview_tree.set(item_id, column)
+            old_val = tree.set(item_id, column)
         
-        entry = ttk.Entry(self.preview_tree, exportselection=True) # [FIX] Allow standard OS copy/paste
+        entry = ttk.Entry(tree, exportselection=True)
         entry.insert(0, old_val)
         entry.select_range(0, tk.END)
         entry.place(x=x, y=y, width=w, height=h)
@@ -1107,71 +1480,80 @@ class PMIReportApp:
         
         def finish_edit(event=None):
             new_val = entry.get()
-            view_idx = self.preview_tree.index(item_id)
-            if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-                actual_idx = self.item_idx_map[view_idx]
-                key_map = {"#4": "Dwg", "#5": "Joint", "#6": "Loc", "#10": "Grade"}
-                key = key_map.get(column)
-                if key:
-                    if key in ["Ni", "Cr", "Mo"]:
-                        self.extracted_data[actual_idx][key] = self.to_float(new_val)
-                    else:
-                        self.extracted_data[actual_idx][key] = str(new_val).strip()
-                    self.populate_preview(self.extracted_data, switch_tab=False)
+            view_idx = tree.index(item_id)
+            if 0 <= view_idx < len(idx_map):
+                actual_idx = idx_map[view_idx]
+                if key in ["Ni", "Cr", "Mo"]:
+                    data[actual_idx][key] = self.to_float(new_val)
+                else:
+                    data[actual_idx][key] = str(new_val).strip()
+                self.populate_preview(data, switch_tab=False, mode=mode)
             entry.destroy()
             
         entry.bind("<Return>", finish_edit)
         entry.bind("<FocusOut>", finish_edit)
         entry.bind("<Escape>", lambda e: entry.destroy())
 
-    def show_context_menu(self, event):
+    def show_context_menu(self, event, mode="PMI"):
         """우클릭 컨텍스트 메뉴 표시 및 마지막 클릭 컬럼 기록"""
-        col = self.preview_tree.identify_column(event.x)
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        col = tree.identify_column(event.x)
         self.last_clicked_col = col # Track for copy/paste
-        item_id = self.preview_tree.identify_row(event.y)
+        item_id = tree.identify_row(event.y)
         if item_id:
-            # 클릭한 항목이 선택되어 있지 않으면 해당 항목만 선택
-            if item_id not in self.preview_tree.selection():
-                self.preview_tree.selection_set(item_id)
+            if item_id not in tree.selection():
+                tree.selection_set(item_id)
+            
+            # Update menu commands for current mode
+            self.ctx_menu.entryconfigure("선택 항목 체크/해제 토글 (Toggle Check)", command=lambda: self.toggle_selected_items(mode))
+            self.ctx_menu.entryconfigure("셀 내용 복사 (Copy)", command=lambda: self.copy_cell(mode))
+            self.ctx_menu.entryconfigure("셀 내용 붙여넣기 (Paste)", command=lambda: self.paste_cell(mode))
+            
+            # Merge commands (Hide for RT if not applicable, but user might want them)
+            self.ctx_menu.entryconfigure("선택 항목 ISO 병합 (Merge ISO)", command=lambda: self.merge_selected_iso(mode))
+            self.ctx_menu.entryconfigure("선택 항목 Joint 병합 (Merge Joint)", command=lambda: self.merge_selected_joint(mode))
+            self.ctx_menu.entryconfigure("선택 항목 Joint 시각적 그룹화 (Group Joint)", command=lambda: self.group_selected_joint(mode))
+            self.ctx_menu.entryconfigure("선택 항목 Joint 그룹 해제 (Ungroup Joint)", command=lambda: self.ungroup_selected_joint(mode))
+            self.ctx_menu.entryconfigure("선택 항목 일괄 변경 (Bulk Update)", command=lambda: self.show_bulk_update_dialog(mode))
+            
             self.ctx_menu.post(event.x_root, event.y_root)
 
 
-    def update_date_listbox(self):
-        if not hasattr(self, 'date_listbox'): return
+    def update_date_listbox(self, mode="PMI"):
+        listbox = self.rt_date_listbox if mode == "RT" else self.date_listbox
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
         
-        old_size = self.date_listbox.size()
-        current_unchecked = set()
-        self.date_listbox.delete(0, tk.END)
+        if not listbox: return
+        
+        listbox.delete(0, tk.END)
         # [NEW] 데이터 기반으로 날짜별 선택 상태(date_filtered) 수집
         date_status = {}
-        for item in self.extracted_data:
+        for item in data:
             dt = item.get('Date', 'N/A')
             if dt not in date_status:
                 date_status[dt] = item.get('date_filtered', True)
         
         dates = sorted(list(date_status.keys()))
         for d in dates:
-            # [FIX] 저장된 상태(date_status)에 따라 [v] 또는 [ ] 표시
             is_v = date_status.get(d, True)
             prefix = "[v]" if is_v else "[ ]"
-            self.date_listbox.insert(tk.END, f"{prefix} {d}")
-            # 시각적 선택 상태 유지
-            if is_v: self.date_listbox.select_set(tk.END)
-                
-        selected_dates = [self.date_listbox.get(i).replace("[v] ", "").strip() for i in range(self.date_listbox.size()) if self.date_listbox.get(i).startswith("[v]")]
-        for item in self.extracted_data:
-            item['date_filtered'] = (item.get('Date', '') in selected_dates)
+            listbox.insert(tk.END, f"{prefix} {d}")
+            if is_v: listbox.select_set(tk.END)
 
-    def copy_cell(self):
+    def copy_cell(self, mode="PMI"):
         """선택된 영역(드래그된 컬럼 범위)의 내용을 클립보드에 복사 (엑셀 스마트 영역 복사)"""
-        selected = self.preview_tree.selection()
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        selected = tree.selection()
         if not selected: return
         
-        # [NEW] Standardized column index to data key mapping
-        key_map = {
-            "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "Loc",
-            "#7": "Ni", "#8": "Cr", "#9": "Mo", "#10": "Grade"
-        }
+        # Standardized column index to data key mapping
+        if mode == "RT":
+            key_map = {f"#{i+1}": k for i, k in enumerate(self.rt_column_keys)}
+        else:
+            key_map = {f"#{i+1}": k for i, k in enumerate(self.column_keys)}
         
         # [SMART AREA] 드래그 시작열과 종료열 사이의 범위를 계산
         try:
@@ -1184,32 +1566,29 @@ class PMIReportApp:
             col_start = min(s_idx, e_idx)
             col_end = max(s_idx, e_idx)
             
-            # [REFINED] If only one column is selected but it's not the one clicked, 
-            # ensure we at least copy the clicked column if available.
             last_col = getattr(self, 'last_clicked_col', None)
             if last_col and s_idx == e_idx and last_col.startswith('#'):
                 l_idx = int(last_col.replace('#', '')) - 1
                 col_start = min(col_start, l_idx)
                 col_end = max(col_end, l_idx)
         except:
-            col_start = col_end = 3 # Default ISO column (#4)
+            col_start = col_end = 3 # ISO column (#4)
             
         target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
         
         copied_rows = []
-        # [SMART SORT] 시각적 순서대로 복사
-        sorted_selected = sorted(list(selected), key=lambda x: self.preview_tree.index(x))
+        sorted_selected = sorted(list(selected), key=lambda x: tree.index(x))
         
         for item_id in sorted_selected:
-            view_idx = self.preview_tree.index(item_id)
-            if not (hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map)):
+            view_idx = tree.index(item_id)
+            if not (0 <= view_idx < len(idx_map)):
                 continue
-            actual_idx = self.item_idx_map[view_idx]
-            item = self.extracted_data[actual_idx]
+            actual_idx = idx_map[view_idx]
+            item = data[actual_idx]
             
             row_vals = []
             for c_id in target_col_ids:
-                if c_id == "#1": # Select column (v/o) - usually not copied but handled if range includes it
+                if c_id == "#1": # Select column (v/o)
                     status = "●" if item.get('selected', True) else "○"
                     row_vals.append(status)
                     continue
@@ -1217,14 +1596,12 @@ class PMIReportApp:
                 key = key_map.get(c_id)
                 if key:
                     val = item.get(key, "")
-                    # 숫자 필드 포맷팅 (Ni, Cr, Mo)
-                    if key in ["Ni", "Cr", "Mo"]:
+                    if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
                         f_val = self.to_float(val)
                         val = f"{f_val:.2f}" if f_val > 0 else ""
                     row_vals.append(str(val))
                 else: 
-                    # 기본적으로 Treeview에 표시된 값을 가져옴
-                    row_vals.append(str(self.preview_tree.set(item_id, c_id)))
+                    row_vals.append(str(tree.set(item_id, c_id)))
             
             copied_rows.append("\t".join(row_vals))
 
@@ -1232,20 +1609,24 @@ class PMIReportApp:
         self.root.clipboard_clear()
         self.root.clipboard_append(final_string)
         self.root.update()
-        self.log(f"📋 엑셀 영역 복사 완료: {len(sorted_selected)}행 x {len(target_col_ids)}열")
+        self.log(f"📋 '{mode}' 엑셀 영역 복사 완료: {len(sorted_selected)}행 x {len(target_col_ids)}열")
 
-    def paste_cell(self):
+    def paste_cell(self, mode="PMI"):
         """클립보드 내용을 선택된 영역(드래그된 컬럼 범위)에 스마트하게 붙여넣기 (멀티행/아래로 채우기 지원)"""
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
         try: 
             clipboard_val = self.root.clipboard_get()
             if not clipboard_val: return
         except: return
         
-        selected = list(self.preview_tree.selection())
+        selected = list(tree.selection())
         if not selected: return
         
         # [SMART SORT] 시각적 순서(위에서 아래)대로 정렬
-        selected.sort(key=lambda x: self.preview_tree.index(x))
+        selected.sort(key=lambda x: tree.index(x))
         
         # [SMART AREA] 드래그된 컬럼 범위를 계산
         try:
@@ -1257,16 +1638,16 @@ class PMIReportApp:
             col_start = col_end = 3 # Default ISO column (#4)
             
         target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
-        key_map = {
-            "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "Loc",
-            "#7": "Ni", "#8": "Cr", "#9": "Mo", "#10": "Grade"
-        }
+        if mode == "RT":
+            key_map = {f"#{i+1}": k for i, k in enumerate(self.rt_column_keys)}
+        else:
+            key_map = {f"#{i+1}": k for i, k in enumerate(self.column_keys)}
         
         # 클립보드 데이터를 행/열 그리드로 파싱 (TAB/NEWLINE)
         paste_rows = [line.split("\t") for line in clipboard_val.strip().split("\n")]
         
         # [FILL DOWN] 한 줄만 선택했는데 클립보드가 여러 줄이면 아래로 자동 확장
-        all_children = self.preview_tree.get_children('')
+        all_children = tree.get_children('')
         if len(selected) == 1 and len(paste_rows) > 1:
             curr_idx = all_children.index(selected[0])
             for i in range(1, len(paste_rows)):
@@ -1274,10 +1655,10 @@ class PMIReportApp:
                     selected.append(all_children[curr_idx + i])
         
         for r_idx, item_id in enumerate(selected):
-            view_idx = self.preview_tree.index(item_id)
-            if not (hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map)):
+            view_idx = tree.index(item_id)
+            if not (0 <= view_idx < len(idx_map)):
                 continue
-            actual_idx = self.item_idx_map[view_idx]
+            actual_idx = idx_map[view_idx]
             
             # 클립보드 데이터 매칭
             source_row = paste_rows[min(r_idx, len(paste_rows)-1)]
@@ -1287,219 +1668,249 @@ class PMIReportApp:
                 
                 key = key_map.get(c_id)
                 if key:
-                    if key in ["Ni", "Cr", "Mo"]:
-                        self.extracted_data[actual_idx][key] = self.to_float(cell_val)
+                    if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
+                        data[actual_idx][key] = self.to_float(cell_val)
                     else:
-                        self.extracted_data[actual_idx][key] = str(cell_val).strip()
+                        data[actual_idx][key] = str(cell_val).strip()
         
-        self.populate_preview(self.extracted_data, switch_tab=False)
-        self.log(f"📋 엑셀 스마트 붙여넣기 완료: {len(selected)}행 x {len(target_col_ids)}열")
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.log(f"📋 {mode} 엑셀 스마트 붙여넣기 완료: {len(selected)}행 x {len(target_col_ids)}열")
 
-    def merge_selected_iso(self):
+    def merge_selected_iso(self, mode="PMI"):
         """선택된 항목들의 ISO 번호를 첫 번째 항목의 것으로 통일 (병합 효과)"""
-        selected = self.preview_tree.selection()
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        selected = tree.selection()
         if len(selected) < 2:
             messagebox.showinfo("알림", "병합할 항목을 2개 이상 선택해주세요.")
             return
         
         # [SMART SORT] 시각적 순서대로 정렬하여 첫 번째 항목 식별
-        selected = sorted(list(selected), key=lambda x: self.preview_tree.index(x))
+        selected = sorted(list(selected), key=lambda x: tree.index(x))
         
-        # [FIX] Fetch from data model, NOT from suppressed Treeview item
-        view_idx_0 = self.preview_tree.index(selected[0])
-        actual_idx_0 = self.item_idx_map[view_idx_0] if hasattr(self, 'item_idx_map') and 0 <= view_idx_0 < len(self.item_idx_map) else None
+        view_idx_0 = tree.index(selected[0])
+        actual_idx_0 = idx_map[view_idx_0] if 0 <= view_idx_0 < len(idx_map) else None
         
         if actual_idx_0 is not None:
-            first_iso = self.extracted_data[actual_idx_0].get('Dwg', '')
+            first_iso = data[actual_idx_0].get('Dwg', '')
         else:
-            first_iso = "" # Safety default
+            first_iso = ""
         
         for i, item_id in enumerate(selected):
-            view_idx = self.preview_tree.index(item_id)
-            if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-                actual_idx = self.item_idx_map[view_idx]
-                self.extracted_data[actual_idx]['Dwg'] = first_iso
-                # [NEW] 병합된 항목임을 표시 (첫번째 제외 시각적 생략용)
-                if i > 0: self.extracted_data[actual_idx]['is_merged_iso'] = True
-                else: self.extracted_data[actual_idx].pop('is_merged_iso', None)
+            view_idx = tree.index(item_id)
+            if 0 <= view_idx < len(idx_map):
+                actual_idx = idx_map[view_idx]
+                data[actual_idx]['Dwg'] = first_iso
+                if i > 0: data[actual_idx]['is_merged_iso'] = True
+                else: data[actual_idx].pop('is_merged_iso', None)
         
-        self.populate_preview(self.extracted_data, switch_tab=False)
-        self.log(f"🔗 {len(selected)}개 항목 ISO 병합 완료: {first_iso}")
-        messagebox.showinfo("성공", f"{len(selected)}개 항목의 ISO 번호를 '{first_iso}'(으)로 병합했습니다.")
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.log(f"🔗 {mode} {len(selected)}개 항목 ISO 병합 완료: {first_iso}")
 
-    def merge_selected_joint(self):
+    def merge_selected_joint(self, mode="PMI"):
         """선택된 항목들의 Joint No를 첫 번째 항목의 것으로 통일 (데이터 완전 변경)"""
-        selected = self.preview_tree.selection()
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        selected = tree.selection()
         if len(selected) < 2:
             messagebox.showinfo("알림", "병합할 항목을 2개 이상 선택해주세요.")
             return
         
         # [SMART SORT]
-        selected = sorted(list(selected), key=lambda x: self.preview_tree.index(x))
+        selected = sorted(list(selected), key=lambda x: tree.index(x))
         
-        # 첫 번째 아이템의 Joint No 추출
-        item_id = selected[0]
-        view_idx = self.preview_tree.index(item_id)
-        actual_idx = self.item_idx_map[view_idx] if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map) else None
+        view_idx_0 = tree.index(selected[0])
+        actual_idx_0 = idx_map[view_idx_0] if 0 <= view_idx_0 < len(idx_map) else None
         
-        if actual_idx is not None:
-            first_joint = self.extracted_data[actual_idx].get('Joint', '')
+        if actual_idx_0 is not None:
+            first_joint = data[actual_idx_0].get('Joint', '')
         else:
             first_joint = ""
-
-        for i, item_id in enumerate(selected):
-            view_idx = self.preview_tree.index(item_id)
-            if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-                actual_idx = self.item_idx_map[view_idx]
-                self.extracted_data[actual_idx]['Joint'] = first_joint
-                self.extracted_data[actual_idx].pop('visual_group_joint', None) # 그룹화 속성 제거
-                # [NEW] 시각적 생략 플래그
-                if i > 0: self.extracted_data[actual_idx]['is_merged_joint'] = True
-                else: self.extracted_data[actual_idx].pop('is_merged_joint', None)
         
-        self.populate_preview(self.extracted_data, switch_tab=False)
-        self.log(f"🔗 {len(selected)}개 항목 Joint 병합 완료: {first_joint}")
-        messagebox.showinfo("성공", f"{len(selected)}개 항목의 Joint No를 '{first_joint}'(으)로 병합(데이터 변경)했습니다.")
+        for i, item_id in enumerate(selected):
+            view_idx = tree.index(item_id)
+            if 0 <= view_idx < len(idx_map):
+                actual_idx = idx_map[view_idx]
+                data[actual_idx]['Joint'] = first_joint
+                if i > 0: data[actual_idx]['is_merged_joint'] = True
+                else: data[actual_idx].pop('is_merged_joint', None)
+        
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.log(f"🔗 {mode} {len(selected)}개 항목 Joint 병합 완료: {first_joint}")
 
-    def group_selected_joint(self,):
+    def group_selected_joint(self, mode="PMI"):
         """선택된 항목들을 시각적으로만 같은 Joint로 취급하여 묶음 (데이터 유지)"""
-        selected = self.preview_tree.selection()
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        selected = tree.selection()
         if len(selected) < 2:
             messagebox.showinfo("알림", "그룹화할 항목을 2개 이상 선택해주세요.")
             return
             
-        # [SMART SORT]
-        selected = sorted(list(selected), key=lambda x: self.preview_tree.index(x))
+        selected = sorted(list(selected), key=lambda x: tree.index(x))
             
-        # 첫 번째 아이템의 Joint No를 그룹 대표값으로 설정
-        item_id = selected[0]
-        view_idx = self.preview_tree.index(item_id)
-        actual_idx = self.item_idx_map[view_idx] if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map) else None
+        view_idx_0 = tree.index(selected[0])
+        actual_idx_0 = idx_map[view_idx_0] if 0 <= view_idx_0 < len(idx_map) else None
         
-        if actual_idx is not None:
-            group_val = self.extracted_data[actual_idx].get('Joint', '')
+        if actual_idx_0 is not None:
+            group_val = data[actual_idx_0].get('Joint', '')
         else:
             group_val = ""
             
         for i, item_id in enumerate(selected):
-            view_idx = self.preview_tree.index(item_id)
-            if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-                actual_idx = self.item_idx_map[view_idx]
-                self.extracted_data[actual_idx]['visual_group_joint'] = group_val
-                # [NEW] 시각적 생략 플래그
-                if i > 0: self.extracted_data[actual_idx]['is_merged_joint'] = True
-                else: self.extracted_data[actual_idx].pop('is_merged_joint', None)
+            view_idx = tree.index(item_id)
+            if 0 <= view_idx < len(idx_map):
+                actual_idx = idx_map[view_idx]
+                data[actual_idx]['visual_group_joint'] = group_val
+                if i > 0: data[actual_idx]['is_merged_joint'] = True
+                else: data[actual_idx].pop('is_merged_joint', None)
                 
-        self.populate_preview(self.extracted_data, switch_tab=False)
-        self.log(f"🔗 {len(selected)}개 항목 Joint 시각적 그룹화 완료")
-        messagebox.showinfo("성공", f"{len(selected)}개 항목을 시각적으로 묶었습니다.\n(출력 시 '{group_val}' 밑으로 비워져 표시되며 실제 데이터는 유지됩니다.)")
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.log(f"🔗 {mode} {len(selected)}개 항목 Joint 시각적 그룹화 완료")
 
-    def ungroup_selected_joint(self):
+    def ungroup_selected_joint(self, mode="PMI"):
         """선택된 항목들의 시각적 그룹화 해제"""
-        selected = self.preview_tree.selection()
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        selected = tree.selection()
         if not selected: return
             
         for item_id in selected:
-            view_idx = self.preview_tree.index(item_id)
-            if hasattr(self, 'item_idx_map') and 0 <= view_idx < len(self.item_idx_map):
-                actual_idx = self.item_idx_map[view_idx]
-                self.extracted_data[actual_idx].pop('visual_group_joint', None)
-                self.extracted_data[actual_idx].pop('is_merged_joint', None) # [NEW]
+            view_idx = tree.index(item_id)
+            if 0 <= view_idx < len(idx_map):
+                actual_idx = idx_map[view_idx]
+                data[actual_idx].pop('visual_group_joint', None)
+                data[actual_idx].pop('is_merged_joint', None)
                 
-        self.populate_preview(self.extracted_data, switch_tab=False)
-        self.log(f"🔗 {len(selected)}개 항목 Joint 시각적 그룹화 해제 완료")
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.log(f"🔗 {mode} {len(selected)}개 항목 Joint 시각적 그룹화 해제 완료")
 
-    def select_all(self):
+    def select_all(self, mode="PMI"):
         """모든 항목 체크"""
-        for item in self.extracted_data:
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        for item in data:
             if item.get('date_filtered', True):
                 item['selected'] = True
-        self.populate_preview(self.extracted_data, switch_tab=False)
+        self.populate_preview(data, switch_tab=False, mode=mode)
 
-    def deselect_all(self):
+    def deselect_all(self, mode="PMI"):
         """모든 항목 체크 해제"""
-        for item in self.extracted_data:
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        for item in data:
             if item.get('date_filtered', True):
                 item['selected'] = False
-        self.populate_preview(self.extracted_data, switch_tab=False)
+        self.populate_preview(data, switch_tab=False, mode=mode)
 
-    def move_item(self, direction):
+    def move_item(self, direction, mode="PMI"):
         """선택된 아이템의 순서를 위/아래로 이동 (필터 상태 대응)"""
-        selected_ids = self.preview_tree.selection()
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        
+        selected_ids = tree.selection()
         if not selected_ids: return
         
-        # 1. 보기 인덱스 확인
-        view_indices = sorted([self.preview_tree.index(sid) for sid in selected_ids])
+        view_indices = sorted([tree.index(sid) for sid in selected_ids])
         
-        # 2. 경계 검사
         if direction == -1: # 위로
             if view_indices[0] == 0: return
-            processing_order = view_indices
         else: # 아래로
-            if view_indices[-1] == len(self.item_idx_map) - 1: return
-            processing_order = reversed(view_indices)
+            if view_indices[-1] == len(tree.get_children()) - 1: return
             
-        # 3. item_idx_map을 이용해 실제 데이터 리스트(extracted_data)에서 스왑
-        for v_idx in processing_order:
-            actual_curr = self.item_idx_map[v_idx]
-            actual_target = self.item_idx_map[v_idx + direction]
+        # 데이터 리스트(data)에서 위치 교환
+        # Treeview 인덱스를 item_idx_map을 통해 실제 데이터 인덱스로 변환
+        actual_indices = [idx_map[vi] for vi in view_indices]
+        
+        # 이동 방향에 따라 처리 순서 결정
+        if direction == -1: # 위로
+            # 가장 위 아이템의 위쪽 아이템 찾기 (Treeview상에서)
+            target_view_idx = view_indices[0] - 1
+            target_actual_idx = idx_map[target_view_idx]
             
-            self.extracted_data[actual_curr], self.extracted_data[actual_target] = \
-                self.extracted_data[actual_target], self.extracted_data[actual_curr]
+            # 선택된 아이템들을 한 칸씩 위로 (target_actual_idx 앞으로)
+            items_to_move = [data.pop(ai) for ai in reversed(actual_indices)]
+            # target_actual_idx가 팝업으로 인해 밀렸을 수 있으므로 다시 계산
+            # 하지만 팝업 시 뒤쪽부터 뺐으므로 target_actual_idx 위치는 유지됨
+            for item in items_to_move:
+                data.insert(target_actual_idx, item)
+        else: # 아래로
+            # 가장 아래 아이템의 아래쪽 아이템 찾기
+            target_view_idx = view_indices[-1] + 1
+            target_actual_idx = idx_map[target_view_idx]
+            
+            # 선택된 아이템들을 한 칸씩 아래로 (target_actual_idx 뒤로)
+            items_to_move = [data.pop(ai) for ai in actual_indices]
+            # 팝업으로 인해 인덱스가 당겨졌으므로 target_actual_idx에서 len(items_to_move) 만큼 보정하거나 단순히 insert
+            insert_pos = target_actual_idx - len(items_to_move) + 1
+            for item in reversed(items_to_move):
+                data.insert(insert_pos, item)
+                
+        self.populate_preview(data, switch_tab=False, mode=mode)
         
-        # [NEW] 순서 변경 후 order_index 전체 재부여하여 차후 정렬 시 이 순서가 유지되게 함
-        for i, item in enumerate(self.extracted_data):
-            item['order_index'] = i
-        
-        # 4. 보기 갱신
-        self.populate_preview(self.extracted_data, switch_tab=False)
-        
-        # 5. 선택 상태 복구
-        new_items = self.preview_tree.get_children()
-        for v_idx in view_indices:
-            self.preview_tree.selection_add(new_items[v_idx + direction])
+        # 선택 상태 복원 (Treeview 아이템이 다시 생성되므로 인덱스로 재선택)
+        new_children = tree.get_children()
+        for vi in view_indices:
+            new_pos = max(0, min(len(new_children)-1, vi + direction))
+            tree.selection_add(new_children[new_pos])
 
-    def delete_item(self):
+    def delete_item(self, mode="PMI"):
         """선택된 아이템 삭제"""
-        selected_items = self.preview_tree.selection()
-        if not selected_items: return
-        if not messagebox.askyesno("삭제 확인", f"선택한 {len(selected_items)}개 항목을 삭제하시겠습니까?"): return
+        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
         
-        indices = sorted([self.item_idx_map[self.preview_tree.index(s)] for s in selected_items], reverse=True)
-        for idx in indices:
-            self.extracted_data.pop(idx)
-        self.update_date_listbox()
-        self.populate_preview(self.extracted_data, switch_tab=False)
+        selected_ids = tree.selection()
+        if not selected_ids: return
+        
+        if not messagebox.askyesno("삭제 확인", f"선택한 {len(selected_ids)}개 항목을 정말 삭제하시겠습니까?"):
+            return
+            
+        view_indices = sorted([tree.index(sid) for sid in selected_ids], reverse=True)
+        for vi in view_indices:
+            actual_idx = idx_map[vi]
+            data.pop(actual_idx)
+            
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.update_date_listbox(mode)
+        self.log(f"🗑️ {mode} {len(selected_ids)}개 항목 삭제 완료")
 
-    def save_preview_data(self):
+    def save_preview_data(self, mode="PMI"):
         """현재 추출/편집된 데이터를 JSON 파일로 저장"""
-        if not self.extracted_data:
-            messagebox.showwarning("알림", "저장할 데이터가 없습니다.")
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if not data:
+            messagebox.showwarning("알림", f"{mode} 저장할 데이터가 없습니다.")
             return
             
         file_path = filedialog.asksaveasfilename(
             defaultextension=".json",
             filetypes=[("JSON Files", "*.json")],
-            initialfile=f"PMI_Data_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            title="미리보기 데이터 저장"
+            initialfile=f"{mode}_Data_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            title=f"{mode} 미리보기 데이터 저장"
         )
         
         if file_path:
             try:
                 with open(file_path, 'w', encoding='utf-8') as f:
-                    # 'selected'나 'date_filtered' 같은 UI 상태값도 포함하여 저장
-                    json.dump(self.extracted_data, f, ensure_ascii=False, indent=4)
-                self.log(f"💾 데이터 저장 완료: {os.path.basename(file_path)}")
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+                self.log(f"💾 {mode} 데이터 저장 완료: {os.path.basename(file_path)}")
                 messagebox.showinfo("완료", "데이터가 성공적으로 저장되었습니다.")
             except Exception as e:
-                self.log(f"❌ 저장 오류: {e}")
+                self.log(f"❌ {mode} 저장 오류: {e}")
                 messagebox.showerror("오류", f"파일 저장 중 오류가 발생했습니다: {e}")
 
-    def load_preview_data(self):
+    def load_preview_data(self, mode="PMI"):
         """저장된 JSON 데이터를 불러와서 목록에 채움"""
         file_path = filedialog.askopenfilename(
             filetypes=[("JSON Files", "*.json")],
-            title="미리보기 데이터 불러오기"
+            title=f"{mode} 미리보기 데이터 불러오기"
         )
         
         if file_path:
@@ -1510,37 +1921,43 @@ class PMIReportApp:
                 if not isinstance(loaded_data, list):
                     raise ValueError("올바른 데이터 형식이 아닙니다.")
                 
-                if self.extracted_data and not messagebox.askyesno("확인", "현재 작업 중인 데이터가 있습니다. 불러온 데이터로 덮어쓰시겠습니까?\n(아니오를 선택하면 기존 데이터에 추가됩니다.)"):
-                    self.extracted_data.extend(loaded_data)
+                data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+                
+                if data and not messagebox.askyesno("확인", f"현재 작업 중인 {mode} 데이터가 있습니다. 불러온 데이터로 덮어쓰시겠습니까?\n(아니오를 선택하면 기존 데이터에 추가됩니다.)"):
+                    data.extend(loaded_data)
                 else:
-                    self.extracted_data = loaded_data
+                    if mode == "RT": self.rt_extracted_data = loaded_data
+                    else: self.extracted_data = loaded_data
+                    data = loaded_data
             
                 # [FIX] 필수 속성 보정
-                for i, item in enumerate(self.extracted_data):
+                for i, item in enumerate(data):
                     if 'date_filtered' not in item: item['date_filtered'] = True
                     if 'selected' not in item: item['selected'] = True
                     if 'order_index' not in item: item['order_index'] = i
                     
-                self.update_date_listbox()
-                self.populate_preview(self.extracted_data)
-                self.log(f"📂 데이터 불러오기 완료: {os.path.basename(file_path)}")
-                messagebox.showinfo("완료", f"데이터를 성공적으로 불러왔습니다.\n(총 {len(self.extracted_data)} 건)")
+                self.update_date_listbox(mode)
+                self.populate_preview(data, mode=mode)
+                self.log(f"📂 {mode} 데이터 불러오기 완료: {os.path.basename(file_path)}")
+                messagebox.showinfo("완료", f"데이터를 성공적으로 불러왔습니다.\n(총 {len(data)} 건)")
             except Exception as e:
-                self.log(f"❌ 불러오기 오류: {e}")
+                self.log(f"❌ {mode} 불러오기 오류: {e}")
                 messagebox.showerror("오류", f"파일을 불러오는 중 오류가 발생했습니다: {e}")
 
-    def clear_all(self):
+    def clear_all(self, mode="PMI"):
         """모든 데이터 초기화"""
-        if messagebox.askyesno("확인", "모든 데이터를 초기화하시겠습니까?"):
-            self.extracted_data = []
-            self.update_date_listbox()
-            self.populate_preview([])
-            self.log("🧹 모든 데이터 초기화 완료")
+        if messagebox.askyesno("확인", f"모든 {mode} 데이터를 초기화하시겠습니까?"):
+            if mode == "RT": self.rt_extracted_data = []
+            else: self.extracted_data = []
+            self.update_date_listbox(mode)
+            self.populate_preview([], mode=mode)
+            self.log(f"🧹 모든 {mode} 데이터 초기화 완료")
 
-    def export_to_excel(self):
+    def export_to_excel(self, mode="PMI"):
         """현재 미리보기 목록(필터링/선택 반영)을 엑셀 파일로 내보냄 (서식 및 병합 시인성 유지)"""
-        if not self.extracted_data:
-            messagebox.showwarning("알림", "내보낼 데이터가 없습니다.")
+        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if not data:
+            messagebox.showwarning("알림", f"{mode} 내보낼 데이터가 없습니다.")
             return
 
         # 1. 엑셀에 들어갈 데이터 가공 (화면 표시 로직 재현)
@@ -1549,72 +1966,75 @@ class PMIReportApp:
         
         last_iso = None
         last_joint = None
-        for idx, item in enumerate(self.extracted_data):
+        for idx, item in enumerate(data):
             if not item.get('date_filtered', True): continue
             if filter_enabled and not item.get('selected', True): continue
             
             curr_iso = item.get('Dwg', '')
             norm_iso = self.normalize_iso(curr_iso)
-            
-            # [FIX] ISO나 Joint가 바뀌었거나, 3행 블록 시작점이라면 무조건 표시 (Joint-Aware)
-            # visual_group_joint 속성이 있으면 해당 값으로 그룹핑 판단
             curr_joint = item.get('visual_group_joint', item.get('Joint', ''))
             
             is_new_iso = (last_iso is None or self.normalize_iso(last_iso) != norm_iso)
             is_new_joint = (last_joint is None or last_joint != curr_joint)
-            is_block_start = (len(export_rows) % 3 == 0)
             
-            # [REFINED] ISO나 Joint가 변경되거나 블록 시작점이면 표시 대상
+            # PMI: 3-row block layout logic, RT: simple 1-row pagination usually
+            is_block_start = (mode == "PMI" and len(export_rows) % 3 == 0)
+            
             is_show = is_new_iso or is_new_joint or is_block_start
             
             d_iso = curr_iso if is_show else ""
             d_joint = item.get('Joint', '') if is_show else ""
             
-            # [FIX] 명시적으로 병합된 경우라도 '새 그룹 시작'이면 표시 강제
             if item.get('is_merged_iso') and not (is_new_iso or is_new_joint): d_iso = ""
             if item.get('is_merged_joint') and not (is_new_iso or is_new_joint): d_joint = ""
             
             last_iso = curr_iso
             last_joint = curr_joint
             
-            ni_val = self.to_float(item.get('Ni'))
-            cr_val = self.to_float(item.get('Cr'))
-            mo_val = self.to_float(item.get('Mo'))
+            if mode == "RT":
+                row_dict = {k: item.get(k, "") for k in self.rt_column_keys}
+                # Overwrite ISO/Joint for visual merging
+                row_dict['Dwg'] = d_iso
+                row_dict['Joint'] = d_joint
+                export_rows.append(row_dict)
+            else:
+                ni_val = self.to_float(item.get('Ni'))
+                cr_val = self.to_float(item.get('Cr'))
+                mo_val = self.to_float(item.get('Mo'))
 
-            export_rows.append({
-                '순번': item.get('No', ''),
-                '날짜': item.get('Date', ''),
-                '도면번호': d_iso,
-                '조인트': d_joint,
-                '위치': item.get('Loc', ''),
-                'Ni': f"{ni_val:.2f}" if ni_val > 0 else "",
-                'Cr': f"{cr_val:.2f}" if cr_val > 0 else "",
-                'Mo': f"{mo_val:.2f}" if mo_val > 0 else "",
-                '판정': item.get('Grade', '')
-            })
+                export_rows.append({
+                    '순번': item.get('No', ''),
+                    '날짜': item.get('Date', ''),
+                    '도면번호': d_iso,
+                    '조인트': d_joint,
+                    '위치': item.get('Loc', ''),
+                    'Ni': f"{ni_val:.2f}" if ni_val > 0 else "",
+                    'Cr': f"{cr_val:.2f}" if cr_val > 0 else "",
+                    'Mo': f"{mo_val:.2f}" if mo_val > 0 else "",
+                    '판정': item.get('Grade', '')
+                })
 
         if not export_rows:
-            messagebox.showinfo("알림", "현재 조건에 맞는 데이터가 없습니다.")
+            messagebox.showinfo("알림", f"{mode} 현재 조건에 맞는 데이터가 없습니다.")
             return
 
         file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel Files", "*.xlsx")],
-            initialfile=f"PMI_Export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-            title="서식 있는 엑셀 파일로 내보내기"
+            initialfile=f"{mode}_Export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            title=f"{mode} 서식 있는 엑셀 파일로 내보내기"
         )
         if not file_path: return
 
         try:
-            # openpyxl을 직접 사용하여 서식 적용
             from openpyxl import Workbook
             from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
+            import openpyxl.utils
 
             wb = Workbook()
             ws = wb.active
-            ws.title = "PMI_Preview"
+            ws.title = f"{mode}_Preview"
 
-            # 헤더 작성
             headers = list(export_rows[0].keys())
             for col_idx, header in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=col_idx, value=header)
@@ -1622,38 +2042,39 @@ class PMIReportApp:
                 cell.fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
                 cell.alignment = Alignment(horizontal='center', vertical='center')
 
-            # 데이터 작성 및 서식 적용
             thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
                                 top=Side(style='thin'), bottom=Side(style='thin'))
             
             for row_idx, row_data in enumerate(export_rows, 2):
                 for col_idx, key in enumerate(headers, 1):
-                    cell = ws.cell(row=row_idx, column=col_idx, value=row_data[key])
+                    val = row_data[key]
+                    if mode == "RT" and key.startswith('D') and key[1:].isdigit():
+                        # Keep check symbols as is
+                        pass
+                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = thin_border
 
-            # 컬럼 너비 설정 (화면 비율 반영: UI 너비를 약 10으로 나눈 값)
-            #widths = {"V": 40, "No": 50, "Date": 90, "ISO/DWG": 180, "Joint No": 100, "Test Location": 100, "Ni": 60, "Cr": 60, "Mo": 60, "Grade": 100}
-            column_widths = {
-                1: 8,   # 순번
-                2: 12,  # 날짜
-                3: 25,  # 도면번호
-                4: 15,  # 조인트
-                5: 15,  # 위치
-                6: 8,   # Ni
-                7: 8,   # Cr
-                8: 8,   # Mo
-                9: 15   # 판정
-            }
+            if mode == "PMI":
+                column_widths = {1: 8, 2: 12, 3: 25, 4: 15, 5: 15, 6: 8, 7: 8, 8: 8, 9: 15}
+            else:
+                # RT Column Widths
+                column_widths = {1: 8, 2: 12, 3: 25, 4: 15, 5: 15, 6: 10} # Simplified for now
+                for i in range(7, 22): column_widths[i] = 4 # Defects
+                column_widths[22] = 8 # Result
+                column_widths[23] = 12 # Welder
+                column_widths[24] = 20 # Remarks
+                
             for col_idx, width in column_widths.items():
-                col_letter = openpyxl.utils.get_column_letter(col_idx)
-                ws.column_dimensions[col_letter].width = width
+                if col_idx <= len(headers):
+                    col_letter = openpyxl.utils.get_column_letter(col_idx)
+                    ws.column_dimensions[col_letter].width = width
 
             wb.save(file_path)
-            self.log(f"📊 서식 포함 엑셀 내보내기 완료: {os.path.basename(file_path)}")
+            self.log(f"📊 {mode} 서식 포함 엑셀 내보내기 완료: {os.path.basename(file_path)}")
             messagebox.showinfo("완료", f"화면 형식과 동일하게 엑셀 파일로 저장했습니다.\n(총 {len(export_rows)} 건)")
         except Exception as e:
-            self.log(f"❌ 엑셀 내보내기 오류: {e}")
+            self.log(f"❌ {mode} 엑셀 내보내기 오류: {e}")
             messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다: {e}")
 
     def sort_by_column(self, col):
@@ -1727,17 +2148,29 @@ class PMIReportApp:
             self.preview_tree.heading(c, text=prefix + c)
 
         # 5. 화면 갱신 및 로그
-        self.populate_preview(self.extracted_data, switch_tab=False)
+            self.populate_preview(self.extracted_data, switch_tab=False)
         self.log(f"📊 '{col}' 기준 {'내림차순' if self.sort_reverse else '오름차순'} 정렬 완료")
 
 
 
-    def populate_preview(self, data_list, switch_tab=True):
+    def populate_preview(self, data_list, switch_tab=True, mode="PMI"):
         """추출된 데이터를 미리보기 표에 채움 (필터 반영 및 그룹 색상 적용)"""
-        for item in self.preview_tree.get_children():
-            self.preview_tree.delete(item)
+        if mode == "RT":
+            tree = self.rt_preview_tree
+            self.rt_item_idx_map = []
+            idx_map = self.rt_item_idx_map
+        elif mode == "PT":
+            tree = self.pt_preview_tree
+            self.pt_item_idx_map = []
+            idx_map = self.pt_item_idx_map
+        else:
+            tree = self.preview_tree
+            self.item_idx_map = []
+            idx_map = self.item_idx_map
+
+        for item in tree.get_children():
+            tree.delete(item)
         
-        self.item_idx_map = []
         filter_enabled = self.show_selected_only.get()
         
         last_iso = None
@@ -1752,14 +2185,14 @@ class PMIReportApp:
             if filter_enabled and not is_selected:
                 continue
             
-            self.item_idx_map.append(idx)
+            idx_map.append(idx)
             v_mark = "●" if is_selected else "○"
             
             # ISO/DWG 번호가 바뀌면 배경색 태그 교체
             curr_iso = item.get('Dwg', '')
             norm_iso = self.normalize_iso(curr_iso)
             
-            # [NEW] 시가적 병합 (visual_group_joint) 값이 존재하면 해당 값으로 그룹화 계산
+            # [NEW] 시각적 병합 (visual_group_joint) 값이 존재하면 해당 값으로 그룹화 계산
             curr_joint = item.get('visual_group_joint', item.get('Joint', ''))
             
             # [FIX] Joint-Aware: Joint가 바뀌었는지도 함께 체크
@@ -1770,7 +2203,7 @@ class PMIReportApp:
                 current_tag = "group_odd" if current_tag == "group_even" else "group_even"
 
             # [REFINED] 하이브리드 표시 로직: 블록 시작점 정렬이거나 "새로운 그룹(ISO or Joint)" 시작점일 때 표시
-            display_count = len(self.item_idx_map) - 1 
+            display_count = len(idx_map) - 1 
             is_block_start = (display_count % 3 == 0)
             
             # ISO나 Joint가 바뀌었거나 3줄 단위 시작이면 표시
@@ -1786,23 +2219,46 @@ class PMIReportApp:
             last_iso = curr_iso
             last_joint = curr_joint
             
-            # Always apply bold to group starts for identification since background is white
+            # Row Values based on mode
+            if mode == "RT":
+                row_vals = [v_mark]
+                row_vals.extend([
+                    item.get('No', ''), item.get('Date', ''),
+                    display_iso, display_joint, item.get('Loc', ''),
+                    item.get('Accept', ''), item.get('Reject', ''), item.get('Grade', '')
+                ])
+                # Add D1 to D15
+                for di in range(1, 16):
+                    row_vals.append(item.get(f'D{di}', ''))
+                row_vals.extend([item.get('Welder', ''), item.get('Remarks', '')])
+            elif mode == "PT":
+                row_vals = [
+                    v_mark, item.get('No', ''), item.get('Date', ''),
+                    item.get('Dwg', ''), item.get('Joint', ''),
+                    item.get('NPS', ''), item.get('Thk.', ''),
+                    item.get('Material', ''), item.get('Welder', ''),
+                    item.get('WType', ''), item.get('Result', '')
+                ]
+            else:
+                row_vals = [
+                    v_mark, item.get('No', ''), item.get('Date', ''),
+                    display_iso, display_joint, item.get('Loc', ''),
+                    f"{self.to_float(item.get('Ni')): .2f}" if self.to_float(item.get('Ni')) > 0 else "",
+                    f"{self.to_float(item.get('Cr')): .2f}" if self.to_float(item.get('Cr')) > 0 else "",
+                    f"{self.to_float(item.get('Mo')): .2f}" if self.to_float(item.get('Mo')) > 0 else "",
+                    item.get('Grade', '')
+                ]
+
             row_tags = [str(idx), current_tag]
-            self.preview_tree.insert("", "end", values=(
-                v_mark,
-                item.get('No', ''),
-                item.get('Date', ''),
-                display_iso,
-                display_joint,
-                item.get('Loc', ''),
-                f"{self.to_float(item.get('Ni')): .2f}" if self.to_float(item.get('Ni')) > 0 else "",
-                f"{self.to_float(item.get('Cr')): .2f}" if self.to_float(item.get('Cr')) > 0 else "",
-                f"{self.to_float(item.get('Mo')): .2f}" if self.to_float(item.get('Mo')) > 0 else "",
-                item.get('Grade', '')
-            ), tags=tuple(row_tags))
+            tree.insert("", "end", values=tuple(row_vals), tags=tuple(row_tags))
             
         if switch_tab:
-            self.tab_notebook.select(self.tab_preview)
+            if mode == "RT":
+                self.rt_tab_notebook.select(self.rt_tab_preview)
+            elif mode == "PT":
+                self.pt_tab_notebook.select(self.pt_tab_preview)
+            else:
+                self.tab_notebook.select(self.tab_preview)
 
     def _browse_dir(self, var):
         path = filedialog.askdirectory(initialdir=var.get() or RESOURCE_DIR)
@@ -2207,13 +2663,21 @@ class PMIReportApp:
         return new_sheet
 
     def extract_only(self, show_msg=True):
-        """데이터만 추출하여 리스트와 미리보기에 반영"""
-        target_file = self.target_file_path.get()
+        """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
+        # 현재 활성 탭에 따른 모드 결정
+        try:
+            tab_idx = self.mode_notebook.index("current") # Main notebook (PMI, RT, PT...)
+            if tab_idx == 1: mode = "RT"
+            elif tab_idx == 2: mode = "PT"
+            else: mode = "PMI"
+        except: mode = "PMI"
+
+        target_file = self.pt_target_file_path.get() if mode == "PT" else (self.rt_target_file_path.get() if mode == "RT" else self.target_file_path.get())
         if not target_file:
-            messagebox.showwarning("파일 미선택", "데이터 파일을 선택해주세요.")
+            messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일을 선택해주세요.")
             return False
             
-        self.log(f"🔍 데이터 추출 시작: {os.path.basename(target_file)}")
+        self.log(f"🔍 {mode} 데이터 추출 시작: {os.path.basename(target_file)}")
         
         # [NEW] Extract date from filename
         fname = os.path.basename(target_file)
@@ -2251,7 +2715,15 @@ class PMIReportApp:
                     header_idx = None
                     for i, row in temp_df.iterrows():
                         row_str = str(row.values).upper()
-                        if ("CR" in row_str and "NI" in row_str) or ("CHROMIUM" in row_str): header_idx = i; break
+                        if mode == "RT":
+                            if "FILM" in row_str or "DEFECT" in row_str or "IQI" in row_str:
+                                header_idx = i; break
+                        elif mode == "PT":
+                            if (("LINE" in row_str or "ISO" in row_str or "DWG" in row_str) and ("JOINT" in row_str or "WELD" in row_str)):
+                                header_idx = i; break
+                        else:
+                            if ("CR" in row_str and "NI" in row_str) or ("CHROMIUM" in row_str):
+                                header_idx = i; break
                     if header_idx is None: continue
                     
                     df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
@@ -2267,13 +2739,48 @@ class PMIReportApp:
                             if "NI" in keywords and ("UNIT" in c_up or "LINE" in c_up): continue
                             return col
                     return None
-                col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
-                col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
-                col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"])
-                col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
-                col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
-                col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
-                col_grade_orig = _find_col(df, ["GRADE", "MATERIAL", "SPEC", "TYPE"])
+                if mode == "RT":
+                    col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
+                    col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
+                    col_joint = _find_col(df, ["JOINT", "WELD NO", "J/N", "FILM IDENT"])
+                    col_loc = _find_col(df, ["LOCATION", "POSITION", "FILM LOC"])
+                    col_grade = _find_col(df, ["GRADE", "DEG"]) # DEG for RT
+                    col_welder = _find_col(df, ["WELDER", "W/N"])
+                    col_remarks = _find_col(df, ["REMARKS", "REMARK", "비고"])
+                    # RT Specifics
+                    col_t = _find_col(df, ["T", "THICK", "THK"])
+                    col_mat = _find_col(df, ["MAT", "MATERIAL"])
+                    col_weld = _find_col(df, ["WELD", "TYPE"])
+                    col_iqi = _find_col(df, ["IQI"])
+                    col_sens = _find_col(df, ["SENS", "SENSITIVITY"])
+                    col_den = _find_col(df, ["DEN", "DENSITY"])
+                    col_result = _find_col(df, ["RESULT", "판정", "ACC", "REJ"])
+                    defect_cols = {}
+                    for i in range(1, 16):
+                        c = _find_col(df, [f"D{i}", f"DEFECT{i}"])
+                        if c: defect_cols[f"D{i}"] = c
+                elif mode == "PT":
+                    col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
+                    col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
+                    col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
+                    if not col_joint:
+                        col_joint = _find_col(df, ["JOINT", "WELD"], exclude=["ISO", "LINE", "ITEM", "WPS", "REPORT", "DATE", "TYPE"])
+                    col_mat = _find_col(df, ["MAT", "MATERIAL", "재질", "CLASS", "M'TL"])
+                    col_size = _find_col(df, ["SIZE", "NPS", "DIA", "INCH", "관경", "ORIGIN", "DI ORIGIN"])
+                    col_thk = _find_col(df, ["THK", "THICK", "SCH", "두께"])
+                    col_welder = _find_col(df, ["WELDER", "ID", "용접사", "WELDER1"])
+                    col_wtype = _find_col(df, ["WELD TYPE", "WELDTYPE", "W.TYPE", "TYPE"], exclude=["JOINT"])
+                    col_result = _find_col(df, ["RESULT", "결과", "판정"])
+                    # Placeholder for Loc to maintain structure
+                    col_loc = None 
+                else:
+                    col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
+                    col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
+                    col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"])
+                    col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
+                    col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
+                    col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
+                    col_grade_orig = _find_col(df, ["GRADE", "MATERIAL", "SPEC", "TYPE"])
 
                 # [NEW] Forward-fill (Fill Down) for ISO and Joint
                 last_dwg = ""
@@ -2282,102 +2789,247 @@ class PMIReportApp:
                 for _, row in df.iterrows():
                     v_raw_no = str(row[col_no]).strip() if col_no is not None else str(_+1)
                     if target_no_list and v_raw_no not in target_no_list: continue
-                    v_cr = self.to_float(row[col_cr])
-                    if v_cr > 0 or (v_raw_no != "" and v_raw_no != "nan"):
-                        v_ni = self.to_float(row[col_ni])
-                        v_mo = self.to_float(row[col_mo]) if col_mo is not None else 0.0
-                        v_mn = self.to_float(row[col_mn]) if col_mn is not None else 0.0
-                        orig_grade = str(row[col_grade_orig]).strip() if col_grade_orig is not None else ""
-                        
-                        # [NEW] ISO/DWG Fill-down
-                        curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
-                        if (not curr_dwg or curr_dwg == "nan") and last_dwg:
-                            curr_dwg = last_dwg
-                        if curr_dwg and curr_dwg != "nan":
-                            last_dwg = curr_dwg
+                    
+                    # [NEW] Common Fill-down Logic
+                    curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
+                    if (not curr_dwg or curr_dwg == "nan") and last_dwg: curr_dwg = last_dwg
+                    if curr_dwg and curr_dwg != "nan": last_dwg = curr_dwg
 
-                        # [NEW] Joint No Fill-down
-                        curr_joint = str(row[col_joint]).strip() if col_joint is not None else ""
-                        if (not curr_joint or curr_joint == "nan") and last_joint:
-                            curr_joint = last_joint
-                        if curr_joint and curr_joint != "nan":
-                            last_joint = curr_joint
-                        elif not curr_joint or curr_joint == "nan":
-                            curr_joint = v_raw_no # Fallback to No if no joint and no previous joint
+                    curr_joint = str(row[col_joint]).strip() if col_joint is not None else ""
+                    if (not curr_joint or curr_joint == "nan") and last_joint: curr_joint = last_joint
+                    if curr_joint and curr_joint != "nan": last_joint = curr_joint
+                    elif not curr_joint or curr_joint == "nan": curr_joint = v_raw_no
 
-                        final_grade = orig_grade
-                        if self.auto_verify.get():
-                            detected = self.check_material_grade({'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn})
-                            if detected: final_grade = detected
-                        if not final_grade or final_grade == "nan":
-                            final_grade = "SS316" if v_mo >= 1.5 else "SS304"
-
-                        all_extracted_data.append({
-                            'No': v_raw_no, 
-                            'Joint': curr_joint,
+                    if mode == "RT":
+                        # RT-specific Row Data
+                        item_data = {
+                            'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': curr_joint,
                             'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
-                            'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
-                            'Grade': final_grade, 'Dwg': curr_dwg,
-                            'Date': extracted_date,
+                            'Grade': str(row[col_grade]).strip() if col_grade is not None else "",
+                            'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
+                            'Remarks': str(row[col_remarks]).strip() if col_remarks is not None else "",
+                            'T': str(row[col_t]).strip() if col_t is not None else "",
+                            'Mat': str(row[col_mat]).strip() if col_mat is not None else "",
+                            'Weld': str(row[col_weld]).strip() if col_weld is not None else "",
+                            'IQI': str(row[col_iqi]).strip() if col_iqi is not None else "",
+                            'Sens': str(row[col_sens]).strip() if col_sens is not None else "",
+                            'Den': str(row[col_den]).strip() if col_den is not None else "",
+                            'Result': str(row[col_result]).strip() if col_result is not None else "ACC",
                             'selected': True,
-                            'order_index': len(self.extracted_data) + len(all_extracted_data)
-                        })
+                            'order_index': len(self.rt_extracted_data) + len(all_extracted_data)
+                        }
+                        # Defects D1-D15 (Normalization)
+                        for i in range(1, 16):
+                            key = f"D{i}"
+                            c = defect_cols.get(key)
+                            val = str(row[c]).strip() if c is not None else ""
+                            if val and val.lower() in ["v", "x", "o", "1", "√", "v"]: val = "√"
+                            else: val = ""
+                            item_data[key] = val
+                            
+                        all_extracted_data.append(item_data)
+                    elif mode == "PT":
+                        # PT-specific Row Data (Filter for ACC only)
+                        res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
+                        is_pass = any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"])
+                        is_fail = any(k in res_str for k in ["REJ", "RW", "FAIL", "UNACC"])
+                        if is_pass and not is_fail:
+                            size_v = str(row[col_size]).strip() if col_size is not None else ""
+                            thk_v = str(row[col_thk]).strip() if col_thk is not None else ""
+                            # SCH -> Thk 변환
+                            thk_converted = convert_sch_to_thk(size_v, thk_v)
+                            
+                            all_extracted_data.append({
+                                'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
+                                'NPS': size_v, 'Thk.': thk_converted, 
+                                'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "",
+                                'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
+                                'WType': str(row[col_wtype]).strip() if col_wtype is not None else "",
+                                'Result': "Acc",
+                                'selected': True,
+                                'order_index': len(self.pt_extracted_data) + len(all_extracted_data)
+                            })
+                    else:
+                        # PMI-specific Row Data
+                        v_cr = self.to_float(row[col_cr])
+                        if v_cr > 0 or (v_raw_no != "" and v_raw_no != "nan"):
+                            v_ni = self.to_float(row[col_ni])
+                            v_mo = self.to_float(row[col_mo]) if col_mo is not None else 0.0
+                            v_mn = self.to_float(row[col_mn]) if col_mn is not None else 0.0
+                            orig_grade = str(row[col_grade_orig]).strip() if col_grade_orig is not None else ""
+                            
+                            final_grade = orig_grade
+                            if self.auto_verify.get():
+                                detected = self.check_material_grade({'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn})
+                                if detected: final_grade = detected
+                            if not final_grade or final_grade == "nan":
+                                final_grade = "SS316" if v_mo >= 1.5 else "SS304"
+
+                            all_extracted_data.append({
+                                'No': v_raw_no, 
+                                'Joint': curr_joint,
+                                'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
+                                'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
+                                'Grade': final_grade, 'Dwg': curr_dwg,
+                                'Date': extracted_date,
+                                'selected': True,
+                                'order_index': len(self.extracted_data) + len(all_extracted_data)
+                            })
                 self.progress['value'] = ((s_idx + 1) / len(xls.sheet_names)) * 50
 
             if not all_extracted_data:
                 messagebox.showerror("오류", "추출된 데이터가 없습니다.")
                 return False
 
-            # Extraction Mode Filter
-            mode = self.extraction_mode.get()
-            if mode != "전체":
-                original_count = len(all_extracted_data)
-                if mode == "SS304 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "SS304"]
-                elif mode == "SS316 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "SS316"]
-                elif mode == "DUPLEX 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "DUPLEX"]
-                elif mode == "SS310 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "SS310"]
-                elif mode == "미분류(기타) 만":
-                    known_grades = ["SS304", "SS316", "DUPLEX", "SS310"]
-                    all_extracted_data = [d for d in all_extracted_data if d['Grade'] not in known_grades]
-                
-                self.log(f"🔍 필터링 ({mode}): {original_count}개 -> {len(all_extracted_data)}개")
-                if not all_extracted_data:
-                    messagebox.showinfo("알림", f"'{mode}'에 해당하는 데이터가 없습니다.")
-                    return False
+            # Extraction Mode Filter (PMI Only)
+            if mode == "PMI":
+                ext_mode = self.extraction_mode.get()
+                if ext_mode != "전체":
+                    original_count = len(all_extracted_data)
+                    if ext_mode == "SS304 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "SS304"]
+                    elif ext_mode == "SS316 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "SS316"]
+                    elif ext_mode == "DUPLEX 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "DUPLEX"]
+                    elif ext_mode == "SS310 만": all_extracted_data = [d for d in all_extracted_data if d['Grade'] == "SS310"]
+                    elif ext_mode == "미분류(기타) 만":
+                        known_grades = ["SS304", "SS316", "DUPLEX", "SS310"]
+                        all_extracted_data = [d for d in all_extracted_data if d['Grade'] not in known_grades]
+                    
+                    self.log(f"🔍 필터링 ({ext_mode}): {original_count}개 -> {len(all_extracted_data)}개")
+                    if not all_extracted_data:
+                        messagebox.showinfo("알림", f"'{ext_mode}'에 해당하는 데이터가 없습니다.")
+                        return False
+
+            # [NEW] 원소 함량 필터링 적용 (PMI 전용)
+            if mode == "PMI" and hasattr(self, 'element_filters') and self.element_filters:
+                for f_item in self.element_filters:
+                    f_key = f_item['key'].get().strip()
+                    if not f_key: continue
+                    f_min = self.to_float(f_item['min'].get())
+                    f_max = self.to_float(f_item['max'].get())
+                    
+                    if f_min > 0 or f_max > 0:
+                        original_count = len(all_extracted_data)
+                        if f_min > 0 and f_max > 0:
+                            all_extracted_data = [d for d in all_extracted_data if f_min <= d.get(f_key, d.get(f_key.capitalize(), 0.0)) <= f_max]
+                        elif f_min > 0:
+                            all_extracted_data = [d for d in all_extracted_data if d.get(f_key, d.get(f_key.capitalize(), 0.0)) >= f_min]
+                        elif f_max > 0:
+                            all_extracted_data = [d for d in all_extracted_data if d.get(f_key, d.get(f_key.capitalize(), 0.0)) <= f_max]
+                        
+                        if len(all_extracted_data) != original_count:
+                             self.log(f"🔍 원소 필터 적용 ({f_key}: {f_min}~{f_max}): {original_count} -> {len(all_extracted_data)}건 남음")
 
             if target_no_list:
                 all_extracted_data.sort(key=lambda x: target_no_list.index(str(x['No'])) if str(x['No']) in target_no_list else 999999)
 
             # [CHANGE] Overwrite -> Accumulate
-            self.extracted_data.extend(all_extracted_data)
-            self.update_date_listbox()
-            
-            # [NEW] 데이터를 추출한 직후 (ISO -> Joint) 순으로 자동 정렬 수행
-            self.sort_column = "ISO/DWG"
-            self.sort_reverse = False
-            self.sort_by_column("ISO/DWG")
+            if mode == "RT":
+                self.rt_extracted_data.extend(all_extracted_data)
+                self.update_date_listbox("RT")
+                self.populate_preview(self.rt_extracted_data, mode="RT")
+                total_count = len(self.rt_extracted_data)
+            elif mode == "PT":
+                self.pt_extracted_data.extend(all_extracted_data)
+                self.update_date_listbox("PT")
+                self.populate_preview(self.pt_extracted_data, mode="PT")
+                total_count = len(self.pt_extracted_data)
+            else:
+                self.extracted_data.extend(all_extracted_data)
+                self.update_date_listbox("PMI")
+                self.sort_column = "ISO/DWG"; self.sort_reverse = False
+                self.sort_by_column("ISO/DWG") # Auto sort for PMI
+                total_count = len(self.extracted_data)
             
             self.progress['value'] = 100
             if show_msg:
-                self.log(f"✅ 데이터 누적 완료 (현재 총 {len(self.extracted_data)} 건)")
-                messagebox.showinfo("완료", f"데이터가 추가되었습니다.\n현재 목록에는 총 {len(self.extracted_data)}건의 데이터가 있습니다.")
+                self.log(f"✅ {mode} 데이터 누적 완료 (현재 총 {total_count} 건)")
+                messagebox.showinfo("완료", f"데이터가 추가되었습니다.\n현재 목록에는 총 {total_count}건의 데이터가 있습니다.")
             return True
         except Exception as e:
-            self.log(f"❌ 추출 오류: {e}")
+            self.log(f"❌ {mode} 추출 오류: {e}")
             traceback.print_exc()
             return False
 
-    def run_process(self):
-        target_file = self.target_file_path.get()
-        template_path = self.template_file_path.get()
+    def duplicate_selected_rows(self):
+        """선택된 행들을 복제하여 데이터 리스트에 삽입"""
+        selected = self.preview_tree.selection()
+        if not selected: return
         
-        # [FIX] 불러온 데이터가 이미 있는 경우(extracted_data) target_file 선택이 필수는 아님
+        # 시각적 순서대로 정렬 (위에서부터 복제)
+        selected = sorted(list(selected), key=lambda x: self.preview_tree.index(x))
+        
+        new_items = []
+        insert_pos = 0
+        for item_id in selected:
+            view_idx = self.preview_tree.index(item_id)
+            actual_idx = self.item_idx_map[view_idx]
+            new_item = self.extracted_data[actual_idx].copy()
+            # No.는 중복 방지를 위해 비우거나 새로 부여 (여기서는 유지 후 나중에 rename 가능)
+            new_items.append(new_item)
+            insert_pos = actual_idx
+            
+        for item in reversed(new_items):
+            self.extracted_data.insert(insert_pos + 1, item)
+             
+        self.populate_preview(self.extracted_data, switch_tab=False)
+        self.log(f"👯 {len(new_items)}개 행 복제 완료")
+
+    def save_column_widths(self):
+        """현재 트리뷰의 컬럼 너비를 설정 파일에 저장"""
+        widths = {}
+        for col in self.preview_tree["columns"]:
+            widths[col] = self.preview_tree.column(col, "width")
+        
+        self.config["PMI_COL_WIDTHS"] = widths
+        self.save_settings()
+        self.log("📏 컬럼 너비 설정 저장 완료")
+
+    def apply_date_filter(self):
+        """날짜 리스트박스 선택 상태를 데이터 모델에 반영"""
+        selected_dates = []
+        for i in range(self.date_listbox.size()):
+            val = self.date_listbox.get(i)
+            if val.startswith("[v]"):
+                selected_dates.append(val.replace("[v] ", "").strip())
+        
+        if not selected_dates:
+            messagebox.showwarning("필터 오류", "최소 하나 이상의 날짜를 선택해주세요.")
+            return
+
+        for item in self.extracted_data:
+            item['date_filtered'] = (item.get('Date', '') in selected_dates)
+        
+        self.populate_preview(self.extracted_data, switch_tab=False)
+        self.log(f"📅 날짜 필터 적용 완료: {len(selected_dates)}개 날짜 선택됨")
+
+    def run_process(self):
+        # 현재 활성 탭에 따른 모드 결정
+        try:
+            tab_idx = self.mode_notebook.index("current")
+            if tab_idx == 1: mode = "RT"
+            elif tab_idx == 2: mode = "PT"
+            else: mode = "PMI"
+        except: mode = "PMI"
+
+        if mode == "RT":
+            target_file = self.rt_target_file_path.get()
+            template_path = self.rt_template_file_path.get()
+            data = self.rt_extracted_data
+        elif mode == "PT":
+            target_file = self.pt_target_file_path.get()
+            template_path = self.pt_template_file_path.get()
+            data = self.pt_extracted_data
+        else:
+            target_file = self.target_file_path.get()
+            template_path = self.template_file_path.get()
+            data = self.extracted_data
+        
         if not template_path:
-            messagebox.showwarning("파일 미선택", "양식(Template) 파일을 선택해주세요.")
+            messagebox.showwarning("파일 미선택", f"{mode} 양식(Template) 파일을 선택해주세요.")
             return
             
-        if not target_file and not self.extracted_data:
-            messagebox.showwarning("파일 미선택", "데이터 파일(Excel)을 선택하거나, 저장된 데이터를 불러와주세요.")
+        if not target_file and not data:
+            messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일(Excel)을 선택하거나, 저장된 데이터를 불러와주세요.")
             return
 
         # [NEW] 템플릿 파일 존재 여부 및 기본 구조 확인
@@ -2388,16 +3040,29 @@ class PMIReportApp:
         self.save_settings()
         
         # 데이터가 비어있거나 새로 추출이 필요한 경우 수행
-        if not self.extracted_data:
+        if not data:
             if not self.extract_only(show_msg=False): return
+            # Re-fetch data after extraction
+            data = self.pt_extracted_data if mode == "PT" else (self.rt_extracted_data if mode == "RT" else self.extracted_data)
             
         # [NEW] 체크된 항목만 필터링 (기본값은 True)
-        final_list = [d for d in self.extracted_data if d.get('selected', True) and d.get('date_filtered', True)]
+        final_list = [d for d in data if d.get('selected', True) and d.get('date_filtered', True)]
         if not final_list:
-            messagebox.showwarning("항목 미선택", "선택된 데이터가 없습니다. 미리보기에서 항목을 체크해주세요.")
+            messagebox.showwarning("항목 미선택", f"선택된 {mode} 데이터가 없습니다. 미리보기에서 항목을 체크해주세요.")
             return
 
-        self.log(f"🚀 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        if mode == "RT":
+            self._run_rt_process(final_list, template_path)
+        elif mode == "PT":
+            self._run_pt_process(final_list, template_path)
+        else:
+            self._run_pmi_process(final_list, template_path)
+
+    def _run_pmi_process(self, final_list, template_path):
+        self.log(f"🚀 PMI 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        self.progress['value'] = 0
+
+        # No changes needed here, just marking for clarity.
         self.progress['value'] = 0
         
         try:
@@ -2693,6 +3358,208 @@ class PMIReportApp:
             # [NEW] 사용자에게 친절한 팝업 알림 추가
             error_msg = f"성적서 생성 중 오류가 발생했습니다.\n\n원인: {e}\n\n* 주로 양식 파일의 시트 구조나 병합 상태가 맞지 않을 때 발생합니다. 다른 양식을 시도하거나 설정을 확인해주세요."
             messagebox.showerror("생성 실패", error_msg)
+            # End of _run_pmi_process logic
+        finally:
+            for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
+                try: os.remove(f)
+                except: pass
+
+    def _run_pt_process(self, final_list, template_path):
+        """PT 성적서 생성 (1-row-per-data 레이아웃 + ISO 병합)"""
+        self.log(f"🚀 PT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        self.progress['value'] = 0
+        try:
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            if len(wb.worksheets) < 1:
+                raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
+
+            # 갑지 (Cover)
+            ws0 = wb.worksheets[0]
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False)
+            self.force_print_settings(ws0, context="COVER")
+            self.apply_custom_dimensions(ws0, "COVER")
+
+            # 을지 (Data)
+            data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
+            ws = wb.worksheets[data_sheet_id]
+            ws.title = f"{ws.title[:20]}_001"
+            self.add_logos_to_sheet(ws, is_cover=False)
+            self.force_print_settings(ws, context="DATA")
+
+            # 헤더 감지 및 시작 행 결정
+            start_row = int(self.config.get('PT_START_ROW', 18))
+            end_row = int(self.config.get('PT_END_ROW', 37))
+            
+            # [Smart Detection] 템플릿에서 헤더를 찾아 시작 행 자동 보정
+            detected_start = -1
+            for r in range(1, 40):
+                line_str = "".join([str(ws.cell(row=r, column=c).value) for c in range(1, 12)]).upper()
+                if (("JOINT" in line_str or "WELD" in line_str) and ("ISO" in line_str or "LINE" in line_str)) or ("DWG" in line_str and "RESULT" in line_str):
+                    detected_start = r + 1; break
+            if detected_start > 0: start_row = detected_start
+
+            current_row = start_row
+            current_page = 1
+            data_ptr = 0
+            
+            while data_ptr < len(final_list):
+                if current_row > end_row:
+                    current_page += 1
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    current_row = start_row
+                
+                item = final_list[data_ptr]
+                
+                # 데이터 기입 (B, C, D 컬럼 병합 대응)
+                self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('No', ''))
+                # ISO Drawing No. (B컬럼에 쓰고 B,C,D 병합)
+                iso_cell = ws.cell(row=current_row, column=2)
+                self.safe_set_value(ws, iso_cell.coordinate, item.get('Dwg', ''))
+                self.safe_merge_cells(ws, current_row, 2, current_row, 4)
+                
+                self.safe_set_value(ws, ws.cell(row=current_row, column=5).coordinate, item.get('Joint', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=6).coordinate, item.get('NPS', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=7).coordinate, item.get('Thk.', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=8).coordinate, item.get('Material', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=9).coordinate, item.get('Welder', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=10).coordinate, item.get('WType', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=11).coordinate, item.get('Result', 'Acc'))
+                
+                # 스타일링
+                for c in range(1, 12):
+                    cell = ws.cell(row=current_row, column=c)
+                    cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+                    cell.font = Font(name='바탕', size=9)
+                    cell.border = thin_border
+
+                data_ptr += 1
+                current_row += 1
+                self.progress['value'] = (data_ptr / len(final_list)) * 95
+
+            total_p = len(wb.worksheets)
+            for p_idx, s in enumerate(wb.worksheets):
+                page_num = p_idx + 1
+                self.apply_custom_dimensions(s, "DATA" if p_idx > 0 else "COVER")
+                # 페이지 번호 기입
+                try:
+                    p_text = f"Page    {page_num}    of    {total_p}"
+                    if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
+                    else: self.safe_set_value(s, 'V3', p_text)
+                except: pass
+
+            now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_name = f"PT_Report_{now_str}.xlsx"
+            save_path = os.path.join(os.path.dirname(template_path), output_name)
+            wb.save(save_path)
+            self.progress['value'] = 100
+            self.log(f"✨ PT 완료! 저장됨: {output_name}")
+            messagebox.showinfo("성공", f"PT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
+        except Exception as e:
+            self.log(f"❌ PT 생성 오류: {e}")
+            traceback.print_exc()
+            messagebox.showerror("생성 실패", f"PT 성적서 생성 중 오류가 발생했습니다: {e}")
+        finally:
+            for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
+                try: os.remove(f)
+                except: pass
+
+    def _run_rt_process(self, final_list, template_path):
+        """RT 성적서 생성 (1-row-per-data 레이아웃)"""
+        self.log(f"🚀 RT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        self.progress['value'] = 0
+        try:
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            if len(wb.worksheets) < 1:
+                raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
+
+            # Gapji (Cover) Logic (Simplified for RT, using generic SITCO style)
+            ws0 = wb.worksheets[0]
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False)
+            self.force_print_settings(ws0, context="COVER")
+            self.apply_custom_dimensions(ws0, "COVER")
+
+            # Data Sheet Logic (1-row-per-data)
+            data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
+            ws = wb.worksheets[data_sheet_id]
+            ws.title = f"{ws.title[:20]}_001"
+            self.add_logos_to_sheet(ws, is_cover=False)
+            self.force_print_settings(ws, context="DATA")
+            # RT usually doesn't have the same headers as PMI
+            # self.set_eulji_headers(ws) 
+
+            # Configizable or Default RT boundaries
+            start_row = int(self.config.get('RT_START_ROW', 17))
+            end_row = int(self.config.get('RT_END_ROW', 41))
+            rows_per_page = end_row - start_row + 1
+            
+            current_row = start_row
+            current_page = 1
+            data_ptr = 0
+            
+            while data_ptr < len(final_list):
+                if current_row > end_row:
+                    current_page += 1
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    current_row = start_row
+                
+                item = final_list[data_ptr]
+                
+                # Column Data Mapping (standardized layout)
+                self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('No', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=2).coordinate, item.get('Date', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=3).coordinate, item.get('Dwg', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=4).coordinate, item.get('Joint', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=5).coordinate, item.get('Loc', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=6).coordinate, item.get('T', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=7).coordinate, item.get('Mat', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=8).coordinate, item.get('Weld', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=9).coordinate, item.get('Deg', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=10).coordinate, item.get('IQI', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=11).coordinate, item.get('Sens', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=12).coordinate, item.get('Den', ''))
+                
+                # Defects D1-D15 (Col 13-27)
+                for i in range(1, 16):
+                    d_val = item.get(f'D{i}', '')
+                    # Check symbol mapping
+                    self.safe_set_value(ws, ws.cell(row=current_row, column=12 + i).coordinate, d_val)
+                
+                self.safe_set_value(ws, ws.cell(row=current_row, column=28).coordinate, item.get('Result', 'ACC'))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=29).coordinate, item.get('Welder', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=30).coordinate, item.get('Remarks', ''))
+                
+                # Styling for individual row
+                for c in range(1, 31):
+                    cell = ws.cell(row=current_row, column=c)
+                    cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+                    cell.font = Font(name='바탕', size=9)
+
+                data_ptr += 1
+                current_row += 1
+                self.progress['value'] = (data_ptr / len(final_list)) * 95
+
+            total_p = len(wb.worksheets)
+            for p_idx, s in enumerate(wb.worksheets):
+                page_num = p_idx + 1
+                self.apply_custom_dimensions(s, "DATA" if p_idx > 0 else "COVER")
+                # Page Numbers
+                try:
+                    if p_idx == 0: cell = s["O35"] if "O35" in s else s.cell(row=35, column=15)
+                    else: cell = s["V3"] if "V3" in s else s.cell(row=3, column=22)
+                    self.safe_set_value(s, cell.coordinate, f"Page   {page_num}   of   {total_p}")
+                except: pass
+
+            now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_name = f"RT_Report_{now_str}.xlsx"
+            save_path = os.path.join(os.path.dirname(template_path), output_name)
+            wb.save(save_path)
+            self.progress['value'] = 100
+            self.log(f"✨ RT 완료! 저장됨: {output_name}")
+            messagebox.showinfo("성공", f"RT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
+        except Exception as e:
+            self.log(f"❌ RT 생성 오류: {e}")
+            traceback.print_exc()
+            messagebox.showerror("생성 실패", f"RT 성적서 생성 중 오류가 발생했습니다: {e}")
         finally:
             for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
                 try: os.remove(f)
