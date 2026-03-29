@@ -1412,9 +1412,6 @@ class PMIReportApp:
         ttk.Button(sidebar, text="전체 초기화", width=12, command=lambda: self.clear_all(mode)).pack(pady=(2, 10))
 
         tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
-        ttk.Button(sidebar, text="🔍 OCR 문자 추출", width=18, command=self.launch_ocr_tool).pack(pady=2)
-
-        tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
         ttk.Button(sidebar, text="💾 현재 내용 저장", width=18, command=lambda: self.save_preview_data(mode)).pack(pady=2)
         ttk.Button(sidebar, text="📂 저장된 내용 열기", width=18, command=lambda: self.load_preview_data(mode)).pack(pady=2)
         ttk.Button(sidebar, text="📊 엑셀 파일로 추출", width=18, command=lambda: self.export_to_excel(mode)).pack(pady=(10, 2))
@@ -2235,21 +2232,6 @@ class PMIReportApp:
             self.log(f"🧹 모든 {mode} 데이터 초기화 완료")
 
     def export_to_excel(self, mode="PMI"):
-        # ... existing code ...
-        pass # Placeholder for search, I'll use target content
-
-    def launch_ocr_tool(self):
-        """별도의 프로세스로 OCR 추출기 실행"""
-        try:
-            import subprocess
-            main_dir = os.path.dirname(os.path.abspath(__file__))
-            ocr_script = os.path.join(main_dir, "ocr_extractor.py")
-            if os.path.exists(ocr_script):
-                subprocess.Popen([sys.executable, ocr_script])
-            else:
-                messagebox.showerror("오류", f"OCR 추출기 파일을 찾을 수 없습니다: {ocr_script}")
-        except Exception as e:
-            messagebox.showerror("오류", f"OCR 추출기 실행 중 오류 발생: {e}")
         """현재 미리보기 목록(필터링/선택 반영)을 엑셀 파일로 내보냄 (서식 및 병합 시인성 유지)"""
         data = self.rt_extracted_data if mode == "RT" else self.extracted_data
         if not data:
