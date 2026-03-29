@@ -169,11 +169,21 @@ class PMIReportApp:
         self.pt_target_file_path = tk.StringVar(value=self.config.get('PT_TARGET_PATH', ""))
         self.pt_template_file_path = tk.StringVar(value=self.config.get('PT_TEMPLATE_PATH', ""))
         self.pt_extracted_data = []
+        self.item_idx_map = []      # [NEW] Missing for PMI
+        self.rt_item_idx_map = []   # [NEW] Missing for RT
         self.pt_item_idx_map = []
+        self.paut_item_idx_map = [] # [NEW] Missing for PAUT
+        
+        self.date_listbox = None
+        self.rt_date_listbox = None
+        self.pt_date_listbox = None
+        self.paut_date_listbox = None
 
         # --- Column Definitions ---
         self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
         self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Accept", "Reject", "Grade", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "Welder", "WType", "Result"]
+        self.paut_column_keys = ["selected", "No", "ISO", "Joint", "t", "h", "l", "d", "Location", "Nature", "Result"]
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "Welder", "WType", "Result"]
 
         # 3. UI Initialization
@@ -407,6 +417,7 @@ class PMIReportApp:
 
         # [NEW] 전역 엔트리 우클릭 메뉴
         self._create_entry_context_menu()
+        self._create_tree_context_menu()
 
         # Mouse Wheel Support
         def _on_mousewheel(event):
@@ -794,17 +805,15 @@ class PMIReportApp:
         batch_frame.pack(fill='both', expand=True)
 
         # PAUT Preview Tree
-        self.paut_preview_tree = ttk.Treeview(batch_frame, columns=("V", "No", "ISO/DWG", "Joint", "t", "h", "l", "d", "Location", "Nature", "Result"), show='headings', height=10)
-        paut_widths = {"V": 30, "No": 40, "ISO/DWG": 120, "Joint": 80, "t": 40, "h": 40, "l": 40, "d": 40, "Location": 70, "Nature": 70, "Result": 80}
+        self.paut_preview_tree = ttk.Treeview(batch_frame, columns=("V", "No", "ISO/DWG", "Joint", "t", "h", "l", "d", "Location", "Nature", "Result"), show='headings', height=10, selectmode='extended')
+        paut_widths = {"V": 40, "No": 40, "ISO/DWG": 120, "Joint": 80, "t": 40, "h": 40, "l": 40, "d": 40, "Location": 70, "Nature": 70, "Result": 80}
         for col in self.paut_preview_tree["columns"]:
             self.paut_preview_tree.heading(col, text=col)
             self.paut_preview_tree.column(col, width=paut_widths.get(col, 60), anchor='center')
         
         self.paut_preview_tree.pack(side='left', fill='both', expand=True)
         
-        scroll = ttk.Scrollbar(batch_frame, orient="vertical", command=self.paut_preview_tree.yview)
-        scroll.pack(side='right', fill='y')
-        self.paut_preview_tree.configure(yscrollcommand=scroll.set)
+        self._setup_preview_sidebar(self.paut_preview_tree, batch_frame, mode="PAUT")
 
         # Buttons
         btn_box = tk.Frame(container, background="#f9fafb")
@@ -842,15 +851,6 @@ class PMIReportApp:
         except Exception as e:
             messagebox.showerror("입력 오류", f"입력값을 확인해주세요: {e}")
 
-    def _populate_paut_preview(self, data):
-        self.paut_preview_tree.delete(*self.paut_preview_tree.get_children())
-        for i, item in enumerate(data):
-            v = "√" if item.get('selected', True) else ""
-            self.paut_preview_tree.insert("", "end", values=(
-                v, i + 1, item.get('ISO', ''), item.get('Joint', ''),
-                item.get('t', ''), item.get('h', ''), item.get('l', ''),
-                item.get('d', ''), item.get('Location', ''), item.get('Nature', ''), item.get('Result', '')
-            ))
 
     def _extract_paut_data(self):
         file_path = self.paut_target_file_path.get()
@@ -891,10 +891,17 @@ class PMIReportApp:
                     'Nature': str(row.get(mapping["nature"], "Slag")) if mapping["nature"] else "Slag",
                     'Result': ""
                 }
-                self.paut_extracted_data.append(item)
+                # [NEW] 원본 엑셀의 모든 컬럼 데이터를 유지하여 '컬럼 관리'에서 활용 가능하게 함
+                item_full = row.to_dict()
+                item_full.update(item)
+                # [NEW] 수동 추가된 컬럼(Remark 등)이 추출 시 증발하지 않도록 초기화
+                for k in self.paut_column_keys:
+                    if k not in item_full and k != "selected":
+                        item_full[k] = ""
+                self.paut_extracted_data.append(item_full)
             
             self.progress['value'] = 100
-            self._populate_paut_preview(self.paut_extracted_data)
+            self.populate_preview(self.paut_extracted_data, mode="PAUT")
             self.log(f"✅ PAUT 데이터 추출 완료: {len(self.paut_extracted_data)} 건")
             
         except Exception as e:
@@ -915,7 +922,7 @@ class PMIReportApp:
             if res == "Accept": count_ok += 1
             else: count_ng += 1
             
-        self._populate_paut_preview(self.paut_extracted_data)
+        self.populate_preview(self.paut_extracted_data, mode="PAUT")
         self.log(f"✅ 판정 완료: 총 {len(self.paut_extracted_data)} 건 (합격: {count_ok}, 불합격: {count_ng})")
 
     def _generate_paut_report(self):
@@ -990,6 +997,30 @@ class PMIReportApp:
         
         self.add_logos_to_sheet(new_sheet, is_cover=False)
         return new_sheet
+
+    def _create_tree_context_menu(self):
+        """미리보기 트리뷰용 공통 컨텍스트 메뉴 초기화"""
+        self.ctx_menu = tk.Menu(self.root, tearoff=0)
+        # 기본 항목 기입 (show_context_menu에서 command 동적 바인딩)
+        self.ctx_menu.add_command(label="선택 항목 체크/해제 토글 (Toggle Check)")
+        self.ctx_menu.add_command(label="셀 내용 복사 (Copy)")
+        self.ctx_menu.add_command(label="셀 내용 붙여넣기 (Paste)")
+        self.ctx_menu.add_separator()
+        self.ctx_menu.add_command(label="위로 이동 (Move Up)")
+        self.ctx_menu.add_command(label="아래로 이동 (Move Down)")
+        self.ctx_menu.add_separator()
+        self.ctx_menu.add_command(label="행 추가 (Add Row)")
+        self.ctx_menu.add_command(label="선택 삭제 (Delete Selected)")
+        self.ctx_menu.add_separator()
+        self.ctx_menu.add_command(label="선택 항목 ISO 병합 (Merge ISO)")
+        self.ctx_menu.add_command(label="선택 항목 Joint 병합 (Merge Joint)")
+        self.ctx_menu.add_command(label="선택 항목 Joint 시각적 그룹화 (Group Joint)")
+        self.ctx_menu.add_command(label="선택 항목 Joint 그룹 해제 (Ungroup Joint)")
+        self.ctx_menu.add_separator()
+        self.ctx_menu.add_command(label="선택 항목 일괄 변경 (Bulk Update)")
+        # PAUT 전용 (기본은 숨김)
+        self.ctx_menu.add_separator()
+        self.ctx_menu.add_command(label="컬럼 설정 (Column Manager)")
 
     def _create_entry_context_menu(self):
         self.entry_popup = tk.Menu(self.root, tearoff=0)
@@ -1250,9 +1281,14 @@ class PMIReportApp:
             if item_id:
                 try:
                     col_idx = int(column.replace("#", "")) - 1
-                    keys = self.rt_column_keys if m == "RT" else self.column_keys
-                    data = self.rt_extracted_data if m == "RT" else self.extracted_data
-                    idx_map = self.rt_item_idx_map if m == "RT" else self.item_idx_map
+                    if m == "RT":
+                        keys, data, idx_map = self.rt_column_keys, self.rt_extracted_data, self.rt_item_idx_map
+                    elif m == "PT":
+                        keys, data, idx_map = self.pt_column_keys, self.pt_extracted_data, self.pt_item_idx_map
+                    elif m == "PAUT":
+                        keys, data, idx_map = self.paut_column_keys, self.paut_extracted_data, self.paut_item_idx_map
+                    else:
+                        keys, data, idx_map = self.column_keys, self.extracted_data, self.item_idx_map
                     
                     if 0 <= col_idx < len(keys):
                         key = keys[col_idx]
@@ -1327,6 +1363,8 @@ class PMIReportApp:
         listbox.config(yscrollcommand=sb.set)
         
         if mode == "RT": self.rt_date_listbox = listbox
+        elif mode == "PT": self.pt_date_listbox = listbox
+        elif mode == "PAUT": self.paut_date_listbox = listbox
         else: self.date_listbox = listbox
         
         def _toggle_date(event, lb=listbox):
@@ -1356,6 +1394,12 @@ class PMIReportApp:
 
         ttk.Button(sidebar, text="전체 선택", width=15, command=lambda: self.select_all(mode)).pack(pady=2)
         ttk.Button(sidebar, text="선택 해제", width=15, command=lambda: self.deselect_all(mode)).pack(pady=(2, 5))
+        
+        # [NEW] 공통 컬럼 관리 버튼 추가
+        ttk.Button(sidebar, text="컬럼 관리 (Columns)", width=15, command=lambda: self.manage_columns(mode)).pack(pady=2)
+        
+        if mode == "PAUT":
+            ttk.Button(sidebar, text="행 추가 (Add Row)", width=15, command=lambda: self.add_item(mode)).pack(pady=2)
         
         ttk.Button(sidebar, text="선택 항목 병합", width=15, command=lambda: self.merge_selected_iso(mode)).pack(pady=2)
         ttk.Button(sidebar, text="일괄 변경 (Bulk)", width=15, command=lambda: self.show_bulk_update_dialog(mode)).pack(pady=(2, 10))
@@ -1448,6 +1492,18 @@ class PMIReportApp:
                 "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "Loc",
                 "#9": "Grade", "#25": "Welder", "#26": "Remarks"
             }
+        elif mode == "PT":
+            # PT: No(#2), Date(#3), Dwg(#4), Joint(#5), NPS(#6), Thk(#7), Material(#8), Welder(#9), WType(#10), Result(#11)
+            key_map = {
+                "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "NPS",
+                "#7": "Thk.", "#8": "Material", "#9": "Welder", "#10": "WType", "#11": "Result"
+            }
+        elif mode == "PAUT":
+            # PAUT: No(#2), ISO(#3), Joint(#4), t(#5), h(#6), l(#7), d(#8), Loc(#9), Nat(#10), Res(#11)
+            key_map = {
+                "#2": "No", "#3": "ISO", "#4": "Joint", "#5": "t", "#6": "h",
+                "#7": "l", "#8": "d", "#9": "Location", "#10": "Nature", "#11": "Result"
+            }
         else:
             # PMI: No, Date, Dwg, Joint, Loc, Ni, Cr, Mo, Grade
             key_map = {
@@ -1495,33 +1551,215 @@ class PMIReportApp:
         entry.bind("<Escape>", lambda e: entry.destroy())
 
     def show_context_menu(self, event, mode="PMI"):
-        """우클릭 컨텍스트 메뉴 표시 및 마지막 클릭 컬럼 기록"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        """우클릭 컨텍스트 메뉴 표시 및 현재 모드에 따라 명령 구성"""
+        tree = self.paut_preview_tree if mode == "PAUT" else (self.rt_preview_tree if mode == "RT" else (self.pt_preview_tree if mode == "PT" else self.preview_tree))
         col = tree.identify_column(event.x)
-        self.last_clicked_col = col # Track for copy/paste
+        self.last_clicked_col = col 
         item_id = tree.identify_row(event.y)
+        
+        # 선택 상태 보정 (우클릭한 항목으로 선택 변경)
         if item_id:
             if item_id not in tree.selection():
                 tree.selection_set(item_id)
+            tree.focus(item_id)
+
+        # 메뉴 명령 동적 업데이트
+        self.ctx_menu.entryconfigure("선택 항목 체크/해제 토글 (Toggle Check)", command=lambda: self.toggle_selected_items(mode))
+        self.ctx_menu.entryconfigure("셀 내용 복사 (Copy)", command=lambda: self.copy_cell(mode))
+        self.ctx_menu.entryconfigure("셀 내용 붙여넣기 (Paste)", command=lambda: self.paste_cell(mode))
+        
+        self.ctx_menu.entryconfigure("위로 이동 (Move Up)", command=lambda: self.move_item("up", mode))
+        self.ctx_menu.entryconfigure("아래로 이동 (Move Down)", command=lambda: self.move_item("down", mode))
+        
+        self.ctx_menu.entryconfigure("행 추가 (Add Row)", command=lambda: self.add_item(mode))
+        self.ctx_menu.entryconfigure("선택 삭제 (Delete Selected)", command=lambda: self.delete_item(mode))
+        
+        # PMI 전용/특화 기능 제어
+        is_pmi = (mode == "PMI")
+        self.ctx_menu.entryconfigure("선택 항목 ISO 병합 (Merge ISO)", command=lambda: self.merge_selected_iso(mode), state="normal" if is_pmi else "disabled")
+        self.ctx_menu.entryconfigure("선택 항목 Joint 병합 (Merge Joint)", command=lambda: self.merge_selected_joint(mode), state="normal" if is_pmi else "disabled")
+        self.ctx_menu.entryconfigure("선택 항목 Joint 시각적 그룹화 (Group Joint)", command=lambda: self.group_selected_joint(mode), state="normal" if is_pmi else "disabled")
+        self.ctx_menu.entryconfigure("선택 항목 Joint 그룹 해제 (Ungroup Joint)", command=lambda: self.ungroup_selected_joint(mode), state="normal" if is_pmi else "disabled")
+        self.ctx_menu.entryconfigure("선택 항목 일괄 변경 (Bulk Update)", command=lambda: self.show_bulk_update_dialog(mode))
+
+        # 컬럼 설정 기능 (모든 모드 지원)
+        self.ctx_menu.entryconfigure("컬럼 설정 (Column Manager)", command=lambda: self.manage_columns(mode))
+        self.ctx_menu.entryconfigure("컬럼 설정 (Column Manager)", state="normal")
+
+        self.ctx_menu.post(event.x_root, event.y_root)
+
+    def manage_columns(self, mode="PMI"):
+        """미리보기에서 표시할 컬럼을 동적으로 관리하는 다이얼로그 (모든 모드 지원)"""
+        if mode == "RT":
+            tree, idx_map, data, keys_attr = self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data, "rt_column_keys"
+        elif mode == "PT":
+            tree, idx_map, data, keys_attr = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data, "pt_column_keys"
+        elif mode == "PAUT":
+            tree, idx_map, data, keys_attr = self.paut_preview_tree, self.paut_item_idx_map, self.paut_extracted_data, "paut_column_keys"
+        else:
+            tree, idx_map, data, keys_attr = self.preview_tree, self.item_idx_map, self.extracted_data, "column_keys"
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"{mode} 컬럼 관리")
+        dialog.geometry("400x550")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        main_frame = ttk.Frame(dialog, padding=20)
+        main_frame.pack(fill='both', expand=True)
+        
+        ttk.Label(main_frame, text=f"{mode} 표시할 컬럼을 선택하세요:", font=("Malgun Gothic", 10, "bold")).pack(pady=(0, 10), anchor='w')
+        
+        # 엑셀 데이터 또는 기존 정의에서 모든 키 추출
+        all_keys = []
+        if data:
+            all_keys = list(data[0].keys())
+        else:
+            # 데이터가 없을 경우 현재 정의된 키들을 기본으로 함
+            all_keys = list(getattr(self, keys_attr))
             
-            # Update menu commands for current mode
-            self.ctx_menu.entryconfigure("선택 항목 체크/해제 토글 (Toggle Check)", command=lambda: self.toggle_selected_items(mode))
-            self.ctx_menu.entryconfigure("셀 내용 복사 (Copy)", command=lambda: self.copy_cell(mode))
-            self.ctx_menu.entryconfigure("셀 내용 붙여넣기 (Paste)", command=lambda: self.paste_cell(mode))
+        # 내부 관리용 키 제외
+        exclude = ["selected", "date_filtered", "order_index", "visual_group_joint", "is_merged_iso", "is_merged_joint"]
+        display_keys = [k for k in all_keys if k not in exclude]
+        
+        # 스크롤 가능한 영역
+        scroll_frame = ttk.Frame(main_frame)
+        scroll_frame.pack(fill='both', expand=True)
+        
+        canvas = tk.Canvas(scroll_frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(scroll_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # RT용 레이블 매핑 정의
+        label_map = {}
+        if mode == "RT":
+            label_map = {
+                "Dwg": "Drawing No.", "Joint": "Film Ident. No.", "Loc": "Film Location",
+                "Accept": "Acc", "Reject": "Rej", "Grade": "Deg", "Welder": "Welder No",
+                "D1": "① Crack", "D2": "② IP", "D3": "③ LF", "D4": "④ Slag", "D5": "⑤ Por",
+                "D6": "⑥ U/C", "D7": "⑦ RUC", "D8": "⑧ BT", "D9": "⑨ TI", "D10": "⑩ CP",
+                "D11": "⑪ RC", "D12": "⑫ Mis", "D13": "⑬ EP", "D14": "⑭ SD", "D15": "⑮ Oth"
+            }
+        elif mode == "PAUT":
+            label_map = {"ISO": "ISO/DWG", "Location": "Loc"}
+
+        vars_dict = {}
+        current_keys = getattr(self, keys_attr)
+        for k in display_keys:
+            v = tk.BooleanVar(value=(k in current_keys))
+            # 매핑된 레이블이 있으면 사용, 없으면 키 원본 사용
+            display_name = label_map.get(k, k)
+            cb = ttk.Checkbutton(scrollable_frame, text=display_name, variable=v)
+            cb.pack(fill='x', anchor='w', pady=2)
+            vars_dict[k] = v
+
+        # 컬럼 관리 버튼 영역 (추가/삭제)
+        mgr_btn_frame = ttk.Frame(main_frame)
+        mgr_btn_frame.pack(fill='x', pady=5)
+        
+        from tkinter import simpledialog
+
+        def _add_col():
+            name = simpledialog.askstring("새 컬럼 추가", "추가할 컬럼 이름을 입력하세요:", parent=dialog)
+            if name:
+                name = name.strip()
+                if not name: return
+                if any(k.lower() == name.lower() for k in all_keys):
+                    messagebox.showerror("오류", "이미 존재하는 컬럼 이름입니다.", parent=dialog)
+                    return
+                # 데이터 구조에 반영
+                if data:
+                    for item in data:
+                        if name not in item: item[name] = ""
+                # 현재 키 리스트에도 즉시 반영 (데이터가 없을 때를 위해)
+                curr = getattr(self, keys_attr)
+                if name not in curr: curr.append(name)
+
+                self.log(f"➕ {mode} 새 컬럼 추가됨: {name}")
+                dialog.destroy()
+                self.manage_columns(mode)
+
+        def _del_col():
+            name = simpledialog.askstring("컬럼 삭제", "삭제할 컬럼 이름을 정확히 입력하세요:", parent=dialog)
+            if name:
+                name = name.strip()
+                if not name: return
+                essential = ["V", "No", "selected", "ISO", "Joint", "ISO/DWG", "Dwg"]
+                if any(k.lower() == name.lower() for k in essential):
+                    messagebox.showerror("오류", f"'{name}' 컬럼은 필수 항목이므로 삭제할 수 없습니다.", parent=dialog)
+                    return
+                
+                target_key = next((k for k in display_keys if k.lower() == name.lower()), None)
+                if not target_key:
+                    messagebox.showerror("오류", f"'{name}' 컬럼을 찾을 수 없습니다.", parent=dialog)
+                    return
+                
+                if messagebox.askyesno("삭제 확인", f"'{target_key}' 컬럼을 데이터에서 완전히 삭제하시겠습니까?", parent=dialog):
+                    if data:
+                        for item in data:
+                            if target_key in item: del item[target_key]
+                    curr = getattr(self, keys_attr)
+                    if target_key in curr: curr.remove(target_key)
+
+                    self.log(f"🗑️ {mode} 컬럼 삭제됨: {target_key}")
+                    dialog.destroy()
+                    self.manage_columns(mode)
+
+        ttk.Button(mgr_btn_frame, text="컬럼 추가", command=_add_col).pack(side='left', padx=5, expand=True)
+        ttk.Button(mgr_btn_frame, text="컬럼 삭제", command=_del_col).pack(side='left', padx=5, expand=True)
             
-            # Merge commands (Hide for RT if not applicable, but user might want them)
-            self.ctx_menu.entryconfigure("선택 항목 ISO 병합 (Merge ISO)", command=lambda: self.merge_selected_iso(mode))
-            self.ctx_menu.entryconfigure("선택 항목 Joint 병합 (Merge Joint)", command=lambda: self.merge_selected_joint(mode))
-            self.ctx_menu.entryconfigure("선택 항목 Joint 시각적 그룹화 (Group Joint)", command=lambda: self.group_selected_joint(mode))
-            self.ctx_menu.entryconfigure("선택 항목 Joint 그룹 해제 (Ungroup Joint)", command=lambda: self.ungroup_selected_joint(mode))
-            self.ctx_menu.entryconfigure("선택 항목 일괄 변경 (Bulk Update)", command=lambda: self.show_bulk_update_dialog(mode))
+        def _apply():
+            selected_keys = ["selected", "No"] # Always include checkbox and No
+            for k in display_keys:
+                if vars_dict[k].get():
+                    selected_keys.append(k)
             
-            self.ctx_menu.post(event.x_root, event.y_root)
+            setattr(self, keys_attr, selected_keys)
+            
+            # Treeview Columns Re-setup
+            header_mapping = {}
+            current_cols = []
+            for k in selected_keys:
+                # 내부 ID 결정
+                col_id = k
+                if k == "selected": col_id = "V"
+                elif k in ["ISO", "ISO/DWG", "Dwg"]: col_id = ("ISO/DWG" if mode == "PAUT" else "Dwg")
+                
+                current_cols.append(col_id)
+                # 표시용 헤더 텍스트 결정
+                header_mapping[col_id] = label_map.get(k, col_id)
+
+            tree["columns"] = tuple(current_cols)
+            for col in tree["columns"]:
+                # Width heuristics
+                w = 120 if any(x in col.upper() for x in ["ISO", "DWG", "JOINT"]) else (40 if col in ["V", "No", "t", "h", "l", "d"] else 80)
+                tree.heading(col, text=header_mapping.get(col, col))
+                tree.column(col, width=w, anchor='center')
+            
+            self.populate_preview(data if data else [], switch_tab=False, mode=mode)
+            self.log(f"⚙️ {mode} 미리보기 컬럼 설정 변경 완료")
+            dialog.destroy()
+            
+        ttk.Button(main_frame, text="적용 (Apply)", command=_apply).pack(pady=10)
 
 
     def update_date_listbox(self, mode="PMI"):
-        listbox = self.rt_date_listbox if mode == "RT" else self.date_listbox
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if mode == "RT":
+            listbox = self.rt_date_listbox
+            data = self.rt_extracted_data
+        elif mode == "PT":
+            listbox = self.pt_date_listbox
+            data = self.pt_extracted_data
+        else:
+            listbox = self.date_listbox
+            data = self.extracted_data
         
         if not listbox: return
         
@@ -1795,7 +2033,11 @@ class PMIReportApp:
 
     def select_all(self, mode="PMI"):
         """모든 항목 체크"""
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if mode == "RT": data = self.rt_extracted_data
+        elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "PAUT": data = self.paut_extracted_data
+        else: data = self.extracted_data
+        
         for item in data:
             if item.get('date_filtered', True):
                 item['selected'] = True
@@ -1803,17 +2045,43 @@ class PMIReportApp:
 
     def deselect_all(self, mode="PMI"):
         """모든 항목 체크 해제"""
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if mode == "RT": data = self.rt_extracted_data
+        elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "PAUT": data = self.paut_extracted_data
+        else: data = self.extracted_data
+        
         for item in data:
             if item.get('date_filtered', True):
                 item['selected'] = False
         self.populate_preview(data, switch_tab=False, mode=mode)
 
+    def add_item(self, mode="PMI"):
+        """새 데이터 행 추가"""
+        if mode == "RT": data = self.rt_extracted_data
+        elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "PAUT": data = self.paut_extracted_data
+        else: data = self.extracted_data
+        
+        new_item = {'selected': True, 'date_filtered': True, 'order_index': len(data)}
+        # 기본 키 초기화
+        keys = self.rt_column_keys if mode == "RT" else (self.pt_column_keys if mode == "PT" else (self.paut_column_keys if mode == "PAUT" else self.column_keys))
+        for k in keys:
+            if k not in new_item: new_item[k] = ""
+            
+        data.append(new_item)
+        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.log(f"➕ {mode} 새 데이터 항목 추가 완료")
+
     def move_item(self, direction, mode="PMI"):
         """선택된 아이템의 순서를 위/아래로 이동 (필터 상태 대응)"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if mode == "RT":
+            tree, idx_map, data = self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data
+        elif mode == "PT":
+            tree, idx_map, data = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data
+        elif mode == "PAUT":
+            tree, idx_map, data = self.paut_preview_tree, self.paut_item_idx_map, self.paut_extracted_data
+        else:
+            tree, idx_map, data = self.preview_tree, self.item_idx_map, self.extracted_data
         
         selected_ids = tree.selection()
         if not selected_ids: return
@@ -1863,9 +2131,14 @@ class PMIReportApp:
 
     def delete_item(self, mode="PMI"):
         """선택된 아이템 삭제"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if mode == "RT":
+            tree, idx_map, data = self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data
+        elif mode == "PT":
+            tree, idx_map, data = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data
+        elif mode == "PAUT":
+            tree, idx_map, data = self.paut_preview_tree, self.paut_item_idx_map, self.paut_extracted_data
+        else:
+            tree, idx_map, data = self.preview_tree, self.item_idx_map, self.extracted_data
         
         selected_ids = tree.selection()
         if not selected_ids: return
@@ -1884,7 +2157,10 @@ class PMIReportApp:
 
     def save_preview_data(self, mode="PMI"):
         """현재 추출/편집된 데이터를 JSON 파일로 저장"""
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        if mode == "RT": data = self.rt_extracted_data
+        elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "PAUT": data = self.paut_extracted_data
+        else: data = self.extracted_data
         if not data:
             messagebox.showwarning("알림", f"{mode} 저장할 데이터가 없습니다.")
             return
@@ -1948,6 +2224,8 @@ class PMIReportApp:
         """모든 데이터 초기화"""
         if messagebox.askyesno("확인", f"모든 {mode} 데이터를 초기화하시겠습니까?"):
             if mode == "RT": self.rt_extracted_data = []
+            elif mode == "PT": self.pt_extracted_data = []
+            elif mode == "PAUT": self.paut_extracted_data = []
             else: self.extracted_data = []
             self.update_date_listbox(mode)
             self.populate_preview([], mode=mode)
@@ -2163,6 +2441,10 @@ class PMIReportApp:
             tree = self.pt_preview_tree
             self.pt_item_idx_map = []
             idx_map = self.pt_item_idx_map
+        elif mode == "PAUT":
+            tree = self.paut_preview_tree
+            self.paut_item_idx_map = []
+            idx_map = self.paut_item_idx_map
         else:
             tree = self.preview_tree
             self.item_idx_map = []
@@ -2188,8 +2470,8 @@ class PMIReportApp:
             idx_map.append(idx)
             v_mark = "●" if is_selected else "○"
             
-            # ISO/DWG 번호가 바뀌면 배경색 태그 교체
-            curr_iso = item.get('Dwg', '')
+            # ISO/DWG 번호가 바뀌면 배경색 태그 교체 (PAUT 'ISO' 대응)
+            curr_iso = item.get('Dwg', item.get('ISO', ''))
             norm_iso = self.normalize_iso(curr_iso)
             
             # [NEW] 시각적 병합 (visual_group_joint) 값이 존재하면 해당 값으로 그룹화 계산
@@ -2219,35 +2501,31 @@ class PMIReportApp:
             last_iso = curr_iso
             last_joint = curr_joint
             
-            # Row Values based on mode
-            if mode == "RT":
-                row_vals = [v_mark]
-                row_vals.extend([
-                    item.get('No', ''), item.get('Date', ''),
-                    display_iso, display_joint, item.get('Loc', ''),
-                    item.get('Accept', ''), item.get('Reject', ''), item.get('Grade', '')
-                ])
-                # Add D1 to D15
-                for di in range(1, 16):
-                    row_vals.append(item.get(f'D{di}', ''))
-                row_vals.extend([item.get('Welder', ''), item.get('Remarks', '')])
-            elif mode == "PT":
-                row_vals = [
-                    v_mark, item.get('No', ''), item.get('Date', ''),
-                    item.get('Dwg', ''), item.get('Joint', ''),
-                    item.get('NPS', ''), item.get('Thk.', ''),
-                    item.get('Material', ''), item.get('Welder', ''),
-                    item.get('WType', ''), item.get('Result', '')
-                ]
-            else:
-                row_vals = [
-                    v_mark, item.get('No', ''), item.get('Date', ''),
-                    display_iso, display_joint, item.get('Loc', ''),
-                    f"{self.to_float(item.get('Ni')): .2f}" if self.to_float(item.get('Ni')) > 0 else "",
-                    f"{self.to_float(item.get('Cr')): .2f}" if self.to_float(item.get('Cr')) > 0 else "",
-                    f"{self.to_float(item.get('Mo')): .2f}" if self.to_float(item.get('Mo')) > 0 else "",
-                    item.get('Grade', '')
-                ]
+            # [REFINED] Dynamic Row Values based on active column_keys for each mode
+            keys = self.rt_column_keys if mode == "RT" else (self.pt_column_keys if mode == "PT" else (self.paut_column_keys if mode == "PAUT" else self.column_keys))
+            
+            row_vals = []
+            for k in keys:
+                if k == "selected":
+                    row_vals.append(v_mark)
+                elif k == "No" and mode == "PAUT":
+                    row_vals.append(len(idx_map))
+                elif k in ["Dwg", "ISO", "ISO/DWG"] and not is_show:
+                    # PMI/RT/PT ISO/DWG merge check
+                    if item.get('is_merged_iso'): row_vals.append("")
+                    else: row_vals.append(display_iso)
+                elif k == "Joint" and not is_show:
+                    if item.get('is_merged_joint'): row_vals.append("")
+                    else: row_vals.append(display_joint)
+                elif mode == "PMI" and k in ["Ni", "Cr", "Mo"]:
+                     val = self.to_float(item.get(k))
+                     row_vals.append(f"{val:.2f}" if val > 0 else "")
+                elif k in ["Dwg", "ISO", "ISO/DWG"]:
+                    row_vals.append(display_iso if mode != "PAUT" else item.get(k, ""))
+                elif k == "Joint":
+                    row_vals.append(display_joint)
+                else:
+                    row_vals.append(item.get(k, ""))
 
             row_tags = [str(idx), current_tag]
             tree.insert("", "end", values=tuple(row_vals), tags=tuple(row_tags))
@@ -2257,6 +2535,8 @@ class PMIReportApp:
                 self.rt_tab_notebook.select(self.rt_tab_preview)
             elif mode == "PT":
                 self.pt_tab_notebook.select(self.pt_tab_preview)
+            elif mode == "PAUT":
+                pass # PAUT doesn't have sub-tabs in its tab
             else:
                 self.tab_notebook.select(self.tab_preview)
 
@@ -2268,26 +2548,26 @@ class PMIReportApp:
         path = filedialog.askopenfilename(initialdir=os.path.dirname(var.get() or BASE_DIR), filetypes=types)
         if path: var.set(path)
 
-    def show_bulk_update_dialog(self):
-        """[NEW] 선택된 항목들을 필터 조건에 따라 일괄 변경하는 다이얼로그 표시"""
-        if not self.extracted_data:
-            messagebox.showwarning("알림", "처리할 데이터가 없습니다.")
+    def show_bulk_update_dialog(self, mode="PMI"):
+        """선택된 항목들을 필터 조건에 따라 일괄 변경하는 다이얼로그 표시"""
+        target_data = self.rt_extracted_data if mode == "RT" else (self.pt_extracted_data if mode == "PT" else self.extracted_data)
+        
+        if not target_data:
+            messagebox.showwarning("알림", f"{mode} 데이터가 없습니다.")
             return
 
-        # 체크된 항목 추출
-        selected_indices = [idx for idx, item in enumerate(self.extracted_data) if item.get('selected', True)]
+        # 체크(●)된 항목의 인덱스 추출
+        selected_indices = [idx for idx, item in enumerate(target_data) if item.get('selected', True)]
         if not selected_indices:
             messagebox.showwarning("항목 미선택", "일괄 변경할 항목을 체크(선택)해주세요.")
             return
 
         dialog = tk.Toplevel(self.root)
-        dialog.title("선택 항목 일괄 변경")
-        dialog.geometry("450x550")
+        dialog.title(f"{mode} 선택 항목 일괄 변경")
+        dialog.geometry("450x570")
         dialog.configure(background="#f9fafb")
         dialog.transient(self.root)
         dialog.grab_set()
-
-        # Center the dialog
         dialog.geometry(f"+{self.root.winfo_x() + 100}+{self.root.winfo_y() + 50}")
 
         main_frame = ttk.Frame(dialog, padding=20)
@@ -2298,15 +2578,25 @@ class PMIReportApp:
         filter_frame = ttk.Frame(main_frame)
         filter_frame.pack(fill='x', pady=(0, 20))
         
+        # 모드별 필터 가능 열 설정
+        if mode == "RT":
+            filter_cols = ["전체(필터 없음)", "Drawing No.", "Film Ident. No.", "Film Location", "Welder No", "Remarks"]
+            key_map = {"Drawing No.": "Dwg", "Film Ident. No.": "Joint", "Film Location": "Loc", "Welder No": "Welder", "Remarks": "Remarks"}
+        elif mode == "PT":
+            filter_cols = ["전체(필터 없음)", "ISO Drawing No.", "Joint", "NPS", "Thk.", "Material", "Welder"]
+            key_map = {"ISO Drawing No.": "Dwg", "Joint": "Joint", "NPS": "NPS", "Thk.": "Thk.", "Material": "Material", "Welder": "Welder"}
+        else: # PMI
+            filter_cols = ["전체(필터 없음)", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"]
+            key_map = {"ISO/DWG": "Dwg", "Joint No": "Joint", "Test Location": "Loc", "Ni": "Ni", "Cr": "Cr", "Mo": "Mo", "Grade": "Grade"}
+
         ttk.Label(filter_frame, text="필터 열:").grid(row=0, column=0, sticky='w')
-        col_var = tk.StringVar(value="Test Location")
-        col_combo = ttk.Combobox(filter_frame, textvariable=col_var, state='readonly', width=15,
-                                 values=["전체(필터 없음)", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"])
+        col_var = tk.StringVar(value="전체(필터 없음)")
+        col_combo = ttk.Combobox(filter_frame, textvariable=col_var, state='readonly', width=20, values=filter_cols)
         col_combo.grid(row=0, column=1, padx=5, sticky='w')
         
         ttk.Label(filter_frame, text="필터 값:").grid(row=1, column=0, sticky='w', pady=5)
-        val_var = tk.StringVar(value="WELD")
-        ttk.Entry(filter_frame, textvariable=val_var, width=18).grid(row=1, column=1, padx=5, sticky='w', pady=5)
+        val_var = tk.StringVar()
+        ttk.Entry(filter_frame, textvariable=val_var, width=23).grid(row=1, column=1, padx=5, sticky='w', pady=5)
         
         ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
 
@@ -2315,32 +2605,32 @@ class PMIReportApp:
         fields_frame = ttk.Frame(main_frame)
         fields_frame.pack(fill='both', expand=True)
         
+        # 모드별 입력 필드 구성
+        if mode == "RT":
+            labels = [("Dwg:", "Dwg"), ("Film Ident:", "Joint"), ("Loc:", "Loc"), ("Grade:", "Grade"), ("Welder:", "Welder"), ("Remarks:", "Remarks"), ("Date:", "Date")]
+        elif mode == "PT":
+            labels = [("Dwg:", "Dwg"), ("Joint:", "Joint"), ("NPS:", "NPS"), ("Thk:", "Thk."), ("Material:", "Material"), ("Welder:", "Welder"), ("Weld Type:", "WType"), ("Result:", "Result"), ("Date:", "Date")]
+        else: # PMI
+            labels = [("Ni (%):", "Ni"), ("Cr (%):", "Cr"), ("Mo (%):", "Mo"), ("Location:", "Loc"), ("Grade:", "Grade"), ("Date:", "Date")]
+
         entries = {}
-        row_idx = 0
-        for label, key in [("Ni (%):", "Ni"), ("Cr (%):", "Cr"), ("Mo (%):", "Mo"), 
-                           ("Location:", "Loc"), ("Grade:", "Grade"), ("Date:", "Date")]:
-            ttk.Label(fields_frame, text=label).grid(row=row_idx, column=0, sticky='e', pady=3, padx=5)
+        for i, (lbl, key) in enumerate(labels):
+            ttk.Label(fields_frame, text=lbl).grid(row=i, column=0, sticky='e', pady=3, padx=5)
             entries[key] = ttk.Entry(fields_frame, width=20)
-            entries[key].grid(row=row_idx, column=1, sticky='w', pady=3)
-            row_idx += 1
+            entries[key].grid(row=i, column=1, sticky='w', pady=3)
 
         def apply_action():
             filter_col = col_var.get()
             filter_val = val_var.get().strip().lower()
-            
-            # Update mappings for filtering
-            key_map = {"ISO/DWG": "Dwg", "Joint No": "Joint", "Test Location": "Loc", "Ni": "Ni", "Cr": "Cr", "Mo": "Mo", "Grade": "Grade"}
             target_key = key_map.get(filter_col)
             
             update_spec = {}
             for key, entry in entries.items():
                 val = entry.get().strip()
                 if val:
-                    if key in ["Ni", "Cr", "Mo"]:
-                        # Support relative values like +1.0 or -0.5
+                    if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
                         if val.startswith(('+', '-')):
-                            try:
-                                update_spec[key] = ('relative', float(val))
+                            try: update_spec[key] = ('relative', float(val))
                             except: update_spec[key] = ('absolute', self.to_float(val))
                         else:
                             update_spec[key] = ('absolute', self.to_float(val))
@@ -2351,28 +2641,24 @@ class PMIReportApp:
                 messagebox.showwarning("입력 부족", "변경할 값을 하나 이상 입력해주세요.")
                 return
 
-            # Apply updates
             count = 0
             for idx in selected_indices:
-                item = self.extracted_data[idx]
-                
-                # Check filter
+                item = target_data[idx]
                 match = True
                 if target_key:
                     curr_val = str(item.get(target_key, "")).strip().lower()
-                    if filter_val not in curr_val: # Partial match for convenience
-                        match = False
+                    if filter_val not in curr_val: match = False
                 
                 if match:
                     for k, spec in update_spec.items():
-                        mode, val = spec
-                        if mode == 'relative':
-                            item[k] = self.to_float(item.get(k, 0)) + val
+                        up_mode, up_val = spec
+                        if up_mode == 'relative':
+                            item[k] = self.to_float(item.get(k, 0)) + up_val
                         else:
-                            item[k] = val
+                            item[k] = up_val
                     count += 1
             
-            self.populate_preview(self.extracted_data, switch_tab=False)
+            self.populate_preview(target_data, switch_tab=False, mode=mode)
             messagebox.showinfo("일괄 변경 완료", f"총 {count}개의 항목이 업데이트되었습니다.")
             dialog.destroy()
 
@@ -2843,6 +3129,11 @@ class PMIReportApp:
                             else: val = ""
                             item_data[key] = val
                             
+                        # [NEW] 기존에 수동으로 추가된 컬럼이 있다면 해당 키도 포함하여 초기화
+                        for k in self.rt_column_keys:
+                            if k not in item_data and k != "selected":
+                                item_data[k] = ""
+
                         all_extracted_data.append(item_data)
                     elif mode == "PT":
                         # PT-specific Row Data (Filter for ACC only)
@@ -2855,7 +3146,7 @@ class PMIReportApp:
                             # SCH -> Thk 변환
                             thk_converted = convert_sch_to_thk(size_v, thk_v)
                             
-                            all_extracted_data.append({
+                            item_row = {
                                 'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
                                 'NPS': size_v, 'Thk.': thk_converted, 
                                 'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "",
@@ -2864,7 +3155,12 @@ class PMIReportApp:
                                 'Result': "Acc",
                                 'selected': True,
                                 'order_index': len(self.pt_extracted_data) + len(all_extracted_data)
-                            })
+                            }
+                            # [NEW] 기존 수동 추가 컬럼 보존
+                            for k in self.pt_column_keys:
+                                if k not in item_row and k != "selected":
+                                    item_row[k] = ""
+                            all_extracted_data.append(item_row)
                     else:
                         # PMI-specific Row Data
                         v_cr = self.to_float(row[col_cr])
@@ -2881,7 +3177,7 @@ class PMIReportApp:
                             if not final_grade or final_grade == "nan":
                                 final_grade = "SS316" if v_mo >= 1.5 else "SS304"
 
-                            all_extracted_data.append({
+                            pmi_item = {
                                 'No': v_raw_no, 
                                 'Joint': curr_joint,
                                 'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
@@ -2890,7 +3186,12 @@ class PMIReportApp:
                                 'Date': extracted_date,
                                 'selected': True,
                                 'order_index': len(self.extracted_data) + len(all_extracted_data)
-                            })
+                            }
+                            # [NEW] 기존 수동 추가 컬럼 보존
+                            for k in self.column_keys:
+                                if k not in pmi_item and k != "selected":
+                                    pmi_item[k] = ""
+                            all_extracted_data.append(pmi_item)
                 self.progress['value'] = ((s_idx + 1) / len(xls.sheet_names)) * 50
 
             if not all_extracted_data:
