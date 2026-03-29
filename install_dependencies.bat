@@ -19,11 +19,12 @@ if %errorlevel% neq 0 (
 echo.
 echo [2/2] Installing OCR Dependencies using %PY_CMD%...
 %PY_CMD% -m pip install --upgrade pip
-%PY_CMD% -m pip install easyocr pytesseract pillow numpy pyperclip opencv-python
+%PY_CMD% -m pip uninstall -y opencv-python opencv-python-headless
+%PY_CMD% -m pip install easyocr pillow numpy pyperclip opencv-python google-genai pymupdf
 echo.
 echo --------------------------------------------------
 echo Installation Final Check...
-%PY_CMD% -c "import easyocr; import pytesseract; print('SUCCESS: All modules ready.')"
+%PY_CMD% -c "import easyocr; import google.genai; import fitz; print('SUCCESS: All modules ready.')"
 if %errorlevel% neq 0 (
     echo [WARNING] Some modules might not have installed correctly.
     echo Please check the error messages above.
