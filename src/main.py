@@ -2239,17 +2239,13 @@ class PMIReportApp:
         pass # Placeholder for search, I'll use target content
 
     def launch_ocr_tool(self):
-        """별도의 프로세스로 OCR 추출기 실행"""
+        """OCR 추출기를 별도 창으로 실행 (EXE 통합을 위해 내부 클래스 사용)"""
         try:
-            import subprocess
-            main_dir = os.path.dirname(os.path.abspath(__file__))
-            ocr_script = os.path.join(main_dir, "ocr_extractor.py")
-            if os.path.exists(ocr_script):
-                subprocess.Popen([sys.executable, ocr_script])
-            else:
-                messagebox.showerror("오류", f"OCR 추출기 파일을 찾을 수 없습니다: {ocr_script}")
+            from ocr_extractor import OCRExtractorApp
+            ocr_window = tk.Toplevel(self.root)
+            OCRExtractorApp(ocr_window)
         except Exception as e:
-            messagebox.showerror("오류", f"OCR 추출기 실행 중 오류 발생: {e}")
+            messagebox.showerror("오류", f"OCR 추출기 실행 중 오류 발생: {e}\n{traceback.format_exc()}")
         """현재 미리보기 목록(필터링/선택 반영)을 엑셀 파일로 내보냄 (서식 및 병합 시인성 유지)"""
         data = self.rt_extracted_data if mode == "RT" else self.extracted_data
         if not data:

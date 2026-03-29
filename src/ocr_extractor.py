@@ -3,6 +3,8 @@ import sys
 import traceback
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
+import numpy as np
+import cv2
 from PIL import Image, ImageTk
 
 # OCR Libraries Check
@@ -129,7 +131,14 @@ class OCRExtractorApp:
             # Initialize reader (Korean + English)
             self.reader = easyocr.Reader(['ko', 'en'])
         
-        results = self.reader.readtext(self.image_path)
+        # [FIX] Handle Korean characters in file path using cv2.imdecode
+        img_array = np.fromfile(self.image_path, np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise Exception("이미지를 디코딩할 수 없습니다. 파일 경로에 문제가 있을 수 있습니다.")
+
+        results = self.reader.readtext(img)
         # Sort results by vertical position then horizontal
         results.sort(key=lambda x: (x[0][0][1], x[0][0][0]))
         
