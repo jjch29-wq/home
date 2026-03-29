@@ -2,7 +2,6 @@ import os
 import sys
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
-import pyperclip
 from PIL import Image, ImageTk
 
 # OCR Libraries Check
@@ -146,7 +145,9 @@ class OCRExtractorApp:
     def copy_to_clipboard(self):
         content = self.result_text.get("1.0", tk.END).strip()
         if content:
-            pyperclip.copy(content)
+            self.root.clipboard_clear()
+            self.root.clipboard_append(content)
+            self.root.update()
             messagebox.showinfo("복사 완료", "텍스트가 클립보드에 복사되었습니다.")
 
 if __name__ == "__main__":
