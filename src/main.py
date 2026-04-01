@@ -82,10 +82,12 @@ medium_side = Side(style='medium')
 thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
 
 if getattr(sys, 'frozen', False):
-    SCRIPT_HOME = os.path.dirname(sys.executable)
-    BASE_DIR = SCRIPT_HOME
-    CONFIG_DIR = SCRIPT_HOME
-    RESOURCE_DIR = SCRIPT_HOME
+    # PyInstaller creates a temp folder and stores path in _MEIPASS
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    SCRIPT_HOME = base_path
+    BASE_DIR = base_path
+    CONFIG_DIR = base_path
+    RESOURCE_DIR = os.path.join(base_path, "resources")
 else:
     SCRIPT_HOME = os.path.dirname(os.path.abspath(__file__))
     BASE_DIR = os.path.dirname(SCRIPT_HOME)
