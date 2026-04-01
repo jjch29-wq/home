@@ -141,10 +141,6 @@ class PMIReportApp:
         self.sort_column = "" 
         self.sort_reverse = False 
         
-        # [NEW] PMI Preview Search & Filter
-        self.pmi_search_loc = tk.StringVar()
-        self.pmi_show_deficiency_only = tk.BooleanVar(value=False)
-        
         # [NEW] 원소 함량 필터링용 상태 변수 (PMI 전용)
         self.element_filters = [] # list of dict: {'key': StringVar, 'min': StringVar, 'max': StringVar}
         # 기본 필터 추가 (Cr, Ni, Mo)
@@ -160,12 +156,8 @@ class PMIReportApp:
         self.paut_template_file_path = tk.StringVar(value=self.config.get('PAUT_TEMPLATE_PATH', ""))
         self.paut_manual_vars = {
             't': tk.StringVar(), 'h': tk.StringVar(), 'l': tk.StringVar(), 'd': tk.StringVar(),
-            'nature': tk.StringVar(value="Slag"), 'loc': tk.StringVar(value="-"),
-            'db': tk.StringVar(value="6"), 'peak': tk.StringVar(value="80"), 
-            'z1': tk.StringVar(), 'z2': tk.StringVar(), 'target_fsh': tk.StringVar(value="40.0%")
+            'nature': tk.StringVar(value="Slag"), 'loc': tk.StringVar(value="-")
         }
-        self.paut_manual_vars['peak'].trace_add("write", lambda *args: self._update_paut_target_fsh())
-        self.paut_manual_vars['db'].trace_add("write", lambda *args: self._update_paut_target_fsh())
         self.paut_extracted_data = []
         
         # --- RT State Variables ---
@@ -743,8 +735,8 @@ class PMIReportApp:
 
         self.pt_preview_tree = ttk.Treeview(tree_frame, columns=self.pt_display_cols, show='headings', height=10, selectmode='extended')
         for col in self.pt_preview_tree["columns"]:
-            self.pt_preview_tree.heading(col, text=col, anchor='center')
-            self.pt_preview_tree.column(col, width=self.pt_widths.get(col, 80), anchor='center', stretch=False)
+            self.pt_preview_tree.heading(col, text=col)
+            self.pt_preview_tree.column(col, width=self.pt_widths.get(col, 100), anchor='center', stretch=False)
         
         scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.pt_preview_tree.yview)
         scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.pt_preview_tree.xview)
@@ -782,29 +774,6 @@ class PMIReportApp:
         manual_frame = ttk.LabelFrame(container, text=" 개별 판정 (Manual Evaluation) ", padding=15)
         manual_frame.pack(fill='x', pady=(0, 15))
         
-        # [NEW] Sizing Helper Row (Upper)
-        calc_frame = tk.Frame(manual_frame, background="#f1f5f9", padx=10, pady=8, highlightbackground="#cbd5e1", highlightthickness=1)
-        calc_frame.grid(row=0, column=0, columnspan=10, sticky='ew', pady=(0, 15))
-        
-        ttk.Label(calc_frame, text="📏 h 산출 도우미:", font=("Malgun Gothic", 9, "bold"), background="#f1f5f9").grid(row=0, column=0, padx=5)
-        
-        ttk.Label(calc_frame, text="Peak 에코(%):", background="#f1f5f9").grid(row=0, column=1, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['peak'], width=5).grid(row=0, column=2, padx=5)
-        
-        ttk.Label(calc_frame, text="강하 dB:", background="#f1f5f9").grid(row=0, column=3, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['db'], width=4).grid(row=0, column=4, padx=5)
-        
-        ttk.Label(calc_frame, text="➡ 목표(%):", background="#f1f5f9", foreground="#ef4444", font=("Malgun Gothic", 9, "bold")).grid(row=0, column=5, padx=2)
-        ttk.Label(calc_frame, textvariable=self.paut_manual_vars['target_fsh'], background="#f1f5f9", foreground="#ef4444", font=("Malgun Gothic", 9, "bold")).grid(row=0, column=6, padx=5)
-
-        ttk.Label(calc_frame, text="|  상측(z1):", background="#f1f5f9").grid(row=0, column=7, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['z1'], width=6).grid(row=0, column=8, padx=5)
-        
-        ttk.Label(calc_frame, text="하측(z2):", background="#f1f5f9").grid(row=0, column=9, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['z2'], width=6).grid(row=0, column=10, padx=5)
-        
-        ttk.Button(calc_frame, text="h 자동 입력", command=self._calculate_paut_h).grid(row=0, column=11, padx=10)
-        
         # Grid inside manual_frame
         m_inputs = [
             ("모재 두께 (t):", "t"), ("결함 높이 (h):", "h"), ("결함 길이 (l):", "l"), 
@@ -812,24 +781,24 @@ class PMIReportApp:
         ]
         
         for i, (lbl, key) in enumerate(m_inputs):
-            ttk.Label(manual_frame, text=lbl).grid(row=1, column=i*2, sticky='w', padx=(10, 2), pady=5)
+            ttk.Label(manual_frame, text=lbl).grid(row=0, column=i*2, sticky='w', padx=(10, 2), pady=5)
             if key == "nature":
                 cb = ttk.Combobox(manual_frame, textvariable=self.paut_manual_vars[key], values=["Crack", "LOF", "IP", "Slag", "Porosity", "Others"], width=10)
-                cb.grid(row=1, column=i*2+1, padx=5, sticky='w')
+                cb.grid(row=0, column=i*2+1, padx=5, sticky='w')
             else:
                 ent = ttk.Entry(manual_frame, textvariable=self.paut_manual_vars[key], width=10)
-                ent.grid(row=1, column=i*2+1, padx=5, sticky='w')
+                ent.grid(row=0, column=i*2+1, padx=5, sticky='w')
                 if key != "l": 
                     ent.bind("<KeyRelease>", lambda e: self._update_paut_auto_loc())
 
-        ttk.Label(manual_frame, text="판정 위치:").grid(row=2, column=0, sticky='w', padx=(10, 2), pady=10)
-        ttk.Label(manual_frame, textvariable=self.paut_manual_vars['loc'], font=("Malgun Gothic", 10, "bold"), foreground="#3b82f6").grid(row=2, column=1, padx=5, sticky='w')
+        ttk.Label(manual_frame, text="판정 위치:").grid(row=1, column=0, sticky='w', padx=(10, 2), pady=10)
+        ttk.Label(manual_frame, textvariable=self.paut_manual_vars['loc'], font=("Malgun Gothic", 10, "bold"), foreground="#3b82f6").grid(row=1, column=1, padx=5, sticky='w')
 
         btn_eval = ttk.Button(manual_frame, text="판정 실행", command=self._run_manual_paut_eval)
-        btn_eval.grid(row=2, column=2, padx=20)
+        btn_eval.grid(row=1, column=2, padx=20)
 
         self.paut_res_label = tk.Label(manual_frame, text="데이터를 입력하세요", font=("Malgun Gothic", 11, "bold"), background="#f3f4f6", height=2)
-        self.paut_res_label.grid(row=2, column=3, columnspan=7, sticky='ew', padx=10)
+        self.paut_res_label.grid(row=1, column=3, columnspan=7, sticky='ew', padx=10)
 
         # 2.2 Preview & Batch (Bottom)
         batch_frame = ttk.LabelFrame(container, text=" 일괄 판정 및 미리보기 (Batch & Preview) ", padding=10)
@@ -839,7 +808,7 @@ class PMIReportApp:
         self.paut_preview_tree = ttk.Treeview(batch_frame, columns=("V", "No", "ISO/DWG", "Joint", "t", "h", "l", "d", "Location", "Nature", "Result"), show='headings', height=10, selectmode='extended')
         paut_widths = {"V": 40, "No": 40, "ISO/DWG": 120, "Joint": 80, "t": 40, "h": 40, "l": 40, "d": 40, "Location": 70, "Nature": 70, "Result": 80}
         for col in self.paut_preview_tree["columns"]:
-            self.paut_preview_tree.heading(col, text=col, anchor='center')
+            self.paut_preview_tree.heading(col, text=col)
             self.paut_preview_tree.column(col, width=paut_widths.get(col, 60), anchor='center')
         
         self.paut_preview_tree.pack(side='left', fill='both', expand=True)
@@ -864,40 +833,6 @@ class PMIReportApp:
                 loc = "Surface" if is_surface else "Subsurface"
                 self.paut_manual_vars['loc'].set(loc)
         except: pass
-
-    def _update_paut_target_fsh(self):
-        """[NEW] Peak 나 dB 변경 시 목표 % FSH 실시간 업데이트"""
-        try:
-            peak = float(self.paut_manual_vars['peak'].get() or 0)
-            db = float(self.paut_manual_vars['db'].get() or 0)
-            if peak > 0:
-                drop_factor = pow(10, -db / 20)
-                target = peak * drop_factor
-                self.paut_manual_vars['target_fsh'].set(f"{target:.1f}%")
-            else:
-                self.paut_manual_vars['target_fsh'].set("0.0%")
-        except:
-            self.paut_manual_vars['target_fsh'].set("-")
-
-    def _calculate_paut_h(self):
-        """[NEW] dB 강하법을 이용한 h 값 계산 및 자동 입력"""
-        try:
-            peak = float(self.paut_manual_vars['peak'].get() or 80)
-            db = float(self.paut_manual_vars['db'].get() or 6)
-            z1 = float(self.paut_manual_vars['z1'].get() or 0)
-            z2 = float(self.paut_manual_vars['z2'].get() or 0)
-            
-            # Calculate Target FSH: Peak * 10^(-dB/20)
-            drop_factor = pow(10, -db / 20)
-            target_fsh = peak * drop_factor
-            self.paut_manual_vars['target_fsh'].set(f"{target_fsh:.1f}%")
-
-            h_calc = abs(z1 - z2)
-            self.paut_manual_vars['h'].set(f"{h_calc:.2f}")
-            self._update_paut_auto_loc()
-            self.log(f"📐 h 산출 완료 ({peak}% peak -> {db}dB 강하 목표 {target_fsh:.1f}%): {h_calc:.2f} mm")
-        except Exception as e:
-            messagebox.showerror("계산 오류", f"입력값을 확인해주세요: {e}")
 
     def _run_manual_paut_eval(self):
         try:
@@ -1298,28 +1233,10 @@ class PMIReportApp:
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        # [NEW] Search & Highlight Header
-        header_frame = tk.Frame(container, background="#f9fafb", pady=5)
-        header_frame.pack(fill='x')
-        
-        # [REMOVED Header Search to consolidate into Sidebar Multi-Select]
-        
-        tk.Checkbutton(header_frame, text="⚠️ 함량 미달만 보기", variable=self.pmi_show_deficiency_only, 
-                       background="#f9fafb", font=("Malgun Gothic", 9),
-                       command=lambda: self.populate_preview(self.extracted_data, switch_tab=False)).pack(side='left', padx=20)
-
-        tree_frame = tk.Frame(container, background="#f9fafb")
-        tree_frame.pack(side='left', fill='both', expand=True)
-
-        self.preview_tree = ttk.Treeview(tree_frame, columns=("ST", "V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"), show='headings', height=10, selectmode='extended')
-        # [NEW] Highlight tags
-        self.preview_tree.tag_configure("deficient", background="#fee2e2", foreground="#991b1b") # Light red
-        self.preview_tree.tag_configure("group_even", background="#ffffff")
-        self.preview_tree.tag_configure("group_odd", background="#f3f4f6")
-        
-        widths = {"ST": 40, "V": 40, "No": 50, "Date": 90, "ISO/DWG": 180, "Joint No": 100, "Test Location": 100, "Ni": 60, "Cr": 60, "Mo": 60, "Grade": 100}
+        self.preview_tree = ttk.Treeview(container, columns=("V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"), show='headings', height=10, selectmode='extended')
+        widths = {"V": 40, "No": 50, "Date": 90, "ISO/DWG": 180, "Joint No": 100, "Test Location": 100, "Ni": 60, "Cr": 60, "Mo": 60, "Grade": 100}
         for col in self.preview_tree["columns"]:
-            self.preview_tree.heading(col, text=col, anchor='center', command=lambda c=col: self.sort_by_column(c))
+            self.preview_tree.heading(col, text=col, command=lambda c=col: self.sort_by_column(c))
             self.preview_tree.column(col, width=widths.get(col, 80), anchor='center')
         
         self._setup_preview_sidebar(self.preview_tree, container, mode="PMI")
@@ -1337,8 +1254,8 @@ class PMIReportApp:
 
         self.rt_preview_tree = ttk.Treeview(tree_frame, columns=self.rt_display_cols, show='headings', height=10, selectmode='extended')
         for col in self.rt_preview_tree["columns"]:
-            self.rt_preview_tree.heading(col, text=col, anchor='center')
-            self.rt_preview_tree.column(col, width=self.rt_widths.get(col, 80), anchor='center', stretch=False)
+            self.rt_preview_tree.heading(col, text=col)
+            self.rt_preview_tree.column(col, width=self.rt_widths.get(col, 60), anchor='center', stretch=False)
         
         scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.rt_preview_tree.yview)
         scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.rt_preview_tree.xview)
@@ -1359,44 +1276,42 @@ class PMIReportApp:
         def _on_tree_press(event, t=tree, m=mode):
             t.focus_set()
             item_id = t.identify_row(event.y)
-            col_id = tree.identify_column(event.x)
-            col_idx = int(col_id.replace("#", "")) - 1
+            column = t.identify_column(event.x)
             
-            if mode == "RT": 
-                display_cols, data, idx_map = self.rt_display_cols, self.rt_extracted_data, self.rt_item_idx_map
-            elif mode == "PT":
-                display_cols, data, idx_map = self.pt_display_cols, self.pt_extracted_data, self.pt_item_idx_map
-            elif mode == "PAUT":
-                display_cols, data, idx_map = self.paut_column_keys, self.paut_extracted_data, self.paut_item_idx_map
-            else: # PMI
-                display_cols = ["ST"] + list(self.column_keys)
-                data, idx_map = self.extracted_data, self.item_idx_map
-
-                if 0 <= col_idx < len(display_cols):
-                    key = display_cols[col_idx]
+            if item_id:
+                try:
+                    col_idx = int(column.replace("#", "")) - 1
+                    if m == "RT":
+                        keys, data, idx_map = self.rt_column_keys, self.rt_extracted_data, self.rt_item_idx_map
+                    elif m == "PT":
+                        keys, data, idx_map = self.pt_column_keys, self.pt_extracted_data, self.pt_item_idx_map
+                    elif m == "PAUT":
+                        keys, data, idx_map = self.paut_column_keys, self.paut_extracted_data, self.paut_item_idx_map
+                    else:
+                        keys, data, idx_map = self.column_keys, self.extracted_data, self.item_idx_map
                     
-                    # (1) Selection Toggle (V)
-                    if key == "V":
+                    if 0 <= col_idx < len(keys):
+                        key = keys[col_idx]
                         view_idx = t.index(item_id)
                         actual_idx = idx_map[view_idx]
-                        data[actual_idx]['selected'] = not data[actual_idx].get('selected', True)
-                        self.populate_preview(data, switch_tab=False, mode=mode)
-                        return "break"
-                    
-                    if key == "ST": return "break" # ST is read-only
-                    
-                    # (2) RT Specific Defect/Result Toggle
-                    if mode == "RT" and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Acc", "Rej"])):
-                        view_idx = t.index(item_id)
-                        actual_idx = idx_map[view_idx]
-                        old_v = data[actual_idx].get(key, "")
-                        new_v = "√" if old_v == "" else ""
-                        data[actual_idx][key] = new_v
-                        if key in ["Acc", "Rej"] and new_v == "√":
-                            other = "Rej" if key == "Acc" else "Acc"
-                            data[actual_idx][other] = ""
-                        self.populate_preview(data, switch_tab=False, mode="RT")
-                        return "break"
+                        
+                        # (1) Selection Toggle
+                        if key == "selected":
+                            data[actual_idx]['selected'] = not data[actual_idx].get('selected', True)
+                            self.populate_preview(data, switch_tab=False, mode=m)
+                            return "break"
+                            
+                        # (2) RT Specific Defect/Result Toggle
+                        elif m == "RT" and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Accept", "Reject"])):
+                            old_v = data[actual_idx].get(key, "")
+                            new_v = "√" if old_v == "" else ""
+                            data[actual_idx][key] = new_v
+                            if key in ["Accept", "Reject"] and new_v == "√":
+                                other = "Reject" if key == "Accept" else "Accept"
+                                data[actual_idx][other] = ""
+                            self.populate_preview(data, switch_tab=False, mode="RT")
+                            return "break"
+                except: pass
 
                 self.drag_start_item = item_id
                 if not (event.state & 0x0001 or event.state & 0x0004):
@@ -1469,42 +1384,9 @@ class PMIReportApp:
             data = self.rt_extracted_data if m == "RT" else self.extracted_data
             for item in data:
                 item['date_filtered'] = (item.get('Date', '') in sel_dates)
-            
-            if m == "PMI":
-                self.update_pmi_loc_listbox()
-                
             self.populate_preview(data, switch_tab=False, mode=m)
             
         ttk.Button(sidebar, text="선택 날짜 적용", command=_apply_date_filter).pack(fill='x', pady=(0, 10))
-        
-        # [NEW] Multi-Select Test Location Filter (PMI Only)
-        if mode == "PMI":
-            ttk.Label(sidebar, text="지점(Loc) 선택 필터", font=("Malgun Gothic", 9, "bold")).pack(pady=(5, 2))
-            loc_frame = tk.Frame(sidebar, background="#f9fafb")
-            loc_frame.pack(fill='x', pady=5)
-            
-            self.pmi_loc_listbox = tk.Listbox(loc_frame, selectmode='single', height=8, exportselection=False, font=("Malgun Gothic", 9))
-            self.pmi_loc_listbox.pack(side='left', fill='both', expand=True)
-            sb_loc = ttk.Scrollbar(loc_frame, orient='vertical', command=self.pmi_loc_listbox.yview)
-            sb_loc.pack(side='right', fill='y')
-            self.pmi_loc_listbox.config(yscrollcommand=sb_loc.set)
-            
-            def _toggle_loc(event):
-                idx = self.pmi_loc_listbox.nearest(event.y)
-                if idx >= 0:
-                    val = self.pmi_loc_listbox.get(idx)
-                    if val.startswith("[v]"):
-                        self.pmi_loc_listbox.delete(idx); self.pmi_loc_listbox.insert(idx, val.replace("[v] ", "[ ] "))
-                    elif val.startswith("[ ]"):
-                        self.pmi_loc_listbox.delete(idx); self.pmi_loc_listbox.insert(idx, val.replace("[ ] ", "[v] "))
-                    self.pmi_loc_listbox.selection_clear(0, tk.END)
-            
-            self.pmi_loc_listbox.bind("<ButtonRelease-1>", _toggle_loc)
-            
-            def _apply_loc_filter():
-                self.populate_preview(self.extracted_data, switch_tab=False, mode="PMI")
-            
-            ttk.Button(sidebar, text="선택 지점 적용", command=_apply_loc_filter).pack(fill='x', pady=(0, 10))
         
         tk.Checkbutton(sidebar, text="선택 항목만 보기", variable=self.show_selected_only, 
                        command=lambda: self.populate_preview(self.rt_extracted_data if mode=="RT" else self.extracted_data, switch_tab=False, mode=mode),
@@ -1512,9 +1394,6 @@ class PMIReportApp:
 
         ttk.Button(sidebar, text="전체 선택", width=15, command=lambda: self.select_all(mode)).pack(pady=2)
         ttk.Button(sidebar, text="선택 해제", width=15, command=lambda: self.deselect_all(mode)).pack(pady=(2, 5))
-        
-        if mode == "PMI":
-            ttk.Button(sidebar, text="미달 항목만 선택", width=15, command=lambda: self.select_deficient_items()).pack(pady=2, fill='x')
         
         # [NEW] 공통 컬럼 관리 버튼 추가
         ttk.Button(sidebar, text="컬럼 관리 (Columns)", width=15, command=lambda: self.manage_columns(mode)).pack(pady=2)
@@ -1531,6 +1410,9 @@ class PMIReportApp:
         tk.Frame(sidebar, height=10, background="#f9fafb").pack()
         ttk.Button(sidebar, text="선택 삭제", width=12, command=lambda: self.delete_item(mode)).pack(pady=2)
         ttk.Button(sidebar, text="전체 초기화", width=12, command=lambda: self.clear_all(mode)).pack(pady=(2, 10))
+
+        tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
+        ttk.Button(sidebar, text="🔍 OCR 문자 추출", width=18, command=self.launch_ocr_tool).pack(pady=2)
 
         tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
         ttk.Button(sidebar, text="💾 현재 내용 저장", width=18, command=lambda: self.save_preview_data(mode)).pack(pady=2)
@@ -1602,7 +1484,7 @@ class PMIReportApp:
         item_id = tree.identify_row(event.y)
         if not item_id: return
 
-        if column == "#2": # Checkbox Column (V)
+        if column == "#1": # Checkbox Column
             self.toggle_item_selection(item_id, mode)
             return
 
@@ -1628,8 +1510,8 @@ class PMIReportApp:
         else:
             # PMI: No, Date, Dwg, Joint, Loc, Ni, Cr, Mo, Grade
             key_map = {
-                "#3": "No", "#4": "Date", "#5": "Dwg", "#6": "Joint", "#7": "Loc",
-                "#8": "Ni", "#9": "Cr", "#10": "Mo", "#11": "Grade"
+                "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "Loc",
+                "#7": "Ni", "#8": "Cr", "#9": "Mo", "#10": "Grade"
             }
         
         key = key_map.get(column)
@@ -1664,12 +1546,6 @@ class PMIReportApp:
                     data[actual_idx][key] = self.to_float(new_val)
                 else:
                     data[actual_idx][key] = str(new_val).strip()
-                
-                # [NEW] Re-calculate Grade after edit
-                new_grade = self.check_material_grade(data[actual_idx])
-                if new_grade:
-                    data[actual_idx]['Grade'] = new_grade
-                
                 self.populate_preview(data, switch_tab=False, mode=mode)
             entry.destroy()
             
@@ -1861,16 +1737,13 @@ class PMIReportApp:
                 
                 current_cols.append(col_id)
                 # 표시용 헤더 텍스트 결정
-                if mode == "PMI" and k == "Joint":
-                    header_mapping[col_id] = "Joint No"
-                else:
-                    header_mapping[col_id] = label_map.get(k, col_id)
+                header_mapping[col_id] = label_map.get(k, col_id)
 
             tree["columns"] = tuple(current_cols)
             for col in tree["columns"]:
                 # Width heuristics
                 w = 120 if any(x in col.upper() for x in ["ISO", "DWG", "JOINT"]) else (40 if col in ["V", "No", "t", "h", "l", "d"] else 80)
-                tree.heading(col, text=header_mapping.get(col, col), anchor='center')
+                tree.heading(col, text=header_mapping.get(col, col))
                 tree.column(col, width=w, anchor='center')
             
             self.populate_preview(data if data else [], switch_tab=False, mode=mode)
@@ -1956,7 +1829,7 @@ class PMIReportApp:
             
             row_vals = []
             for c_id in target_col_ids:
-                if c_id == "#2": # Select column (v/o)
+                if c_id == "#1": # Select column (v/o)
                     status = "●" if item.get('selected', True) else "○"
                     row_vals.append(status)
                     continue
@@ -2185,69 +2058,6 @@ class PMIReportApp:
                 item['selected'] = False
         self.populate_preview(data, switch_tab=False, mode=mode)
 
-    def select_deficient_items(self):
-        """PMI: 함량 미달인 항목만 자동으로 선택(체크)"""
-        if not self.extracted_data or not hasattr(self, 'element_filters'): return
-        
-        count = 0
-        for item in self.extracted_data:
-            is_deficient = False
-            for f_item in self.element_filters:
-                f_key = f_item['key'].get().strip()
-                if not f_key: continue
-                f_min = round(self.to_float(f_item['min'].get()), 2)
-                f_max = round(self.to_float(f_item['max'].get()), 2)
-                
-                val = round(self.to_float(self._get_val_ci(item, f_key)), 2)
-                if (f_min > 0 and val < f_min) or (f_max > 0 and val > f_max):
-                    is_deficient = True
-                    break
-            
-            item['selected'] = is_deficient
-            if is_deficient: count += 1
-            
-        self.populate_preview(self.extracted_data, switch_tab=False, mode="PMI")
-        self.log(f"✅ 미달 항목 {count}건을 선택했습니다.")
-
-    def reset_pmi_filters(self, refresh=True, clear_search=True):
-        """PMI 검색 및 함량 필터 초기화"""
-        if clear_search:
-            self.pmi_search_loc.set("")
-            # 사이드바 지점 필터도 초기화
-            if hasattr(self, 'pmi_loc_listbox'):
-                for i in range(self.pmi_loc_listbox.size()):
-                    val = self.pmi_loc_listbox.get(i)
-                    self.pmi_loc_listbox.delete(i)
-                    self.pmi_loc_listbox.insert(i, val.replace("[v] ", "[ ] "))
-        
-        self.pmi_show_deficiency_only.set(False)
-        if hasattr(self, 'element_filters'):
-            for f in self.element_filters:
-                f['min'].set("")
-                f['max'].set("")
-        if refresh:
-            self.populate_preview(self.extracted_data, switch_tab=False, mode="PMI")
-        self.log("🧹 PMI 필터가 초기화되었습니다.")
-
-    def update_pmi_loc_listbox(self):
-        """현재 데이터의 Test Location 목록을 추출하여 드롭다운 갱신 (날짜 필터 적용된 항목만)"""
-        if not hasattr(self, 'pmi_loc_listbox') or not self.extracted_data: return
-        
-        # 기존 선택 세트 백업
-        selected_locs = set()
-        for i in range(self.pmi_loc_listbox.size()):
-            val = self.pmi_loc_listbox.get(i)
-            if val.startswith("[v] "):
-                selected_locs.add(val.replace("[v] ", ""))
-        
-        # 새 목록 추출
-        current_locs = sorted(list(set(str(item.get('Loc', '')).strip() for item in self.extracted_data if item.get('Loc') and item.get('date_filtered', True))))
-        
-        self.pmi_loc_listbox.delete(0, tk.END)
-        for loc in current_locs:
-            prefix = "[v] " if loc in selected_locs else "[ ] "
-            self.pmi_loc_listbox.insert(tk.END, prefix + loc)
-
     def add_item(self, mode="PMI"):
         """새 데이터 행 추가"""
         if mode == "RT": data = self.rt_extracted_data
@@ -2425,6 +2235,17 @@ class PMIReportApp:
             self.log(f"🧹 모든 {mode} 데이터 초기화 완료")
 
     def export_to_excel(self, mode="PMI"):
+        # ... existing code ...
+        pass # Placeholder for search, I'll use target content
+
+    def launch_ocr_tool(self):
+        """OCR 추출기를 별도 창으로 실행 (EXE 통합을 위해 내부 클래스 사용)"""
+        try:
+            from ocr_extractor import OCRExtractorApp
+            ocr_window = tk.Toplevel(self.root)
+            OCRExtractorApp(ocr_window)
+        except Exception as e:
+            messagebox.showerror("오류", f"OCR 추출기 실행 중 오류 발생: {e}\n{traceback.format_exc()}")
         """현재 미리보기 목록(필터링/선택 반영)을 엑셀 파일로 내보냄 (서식 및 병합 시인성 유지)"""
         data = self.rt_extracted_data if mode == "RT" else self.extracted_data
         if not data:
@@ -2506,46 +2327,7 @@ class PMIReportApp:
             ws = wb.active
             ws.title = f"{mode}_Preview"
 
-            # [REFINED] Export with ST column for PMI
-            if mode == "PMI":
-                headers = ["ST", "V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"]
-                export_rows = []
-                for item in final_list:
-                    # Calculate status icon for Excel
-                    is_def = False
-                    if hasattr(self, 'element_filters'):
-                        for f in self.element_filters:
-                            fk = f['key'].get().strip()
-                            if not fk: continue
-                            fm, fx = round(self.to_float(f['min'].get()), 2), round(self.to_float(f['max'].get()), 2)
-                            v = round(self.to_float(self._get_val_ci(item, fk)), 2)
-                            if (fm > 0 and v < fm) or (fx > 0 and v > fx):
-                                is_def = True; break
-                    
-                    row = {
-                        "ST": "⚠️" if is_def else "✅",
-                        "V": "●" if item.get('selected', True) else "○",
-                        "No": item.get('No', ''),
-                        "Date": item.get('Date', ''),
-                        "ISO/DWG": item.get('Dwg', ''),
-                        "Joint No": item.get('Joint', ''),
-                        "Test Location": item.get('Loc', ''),
-                        "Ni": f"{self.to_float(item.get('Ni', 0)):.2f}%",
-                        "Cr": f"{self.to_float(item.get('Cr', 0)):.2f}%",
-                        "Mo": f"{self.to_float(item.get('Mo', 0)):.2f}%",
-                        "Grade": item.get('Grade', '')
-                    }
-                    export_rows.append(row)
-            else:
-                headers = [k for k in self.rt_display_cols] # RT/PT use display_cols names
-                export_rows = []
-                for item in final_list:
-                    row = {}
-                    for k in headers:
-                        if k == "V": row[k] = "●" if item.get('selected', True) else "○"
-                        else: row[k] = item.get(k, "")
-                    export_rows.append(row)
-
+            headers = list(export_rows[0].keys())
             for col_idx, header in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=col_idx, value=header)
                 cell.font = Font(bold=True)
@@ -2553,20 +2335,23 @@ class PMIReportApp:
                 cell.alignment = Alignment(horizontal='center', vertical='center')
 
             thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
-                                 top=Side(style='thin'), bottom=Side(style='thin'))
+                                top=Side(style='thin'), bottom=Side(style='thin'))
             
             for row_idx, row_data in enumerate(export_rows, 2):
                 for col_idx, key in enumerate(headers, 1):
-                    val = row_data.get(key, "")
+                    val = row_data[key]
+                    if mode == "RT" and key.startswith('D') and key[1:].isdigit():
+                        # Keep check symbols as is
+                        pass
                     cell = ws.cell(row=row_idx, column=col_idx, value=val)
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                     cell.border = thin_border
 
             if mode == "PMI":
-                column_widths = {1: 5, 2: 5, 3: 8, 4: 12, 5: 25, 6: 15, 7: 15, 8: 8, 9: 8, 10: 8, 11: 15}
+                column_widths = {1: 8, 2: 12, 3: 25, 4: 15, 5: 15, 6: 8, 7: 8, 8: 8, 9: 15}
             else:
                 # RT Column Widths
-                column_widths = {1: 5, 2: 8, 3: 12, 4: 25, 5: 15, 6: 10}
+                column_widths = {1: 8, 2: 12, 3: 25, 4: 15, 5: 15, 6: 10} # Simplified for now
                 for i in range(7, 22): column_widths[i] = 4 # Defects
                 column_widths[22] = 8 # Result
                 column_widths[23] = 12 # Welder
@@ -2590,7 +2375,7 @@ class PMIReportApp:
         
         # 1. 정렬 기준 컬럼 매핑 (Treeview 헤더 이름 -> 데이터 키)
         key_map = {
-            "ST": "_status", "V": "selected", "No": "No", "Date": "Date", "ISO/DWG": "Dwg",
+            "V": "selected", "No": "No", "Date": "Date", "ISO/DWG": "Dwg",
             "Joint No": "Joint", "Test Location": "Loc", "Ni": "Ni", 
             "Cr": "Cr", "Mo": "Mo", "Grade": "Grade"
         }
@@ -2623,19 +2408,13 @@ class PMIReportApp:
             return [segment_to_tuple(c) for c in re.split(r'(\d+)', s_val) if c]
 
         def get_value(item, key):
-            if key == "_status":
-                # Deficiency calculation for sorting
-                is_def = False
-                if hasattr(self, 'element_filters'):
-                    for f in self.element_filters:
-                        fk = f['key'].get().strip()
-                        if not fk: continue
-                        fm, fx = round(self.to_float(f['min'].get()), 2), round(self.to_float(f['max'].get()), 2)
-                        v = round(self.to_float(self._get_val_ci(item, fk)), 2)
-                        if (fm > 0 and v < fm) or (fx > 0 and v > fx):
-                            is_def = True; break
-                return 0 if is_def else 1 # ⚠️(0) before ✅(1) in ascending
-            return item.get(data_key, "")
+            val = item.get(key, "")
+            
+            # 선택(V) 컬럼 전용 처리
+            if key == "selected":
+                return [0, 0 if val is True else 1]
+            
+            return get_natural_key(val)
 
         # 정렬 수행: 계층적 정렬 (사용자 요청 기반)
         try:
@@ -2644,10 +2423,10 @@ class PMIReportApp:
             
             if data_key in [k_iso, k_joint]:
                 # ISO나 Joint를 클릭하면 ISO > Joint > order_index 순서로 안정적 정렬
-                sort_key = lambda x: (get_natural_key(get_value(x, k_iso)), get_natural_key(get_value(x, k_joint)), x.get('order_index', 0))
+                sort_key = lambda x: (get_value(x, k_iso), get_value(x, k_joint), x.get('order_index', 0))
             else:
                 # 그 외 컬럼 클릭 시 해당 컬럼이 1순위, 그 뒤에 ISO > Joint > order_index 보조
-                sort_key = lambda x: (get_natural_key(get_value(x, data_key)), get_natural_key(get_value(x, k_iso)), get_natural_key(get_value(x, k_joint)), x.get('order_index', 0))
+                sort_key = lambda x: (get_value(x, data_key), get_value(x, k_iso), get_value(x, k_joint), x.get('order_index', 0))
             
             self.extracted_data.sort(key=sort_key, reverse=self.sort_reverse)
         except Exception as e:
@@ -2684,25 +2463,11 @@ class PMIReportApp:
             tree = self.preview_tree
             self.item_idx_map = []
             idx_map = self.item_idx_map
-            # [NEW] Update Loc List
-            self.update_pmi_loc_listbox()
-            
-        # [NEW] Deficiency Detection & Auto-Reset (PMI Only)
-            # [REMOVED global check, moved to local loop below]
 
         for item in tree.get_children():
             tree.delete(item)
         
         filter_enabled = self.show_selected_only.get()
-        hidden_by_def_count = 0
-        total_matched_search = 0
-        local_pmi_deficient_count = 0 # Count within Date/Loc filter
-        
-        active_locs = set()
-        if mode == "PMI" and hasattr(self, 'pmi_loc_listbox'):
-            for i in range(self.pmi_loc_listbox.size()):
-                val = self.pmi_loc_listbox.get(i)
-                if val.startswith("[v] "): active_locs.add(val.replace("[v] ", "").lower())
         
         last_iso = None
         last_joint = None
@@ -2716,39 +2481,8 @@ class PMIReportApp:
             if filter_enabled and not is_selected:
                 continue
             
-            # [NEW] PMI Preview Filters (Multi-Select Test Location & Deficiency)
-            selected_locs_names = []
-            if mode == "PMI":
-                # item Date/Loc filter already passed (Date was line 2608, Loc is here)
-                loc_val = str(item.get('Loc', '')).lower()
-                if active_locs and loc_val not in active_locs:
-                    continue
-                
-                # Check for deficiency highlighting (AND local count)
-                is_deficient = False
-                if hasattr(self, 'element_filters'):
-                    for f_item in self.element_filters:
-                        f_key = f_item['key'].get().strip()
-                        if not f_key: continue
-                        f_min = round(self.to_float(f_item['min'].get()), 2)
-                        f_max = round(self.to_float(f_item['max'].get()), 2)
-                        val = round(self.to_float(self._get_val_ci(item, f_key)), 2)
-                        if (f_min > 0 and val < f_min) or (f_max > 0 and val > f_max):
-                            is_deficient = True; break
-                
-                if is_deficient: local_pmi_deficient_count += 1
-                total_matched_search += 1
-                selected_locs_names.append(item.get('Loc', '')) 
-                
-                if self.pmi_show_deficiency_only.get() and not is_deficient:
-                    hidden_by_def_count += 1
-                    continue
-            else:
-                is_deficient = False
-
             idx_map.append(idx)
             v_mark = "●" if is_selected else "○"
-            st_mark = "⚠️" if is_deficient else "✅"
             
             # ISO/DWG 번호가 바뀌면 배경색 태그 교체 (PAUT 'ISO' 대응)
             curr_iso = item.get('Dwg', item.get('ISO', ''))
@@ -2781,58 +2515,34 @@ class PMIReportApp:
             last_iso = curr_iso
             last_joint = curr_joint
             
+            # [REFINED] Dynamic Row Values based on active column_keys for each mode
+            keys = self.rt_column_keys if mode == "RT" else (self.pt_column_keys if mode == "PT" else (self.paut_column_keys if mode == "PAUT" else self.column_keys))
+            
             row_vals = []
-            if mode == "RT":
-                for k in self.rt_display_cols:
-                    if k == "V": row_vals.append(v_mark)
-                    else: 
-                        val = str(item.get(k, "")).strip()
-                        row_vals.append(val)
-            elif mode == "PT":
-                for k in self.pt_display_cols:
-                    if k == "V": row_vals.append(v_mark)
-                    else: 
-                        val = str(item.get(k, "")).strip()
-                        row_vals.append(val)
-            elif mode == "PAUT":
-                # PAUT use paut_column_keys
-                for k in self.paut_column_keys:
-                    if k == "No": row_vals.append(len(idx_map))
-                    else: 
-                        val = str(item.get(k, "")).strip()
-                        row_vals.append(val)
-            else: # PMI
-                for k in ["ST"] + self.column_keys:
-                    if k == "ST": row_vals.append(st_mark)
-                    elif k == "V": row_vals.append(v_mark)
-                    elif k in ["Ni", "Cr", "Mo"]:
-                        row_vals.append(f"{self.to_float(item.get(k, 0)):.2f}%")
-                    elif (k in ["Dwg", "ISO/DWG"] or k == "Joint") and not is_show:
-                        row_vals.append("") # Merged/Duplicate display suppression
-                    else:
-                        val = str(item.get(k, "")).strip()
-                        row_vals.append(val)
+            for k in keys:
+                if k == "selected":
+                    row_vals.append(v_mark)
+                elif k == "No" and mode == "PAUT":
+                    row_vals.append(len(idx_map))
+                elif k in ["Dwg", "ISO", "ISO/DWG"] and not is_show:
+                    # PMI/RT/PT ISO/DWG merge check
+                    if item.get('is_merged_iso'): row_vals.append("")
+                    else: row_vals.append(display_iso)
+                elif k == "Joint" and not is_show:
+                    if item.get('is_merged_joint'): row_vals.append("")
+                    else: row_vals.append(display_joint)
+                elif mode == "PMI" and k in ["Ni", "Cr", "Mo"]:
+                     val = self.to_float(item.get(k))
+                     row_vals.append(f"{val:.2f}" if val > 0 else "")
+                elif k in ["Dwg", "ISO", "ISO/DWG"]:
+                    row_vals.append(display_iso if mode != "PAUT" else item.get(k, ""))
+                elif k == "Joint":
+                    row_vals.append(display_joint)
+                else:
+                    row_vals.append(item.get(k, ""))
 
             row_tags = [str(idx), current_tag]
-            if is_deficient:
-                row_tags.append("deficient")
             tree.insert("", "end", values=tuple(row_vals), tags=tuple(row_tags))
-            
-        # [REACTIVE AUTO-RESET] Trigger if current view is clean but filters are active
-        if mode == "PMI":
-            has_pmi_filter = self.pmi_show_deficiency_only.get()
-            if not has_pmi_filter and hasattr(self, 'element_filters'):
-                for f in self.element_filters:
-                    if f['min'].get().strip() or f['max'].get().strip():
-                        has_pmi_filter = True; break
-            
-            if local_pmi_deficient_count == 0 and has_pmi_filter:
-                self.reset_pmi_filters(refresh=True, clear_search=False)
-                return
-
-        if mode == "PMI" and hidden_by_def_count > 0:
-            sel_str = ", ".join(list(set(selected_locs_names))) if selected_locs_names else "전체"
-            self.log(f"ℹ️ '{sel_str}' 결과 중 {hidden_by_def_count}건이 '함량 미달만 보기' 옵션으로 인해 숨겨져 있습니다.")
             
         if switch_tab:
             if mode == "RT":
@@ -2902,20 +2612,6 @@ class PMIReportApp:
         val_var = tk.StringVar()
         ttk.Entry(filter_frame, textvariable=val_var, width=23).grid(row=1, column=1, padx=5, sticky='w', pady=5)
         
-        # [NEW] Filter Integration Checkboxes
-        only_def_var = tk.BooleanVar(value=False)
-        only_visible_var = tk.BooleanVar(value=True) # Default to True for convenience
-        
-        filter_options_frame = ttk.Frame(main_frame)
-        filter_options_frame.pack(fill='x', pady=(0, 10))
-        
-        if mode == "PMI":
-            tk.Checkbutton(filter_options_frame, text="⚠️ 함량 미달인 항목만 변경 적용", variable=only_def_var, 
-                           background="#f9fafb", font=("Malgun Gothic", 9)).pack(anchor='w')
-        
-        tk.Checkbutton(filter_options_frame, text="🔍 현재 화면에 보이는(필터링된) 항목만 변경", variable=only_visible_var, 
-                       background="#f9fafb", font=("Malgun Gothic", 9)).pack(anchor='w')
-        
         ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
 
         ttk.Label(main_frame, text="2. 변경할 값 입력 (입력된 항목만 반영)", font=("Malgun Gothic", 10, "bold")).pack(anchor='w', pady=(0, 10))
@@ -2967,36 +2663,6 @@ class PMIReportApp:
                     curr_val = str(item.get(target_key, "")).strip().lower()
                     if filter_val not in curr_val: match = False
                 
-                # [NEW] Check for deficiency if requested
-                if match and mode == "PMI" and only_def_var.get():
-                    is_deficient = False
-                    for f_item in self.element_filters:
-                        f_key = f_item['key'].get().strip()
-                        if not f_key: continue
-                        f_min = round(self.to_float(f_item['min'].get()), 2)
-                        f_max = round(self.to_float(f_item['max'].get()), 2)
-                        val = round(self.to_float(self._get_val_ci(item, f_key)), 2)
-                        if (f_min > 0 and val < f_min) or (f_max > 0 and val > f_max):
-                            is_deficient = True; break
-                    if not is_deficient: match = False
-                
-                # [NEW] Check for sidebar visibility (Date & Loc)
-                if match and only_visible_var.get():
-                    if not item.get('date_filtered', True):
-                        match = False
-                    
-                    if match and mode == "PMI" and hasattr(self, 'pmi_loc_listbox'):
-                        # Get active sidebar locs
-                        active_locs = set()
-                        for i in range(self.pmi_loc_listbox.size()):
-                            v = self.pmi_loc_listbox.get(i)
-                            if v.startswith("[v] "): active_locs.add(v.replace("[v] ", "").lower())
-                        
-                        if active_locs:
-                            loc_val = str(item.get('Loc', '')).lower()
-                            if loc_val not in active_locs:
-                                match = False
-
                 if match:
                     for k, spec in update_spec.items():
                         up_mode, up_val = spec
@@ -3004,13 +2670,6 @@ class PMIReportApp:
                             item[k] = self.to_float(item.get(k, 0)) + up_val
                         else:
                             item[k] = up_val
-                    
-                    # [NEW] Re-calculate Grade ONLY if NOT manually provided
-                    if "Grade" not in update_spec:
-                        new_grade = self.check_material_grade(item)
-                        if new_grade:
-                            item['Grade'] = new_grade
-                    
                     count += 1
             
             self.populate_preview(target_data, switch_tab=False, mode=mode)
@@ -3025,28 +2684,18 @@ class PMIReportApp:
     # --- Integrated Verification Logic ---
 
     def to_float(self, val):
-        try:
-            s = str(val).replace('%', '').strip()
-            if not s or s.lower() == 'nan': return 0.0
-            return float(s)
+        if pd.isna(val): return 0.0
+        s = str(val).upper().replace("%", "").strip()
+        if "<" in s or "ND" in s or s == "": return 0.0
+        try: return float(s)
         except: return 0.0
-
-    def _get_val_ci(self, item, key):
-        """대소문자 구분 없이 딕셔너리에서 값 찾기 (Cr vs CR 등)"""
-        if not key or not isinstance(item, dict): return None
-        if key in item: return item[key]
-        k_lower = key.lower()
-        for k in item.keys():
-            if str(k).lower() == k_lower:
-                return item[k]
-        return None
 
     def check_material_grade(self, row_data):
         """jjchRFIPMI.py에서 이식된 10% 여유치 판정 로직"""
-        cr = self.to_float(self._get_val_ci(row_data, 'Cr'))
-        ni = self.to_float(self._get_val_ci(row_data, 'Ni'))
-        mo = self.to_float(self._get_val_ci(row_data, 'Mo'))
-        mn = self.to_float(self._get_val_ci(row_data, 'Mn'))
+        cr = row_data.get('Cr', 0.0)
+        ni = row_data.get('Ni', 0.0)
+        mo = row_data.get('Mo', 0.0)
+        mn = row_data.get('Mn', 0.0)
         
         margin = 0.1 # 10% 여유
         
