@@ -12,6 +12,9 @@ import pandas as pd
 import openpyxl
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
+
+# --- Versioning ---
+APP_VERSION = "v260401.01"
 from openpyxl.cell.cell import MergedCell
 from openpyxl.worksheet.pagebreak import Break
 from openpyxl.drawing.image import Image as XLImage
@@ -99,7 +102,7 @@ SETTINGS_FILE = os.path.join(CONFIG_DIR, "logo_settings_unified.json")
 class PMIReportApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("SITCO 통합 성적서 자동 생성기 (PMI, RT, PAUT)")
+        self.root.title(f"SITCO 통합 성적서 자동 생성기 ({APP_VERSION})")
         self.root.geometry("950x850") # Slightly wider/taller for multi-tab
         self.root.configure(background="#f9fafb")
         
@@ -855,6 +858,13 @@ class PMIReportApp:
         ttk.Button(btn_box, text="데이터 추출", command=self._extract_paut_data).pack(side='left', padx=5)
         ttk.Button(btn_box, text="일괄 판정 실행", command=self._run_batch_paut_eval).pack(side='left', padx=5)
         ttk.Button(btn_box, text="성적서 생성", command=self._generate_paut_report).pack(side='right', padx=5)
+
+        # Footer / Status Bar with Version
+        footer = tk.Frame(self.root, background="#e5e7eb", height=20)
+        footer.pack(side='bottom', fill='x')
+        tk.Label(footer, text=f"Build Version: {APP_VERSION}", font=("Arial", 8), background="#e5e7eb", foreground="#6b7280").pack(side='right', padx=10)
+        self.status_label = tk.Label(footer, text="준비됨", font=("Arial", 8), background="#e5e7eb", foreground="#374151")
+        self.status_label.pack(side='left', padx=10)
 
     def _update_paut_auto_loc(self):
         try:
