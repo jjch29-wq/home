@@ -108,6 +108,9 @@ class PMIReportApp:
         
         # 1. Initialize Configuration first (needed for state variables)
         self.config = {
+            # UI State (Persistence)
+            'PMI_SASH_RATIO': 0.5, 'RT_SASH_RATIO': 0.5, 'PT_SASH_RATIO': 0.5, 'PAUT_SASH_RATIO': 0.5,
+            'PMI_COL_WIDTHS': {}, 'RT_COL_WIDTHS': {}, 'PT_COL_WIDTHS': {}, 'PAUT_COL_WIDTHS': {},
             # 갑지 (Cover)
             'SEOUL_COVER_ANCHOR': "E5", 'SEOUL_COVER_W': 200.0, 'SEOUL_COVER_H': 18.0, 'SEOUL_COVER_X': 30.0, 'SEOUL_COVER_Y': 15.0,
             'SITCO_COVER_ANCHOR': "A6", 'SITCO_COVER_W': 80.0, 'SITCO_COVER_H': 40.0, 'SITCO_COVER_X': 10.0, 'SITCO_COVER_Y': 10.0,
@@ -136,15 +139,23 @@ class PMIReportApp:
 
         # 2. State Variables
         self.logo_folder_path = tk.StringVar(value=RESOURCE_DIR)
-        self.target_file_path = tk.StringVar()
-        self.template_file_path = tk.StringVar()
+        self.target_file_path = tk.StringVar(value=self.config.get('PMI_TARGET_PATH', ""))
+        self.template_file_path = tk.StringVar(value=self.config.get('PMI_TEMPLATE_PATH', ""))
         self.sequence_filter = tk.StringVar()
         self.extraction_mode = tk.StringVar(value="전체")
         self.auto_verify = tk.BooleanVar(value=True)
+        self.pmi_pane_ratio = self.config.get('PMI_SASH_RATIO', 0.5)
+        
         self.show_selected_only = tk.BooleanVar(value=False)
         self.extracted_data = [] 
-        self.sort_column = "" 
-        self.sort_reverse = False 
+        self.pmi_sort_col = "" 
+        self.pmi_sort_rev = False 
+        self.rt_sort_col = ""
+        self.rt_sort_rev = False
+        self.pt_sort_col = ""
+        self.pt_sort_rev = False
+        self.paut_sort_col = ""
+        self.paut_sort_rev = False
         
         # [NEW] PMI Preview Search & Filter
         self.pmi_search_loc = tk.StringVar()
@@ -155,11 +166,11 @@ class PMIReportApp:
         # 기본 필터 추가 (Cr, Ni, Mo)
         for k in ["Cr", "Ni", "Mo"]:
             self.element_filters.append({
-                'key': tk.StringVar(value=k),
-                'min': tk.StringVar(),
-                'max': tk.StringVar()
+                'key': tk.StringVar(value=k), 
+                'min': tk.StringVar(value=''), 
+                'max': tk.StringVar(value='')
             })
-        
+            
         # --- PAUT State Variables ---
         self.paut_target_file_path = tk.StringVar(value=self.config.get('PAUT_TARGET_PATH', ""))
         self.paut_template_file_path = tk.StringVar(value=self.config.get('PAUT_TEMPLATE_PATH', ""))
@@ -185,24 +196,48 @@ class PMIReportApp:
         self.item_idx_map = []      # [NEW] Missing for PMI
         self.rt_item_idx_map = []   # [NEW] Missing for RT
         self.pt_item_idx_map = []
-        self.paut_item_idx_map = [] # [NEW] Missing for PAUT
+        self.paut_item_idx_map = [] 
+        
+        # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
+        self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "WType", "Result", "Welder", "Remarks"]
+        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
+        self.paut_column_keys = ["selected", "No", "ISO", "Joint", "t", "h", "Size", "l", "d", "Location", "Nature", "Result"]
         
         self.date_listbox = None
+    
+        # [NEW] Handle Application Closing for Final State Capture
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.rt_date_listbox = None
         self.pt_date_listbox = None
         self.paut_date_listbox = None
 
-        # --- Column Definitions ---
-        self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
-        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Accept", "Reject", "Grade", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
-        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "Welder", "WType", "Result"]
-        self.paut_column_keys = ["selected", "No", "ISO", "Joint", "t", "h", "l", "d", "Location", "Nature", "Result"]
-        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "Welder", "WType", "Result"]
+        # Keys are now verified to match Treeview column indices 1-N.
 
         # 3. UI Initialization
+        # [NEW] File Info Strings for Preview Headers
+        self.file_info_vars = {
+            'PMI': tk.StringVar(value="📄 파일을 선택해주세요."),
+            'RT': tk.StringVar(value="📄 파일을 선택해주세요."),
+            'PT': tk.StringVar(value="📄 파일을 선택해주세요."),
+            'PAUT': tk.StringVar(value="📄 파일을 선택해주세요.")
+        }
+
         self.create_widgets()
+        
+        # [NEW] Sync initial file info from loaded config
+        self._sync_all_file_infos()
         self.log("[INFO] 통합 버전을 시작했습니다.")
         
+    def _safe_update_scrollregion(self):
+        """Safely update canvas scrollregion, handling None bbox."""
+        try:
+            bbox = self.canvas.bbox("all")
+            if bbox:
+                self.canvas.configure(scrollregion=bbox)
+        except Exception:
+            pass
+
     def log(self, message):
         if hasattr(self, 'status_log'):
             self.status_log.config(state='normal')
@@ -230,59 +265,97 @@ class PMIReportApp:
         except: return str(val).strip()
 
     def load_settings(self):
-        # [NEW] 로고 위치 고정(Fixed)을 위해 내장된 최적 설정을 우선시합니다.
-        
-        # 1. 외부 설정 파일 (사용자 오버라이드 시도)
-        if os.path.exists(SETTINGS_FILE):
-            try:
-                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
-                    saved_data = json.load(f)
-                    self.config.update(saved_data)
-                print("SUCCESS: 외부 저장된 설정을 불러왔습니다.")
-                
-                # [NEW] 탭별 전용 행 설정 불러오기
-                for tab in ["PMI", "PAUT"]:
-                    for row_key in ['START_ROW', 'DATA_END_ROW', 'PRINT_END_ROW']:
-                        tab_specific_key = f"{tab}_{row_key}"
-                        if tab_specific_key in saved_data:
-                            # 현재 탭에 맞는 설정이면 config에 직접 반영 (PAUT는 별도 변수 PAUT_START_ROW 등을 쓰므로 통합 처리)
-                            pass 
-
-                # [NEW] 저장된 필터 불러오기 (PMI)
-                filter_key = "PMI_FILTERS"
-                if filter_key in saved_data:
-                    saved_filters = saved_data[filter_key]
-                    if isinstance(saved_filters, list):
-                        self.element_filters = []
-                        for f_data in saved_filters:
-                            self.element_filters.append({
-                                'key': tk.StringVar(value=f_data.get('key', '')),
-                                'min': tk.StringVar(value=f_data.get('min', '')),
-                                'max': tk.StringVar(value=f_data.get('max', ''))
-                            })
-            except Exception as e:
-                print(f"WARNING: 외부 설정 불러오기 실패: {e}")
-
-        # 2. 내장 설정 파일 (실행파일 내부에 번들링된 최적값 - 외부 파일보다 우선순위 높임)
+        # 1. 내장 설정 파일 (실행파일 내부에 번들링된 기본값)
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
             bundle_settings = os.path.join(sys._MEIPASS, "logo_settings_unified.json")
             if os.path.exists(bundle_settings):
                 try:
                     with open(bundle_settings, 'r', encoding='utf-8') as f:
-                        saved_data = json.load(f)
-                        self.config.update(saved_data)
-                    print("SUCCESS: 내장된 최적 설정을 최종 적용했습니다. (고정 모드)")
+                        bundle_data = json.load(f)
+                        self.config.update(bundle_data)
+                    print("SUCCESS: 내장된 기본 설정을 로드했습니다.")
                 except Exception as e:
                     print(f"WARNING: 내장 설정 불러오기 실패: {e}")
 
-        # [NEW] PAUT 마이그레이션 (UT_* -> PAUT_*)
+        # 2. 외부 설정 파일 (사용자 저장값 - 내장값보다 우선순위 높음)
+        if os.path.exists(SETTINGS_FILE):
+            try:
+                with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    saved_data = json.load(f)
+                    self.config.update(saved_data)
+                print("SUCCESS: 사용자 저장 설정을 적용했습니다.")
+                
+                # Restore Window Geometry/State
+                if 'WINDOW_GEOMETRY' in saved_data:
+                    self.root.geometry(saved_data['WINDOW_GEOMETRY'])
+                if 'WINDOW_STATE' in saved_data:
+                    try: self.root.state(saved_data['WINDOW_STATE'])
+                    except: pass
+                if 'ACTIVE_TAB' in saved_data:
+                    self.root.after(200, lambda: self.mode_notebook.select(saved_data['ACTIVE_TAB']))
+            except Exception as e:
+                print(f"WARNING: 사용자 설정 불러오기 실패: {e}")
+
+        # PAUT 마이그레이션 (UT_* -> PAUT_*)
         for k in list(self.config.keys()):
             if k.startswith("UT_"):
                 new_k = k.replace("UT_", "PAUT_")
                 if new_k not in self.config:
                     self.config[new_k] = self.config[k]
 
+    def capture_ui_state(self):
+        """UI 요소들의 현재 상태(컬럼 너비, 분할선 위치 등)를 config에 반영"""
+        try:
+            # 1. 트리뷰 컬럼 너비 캡처
+            trees = [
+                ('PMI', getattr(self, 'preview_tree', None)), 
+                ('RT', getattr(self, 'rt_preview_tree', None)), 
+                ('PT', getattr(self, 'pt_preview_tree', None)), 
+                ('PAUT', getattr(self, 'paut_preview_tree', None))
+            ]
+            for mode, tree in trees:
+                if tree:
+                    try:
+                        self.config[f"{mode}_COL_WIDTHS"] = {col: tree.column(col, "width") for col in tree["columns"]}
+                    except: pass
+
+            # 2. 패널 분할선(Sash) 비율 캡처
+            paned_windows = [
+                ('PMI', getattr(self, 'pmi_paned', None)),
+                ('RT', getattr(self, 'rt_paned', None)),
+                ('PT', getattr(self, 'pt_paned', None)),
+                ('PAUT', getattr(self, 'paut_paned', None))
+            ]
+            for mode, pw in paned_windows:
+                if pw:
+                    try:
+                        total_w = pw.winfo_width()
+                        if total_w > 100:
+                            self.config[f'{mode}_SASH_RATIO'] = pw.sash_coord(0)[0] / total_w
+                    except: pass
+
+            # 3. 윈도우 및 활성 탭 상태 캡처
+            try:
+                self.config['WINDOW_GEOMETRY'] = self.root.geometry()
+                self.config['WINDOW_STATE'] = self.root.state()
+                if hasattr(self, 'mode_notebook'):
+                    self.config['ACTIVE_TAB'] = self.mode_notebook.index("current")
+                
+                # 4. 파일 경로 관성 저장
+                self.config['PMI_TARGET_PATH'] = self.target_file_path.get()
+                self.config['PMI_TEMPLATE_PATH'] = self.template_file_path.get()
+                self.config['RT_TARGET_PATH'] = self.rt_target_file_path.get()
+                self.config['RT_TEMPLATE_PATH'] = self.rt_template_file_path.get()
+                self.config['PT_TARGET_PATH'] = self.pt_target_file_path.get()
+                self.config['PT_TEMPLATE_PATH'] = self.pt_template_file_path.get()
+                self.config['PAUT_TARGET_PATH'] = self.paut_target_file_path.get()
+                self.config['PAUT_TEMPLATE_PATH'] = self.paut_template_file_path.get()
+            except: pass
+        except: pass
+
     def save_settings(self):
+        """현재 설정을 파일(JSON)에 저장"""
+        self.capture_ui_state()
         try:
             if hasattr(self, 'setting_vars'):
                 for key, var in self.setting_vars.items():
@@ -312,11 +385,38 @@ class PMIReportApp:
             self.config["PMI_DATA_END_ROW"] = self.config.get("DATA_END_ROW", 45)
             self.config["PMI_PRINT_END_ROW"] = self.config.get("PRINT_END_ROW", 47)
 
+            # [NEW] Window State Capture
+            self.config['WINDOW_GEOMETRY'] = self.root.geometry()
+            self.config['WINDOW_STATE'] = self.root.state()
+            try: self.config['ACTIVE_TAB'] = self.mode_notebook.index("current")
+            except: pass
+
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=4)
             self.log("[SUCCESS] 설정이 파일에 저장되었습니다.")
         except Exception as e:
             self.log(f"[WARNING] 설정 저장 실패: {e}")
+
+    def on_closing(self):
+        """애플리케이션 종료 시 최종 상태 저장"""
+        try:
+            self.capture_ui_state()
+            self.save_settings()
+        except: pass
+        self.root.destroy()
+
+    def _apply_sash_ratio(self, mode):
+        """Helper to apply saved sash ratio with a slight delay to ensure UI mapping."""
+        pw = getattr(self, f"{mode.lower()}_paned", None)
+        ratio = self.config.get(f"{mode}_SASH_RATIO")
+        if pw and ratio is not None:
+            def apply():
+                total_w = pw.winfo_width()
+                if total_w > 100:
+                    pw.sash_place(0, int(total_w * ratio), 0)
+                else:
+                    self.root.after(100, apply)
+            self.root.after(100, apply)
 
     def evaluate_paut_flaw(self, t, h, l, depth, flaw_nature):
         """
@@ -397,7 +497,7 @@ class PMIReportApp:
         style.configure("Action.TButton", font=("Malgun Gothic", 11, "bold"), padding=10)
         
         # [NEW] 탭 스타일 설정
-        style.configure("Main.TNotebook.Tab", font=("Malgun Gothic", 11, "bold"), padding=[15, 5])
+        style.configure("Main.TNotebook.Tab", font=("Malgun Gothic", 11, "bold"), padding=[10, 3])
         
         style.map("TEntry", 
                   selectbackground=[('focus', '#3b82f6'), ('!focus', '#3b82f6')],
@@ -410,13 +510,18 @@ class PMIReportApp:
 
         self.scrollable_frame.bind(
             "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+            lambda e: self._safe_update_scrollregion()
         )
 
         self.canvas_frame_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
 
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self.canvas_frame_window, width=e.width))
+        def _on_canvas_configure(event):
+            # [ROOT CAUSE FIX] Always force width, handle None bbox gracefully
+            self.canvas.itemconfigure(self.canvas_frame_window, width=event.width)
+            self._safe_update_scrollregion()
+
+        self.canvas.bind("<Configure>", _on_canvas_configure)
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
         
@@ -428,7 +533,6 @@ class PMIReportApp:
         style.map("Treeview", background=[('selected', '#3b82f6')], foreground=[('selected', 'white')])
         style.configure("Treeview.Heading", font=("Malgun Gothic", 10, "bold"))
 
-        # [NEW] 전역 엔트리 우클릭 메뉴
         self._create_entry_context_menu()
         self._create_tree_context_menu()
 
@@ -459,23 +563,52 @@ class PMIReportApp:
             except: pass
         self.root.bind_all("<Button-1>", _on_root_click, add="+")
 
-        # Main Container
-        main_container = tk.Frame(self.scrollable_frame, background="#f9fafb", padx=20, pady=20)
-        main_container.pack(fill='both', expand=True)
+        # [ROOT CAUSE FIX] Place Notebook DIRECTLY in root, NOT in Canvas scrollable_frame.
+        # Canvas windows do not reliably propagate width to children.
+        # Since PMI uses splitscreen (no scrolling needed), direct packing guarantees full width.
         
-        # --- Top Notebook (Multi-Mode) ---
-        self.mode_notebook = ttk.Notebook(main_container, style="Main.TNotebook")
-        self.mode_notebook.pack(fill='both', expand=True, pady=(0, 10))
+        # Hide Canvas & Scrollbar (no longer needed for layout)
+        self.canvas.pack_forget()
+        self.scrollbar.pack_forget()
+        
+        # ===== PACK ORDER: bottom-most items first =====
+        
+        # 1. Status bar (very bottom)
+        self.status_bar = tk.Frame(self.root, background="#e2e8f0", height=22)
+        self.status_bar.pack(fill='x', side='bottom')
+        self.status_bar.pack_propagate(False)
+        tk.Label(self.status_bar, text="준비됨", font=("Malgun Gothic", 8), background="#e2e8f0", foreground="#64748b").pack(side='left', padx=10)
+        tk.Label(self.status_bar, text=f"Build Version: v{APP_VERSION}", font=("Arial", 8), background="#e2e8f0", foreground="#94a3b8").pack(side='right', padx=10)
+        
+        # 2. Progress bar + Log (above status bar, compact)
+        bottom_frame = tk.Frame(self.root, background="#f9fafb")
+        bottom_frame.pack(fill='x', side='bottom', padx=5)
+
+        self.progress = ttk.Progressbar(bottom_frame, orient="horizontal", mode="determinate")
+        self.progress.pack(fill='x', pady=(5, 2))
+
+        log_frame = tk.Frame(bottom_frame, background="#f9fafb")
+        log_frame.pack(fill='x')
+
+        self.status_log = tk.Text(log_frame, height=4, font=("Consolas", 8), state='disabled', background="#1e1e2e", foreground="#10b981", padx=5, pady=3)
+        vsb = ttk.Scrollbar(log_frame, orient="vertical", command=self.status_log.yview)
+        self.status_log.configure(yscrollcommand=vsb.set)
+        self.status_log.pack(side='left', fill='both', expand=True)
+        vsb.pack(side='right', fill='y')
+        
+        # 3. THEN pack Notebook (fills all remaining space)
+        self.mode_notebook = ttk.Notebook(self.root, style="Main.TNotebook")
+        self.mode_notebook.pack(fill='both', expand=True, padx=5, pady=(5, 0))
         
         self.pmi_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.rt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.paut_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         
-        self.mode_notebook.add(self.pmi_mode_frame, text="  PMI (성분 분석)  ")
-        self.mode_notebook.add(self.rt_mode_frame, text="  RT (방사선 투과)  ")
-        self.mode_notebook.add(self.pt_mode_frame, text="  PT (침투 탐상)  ")
-        self.mode_notebook.add(self.paut_mode_frame, text="  PAUT (ASME B31.1)  ")
+        self.mode_notebook.add(self.pmi_mode_frame, text="  PMI (성분 분석)  ", sticky='nsew')
+        self.mode_notebook.add(self.rt_mode_frame, text="  RT (방사선 투과)  ", sticky='nsew')
+        self.mode_notebook.add(self.pt_mode_frame, text="  PT (침투 탐상)  ", sticky='nsew')
+        self.mode_notebook.add(self.paut_mode_frame, text="  PAUT (ASME B31.1)  ", sticky='nsew')
         
         # Setup each mode
         self._setup_pmi_ui(self.pmi_mode_frame)
@@ -483,273 +616,476 @@ class PMIReportApp:
         self._setup_pt_ui(self.pt_mode_frame)
         self._setup_paut_ui(self.paut_mode_frame)
 
-        # Bottom Section (Common)
-        bottom_frame = tk.Frame(main_container, background="#f9fafb")
-        bottom_frame.pack(fill='x', side='bottom')
-
-        self.progress = ttk.Progressbar(bottom_frame, orient="horizontal", mode="determinate")
-        self.progress.pack(fill='x', pady=(10, 5))
-
-        log_frame = ttk.LabelFrame(bottom_frame, text=" 작업 로그 (Status Log) ", padding=10)
-        log_frame.pack(fill='both', expand=True)
-
-        self.status_log = tk.Text(log_frame, height=8, font=("Consolas", 9), state='disabled', background="#000000", foreground="#10b981", padx=5, pady=5)
-        vsb = ttk.Scrollbar(log_frame, orient="vertical", command=self.status_log.yview)
-        self.status_log.configure(yscrollcommand=vsb.set)
-        self.status_log.pack(side='left', fill='both', expand=True)
-        vsb.pack(side='right', fill='y')
-
-        # Dummy frame for scroll padding
-        tk.Frame(self.scrollable_frame, height=50, background="#f9fafb").pack(side='bottom', fill='x')
-
     def _setup_pmi_ui(self, parent):
-        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        # [FORCE] Ensure parent (pmi_mode_frame) allows expansion
+        container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        tk.Label(container, text="PMI 성적서 생성 및 관리", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
+        # --- Dual Pane Layout (PanedWindow) ---
+        self.pmi_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
+                            sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
+        self.pmi_paned.pack(fill='both', expand=True)
 
-        # 1. File Selection
-        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
-        file_frame.pack(fill='x', pady=(0, 20))
+        # [LEFT] Settings & Actions Pane (Scrollable Wrapper)
+        left_pane_outer = tk.Frame(self.pmi_paned, background="#f9fafb")
+        self.pmi_paned.add(left_pane_outer, stretch="always") 
 
-        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
-            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
-            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
-            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
-            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
+        left_canvas = tk.Canvas(left_pane_outer, background="#f9fafb", highlightthickness=0)
+        left_vsb = ttk.Scrollbar(left_pane_outer, orient="vertical", command=left_canvas.yview)
+        left_pane = tk.Frame(left_canvas, background="#f9fafb", padx=10, pady=10)
+        left_pane.bind("<Configure>", lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all")))
+        canvas_window = left_canvas.create_window((0, 0), window=left_pane, anchor="nw")
+        
+        # [CRITICAL] Strictly follow canvas width to prevent "Hiding" (Clipping)
+        def _on_canvas_configure(e):
+            self.root.update_idletasks()
+            left_canvas.itemconfig(canvas_window, width=e.width)
+        left_canvas.bind("<Configure>", _on_canvas_configure)
+        left_canvas.configure(yscrollcommand=left_vsb.set)
+        
+        left_vsb.pack(side='right', fill='y')
+        left_canvas.pack(side='left', fill='both', expand=True)
 
-        _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
-        _add_file_row(file_frame, "RFI 데이터:", self.target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
-        _add_file_row(file_frame, "성적서 양식:", self.template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        # Mousewheel scroll for settings
+        def _left_scroll(event):
+            left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            return "break"
+        left_canvas.bind("<MouseWheel>", _left_scroll)
 
-        # 2. Configuration Tabs
-        config_frame = ttk.LabelFrame(container, text=" 리포트 세부 설정 ", padding=5)
-        config_frame.pack(fill='both', expand=False, pady=(0, 20))
+        # Bind events to maintain ratio
+        self.pmi_paned.bind("<Configure>", lambda e: [self._on_pmi_paned_configure(e), self.root.update_idletasks()])
+        self.pmi_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_pmi_ratio))
+
+        # Header
+        header_frame = tk.Frame(left_pane, background="#f9fafb")
+        header_frame.pack(fill='x', pady=(0, 10))
+        tk.Label(header_frame, text="🔬 PMI 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+        tk.Label(header_frame, text=f"v{APP_VERSION}", font=("Arial", 8), 
+                 background="#f1f5f9", foreground="#64748b", padx=5, pady=1).pack(side='left', padx=10)
+
+        # 1. File Selection Group
+        file_container = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
+        file_container.pack(fill='x', pady=(0, 10))
+
+        def _add_very_compact_row(parent_f, label, var, row, is_dir=False, types=None):
+            parent_f.columnconfigure(1, weight=1)
+            ttk.Label(parent_f, text=label, font=("Malgun Gothic", 8)).grid(row=row, column=0, sticky='e', padx=2, pady=2)
+            # Use width=1 for entry to allow proactive shrinking
+            ttk.Entry(parent_f, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=row, column=1, padx=2, pady=2, sticky='ew')
+            cmd = (lambda : self._browse_dir(var)) if is_dir else (lambda : self._browse_file(var, types))
+            ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
+
+        _add_very_compact_row(file_container, "로고:", self.logo_folder_path, 0, is_dir=True)
+        _add_very_compact_row(file_container, "데이터:", self.target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_very_compact_row(file_container, "양식:", self.template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+
+        # 2. Configuration Notebook (Cover, Data, Rows - NO Preview tab here)
+        config_frame = ttk.LabelFrame(left_pane, text=" 설정 (Config) ", padding=2)
+        config_frame.pack(fill='both', expand=True, pady=(0, 10))
 
         self.tab_notebook = ttk.Notebook(config_frame)
         self.tab_notebook.pack(fill='both', expand=True)
 
+        tab_cover = ttk.Frame(self.tab_notebook, padding=5)
+        tab_data = ttk.Frame(self.tab_notebook, padding=5)
+        tab_rows = ttk.Frame(self.tab_notebook, padding=5)
+        
+        # [CRITICAL] Allow children to expand within tabs
+        for t in [tab_cover, tab_data, tab_rows]: t.columnconfigure(0, weight=1)
+
+        self.tab_notebook.add(tab_cover, text="갑지")
+        self.tab_notebook.add(tab_data, text="을지")
+        self.tab_notebook.add(tab_rows, text="행 설정")
+
         self.setting_vars = {}
-        tab_cover = ttk.Frame(self.tab_notebook, padding=10)
-        tab_data = ttk.Frame(self.tab_notebook, padding=10)
-        tab_rows = ttk.Frame(self.tab_notebook, padding=10)
-
-        self.tab_notebook.add(tab_cover, text="갑지 (Cover)")
-        self.tab_notebook.add(tab_data, text="을지 (Data)")
-        self.tab_notebook.add(tab_rows, text="행 설정 (Rows)")
-
-        self.tab_preview = ttk.Frame(self.tab_notebook, padding=5)
-        self.tab_notebook.add(self.tab_preview, text="미리보기 (Preview)")
-        self._create_preview_ui(self.tab_preview)
-
-        self._create_setting_grid(tab_cover, "COVER")
-        self._create_setting_grid(tab_data, "DATA")
-        self._create_margin_settings(tab_cover, "COVER")
-        self._create_margin_settings(tab_data, "DATA")
+        # [ALIGNED] Direct grid expansion (as in RT/PT)
+        next_row_cover = self._create_setting_grid(tab_cover, "COVER")
+        next_row_data = self._create_setting_grid(tab_data, "DATA")
+        self._create_margin_settings(tab_cover, "COVER", next_row_cover)
+        self._create_margin_settings(tab_data, "DATA", next_row_data)
         self._create_row_settings(tab_rows)
-
-        # 3. Action Section
-        action_frame = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb", padx=15, pady=15)
-        action_frame.pack(fill='x', pady=(0, 10))
-
-        filter_row = tk.Frame(action_frame, background="#ffffff")
-        filter_row.pack(fill='x', pady=(0, 10))
-        ttk.Label(filter_row, text="특정 순번(NO)만 추출 (예: 1, 3, 5-10):", background="#ffffff").pack(side='left', padx=(0, 10))
-        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=30, exportselection=False).pack(side='left')
-
-        verify_row = tk.Frame(action_frame, background="#ffffff")
-        verify_row.pack(fill='x', pady=(0, 10))
-        tk.Checkbutton(verify_row, text="재질 자동 판정 (성분 비교 알고리즘 적용, 10% 허용오차)", variable=self.auto_verify, background="#ffffff", font=("Malgun Gothic", 10)).pack(side='left')
         
-        # [NEW] 원소 함량 필터 UI (PMI 전용)
-        filter_ui_frame = tk.Frame(action_frame, background="#ffffff", pady=5)
-        filter_ui_frame.pack(fill='x', pady=(0, 10))
-        
-        ttk.Label(filter_ui_frame, text="원소/컬럼 함량 필터 (Min~Max):", background="#ffffff", font=("Malgun Gothic", 10, "bold")).pack(side='left', padx=(0, 10))
-        
-        self.filter_container = tk.Frame(filter_ui_frame, background="#ffffff")
-        self.filter_container.pack(side='left')
-        
-        def refresh_filter_ui():
-            for widget in self.filter_container.winfo_children():
-                widget.destroy()
-            
-            for i, f_item in enumerate(self.element_filters):
-                unit_frame = tk.Frame(self.filter_container, background="#ffffff", padx=5)
-                unit_frame.pack(side='left')
-                
-                ttk.Entry(unit_frame, textvariable=f_item['key'], width=5, exportselection=False).pack(side='left')
-                ttk.Label(unit_frame, text=":", background="#ffffff").pack(side='left')
-                ttk.Entry(unit_frame, textvariable=f_item['min'], width=5, exportselection=False).pack(side='left')
-                ttk.Label(unit_frame, text="~", background="#ffffff").pack(side='left')
-                ttk.Entry(unit_frame, textvariable=f_item['max'], width=5, exportselection=False).pack(side='left')
-                
-                # 삭제 버튼
-                btn_del = tk.Button(unit_frame, text="×", command=lambda idx=i: remove_filter(idx), 
-                                    relief='flat', background="#ffffff", foreground="red", font=("Arial", 10, "bold"))
-                btn_del.pack(side='left', padx=(2, 0))
+        # Spacer for tabs
+        tk.Frame(tab_rows, background="#f9fafb").pack(fill='x')
 
+        # 3. Quick Options Section
+        action_outer = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
+        action_outer.pack(fill='x', pady=(0, 10))
+
+        # Filter Tag Area (Self-updating)
+        filter_box = tk.Frame(action_outer, background="#ffffff")
+        filter_box.pack(fill='x', pady=2)
+        ttk.Label(filter_box, text="🔍 성분 필터:", background="#ffffff", font=("Malgun Gothic", 9, "bold")).pack(side='left', padx=(0, 5))
+        self.filter_container = tk.Frame(filter_box, background="#ffffff")
+        self.filter_container.pack(side='left', fill='x', expand=True)
+        
         def add_filter():
-            self.element_filters.append({'key': tk.StringVar(), 'min': tk.StringVar(), 'max': tk.StringVar()})
-            refresh_filter_ui()
+            self.element_filters.append({'key': tk.StringVar(value=''), 'min': tk.StringVar(value=''), 'max': tk.StringVar(value='')})
+            self._update_pmi_filter_ui()
+        ttk.Button(filter_box, text="+", width=2, command=add_filter).pack(side='right')
 
-        def remove_filter(idx):
-            if len(self.element_filters) > 0:
-                self.element_filters.pop(idx)
-                refresh_filter_ui()
+        # Sequence Filter & Auto Check
+        tk.Checkbutton(action_outer, text="✅ 재질 자동 판정", variable=self.auto_verify, background="#ffffff", font=("Malgun Gothic", 8)).pack(anchor='w')
+        seq_row = tk.Frame(action_outer, background="#ffffff")
+        seq_row.pack(fill='x', pady=2)
+        ttk.Label(seq_row, text="📊 특정순번:", background="#ffffff", font=("Malgun Gothic", 8)).pack(side='left')
+        ttk.Entry(seq_row, textvariable=self.sequence_filter, width=15, font=("Arial", 9), exportselection=False).pack(side='left', padx=5, fill='x', expand=True)
 
-        ttk.Button(filter_ui_frame, text="+ 필터 추가", command=add_filter, width=10).pack(side='left', padx=10)
-        refresh_filter_ui()
+        action_bar = tk.Frame(left_pane, background="#f9fafb")
+        action_bar.pack(fill='x', pady=5)
+        ttk.Button(action_bar, text=" 📝 데이터 추출 ", style="Action.TButton", command=self.extract_only).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(action_bar, text=" ✨ 생성 시작 ", style="Action.TButton", command=self.run_process).pack(side='left', fill='x', expand=True)
+
+        self._update_pmi_filter_ui()
+
+        # [RIGHT] Data Preview Pane (Always visible)
+        right_frame = ttk.LabelFrame(self.pmi_paned, text=" 🔬 실시간 데이터 관리 (Live Preview) ", padding=10)
+        self.pmi_paned.add(right_frame, stretch="always")
+        self._create_preview_ui(right_frame)
+        self._apply_sash_ratio("PMI")
         
-        mode_row = tk.Frame(action_frame, background="#ffffff")
-        mode_row.pack(fill='x', pady=(0, 10))
-        ttk.Label(mode_row, text="추출 방식 (Extraction Method):", background="#ffffff").pack(side='left', padx=(0, 10))
-        mode_combo = ttk.Combobox(mode_row, textvariable=self.extraction_mode, state="readonly", width=25)
-        mode_combo['values'] = ("전체", "SS304 만", "SS316 만", "DUPLEX 만", "SS310 만", "미분류(기타) 만")
-        mode_combo.pack(side='left')
 
-        btn_frame = tk.Frame(action_frame, background="#ffffff")
-        btn_frame.pack(side='right')
+    def _update_pmi_ratio(self):
+        """Saves current sash position and persists it."""
+        try:
+            total_w = self.pmi_paned.winfo_width()
+            if total_w > 100:
+                current_sash = self.pmi_paned.sash_coord(0)[0]
+                self.pmi_pane_ratio = current_sash / total_w
+                self.config['PMI_SASH_RATIO'] = self.pmi_pane_ratio
+                self.save_settings() # Persist immediately
+        except: pass
 
-        ttk.Button(btn_frame, text="데이터 추출 (Extract)", style="Action.TButton", command=self.extract_only).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="성적서 생성 시작 (Generate)", style="Action.TButton", command=self.run_process).pack(side='left', padx=5)
+    def _on_pmi_paned_configure(self, event):
+        """Maintains the proportional split when the window resizes."""
+        try:
+            total_w = self.pmi_paned.winfo_width()
+            if total_w > 100:
+                # During window resize, RE-PLACE sash based on SAVED ratio
+                if event and event.widget == self.pmi_paned:
+                    new_pos = int(total_w * self.pmi_pane_ratio)
+                    self.pmi_paned.sash_place(0, new_pos, 0)
+        except: pass
+
+    def _update_pmi_filter_ui(self):
+        """Redraws the element filter tags in a modern, elastic style."""
+        for widget in self.filter_container.winfo_children():
+            widget.destroy()
+        
+        def remove_filter(idx):
+            self.element_filters.pop(idx)
+            self._update_pmi_filter_ui()
+
+        # [HYPER-REACTIVE] Use grid for even horizontal distribution (Elastic)
+        for i, f_item in enumerate(self.element_filters):
+            self.filter_container.columnconfigure(i, weight=1, minsize=0)
+            
+            # Create an "Elastic Tag" 
+            tag = tk.Frame(self.filter_container, background="#eff6ff", highlightthickness=1, 
+                            highlightbackground="#bfdbfe", padx=2, pady=1)
+            tag.grid(row=0, column=i, sticky='ew', padx=2)
+            
+            # Inner grid for tag components
+            tag.columnconfigure(0, weight=1, minsize=0) # Key
+            tag.columnconfigure(2, weight=1, minsize=0) # Min
+            tag.columnconfigure(4, weight=1, minsize=0) # Max
+            
+            # Key
+            e_key = tk.Entry(tag, textvariable=f_item['key'], width=1, font=("Arial", 8), 
+                             relief='flat', background="#eff6ff", justify='center')
+            e_key.grid(row=0, column=0, sticky='ew')
+            tk.Label(tag, text=":", background="#eff6ff", font=("Arial", 8)).grid(row=0, column=1)
+            
+            # Min
+            e_min = tk.Entry(tag, textvariable=f_item['min'], width=1, font=("Arial", 8), 
+                             relief='flat', background="#eff6ff", justify='center')
+            e_min.grid(row=0, column=2, sticky='ew')
+            tk.Label(tag, text="~", background="#eff6ff", font=("Arial", 8)).grid(row=0, column=3)
+            
+            # Max
+            e_max = tk.Entry(tag, textvariable=f_item['max'], width=1, font=("Arial", 8), 
+                             relief='flat', background="#eff6ff", justify='center')
+            e_max.grid(row=0, column=4, sticky='ew')
+            
+            # Delete button (Small)
+            btn_del = tk.Button(tag, text="×", command=lambda idx=i: remove_filter(idx), 
+                                relief='flat', background="#eff6ff", foreground="#3b82f6", font=("Arial", 9, "bold"),
+                                activebackground="#dbeafe", cursor="hand2", padx=0, pady=0)
+            btn_del.grid(row=0, column=5, padx=(2, 0))
 
     def _setup_rt_ui(self, parent):
-        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        # [FORCE] Ensure parent (rt_mode_frame) allows expansion
+        container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        tk.Label(container, text="RT 성적서 생성 및 관리", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
+        # --- Dual Pane Layout (PanedWindow) ---
+        self.rt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
+                            sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
+        self.rt_paned.pack(fill='both', expand=True)
 
-        # 1. File Selection
-        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
-        file_frame.pack(fill='x', pady=(0, 20))
+        # [LEFT] Settings Pane (Scrollable Wrapper)
+        left_pane_outer = tk.Frame(self.rt_paned, background="#f9fafb")
+        self.rt_paned.add(left_pane_outer, stretch="always") 
+
+        left_canvas = tk.Canvas(left_pane_outer, background="#f9fafb", highlightthickness=0)
+        left_vsb = ttk.Scrollbar(left_pane_outer, orient="vertical", command=left_canvas.yview)
+        left_pane = tk.Frame(left_canvas, background="#f9fafb", padx=10, pady=10)
+        
+        left_pane.bind("<Configure>", lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all")))
+        canvas_window = left_canvas.create_window((0, 0), window=left_pane, anchor="nw")
+        def _on_rt_canvas_configure(e):
+            self.root.update_idletasks()
+            left_canvas.itemconfig(canvas_window, width=e.width)
+        left_canvas.bind("<Configure>", _on_rt_canvas_configure)
+        left_canvas.configure(yscrollcommand=left_vsb.set)
+        
+        left_vsb.pack(side='right', fill='y')
+        left_canvas.pack(side='left', fill='both', expand=True)
+
+        # Mousewheel scroll
+        def _rt_left_scroll(event):
+            left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            return "break"
+        left_canvas.bind("<MouseWheel>", _rt_left_scroll)
+
+        # Header
+        header_frame = tk.Frame(left_pane, background="#f9fafb")
+        header_frame.pack(fill='x', pady=(0, 10))
+        tk.Label(header_frame, text="🔬 RT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+
+        # 1. File Selection Group
+        file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
+        file_frame.pack(fill='x', pady=(0, 10))
 
         def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
-            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
-            # RT 탭에서도 엔트리 우클릭 메뉴를 지원하도록 exportselection=False 설정 유지
-            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
+            parent_frame.columnconfigure(1, weight=1)
+            ttk.Label(parent_frame, text=label, font=("Malgun Gothic", 8)).grid(row=row, column=0, sticky='e', padx=2, pady=2)
+            ttk.Entry(parent_frame, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=row, column=1, padx=2, pady=2, sticky='ew')
             cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
-            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
+            ttk.Button(parent_frame, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
         _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
-        _add_file_row(file_frame, "RT 데이터 (Excel):", self.rt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
-        _add_file_row(file_frame, "RT 성적서 양식:", self.rt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "RT 데이터:", self.rt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "RT 양식:", self.rt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
 
         # 2. Configuration Tabs
-        rt_config_frame = ttk.LabelFrame(container, text=" RT 리포트 세부 설정 ", padding=5)
-        rt_config_frame.pack(fill='both', expand=False, pady=(0, 20))
+        rt_config_frame = ttk.LabelFrame(left_pane, text=" 리포트 세부 설정 ", padding=2)
+        rt_config_frame.pack(fill='both', expand=True, pady=(0, 10))
 
         self.rt_tab_notebook = ttk.Notebook(rt_config_frame)
         self.rt_tab_notebook.pack(fill='both', expand=True)
 
-        rt_tab_cover = ttk.Frame(self.rt_tab_notebook, padding=10)
-        rt_tab_data = ttk.Frame(self.rt_tab_notebook, padding=10)
-        rt_tab_rows = ttk.Frame(self.rt_tab_notebook, padding=10)
+        rt_tab_cover = ttk.Frame(self.rt_tab_notebook, padding=5)
+        rt_tab_data = ttk.Frame(self.rt_tab_notebook, padding=5)
+        rt_tab_rows = ttk.Frame(self.rt_tab_notebook, padding=5)
+        
+        # [CRITICAL] Allow children to expand
+        for t in [rt_tab_cover, rt_tab_data, rt_tab_rows]: t.columnconfigure(0, weight=1)
 
-        self.rt_tab_notebook.add(rt_tab_cover, text="갑지 (Cover)")
-        self.rt_tab_notebook.add(rt_tab_data, text="을지 (Data)")
-        self.rt_tab_notebook.add(rt_tab_rows, text="행 설정 (Rows)")
+        self.rt_tab_notebook.add(rt_tab_cover, text="갑지")
+        self.rt_tab_notebook.add(rt_tab_data, text="을지")
+        self.rt_tab_notebook.add(rt_tab_rows, text="행 설정")
 
-        self.rt_tab_preview = ttk.Frame(self.rt_tab_notebook, padding=5)
-        self.rt_tab_notebook.add(self.rt_tab_preview, text="미리보기 (Preview)")
-        self._create_rt_preview_ui(self.rt_tab_preview)
-
-        self._create_setting_grid(rt_tab_cover, "COVER")
-        self._create_setting_grid(rt_tab_data, "DATA")
-        self._create_margin_settings(rt_tab_cover, "COVER")
-        self._create_margin_settings(rt_tab_data, "DATA")
+        next_row_rt_cover = self._create_setting_grid(rt_tab_cover, "COVER")
+        next_row_rt_data = self._create_setting_grid(rt_tab_data, "DATA")
+        self._create_margin_settings(rt_tab_cover, "COVER", next_row_rt_cover)
+        self._create_margin_settings(rt_tab_data, "DATA", next_row_rt_data)
         self._create_row_settings(rt_tab_rows)
 
         # 3. Action Section
-        action_frame = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb", padx=15, pady=15)
+        action_frame = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
         action_frame.pack(fill='x', pady=(0, 10))
 
         filter_row = tk.Frame(action_frame, background="#ffffff")
-        filter_row.pack(fill='x', pady=(0, 10))
-        ttk.Label(filter_row, text="특정 순번(NO)만 추출 (예: 1, 3, 5-10):", background="#ffffff").pack(side='left', padx=(0, 10))
-        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=30, exportselection=False).pack(side='left')
+        filter_row.pack(fill='x', pady=2)
+        ttk.Label(filter_row, text="📊 특정순번:", background="#ffffff", font=("Malgun Gothic", 8)).pack(side='left')
+        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=15, font=("Arial", 9), exportselection=False).pack(side='left', padx=5, fill='x', expand=True)
 
-        btn_frame = tk.Frame(action_frame, background="#ffffff")
-        btn_frame.pack(side='right')
+        btn_row = tk.Frame(left_pane, background="#f9fafb")
+        btn_row.pack(fill='x', pady=5)
+        ttk.Button(btn_row, text=" 📝 데이터 추출 ", style="Action.TButton", command=self.extract_only).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(btn_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(side='left', fill='x', expand=True)
 
-        ttk.Button(btn_frame, text="데이터 추출 (Extract)", style="Action.TButton", command=self.extract_only).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="성적서 생성 (Generate)", style="Action.TButton", command=self.run_process).pack(side='left', padx=5)
+        # [RIGHT] Preview Pane
+        right_frame = ttk.LabelFrame(self.rt_paned, text=" 🔬 실시간 데이터 관리 (RT Preview) ", padding=10)
+        self.rt_paned.add(right_frame, stretch="always")
+        self._create_rt_preview_ui(right_frame)
+        self._apply_sash_ratio("RT")
+        
+
+        # Adaptive Resizing Bindings
+        self.rt_pane_ratio = self.config.get('RT_SASH_RATIO', 0.5)
+        self.rt_paned.bind("<Configure>", lambda e: [self._on_rt_paned_configure(e), self.root.update_idletasks()])
+        self.rt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_rt_ratio))
+        self.root.after(500, lambda: self._on_rt_paned_configure(None))
+
+    def _update_rt_ratio(self):
+        try:
+            total_w = self.rt_paned.winfo_width()
+            if total_w > 100:
+                current_sash = self.rt_paned.sash_coord(0)[0]
+                self.rt_pane_ratio = current_sash / total_w
+                self.config['RT_SASH_RATIO'] = self.rt_pane_ratio
+                self.save_settings()
+        except: pass
+
+    def _on_rt_paned_configure(self, event):
+        try:
+            total_w = self.rt_paned.winfo_width()
+            if total_w > 100:
+                if event and event.widget == self.rt_paned:
+                    new_pos = int(total_w * self.rt_pane_ratio)
+                    self.rt_paned.sash_place(0, new_pos, 0)
+        except: pass
 
     def _setup_pt_ui(self, parent):
-        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        # [FORCE] Ensure parent (pt_mode_frame) allows expansion
+        container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        tk.Label(container, text="PT 성적서 생성 및 관리", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
+        # --- Dual Pane Layout (PanedWindow) ---
+        self.pt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
+                            sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
+        self.pt_paned.pack(fill='both', expand=True)
 
-        # 1. File Selection
-        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
-        file_frame.pack(fill='x', pady=(0, 20))
+        # [LEFT] Settings Pane (Scrollable Wrapper)
+        left_pane_outer = tk.Frame(self.pt_paned, background="#f9fafb")
+        self.pt_paned.add(left_pane_outer, stretch="always") 
 
-        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
-            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
-            # PT 탭에서도 엔트리 우클릭 메뉴를 지원하도록 exportselection=False 설정 유지
-            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
+        left_canvas = tk.Canvas(left_pane_outer, background="#f9fafb", highlightthickness=0)
+        left_vsb = ttk.Scrollbar(left_pane_outer, orient="vertical", command=left_canvas.yview)
+        left_pane = tk.Frame(left_canvas, background="#f9fafb", padx=10, pady=10)
+        
+        left_pane.bind("<Configure>", lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all")))
+        canvas_window = left_canvas.create_window((0, 0), window=left_pane, anchor="nw")
+        def _on_pt_canvas_configure(e):
+            self.root.update_idletasks()
+            left_canvas.itemconfig(canvas_window, width=e.width)
+        left_canvas.bind("<Configure>", _on_pt_canvas_configure)
+        left_canvas.configure(yscrollcommand=left_vsb.set)
+        
+        left_vsb.pack(side='right', fill='y')
+        left_canvas.pack(side='left', fill='both', expand=True)
+
+        # Mousewheel scroll
+        def _pt_left_scroll(event):
+            left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            return "break"
+        left_canvas.bind("<MouseWheel>", _pt_left_scroll)
+
+        # Header
+        header_frame = tk.Frame(left_pane, background="#f9fafb")
+        header_frame.pack(fill='x', pady=(0, 10))
+        tk.Label(header_frame, text="🔬 PT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+
+        # 1. File Selection Group
+        file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
+        file_frame.pack(fill='x', pady=(0, 10))
+
+        def _add_file_row(parent_f, label, var, row, is_dir=False, types=None):
+            parent_f.columnconfigure(1, weight=1)
+            ttk.Label(parent_f, text=label, font=("Malgun Gothic", 8)).grid(row=row, column=0, sticky='e', padx=2, pady=2)
+            ttk.Entry(parent_f, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=row, column=1, padx=2, pady=2, sticky='ew')
             cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
-            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
+            ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
         _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
-        _add_file_row(file_frame, "PT 데이터 (Excel):", self.pt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
-        _add_file_row(file_frame, "PT 성적서 양식:", self.pt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "PT 데이터:", self.pt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "PT 양식:", self.pt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
 
         # 2. Configuration Tabs
-        pt_config_frame = ttk.LabelFrame(container, text=" PT 리포트 세부 설정 ", padding=5)
-        pt_config_frame.pack(fill='both', expand=False, pady=(0, 20))
+        pt_config_frame = ttk.LabelFrame(left_pane, text=" 리포트 세부 설정 ", padding=2)
+        pt_config_frame.pack(fill='both', expand=True, pady=(0, 10))
 
         self.pt_tab_notebook = ttk.Notebook(pt_config_frame)
         self.pt_tab_notebook.pack(fill='both', expand=True)
 
-        pt_tab_cover = ttk.Frame(self.pt_tab_notebook, padding=10)
-        pt_tab_data = ttk.Frame(self.pt_tab_notebook, padding=10)
-        pt_tab_rows = ttk.Frame(self.pt_tab_notebook, padding=10)
+        pt_tab_cover = ttk.Frame(self.pt_tab_notebook, padding=5)
+        pt_tab_data = ttk.Frame(self.pt_tab_notebook, padding=5)
+        pt_tab_rows = ttk.Frame(self.pt_tab_notebook, padding=5)
+        
+        # [CRITICAL] Allow children to expand
+        for t in [pt_tab_cover, pt_tab_data, pt_tab_rows]: t.columnconfigure(0, weight=1)
 
-        self.pt_tab_notebook.add(pt_tab_cover, text="갑지 (Cover)")
-        self.pt_tab_notebook.add(pt_tab_data, text="을지 (Data)")
-        self.pt_tab_notebook.add(pt_tab_rows, text="행 설정 (Rows)")
+        self.pt_tab_notebook.add(pt_tab_cover, text="갑지")
+        self.pt_tab_notebook.add(pt_tab_data, text="을지")
+        self.pt_tab_notebook.add(pt_tab_rows, text="행 설정")
 
-        self.pt_tab_preview = ttk.Frame(self.pt_tab_notebook, padding=5)
-        self.pt_tab_notebook.add(self.pt_tab_preview, text="미리보기 (Preview)")
-        self._create_pt_preview_ui(self.pt_tab_preview)
-
-        self._create_setting_grid(pt_tab_cover, "COVER")
-        self._create_setting_grid(pt_tab_data, "DATA")
-        self._create_margin_settings(pt_tab_cover, "COVER")
-        self._create_margin_settings(pt_tab_data, "DATA")
+        next_row_pt_cover = self._create_setting_grid(pt_tab_cover, "COVER")
+        next_row_pt_data = self._create_setting_grid(pt_tab_data, "DATA")
+        self._create_margin_settings(pt_tab_cover, "COVER", next_row_pt_cover)
+        self._create_margin_settings(pt_tab_data, "DATA", next_row_pt_data)
         self._create_row_settings(pt_tab_rows)
 
         # 3. Action Section
-        action_frame = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb", padx=15, pady=15)
+        action_frame = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
         action_frame.pack(fill='x', pady=(0, 10))
 
         filter_row = tk.Frame(action_frame, background="#ffffff")
-        filter_row.pack(fill='x', pady=(0, 10))
-        ttk.Label(filter_row, text="특정 순번(NO)만 추출 (예: 1, 3, 5-10):", background="#ffffff").pack(side='left', padx=(0, 10))
-        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=30, exportselection=False).pack(side='left')
+        filter_row.pack(fill='x', pady=2)
+        ttk.Label(filter_row, text="📊 특정순번:", background="#ffffff", font=("Malgun Gothic", 8)).pack(side='left')
+        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=15, font=("Arial", 9), exportselection=False).pack(side='left', padx=5, fill='x', expand=True)
 
-        btn_frame = tk.Frame(action_frame, background="#ffffff")
-        btn_frame.pack(side='right')
+        btn_row = tk.Frame(left_pane, background="#f9fafb")
+        btn_row.pack(fill='x', pady=5)
+        ttk.Button(btn_row, text=" 📝 데이터 추출 ", style="Action.TButton", command=self.extract_only).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(btn_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(side='left', fill='x', expand=True)
 
-        ttk.Button(btn_frame, text="데이터 추출 (Extract)", style="Action.TButton", command=self.extract_only).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="성적서 생성 (Generate)", style="Action.TButton", command=self.run_process).pack(side='left', padx=5)
+        # [RIGHT] Preview Pane
+        right_frame = ttk.LabelFrame(self.pt_paned, text=" 🔬 실시간 데이터 관리 (PT Preview) ", padding=10)
+        self.pt_paned.add(right_frame, stretch="always")
+        self._create_pt_preview_ui(right_frame)
+        self._apply_sash_ratio("PT")
+        
+
+        # Adaptive Resizing Bindings
+        self.pt_pane_ratio = self.config.get('PT_SASH_RATIO', 0.5)
+        self.pt_paned.bind("<Configure>", lambda e: [self._on_pt_paned_configure(e), self.root.update_idletasks()])
+        self.pt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_pt_ratio))
+        self.root.after(500, lambda: self._on_pt_paned_configure(None))
+
+    def _update_pt_ratio(self):
+        try:
+            total_w = self.pt_paned.winfo_width()
+            if total_w > 100:
+                current_sash = self.pt_paned.sash_coord(0)[0]
+                self.pt_pane_ratio = current_sash / total_w
+                self.config['PT_SASH_RATIO'] = self.pt_pane_ratio
+                self.save_settings()
+        except: pass
+
+    def _on_pt_paned_configure(self, event):
+        try:
+            total_w = self.pt_paned.winfo_width()
+            if total_w > 100:
+                if event and event.widget == self.pt_paned:
+                    new_pos = int(total_w * self.pt_pane_ratio)
+                    self.pt_paned.sash_place(0, new_pos, 0)
+        except: pass
 
     def _create_pt_preview_ui(self, parent):
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        self.pt_display_cols = ["V", "No", "Date", "ISO Drawing No.", "Joint", "NPS", "Thk.", "Material", "Welder", "Weld Type", "Result"]
-        self.pt_widths = {"V": 40, "No": 50, "Date": 90, "ISO Drawing No.": 200, "Joint": 100, "NPS": 80, "Thk.": 80, "Material": 100, "Welder": 100, "Weld Type": 100, "Result": 80}
+        # [NEW] File Info Header
+        header_info = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
+        header_info.pack(fill='x', pady=(0, 5))
+        tk.Label(header_info, textvariable=self.file_info_vars['PT'], background="#ffffff", 
+                 foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
+
+        self.pt_display_cols = ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
+        saved_widths = self.config.get("PT_COL_WIDTHS", {})
+        default_widths = {"V": 40, "No": 50, "Date": 90, "ISO/Dwg": 300, "Joint No.": 120, "Material": 100, "Test Item": 100, "Result": 80, "Welder No": 100}
 
         tree_frame = tk.Frame(container, background="#f9fafb")
-        tree_frame.pack(side='left', fill='both', expand=True)
-
         self.pt_preview_tree = ttk.Treeview(tree_frame, columns=self.pt_display_cols, show='headings', height=10, selectmode='extended')
         for col in self.pt_preview_tree["columns"]:
-            self.pt_preview_tree.heading(col, text=col, anchor='center')
-            self.pt_preview_tree.column(col, width=self.pt_widths.get(col, 80), anchor='center', stretch=False)
+            self.pt_preview_tree.heading(col, text=col, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode="PT"))
+            w = saved_widths.get(col, default_widths.get(col, 80))
+            self.pt_preview_tree.column(col, width=w, anchor='center', stretch=True)
         
         scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.pt_preview_tree.yview)
         scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.pt_preview_tree.xview)
@@ -762,109 +1098,158 @@ class PMIReportApp:
         tree_frame.grid_columnconfigure(0, weight=1)
 
         self._setup_preview_sidebar(self.pt_preview_tree, container, mode="PT")
+        tree_frame.pack(side="left", fill="both", expand=True)
 
     def _setup_paut_ui(self, parent):
-        container = tk.Frame(parent, background="#f9fafb", padx=10, pady=10)
+        # [FORCE] Ensure parent (paut_mode_frame) allows expansion
+        container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        tk.Label(container, text="PAUT (ASME B31.1) 성적서 생성 및 판정", font=("Malgun Gothic", 14, "bold"), background="#f9fafb", foreground="#111827").pack(pady=(0, 15), anchor='w')
+        # --- Dual Pane Layout (PanedWindow) ---
+        self.paut_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
+                            sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
+        self.paut_paned.pack(fill='both', expand=True)
 
-        # 1. File Selection
-        file_frame = ttk.LabelFrame(container, text=" 파일 및 폴더 선택 ", padding=15)
-        file_frame.pack(fill='x', pady=(0, 15))
+        # [LEFT] Settings & Manual Eval Pane (Scrollable Wrapper)
+        left_pane_outer = tk.Frame(self.paut_paned, background="#f9fafb")
+        self.paut_paned.add(left_pane_outer, stretch="always") 
 
-        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
-            ttk.Label(parent_frame, text=label).grid(row=row, column=0, sticky='e', padx=5, pady=5)
-            ttk.Entry(parent_frame, textvariable=var, width=50, exportselection=False).grid(row=row, column=1, padx=5, pady=5)
+        left_canvas = tk.Canvas(left_pane_outer, background="#f9fafb", highlightthickness=0)
+        left_vsb = ttk.Scrollbar(left_pane_outer, orient="vertical", command=left_canvas.yview)
+        left_pane = tk.Frame(left_canvas, background="#f9fafb", padx=10, pady=10)
+        
+        left_pane.bind("<Configure>", lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all")))
+        canvas_window = left_canvas.create_window((0, 0), window=left_pane, anchor="nw")
+        def _on_paut_canvas_configure(e):
+            self.root.update_idletasks()
+            left_canvas.itemconfig(canvas_window, width=e.width)
+        left_canvas.bind("<Configure>", _on_paut_canvas_configure)
+        left_canvas.configure(yscrollcommand=left_vsb.set)
+        
+        left_vsb.pack(side='right', fill='y')
+        left_canvas.pack(side='left', fill='both', expand=True)
+
+        # Mousewheel scroll
+        def _paut_left_scroll(event):
+            left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            return "break"
+        left_canvas.bind("<MouseWheel>", _paut_left_scroll)
+
+        # Header
+        header_frame = tk.Frame(left_pane, background="#f9fafb")
+        header_frame.pack(fill='x', pady=(0, 10))
+        tk.Label(header_frame, text="🔬 PAUT (ASME B31.1) 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+
+        # 1. File Selection Group
+        file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
+        file_frame.pack(fill='x', pady=(0, 10))
+
+        def _add_file_row(parent_f, label, var, row, is_dir=False, types=None):
+            parent_f.columnconfigure(1, weight=1)
+            ttk.Label(parent_f, text=label, font=("Malgun Gothic", 8)).grid(row=row, column=0, sticky='e', padx=2, pady=2)
+            ttk.Entry(parent_f, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=row, column=1, padx=2, pady=2, sticky='ew')
             cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
-            ttk.Button(parent_frame, text="찾기", command=cmd).grid(row=row, column=2, padx=5, pady=5)
+            ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
-        _add_file_row(file_frame, "PAUT 데이터 (Excel):", self.paut_target_file_path, 0, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
-        _add_file_row(file_frame, "성적서 양식 (Template):", self.paut_template_file_path, 1, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "PAUT 데이터:", self.paut_target_file_path, 0, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "PAUT 양식:", self.paut_template_file_path, 1, types=[("Excel Template", "*.xlsx;*.xlsm")])
 
-        # 2. Vertical Layout: Manual Eval (Top) & Preview/Batch (Bottom)
-        # 2.1 Manual Evaluation (Top)
-        manual_frame = ttk.LabelFrame(container, text=" 개별 판정 (Manual Evaluation) ", padding=15)
-        manual_frame.pack(fill='x', pady=(0, 15))
+        # 2. Manual Evaluation (Moved to Left Pane)
+        manual_frame = ttk.LabelFrame(left_pane, text=" 개별 판정 (Manual Evaluation) ", padding=15)
+        manual_frame.pack(fill='x', pady=(0, 10))
         
-        # [NEW] Sizing Helper Row (Upper)
+        # Sizing Helper Row
         calc_frame = tk.Frame(manual_frame, background="#f1f5f9", padx=10, pady=8, highlightbackground="#cbd5e1", highlightthickness=1)
-        calc_frame.grid(row=0, column=0, columnspan=10, sticky='ew', pady=(0, 15))
+        calc_frame.grid(row=0, column=0, columnspan=10, sticky='ew', pady=(0, 10))
         
-        ttk.Label(calc_frame, text="📏 h 산출 도우미:", font=("Malgun Gothic", 9, "bold"), background="#f1f5f9").grid(row=0, column=0, padx=5)
-        
-        ttk.Label(calc_frame, text="Peak 에코(%):", background="#f1f5f9").grid(row=0, column=1, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['peak'], width=5).grid(row=0, column=2, padx=5)
-        
-        ttk.Label(calc_frame, text="강하 dB:", background="#f1f5f9").grid(row=0, column=3, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['db'], width=4).grid(row=0, column=4, padx=5)
-        
-        ttk.Label(calc_frame, text="➡ 목표(%):", background="#f1f5f9", foreground="#ef4444", font=("Malgun Gothic", 9, "bold")).grid(row=0, column=5, padx=2)
-        ttk.Label(calc_frame, textvariable=self.paut_manual_vars['target_fsh'], background="#f1f5f9", foreground="#ef4444", font=("Malgun Gothic", 9, "bold")).grid(row=0, column=6, padx=5)
+        ttk.Label(calc_frame, text="📏 h 산출:", font=("Malgun Gothic", 8, "bold"), background="#f1f5f9").grid(row=0, column=0, padx=2)
+        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['peak'], width=4).grid(row=0, column=1, padx=2)
+        ttk.Label(calc_frame, text="% /", background="#f1f5f9").grid(row=0, column=2)
+        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['db'], width=3).grid(row=0, column=3, padx=2)
+        ttk.Label(calc_frame, text="dB ->", background="#f1f5f9").grid(row=0, column=4)
+        ttk.Label(calc_frame, textvariable=self.paut_manual_vars['target_fsh'], background="#f1f5f9", foreground="#ef4444", font=("Arial", 8, "bold")).grid(row=0, column=5, padx=2)
+        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['z1'], width=5).grid(row=0, column=6, padx=2)
+        ttk.Label(calc_frame, text="~", background="#f1f5f9").grid(row=0, column=7)
+        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['z2'], width=5).grid(row=0, column=8, padx=2)
+        ttk.Button(calc_frame, text="입력", width=4, command=self._calculate_paut_h).grid(row=0, column=9, padx=5)
 
-        ttk.Label(calc_frame, text="|  상측(z1):", background="#f1f5f9").grid(row=0, column=7, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['z1'], width=6).grid(row=0, column=8, padx=5)
-        
-        ttk.Label(calc_frame, text="하측(z2):", background="#f1f5f9").grid(row=0, column=9, padx=2)
-        tk.Entry(calc_frame, textvariable=self.paut_manual_vars['z2'], width=6).grid(row=0, column=10, padx=5)
-        
-        ttk.Button(calc_frame, text="h 자동 입력", command=self._calculate_paut_h).grid(row=0, column=11, padx=10)
-        
-        # Grid inside manual_frame
-        m_inputs = [
-            ("모재 두께 (t):", "t"), ("결함 높이 (h):", "h"), ("결함 길이 (l):", "l"), 
-            ("결함 깊이 (d):", "d"), ("결함 종류:", "nature")
-        ]
-        
+        # Inputs grid
+        m_inputs = [("t:", "t"), ("h:", "h"), ("l:", "l"), ("d:", "d")]
         for i, (lbl, key) in enumerate(m_inputs):
-            ttk.Label(manual_frame, text=lbl).grid(row=1, column=i*2, sticky='w', padx=(10, 2), pady=5)
-            if key == "nature":
-                cb = ttk.Combobox(manual_frame, textvariable=self.paut_manual_vars[key], values=["Crack", "LOF", "IP", "Slag", "Porosity", "Others"], width=10)
-                cb.grid(row=1, column=i*2+1, padx=5, sticky='w')
-            else:
-                ent = ttk.Entry(manual_frame, textvariable=self.paut_manual_vars[key], width=10)
-                ent.grid(row=1, column=i*2+1, padx=5, sticky='w')
-                if key != "l": 
-                    ent.bind("<KeyRelease>", lambda e: self._update_paut_auto_loc())
+            ttk.Label(manual_frame, text=lbl).grid(row=1, column=i*2, sticky='e', padx=2, pady=5)
+            tk.Entry(manual_frame, textvariable=self.paut_manual_vars[key], width=7).grid(row=1, column=i*2+1, padx=2, sticky='w')
 
-        ttk.Label(manual_frame, text="판정 위치:").grid(row=2, column=0, sticky='w', padx=(10, 2), pady=10)
-        ttk.Label(manual_frame, textvariable=self.paut_manual_vars['loc'], font=("Malgun Gothic", 10, "bold"), foreground="#3b82f6").grid(row=2, column=1, padx=5, sticky='w')
+        nature_row = tk.Frame(manual_frame, background="#f9fafb")
+        nature_row.grid(row=2, column=0, columnspan=10, sticky='ew', pady=5)
+        ttk.Label(nature_row, text="종류:").pack(side='left', padx=2)
+        ttk.Combobox(nature_row, textvariable=self.paut_manual_vars['nature'], values=["Crack", "LOF", "IP", "Slag", "Porosity", "Others"], width=10).pack(side='left', padx=5)
+        ttk.Label(nature_row, text="위치:").pack(side='left', padx=2)
+        ttk.Label(nature_row, textvariable=self.paut_manual_vars['loc'], foreground="#3b82f6", font=("Arial", 9, "bold")).pack(side='left', padx=5)
+        ttk.Button(nature_row, text="판정", command=self._run_manual_paut_eval).pack(side='right', padx=5)
 
-        btn_eval = ttk.Button(manual_frame, text="판정 실행", command=self._run_manual_paut_eval)
-        btn_eval.grid(row=2, column=2, padx=20)
+        self.paut_res_label = tk.Label(manual_frame, text="결과 대기", font=("Malgun Gothic", 10, "bold"), background="#f3f4f6", height=1)
+        self.paut_res_label.grid(row=3, column=0, columnspan=10, sticky='ew', pady=(5, 0))
 
-        self.paut_res_label = tk.Label(manual_frame, text="데이터를 입력하세요", font=("Malgun Gothic", 11, "bold"), background="#f3f4f6", height=2)
-        self.paut_res_label.grid(row=2, column=3, columnspan=7, sticky='ew', padx=10)
+        # Bottom Actions
+        paut_btn_row = tk.Frame(left_pane, background="#f9fafb")
+        paut_btn_row.pack(fill='x', pady=5)
+        ttk.Button(paut_btn_row, text=" 📝 추출 ", command=self._extract_paut_data).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(paut_btn_row, text=" ✨ 일괄 판정 ", command=self._run_batch_paut_eval).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(paut_btn_row, text=" 📄 성적서 생성 ", command=self._generate_paut_report).pack(side='left', fill='x', expand=True)
 
-        # 2.2 Preview & Batch (Bottom)
-        batch_frame = ttk.LabelFrame(container, text=" 일괄 판정 및 미리보기 (Batch & Preview) ", padding=10)
-        batch_frame.pack(fill='both', expand=True)
+        # [RIGHT] Batch & Preview Pane
+        right_frame = ttk.LabelFrame(self.paut_paned, text=" 🔬 일괄 판정 및 미리보기 (Batch & Preview) ", padding=10)
+        self.paut_paned.add(right_frame, stretch="always")
+        self._apply_sash_ratio("PAUT")
+        
+        # [NEW] File Info Header
+        header_info = tk.Frame(right_frame, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
+        header_info.pack(fill='x', pady=(0, 5))
+        tk.Label(header_info, textvariable=self.file_info_vars['PAUT'], background="#ffffff", 
+                 foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
 
-        # PAUT Preview Tree
-        self.paut_preview_tree = ttk.Treeview(batch_frame, columns=("V", "No", "ISO/DWG", "Joint", "t", "h", "l", "d", "Location", "Nature", "Result"), show='headings', height=10, selectmode='extended')
-        paut_widths = {"V": 40, "No": 40, "ISO/DWG": 120, "Joint": 80, "t": 40, "h": 40, "l": 40, "d": 40, "Location": 70, "Nature": 70, "Result": 80}
+        tree_frame = tk.Frame(right_frame, background="#f9fafb")
+        tree_frame.pack(fill='both', expand=True)
+        
+        self.paut_preview_tree = ttk.Treeview(tree_frame, columns=("V", "No", "ISO/DWG", "Joint", "t", "h", "Size", "l", "d", "Location", "Nature", "Result"), show='headings', height=10, selectmode='extended')
+        
+        saved_widths = self.config.get("PAUT_COL_WIDTHS", {})
+        default_widths = {"V": 40, "No": 50, "ISO/DWG": 300, "Joint": 120, "t": 60, "h": 60, "Size": 80, "l": 60, "d": 60, "Location": 150, "Nature": 100, "Result": 80}
+        
         for col in self.paut_preview_tree["columns"]:
-            self.paut_preview_tree.heading(col, text=col, anchor='center')
-            self.paut_preview_tree.column(col, width=paut_widths.get(col, 60), anchor='center')
+            self.paut_preview_tree.heading(col, text=col, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode="PAUT"))
+            w = saved_widths.get(col, default_widths.get(col, 80))
+            self.paut_preview_tree.column(col, width=w, anchor='center', stretch=True)
         
+        self._setup_preview_sidebar(self.paut_preview_tree, right_frame, mode="PAUT")
         self.paut_preview_tree.pack(side='left', fill='both', expand=True)
-        
-        self._setup_preview_sidebar(self.paut_preview_tree, batch_frame, mode="PAUT")
 
-        # Buttons
-        btn_box = tk.Frame(container, background="#f9fafb")
-        btn_box.pack(fill='x', pady=10)
-        
-        ttk.Button(btn_box, text="데이터 추출", command=self._extract_paut_data).pack(side='left', padx=5)
-        ttk.Button(btn_box, text="일괄 판정 실행", command=self._run_batch_paut_eval).pack(side='left', padx=5)
-        ttk.Button(btn_box, text="성적서 생성", command=self._generate_paut_report).pack(side='right', padx=5)
 
-        # Footer / Status Bar with Version
-        footer = tk.Frame(self.root, background="#e5e7eb", height=20)
-        footer.pack(side='bottom', fill='x')
-        tk.Label(footer, text=f"Build Version: {APP_VERSION}", font=("Arial", 8), background="#e5e7eb", foreground="#6b7280").pack(side='right', padx=10)
-        self.status_label = tk.Label(footer, text="준비됨", font=("Arial", 8), background="#e5e7eb", foreground="#374151")
-        self.status_label.pack(side='left', padx=10)
+        # Adaptive Resizing Bindings
+        self.paut_pane_ratio = self.config.get('PAUT_SASH_RATIO', 0.5)
+        self.paut_paned.bind("<Configure>", lambda e: [self._on_paut_paned_configure(e), self.root.update_idletasks()])
+        self.paut_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_paut_ratio))
+        self.root.after(500, lambda: self._on_paut_paned_configure(None))
+
+    def _update_paut_ratio(self):
+        try:
+            total_w = self.paut_paned.winfo_width()
+            if total_w > 100:
+                current_sash = self.paut_paned.sash_coord(0)[0]
+                self.paut_pane_ratio = current_sash / total_w
+                self.config['PAUT_SASH_RATIO'] = self.paut_pane_ratio
+                self.save_settings()
+        except: pass
+
+    def _on_paut_paned_configure(self, event):
+        try:
+            total_w = self.paut_paned.winfo_width()
+            if total_w > 100:
+                if event and event.widget == self.paut_paned:
+                    new_pos = int(total_w * self.paut_pane_ratio)
+                    self.paut_paned.sash_place(0, new_pos, 0)
+        except: pass
 
     def _update_paut_auto_loc(self):
         try:
@@ -978,7 +1363,7 @@ class PMIReportApp:
                 self.paut_extracted_data.append(item_full)
             
             self.progress['value'] = 100
-            self.populate_preview(self.paut_extracted_data, mode="PAUT")
+            self.sort_by_column("ISO/DWG", mode="PAUT") # Auto sort for PAUT
             self.log(f"✅ PAUT 데이터 추출 완료: {len(self.paut_extracted_data)} 건")
             
         except Exception as e:
@@ -1080,7 +1465,9 @@ class PMIReportApp:
         self.ctx_menu = tk.Menu(self.root, tearoff=0)
         # 기본 항목 기입 (show_context_menu에서 command 동적 바인딩)
         self.ctx_menu.add_command(label="선택 항목 체크/해제 토글 (Toggle Check)")
-        self.ctx_menu.add_command(label="셀 내용 복사 (Copy)")
+        self.ctx_menu.add_command(label="현재 셀 내용만 복사 (Copy Cell)")
+        self.ctx_menu.add_command(label="선택 행 전체 복사 (Copy Row)")
+        self.ctx_menu.add_command(label="이 컬럼 전체 복사 (Copy Column)")
         self.ctx_menu.add_command(label="셀 내용 붙여넣기 (Paste)")
         self.ctx_menu.add_separator()
         self.ctx_menu.add_command(label="위로 이동 (Move Up)")
@@ -1166,80 +1553,70 @@ class PMIReportApp:
             ("바닥글 좌측 (Footer Left)", f"FOOTER_PT_{context}")
         ]
         
+        next_row = 0
         for i, (label, key_prefix) in enumerate(items):
-            # Block Container
-            block = tk.LabelFrame(parent, text=f" {label} ", padx=10, pady=10, background="#ffffff", font=("Malgun Gothic", 9, "bold"))
-            block.grid(row=i, column=0, sticky='ew', pady=5, padx=2)
-            parent.columnconfigure(0, weight=1)
+            # [HYPER-REACTIVE] Force columnspan=1 to match weighted col 0 of parent
+            short_label = label.split(" ")[0].replace("로고", "")
+            block = tk.LabelFrame(parent, text=f" {short_label} ", padx=2, pady=1, background="#ffffff", font=("Malgun Gothic", 8, "bold"))
+            block.grid(row=i, column=0, sticky='ew', pady=1, padx=2)
             
-            # Row 1: File Selection
-            file_row = tk.Frame(block, background="#ffffff")
-            file_row.pack(fill='x', pady=(0, 5))
-            tk.Label(file_row, text="파일:", width=5, anchor='e', background="#ffffff").pack(side='left')
+            frame = tk.Frame(block, background="#ffffff")
+            frame.pack(fill='x')
+            frame.columnconfigure(1, weight=5, minsize=0) # Path entry weight
+            for c in [3, 5, 7, 9]: frame.columnconfigure(c, weight=1, minsize=0) # Coords weight
+            
+            tk.Label(frame, text="P:", width=2, anchor='e', background="#ffffff", font=("Malgun Gothic", 7)).grid(row=0, column=0)
             v_path = tk.StringVar(value=self.config.get(f"{key_prefix}_PATH", ""))
-            ttk.Entry(file_row, textvariable=v_path, exportselection=False).pack(side='left', fill='x', expand=True, padx=5)
-            ttk.Button(file_row, text="찾기", width=5, command=lambda v=v_path: self._browse_file(v, [("Image Files", "*.png;*.jpg;*.jpeg;*.bmp")])).pack(side='right')
+            ttk.Entry(frame, textvariable=v_path, width=1, exportselection=False).grid(row=0, column=1, sticky='ew', padx=1)
+            ttk.Button(frame, text="..", width=2, command=lambda v=v_path: self._browse_file(v, [("Images", "*.png;*.jpg;*.jpeg")])).grid(row=0, column=2, padx=1)
             self.setting_vars[f"{key_prefix}_PATH"] = v_path
             
-            # Row 2: Coordinates
-            coord_row = tk.Frame(block, background="#ffffff")
-            coord_row.pack(fill='x')
-            
-            # Anchor
-            tk.Label(coord_row, text="셀:", width=5, anchor='e', background="#ffffff").pack(side='left')
-            v_a = tk.StringVar(value=self.config.get(f"{key_prefix}_ANCHOR", ""))
-            ttk.Entry(coord_row, textvariable=v_a, width=6, exportselection=False).pack(side='left', padx=(0, 10))
-            self.setting_vars[f"{key_prefix}_ANCHOR"] = v_a
-            
-            for coord, key_suffix in [("X", "X"), ("Y", "Y"), ("W", "W"), ("H", "H")]:
-                tk.Label(coord_row, text=f"{coord}:", width=3, anchor='e', background="#ffffff").pack(side='left')
+            for idx, (coord, key_suffix) in enumerate([("X", "X"), ("Y", "Y"), ("W", "W"), ("H", "H")]):
+                tk.Label(frame, text=f"{coord}:", width=1, anchor='e', background="#ffffff", font=("Malgun Gothic", 7)).grid(row=0, column=3+idx*2)
                 v = tk.StringVar(value=str(self.config.get(f"{key_prefix}_{key_suffix}", "0.0")))
-                ttk.Entry(coord_row, textvariable=v, width=6, exportselection=False).pack(side='left', padx=(0, 8))
+                ttk.Entry(frame, textvariable=v, width=1, exportselection=False).grid(row=0, column=4+idx*2, sticky='ew', padx=1)
                 self.setting_vars[f"{key_prefix}_{key_suffix}"] = v
+            next_row = i + 1
+        return next_row
             
-    def _create_margin_settings(self, parent, context):
-        # [NEW] 여백 및 배율 설정용 UI (탭 하단에 배치)
-        frame = ttk.LabelFrame(parent, text=" 인쇄 및 여백 설정 (Print & Margins) ", padding=10)
-        frame.grid(row=5, column=0, columnspan=12, sticky='ew', pady=(20, 0))
+    def _create_margin_settings(self, parent, context, start_row):
+        # [HYPER-REACTIVE] Elastic Margin Grid (columnspan=1 for weighted parent)
+        frame = ttk.LabelFrame(parent, text=" 인쇄 및 여백 (Margins) ", padding=2)
+        frame.grid(row=start_row, column=0, sticky='ew', pady=(5, 0)) 
         
-        m_items = [("위(Top)", "TOP"), ("아래(Bottom)", "BOTTOM"), ("왼쪽(Left)", "LEFT"), ("오른쪽(Right)", "RIGHT")]
-        for i, (label, key) in enumerate(m_items):
-            ttk.Label(frame, text=label + ":").grid(row=0, column=i*2, sticky='e', padx=(10, 2))
+        # Force 0 minsize for elasticity
+        for col in range(10): frame.columnconfigure(col, minsize=0)
+        # [FIX] Distribute expansion only to entries
+        for col in [0, 2, 4, 6, 8]: frame.columnconfigure(col, weight=0) # Labels
+        for col in [1, 3, 5, 7, 9]: frame.columnconfigure(col, weight=1) # Entries
+
+        m_items = [("T", "TOP"), ("B", "BOTTOM"), ("L", "LEFT"), ("R", "RIGHT")]
+        for i, (sh_lbl, key) in enumerate(m_items):
+            ttk.Label(frame, text=f"{sh_lbl}:", font=("Arial", 7)).grid(row=0, column=i*2, sticky='e', padx=1)
             v = tk.StringVar(value=str(self.config.get(f"MARGIN_{context}_{key}", "0.2")))
-            ttk.Entry(frame, textvariable=v, width=6).grid(row=0, column=i*2+1, sticky='w')
+            ttk.Entry(frame, textvariable=v, width=1).grid(row=0, column=i*2+1, sticky='ew', padx=1)
             self.setting_vars[f"MARGIN_{context}_{key}"] = v
             
-        ttk.Label(frame, text="배율(%):").grid(row=0, column=8, sticky='e', padx=(20, 2))
+        ttk.Label(frame, text="S:", font=("Arial", 7)).grid(row=0, column=8, sticky='e', padx=1)
         v_s = tk.StringVar(value=str(self.config.get(f"PRINT_SCALE_{context}", "95")))
-        ttk.Entry(frame, textvariable=v_s, width=6).grid(row=0, column=9, sticky='w')
+        ttk.Entry(frame, textvariable=v_s, width=1).grid(row=0, column=9, sticky='ew', padx=1)
         self.setting_vars[f"PRINT_SCALE_{context}"] = v_s
 
-        # [NEW] 선택적 행/열 조절 UI (추가 행 배치)
-        sub_frame = ttk.Frame(frame)
-        sub_frame.grid(row=1, column=0, columnspan=12, sticky='ew', pady=(10, 0))
+        # Adjusters Row (Proportional weights - only entries grow)
+        sub = ttk.Frame(frame)
+        sub.grid(row=1, column=0, columnspan=10, sticky='ew', pady=2)
+        for c in [1, 3, 5, 7]: sub.columnconfigure(c, weight=1, minsize=0)
+        for c in [0, 2, 4, 6]: sub.columnconfigure(c, weight=0, minsize=0)
         
-        ttk.Label(sub_frame, text="행 높이 조절 (예: 1-10, 5):").grid(row=0, column=0, sticky='e', padx=(0, 2))
-        v_rr = tk.StringVar(value=self.config.get(f"CUSTOM_ROWS_{context}", ""))
-        ttk.Entry(sub_frame, textvariable=v_rr, width=15).grid(row=0, column=1, sticky='w')
-        self.setting_vars[f"CUSTOM_ROWS_{context}"] = v_rr
+        labels = [("Rows:", f"CUSTOM_ROWS_{context}"), ("H:", f"CUSTOM_ROW_HEIGHT_{context}"), 
+                  ("Cols:", f"CUSTOM_COLS_{context}"), ("W:", f"CUSTOM_COL_WIDTH_{context}")]
         
-        ttk.Label(sub_frame, text="높이:").grid(row=0, column=2, sticky='e', padx=(10, 2))
-        v_rh = tk.StringVar(value=str(self.config.get(f"CUSTOM_ROW_HEIGHT_{context}", "16.5")))
-        ttk.Entry(sub_frame, textvariable=v_rh, width=6).grid(row=0, column=3, sticky='w')
-        self.setting_vars[f"CUSTOM_ROW_HEIGHT_{context}"] = v_rh
-
-        ttk.Label(sub_frame, text="열 너비 조절 (예: A-C, E):").grid(row=0, column=4, sticky='e', padx=(20, 2))
-        v_cr = tk.StringVar(value=self.config.get(f"CUSTOM_COLS_{context}", ""))
-        ttk.Entry(sub_frame, textvariable=v_cr, width=15).grid(row=0, column=5, sticky='w')
-        self.setting_vars[f"CUSTOM_COLS_{context}"] = v_cr
-        
-        ttk.Label(sub_frame, text="너비:").grid(row=0, column=6, sticky='e', padx=(10, 2))
-        v_cw = tk.StringVar(value=str(self.config.get(f"CUSTOM_COL_WIDTH_{context}", "10.0")))
-        ttk.Entry(sub_frame, textvariable=v_cw, width=6).grid(row=0, column=7, sticky='w')
-        self.setting_vars[f"CUSTOM_COL_WIDTH_{context}"] = v_cw
-
-        pass
-
+        for i, (lbl, key) in enumerate(labels):
+            ttk.Label(sub, text=lbl, font=("Arial", 7)).grid(row=0, column=i*2, sticky='e')
+            defaultv = "16.5" if "HEIGHT" in key else ("10.0" if "WIDTH" in key else "")
+            v = tk.StringVar(value=str(self.config.get(key, defaultv)))
+            ttk.Entry(sub, textvariable=v, width=1).grid(row=0, column=i*2+1, sticky='ew', padx=1)
+            self.setting_vars[key] = v
 
     def _create_row_settings(self, parent):
         # PMI Rows
@@ -1310,47 +1687,70 @@ class PMIReportApp:
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
-        # [NEW] Search & Highlight Header
-        header_frame = tk.Frame(container, background="#f9fafb", pady=5)
-        header_frame.pack(fill='x')
+        # [NEW] File Info Header (Contextual Awareness)
+        header_info = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
+        header_info.pack(fill='x', pady=(0, 5))
+        tk.Label(header_info, textvariable=self.file_info_vars['PMI'], background="#ffffff", 
+                 foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
+
+        # [REFINED] Compact Header inside Frame
+        header_frame = tk.Frame(container, background="#f9fafb")
+        header_frame.pack(fill='x', pady=(0, 5))
         
-        # [REMOVED Header Search to consolidate into Sidebar Multi-Select]
-        
-        tk.Checkbutton(header_frame, text="⚠️ 함량 미달만 보기", variable=self.pmi_show_deficiency_only, 
+        tk.Checkbutton(header_frame, text="⚠️ 함량 미달만 보기(PMI)", variable=self.pmi_show_deficiency_only, 
                        background="#f9fafb", font=("Malgun Gothic", 9),
-                       command=lambda: self.populate_preview(self.extracted_data, switch_tab=False)).pack(side='left', padx=20)
+                       command=lambda: self.populate_preview(self.extracted_data, switch_tab=False)).pack(side='left')
 
         tree_frame = tk.Frame(container, background="#f9fafb")
-        tree_frame.pack(side='left', fill='both', expand=True)
-
         self.preview_tree = ttk.Treeview(tree_frame, columns=("ST", "V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"), show='headings', height=10, selectmode='extended')
         # [NEW] Highlight tags
         self.preview_tree.tag_configure("deficient", background="#fee2e2", foreground="#991b1b") # Light red
         self.preview_tree.tag_configure("group_even", background="#ffffff")
         self.preview_tree.tag_configure("group_odd", background="#f3f4f6")
         
-        widths = {"ST": 40, "V": 40, "No": 50, "Date": 90, "ISO/DWG": 180, "Joint No": 100, "Test Location": 100, "Ni": 60, "Cr": 60, "Mo": 60, "Grade": 100}
+        saved_widths = self.config.get("PMI_COL_WIDTHS", {})
+        default_widths = {"ST": 40, "V": 40, "No": 50, "Date": 90, "ISO/DWG": 400, "Joint No": 200, "Test Location": 300, "Ni": 60, "Cr": 60, "Mo": 60, "Grade": 150}
+        
         for col in self.preview_tree["columns"]:
-            self.preview_tree.heading(col, text=col, anchor='center', command=lambda c=col: self.sort_by_column(c))
-            self.preview_tree.column(col, width=widths.get(col, 80), anchor='center')
+            self.preview_tree.heading(col, text=col, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode="PMI"))
+            w = saved_widths.get(col, default_widths.get(col, 80))
+            self.preview_tree.column(col, width=w, anchor='center', stretch=True)
+        
+        # [NEW] Add Scrollbars for full coverage
+        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.preview_tree.yview)
+        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.preview_tree.xview)
+        self.preview_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        
+        self.preview_tree.grid(row=0, column=0, sticky='nsew')
+        scroll_y.grid(row=0, column=1, sticky='ns')
+        scroll_x.grid(row=1, column=0, sticky='ew')
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
         
         self._setup_preview_sidebar(self.preview_tree, container, mode="PMI")
+        tree_frame.pack(side="left", fill="both", expand=True)
 
     def _create_rt_preview_ui(self, parent):
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
+        # [NEW] File Info Header
+        header_info = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
+        header_info.pack(fill='x', pady=(0, 5))
+        tk.Label(header_info, textvariable=self.file_info_vars['RT'], background="#ffffff", 
+                 foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
+
         self.rt_display_cols = ["V", "No", "Date", "Drawing No.", "Film Ident. No.", "Film Location", "Acc", "Rej", "Deg", "① Crack", "② IP", "③ LF", "④ Slag", "⑤ Por", "⑥ U/C", "⑦ RUC", "⑧ BT", "⑨ TI", "⑩ CP", "⑪ RC", "⑫ Mis", "⑬ EP", "⑭ SD", "⑮ Oth", "Welder No", "Remarks"]
-        self.rt_widths = {"V": 40, "No": 50, "Date": 90, "Drawing No.": 150, "Film Ident. No.": 120, "Film Location": 100, "Acc": 40, "Rej": 40, "Deg": 40, "Welder No": 100, "Remarks": 120}
+        saved_widths = self.config.get("RT_COL_WIDTHS", {})
+        default_widths = {"V": 40, "No": 50, "Date": 90, "Drawing No.": 300, "Film Ident. No.": 120, "Film Location": 100, "Acc": 40, "Rej": 40, "Deg": 40, "Welder No": 100, "Remarks": 120}
 
         # Inner frame for horizontal/vertical scroll
         tree_frame = tk.Frame(container, background="#f9fafb")
-        tree_frame.pack(side='left', fill='both', expand=True)
-
         self.rt_preview_tree = ttk.Treeview(tree_frame, columns=self.rt_display_cols, show='headings', height=10, selectmode='extended')
         for col in self.rt_preview_tree["columns"]:
-            self.rt_preview_tree.heading(col, text=col, anchor='center')
-            self.rt_preview_tree.column(col, width=self.rt_widths.get(col, 80), anchor='center', stretch=False)
+            self.rt_preview_tree.heading(col, text=col, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode="RT"))
+            w = saved_widths.get(col, default_widths.get(col, 80))
+            self.rt_preview_tree.column(col, width=w, anchor='center', stretch=True)
         
         scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.rt_preview_tree.yview)
         scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.rt_preview_tree.xview)
@@ -1363,6 +1763,7 @@ class PMIReportApp:
         tree_frame.grid_columnconfigure(0, weight=1)
 
         self._setup_preview_sidebar(self.rt_preview_tree, container, mode="RT")
+        tree_frame.pack(side="left", fill="both", expand=True)
 
     def _setup_preview_sidebar(self, tree, container, mode):
         # 1. Event Bindings
@@ -1371,52 +1772,58 @@ class PMIReportApp:
         def _on_tree_press(event, t=tree, m=mode):
             t.focus_set()
             item_id = t.identify_row(event.y)
-            col_id = tree.identify_column(event.x)
-            col_idx = int(col_id.replace("#", "")) - 1
+            col_id = t.identify_column(event.x)
             
-            if mode == "RT": 
-                display_cols, data, idx_map = self.rt_display_cols, self.rt_extracted_data, self.rt_item_idx_map
-            elif mode == "PT":
-                display_cols, data, idx_map = self.pt_display_cols, self.pt_extracted_data, self.pt_item_idx_map
-            elif mode == "PAUT":
-                display_cols, data, idx_map = self.paut_column_keys, self.paut_extracted_data, self.paut_item_idx_map
-            else: # PMI
-                display_cols = ["ST"] + list(self.column_keys)
-                data, idx_map = self.extracted_data, self.item_idx_map
-
-                if 0 <= col_idx < len(display_cols):
-                    key = display_cols[col_idx]
+            # [DYNAMIC] Get consistent module info
+            mode_info = self._get_mode_info(m)
+            if not mode_info: return
+            _, idx_map, data_list, col_keys = mode_info
+            
+            self.start_col = col_id
+            self.end_col = col_id
+            self.last_clicked_col = col_id
+            
+            if not item_id or not col_id: return
+            
+            try:
+                col_idx = int(col_id.replace("#", "")) - 1
+                if 0 <= col_idx < len(col_keys):
+                    key = col_keys[col_idx]
+                    # Checkbox Toggle (V or selected)
+                    if key in ["selected", "V"] or col_id == "#1": # Fallback to first col for V
+                        if key == "selected" or (m == "PMI" and col_id == "#2"):
+                             view_idx = t.index(item_id)
+                             if 0 <= view_idx < len(idx_map):
+                                 actual_idx = idx_map[view_idx]
+                                 data_list[actual_idx]['selected'] = not data_list[actual_idx].get('selected', True)
+                                 self.populate_preview(data_list, switch_tab=False, mode=m)
+                                 return "break"
                     
-                    # (1) Selection Toggle (V)
-                    if key == "V":
+                    # RT Specific specialized toggle
+                    if m == "RT" and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Acc", "Rej"])):
                         view_idx = t.index(item_id)
-                        actual_idx = idx_map[view_idx]
-                        data[actual_idx]['selected'] = not data[actual_idx].get('selected', True)
-                        self.populate_preview(data, switch_tab=False, mode=mode)
-                        return "break"
-                    
-                    if key == "ST": return "break" # ST is read-only
-                    
-                    # (2) RT Specific Defect/Result Toggle
-                    if mode == "RT" and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Acc", "Rej"])):
-                        view_idx = t.index(item_id)
-                        actual_idx = idx_map[view_idx]
-                        old_v = data[actual_idx].get(key, "")
-                        new_v = "√" if old_v == "" else ""
-                        data[actual_idx][key] = new_v
-                        if key in ["Acc", "Rej"] and new_v == "√":
-                            other = "Rej" if key == "Acc" else "Acc"
-                            data[actual_idx][other] = ""
-                        self.populate_preview(data, switch_tab=False, mode="RT")
-                        return "break"
+                        if 0 <= view_idx < len(idx_map):
+                            actual_idx = idx_map[view_idx]
+                            old_v = data_list[actual_idx].get(key, "")
+                            new_v = "√" if old_v == "" else ""
+                            data_list[actual_idx][key] = new_v
+                            if key in ["Acc", "Rej"] and new_v == "√":
+                                other = "Rej" if key == "Acc" else "Acc"
+                                data_list[actual_idx][other] = ""
+                            self.populate_preview(data_list, switch_tab=False, mode="RT")
+                            return "break"
+            except: pass
 
-                self.drag_start_item = item_id
-                if not (event.state & 0x0001 or event.state & 0x0004):
-                    t.selection_set(item_id)
+            self.drag_start_item = item_id
+            if not (event.state & 0x0001 or event.state & 0x0004):
+                t.selection_set(item_id)
 
         def _on_tree_drag(event, t=tree):
             if not self.drag_start_item: return
             curr_item = t.identify_row(event.y)
+            drag_col = t.identify_column(event.x)
+            if drag_col: self.end_col = drag_col
+            
             if not curr_item: return
             all_items = t.get_children('')
             try:
@@ -1435,25 +1842,48 @@ class PMIReportApp:
         tree.bind("<Double-1>", lambda e, m=mode: self.on_tree_double_click(e, m))
         tree.bind("<Button-3>", lambda e, m=mode: self.show_context_menu(e, m))
         tree.bind("<Control-c>", lambda e, m=mode: self.copy_cell(m))
+        tree.bind("<Control-C>", lambda e, m=mode: self.copy_cell(m))
         tree.bind("<Control-v>", lambda e, m=mode: self.paste_cell(m))
+        tree.bind("<Control-V>", lambda e, m=mode: self.paste_cell(m))
+        tree.bind("<Control-a>", lambda e, t=tree: [t.selection_set(t.get_children(''))])
+        tree.bind("<Control-A>", lambda e, t=tree: [t.selection_set(t.get_children(''))])
+        tree.bind("<Delete>", lambda e, m=mode: self.on_delete_key(e, m))
+        tree.bind("<F2>", lambda e, m=mode: self.on_tree_double_click(e, m))
 
-        # Basic Tree Scroll (if not already handled in grid)
-        if mode == "PMI":
-            scroll_y = ttk.Scrollbar(container, orient="vertical", command=tree.yview)
-            tree.configure(yscrollcommand=scroll_y.set)
-            tree.pack(side='left', fill='both', expand=True)
-            scroll_y.pack(side='left', fill='y')
-
-        # 2. Sidebar buttons
-        sidebar = tk.Frame(container, background="#f9fafb", padx=10)
-        sidebar.pack(side='right', fill='y')
-
-        ttk.Label(sidebar, text="날짜 선택 필터", font=("Malgun Gothic", 9, "bold")).pack(pady=(5, 2))
-        date_frame = tk.Frame(sidebar, background="#f9fafb")
-        date_frame.pack(fill='x', pady=5)
+        # 2. Sidebar with SCROLL support (too many elements to fit without scrolling)
+        sidebar_outer = tk.Frame(container, background="#f1f5f9", highlightthickness=1, highlightbackground="#e2e8f0", width=160)
+        sidebar_outer.pack(side='left', fill='y', padx=(0, 5))
+        sidebar_outer.pack_propagate(False)
         
-        # Mode specific date listbox
-        listbox = tk.Listbox(date_frame, selectmode='single', height=6, exportselection=False, font=("Malgun Gothic", 9))
+        # Scrollable canvas inside sidebar
+        sidebar_canvas = tk.Canvas(sidebar_outer, background="#f1f5f9", highlightthickness=0, width=155)
+        sidebar_sb = ttk.Scrollbar(sidebar_outer, orient="vertical", command=sidebar_canvas.yview)
+        sidebar = tk.Frame(sidebar_canvas, background="#f1f5f9", padx=5, pady=3)
+        
+        sidebar.bind("<Configure>", lambda e: sidebar_canvas.configure(scrollregion=sidebar_canvas.bbox("all")))
+        sidebar_canvas.create_window((0, 0), window=sidebar, anchor="nw", width=145)
+        sidebar_canvas.configure(yscrollcommand=sidebar_sb.set)
+        
+        sidebar_canvas.pack(side='left', fill='both', expand=True)
+        sidebar_sb.pack(side='right', fill='y')
+        
+        # Mousewheel scroll for sidebar
+        def _sidebar_scroll(event):
+            sidebar_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            return "break"
+        sidebar_canvas.bind("<MouseWheel>", _sidebar_scroll)
+        sidebar.bind("<MouseWheel>", _sidebar_scroll)
+        def _bind_mousewheel_recursive(widget):
+            widget.bind("<MouseWheel>", _sidebar_scroll)
+            for child in widget.winfo_children():
+                _bind_mousewheel_recursive(child)
+        sidebar.bind("<Configure>", lambda e: _bind_mousewheel_recursive(sidebar))
+
+        ttk.Label(sidebar, text="날짜 필터", font=("Malgun Gothic", 8, "bold")).pack(pady=(2, 1))
+        date_frame = tk.Frame(sidebar, background="#f1f5f9")
+        date_frame.pack(fill='x', pady=2)
+        
+        listbox = tk.Listbox(date_frame, selectmode='single', height=5, exportselection=False, font=("Malgun Gothic", 8))
         listbox.pack(side='left', fill='both', expand=True)
         sb = ttk.Scrollbar(date_frame, orient='vertical', command=listbox.yview)
         sb.pack(side='right', fill='y')
@@ -1487,15 +1917,15 @@ class PMIReportApp:
                 
             self.populate_preview(data, switch_tab=False, mode=m)
             
-        ttk.Button(sidebar, text="선택 날짜 적용", command=_apply_date_filter).pack(fill='x', pady=(0, 10))
+        ttk.Button(sidebar, text="날짜 적용", command=_apply_date_filter).pack(fill='x', pady=(0, 5))
         
         # [NEW] Multi-Select Test Location Filter (PMI Only)
         if mode == "PMI":
-            ttk.Label(sidebar, text="지점(Loc) 선택 필터", font=("Malgun Gothic", 9, "bold")).pack(pady=(5, 2))
-            loc_frame = tk.Frame(sidebar, background="#f9fafb")
-            loc_frame.pack(fill='x', pady=5)
+            ttk.Label(sidebar, text="지점(Loc) 필터", font=("Malgun Gothic", 8, "bold"), background="#f1f5f9").pack(pady=(2, 1))
+            loc_frame = tk.Frame(sidebar, background="#f1f5f9")
+            loc_frame.pack(fill='x', pady=2)
             
-            self.pmi_loc_listbox = tk.Listbox(loc_frame, selectmode='single', height=8, exportselection=False, font=("Malgun Gothic", 9))
+            self.pmi_loc_listbox = tk.Listbox(loc_frame, selectmode='single', height=4, exportselection=False, font=("Malgun Gothic", 8))
             self.pmi_loc_listbox.pack(side='left', fill='both', expand=True)
             sb_loc = ttk.Scrollbar(loc_frame, orient='vertical', command=self.pmi_loc_listbox.yview)
             sb_loc.pack(side='right', fill='y')
@@ -1516,37 +1946,36 @@ class PMIReportApp:
             def _apply_loc_filter():
                 self.populate_preview(self.extracted_data, switch_tab=False, mode="PMI")
             
-            ttk.Button(sidebar, text="선택 지점 적용", command=_apply_loc_filter).pack(fill='x', pady=(0, 10))
+            ttk.Button(sidebar, text="지점 적용", command=_apply_loc_filter).pack(fill='x', pady=(0, 5))
         
-        tk.Checkbutton(sidebar, text="선택 항목만 보기", variable=self.show_selected_only, 
+        tk.Checkbutton(sidebar, text="선택만", variable=self.show_selected_only, 
                        command=lambda: self.populate_preview(self.rt_extracted_data if mode=="RT" else self.extracted_data, switch_tab=False, mode=mode),
-                       background="#f9fafb", font=("Malgun Gothic", 9)).pack(pady=(0, 5), anchor='w')
+                       background="#f1f5f9", font=("Malgun Gothic", 8)).pack(pady=(0, 3), anchor='w')
 
-        ttk.Button(sidebar, text="전체 선택", width=15, command=lambda: self.select_all(mode)).pack(pady=2)
-        ttk.Button(sidebar, text="선택 해제", width=15, command=lambda: self.deselect_all(mode)).pack(pady=(2, 5))
+        ttk.Button(sidebar, text="전체 선택", width=12, command=lambda: self.select_all(mode)).pack(pady=2, fill='x')
+        ttk.Button(sidebar, text="선택 해제", width=12, command=lambda: self.deselect_all(mode)).pack(pady=2, fill='x')
         
         if mode == "PMI":
-            ttk.Button(sidebar, text="미달 항목만 선택", width=15, command=lambda: self.select_deficient_items()).pack(pady=2, fill='x')
+            ttk.Button(sidebar, text="미달만 선택", width=12, command=lambda: self.select_deficient_items()).pack(pady=2, fill='x')
         
-        # [NEW] 공통 컬럼 관리 버튼 추가
-        ttk.Button(sidebar, text="컬럼 관리 (Columns)", width=15, command=lambda: self.manage_columns(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="컬럼 관리", width=12, command=lambda: self.manage_columns(mode)).pack(pady=2, fill='x')
         
         if mode == "PAUT":
-            ttk.Button(sidebar, text="행 추가 (Add Row)", width=15, command=lambda: self.add_item(mode)).pack(pady=2)
+            ttk.Button(sidebar, text="행 추가", width=12, command=lambda: self.add_item(mode)).pack(pady=2, fill='x')
         
-        ttk.Button(sidebar, text="선택 항목 병합", width=15, command=lambda: self.merge_selected_iso(mode)).pack(pady=2)
-        ttk.Button(sidebar, text="일괄 변경 (Bulk)", width=15, command=lambda: self.show_bulk_update_dialog(mode)).pack(pady=(2, 10))
+        ttk.Button(sidebar, text="병합", width=12, command=lambda: self.merge_selected_iso(mode)).pack(pady=2, fill='x')
+        ttk.Button(sidebar, text="일괄 변경", width=12, command=lambda: self.show_bulk_update_dialog(mode)).pack(pady=(2, 3), fill='x')
 
         tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
-        ttk.Button(sidebar, text="▲ 위로", width=10, command=lambda: self.move_item(-1, mode)).pack(pady=2)
-        ttk.Button(sidebar, text="▼ 아래로", width=10, command=lambda: self.move_item(1, mode)).pack(pady=2)
+        ttk.Button(sidebar, text="▲ 위로", width=10, command=lambda: self.move_item(-1, mode)).pack(pady=5)
+        ttk.Button(sidebar, text="▼ 아래로", width=10, command=lambda: self.move_item(1, mode)).pack(pady=5)
         tk.Frame(sidebar, height=10, background="#f9fafb").pack()
-        ttk.Button(sidebar, text="선택 삭제", width=12, command=lambda: self.delete_item(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="선택 삭제", width=12, command=lambda: self.delete_item(mode)).pack(pady=5)
         ttk.Button(sidebar, text="전체 초기화", width=12, command=lambda: self.clear_all(mode)).pack(pady=(2, 10))
 
         tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
-        ttk.Button(sidebar, text="💾 현재 내용 저장", width=18, command=lambda: self.save_preview_data(mode)).pack(pady=2)
-        ttk.Button(sidebar, text="📂 저장된 내용 열기", width=18, command=lambda: self.load_preview_data(mode)).pack(pady=2)
+        ttk.Button(sidebar, text="💾 현재 내용 저장", width=18, command=lambda: self.save_preview_data(mode)).pack(pady=5)
+        ttk.Button(sidebar, text="📂 저장된 내용 열기", width=18, command=lambda: self.load_preview_data(mode)).pack(pady=5)
         ttk.Button(sidebar, text="📊 엑셀 파일로 추출", width=18, command=lambda: self.export_to_excel(mode)).pack(pady=(10, 2))
 
         # 3. Context Menu Config
@@ -1605,89 +2034,108 @@ class PMIReportApp:
         pass
 
     def on_tree_double_click(self, event, mode="PMI"):
-        """#1(토글), ISO/DWG(#4), Joint No(#5), Test Location(#6), 또는 Grade(#10) 컬럼 더블 클릭 처리"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
+        """셀(Cell) 더블클릭 시 엑셀처럼 그 자리에서 바로 수동 편집 가능하게 함"""
+        mode_info = self._get_mode_info(mode)
+        if not mode_info: return
+        tree, idx_map, data_list, col_keys = mode_info
+
         region = tree.identify_region(event.x, event.y)
         if region != "cell": return
         
         column = tree.identify_column(event.x)
         item_id = tree.identify_row(event.y)
-        if not item_id: return
-
-        if column == "#2": # Checkbox Column (V)
-            self.toggle_item_selection(item_id, mode)
+        if not item_id or not column: return
+        
+        # [DYNAMIC] 컬럼 인덱스를 통해 키 추출
+        try:
+            col_idx = int(column.replace('#', '')) - 1
+            if col_idx < 0 or col_idx >= len(col_keys): return
+            key = col_keys[col_idx]
+        except: return
+        
+        # 수정 차단 컬럼 (V, 상태 아이콘 등)
+        if key in ["selected", "_status", "V", "ST"]:
+            if key in ["selected", "V"]: self.toggle_item_selection(item_id, mode)
             return
 
-        # Editable columns mapping
-        if mode == "RT":
-            # RT: No(#2), Date(#3), Drawing No(#4), Film Ident(#5), Film Loc(#6), Deg(#9), Welder No(#25), Remarks(#26)
-            key_map = {
-                "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "Loc",
-                "#9": "Grade", "#25": "Welder", "#26": "Remarks"
-            }
-        elif mode == "PT":
-            # PT: No(#2), Date(#3), Dwg(#4), Joint(#5), NPS(#6), Thk(#7), Material(#8), Welder(#9), WType(#10), Result(#11)
-            key_map = {
-                "#2": "No", "#3": "Date", "#4": "Dwg", "#5": "Joint", "#6": "NPS",
-                "#7": "Thk.", "#8": "Material", "#9": "Welder", "#10": "WType", "#11": "Result"
-            }
-        elif mode == "PAUT":
-            # PAUT: No(#2), ISO(#3), Joint(#4), t(#5), h(#6), l(#7), d(#8), Loc(#9), Nat(#10), Res(#11)
-            key_map = {
-                "#2": "No", "#3": "ISO", "#4": "Joint", "#5": "t", "#6": "h",
-                "#7": "l", "#8": "d", "#9": "Location", "#10": "Nature", "#11": "Result"
-            }
-        else:
-            # PMI: No, Date, Dwg, Joint, Loc, Ni, Cr, Mo, Grade
-            key_map = {
-                "#3": "No", "#4": "Date", "#5": "Dwg", "#6": "Joint", "#7": "Loc",
-                "#8": "Ni", "#9": "Cr", "#10": "Mo", "#11": "Grade"
-            }
-        
-        key = key_map.get(column)
-        if not key: return 
-        
+        # 현재 값 가져오기
         x, y, w, h = tree.bbox(item_id, column)
-        
         view_idx = tree.index(item_id)
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-
-        if 0 <= view_idx < len(idx_map):
-            actual_idx = idx_map[view_idx]
-            old_val = data[actual_idx].get(key, "")
-            if key in ["Ni", "Cr", "Mo"] and isinstance(old_val, (int, float)) and old_val > 0:
-                old_val = f"{old_val:.2f}"
-        else:
-            old_val = tree.set(item_id, column)
+        if not (0 <= view_idx < len(idx_map)): return
+        actual_idx = idx_map[view_idx]
         
-        entry = ttk.Entry(tree, exportselection=True)
-        entry.insert(0, old_val)
+        curr_val = data_list[actual_idx].get(key, "")
+        if key in ["Ni", "Cr", "Mo"] and self.to_float(curr_val) > 0:
+            curr_val = f"{self.to_float(curr_val):.2f}"
+            
+        entry = ttk.Entry(tree, font=("Malgun Gothic", 10), exportselection=True)
+        entry.insert(0, str(curr_val))
         entry.select_range(0, tk.END)
         entry.place(x=x, y=y, width=w, height=h)
         entry.focus_set()
         
-        def finish_edit(event=None):
-            new_val = entry.get()
+        def finish_edit(e=None):
+            if not entry.winfo_exists(): return
+            new_val = entry.get().strip()
+            
+            # [PMI 특화] 함량 소수점 처리 및 판정 재계산
+            if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
+                f_val = self.to_float(new_val)
+                data_list[actual_idx][key] = f"{f_val:.2f}" if f_val > 0 else ""
+                # 함량 변경 시 등급 판정 재수행
+                new_grade = self.check_material_grade(data_list[actual_idx])
+                if new_grade: data_list[actual_idx]['Grade'] = new_grade
+            else:
+                data_list[actual_idx][key] = new_val
+
+            self.populate_preview(data_list, switch_tab=False, mode=mode)
+            self.log(f"📝 {mode} {key} 수정: {new_val}")
+            entry.destroy()
+
+        entry.bind("<Return>", finish_edit)
+        entry.bind("<FocusOut>", lambda e: finish_edit())
+        entry.bind("<Escape>", lambda e: entry.destroy())
+
+    def on_delete_key(self, event, mode="PMI"):
+        """Delete 키 선택 시 현재 선택된 셀(들)의 내용을 지움 (엑셀 방식)"""
+        mode_info = self._get_mode_info(mode)
+        if not mode_info: return
+        tree, idx_map, data_list, col_keys = mode_info
+        
+        selected = tree.selection()
+        if not selected: return
+        
+        # 드래그된 컬럼 범위 계산
+        s_col = getattr(self, 'start_col', None)
+        e_col = getattr(self, 'end_col', None)
+        l_col = getattr(self, 'last_clicked_col', None)
+        
+        if not s_col or not e_col or s_col == e_col:
+            target_col_ids = [l_col or s_col or "#4"]
+        else:
+            try:
+                s_idx = int(s_col.replace('#', '')) - 1
+                e_idx = int(e_col.replace('#', '')) - 1
+                col_start, col_end = min(s_idx, e_idx), max(s_idx, e_idx)
+                target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
+            except:
+                target_col_ids = [l_col or s_col or "#4"]
+        
+        key_map = {f"#{i+1}": k for i, k in enumerate(col_keys)}
+        count = 0
+        for item_id in selected:
             view_idx = tree.index(item_id)
             if 0 <= view_idx < len(idx_map):
                 actual_idx = idx_map[view_idx]
-                if key in ["Ni", "Cr", "Mo"]:
-                    data[actual_idx][key] = self.to_float(new_val)
-                else:
-                    data[actual_idx][key] = str(new_val).strip()
-                
-                # [NEW] Re-calculate Grade after edit
-                new_grade = self.check_material_grade(data[actual_idx])
-                if new_grade:
-                    data[actual_idx]['Grade'] = new_grade
-                
-                self.populate_preview(data, switch_tab=False, mode=mode)
-            entry.destroy()
-            
-        entry.bind("<Return>", finish_edit)
-        entry.bind("<FocusOut>", finish_edit)
-        entry.bind("<Escape>", lambda e: entry.destroy())
+                for c_id in target_col_ids:
+                    key = key_map.get(c_id)
+                    if key and key not in ["selected", "_status"]:
+                        data_list[actual_idx][key] = ""
+                        count += 1
+        
+        if count > 0:
+            self.populate_preview(data_list, switch_tab=False, mode=mode)
+            self.log(f"🧹 {mode} 데이터 {count}건 내용 삭제 완료")
 
     def show_context_menu(self, event, mode="PMI"):
         """우클릭 컨텍스트 메뉴 표시 및 현재 모드에 따라 명령 구성"""
@@ -1704,11 +2152,13 @@ class PMIReportApp:
 
         # 메뉴 명령 동적 업데이트
         self.ctx_menu.entryconfigure("선택 항목 체크/해제 토글 (Toggle Check)", command=lambda: self.toggle_selected_items(mode))
-        self.ctx_menu.entryconfigure("셀 내용 복사 (Copy)", command=lambda: self.copy_cell(mode))
+        self.ctx_menu.entryconfigure("현재 셀 내용만 복사 (Copy Cell)", command=lambda: self.copy_cell(mode, target="cell"))
+        self.ctx_menu.entryconfigure("선택 행 전체 복사 (Copy Row)", command=lambda: self.copy_cell(mode, target="row"))
+        self.ctx_menu.entryconfigure("이 컬럼 전체 복사 (Copy Column)", command=lambda: self.copy_cell(mode, target="column"))
         self.ctx_menu.entryconfigure("셀 내용 붙여넣기 (Paste)", command=lambda: self.paste_cell(mode))
         
-        self.ctx_menu.entryconfigure("위로 이동 (Move Up)", command=lambda: self.move_item("up", mode))
-        self.ctx_menu.entryconfigure("아래로 이동 (Move Down)", command=lambda: self.move_item("down", mode))
+        self.ctx_menu.entryconfigure("위로 이동 (Move Up)", command=lambda: self.move_item(-1, mode))
+        self.ctx_menu.entryconfigure("아래로 이동 (Move Down)", command=lambda: self.move_item(1, mode))
         
         self.ctx_menu.entryconfigure("행 추가 (Add Row)", command=lambda: self.add_item(mode))
         self.ctx_menu.entryconfigure("선택 삭제 (Delete Selected)", command=lambda: self.delete_item(mode))
@@ -1796,7 +2246,7 @@ class PMIReportApp:
             # 매핑된 레이블이 있으면 사용, 없으면 키 원본 사용
             display_name = label_map.get(k, k)
             cb = ttk.Checkbutton(scrollable_frame, text=display_name, variable=v)
-            cb.pack(fill='x', anchor='w', pady=2)
+            cb.pack(fill='x', anchor='w', pady=5)
             vars_dict[k] = v
 
         # 컬럼 관리 버튼 영역 (추가/삭제)
@@ -1889,7 +2339,7 @@ class PMIReportApp:
             self.log(f"⚙️ {mode} 미리보기 컬럼 설정 변경 완료")
             dialog.destroy()
             
-        ttk.Button(main_frame, text="적용 (Apply)", command=_apply).pack(pady=10)
+        ttk.Button(main_frame, text="적용 (Apply)", command=_apply).pack(pady=5)
 
 
     def update_date_listbox(self, mode="PMI"):
@@ -1920,161 +2370,188 @@ class PMIReportApp:
             listbox.insert(tk.END, f"{prefix} {d}")
             if is_v: listbox.select_set(tk.END)
 
-    def copy_cell(self, mode="PMI"):
-        """선택된 영역(드래그된 컬럼 범위)의 내용을 클립보드에 복사 (엑셀 스마트 영역 복사)"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
-        
-        selected = tree.selection()
-        if not selected: return
-        
-        # Standardized column index to data key mapping
-        if mode == "RT":
-            key_map = {f"#{i+1}": k for i, k in enumerate(self.rt_column_keys)}
-        else:
-            key_map = {f"#{i+1}": k for i, k in enumerate(self.column_keys)}
-        
-        # [SMART AREA] 드래그 시작열과 종료열 사이의 범위를 계산
+    def _get_mode_info(self, mode):
+        """Helper to get core UI/Data objects for a specific module mode."""
+        if mode == "PMI":
+            return (self.preview_tree, self.item_idx_map, self.extracted_data, self.column_keys)
+        elif mode == "RT":
+            return (self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data, self.rt_column_keys)
+        elif mode == "PT":
+            return (self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data, self.pt_column_keys)
+        elif mode == "PAUT":
+            return (self.paut_preview_tree, self.paut_item_idx_map, self.paut_extracted_data, self.paut_column_keys)
+        return None
+
+    def copy_cell(self, mode="PMI", target="smart"):
+        """선택된 영역의 내용을 엑셀 형식(\t)으로 클립보드에 복사"""
         try:
-            s_col = getattr(self, 'start_col', '#4')
-            e_col = getattr(self, 'end_col', s_col)
-            
-            s_idx = int(s_col.replace('#', '')) - 1
-            e_idx = int(e_col.replace('#', '')) - 1
-            
-            col_start = min(s_idx, e_idx)
-            col_end = max(s_idx, e_idx)
-            
-            last_col = getattr(self, 'last_clicked_col', None)
-            if last_col and s_idx == e_idx and last_col.startswith('#'):
-                l_idx = int(last_col.replace('#', '')) - 1
-                col_start = min(col_start, l_idx)
-                col_end = max(col_end, l_idx)
-        except:
-            col_start = col_end = 3 # ISO column (#4)
-            
-        target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
-        
-        copied_rows = []
-        sorted_selected = sorted(list(selected), key=lambda x: tree.index(x))
-        
-        for item_id in sorted_selected:
-            view_idx = tree.index(item_id)
-            if not (0 <= view_idx < len(idx_map)):
-                continue
-            actual_idx = idx_map[view_idx]
-            item = data[actual_idx]
-            
-            row_vals = []
-            for c_id in target_col_ids:
-                if c_id == "#2": # Select column (v/o)
-                    status = "●" if item.get('selected', True) else "○"
-                    row_vals.append(status)
-                    continue
+            mode_info = self._get_mode_info(mode)
+            if not mode_info: return
+            tree, idx_map, data_list, col_keys = mode_info
 
-                key = key_map.get(c_id)
-                if key:
-                    val = item.get(key, "")
-                    if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
-                        f_val = self.to_float(val)
-                        val = f"{f_val:.2f}" if f_val > 0 else ""
-                    row_vals.append(str(val))
-                else: 
-                    row_vals.append(str(tree.set(item_id, c_id)))
-            
-            copied_rows.append("\t".join(row_vals))
+            selected = list(tree.selection())
+            if not selected: return
+            selected.sort(key=lambda x: tree.index(x))
 
-        final_string = "\n".join(copied_rows)
-        self.root.clipboard_clear()
-        self.root.clipboard_append(final_string)
-        self.root.update()
-        self.log(f"📋 '{mode}' 엑셀 영역 복사 완료: {len(sorted_selected)}행 x {len(target_col_ids)}열")
+            # [REFINED] 드래그 영역 계산
+            s_col = getattr(self, 'start_col', None)
+            e_col = getattr(self, 'end_col', None)
+            l_col = getattr(self, 'last_clicked_col', None)
+
+            if target == "cell":
+                target_col_ids = [l_col or s_col or "#4"]
+            elif not s_col or not e_col or s_col == e_col:
+                target_col_ids = [l_col or s_col or "#4"]
+            else:
+                try:
+                    s_idx = int(s_col.replace('#', '')) - 1
+                    e_idx = int(e_col.replace('#', '')) - 1
+                    col_start, col_end = min(s_idx, e_idx), max(s_idx, e_idx)
+                    target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
+                except:
+                    target_col_ids = [l_col or s_col or "#4"]
+
+            key_map = {f"#{i+1}": k for i, k in enumerate(col_keys)}
+            output = []
+
+            for item_id in selected:
+                view_idx = tree.index(item_id)
+                if not (0 <= view_idx < len(idx_map)): continue
+                actual_idx = idx_map[view_idx]
+                item = data_list[actual_idx]
+                
+                row_vals = []
+                for c_id in target_col_ids:
+                    key = key_map.get(c_id)
+                    if key == "selected":
+                        row_vals.append("●" if item.get('selected', True) else "○")
+                    elif key == "_status":
+                        is_def = False
+                        if mode == "PMI" and hasattr(self, 'element_filters'):
+                            for f in self.element_filters:
+                                fk = f['key'].get().strip()
+                                if not fk: continue
+                                v = self.to_float(self._get_val_ci(item, fk))
+                                fm, fx = self.to_float(f['min'].get()), self.to_float(f['max'].get())
+                                if (fm > 0 and v < fm) or (fx > 0 and v > fx):
+                                    is_def = True; break
+                        row_vals.append("⚠️" if is_def else "✅")
+                    else:
+                        val = item.get(key, "")
+                        if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
+                            f_val = self.to_float(val)
+                            val = f"{f_val:.2f}" if f_val > 0 else ""
+                        row_vals.append(str(val))
+                
+                output.append("\t".join(row_vals))
+
+            self.root.clipboard_clear()
+            self.root.clipboard_append("\n".join(output))
+            self.log(f"📋 {mode} 복사 완료: {len(selected)}행 x {len(target_col_ids)}열")
+        except Exception as e:
+            self.log(f"❌ 복사 오류: {e}")
 
     def paste_cell(self, mode="PMI"):
-        """클립보드 내용을 선택된 영역(드래그된 컬럼 범위)에 스마트하게 붙여넣기 (멀티행/아래로 채우기 지원)"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
-        
-        try: 
-            clipboard_val = self.root.clipboard_get()
-            if not clipboard_val: return
-        except: return
-        
-        selected = list(tree.selection())
-        if not selected: return
-        
-        # [SMART SORT] 시각적 순서(위에서 아래)대로 정렬
-        selected.sort(key=lambda x: tree.index(x))
-        
-        # [SMART AREA] 드래그된 컬럼 범위를 계산
+        """클립보드 내용을 선택된 영역에 스마트하게(Replicate 지원) 붙여넣기"""
         try:
-            s_idx = int(getattr(self, 'start_col', '#4').replace('#', '')) - 1
-            e_idx = int(getattr(self, 'end_col', '#4').replace('#', '')) - 1
-            col_start = min(s_idx, e_idx)
-            col_end = max(s_idx, e_idx)
-        except:
-            col_start = col_end = 3 # Default ISO column (#4)
+            mode_info = self._get_mode_info(mode)
+            if not mode_info: return
+            tree, idx_map, data_list, col_keys = mode_info
             
-        target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
-        if mode == "RT":
-            key_map = {f"#{i+1}": k for i, k in enumerate(self.rt_column_keys)}
-        else:
-            key_map = {f"#{i+1}": k for i, k in enumerate(self.column_keys)}
-        
-        # 클립보드 데이터를 행/열 그리드로 파싱 (TAB/NEWLINE)
-        paste_rows = [line.split("\t") for line in clipboard_val.strip().split("\n")]
-        
-        # [FILL DOWN] 한 줄만 선택했는데 클립보드가 여러 줄이면 아래로 자동 확장
-        all_children = tree.get_children('')
-        if len(selected) == 1 and len(paste_rows) > 1:
-            curr_idx = all_children.index(selected[0])
-            for i in range(1, len(paste_rows)):
-                if curr_idx + i < len(all_children):
-                    selected.append(all_children[curr_idx + i])
-        
-        for r_idx, item_id in enumerate(selected):
-            view_idx = tree.index(item_id)
-            if not (0 <= view_idx < len(idx_map)):
-                continue
-            actual_idx = idx_map[view_idx]
+            try: 
+                clipboard_val = self.root.clipboard_get()
+                if not clipboard_val: return
+                # 엑셀 형식(\t, \n) 파싱
+                paste_rows = [line.split("\t") for line in clipboard_val.strip().split("\n")]
+            except Exception as e:
+                self.log(f"⚠️ 클립보드 데이터를 가져올 수 없습니다: {e}")
+                return
             
-            # 클립보드 데이터 매칭
-            source_row = paste_rows[min(r_idx, len(paste_rows)-1)]
+            selected = list(tree.selection())
+            if not selected:
+                messagebox.showwarning("붙여넣기 오류", "붙여넣을 셀을 선택해주세요.")
+                return
+            selected.sort(key=lambda x: tree.index(x))
             
-            for c_idx, c_id in enumerate(target_col_ids):
-                cell_val = source_row[min(c_idx, len(source_row)-1)].strip()
+            # [SMART AREA] 드래그된 컬럼 범위를 계산
+            s_col = getattr(self, 'start_col', None)
+            e_col = getattr(self, 'end_col', None)
+            l_col = getattr(self, 'last_clicked_col', None)
+            
+            if not s_col or not e_col or s_col == e_col:
+                target_col = l_col or s_col or "#4"
+                try:
+                    s_idx = int(target_col.replace('#', '')) - 1
+                    col_start = s_idx
+                    # 단일 셀 선택 시 클립보드 너비만큼 자동 확장
+                    max_cols_in_paste = len(paste_rows[0]) if paste_rows else 1
+                    col_end = min(len(col_keys) - 1, col_start + max_cols_in_paste - 1)
+                except:
+                    col_start, col_end = 0, len(col_keys) - 1
+            else:
+                try:
+                    s_idx = int(s_col.replace('#', '')) - 1
+                    e_idx = int(e_col.replace('#', '')) - 1
+                    col_start, col_end = min(s_idx, e_idx), max(s_idx, e_idx)
+                except:
+                    col_start, col_end = 0, len(col_keys) - 1
+            
+            target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
+            key_map = {f"#{i+1}": k for i, k in enumerate(col_keys)}
+            
+            # [EXCEL-LIKE REPLICATION]
+            # 한 행만 선택했는데 클립보드가 여러 행이면 -> 자동 드래그 (Fill Down)
+            all_children = tree.get_children('')
+            if len(selected) == 1 and len(paste_rows) > 1:
+                curr_idx = all_children.index(selected[0])
+                for i in range(1, len(paste_rows)):
+                    if curr_idx + i < len(all_children):
+                        selected.append(all_children[curr_idx + i])
+            
+            for r_idx, item_id in enumerate(selected):
+                view_idx = tree.index(item_id)
+                if not (0 <= view_idx < len(idx_map)): continue
+                actual_idx = idx_map[view_idx]
                 
-                key = key_map.get(c_id)
-                if key:
-                    if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
-                        data[actual_idx][key] = self.to_float(cell_val)
-                    else:
-                        data[actual_idx][key] = str(cell_val).strip()
-        
-        self.populate_preview(data, switch_tab=False, mode=mode)
-        self.log(f"📋 {mode} 엑셀 스마트 붙여넣기 완료: {len(selected)}행 x {len(target_col_ids)}열")
+                # 행 복제(Replicate): 클립보드 행보다 선택된 행이 많으면 순환하며 붙여넣음
+                source_row = paste_rows[r_idx % len(paste_rows)]
+                
+                for c_idx, c_id in enumerate(target_col_ids):
+                    # 열 복제(Replicate): 클립보드 열보다 선택된 열이 많으면 순환하며 붙여넣음
+                    cell_val = source_row[c_idx % len(source_row)].strip()
+                    key = key_map.get(c_id)
+                    
+                    if key and key not in ["selected", "_status"]:
+                        if mode == "PMI" and key in ["Ni", "Cr", "Mo"]:
+                            f_val = self.to_float(cell_val)
+                            data_list[actual_idx][key] = f"{f_val:.2f}" if f_val > 0 else ""
+                        else:
+                            data_list[actual_idx][key] = cell_val
+            
+            self.populate_preview(data_list, switch_tab=False, mode=mode)
+            self.log(f"📋 {mode} 붙여넣기 완료: {len(selected)}행 x {len(target_col_ids)}열")
+        except Exception as e:
+            self.log(f"❌ 붙여넣기 오류: {e}")
+            messagebox.showerror("붙여넣기 실패", f"데이터를 붙여넣는 중 오류가 발생했습니다:\n{e}")
 
     def merge_selected_iso(self, mode="PMI"):
         """선택된 항목들의 ISO 번호를 첫 번째 항목의 것으로 통일 (병합 효과)"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        mode_info = self._get_mode_info(mode)
+        if not mode_info: return
+        tree, idx_map, data_list, _ = mode_info
         
         selected = tree.selection()
         if len(selected) < 2:
             messagebox.showinfo("알림", "병합할 항목을 2개 이상 선택해주세요.")
             return
         
-        # [SMART SORT] 시각적 순서대로 정렬하여 첫 번째 항목 식별
         selected = sorted(list(selected), key=lambda x: tree.index(x))
-        
         view_idx_0 = tree.index(selected[0])
         actual_idx_0 = idx_map[view_idx_0] if 0 <= view_idx_0 < len(idx_map) else None
         
+        k_iso = "ISO" if mode == "PAUT" else "Dwg"
         if actual_idx_0 is not None:
-            first_iso = data[actual_idx_0].get('Dwg', '')
+            first_iso = data_list[actual_idx_0].get(k_iso, '')
         else:
             first_iso = ""
         
@@ -2082,32 +2559,30 @@ class PMIReportApp:
             view_idx = tree.index(item_id)
             if 0 <= view_idx < len(idx_map):
                 actual_idx = idx_map[view_idx]
-                data[actual_idx]['Dwg'] = first_iso
-                if i > 0: data[actual_idx]['is_merged_iso'] = True
-                else: data[actual_idx].pop('is_merged_iso', None)
+                data_list[actual_idx][k_iso] = first_iso
+                if i > 0: data_list[actual_idx]['is_merged_iso'] = True
+                else: data_list[actual_idx].pop('is_merged_iso', None)
         
-        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.populate_preview(data_list, switch_tab=False, mode=mode)
         self.log(f"🔗 {mode} {len(selected)}개 항목 ISO 병합 완료: {first_iso}")
 
     def merge_selected_joint(self, mode="PMI"):
         """선택된 항목들의 Joint No를 첫 번째 항목의 것으로 통일 (데이터 완전 변경)"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        mode_info = self._get_mode_info(mode)
+        if not mode_info: return
+        tree, idx_map, data_list, _ = mode_info
         
         selected = tree.selection()
         if len(selected) < 2:
             messagebox.showinfo("알림", "병합할 항목을 2개 이상 선택해주세요.")
             return
         
-        # [SMART SORT]
         selected = sorted(list(selected), key=lambda x: tree.index(x))
-        
         view_idx_0 = tree.index(selected[0])
         actual_idx_0 = idx_map[view_idx_0] if 0 <= view_idx_0 < len(idx_map) else None
         
         if actual_idx_0 is not None:
-            first_joint = data[actual_idx_0].get('Joint', '')
+            first_joint = data_list[actual_idx_0].get('Joint', '')
         else:
             first_joint = ""
         
@@ -2115,11 +2590,11 @@ class PMIReportApp:
             view_idx = tree.index(item_id)
             if 0 <= view_idx < len(idx_map):
                 actual_idx = idx_map[view_idx]
-                data[actual_idx]['Joint'] = first_joint
-                if i > 0: data[actual_idx]['is_merged_joint'] = True
-                else: data[actual_idx].pop('is_merged_joint', None)
+                data_list[actual_idx]['Joint'] = first_joint
+                if i > 0: data_list[actual_idx]['is_merged_joint'] = True
+                else: data_list[actual_idx].pop('is_merged_joint', None)
         
-        self.populate_preview(data, switch_tab=False, mode=mode)
+        self.populate_preview(data_list, switch_tab=False, mode=mode)
         self.log(f"🔗 {mode} {len(selected)}개 항목 Joint 병합 완료: {first_joint}")
 
     def group_selected_joint(self, mode="PMI"):
@@ -2279,14 +2754,13 @@ class PMIReportApp:
 
     def move_item(self, direction, mode="PMI"):
         """선택된 아이템의 순서를 위/아래로 이동 (필터 상태 대응)"""
-        if mode == "RT":
-            tree, idx_map, data = self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data
-        elif mode == "PT":
-            tree, idx_map, data = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data
-        elif mode == "PAUT":
-            tree, idx_map, data = self.paut_preview_tree, self.paut_item_idx_map, self.paut_extracted_data
-        else:
-            tree, idx_map, data = self.preview_tree, self.item_idx_map, self.extracted_data
+        # direction이 문자열인 경우 처리 ("up" -> -1, "down" -> 1)
+        if isinstance(direction, str):
+            direction = -1 if direction.lower() == "up" else 1
+        
+        mode_info = self._get_mode_info(mode)
+        if not mode_info: return
+        tree, idx_map, data, _ = mode_info
         
         selected_ids = tree.selection()
         if not selected_ids: return
@@ -2438,66 +2912,19 @@ class PMIReportApp:
 
     def export_to_excel(self, mode="PMI"):
         """현재 미리보기 목록(필터링/선택 반영)을 엑셀 파일로 내보냄 (서식 및 병합 시인성 유지)"""
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        mode_info = self._get_mode_info(mode)
+        if not mode_info: return
+        _, _, data, col_keys = mode_info
+        
         if not data:
             messagebox.showwarning("알림", f"{mode} 내보낼 데이터가 없습니다.")
             return
 
-        # 1. 엑셀에 들어갈 데이터 가공 (화면 표시 로직 재현)
-        export_rows = []
+        # 1. 엑셀에 저장할 대상 데이터 필터링
         filter_enabled = self.show_selected_only.get()
+        final_list = [d for d in data if d.get('date_filtered', True) and (not filter_enabled or d.get('selected', True))]
         
-        last_iso = None
-        last_joint = None
-        for idx, item in enumerate(data):
-            if not item.get('date_filtered', True): continue
-            if filter_enabled and not item.get('selected', True): continue
-            
-            curr_iso = item.get('Dwg', '')
-            norm_iso = self.normalize_iso(curr_iso)
-            curr_joint = item.get('visual_group_joint', item.get('Joint', ''))
-            
-            is_new_iso = (last_iso is None or self.normalize_iso(last_iso) != norm_iso)
-            is_new_joint = (last_joint is None or last_joint != curr_joint)
-            
-            # PMI: 3-row block layout logic, RT: simple 1-row pagination usually
-            is_block_start = (mode == "PMI" and len(export_rows) % 3 == 0)
-            
-            is_show = is_new_iso or is_new_joint or is_block_start
-            
-            d_iso = curr_iso if is_show else ""
-            d_joint = item.get('Joint', '') if is_show else ""
-            
-            if item.get('is_merged_iso') and not (is_new_iso or is_new_joint): d_iso = ""
-            if item.get('is_merged_joint') and not (is_new_iso or is_new_joint): d_joint = ""
-            
-            last_iso = curr_iso
-            last_joint = curr_joint
-            
-            if mode == "RT":
-                row_dict = {k: item.get(k, "") for k in self.rt_column_keys}
-                # Overwrite ISO/Joint for visual merging
-                row_dict['Dwg'] = d_iso
-                row_dict['Joint'] = d_joint
-                export_rows.append(row_dict)
-            else:
-                ni_val = self.to_float(item.get('Ni'))
-                cr_val = self.to_float(item.get('Cr'))
-                mo_val = self.to_float(item.get('Mo'))
-
-                export_rows.append({
-                    '순번': item.get('No', ''),
-                    '날짜': item.get('Date', ''),
-                    '도면번호': d_iso,
-                    '조인트': d_joint,
-                    '위치': item.get('Loc', ''),
-                    'Ni': f"{ni_val:.2f}" if ni_val > 0 else "",
-                    'Cr': f"{cr_val:.2f}" if cr_val > 0 else "",
-                    'Mo': f"{mo_val:.2f}" if mo_val > 0 else "",
-                    '판정': item.get('Grade', '')
-                })
-
-        if not export_rows:
+        if not final_list:
             messagebox.showinfo("알림", f"{mode} 현재 조건에 맞는 데이터가 없습니다.")
             return
 
@@ -2518,45 +2945,55 @@ class PMIReportApp:
             ws = wb.active
             ws.title = f"{mode}_Preview"
 
-            # [REFINED] Export with ST column for PMI
+            # [REFINED] Export with consistent headers from mode_info
             if mode == "PMI":
+                # PMI는 특수하게 ST, V 헤더 추가
                 headers = ["ST", "V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"]
-                export_rows = []
-                for item in final_list:
-                    # Calculate status icon for Excel
+            else:
+                # RT/PT/PAUT는 Treeview 컬럼 헤더 그대로 사용
+                tree = self._get_mode_info(mode)[0]
+                headers = [tree.heading(c)['text'] for c in tree['columns']]
+            
+            export_rows = []
+            for item in final_list:
+                row = {}
+                if mode == "PMI":
+                    # Status Icon
                     is_def = False
                     if hasattr(self, 'element_filters'):
                         for f in self.element_filters:
                             fk = f['key'].get().strip()
                             if not fk: continue
-                            fm, fx = round(self.to_float(f['min'].get()), 2), round(self.to_float(f['max'].get()), 2)
-                            v = round(self.to_float(self._get_val_ci(item, fk)), 2)
+                            v = self.to_float(self._get_val_ci(item, fk))
+                            fm, fx = self.to_float(f['min'].get()), self.to_float(f['max'].get())
                             if (fm > 0 and v < fm) or (fx > 0 and v > fx):
                                 is_def = True; break
                     
-                    row = {
-                        "ST": "⚠️" if is_def else "✅",
-                        "V": "●" if item.get('selected', True) else "○",
-                        "No": item.get('No', ''),
-                        "Date": item.get('Date', ''),
-                        "ISO/DWG": item.get('Dwg', ''),
-                        "Joint No": item.get('Joint', ''),
-                        "Test Location": item.get('Loc', ''),
-                        "Ni": f"{self.to_float(item.get('Ni', 0)):.2f}%",
-                        "Cr": f"{self.to_float(item.get('Cr', 0)):.2f}%",
-                        "Mo": f"{self.to_float(item.get('Mo', 0)):.2f}%",
-                        "Grade": item.get('Grade', '')
-                    }
-                    export_rows.append(row)
-            else:
-                headers = [k for k in self.rt_display_cols] # RT/PT use display_cols names
-                export_rows = []
-                for item in final_list:
-                    row = {}
-                    for k in headers:
-                        if k == "V": row[k] = "●" if item.get('selected', True) else "○"
-                        else: row[k] = item.get(k, "")
-                    export_rows.append(row)
+                    row["ST"] = "⚠️" if is_def else "✅"
+                    row["V"] = "●" if item.get('selected', True) else "○"
+                    row["No"] = item.get('No', '')
+                    row["Date"] = item.get('Date', '')
+                    row["ISO/DWG"] = item.get('Dwg', '')
+                    row["Joint No"] = item.get('Joint', '')
+                    row["Test Location"] = item.get('Loc', '')
+                    row["Ni"] = f"{self.to_float(item.get('Ni', 0)):.2f}%"
+                    row["Cr"] = f"{self.to_float(item.get('Cr', 0)):.2f}%"
+                    row["Mo"] = f"{self.to_float(item.get('Mo', 0)):.2f}%"
+                    row["Grade"] = item.get('Grade', '')
+                else:
+                    # Generic mapping for other modes
+                    # col_keys: ("_status", "selected", "No", ...)
+                    for i, h in enumerate(headers):
+                        k = col_keys[i] if i < len(col_keys) else None
+                        if k == "_status":
+                            row[h] = "✅" 
+                        elif k == "selected":
+                            row[h] = "●" if item.get('selected', True) else "○"
+                        elif k:
+                            row[h] = item.get(k, "")
+                        else:
+                            row[h] = ""
+                export_rows.append(row)
 
             for col_idx, header in enumerate(headers, 1):
                 cell = ws.cell(row=1, column=col_idx, value=header)
@@ -2595,86 +3032,107 @@ class PMIReportApp:
         except Exception as e:
             self.log(f"❌ {mode} 엑셀 내보내기 오류: {e}")
             messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다: {e}")
+        finally:
+            if 'wb' in locals():
+                try: wb.close()
+                except: pass
 
-    def sort_by_column(self, col):
+    def sort_by_column(self, col, mode="PMI"):
         """특정 컬럼을 기준으로 데이터 전체 정렬 (문자열/숫자 구분 및 헤더 표시)"""
-        if not self.extracted_data: return
+        # 0. 데이터 대상 선정
+        data_targets = {
+            "PMI": self.extracted_data,
+            "RT": self.rt_extracted_data,
+            "PT": self.pt_extracted_data,
+            "PAUT": self.paut_extracted_data
+        }
+        target_list = data_targets.get(mode)
+        if not target_list: return
         
-        # 1. 정렬 기준 컬럼 매핑 (Treeview 헤더 이름 -> 데이터 키)
+        # 1. 정렬 기준 컬럼 매핑 (모든 모드 통합)
         key_map = {
-            "ST": "_status", "V": "selected", "No": "No", "Date": "Date", "ISO/DWG": "Dwg",
-            "Joint No": "Joint", "Test Location": "Loc", "Ni": "Ni", 
-            "Cr": "Cr", "Mo": "Mo", "Grade": "Grade"
+            "selected": "selected", "V": "selected", "No": "No", "Date": "Date", 
+            "Dwg": "Dwg", "Joint": "Joint", "Loc": "Loc", "Ni": "Ni", "Cr": "Cr", "Mo": "Mo", "Grade": "Grade",
+            "NPS": "NPS", "Thk.": "Thk.", "Material": "Material", "WType": "WType", "Result": "Result",
+            "ISO/DWG": "ISO", "t": "t", "h": "h", "l": "l", "d": "d", "Location": "Location", "Nature": "Nature",
+            "ST": "_status", "ISO Drawing No.": "Dwg", "Joint No": "Joint", "Test Location": "Loc", "Weld Type": "WType"
         }
         data_key = key_map.get(col)
         if not data_key: return
 
         # 2. 정렬 방향 결정 (기존 방향과 같으면 토글)
-        if self.sort_column == col:
-            self.sort_reverse = not self.sort_reverse
+        attr_col = f"{mode.lower()}_sort_col"
+        attr_rev = f"{mode.lower()}_sort_rev"
+        
+        if getattr(self, attr_col, None) == col:
+            setattr(self, attr_rev, not getattr(self, attr_rev, False))
         else:
-            self.sort_column = col
-            self.sort_reverse = False # 기본 오름차순 (A~Z, 1~9)
+            setattr(self, attr_col, col)
+            setattr(self, attr_rev, False)
 
-        # 3. 데이터 정렬 (지능형 복합 자연어 정렬: Interleaved Natural Sort)
+        sort_rev = getattr(self, attr_rev, False)
+
+        # 3. 데이터 정렬 (지능형 복합 자연어 정렬)
         def get_natural_key(val):
-            """문자열을 텍스트와 숫자로 조각내어 에러 없이 통합된 자연어 정렬 수행"""
             if val is None: return [(2, "")]
-            
             s_val = str(val).strip().lower()
             if not s_val: return [(2, "")]
-            
-            # [ (타입, 값), (타입, 값)... ] 구조로 반환
-            # (0, 숫자) 가 (1, 문자) 보다 우선순위가 높음 (0 < 1)
-            # 이를 통해 "1" -> [(0, 1)], "1A" -> [(0, 1), (1, 'a')], "2" -> [(0, 2)] 순서 보장
             def segment_to_tuple(text):
-                if text.isdigit():
-                    return (0, int(text))
+                if text.isdigit(): return (0, int(text))
                 return (1, text)
-            
             return [segment_to_tuple(c) for c in re.split(r'(\d+)', s_val) if c]
 
         def get_value(item, key):
-            if key == "_status":
-                # Deficiency calculation for sorting
+            if key == "_status" and mode == "PMI":
                 is_def = False
                 if hasattr(self, 'element_filters'):
                     for f in self.element_filters:
                         fk = f['key'].get().strip()
                         if not fk: continue
-                        fm, fx = round(self.to_float(f['min'].get()), 2), round(self.to_float(f['max'].get()), 2)
-                        v = round(self.to_float(self._get_val_ci(item, fk)), 2)
+                        fm = self.to_float(f['min'].get())
+                        fx = self.to_float(f['max'].get())
+                        v = self.to_float(self._get_val_ci(item, fk))
                         if (fm > 0 and v < fm) or (fx > 0 and v > fx):
                             is_def = True; break
-                return 0 if is_def else 1 # ⚠️(0) before ✅(1) in ascending
-            return item.get(data_key, "")
+                return 0 if is_def else 1
+            # '_current' 가 넘어오면 클릭된 컬럼(data_key) 값을 반환
+            return item.get(data_key if key=="_current" else key, "")
 
-        # 정렬 수행: 계층적 정렬 (사용자 요청 기반)
+        # 4. 계층적 정렬 수행
         try:
-            # 1순위 ISO(Dwg), 2순위 Joint No 를 기본 뼈대로 사용
-            k_iso, k_joint = "Dwg", "Joint"
+            k_iso = "ISO" if mode == "PAUT" else "Dwg"
+            k_joint = "Joint"
             
-            if data_key in [k_iso, k_joint]:
-                # ISO나 Joint를 클릭하면 ISO > Joint > order_index 순서로 안정적 정렬
-                sort_key = lambda x: (get_natural_key(get_value(x, k_iso)), get_natural_key(get_value(x, k_joint)), x.get('order_index', 0))
-            else:
-                # 그 외 컬럼 클릭 시 해당 컬럼이 1순위, 그 뒤에 ISO > Joint > order_index 보조
-                sort_key = lambda x: (get_natural_key(get_value(x, data_key)), get_natural_key(get_value(x, k_iso)), get_natural_key(get_value(x, k_joint)), x.get('order_index', 0))
-            
-            self.extracted_data.sort(key=sort_key, reverse=self.sort_reverse)
+            sort_key_func = lambda x: (
+                get_natural_key(get_value(x, "_current")),
+                get_natural_key(get_value(x, k_iso)),
+                get_natural_key(get_value(x, k_joint)),
+                x.get('order_index', 0)
+            )
+
+            target_list.sort(key=sort_key_func, reverse=sort_rev)
         except Exception as e:
-            self.log(f"⚠️ 정렬 오류: {e}")
+            self.log(f"⚠️ {mode} 정렬 오류: {e}")
 
-        # 4. 헤더 텍스트 갱신 (정렬 화살표 표시)
-        for c in ["V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"]:
-            prefix = ""
-            if c == col:
-                prefix = "▼ " if self.sort_reverse else "▲ "
-            self.preview_tree.heading(c, text=prefix + c)
+        # 5. 헤더 텍스트 갱신 (화살표)
+        tree_map = {
+            "PMI": self.preview_tree, "RT": self.rt_preview_tree,
+            "PT": self.pt_preview_tree, "PAUT": self.paut_preview_tree
+        }
+        target_tree = tree_map.get(mode)
+        if target_tree:
+            for c in target_tree["columns"]:
+                clean_text = c.replace("▲ ", "").replace("▼ ", "")
+                # identifier 가 key_map에 기술된 'ST', 'V' 등인 경우와 Dwg 등인 경우 혼재하므로
+                # heading text 자체를 조회해서 쓰지 않고 identifier 기반으로 prefix 추가
+                prefix = ""
+                if c == col:
+                    prefix = "▼ " if sort_rev else "▲ "
+                target_tree.heading(c, text=prefix + clean_text)
 
-        # 5. 화면 갱신 및 로그
-            self.populate_preview(self.extracted_data, switch_tab=False)
-        self.log(f"📊 '{col}' 기준 {'내림차순' if self.sort_reverse else '오름차순'} 정렬 완료")
+        # 6. 화면 갱신
+        self.populate_preview(target_list, switch_tab=False, mode=mode)
+        self.log(f"📊 {mode}: '{col}' 기준 {'내림차순' if sort_rev else '오름차순'} 정렬 완료")
 
 
 
@@ -2795,16 +3253,18 @@ class PMIReportApp:
             
             row_vals = []
             if mode == "RT":
-                for k in self.rt_display_cols:
-                    if k == "V": row_vals.append(v_mark)
+                for k in self.rt_column_keys:
+                    if k == "selected": row_vals.append(v_mark)
                     else: 
                         val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
                         row_vals.append(val)
             elif mode == "PT":
-                for k in self.pt_display_cols:
-                    if k == "V": row_vals.append(v_mark)
+                for k in self.pt_column_keys:
+                    if k == "selected": row_vals.append(v_mark)
                     else: 
                         val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
                         row_vals.append(val)
             elif mode == "PAUT":
                 # PAUT use paut_column_keys
@@ -2812,17 +3272,17 @@ class PMIReportApp:
                     if k == "No": row_vals.append(len(idx_map))
                     else: 
                         val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
                         row_vals.append(val)
             else: # PMI
-                for k in ["ST"] + self.column_keys:
-                    if k == "ST": row_vals.append(st_mark)
-                    elif k == "V": row_vals.append(v_mark)
+                for k in self.column_keys:
+                    if k == "_status": row_vals.append(st_mark)
+                    elif k == "selected": row_vals.append(v_mark)
                     elif k in ["Ni", "Cr", "Mo"]:
                         row_vals.append(f"{self.to_float(item.get(k, 0)):.2f}%")
-                    elif (k in ["Dwg", "ISO/DWG"] or k == "Joint") and not is_show:
-                        row_vals.append("") # Merged/Duplicate display suppression
                     else:
                         val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
                         row_vals.append(val)
 
             row_tags = [str(idx), current_tag]
@@ -2846,23 +3306,59 @@ class PMIReportApp:
             sel_str = ", ".join(list(set(selected_locs_names))) if selected_locs_names else "전체"
             self.log(f"ℹ️ '{sel_str}' 결과 중 {hidden_by_def_count}건이 '함량 미달만 보기' 옵션으로 인해 숨겨져 있습니다.")
             
-        if switch_tab:
-            if mode == "RT":
-                self.rt_tab_notebook.select(self.rt_tab_preview)
-            elif mode == "PT":
-                self.pt_tab_notebook.select(self.pt_tab_preview)
-            elif mode == "PAUT":
-                pass # PAUT doesn't have sub-tabs in its tab
-            else:
-                self.tab_notebook.select(self.tab_preview)
+        # [REMOVED] Legacy tab switching logic (Preview is now permanently visible in splitscreen)
+        # if switch_tab:
+        #     if mode == "RT":
+        #         self.rt_tab_notebook.select(self.rt_tab_preview)
+        #     elif mode == "PT":
+        #         self.pt_tab_notebook.select(self.pt_tab_preview)
+        #     elif mode == "PAUT":
+        #         pass 
+        #     else:
+        #         self.tab_notebook.select(self.tab_preview)
 
     def _browse_dir(self, var):
         path = filedialog.askdirectory(initialdir=var.get() or RESOURCE_DIR)
         if path: var.set(path)
 
+    def _update_file_info(self, mode, path):
+        """Extracts and formats file metadata for the UI header."""
+        if not path or not os.path.exists(path):
+            self.file_info_vars[mode].set("📄 파일을 선택해주세요.")
+            return
+
+        try:
+            fname = os.path.basename(path)
+            fsize = os.path.getsize(path) / 1024 # KB
+            mtime = os.path.getmtime(path)
+            dt_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
+            
+            size_str = f"{fsize:.1f}KB" if fsize < 1024 else f"{fsize/1024:.2f}MB"
+            self.file_info_vars[mode].set(f"📄 파일: {fname}  |  📏 크기: {size_str}  |  📅 수정일: {dt_str}")
+        except Exception as e:
+            self.file_info_vars[mode].set(f"⚠️ 파일 정보 읽기 오류: {str(e)}")
+
+    def _sync_all_file_infos(self):
+        """Updates all mode headers from current config paths."""
+        modes = [
+            ('PMI', self.target_file_path.get()),
+            ('RT', self.rt_target_file_path.get()),
+            ('PT', self.pt_target_file_path.get()),
+            ('PAUT', self.paut_target_file_path.get())
+        ]
+        for mode, path in modes:
+            self._update_file_info(mode, path)
+
     def _browse_file(self, var, types):
         path = filedialog.askopenfilename(initialdir=os.path.dirname(var.get() or BASE_DIR), filetypes=types)
-        if path: var.set(path)
+        if path: 
+            var.set(path)
+            # Find which mode this belongs to and update info
+            for mode, m_var in [('PMI', self.target_file_path), ('RT', self.rt_target_file_path), 
+                               ('PT', self.pt_target_file_path), ('PAUT', self.paut_target_file_path)]:
+                if var == m_var:
+                    self._update_file_info(mode, path)
+                    break 
 
     def show_bulk_update_dialog(self, mode="PMI"):
         """선택된 항목들을 필터 조건에 따라 일괄 변경하는 다이얼로그 표시"""
@@ -2892,7 +3388,7 @@ class PMIReportApp:
         ttk.Label(main_frame, text="1. 대상 필터링 (선택 사항)", font=("Malgun Gothic", 10, "bold")).pack(anchor='w', pady=(0, 10))
         
         filter_frame = ttk.Frame(main_frame)
-        filter_frame.pack(fill='x', pady=(0, 20))
+        filter_frame.pack(fill='x', pady=(0, 10))
         
         # 모드별 필터 가능 열 설정
         if mode == "RT":
@@ -2928,7 +3424,7 @@ class PMIReportApp:
         tk.Checkbutton(filter_options_frame, text="🔍 현재 화면에 보이는(필터링된) 항목만 변경", variable=only_visible_var, 
                        background="#f9fafb", font=("Malgun Gothic", 9)).pack(anchor='w')
         
-        ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
+        ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=5)
 
         ttk.Label(main_frame, text="2. 변경할 값 입력 (입력된 항목만 반영)", font=("Malgun Gothic", 10, "bold")).pack(anchor='w', pady=(0, 10))
         
@@ -3627,22 +4123,21 @@ class PMIReportApp:
             if target_no_list:
                 all_extracted_data.sort(key=lambda x: target_no_list.index(str(x['No'])) if str(x['No']) in target_no_list else 999999)
 
-            # [CHANGE] Overwrite -> Accumulate
+            # [CHANGE] Overwrite -> Accumulate + Auto Sort
             if mode == "RT":
                 self.rt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("RT")
-                self.populate_preview(self.rt_extracted_data, mode="RT")
+                self.sort_by_column("ISO Drawing No.", mode="RT") # Auto sort for RT
                 total_count = len(self.rt_extracted_data)
             elif mode == "PT":
                 self.pt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("PT")
-                self.populate_preview(self.pt_extracted_data, mode="PT")
+                self.sort_by_column("ISO Drawing No.", mode="PT") # Auto sort for PT
                 total_count = len(self.pt_extracted_data)
             else:
                 self.extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("PMI")
-                self.sort_column = "ISO/DWG"; self.sort_reverse = False
-                self.sort_by_column("ISO/DWG") # Auto sort for PMI
+                self.sort_by_column("ISO/DWG", mode="PMI") # Auto sort for PMI
                 total_count = len(self.extracted_data)
             
             self.progress['value'] = 100
@@ -3708,6 +4203,15 @@ class PMIReportApp:
         self.log(f"📅 날짜 필터 적용 완료: {len(selected_dates)}개 날짜 선택됨")
 
     def run_process(self):
+        # [NEW] Ensure config values are correct types for comparison (prevent str vs int errors)
+        for k in list(self.config.keys()):
+            if k.endswith(('_ROW', '_IDX', '_SIZE')) or any(x in k for x in ['START', 'END', 'PAGE']):
+                try: self.config[k] = int(float(self.config[k]))
+                except: pass
+            elif any(x in k for x in ['MARGIN', 'SCALE', 'RATIO', 'POS']):
+                try: self.config[k] = float(self.config[k])
+                except: pass
+
         # 현재 활성 탭에 따른 모드 결정
         try:
             tab_idx = self.mode_notebook.index("current")
@@ -3766,12 +4270,13 @@ class PMIReportApp:
     def _run_pmi_process(self, final_list, template_path):
         self.log(f"🚀 PMI 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
-
-        # No changes needed here, just marking for clarity.
-        self.progress['value'] = 0
+        all_extracted_data = final_list
+        
+        # [FIX] data_end_row 전역/설정으로 보강
+        data_start_row = int(self.config.get('START_ROW', 17))
+        data_end_row = int(self.config.get('DATA_END_ROW', 45))
         
         try:
-            all_extracted_data = final_list
             wb = openpyxl.load_workbook(template_path, keep_vba=True)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
@@ -3788,7 +4293,8 @@ class PMIReportApp:
                         cell_a.border = Border(left=medium_side, right=eb.right, top=eb.top, bottom=eb.bottom)
                     except: pass
                 
-                self.safe_set_value(ws0, 'I35', None) # [FIX] Border() 대신 가독성을 위해 safe_set_value 적용
+                ws0['I35'].border = Border() # [FIX] I35 셀 선 제거
+                self.safe_set_value(ws0, 'I35', None) 
                 self.apply_custom_dimensions(ws0, "COVER") # [MOVED] Ensure it has the final say
             
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
@@ -3900,7 +4406,9 @@ class PMIReportApp:
                     self.safe_set_value(ws, ws.cell(row=r, column=7).coordinate, item.get('Loc', ''), align='center')
                     
                     for val_key, col_idx in [('Ni', 8), ('Cr', 9), ('Mo', 10)]:
-                        v = item.get(val_key, 0.0); cell = ws.cell(row=r, column=col_idx)
+                        raw_v = item.get(val_key, 0.0)
+                        v = self.to_float(raw_v)
+                        cell = ws.cell(row=r, column=col_idx)
                         self.safe_set_value(ws, cell.coordinate, v if v > 0 else "", align='center')
                         if v > 0: cell.number_format = '0.00'
                     
@@ -4016,10 +4524,10 @@ class PMIReportApp:
                         b_5 = cell_5.border
                         cell_5.border = Border(left=b_5.left, right=b_5.right, top=medium_side, bottom=b_5.bottom)
 
-            # [FORCE] 을지 시트의 지정 행(17~45) 글꼴 크기 통일
+            # [FORCE] 을지 시트의 지정 행 글꼴 크기 통일
             for idx, s in enumerate(wb.worksheets):
                 if idx > 0: # 을지 시트
-                    for r_idx in range(17, data_end_row + 1):
+                    for r_idx in range(data_start_row, data_end_row + 1):
                         for c_idx in range(1, 14):
                             cell = s.cell(row=r_idx, column=c_idx)
                             f = cell.font
@@ -4065,6 +4573,13 @@ class PMIReportApp:
             messagebox.showerror("생성 실패", error_msg)
             # End of _run_pmi_process logic
         finally:
+            if 'wb' in locals() and wb:
+                try:
+                    if hasattr(wb, 'vba_archive') and wb.vba_archive:
+                        wb.vba_archive.close()
+                except: pass
+                try: wb.close()
+                except: pass
             for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
                 try: os.remove(f)
                 except: pass
@@ -4176,6 +4691,13 @@ class PMIReportApp:
             traceback.print_exc()
             messagebox.showerror("생성 실패", f"PT 성적서 생성 중 오류가 발생했습니다: {e}")
         finally:
+            if 'wb' in locals() and wb:
+                try:
+                    if hasattr(wb, 'vba_archive') and wb.vba_archive:
+                        wb.vba_archive.close()
+                except: pass
+                try: wb.close()
+                except: pass
             for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
                 try: os.remove(f)
                 except: pass
@@ -4278,6 +4800,13 @@ class PMIReportApp:
             traceback.print_exc()
             messagebox.showerror("생성 실패", f"RT 성적서 생성 중 오류가 발생했습니다: {e}")
         finally:
+            if 'wb' in locals() and wb:
+                try:
+                    if hasattr(wb, 'vba_archive') and wb.vba_archive:
+                        wb.vba_archive.close()
+                except: pass
+                try: wb.close()
+                except: pass
             for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
                 try: os.remove(f)
                 except: pass
