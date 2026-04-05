@@ -204,7 +204,7 @@ class PMIReportApp:
         
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
-        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "WType", "Result", "Welder", "Remarks"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"]
         
@@ -286,6 +286,46 @@ class PMIReportApp:
             try:
                 with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
                     saved_data = json.load(f)
+                    
+                    # [REFINED] Case-insensitive Sanitization for all modules
+                    sanit_map = {
+                        'PMI_NAME_DWG': (['ISO/DWG', 'ISO/DWG.'], 'Drawing No.'),
+                        'PMI_NAME_JOINT': (['JOINT NO', 'JOINT NO.'], 'Joint No.'),
+                        'PMI_NAME_LOC': (['TEST LOCATION', 'LOC'], 'Location'),
+                        'PMI_NAME_RES': (['GRADE', 'RESULT'], 'Result'),
+                        'RT_NAME_DWG': (['ISO/DWG', 'ISO/DWG.', 'DWG'], 'Drawing No.'),
+                        'RT_NAME_JOINT': (['JOINT NO', 'FILM IDENT', 'JOINT'], 'Film Ident. No.'),
+                        'RT_NAME_LOC': (['LOC', 'LOC.'], 'Film Location'),
+                        'RT_NAME_WELDER': (['WELDER'], 'Welder No'),
+                        'RT_NAME_DEG': (['물성', '물성(DEG)', 'DEG'], 'Deg')
+                    }
+                    for k, (olds, new) in sanit_map.items():
+                        if k in saved_data:
+                            val = str(saved_data[k]).upper().strip()
+                            if any(val == o.upper() for o in olds):
+                                saved_data[k] = new
+
+                    # [NEW] Sanitize old "Element-" prefixes and Mn exclusion
+                    for k in ['PMI_NAME_NI', 'PMI_NAME_CR', 'PMI_NAME_MO']:
+                        if k in saved_data and isinstance(saved_data[k], str) and (saved_data[k].startswith("Element-") or "ELEMENT" in saved_data[k].upper()):
+                            saved_data[k] = saved_data[k].replace("Element-", "").replace("ELEMENT-", "").replace("Element", "").strip()
+                    
+                    if 'column_keys' in saved_data and isinstance(saved_data['column_keys'], list):
+                        while 'Mn' in saved_data['column_keys']: saved_data['column_keys'].remove('Mn')
+
+                    # [NEW] Defect Names Sanitization (D1-D15 to circled labels)
+                    defect_standards = {
+                        1: "① Crack", 2: "② IP", 3: "③ LF", 4: "④ Slag", 5: "⑤ Por",
+                        6: "⑥ U/C", 7: "⑦ RUC", 8: "⑧ BT", 9: "⑨ TI", 10: "⑩ CP",
+                        11: "⑪ RC", 12: "⑫ Mis", 13: "⑬ EP", 14: "⑭ SD", 15: "⑮ Oth"
+                    }
+                    for d_i, std_name in defect_standards.items():
+                        d_k = f'RT_NAME_D{d_i}'
+                        if d_k in saved_data:
+                            curr_val = str(saved_data[d_k]).upper().strip()
+                            if curr_val == f"D{d_i}" or not curr_val or curr_val == "NAN":
+                                saved_data[d_k] = std_name
+
                     self.config.update(saved_data)
                 print("SUCCESS: 사용자 저장 설정을 적용했습니다.")
                 
@@ -585,13 +625,17 @@ class PMIReportApp:
         
         # ===== PACK ORDER: bottom-most items first =====
         
+        # [UX] ESC Key Binding: Unfocus only (preserving content)
+        self.root.bind_class("TEntry", "<Escape>", self._on_entry_esc)
+        self.root.bind_class("Entry", "<Escape>", self._on_entry_esc)
+        
         # 1. Status bar (very bottom)
         self.status_bar = tk.Frame(self.root, background="#e2e8f0", height=22)
         self.status_bar.pack(fill='x', side='bottom')
         self.status_bar.pack_propagate(False)
         tk.Label(self.status_bar, text="준비됨", font=("Malgun Gothic", 8), background="#e2e8f0", foreground="#64748b").pack(side='left', padx=10)
         tk.Label(self.status_bar, text=f"Build Version: v{APP_VERSION}", font=("Arial", 8), background="#e2e8f0", foreground="#94a3b8").pack(side='right', padx=10)
-        
+
         # 2. Progress bar + Log (above status bar, compact)
         bottom_frame = tk.Frame(self.root, background="#f9fafb")
         bottom_frame.pack(fill='x', side='bottom', padx=5)
@@ -628,6 +672,36 @@ class PMIReportApp:
         self._setup_pt_ui(self.pt_mode_frame)
         self._setup_paut_ui(self.paut_mode_frame)
 
+    def _create_scrollable_sidebar(self, parent):
+        """Creates a scrollable canvas/scrollbar container for sidebars."""
+        canvas = tk.Canvas(parent, background="#f9fafb", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, background="#f9fafb", padx=10, pady=10)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        def _on_canvas_configure(e):
+            canvas.itemconfig(canvas_window, width=e.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
+        
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            return "break"
+        
+        canvas.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind('<Leave>', lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        return scrollable_frame
+
     def _setup_pmi_ui(self, parent):
         # [FORCE] Ensure parent (pmi_mode_frame) allows expansion
         container = tk.Frame(parent, background="#f9fafb")
@@ -638,7 +712,7 @@ class PMIReportApp:
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.pmi_paned.pack(fill='both', expand=True)
 
-        # [LEFT] Settings & Actions Pane (Simplified Layout)
+        # [LEFT] Filter/Settings Sidebar
         left_pane = tk.Frame(self.pmi_paned, background="#f9fafb", padx=10, pady=10)
         self.pmi_paned.add(left_pane, stretch="always")
 
@@ -705,9 +779,9 @@ class PMIReportApp:
             ("Drawing No:", "PMI_COL_DWG", 1, "PMI_NAME_DWG", "Drawing No.", "Drawing No."),
             ("Joint No:", "PMI_COL_JOINT", 6, "PMI_NAME_JOINT", "Joint No.", "Joint No."),
             ("Location:", "PMI_COL_LOC", 7, "PMI_NAME_LOC", "Location", "Location"),
-            ("Element-Ni:", "PMI_COL_NI", 8, "PMI_NAME_NI", "Element-Ni", "Element-Ni"),
-            ("Element-Cr:", "PMI_COL_CR", 9, "PMI_NAME_CR", "Element-Cr", "Element-Cr"),
-            ("Element-Mo:", "PMI_COL_MO", 10, "PMI_NAME_MO", "Element-Mo", "Element-Mo"),
+            ("Ni:", "PMI_COL_NI", 8, "PMI_NAME_NI", "Ni", "Ni"),
+            ("Cr:", "PMI_COL_CR", 9, "PMI_NAME_CR", "Cr", "Cr"),
+            ("Mo:", "PMI_COL_MO", 10, "PMI_NAME_MO", "Mo", "Mo"),
             ("판정 결과:", "PMI_COL_RES", 13, "PMI_NAME_RES", "Result", "Result")
         ]
         self._create_column_mapping_ui(tab_cols, "PMI", pmi_items)
@@ -830,9 +904,11 @@ class PMIReportApp:
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.rt_paned.pack(fill='both', expand=True)
 
-        # [LEFT] Settings Pane (Simplified Layout)
-        left_pane = tk.Frame(self.rt_paned, background="#f9fafb", padx=10, pady=10)
-        self.rt_paned.add(left_pane, stretch="always")
+        # [LEFT] Scrollable Settings Sidebar
+        left_container = tk.Frame(self.rt_paned, background="#f9fafb")
+        self.rt_paned.add(left_container, stretch="always")
+        
+        left_pane = self._create_scrollable_sidebar(left_container)
 
         # Header
         header_frame = tk.Frame(left_pane, background="#f9fafb")
@@ -882,20 +958,34 @@ class PMIReportApp:
         self._create_row_settings(rt_tab_rows, mode="RT")
         
         rt_items = [
-            ("순번(No):", "RT_COL_NO", 1, "RT_NAME_NO", "No", "No"),
-            ("검사일자:", "RT_COL_DATE", 2, "RT_NAME_DATE", "Date", "Date"),
-            ("ISO/Dwg:", "RT_COL_DWG", 3, "RT_NAME_DWG", "Dwg", "Dwg"),
-            ("Joint No:", "RT_COL_JOINT", 4, "RT_NAME_JOINT", "Joint", "Joint"),
-            ("검사부위(Loc):", "RT_COL_LOC", 5, "RT_NAME_LOC", "Loc", "Loc"),
+            ("No:", "RT_COL_NO", 1, "RT_NAME_NO", "No", "No"),
+            ("Date:", "RT_COL_DATE", 2, "RT_NAME_DATE", "Date", "Date"),
+            ("Drawing No.:", "RT_COL_DWG", 3, "RT_NAME_DWG", "Drawing No.", "Drawing No."),
+            ("Film Ident. No.:", "RT_COL_JOINT", 4, "RT_NAME_JOINT", "Film Ident. No.", "Film Ident. No."),
+            ("Film Location:", "RT_COL_LOC", 5, "RT_NAME_LOC", "Film Location", "Film Location"),
             ("두께(T):", "RT_COL_THK", 6, "RT_NAME_THK", "T", "T"),
             ("재질(Mat):", "RT_COL_MAT", 7, "RT_NAME_MAT", "Mat", "Mat"),
+            ("물성(Deg):", "RT_COL_DEG", 10, "RT_NAME_DEG", "Deg", "Deg"),
+            ("Acc:", "RT_COL_ACC", 8, "RT_NAME_ACC", "Acc", "Acc"),
+            ("Rej:", "RT_COL_REJ", 9, "RT_NAME_REJ", "Rej", "Rej"),
+            ("① Crack:", "RT_COL_D1", 13, "RT_NAME_D1", "① Crack", "① Crack"),
+            ("② IP:", "RT_COL_D2", 14, "RT_NAME_D2", "② IP", "② IP"),
+            ("③ LF:", "RT_COL_D3", 15, "RT_NAME_D3", "③ LF", "③ LF"),
+            ("④ Slag:", "RT_COL_D4", 16, "RT_NAME_D4", "④ Slag", "④ Slag"),
+            ("⑤ Por:", "RT_COL_D5", 17, "RT_NAME_D5", "⑤ Por", "⑤ Por"),
+            ("⑥ U/C:", "RT_COL_D6", 18, "RT_NAME_D6", "⑥ U/C", "⑥ U/C"),
+            ("⑦ RUC:", "RT_COL_D7", 19, "RT_NAME_D7", "⑦ RUC", "⑦ RUC"),
+            ("⑧ BT:", "RT_COL_D8", 20, "RT_NAME_D8", "⑧ BT", "⑧ BT"),
+            ("⑨ TI:", "RT_COL_D9", 21, "RT_NAME_D9", "⑨ TI", "⑨ TI"),
+            ("⑩ CP:", "RT_COL_D10", 22, "RT_NAME_D10", "⑩ CP", "⑩ CP"),
+            ("⑪ RC:", "RT_COL_D11", 23, "RT_NAME_D11", "⑪ RC", "⑪ RC"),
+            ("⑫ Mis:", "RT_COL_D12", 24, "RT_NAME_D12", "⑫ Mis", "⑫ Mis"),
+            ("⑬ EP:", "RT_COL_D13", 25, "RT_NAME_D13", "⑬ EP", "⑬ EP"),
+            ("⑭ SD:", "RT_COL_D14", 26, "RT_NAME_D14", "⑭ SD", "⑭ SD"),
+            ("⑮ Oth:", "RT_COL_D15", 27, "RT_NAME_D15", "⑮ Oth", "⑮ Oth"),
             ("판정(Result):", "RT_COL_RES", 28, "RT_NAME_RES", "Result", "Result"),
-            ("용접사(Welder):", "RT_COL_WELDER", 29, "RT_NAME_WELDER", "Welder", "Welder"),
-            ("D1(Crack):", "RT_COL_D1", 13, "RT_NAME_D1", "D1", "D1"),
-            ("D2(IP):", "RT_COL_D2", 14, "RT_NAME_D2", "D2", "D2"),
-            ("D3(LF):", "RT_COL_D3", 15, "RT_NAME_D3", "D3", "D3"),
-            ("D4(Slag):", "RT_COL_D4", 16, "RT_NAME_D4", "D4", "D4"),
-            ("D5(Por):", "RT_COL_D5", 17, "RT_NAME_D5", "D5", "D5")
+            ("용접사(Welder):", "RT_COL_WELDER", 29, "RT_NAME_WELDER", "Welder No", "Welder No"),
+            ("비고(Remarks):", "RT_COL_REM", 30, "RT_NAME_REM", "Remarks", "Remarks")
         ]
         self._create_column_mapping_ui(rt_tab_cols, "RT", rt_items)
 
@@ -955,7 +1045,7 @@ class PMIReportApp:
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.pt_paned.pack(fill='both', expand=True)
 
-        # [LEFT] Settings Pane (Simplified Layout)
+        # [LEFT] Evaluation Controls
         left_pane = tk.Frame(self.pt_paned, background="#f9fafb", padx=10, pady=10)
         self.pt_paned.add(left_pane, stretch="always")
 
@@ -1122,30 +1212,9 @@ class PMIReportApp:
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.paut_paned.pack(fill='both', expand=True)
 
-        # [LEFT] Settings & Manual Eval Pane (Scrollable Wrapper)
-        left_pane_outer = tk.Frame(self.paut_paned, background="#f9fafb")
-        self.paut_paned.add(left_pane_outer, stretch="always") 
-
-        left_canvas = tk.Canvas(left_pane_outer, background="#f9fafb", highlightthickness=0)
-        left_vsb = ttk.Scrollbar(left_pane_outer, orient="vertical", command=left_canvas.yview)
-        left_pane = tk.Frame(left_canvas, background="#f9fafb", padx=10, pady=10)
-        
-        left_pane.bind("<Configure>", lambda e: left_canvas.configure(scrollregion=left_canvas.bbox("all")))
-        canvas_window = left_canvas.create_window((0, 0), window=left_pane, anchor="nw")
-        def _on_paut_canvas_configure(e):
-            self.root.update_idletasks()
-            left_canvas.itemconfig(canvas_window, width=e.width)
-        left_canvas.bind("<Configure>", _on_paut_canvas_configure)
-        left_canvas.configure(yscrollcommand=left_vsb.set)
-        
-        left_vsb.pack(side='right', fill='y')
-        left_canvas.pack(side='left', fill='both', expand=True)
-
-        # Mousewheel scroll
-        def _paut_left_scroll(event):
-            left_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-            return "break"
-        left_canvas.bind("<MouseWheel>", _paut_left_scroll)
+        # [LEFT] Settings & Manual Eval Pane
+        left_pane = tk.Frame(self.paut_paned, background="#f9fafb", padx=10, pady=10)
+        self.paut_paned.add(left_pane, stretch="always")
 
         # Header
         header_frame = tk.Frame(left_pane, background="#f9fafb")
@@ -2134,27 +2203,27 @@ class PMIReportApp:
                        command=lambda: self.populate_preview(self.extracted_data, switch_tab=False)).pack(side='left')
 
         tree_frame = tk.Frame(container, background="#f9fafb")
-        self.preview_tree = ttk.Treeview(tree_frame, columns=("ST", "V", "No", "Date", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"), show='headings', height=10, selectmode='extended')
+        self.preview_tree = ttk.Treeview(tree_frame, columns=("ST", "V", "No", "Date", "Drawing No.", "Joint No.", "Location", "Ni", "Cr", "Mo", "Result"), show='headings', height=10, selectmode='extended')
         # [NEW] Highlight tags
         self.preview_tree.tag_configure("deficient", background="#fee2e2", foreground="#991b1b") # Light red
         self.preview_tree.tag_configure("group_even", background="#ffffff")
         self.preview_tree.tag_configure("group_odd", background="#f3f4f6")
         
         saved_widths = self.config.get("PMI_COL_WIDTHS", {})
-        default_widths = {"ST": 40, "V": 40, "No": 50, "Date": 90, "ISO/DWG": 400, "Joint No": 200, "Test Location": 300, "Ni": 60, "Cr": 60, "Mo": 60, "Grade": 150}
+        default_widths = {"ST": 40, "V": 40, "No": 50, "Date": 90, "Drawing No.": 400, "Joint No.": 200, "Location": 300, "Ni": 60, "Cr": 60, "Mo": 60, "Result": 150}
         
         for col in self.preview_tree["columns"]:
             # Use dynamic names from config for headings
             name_key = f"PMI_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').replace('-', '').upper()}"
             if col == "No": name_key = "PMI_NAME_NO"
             elif col == "Date": name_key = "PMI_NAME_DATE"
-            elif col == "ISO/DWG": name_key = "PMI_NAME_DWG"
-            elif col == "Joint No": name_key = "PMI_NAME_JOINT"
-            elif col == "Test Location": name_key = "PMI_NAME_LOC"
+            elif col == "Drawing No.": name_key = "PMI_NAME_DWG"
+            elif col == "Joint No.": name_key = "PMI_NAME_JOINT"
+            elif col == "Location": name_key = "PMI_NAME_LOC"
             elif col == "Ni": name_key = "PMI_NAME_NI"
             elif col == "Cr": name_key = "PMI_NAME_CR"
             elif col == "Mo": name_key = "PMI_NAME_MO"
-            elif col == "Grade": name_key = "PMI_NAME_RES"
+            elif col == "Result": name_key = "PMI_NAME_RES"
             else: name_key = None
             
             display_text = self.config.get(name_key, col) if name_key else col
@@ -2195,20 +2264,27 @@ class PMIReportApp:
         self.rt_preview_tree = ttk.Treeview(tree_frame, columns=self.rt_display_cols, show='headings', height=10, selectmode='extended')
         for col in self.rt_preview_tree["columns"]:
             name_key = f"RT_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').replace('①', '').replace('②', '').replace('③', '').replace('④', '').replace('⑤', '').upper()}"
-            if col == "Item": name_key = "RT_NAME_DWG"
-            elif col == "Line No.": name_key = "RT_NAME_LINE"
-            elif col == "Film Ident. No": name_key = "RT_NAME_JOINT"
-            elif col == "Size": name_key = "RT_NAME_SIZE"
-            elif col == "Thk.": name_key = "RT_NAME_THK"
-            elif col == "Mat.": name_key = "RT_NAME_MAT"
+            if col == "Drawing No.": name_key = "RT_NAME_DWG"
+            elif col == "Film Ident. No.": name_key = "RT_NAME_JOINT"
+            elif col == "Film Location": name_key = "RT_NAME_LOC"
+            elif col == "Welder No": name_key = "RT_NAME_WELDER"
             elif col == "Acc": name_key = "RT_NAME_ACC"
             elif col == "Rej": name_key = "RT_NAME_REJ"
-            elif col == "Welder No": name_key = "RT_NAME_WELDER"
             elif col == "① Crack": name_key = "RT_NAME_D1"
             elif col == "② IP": name_key = "RT_NAME_D2"
             elif col == "③ LF": name_key = "RT_NAME_D3"
             elif col == "④ Slag": name_key = "RT_NAME_D4"
             elif col == "⑤ Por": name_key = "RT_NAME_D5"
+            elif col == "⑥ U/C": name_key = "RT_NAME_D6"
+            elif col == "⑦ RUC": name_key = "RT_NAME_D7"
+            elif col == "⑧ BT": name_key = "RT_NAME_D8"
+            elif col == "⑨ TI": name_key = "RT_NAME_D9"
+            elif col == "⑩ CP": name_key = "RT_NAME_D10"
+            elif col == "⑪ RC": name_key = "RT_NAME_D11"
+            elif col == "⑫ Mis": name_key = "RT_NAME_D12"
+            elif col == "⑬ EP": name_key = "RT_NAME_D13"
+            elif col == "⑭ SD": name_key = "RT_NAME_D14"
+            elif col == "⑮ Oth": name_key = "RT_NAME_D15"
             else: name_key = None
             
             display_text = self.config.get(name_key, col) if name_key else col
@@ -3877,6 +3953,20 @@ class PMIReportApp:
             if mode == "RT":
                 for k in self.rt_column_keys:
                     if k == "selected": row_vals.append(v_mark)
+                    elif k == "Acc":
+                        val = item.get("Acc", "")
+                        if not val:
+                            res = str(item.get("Result", "")).upper()
+                            val = "OK" if "ACC" in res or "OK" in res else ""
+                        row_vals.append(val)
+                    elif k == "Rej":
+                        val = item.get("Rej", "")
+                        if not val:
+                            res = str(item.get("Result", "")).upper()
+                            val = "NG" if "REJ" in res or "NG" in res or "RE" in res else ""
+                        row_vals.append(val)
+                    elif k == "Deg":
+                        row_vals.append(str(item.get("Deg", "")).strip())
                     else: 
                         val = str(item.get(k, "")).strip()
                         if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
@@ -3900,7 +3990,7 @@ class PMIReportApp:
                 for k in self.column_keys:
                     if k == "_status": row_vals.append(st_mark)
                     elif k == "selected": row_vals.append(v_mark)
-                    elif k in ["Ni", "Cr", "Mo"]:
+                    elif k in ["Ni", "Cr", "Mo", "Mn"]:
                         row_vals.append(f"{self.to_float(item.get(k, 0)):.2f}%")
                     else:
                         val = str(item.get(k, "")).strip()
@@ -4601,16 +4691,23 @@ class PMIReportApp:
                     col_welder = _find_col(df, ["WELDER", "W/N"])
                     col_remarks = _find_col(df, ["REMARKS", "REMARK", "비고"])
                     # RT Specifics
+                    col_date = _find_col(df, ["DATE", "검사일"])
                     col_t = _find_col(df, ["T", "THICK", "THK"])
                     col_mat = _find_col(df, ["MAT", "MATERIAL"])
                     col_weld = _find_col(df, ["WELD", "TYPE"])
                     col_iqi = _find_col(df, ["IQI"])
                     col_sens = _find_col(df, ["SENS", "SENSITIVITY"])
                     col_den = _find_col(df, ["DEN", "DENSITY"])
-                    col_result = _find_col(df, ["RESULT", "판정", "ACC", "REJ"])
+                    col_acc = _find_col(df, ["ACC", "합격"])
+                    col_rej = _find_col(df, ["REJ", "불합격"])
+                    col_deg = _find_col(df, ["DEG", "물성", "수정브랜드", "GRADE"])
+                    col_result = _find_col(df, ["RESULT", "판정"])
+                    
                     defect_cols = {}
                     for i in range(1, 16):
-                        c = _find_col(df, [f"D{i}", f"DEFECT{i}"])
+                        # Support for D1, DEFECT1, and circled numbers ① to ⑮
+                        circle_num = chr(9311 + i) # ① is 9312
+                        c = _find_col(df, [f"D{i}", f"DEFECT{i}", circle_num, f"{i}"])
                         if c: defect_cols[f"D{i}"] = c
                 elif mode == "PT":
                     col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
@@ -4666,9 +4763,13 @@ class PMIReportApp:
                     if mode == "RT":
                         # RT-specific Row Data
                         item_data = {
-                            'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': curr_joint,
+                            'No': v_raw_no, 
+                            'Date': str(row[col_date]).strip() if col_date is not None else (extracted_date if extracted_date else ""),
+                            'Dwg': curr_dwg, 'Joint': curr_joint,
                             'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
-                            'Grade': str(row[col_grade]).strip() if col_grade is not None else "",
+                            'Acc': str(row[col_acc]).strip() if col_acc is not None else "",
+                            'Rej': str(row[col_rej]).strip() if col_rej is not None else "",
+                            'Deg': str(row[col_deg]).strip() if col_deg is not None else "",
                             'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
                             'Remarks': str(row[col_remarks]).strip() if col_remarks is not None else "",
                             'T': str(row[col_t]).strip() if col_t is not None else "",
@@ -5512,6 +5613,36 @@ class PMIReportApp:
                 
                 item = final_list[data_ptr]
                 
+                # [NEW] Write headers to Excel on the row above start_row
+                if current_row == start_row:
+                    try:
+                        h_row = start_row - 1
+                        if h_row >= 1:
+                            # Use existing mapping keys to place headers
+                            h_map = {
+                                'RT_COL_NO': 'RT_NAME_NO', 'RT_COL_DATE': 'RT_NAME_DATE',
+                                'RT_COL_DWG': 'RT_NAME_DWG', 'RT_COL_JOINT': 'RT_NAME_JOINT',
+                                'RT_COL_LOC': 'RT_NAME_LOC', 'RT_COL_THK': 'RT_NAME_THK',
+                                'RT_COL_MAT': 'RT_NAME_MAT', 'RT_COL_ACC': 'RT_NAME_ACC',
+                                'RT_COL_REJ': 'RT_NAME_REJ', 'RT_COL_DEG': 'RT_NAME_DEG',
+                                'RT_COL_RES': 'RT_NAME_RES', 'RT_COL_WELDER': 'RT_NAME_WELDER',
+                                'RT_COL_REM': 'RT_NAME_REM'
+                            }
+                            for c_key, n_key in h_map.items():
+                                c_idx = self.col_to_num(self.config.get(c_key, '0'))
+                                if c_idx >= 1:
+                                    h_default = c_key.replace('RT_COL_', '').capitalize()
+                                    h_text = self.config.get(n_key, h_default)
+                                    self.safe_set_value(ws, ws.cell(row=h_row, column=c_idx).coordinate, h_text)
+                            
+                            # Defects D1-D15 headers
+                            for d_i in range(1, 16):
+                                d_c_idx = self.col_to_num(self.config.get(f'RT_COL_D{d_i}', '0'))
+                                if d_c_idx >= 1:
+                                    d_text = self.config.get(f'RT_NAME_D{d_i}', f'D{d_i}')
+                                    self.safe_set_value(ws, ws.cell(row=h_row, column=d_c_idx).coordinate, d_text)
+                    except: pass
+
                 # Column Data Mapping (standardized layout)
                 no_col = self.col_to_num(self.config.get('RT_COL_NO', '1'))
                 if no_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=no_col).coordinate, item.get('No', ''))
@@ -5528,17 +5659,34 @@ class PMIReportApp:
                 loc_col = self.col_to_num(self.config.get('RT_COL_LOC', '5'))
                 if loc_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=loc_col).coordinate, item.get('Loc', ''))
                 
-                # Standard columns 6-12 (Legacy hardcoded mapping for now)
-                self.safe_set_value(ws, ws.cell(row=current_row, column=6).coordinate, item.get('T', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=7).coordinate, item.get('Mat', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=8).coordinate, item.get('Weld', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=9).coordinate, item.get('Deg', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=10).coordinate, item.get('IQI', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=11).coordinate, item.get('Sens', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=12).coordinate, item.get('Den', ''))
+                # Standard columns (Dynamic mapping)
+                thk_col = self.col_to_num(self.config.get('RT_COL_THK', '6'))
+                if thk_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=thk_col).coordinate, item.get('T', ''))
                 
-                # Defects D1-D5 (Dynamic)
-                for d_i in range(1, 6):
+                mat_col = self.col_to_num(self.config.get('RT_COL_MAT', '7'))
+                if mat_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=mat_col).coordinate, item.get('Mat', ''))
+                
+                acc_col = self.col_to_num(self.config.get('RT_COL_ACC', '7'))
+                if acc_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=acc_col).coordinate, item.get('Acc', ''))
+                
+                rej_col = self.col_to_num(self.config.get('RT_COL_REJ', '8'))
+                if rej_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rej_col).coordinate, item.get('Rej', ''))
+                
+                deg_col = self.col_to_num(self.config.get('RT_COL_DEG', '9'))
+                if deg_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=deg_col).coordinate, item.get('Deg', ''))
+
+                # IQI/Sens/Den (Legacy or fixed for now)
+                iqi_col = self.col_to_num(self.config.get('RT_COL_IQI', '10'))
+                if iqi_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=iqi_col).coordinate, item.get('IQI', ''))
+                
+                sens_col = self.col_to_num(self.config.get('RT_COL_SENS', '11'))
+                if sens_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=sens_col).coordinate, item.get('Sens', ''))
+                
+                den_col = self.col_to_num(self.config.get('RT_COL_DEN', '12'))
+                if den_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=den_col).coordinate, item.get('Den', ''))
+                
+                # Defects D1-D15 (Dynamic)
+                for d_i in range(1, 16):
                     d_col_key = f'RT_COL_D{d_i}'
                     d_col_idx = self.col_to_num(self.config.get(d_col_key, str(12 + d_i)))
                     if d_col_idx >= 1:
@@ -5596,6 +5744,15 @@ class PMIReportApp:
             for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
                 try: os.remove(f)
                 except: pass
+
+    def _on_entry_esc(self, event):
+        """Removes focus and clears selection on ESC (preserves text)."""
+        try:
+            widget = event.widget
+            if hasattr(widget, 'selection_clear'):
+                widget.selection_clear()
+            self.root.focus_set()
+        except: pass
 
 if __name__ == "__main__":
     root = tk.Tk()
