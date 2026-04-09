@@ -10,12 +10,15 @@ import threading
 import json
 
 class PhotoLogApp:
-    def __init__(self, root):
+    def __init__(self, root, embedded=False):
         self.root = root
-        self.root.title("Photo Log Generator v33:00")
-        self.root.geometry("600x650")
-        self.root.configure(background="#f3f4f6")
-        
+        self.embedded = embedded
+
+        if not embedded:
+            self.root.title("Photo Log Generator v33:00")
+            self.root.geometry("600x650")
+            self.root.configure(background="#f3f4f6")
+
         self.style = ttk.Style()
         self.style.theme_use('clam')
         
@@ -66,7 +69,8 @@ class PhotoLogApp:
         
         self.create_widgets()
         self.load_settings() # Restore previous session data
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        if not embedded:
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
     def create_widgets(self):
         # Main Container
@@ -74,30 +78,40 @@ class PhotoLogApp:
         main_frame.pack(fill="both", expand=True)
         
         # Title
-        tk.Label(main_frame, text="📷 Photo Log Generator", font=("Malgun Gothic", 18, "bold"), 
-                 background="#f3f4f6", foreground="#1e3a8a").pack(side="top", pady=(0, 20))
-        
+        tk.Label(main_frame, text="📷 Photo Log Generator", font=("Malgun Gothic", 18, "bold"),
+                 background="#f3f4f6", foreground="#1e3a8a").pack(side="top", pady=(0, 10))
+
         # 1. Buttons Frame (Bottom)
         btn_frame = tk.Frame(main_frame, background="#f3f4f6")
         btn_frame.pack(side="bottom", fill="x", pady=(10, 0))
-        
         ttk.Button(btn_frame, text="리포트 생성 시작", command=self.start_generation).pack(side="right", padx=5)
-        ttk.Button(btn_frame, text="종료", command=self.root.quit).pack(side="right", padx=5)
+        if not self.embedded:
+            ttk.Button(btn_frame, text="종료", command=self.root.quit).pack(side="right", padx=5)
 
         # 2. Progress Bar
         self.progress = ttk.Progressbar(main_frame, orient="horizontal", mode="determinate")
         self.progress.pack(side="bottom", fill="x", pady=(10, 0))
 
-        # 3. Input Section (Top)
-        input_frame = ttk.LabelFrame(main_frame, text=" 리포트 정보 (Report Info) ", padding=15)
-        input_frame.pack(side="top", fill="x", pady=5)
-        
-        # Inspection Type & Title
+        # ── PanedWindow: 설정 영역(위) ↕ 파일/로그 영역(아래) ──────────────────
+        self.paned_window = tk.PanedWindow(
+            main_frame, orient=tk.VERTICAL,
+            sashwidth=7, sashrelief="raised",
+            background="#d1d5db"
+        )
+        self.paned_window.pack(fill="both", expand=True)
+
+        # ── 상단 패널: 설정 영역 ──────────────────────────────────────────────
+        settings_frame = tk.Frame(self.paned_window, background="#f3f4f6")
+
+        # 3. Input Section
+        input_frame = ttk.LabelFrame(settings_frame, text=" 리포트 정보 (Report Info) ", padding=15)
+        input_frame.pack(side="top", fill="x", pady=(0, 5))
+
         tk.Label(input_frame, text="검사 항목:", font=("Malgun Gothic", 10), anchor="w").grid(row=0, column=0, sticky="ew", pady=2)
         type_combo = ttk.Combobox(input_frame, textvariable=self.inspect_type, values=list(self.header_map.keys()), state="readonly", font=("Malgun Gothic", 10))
         type_combo.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=2)
         type_combo.bind("<<ComboboxSelected>>", self.on_type_change)
-        
+
         tk.Label(input_frame, text="리포트 제목:", font=("Malgun Gothic", 10), anchor="w").grid(row=1, column=0, sticky="ew", pady=2)
         ttk.Entry(input_frame, textvariable=self.report_title, font=("Malgun Gothic", 9)).grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=2)
 
@@ -105,25 +119,21 @@ class PhotoLogApp:
         self._add_input_row(input_frame, "REPORT NO:", self.report_no, 3)
         self._add_input_row(input_frame, "검사일자", self.inspect_date, 4)
         input_frame.columnconfigure(1, weight=1)
-        
+
         # 4. Image Options Section
-        opt_frame = ttk.LabelFrame(main_frame, text=" 사진 레이아웃 설정 (Image Options) ", padding=15)
-        opt_frame.pack(side="top", fill="x", pady=5)
-        
+        opt_frame = ttk.LabelFrame(settings_frame, text=" 사진 레이아웃 설정 (Image Options) ", padding=15)
+        opt_frame.pack(side="top", fill="x", pady=(0, 5))
+
         tk.Label(opt_frame, text="한 줄당 사진 개수:", font=("Malgun Gothic", 10)).grid(row=0, column=0, sticky="w", pady=2)
         layout_combo = ttk.Combobox(opt_frame, textvariable=self.cols_per_row, values=["1", "2", "3"], state="readonly", width=5)
         layout_combo.grid(row=0, column=1, sticky="w", padx=10, pady=2)
-        
         ttk.Checkbutton(opt_frame, text="가로세로 비율 유지 및 중앙 정렬", variable=self.keep_aspect).grid(row=0, column=2, padx=20, sticky="w")
 
-        # New: Cell Dimension Inputs
         tk.Label(opt_frame, text="사진 칸 너비 (엑셀):", font=("Malgun Gothic", 10)).grid(row=1, column=0, sticky="w", pady=2)
         ttk.Entry(opt_frame, textvariable=self.cell_width_var, width=10).grid(row=1, column=1, sticky="w", padx=10, pady=2)
-        
         tk.Label(opt_frame, text="사진 칸 높이 (포인트):", font=("Malgun Gothic", 10)).grid(row=1, column=2, sticky="w", pady=2)
         ttk.Entry(opt_frame, textvariable=self.cell_height_var, width=10).grid(row=1, column=3, sticky="w", padx=10, pady=2)
 
-        # New: Margin & Scale Section
         tk.Label(opt_frame, text="여백(Top/Bottom):", font=("Malgun Gothic", 10)).grid(row=2, column=0, sticky="w", pady=2)
         m_tb_frame = tk.Frame(opt_frame, background="#f3f4f6")
         m_tb_frame.grid(row=2, column=1, sticky="w", padx=10)
@@ -138,65 +148,67 @@ class PhotoLogApp:
 
         tk.Label(opt_frame, text="인쇄 배율 (%):", font=("Malgun Gothic", 10)).grid(row=3, column=0, sticky="w", pady=2)
         ttk.Entry(opt_frame, textvariable=self.print_scale_var, width=10).grid(row=3, column=1, sticky="w", padx=10, pady=2)
-
         tk.Label(opt_frame, text="설명 줄 높이 (포인트):", font=("Malgun Gothic", 10)).grid(row=3, column=2, sticky="w", pady=2)
         ttk.Entry(opt_frame, textvariable=self.desc_height_var, width=10).grid(row=3, column=3, sticky="w", padx=10, pady=2)
 
         tk.Label(opt_frame, text="로고 너비 (픽셀):", font=("Malgun Gothic", 10)).grid(row=4, column=0, sticky="w", pady=2)
         ttk.Entry(opt_frame, textvariable=self.logo_width_var, width=10).grid(row=4, column=1, sticky="w", padx=10, pady=2)
-
         tk.Label(opt_frame, text="로고 X/Y 오프셋", font=("Malgun Gothic", 10)).grid(row=4, column=2, sticky="w", pady=2)
         logo_xy_frame = tk.Frame(opt_frame, background="#f3f4f6")
         logo_xy_frame.grid(row=4, column=3, sticky="w", padx=10)
         ttk.Entry(logo_xy_frame, textvariable=self.logo_x_var, width=5).pack(side="left")
         ttk.Entry(logo_xy_frame, textvariable=self.logo_y_var, width=5).pack(side="left", padx=2)
 
-        # New: Photo Alignment & Fit Width
         tk.Label(opt_frame, text="사진 정렬:", font=("Malgun Gothic", 10)).grid(row=5, column=0, sticky="w", pady=2)
         align_combo = ttk.Combobox(opt_frame, textvariable=self.photo_align_var, values=["중앙 정렬", "좌측 정렬"], state="readonly", width=10)
         align_combo.grid(row=5, column=1, sticky="w", padx=10, pady=2)
-
         ttk.Checkbutton(opt_frame, text="가로 폭 맞춤 (Fit to Width)", variable=self.fit_width_var).grid(row=5, column=2, columnspan=2, padx=20, sticky="w")
 
-        # 5. Path & File Management Section (Replaced Folder Entry with Listbox)
-        path_frame = ttk.LabelFrame(main_frame, text=" 사진 파일 관리 (Selection Management) ", padding=15)
-        path_frame.pack(side="top", fill="both", expand=True, pady=5)
-        
-        # File Listbox
-        list_grid_frame = tk.Frame(path_frame, background="#ffffff")
-        list_grid_frame.pack(side="top", fill="both", expand=True)
-        
-        self.file_listbox = tk.Listbox(list_grid_frame, height=8, font=("Consolas", 9), selectmode="extended", borderwidth=0)
-        self.file_listbox.pack(side="left", fill="both", expand=True)
-        
-        list_scroll = ttk.Scrollbar(list_grid_frame, orient="vertical", command=self.file_listbox.yview)
-        list_scroll.pack(side="right", fill="y")
-        self.file_listbox.config(yscrollcommand=list_scroll.set)
-        
-        # Management Tool Buttons
+        self.paned_window.add(settings_frame, minsize=80)
+
+        # ── 하단 패널: 파일 관리 + 로그 ─────────────────────────────────────
+        content_frame = tk.Frame(self.paned_window, background="#f3f4f6")
+
+        # 5. Path & File Management Section
+        path_frame = ttk.LabelFrame(content_frame, text=" 사진 파일 관리 (Selection Management) ", padding=15)
+        path_frame.pack(side="top", fill="both", expand=True, pady=(0, 5))
+
+        # 로고/파일명/버튼을 먼저 bottom에 배치 → 항상 보임
+        misc_frame = tk.Frame(path_frame)
+        misc_frame.pack(side="bottom", fill="x", pady=(5, 0))
+        self._add_path_row(misc_frame, "로고 파일:", self.logo_path, 0)
+        self._add_input_row(misc_frame, "파일명", self.output_name, 1)
+
         m_btn_frame = tk.Frame(path_frame)
-        m_btn_frame.pack(side="top", fill="x", pady=5)
+        m_btn_frame.pack(side="bottom", fill="x", pady=(5, 0))
         ttk.Button(m_btn_frame, text="파일 개별 추가", command=self.add_files).pack(side="left", padx=2)
         ttk.Button(m_btn_frame, text="폴더 전체 추가", command=self.add_folder).pack(side="left", padx=2)
         ttk.Button(m_btn_frame, text="선택 항목 제거", command=self.remove_selected).pack(side="right", padx=2)
         ttk.Button(m_btn_frame, text="전체 비우기", command=self.clear_all).pack(side="right", padx=2)
 
-        # Logo and Output Name Section
-        misc_frame = tk.Frame(path_frame)
-        misc_frame.pack(side="top", fill="x", pady=5)
-        self._add_path_row(misc_frame, "로고 파일:", self.logo_path, 0)
-        self._add_input_row(misc_frame, "파일명", self.output_name, 1)
-        
+        # 리스트박스는 남은 공간을 채움
+        list_grid_frame = tk.Frame(path_frame, background="#ffffff")
+        list_grid_frame.pack(side="top", fill="both", expand=True)
+
+        self.file_listbox = tk.Listbox(list_grid_frame, height=6, font=("Consolas", 9), selectmode="extended", borderwidth=0)
+        self.file_listbox.pack(side="left", fill="both", expand=True)
+
+        list_scroll = ttk.Scrollbar(list_grid_frame, orient="vertical", command=self.file_listbox.yview)
+        list_scroll.pack(side="right", fill="y")
+        self.file_listbox.config(yscrollcommand=list_scroll.set)
+
         # 6. Log Section
-        log_frame = ttk.LabelFrame(main_frame, text=" 진행 로그 (Log) ", padding=10)
-        log_frame.pack(side="top", fill="both", expand=True, pady=10)
-        
+        log_frame = ttk.LabelFrame(content_frame, text=" 진행 로그 (Log) ", padding=10)
+        log_frame.pack(side="top", fill="x", pady=(0, 5))
+
         self.log_text = tk.Text(log_frame, height=5, font=("Consolas", 9), state="disabled", background="#ffffff")
         self.log_text.pack(side="left", fill="both", expand=True)
-        
+
         scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
+
+        self.paned_window.add(content_frame, minsize=80)
 
     def _add_input_row(self, parent, label, var, row):
         tk.Label(parent, text=label, font=("Malgun Gothic", 10), anchor="w").grid(row=row, column=0, sticky="ew", pady=2)
@@ -304,8 +316,15 @@ class PhotoLogApp:
                 "desc_height": self.desc_height_var.get(),
                 "photo_align": self.photo_align_var.get(),
                 "fit_width": self.fit_width_var.get(),
-                "selected_files": self.selected_files
+                "selected_files": self.selected_files,
             }
+            if not self.embedded:
+                data["window_geometry"] = self.root.geometry()
+            # 구분선(sash) 위치 저장
+            try:
+                data["sash_pos"] = self.paned_window.sash_coord(0)[1]
+            except Exception:
+                pass
             with open(self.settings_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
         except Exception as e:
@@ -332,7 +351,7 @@ class PhotoLogApp:
                         self.cell_width_var.set("53.0")
                     else:
                         self.cell_width_var.set(val)
-                if "cell_height" in data: 175.0
+                if "cell_height" in data: self.cell_height_var.set(data["cell_height"])
                 if "logo_width" in data: self.logo_width_var.set(data["logo_width"])
                 if "logo_x" in data: self.logo_x_var.set(data["logo_x"])
                 if "logo_y" in data: self.logo_y_var.set(data["logo_y"])
@@ -350,8 +369,24 @@ class PhotoLogApp:
                     self.file_listbox.delete(0, tk.END)
                     for f_path in self.selected_files:
                         self.file_listbox.insert(tk.END, f_path)
+                if not self.embedded and "window_geometry" in data:
+                    try:
+                        self.root.geometry(data["window_geometry"])
+                    except Exception:
+                        pass
+                # 구분선 위치는 렌더링 후에 적용해야 정확함
+                if "sash_pos" in data:
+                    sash_pos = int(data["sash_pos"])
+                    self.root.after(150, lambda p=sash_pos: self._restore_sash(p))
         except Exception as e:
             print(f"Error loading settings: {e}")
+
+    def _restore_sash(self, pos):
+        """PanedWindow 구분선 위치 복원 (렌더링 완료 후 호출)"""
+        try:
+            self.paned_window.sash_place(0, 1, pos)
+        except Exception:
+            pass
 
     def log(self, message):
         self.log_text.config(state="normal")

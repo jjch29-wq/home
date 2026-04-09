@@ -660,17 +660,20 @@ class PMIReportApp:
         self.rt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.paut_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
-        
+        self.photo_log_frame = tk.Frame(self.mode_notebook, background="#f3f4f6")
+
         self.mode_notebook.add(self.pmi_mode_frame, text="  PMI (성분 분석)  ", sticky='nsew')
         self.mode_notebook.add(self.rt_mode_frame, text="  RT (방사선 투과)  ", sticky='nsew')
         self.mode_notebook.add(self.pt_mode_frame, text="  PT (침투 탐상)  ", sticky='nsew')
         self.mode_notebook.add(self.paut_mode_frame, text="  PAUT (ASME B31.1)  ", sticky='nsew')
-        
+        self.mode_notebook.add(self.photo_log_frame, text="  📷 Photo Log  ", sticky='nsew')
+
         # Setup each mode
         self._setup_pmi_ui(self.pmi_mode_frame)
         self._setup_rt_ui(self.rt_mode_frame)
         self._setup_pt_ui(self.pt_mode_frame)
         self._setup_paut_ui(self.paut_mode_frame)
+        self._setup_photo_log_ui(self.photo_log_frame)
 
     def _create_scrollable_sidebar(self, parent):
         """Creates a scrollable canvas/scrollbar container for sidebars."""
@@ -5744,6 +5747,28 @@ class PMIReportApp:
             for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
                 try: os.remove(f)
                 except: pass
+
+    def _setup_photo_log_ui(self, parent):
+        """Photo Log Generator 탭을 photo_log_ui.PhotoLogApp으로 임베드"""
+        import importlib.util
+        photo_log_path = os.path.join(BASE_DIR, "photo_log_ui.py")
+        try:
+            if "photo_log_ui" not in sys.modules:
+                spec = importlib.util.spec_from_file_location("photo_log_ui", photo_log_path)
+                mod = importlib.util.module_from_spec(spec)
+                sys.modules["photo_log_ui"] = mod
+                spec.loader.exec_module(mod)
+            PhotoLogApp = sys.modules["photo_log_ui"].PhotoLogApp
+            self.photo_log_app = PhotoLogApp(parent, embedded=True)
+        except Exception as e:
+            tk.Label(
+                parent,
+                text=f"Photo Log 로드 실패:\n{e}",
+                font=("Malgun Gothic", 11),
+                foreground="red",
+                background="#f3f4f6",
+                justify="center"
+            ).pack(expand=True)
 
     def _on_entry_esc(self, event):
         """Removes focus and clears selection on ESC (preserves text)."""
