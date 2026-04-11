@@ -2,12 +2,19 @@
 from tkinter import ttk, filedialog, messagebox
 import xlsxwriter
 import os
+import sys
 import glob
 from PIL import Image, ImageOps
 import datetime
 import math
 import threading
 import json
+
+def _get_resource_dir():
+    """PyInstaller 번들 및 일반 실행 모두 에서 resources 폴더 경로 반환"""
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, 'resources')
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resources')
 
 class PhotoLogApp:
     def __init__(self, root, embedded=False):
@@ -43,8 +50,12 @@ class PhotoLogApp:
         
         self.cols_per_row = tk.StringVar(value="2")
         self.keep_aspect = tk.BooleanVar(value=True)
-        
-        self.logo_path = tk.StringVar(value=os.path.join(os.getcwd(), "logo.png"))
+
+        # 기본 로고: 번들 resources 폴더의 logo.png 우선, 없으면 빈 문자열
+        _default_logo = os.path.join(_get_resource_dir(), "logo.png")
+        if not os.path.exists(_default_logo):
+            _default_logo = ""
+        self.logo_path = tk.StringVar(value=_default_logo)
         self.output_name = tk.StringVar(value="NDT_Photo_Log_Final.xlsx")
         self.logo_width_var = tk.StringVar(value="80") # Custom Logo Width
         self.logo_x_var = tk.StringVar(value="2")      # Logo X Offset
