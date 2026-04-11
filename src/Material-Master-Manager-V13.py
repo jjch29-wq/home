@@ -11412,6 +11412,10 @@ class MaterialManager:
         try:
             # 1. Save configuration when tab changes (respects is_ready via save_tab_config)
             self.save_tab_config()
+
+            # 1-1. 탭 이동 시 실제 데이터(Excel)도 자동 저장
+            if getattr(self, 'is_ready', False):
+                self.save_data()
             
             # 2. Handle specific tab UI adjustments
             current_tab = self.notebook.select()
