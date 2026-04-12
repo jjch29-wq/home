@@ -2633,8 +2633,6 @@ class MaterialManager:
 
     def save_data(self):
         try:
-            print(f"DEBUG: Saving data to {self.db_path}...")
-            print(f"DEBUG: DataFrames size - Materials: {len(self.materials_df)}, Transactions: {len(self.transactions_df)}, Monthly: {len(self.monthly_usage_df)}, Daily: {len(self.daily_usage_df)}, Budget: {len(self.budget_df)}")
             
             # [STABILITY] Ensure MaterialID is consistently numeric in all sheets
             # Only cast if types are mixed or object to save time
@@ -2659,12 +2657,10 @@ class MaterialManager:
                 self.daily_usage_df.to_excel(writer, sheet_name='DailyUsage', index=False)
                 self.budget_df.to_excel(writer, sheet_name='Budget', index=False)
             
-            print("DEBUG: Save successful.")
             return True
         except Exception as e:
             import traceback
             err_detail = traceback.format_exc()
-            print(f"DEBUG: Save FAILED: {e}\n{err_detail}")
             self.show_error_dialog("데이터 저장 실패", f"데이터를 저장하는데 실패했습니다:\n{e}\n\n파일이 열려있다면 닫고 다시 시도해주세요.")
             return False
 
@@ -4957,12 +4953,12 @@ class MaterialManager:
         import re
         df.columns = [re.sub(r'\s+', '', str(c)) for c in df.columns]
         
-        df['Year'] = pd.to_datetime(df['Date']).dt.year
-        df['Month'] = pd.to_datetime(df['Date']).dt.month
-        
-        # DEBUG: Check what columns exist
-        print(f"DEBUG: Normalized daily_usage_df columns: {df.columns.tolist()}")
-        print(f"DEBUG: Number of rows before filter: {len(df)}")
+        df['Year'] = pd.to_datetime(df['Date'], errors='coerce').dt.year
+        df['Month'] = pd.to_datetime(df['Date'], errors='coerce').dt.month
+        # 날짜 파싱 실패 행 제거
+        df = df.dropna(subset=['Year', 'Month'])
+        df['Year'] = df['Year'].astype(int)
+        df['Month'] = df['Month'].astype(int)
         
         # Apply filters
         if filter_year != '전체':
@@ -4973,8 +4969,6 @@ class MaterialManager:
         
         if filter_site != '전체':
             df = df[df['Site'] == filter_site]
-        
-        print(f"DEBUG: Number of rows after filter: {len(df)}")
         
         # [NEW] Return early if filtered df is empty to avoid ValueError during assignment
         if df.empty:
@@ -5085,10 +5079,6 @@ class MaterialManager:
         
         # Store df for selection handling
         self.current_monthly_df = df
-        
-        print(f"DEBUG: Number of grouped rows: {len(grouped)}")
-        if len(grouped) > 0:
-            print(f"DEBUG: First grouped row: {grouped.iloc[0].to_dict()}")
         
         # Initialize totals for cumulative sum
         total_worker_count = 0.0
@@ -7928,6 +7918,24 @@ class MaterialManager:
         tree_outer.grid_rowconfigure(0, weight=1)
         tree_outer.grid_columnconfigure(0, weight=1)
 
+        # ── ESC: 현장별 탭 내 모든 입력 위젯에서 포커스 해제 ──────────────
+        def _esc_to_root(e=None):
+            self.root.focus_set()
+            return "break"
+
+        def _bind_esc_recursive(widget):
+            try:
+                cls = widget.winfo_class()
+                if cls in ('TEntry', 'Entry', 'TCombobox'):
+                    widget.bind('<Escape>', _esc_to_root, add='+')
+            except Exception:
+                pass
+            for child in widget.winfo_children():
+                _bind_esc_recursive(child)
+
+        # after_idle: 모든 위젯 생성 완료 후 바인딩
+        self.root.after_idle(lambda: _bind_esc_recursive(self.tab_daily_usage))
+
     def update_budget_view(self):
         """Refresh the budget treeview - no-op (UI triggered)"""
         pass
@@ -9690,6 +9698,14 @@ class MaterialManager:
                 messagebox.showinfo("완료", final_msg)
                 self.refresh_inquiry_filters()
                 self.update_daily_usage_view()
+                # 월별 탭 필터를 저장된 날짜에 맞추고 갱신
+                try:
+                    if hasattr(self, 'cb_filter_year'):
+                        self.cb_filter_year.set(str(selected_date.year))
+                    if hasattr(self, 'cb_filter_month'):
+                        self.cb_filter_month.set(str(selected_date.month))
+                except Exception:
+                    pass
                 self.update_monthly_usage_view() # Also refresh monthly summary
                 
                 # Report view was removed/renamed, safe to skip or call appropriate method
