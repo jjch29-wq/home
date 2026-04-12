@@ -1987,7 +1987,13 @@ class ColumnSelectionDialog(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", on_close)
             
         # Create checkboxes
-        for col in columns:
+        for item in columns:
+            if isinstance(item, (tuple, list)) and len(item) >= 2:
+                col = item[0]
+                provided_display_text = item[1]
+            else:
+                col = item
+                provided_display_text = None
             var = tk.BooleanVar(value=True)
             self.vars[col] = var
             # 사용자에게는 내부 컬럼명 대신 표시용 한글명을 보여줌
@@ -1999,7 +2005,7 @@ class ColumnSelectionDialog(tk.Toplevel):
                 'MaterialID': '자재ID',
                 'FilmCount': '필름매수'
             }
-            display_text = display_map.get(col, col)
+            display_text = provided_display_text or display_map.get(col, col)
             cb = ttk.Checkbutton(scrollable_frame, text=display_text, variable=var)
             cb.pack(anchor='w', pady=2)
             
@@ -8169,6 +8175,7 @@ class MaterialManager:
         ttk.Button(bottom_filter, text="조회", command=self.update_budget_site_view).pack(side='left', padx=8)
         ttk.Button(bottom_filter, text="예산 수정/불러오기",
                    command=lambda: self._load_budget_to_form(self.cb_budget_view_site.get())).pack(side='left', padx=4)
+        ttk.Button(bottom_filter, text="컬럼 추가", command=self.add_budget_view_custom_column).pack(side='left', padx=4)
         ttk.Button(bottom_filter, text="컬럼 관리", command=self.show_budget_view_column_dialog).pack(side='left', padx=4)
         ttk.Button(bottom_filter, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
 
@@ -8177,25 +8184,28 @@ class MaterialManager:
         tree_outer = ttk.Frame(bottom_container)
         tree_outer.pack(fill='both', expand=True)
 
-        # 전체 컬럼: 기본 표시 컬럼 + 사용자가 "추가" 할 수 있는 숨김 기본 컬럼
-        self.budget_view_cols = (
+        # 전체 컬럼: 기본 표시 컬럼 + 사용자가 "추가" 할 수 있는 숨김 기본 컬럼 + 사용자정의 컬럼
+        self.budget_view_builtin_cols = (
             'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
             'OT합계', '자재사용량', '자재단가', '합계', '비고',
             '작업자', '품목명', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고',
             'MaterialID', 'FilmCount'
         )
-        self.budget_view_widths = (
-            90, 120, 100, 80, 70, 80, 90, 80, 70,
-            80, 80, 90, 100, 150,
-            170, 180, 140, 110, 100, 120, 140,
-            90, 90
-        )
-        self.budget_view_heads  = (
-            '날짜', '현장', '장비', '검사방법', '수량', '단가', '검사단가', '출장비', '일식',
-            'OT합계', '자재사용량', '자재단가', '합계', '비고',
-            '작업자', '품목명', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고',
-            '자재ID', '필름매수'
-        )
+        self.budget_view_builtin_width_map = {
+            'Date': 90, 'Site': 120, '장비명': 100, '검사방법': 80, '검사량': 70, '단가': 80,
+            '검사단가': 90, '출장비': 80, '일식': 70, 'OT합계': 80, '자재사용량': 80, '자재단가': 90,
+            '합계': 100, '비고': 150, '작업자': 170, '품목명': 180, '입력시간': 140,
+            '차량번호': 110, '주행거리': 100, '차량점검': 120, '차량비고': 140, 'MaterialID': 90, 'FilmCount': 90
+        }
+        self.budget_view_builtin_head_map = {
+            'Date': '날짜', 'Site': '현장', '장비명': '장비', '검사방법': '검사방법', '검사량': '수량', '단가': '단가',
+            '검사단가': '검사단가', '출장비': '출장비', '일식': '일식', 'OT합계': 'OT합계', '자재사용량': '자재사용량',
+            '자재단가': '자재단가', '합계': '합계', '비고': '비고', '작업자': '작업자', '품목명': '품목명',
+            '입력시간': '입력시간', '차량번호': '차량번호', '주행거리': '주행거리', '차량점검': '차량점검',
+            '차량비고': '차량비고', 'MaterialID': '자재ID', 'FilmCount': '필름매수'
+        }
+        self.budget_view_heading_aliases = getattr(self, 'budget_view_heading_aliases', {})
+        self.budget_view_custom_columns = getattr(self, 'budget_view_custom_columns', [])
         self.budget_view_default_cols = (
             'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
             'OT합계', '자재사용량', '자재단가', '합계', '비고'
@@ -8203,19 +8213,9 @@ class MaterialManager:
 
         vsb = ttk.Scrollbar(tree_outer, orient='vertical')
         hsb = ttk.Scrollbar(tree_outer, orient='horizontal')
-        self.budget_view_tree = ttk.Treeview(tree_outer, columns=self.budget_view_cols, show='headings',
+        self.budget_view_tree = ttk.Treeview(tree_outer, columns=self.budget_view_builtin_cols, show='headings',
                                               yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        for col, head, w in zip(self.budget_view_cols, self.budget_view_heads, self.budget_view_widths):
-            self.budget_view_tree.heading(col, text=head,
-                command=lambda c=col: self.treeview_sort_column(self.budget_view_tree, c, False))
-            self.budget_view_tree.column(col, width=w, minwidth=40, anchor='center')
-
-        # 저장된 컬럼 가시성 적용 (없으면 전체 표시)
-        if hasattr(self, 'budget_view_visible_cols') and self.budget_view_visible_cols:
-            visible = [c for c in self.budget_view_visible_cols if c in self.budget_view_cols]
-            self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_cols
-        else:
-            self.budget_view_tree['displaycolumns'] = self.budget_view_default_cols
+        self._refresh_budget_view_tree_columns(reload_data=False)
 
         vsb.config(command=self.budget_view_tree.yview)
         hsb.config(command=self.budget_view_tree.xview)
@@ -8253,6 +8253,128 @@ class MaterialManager:
         """Refresh the budget treeview - no-op (UI triggered)"""
         pass
 
+    def _refresh_budget_view_tree_columns(self, reload_data=False):
+        """Rebuild budget site performance tree column structure."""
+        if not hasattr(self, 'budget_view_tree'):
+            return
+
+        custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+        custom_keys = [c.get('key') for c in custom_cols if c.get('key')]
+        self.budget_view_cols = tuple(list(self.budget_view_builtin_cols) + custom_keys)
+
+        head_map = dict(getattr(self, 'budget_view_builtin_head_map', {}))
+        width_map = dict(getattr(self, 'budget_view_builtin_width_map', {}))
+        for col in custom_cols:
+            key = col.get('key')
+            if not key:
+                continue
+            head_map[key] = col.get('name', key)
+            width_map[key] = int(col.get('width', 120) or 120)
+
+        alias_map = getattr(self, 'budget_view_heading_aliases', {}) or {}
+        self.budget_view_tree.configure(columns=self.budget_view_cols)
+        for col in self.budget_view_cols:
+            heading_text = alias_map.get(col, head_map.get(col, col))
+            self.budget_view_tree.heading(col, text=heading_text,
+                                          command=lambda c=col: self.treeview_sort_column(self.budget_view_tree, c, False))
+            self.budget_view_tree.column(col, width=width_map.get(col, 100), minwidth=40, anchor='center')
+
+        visible_source = getattr(self, 'budget_view_visible_cols', []) or list(self.budget_view_default_cols)
+        visible = [c for c in visible_source if c in self.budget_view_cols]
+        self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_default_cols
+        self.budget_view_visible_cols = list(self.budget_view_tree['displaycolumns'])
+
+        if reload_data:
+            self.update_budget_site_view()
+
+    def add_budget_view_custom_column(self):
+        """Add a custom column to budget site performance view."""
+        name = simpledialog.askstring("컬럼 추가", "새 컬럼 이름을 입력하세요:", parent=self.root)
+        if not name or not str(name).strip():
+            return
+        name = str(name).strip()
+        default_value = simpledialog.askstring("컬럼 내용", f"'{name}' 컬럼의 기본 내용을 입력하세요(선택):", parent=self.root)
+
+        existing = set(getattr(self, 'budget_view_cols', []))
+        key_base = re.sub(r'[^0-9A-Za-z가-힣_]+', '_', name).strip('_') or '사용자컬럼'
+        key = key_base
+        idx = 1
+        while key in existing:
+            idx += 1
+            key = f"{key_base}_{idx}"
+
+        custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+        custom_cols.append({'key': key, 'name': name, 'default': default_value or '', 'width': 120})
+        self.budget_view_custom_columns = custom_cols
+
+        visible = list(getattr(self, 'budget_view_visible_cols', []) or list(self.budget_view_default_cols))
+        if key not in visible:
+            visible.append(key)
+        self.budget_view_visible_cols = visible
+
+        self._refresh_budget_view_tree_columns(reload_data=True)
+        self.save_tab_config()
+
+    def rename_budget_view_column(self, col_key):
+        """Rename a budget site performance column heading."""
+        if not col_key:
+            return
+        current_name = self.budget_view_tree.heading(col_key)['text'] if hasattr(self, 'budget_view_tree') else col_key
+        new_name = simpledialog.askstring("컬럼 이름 변경", "새 컬럼 이름을 입력하세요:", initialvalue=current_name, parent=self.root)
+        if not new_name or not str(new_name).strip():
+            return
+        new_name = str(new_name).strip()
+
+        # Custom column: rename the stored name itself
+        updated = False
+        for col in getattr(self, 'budget_view_custom_columns', []) or []:
+            if col.get('key') == col_key:
+                col['name'] = new_name
+                updated = True
+                break
+        if not updated:
+            aliases = getattr(self, 'budget_view_heading_aliases', {}) or {}
+            default_name = getattr(self, 'budget_view_builtin_head_map', {}).get(col_key, col_key)
+            if new_name == default_name:
+                aliases.pop(col_key, None)
+            else:
+                aliases[col_key] = new_name
+            self.budget_view_heading_aliases = aliases
+
+        self._refresh_budget_view_tree_columns(reload_data=False)
+        self.save_tab_config()
+
+    def set_budget_view_custom_column_content(self, col_key):
+        """Change default content for a custom column."""
+        custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+        target = next((c for c in custom_cols if c.get('key') == col_key), None)
+        if not target:
+            return
+        new_value = simpledialog.askstring("컬럼 내용 설정", f"'{target.get('name', col_key)}' 컬럼의 기본 내용을 입력하세요:",
+                                           initialvalue=target.get('default', ''), parent=self.root)
+        if new_value is None:
+            return
+        target['default'] = new_value
+        self._refresh_budget_view_tree_columns(reload_data=True)
+        self.save_tab_config()
+
+    def delete_budget_view_custom_column(self, col_key):
+        """Delete a custom budget column."""
+        custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+        target = next((c for c in custom_cols if c.get('key') == col_key), None)
+        if not target:
+            return
+        if not messagebox.askyesno("컬럼 삭제", f"'{target.get('name', col_key)}' 컬럼을 삭제하시겠습니까?", parent=self.root):
+            return
+
+        self.budget_view_custom_columns = [c for c in custom_cols if c.get('key') != col_key]
+        self.budget_view_visible_cols = [c for c in getattr(self, 'budget_view_visible_cols', []) if c != col_key]
+        aliases = getattr(self, 'budget_view_heading_aliases', {}) or {}
+        aliases.pop(col_key, None)
+        self.budget_view_heading_aliases = aliases
+        self._refresh_budget_view_tree_columns(reload_data=True)
+        self.save_tab_config()
+
     def show_budget_view_column_dialog(self):
         """Open dialog to show/hide columns in budget site performance view"""
         if not hasattr(self, 'budget_view_tree'):
@@ -8263,7 +8385,8 @@ class MaterialManager:
         if not active_cols or active_cols == ('#all'):
             active_cols = all_cols
 
-        dialog = ColumnSelectionDialog(self.root, all_cols, title="현장별 실적 표시 컬럼 관리")
+        dialog_cols = [(col, self.budget_view_tree.heading(col)['text']) for col in all_cols]
+        dialog = ColumnSelectionDialog(self.root, dialog_cols, title="현장별 실적 표시 컬럼 관리")
         for col, var in dialog.vars.items():
             var.set(col in active_cols)
 
@@ -8292,7 +8415,23 @@ class MaterialManager:
         except Exception:
             return
 
+        column_id = tree.identify_column(event.x)
+        col_key = self._get_column_name_from_id(tree, column_id)
+        if not col_key:
+            return
+        col_text = tree.heading(col_key)['text']
+        custom_keys = {c.get('key') for c in (getattr(self, 'budget_view_custom_columns', []) or [])}
+
         menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label=f"⬅️ '{col_text}' 왼쪽으로 이동", command=lambda: self._move_column_visual(tree, column_id, -1))
+        menu.add_command(label=f"➡️ '{col_text}' 오른쪽으로 이동", command=lambda: self._move_column_visual(tree, column_id, 1))
+        menu.add_separator()
+        menu.add_command(label=f"✏️ '{col_text}' 이름 변경...", command=lambda: self.rename_budget_view_column(col_key))
+        menu.add_command(label="➕ 사용자 컬럼 추가...", command=self.add_budget_view_custom_column)
+        if col_key in custom_keys:
+            menu.add_command(label=f"📝 '{col_text}' 내용 설정...", command=lambda: self.set_budget_view_custom_column_content(col_key))
+            menu.add_command(label=f"🗑️ '{col_text}' 사용자 컬럼 삭제", command=lambda: self.delete_budget_view_custom_column(col_key))
+        menu.add_separator()
         menu.add_command(label="⚙️ 컬럼 관리(추가/삭제)...", command=self.show_budget_view_column_dialog)
         try:
             menu.tk_popup(event.x_root, event.y_root)
@@ -8434,6 +8573,10 @@ class MaterialManager:
                 'MaterialID': _clean_str(row.get('MaterialID', '')),
                 'FilmCount': _clean_str(row.get('FilmCount', '')),
             }
+            for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
+                key = custom_col.get('key')
+                if key:
+                    row_map[key] = custom_col.get('default', '')
             self.budget_view_tree.insert('', tk.END, values=tuple(row_map.get(col, '') for col in self.budget_view_cols))
 
     def _update_budget_kpis(self):
@@ -12273,6 +12416,8 @@ class MaterialManager:
                 'history_visible_cols': getattr(self, 'manual_visible_cols', []),
                 'monthly_visible_cols': getattr(self, 'monthly_visible_cols', []),
                 'budget_view_visible_cols': getattr(self, 'budget_view_visible_cols', []),
+                'budget_view_heading_aliases': getattr(self, 'budget_view_heading_aliases', {}),
+                'budget_view_custom_columns': getattr(self, 'budget_view_custom_columns', []),
                 'window_state': self.root.state(),
                 'window_width': self.root.winfo_width(),
                 'window_height': self.root.winfo_height()
@@ -12531,6 +12676,13 @@ class MaterialManager:
 
                 # Restore budget site performance view visibility if saved
                 self.budget_view_visible_cols = config.get('budget_view_visible_cols', [])
+                self.budget_view_heading_aliases = config.get('budget_view_heading_aliases', {})
+                self.budget_view_custom_columns = config.get('budget_view_custom_columns', [])
+                if hasattr(self, 'budget_view_tree'):
+                    try:
+                        self._refresh_budget_view_tree_columns(reload_data=False)
+                    except:
+                        pass
                 if self.budget_view_visible_cols and hasattr(self, 'budget_view_tree'):
                     try:
                         visible = [c for c in self.budget_view_visible_cols if c in self.budget_view_tree['columns']]
@@ -13027,6 +13179,9 @@ class MaterialManager:
                 elif tree == self.monthly_usage_tree:
                     self.monthly_visible_cols = visible_names
                     self.save_tab_config()
+                elif hasattr(self, 'budget_view_tree') and tree == self.budget_view_tree:
+                    self.budget_view_visible_cols = visible_names
+                    self.save_tab_config()
         except: pass
 
     def _reorder_tree_columns(self, tree, source_id, target_id):
@@ -13060,6 +13215,9 @@ class MaterialManager:
                     self.save_tab_config()
                 elif tree == self.monthly_usage_tree:
                     self.monthly_visible_cols = visible_names
+                    self.save_tab_config()
+                elif hasattr(self, 'budget_view_tree') and tree == self.budget_view_tree:
+                    self.budget_view_visible_cols = visible_names
                     self.save_tab_config()
         except: pass
 
