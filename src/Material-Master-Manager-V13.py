@@ -490,27 +490,42 @@ def register_autocomplete(combobox, suggestion_list):
     """Enable SuggestionWindow-based autocomplete for any ttk.Combobox"""
     # ── 이미 등록된 경우 이벤트 핸들러 중복 추가 방지 ──────────────────
     if hasattr(combobox, '_suggestion_win'):
-        return  # combobox['values'] 갱신은 호출 측에서 직접 처리
+        return
 
     combobox._suggestion_win = SuggestionWindow(combobox)
     combobox._autocomplete_timer = None
 
+    # ── _real_values: 진짜 목록 저장소 (combobox['values']는 영구 [] 유지) ──
+    # postcommand 에서 values=[] → after_idle 복원 방식은 빠른 이중 클릭 시
+    # 복원값이 [] 로 스택돼 목록이 영구 소실되는 버그를 유발.
+    # 해결: combobox['values']를 항상 [] 로 유지 → native 드롭다운 원천 차단.
+    # 앱에서 combobox['values'] = new_list 를 호출하면 _sync_real_values()가
+    # 다음 상호작용 시 감지 후 _real_values 갱신 + 재비움.
+    combobox._real_values = list(combobox['values'])
+    combobox.configure(values=[])  # 영구 비움 (native 드롭다운 불가)
+
+    def _sync_real_values():
+        """앱이 combobox['values'] 를 갱신했으면 _real_values 에 반영 후 재비움."""
+        current = list(combobox['values'])
+        if current:
+            combobox._real_values = current
+            combobox.configure(values=[])
+
     def perform_filter(force_all=False):
+        _sync_real_values()
         typed = combobox.get()
-        all_vals = combobox['values']
+        all_vals = combobox._real_values
         if not all_vals: return
-        
-        # [FIX] If forced (click/focus), show all values even if something is typed/selected
+
         if force_all or not typed:
             combobox._suggestion_win.show(all_vals)
             return
-        
+
         if len(typed) == 1:
             filtered = [v for v in all_vals if str(v).lower().startswith(typed.lower())]
         else:
-            # Substring match for 2+ characters
             filtered = [v for v in all_vals if typed.lower() in str(v).lower()]
-        
+
         combobox._suggestion_win.show(filtered)
 
     def on_keyrelease(event):
@@ -520,32 +535,27 @@ def register_autocomplete(combobox, suggestion_list):
         if event.keysym == "Up" and combobox._suggestion_win.active:
             combobox._suggestion_win.move_selection(-1)
             return "break"
-        
-        # [NOTICE] Removed "Return" handling here as it's already handled in handle_extra_nav (KeyPress).
-        # Double handling Return (KeyPress + KeyRelease) causes focus skipping (double-jump) 
-        # when moving focus between autocomplete widgets.
-        
+
         if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
             if event.keysym in ("Escape", "Tab"):
                 combobox._suggestion_win.hide()
             return
-        
+
         if hasattr(combobox, '_autocomplete_timer') and combobox._autocomplete_timer:
             combobox.after_cancel(combobox._autocomplete_timer)
         combobox._autocomplete_timer = combobox.after(50, lambda: perform_filter(force_all=False))
-    
+
     combobox.bind('<KeyRelease>', on_keyrelease, add="+")
-    
+
     def handle_extra_nav(event):
         if not combobox._suggestion_win.active: return
         if event.keysym == "Down": combobox._suggestion_win.move_selection(1); return "break"
         if event.keysym == "Up": combobox._suggestion_win.move_selection(-1); return "break"
-        if event.keysym == "Return": 
+        if event.keysym == "Return":
             if combobox._suggestion_win.confirm_selection():
-                # Trigger search if bound to the combobox
                 combobox.event_generate('<<ComboboxSelected>>')
                 return "break"
-            
+
     combobox.bind('<KeyPress-Down>', handle_extra_nav, add="+")
     combobox.bind('<KeyPress-Up>', handle_extra_nav, add="+")
     combobox.bind('<KeyPress-Return>', handle_extra_nav, add="+")
@@ -555,15 +565,12 @@ def register_autocomplete(combobox, suggestion_list):
     combobox.bind('<FocusOut>', on_focus_out, add=True)
     combobox.bind('<<ComboboxSelected>>', lambda e: combobox._suggestion_win.hide(), add=True)
 
-    # FocusIn 은 show를 하지 않음 — Button-1 / postcommand 가 단독으로 show/hide 담당
-    # (FocusIn이 show하면 Button-1과 충돌해 빈 박스 or 이중 창 발생)
-
     # 텍스트 영역 클릭: SuggestionWindow 토글
     # ▼ 버튼은 postcommand가 먼저 처리하고 _just_postcommand 플래그로 알림
     combobox._just_postcommand = False
     def _on_click(event):
         if combobox._just_postcommand:
-            combobox._just_postcommand = False  # 플래그 해제 후 건너뜀
+            combobox._just_postcommand = False
             return
         if combobox._suggestion_win.active:
             combobox._suggestion_win.hide()
@@ -571,10 +578,12 @@ def register_autocomplete(combobox, suggestion_list):
             perform_filter(force_all=True)
     combobox.bind('<Button-1>', _on_click, add="+")
 
-    # ▼ 버튼(postcommand): native 드롭다운 차단 + SuggestionWindow 토글
+    # ▼ 버튼(postcommand): SuggestionWindow 토글
+    # combobox['values'] 가 영구 [] 이므로 Tk 가 native 드롭다운을 올리지 않음.
+    # after_idle 복원 불필요 → 이중클릭 스택 버그 원천 제거.
     def _postcommand():
-        _saved = list(combobox['values'])
-        # _just_postcommand 세팅: 이어지는 Button-1이 이중 토글하지 않도록
+        _sync_real_values()
+        _saved = combobox._real_values
         combobox._just_postcommand = True
         combobox.after(100, lambda: setattr(combobox, '_just_postcommand', False))
         if combobox._suggestion_win.active:
@@ -582,9 +591,8 @@ def register_autocomplete(combobox, suggestion_list):
         else:
             if _saved:
                 combobox._suggestion_win.show(_saved)
-        # values=[] 로 native 드롭다운 항상 차단 (Post가 값 없으면 건너뜀)
+        # 혹시 _sync_real_values 에서 비웠더라도 다시 확인 보장
         combobox.configure(values=[])
-        combobox.after_idle(lambda: combobox.configure(values=_saved))
     combobox.configure(postcommand=_postcommand)
 
 
