@@ -8381,6 +8381,9 @@ class MaterialManager:
         self.cb_budget_view_site = ttk.Combobox(bottom_filter, width=20, state='readonly')
         self.cb_budget_view_site['values'] = self.sites
         self.cb_budget_view_site.pack(side='left', padx=5)
+        # 첫 번째 현장을 기본 선택
+        if self.sites:
+            self.cb_budget_view_site.set(self.sites[0])
         self.cb_budget_view_site.bind('<<ComboboxSelected>>', lambda e: self.update_budget_site_view())
 
         ttk.Label(bottom_filter, text="시작일:").pack(side='left', padx=(10, 2))
@@ -8470,6 +8473,9 @@ class MaterialManager:
 
         # after_idle: 모든 위젯 생성 완료 후 바인딩
         self.root.after_idle(lambda: _bind_esc_recursive(self.tab_daily_usage))
+        
+        # 초기 데이터 로드 (첫 현장 자동 선택 후 표시)
+        self.root.after(100, lambda: self.update_budget_site_view())
 
     def update_budget_view(self):
         """Refresh the budget treeview - no-op (UI triggered)"""
@@ -8800,6 +8806,43 @@ class MaterialManager:
                 if key:
                     row_map[key] = custom_col.get('default', '')
             self.budget_view_tree.insert('', tk.END, values=tuple(row_map.get(col, '') for col in self.budget_view_cols))
+
+        # --- 합계 행 추가 ---
+        if df.shape[0] > 0:
+            total_row_map = {
+                'Date': f"[합계]",
+                'Site': f"{site}",
+                '장비명': '',
+                '검사방법': '',
+                '검사량': '',
+                '단가': '',
+                '검사단가': f"{total_net_revenue:,.0f}",
+                '출장비': f"{total_expense:,.0f}",
+                '일식': '',
+                'OT합계': '',
+                '자재사용량': '',
+                '자재단가': '',
+                '합계': f"{total_sum:,.0f}",
+                '비고': f"소계: 수입 {total_income:,.0f} 경비 {total_expense:,.0f} 자재원가 {total_mat_cost:,.0f}",
+                '작업자': '',
+                '품목명': '',
+                '입력시간': '',
+                '차량번호': '',
+                '주행거리': '',
+                '차량점검': '',
+                '차량비고': '',
+                'MaterialID': '',
+                'FilmCount': '',
+            }
+            for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
+                key = custom_col.get('key')
+                if key:
+                    total_row_map[key] = ''
+            self.budget_view_tree.insert('', tk.END, values=tuple(total_row_map.get(col, '') for col in self.budget_view_cols), tags=('total',))
+        
+        # --- Treeview 태그 스타일 (합계 행 강조) ---
+        if not self.budget_view_tree.tag_configure('total'):
+            self.budget_view_tree.tag_configure('total', background='#ffff00', foreground='#000000')
 
     def _update_budget_kpis(self):
         """Update the top KPI summary labels based on current budget form values"""
