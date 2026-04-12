@@ -3,6 +3,10 @@
 # DB 파일(Material_Inventory.xlsx) 미포함: exe 옆에 자동 생성됨
 
 from PyInstaller.utils.hooks import collect_data_files
+from datetime import datetime
+
+_today = datetime.now().strftime('%Y%m%d')
+_exe_name = f'SITCO-Material-Manager-{_today}'
 
 block_cipher = None
 
@@ -72,7 +76,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='SITCO-Material-Manager',
+    name=_exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
