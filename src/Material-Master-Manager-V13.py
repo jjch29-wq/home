@@ -8162,7 +8162,7 @@ class MaterialManager:
         ttk.Button(bottom_filter, text="조회", command=self.update_budget_site_view).pack(side='left', padx=8)
         ttk.Button(bottom_filter, text="예산 수정/불러오기",
                    command=lambda: self._load_budget_to_form(self.cb_budget_view_site.get())).pack(side='left', padx=4)
-        ttk.Button(bottom_filter, text="컬럼 관리", command=self.show_budget_view_column_dialog).pack(side='right', padx=4)
+        ttk.Button(bottom_filter, text="컬럼 관리", command=self.show_budget_view_column_dialog).pack(side='left', padx=4)
         ttk.Button(bottom_filter, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
 
         # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
@@ -8198,6 +8198,7 @@ class MaterialManager:
         tree_outer.grid_rowconfigure(0, weight=1)
         tree_outer.grid_columnconfigure(0, weight=1)
         self.budget_view_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+        self.budget_view_tree.bind('<Button-3>', self._show_budget_view_heading_context_menu, add='+')
 
         # ── ESC: 현장별 탭 내 모든 입력 위젯에서 포커스 해제 ──────────────
         def _esc_to_root(e=None):
@@ -8252,6 +8253,24 @@ class MaterialManager:
             self.budget_view_tree['displaycolumns'] = sorted_selection if sorted_selection else all_cols
             self.budget_view_visible_cols = list(self.budget_view_tree['displaycolumns'])
             self.save_tab_config()
+
+    def _show_budget_view_heading_context_menu(self, event):
+        """공사탭 현장별 실적 Treeview 헤더 우클릭 메뉴"""
+        if not hasattr(self, 'budget_view_tree'):
+            return
+        tree = self.budget_view_tree
+        try:
+            if tree.identify_region(event.x, event.y) != 'heading':
+                return
+        except Exception:
+            return
+
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label="⚙️ 컬럼 관리(추가/삭제)...", command=self.show_budget_view_column_dialog)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def update_budget_site_view(self):
         """현장별 일일사용량 데이터를 하단 Treeview에 표시하고 KPI를 갱신한다."""
