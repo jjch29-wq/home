@@ -5,7 +5,7 @@
 from PyInstaller.utils.hooks import collect_data_files
 from datetime import datetime
 
-_today = datetime.now().strftime('%Y%m%d')
+_today = datetime.now().strftime('%Y%m%d_%H%M')
 _exe_name = f'SITCO-Material-Manager-{_today}'
 
 block_cipher = None
