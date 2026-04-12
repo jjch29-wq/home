@@ -184,10 +184,7 @@ except Exception:
     pass
 
 # 11) Calendar._prev_year / _next_year : 년도 이동
-# [FIX] 이전에 BaseException 으로 감쌌으나, 이것이 오히려 연도 이동을 조용히
-# 막는 원인이었음. update_idletasks 충돌은 patch #8/#9 에서 근본 해결됨.
-# _prev/_next_year 자체에는 update_idletasks 호출 없으므로 BaseException 래핑 불필요.
-# 만약 실제 TclError 등이 발생한다면 Exception 수준에서만 잡고, 날짜도 롤백.
+# [FIX] Exception 수준에서만 잡고, 날짜도 롤백.
 try:
     if hasattr(Calendar, '_prev_year'):
         _orig_prev_year = Calendar._prev_year
@@ -238,6 +235,32 @@ try:
             except Exception:
                 self._date = _saved
         Calendar._next_month = _patched_next_month
+except Exception:
+    pass
+
+# 13) DateEntry._on_focus_out_cal : 년도/월 네비게이션 버튼 클릭 시 달력 닫힘 방지
+# [근본 원인] 년도 버튼(_l_year/_r_year) 클릭 → Calendar에 <FocusOut> 발생
+# → focus_get()이 버튼 위젯(DateEntry가 아닌 _top_cal 자식)을 반환
+# → 기존 코드: "focus != self(DateEntry)" 이므로 else: _top_cal.withdraw() → 달력 닫힘
+# → 사용자 입장: 년도 버튼 누를 때마다 달력이 꺼짐 ("화면 튕김")
+# [수정] focus가 _top_cal 내부 위젯으로 이동한 경우 → 달력 유지
+try:
+    if hasattr(DateEntry, '_on_focus_out_cal'):
+        _orig_on_focus_out_cal = DateEntry._on_focus_out_cal
+        def _patched_on_focus_out_cal(self, event):
+            fw = self.focus_get()
+            if fw is not None:
+                try:
+                    # focus가 _top_cal 내부(년도·월 버튼 등)로 이동한 경우 → 유지
+                    if str(fw).startswith(str(self._top_cal)):
+                        return
+                except Exception:
+                    pass
+            try:
+                _orig_on_focus_out_cal(self, event)
+            except BaseException:
+                pass
+        DateEntry._on_focus_out_cal = _patched_on_focus_out_cal
 except Exception:
     pass
 
