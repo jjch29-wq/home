@@ -1898,20 +1898,22 @@ class MaterialManager:
                 os.makedirs(documents_dir, exist_ok=True)
             self.config_path = os.path.join(documents_dir, 'Material_Manager_Config.json')
         else:
-            # If running as a script
+            # 스크립트 실행 모드: src/ 우선, 없으면 ../data/ 탐색
             self.app_dir = os.path.dirname(os.path.abspath(__file__))
             self.bundle_dir = self.app_dir
             self.config_path = os.path.join(self.app_dir, 'Material_Manager_Config.json')
-            
-        # DB 파일 경로 탐색: src/ → data/ → app_dir 순으로 우선순위
-        _db_name = 'Material_Inventory.xlsx'
-        _data_dir = os.path.join(os.path.dirname(self.app_dir), 'data')  # 상위 폴더/data
-        _candidates = [
-            os.path.join(self.app_dir, _db_name),           # src/Material_Inventory.xlsx
-            os.path.join(_data_dir, _db_name),              # data/Material_Inventory.xlsx
-        ]
-        # 실제로 존재하는 파일을 우선 사용, 없으면 src/ 경로를 기본(저장 위치)으로
-        self.db_path = next((p for p in _candidates if os.path.exists(p)), _candidates[0])
+            _db_name = 'Material_Inventory.xlsx'
+            _data_dir = os.path.join(os.path.dirname(self.app_dir), 'data')
+            _candidates = [
+                os.path.join(self.app_dir, _db_name),   # src/Material_Inventory.xlsx
+                os.path.join(_data_dir, _db_name),      # data/Material_Inventory.xlsx
+            ]
+            self.db_path = next((p for p in _candidates if os.path.exists(p)), _candidates[0])
+
+        if getattr(sys, 'frozen', False):
+            # exe 실행 모드: exe와 같은 폴더에 DB 저장 (어디서 실행해도 동일)
+            self.db_path = os.path.join(self.app_dir, 'Material_Inventory.xlsx')
+
         print(f"DEBUG: DB path resolved → {self.db_path}")
         
         self.sites = [] # Initialize site list
