@@ -3074,6 +3074,7 @@ class MaterialManager:
         
         # Auto-save column widths when user resizes columns
         self.stock_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+        self.enable_tree_column_drag(self.stock_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.stock_tree))
         
         # Grid layout
         self.stock_tree.grid(row=0, column=0, sticky='nsew')
@@ -3627,6 +3628,7 @@ class MaterialManager:
         for col, width in zip(columns, col_widths):
             self.inout_tree.heading(col, text=col)
             self.inout_tree.column(col, width=width, minwidth=50, stretch=True, anchor='center')
+        self.enable_tree_column_drag(self.inout_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.inout_tree))
         
         # 컬럼 분리선 드래그 후 나머지 컬럼을 비례 재배분
         # → 한 컬럼 늘리면 나머지 전체가 균등 축소 (전체 너비 고정)
@@ -5147,6 +5149,7 @@ class MaterialManager:
         
         # [NEW] Auto-save site summary column widths
         self.site_summary_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+        self.enable_tree_column_drag(self.site_summary_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.site_summary_tree))
         
         site_vsb = ttk.Scrollbar(site_frame, orient="vertical", command=self.site_summary_tree.yview)
         self.site_summary_tree.configure(yscrollcommand=site_vsb.set)
@@ -5174,6 +5177,7 @@ class MaterialManager:
         
         # [NEW] Auto-save worker summary column widths
         self.worker_summary_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+        self.enable_tree_column_drag(self.worker_summary_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.worker_summary_tree))
             
         worker_vsb = ttk.Scrollbar(worker_frame, orient="vertical", command=self.worker_summary_tree.yview)
         self.worker_summary_tree.configure(yscrollcommand=worker_vsb.set)
@@ -13133,6 +13137,28 @@ class MaterialManager:
             menu.add_command(label="⚙️ 컬럼 관리(숨기기/보이기)...", command=self.show_column_visibility_dialog)
             
             menu.post(event.x_root, event.y_root)
+
+                def _show_generic_tree_heading_context_menu(self, event, tree):
+                    """Generic header context menu for trees that support only column move."""
+                    try:
+                        if tree.identify_region(event.x, event.y) != "heading":
+                            return
+                        column_id = tree.identify_column(event.x)
+                        col_name = self._get_column_name_from_id(tree, column_id)
+                        if not col_name:
+                            return
+                    except Exception:
+                        return
+
+                    menu = tk.Menu(self.root, tearoff=0)
+                    menu.add_command(label=f"⬅️ '{col_name}' 왼쪽으로 이동",
+                                     command=lambda: self._move_column_visual(tree, column_id, -1))
+                    menu.add_command(label=f"➡️ '{col_name}' 오른쪽으로 이동",
+                                     command=lambda: self._move_column_visual(tree, column_id, 1))
+                    try:
+                        menu.tk_popup(event.x_root, event.y_root)
+                    finally:
+                        menu.grab_release()
 
     def _get_column_name_from_id(self, tree, column_id):
         """Helper to get actual column name from visual ID like #1"""
