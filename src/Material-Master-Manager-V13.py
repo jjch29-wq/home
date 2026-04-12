@@ -9646,8 +9646,12 @@ class MaterialManager:
                     is_chemical = False
                     category_upper = category.upper()
                     name_upper = str(actual_mat_name).upper()
+                    # input_name 자체가 NDT 화학약품 목록에 있으면 무조건 chemical
+                    ndt_chem_inputs = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
                     
-                    if any(k in category_upper for k in ['PT', 'MT', '약품', '소모품', 'CHEM', 'NDT']):
+                    if input_name in ndt_chem_inputs:
+                        is_chemical = True  # 입력 항목 자체가 NDT 약품 → 무조건 차감
+                    elif any(k in category_upper for k in ['PT', 'MT', '약품', '소모품', 'CHEM', 'NDT']):
                         is_chemical = True
                     # Fallback: specific names if category is vague
                     elif any(k in name_upper for k in ['침투제', '세척제', '현상제', '자분', '페인트', '흑색자분', '백색페인트', '형광', 'DEVELOPER', 'CLEANER', 'PENETRANT', 'MT', 'PT', 'NABAKEM', 'MAGNAFLUX']):
