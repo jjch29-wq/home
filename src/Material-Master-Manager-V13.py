@@ -87,14 +87,18 @@ try:
 
     # [FIX] Python 3.13+ / 3.14 compat:
     # update_idletasks() 내부에서 KeyboardInterrupt(BaseException)가 전파될 수 있음.
-    # Exception이 아닌 BaseException 계열이라 기존 try/except Exception에 안 잡힘.
+    # 인스턴스 레벨에서 update_idletasks를 no-op으로 대체하여 스타일 설정 중 호출 자체를 차단.
     if hasattr(DateEntry, '_setup_style'):
         _orig_setup_style = DateEntry._setup_style
         def _patched_setup_style(self):
+            _orig_update = self.update_idletasks
+            self.update_idletasks = lambda: None  # 스타일 설정 중 update_idletasks 무시
             try:
                 _orig_setup_style(self)
-            except KeyboardInterrupt:
-                pass  # Python 3.14 signal 전파 무시
+            except (KeyboardInterrupt, Exception):
+                pass
+            finally:
+                self.update_idletasks = _orig_update
         DateEntry._setup_style = _patched_setup_style
 
 except ImportError:
@@ -7939,6 +7943,10 @@ class MaterialManager:
         def _bind_esc_recursive(widget):
             try:
                 cls = widget.winfo_class()
+                # Toplevel(달력 팝업 등) 내부는 절대 순회하지 않음
+                # → 순회만으로도 winfo_children() 가 Toplevel을 화면에 표시시킬 수 있음
+                if cls == 'Toplevel':
+                    return
                 if cls in ('TEntry', 'Entry', 'TCombobox'):
                     widget.bind('<Escape>', _esc_to_root, add='+')
             except Exception:
