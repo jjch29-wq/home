@@ -488,44 +488,33 @@ class SuggestionWindow:
 
 def register_autocomplete(combobox, suggestion_list):
     """Enable SuggestionWindow-based autocomplete for any ttk.Combobox"""
-    # ── 이미 등록된 경우 이벤트 핸들러 중복 추가 방지 ──────────────────
     if hasattr(combobox, '_suggestion_win'):
         return
 
     combobox._suggestion_win = SuggestionWindow(combobox)
     combobox._autocomplete_timer = None
-
-    # ── _real_values: 진짜 목록 저장소 (combobox['values']는 영구 [] 유지) ──
-    # postcommand 에서 values=[] → after_idle 복원 방식은 빠른 이중 클릭 시
-    # 복원값이 [] 로 스택돼 목록이 영구 소실되는 버그를 유발.
-    # 해결: combobox['values']를 항상 [] 로 유지 → native 드롭다운 원천 차단.
-    # 앱에서 combobox['values'] = new_list 를 호출하면 _sync_real_values()가
-    # 다음 상호작용 시 감지 후 _real_values 갱신 + 재비움.
+    # _real_values: SuggestionWindow 에 표시할 진짜 목록
+    # combobox['values'] 는 앱이 직접 갱신하며, _sync_real_values() 가 읽어 감.
     combobox._real_values = list(combobox['values'])
-    combobox.configure(values=[])  # 영구 비움 (native 드롭다운 불가)
 
     def _sync_real_values():
-        """앱이 combobox['values'] 를 갱신했으면 _real_values 에 반영 후 재비움."""
+        """앱이 combobox['values'] 를 갱신했으면 _real_values 에 반영."""
         current = list(combobox['values'])
         if current:
             combobox._real_values = current
-            combobox.configure(values=[])
 
     def perform_filter(force_all=False):
         _sync_real_values()
         typed = combobox.get()
         all_vals = combobox._real_values
         if not all_vals: return
-
         if force_all or not typed:
             combobox._suggestion_win.show(all_vals)
             return
-
         if len(typed) == 1:
             filtered = [v for v in all_vals if str(v).lower().startswith(typed.lower())]
         else:
             filtered = [v for v in all_vals if typed.lower() in str(v).lower()]
-
         combobox._suggestion_win.show(filtered)
 
     def on_keyrelease(event):
@@ -535,12 +524,11 @@ def register_autocomplete(combobox, suggestion_list):
         if event.keysym == "Up" and combobox._suggestion_win.active:
             combobox._suggestion_win.move_selection(-1)
             return "break"
-
-        if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
+        if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab",
+                             "Shift_L", "Shift_R", "Control_L", "Control_R"):
             if event.keysym in ("Escape", "Tab"):
                 combobox._suggestion_win.hide()
             return
-
         if hasattr(combobox, '_autocomplete_timer') and combobox._autocomplete_timer:
             combobox.after_cancel(combobox._autocomplete_timer)
         combobox._autocomplete_timer = combobox.after(50, lambda: perform_filter(force_all=False))
@@ -566,7 +554,7 @@ def register_autocomplete(combobox, suggestion_list):
     combobox.bind('<<ComboboxSelected>>', lambda e: combobox._suggestion_win.hide(), add=True)
 
     # 텍스트 영역 클릭: SuggestionWindow 토글
-    # ▼ 버튼은 postcommand가 먼저 처리하고 _just_postcommand 플래그로 알림
+    # ▼ 버튼은 postcommand 가 먼저 처리하고 _just_postcommand 플래그로 알림
     combobox._just_postcommand = False
     def _on_click(event):
         if combobox._just_postcommand:
@@ -578,21 +566,24 @@ def register_autocomplete(combobox, suggestion_list):
             perform_filter(force_all=True)
     combobox.bind('<Button-1>', _on_click, add="+")
 
-    # ▼ 버튼(postcommand): SuggestionWindow 토글
-    # combobox['values'] 가 영구 [] 이므로 Tk 가 native 드롭다운을 올리지 않음.
-    # after_idle 복원 불필요 → 이중클릭 스택 버그 원천 제거.
+    # ▼ 버튼(postcommand): SuggestionWindow 토글 + native 드롭다운 차단
+    # Tk 는 postcommand 반환 후 combobox['values'] 를 다시 확인 →
+    # 그 시점에 [] 이면 native 드롭다운을 올리지 않음.
+    # after_idle 에서 combobox._real_values 참조(캡처 변수 X)로 복원 →
+    # 빠른 이중클릭 시 [] 스택 버그 없음.
     def _postcommand():
         _sync_real_values()
-        _saved = combobox._real_values
         combobox._just_postcommand = True
         combobox.after(100, lambda: setattr(combobox, '_just_postcommand', False))
         if combobox._suggestion_win.active:
             combobox._suggestion_win.hide()
         else:
-            if _saved:
-                combobox._suggestion_win.show(_saved)
-        # 혹시 _sync_real_values 에서 비웠더라도 다시 확인 보장
+            if combobox._real_values:
+                combobox._suggestion_win.show(combobox._real_values)
+        # native 드롭다운 차단: postcommand 후 Tk 가 values 재확인
         combobox.configure(values=[])
+        # 참조 복원: 람다가 _real_values 를 캡처하지 않고 매번 현재값 읽음
+        combobox.after_idle(lambda: combobox.configure(values=combobox._real_values))
     combobox.configure(postcommand=_postcommand)
 
 
