@@ -594,15 +594,10 @@ class WorkerCompositeWidget(ttk.Frame):
     def __init__(self, parent, enable_autocomplete=False, user_list=None, **kwargs):
         super().__init__(parent)
         
-        # Worker Name selection
+        # Worker Name selection — native dropdown (like time combobox, no SuggestionWindow)
         name_width = kwargs.pop('width', 15)
         self.cb_name = ttk.Combobox(self, width=name_width, **kwargs)
         self.cb_name.pack(side='left', fill='x', expand=True)
-        
-        # Enable autocomplete if requested
-        if enable_autocomplete and user_list is not None:
-            self._autocomplete_timer = None
-            register_autocomplete(self.cb_name, user_list)
         
     def get(self):
         """Return clean name"""
