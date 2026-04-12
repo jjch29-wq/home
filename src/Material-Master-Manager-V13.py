@@ -7177,6 +7177,9 @@ class MaterialManager:
         self.update_resolution_display()
         
         
+        btn_ndt_map = ttk.Button(header_frame, text="🧪 NDT 품목 매핑", command=self.open_ndt_product_map_dialog)
+        btn_ndt_map.pack(side='left', padx=5)
+
         btn_add_memo = ttk.Button(header_frame, text="➕ 메모 추가", command=self.add_new_memo)
         btn_add_memo.pack(side='right', padx=5)
 
@@ -9265,6 +9268,71 @@ class MaterialManager:
         except Exception as e:
             messagebox.showerror("오류", f"동기화 중 오류가 발생했습니다: {e}")
 
+    def _load_ndt_product_map(self):
+        """config 에서 NDT 약품 → 실제 DB 품목명 매핑 불러오기"""
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                return cfg.get('ndt_product_map', {})
+        except Exception:
+            pass
+        return {}
+
+    def _save_ndt_product_map(self, mapping: dict):
+        """NDT 약품 매핑을 config 에 저장"""
+        try:
+            cfg = {}
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+            cfg['ndt_product_map'] = mapping
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            messagebox.showerror("오류", f"NDT 매핑 저장 실패: {e}")
+
+    def open_ndt_product_map_dialog(self):
+        """NDT 약품 → 실제 DB 품목명 매핑 설정 다이얼로그"""
+        ndt_types = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+        current_map = self._load_ndt_product_map()
+
+        # 현재 DB 품목명 목록 (빈 값 포함 = 미연결)
+        mat_names = [''] + sorted(self.materials_df['품목명'].dropna().unique().tolist())
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("🧪 NDT 약품 품목 매핑 설정")
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        ttk.Label(dlg, text="NDT 입력칸과 실제 재고 품목명을 연결합니다.\n빈칸이면 자동 검색(키워드 매칭)을 사용합니다.",
+                  font=('Malgun Gothic', 9), justify='left').grid(row=0, column=0, columnspan=2, padx=15, pady=(12, 8), sticky='w')
+
+        cb_vars = {}
+        for i, ndt in enumerate(ndt_types):
+            ttk.Label(dlg, text=f"{ndt} →", font=('Malgun Gothic', 9, 'bold'), width=10, anchor='e').grid(
+                row=i+1, column=0, padx=(15, 5), pady=4, sticky='e')
+            var = tk.StringVar(value=current_map.get(ndt, ''))
+            cb = ttk.Combobox(dlg, textvariable=var, values=mat_names, width=30, state='normal')
+            cb.grid(row=i+1, column=1, padx=(0, 15), pady=4, sticky='w')
+            cb_vars[ndt] = var
+
+        def _save():
+            new_map = {ndt: cb_vars[ndt].get().strip() for ndt in ndt_types if cb_vars[ndt].get().strip()}
+            self._save_ndt_product_map(new_map)
+            messagebox.showinfo("저장 완료", "NDT 약품 매핑이 저장되었습니다.", parent=dlg)
+            dlg.destroy()
+
+        def _clear():
+            for var in cb_vars.values():
+                var.set('')
+
+        btn_frame = ttk.Frame(dlg)
+        btn_frame.grid(row=len(ndt_types)+1, column=0, columnspan=2, pady=10)
+        ttk.Button(btn_frame, text="저장", command=_save, width=10).pack(side='left', padx=8)
+        ttk.Button(btn_frame, text="전체 초기화", command=_clear, width=10).pack(side='left', padx=8)
+        ttk.Button(btn_frame, text="닫기", command=dlg.destroy, width=10).pack(side='left', padx=8)
+
     def add_daily_usage_entry(self):
         """Add a daily usage entry"""
         try:
@@ -9570,6 +9638,9 @@ class MaterialManager:
             stock_info = ""
             
             # Keyword mapping for NDT materials (PT/MT Chemicals)
+            # NDT 품목 매핑 우선 조회 (사용자가 설정한 품목명으로 직접 검색)
+            ndt_product_map = self._load_ndt_product_map()
+
             ndt_keywords = {
                 "형광자분": ["형광자분", "MAGNETIC FLUORESCENT", "GLO CHECK"],
                 "흑색자분": ["흑색자분", "흑색 자분", "BLACK MAGNETIC", "7HF"],
@@ -9640,7 +9711,17 @@ class MaterialManager:
                 elif input_name == "형광침투제": search_names.append("형광")
                 
                 ndt_mat_rows = pd.DataFrame()
-                
+
+                # Step 0: 사용자 매핑 설정 우선 (가장 정확)
+                mapped_name = ndt_product_map.get(input_name, '')
+                if mapped_name:
+                    mapped_match = self.materials_df[
+                        (self.materials_df['품목명'] == mapped_name) |
+                        (self.materials_df['모델명'] == mapped_name)
+                    ]
+                    if not mapped_match.empty:
+                        ndt_mat_rows = mapped_match
+
                 # Step 1: Try exact match for any of the search names (품목명 or 모델명)
                 for s_name in search_names:
                     matches = self.materials_df[
