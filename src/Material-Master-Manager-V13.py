@@ -9177,7 +9177,7 @@ class MaterialManager:
                                     ot_data['연장근무']['names'].add(worker_name_only)
 
 
-            # --- 자재 사용량 집계 ---
+            # --- 자재 사용량 집계 (NDT + 필름) ---
             m_id = row.get('MaterialID', '')
             m_name = str(mat_id_name_map.get(m_id, '')).strip()
             test_method = str(row.get('검사방법', '')).upper()
@@ -9186,21 +9186,49 @@ class MaterialManager:
             if 'RT' in test_method:
                 rt_inspection_count += 1  # [NEW] Check for RT
                 usage = _f(row.get('FilmCount', 0))
-                material_usage_sums[5] += usage
+                material_usage_sums[5] += usage  # Index 5 = 필름
+                total_mat_cost += usage * float(mat_id_cost_map.get(m_id, 0))
             else:
+                # UT/PT/MT 검사: NDT 화학약품 등의 일반 자재 사용
                 usage = _f(row.get('Usage', 0))
-                for keyword, idx in mat_map.items():
-                    if keyword in m_name:
-                        if keyword == '현상' and ('액' in m_name or 'PT' not in test_method):
-                             if 'PT' in test_method: 
-                                 material_usage_sums[2] += usage
-                             else:
-                                 material_usage_sums[7] += usage
-                             break
-                        material_usage_sums[idx] += usage
-                        break
-            
-            total_mat_cost += usage * float(mat_id_cost_map.get(m_id, 0))
+                if usage > 0:
+                    # 세척제: 청소/세척 용도 → Index 0
+                    if '세척제' in m_name or '세척' in m_name or '청소' in m_name:
+                        material_usage_sums[0] += usage
+                    # 침투제: 침투액 → Index 1
+                    elif '침투제' in m_name or '침투액' in m_name:
+                        material_usage_sums[1] += usage
+                    # 현상제: 현상용 시약 → Index 2
+                    elif '현상제' in m_name or '현상액' in m_name:
+                        material_usage_sums[2] += usage
+                    # 자분: 자기 자분 → Index 3
+                    elif '자분' in m_name and '흑색' not in m_name:
+                        material_usage_sums[3] += usage
+                    # 흑색자분 → Index 4
+                    elif '흑색자분' in m_name or ('흑색' in m_name and '자분' in m_name):
+                        material_usage_sums[4] += usage
+                    # 글리세린 → Index 6
+                    elif '글리세' in m_name or '글리세린' in m_name:
+                        material_usage_sums[6] += usage
+                    # 정착액 → Index 8
+                    elif '정착액' in m_name or '정착' in m_name:
+                        material_usage_sums[8] += usage
+                    # 수적 → Index 9
+                    elif '수적' in m_name:
+                        material_usage_sums[9] += usage
+                    # 기타 PT/MT 화학약품이면 자동 매핑
+                    elif any(k in m_name.upper() for k in ['PENETRANT', 'DEVELOPER', 'CLEANER', 'NABAKEM', 'PT', 'MT']):
+                        # 품목명에 명시된 키워드로 우선 매핑
+                        matched = False
+                        for keyword, idx in mat_map.items():
+                            if keyword.lower() in m_name.lower():
+                                material_usage_sums[idx] += usage
+                                matched = True
+                                break
+                        # 매핑 실패 시 0번 인덱스(세척)로 기본 분류
+                        if not matched:
+                            material_usage_sums[0] += usage
+                    total_mat_cost += usage * float(mat_id_cost_map.get(m_id, 0))
 
         # 3. 폼에 입력 및 [5. 영업이익] '실행(실적)' 줄에 표시 결과 연동
         # Update Special Unit Prices if LaborCostDetailWidget is available to compute correct revenue
@@ -10326,78 +10354,67 @@ class MaterialManager:
 
             # 2. Deduct NDT materials (PT/MT Chemicals)
             for input_name, qty in ndt_usage.items():
-                # Fallback mapping for renamed items
-                search_names = [input_name]
-                if input_name == "흑색자분": search_names.append("자분")
-                elif input_name == "백색페인트": search_names.append("페인트")
-                elif input_name == "형광침투제": search_names.append("형광")
-                
+                if qty <= 0:
+                    continue
+                    
                 ndt_mat_rows = pd.DataFrame()
 
                 # Step 0: 사용자 매핑 설정 우선 (가장 정확)
-                mapped_name = ndt_product_map.get(input_name, '')
+                mapped_name = ndt_product_map.get(input_name, '').strip()
                 if mapped_name:
                     mapped_match = self.materials_df[
-                        (self.materials_df['품목명'] == mapped_name) |
-                        (self.materials_df['모델명'] == mapped_name)
+                        self.materials_df['품목명'].astype(str).str.strip() == mapped_name
                     ]
                     if not mapped_match.empty:
                         ndt_mat_rows = mapped_match
 
-                # Step 1: Try exact match for any of the search names (품목명 or 모델명)
-                for s_name in search_names:
-                    matches = self.materials_df[
-                        (self.materials_df['품목명'] == s_name) | 
-                        (self.materials_df['모델명'] == s_name)
+                # Step 1: Try exact match by 품목명
+                if ndt_mat_rows.empty:
+                    exact_match = self.materials_df[
+                        self.materials_df['품목명'].astype(str).str.strip() == input_name
                     ]
-                    if not matches.empty:
-                        ndt_mat_rows = matches
-                        break
+                    if not exact_match.empty:
+                        ndt_mat_rows = exact_match
                 
-                # Step 2: Try finding using keywords from ndt_keywords mapping
+                # Step 2: Try finding by keywords from ndt_keywords mapping
                 if ndt_mat_rows.empty:
                     keywords = ndt_keywords.get(input_name, [input_name])
                     for kw in keywords:
-                        matches = self.materials_df[
-                            self.materials_df['품목명'].astype(str).str.contains(kw, na=False, case=False, regex=False) |
-                            self.materials_df['모델명'].astype(str).str.contains(kw, na=False, case=False, regex=False)
+                        kw_match = self.materials_df[
+                            (self.materials_df['품목명'].astype(str).str.contains(kw, na=False, case=False, regex=False)) |
+                            (self.materials_df['모델명'].astype(str).str.contains(kw, na=False, case=False, regex=False))
                         ]
-                        if not matches.empty:
-                            ndt_mat_rows = matches
+                        if not kw_match.empty:
+                            ndt_mat_rows = kw_match
                             break
                 
-                # Step 3: Fallback to partial match of original name
+                # Step 3: Try partial match by input_name
                 if ndt_mat_rows.empty:
-                    for s_name in search_names:
-                        matches = self.materials_df[
-                            self.materials_df['품목명'].astype(str).str.contains(s_name, na=False, case=False, regex=False) |
-                            self.materials_df['모델명'].astype(str).str.contains(s_name, na=False, case=False, regex=False)
-                        ]
-                        if not matches.empty:
-                            ndt_mat_rows = matches
-                            break
+                    partial_match = self.materials_df[
+                        (self.materials_df['품목명'].astype(str).str.contains(input_name, na=False, case=False, regex=False))
+                    ]
+                    if not partial_match.empty:
+                        ndt_mat_rows = partial_match
                     
                 if not ndt_mat_rows.empty:
                     # Check category for PT/MT chemicals
                     ndt_mat_row = ndt_mat_rows.iloc[0]
                     ndt_mat_id = ndt_mat_row['MaterialID']
                     actual_mat_name = ndt_mat_row['품목명']
-                    category = str(ndt_mat_row.get('품목군코드', '')).upper()
+                    category = str(ndt_mat_row.get('품목군코드', '')).upper().strip()
                     
-                    # Check if it belongs to PT or MT chemicals
-                    is_chemical = False
-                    category_upper = category.upper()
-                    name_upper = str(actual_mat_name).upper()
-                    # input_name 자체가 NDT 화학약품 목록에 있으면 무조건 chemical
+                    # Always treat as chemical if it's in the NDT input list
                     ndt_chem_inputs = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+                    is_chemical = input_name in ndt_chem_inputs
                     
-                    if input_name in ndt_chem_inputs:
-                        is_chemical = True  # 입력 항목 자체가 NDT 약품 → 무조건 차감
-                    elif any(k in category_upper for k in ['PT', 'MT', '약품', '소모품', 'CHEM', 'NDT']):
-                        is_chemical = True
-                    # Fallback: specific names if category is vague
-                    elif any(k in name_upper for k in ['침투제', '세척제', '현상제', '자분', '페인트', '흑색자분', '백색페인트', '형광', 'DEVELOPER', 'CLEANER', 'PENETRANT', 'MT', 'PT', 'NABAKEM', 'MAGNAFLUX']):
-                        is_chemical = True
+                    # Additional category check if not identified as NDT chemical
+                    if not is_chemical:
+                        category_upper = category.upper()
+                        name_upper = str(actual_mat_name).upper()
+                        if any(k in category_upper for k in ['PT', 'MT', '약품', '소모품', 'CHEM', 'NDT']):
+                            is_chemical = True
+                        elif any(k in name_upper for k in ['침투제', '세척제', '현상제', '자분', '페인트', 'DEVELOPER', 'CLEANER', 'PENETRANT', 'NABAKEM']):
+                            is_chemical = True
                     
                     if is_chemical:
                         ndt_transaction = {
@@ -10412,16 +10429,19 @@ class MaterialManager:
                         self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([ndt_transaction])], ignore_index=True)
                         stock_info += f"\n• {actual_mat_name}: {qty:.1f} 차감 (-)"
                     else:
-                        stock_info += f"\n• {actual_mat_name}: 재고 차감 대상 아님 (구분:'{category}', 약품 아님)"
+                        stock_info += f"\n• {actual_mat_name}: 재고 차감 대상 아님 (구분:'{category}')"
                 else:
-                    # Auto-register missing NDT material
+                    # Auto-register missing NDT material with correct category
                     new_ndt_id = self.materials_df['MaterialID'].max() + 1 if not self.materials_df.empty else 1
+                    
+                    # 세척제, 현상제는 명시적으로 NDT_CHEM으로
+                    ndt_category = 'NDT_CHEM'
                     
                     new_ndt_material = {
                         'MaterialID': new_ndt_id,
                         '품목명': input_name,
                         '관리품번': '',
-                        '품목군코드': 'NDT_CHEM',
+                        '품목군코드': ndt_category,
                         '규격': '',
                         '관리단위': 'EA',
                         '재고위치': '',
@@ -10445,6 +10465,7 @@ class MaterialManager:
                     }
                     self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([ndt_transaction])], ignore_index=True)
                     stock_info += f"\n• {input_name}: 자동 등록 및 {qty:.1f} 차감 (-)"
+
             
             self.daily_usage_df = pd.concat([self.daily_usage_df, pd.DataFrame([final_entry])], ignore_index=True)
             # Maintain clean headers
