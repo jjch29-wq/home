@@ -8162,6 +8162,7 @@ class MaterialManager:
         ttk.Button(bottom_filter, text="조회", command=self.update_budget_site_view).pack(side='left', padx=8)
         ttk.Button(bottom_filter, text="예산 수정/불러오기",
                    command=lambda: self._load_budget_to_form(self.cb_budget_view_site.get())).pack(side='left', padx=4)
+        ttk.Button(bottom_filter, text="컬럼 관리", command=self.show_budget_view_column_dialog).pack(side='right', padx=4)
         ttk.Button(bottom_filter, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
 
         # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
@@ -8169,18 +8170,25 @@ class MaterialManager:
         tree_outer = ttk.Frame(bottom_container)
         tree_outer.pack(fill='both', expand=True)
 
-        bv_cols = ('Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식', 'OT합계', '자재사용량', '자재단가', '합계', '비고')
-        bv_widths = (90, 120, 100, 80, 70, 80, 90, 80, 70, 80, 80, 90, 100, 150)
-        bv_heads  = ('날짜', '현장', '장비', '검사방법', '수량', '단가', '검사단가', '출장비', '일식', 'OT합계', '자재사용량', '자재단가', '합계', '비고')
+        self.budget_view_cols = ('Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식', 'OT합계', '자재사용량', '자재단가', '합계', '비고')
+        self.budget_view_widths = (90, 120, 100, 80, 70, 80, 90, 80, 70, 80, 80, 90, 100, 150)
+        self.budget_view_heads  = ('날짜', '현장', '장비', '검사방법', '수량', '단가', '검사단가', '출장비', '일식', 'OT합계', '자재사용량', '자재단가', '합계', '비고')
 
         vsb = ttk.Scrollbar(tree_outer, orient='vertical')
         hsb = ttk.Scrollbar(tree_outer, orient='horizontal')
-        self.budget_view_tree = ttk.Treeview(tree_outer, columns=bv_cols, show='headings',
+        self.budget_view_tree = ttk.Treeview(tree_outer, columns=self.budget_view_cols, show='headings',
                                               yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        for col, head, w in zip(bv_cols, bv_heads, bv_widths):
+        for col, head, w in zip(self.budget_view_cols, self.budget_view_heads, self.budget_view_widths):
             self.budget_view_tree.heading(col, text=head,
                 command=lambda c=col: self.treeview_sort_column(self.budget_view_tree, c, False))
             self.budget_view_tree.column(col, width=w, minwidth=40, anchor='center')
+
+        # 저장된 컬럼 가시성 적용 (없으면 전체 표시)
+        if hasattr(self, 'budget_view_visible_cols') and self.budget_view_visible_cols:
+            visible = [c for c in self.budget_view_visible_cols if c in self.budget_view_cols]
+            self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_cols
+        else:
+            self.budget_view_tree['displaycolumns'] = self.budget_view_cols
 
         vsb.config(command=self.budget_view_tree.yview)
         hsb.config(command=self.budget_view_tree.xview)
@@ -8189,6 +8197,7 @@ class MaterialManager:
         hsb.grid(row=1, column=0, sticky='ew')
         tree_outer.grid_rowconfigure(0, weight=1)
         tree_outer.grid_columnconfigure(0, weight=1)
+        self.budget_view_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
 
         # ── ESC: 현장별 탭 내 모든 입력 위젯에서 포커스 해제 ──────────────
         def _esc_to_root(e=None):
@@ -8215,6 +8224,34 @@ class MaterialManager:
     def update_budget_view(self):
         """Refresh the budget treeview - no-op (UI triggered)"""
         pass
+
+    def show_budget_view_column_dialog(self):
+        """Open dialog to show/hide columns in budget site performance view"""
+        if not hasattr(self, 'budget_view_tree'):
+            return
+
+        all_cols = list(self.budget_view_tree['columns'])
+        active_cols = self.budget_view_tree['displaycolumns']
+        if not active_cols or active_cols == ('#all'):
+            active_cols = all_cols
+
+        dialog = ColumnSelectionDialog(self.root, all_cols, title="현장별 실적 표시 컬럼 관리")
+        for col, var in dialog.vars.items():
+            var.set(col in active_cols)
+
+        dialog.wait_window()
+
+        if dialog.result is not None:
+            # 필수 컬럼 보정: 날짜/현장은 항상 유지
+            final_selection = list(dialog.result)
+            for mandatory in ('Date', 'Site'):
+                if mandatory in all_cols and mandatory not in final_selection:
+                    final_selection.insert(0 if mandatory == 'Date' else 1, mandatory)
+
+            sorted_selection = [c for c in all_cols if c in final_selection]
+            self.budget_view_tree['displaycolumns'] = sorted_selection if sorted_selection else all_cols
+            self.budget_view_visible_cols = list(self.budget_view_tree['displaycolumns'])
+            self.save_tab_config()
 
     def update_budget_site_view(self):
         """현장별 일일사용량 데이터를 하단 Treeview에 표시하고 KPI를 갱신한다."""
@@ -12158,6 +12195,7 @@ class MaterialManager:
                 'entry_inner_frame_height': self.entry_inner_frame.winfo_height() if hasattr(self, 'entry_inner_frame') else None,
                 'history_visible_cols': getattr(self, 'manual_visible_cols', []),
                 'monthly_visible_cols': getattr(self, 'monthly_visible_cols', []),
+                'budget_view_visible_cols': getattr(self, 'budget_view_visible_cols', []),
                 'window_state': self.root.state(),
                 'window_width': self.root.winfo_width(),
                 'window_height': self.root.winfo_height()
@@ -12197,6 +12235,12 @@ class MaterialManager:
             if hasattr(self, 'report_tree'):
                 for col in self.report_tree['columns']:
                     self.tab_config['report_col_widths'][col] = self.report_tree.column(col, 'width')
+
+            # Save budget site performance column widths
+            self.tab_config['budget_view_col_widths'] = {}
+            if hasattr(self, 'budget_view_tree'):
+                for col in self.budget_view_tree['columns']:
+                    self.tab_config['budget_view_col_widths'][col] = self.budget_view_tree.column(col, 'width')
             
             # Save tab order
             self.tab_config['tab_order'] = []
@@ -12407,6 +12451,15 @@ class MaterialManager:
                     try:
                         self.monthly_usage_tree['displaycolumns'] = [c for c in self.monthly_visible_cols if c in self.monthly_usage_tree['columns']]
                     except: pass
+
+                # Restore budget site performance view visibility if saved
+                self.budget_view_visible_cols = config.get('budget_view_visible_cols', [])
+                if self.budget_view_visible_cols and hasattr(self, 'budget_view_tree'):
+                    try:
+                        visible = [c for c in self.budget_view_visible_cols if c in self.budget_view_tree['columns']]
+                        self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_tree['columns']
+                    except:
+                        pass
                 
                 # Restore warehouses list
                 self.warehouses[:] = config.get('warehouses', [])
@@ -12469,6 +12522,17 @@ class MaterialManager:
                             w = int(width)
                             if w > 10:
                                 self.site_summary_tree.column(col, width=w, minwidth=20, stretch=False)
+                        except:
+                            pass
+
+                # Restore budget site performance column widths
+                budget_view_col_widths = config.get('budget_view_col_widths', {})
+                if budget_view_col_widths and hasattr(self, 'budget_view_tree'):
+                    for col, width in budget_view_col_widths.items():
+                        try:
+                            w = int(width)
+                            if w > 10:
+                                self.budget_view_tree.column(col, width=w, minwidth=20, stretch=False)
                         except:
                             pass
 
