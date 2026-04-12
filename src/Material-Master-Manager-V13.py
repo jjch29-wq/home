@@ -955,18 +955,8 @@ class VehicleInspectionWidget(ttk.Frame):
         input_frame.grid_columnconfigure(1, weight=1)
 
     def update_vehicle_list(self, new_list):
-        """Update the combobox values and re-register autocomplete"""
+        """Update the combobox values (native dropdown)"""
         self.cb_vehicle_info['values'] = new_list
-        # Access register_autocomplete from global scope
-        try:
-            import sys
-            main_mod = sys.modules.get('__main__')
-            if main_mod and hasattr(main_mod, 'register_autocomplete'):
-                main_mod.register_autocomplete(self.cb_vehicle_info, new_list)
-            elif 'register_autocomplete' in globals():
-                globals()['register_autocomplete'](self.cb_vehicle_info, new_list)
-        except:
-            pass
 
     def format_mileage(self, event=None):
         """Autoformat mileage with commas"""
@@ -7392,7 +7382,6 @@ class MaterialManager:
         ttk.Label(form_content, text="현장명:").grid(row=0, column=0, padx=2, pady=1, sticky='e')
         self.cb_daily_site = ttk.Combobox(form_content, width=12)
         self.cb_daily_site.grid(row=0, column=1, padx=2, pady=1, sticky='w')
-        register_autocomplete(self.cb_daily_site, None) # Use general registration
         
         # [NEW] Focus Transition for Site
         def on_site_select(e):
@@ -7451,7 +7440,6 @@ class MaterialManager:
         ttk.Label(form_content, text="장비명:").grid(row=1, column=0, padx=2, pady=1, sticky='e')
         self.cb_daily_equip = ttk.Combobox(form_content, width=12)
         self.cb_daily_equip.grid(row=1, column=1, padx=2, pady=1, sticky='w')
-        register_autocomplete(self.cb_daily_equip, None)
         
         # [NEW] Focus Transition for Equipment
         def on_equip_select(e):
@@ -7463,7 +7451,6 @@ class MaterialManager:
         ttk.Label(form_content, text="품목명:").grid(row=1, column=2, padx=2, pady=1, sticky='e')
         self.cb_daily_material = ttk.Combobox(form_content, width=12)
         self.cb_daily_material.grid(row=1, column=3, padx=2, pady=1, sticky='w')
-        register_autocomplete(self.cb_daily_material, None)
         
         # [NEW] Focus Transition for Material
         def on_mat_select(e):
