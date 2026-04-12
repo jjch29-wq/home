@@ -3586,6 +3586,9 @@ class MaterialManager:
         
         btn_export_trans = ttk.Button(filter_row1, text="엑셀 내보내기", command=self.export_transaction_history)
         btn_export_trans.pack(side='left', padx=5)
+
+        btn_refresh_trans = ttk.Button(filter_row1, text="입출고 내역 새로고침", command=self.refresh_inout_history)
+        btn_refresh_trans.pack(side='left', padx=5)
         
         # Second row of filters
         filter_row2 = ttk.Frame(history_ctrl_frame)
@@ -3609,6 +3612,7 @@ class MaterialManager:
         self.cb_trans_filter_vehicle = ttk.Combobox(filter_row3, width=12, state="readonly")
         self.cb_trans_filter_vehicle.pack(side='left', padx=5)
         self.cb_trans_filter_vehicle.bind('<<ComboboxSelected>>', lambda e: self.update_transaction_view())
+        self.cb_trans_filter_vehicle.bind('<F5>', lambda e: (self.refresh_inout_history(), 'break')[1])
         
         # Treeview for history
         tree_scroll_frame = ttk.Frame(history_frame)
@@ -3668,6 +3672,7 @@ class MaterialManager:
 
         self.inout_tree.bind('<Button-1>', _inout_col_press, add='+')
         self.inout_tree.bind('<ButtonRelease-1>', _inout_col_release, add='+')
+        self.inout_tree.bind('<F5>', lambda e: (self.refresh_inout_history(), 'break')[1])
 
         self.inout_tree.grid(row=0, column=0, sticky='nsew')
         inout_vsb.grid(row=0, column=1, sticky='ns')
@@ -3816,6 +3821,142 @@ class MaterialManager:
             self.cb_trans_filter_vehicle['values'] = ["전체"] + vehicle_list
             if not self.cb_trans_filter_vehicle.get():
                 self.cb_trans_filter_vehicle.set("전체")
+
+    def _get_material_candidates(self, include_all=False):
+        vals = []
+        if hasattr(self, 'materials_display_list'):
+            vals.extend(getattr(self, 'materials_display_list', []) or [])
+        if hasattr(self, 'cb_daily_material'):
+            vals.extend(list(getattr(self.cb_daily_material, 'cget', lambda _k: [])('values') or []))
+
+        cleaned = sorted(set(str(v).strip() for v in vals if str(v).strip() and str(v).strip() != '전체'))
+        return (['전체'] + cleaned) if include_all else cleaned
+
+    def _get_equipment_candidates(self, include_all=False):
+        vals = []
+        if hasattr(self, 'equipments'):
+            vals.extend(getattr(self, 'equipments', []) or [])
+        if hasattr(self, 'equipment_suggestions'):
+            vals.extend(getattr(self, 'equipment_suggestions', []) or [])
+        if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
+            vals.extend(self.daily_usage_df['장비명'].dropna().astype(str).str.strip().tolist())
+
+        cleaned = sorted(set(str(v).strip() for v in vals if str(v).strip() and str(v).strip() != '전체'))
+        return (['전체'] + cleaned) if include_all else cleaned
+
+    def _apply_combobox_word_suggest(self, combobox, source_values, open_dropdown=False):
+        if not combobox:
+            return
+
+        if not hasattr(combobox, '_word_suggest_win'):
+            combobox._word_suggest_win = SuggestionWindow(combobox)
+
+        text_raw = combobox.get()
+        text = text_raw.strip()
+        had_focus = False
+        try:
+            had_focus = (self.root.focus_get() == combobox)
+        except Exception:
+            had_focus = False
+        try:
+            cursor_pos = combobox.index(tk.INSERT)
+        except Exception:
+            cursor_pos = len(text_raw)
+        source = [str(v).strip() for v in (source_values or []) if str(v).strip()]
+
+        if not text:
+            filtered = source
+        else:
+            q = text.lower()
+            filtered = [v for v in source if q in v.lower()]
+
+        combobox['values'] = filtered
+
+        # Keep current input/caret intact after values update
+        def _restore_state():
+            try:
+                if had_focus:
+                    combobox.focus_set()
+                combobox.set(text_raw)
+                combobox.icursor(min(cursor_pos, len(text_raw)))
+                combobox.selection_clear()
+                combobox.xview_moveto(1.0)
+            except Exception:
+                pass
+
+        _restore_state()
+        try:
+            combobox.after_idle(_restore_state)
+        except Exception:
+            pass
+
+        if open_dropdown and filtered:
+            try:
+                combobox._word_suggest_win.show(filtered)
+            except Exception:
+                pass
+        else:
+            try:
+                combobox._word_suggest_win.hide()
+            except Exception:
+                pass
+
+    def _bind_combobox_word_suggest(self, combobox, source_getter):
+        if not combobox:
+            return
+
+        if not hasattr(combobox, '_word_suggest_win'):
+            combobox._word_suggest_win = SuggestionWindow(combobox)
+
+        def _on_keyrelease(e=None):
+            if e is not None and getattr(e, 'keysym', '') in {
+                'Left', 'Right', 'Tab',
+                'Shift_L', 'Shift_R', 'Control_L', 'Control_R',
+                'Alt_L', 'Alt_R', 'Caps_Lock'
+            }:
+                return
+            if e is not None and getattr(e, 'keysym', '') == 'Escape':
+                combobox._word_suggest_win.hide()
+                return
+            if e is not None and getattr(e, 'keysym', '') == 'Down':
+                if combobox._word_suggest_win.active:
+                    combobox._word_suggest_win.move_selection(1)
+                else:
+                    self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=True)
+                return 'break'
+            if e is not None and getattr(e, 'keysym', '') == 'Up':
+                if combobox._word_suggest_win.active:
+                    combobox._word_suggest_win.move_selection(-1)
+                return 'break'
+            if e is not None and getattr(e, 'keysym', '') == 'Return':
+                if combobox._word_suggest_win.active and combobox._word_suggest_win.confirm_selection():
+                    try:
+                        combobox.event_generate('<<ComboboxSelected>>')
+                    except Exception:
+                        pass
+                    return 'break'
+            self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=True)
+
+        def _on_focus_in(_e=None):
+            self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=False)
+
+        def _on_focus_out(_e=None):
+            sw = getattr(combobox, '_word_suggest_win', None)
+            if not sw or not sw.active:
+                return
+            fw = combobox.focus_get()
+            if fw is not None and sw.window and sw.window.winfo_exists():
+                try:
+                    if str(fw).startswith(str(sw.window)):
+                        combobox.after(150, sw.hide)
+                        return
+                except Exception:
+                    pass
+            sw.hide()
+
+        combobox.bind('<KeyRelease>', _on_keyrelease, add='+')
+        combobox.bind('<FocusIn>', _on_focus_in, add='+')
+        combobox.bind('<FocusOut>', _on_focus_out, add='+')
 
     def update_registration_combos(self):
         """Update registration comboboxes with unique values from database and centralized list"""
@@ -4209,6 +4350,17 @@ class MaterialManager:
             import traceback
             error_details = traceback.format_exc()
             print(f"Transaction View Error: {e}\n{error_details}")
+
+    def refresh_inout_history(self):
+        """Refresh In/Out history and related filter source lists."""
+        try:
+            # Ensure filter candidates reflect latest data first
+            self.update_material_combo()
+            # Then redraw history and stock views
+            self.update_transaction_view()
+            self.update_stock_view()
+        except Exception as e:
+            messagebox.showerror("새로고침 오류", f"입출고 내역 새로고침 중 오류가 발생했습니다.\n{e}")
 
     def delete_transaction_entry(self):
         """Delete selected transaction from history and refresh"""
@@ -6093,8 +6245,20 @@ class MaterialManager:
 
     def create_draggable_container(self, parent, label_text, widget_class, config_key, manage_list_key=None, grid_info=None, **widget_kwargs):
         """Create a draggable container with a label and a widget, styled as a visible box"""
-        # Use ttk.Frame for automatic background matching
-        container = ttk.Frame(parent, relief="solid", borderwidth=1)
+        box_border_color = (
+            getattr(self, 'style', None).lookup('TLabelframe', 'bordercolor') if hasattr(self, 'style') else ''
+        ) or (
+            getattr(self, 'style', None).lookup('TFrame', 'bordercolor') if hasattr(self, 'style') else ''
+        ) or '#c0c0c0'
+
+        container = tk.Frame(
+            parent,
+            relief="solid",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=box_border_color,
+            bg=self.theme_bg
+        )
         
         # Header container for label and buttons
         hdr = ttk.Frame(container) 
@@ -7390,7 +7554,19 @@ class MaterialManager:
         self.entry_inner_frame.grid_rowconfigure(0, weight=1)
 
         # 1. Combined Frame: Basic Info & Costs
-        form_container = ttk.Frame(self.entry_inner_frame, relief="solid", borderwidth=1)
+        box_border_color = (
+            self.style.lookup('TLabelframe', 'bordercolor')
+            or self.style.lookup('TFrame', 'bordercolor')
+            or '#c0c0c0'
+        )
+        form_container = tk.Frame(
+            self.entry_inner_frame,
+            relief="solid",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=box_border_color,
+            bg=self.theme_bg
+        )
         form_hdr = ttk.Frame(form_container)
         form_hdr.pack(fill='x', side='top')
         ttk.Label(form_hdr, text="✥", font=('Arial', 9)).pack(side='left', padx=1)
@@ -7463,6 +7639,7 @@ class MaterialManager:
         ttk.Label(form_content, text="장비명:").grid(row=1, column=0, padx=2, pady=1, sticky='e')
         self.cb_daily_equip = ttk.Combobox(form_content, width=22)
         self.cb_daily_equip.grid(row=1, column=1, padx=2, pady=1, sticky='w')
+        self._bind_combobox_word_suggest(self.cb_daily_equip, lambda: self._get_equipment_candidates(include_all=False))
         
         # [NEW] Focus Transition for Equipment
         def on_equip_select(e):
@@ -7474,6 +7651,7 @@ class MaterialManager:
         ttk.Label(form_content, text="품목명:").grid(row=1, column=2, padx=2, pady=1, sticky='e')
         self.cb_daily_material = ttk.Combobox(form_content, width=22)
         self.cb_daily_material.grid(row=1, column=3, padx=2, pady=1, sticky='w')
+        self._bind_combobox_word_suggest(self.cb_daily_material, lambda: self._get_material_candidates(include_all=False))
         
         # [NEW] Focus Transition for Material
         def on_mat_select(e):
@@ -7532,7 +7710,14 @@ class MaterialManager:
         rtk_cats = ["센터미스", "농도", "마킹미스", "필름마크", "취급부주의", "고객불만", "기타", "총계"]
 
         # Row 1: NDT
-        ndt_container = ttk.Frame(self.entry_inner_frame, relief="solid", borderwidth=1)
+        ndt_container = tk.Frame(
+            self.entry_inner_frame,
+            relief="solid",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=box_border_color,
+            bg=self.theme_bg
+        )
         ndt_hdr = ttk.Frame(ndt_container)
         ndt_hdr.pack(fill='x', side='top'); ttk.Label(ndt_hdr, text="✥", font=('Arial', 9)).pack(side='left', padx=1)
         lbl_ndt_title = ttk.Label(ndt_hdr, text="NDT 자재", font=('Malgun Gothic', 9, 'bold'))
@@ -7558,7 +7743,14 @@ class MaterialManager:
         self.make_draggable(ndt_container, 'ndt_usage_box_geometry'); self.draggable_items['ndt_usage_box_geometry'] = ndt_container
 
         # Row 2: RTK
-        rtk_container = ttk.Frame(self.entry_inner_frame, relief="solid", borderwidth=1)
+        rtk_container = tk.Frame(
+            self.entry_inner_frame,
+            relief="solid",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=box_border_color,
+            bg=self.theme_bg
+        )
         rtk_hdr = ttk.Frame(rtk_container)
         rtk_hdr.pack(fill='x', side='top'); ttk.Label(rtk_hdr, text="✥", font=('Arial', 9)).pack(side='left', padx=1)
         lbl_rtk_title = ttk.Label(rtk_hdr, text="RTK", font=('Malgun Gothic', 9, 'bold'))
@@ -7591,9 +7783,33 @@ class MaterialManager:
         rtk_container.lift() # Ensure visibility
         self.make_draggable(rtk_container, 'rtk_usage_box_geometry'); self.draggable_items['rtk_usage_box_geometry'] = rtk_container
 
+        # [LAYOUT FIX] Ensure enough baseline row heights so workers panel bottom rows are visible
+        try:
+            self.entry_inner_frame.grid_rowconfigure(0, minsize=170)
+            self.entry_inner_frame.grid_rowconfigure(1, minsize=120)
+            self.entry_inner_frame.grid_rowconfigure(2, minsize=130)
+            self.entry_inner_frame.grid_rowconfigure(3, minsize=60)
+        except Exception:
+            pass
+
         # Row 3: Save Button
-        save_btn_container = ttk.Frame(self.entry_inner_frame)
-        ttk.Button(save_btn_container, text="주진철 저장", command=self.add_daily_usage_entry, width=15, style='Big.TButton').pack()
+        save_btn_container = tk.Frame(
+            self.entry_inner_frame,
+            relief="solid",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=box_border_color,
+            bg=self.theme_bg
+        )
+        save_btn_inner = ttk.Frame(save_btn_container, padding=(2, 2))
+        save_btn_inner.pack(fill='both', expand=True)
+        ttk.Button(
+            save_btn_inner,
+            text="주진철 저장",
+            command=self.add_daily_usage_entry,
+            width=15,
+            style='Big.TButton'
+        ).pack(padx=1, pady=1)
         save_btn_container.grid(row=3, column=0, padx=1, pady=1, sticky='nw')
         self.make_draggable(save_btn_container, 'save_btn_geometry'); self.draggable_items['save_btn_geometry'] = save_btn_container
 
@@ -7737,11 +7953,13 @@ class MaterialManager:
         self.cb_daily_filter_material = ttk.Combobox(filter_panel, width=15)
         self.cb_daily_filter_material.pack(side='left', padx=2)
         self.cb_daily_filter_material.set('전체')
+        self._bind_combobox_word_suggest(self.cb_daily_filter_material, lambda: self._get_material_candidates(include_all=True))
         
         ttk.Label(filter_panel, text="장비명:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_equipment = ttk.Combobox(filter_panel, width=15)
         self.cb_daily_filter_equipment.pack(side='left', padx=2)
         self.cb_daily_filter_equipment.set('전체')
+        self._bind_combobox_word_suggest(self.cb_daily_filter_equipment, lambda: self._get_equipment_candidates(include_all=True))
         
         ttk.Label(filter_panel, text="작업자:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_worker = ttk.Combobox(filter_panel, width=12)
@@ -9254,15 +9472,16 @@ class MaterialManager:
                         return
 
             # Try to restore from saved ratio first
-            target_ratio = 0.25  # Default ratio
+            # [UX FIX] 작업자 박스 하단이 가려지지 않도록 상단 영역 기본 비율 상향
+            target_ratio = 0.45  # Default ratio
             if hasattr(self, 'tab_config') and 'daily_usage_sash_ratio' in self.tab_config:
                 target_ratio = self.tab_config['daily_usage_sash_ratio']
             
             # Calculate target position
             target_pos = int(total_h * target_ratio)
             
-            # Apply relaxed bounds (10% to 90% of total height)
-            min_pos = int(total_h * 0.1)
+            # Apply relaxed bounds + practical minimum top area
+            min_pos = max(int(total_h * 0.1), 460)
             max_pos = int(total_h * 0.9)
             
             if target_pos < min_pos:
@@ -12912,8 +13131,52 @@ class MaterialManager:
                                 load_y = geo.get('y', 0)
                                 load_w = max(100, geo.get('width', 200))
                                 load_h = max(50, geo.get('height', 100))
+
+                                # [RECOVERY] 작업자 박스는 화면 밖/과소 복원을 방지
+                                if key == 'workers_box_geometry':
+                                    try:
+                                        p_w = widget.master.winfo_width()
+                                        p_h = widget.master.winfo_height()
+                                        load_w = max(520, load_w)
+                                        load_h = max(360, load_h)
+                                        if p_w > 0:
+                                            load_x = max(0, min(int(load_x), max(0, p_w - load_w)))
+                                        else:
+                                            load_x = max(0, int(load_x))
+                                        if p_h > 0:
+                                            load_y = max(0, min(int(load_y), max(0, p_h - load_h)))
+                                        else:
+                                            load_y = max(0, int(load_y))
+                                    except Exception:
+                                        load_x = max(0, int(load_x))
+                                        load_y = max(0, int(load_y))
                                 
                                 widget.place(x=load_x, y=load_y, width=load_w, height=load_h)
+
+                                # [VISUAL FIX] 핵심 박스는 기존 placeholder 잔상 제거 + 최소 필요 높이 보정
+                                if key in ('ndt_usage_box_geometry', 'rtk_usage_box_geometry', 'workers_box_geometry'):
+                                    try:
+                                        self._remove_placeholder(widget)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        widget.update_idletasks()
+                                        if key == 'workers_box_geometry':
+                                            min_w = max(520, widget.winfo_reqwidth() + 8)
+                                            min_h = max(360, widget.winfo_reqheight() + 12)
+                                        else:
+                                            min_w = max(160, widget.winfo_reqwidth() + 4)
+                                            min_h = max(90, widget.winfo_reqheight() + 6)
+                                        cur_x = int(float(widget.place_info().get('x', load_x)))
+                                        cur_y = int(float(widget.place_info().get('y', load_y)))
+                                        cur_w = int(float(widget.place_info().get('width', load_w)))
+                                        cur_h = int(float(widget.place_info().get('height', load_h)))
+                                        if cur_w < min_w or cur_h < min_h:
+                                            widget.place(x=cur_x, y=cur_y, width=max(cur_w, min_w), height=max(cur_h, min_h))
+                                        if key == 'workers_box_geometry':
+                                            widget.lift()
+                                    except Exception:
+                                        pass
                             except Exception as e:
                                 print(f"Error placing widget {key}: {e}")
                                 
@@ -12926,13 +13189,120 @@ class MaterialManager:
                                 print(f"LOADER: Safeguard - Recovering missing/unmanaged core widget: {key}")
                                 self.reset_widget_position(None, widget=widget)
 
+                    # 3.6 [SAFEGUARD] workers 박스 강제 복구 (기존 배치 잔상/숨김/화면 밖 복원 방지)
+                    if 'workers_box_geometry' in self.draggable_items:
+                        wbox = self.draggable_items['workers_box_geometry']
+                        mgr = wbox.winfo_manager()
+                        if mgr in ('', 'grid'):
+                            self.reset_widget_position(None, widget=wbox)
+                            try:
+                                if wbox.winfo_manager() == 'grid':
+                                    wbox.grid_forget()
+                                wbox.place(x=560, y=10, width=560, height=420)
+                                wbox.lift()
+                            except Exception:
+                                pass
+                        elif mgr == 'place':
+                            try:
+                                pi = wbox.place_info()
+                                cx = int(float(pi.get('x', 0)))
+                                cy = int(float(pi.get('y', 0)))
+                                ww = int(float(pi.get('width', wbox.winfo_width() or 0)))
+                                hh = int(float(pi.get('height', wbox.winfo_height() or 0)))
+                                p_w = wbox.master.winfo_width()
+                                p_h = wbox.master.winfo_height()
+                                ww = max(520, ww)
+                                hh = max(360, hh)
+                                if p_w > 0:
+                                    cx = max(0, min(cx, max(0, p_w - ww)))
+                                if p_h > 0:
+                                    cy = max(0, min(cy, max(0, p_h - hh)))
+                                wbox.place(x=cx, y=cy, width=ww, height=hh)
+                                wbox.lift()
+                            except Exception:
+                                pass
+
+                    # 3.7 [SAFEGUARD] 코어 박스가 비정상 크기로 복원되면 grid 기본 배치로 자동 복구
+                    # (기존 배치 잔상으로 하단이 잘려 반 이상 안 보이는 현상 방지)
+                    for ckey in ('ndt_usage_box_geometry', 'rtk_usage_box_geometry', 'workers_box_geometry'):
+                        if ckey not in self.draggable_items:
+                            continue
+                        cw = self.draggable_items[ckey]
+                        try:
+                            cw.update_idletasks()
+                            mgr = cw.winfo_manager()
+                            cur_h = cw.winfo_height()
+                            req_h = cw.winfo_reqheight()
+                            cur_w = cw.winfo_width()
+
+                            if ckey == 'workers_box_geometry':
+                                bad_size = (cur_h < 320) or (cur_w < 480)
+                            else:
+                                bad_size = (cur_h < max(100, int(req_h * 0.8)))
+
+                            if mgr == '' or bad_size:
+                                print(f"LOADER: Recovering clipped core box: {ckey} (mgr={mgr}, w={cur_w}, h={cur_h}, req_h={req_h})")
+                                self.reset_widget_position(None, widget=cw)
+                                try:
+                                    self._remove_placeholder(cw)
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+
+                    # 3.8 [SAFEGUARD] 저장 버튼 강제 복구 (화면 밖/숨김/겹침 방지)
+                    if 'save_btn_geometry' in self.draggable_items:
+                        sbox = self.draggable_items['save_btn_geometry']
+                        try:
+                            sbox.update_idletasks()
+                            smgr = sbox.winfo_manager()
+                            sw = sbox.winfo_width()
+                            sh = sbox.winfo_height()
+
+                            # Hidden/unmanaged or too small => reset to grid default first
+                            if smgr == '' or sw < 80 or sh < 20:
+                                self.reset_widget_position(None, widget=sbox)
+                                smgr = sbox.winfo_manager()
+
+                            # If placed, clamp into visible area and keep above siblings
+                            if smgr == 'place':
+                                pi = sbox.place_info()
+                                sx = int(float(pi.get('x', 10)))
+                                sy = int(float(pi.get('y', 340)))
+                                sw = int(float(pi.get('width', max(120, sbox.winfo_reqwidth() or 120))))
+                                sh = int(float(pi.get('height', max(28, sbox.winfo_reqheight() or 28))))
+                                p_w = sbox.master.winfo_width()
+                                p_h = sbox.master.winfo_height()
+                                sw = max(120, sw)
+                                sh = max(28, sh)
+                                if p_w > 0:
+                                    sx = max(0, min(sx, max(0, p_w - sw)))
+                                if p_h > 0:
+                                    sy = max(0, min(sy, max(0, p_h - sh)))
+                                sbox.place(x=sx, y=sy, width=sw, height=sh)
+
+                            sbox.lift()
+                        except Exception:
+                            pass
+
                     # 4. Restore sash positions
                     def apply_sashes():
                         try:
                             # Daily usage sash
                             daily_sash = config.get('daily_usage_sash_pos')
                             if daily_sash is not None and hasattr(self, 'daily_usage_paned'):
-                                self.daily_usage_paned.sashpos(0, int(daily_sash))
+                                total_h = self.daily_usage_paned.winfo_height()
+                                if total_h > 0:
+                                    min_pos = max(int(total_h * 0.1), 460)
+                                    max_pos = int(total_h * 0.9)
+                                    safe_pos = int(daily_sash)
+                                    if safe_pos < min_pos:
+                                        safe_pos = min_pos
+                                    if safe_pos > max_pos:
+                                        safe_pos = max_pos
+                                    self.daily_usage_paned.sashpos(0, safe_pos)
+                                else:
+                                    self.daily_usage_paned.sashpos(0, int(daily_sash))
                             
                             # History sash
                             history_sash = config.get('daily_history_sash_pos')
@@ -13332,4 +13702,10 @@ class MaterialManager:
 if __name__ == "__main__":
     root = tk.Tk()
     app = MaterialManager(root)
-    root.mainloop()
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        try:
+            root.destroy()
+        except Exception:
+            pass
