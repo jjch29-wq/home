@@ -172,13 +172,31 @@ try:
 except Exception:
     pass
 
-# 10) Calendar._prev_year / _next_year : 년도 이동 튕김 방지
+# 10) Calendar._setup_style : ThemeChanged 시 예외 방지
+try:
+    if hasattr(Calendar, '_setup_style'):
+        _orig_cal_setup_style = Calendar._setup_style
+        def _patched_cal_setup_style(self, event=None):
+            try: _orig_cal_setup_style(self, event)
+            except BaseException: pass
+        Calendar._setup_style = _patched_cal_setup_style
+except Exception:
+    pass
+
+# 11) Calendar._prev_year / _next_year : 년도 이동
+# [FIX] 이전에 BaseException 으로 감쌌으나, 이것이 오히려 연도 이동을 조용히
+# 막는 원인이었음. update_idletasks 충돌은 patch #8/#9 에서 근본 해결됨.
+# _prev/_next_year 자체에는 update_idletasks 호출 없으므로 BaseException 래핑 불필요.
+# 만약 실제 TclError 등이 발생한다면 Exception 수준에서만 잡고, 날짜도 롤백.
 try:
     if hasattr(Calendar, '_prev_year'):
         _orig_prev_year = Calendar._prev_year
         def _patched_prev_year(self):
-            try: _orig_prev_year(self)
-            except BaseException: pass
+            _saved = self._date
+            try:
+                _orig_prev_year(self)
+            except Exception:
+                self._date = _saved   # 실패 시 날짜 롤백
         Calendar._prev_year = _patched_prev_year
 except Exception:
     pass
@@ -187,9 +205,39 @@ try:
     if hasattr(Calendar, '_next_year'):
         _orig_next_year = Calendar._next_year
         def _patched_next_year(self):
-            try: _orig_next_year(self)
-            except BaseException: pass
+            _saved = self._date
+            try:
+                _orig_next_year(self)
+            except Exception:
+                self._date = _saved   # 실패 시 날짜 롤백
         Calendar._next_year = _patched_next_year
+except Exception:
+    pass
+
+# 12) Calendar._prev_month / _next_month : 월 이동도 동일하게 안전화
+try:
+    if hasattr(Calendar, '_prev_month'):
+        _orig_prev_month = Calendar._prev_month
+        def _patched_prev_month(self):
+            _saved = self._date
+            try:
+                _orig_prev_month(self)
+            except Exception:
+                self._date = _saved
+        Calendar._prev_month = _patched_prev_month
+except Exception:
+    pass
+
+try:
+    if hasattr(Calendar, '_next_month'):
+        _orig_next_month = Calendar._next_month
+        def _patched_next_month(self):
+            _saved = self._date
+            try:
+                _orig_next_month(self)
+            except Exception:
+                self._date = _saved
+        Calendar._next_month = _patched_next_month
 except Exception:
     pass
 
