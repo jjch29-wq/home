@@ -3631,47 +3631,9 @@ class MaterialManager:
         col_widths = [150, 120, 180, 150, 70, 70, 70, 100, 120, 100, 200, 150, 200]
         for col, width in zip(columns, col_widths):
             self.inout_tree.heading(col, text=col)
-            self.inout_tree.column(col, width=width, minwidth=50, stretch=True, anchor='center')
+            self.inout_tree.column(col, width=width, minwidth=50, stretch=False, anchor='center')
         self.enable_tree_column_drag(self.inout_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.inout_tree))
-        
-        # 컬럼 분리선 드래그 후 나머지 컬럼을 비례 재배분
-        # → 한 컬럼 늘리면 나머지 전체가 균등 축소 (전체 너비 고정)
-        _inout_sep_col = {'col': None}
-
-        def _inout_col_press(event):
-            if self.inout_tree.identify_region(event.x, event.y) == 'separator':
-                _inout_sep_col['col'] = self.inout_tree.identify_column(event.x)
-            else:
-                _inout_sep_col['col'] = None
-
-        def _inout_col_release(event):
-            resized_col_id = _inout_sep_col.get('col')
-            _inout_sep_col['col'] = None
-            if not resized_col_id:
-                return
-            try:
-                tree = self.inout_tree
-                cols = list(tree['columns'])
-                tree_w = tree.winfo_width() - 2   # 스크롤바 여백 제외
-                # '#1' → index 0
-                col_idx = int(resized_col_id.replace('#', '')) - 1
-                if col_idx < 0 or col_idx >= len(cols):
-                    return
-                resized_w = tree.column(cols[col_idx], 'width')
-                remaining = max(0, tree_w - resized_w)
-                other_cols = [c for i, c in enumerate(cols) if i != col_idx]
-                other_total = sum(tree.column(c, 'width') for c in other_cols)
-                if other_total == 0:
-                    return
-                scale = remaining / other_total
-                for c in other_cols:
-                    new_w = max(50, int(tree.column(c, 'width') * scale))
-                    tree.column(c, width=new_w)
-            except Exception:
-                pass
-
-        self.inout_tree.bind('<Button-1>', _inout_col_press, add='+')
-        self.inout_tree.bind('<ButtonRelease-1>', _inout_col_release, add='+')
+        self.inout_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config(), add='+')
         self.inout_tree.bind('<F5>', lambda e: (self.refresh_inout_history(), 'break')[1])
 
         self.inout_tree.grid(row=0, column=0, sticky='nsew')
@@ -8379,11 +8341,10 @@ class MaterialManager:
 
         ttk.Label(bottom_filter, text="현장:").pack(side='left', padx=5)
         self.cb_budget_view_site = ttk.Combobox(bottom_filter, width=20, state='readonly')
-        self.cb_budget_view_site['values'] = self.sites
+        site_values = ['전체'] + sorted([str(s).strip() for s in (self.sites or []) if str(s).strip()])
+        self.cb_budget_view_site['values'] = site_values
         self.cb_budget_view_site.pack(side='left', padx=5)
-        # 첫 번째 현장을 기본 선택
-        if self.sites:
-            self.cb_budget_view_site.set(self.sites[0])
+        self.cb_budget_view_site.set('전체')
         self.cb_budget_view_site.bind('<<ComboboxSelected>>', lambda e: self.update_budget_site_view())
 
         ttk.Label(bottom_filter, text="시작일:").pack(side='left', padx=(10, 2))
@@ -8412,19 +8373,19 @@ class MaterialManager:
         # 전체 컬럼: 기본 표시 컬럼 + 사용자가 "추가" 할 수 있는 숨김 기본 컬럼 + 사용자정의 컬럼
         self.budget_view_builtin_cols = (
             'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
-            'OT합계', '자재사용량', '자재단가', '합계', '비고',
+            'OT합계', '자재사용량', '침투제', '세척제', '현상제', '자재단가', '합계', '비고',
             '작업자', '품목명', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고',
             'MaterialID', 'FilmCount'
         )
         self.budget_view_builtin_width_map = {
             'Date': 90, 'Site': 120, '장비명': 100, '검사방법': 80, '검사량': 70, '단가': 80,
-            '검사단가': 90, '출장비': 80, '일식': 70, 'OT합계': 80, '자재사용량': 80, '자재단가': 90,
+            '검사단가': 90, '출장비': 80, '일식': 70, 'OT합계': 80, '자재사용량': 80, '침투제': 70, '세척제': 70, '현상제': 70, '자재단가': 90,
             '합계': 100, '비고': 150, '작업자': 170, '품목명': 180, '입력시간': 140,
             '차량번호': 110, '주행거리': 100, '차량점검': 120, '차량비고': 140, 'MaterialID': 90, 'FilmCount': 90
         }
         self.budget_view_builtin_head_map = {
             'Date': '날짜', 'Site': '현장', '장비명': '장비', '검사방법': '검사방법', '검사량': '수량', '단가': '단가',
-            '검사단가': '검사단가', '출장비': '출장비', '일식': '일식', 'OT합계': 'OT합계', '자재사용량': '자재사용량',
+            '검사단가': '검사단가', '출장비': '출장비', '일식': '일식', 'OT합계': 'OT합계', '자재사용량': '자재사용량', '침투제': '침투제', '세척제': '세척제', '현상제': '현상제',
             '자재단가': '자재단가', '합계': '합계', '비고': '비고', '작업자': '작업자', '품목명': '품목명',
             '입력시간': '입력시간', '차량번호': '차량번호', '주행거리': '주행거리', '차량점검': '차량점검',
             '차량비고': '차량비고', 'MaterialID': '자재ID', 'FilmCount': '필름매수'
@@ -8433,7 +8394,7 @@ class MaterialManager:
         self.budget_view_custom_columns = getattr(self, 'budget_view_custom_columns', [])
         self.budget_view_default_cols = (
             'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
-            'OT합계', '자재사용량', '자재단가', '합계', '비고'
+            'OT합계', '자재사용량', '침투제', '세척제', '현상제', '자재단가', '합계', '비고'
         )
 
         vsb = ttk.Scrollbar(tree_outer, orient='vertical')
@@ -8487,6 +8448,30 @@ class MaterialManager:
             return
 
         custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
+        # [FIX] built-in 컬럼과 이름/키가 중복되는 사용자 컬럼 정리
+        builtin_keys = set(getattr(self, 'budget_view_builtin_cols', []) or [])
+        builtin_headings = set((getattr(self, 'budget_view_builtin_head_map', {}) or {}).values())
+        sanitized_custom_cols = []
+        seen_custom_keys = set()
+        seen_custom_names = set()
+        for c in custom_cols:
+            key = str(c.get('key', '')).strip()
+            name = str(c.get('name', key)).strip()
+            if not key:
+                continue
+            # built-in 과 키 충돌/이름 충돌이면 제거
+            if key in builtin_keys or name in builtin_headings:
+                continue
+            # custom 내부 중복도 제거
+            if key in seen_custom_keys or name in seen_custom_names:
+                continue
+            seen_custom_keys.add(key)
+            seen_custom_names.add(name)
+            sanitized_custom_cols.append(c)
+        if len(sanitized_custom_cols) != len(custom_cols):
+            self.budget_view_custom_columns = sanitized_custom_cols
+            custom_cols = sanitized_custom_cols
+
         custom_keys = [c.get('key') for c in custom_cols if c.get('key')]
         self.budget_view_cols = tuple(list(self.budget_view_builtin_cols) + custom_keys)
 
@@ -8521,6 +8506,14 @@ class MaterialManager:
         if not name or not str(name).strip():
             return
         name = str(name).strip()
+
+        # [FIX] built-in/기존 사용자 컬럼과 이름 중복 방지
+        builtin_names = set((getattr(self, 'budget_view_builtin_head_map', {}) or {}).values())
+        existing_custom_names = {str(c.get('name', '')).strip() for c in (getattr(self, 'budget_view_custom_columns', []) or [])}
+        if name in builtin_names or name in existing_custom_names:
+            messagebox.showwarning("중복 컬럼", f"'{name}' 컬럼은 이미 존재합니다.")
+            return
+
         default_value = simpledialog.askstring("컬럼 내용", f"'{name}' 컬럼의 기본 내용을 입력하세요(선택):", parent=self.root)
 
         existing = set(getattr(self, 'budget_view_cols', []))
@@ -8675,8 +8668,6 @@ class MaterialManager:
             self.budget_view_tree.delete(item)
 
         site = self.cb_budget_view_site.get().strip()
-        if not site:
-            return
 
         if self.daily_usage_df.empty:
             return
@@ -8685,9 +8676,41 @@ class MaterialManager:
         start_date = self.budget_view_start.get_date()
         end_date   = self.budget_view_end.get_date()
         df = self.daily_usage_df.copy()
-        df['_date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
-        mask = (df['_date'] >= start_date) & (df['_date'] <= end_date) & (df['Site'] == site)
+        # 구버전 컬럼명 호환
+        if 'Site' not in df.columns and '현장' in df.columns:
+            df['Site'] = df['현장']
+        if 'Date' not in df.columns and '날짜' in df.columns:
+            df['Date'] = df['날짜']
+        if 'Site' not in df.columns:
+            return
+
+        df['_site_norm'] = df['Site'].astype(str).str.strip()
+
+        # 날짜 파싱(실패 데이터는 제외 대신 전체 누락 방지를 위해 후단에서 완화)
+        if 'Date' in df.columns:
+            df['_date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
+            date_mask = (df['_date'] >= start_date) & (df['_date'] <= end_date)
+            if df['_date'].notna().sum() == 0:
+                date_mask = pd.Series([True] * len(df), index=df.index)
+        else:
+            date_mask = pd.Series([True] * len(df), index=df.index)
+
+        if site and site != '전체':
+            site_mask = (df['_site_norm'] == site)
+        else:
+            site_mask = pd.Series([True] * len(df), index=df.index)
+
+        mask = date_mask & site_mask
         df = df[mask].copy()
+
+        # 날짜 조건으로 0건이면 동일 현장 전체기간으로 완화(사용성 개선)
+        if df.empty and site and site != '전체':
+            df = self.daily_usage_df.copy()
+            if 'Site' not in df.columns and '현장' in df.columns:
+                df['Site'] = df['현장']
+            if 'Site' in df.columns:
+                df['_site_norm'] = df['Site'].astype(str).str.strip()
+                df = df[df['_site_norm'] == site].copy()
 
         # --- 자재 원가 맵 ---
         mat_id_cost_map = {}
@@ -8708,6 +8731,9 @@ class MaterialManager:
         total_net_revenue = 0.0 # 검사비 합계
         total_sum     = 0.0
         total_mat_cost = 0.0 # 자재 실적 사용료 합계
+        total_ndt_penetrant = 0.0 # NDT 침투제 합계
+        total_ndt_cleaner = 0.0 # NDT 세척제 합계
+        total_ndt_developer = 0.0 # NDT 현상제 합계
 
         import re as _re
         for _, row in df.iterrows():
@@ -8716,6 +8742,21 @@ class MaterialManager:
                     return ''
                 s = str(val).strip()
                 return '' if s.lower() in ('nan', 'none') else s
+
+            def _first_text(_row, keys, default=''):
+                """여러 후보 컬럼 중 첫 유효 문자열 반환 (구버전 컬럼명 호환)."""
+                for k in keys:
+                    if k in _row.index:
+                        v = _clean_str(_row.get(k, ''))
+                        if v:
+                            return v
+                return default
+
+            def _ndt_val(_row, *keys):
+                for k in keys:
+                    if k in _row.index:
+                        return _f(_row.get(k, 0))
+                return 0.0
 
             # [FIX] OT 컬럼에서 금액 추출 로직 강화 (NaN 방지)
             parsed_ots = []
@@ -8748,6 +8789,13 @@ class MaterialManager:
                 usage = _f(row.get('FilmCount', 0))
             else:
                 usage = _f(row.get('Usage', 0))
+
+            # 일일 탭 NDT 입력값(침투제/세척제/현상제)
+            # 구버전 데이터 호환: NDT_* 컬럼이 없으면 일반 컬럼명(침투제/세척제/현상제)도 조회
+            ndt_penetrant = _ndt_val(row, 'NDT_침투제', '침투제')
+            ndt_cleaner = _ndt_val(row, 'NDT_세척제', '세척제')
+            ndt_developer = _ndt_val(row, 'NDT_현상제', '현상제')
+
             unit_cost = mat_id_cost_map.get(row.get('MaterialID'), 0)
             mat_cost = usage * float(unit_cost)
 
@@ -8775,6 +8823,9 @@ class MaterialManager:
             total_net_revenue += net
             total_sum      += row_sum
             total_mat_cost += mat_cost
+            total_ndt_penetrant += ndt_penetrant
+            total_ndt_cleaner += ndt_cleaner
+            total_ndt_developer += ndt_developer
 
             row_map = {
                 'Date': _clean_str(row.get('Date', '')),
@@ -8788,16 +8839,19 @@ class MaterialManager:
                 '일식': f"{meal:,.0f}",
                 'OT합계': f"{ot_sum:,.0f}",
                 '자재사용량': f"{usage:g}",
+                '침투제': f"{ndt_penetrant:g}",
+                '세척제': f"{ndt_cleaner:g}",
+                '현상제': f"{ndt_developer:g}",
                 '자재단가': f"{unit_cost:,.0f}",
                 '합계': f"{row_sum:,.0f}",
                 '비고': _clean_str(row.get('비고', row.get('Note', ''))),
                 '작업자': consolidated_workers,
                 '품목명': mat_name,
                 '입력시간': _clean_str(row.get('EntryTime', '')),
-                '차량번호': _clean_str(row.get('차량번호', '')),
-                '주행거리': _clean_str(row.get('주행거리', '')),
-                '차량점검': _clean_str(row.get('차량점검', '')),
-                '차량비고': _clean_str(row.get('차량비고', '')),
+                '차량번호': _first_text(row, ['차량번호', 'vehicle_info', 'VehicleInfo']),
+                '주행거리': _first_text(row, ['주행거리', 'mileage', 'Mileage']),
+                '차량점검': _first_text(row, ['차량점검', '차량 점검', 'vehicle_checks', 'inspection', 'Inspection']),
+                '차량비고': _first_text(row, ['차량비고', '차량 비고', 'remarks', 'vehicle_remarks', 'Remark']),
                 'MaterialID': _clean_str(row.get('MaterialID', '')),
                 'FilmCount': _clean_str(row.get('FilmCount', '')),
             }
@@ -8821,6 +8875,9 @@ class MaterialManager:
                 '일식': '',
                 'OT합계': '',
                 '자재사용량': '',
+                '침투제': f"{total_ndt_penetrant:g}",
+                '세척제': f"{total_ndt_cleaner:g}",
+                '현상제': f"{total_ndt_developer:g}",
                 '자재단가': '',
                 '합계': f"{total_sum:,.0f}",
                 '비고': f"소계: 수입 {total_income:,.0f} 경비 {total_expense:,.0f} 자재원가 {total_mat_cost:,.0f}",
@@ -9043,12 +9100,15 @@ class MaterialManager:
 
         total_mat_cost = 0.0
         rt_inspection_count = 0  # Counter for RT occurrences
+        total_film_count = 0.0
         # [NEW] Use unique days instead of row count to avoid inflating days for multiple records
         total_days_count = df['_date_ts'].dt.date.nunique() if not df.empty else 0
         
         # [NEW] Track unique dates for vehicles
         starex_dates = set()
         toptruck_dates = set()
+        paut_dates = set()
+        mt_dates = set()
 
         for _, row in df.iterrows():
             # Check weekday
@@ -9062,6 +9122,19 @@ class MaterialManager:
             total_net_revenue += _f(row.get('검사비', 0))
             total_travel += _f(row.get('출장비', 0))
             total_meal += _f(row.get('일식', 0))
+
+            # [FIX] 일일 탭 NDT 입력값을 재료비 상세 수량에 직접 반영
+            # 구버전 호환: NDT_* 컬럼이 없으면 일반 컬럼명도 확인
+            ndt_cleaner = _f(row.get('NDT_세척제', row.get('세척제', 0)))
+            ndt_penetrant = _f(row.get('NDT_침투제', row.get('침투제', 0)))
+            ndt_developer = _f(row.get('NDT_현상제', row.get('현상제', 0)))
+            ndt_white_paint = _f(row.get('NDT_백색페인트', row.get('NDT_페인트', row.get('백색페인트', 0))))
+            ndt_black_mag = _f(row.get('NDT_흑색자분', row.get('NDT_자분', row.get('흑색자분', 0))))
+            material_usage_sums[0] += ndt_cleaner   # 세척액
+            material_usage_sums[1] += ndt_penetrant # 침투액
+            material_usage_sums[2] += ndt_developer # 현상액
+            material_usage_sums[3] += ndt_white_paint # 자분페인트(백색페인트)
+            material_usage_sums[4] += ndt_black_mag   # 흑색자분
             
             # --- Vehicle Tracking ---
             car_info = f"{row.get('차량번호', '')} {row.get('차량비고', '')} {row.get('장비명', '')}".strip()
@@ -9076,6 +9149,16 @@ class MaterialManager:
                 starex_dates.add(date_key)
             if '탑차' in car_info:
                 toptruck_dates.add(date_key)
+
+            # PAUT 작업일수(중복일 제외) 집계
+            try:
+                method_val = str(row.get('검사방법', '')).upper()
+                if 'PAUT' in method_val:
+                    paut_dates.add(date_key)
+                if 'MT' in method_val:
+                    mt_dates.add(date_key)
+            except Exception:
+                pass
 
             # --- Labor & OT Parsing ---
             shift = str(row.get('Shift', '주간')).strip()
@@ -9224,11 +9307,13 @@ class MaterialManager:
             m_id = row.get('MaterialID', '')
             m_name = str(mat_id_name_map.get(m_id, '')).strip()
             test_method = str(row.get('검사방법', '')).upper()
+            film_count = _f(row.get('FilmCount', row.get('필름매수', 0)))
             
             usage = 0.0
-            if 'RT' in test_method:
+            if 'RT' in test_method or film_count > 0:
                 rt_inspection_count += 1  # [NEW] Check for RT
-                usage = _f(row.get('FilmCount', 0))
+                usage = film_count
+                total_film_count += usage
                 material_usage_sums[5] += usage  # Index 5 = 필름
                 total_mat_cost += usage * float(mat_id_cost_map.get(m_id, 0))
             else:
@@ -9282,16 +9367,17 @@ class MaterialManager:
 
         self.cb_budget_site.set(site)
         self.ent_budget_revenue.delete(0, tk.END)
-        # 사용 요청: 도급액은 비워두고 입력 시 반영되도록 함. 
-        
+
+        # 사용 요청: 도급액은 비워두고 입력 시 반영되도록 함.
+
         # [NEW] 실적 데이터의 검사비 총액을 '검사단가' 칸에 기본 입력
         if hasattr(self, 'ent_budget_unit_price'):
             self.ent_budget_unit_price.delete(0, tk.END)
             self.ent_budget_unit_price.insert(0, f"{total_net_revenue:,.0f}")
-        
+
         self.ent_budget_material.delete(0, tk.END)
         self.ent_budget_material.insert(0, f"{total_mat_cost:,.0f}")
-        
+
         self.ent_budget_expense.delete(0, tk.END)
         self.ent_budget_expense.insert(0, f"{(total_travel + total_meal):,.0f}")
 
@@ -9329,6 +9415,20 @@ class MaterialManager:
         # 5. 재료비 상세 위젯 업데이트
         if hasattr(self, 'material_detail_widget'):
             current_mat_data = self.material_detail_widget.get_data()
+
+            # [FIX] 필름현상액/정착액 자동 계산
+            # 기준: 필름 500매 -> 각 2개, 1000매 -> 각 4개
+            # 즉 250매당 1개
+            film_chem_qty = (total_film_count / 250.0) if total_film_count > 0 else 0.0
+            # 수적방지액(200mL): 필름 500매당 1개
+            anti_drop_qty = (total_film_count / 500.0) if total_film_count > 0 else 0.0
+            if len(material_usage_sums) > 7:
+                material_usage_sums[7] = film_chem_qty  # 필름현상액 3L
+            if len(material_usage_sums) > 8:
+                material_usage_sums[8] = film_chem_qty  # 정착액 3L
+            if len(material_usage_sums) > 9:
+                material_usage_sums[9] = anti_drop_qty  # 수적방지액 200mL
+
             for i, qty in enumerate(material_usage_sums):
                 if i < len(current_mat_data):
                     current_mat_data[i]['qty'] = f"{qty:g}" if qty > 0 else ""
@@ -9344,12 +9444,10 @@ class MaterialManager:
             # [STABILITY] Update KPI summary after loading
             self._update_budget_kpis()
             current_exp_data = self.expense_detail_widget.get_data()
+
+            # [FIX] 현장경비 수량(qty)은 사용자 입력값 유지 (자동 덮어쓰기 금지)
             for row_data in current_exp_data.get('site_expense', []):
-                cat = row_data.get('cat')
-                if cat in ['차량유지비', '소모품비', '복리후생비']:
-                    row_data['qty'] = f"{total_days_count:g}"
-                elif cat == 'Se-175':
-                    row_data['qty'] = f"{rt_inspection_count:g}"
+                pass
                     
             for row_data in current_exp_data.get('depreciation', []):
                 item = row_data.get('item', '')
@@ -9357,6 +9455,14 @@ class MaterialManager:
                     row_data['days'] = f"{len(starex_dates):g}" if len(starex_dates) > 0 else ""
                 elif '탑차' in item:
                     row_data['days'] = f"{len(toptruck_dates):g}" if len(toptruck_dates) > 0 else ""
+                elif 'PAUT' in str(item).upper():
+                    # 기존 사용횟수(days)에 PAUT 작업일수 누적
+                    base_days = _f(row_data.get('days', 0))
+                    row_data['days'] = f"{(base_days + len(paut_dates)):g}" if (base_days + len(paut_dates)) > 0 else ""
+                elif 'YOKE' in str(item).upper():
+                    # 기존 사용횟수(days)에 MT 작업일수 누적
+                    base_days = _f(row_data.get('days', 0))
+                    row_data['days'] = f"{(base_days + len(mt_dates)):g}" if (base_days + len(mt_dates)) > 0 else ""
                     
             self.expense_detail_widget.set_data(current_exp_data)
 
@@ -10225,6 +10331,17 @@ class MaterialManager:
             v_mileages = []
             v_checks = []
             v_remarks = []
+
+            def _is_checked(val):
+                try:
+                    if isinstance(val, bool):
+                        return val
+                    if isinstance(val, (int, float)):
+                        return float(val) != 0.0
+                    s = str(val).strip().lower()
+                    return s in ('1', 'true', 't', 'yes', 'y', 'on')
+                except Exception:
+                    return False
             
             for v_key, v_widget in self.vehicle_inspections.items():
                 v_data = v_widget.get_data()
@@ -10232,17 +10349,43 @@ class MaterialManager:
                 v_mileages.append(v_data.get('mileage', ''))
                 v_remarks.append(v_data.get('remarks', ''))
                 
-                # Format checks: Fuel:V, Clean:X etc.
+                # 점검 체크값 수집 (위젯 vars 우선, 없으면 get_data fallback)
                 checks = []
                 for label, key in [("주유", "Fuel"), ("청결", "Clean"), ("엔진오일", "Oil"), ("타이어", "Tire"), ("전조등", "Light")]:
-                    if v_data.get(key):
+                    checked_val = None
+                    try:
+                        if hasattr(v_widget, 'vars') and key in v_widget.vars:
+                            checked_val = v_widget.vars[key].get()
+                    except Exception:
+                        checked_val = None
+                    if checked_val is None:
+                        checked_val = v_data.get(key)
+
+                    if _is_checked(checked_val):
                         checks.append(label)
                 
                 # Always append to maintain alignment with other fields
                 v_checks.append(", ".join(checks))
             
             vehicle_info_str = ", ".join([v for v in v_infos if v])
-            mileage_str = ", ".join([v for v in v_mileages if v])
+            # [FIX] 주행거리는 문자열 나열이 아닌 누계 합산으로 저장
+            mileage_vals = []
+            for mv in v_mileages:
+                s = str(mv).strip().replace(',', '')
+                if not s:
+                    continue
+                try:
+                    mileage_vals.append(float(s))
+                except Exception:
+                    pass
+            if mileage_vals:
+                total_mileage = sum(mileage_vals)
+                if abs(total_mileage - int(total_mileage)) < 1e-9:
+                    mileage_str = f"{int(total_mileage):,}"
+                else:
+                    mileage_str = f"{total_mileage:,.1f}".rstrip('0').rstrip('.')
+            else:
+                mileage_str = ""
             inspection_str = "; ".join([v for v in v_checks if v])
             v_remarks_str = ", ".join([v for v in v_remarks if v])
 
@@ -10608,6 +10751,14 @@ class MaterialManager:
                     self.update_report_view()
                 elif hasattr(self, 'update_budget_view'):
                     # Could potentially refresh budget if needed, but not strictly required here
+                    pass
+
+                # [UX] 저장 성공 후 차량점검 박스 자동 닫기
+                try:
+                    for v_key in list(getattr(self, 'vehicle_inspections', {}).keys()):
+                        if str(v_key).startswith('vehicle_inspection_'):
+                            self.destroy_custom_widget(v_key)
+                except Exception:
                     pass
                 
                 # Switch to In/Out Management tab (index 1) to see the transactions
@@ -12716,6 +12867,12 @@ class MaterialManager:
                 for col in self.stock_tree['columns']:
                     self.tab_config['stock_col_widths'][col] = self.stock_tree.column(col, 'width')
 
+            # Save in/out history column widths
+            self.tab_config['inout_col_widths'] = {}
+            if hasattr(self, 'inout_tree'):
+                for col in self.inout_tree['columns']:
+                    self.tab_config['inout_col_widths'][col] = self.inout_tree.column(col, 'width')
+
             # Save daily usage column widths
             self.tab_config['daily_usage_col_widths'] = {}
             if hasattr(self, 'daily_usage_tree'):
@@ -12761,6 +12918,11 @@ class MaterialManager:
             current_geometries = {}
             
             for key, widget in self.draggable_items.items():
+                # [LAYOUT FIX] 핵심 박스는 좌표 저장 제외
+                # 재시작 시 기본 grid 배치로 복원하여 겹침/잘림 방지
+                if key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
+                    continue
+
                 manager = widget.winfo_manager()
                 # Capture everything that is visible and managed
                 if manager in ['place', 'grid']:
@@ -12812,6 +12974,12 @@ class MaterialManager:
             
             # Use disk's geometries as base, then update with WHAT WE JUST CAPTURED in memory
             disk_geos = final_config.get('draggable_geometries', {})
+
+            # [LAYOUT FIX] 과거에 저장된 핵심 박스 좌표도 제거
+            for core_key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
+                if core_key in disk_geos:
+                    del disk_geos[core_key]
+
             disk_geos.update(current_geometries)
             
             # Apply other tab state updates
@@ -13001,6 +13169,17 @@ class MaterialManager:
                                 self.stock_tree.column(col, width=w, minwidth=20, stretch=False)
                         except:
                             pass
+
+                # Restore in/out history column widths
+                inout_col_widths = config.get('inout_col_widths', {})
+                if inout_col_widths and hasattr(self, 'inout_tree'):
+                    for col, width in inout_col_widths.items():
+                        try:
+                            w = int(width)
+                            if w > 10:
+                                self.inout_tree.column(col, width=w, minwidth=50, stretch=False)
+                        except:
+                            pass
                 
                 # Restore daily usage column widths
                 daily_usage_col_widths = config.get('daily_usage_col_widths', {})
@@ -13165,6 +13344,10 @@ class MaterialManager:
                         if key in self.draggable_items:
                             widget = self.draggable_items[key]
                             try:
+                                # [LAYOUT FIX] 핵심 박스는 저장 좌표를 무시하고 기본 grid 배치 사용
+                                if key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
+                                    continue
+
                                 if geo.get('hidden'):
                                     # [STABILITY] If it's a core widget, ignore hidden status and reset it
                                     if key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
@@ -13244,75 +13427,17 @@ class MaterialManager:
                             except Exception as e:
                                 print(f"Error placing widget {key}: {e}")
                                 
-                    # 3.5 [SAFEGUARD] Ensure all core widgets are visible even if missing from config
+                    # 3.5 [LAYOUT FIX] 핵심 박스는 항상 기본 grid 위치로 복구
                     for key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
-                        if key in self.draggable_items:
-                            widget = self.draggable_items[key]
-                            # If not managed by place or grid, or hidden, force reset
-                            if widget.winfo_manager() == '' or key not in draggable_geos:
-                                print(f"LOADER: Safeguard - Recovering missing/unmanaged core widget: {key}")
-                                self.reset_widget_position(None, widget=widget)
-
-                    # 3.6 [SAFEGUARD] workers 박스 강제 복구 (기존 배치 잔상/숨김/화면 밖 복원 방지)
-                    if 'workers_box_geometry' in self.draggable_items:
-                        wbox = self.draggable_items['workers_box_geometry']
-                        mgr = wbox.winfo_manager()
-                        if mgr in ('', 'grid'):
-                            self.reset_widget_position(None, widget=wbox)
-                            try:
-                                if wbox.winfo_manager() == 'grid':
-                                    wbox.grid_forget()
-                                wbox.place(x=560, y=10, width=560, height=420)
-                                wbox.lift()
-                            except Exception:
-                                pass
-                        elif mgr == 'place':
-                            try:
-                                pi = wbox.place_info()
-                                cx = int(float(pi.get('x', 0)))
-                                cy = int(float(pi.get('y', 0)))
-                                ww = int(float(pi.get('width', wbox.winfo_width() or 0)))
-                                hh = int(float(pi.get('height', wbox.winfo_height() or 0)))
-                                p_w = wbox.master.winfo_width()
-                                p_h = wbox.master.winfo_height()
-                                ww = max(520, ww)
-                                hh = max(360, hh)
-                                if p_w > 0:
-                                    cx = max(0, min(cx, max(0, p_w - ww)))
-                                if p_h > 0:
-                                    cy = max(0, min(cy, max(0, p_h - hh)))
-                                wbox.place(x=cx, y=cy, width=ww, height=hh)
-                                wbox.lift()
-                            except Exception:
-                                pass
-
-                    # 3.7 [SAFEGUARD] 코어 박스가 비정상 크기로 복원되면 grid 기본 배치로 자동 복구
-                    # (기존 배치 잔상으로 하단이 잘려 반 이상 안 보이는 현상 방지)
-                    for ckey in ('ndt_usage_box_geometry', 'rtk_usage_box_geometry', 'workers_box_geometry'):
-                        if ckey not in self.draggable_items:
+                        if key not in self.draggable_items:
                             continue
-                        cw = self.draggable_items[ckey]
+                        widget = self.draggable_items[key]
                         try:
-                            cw.update_idletasks()
-                            mgr = cw.winfo_manager()
-                            cur_h = cw.winfo_height()
-                            req_h = cw.winfo_reqheight()
-                            cur_w = cw.winfo_width()
-
-                            if ckey == 'workers_box_geometry':
-                                bad_size = (cur_h < 320) or (cur_w < 480)
-                            else:
-                                bad_size = (cur_h < max(100, int(req_h * 0.8)))
-
-                            if mgr == '' or bad_size:
-                                print(f"LOADER: Recovering clipped core box: {ckey} (mgr={mgr}, w={cur_w}, h={cur_h}, req_h={req_h})")
-                                self.reset_widget_position(None, widget=cw)
-                                try:
-                                    self._remove_placeholder(cw)
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
+                            self.reset_widget_position(None, widget=widget)
+                            self._remove_placeholder(widget)
+                            widget.lift()
+                        except Exception as e:
+                            print(f"LOADER: Failed to reset core widget {key}: {e}")
 
                     # 3.8 [SAFEGUARD] 저장 버튼 강제 복구 (화면 밖/숨김/겹침 방지)
                     if 'save_btn_geometry' in self.draggable_items:
