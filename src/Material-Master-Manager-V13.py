@@ -9212,42 +9212,37 @@ class MaterialManager:
                 messagebox.showwarning("입력 오류", "현장을 입력해주세요.")
                 return
             
-            if not mat_name:
-                messagebox.showwarning("입력 오류", "품목명을 선택해주세요.")
-                return
-
-            # Robust MaterialID Lookup
-            # Instead of splitting which fails if name contains " - ", 
-            # we find the ID by reconstructing the display name same way as in the combo.
+            # Robust MaterialID Lookup (품목명 없으면 건너뜀)
             mat_id = None
             pure_mat_name = ""
-            
-            for _, m_row in self.materials_df.iterrows():
-                m_name = str(m_row.get('품목명', ''))
-                m_model = str(m_row.get('모델명', '')).replace('nan', '').replace('None', '')
-                m_sn = str(m_row.get('SN', '')).replace('nan', '').replace('None', '')
+
+            if mat_name:
+                for _, m_row in self.materials_df.iterrows():
+                    m_name = str(m_row.get('품목명', ''))
+                    m_model = str(m_row.get('모델명', '')).replace('nan', '').replace('None', '')
+                    m_sn = str(m_row.get('SN', '')).replace('nan', '').replace('None', '')
+                    
+                    m_display = m_name
+                    if m_model: m_display += f" - {m_model}"
+                    if m_sn: m_display += f" (SN: {m_sn})"
+                    
+                    if m_display == mat_name:
+                        mat_id = m_row['MaterialID']
+                        pure_mat_name = m_name
+                        break
                 
-                m_display = m_name
-                if m_model: m_display += f" - {m_model}"
-                if m_sn: m_display += f" (SN: {m_sn})"
-                
-                if m_display == mat_name:
-                    mat_id = m_row['MaterialID']
-                    pure_mat_name = m_name
-                    break
-            
-            # Fallback for manual entry if exact match not found
-            if mat_id is None:
-                pure_mat_name = mat_name
-                if " - " in pure_mat_name:
-                    pure_mat_name = pure_mat_name.split(" - ")[0]
-                if " (SN: " in pure_mat_name:
-                    pure_mat_name = pure_mat_name.split(" (SN: ")[0]
-                
-                # Try finding by name only
-                mat_rows = self.materials_df[self.materials_df['품목명'] == pure_mat_name]
-                if not mat_rows.empty:
-                    mat_id = mat_rows['MaterialID'].values[0]
+                # Fallback for manual entry if exact match not found
+                if mat_id is None:
+                    pure_mat_name = mat_name
+                    if " - " in pure_mat_name:
+                        pure_mat_name = pure_mat_name.split(" - ")[0]
+                    if " (SN: " in pure_mat_name:
+                        pure_mat_name = pure_mat_name.split(" (SN: ")[0]
+                    
+                    # Try finding by name only
+                    mat_rows = self.materials_df[self.materials_df['품목명'] == pure_mat_name]
+                    if not mat_rows.empty:
+                        mat_id = mat_rows['MaterialID'].values[0]
             
             # Parse date and combine with current time for transaction accuracy
             try:
@@ -9258,7 +9253,7 @@ class MaterialManager:
                 messagebox.showwarning("입력 오류", "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)")
                 return
             
-            if mat_id is None:
+            if mat_name and mat_id is None:
                 # Material doesn't exist in database, create it
                 new_mat_id = self.materials_df['MaterialID'].max() + 1 if not self.materials_df.empty else 1
                 
@@ -9287,9 +9282,7 @@ class MaterialManager:
                 self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_material])], ignore_index=True)
                 self.save_data()
                 mat_id = new_mat_id
-            else:
-                # MaterialID is already set from the lookup above
-                pass
+            # else: mat_name 없거나 mat_id가 이미 설정됨 — 그대로 유지
             
             # 1. Collect all worker data from UI
             raw_worker_data = []
@@ -9497,7 +9490,7 @@ class MaterialManager:
             # UNIFIED LOGIC: Total Deduction = Film Count + RTK Total (total_usage)
             # Inspection Quantity (test_amount) is EXCLUDED from deduction as per user request ("검사량 빼줘").
             total_deduction = film_count + total_usage
-            if total_deduction > 0:
+            if mat_id is not None and total_deduction > 0:
                 is_film = False
                 mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
                 category = ""
