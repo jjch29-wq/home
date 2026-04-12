@@ -475,9 +475,12 @@ class SuggestionWindow:
 
 def register_autocomplete(combobox, suggestion_list):
     """Enable SuggestionWindow-based autocomplete for any ttk.Combobox"""
-    if not hasattr(combobox, '_suggestion_win'):
-        combobox._suggestion_win = SuggestionWindow(combobox)
-        combobox._autocomplete_timer = None
+    # ── 이미 등록된 경우 이벤트 핸들러 중복 추가 방지 ──────────────────
+    if hasattr(combobox, '_suggestion_win'):
+        return  # combobox['values'] 갱신은 호출 측에서 직접 처리
+
+    combobox._suggestion_win = SuggestionWindow(combobox)
+    combobox._autocomplete_timer = None
 
     def perform_filter(force_all=False):
         typed = combobox.get()
@@ -544,8 +547,28 @@ def register_autocomplete(combobox, suggestion_list):
         perform_filter(force_all=True)
     combobox.bind('<FocusIn>', on_focus_in, add="+")
     
-    # [FIX] Also show list on click
+    # [FIX] Also show list on click (text area click)
     combobox.bind('<Button-1>', lambda e: perform_filter(force_all=True), add="+")
+
+    # ── native 드롭다운 억제: ▼ 버튼 클릭 시 SuggestionWindow만 표시 ──
+    def _postcommand():
+        perform_filter(force_all=True)
+        _saved = list(combobox['values'])
+        def _close_native():
+            try:
+                # ttk::combobox::Unpost 로 네이티브 드롭다운 즉시 닫기
+                combobox.tk.call('ttk::combobox::Unpost', combobox)
+            except Exception:
+                pass
+            try:
+                # Unpost 가 values 를 초기화할 수 있으므로 복원
+                if not list(combobox['values']):
+                    combobox['values'] = _saved
+            except Exception:
+                pass
+        combobox.after_idle(_close_native)
+    combobox.configure(postcommand=_postcommand)
+
 
 class WorkerCompositeWidget(ttk.Frame):
     """
