@@ -547,20 +547,26 @@ def register_autocomplete(combobox, suggestion_list):
         perform_filter(force_all=True)
     combobox.bind('<FocusIn>', on_focus_in, add="+")
     
-    # [FIX] Also show list on click (text area click)
-    combobox.bind('<Button-1>', lambda e: perform_filter(force_all=True), add="+")
+    # 텍스트 영역 클릭: SuggestionWindow 토글 (열려 있으면 닫기, 닫혀 있으면 열기)
+    def _on_click(event):
+        if combobox._suggestion_win.active:
+            combobox._suggestion_win.hide()
+        else:
+            perform_filter(force_all=True)
+    combobox.bind('<Button-1>', _on_click, add="+")
 
-    # ── native 드롭다운 완전 억제: ▼ 버튼 클릭 시 SuggestionWindow만 표시 ──
-    # postcommand 안에서 values=[] 로 비우면 Tk 내부 ttk::combobox::Post 가
-    # "값 없음" 판단 후 native 드롭다운을 아예 올리지 않음 (Unpost 불필요).
+    # ── ▼ 버튼(postcommand): native 드롭다운 차단 + SuggestionWindow 토글 ──
     def _postcommand():
         _saved = list(combobox['values'])
-        # 1) 현재 값으로 SuggestionWindow 표시 (values 비우기 전에 먼저 실행)
-        if _saved:
-            combobox._suggestion_win.show(_saved)
-        # 2) values 를 비워서 Post 가 native 드롭다운을 건너뜨게 함
+        if combobox._suggestion_win.active:
+            # 이미 열려 있으면 → 닫기
+            combobox._suggestion_win.hide()
+        else:
+            # 닫혀 있으면 → 열기
+            if _saved:
+                combobox._suggestion_win.show(_saved)
+        # values=[] 로 native 드롭다운 항상 차단 (Post가 값 없으면 건너뜀)
         combobox.configure(values=[])
-        # 3) Post 판정 후 즉시 복원 (after_idle = 현재 이벤트 처리 직후)
         combobox.after_idle(lambda: combobox.configure(values=_saved))
     combobox.configure(postcommand=_postcommand)
 
