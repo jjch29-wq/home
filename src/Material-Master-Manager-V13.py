@@ -8225,7 +8225,7 @@ class MaterialManager:
         tree_outer.grid_rowconfigure(0, weight=1)
         tree_outer.grid_columnconfigure(0, weight=1)
         self.budget_view_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
-        self.budget_view_tree.bind('<Button-3>', self._show_budget_view_heading_context_menu, add='+')
+        self.enable_tree_column_drag(self.budget_view_tree, context_menu_handler=self._show_budget_view_heading_context_menu)
 
         # ── ESC: 현장별 탭 내 모든 입력 위젯에서 포커스 해제 ──────────────
         def _esc_to_root(e=None):
@@ -13031,7 +13031,7 @@ class MaterialManager:
         except Exception as e:
             messagebox.showerror("오류", f"내보내기 실패: {e}")
 
-    def enable_tree_column_drag(self, tree):
+    def enable_tree_column_drag(self, tree, context_menu_handler=None):
         """Ultra-robust drag-and-drop column reordering using root-level event tracking"""
         tree._drag_info = {"col_id": None, "col_name": None, "start_x": 0, "active": False, "ghost": None}
         
@@ -13109,7 +13109,10 @@ class MaterialManager:
         # Primary entry point: tree-level press
         tree.bind("<Button-1>", on_press, add="+")
         # Direct right-click menu as reliable alternative
-        tree.bind("<Button-3>", lambda e: self._show_heading_context_menu(e, tree), add="+")
+        if context_menu_handler is not None:
+            tree.bind("<Button-3>", context_menu_handler, add="+")
+        else:
+            tree.bind("<Button-3>", lambda e: self._show_heading_context_menu(e, tree), add="+")
 
     def _show_heading_context_menu(self, event, tree):
         """Show context menu on Treeview header to move columns"""
