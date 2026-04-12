@@ -9571,13 +9571,13 @@ class MaterialManager:
             
             # Keyword mapping for NDT materials (PT/MT Chemicals)
             ndt_keywords = {
-                "형광자분": ["형광자분", "FLUOR", "MAGNETIC", "GLO"],
-                "흑색자분": ["흑색", "자분", "BLACK", "MAGNETIC", "7HF"],
-                "백색페인트": ["백색", "페인트", "WHITE", "PAINT", "CONTRAST", "WCP"],
-                "침투제": ["침투제", "PENETRANT", "VP", "SKL", "NP"],
-                "세척제": ["세척제", "CLEANER", "SKC", "CLEAN", "NC"],
-                "현상제": ["현상제", "DEVELOPER", "SKD", "DEV", "ND"],
-                "형광침투제": ["형광", "FLUOR", "GLO"]
+                "형광자분": ["형광자분", "MAGNETIC FLUORESCENT", "GLO CHECK"],
+                "흑색자분": ["흑색자분", "흑색 자분", "BLACK MAGNETIC", "7HF"],
+                "백색페인트": ["백색페인트", "백색 페인트", "WHITE CONTRAST", "CONTRAST PAINT", "WCP"],
+                "침투제": ["침투제", "PENETRANT", "SKL", "NABAKEM PT"],
+                "세척제": ["세척제", "CLEANER", "SKC", "NABAKEM NC", "PT CLEANER"],
+                "현상제": ["현상제", "DEVELOPER", "SKD", "NABAKEM ND", "PT DEVELOPER"],
+                "형광침투제": ["형광침투제", "FLUORESCENT PENETRANT", "GLO CHECK"]
             }
             
             # 1. Deduct main selection (FILM or Item based on Inspection Amount)
