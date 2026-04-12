@@ -2,16 +2,23 @@
 # SITCO Material Master Manager — PyInstaller spec
 # DB 파일(Material_Inventory.xlsx) 미포함: exe 옆에 자동 생성됨
 
+from PyInstaller.utils.hooks import collect_data_files
+
 block_cipher = None
 
 a = Analysis(
     ['src/Material-Master-Manager-V13.py'],
     pathex=[],
     binaries=[],
-    datas=[
+    datas=(
+        # babel 로케일 데이터 — tkcalendar 날짜 선택 시 필수 (없으면 튕김)
+        # collect_data_files 사용: 한글 경로 absolute path 문제 없이 자동 수집
+        collect_data_files('babel') +
+        collect_data_files('tkcalendar')
         # DB 파일은 의도적으로 제외 (첫 저장 시 exe 옆에 자동 생성)
         # config 파일도 제외 (Documents/MaterialManager/ 에 자동 생성)
-    ],
+    ),
+    
     hiddenimports=[
         # pandas / openpyxl / xlsxwriter
         'openpyxl',
@@ -25,6 +32,7 @@ a = Analysis(
         'babel.numbers',
         'babel.dates',
         'babel.core',
+        'babel.plural',
         # PIL
         'PIL',
         'PIL._imagingtk',
@@ -36,8 +44,6 @@ a = Analysis(
         # lxml (openpyxl 선택적 의존)
         'lxml',
         'lxml.etree',
-        # 기타
-        'pkg_resources.py2_warn',
     ],
     hookspath=[],
     hooksconfig={},

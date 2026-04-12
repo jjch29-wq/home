@@ -1914,7 +1914,7 @@ class MaterialManager:
             # exe 실행 모드: exe와 같은 폴더에 DB 저장 (어디서 실행해도 동일)
             self.db_path = os.path.join(self.app_dir, 'Material_Inventory.xlsx')
 
-        print(f"DEBUG: DB path resolved → {self.db_path}")
+        # db_path 확정
         
         self.sites = [] # Initialize site list
         self.users = [
