@@ -5917,7 +5917,16 @@ class MaterialManager:
     def open_list_management_dialog(self, config_key):
         """Open a generic dialog to manage (edit/delete) items in a data list"""
         if self.layout_locked: return
-        
+
+        # ── 이미 열린 창이 있으면 앞으로 가져오고 종료 ──────────────
+        if not hasattr(self, '_list_mgmt_dialogs'):
+            self._list_mgmt_dialogs = {}
+        existing = self._list_mgmt_dialogs.get(config_key)
+        if existing and existing.winfo_exists():
+            existing.lift()
+            existing.focus_set()
+            return
+
         # Map key to actual list
         data_map = {
             'sites': ('현장 목록 관리', self.sites),
@@ -5930,6 +5939,7 @@ class MaterialManager:
         title, data_list = data_map[config_key]
         
         dialog = tk.Toplevel(self.root)
+        self._list_mgmt_dialogs[config_key] = dialog  # 창 추적 등록
         dialog.title(title)
         dialog.geometry("400x400")
         dialog.transient(self.root)
@@ -5993,10 +6003,16 @@ class MaterialManager:
                 self.save_tab_config()
                 refresh_list()
 
+        def on_close():
+            self._list_mgmt_dialogs.pop(config_key, None)
+            dialog.destroy()
+
+        dialog.protocol("WM_DELETE_WINDOW", on_close)  # X 버튼도 추적 해제
+
         ttk.Button(btn_frame, text="추가", command=add_item).pack(side='left', padx=5, expand=True)
         ttk.Button(btn_frame, text="수정", command=edit_item).pack(side='left', padx=5, expand=True)
         ttk.Button(btn_frame, text="삭제", command=delete_item).pack(side='left', padx=5, expand=True)
-        ttk.Button(btn_frame, text="닫기", command=dialog.destroy).pack(side='left', padx=5, expand=True)
+        ttk.Button(btn_frame, text="닫기", command=on_close).pack(side='left', padx=5, expand=True)
 
     def refresh_ui_for_list_change(self, config_key):
         """Update all related UI elements after a list (sites, users, etc) has changed"""
