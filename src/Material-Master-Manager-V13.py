@@ -13138,27 +13138,27 @@ class MaterialManager:
             
             menu.post(event.x_root, event.y_root)
 
-                def _show_generic_tree_heading_context_menu(self, event, tree):
-                    """Generic header context menu for trees that support only column move."""
-                    try:
-                        if tree.identify_region(event.x, event.y) != "heading":
-                            return
-                        column_id = tree.identify_column(event.x)
-                        col_name = self._get_column_name_from_id(tree, column_id)
-                        if not col_name:
-                            return
-                    except Exception:
-                        return
+    def _show_generic_tree_heading_context_menu(self, event, tree):
+        """Generic header context menu for trees that support only column move."""
+        try:
+            if tree.identify_region(event.x, event.y) != "heading":
+                return
+            column_id = tree.identify_column(event.x)
+            col_name = self._get_column_name_from_id(tree, column_id)
+            if not col_name:
+                return
+        except Exception:
+            return
 
-                    menu = tk.Menu(self.root, tearoff=0)
-                    menu.add_command(label=f"⬅️ '{col_name}' 왼쪽으로 이동",
-                                     command=lambda: self._move_column_visual(tree, column_id, -1))
-                    menu.add_command(label=f"➡️ '{col_name}' 오른쪽으로 이동",
-                                     command=lambda: self._move_column_visual(tree, column_id, 1))
-                    try:
-                        menu.tk_popup(event.x_root, event.y_root)
-                    finally:
-                        menu.grab_release()
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label=f"⬅️ '{col_name}' 왼쪽으로 이동",
+                         command=lambda: self._move_column_visual(tree, column_id, -1))
+        menu.add_command(label=f"➡️ '{col_name}' 오른쪽으로 이동",
+                         command=lambda: self._move_column_visual(tree, column_id, 1))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def _get_column_name_from_id(self, tree, column_id):
         """Helper to get actual column name from visual ID like #1"""
