@@ -3752,6 +3752,11 @@ class MaterialManager:
             self.cb_material['values'] = all_vals
         if hasattr(self, 'cb_daily_material'):
             self.cb_daily_material['values'] = all_vals
+            try:
+                max_chars = max((len(str(v)) for v in all_vals), default=12)
+                self.cb_daily_material.configure(width=min(40, max(22, max_chars + 2)))
+            except Exception:
+                pass
             
         if hasattr(self, 'cb_daily_equip'):
             # [NEW] Collect history of equipment names from daily usage records
@@ -3763,6 +3768,11 @@ class MaterialManager:
             combined_equip = list(set([str(e).strip() for e in self.equipments + history_equip + all_vals if pd.notna(e) and str(e).strip()]))
             combined_equip.sort()
             self.cb_daily_equip['values'] = combined_equip
+            try:
+                max_chars = max((len(str(v)) for v in combined_equip), default=12)
+                self.cb_daily_equip.configure(width=min(40, max(22, max_chars + 2)))
+            except Exception:
+                pass
             self.equipment_suggestions = combined_equip
         
         self.materials_display_list = all_vals
@@ -7436,7 +7446,7 @@ class MaterialManager:
 
         # Row 1: Equipment & Material
         ttk.Label(form_content, text="장비명:").grid(row=1, column=0, padx=2, pady=1, sticky='e')
-        self.cb_daily_equip = ttk.Combobox(form_content, width=12)
+        self.cb_daily_equip = ttk.Combobox(form_content, width=22)
         self.cb_daily_equip.grid(row=1, column=1, padx=2, pady=1, sticky='w')
         
         # [NEW] Focus Transition for Equipment
@@ -7447,7 +7457,7 @@ class MaterialManager:
         self.cb_daily_equip.bind('<Return>', on_equip_select)
         
         ttk.Label(form_content, text="품목명:").grid(row=1, column=2, padx=2, pady=1, sticky='e')
-        self.cb_daily_material = ttk.Combobox(form_content, width=12)
+        self.cb_daily_material = ttk.Combobox(form_content, width=22)
         self.cb_daily_material.grid(row=1, column=3, padx=2, pady=1, sticky='w')
         
         # [NEW] Focus Transition for Material
