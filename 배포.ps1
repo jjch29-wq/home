@@ -13,13 +13,23 @@ Set-Location $PSScriptRoot
 $ErrorActionPreference = 'Stop'
 
 $Today    = (Get-Date).ToString('yyyyMMdd')
-$ExeName  = "SITCO-Material-Manager-$Today.exe"
 $DistPath = Join-Path $PSScriptRoot "dist"
-$ExePath  = Join-Path $DistPath $ExeName
+
+# 가장 최근에 만들어진 날짜_시분 exe 탐색
+function Find-LatestExe {
+    Get-ChildItem $DistPath -Filter 'SITCO-Material-Manager-????????_????.exe' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+}
+
+# 빌드 전에는 null, 빌드 후 탐색으로 채워짐
+$ExeItem = $null
+$ExeName = $null
+$ExePath = $null
 
 # ── 1. exe 빌드 ────────────────────────────────────────────────
 if (-not $NoExe) {
-    Write-Host "`n[1/3] exe 빌드 시작 → $ExeName" -ForegroundColor Cyan
+    Write-Host "`n[1/3] exe 빌드 시작 (날짜_시분 버전)..." -ForegroundColor Cyan
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName         = ".venv\Scripts\pyinstaller.exe"
@@ -39,12 +49,15 @@ if (-not $NoExe) {
         exit 1
     }
 
-    # spec에서 만들어진 exe 확인 (날짜 이름)
-    if (Test-Path $ExePath) {
-        $mb = [math]::Round((Get-Item $ExePath).Length / 1MB, 1)
+    # 빌드 완료 후 가장 최근 exe 탐색 (날짜_시분 포함)
+    $ExeItem = Find-LatestExe
+    if ($ExeItem) {
+        $ExeName = $ExeItem.Name
+        $ExePath = $ExeItem.FullName
+        $mb = [math]::Round($ExeItem.Length / 1MB, 1)
         Write-Host "[완료] $ExeName ($mb MB)" -ForegroundColor Green
     } else {
-        Write-Host "[경고] exe 파일을 찾지 못했습니다: $ExePath" -ForegroundColor Yellow
+        Write-Host "[경고] 빌드된 exe를 찾지 못했습니다." -ForegroundColor Yellow
     }
 } else {
     Write-Host "`n[1/3] exe 빌드 생략 (-NoExe)" -ForegroundColor DarkGray
@@ -57,7 +70,7 @@ Write-Host "`n[2/3] Git 변경 사항 확인..." -ForegroundColor Cyan
 git add "src/Material-Master-Manager-V13.py" "material_manager.spec" 2>$null
 
 # 오늘 날짜 exe 있으면 추가 (없으면 생략)
-if (Test-Path $ExePath) {
+if ($ExePath -and (Test-Path $ExePath)) {
     $relExe = "dist/$ExeName"
     git add -f $relExe 2>$null
 }
