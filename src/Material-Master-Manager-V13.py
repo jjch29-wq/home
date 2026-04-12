@@ -3480,6 +3480,45 @@ class MaterialManager:
             self.inout_tree.heading(col, text=col)
             self.inout_tree.column(col, width=width, minwidth=50, stretch=True, anchor='center')
         
+        # 컬럼 분리선 드래그 후 나머지 컬럼을 비례 재배분
+        # → 한 컬럼 늘리면 나머지 전체가 균등 축소 (전체 너비 고정)
+        _inout_sep_col = {'col': None}
+
+        def _inout_col_press(event):
+            if self.inout_tree.identify_region(event.x, event.y) == 'separator':
+                _inout_sep_col['col'] = self.inout_tree.identify_column(event.x)
+            else:
+                _inout_sep_col['col'] = None
+
+        def _inout_col_release(event):
+            resized_col_id = _inout_sep_col.get('col')
+            _inout_sep_col['col'] = None
+            if not resized_col_id:
+                return
+            try:
+                tree = self.inout_tree
+                cols = list(tree['columns'])
+                tree_w = tree.winfo_width() - 2   # 스크롤바 여백 제외
+                # '#1' → index 0
+                col_idx = int(resized_col_id.replace('#', '')) - 1
+                if col_idx < 0 or col_idx >= len(cols):
+                    return
+                resized_w = tree.column(cols[col_idx], 'width')
+                remaining = max(0, tree_w - resized_w)
+                other_cols = [c for i, c in enumerate(cols) if i != col_idx]
+                other_total = sum(tree.column(c, 'width') for c in other_cols)
+                if other_total == 0:
+                    return
+                scale = remaining / other_total
+                for c in other_cols:
+                    new_w = max(50, int(tree.column(c, 'width') * scale))
+                    tree.column(c, width=new_w)
+            except Exception:
+                pass
+
+        self.inout_tree.bind('<Button-1>', _inout_col_press, add='+')
+        self.inout_tree.bind('<ButtonRelease-1>', _inout_col_release, add='+')
+
         self.inout_tree.grid(row=0, column=0, sticky='nsew')
         inout_vsb.grid(row=0, column=1, sticky='ns')
         inout_hsb.grid(row=1, column=0, sticky='ew')
