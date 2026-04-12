@@ -1990,8 +1990,15 @@ class ColumnSelectionDialog(tk.Toplevel):
         for col in columns:
             var = tk.BooleanVar(value=True)
             self.vars[col] = var
-            # [NEW] Map 검사량 to 수량 for display
-            display_map = {'검사량': '수량'}
+            # 사용자에게는 내부 컬럼명 대신 표시용 한글명을 보여줌
+            display_map = {
+                '검사량': '수량',
+                'Date': '날짜',
+                'Site': '현장',
+                'EntryTime': '입력시간',
+                'MaterialID': '자재ID',
+                'FilmCount': '필름매수'
+            }
             display_text = display_map.get(col, col)
             cb = ttk.Checkbutton(scrollable_frame, text=display_text, variable=var)
             cb.pack(anchor='w', pady=2)
@@ -8170,9 +8177,29 @@ class MaterialManager:
         tree_outer = ttk.Frame(bottom_container)
         tree_outer.pack(fill='both', expand=True)
 
-        self.budget_view_cols = ('Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식', 'OT합계', '자재사용량', '자재단가', '합계', '비고')
-        self.budget_view_widths = (90, 120, 100, 80, 70, 80, 90, 80, 70, 80, 80, 90, 100, 150)
-        self.budget_view_heads  = ('날짜', '현장', '장비', '검사방법', '수량', '단가', '검사단가', '출장비', '일식', 'OT합계', '자재사용량', '자재단가', '합계', '비고')
+        # 전체 컬럼: 기본 표시 컬럼 + 사용자가 "추가" 할 수 있는 숨김 기본 컬럼
+        self.budget_view_cols = (
+            'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
+            'OT합계', '자재사용량', '자재단가', '합계', '비고',
+            '작업자', '품목명', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고',
+            'MaterialID', 'FilmCount'
+        )
+        self.budget_view_widths = (
+            90, 120, 100, 80, 70, 80, 90, 80, 70,
+            80, 80, 90, 100, 150,
+            170, 180, 140, 110, 100, 120, 140,
+            90, 90
+        )
+        self.budget_view_heads  = (
+            '날짜', '현장', '장비', '검사방법', '수량', '단가', '검사단가', '출장비', '일식',
+            'OT합계', '자재사용량', '자재단가', '합계', '비고',
+            '작업자', '품목명', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고',
+            '자재ID', '필름매수'
+        )
+        self.budget_view_default_cols = (
+            'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
+            'OT합계', '자재사용량', '자재단가', '합계', '비고'
+        )
 
         vsb = ttk.Scrollbar(tree_outer, orient='vertical')
         hsb = ttk.Scrollbar(tree_outer, orient='horizontal')
@@ -8188,7 +8215,7 @@ class MaterialManager:
             visible = [c for c in self.budget_view_visible_cols if c in self.budget_view_cols]
             self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_cols
         else:
-            self.budget_view_tree['displaycolumns'] = self.budget_view_cols
+            self.budget_view_tree['displaycolumns'] = self.budget_view_default_cols
 
         vsb.config(command=self.budget_view_tree.yview)
         hsb.config(command=self.budget_view_tree.xview)
@@ -8247,7 +8274,7 @@ class MaterialManager:
             final_selection = list(dialog.result)
             for mandatory in ('Date', 'Site'):
                 if mandatory in all_cols and mandatory not in final_selection:
-                    final_selection.insert(0 if mandatory == 'Date' else 1, mandatory)
+                    final_selection.append(mandatory)
 
             sorted_selection = [c for c in all_cols if c in final_selection]
             self.budget_view_tree['displaycolumns'] = sorted_selection if sorted_selection else all_cols
@@ -8317,6 +8344,12 @@ class MaterialManager:
 
         import re as _re
         for _, row in df.iterrows():
+            def _clean_str(val):
+                if pd.isna(val):
+                    return ''
+                s = str(val).strip()
+                return '' if s.lower() in ('nan', 'none') else s
+
             # [FIX] OT 컬럼에서 금액 추출 로직 강화 (NaN 방지)
             parsed_ots = []
             for i in range(1, 11):
@@ -8351,6 +8384,21 @@ class MaterialManager:
             unit_cost = mat_id_cost_map.get(row.get('MaterialID'), 0)
             mat_cost = usage * float(unit_cost)
 
+            # 작업자 통합
+            worker_cols = ['User'] + [f'User{i}' for i in range(2, 11)]
+            raw_workers = []
+            for wcol in worker_cols:
+                wv = _clean_str(row.get(wcol, ''))
+                if wv and wv not in raw_workers:
+                    raw_workers.append(wv)
+            consolidated_workers = ', '.join(raw_workers)
+
+            # 품목명 표시명
+            try:
+                mat_name = self.get_material_display_name(row.get('MaterialID')) if pd.notna(row.get('MaterialID')) else ''
+            except Exception:
+                mat_name = ''
+
             income  = net + ot_sum
             expense = travel + meal
             row_sum = income + expense
@@ -8361,22 +8409,32 @@ class MaterialManager:
             total_sum      += row_sum
             total_mat_cost += mat_cost
 
-            self.budget_view_tree.insert('', tk.END, values=(
-                str(row.get('Date', '')),
-                str(row.get('Site', '')),
-                str(row.get('장비명', '')),
-                str(row.get('검사방법', '')),
-                f"{qty:g}",
-                f"{price:,.0f}",
-                f"{net:,.0f}",
-                f"{travel:,.0f}",
-                f"{meal:,.0f}",
-                f"{ot_sum:,.0f}",
-                f"{usage:g}",
-                f"{unit_cost:,.0f}",
-                f"{row_sum:,.0f}",
-                str(row.get('비고', row.get('Note', ''))).replace('nan', '')
-            ))
+            row_map = {
+                'Date': _clean_str(row.get('Date', '')),
+                'Site': _clean_str(row.get('Site', '')),
+                '장비명': _clean_str(row.get('장비명', '')),
+                '검사방법': _clean_str(row.get('검사방법', '')),
+                '검사량': f"{qty:g}",
+                '단가': f"{price:,.0f}",
+                '검사단가': f"{net:,.0f}",
+                '출장비': f"{travel:,.0f}",
+                '일식': f"{meal:,.0f}",
+                'OT합계': f"{ot_sum:,.0f}",
+                '자재사용량': f"{usage:g}",
+                '자재단가': f"{unit_cost:,.0f}",
+                '합계': f"{row_sum:,.0f}",
+                '비고': _clean_str(row.get('비고', row.get('Note', ''))),
+                '작업자': consolidated_workers,
+                '품목명': mat_name,
+                '입력시간': _clean_str(row.get('EntryTime', '')),
+                '차량번호': _clean_str(row.get('차량번호', '')),
+                '주행거리': _clean_str(row.get('주행거리', '')),
+                '차량점검': _clean_str(row.get('차량점검', '')),
+                '차량비고': _clean_str(row.get('차량비고', '')),
+                'MaterialID': _clean_str(row.get('MaterialID', '')),
+                'FilmCount': _clean_str(row.get('FilmCount', '')),
+            }
+            self.budget_view_tree.insert('', tk.END, values=tuple(row_map.get(col, '') for col in self.budget_view_cols))
 
     def _update_budget_kpis(self):
         """Update the top KPI summary labels based on current budget form values"""
