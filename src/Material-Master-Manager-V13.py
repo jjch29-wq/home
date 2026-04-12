@@ -2775,9 +2775,7 @@ class MaterialManager:
         # Mapping: {widget_attr_name: values_list_attr_name}
         mappings = {
             'cb_daily_site': 'sites',
-            'cb_daily_equip': 'equipment_suggestions',
             'cb_material': 'materials_display_list',
-            'cb_daily_material': 'materials_display_list',
             'cb_trans_filter_mat': 'materials_display_list',
             'cb_trans_filter_site': 'sites',
             'cb_daily_filter_site': 'sites',
