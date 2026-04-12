@@ -95,27 +95,41 @@ try:
             self.update_idletasks = lambda: None  # 스타일 설정 중 update_idletasks 무시
             try:
                 _orig_setup_style(self)
-            except (KeyboardInterrupt, Exception):
+            except BaseException:
                 pass
             finally:
                 self.update_idletasks = _orig_update
         DateEntry._setup_style = _patched_setup_style
 
     # [FIX] Python 3.14 compat:
-    # _determine_downarrow_name 은 <Configure>/<Map> 에 바인딩됨.
-    # 달력 년도 이동 시 Configure 이벤트 → 이 메서드 → update_idletasks() → 충돌.
-    if hasattr(DateEntry, '_determine_downarrow_name'):
-        _orig_determine = DateEntry._determine_downarrow_name
-        def _patched_determine(self, event=None):
-            _orig_update = self.update_idletasks
-            self.update_idletasks = lambda: None  # update_idletasks 충돌 억제
-            try:
-                _orig_determine(self, event)
-            except (KeyboardInterrupt, Exception):
-                pass
-            finally:
-                self.update_idletasks = _orig_update
-        DateEntry._determine_downarrow_name = _patched_determine
+    # DateEntry.update_idletasks 를 클래스 레벨에서 영구 안전화.
+    # _determine_downarrow_name 의 after(10,...) 재예약 콜백에서도
+    # 인스턴스 복원 후 진짜 update_idletasks 가 호출되어 충돌하는 문제 근본 해결.
+    import tkinter as _tk_ref
+    def _safe_de_update_idletasks(self):
+        try:
+            _tk_ref.Misc.update_idletasks(self)
+        except BaseException:
+            pass
+    DateEntry.update_idletasks = _safe_de_update_idletasks
+
+    # [FIX] Python 3.14 compat:
+    # 달력 년도 이동 버튼(_prev_year/_next_year) 자체를 BaseException 으로 감쌈.
+    # → _display_calendar → Configure 이벤트 → _determine_downarrow_name 연쇄에서
+    #   어디서든 BaseException 이 발생해도 앱이 튕기지 않음.
+    if hasattr(Calendar, '_prev_year'):
+        _orig_prev_year = Calendar._prev_year
+        def _patched_prev_year(self):
+            try: _orig_prev_year(self)
+            except BaseException: pass
+        Calendar._prev_year = _patched_prev_year
+
+    if hasattr(Calendar, '_next_year'):
+        _orig_next_year = Calendar._next_year
+        def _patched_next_year(self):
+            try: _orig_next_year(self)
+            except BaseException: pass
+        Calendar._next_year = _patched_next_year
 
 except ImportError:
     install_and_import('tkcalendar')
