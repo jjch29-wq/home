@@ -555,23 +555,15 @@ def register_autocomplete(combobox, suggestion_list):
     combobox.bind('<FocusOut>', on_focus_out, add=True)
     combobox.bind('<<ComboboxSelected>>', lambda e: combobox._suggestion_win.hide(), add=True)
 
-    # _just_focused: FocusIn 직후 Button-1이 hide하는 것을 막는 플래그
-    # 클릭 이벤트 순서: FocusIn(show) → Button-1 → 이때 Button-1이 hide하면 빈 박스 노출
-    combobox._just_focused = False
-    def on_focus_in(event):
-        combobox._just_focused = True  # FocusIn 직후임을 표시
-        perform_filter(force_all=True)
-    combobox.bind('<FocusIn>', on_focus_in, add="+")
-    
+    # FocusIn 은 show를 하지 않음 — Button-1 / postcommand 가 단독으로 show/hide 담당
+    # (FocusIn이 show하면 Button-1과 충돌해 빈 박스 or 이중 창 발생)
+
     # 텍스트 영역 클릭: SuggestionWindow 토글
-    # ▼ 버튼은 postcommand가 처리하므로 _just_postcommand 플래그로 중복 토글 방지
+    # ▼ 버튼은 postcommand가 먼저 처리하고 _just_postcommand 플래그로 알림
     combobox._just_postcommand = False
     def _on_click(event):
         if combobox._just_postcommand:
             combobox._just_postcommand = False  # 플래그 해제 후 건너뜀
-            return
-        if combobox._just_focused:
-            combobox._just_focused = False  # FocusIn이 이미 show했으므로 skip
             return
         if combobox._suggestion_win.active:
             combobox._suggestion_win.hide()
@@ -582,10 +574,8 @@ def register_autocomplete(combobox, suggestion_list):
     # ▼ 버튼(postcommand): native 드롭다운 차단 + SuggestionWindow 토글
     def _postcommand():
         _saved = list(combobox['values'])
-        # _just_postcommand 세팅: Button-1이 이중 토글하지 않도록
+        # _just_postcommand 세팅: 이어지는 Button-1이 이중 토글하지 않도록
         combobox._just_postcommand = True
-        combobox._just_focused = False  # postcommand 시 focused 플래그 초기화
-        # 100ms 후 안전 초기화 (Button-1이 안 오는 케이스 대비)
         combobox.after(100, lambda: setattr(combobox, '_just_postcommand', False))
         if combobox._suggestion_win.active:
             combobox._suggestion_win.hide()
