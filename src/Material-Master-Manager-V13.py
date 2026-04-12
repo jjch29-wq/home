@@ -6261,6 +6261,10 @@ class MaterialManager:
         # Recurse for children
         try:
             for child in widget.winfo_children():
+                # Toplevel(DateEntry 달력 팝업 등) 내부는 절대 순회하지 않음
+                # → winfo_children() 재귀만으로도 Toplevel이 화면에 나타날 수 있음
+                if child.winfo_class() == 'Toplevel':
+                    continue
                 self._bind_recursive(child, target_container)
         except:
             pass
