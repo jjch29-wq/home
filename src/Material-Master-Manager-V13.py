@@ -235,6 +235,8 @@ if not hasattr(messagebox, 'showerror_orig'):
 
 class SuggestionWindow:
     """A custom Toplevel window with a scrollable Label-based suggestion list."""
+    _all_instances = []  # 클래스레벨 전체 인스턴스 추적 (한 번에 하나만 표시)
+
     def __init__(self, widget):
         self.widget = widget
         self.root = widget.winfo_toplevel()
@@ -247,6 +249,8 @@ class SuggestionWindow:
         self.values = []
         self._drag_data = {"x": 0, "y": 0}
         self._just_selected = False # [NEW] Prevent re-show right after selection
+
+        SuggestionWindow._all_instances.append(self)  # 전체 인스턴스에 등록
         
         # Track parent window movement to reposition suggestions
         self.root.bind('<Configure>', lambda e: self._reposition(), add='+')
@@ -255,6 +259,15 @@ class SuggestionWindow:
         if not filtered_values or self._just_selected:
             self.hide()
             return
+
+        # 다른 SuggestionWindow 즉시 숨김 (동시에 두 창 표시 방지)
+        SuggestionWindow._all_instances = [
+            i for i in SuggestionWindow._all_instances
+            if i.window is None or i.window.winfo_exists()
+        ]
+        for inst in SuggestionWindow._all_instances:
+            if inst is not self and inst.active:
+                inst.hide()
 
         self.values = filtered_values
 
@@ -547,22 +560,29 @@ def register_autocomplete(combobox, suggestion_list):
         perform_filter(force_all=True)
     combobox.bind('<FocusIn>', on_focus_in, add="+")
     
-    # 텍스트 영역 클릭: SuggestionWindow 토글 (열려 있으면 닫기, 닫혀 있으면 열기)
+    # 텍스트 영역 클릭: SuggestionWindow 토글
+    # ▼ 버튼은 postcommand가 처리하므로 _just_postcommand 플래그로 중복 토글 방지
+    combobox._just_postcommand = False
     def _on_click(event):
+        if combobox._just_postcommand:
+            combobox._just_postcommand = False  # 플래그 해제 후 건너뜀
+            return
         if combobox._suggestion_win.active:
             combobox._suggestion_win.hide()
         else:
             perform_filter(force_all=True)
     combobox.bind('<Button-1>', _on_click, add="+")
 
-    # ── ▼ 버튼(postcommand): native 드롭다운 차단 + SuggestionWindow 토글 ──
+    # ▼ 버튼(postcommand): native 드롭다운 차단 + SuggestionWindow 토글
     def _postcommand():
         _saved = list(combobox['values'])
+        # _just_postcommand 세팅: Button-1이 이중 토글하지 않도록
+        combobox._just_postcommand = True
+        # 100ms 후 안전 초기화 (Button-1이 안 오는 케이스 대비)
+        combobox.after(100, lambda: setattr(combobox, '_just_postcommand', False))
         if combobox._suggestion_win.active:
-            # 이미 열려 있으면 → 닫기
             combobox._suggestion_win.hide()
         else:
-            # 닫혀 있으면 → 열기
             if _saved:
                 combobox._suggestion_win.show(_saved)
         # values=[] 로 native 드롭다운 항상 차단 (Post가 값 없으면 건너뜀)
