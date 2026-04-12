@@ -101,6 +101,22 @@ try:
                 self.update_idletasks = _orig_update
         DateEntry._setup_style = _patched_setup_style
 
+    # [FIX] Python 3.14 compat:
+    # _determine_downarrow_name 은 <Configure>/<Map> 에 바인딩됨.
+    # 달력 년도 이동 시 Configure 이벤트 → 이 메서드 → update_idletasks() → 충돌.
+    if hasattr(DateEntry, '_determine_downarrow_name'):
+        _orig_determine = DateEntry._determine_downarrow_name
+        def _patched_determine(self, event=None):
+            _orig_update = self.update_idletasks
+            self.update_idletasks = lambda: None  # update_idletasks 충돌 억제
+            try:
+                _orig_determine(self, event)
+            except (KeyboardInterrupt, Exception):
+                pass
+            finally:
+                self.update_idletasks = _orig_update
+        DateEntry._determine_downarrow_name = _patched_determine
+
 except ImportError:
     install_and_import('tkcalendar')
     import tkcalendar
