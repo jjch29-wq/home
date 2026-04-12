@@ -33,10 +33,19 @@ def install_and_import(package):
 try:
     import tkcalendar
     from tkcalendar import DateEntry, Calendar
-    # [FIX] Patch tkcalendar for stability in ko_KR locale and prevent closure on navigation.
+except ImportError:
+    install_and_import('tkcalendar')
+    import tkcalendar
+    from tkcalendar import DateEntry, Calendar
+
+# [FIX] Patch tkcalendar for stability in ko_KR locale / Python 3.14.
+# 각 패치를 독립적으로 적용 - 한 패치 실패가 나머지를 무효화하지 않도록 분리.
+import tkinter as _tk_ref
+
+# 1) Calendar.__init__ : select_on_nav=False 기본값 + 헤더 너비 조정
+try:
     _orig_cal_init = Calendar.__init__
     def _patched_cal_init(self, *args, **kwargs):
-        # Default select_on_nav to False for better popup stability if not specified
         if 'select_on_nav' not in kwargs:
             kwargs['select_on_nav'] = False
         _orig_cal_init(self, *args, **kwargs)
@@ -50,49 +59,87 @@ try:
         self.after_idle(widen)
         self._widen_headers = widen
     Calendar.__init__ = _patched_cal_init
-    
+except Exception:
+    pass
+
+# 2) Calendar._display_calendar : 헤더 너비 재조정
+try:
     _orig_cal_display = Calendar._display_calendar
     def _patched_cal_display(self, *args, **kwargs):
         _orig_cal_display(self, *args, **kwargs)
         if hasattr(self, '_widen_headers'):
             self.after_idle(self._widen_headers)
     Calendar._display_calendar = _patched_cal_display
+except Exception:
+    pass
 
-    _orig_de_show_cal = DateEntry._show_calendar
-    def _patched_de_show_cal(self):
-        try: self._last_known_date = self.get_date()
-        except: self._last_known_date = None
-        _orig_de_show_cal(self)
-        if hasattr(self, '_calendar'):
-            # Force select_on_nav=False to prevent closure during browsing
-            try: self._calendar.configure(select_on_nav=False)
-            except: pass
-            self._calendar.after_idle(getattr(self._calendar, '_widen_headers', lambda: None))
-    DateEntry._show_calendar = _patched_de_show_cal
+# 3) DateEntry._show_calendar : tkcalendar < 1.6 버전 호환 (1.6.1에서는 없음 - 무시)
+try:
+    if hasattr(DateEntry, '_show_calendar'):
+        _orig_de_show_cal = DateEntry._show_calendar
+        def _patched_de_show_cal(self):
+            try: self._last_known_date = self.get_date()
+            except: self._last_known_date = None
+            try: _orig_de_show_cal(self)
+            except BaseException: pass
+            if hasattr(self, '_calendar'):
+                try: self._calendar.configure(select_on_nav=False)
+                except: pass
+        DateEntry._show_calendar = _patched_de_show_cal
+except Exception:
+    pass
 
-    _orig_de_on_sel = DateEntry._on_calendar_selection
-    def _patched_de_on_sel(self, event):
-        # Only close if the date has changed vs what was there when opened, 
-        # or if it was a real selection trigger.
-        try:
-            new_date = self._calendar.selection_get()
-            if hasattr(self, '_last_known_date') and self._last_known_date == new_date:
-                # Even if they re-click the same day, we might want to close.
-                # But during navigation, select_on_nav=False ensures dates don't change.
-                # If they clicked a day, selection_get() would be the clicked day.
+# 4) DateEntry.drop_down : tkcalendar 1.6.1+ 날짜박스 클릭 시 튕김 방지 (핵심 패치)
+try:
+    if hasattr(DateEntry, 'drop_down'):
+        _orig_drop_down = DateEntry.drop_down
+        def _patched_drop_down(self):
+            try: self._last_known_date = self.get_date()
+            except: self._last_known_date = None
+            try:
+                _orig_drop_down(self)
+                if hasattr(self, '_calendar'):
+                    try: self._calendar.configure(select_on_nav=False)
+                    except: pass
+            except BaseException:
                 pass
-        except: pass
-        _orig_de_on_sel(self, event)
-    DateEntry._on_calendar_selection = _patched_de_on_sel
+        DateEntry.drop_down = _patched_drop_down
+except Exception:
+    pass
 
-    # [FIX] Python 3.13+ / 3.14 compat:
-    # update_idletasks() 내부에서 KeyboardInterrupt(BaseException)가 전파될 수 있음.
-    # 인스턴스 레벨에서 update_idletasks를 no-op으로 대체하여 스타일 설정 중 호출 자체를 차단.
+# 5) DateEntry._on_b1_press : 클릭 이벤트 처리 중 예외 방지
+try:
+    if hasattr(DateEntry, '_on_b1_press'):
+        _orig_b1_press = DateEntry._on_b1_press
+        def _patched_b1_press(self, event):
+            try: _orig_b1_press(self, event)
+            except BaseException: pass
+        DateEntry._on_b1_press = _patched_b1_press
+except Exception:
+    pass
+
+# 6) DateEntry._on_calendar_selection
+try:
+    if hasattr(DateEntry, '_on_calendar_selection'):
+        _orig_de_on_sel = DateEntry._on_calendar_selection
+        def _patched_de_on_sel(self, event):
+            try:
+                new_date = self._calendar.selection_get()
+                if hasattr(self, '_last_known_date') and self._last_known_date == new_date:
+                    pass
+            except: pass
+            _orig_de_on_sel(self, event)
+        DateEntry._on_calendar_selection = _patched_de_on_sel
+except Exception:
+    pass
+
+# 7) DateEntry._setup_style : 스타일 설정 중 update_idletasks 일시 차단
+try:
     if hasattr(DateEntry, '_setup_style'):
         _orig_setup_style = DateEntry._setup_style
         def _patched_setup_style(self):
             _orig_update = self.update_idletasks
-            self.update_idletasks = lambda: None  # 스타일 설정 중 update_idletasks 무시
+            self.update_idletasks = lambda: None
             try:
                 _orig_setup_style(self)
             except BaseException:
@@ -100,49 +147,49 @@ try:
             finally:
                 self.update_idletasks = _orig_update
         DateEntry._setup_style = _patched_setup_style
+except Exception:
+    pass
 
-    # [FIX] Python 3.14 compat:
-    # DateEntry.update_idletasks 를 클래스 레벨에서 영구 안전화.
-    # _determine_downarrow_name 의 after(10,...) 재예약 콜백에서도
-    # 인스턴스 복원 후 진짜 update_idletasks 가 호출되어 충돌하는 문제 근본 해결.
-    import tkinter as _tk_ref
+# 8) DateEntry.update_idletasks : Python 3.14 BaseException 안전화 (클래스 레벨 영구 적용)
+try:
     def _safe_de_update_idletasks(self):
         try:
             _tk_ref.Misc.update_idletasks(self)
         except BaseException:
             pass
     DateEntry.update_idletasks = _safe_de_update_idletasks
+except Exception:
+    pass
 
-    # [FIX] Python 3.14 compat:
-    # 달력 년도 이동 버튼(_prev_year/_next_year) 자체를 BaseException 으로 감쌈.
-    # → _display_calendar → Configure 이벤트 → _determine_downarrow_name 연쇄에서
-    #   어디서든 BaseException 이 발생해도 앱이 튕기지 않음.
+# 9) DateEntry._determine_downarrow_name : Configure/Map 이벤트 콜백 예외 방지
+try:
+    if hasattr(DateEntry, '_determine_downarrow_name'):
+        _orig_det = DateEntry._determine_downarrow_name
+        def _patched_det(self, event=None):
+            try: _orig_det(self, event)
+            except BaseException: pass
+        DateEntry._determine_downarrow_name = _patched_det
+except Exception:
+    pass
+
+# 10) Calendar._prev_year / _next_year : 년도 이동 튕김 방지
+try:
     if hasattr(Calendar, '_prev_year'):
         _orig_prev_year = Calendar._prev_year
         def _patched_prev_year(self):
             try: _orig_prev_year(self)
             except BaseException: pass
         Calendar._prev_year = _patched_prev_year
+except Exception:
+    pass
 
+try:
     if hasattr(Calendar, '_next_year'):
         _orig_next_year = Calendar._next_year
         def _patched_next_year(self):
             try: _orig_next_year(self)
             except BaseException: pass
         Calendar._next_year = _patched_next_year
-
-except ImportError:
-    install_and_import('tkcalendar')
-    import tkcalendar
-    from tkcalendar import DateEntry, Calendar
-    # Re-apply patch after installation
-    _orig_cal_init = Calendar.__init__
-    def _patched_cal_init(self, *args, **kwargs):
-        _orig_cal_init(self, *args, **kwargs)
-        if hasattr(self, '_header_month'):
-            try: self._header_month.configure(width=25)
-            except: pass
-    Calendar.__init__ = _patched_cal_init
 except Exception:
     pass
 
