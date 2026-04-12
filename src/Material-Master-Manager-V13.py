@@ -2813,9 +2813,7 @@ class MaterialManager:
                     else:
                         self.enable_autocomplete(widget, values_list_attr=list_attr)
 
-        # Handle cb_daily_test_method with static list
-        if hasattr(self, 'cb_daily_test_method'):
-            self.enable_autocomplete(self.cb_daily_test_method, values_list=["RT", "PAUT", "UT", "MT", "PT", "PMI"])
+        # cb_daily_test_method 는 native Combobox 단독 사용 (SuggestionWindow 비활성화)
 
     def _safe_format_datetime(self, val, format_str='%Y-%m-%d %H:%M'):
         if pd.isna(val) or val is None or str(val).strip().lower() in ['nan', 'none', '']:
