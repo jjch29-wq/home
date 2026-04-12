@@ -555,8 +555,11 @@ def register_autocomplete(combobox, suggestion_list):
     combobox.bind('<FocusOut>', on_focus_out, add=True)
     combobox.bind('<<ComboboxSelected>>', lambda e: combobox._suggestion_win.hide(), add=True)
 
+    # _just_focused: FocusIn 직후 Button-1이 hide하는 것을 막는 플래그
+    # 클릭 이벤트 순서: FocusIn(show) → Button-1 → 이때 Button-1이 hide하면 빈 박스 노출
+    combobox._just_focused = False
     def on_focus_in(event):
-        # [FIX] Trigger filter with force_all=True on focus
+        combobox._just_focused = True  # FocusIn 직후임을 표시
         perform_filter(force_all=True)
     combobox.bind('<FocusIn>', on_focus_in, add="+")
     
@@ -566,6 +569,9 @@ def register_autocomplete(combobox, suggestion_list):
     def _on_click(event):
         if combobox._just_postcommand:
             combobox._just_postcommand = False  # 플래그 해제 후 건너뜀
+            return
+        if combobox._just_focused:
+            combobox._just_focused = False  # FocusIn이 이미 show했으므로 skip
             return
         if combobox._suggestion_win.active:
             combobox._suggestion_win.hide()
@@ -578,6 +584,7 @@ def register_autocomplete(combobox, suggestion_list):
         _saved = list(combobox['values'])
         # _just_postcommand 세팅: Button-1이 이중 토글하지 않도록
         combobox._just_postcommand = True
+        combobox._just_focused = False  # postcommand 시 focused 플래그 초기화
         # 100ms 후 안전 초기화 (Button-1이 안 오는 케이스 대비)
         combobox.after(100, lambda: setattr(combobox, '_just_postcommand', False))
         if combobox._suggestion_win.active:
