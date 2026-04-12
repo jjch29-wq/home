@@ -84,6 +84,19 @@ try:
         except: pass
         _orig_de_on_sel(self, event)
     DateEntry._on_calendar_selection = _patched_de_on_sel
+
+    # [FIX] Python 3.13+ / 3.14 compat:
+    # update_idletasks() 내부에서 KeyboardInterrupt(BaseException)가 전파될 수 있음.
+    # Exception이 아닌 BaseException 계열이라 기존 try/except Exception에 안 잡힘.
+    if hasattr(DateEntry, '_setup_style'):
+        _orig_setup_style = DateEntry._setup_style
+        def _patched_setup_style(self):
+            try:
+                _orig_setup_style(self)
+            except KeyboardInterrupt:
+                pass  # Python 3.14 signal 전파 무시
+        DateEntry._setup_style = _patched_setup_style
+
 except ImportError:
     install_and_import('tkcalendar')
     import tkcalendar
