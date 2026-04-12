@@ -534,7 +534,8 @@ class SuggestionWindow:
         self.window.geometry(f"{int(width+20 if len(filtered_values) > max_items else width)}x{int(height)}+{int(x)}+{int(y)}")
         self.window.deiconify()
         self.window.lift()
-        self.window.update_idletasks()
+        # [FIX] update_idletasks() 제거: postcommand의 after_idle(values복원)과 충돌하여
+        # native 드롭다운이 열리거나 이벤트 순서가 꼬이는 원인이었음
         self.active = True
 
     def _handle_mousewheel(self, event):
@@ -562,8 +563,8 @@ class SuggestionWindow:
         if self.window and self.window.winfo_exists():
             try:
                 self.window.withdraw()
-                # Use update() to force immediate visual removal
-                self.window.update() 
+                # [FIX] update() 제거: 재진입 이벤트 처리로 두 번째 창이 열리는 버그 방지
+                # withdraw()만으로 충분히 즉시 숨겨짐
             except: pass
 
     def _highlight(self, index):
@@ -697,7 +698,23 @@ def register_autocomplete(combobox, suggestion_list):
     combobox.bind('<KeyPress-Return>', handle_extra_nav, add="+")
 
     def on_focus_out(event):
-        combobox.after(200, combobox._suggestion_win.hide)
+        # [FIX] 다중창 버그 수정:
+        # 포커스가 제안창 내부(항목 클릭)로 이동 → 200ms 딜레이 (클릭 등록 대기)
+        # 포커스가 외부(다른 콤보박스, 버튼 등)로 이동 → 즉시 숨김
+        sw = combobox._suggestion_win
+        if not sw.active:
+            return
+        fw = combobox.focus_get()
+        if fw is not None and sw.window and sw.window.winfo_exists():
+            try:
+                if str(fw).startswith(str(sw.window)):
+                    # 제안창 내부로 포커스 이동 → 클릭 등록될 때까지 대기 후 숨김
+                    combobox.after(200, sw.hide)
+                    return
+            except Exception:
+                pass
+        # 외부로 포커스 이동 → 즉시 숨김 (다른 창이 동시에 보이는 현상 방지)
+        sw.hide()
     combobox.bind('<FocusOut>', on_focus_out, add=True)
     combobox.bind('<<ComboboxSelected>>', lambda e: combobox._suggestion_win.hide(), add=True)
 
