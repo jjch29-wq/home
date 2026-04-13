@@ -544,22 +544,11 @@ class SuggestionWindow:
         else:
             self.scrollbar.pack_forget()
 
-        # Position smartly based on screen space (Default: Below)
+        # Position exactly below the widget (Restored simpler behavior as requested by user)
         x = self.widget.winfo_rootx()
-        y_below = self.widget.winfo_rooty() + self.widget.winfo_height()
+        y = self.widget.winfo_rooty() + self.widget.winfo_height()
         
-        # Check available space at bottom of screen
-        screen_h = self.root.winfo_screenheight()
-        suggest_h = height
-        
-        if y_below + suggest_h > screen_h - 40: # 40px margin for taskbar
-            # Not enough space below, flip to ABOVE
-            y = self.widget.winfo_rooty() - suggest_h
-        else:
-            y = y_below
-        
-        expected_w = int(width+20 if len(filtered_values) > max_items else width)
-        self.window.geometry(f"{expected_w}x{int(height)}+{int(x)}+{int(y)}")
+        self.window.geometry(f"{int(width+20 if len(filtered_values) > max_items else width)}x{int(height)}+{int(x)}+{int(y)}")
         self.window.deiconify()
         self.window.lift()
         # [FIX] update_idletasks() 제거: postcommand의 after_idle(values복원)과 충돌하여
@@ -581,6 +570,7 @@ class SuggestionWindow:
         """Update window position to stay attached to the widget"""
         if self.active and self.window and self.window.winfo_exists() and self.window.winfo_viewable():
             x = self.widget.winfo_rootx()
+<<<<<<< HEAD
             y_below = self.widget.winfo_rooty() + self.widget.winfo_height()
             
             # Check available space at bottom of screen
@@ -598,6 +588,10 @@ class SuggestionWindow:
             else:
                 y = y_below
                 
+=======
+            y = self.widget.winfo_rooty() + self.widget.winfo_height()
+            # Preserve current width/height
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
             curr_geom = self.window.geometry().split('+')[0]
             self.window.geometry(f"{curr_geom}+{int(x)}+{int(y)}")
 
@@ -2841,7 +2835,19 @@ class MaterialManager:
         # Mapping: {widget_attr_name: values_list_attr_name}
         mappings = {
             'cb_daily_site': 'sites',
+<<<<<<< HEAD
             'cb_budget_site': 'budget_sites',
+=======
+            'cb_material': 'materials_display_list',
+            'cb_trans_filter_mat': 'materials_display_list',
+            'cb_trans_filter_site': 'sites',
+            'cb_daily_filter_site': 'sites',
+            'cb_budget_site': 'budget_sites',
+            'cb_daily_filter_material': 'materials_display_list',
+            'cb_daily_filter_worker': 'users',
+            'cb_daily_filter_vehicle': 'vehicles',
+            'cb_trans_filter_vehicle': 'vehicles',
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
             'cb_sales_filter_site': 'sites',
             'cb_filter_co': 'co_code_list',
             'cb_filter_class': 'class_list',
@@ -2849,13 +2855,29 @@ class MaterialManager:
             'cb_filter_name': 'materials_display_list',
             'cb_filter_sn': 'sn_list',
             'cb_filter_model': 'model_list',
+<<<<<<< HEAD
             'cb_filter_eq': 'eq_code_list'
+=======
+            'cb_filter_eq': 'eq_code_list',
+            'cb_co_code': 'co_code_list',
+            'cb_eq_code': 'eq_code_list',
+            'cb_item_name': 'item_name_list',
+            'cb_class': 'class_list',
+            'cb_spec': 'spec_list',
+            'cb_unit': 'unit_list',
+            'cb_mfr': 'mfr_list',
+            'cb_origin': 'origin_list'
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         }
         
         for widget_attr, list_attr in mappings.items():
             if hasattr(self, widget_attr):
                 widget = getattr(self, widget_attr)
                 if isinstance(widget, ttk.Combobox):
+<<<<<<< HEAD
+=======
+                    # For filtering, we might want to include '전체' dynamically
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
                     current_values = list(widget['values'])
                     if '전체' in current_values:
                         self.enable_autocomplete(widget, values_list_attr=list_attr, prefix_list=['전체'])
@@ -3554,7 +3576,12 @@ class MaterialManager:
         self.cb_material.bind('<<ComboboxSelected>>', self.on_material_selected)
         self.cb_material.bind('<Return>', lambda e: self.cb_type.focus_set())
         
+<<<<<<< HEAD
         # [REVERTED] Use native dropdown for material selection as requested by user
+=======
+        # Register autocomplete for material selection
+        self.enable_autocomplete(self.cb_material, values_list=[]) # Initial empty, will be updated by update_material_combo
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         self.update_material_combo()
         
         # Model List display - Moved to row 4 for narrower fit
@@ -3769,10 +3796,14 @@ class MaterialManager:
             self.cb_daily_material['values'] = all_vals
             try:
                 max_chars = max((len(str(v)) for v in all_vals), default=12)
+<<<<<<< HEAD
                 calc_w = min(40, max(22, max_chars + 2))
                 self.cb_daily_material.configure(width=calc_w)
                 if hasattr(self, 'cb_daily_filter_material'):
                     self.cb_daily_filter_material.configure(width=calc_w)
+=======
+                self.cb_daily_material.configure(width=min(40, max(22, max_chars + 2)))
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
             except Exception:
                 pass
             
@@ -3788,10 +3819,14 @@ class MaterialManager:
             self.cb_daily_equip['values'] = combined_equip
             try:
                 max_chars = max((len(str(v)) for v in combined_equip), default=12)
+<<<<<<< HEAD
                 calc_w = min(40, max(22, max_chars + 2))
                 self.cb_daily_equip.configure(width=calc_w)
                 if hasattr(self, 'cb_daily_filter_equipment'):
                     self.cb_daily_filter_equipment.configure(width=calc_w)
+=======
+                self.cb_daily_equip.configure(width=min(40, max(22, max_chars + 2)))
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
             except Exception:
                 pass
             self.equipment_suggestions = combined_equip
@@ -3825,6 +3860,7 @@ class MaterialManager:
             if not self.cb_trans_filter_vehicle.get():
                 self.cb_trans_filter_vehicle.set("전체")
 
+<<<<<<< HEAD
         # [NEW] Update Site Filter Box with dynamic width
         if hasattr(self, 'cb_daily_filter_site'):
             site_list = sorted(self.sites)
@@ -3835,6 +3871,8 @@ class MaterialManager:
             except Exception:
                 pass
 
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
     def _get_material_candidates(self, include_all=False):
         vals = []
         if hasattr(self, 'materials_display_list'):
@@ -3845,6 +3883,7 @@ class MaterialManager:
         cleaned = sorted(set(str(v).strip() for v in vals if str(v).strip() and str(v).strip() != '전체'))
         return (['전체'] + cleaned) if include_all else cleaned
 
+<<<<<<< HEAD
     def _get_site_candidates(self, include_all=False):
         vals = []
         if hasattr(self, 'sites'):
@@ -3855,6 +3894,8 @@ class MaterialManager:
         cleaned = sorted(set(str(v).strip() for v in vals if str(v).strip() and str(v).strip() != '전체'))
         return (['전체'] + cleaned) if include_all else cleaned
 
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
     def _get_equipment_candidates(self, include_all=False):
         vals = []
         if hasattr(self, 'equipments'):
@@ -8000,6 +8041,7 @@ class MaterialManager:
         self.update_daily_usage_view = update_daily_usage_view_with_save
         
         ttk.Label(filter_panel, text="현장:").pack(side='left', padx=(5, 2))
+<<<<<<< HEAD
         self.cb_daily_filter_site = ttk.Combobox(filter_panel, width=22)
         self.cb_daily_filter_site.pack(side='left', padx=2)
         self.cb_daily_filter_site.set('전체')
@@ -8016,18 +8058,41 @@ class MaterialManager:
         self.cb_daily_filter_equipment.pack(side='left', padx=2)
         self.cb_daily_filter_equipment.set('전체')
         # [REVERTED] Use native dropdown for simplicity
+=======
+        self.cb_daily_filter_site = ttk.Combobox(filter_panel, width=12)
+        self.cb_daily_filter_site.pack(side='left', padx=2)
+        self.cb_daily_filter_site.set('전체')
+        
+        ttk.Label(filter_panel, text="품목명:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_material = ttk.Combobox(filter_panel, width=15)
+        self.cb_daily_filter_material.pack(side='left', padx=2)
+        self.cb_daily_filter_material.set('전체')
+        self._bind_combobox_word_suggest(self.cb_daily_filter_material, lambda: self._get_material_candidates(include_all=True))
+        
+        ttk.Label(filter_panel, text="장비명:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_equipment = ttk.Combobox(filter_panel, width=15)
+        self.cb_daily_filter_equipment.pack(side='left', padx=2)
+        self.cb_daily_filter_equipment.set('전체')
+        self._bind_combobox_word_suggest(self.cb_daily_filter_equipment, lambda: self._get_equipment_candidates(include_all=True))
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         
         ttk.Label(filter_panel, text="작업자:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_worker = ttk.Combobox(filter_panel, width=12)
         self.cb_daily_filter_worker.pack(side='left', padx=2)
         self.cb_daily_filter_worker.set('전체')
+<<<<<<< HEAD
         # [REVERTED] Use native dropdown for simplicity
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         
         ttk.Label(filter_panel, text="차량번호:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_vehicle = ttk.Combobox(filter_panel, width=12)
         self.cb_daily_filter_vehicle.pack(side='left', padx=2)
         self.cb_daily_filter_vehicle.set('전체')
+<<<<<<< HEAD
         # [REVERTED] Use native dropdown for simplicity
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         
         ttk.Label(filter_panel, text="분류:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_shift = ttk.Combobox(filter_panel, width=10, state="readonly", values=["전체", "주간", "야간", "주야간", "휴일"])
@@ -8052,6 +8117,7 @@ class MaterialManager:
         btn_col_manage = ttk.Button(filter_frame, text="컬럼 관리", command=self.show_column_visibility_dialog)
         btn_col_manage.pack(side='left', padx=10)
 
+<<<<<<< HEAD
         # [NEW] Enhanced sequentially-linked filter widgets for convenience
         filter_sequence = [
             self.ent_daily_start_date, self.ent_daily_end_date,
@@ -8087,6 +8153,29 @@ class MaterialManager:
                     if isinstance(child, (tk.Entry, ttk.Entry)):
                         child.bind("<Return>", make_transition(i))
                 widget.bind("<Return>", make_transition(i))
+=======
+        # [NEW] Bind Enter key and selection events to all filter widgets for convenience
+        filter_widgets = [
+            self.cb_daily_filter_site, self.cb_daily_filter_material, 
+            self.cb_daily_filter_equipment, self.cb_daily_filter_worker, 
+            self.cb_daily_filter_vehicle, self.cb_daily_filter_shift
+        ]
+        for widget in filter_widgets:
+            widget.bind("<Return>", lambda e: self.update_daily_usage_view())
+            widget.bind("<<ComboboxSelected>>", lambda e: self.update_daily_usage_view())
+
+        # DateEntry widgets require binding to their internal entry or using their own events
+        for date_widget in [self.ent_daily_start_date, self.ent_daily_end_date]:
+            # Some versions of tkcalendar.DateEntry allow direct binding, 
+            # but binding to the underlying entry is most reliable for <Return>
+            try:
+                date_widget.bind("<Return>", lambda e: self.update_daily_usage_view())
+                # If DateEntry has an internal entry child, bind to it too
+                for child in date_widget.winfo_children():
+                    if isinstance(child, (tk.Entry, ttk.Entry)):
+                        child.bind("<Return>", lambda e: self.update_daily_usage_view())
+            except: pass
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         
         # Treeview for daily usage records
         tree_container = ttk.Frame(display_frame)
@@ -11441,20 +11530,32 @@ class MaterialManager:
         
         # 1. Collect and Merge Site Info
         raw_sites = set()
+<<<<<<< HEAD
         # [NEW] Include transactions_df as it's a primary source of site names
         if not getattr(self, 'transactions_df', pd.DataFrame()).empty and 'Site' in self.transactions_df.columns:
             raw_sites.update(self.transactions_df['Site'].dropna().astype(str).str.strip().tolist())
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         if not self.daily_usage_df.empty and 'Site' in self.daily_usage_df.columns:
             raw_sites.update(self.daily_usage_df['Site'].dropna().astype(str).str.strip().tolist())
         if hasattr(self, 'sites'):
             raw_sites.update(self.sites)
+<<<<<<< HEAD
         # budget_df에 저장된 현장명도 포함
+=======
+        # [NEW] budget_df에 저장된 현장명도 포함
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         if hasattr(self, 'budget_df') and not self.budget_df.empty and 'Site' in self.budget_df.columns:
             raw_sites.update(self.budget_df['Site'].dropna().astype(str).str.strip().tolist())
         
         unique_sites = sorted([s for s in raw_sites 
+<<<<<<< HEAD
                                 if s and str(s).lower() not in ['nan', 'none', '']
                                 and s not in getattr(self, 'hidden_sites', [])])
+=======
+                                if s and str(s).lower() != 'nan'
+                                and s not in getattr(self, 'hidden_sites', [])])  # [FIX] 숨긴 현장 제외
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         self.sites[:] = unique_sites # Update master list in-place
         
         if hasattr(self, 'cb_daily_filter_site'):
@@ -11486,6 +11587,7 @@ class MaterialManager:
             for mat_id in unique_mat_ids:
                 name = self.get_material_display_name(mat_id)
                 if name: raw_materials.add(name)
+<<<<<<< HEAD
         
         # Include materials from transactions_df
         if not getattr(self, 'transactions_df', pd.DataFrame()).empty and 'MaterialID' in self.transactions_df.columns:
@@ -11494,6 +11596,8 @@ class MaterialManager:
                 name = self.get_material_display_name(mat_id)
                 if name: raw_materials.add(name)
                 
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         if hasattr(self, 'materials_display_list'):
             raw_materials.update(self.materials_display_list)
         
@@ -11505,6 +11609,7 @@ class MaterialManager:
             if not self.cb_daily_filter_material.get(): self.cb_daily_filter_material.set('전체')
         if hasattr(self, 'cb_filter_material_monthly'):
             self.cb_filter_material_monthly['values'] = ['전체'] + unique_materials
+<<<<<<< HEAD
         if hasattr(self, 'cb_trans_filter_mat'):
             self.cb_trans_filter_mat['values'] = ['전체'] + unique_materials
 
@@ -11521,6 +11626,17 @@ class MaterialManager:
                 raw_equip.update(self.equipment_suggestions)
             
             unique_equip = sorted(list(set([e for e in raw_equip if e and str(e).lower() not in ['nan', 'none', '']])))
+=======
+
+        # 3. Equipment dropdown
+        if hasattr(self, 'cb_daily_filter_equipment'):
+            raw_equip = []
+            if not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
+                raw_equip = self.daily_usage_df['장비명'].dropna().astype(str).str.strip().unique().tolist()
+            
+            # Combine with catalog if needed
+            unique_equip = sorted(list(set([e for e in raw_equip if e and str(e).lower() != 'nan'])))
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
             self.cb_daily_filter_equipment['values'] = ['전체'] + unique_equip
             if not self.cb_daily_filter_equipment.get(): self.cb_daily_filter_equipment.set('전체')
 
@@ -11532,8 +11648,11 @@ class MaterialManager:
                 for col in worker_cols:
                     if col in self.daily_usage_df.columns:
                         all_workers_raw.update(self.daily_usage_df[col].dropna().astype(str).unique().tolist())
+<<<<<<< HEAD
             if not getattr(self, 'transactions_df', pd.DataFrame()).empty and 'User' in self.transactions_df.columns:
                 all_workers_raw.update(self.transactions_df['User'].dropna().astype(str).unique().tolist())
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
             
             # Include static list
             if hasattr(self, 'users'): all_workers_raw.update(self.users)
@@ -11558,6 +11677,7 @@ class MaterialManager:
             for v in v_list:
                 cleaned = self.clean_nan(v)
                 if cleaned: raw_vehicles.add(cleaned)
+<<<<<<< HEAD
         
         # Include vehicles from transactions_df
         if not getattr(self, 'transactions_df', pd.DataFrame()).empty and '차량번호' in self.transactions_df.columns:
@@ -11565,6 +11685,8 @@ class MaterialManager:
             for v in v_list:
                 cleaned = self.clean_nan(v)
                 if cleaned: raw_vehicles.add(cleaned)
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
         if hasattr(self, 'vehicles'):
             raw_vehicles.update(self.vehicles)
             
@@ -11579,8 +11701,11 @@ class MaterialManager:
             if not self.cb_sales_filter_site.get(): self.cb_sales_filter_site.set('전체')
         if hasattr(self, 'cb_trans_filter_vehicle'):
             self.cb_trans_filter_vehicle['values'] = ['전체'] + unique_vehicles
+<<<<<<< HEAD
         if hasattr(self, 'cb_trans_filter_site'):
             self.cb_trans_filter_site['values'] = ['전체'] + self.sites
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
 
     def update_daily_usage_view(self):
         """Update the daily usage treeview with smarter filters and shift classification"""
@@ -13170,9 +13295,12 @@ class MaterialManager:
                 
                 # Also ensure the inner history sash is visible
                 self.root.after(150, self._ensure_sash_visible)
+<<<<<<< HEAD
                 
                 # [NEW] Aggressively refresh inquiry filters to ensure they have latest data
                 self.refresh_inquiry_filters()
+=======
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
             
             elif tab_text == '월별 집계':
                 print("Monthly usage tab selected - refreshing view")
@@ -13712,6 +13840,7 @@ class MaterialManager:
                 
                 # Restore sites list - use in-place update
                 self.sites[:] = config.get('sites', [])
+<<<<<<< HEAD
                 # If sites list is empty, try to populate from available data
                 if not self.sites:
                     raw_sites = set()
@@ -13721,6 +13850,13 @@ class MaterialManager:
                         raw_sites.update(self.transactions_df['Site'].dropna().unique().tolist())
                     self.sites[:] = sorted([str(s).strip() for s in raw_sites if str(s).strip()])
                 # Restore hidden sites list
+=======
+                # If sites list is empty, try to populate from current daily_usage_df
+                if not self.sites and not self.daily_usage_df.empty:
+                    self.sites = sorted(self.daily_usage_df['Site'].dropna().unique().tolist())
+                    self.sites = [str(s).strip() for s in self.sites if str(s).strip()]
+                # [NEW] Restore hidden sites list
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
                 self.hidden_sites[:] = config.get('hidden_sites', [])
                 
                 # Restore users list - use in-place update to preserve references
@@ -13816,6 +13952,7 @@ class MaterialManager:
                 # Restore warehouses list
                 self.warehouses[:] = config.get('warehouses', [])
                 if not self.warehouses and not self.materials_df.empty:
+<<<<<<< HEAD
                     w_list = sorted(self.materials_df['창고'].dropna().unique().tolist())
                     self.warehouses[:] = [str(w).strip() for w in w_list if str(w).strip()]
                 
@@ -13823,6 +13960,15 @@ class MaterialManager:
                 if not self.equipments and not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
                     e_list = sorted(self.daily_usage_df['장비명'].dropna().unique().tolist())
                     self.equipments[:] = [str(e).strip() for e in e_list if str(e).strip()]
+=======
+                    self.warehouses = sorted(self.materials_df['창고'].dropna().unique().tolist())
+                    self.warehouses = [str(w).strip() for w in self.warehouses if str(w).strip()]
+                
+                self.equipments[:] = config.get('equipments', [])
+                if not self.equipments and not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
+                    self.equipments = sorted(self.daily_usage_df['장비명'].dropna().unique().tolist())
+                    self.equipments = [str(e).strip() for e in self.equipments if str(e).strip()]
+>>>>>>> d43c491dac324825910b9b1d217cff51224d52b4
                 
                 # Vehicle list
                 self.vehicles[:] = config.get('vehicles', [])
