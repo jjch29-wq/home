@@ -7441,6 +7441,7 @@ class MaterialManager:
         self.cb_daily_filter_site = ttk.Combobox(filter_panel, width=12)
         self.cb_daily_filter_site.pack(side='left', padx=2)
         self.cb_daily_filter_site.set('전체')
+        self.enable_autocomplete(self.cb_daily_filter_site, values_list_attr='sites', prefix_list=['전체'])
         
         ttk.Label(filter_panel, text="품목명:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_material = ttk.Combobox(filter_panel, width=15)
@@ -7499,6 +7500,9 @@ class MaterialManager:
 
         # DateEntry widgets require binding to their internal entry or using their own events
         for date_widget in [self.ent_daily_start_date, self.ent_daily_end_date]:
+            # [NEW] Auto-search on date selection
+            date_widget.bind("<<DateEntrySelected>>", lambda e: self.update_daily_usage_view())
+            
             # Some versions of tkcalendar.DateEntry allow direct binding, 
             # but binding to the underlying entry is most reliable for <Return>
             try:
@@ -9938,11 +9942,16 @@ class MaterialManager:
             # Apply robust filtering
             filtered_df = filtered_df[filtered_df.apply(row_matches, axis=1)]
         
-        # Sort by date descending - ensure Date column is consistent type
+        # Sort by date descending and Equipment name ascending
         if not filtered_df.empty:
             # Convert Date column to datetime for consistent sorting
             filtered_df['Date'] = pd.to_datetime(filtered_df['Date'], errors='coerce')
-            filtered_df = filtered_df.sort_values('Date', ascending=False)
+            sort_cols = ['Date']
+            sort_orders = [False]
+            if '장비명' in filtered_df.columns:
+                sort_cols.append('장비명')
+                sort_orders.append(True)
+            filtered_df = filtered_df.sort_values(by=sort_cols, ascending=sort_orders)
         
         # Define RTK categories
         rtk_categories = ["센터미스", "농도", "마킹미스", "필름마크", "취급부주의", "고객불만", "기타", "총계"]
