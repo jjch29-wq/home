@@ -3796,8 +3796,14 @@ class MaterialManager:
             # Sort by date descending
             date_col = 'Date' if 'Date' in df_to_show.columns else '날짜'
             if date_col in df_to_show.columns:
+                # [FIX] Force convert while ignoring non-date artifacts, then drop invalid dates (NaT)
                 df_to_show[date_col] = pd.to_datetime(df_to_show[date_col], errors='coerce')
-                df_sorted = df_to_show.sort_values(by=date_col, ascending=False, na_position='last').head(500)
+                df_to_show = df_to_show.dropna(subset=[date_col])
+                
+                if not df_to_show.empty:
+                    df_sorted = df_to_show.sort_values(by=date_col, ascending=False, na_position='last').head(500)
+                else:
+                    df_sorted = df_to_show
             else:
                 df_sorted = df_to_show.head(500)
             
