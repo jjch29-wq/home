@@ -2,8 +2,8 @@
     "orderer": "서울에너지공사",
     "report_no": "SIT/GI-SE-PAUT-TNTFJPWJ001",
     "inspect_date": "2026년 04월 06일",
-    "inspect_type": "UT",
-    "report_title": "REPORT OF ULTRASONIC EXAMINATION (초 음 파 탐 상 검 사 보 고 서)",
+    "inspect_type": "PAUT",
+    "report_title": "REPORT OF PHASED ARRAY UT EXAMINATION (위 상 배 열 초 음 파 탐 상 검 사 보 고 서)",
     "cols_per_row": "1",
     "keep_aspect": false,
     "logo_path": "C:\\Users\\jjch2\\Desktop\\사진대장\\images\\logo.png",
@@ -34,6 +34,6 @@
         "C:\\Users\\jjch2\\Desktop\\사진대장\\images\\010_U2AN-CTWR-7301004-02 J10.png",
         "C:\\Users\\jjch2\\Desktop\\사진대장\\images\\logo.png"
     ],
-    "window_geometry": "1920x1009+-1752+101",
-    "sash_pos": 255
+    "window_geometry": "1536x793+-542+36",
+    "sash_pos": 445
 }

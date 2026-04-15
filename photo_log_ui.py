@@ -136,18 +136,19 @@ class PhotoLogApp:
         )
         self.paned_window.pack(fill="both", expand=True)
 
-        # ── 상단 패널: 설정 영역 ──────────────────────────────────────────────
+        # ── 상단 패널: 설정 영역 (FULLY FIXED as per request) ─────────────────
         settings_container = tk.Frame(self.paned_window, background="#f3f4f6")
         
-        # [NEW] FIXED Section (Report Info)
-        # We pack this directly into settings_container so it stays at the top.
-        fixed_report_info = tk.Frame(settings_container, background="#f3f4f6")
+        # We pack everything directly into settings_container so it stays STATIONARY.
+        # No scrollable canvas is used here to prevent items from "going up" during scroll.
+        
+        fixed_report_info = tk.Frame(settings_container, background="#f3f4f6", padx=10, pady=5)
         fixed_report_info.pack(side="top", fill="x")
 
         input_frame = ttk.LabelFrame(fixed_report_info, text=" 리포트 정보 (Report Info) [고정] ", padding=15)
         input_frame.pack(fill="x", pady=(0, 5))
 
-        # [NEW] Moved Title back here to be FIXED
+        # [FIXED] App Title
         tk.Label(input_frame, text="📷 Photo Log Generator", font=("Malgun Gothic", 12, "bold"),
                  background="#f3f4f6", foreground="#1e3a8a").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
@@ -164,11 +165,9 @@ class PhotoLogApp:
         self._add_input_row(input_frame, "검사일자", self.inspect_date, 5)
         input_frame.columnconfigure(1, weight=1)
 
-        # ── SCROLLABLE Section (Options) ──
-        scroll_frame = self._create_scrollable_sidebar(settings_container)
-
-        # 4. Image Options Section
-        opt_frame = ttk.LabelFrame(scroll_frame, text=" 사진 레이아웃 설정 (Image Options) ", padding=15)
+        # 4. [FIXED] Image Options Section
+        # User requested to fix this too.
+        opt_frame = ttk.LabelFrame(fixed_report_info, text=" 사진 레이아웃 설정 (Image Options) [고정] ", padding=15)
         opt_frame.pack(side="top", fill="x", pady=(0, 5))
 
         tk.Label(opt_frame, text="한 줄당 사진 개수:", font=("Malgun Gothic", 10)).grid(row=0, column=0, sticky="w", pady=2)
@@ -211,7 +210,7 @@ class PhotoLogApp:
         align_combo.grid(row=5, column=1, sticky="w", padx=10, pady=2)
         ttk.Checkbutton(opt_frame, text="가로 폭 맞춤 (Fit to Width)", variable=self.fit_width_var).grid(row=5, column=2, columnspan=2, padx=20, sticky="w")
 
-        self.paned_window.add(settings_container, minsize=100)
+        self.paned_window.add(settings_container, minsize=480) 
 
         # ── 하단 패널: 파일 관리 + 로그 ─────────────────────────────────────
         content_frame = tk.Frame(self.paned_window, background="#f3f4f6")
