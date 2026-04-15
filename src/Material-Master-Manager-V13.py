@@ -3386,9 +3386,6 @@ class MaterialManager:
         if not combobox:
             return
 
-        if not hasattr(combobox, '_word_suggest_win'):
-            combobox._word_suggest_win = SuggestionWindow(combobox)
-
         text_raw = combobox.get()
         text = text_raw.strip()
         had_focus = False
@@ -3408,7 +3405,9 @@ class MaterialManager:
             q = text.lower()
             filtered = [v for v in source if q in v.lower()]
 
-        combobox['values'] = filtered
+        # [FIX] Only update if values changed to avoid recursion/flicker
+        if list(combobox['values']) != list(filtered):
+            combobox['values'] = filtered
 
         # Keep current input/caret intact after values update
         def _restore_state():
@@ -3428,23 +3427,9 @@ class MaterialManager:
         except Exception:
             pass
 
-        if open_dropdown and filtered:
-            try:
-                combobox._word_suggest_win.show(filtered)
-            except Exception:
-                pass
-        else:
-            try:
-                combobox._word_suggest_win.hide()
-            except Exception:
-                pass
-
     def _bind_combobox_word_suggest(self, combobox, source_getter):
         if not combobox:
             return
-
-        if not hasattr(combobox, '_word_suggest_win'):
-            combobox._word_suggest_win = SuggestionWindow(combobox)
 
         def _on_keyrelease(e=None):
             if e is not None and getattr(e, 'keysym', '') in {
@@ -3453,48 +3438,18 @@ class MaterialManager:
                 'Alt_L', 'Alt_R', 'Caps_Lock'
             }:
                 return
-            if e is not None and getattr(e, 'keysym', '') == 'Escape':
-                combobox._word_suggest_win.hide()
+            
+            if e is not None and getattr(e, 'keysym', '') in ('Up', 'Down', 'Return', 'Escape'):
                 return
-            if e is not None and getattr(e, 'keysym', '') == 'Down':
-                if combobox._word_suggest_win.active:
-                    combobox._word_suggest_win.move_selection(1)
-                else:
-                    self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=True)
-                return 'break'
-            if e is not None and getattr(e, 'keysym', '') == 'Up':
-                if combobox._word_suggest_win.active:
-                    combobox._word_suggest_win.move_selection(-1)
-                return 'break'
-            if e is not None and getattr(e, 'keysym', '') == 'Return':
-                if combobox._word_suggest_win.active and combobox._word_suggest_win.confirm_selection():
-                    try:
-                        combobox.event_generate('<<ComboboxSelected>>')
-                    except Exception:
-                        pass
-                    return 'break'
+                
             self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=True)
 
         def _on_focus_in(_e=None):
             self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=False)
 
-        def _on_focus_out(_e=None):
-            sw = getattr(combobox, '_word_suggest_win', None)
-            if not sw or not sw.active:
-                return
-            fw = combobox.focus_get()
-            if fw is not None and sw.window and sw.window.winfo_exists():
-                try:
-                    if str(fw).startswith(str(sw.window)):
-                        combobox.after(150, sw.hide)
-                        return
-                except Exception:
-                    pass
-            sw.hide()
-
         combobox.bind('<KeyRelease>', _on_keyrelease, add='+')
         combobox.bind('<FocusIn>', _on_focus_in, add='+')
-        combobox.bind('<FocusOut>', _on_focus_out, add='+')
+        combobox.bind('<Button-1>', lambda e: self._apply_combobox_word_suggest(e.widget, source_getter(), open_dropdown=True), add='+')
 
     def update_registration_combos(self):
         """Update registration comboboxes with unique values from database and centralized list"""
