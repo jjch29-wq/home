@@ -7,20 +7,29 @@ import re
 import warnings
 import json
 import tempfile
-import datetime
 import pandas as pd
 import openpyxl
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
+import threading
+import xlsxwriter
+import datetime
+from PIL import Image as PILImage, ImageChops, ImageOps
+
+# DPI Awareness for Windows
+try:
+    from ctypes import windll
+    windll.shcore.SetProcessDpiAwareness(1)
+except:
+    pass
 
 # --- Versioning ---
-APP_VERSION = "v260404.01"
+APP_VERSION = "v260404.03"
 from openpyxl.cell.cell import MergedCell
 from openpyxl.worksheet.pagebreak import Break
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font, Border, Side
-from PIL import Image as PILImage, ImageChops
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
@@ -135,7 +144,6 @@ class PMIReportApp:
             # RT Specific (Radiographic Testing)
             'RT_START_ROW': 11, 'RT_DATA_END_ROW': 45, 'RT_PRINT_END_ROW': 47
         }
-        self.load_settings()
 
         # 2. State Variables
         self.logo_folder_path = tk.StringVar(value=RESOURCE_DIR)
@@ -224,8 +232,47 @@ class PMIReportApp:
             'PMI': tk.StringVar(value="📄 파일을 선택해주세요."),
             'RT': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PT': tk.StringVar(value="📄 파일을 선택해주세요."),
-            'PAUT': tk.StringVar(value="📄 파일을 선택해주세요.")
+            'PAUT': tk.StringVar(value="📄 파일을 선택해주세요."),
+            'PHOTO': tk.StringVar(value="📸 사진 리스트를 구성해주세요.")
         }
+        
+        # --- Photo Log State Variables ---
+        self.photo_header_map = {
+            "PAUT": "REPORT OF PHASED ARRAY UT EXAMINATION (위 상 배 열 초 음 파 탐 상 검 사 보 고 서)",
+            "RT": "REPORT OF RADIOGRAPHIC EXAMINATION (방 사 선 투 과 검 사 보 고 서)",
+            "PT": "REPORT OF LIQUID PENETRANT EXAMINATION (침 투 탐 상 검 사 보 고 서)",
+            "MT": "REPORT OF MAGNETIC PARTICLE EXAMINATION (자 분 탐 상 검 사 보 고 서)",
+            "PMI": "REPORT OF POSITIVE MATERIAL IDENTIFICATION (재 질 성 분 분 석 검 사 보 고 서)",
+            "UT": "REPORT OF ULTRASONIC EXAMINATION (초 음 파 탐 상 검 사 보 고 서)",
+            "NDT": "REPORT OF NON-DESTRUCTIVE EXAMINATION (비 파 괴 검 사 보 고 서)",
+            "기타 (직접 입력)": ""
+        }
+        self.photo_orderer = tk.StringVar(value="서울에너지공사")
+        self.photo_inspect_date = tk.StringVar(value=datetime.datetime.now().strftime("%Y-%m-%d"))
+        self.photo_report_no = tk.StringVar(value="SIT/GI-SE-PAUT-TNTFJPWJ001")
+        self.photo_inspect_type = tk.StringVar(value="PAUT")
+        self.photo_report_title = tk.StringVar(value=self.photo_header_map["PAUT"])
+        self.photo_cols_per_row = tk.StringVar(value="2")
+        self.photo_keep_aspect = tk.BooleanVar(value=True)
+        self.photo_output_name = tk.StringVar(value="NDT_Photo_Log_Final.xlsx")
+        _def_logo = os.path.join(RESOURCE_DIR, "logo.png")
+        self.photo_logo_path = tk.StringVar(value=_def_logo if os.path.exists(_def_logo) else "")
+        self.photo_logo_width_var = tk.StringVar(value="80")
+        self.photo_logo_x_var = tk.StringVar(value="2")
+        self.photo_logo_y_var = tk.StringVar(value="0")
+        self.photo_cell_width_var = tk.StringVar(value="53.0")
+        self.photo_cell_height_var = tk.StringVar(value="178.0")
+        self.photo_margin_top_var = tk.StringVar(value="0.5")
+        self.photo_margin_bottom_var = tk.StringVar(value="0.5")
+        self.photo_margin_left_var = tk.StringVar(value="0.4")
+        self.photo_margin_right_var = tk.StringVar(value="0.4")
+        self.photo_print_scale_var = tk.StringVar(value="100")
+        self.photo_desc_height_var = tk.StringVar(value="20.0")
+        self.photo_align_var = tk.StringVar(value="중앙 정렬")
+        self.photo_fit_width_var = tk.BooleanVar(value=True)
+        self.photo_selected_files = [] 
+        
+        self.load_settings()
 
         self.create_widgets()
         
@@ -325,6 +372,34 @@ class PMIReportApp:
                             curr_val = str(saved_data[d_k]).upper().strip()
                             if curr_val == f"D{d_i}" or not curr_val or curr_val == "NAN":
                                 saved_data[d_k] = std_name
+                    
+                    # [NEW] Restore Photo Log Variables
+                    photo_vars = {
+                        'orderer': self.photo_orderer, 'inspect_date': self.photo_inspect_date,
+                        'inspect_type': self.photo_inspect_type, 'report_title': self.photo_report_title,
+                        'report_no': self.photo_report_no,
+                        'cols_per_row': self.photo_cols_per_row, 'keep_aspect': self.photo_keep_aspect,
+                        'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
+                        'logo_width': self.photo_logo_width_var,
+                        'logo_x': self.photo_logo_x_var, 'logo_y': self.photo_logo_y_var,
+                        'cell_width': self.photo_cell_width_var, 'cell_height': self.photo_cell_height_var,
+                        'm_top': self.photo_margin_top_var, 'm_bottom': self.photo_margin_bottom_var,
+                        'm_left': self.photo_margin_left_var, 'm_right': self.photo_margin_right_var,
+                        'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
+                        'photo_align': self.photo_align_var, 'fit_width': self.photo_fit_width_var
+                    }
+                    if 'PHOTO_LOG_SETTINGS' in saved_data:
+                        plist = saved_data['PHOTO_LOG_SETTINGS']
+                        for pk, pvar in photo_vars.items():
+                            if pk in plist:
+                                if isinstance(pvar, tk.BooleanVar): pvar.set(bool(plist[pk]))
+                                else: pvar.set(str(plist[pk]))
+                        if 'selected_files' in plist:
+                            self.photo_selected_files = plist['selected_files']
+                            if hasattr(self, 'photo_listbox'):
+                                self.photo_listbox.delete(0, tk.END)
+                                for f_path in self.photo_selected_files:
+                                    self.photo_listbox.insert(tk.END, f_path)
 
                     self.config.update(saved_data)
                 print("SUCCESS: 사용자 저장 설정을 적용했습니다.")
@@ -394,6 +469,21 @@ class PMIReportApp:
                 self.config['PT_TEMPLATE_PATH'] = self.pt_template_file_path.get()
                 self.config['PAUT_TARGET_PATH'] = self.paut_target_file_path.get()
                 self.config['PAUT_TEMPLATE_PATH'] = self.paut_template_file_path.get()
+                
+                # 5. Photo Log Settings Capture
+                self.config['PHOTO_LOG_SETTINGS'] = {
+                    'orderer': self.photo_orderer.get(), 'inspect_date': self.photo_inspect_date.get(),
+                    'inspect_type': self.photo_inspect_type.get(), 'report_title': self.photo_report_title.get(),
+                    'cols_per_row': self.photo_cols_per_row.get(), 'keep_aspect': self.photo_keep_aspect.get(),
+                    'output_name': self.photo_output_name.get(), 'logo_width': self.photo_logo_width_var.get(),
+                    'logo_x': self.photo_logo_x_var.get(), 'logo_y': self.photo_logo_y_var.get(),
+                    'cell_width': self.photo_cell_width_var.get(), 'cell_height': self.photo_cell_height_var.get(),
+                    'm_top': self.photo_margin_top_var.get(), 'm_bottom': self.photo_margin_bottom_var.get(),
+                    'm_left': self.photo_margin_left_var.get(), 'm_right': self.photo_margin_right_var.get(),
+                    'print_scale': self.photo_print_scale_var.get(), 'desc_height': self.photo_desc_height_var.get(),
+                    'photo_align': self.photo_align_var.get(), 'fit_width': self.photo_fit_width_var.get(),
+                    'selected_files': self.photo_selected_files
+                }
             except: pass
         except: pass
 
@@ -660,28 +750,36 @@ class PMIReportApp:
         self.rt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.paut_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
-        
-        self.mode_notebook.add(self.pmi_mode_frame, text="  PMI (성분 분석)  ", sticky='nsew')
-        self.mode_notebook.add(self.rt_mode_frame, text="  RT (방사선 투과)  ", sticky='nsew')
-        self.mode_notebook.add(self.pt_mode_frame, text="  PT (침투 탐상)  ", sticky='nsew')
-        self.mode_notebook.add(self.paut_mode_frame, text="  PAUT (ASME B31.1)  ", sticky='nsew')
-        
+        self.photo_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
+
+        self.mode_notebook.add(self.pmi_mode_frame, text=" 🔬 PMI (OES) ")
+        self.mode_notebook.add(self.rt_mode_frame, text=" 🔬 Radiographic (RT) ")
+        self.mode_notebook.add(self.pt_mode_frame, text=" 🔬 Penetrant (PT) ")
+        self.mode_notebook.add(self.paut_mode_frame, text=" 🔬 Phased Array (PAUT) ")
+        self.mode_notebook.add(self.photo_mode_frame, text=" 📸 사진대장 (Photo Log) ")
+
         # Setup each mode
         self._setup_pmi_ui(self.pmi_mode_frame)
         self._setup_rt_ui(self.rt_mode_frame)
         self._setup_pt_ui(self.pt_mode_frame)
         self._setup_paut_ui(self.paut_mode_frame)
+        self._setup_photo_log_ui(self.photo_mode_frame)
 
     def _create_scrollable_sidebar(self, parent):
         """Creates a scrollable canvas/scrollbar container for sidebars."""
-        canvas = tk.Canvas(parent, background="#f9fafb", highlightthickness=0)
+        canvas = tk.Canvas(parent, background="#f9fafb", highlightthickness=0, borderwidth=0)
         scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, background="#f9fafb", padx=10, pady=10)
+        scrollable_frame = tk.Frame(canvas, background="#f9fafb", padx=10, pady=0, highlightthickness=0, borderwidth=0)
 
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        def _update_scrollregion(e):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            # Auto-hide scrollbar if content fits
+            if canvas.bbox("all")[3] <= canvas.winfo_height():
+                scrollbar.pack_forget()
+            else:
+                scrollbar.pack(side="right", fill="y")
+        
+        scrollable_frame.bind("<Configure>", _update_scrollregion)
 
         canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         def _on_canvas_configure(e):
@@ -691,7 +789,9 @@ class PMIReportApp:
         canvas.configure(yscrollcommand=scrollbar.set)
         
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            # Only allow scrolling if content actually exceeds the visible area
+            if canvas.bbox("all")[3] > canvas.winfo_height():
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
             return "break"
         
         canvas.bind('<Enter>', lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
@@ -713,19 +813,30 @@ class PMIReportApp:
         self.pmi_paned.pack(fill='both', expand=True)
 
         # [LEFT] Filter/Settings Sidebar
-        left_container = tk.Frame(self.pmi_paned, background="#f9fafb")
-        self.pmi_paned.add(left_container, stretch="always")
-        
-        # Header (FIXED at top)
-        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
-        header_frame.pack(fill='x')
-        tk.Label(header_frame, text="🔬 PMI 관리", font=("Malgun Gothic", 15, "bold"), 
-                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-        tk.Label(header_frame, text=f"v{APP_VERSION}", font=("Arial", 8), 
-                 background="#f1f5f9", foreground="#64748b", padx=5, pady=1).pack(side='left', padx=10)
+        left_container = tk.Frame(self.pmi_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        self.pmi_paned.add(left_container, width=425)
 
-        # Scrollable area for the rest
+        # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
+
+        # FIXED FLOATING Header (Lifts over scrollable area)
+        header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        
+        inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
+        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        
+        tk.Label(inner_header, text="🔬 PMI 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+        tk.Label(inner_header, text=f"v{APP_VERSION}", font=("Arial", 8), 
+                 background="#f1f5f9", foreground="#64748b", padx=5, pady=0).pack(side='left', padx=10)
+        
+        # Bottom separator to emphasize "going under"
+        tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
+        header_frame.lift() # Ensure it's on top
+
+        # Spacer in scrollable area so first group starts below floating header
+        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_container = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -904,17 +1015,27 @@ class PMIReportApp:
         self.rt_paned.pack(fill='both', expand=True)
 
         # [LEFT] Scrollable Settings Sidebar
-        left_container = tk.Frame(self.rt_paned, background="#f9fafb")
-        self.rt_paned.add(left_container, stretch="always")
+        left_container = tk.Frame(self.rt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        self.rt_paned.add(left_container, width=425)
         
-        # Header (FIXED at top)
-        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
-        header_frame.pack(fill='x')
-        tk.Label(header_frame, text="🔬 RT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
-                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-
-        # Scrollable area for the rest
+        # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
+
+        # FIXED FLOATING Header
+        header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        
+        inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
+        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        
+        tk.Label(inner_header, text="🔬 RT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+        
+        tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
+        header_frame.lift()
+
+        # Spacer in scrollable area
+        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -1045,18 +1166,28 @@ class PMIReportApp:
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.pt_paned.pack(fill='both', expand=True)
 
-        # [LEFT] Evaluation Controls
-        left_container = tk.Frame(self.pt_paned, background="#f9fafb")
-        self.pt_paned.add(left_container, stretch="always")
+        # [LEFT] Settings Sidebar
+        left_container = tk.Frame(self.pt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        self.pt_paned.add(left_container, width=425)
         
-        # Header (FIXED at top)
-        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
-        header_frame.pack(fill='x')
-        tk.Label(header_frame, text="🔬 PT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
-                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-
-        # Scrollable area for the rest
+        # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
+
+        # FIXED FLOATING Header
+        header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        
+        inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
+        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        
+        tk.Label(inner_header, text="🔬 PT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+        
+        tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
+        header_frame.lift()
+
+        # Spacer in scrollable area
+        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -1216,17 +1347,27 @@ class PMIReportApp:
         self.paut_paned.pack(fill='both', expand=True)
 
         # [LEFT] Settings & Manual Eval Pane
-        left_container = tk.Frame(self.paut_paned, background="#f9fafb")
-        self.paut_paned.add(left_container, stretch="always")
+        left_container = tk.Frame(self.paut_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        self.paut_paned.add(left_container, width=425)
         
-        # Header (FIXED at top)
-        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
-        header_frame.pack(fill='x')
-        tk.Label(header_frame, text="🔬 PAUT (ASME B31.1) 관리", font=("Malgun Gothic", 15, "bold"), 
-                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-
-        # Scrollable area for the rest
+        # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
+
+        # FIXED FLOATING Header
+        header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        
+        inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
+        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        
+        tk.Label(inner_header, text="🔬 PAUT (ASME B31.1) 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+        
+        tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
+        header_frame.lift()
+
+        # Spacer in scrollable area
+        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -5750,6 +5891,363 @@ class PMIReportApp:
             for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
                 try: os.remove(f)
                 except: pass
+
+    # --- PHOTO LOG UI & LOGIC ---
+    def _setup_photo_log_ui(self, parent):
+        """Standardized Photo Log UI with Dual-Pane Layout."""
+        self.photo_paned = tk.PanedWindow(parent, orient='horizontal', sashwidth=4, sashrelief='flat', background="#e2e8f0")
+        self.photo_paned.pack(fill='both', expand=True)
+
+        # [LEFT] Settings Sidebar
+        left_container = tk.Frame(self.photo_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        self.photo_paned.add(left_container, width=425)
+        
+        # Scrollable area (Full size)
+        left_pane = self._create_scrollable_sidebar(left_container)
+
+        # FIXED FLOATING Header
+        header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        
+        inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
+        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        
+        tk.Label(inner_header, text="📸 사진대장 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+        
+        tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
+        header_frame.lift()
+
+        # Spacer in scrollable area
+        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
+
+        # 1. Report Info Group
+        info_frame = ttk.LabelFrame(left_pane, text=" 리포트 정보 (Report Info) ", padding=10)
+        info_frame.pack(fill='x', padx=10, pady=5)
+
+        tk.Label(info_frame, text="검사 항목:").grid(row=0, column=0, sticky='w', pady=2)
+        type_combo = ttk.Combobox(info_frame, textvariable=self.photo_inspect_type, 
+                                 values=list(self.photo_header_map.keys()), state="readonly")
+        type_combo.grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+        type_combo.bind("<<ComboboxSelected>>", self._on_photo_type_change)
+
+        tk.Label(info_frame, text="리포트 제목:").grid(row=1, column=0, sticky='w', pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_report_title).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+
+        tk.Label(info_frame, text="발주처:").grid(row=2, column=0, sticky='w', pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_orderer).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+
+        tk.Label(info_frame, text="리포트 번호:").grid(row=3, column=0, sticky='w', pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_report_no).grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+
+        tk.Label(info_frame, text="검사 일자:").grid(row=4, column=0, sticky='w', pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_inspect_date).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
+        
+        tk.Label(info_frame, text="로고 파일:").grid(row=5, column=0, sticky='w', pady=2)
+        logo_f = tk.Frame(info_frame)
+        logo_f.grid(row=5, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Entry(logo_f, textvariable=self.photo_logo_path).pack(side='left', fill='x', expand=True)
+        def browse_logo():
+            f = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.bmp")])
+            if f: self.photo_logo_path.set(f)
+        ttk.Button(logo_f, text="...", width=3, command=browse_logo).pack(side='right')
+        
+        info_frame.columnconfigure(1, weight=1)
+
+        # 2. Layout Settings Group
+        layout_frame = ttk.LabelFrame(left_pane, text=" 사진 레이아웃 설정 (Layout) ", padding=10)
+        layout_frame.pack(fill='x', padx=10, pady=5)
+
+        tk.Label(layout_frame, text="한 줄당 사진:").grid(row=0, column=0, sticky='w', pady=2)
+        ttk.Combobox(layout_frame, textvariable=self.photo_cols_per_row, values=["1", "2", "3"], state="readonly", width=5).grid(row=0, column=1, sticky='w', padx=5, pady=2)
+        ttk.Checkbutton(layout_frame, text="비율 유지", variable=self.photo_keep_aspect).grid(row=0, column=2, sticky='w')
+
+        tk.Label(layout_frame, text="칸 너비/높이:").grid(row=1, column=0, sticky='w', pady=2)
+        wh_f = tk.Frame(layout_frame)
+        wh_f.grid(row=1, column=1, columnspan=2, sticky='w')
+        ttk.Entry(wh_f, textvariable=self.photo_cell_width_var, width=6).pack(side='left', padx=2)
+        ttk.Entry(wh_f, textvariable=self.photo_cell_height_var, width=6).pack(side='left', padx=2)
+
+        tk.Label(layout_frame, text="여백(T/B/L/R):").grid(row=2, column=0, sticky='w', pady=2)
+        m_f = tk.Frame(layout_frame)
+        m_f.grid(row=2, column=1, columnspan=2, sticky='w')
+        ttk.Entry(m_f, textvariable=self.photo_margin_top_var, width=4).pack(side='left', padx=1)
+        ttk.Entry(m_f, textvariable=self.photo_margin_bottom_var, width=4).pack(side='left', padx=1)
+        ttk.Entry(m_f, textvariable=self.photo_margin_left_var, width=4).pack(side='left', padx=1)
+        ttk.Entry(m_f, textvariable=self.photo_margin_right_var, width=4).pack(side='left', padx=1)
+
+        tk.Label(layout_frame, text="설명 높이:").grid(row=3, column=0, sticky='w', pady=2)
+        ttk.Entry(layout_frame, textvariable=self.photo_desc_height_var, width=10).grid(row=3, column=1, sticky='w', padx=5, pady=2)
+        
+        tk.Label(layout_frame, text="인쇄 배율:").grid(row=4, column=0, sticky='w', pady=2)
+        ttk.Entry(layout_frame, textvariable=self.photo_print_scale_var, width=10).grid(row=4, column=1, sticky='w', padx=5, pady=2)
+
+        tk.Label(layout_frame, text="배치 설정:").grid(row=5, column=0, sticky='w', pady=2)
+        b_f = tk.Frame(layout_frame)
+        b_f.grid(row=5, column=1, columnspan=2, sticky='w')
+        ttk.Combobox(b_f, textvariable=self.photo_align_var, values=["좌측 정렬", "중앙 정렬"], state="readonly", width=10).pack(side='left', padx=2)
+        ttk.Checkbutton(b_f, text="너비 맞춤", variable=self.photo_fit_width_var).pack(side='left', padx=5)
+
+        # 3. Logo Options
+        logo_frame = ttk.LabelFrame(left_pane, text=" 로고 및 출력 설정 ", padding=10)
+        logo_frame.pack(fill='x', padx=10, pady=5)
+
+        tk.Label(logo_frame, text="로고 너비:").grid(row=0, column=0, sticky='w', pady=2)
+        ttk.Entry(logo_frame, textvariable=self.photo_logo_width_var, width=10).grid(row=0, column=1, sticky='w', padx=5, pady=2)
+        
+        tk.Label(logo_frame, text="로고 X/Y:").grid(row=1, column=0, sticky='w', pady=2)
+        xy_f = tk.Frame(logo_frame)
+        xy_f.grid(row=1, column=1, sticky='w')
+        ttk.Entry(xy_f, textvariable=self.photo_logo_x_var, width=5).pack(side='left', padx=2)
+        ttk.Entry(xy_f, textvariable=self.photo_logo_y_var, width=5).pack(side='left', padx=2)
+        
+        tk.Label(logo_frame, text="출력 파일명:").grid(row=2, column=0, sticky='w', pady=2)
+        ttk.Entry(logo_frame, textvariable=self.photo_output_name).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        logo_frame.columnconfigure(1, weight=1)
+
+        # Action Button at bottom of sidebar
+        ttk.Button(left_pane, text="🚀 사진대장 리포트 생성", style="Accent.TButton", 
+                   command=self.start_photo_generation).pack(fill='x', padx=20, pady=20)
+
+        # [RIGHT] Preview & File List
+        right_container = tk.Frame(self.photo_paned, background="#ffffff")
+        self.photo_paned.add(right_container)
+
+        # File List Header
+        list_header = tk.Frame(right_container, background="#f8fafc", padx=15, pady=10)
+        list_header.pack(fill='x')
+        tk.Label(list_header, text="📁 선택된 사진 리스트 (파일 순차 정렬됨)", font=("Malgun Gothic", 10, "bold"), 
+                 background="#f8fafc", foreground="#475569").pack(side='left')
+        
+        # Tools under header
+        tool_bar = tk.Frame(right_container, background="#ffffff", padx=10, pady=5)
+        tool_bar.pack(fill='x')
+        ttk.Button(tool_bar, text="파일 개별 추가", command=self._add_photo_files).pack(side='left', padx=2)
+        ttk.Button(tool_bar, text="폴더 전체 추가", command=self._add_photo_folder).pack(side='left', padx=2)
+        ttk.Button(tool_bar, text="전체 비우기", command=self._clear_photo_all).pack(side='right', padx=2)
+        ttk.Button(tool_bar, text="선택 항목 제거", command=self._remove_photo_selected).pack(side='right', padx=2)
+
+        # Listbox area
+        list_frame = tk.Frame(right_container, background="#ffffff")
+        list_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        self.photo_listbox = tk.Listbox(list_frame, font=("Consolas", 9), selectmode="extended", borderwidth=1, relief='flat', highlightthickness=1, highlightcolor="#3b82f6")
+        self.photo_listbox.pack(side='left', fill='both', expand=True)
+        
+        list_vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.photo_listbox.yview)
+        self.photo_listbox.configure(yscrollcommand=list_vsb.set)
+        list_vsb.pack(side='right', fill='y')
+        
+        # Sync listbox if any files were loaded from settings
+        if self.photo_selected_files:
+            self.photo_listbox.delete(0, tk.END)
+            for f in self.photo_selected_files:
+                self.photo_listbox.insert(tk.END, f)
+
+    def _on_photo_type_change(self, event=None):
+        new_type = self.photo_inspect_type.get()
+        if new_type in self.photo_header_map:
+            self.photo_report_title.set(self.photo_header_map[new_type])
+
+    def _add_photo_files(self):
+        files = filedialog.askopenfilenames(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp")])
+        if files:
+            for f in files:
+                f_norm = os.path.normpath(f)
+                if f_norm not in self.photo_selected_files:
+                    self.photo_selected_files.append(f_norm)
+                    if hasattr(self, 'photo_listbox'):
+                        self.photo_listbox.insert(tk.END, f_norm)
+            self.log(f"[PhotoLog] {len(files)}개 파일 추가 시도")
+
+    def _add_photo_folder(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            added_count = 0
+            for ext in ('*.png', '*.jpg', '*.jpeg', '*.bmp'):
+                for f in glob.glob(os.path.join(folder, ext)):
+                    f_norm = os.path.normpath(f)
+                    if f_norm not in self.photo_selected_files:
+                        self.photo_selected_files.append(f_norm)
+                        if hasattr(self, 'photo_listbox'):
+                            self.photo_listbox.insert(tk.END, f_norm)
+                        added_count += 1
+            self.log(f"[PhotoLog] 폴더에서 {added_count}개 파일 추가 완료")
+
+    def _remove_photo_selected(self):
+        idxs = list(self.photo_listbox.curselection())
+        for i in reversed(idxs):
+            path = self.photo_listbox.get(i)
+            if path in self.photo_selected_files:
+                self.photo_selected_files.remove(path)
+            self.photo_listbox.delete(i)
+
+    def _clear_photo_all(self):
+        self.photo_selected_files.clear()
+        self.photo_listbox.delete(0, tk.END)
+        self.log("[PhotoLog] 리스트 초기화 완료")
+
+    def start_photo_generation(self):
+        if not self.photo_selected_files:
+            messagebox.showwarning("경고", "리포트에 포함할 이미지를 먼저 선택해주세요.")
+            return
+        threading.Thread(target=self.generate_photo_report, daemon=True).start()
+
+    def generate_photo_report(self):
+        try:
+            self.progress["value"] = 0
+            self.log("[PhotoLog] 작업을 시작합니다..")
+            
+            image_files = sorted(self.photo_selected_files)
+            img_folder = os.path.dirname(image_files[0])
+            
+            output_name_val = self.photo_output_name.get()
+            if not output_name_val.endswith(".xlsx"):
+                output_name_val += ".xlsx"
+                
+            # Use parent dir of images to avoid cluttering image folder
+            output_path = os.path.join(os.path.dirname(img_folder), output_name_val)
+            
+            # Simple unique path logic
+            if os.path.exists(output_path):
+                base, ext = os.path.splitext(output_path)
+                output_path = f"{base}_{datetime.datetime.now().strftime('%H%M%S')}{ext}"
+            
+            workbook = xlsxwriter.Workbook(output_path)
+            worksheet = workbook.add_worksheet()
+
+            # Page Setup
+            worksheet.set_paper(9) # A4
+            worksheet.set_portrait()
+            worksheet.center_horizontally()
+            
+            try:
+                m_t = float(self.photo_margin_top_var.get())
+                m_b = float(self.photo_margin_bottom_var.get())
+                m_l = float(self.photo_margin_left_var.get())
+                m_r = float(self.photo_margin_right_var.get())
+                worksheet.set_margins(left=m_l, right=m_r, top=m_t, bottom=m_b)
+            except:
+                worksheet.set_margins(left=0.4, right=0.4, top=0.5, bottom=0.5)
+            
+            worksheet.set_footer('&C&P / &N')
+            worksheet.repeat_rows(0, 4) 
+
+            # Layout Calculation
+            num_cols = int(self.photo_cols_per_row.get())
+            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
+            total_pages = math.ceil(len(self.photo_selected_files) / photos_per_page)
+            worksheet.fit_to_pages(1, total_pages)
+
+            # Formats
+            title_format = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'shrink': True})
+            company_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9, 'text_wrap': True})
+            center_border = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+            bold_format = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1})
+            desc_format = workbook.add_format({'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10, 'shrink': True, 'text_wrap': False, 'indent': 1})
+
+            # Fixed 6-column Grid System
+            GRID_COLS = 6
+            unit_per_grid = (float(self.photo_cell_width_var.get()) * 2) / GRID_COLS
+            worksheet.set_column(0, GRID_COLS - 1, unit_per_grid)
+
+            CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
+            
+            if num_cols == 1:
+                photo_col_spans = [(0, GRID_COLS - 1)]
+                CELL_WIDTH_PX = (unit_per_grid * 6 * 7.0) + (6 * 5)
+            elif num_cols == 2:
+                photo_col_spans = [(0, 2), (3, 5)]
+                CELL_WIDTH_PX = (unit_per_grid * 3 * 7.0) + (3 * 5)
+            else: # 3 Columns
+                photo_col_spans = [(0, 1), (2, 3), (4, 5)]
+                CELL_WIDTH_PX = (unit_per_grid * 2 * 7.0) + (2 * 5)
+
+            worksheet.set_row(0, 30)
+            worksheet.merge_range(0, 0, 0, GRID_COLS-1, self.photo_report_title.get(), title_format)
+            
+            company_text = "서   울   檢   査   株   式   會   社\nSEOUL INSPECTION & TESTING Co., Ltd.\nTEL : (02) 552-1112   FAX : (02) 2058-0720"
+            worksheet.merge_range(1, 0, 3, 2, company_text, company_format)
+
+            # Logo
+            logo_f = self.photo_logo_path.get()
+            if os.path.exists(logo_f):
+                try:
+                    total_header_h = 45 # 15 * 3 rows
+                    for r in range(1, 4): worksheet.set_row(r, 15) 
+                    with PILImage.open(logo_f) as img:
+                        w, h = img.size
+                        max_w_logo = float(self.photo_logo_width_var.get())
+                        mx = float(self.photo_logo_x_var.get())
+                        my = float(self.photo_logo_y_var.get())
+                        scale = min(max_w_logo/w, 42/h) * 0.95
+                        logo_h = h * scale
+                        y_offset = (total_header_h - logo_h) / 2 + my
+                        worksheet.insert_image('A2', logo_f, {'x_scale': scale, 'y_scale': scale, 'x_offset': mx, 'y_offset': y_offset, 'object_position': 1})
+                except: pass
+
+            worksheet.merge_range(1, 3, 1, 5, f"발주처: {self.photo_orderer.get()}", center_border)
+            worksheet.merge_range(2, 3, 2, 5, f"REPORT NO: {self.photo_report_no.get()}", center_border)
+            worksheet.merge_range(3, 3, 3, 5, f"검사일자: {self.photo_inspect_date.get()}", center_border)
+            
+            worksheet.set_row(4, 25)
+            worksheet.merge_range(4, 0, 4, GRID_COLS-1, "PHOTO LOG (사진 대장)", bold_format)
+
+            row = 5
+            col_ptr = 0
+            page_breaks = []
+            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
+            DESC_ROW_HEIGHT = float(self.photo_desc_height_var.get())
+            CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
+            
+            total = len(image_files)
+            for i, img_path in enumerate(image_files):
+                worksheet.set_row(row, CELL_ROW_HEIGHT)
+                try:
+                    with PILImage.open(img_path) as img:
+                        img = ImageOps.exif_transpose(img)
+                        img_w, img_h = img.size
+                        c_start, c_end = photo_col_spans[col_ptr]
+                        if c_start != c_end: worksheet.merge_range(row, c_start, row, c_end, "", center_border)
+                        
+                        scale = min(CELL_WIDTH_PX / img_w, CELL_HEIGHT_PX / img_h)
+                        if not self.photo_keep_aspect.get():
+                            x_scale = CELL_WIDTH_PX / img_w
+                            y_scale = CELL_HEIGHT_PX / img_h
+                        else:
+                            x_scale = y_scale = scale
+                        
+                        x_off = (CELL_WIDTH_PX - (img_w * x_scale)) / 2 if self.photo_align_var.get() == "중앙 정렬" else 2
+                        y_off = (CELL_HEIGHT_PX - (img_h * y_scale)) / 2
+                        
+                        worksheet.insert_image(row, c_start, img_path, {'x_scale': x_scale, 'y_scale': y_scale, 'x_offset': x_off, 'y_offset': y_off, 'object_position': 1})
+                except Exception as e:
+                    self.log(f"[Error] {os.path.basename(img_path)}: {e}")
+
+                name = os.path.splitext(os.path.basename(img_path))[0]
+                worksheet.set_row(row + 1, DESC_ROW_HEIGHT)
+                c_start, c_end = photo_col_spans[col_ptr]
+                worksheet.merge_range(row+1, c_start, row+1, c_end, f"사진 설명: {name}", desc_format)
+                
+                col_ptr += 1
+                if col_ptr >= num_cols:
+                    col_ptr = 0
+                    row += 2
+                
+                if (i + 1) % photos_per_page == 0 and (i + 1) < total:
+                    page_breaks.append(row if col_ptr==0 else row+2)
+
+                self.progress["value"] = ((i + 1) / total) * 100
+                self.log(f"[PhotoLog] 처리 중.. ({i+1}/{total})")
+
+            if page_breaks: worksheet.set_h_pagebreaks(page_breaks)
+            workbook.close()
+            self.log(f"[PhotoLog] 완료: {os.path.basename(output_path)}")
+            messagebox.showinfo("성공", f"사진대장이 생성되었습니다.\n{output_path}")
+
+        except Exception as e:
+            self.log(f"[Error] {e}")
+            messagebox.showerror("오류", f"작업 중 오류 발생:\n{e}")
 
     def _on_entry_esc(self, event):
         """Removes focus and clears selection on ESC (preserves text)."""
