@@ -112,15 +112,10 @@ class PhotoLogApp:
         canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
 
         return scrollable_frame
-        
     def create_widgets(self):
         # Main Container
         main_frame = tk.Frame(self.root, background="#f3f4f6", padx=20, pady=20)
         main_frame.pack(fill="both", expand=True)
-        
-        # Title (FIXED at top)
-        tk.Label(main_frame, text="📷 Photo Log Generator", font=("Malgun Gothic", 18, "bold"),
-                 background="#f3f4f6", foreground="#1e3a8a").pack(side="top", pady=(0, 10))
 
         # 1. Buttons Frame (Bottom)
         btn_frame = tk.Frame(main_frame, background="#f3f4f6")
@@ -141,13 +136,16 @@ class PhotoLogApp:
         )
         self.paned_window.pack(fill="both", expand=True)
 
-        # ── 상단 패널: 설정 영역 (Scrollable) ──────────────────────────────────
+        # ── 상단 패널: 설정 영역 ──────────────────────────────────────────────
         settings_container = tk.Frame(self.paned_window, background="#f3f4f6")
-        scroll_frame = self._create_scrollable_sidebar(settings_container)
+        
+        # [NEW] FIXED Section (Report Info)
+        # We pack this directly into settings_container so it stays at the top.
+        fixed_report_info = tk.Frame(settings_container, background="#f3f4f6")
+        fixed_report_info.pack(side="top", fill="x")
 
-        # 3. Input Section
-        input_frame = ttk.LabelFrame(scroll_frame, text=" 리포트 정보 (Report Info) ", padding=15)
-        input_frame.pack(side="top", fill="x", pady=(0, 5))
+        input_frame = ttk.LabelFrame(fixed_report_info, text=" 리포트 정보 (Report Info) [고정] ", padding=15)
+        input_frame.pack(fill="x", pady=(0, 5))
 
         tk.Label(input_frame, text="검사 항목:", font=("Malgun Gothic", 10), anchor="w").grid(row=0, column=0, sticky="ew", pady=2)
         type_combo = ttk.Combobox(input_frame, textvariable=self.inspect_type, values=list(self.header_map.keys()), state="readonly", font=("Malgun Gothic", 10))
@@ -161,6 +159,13 @@ class PhotoLogApp:
         self._add_input_row(input_frame, "REPORT NO:", self.report_no, 3)
         self._add_input_row(input_frame, "검사일자", self.inspect_date, 4)
         input_frame.columnconfigure(1, weight=1)
+
+        # ── SCROLLABLE Section (Title + Options) ──
+        scroll_frame = self._create_scrollable_sidebar(settings_container)
+        
+        # App Title (Moved here to scroll as requested)
+        tk.Label(scroll_frame, text="📷 Photo Log Generator", font=("Malgun Gothic", 14, "bold"),
+                 background="#f3f4f6", foreground="#1e3a8a").pack(side="top", pady=(5, 10))
 
         # 4. Image Options Section
         opt_frame = ttk.LabelFrame(scroll_frame, text=" 사진 레이아웃 설정 (Image Options) ", padding=15)
