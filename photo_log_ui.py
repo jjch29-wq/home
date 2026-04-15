@@ -120,7 +120,9 @@ class PhotoLogApp:
         # 1. Buttons Frame (Bottom)
         btn_frame = tk.Frame(main_frame, background="#f3f4f6")
         btn_frame.pack(side="bottom", fill="x", pady=(10, 0))
+        
         ttk.Button(btn_frame, text="리포트 생성 시작", command=self.start_generation).pack(side="right", padx=5)
+        ttk.Button(btn_frame, text="현재 설정 저장", command=self.save_settings).pack(side="right", padx=5)
         if not self.embedded:
             ttk.Button(btn_frame, text="종료", command=self.root.quit).pack(side="right", padx=5)
 
@@ -339,6 +341,9 @@ class PhotoLogApp:
 
     def save_settings(self):
         try:
+            # Ensure UI is updated before capturing geometry
+            self.root.update_idletasks()
+            
             data = {
                 "orderer": self.orderer.get(),
                 "report_no": self.report_no.get(),
@@ -366,15 +371,23 @@ class PhotoLogApp:
             }
             if not self.embedded:
                 data["window_geometry"] = self.root.geometry()
+            
             # 구분선(sash) 위치 저장
             try:
-                data["sash_pos"] = self.paned_window.sash_coord(0)[1]
+                # Use sash_coord to get the current position
+                sash_y = self.paned_window.sash_coord(0)[1]
+                data["sash_pos"] = sash_y
             except Exception:
                 pass
+                
             with open(self.settings_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
+            
+            # Show a brief log message if manually saved
+            self.log("현재 설정 및 창 크기가 저장되었습니다.")
         except Exception as e:
             print(f"Error saving settings: {e}")
+            self.log(f"설정 저장 중 오류 발생: {e}")
 
     def load_settings(self):
         if not os.path.exists(self.settings_file):
