@@ -381,375 +381,6 @@ if not hasattr(messagebox, 'showerror_orig'):
 
 
 
-class SuggestionWindow:
-    """A custom Toplevel window with a scrollable Label-based suggestion list."""
-    _all_instances = []  # 클래스레벨 전체 인스턴스 추적 (한 번에 하나만 표시)
-
-    def __init__(self, widget):
-        self.widget = widget
-        self.root = widget.winfo_toplevel()
-        self.window = None
-        self.canvas = None
-        self.container = None
-        self.labels = []
-        self.active_index = -1
-        self.active = False
-        self.values = []
-        self._drag_data = {"x": 0, "y": 0}
-        self._just_selected = False # [NEW] Prevent re-show right after selection
-
-        SuggestionWindow._all_instances.append(self)  # 전체 인스턴스에 등록
-        
-        # Track parent window movement to reposition suggestions
-        self.root.bind('<Configure>', lambda e: self._reposition(), add='+')
-
-    def show(self, filtered_values):
-        if not filtered_values or self._just_selected:
-            self.hide()
-            return
-
-        # 다른 SuggestionWindow 즉시 숨김 (동시에 두 창 표시 방지)
-        SuggestionWindow._all_instances = [
-            i for i in SuggestionWindow._all_instances
-            if i.window is None or i.window.winfo_exists()
-        ]
-        for inst in SuggestionWindow._all_instances:
-            if inst is not self and inst.active:
-                inst.hide()
-
-        self.values = filtered_values
-
-        if not self.window or not self.window.winfo_exists():
-            self.window = tk.Toplevel(self.root)
-            self.window.withdraw()
-            self.window.overrideredirect(True)
-            self.window.attributes('-topmost', True)
-            
-            # Main border frame
-            self.outer_frame = tk.Frame(self.window, background="#888888", padx=1, pady=1)
-            self.outer_frame.pack(fill='both', expand=True)
-            
-            # Scrollbar and Canvas
-            self.scrollbar = ttk.Scrollbar(self.outer_frame, orient="vertical")
-            self.canvas = tk.Canvas(self.outer_frame, background="white", highlightthickness=0, yscrollcommand=self.scrollbar.set)
-            
-            self.container = tk.Frame(self.canvas, background="white")
-            self.canvas_window = self.canvas.create_window((0, 0), window=self.container, anchor="nw")
-            
-            self.scrollbar.config(command=self.canvas.yview)
-            
-            self.canvas.pack(side="left", fill="both", expand=True)
-            self.scrollbar.pack(side="right", fill="y")
-            
-            # Bind mousewheel to all components
-            self.window.bind("<MouseWheel>", self._handle_mousewheel)
-            self.outer_frame.bind("<MouseWheel>", self._handle_mousewheel)
-            self.canvas.bind("<MouseWheel>", self._handle_mousewheel)
-            self.container.bind("<MouseWheel>", self._handle_mousewheel)
-            self.scrollbar.bind("<MouseWheel>", self._handle_mousewheel)
-            
-            # Linux/Unix mouse wheel bindings (Button-4, Button-5)
-            self.window.bind("<Button-4>", self._handle_mousewheel)
-            self.window.bind("<Button-5>", self._handle_mousewheel)
-            self.canvas.bind("<Button-4>", self._handle_mousewheel)
-            self.canvas.bind("<Button-5>", self._handle_mousewheel)
-            self.container.bind("<Button-4>", self._handle_mousewheel)
-            self.container.bind("<Button-5>", self._handle_mousewheel)
-            
-            # Make it draggable (via the outer frame/border)
-            def start_drag(event):
-                self._drag_data["x"] = event.x
-                self._drag_data["y"] = event.y
-                # Optional: lifting window when interaction starts
-                self.window.lift()
-            
-            def do_drag(event):
-                x = self.window.winfo_x() + (event.x - self._drag_data["x"])
-                y = self.window.winfo_y() + (event.y - self._drag_data["y"])
-                self.window.geometry(f"+{x}+{y}")
-            
-            self.outer_frame.bind("<Button-1>", start_drag)
-            self.outer_frame.bind("<B1-Motion>", do_drag)
-
-        # Clear existing labels
-        for lbl in self.labels:
-            lbl.destroy()
-        self.labels = []
-        self.active_index = -1
-
-        # Create new labels for each value
-        for i, val in enumerate(filtered_values):
-            lbl = tk.Label(self.container, text=val, font=('Malgun Gothic', 10),
-                          anchor='w', padx=5, pady=2, background="white", cursor="hand2")
-            lbl.pack(fill='x')
-            
-            # Bind events to each label individually
-            lbl.bind('<Enter>', lambda e, idx=i: self._highlight(idx))
-            lbl.bind('<Button-1>', lambda e, v=val: self._select(v))
-            lbl.bind('<MouseWheel>', self._handle_mousewheel)
-            lbl.bind('<Button-4>', self._handle_mousewheel)
-            lbl.bind('<Button-5>', self._handle_mousewheel)
-            self.labels.append(lbl)
-        
-        # [NEW] Enhanced Width Calculation
-        self.container.update_idletasks()
-        widget_width = self.widget.winfo_width()
-        
-        # Calculate visual width based on content
-        content_width = 0
-        try:
-            def get_visual_width(s):
-                # Korean/Full-width chars are approx 2x wider than half-width
-                return sum(1.8 if ord(c) > 127 else 1.0 for c in str(s))
-            
-            if filtered_values:
-                max_visual_chars = max(get_visual_width(v) for v in filtered_values)
-                # Appox 8-9px per half-width char for Malgun Gothic 10
-                content_width = int(max_visual_chars * 9) + 25 
-        except:
-            content_width = 0
-            
-        # Use the larger of widget width or content width
-        width = max(widget_width, content_width)
-        
-        item_height = 24
-        max_items = 12
-        visible_items = min(len(filtered_values), max_items)
-        height = visible_items * item_height
-        
-        # Adjust container width in canvas
-        self.canvas.itemconfig(self.canvas_window, width=width)
-        self.canvas.config(scrollregion=(0, 0, width, len(filtered_values) * item_height))
-        
-        # Toggle scrollbar
-        if len(filtered_values) > max_items:
-            self.scrollbar.pack(side="right", fill="y")
-        else:
-            self.scrollbar.pack_forget()
-
-        # Position exactly below the widget
-        x = self.widget.winfo_rootx()
-        y = self.widget.winfo_rooty() + self.widget.winfo_height()
-        
-        self.window.geometry(f"{int(width+20 if len(filtered_values) > max_items else width)}x{int(height)}+{int(x)}+{int(y)}")
-        self.window.deiconify()
-        self.window.lift()
-        # [FIX] update_idletasks() 제거: postcommand의 after_idle(values복원)과 충돌하여
-        # native 드롭다운이 열리거나 이벤트 순서가 꼬이는 원인이었음
-        self.active = True
-
-    def _handle_mousewheel(self, event):
-        """Unified mousewheel handler for all child widgets"""
-        if self.active and self.canvas:
-            if event.num == 4: # Linux scroll up
-                self.canvas.yview_scroll(-1, "units")
-            elif event.num == 5: # Linux scroll down
-                self.canvas.yview_scroll(1, "units")
-            else: # Windows/macOS delta
-                self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-            return "break"
-
-    def _reposition(self):
-        """Update window position to stay attached to the widget"""
-        if self.active and self.window and self.window.winfo_exists() and self.window.winfo_viewable():
-            x = self.widget.winfo_rootx()
-            y = self.widget.winfo_rooty() + self.widget.winfo_height()
-            # Preserve current width/height
-            curr_geom = self.window.geometry().split('+')[0]
-            self.window.geometry(f"{curr_geom}+{int(x)}+{int(y)}")
-
-    def hide(self, event=None):
-        self.active = False
-        if self.window and self.window.winfo_exists():
-            try:
-                self.window.withdraw()
-                # [FIX] update() 제거: 재진입 이벤트 처리로 두 번째 창이 열리는 버그 방지
-                # withdraw()만으로 충분히 즉시 숨겨짐
-            except: pass
-
-    def _highlight(self, index):
-        # Remove previous highlight
-        if self.active_index >= 0 and self.active_index < len(self.labels):
-            self.labels[self.active_index].config(background="white", foreground="black")
-            
-        self.active_index = index
-        if self.active_index >= 0 and self.active_index < len(self.labels):
-            lbl = self.labels[self.active_index]
-            lbl.config(background="#0078d7", foreground="white")
-            
-            # Ensure visible in scroll context
-            self._ensure_visible(index)
-
-    def _ensure_visible(self, index):
-        """Scroll canvas to make the highlighted label visible."""
-        if not self.canvas: return
-        
-        item_height = 24
-        total_items = len(self.labels)
-        if total_items == 0: return
-        
-        # Fraction of the way down
-        top = index / total_items
-        bottom = (index + 1) / total_items
-        
-        # Current view range
-        view_top, view_bottom = self.canvas.yview()
-        
-        if top < view_top:
-            self.canvas.yview_moveto(top)
-        elif bottom > view_bottom:
-            self.canvas.yview_moveto(bottom - (view_bottom - view_top))
-
-    def _select(self, val):
-        self._just_selected = True
-        self.hide() # Hide immediately before any delay or event generation
-        def commit():
-            try:
-                self.widget.delete(0, tk.END)
-                self.widget.insert(0, val)
-                self.hide() # Double-ensure hidden
-                # Trigger events for auto-save/search
-                self.widget.event_generate('<<ComboboxSelected>>')
-                # self.widget.event_generate('<Return>') # [NOTICE] Generating Return can re-trigger keyrelease filters
-            except: pass
-            finally:
-                # Reset cooldown after a delay to allow UI to settle
-                self.widget.after(500, lambda: setattr(self, '_just_selected', False))
-        
-        # Small visual feedback delay
-        self.widget.after(20, commit)
-
-    def move_selection(self, direction):
-        if not self.active or not self.labels: return
-        
-        new_idx = (self.active_index + direction) % len(self.labels)
-        self._highlight(new_idx)
-        return True
-
-    def confirm_selection(self):
-        if not self.active: return False
-        if self.active_index >= 0 and self.active_index < len(self.values):
-            self._select(self.values[self.active_index])
-            return True
-        self.hide()
-        return False
-
-
-def register_autocomplete(combobox, suggestion_list):
-    """Enable SuggestionWindow-based autocomplete for any ttk.Combobox"""
-    if hasattr(combobox, '_suggestion_win'):
-        return
-
-    combobox._suggestion_win = SuggestionWindow(combobox)
-    combobox._autocomplete_timer = None
-    # _real_values: SuggestionWindow 에 표시할 진짜 목록
-    # combobox['values'] 는 앱이 직접 갱신하며, _sync_real_values() 가 읽어 감.
-    combobox._real_values = list(combobox['values'])
-
-    def _sync_real_values():
-        """앱이 combobox['values'] 를 갱신했으면 _real_values 에 반영."""
-        current = list(combobox['values'])
-        if current:
-            combobox._real_values = current
-
-    def perform_filter(force_all=False):
-        _sync_real_values()
-        typed = combobox.get()
-        all_vals = combobox._real_values
-        if not all_vals: return
-        if force_all or not typed:
-            combobox._suggestion_win.show(all_vals)
-            return
-        if len(typed) == 1:
-            filtered = [v for v in all_vals if str(v).lower().startswith(typed.lower())]
-        else:
-            filtered = [v for v in all_vals if typed.lower() in str(v).lower()]
-        combobox._suggestion_win.show(filtered)
-
-    def on_keyrelease(event):
-        if event.keysym == "Down" and combobox._suggestion_win.active:
-            combobox._suggestion_win.move_selection(1)
-            return "break"
-        if event.keysym == "Up" and combobox._suggestion_win.active:
-            combobox._suggestion_win.move_selection(-1)
-            return "break"
-        if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab",
-                             "Shift_L", "Shift_R", "Control_L", "Control_R"):
-            if event.keysym in ("Escape", "Tab"):
-                combobox._suggestion_win.hide()
-            return
-        if hasattr(combobox, '_autocomplete_timer') and combobox._autocomplete_timer:
-            combobox.after_cancel(combobox._autocomplete_timer)
-        combobox._autocomplete_timer = combobox.after(50, lambda: perform_filter(force_all=False))
-
-    combobox.bind('<KeyRelease>', on_keyrelease, add="+")
-
-    def handle_extra_nav(event):
-        if not combobox._suggestion_win.active: return
-        if event.keysym == "Down": combobox._suggestion_win.move_selection(1); return "break"
-        if event.keysym == "Up": combobox._suggestion_win.move_selection(-1); return "break"
-        if event.keysym == "Return":
-            if combobox._suggestion_win.confirm_selection():
-                combobox.event_generate('<<ComboboxSelected>>')
-                return "break"
-
-    combobox.bind('<KeyPress-Down>', handle_extra_nav, add="+")
-    combobox.bind('<KeyPress-Up>', handle_extra_nav, add="+")
-    combobox.bind('<KeyPress-Return>', handle_extra_nav, add="+")
-
-    def on_focus_out(event):
-        # [FIX] 다중창 버그 수정:
-        # 포커스가 제안창 내부(항목 클릭)로 이동 → 200ms 딜레이 (클릭 등록 대기)
-        # 포커스가 외부(다른 콤보박스, 버튼 등)로 이동 → 즉시 숨김
-        sw = combobox._suggestion_win
-        if not sw.active:
-            return
-        fw = combobox.focus_get()
-        if fw is not None and sw.window and sw.window.winfo_exists():
-            try:
-                if str(fw).startswith(str(sw.window)):
-                    # 제안창 내부로 포커스 이동 → 클릭 등록될 때까지 대기 후 숨김
-                    combobox.after(200, sw.hide)
-                    return
-            except Exception:
-                pass
-        # 외부로 포커스 이동 → 즉시 숨김 (다른 창이 동시에 보이는 현상 방지)
-        sw.hide()
-    combobox.bind('<FocusOut>', on_focus_out, add=True)
-    combobox.bind('<<ComboboxSelected>>', lambda e: combobox._suggestion_win.hide(), add=True)
-
-    # 텍스트 영역 클릭: SuggestionWindow 토글
-    # ▼ 버튼은 postcommand 가 먼저 처리하고 _just_postcommand 플래그로 알림
-    combobox._just_postcommand = False
-    def _on_click(event):
-        if combobox._just_postcommand:
-            combobox._just_postcommand = False
-            return
-        if combobox._suggestion_win.active:
-            combobox._suggestion_win.hide()
-        else:
-            perform_filter(force_all=True)
-    combobox.bind('<Button-1>', _on_click, add="+")
-
-    # ▼ 버튼(postcommand): SuggestionWindow 토글 + native 드롭다운 차단
-    # Tk 는 postcommand 반환 후 combobox['values'] 를 다시 확인 →
-    # 그 시점에 [] 이면 native 드롭다운을 올리지 않음.
-    # after_idle 에서 combobox._real_values 참조(캡처 변수 X)로 복원 →
-    # 빠른 이중클릭 시 [] 스택 버그 없음.
-    def _postcommand():
-        _sync_real_values()
-        combobox._just_postcommand = True
-        combobox.after(100, lambda: setattr(combobox, '_just_postcommand', False))
-        if combobox._suggestion_win.active:
-            combobox._suggestion_win.hide()
-        else:
-            if combobox._real_values:
-                combobox._suggestion_win.show(combobox._real_values)
-        # native 드롭다운 차단: postcommand 후 Tk 가 values 재확인
-        combobox.configure(values=[])
-        # 참조 복원: 람다가 _real_values 를 캡처하지 않고 매번 현재값 읽음
-        combobox.after_idle(lambda: combobox.configure(values=combobox._real_values))
-    combobox.configure(postcommand=_postcommand)
 
 
 class WorkerCompositeWidget(ttk.Frame):
@@ -2676,23 +2307,12 @@ class MaterialManager:
         messagebox.showinfo("마이그레이션 완료", "기존 데이터가 새로운 형식으로 변환되었습니다.")
     
     def enable_autocomplete(self, combobox, values_list_attr=None, values_list=None, prefix_list=None):
-        """
-        Enable autocomplete/autosuggestion on a Combobox widget with a custom Toplevel dropdown.
-        This keeps the cursor (caret) 100% visible and stable.
-        """
+        """Standardize to Native Dropdown: Filter values but use standard system dropdown."""
         if not hasattr(self, '_autocomplete_timers'):
             self._autocomplete_timers = {}
-        if not hasattr(self, '_suggestion_windows'):
-            self._suggestion_windows = {}
-
-        # Create/Get custom suggestion window for this combobox
-        if combobox not in self._suggestion_windows:
-            self._suggestion_windows[combobox] = SuggestionWindow(combobox)
-        
-        suggest_win = self._suggestion_windows[combobox]
 
         def perform_filter(event_widget, force_all=False):
-            typed = str(event_widget.get()).strip() # [NEW] Strip input for robustness
+            typed = str(event_widget.get()).strip()
             
             if values_list_attr:
                 base_values = getattr(self, values_list_attr, [])
@@ -2701,43 +2321,21 @@ class MaterialManager:
             else:
                 base_values = []
             
-            # Combine with prefix list (e.g. ['전체']) if provided
             all_values = (prefix_list + base_values) if prefix_list else base_values
             
-            # [FIX] If forced (click/focus), show all values even if something is typed/selected
             if force_all or not typed:
-                event_widget['values'] = all_values
-                suggest_win.show(all_values)
-                return
+                new_values = all_values
+            elif prefix_list and typed in prefix_list:
+                new_values = all_values
+            else:
+                new_values = [v for v in all_values if str(v).lower().startswith(typed.lower())]
             
-            # [NEW] If matches prefix_list (like "전체"), show all options
-            is_prefix = (prefix_list and typed in prefix_list)
-            if is_prefix:
-                event_widget['values'] = all_values
-                suggest_win.show(all_values)
-                return
-            
-            filtered = [v for v in all_values if str(v).lower().startswith(typed.lower())]
-            event_widget['values'] = filtered
-            
-            # Show custom window
-            suggest_win.show(filtered)
+            # [FIX] Do not update if values are already correct to avoid recursive issues
+            if list(event_widget['values']) != list(new_values):
+                event_widget['values'] = new_values
 
         def on_keyrelease(event):
-            # Handle navigation keys for custom window
-            if event.keysym == "Down" and suggest_win.active:
-                suggest_win.move_selection(1)
-                return "break"
-            if event.keysym == "Up" and suggest_win.active:
-                suggest_win.move_selection(-1)
-                return "break"
-            if event.keysym == "Escape":
-                suggest_win.hide()
-                return "break"
-
             if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
-                if event.keysym in ("Escape", "Tab"):
-                    suggest_win.hide()
                 return
             
             widget = event.widget
@@ -2748,39 +2346,17 @@ class MaterialManager:
             self._autocomplete_timers[widget] = timer_id
         
         combobox.bind('<KeyRelease>', on_keyrelease, add=True)
-        
-        def handle_extra_nav(event):
-            if not suggest_win.active: return
-            if event.keysym == "Down": suggest_win.move_selection(1); return "break"
-            if event.keysym == "Up": suggest_win.move_selection(-1); return "break"
-            if event.keysym == "Return": 
-                if suggest_win.confirm_selection(): return "break"
-                
-        combobox.bind('<KeyPress-Down>', handle_extra_nav, add=True)
-        combobox.bind('<KeyPress-Up>', handle_extra_nav, add=True)
-        combobox.bind('<KeyPress-Return>', handle_extra_nav, add=True)
-        combobox.bind('<KeyPress-Escape>', lambda e: suggest_win.hide(), add=True)
-        combobox.bind('<KeyPress-Tab>', lambda e: suggest_win.hide(), add=True)
-
-        def on_focus_out(event):
-            self.root.after(200, suggest_win.hide)
-        # Use add=True to preserve external save bindings
-        combobox.bind('<FocusOut>', on_focus_out, add=True)
-        combobox.bind('<<ComboboxSelected>>', lambda e: suggest_win.hide(), add=True)
 
         def on_focus_in(event):
-            # [NEW] Select all text for easy overwriting
             try:
                 event.widget.selection_range(0, tk.END)
             except: pass
-            # [FIX] Trigger filter with force_all=True on focus
             perform_filter(event.widget, force_all=True)
+            
         combobox.bind('<FocusIn>', on_focus_in, add=True)
         
-        # [FIX] Also show list on click to handle cases where it's already focused
-        def on_click(event):
-            perform_filter(event.widget, force_all=True)
-        combobox.bind('<Button-1>', on_click, add=True)
+        # [NEW] Also show list on click 
+        combobox.bind('<Button-1>', lambda e: perform_filter(e.widget, force_all=True), add=True)
 
 
     def apply_autocomplete_to_all_comboboxes(self):
@@ -8244,12 +7820,6 @@ class MaterialManager:
         def _on_budget_site_selected(e):
             # [FIX] 현장명을 가장 먼저 캡처 - focus_set() 호출 전에 해야 값이 유지됨
             selected_site = self.cb_budget_site.get().strip()
-            # SuggestionWindow(자동완성 창) 강제 닫기
-            if hasattr(self, '_suggestion_windows') and self.cb_budget_site in self._suggestion_windows:
-                try:
-                    self._suggestion_windows[self.cb_budget_site].hide()
-                except Exception:
-                    pass
             # 폼 로드 (현장명 먼저 캡처했으므로 안전)
             self._load_budget_to_form(selected_site, silent=True)
             # 포커스 이동은 폼 로드 완료 후에 (after로 지연)
@@ -8934,12 +8504,6 @@ class MaterialManager:
 
     def _load_budget_to_form(self, site, silent=False):
         """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
-        # [FIX] 자동완성 SuggestionWindow 강제 닫기
-        if hasattr(self, 'cb_budget_site') and hasattr(self.cb_budget_site, '_suggestion_win'):
-            try:
-                self.cb_budget_site._suggestion_win.hide()
-            except Exception:
-                pass
         # [NEW] Clear current form before loading new site data to prevent residual data
         self.clear_budget_form()
 
