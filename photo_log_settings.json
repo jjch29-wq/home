@@ -4,7 +4,7 @@
     "inspect_date": "2026년 04월 06일",
     "inspect_type": "PAUT",
     "report_title": "REPORT OF PHASED ARRAY UT EXAMINATION (위 상 배 열 초 음 파 탐 상 검 사 보 고 서)",
-    "cols_per_row": "1",
+    "cols_per_row": "2",
     "keep_aspect": false,
     "logo_path": "C:\\Users\\jjch2\\Desktop\\사진대장\\images\\logo.png",
     "output_name": "NDT_Photo_Log_Final.xlsx",
@@ -34,6 +34,6 @@
         "C:\\Users\\jjch2\\Desktop\\사진대장\\images\\010_U2AN-CTWR-7301004-02 J10.png",
         "C:\\Users\\jjch2\\Desktop\\사진대장\\images\\logo.png"
     ],
-    "window_geometry": "1920x1009+-1833+58",
-    "sash_pos": 481
+    "window_geometry": "1920x1009+-1922+-15",
+    "sash_pos": 450
 }
