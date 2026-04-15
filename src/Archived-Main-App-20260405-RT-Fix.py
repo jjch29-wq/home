@@ -716,19 +716,16 @@ class PMIReportApp:
         left_container = tk.Frame(self.pmi_paned, background="#f9fafb")
         self.pmi_paned.add(left_container, stretch="always")
         
-        left_pane = self._create_scrollable_sidebar(left_container)
-
-        # Bind events to maintain ratio
-        self.pmi_paned.bind("<Configure>", lambda e: [self._on_pmi_paned_configure(e), self.root.update_idletasks()])
-        self.pmi_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_pmi_ratio))
-
-        # Header
-        header_frame = tk.Frame(left_pane, background="#f9fafb")
-        header_frame.pack(fill='x', pady=(0, 10))
+        # Header (FIXED at top)
+        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
+        header_frame.pack(fill='x')
         tk.Label(header_frame, text="🔬 PMI 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
         tk.Label(header_frame, text=f"v{APP_VERSION}", font=("Arial", 8), 
                  background="#f1f5f9", foreground="#64748b", padx=5, pady=1).pack(side='left', padx=10)
+
+        # Scrollable area for the rest
+        left_pane = self._create_scrollable_sidebar(left_container)
 
         # 1. File Selection Group
         file_container = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -910,13 +907,14 @@ class PMIReportApp:
         left_container = tk.Frame(self.rt_paned, background="#f9fafb")
         self.rt_paned.add(left_container, stretch="always")
         
-        left_pane = self._create_scrollable_sidebar(left_container)
-
-        # Header
-        header_frame = tk.Frame(left_pane, background="#f9fafb")
-        header_frame.pack(fill='x', pady=(0, 10))
+        # Header (FIXED at top)
+        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
+        header_frame.pack(fill='x')
         tk.Label(header_frame, text="🔬 RT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+
+        # Scrollable area for the rest
+        left_pane = self._create_scrollable_sidebar(left_container)
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -1051,13 +1049,14 @@ class PMIReportApp:
         left_container = tk.Frame(self.pt_paned, background="#f9fafb")
         self.pt_paned.add(left_container, stretch="always")
         
-        left_pane = self._create_scrollable_sidebar(left_container)
-
-        # Header
-        header_frame = tk.Frame(left_pane, background="#f9fafb")
-        header_frame.pack(fill='x', pady=(0, 10))
+        # Header (FIXED at top)
+        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
+        header_frame.pack(fill='x')
         tk.Label(header_frame, text="🔬 PT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+
+        # Scrollable area for the rest
+        left_pane = self._create_scrollable_sidebar(left_container)
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -1220,13 +1219,14 @@ class PMIReportApp:
         left_container = tk.Frame(self.paut_paned, background="#f9fafb")
         self.paut_paned.add(left_container, stretch="always")
         
-        left_pane = self._create_scrollable_sidebar(left_container)
-
-        # Header
-        header_frame = tk.Frame(left_pane, background="#f9fafb")
-        header_frame.pack(fill='x', pady=(0, 10))
+        # Header (FIXED at top)
+        header_frame = tk.Frame(left_container, background="#f9fafb", padx=10, pady=10)
+        header_frame.pack(fill='x')
         tk.Label(header_frame, text="🔬 PAUT (ASME B31.1) 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+
+        # Scrollable area for the rest
+        left_pane = self._create_scrollable_sidebar(left_container)
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
