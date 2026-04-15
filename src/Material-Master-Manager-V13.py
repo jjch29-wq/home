@@ -9848,13 +9848,19 @@ class MaterialManager:
         # Filter data
         filtered_df = self.daily_usage_df.copy()
         
-        if start_date is not None:
+        # [NEW] Column Compatibility: Ensure 'Site' and 'Date' are available for filtering
+        if 'Site' not in filtered_df.columns and '현장' in filtered_df.columns:
+            filtered_df['Site'] = filtered_df['현장']
+        if 'Date' not in filtered_df.columns and '날짜' in filtered_df.columns:
+            filtered_df['Date'] = filtered_df['날짜']
+            
+        if start_date is not None and 'Date' in filtered_df.columns:
             filtered_df = filtered_df[pd.to_datetime(filtered_df['Date']) >= start_date]
         
-        if end_date is not None:
+        if end_date is not None and 'Date' in filtered_df.columns:
             filtered_df = filtered_df[pd.to_datetime(filtered_df['Date']) <= end_date]
         
-        if filter_site != '전체':
+        if filter_site != '전체' and 'Site' in filtered_df.columns:
             # Support partial match for site for more robustness since it's now editable
             filtered_df = filtered_df[filtered_df['Site'].astype(str).str.contains(filter_site, na=False, case=False, regex=False)]
         
