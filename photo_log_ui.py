@@ -22,8 +22,8 @@ class PhotoLogApp:
         self.embedded = embedded
 
         if not embedded:
-            self.root.title("Photo Log Generator v33:00")
-            self.root.geometry("600x650")
+            self.root.title("Photo Log Generator v33:10")
+            self.root.geometry("600x900")
             self.root.configure(background="#f3f4f6")
 
         self.style = ttk.Style()
@@ -210,7 +210,7 @@ class PhotoLogApp:
         align_combo.grid(row=5, column=1, sticky="w", padx=10, pady=2)
         ttk.Checkbutton(opt_frame, text="가로 폭 맞춤 (Fit to Width)", variable=self.fit_width_var).grid(row=5, column=2, columnspan=2, padx=20, sticky="w")
 
-        self.paned_window.add(settings_container, minsize=480) 
+        self.paned_window.add(settings_container, minsize=350) 
 
         # ── 하단 패널: 파일 관리 + 로그 ─────────────────────────────────────
         content_frame = tk.Frame(self.paned_window, background="#f3f4f6")
