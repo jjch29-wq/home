@@ -82,13 +82,43 @@ class PhotoLogApp:
         self.load_settings() # Restore previous session data
         if not embedded:
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def _create_scrollable_sidebar(self, parent):
+        """Creates a scrollable canvas/scrollbar container for sidebars."""
+        canvas = tk.Canvas(parent, background="#f3f4f6", borderwidth=0, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, background="#f3f4f6")
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        # Bind MouseWheel to Canvas
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Proactive Resize binding
+        scrollable_frame.bind("<Configure>", lambda e: canvas.itemconfig(canvas.find_withtag("all")[0], width=e.width))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas.find_withtag("all")[0], width=e.width))
+        
+        # Enable mousewheel on hover
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        return scrollable_frame
         
     def create_widgets(self):
         # Main Container
         main_frame = tk.Frame(self.root, background="#f3f4f6", padx=20, pady=20)
         main_frame.pack(fill="both", expand=True)
         
-        # Title
+        # Title (FIXED at top)
         tk.Label(main_frame, text="📷 Photo Log Generator", font=("Malgun Gothic", 18, "bold"),
                  background="#f3f4f6", foreground="#1e3a8a").pack(side="top", pady=(0, 10))
 
@@ -111,11 +141,12 @@ class PhotoLogApp:
         )
         self.paned_window.pack(fill="both", expand=True)
 
-        # ── 상단 패널: 설정 영역 ──────────────────────────────────────────────
-        settings_frame = tk.Frame(self.paned_window, background="#f3f4f6")
+        # ── 상단 패널: 설정 영역 (Scrollable) ──────────────────────────────────
+        settings_container = tk.Frame(self.paned_window, background="#f3f4f6")
+        scroll_frame = self._create_scrollable_sidebar(settings_container)
 
         # 3. Input Section
-        input_frame = ttk.LabelFrame(settings_frame, text=" 리포트 정보 (Report Info) ", padding=15)
+        input_frame = ttk.LabelFrame(scroll_frame, text=" 리포트 정보 (Report Info) ", padding=15)
         input_frame.pack(side="top", fill="x", pady=(0, 5))
 
         tk.Label(input_frame, text="검사 항목:", font=("Malgun Gothic", 10), anchor="w").grid(row=0, column=0, sticky="ew", pady=2)
@@ -132,7 +163,7 @@ class PhotoLogApp:
         input_frame.columnconfigure(1, weight=1)
 
         # 4. Image Options Section
-        opt_frame = ttk.LabelFrame(settings_frame, text=" 사진 레이아웃 설정 (Image Options) ", padding=15)
+        opt_frame = ttk.LabelFrame(scroll_frame, text=" 사진 레이아웃 설정 (Image Options) ", padding=15)
         opt_frame.pack(side="top", fill="x", pady=(0, 5))
 
         tk.Label(opt_frame, text="한 줄당 사진 개수:", font=("Malgun Gothic", 10)).grid(row=0, column=0, sticky="w", pady=2)
@@ -175,7 +206,7 @@ class PhotoLogApp:
         align_combo.grid(row=5, column=1, sticky="w", padx=10, pady=2)
         ttk.Checkbutton(opt_frame, text="가로 폭 맞춤 (Fit to Width)", variable=self.fit_width_var).grid(row=5, column=2, columnspan=2, padx=20, sticky="w")
 
-        self.paned_window.add(settings_frame, minsize=80)
+        self.paned_window.add(settings_container, minsize=100)
 
         # ── 하단 패널: 파일 관리 + 로그 ─────────────────────────────────────
         content_frame = tk.Frame(self.paned_window, background="#f3f4f6")
