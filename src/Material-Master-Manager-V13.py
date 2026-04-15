@@ -8346,6 +8346,11 @@ class MaterialManager:
         self.cb_budget_view_site.pack(side='left', padx=5)
         self.cb_budget_view_site.set('전체')
         self.cb_budget_view_site.bind('<<ComboboxSelected>>', lambda e: self.update_budget_site_view())
+        
+        ttk.Label(bottom_filter, text="현장검색:").pack(side='left', padx=(10, 2))
+        self.ent_budget_view_site_search = ttk.Entry(bottom_filter, width=15)
+        self.ent_budget_view_site_search.pack(side='left', padx=2)
+        self.ent_budget_view_site_search.bind('<Return>', lambda e: self.update_budget_site_view())
 
         ttk.Label(bottom_filter, text="시작일:").pack(side='left', padx=(10, 2))
         self.budget_view_start = DateEntry(bottom_filter, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
@@ -8698,10 +8703,16 @@ class MaterialManager:
         else:
             date_mask = pd.Series([True] * len(df), index=df.index)
 
+        site_search = self.ent_budget_view_site_search.get().strip()
+        
         if site and site != '전체':
             site_mask = (df['_site_norm'] == site)
         else:
             site_mask = pd.Series([True] * len(df), index=df.index)
+
+        if site_search:
+            site_search_mask = df['_site_norm'].str.contains(site_search, case=False, na=False)
+            site_mask = site_mask & site_search_mask
 
         mask = date_mask & site_mask
         df = df[mask].copy()
