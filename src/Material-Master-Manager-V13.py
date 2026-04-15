@@ -3197,16 +3197,22 @@ class MaterialManager:
         inout_vsb = ttk.Scrollbar(tree_scroll_frame, orient="vertical")
         inout_hsb = ttk.Scrollbar(tree_scroll_frame, orient="horizontal")
         
-        columns = ('날짜', '현장', '품목명', '모델명', '구분', '수량', '재고', '담당자', '차량번호', '주행거리', '차량점검', '차량비고', '비고')
+        columns = ('날짜', '현장', '장비명', '품목명', '필름매수', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제')
         self.inout_tree = ttk.Treeview(tree_scroll_frame, columns=columns, show='headings', height=10,
                                        yscrollcommand=inout_vsb.set, xscrollcommand=inout_hsb.set)
         
         inout_vsb.config(command=self.inout_tree.yview)
         inout_hsb.config(command=self.inout_tree.xview)
         
-        col_widths = [150, 120, 180, 150, 70, 70, 70, 100, 120, 100, 200, 150, 200]
-        for col, width in zip(columns, col_widths):
+        # [NEW] Default Column Widths for Detailed View
+        col_widths = {
+            '날짜': 150, '현장': 120, '장비명': 130, '품목명': 180, '필름매수': 80,
+            '형광자분': 80, '흑색자분': 80, '백색페인트': 80, '침투제': 80, '세척제': 80, 
+            '현상제': 80, '형광침투제': 80
+        }
+        for col in columns:
             self.inout_tree.heading(col, text=col)
+            width = col_widths.get(col, 100)
             self.inout_tree.column(col, width=width, minwidth=50, stretch=False, anchor='center')
         self.enable_tree_column_drag(self.inout_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.inout_tree))
         self.inout_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config(), add='+')
@@ -3736,7 +3742,7 @@ class MaterialManager:
         self.update_transaction_view()
 
     def update_transaction_view(self):
-        """Populate the transaction history Treeview"""
+        """Populate the In/Out history Treeview with Detailed Daily Usage information summerly"""
         try:
             if not hasattr(self, 'inout_tree'):
                 return
@@ -3745,100 +3751,79 @@ class MaterialManager:
             for item in self.inout_tree.get_children():
                 self.inout_tree.delete(item)
                 
-            if self.transactions_df.empty:
+            if self.daily_usage_df.empty:
                 return
                 
-            # Update frame title with count
-            if hasattr(self, 'scrollable_frame'):
-                # Try to find the history LabelFrame to update its text
-                for child in self.scrollable_frame.winfo_children():
-                    if isinstance(child, ttk.LabelFrame) and child.cget("text").startswith("최근 입출고 내역"):
-                        child.configure(text=f"최근 입출고 내역 (총 {len(self.transactions_df)}건)")
+            # Filter data from daily_usage_df
+            df_to_show = self.daily_usage_df.copy()
             
-            # Display last 500 transactions, descending by date
-            df_to_show = self.transactions_df.copy()
+            # Column Compatibility (Handle Korean/English headers if necessary)
+            if 'Site' not in df_to_show.columns and '현장' in df_to_show.columns:
+                df_to_show['Site'] = df_to_show['현장']
+            if 'Date' not in df_to_show.columns and '날짜' in df_to_show.columns:
+                df_to_show['Date'] = df_to_show['날짜']
             
-            # 1. Pre-calculate Running Balances for ALL transactions to show historical accuracy
-            initial_stocks = self.materials_df.set_index('MaterialID')['수량'].fillna(0).to_dict()
-            df_running = df_to_show.copy().sort_values(by='Date')
-            
-            # Map IN/OUT to signed values
-            # Since we already normalized OUT to negative in load_data and save logic, 
-            # we can use Quantity directly.
-            df_running['SignedQty'] = df_running['Quantity']
-            
-            # Calculate cumulative sum per material
-            df_running['HistoricalStock'] = df_running.groupby('MaterialID')['SignedQty'].cumsum()
-            
-            # Add initial stock offset
-            df_running['HistoricalStock'] = df_running.apply(lambda r: initial_stocks.get(r['MaterialID'], 0) + r['HistoricalStock'], axis=1)
-            
-            # Merge back to the copy we want to filter/show
-            df_to_show = df_to_show.merge(df_running[['HistoricalStock']], left_index=True, right_index=True)
-            
-            # Apply material filter if selected (Optimized)
+            # Apply material filter if selected
             if hasattr(self, 'cb_trans_filter_mat'):
                 selected_mat = self.cb_trans_filter_mat.get()
                 if selected_mat and selected_mat != "전체":
-                    # Pre-calculate matching IDs to avoid repetitive lookups
-                    matching_ids = []
-                    for mat_id in df_to_show['MaterialID'].unique():
-                        if pd.isna(mat_id): continue
-                        if self.get_material_display_name(mat_id) == selected_mat:
-                            matching_ids.append(mat_id)
-                    df_to_show = df_to_show[df_to_show['MaterialID'].isin(matching_ids)]
+                    # In DailyUsage, '품목명' or 'MaterialID' matches
+                    # We check the display name for consistency
+                    matching_rows = []
+                    for idx, row in df_to_show.iterrows():
+                        mat_id = row.get('MaterialID')
+                        display_name = self.get_material_display_name(mat_id)
+                        if display_name == selected_mat:
+                            matching_rows.append(idx)
+                    df_to_show = df_to_show.loc[matching_rows]
             
             # Apply site filter if selected
             if hasattr(self, 'cb_trans_filter_site'):
                 selected_site = self.cb_trans_filter_site.get()
                 if selected_site and selected_site != "전체":
-                    df_to_show = df_to_show[df_to_show['Site'] == selected_site]
+                    # Support both English 'Site' and Korean '현장' columns
+                    site_col = 'Site' if 'Site' in df_to_show.columns else '현장'
+                    if site_col in df_to_show.columns:
+                        df_to_show = df_to_show[df_to_show[site_col].astype(str).str.contains(selected_site, na=False, case=False, regex=False)]
             
             # Apply vehicle filter if selected
             if hasattr(self, 'cb_trans_filter_vehicle'):
                 selected_vehicle = self.cb_trans_filter_vehicle.get()
                 if selected_vehicle and selected_vehicle != "전체":
-                    df_to_show = df_to_show[df_to_show['차량번호'].astype(str).str.contains(selected_vehicle, na=False, case=False, regex=False)]
+                    if '차량번호' in df_to_show.columns:
+                        df_to_show = df_to_show[df_to_show['차량번호'].astype(str).str.contains(selected_vehicle, na=False, case=False, regex=False)]
 
-            df_sorted = df_to_show.sort_values(by='Date', ascending=False, na_position='last').head(500)
+            # Sort by date descending
+            date_col = 'Date' if 'Date' in df_to_show.columns else '날짜'
+            if date_col in df_to_show.columns:
+                df_to_show[date_col] = pd.to_datetime(df_to_show[date_col], errors='coerce')
+                df_sorted = df_to_show.sort_values(by=date_col, ascending=False, na_position='last').head(500)
+            else:
+                df_sorted = df_to_show.head(500)
             
             for idx, row in df_sorted.iterrows():
-                mat_id = row['MaterialID']
-                mat_name = self.get_material_display_name(mat_id)
-                
-                # Safe date formatting
-                raw_date = row.get('Date')
-                if pd.isna(raw_date):
-                    date_str = "Unknown"
-                elif hasattr(raw_date, 'strftime'):
-                    date_str = raw_date.strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    date_str = str(raw_date)
-                
-                # Use pre-calculated historical stock for balance view
-                historical_stock = row.get('HistoricalStock', 0)
-                
-                # Find model name from materials_df
-                model_name = ""
-                mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
-                if not mat_row.empty:
-                    model_name = str(mat_row.iloc[0].get('모델명', '')).replace('nan', '').replace('None', '')
-                
-                self.inout_tree.insert('', tk.END, values=(
-                    date_str,
-                    self.clean_nan(row.get('Site', '')),
-                    mat_name,
-                    model_name,
-                    row.get('Type', ''),
-                    row.get('Quantity', 0),
-                    historical_stock,
-                    self.clean_nan(row.get('User', '')),
-                    self.clean_nan(row.get('차량번호', '')),
-                    self.clean_nan(row.get('주행거리', '')),
-                    self.clean_nan(row.get('차량점검', '')),
-                    self.clean_nan(row.get('차량비고', '')),
-                    self.clean_nan(row.get('Note', ''))
-                ), tags=(str(idx),))
+                try:
+                    # Map DailyUsage columns to requested In/Out columns
+                    # ['날짜', '현장', '장비명', '품목명', '필름매수', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']
+                    usage_date = self._safe_format_datetime(row.get('Date', row.get('날짜', '')), '%Y-%m-%d %H:%M')
+                    
+                    self.inout_tree.insert('', tk.END, values=(
+                        usage_date,
+                        self.clean_nan(row.get('Site', row.get('현장', ''))),
+                        self.clean_nan(row.get('장비명', '')),
+                        self.clean_nan(row.get('품목명', '')),
+                        self.clean_nan(row.get('필름매수', row.get('FilmCount', '0'))),
+                        self.clean_nan(row.get('형광자분', '0')),
+                        self.clean_nan(row.get('흑색자분', '0')),
+                        self.clean_nan(row.get('백색페인트', '0')),
+                        self.clean_nan(row.get('침투제', '0')),
+                        self.clean_nan(row.get('세척제', '0')),
+                        self.clean_nan(row.get('현상제', '0')),
+                        self.clean_nan(row.get('형광침투제', '0'))
+                    ))
+                except Exception as e:
+                    print(f"Row Error: {e}")
+                    continue
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
@@ -4437,26 +4422,16 @@ class MaterialManager:
                 messagebox.showerror("오류", f"저장 실패: {e}")
     
     def export_transaction_history(self):
-        """Export transaction history displayed in the inout_tree to Excel"""
-        # Build data from current treeview
+        """Export the detailed In/Out history to Excel summerly"""
         history_data = []
+        columns = [self.inout_tree.heading(col, 'text') for col in self.inout_tree['columns']]
+        
         for item in self.inout_tree.get_children():
             values = self.inout_tree.item(item, 'values')
-            history_data.append({
-                '날짜': values[0],
-                '현장': values[1],
-                '품목명': values[2],
-                '모델명': values[3],
-                '구분': values[4],
-                '수량': values[5],
-                '재고': values[6],
-                '담당자': values[7],
-                '차량번호': values[8],
-                '주행거리': values[9],
-                '차량점검': values[10],
-                '차량비고': values[11],
-                '비고': values[12]
-            })
+            row_data = {}
+            for i, col in enumerate(columns):
+                row_data[col] = values[i] if i < len(values) else ''
+            history_data.append(row_data)
         
         if not history_data:
             messagebox.showinfo("알림", "내보낼 데이터가 없습니다.")
