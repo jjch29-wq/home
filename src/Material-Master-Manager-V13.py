@@ -8222,8 +8222,8 @@ class MaterialManager:
             start_ts = pd.to_datetime(start_date).normalize()
             end_ts = pd.to_datetime(end_date).normalize()
             date_mask = (df['_date'] >= start_ts) & (df['_date'] <= end_ts)
-            if df['_date'].notna().sum() == 0:
-                date_mask = pd.Series([True] * len(df), index=df.index)
+            # [STRICT] Exclude any rows with invalid/missing dates (NaT)
+            date_mask = date_mask & df['_date'].notna()
         else:
             date_mask = pd.Series([True] * len(df), index=df.index)
 
