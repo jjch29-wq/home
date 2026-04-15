@@ -8235,15 +8235,6 @@ class MaterialManager:
         mask = date_mask & site_mask
         df = df[mask].copy()
 
-        # 날짜 조건으로 0건이면 동일 현장 전체기간으로 완화(사용성 개선)
-        if df.empty and site and site != '전체':
-            df = self.daily_usage_df.copy()
-            if 'Site' not in df.columns and '현장' in df.columns:
-                df['Site'] = df['현장']
-            if 'Site' in df.columns:
-                df['_site_norm'] = df['Site'].astype(str).str.strip()
-                df = df[df['_site_norm'] == site].copy()
-
         # --- 자재 원가 맵 ---
         mat_id_cost_map = {}
         if 'MaterialID' in self.materials_df.columns and '원가' in self.materials_df.columns:
