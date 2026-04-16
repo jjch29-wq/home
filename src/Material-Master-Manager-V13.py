@@ -1705,12 +1705,10 @@ class MaterialManager:
                 parent = widget
                 while parent:
                     if isinstance(parent, tk.Canvas):
-                        # Do not scroll the daily usage entry form canvas as it has no scrollbars
-                        if hasattr(self, 'entry_canvas') and parent is self.entry_canvas:
-                            return
-                            
+                        # Allow scrolling on all canvases
                         parent.yview_scroll(int(-1 * (event.delta / 120)), "units")
                         return
+
                     if hasattr(parent, 'master') and parent.master:
                         parent = parent.master
                     else:
@@ -4063,7 +4061,8 @@ class MaterialManager:
                     '장비명': row.get('장비명', ''),
                     '품목명': row.get('품목명', ''),
                     'MaterialID': row.get('MaterialID', ''),
-                    '수량': row.get('수량', row.get('필름매수', row.get('FilmCount', '0'))),
+                    # [BUG FIX] Prioritize '검사량' for correct quantity display in unified view
+                    '수량': row.get('검사량', row.get('수량', row.get('필름매수', row.get('FilmCount', '0')))),
                     '형광자분': row.get('형광자분', '0'),
                     '흑색자분': row.get('흑색자분', '0'),
                     '백색페인트': row.get('백색페인트', '0'),
@@ -4123,6 +4122,29 @@ class MaterialManager:
                 if selected_vehicle and selected_vehicle != "전체":
                     df_unified = df_unified[df_unified['차량번호'].astype(str).str.contains(selected_vehicle, na=False, case=False, regex=False)]
 
+            # [NEW] Update Filter Dropdowns with latest unified data unique values
+            if hasattr(self, 'cb_trans_filter_site') and not getattr(self, '_site_filter_busy', False):
+                self._site_filter_busy = True
+                try:
+                    s_current = self.cb_trans_filter_site.get()
+                    s_vals = sorted(df_unified['Site'].dropna().astype(str).unique().tolist())
+                    self.cb_trans_filter_site['values'] = ["전체"] + [v for v in s_vals if v.strip()]
+                    if s_current: self.cb_trans_filter_site.set(s_current)
+                    else: self.cb_trans_filter_site.set("전체")
+                finally: self._site_filter_busy = False
+
+            if hasattr(self, 'cb_trans_filter_mat') and not getattr(self, '_mat_filter_busy', False):
+                self._mat_filter_busy = True
+                try:
+                    m_current = self.cb_trans_filter_mat.get()
+                    # Get display names for all MaterialIDs in the unified set
+                    unique_mat_ids = df_unified['MaterialID'].dropna().unique()
+                    m_vals = sorted([self.get_material_display_name(mid) for mid in unique_mat_ids])
+                    self.cb_trans_filter_mat['values'] = ["전체"] + [v for v in m_vals if v.strip()]
+                    if m_current: self.cb_trans_filter_mat.set(m_current)
+                    else: self.cb_trans_filter_mat.set("전체")
+                finally: self._mat_filter_busy = False
+
             # Sort and display
             df_sorted = df_unified.sort_values(by='Date', ascending=False).head(500)
             
@@ -4134,7 +4156,7 @@ class MaterialManager:
                         self.clean_nan(row['Site']),
                         self.clean_nan(row['장비명']),
                         self.clean_nan(row['품목명']),
-                        self.clean_nan(row['필름매수']),
+                        self.clean_nan(row['수량']),
                         self.clean_nan(row['형광자분']),
                         self.clean_nan(row['흑색자분']),
                         self.clean_nan(row['백색페인트']),
@@ -7380,12 +7402,14 @@ class MaterialManager:
             except Exception: pass
 
         # [STABILITY FIX] Use a Canvas to hold the entry form for draggable support.
-        # [REVISION] Scrollbars removed per user request for a cleaner UI.
+        # [REVISION] Restored scrollbar to satisfy the user request.
         canvas_parent = ttk.Frame(entry_frame)
         canvas_parent.pack(fill='both', expand=True, padx=2, pady=1)
         
         self.entry_canvas = tk.Canvas(canvas_parent, highlightthickness=0, bg=self.theme_bg)
-        # Scrollbars (entry_vsb/hsb) and their configurations have been removed.
+        entry_vsb = ttk.Scrollbar(canvas_parent, orient="vertical", command=self.entry_canvas.yview)
+        entry_vsb.pack(side='right', fill='y')
+        self.entry_canvas.configure(yscrollcommand=entry_vsb.set)
         self.entry_canvas.pack(side='left', fill='both', expand=True)
         
         self.entry_inner_frame = ttk.Frame(self.entry_canvas)
@@ -7402,7 +7426,8 @@ class MaterialManager:
         self.entry_inner_frame.bind("<Configure>", lambda e: self._ensure_canvas_scroll_region())
         self.entry_canvas.bind("<Configure>", _on_entry_config)
         
-        # Mouse Wheel bindings have been removed to prevent scrolling as requested.
+        # [NOTE] Mousewheel scrolling is handled by the global handler in __init__
+
         
         # Explicitly fix all possible grid rows to weight 0
         for r in range(100):
@@ -7534,11 +7559,7 @@ class MaterialManager:
         self.ent_daily_test_fee = ttk.Entry(form_content, width=12)
         self.ent_daily_test_fee.grid(row=4, column=3, padx=2, pady=1, sticky='w')
         
-        ttk.Label(form_content, text="필름:").grid(row=5, column=0, padx=2, pady=1, sticky='e')
-        self.ent_film_count = ttk.Entry(form_content, width=12)
-        self.ent_film_count.grid(row=5, column=1, padx=2, pady=1, sticky='w')
-        
-        # Add Sync button at the end of cost row for better flow
+        # Row 5: Sync Button (Film count removed as requested)
         btn_sync = ttk.Button(form_content, text="일괄", command=self.sync_worker_times, width=4)
         btn_sync.grid(row=5, column=3, padx=(10, 1), sticky='w')
         
@@ -7805,6 +7826,10 @@ class MaterialManager:
         btn_col_manage = ttk.Button(filter_frame, text="컬럼 관리", command=self.show_column_visibility_dialog)
         btn_col_manage.pack(side='left', padx=10)
 
+        # [NEW] Dedicated Save Button for the List View
+        self.btn_daily_save_list = ttk.Button(filter_frame, text="저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
+        self.btn_daily_save_list.pack(side='left', padx=10)
+
         # [NEW] Bind Enter key and selection events to all filter widgets for convenience
         filter_widgets = [
             self.cb_daily_filter_site, self.cb_daily_filter_material, 
@@ -7885,9 +7910,10 @@ class MaterialManager:
         list_frame.grid_columnconfigure(0, weight=1)
         
         # Auto-save column widths when user resizes columns
-        # [NEW] Bind worker details popup to both click and double-click
+        # [NEW] Bind worker details popup AND Quick Edit dialog to double-click
         self.daily_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.daily_usage_tree), add="+")
         self.daily_usage_tree.bind("<Double-1>", lambda e: self.show_worker_popup(e, self.daily_usage_tree), add="+")
+        self.daily_usage_tree.bind("<Double-1>", lambda e: self.open_edit_daily_usage_dialog(), add="+")
         
         # [NEW] Enable column reordering via drag & drop
         self.enable_tree_column_drag(self.daily_usage_tree)
@@ -10046,7 +10072,7 @@ class MaterialManager:
                 '장비명': self.cb_daily_equip.get().strip(),
                 '검사방법': self.cb_daily_test_method.get().strip(),
                 '검사량': to_f(self.ent_daily_test_amount),
-                'FilmCount': to_f(self.ent_film_count),
+                'FilmCount': 0, # Film count removed from UI, default to 0
                 '단가': to_f(self.ent_daily_unit_price),
                 '출장비': to_f(self.ent_daily_travel_cost),
                 '일식': to_f(self.ent_daily_meal_cost),
@@ -10149,7 +10175,20 @@ class MaterialManager:
                             }
                             self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
 
-            # 7. Save all company records
+            # 7. Create transaction for the main material usage
+            if records_to_save and mat_id and common_data['검사량'] > 0:
+                main_trans = {
+                    'Date': datetime.datetime.now(),
+                    'MaterialID': mat_id,
+                    'Type': 'OUT',
+                    'Quantity': -common_data['검사량'],
+                    'Note': f"{site} 현장 사용 (자동 차감)",
+                    'User': common_data.get('User', ''),
+                    'Site': site
+                }
+                self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([main_trans])], ignore_index=True)
+
+            # 8. Save all company records
             if records_to_save:
                 self.daily_usage_df = pd.concat([self.daily_usage_df, pd.DataFrame(records_to_save)], ignore_index=True)
             
@@ -10185,6 +10224,9 @@ class MaterialManager:
                 # Sync lists
                 if site not in self.sites:
                     self.sites.append(site); self.sites.sort(); self.save_tab_config()
+                
+                # [FIX] Restore focus to Site field for next entry immediately
+                self.root.after(100, self.cb_daily_site.focus_set)
             
         except Exception as e:
             import traceback
@@ -10327,9 +10369,9 @@ class MaterialManager:
             if widget and hasattr(widget, '_suggestion_win'):
                 widget._suggestion_win.hide()
 
-        # [NEW] Move focus to tree to ensure keyboard/window state transition
-        if hasattr(self, 'daily_usage_tree'):
-            self.daily_usage_tree.focus_set()
+        # [REMOVED] focus_set here stoles focus from the entry form after saving
+        # if hasattr(self, 'daily_usage_tree'):
+        #     self.daily_usage_tree.focus_set()
 
         # Clear current view
         for item in self.daily_usage_tree.get_children():
@@ -10495,6 +10537,13 @@ class MaterialManager:
         has_equip = False
         has_method = False
         has_note = False
+        has_product = False
+        has_entry_time = False
+        has_vehicle_no = False
+        has_mileage = False
+        has_veh_insp = False
+        has_veh_note = False
+        has_co_code = False
         
         
         current_date = None
@@ -10568,7 +10617,10 @@ class MaterialManager:
                     return float(str(val).replace(',', ''))
                 except: return 0.0
 
-            q_val = to_f(entry.get('수량', entry.get('검사량', 0.0)))
+            # [BUG FIX] Prioritize '검사량' (internal key) over '수량' (sometimes empty from import/legacy)
+            q_val = to_f(entry.get('검사량'))
+            if q_val == 0.0:
+                q_val = to_f(entry.get('수량', 0.0))
             p_val = to_f(entry.get('단가', 0.0))
             t_val_cost = to_f(entry.get('출장비', 0.0))
             m_val_cost = to_f(entry.get('일식', 0.0))
@@ -10712,6 +10764,23 @@ class MaterialManager:
             if pd.isna(note_val) or str(note_val).lower() == 'nan': note_val = ''
             
             display_note = f"[{user_val}] {note_val}" if user_val else note_val
+
+            # [BUG FIX] Update visibility flags during the loop with strict data checks
+            def has_data(val):
+                if pd.isna(val) or str(val).lower() == 'nan' or str(val).strip() in ('', '-', '0', '0.0'):
+                    return False
+                return True
+
+            if has_data(entry.get('장비명')): has_equip = True
+            if has_data(entry.get('검사방법')): has_method = True
+            if has_data(entry.get('Note')): has_note = True
+            if has_data(entry.get('MaterialID')): has_product = True
+            if has_data(entry.get('EntryTime')): has_entry_time = True
+            if has_data(entry.get('차량번호')): has_vehicle_no = True
+            if has_data(entry.get('주행거리')): has_mileage = True
+            if has_data(entry.get('차량점검')): has_veh_insp = True
+            if has_data(entry.get('차량비고')): has_veh_note = True
+            if has_data(entry.get('회사코드')): has_co_code = True
             
             # Insert with index as tag for reliable deletion
             # def clean_str(val): -> Removed, confirmed defined above
@@ -10785,27 +10854,31 @@ class MaterialManager:
             self.daily_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
             
             # --- Dynamic Column Hiding ---
-            # Mandatory cols are those that are ALWAYS essential (Site, Worker, Material, EntryTime, Date)
-            mandatory_cols = ['날짜', '현장', '작업자', '품목명', '입력시간']
+            # Mandatory cols (absolute minimum identifying info)
+            mandatory_cols = ['날짜', '현장', '작업자']
             
-            # Map dynamic columns to their total values
+            # Threshold for numeric visibility (avoid float noise)
+            T = 0.0001
             dynamic_col_status = {
-                '작업시간': total_work_hours > 0,
-                '수량': total_test_amount > 0,
-                '필름매수': total_film_count > 0,
-                '단가': total_unit_price > 0,
-                '출장비': total_travel_cost > 0,
-                '일식': total_meal_cost > 0,
-                '검사비': total_test_fee > 0,
-                'OT시간': total_ot_hours > 0,
-                'OT금액': total_ot_amount > 0,
+                '작업시간': total_work_hours > T,
+                '수량': total_test_amount > T,
+                '필름매수': total_film_count > T,
+                '단가': total_unit_price > T,
+                '출장비': total_travel_cost > T,
+                '일식': total_meal_cost > T,
+                '검사비': total_test_fee > T,
+                'OT시간': total_ot_hours > T,
+                'OT금액': total_ot_amount > T,
                 '장비명': has_equip,
                 '검사방법': has_method,
                 '비고': has_note,
-                '차량번호': not filtered_df.empty and (filtered_df['차량번호'].astype(str).str.strip() != '').any(),
-                '주행거리': not filtered_df.empty and (filtered_df['주행거리'].astype(str).str.strip() != '').any(),
-                '차량점검': not filtered_df.empty and (filtered_df['차량점검'].astype(str).str.strip() != '').any(),
-                '차량비고': not filtered_df.empty and (filtered_df['차량비고'].astype(str).str.strip() != '').any()
+                '차량번호': has_vehicle_no,
+                '주행거리': has_mileage,
+                '차량점검': has_veh_insp,
+                '차량비고': has_veh_note,
+                '품목명': has_product,
+                '입력시간': has_entry_time,
+                '회사코드': has_co_code
             }
             
             # Individual OT columns
@@ -10813,52 +10886,56 @@ class MaterialManager:
                 col_name = f'OT{i}'
                 dynamic_col_status[col_name] = total_indiv_ot_amounts[i-1] > 0
             
-            # RTK Columns (11-17) and RTK총계 (18)
+            # RTK Columns (11-17)
             rtk_col_names = ["센터미스", "농도", "마킹미스", "필름마크", "취급부주의", "고객불만", "기타"]
             for i, col_name in enumerate(rtk_col_names):
-                dynamic_col_status[col_name] = total_rtk[i] > 0
-            dynamic_col_status['RTK총계'] = total_rtk[7] > 0
+                dynamic_col_status[col_name] = (total_rtk[i] > T)
+            # Fix ID mismatch for Total RTK column
+            dynamic_col_status['RTK총계'] = (total_rtk[7] > T)
             
             # NDT Columns (19-25)
             ndt_col_names = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
             for i, col_name in enumerate(ndt_col_names):
-                dynamic_col_status[col_name] = total_ndt[i] > 0
+                dynamic_col_status[col_name] = (total_ndt[i] > T)
                 
             # Build final visible columns list based on the order in self.daily_usage_tree['columns']
             all_cols = self.daily_usage_tree['columns']
             
-            # If user has manually selected columns, respect those selections
+            # Build base visible list
             if hasattr(self, 'manual_visible_cols') and self.manual_visible_cols:
-                # Use manual selection directly but filter for columns that actually exist
                 visible_cols = [col for col in self.manual_visible_cols if col in all_cols]
-                
-                # [OPTIONAL] If some column NOT in manual_visible_cols has data (>0), we can choose to auto-show it 
-                # to prevent data loss perception, or strictly follow manual. 
-                # Let's prioritize manual, but still ALWAYS include mandatory cols.
-                for m_col in mandatory_cols:
-                    if m_col in all_cols and m_col not in visible_cols:
-                        visible_cols.append(m_col) # Simplified insert, order fixed below
-                
-                # Re-sort visible_cols based on original tree columns order
-                visible_cols = [col for col in all_cols if col in visible_cols]
             else:
-                # Default: Show all defined columns except internal technical ones
                 visible_cols = [col for col in all_cols if col != '(Full작업자)']
+
+            # Apply Smart Hiding to build final list
+            final_visible = []
+            for col in all_cols:
+                if col in mandatory_cols:
+                    # Mandatory cols always stay if they are in the base visible list
+                    # OR if we are in default mode (no manual selection)
+                    is_manual = hasattr(self, 'manual_visible_cols') and self.manual_visible_cols
+                    if col in visible_cols or not is_manual:
+                        final_visible.append(col)
+                elif col in visible_cols:
+                    # Check if column has data
+                    if dynamic_col_status.get(col, True):
+                        final_visible.append(col)
             
-            # Apply visible columns to treeview
-            self.daily_usage_tree['displaycolumns'] = visible_cols
+            # Final re-sort by original order
+            final_visible = [c for c in all_cols if c in final_visible]
+            self.daily_usage_tree['displaycolumns'] = final_visible
             
             # [REMOVED] Header rename '필름매수' to 'RTK' per user request
 
             # Ensure stretch=False and minwidth is relaxed for ALL displayed columns
             # This is critical for making all columns, especially the last one, resizable
-            for col in visible_cols:
+            for col in final_visible:
                 self.daily_usage_tree.column(col, stretch=False, minwidth=20)
 
             # Re-apply saved column widths if available
             if hasattr(self, 'tab_config') and 'daily_usage_col_widths' in self.tab_config:
                 saved_widths = self.tab_config['daily_usage_col_widths']
-                for col in visible_cols:
+                for col in final_visible:
                     if col in saved_widths:
                         try:
                             self.daily_usage_tree.column(col, width=int(saved_widths[col]), stretch=False)
@@ -10873,19 +10950,29 @@ class MaterialManager:
             self.daily_usage_tree.detach(self.daily_usage_tree.get_children()[-1])
             self.daily_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
         else:
-            # If empty, check manual visibility first
-            if hasattr(self, 'manual_visible_cols') and self.manual_visible_cols:
-                visible_cols = [col for col in self.manual_visible_cols if col in self.daily_usage_tree['columns']]
-                self.daily_usage_tree['displaycolumns'] = visible_cols
-            else:
-                # Default: Show all columns
-                visible_cols = [col for col in self.daily_usage_tree['columns'] if col != '(Full작업자)']
-                self.daily_usage_tree['displaycolumns'] = visible_cols
+            # If empty, apply same smart visibility logic (show only mandatory)
+            all_cols = self.daily_usage_tree['columns']
+            mandatory_cols = ['날짜', '현장', '작업자']
             
-            # Ensure stretch=False and minwidth is relaxed for all displayed columns
-            for col in visible_cols:
+            if hasattr(self, 'manual_visible_cols') and self.manual_visible_cols:
+                visible_cols = [col for col in self.manual_visible_cols if col in all_cols]
+            else:
+                visible_cols = [col for col in all_cols if col != '(Full작업자)']
+                
+            final_visible = []
+            for col in all_cols:
+                if col in mandatory_cols:
+                    is_manual = hasattr(self, 'manual_visible_cols') and self.manual_visible_cols
+                    if col in visible_cols or not is_manual:
+                        final_visible.append(col)
+            
+            # Re-sort and apply
+            final_visible = [c for c in all_cols if c in final_visible]
+            self.daily_usage_tree['displaycolumns'] = final_visible
+            
+            # Standard column setup for display
+            for col in final_visible:
                 self.daily_usage_tree.column(col, stretch=False, minwidth=20)
-
             # Re-apply saved column widths if available
             if hasattr(self, 'tab_config') and 'daily_usage_col_widths' in self.tab_config:
                 saved_widths = self.tab_config['daily_usage_col_widths']
@@ -11178,7 +11265,7 @@ class MaterialManager:
         cost_frame.pack(fill='x', pady=5)
         
         qty_configs = [
-            ('검사량', '검사량'), ('필름매수', 'FilmCount'), ('단가', '단가'), ('출장비', '출장비'),
+            ('검사량', '검사량'), ('단가', '단가'), ('출장비', '출장비'),
             ('일식', '일식'), ('검사비', '검사비')
         ]
         for i, (lbl, key) in enumerate(qty_configs):
@@ -11247,13 +11334,7 @@ class MaterialManager:
         worker_main_frame = ttk.LabelFrame(scrollable_frame, text="작업자 정보 (1~10)", padding=10)
         worker_main_frame.pack(fill='x', pady=5)
         
-        # [NEW] Inner-dialog helper for RT film sync
-        def sync_edit_film(event=None):
-            method = cb_method.get().strip().upper()
-            if "RT" == method or method.startswith("RT "):
-                qty = fields['검사량'].get().strip()
-                fields['FilmCount'].delete(0, tk.END)
-                fields['FilmCount'].insert(0, qty)
+
 
         # [NEW] Inner-dialog helper for Fee calculation
         def update_edit_fee_calc(event=None):
@@ -11274,9 +11355,8 @@ class MaterialManager:
                 fields['검사비'].insert(0, f"{calc_fee:,.0f}")
             except: pass
 
-        # Bindings for auto-sync and calc
-        cb_method.bind('<<ComboboxSelected>>', sync_edit_film)
-        fields['검사량'].bind('<KeyRelease>', lambda e: [sync_edit_film(), update_edit_fee_calc()])
+        # Bindings for auto-calc
+        fields['검사량'].bind('<KeyRelease>', lambda e: update_edit_fee_calc())
         
         # [NEW] Add comma auto-formatting for edit fields
         for k in ['단가', '출장비', '일식', '검사비']:
@@ -11357,7 +11437,8 @@ class MaterialManager:
             new_data['검사방법'] = cb_method.get().strip()
             
             # Numeric fields
-            for key in ['검사량', 'FilmCount', '단가', '출장비', '일식', '검사비']:
+            new_data['FilmCount'] = 0.0 # Film count removed from UI
+            for key in ['검사량', '단가', '출장비', '일식', '검사비']:
                 try: 
                     v_str = fields[key].get().strip().replace(',', '')
                     new_data[key] = float(v_str) if v_str else 0.0
@@ -11524,7 +11605,7 @@ class MaterialManager:
             new_date = pd.to_datetime(new_data['Date'])
             new_site = new_data['Site']
             new_mat_id = new_data['MaterialID']
-            new_film_count = new_data.get('FilmCount', 0)
+            new_qty = float(new_data.get('검사량', 0))
             new_note_pattern = f'{new_site} 현장 사용 (자동 차감)'
             
             # Collect all workers names for transaction
@@ -11534,14 +11615,13 @@ class MaterialManager:
                 if n: workers_names.append(n)
             all_workers = ", ".join(workers_names)
             
-            # Use same logic as add_daily_usage_entry but adapted
-            total_deduction = new_film_count + rtk_total
-            if total_deduction > 0:
+            # [REVISION] Main material transaction
+            if new_mat_id and new_qty > 0:
                 new_trans = {
                     'Date': datetime.datetime.combine(new_date.date(), datetime.datetime.now().time()),
                     'MaterialID': new_mat_id,
                     'Type': 'OUT',
-                    'Quantity': total_deduction,
+                    'Quantity': -new_qty,
                     'User': all_workers,
                     'Site': new_site,
                     'Note': new_note_pattern
@@ -11549,9 +11629,10 @@ class MaterialManager:
                 self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
             
             # NDT Deductions
+            ndt_names = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
             for cat in ndt_names:
                 m_key = "".join(cat.split())
-                qty = new_data.get(f'NDT_{m_key}', 0)
+                qty = float(new_data.get(f'NDT_{m_key}', 0))
                 if qty > 0:
                     found_ids = self.materials_df[self.materials_df['품목명'] == cat]['MaterialID']
                     if not found_ids.empty:
@@ -11559,7 +11640,7 @@ class MaterialManager:
                             'Date': datetime.datetime.combine(new_date.date(), datetime.datetime.now().time()),
                             'MaterialID': found_ids.iloc[0],
                             'Type': 'OUT',
-                            'Quantity': qty,
+                            'Quantity': -qty,
                             'User': all_workers,
                             'Site': new_site,
                             'Note': new_note_pattern
@@ -13380,6 +13461,16 @@ class MaterialManager:
         # 3. Trigger Search
         self.update_daily_usage_view()
 
+    def save_all_daily_usage_changes(self):
+        """Unified save button for the inquiry list to satisfy spreadsheet-style workflow"""
+        try:
+            if self.save_data():
+                # Provide clear feedback that ALL changes in the app are saved
+                messagebox.showinfo("저장 완료", "모든 변경 사항이 마스터 파일(Material_Inventory.xlsx)에 안전하게 저장되었습니다.")
+                # Refresh view to ensure everything is synchronized
+                self.update_daily_usage_view()
+        except Exception as e:
+            messagebox.showerror("저장 오류", f"데이터 저장 중 오류가 발생했습니다: {e}")
 
 if __name__ == "__main__":
     root = tk.Tk()
