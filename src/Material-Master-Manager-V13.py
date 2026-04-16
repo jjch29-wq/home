@@ -1,4 +1,4 @@
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import sys
 import subprocess
@@ -1789,7 +1789,9 @@ class MaterialManager:
         self.origin_list = []
         self.sn_list = []
         self.model_list = []
+        self.supplier_list = []
         self.equipment_suggestions = []
+        self.test_methods = ["RT", "PAUT", "UT", "MT", "PT", "PMI"]  # [NEW] Initialize test methods
         self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
         self.hidden_sites = []  # [NEW] 현장명 드롭다운에서 숨길 현장 목록 (config에 저장)
         
@@ -1994,10 +1996,10 @@ class MaterialManager:
                 ])
                 self.transactions_df = pd.DataFrame(columns=['Date', 'MaterialID', 'Site', 'Type', 'Quantity', 'Note', 'User', '차량번호', '주행거리', '차량점검', '차량비고'])
                 self.monthly_usage_df = pd.DataFrame(columns=['MaterialID', 'Year', 'Month', 'Site', 'Usage', 'Note', 'Entry Date'])
-                self.daily_usage_df = pd.DataFrame(columns=['Date', 'Site', 'MaterialID', 'Usage', 'Note', 'EntryTime', 
-                                                'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크', 
+                self.daily_usage_df = pd.DataFrame(columns=['Date', 'Site', 'MaterialID', 'Usage', 'Note', 'EntryTime',
+                                                'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크',
                                                 'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', '장비명', '검사방법', '검사량',
-                                                '단가', '출장비', '일식', '검사비', 'FilmCount',
+                                                '단가', '출장비', '일식', '검사비', 'FilmCount', '회사코드',
                                                 'User', 'WorkTime', 'OT',
                                                 'User2', 'WorkTime2', 'OT2',
                                                 'User3', 'WorkTime3', 'OT3',
@@ -2170,10 +2172,11 @@ class MaterialManager:
                         # Remove old RTK Category column if exists
                         if 'RTK Category' in self.daily_usage_df.columns:
                             self.daily_usage_df = self.daily_usage_df.drop('RTK Category', axis=1)
+                        
                 except Exception as e:
                     print(f"DEBUG: Failed to load DailyUsage: {e}")
-                    self.daily_usage_df = pd.DataFrame(columns=['Date', 'Site', 'MaterialID', 'Usage', 'Note', 'EntryTime', 
-                                                        'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크', 
+                    self.daily_usage_df = pd.DataFrame(columns=['Date', 'Site', 'MaterialID', 'Usage', 'Note', 'EntryTime',
+                                                        'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크',
                                                         'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', 'User', '장비명', '검사량',
                                                         '단가', '출장비', '일식', '검사비',
                                                         '차량번호', '주행거리', '차량점검', '차량비고'])
@@ -2258,9 +2261,9 @@ class MaterialManager:
             ])
             self.transactions_df = pd.DataFrame(columns=['Date', 'MaterialID', 'Site', 'Type', 'Quantity', 'Note', 'User', '차량번호', '주행거리', '차량점검', '차량비고'])
             self.monthly_usage_df = pd.DataFrame(columns=['MaterialID', 'Year', 'Month', 'Site', 'Usage', 'Note', 'Entry Date'])
-            self.daily_usage_df = pd.DataFrame(columns=['Date', 'Site', 'MaterialID', 'Usage', 'Note', 'EntryTime', 
-                                                'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크', 
-                                                'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', '장비명', '검사량',
+            self.daily_usage_df = pd.DataFrame(columns=['Date', 'Site', 'MaterialID', 'Usage', 'Note', 'EntryTime',
+                                                'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크',
+                                                'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', '장비명', '검사량', '회사코드',
                                             '차량번호', '주행거리', '차량점검', '차량비고'])
             self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note'])
         
@@ -2352,7 +2355,14 @@ class MaterialManager:
             self._autocomplete_timers = {}
 
         def perform_filter(event_widget, force_all=False):
+            """Filter combobox values based on typed text."""
             typed = str(event_widget.get()).strip()
+            widget_name = str(event_widget)
+            print(f"[FILTER] Widget: {widget_name}, typed='{typed}', force_all={force_all}")
+            
+            if not typed and not force_all:
+                print(f"[FILTER] Skipping - empty input")
+                return  # Don't filter on empty input unless forced
             
             if values_list_attr:
                 base_values = getattr(self, values_list_attr, [])
@@ -2362,41 +2372,191 @@ class MaterialManager:
                 base_values = []
             
             all_values = (prefix_list + base_values) if prefix_list else base_values
+            print(f"[FILTER] all_values count: {len(all_values)}")
             
             if force_all or not typed:
                 new_values = all_values
             elif prefix_list and typed in prefix_list:
                 new_values = all_values
             else:
-                new_values = [v for v in all_values if str(v).lower().startswith(typed.lower())]
+                new_values = [v for v in all_values if typed.lower() in str(v).lower()]
             
-            # [FIX] Do not update if values are already correct to avoid recursive issues
+            print(f"[FILTER] new_values count: {len(new_values)}, changed: {list(event_widget['values']) != list(new_values)}")
+            
+            # Update values if changed
             if list(event_widget['values']) != list(new_values):
                 event_widget['values'] = new_values
+                print(f"[FILTER] Updated values to {len(new_values)} items")
+            
+            # Auto-open dropdown after 400ms of no typing (any number of results)
+            print(f"[FILTER] Checking auto-dropdown: force_all={force_all}, typed='{typed}', new_values={len(new_values)}")
+            if not force_all and typed and len(new_values) > 0:
+                # Cancel any pending open
+                if hasattr(event_widget, '_dropdown_timer'):
+                    event_widget.after_cancel(event_widget._dropdown_timer)
+                    print(f"[FILTER] Cancelled previous dropdown timer")
+                
+                def open_dropdown():
+                    print(f"[DROPDOWN] Timer fired, attempting to open")
+                    try:
+                        # Only if still has focus
+                        if event_widget.focus_get() == event_widget:
+                            pos = event_widget.index(tk.INSERT)
+                            print(f"[DROPDOWN] Has focus, pos={pos}, opening...")
+                            event_widget.event_generate('<Down>')
+                            # Keep typing position
+                            event_widget.after(50, lambda: event_widget.icursor(pos))
+                            print(f"[DROPDOWN] Opened and positioned cursor")
+                        else:
+                            print(f"[DROPDOWN] No focus, skipping")
+                    except Exception as e:
+                        print(f"[DROPDOWN] Error: {e}")
+                
+                event_widget._dropdown_timer = event_widget.after(400, open_dropdown)
+                print(f"[FILTER] Set dropdown timer for 400ms")
+
 
         def on_keyrelease(event):
+            """Filter values as user types. Down arrow or click ▼ to see filtered list."""
+            print(f"[KEY] keysym={event.keysym}, char='{event.char}'")
+            
+            # Cancel any pending dropdown open while typing
+            if hasattr(combobox, '_dropdown_timer'):
+                print(f"[KEY] Cancelling dropdown timer")
+                combobox.after_cancel(combobox._dropdown_timer)
+                delattr(combobox, '_dropdown_timer')
+            else:
+                print(f"[KEY] No dropdown timer to cancel")
+            
             if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
+                print(f"[KEY] Ignored key")
                 return
             
-            widget = event.widget
-            if widget in self._autocomplete_timers:
-                self.root.after_cancel(self._autocomplete_timers[widget])
+            # For Korean input (composition), char may be empty but we still need to filter
+            # The actual text will be in the widget
+            print(f"[KEY] char='{event.char}', will filter using widget.get()")
             
-            timer_id = self.root.after(50, lambda: perform_filter(widget, force_all=False))
-            self._autocomplete_timers[widget] = timer_id
+            # Use combobox directly (event.widget may be internal entry)
+            print(f"[KEY] Scheduling filter for {str(combobox)}")
+            if combobox in self._autocomplete_timers:
+                self.root.after_cancel(self._autocomplete_timers[combobox])
+            
+            # Debounce: wait after typing stops before filtering (with Korean IME polling)
+            def delayed_filter():
+                try:
+                    # Poll for Korean IME composition - check every 50ms for up to 1 second
+                    max_polls = 20  # 20 * 50ms = 1 second
+                    poll_count = [0]  # Use list for mutable reference
+                    last_val = ['']  # Track last value
+                    
+                    def poll_for_value():
+                        try:
+                            current_val = combobox.get()
+                            print(f"[POLL] count={poll_count[0]}, value='{current_val}'")
+                            
+                            # If value changed from empty to non-empty, we're done
+                            if not last_val[0] and current_val:
+                                print(f"[POLL] Value appeared: '{current_val}'")
+                                perform_filter(combobox, force_all=False)
+                                return
+                            
+                            # If value is still empty and we haven't exceeded max polls
+                            if not current_val and poll_count[0] < max_polls:
+                                last_val[0] = current_val
+                                poll_count[0] += 1
+                                combobox.after(50, poll_for_value)  # Check again in 50ms
+                                return
+                            
+                            # Timeout or value found - perform filter anyway
+                            if current_val:
+                                print(f"[POLL] Final filter with value: '{current_val}'")
+                                perform_filter(combobox, force_all=False)
+                            else:
+                                # [KOREAN IME] Value still empty after polling - show all values
+                                print(f"[POLL] Korean IME detected, showing all values")
+                                perform_filter(combobox, force_all=True)
+                        except Exception as e:
+                            print(f"[POLL] Error: {e}")
+                    
+                    poll_for_value()
+                except Exception as e:
+                    print(f"[DELAYED] Error during filter: {e}")
+            
+            timer_id = self.root.after(200, delayed_filter)  # Initial 200ms delay
+            self._autocomplete_timers[combobox] = timer_id
         
         combobox.bind('<KeyRelease>', on_keyrelease, add=True)
+        
+        # [NEW] Also bind to KeyPress for Korean input composition support
+        def on_keypress(event):
+            """Handle KeyPress for Korean input composition."""
+            print(f"[KEYPRESS] keysym={event.keysym}, char='{event.char}'")
+            # For Korean input, schedule filter on any keypress too
+            if event.keysym not in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
+                # Cancel existing timer
+                if combobox in self._autocomplete_timers:
+                    self.root.after_cancel(self._autocomplete_timers[combobox])
+                
+                # Also cancel dropdown timer
+                if hasattr(combobox, '_dropdown_timer'):
+                    combobox.after_cancel(combobox._dropdown_timer)
+                    delattr(combobox, '_dropdown_timer')
+                
+                # Schedule filter with polling for Korean IME composition
+                def delayed_filter_korean():
+                    try:
+                        # Poll for Korean IME composition - check every 50ms for up to 1 second
+                        max_polls = 20
+                        poll_count = [0]
+                        last_val = ['']
+                        
+                        def poll_for_value():
+                            try:
+                                current_val = combobox.get()
+                                print(f"[KOREAN-POLL] count={poll_count[0]}, value='{current_val}'")
+                                
+                                # If value appeared, filter immediately
+                                if not last_val[0] and current_val:
+                                    print(f"[KOREAN-POLL] Value appeared: '{current_val}'")
+                                    perform_filter(combobox, force_all=False)
+                                    return
+                                
+                                # Keep polling while empty
+                                if not current_val and poll_count[0] < max_polls:
+                                    last_val[0] = current_val
+                                    poll_count[0] += 1
+                                    combobox.after(50, poll_for_value)
+                                    return
+                                
+                                # Done polling
+                                if current_val:
+                                    perform_filter(combobox, force_all=False)
+                                else:
+                                    # [KOREAN IME] Show all values
+                                    print(f"[KOREAN-POLL] Timeout, showing all values")
+                                    perform_filter(combobox, force_all=True)
+                            except Exception as e:
+                                print(f"[KOREAN-POLL] Error: {e}")
+                        
+                        poll_for_value()
+                    except Exception as e:
+                        print(f"[KOREAN] Error: {e}")
+                
+                timer_id = self.root.after(400, delayed_filter_korean)  # 400ms for Korean IME
+                self._autocomplete_timers[combobox] = timer_id
+        
+        combobox.bind('<KeyPress>', on_keypress, add=True)
 
         def on_focus_in(event):
             try:
-                event.widget.selection_range(0, tk.END)
+                combobox.selection_range(0, tk.END)
             except: pass
-            perform_filter(event.widget, force_all=True)
+            perform_filter(combobox, force_all=True)
             
         combobox.bind('<FocusIn>', on_focus_in, add=True)
         
-        # [NEW] Also show list on click 
-        combobox.bind('<Button-1>', lambda e: perform_filter(e.widget, force_all=True), add=True)
+        # Click to show full list
+        combobox.bind('<Button-1>', lambda e: perform_filter(combobox, force_all=True), add=True)
 
 
     def apply_autocomplete_to_all_comboboxes(self):
@@ -2409,9 +2569,13 @@ class MaterialManager:
             'cb_trans_filter_site': 'sites',
             'cb_daily_filter_site': 'sites',
             'cb_budget_site': 'budget_sites',
+            'cb_daily_material': 'materials_display_list',
             'cb_daily_filter_material': 'materials_display_list',
             'cb_daily_filter_worker': 'users',
             'cb_daily_filter_vehicle': 'vehicles',
+            'cb_daily_equip': 'equipment_suggestions',  # Daily usage equipment
+            'cb_daily_test_method': 'test_methods',  # Test method list
+            'cb_daily_co_code': 'co_code_list',  # [NEW] Company code for MT/PT
             'cb_trans_filter_vehicle': 'vehicles',
             'cb_sales_filter_site': 'sites',
             'cb_filter_co': 'co_code_list',
@@ -2424,11 +2588,20 @@ class MaterialManager:
             'cb_co_code': 'co_code_list',
             'cb_eq_code': 'eq_code_list',
             'cb_item_name': 'item_name_list',
+            'cb_model': 'model_list',
             'cb_class': 'class_list',
             'cb_spec': 'spec_list',
             'cb_unit': 'unit_list',
+            'cb_supplier': 'supplier_list',
             'cb_mfr': 'mfr_list',
-            'cb_origin': 'origin_list'
+            'cb_origin': 'origin_list',
+            'cb_trans_site': 'sites',
+            'cb_warehouse': 'warehouses',
+            'ent_user': 'users',
+            # [NEW] Additional comboboxes for autocomplete
+            'cb_name': 'users',  # Worker name
+            'ent_worktime': 'worktimes',  # Work time
+            'cb_vehicle_info': 'vehicles',  # Vehicle info
         }
         
         for widget_attr, list_attr in mappings.items():
@@ -2441,8 +2614,6 @@ class MaterialManager:
                         self.enable_autocomplete(widget, values_list_attr=list_attr, prefix_list=['전체'])
                     else:
                         self.enable_autocomplete(widget, values_list_attr=list_attr)
-
-        # Autosuggestion active for these fields
 
     def _safe_format_datetime(self, val, format_str='%Y-%m-%d %H:%M'):
         if pd.isna(val) or val is None or str(val).strip().lower() in ['nan', 'none', '']:
@@ -3076,73 +3247,83 @@ class MaterialManager:
         ttk.Label(reg_frame, text="품목명:").grid(row=1, column=0, padx=5, pady=2, sticky='w')
         self.cb_item_name = ttk.Combobox(reg_frame, width=15)
         self.cb_item_name.grid(row=1, column=1, padx=5, pady=2, sticky='ew')
-        self.cb_item_name.bind('<Return>', lambda e: self.ent_sn.focus_set())
+        self.cb_item_name.bind('<Return>', lambda e: self.cb_model.focus_set())
         
-        ttk.Label(reg_frame, text="SN번호:").grid(row=1, column=2, padx=5, pady=2, sticky='w')
-        self.ent_sn = ttk.Entry(reg_frame, width=20)
-        self.ent_sn.grid(row=1, column=3, padx=5, pady=2, sticky='ew')
-        self.ent_sn.bind('<Return>', lambda e: self.cb_class.focus_set())
+        ttk.Label(reg_frame, text="모델명:").grid(row=1, column=2, padx=5, pady=2, sticky='w')
+        self.cb_model = ttk.Combobox(reg_frame, width=20)
+        self.cb_model.grid(row=1, column=3, padx=5, pady=2, sticky='ew')
+        self.cb_model.bind('<Return>', lambda e: self.ent_sn.focus_set())
         
         # Row 2
-        ttk.Label(reg_frame, text="분류:").grid(row=2, column=0, padx=5, pady=2, sticky='w')
-        self.cb_class = ttk.Combobox(reg_frame, width=15)
-        self.cb_class.grid(row=2, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="SN번호:").grid(row=2, column=0, padx=5, pady=2, sticky='w')
+        self.ent_sn = ttk.Entry(reg_frame, width=15)
+        self.ent_sn.grid(row=2, column=1, padx=5, pady=2, sticky='ew')
+        self.ent_sn.bind('<Return>', lambda e: self.cb_class.focus_set())
+        
+        ttk.Label(reg_frame, text="분류:").grid(row=2, column=2, padx=5, pady=2, sticky='w')
+        self.cb_class = ttk.Combobox(reg_frame, width=20)
+        self.cb_class.grid(row=2, column=3, padx=5, pady=2, sticky='ew')
         self.cb_class.bind('<Return>', lambda e: self.cb_spec.focus_set())
         
-        ttk.Label(reg_frame, text="규격:").grid(row=2, column=2, padx=5, pady=2, sticky='w')
-        self.cb_spec = ttk.Combobox(reg_frame, width=20)
-        self.cb_spec.grid(row=2, column=3, padx=5, pady=2, sticky='ew')
+        # Row 3
+        ttk.Label(reg_frame, text="규격:").grid(row=3, column=0, padx=5, pady=2, sticky='w')
+        self.cb_spec = ttk.Combobox(reg_frame, width=15)
+        self.cb_spec.grid(row=3, column=1, padx=5, pady=2, sticky='ew')
         self.cb_spec.bind('<Return>', lambda e: self.cb_unit.focus_set())
         
-        # Row 3
-        ttk.Label(reg_frame, text="단위:").grid(row=3, column=0, padx=5, pady=2, sticky='w')
-        self.cb_unit = ttk.Combobox(reg_frame, width=15)
-        self.cb_unit.grid(row=3, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="단위:").grid(row=3, column=2, padx=5, pady=2, sticky='w')
+        self.cb_unit = ttk.Combobox(reg_frame, width=20)
+        self.cb_unit.grid(row=3, column=3, padx=5, pady=2, sticky='ew')
         self.cb_unit.bind('<Return>', lambda e: self.cb_supplier.focus_set())
         
-        ttk.Label(reg_frame, text="공급업자:").grid(row=3, column=2, padx=5, pady=2, sticky='w')
-        self.cb_supplier = ttk.Combobox(reg_frame, width=20)
-        self.cb_supplier.grid(row=3, column=3, padx=5, pady=2, sticky='ew')
+        # Row 4
+        ttk.Label(reg_frame, text="공급업자:").grid(row=4, column=0, padx=5, pady=2, sticky='w')
+        self.cb_supplier = ttk.Combobox(reg_frame, width=15)
+        self.cb_supplier.grid(row=4, column=1, padx=5, pady=2, sticky='ew')
         self.cb_supplier.bind('<Return>', lambda e: self.cb_mfr.focus_set())
         
-        # Row 4
-        ttk.Label(reg_frame, text="제조사:").grid(row=4, column=0, padx=5, pady=2, sticky='w')
-        self.cb_mfr = ttk.Combobox(reg_frame, width=15)
-        self.cb_mfr.grid(row=4, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="제조사:").grid(row=4, column=2, padx=5, pady=2, sticky='w')
+        self.cb_mfr = ttk.Combobox(reg_frame, width=20)
+        self.cb_mfr.grid(row=4, column=3, padx=5, pady=2, sticky='ew')
         self.cb_mfr.bind('<Return>', lambda e: self.cb_origin.focus_set())
         
-        ttk.Label(reg_frame, text="제조국:").grid(row=4, column=2, padx=5, pady=2, sticky='w')
-        self.cb_origin = ttk.Combobox(reg_frame, width=20)
-        self.cb_origin.grid(row=4, column=3, padx=5, pady=2, sticky='ew')
+        # Row 5
+        ttk.Label(reg_frame, text="제조국:").grid(row=5, column=0, padx=5, pady=2, sticky='w')
+        self.cb_origin = ttk.Combobox(reg_frame, width=15)
+        self.cb_origin.grid(row=5, column=1, padx=5, pady=2, sticky='ew')
         self.cb_origin.bind('<Return>', lambda e: self.ent_reorder.focus_set())
         
-        # Row 5
-        ttk.Label(reg_frame, text="재주문 수준:").grid(row=5, column=0, padx=5, pady=2, sticky='w')
-        self.ent_reorder = ttk.Entry(reg_frame, width=10)
-        self.ent_reorder.grid(row=5, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="재주문 수준:").grid(row=5, column=2, padx=5, pady=2, sticky='w')
+        self.ent_reorder = ttk.Entry(reg_frame, width=20)
+        self.ent_reorder.grid(row=5, column=3, padx=5, pady=2, sticky='ew')
         self.ent_reorder.insert(0, "0")
         self.ent_reorder.bind('<Return>', lambda e: self.ent_init.focus_set())
         
-        ttk.Label(reg_frame, text="초기재고:").grid(row=5, column=2, padx=5, pady=2, sticky='w')
+        # Row 6
+        ttk.Label(reg_frame, text="초기재고:").grid(row=6, column=0, padx=5, pady=2, sticky='w')
         self.ent_init = ttk.Entry(reg_frame, width=15)
-        self.ent_init.grid(row=5, column=3, padx=5, pady=2, sticky='ew')
+        self.ent_init.grid(row=6, column=1, padx=5, pady=2, sticky='ew')
         self.ent_init.insert(0, "0")
         self.ent_init.bind('<Return>', lambda e: self.ent_price.focus_set())
         
-        ttk.Label(reg_frame, text="단가(가격):").grid(row=6, column=0, padx=5, pady=2, sticky='w')
-        self.ent_price = ttk.Entry(reg_frame, width=15)
-        self.ent_price.grid(row=6, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="단가(가격):").grid(row=6, column=2, padx=5, pady=2, sticky='w')
+        self.ent_price = ttk.Entry(reg_frame, width=20)
+        self.ent_price.grid(row=6, column=3, padx=5, pady=2, sticky='ew')
         self.ent_price.insert(0, "0")
         self.ent_price.bind('<Return>', lambda e: self.ent_cost.focus_set())
         
-        ttk.Label(reg_frame, text="원가:").grid(row=6, column=2, padx=5, pady=2, sticky='w')
+        # Row 7
+        ttk.Label(reg_frame, text="원가:").grid(row=7, column=0, padx=5, pady=2, sticky='w')
         self.ent_cost = ttk.Entry(reg_frame, width=15)
-        self.ent_cost.grid(row=6, column=3, padx=5, pady=2, sticky='ew')
+        self.ent_cost.grid(row=7, column=1, padx=5, pady=2, sticky='ew')
         self.ent_cost.insert(0, "0")
         self.ent_cost.bind('<Return>', lambda e: btn_reg.focus_set())
         
+        # Row 8
         btn_reg = ttk.Button(reg_frame, text="자재 등록", command=self.register_material)
-        btn_reg.grid(row=7, column=0, columnspan=4, pady=10)
+        btn_reg.grid(row=8, column=0, columnspan=4, pady=10)
+        
+
         
         # Side 2: Transaction Entry
         trans_reg_container = ttk.Frame(self.inout_top_paned)
@@ -3165,7 +3346,7 @@ class MaterialManager:
         self.cb_material.bind('<Return>', lambda e: self.cb_type.focus_set())
         
         # Register autocomplete for material selection
-        self.enable_autocomplete(self.cb_material, values_list=[]) # Initial empty, will be updated by update_material_combo
+        self.enable_autocomplete(self.cb_material, values_list=[]) # Initial empty, will be updated
         self.update_material_combo()
         
         # Model List display - Moved to row 4 for narrower fit
@@ -3380,6 +3561,7 @@ class MaterialManager:
         all_vals.sort()
         
         # Update ComboBoxes
+        self.cached_material_list = all_vals
         if hasattr(self, 'cb_material'):
             self.cb_material['values'] = all_vals
         if hasattr(self, 'cb_daily_material'):
@@ -3482,26 +3664,29 @@ class MaterialManager:
             filtered = [v for v in source if q in v.lower()]
 
         # [FIX] Only update if values changed to avoid recursion/flicker
-        if list(combobox['values']) != list(filtered):
+        values_changed = list(combobox['values']) != list(filtered)
+        if values_changed:
             combobox['values'] = filtered
 
-        # Keep current input/caret intact after values update
-        def _restore_state():
+            # Keep current input/caret intact after values update
+            def _restore_state():
+                try:
+                    # [BUGFIX] Only call focus_set if it actually lost focus
+                    # Otherwise, calling focus_set() unconditionally triggers <FocusIn> again -> Infinite Loop!
+                    if had_focus and hasattr(self, 'root') and self.root.focus_get() != combobox:
+                        combobox.focus_set()
+                    combobox.set(text_raw)
+                    combobox.icursor(min(cursor_pos, len(text_raw)))
+                    combobox.selection_clear()
+                    combobox.xview_moveto(1.0)
+                except Exception:
+                    pass
+
+            _restore_state()
             try:
-                if had_focus:
-                    combobox.focus_set()
-                combobox.set(text_raw)
-                combobox.icursor(min(cursor_pos, len(text_raw)))
-                combobox.selection_clear()
-                combobox.xview_moveto(1.0)
+                combobox.after_idle(_restore_state)
             except Exception:
                 pass
-
-        _restore_state()
-        try:
-            combobox.after_idle(_restore_state)
-        except Exception:
-            pass
 
     def _bind_combobox_word_suggest(self, combobox, source_getter):
         if not combobox:
@@ -3520,12 +3705,8 @@ class MaterialManager:
                 
             self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=True)
 
-        def _on_focus_in(_e=None):
-            self._apply_combobox_word_suggest(combobox, source_getter(), open_dropdown=False)
-
         combobox.bind('<KeyRelease>', _on_keyrelease, add='+')
-        combobox.bind('<FocusIn>', _on_focus_in, add='+')
-        combobox.bind('<Button-1>', lambda e: self._apply_combobox_word_suggest(e.widget, source_getter(), open_dropdown=True), add='+')
+        # [REMOVED] FocusIn and Button-1 bindings were conflicting with native drop-down opening, causing silent failures!
 
     def update_registration_combos(self):
         """Update registration comboboxes with unique values from database and centralized list"""
@@ -3537,6 +3718,7 @@ class MaterialManager:
             '품목군코드': self.cb_class,
             '규격': self.cb_spec,
             '관리단위': self.cb_unit,
+            '공급업체': self.cb_supplier,
             '제조사': self.cb_mfr,
             '제조국': self.cb_origin
         }
@@ -3548,6 +3730,7 @@ class MaterialManager:
         self.class_list = []
         self.spec_list = []
         self.unit_list = []
+        self.supplier_list = []
         self.mfr_list = []
         self.origin_list = []
         self.sn_list = []
@@ -3560,6 +3743,7 @@ class MaterialManager:
             '품목군코드': 'class_list',
             '규격': 'spec_list',
             '관리단위': 'unit_list',
+            '공급업체': 'supplier_list',
             '제조사': 'mfr_list',
             '제조국': 'origin_list',
             'SN': 'sn_list',
@@ -3644,8 +3828,8 @@ class MaterialManager:
         else:
             mat_id = self.materials_df['MaterialID'].max() + 1
         
-        # Extract SN from Model Name if present
-        model_name = '' # Default empty
+        # Extract SN from Model Name (Now using newly added model name combobox)
+        model_name = self.cb_model.get().strip() if hasattr(self, 'cb_model') else ''
         new_model, new_sn = self.extract_sn_from_model(model_name, sn)
         # Note: In register_material, model_name is currently not an input field, but SN is.
         # If the user adds model name to registration later, this will handle it.
@@ -3692,6 +3876,13 @@ class MaterialManager:
         self.ent_reorder.insert(0, "0")
         self.ent_init.delete(0, tk.END)
         self.ent_init.insert(0, "0")
+        # Clear additional fields
+        if hasattr(self, 'cb_model'):
+            self.cb_model.set('')
+        if hasattr(self, 'ent_price'):
+            self.ent_price.delete(0, tk.END)
+        if hasattr(self, 'ent_cost'):
+            self.ent_cost.delete(0, tk.END)
 
     def add_transaction(self):
         """Record an IN or OUT transaction"""
@@ -6161,7 +6352,7 @@ class MaterialManager:
                         try: widget['values'] = sorted_vals
                         except: pass
             
-            if hasattr(self, 'cb_trans_user'): self.cb_trans_user['values'] = sorted_vals
+            if hasattr(self, 'ent_user'): self.ent_user['values'] = sorted_vals
         elif config_key == 'worktimes':
             # Update all worktime fields (1-10)
             for i in range(1, 11):
@@ -6174,10 +6365,15 @@ class MaterialManager:
                         except: pass
         elif config_key == 'equipments':
             self.update_material_combo()
+        elif config_key == 'warehouses':
+            if hasattr(self, 'cb_warehouse'): self.cb_warehouse['values'] = sorted_vals
         elif config_key == 'vehicles':
             # Update all VehicleInspectionWidgets
             for key, widget_instance in self.vehicle_inspections.items():
                 widget_instance.update_vehicle_list(sorted_vals)
+        elif config_key == 'co_code':
+            # [NEW] Update company code combobox in daily usage
+            if hasattr(self, 'cb_daily_co_code'): self.cb_daily_co_code['values'] = sorted_vals
 
 
         # 2. Update ALL draggable widgets (clones) that depend on this list
@@ -7172,6 +7368,17 @@ class MaterialManager:
         btn_add_vehicle = ttk.Button(header_frame, text="🚗 차량점검", command=self.add_vehicle_inspection_box)
         btn_add_vehicle.pack(side='right', padx=5)
 
+        # [NEW] Sash layout lock button explicitly requested
+        self.btn_sash_lock = ttk.Button(header_frame, 
+                                        text="🔒 경계 고정됨" if self.daily_usage_sash_locked else "🔓 경계 고정", 
+                                        command=self.toggle_sash_lock)
+        self.btn_sash_lock.pack(side='right', padx=5)
+        if self.daily_usage_sash_locked:
+            try:
+                self.style.configure("SashLock.TButton", foreground="red")
+                self.btn_sash_lock.configure(style="SashLock.TButton")
+            except Exception: pass
+
         # [STABILITY FIX] Use a Canvas to hold the entry form for draggable support.
         # [REVISION] Scrollbars removed per user request for a cleaner UI.
         canvas_parent = ttk.Frame(entry_frame)
@@ -7302,6 +7509,7 @@ class MaterialManager:
         def on_method_select(e):
             self.root.after(10, self.ent_daily_test_amount.focus_set)
             return "break"
+        
         self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_select, add='+')
         self.cb_daily_test_method.bind('<Return>', on_method_select, add='+')
         
@@ -7340,22 +7548,25 @@ class MaterialManager:
         ndt_materials = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
         rtk_cats = ["센터미스", "농도", "마킹미스", "필름마크", "취급부주의", "고객불만", "기타", "총계"]
 
-        # Row 1: NDT
-        ndt_grid = ttk.LabelFrame(self.master_form_panel, text="NDT 자재 소모량")
-        ndt_grid.grid(row=1, column=0, padx=10, pady=5, sticky='nsew')
+        # Row 1: NDT with Multi-Company Support
+        self.ndt_frame = ttk.LabelFrame(self.master_form_panel, text="NDT 자재 소모량 (회사별)")
+        self.ndt_frame.grid(row=1, column=0, padx=10, pady=5, sticky='nsew')
         
-        self.ndt_entries = {}
-        for i, mat in enumerate(ndt_materials):
-            r = i // 4; col = (i % 4) * 2
-            ttk.Label(ndt_grid, text=f"{mat}:", font=('Arial', 8)).grid(row=r, column=col, padx=1, pady=1, sticky='w')
-            e = ttk.Entry(ndt_grid, width=6); e.grid(row=r, column=col+1, padx=1, pady=1, sticky='ew'); self.ndt_entries[mat] = e
-            
-            # Focus transition to next NDT entry
-            if i + 1 < len(ndt_materials):
-                next_mat = ndt_materials[i+1]
-                e.bind('<Return>', lambda e, nm=next_mat: self.ndt_entries[nm].focus_set())
-            elif len(rtk_cats) > 0: # From last NDT to first RTK
-                e.bind('<Return>', lambda e: self.rtk_entries[rtk_cats[0]].focus_set())
+        # Container for company-specific NDT sections
+        self.ndt_company_container = ttk.Frame(self.ndt_frame)
+        self.ndt_company_container.pack(fill='x', expand=True, padx=5, pady=2)
+        
+        # Store NDT entries by company index: {0: {mat: entry, ...}, 1: {...}}
+        self.ndt_company_entries = []
+        
+        # Button frame for adding companies
+        btn_frame = ttk.Frame(self.ndt_frame)
+        btn_frame.pack(fill='x', padx=5, pady=2)
+        ttk.Button(btn_frame, text="+ 회사 추가", command=self.add_ndt_company_section, width=12).pack(side='left', padx=2)
+        ttk.Button(btn_frame, text="- 마지막 회사 삭제", command=self.remove_last_ndt_company, width=15).pack(side='left', padx=2)
+        
+        # Add default first company section
+        self.add_ndt_company_section()
 
         # Removed draggable container logic
 
@@ -7634,13 +7845,13 @@ class MaterialManager:
         # Note: Workers 1-10 columns are kept in the 'columns' tuple for data storage,
         # but we will only show a consolidated '작업자' in 'displaycolumns'.
         # Added '(Full작업자)' for Excel export backup.
-        columns = ('날짜', '현장', '작업자', '작업시간', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', '장비명', '검사방법', '수량', '필름매수', '단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '품목명', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', '(Full작업자)')
+        columns = ('날짜', '현장', '작업자', '작업시간', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', '장비명', '검사방법', '회사코드', '수량', '필름매수', '단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '품목명', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', '(Full작업자)')
         self.daily_usage_tree = ttk.Treeview(list_frame, columns=columns, show='headings',
                                               yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
         # Define display columns - hidden (Full작업자) and individual OT columns by default
         # [NEW] Also hide 'OT시간' by default as per amount-only display request
-        visible_defaults = ['날짜', '현장', '작업자', '작업시간', '장비명', '검사방법', '수량', '필름매수', '단가', '출장비', '일식', '검사비', 'OT금액', '품목명', 'RTK총계', '차량번호', '주행거리', '차량점검', '차량비고', '입력시간']
+        visible_defaults = ['날짜', '현장', '작업자', '작업시간', '장비명', '검사방법', '회사코드', '수량', '필름매수', '단가', '출장비', '일식', '검사비', 'OT금액', '품목명', 'RTK총계', '차량번호', '주행거리', '차량점검', '차량비고', '입력시간']
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         vsb.config(command=self.daily_usage_tree.yview)
@@ -7652,7 +7863,7 @@ class MaterialManager:
             'OT1': 140, 'OT2': 140, 'OT3': 140, 'OT4': 140, 'OT5': 140, 'OT6': 140,
             'OT7': 140, 'OT8': 140, 'OT9': 140, 'OT10': 140,
             '차량번호': 120, '주행거리': 100, '차량점검': 200, '차량비고': 150,
-            '장비명': 130, '검사방법': 90, 
+            '장비명': 130, '검사방법': 90, '회사코드': 80,
             '수량': 80, '필름매수': 80, '단가': 90, '출장비': 90, '일식': 80, 
             '검사비': 100, 'OT시간': 80, 'OT금액': 100, '품목명': 210, '센터미스': 70, '농도': 70, '마킹미스': 70, 
             '필름마크': 70, '취급부주의': 70, '고객불만': 70, '기타': 70, 'RTK총계': 80, 
@@ -9280,9 +9491,9 @@ class MaterialManager:
             # Calculate target position
             target_pos = int(total_h * target_ratio)
             
-            # Apply relaxed bounds + practical minimum top area
-            min_pos = max(int(total_h * 0.1), 460)
-            max_pos = int(total_h * 0.9)
+            # Apply relaxed bounds + practical minimum top area (Reduced from 460 to 100 to allow user custom sizing)
+            min_pos = max(int(total_h * 0.1), 100)
+            max_pos = int(total_h * 0.95)
             
             if target_pos < min_pos:
                 target_pos = min_pos
@@ -9647,6 +9858,51 @@ class MaterialManager:
         except:
             pass
 
+    def add_ndt_company_section(self):
+        """회사별 NDT 입력 섹션 추가"""
+        if not hasattr(self, 'ndt_company_entries'):
+            self.ndt_company_entries = []
+        
+        company_idx = len(self.ndt_company_entries)
+        ndt_materials = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+        
+        # Company frame
+        company_frame = ttk.LabelFrame(self.ndt_company_container, text=f"회사 #{company_idx + 1}")
+        company_frame.pack(fill='x', expand=True, padx=2, pady=2)
+        
+        # Company code selector
+        header_frame = ttk.Frame(company_frame)
+        header_frame.pack(fill='x', padx=2, pady=2)
+        ttk.Label(header_frame, text="회사코드:", font=('Arial', 8, 'bold')).pack(side='left', padx=2)
+        cb_co = ttk.Combobox(header_frame, width=12, values=getattr(self, 'co_code_list', []))
+        cb_co.pack(side='left', padx=2)
+        cb_co.set('')  # Default empty
+        
+        # NDT entries grid
+        grid_frame = ttk.Frame(company_frame)
+        grid_frame.pack(fill='x', padx=2, pady=2)
+        
+        entries = {'_company': cb_co}  # Store company combobox
+        for i, mat in enumerate(ndt_materials):
+            r = i // 4
+            c = (i % 4) * 2
+            ttk.Label(grid_frame, text=f"{mat}:", font=('Arial', 8)).grid(row=r, column=c, padx=1, pady=1, sticky='w')
+            e = ttk.Entry(grid_frame, width=6)
+            e.grid(row=r, column=c+1, padx=1, pady=1, sticky='ew')
+            entries[mat] = e
+        
+        self.ndt_company_entries.append(entries)
+    
+    def remove_last_ndt_company(self):
+        """마지막 회사 섹션 삭제"""
+        if hasattr(self, 'ndt_company_entries') and len(self.ndt_company_entries) > 1:
+            # Remove last entry dict
+            self.ndt_company_entries.pop()
+            # Destroy last widget in container
+            widgets = self.ndt_company_container.winfo_children()
+            if widgets:
+                widgets[-1].destroy()
+
     def sync_worker_times(self):
         """작업자 1의 설정(주야/작업시간/OT)을 모든 작업자와 동기화"""
         try:
@@ -9781,9 +10037,9 @@ class MaterialManager:
                     val = ent.get().replace(',', '') if hasattr(ent, 'get') else str(ent).replace(',', '')
                     return float(val) if val else 0.0
                 except: return 0.0
-
-            # 2. Construct Record Dictionary
-            new_record = {
+            
+            # 2. Collect Common Data (Workers, RTK, Vehicle)
+            common_data = {
                 'Date': date_val,
                 'Site': site,
                 'MaterialID': mat_id,
@@ -9795,7 +10051,7 @@ class MaterialManager:
                 '출장비': to_f(self.ent_daily_travel_cost),
                 '일식': to_f(self.ent_daily_meal_cost),
                 '검사비': to_f(self.ent_daily_test_fee),
-                'Note': "", # Will be appended below if needed
+                'Note': "",
                 'EntryTime': datetime.datetime.now()
             }
 
@@ -9807,89 +10063,120 @@ class MaterialManager:
                 ot_key = 'OT' if i == 1 else f'OT{i}'
                 
                 if group:
-                    new_record[u_key] = group.cb_name.get().strip()
-                    new_record[wt_key] = group.ent_worktime.get().strip()
-                    new_record[ot_key] = group.ent_ot.get().strip()
+                    common_data[u_key] = group.cb_name.get().strip()
+                    common_data[wt_key] = group.ent_worktime.get().strip()
+                    common_data[ot_key] = group.ent_ot.get().strip()
                 else:
-                    new_record[u_key] = ""; new_record[wt_key] = ""; new_record[ot_key] = ""
+                    common_data[u_key] = ""; common_data[wt_key] = ""; common_data[ot_key] = ""
 
-            # 4. RTK Categories
+            # 4. RTK Categories (Common for all companies)
+            rtk_data = {}
             for cat, ent in self.rtk_entries.items():
-                new_record[f'RTK_{cat}'] = to_f(ent)
+                rtk_data[f'RTK_{cat}'] = to_f(ent)
 
-            # 5. NDT Materials & Automated Inventory Deduction
+            # 5. Vehicle Data (Common for all companies)
+            vehicle_data = {'차량번호': "", '주행거리': "", '차량점검': "", '차량비고': ""}
+            if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
+                box = self.vehicle_boxes[0]
+                vehicle_data['차량번호'] = box.cb_veh_no.get().strip()
+                vehicle_data['주행거리'] = box.ent_mileage.get().strip()
+                vehicle_data['차량점검'] = box.ent_inspection.get().strip()
+                vehicle_data['차량비고'] = box.ent_note.get().strip()
+
+            # 6. NDT Materials by Company - Create separate records
             ndt_product_map = self._load_ndt_product_map()
             ndt_groups = {
                 'PT약품': ['세척제', '침투제', '현상제', '형광침투제'],
                 'MT약품': ['백색페인트', '흑색자분', '형광자분']
             }
             
-            for ndt_name, ent in self.ndt_entries.items():
-                qty = to_f(ent)
-                new_record[f'NDT_{ndt_name}'] = qty
-                
-                if qty > 0:
-                    # Find mapped DB info
-                    db_item_name = ndt_product_map.get(ndt_name, '')
-                    db_model_name = ndt_name
+            records_to_save = []
+            
+            # Iterate through company sections
+            if hasattr(self, 'ndt_company_entries'):
+                for company_entries in self.ndt_company_entries:
+                    company_code = company_entries['_company'].get().strip()
                     
-                    if not db_item_name:
-                        # Auto-mapping logic per category
-                        for group_name, members in ndt_groups.items():
-                            if ndt_name in members:
-                                db_item_name = group_name
-                                break
-                        if not db_item_name: db_item_name = "기타소모품"
-
-                    # Stock Deduction logic
-                    mat_rows = self.materials_df[
-                        (self.materials_df['품목명'] == db_item_name) & 
-                        (self.materials_df['모델명'] == db_model_name)
-                    ]
+                    # Build NDT data for this company
+                    ndt_data = {}
+                    has_ndt = False
+                    for ndt_name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']:
+                        qty = to_f(company_entries.get(ndt_name, None))
+                        ndt_data[f'NDT_{ndt_name}'] = qty
+                        if qty > 0:
+                            has_ndt = True
                     
-                    target_mat_id = ""
-                    if mat_rows.empty:
-                        # Auto-create missing material using the unified helper
-                        target_mat_id = self.register_new_material(db_item_name, model=db_model_name, warehouse='현장', 규격='자동등록')
-                    else:
-                        target_mat_id = mat_rows['MaterialID'].values[0]
-                    
-                    # Record the OUT transaction
-                    new_trans = {
-                        'Date': datetime.datetime.now(),
-                        'MaterialID': target_mat_id,
-                        'Type': 'OUT',
-                        'Quantity': -qty,
-                        'Note': f"{site} 현장 사용 (자동 차감)",
-                        'User': new_record['User'],
-                        'Site': site
-                    }
-                    self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
+                    # Create record if company has data or if it's the first company
+                    if has_ndt or company_entries == self.ndt_company_entries[0]:
+                        company_record = {**common_data, **rtk_data, **vehicle_data, **ndt_data}
+                        company_record['회사코드'] = company_code  # Store company code
+                        records_to_save.append(company_record)
+                        
+                        # Stock deduction for each NDT item with company code in note
+                        for ndt_name, qty in [(k.replace('NDT_', ''), v) for k, v in ndt_data.items() if v > 0]:
+                            db_item_name = ndt_product_map.get(ndt_name, '')
+                            db_model_name = ndt_name
+                            
+                            if not db_item_name:
+                                for group_name, members in ndt_groups.items():
+                                    if ndt_name in members:
+                                        db_item_name = group_name
+                                        break
+                                if not db_item_name: db_item_name = "기타소모품"
+                            
+                            # Include company code in transaction note
+                            note_suffix = f" ({company_code})" if company_code else ""
+                            
+                            mat_rows = self.materials_df[
+                                (self.materials_df['품목명'] == db_item_name) & 
+                                (self.materials_df['모델명'] == db_model_name)
+                            ]
+                            
+                            target_mat_id = ""
+                            if mat_rows.empty:
+                                target_mat_id = self.register_new_material(db_item_name, model=db_model_name, warehouse='현장', 규격='자동등록')
+                            else:
+                                target_mat_id = mat_rows['MaterialID'].values[0]
+                            
+                            new_trans = {
+                                'Date': datetime.datetime.now(),
+                                'MaterialID': target_mat_id,
+                                'Type': 'OUT',
+                                'Quantity': -qty,
+                                'Note': f"{site} 현장 사용 (자동 차감){note_suffix}",
+                                'User': common_data.get('User', ''),
+                                'Site': site
+                            }
+                            self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
 
-            # 6. Vehicle data (Collect from any open inspection boxes)
-            # Find the first one for simplicity or aggregate if needed. 
-            # Usually only one is used per entry.
-            new_record['차량번호'] = ""; new_record['주행거리'] = ""; new_record['차량점검'] = ""; new_record['차량비고'] = ""
-            if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
-                box = self.vehicle_boxes[0]
-                new_record['차량번호'] = box.cb_veh_no.get().strip()
-                new_record['주행거리'] = box.ent_mileage.get().strip()
-                new_record['차량점검'] = box.ent_inspection.get().strip()
-                new_record['차량비고'] = box.ent_note.get().strip()
-
-            # 7. Finalize and Save
-            self.daily_usage_df = pd.concat([self.daily_usage_df, pd.DataFrame([new_record])], ignore_index=True)
+            # 7. Save all company records
+            if records_to_save:
+                self.daily_usage_df = pd.concat([self.daily_usage_df, pd.DataFrame(records_to_save)], ignore_index=True)
             
             if self.save_data():
                 # [FIX] Automatically clear NDT and RTK fields after success
-                for ent in self.ndt_entries.values(): ent.delete(0, tk.END)
+                # Clear all company NDT sections
+                if hasattr(self, 'ndt_company_entries'):
+                    for entries in self.ndt_company_entries:
+                        for key, widget in entries.items():
+                            if key != '_company' and hasattr(widget, 'delete'):
+                                widget.delete(0, tk.END)
+                        # Reset company code
+                        if '_company' in entries:
+                            entries['_company'].set('')
+                
+                # Reset to single company section
+                while len(getattr(self, 'ndt_company_entries', [])) > 1:
+                    self.remove_last_ndt_company()
+                
                 for ent in self.rtk_entries.values(): 
                     if ent.cget('state') != 'readonly': ent.delete(0, tk.END)
                 
                 # Clear basic amount
                 self.ent_daily_test_amount.delete(0, tk.END)
                 
-                messagebox.showinfo("저장 완료", "일일 사용 기록이 저장되었습니다.\n(NDT 약품 재고가 자동으로 차감되었습니다.)")
+                msg = f"일일 사용 기록이 저장되었습니다. (총 {len(records_to_save)}건)\n(NDT 약품 재고가 자동으로 차감되었습니다.)"
+                messagebox.showinfo("저장 완료", msg)
                 self.update_daily_usage_view()
                 self.update_stock_view()
                 self.update_transaction_view()
@@ -10438,6 +10725,7 @@ class MaterialManager:
                 *row_ots,
                 entry.get('장비명', ''),
                 entry.get('검사방법', ''),
+                entry.get('회사코드', ''),  # 회사코드 표시
                 f"{q_val:.1f}",
                 film_count_str,
                 f"{p_val:,.0f}",
@@ -10473,6 +10761,7 @@ class MaterialManager:
                 *[f"{a:,}" if a > 0 else "0" for a in total_indiv_ot_amounts],
                 '', # 장비명
                 '', # 검사방법
+                '', # 회사코드
                 f"{total_test_amount:.1f}",
                 f"{total_film_count:.1f}",
                 f"{total_unit_price:,.0f}",
@@ -11431,8 +11720,6 @@ class MaterialManager:
                 # The previous code seemed to try to export based on tree columns but mapped from DF?
                 # "export_df = self.daily_usage_df[selected_cols].copy()"
                 # This implies 'selected_cols' MUST exist in daily_usage_df.
-                # BUT 'daily_usage_tree['columns']' includes 'OT합계', 'RTK총계' which are likely NOT in daily_usage_df (calculated).
-                
                 # Let's check daily_usage_df columns again.
                 # It has 'Date', 'Site', 'MaterialID'...
                 # It does NOT have '날짜', '현장' (Korean names).
@@ -12043,8 +12330,8 @@ class MaterialManager:
                 'vehicles': getattr(self, 'vehicles', []),
                 'worktimes': getattr(self, 'worktimes', []),
                 'ot_times': getattr(self, 'ot_times', []),
-                'layout_locked': self.layout_locked,
-                'resolution_locked': self.resolution_locked,
+                'layout_locked': getattr(self, 'layout_locked', False),
+                'resolution_locked': getattr(self, 'resolution_locked', False),
                 'locked_width': getattr(self, 'locked_width', 1200),
                 'locked_height': getattr(self, 'locked_height', 800),
                 'daily_usage_sash_locked': self.daily_usage_sash_locked,
@@ -12358,6 +12645,17 @@ class MaterialManager:
                 
                 # Vehicle list
                 self.vehicles[:] = config.get('vehicles', [])
+                
+                # [FIX] Update combo box values after loading lists from config
+                # Update sites combo boxes
+                if hasattr(self, 'cb_trans_site'): 
+                    self.cb_trans_site['values'] = sorted(self.sites)
+                # Update warehouses combo boxes
+                if hasattr(self, 'cb_warehouse'): 
+                    self.cb_warehouse['values'] = sorted(self.warehouses)
+                # Update users combo boxes
+                if hasattr(self, 'ent_user'): 
+                    self.ent_user['values'] = sorted(self.users)
                 
                 # Restore stock column widths
                 stock_col_widths = config.get('stock_col_widths', {})
