@@ -821,22 +821,22 @@ class PMIReportApp:
 
         # FIXED FLOATING Header (Lifts over scrollable area)
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
-        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        header_frame.place(x=0, y=0, relwidth=1, height=40)
         
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
-        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        inner_header.pack(fill='both', expand=True, pady=(5, 0))
         
         tk.Label(inner_header, text="🔬 PMI 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
         tk.Label(inner_header, text=f"v{APP_VERSION}", font=("Arial", 8), 
                  background="#f1f5f9", foreground="#64748b", padx=5, pady=0).pack(side='left', padx=10)
         
-        # Bottom separator to emphasize "going under"
+        # Bottom separator
         tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
         header_frame.lift() # Ensure it's on top
 
         # Spacer in scrollable area so first group starts below floating header
-        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
+        tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_container = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -1023,10 +1023,10 @@ class PMIReportApp:
 
         # FIXED FLOATING Header
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
-        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        header_frame.place(x=0, y=0, relwidth=1, height=40)
         
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
-        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        inner_header.pack(fill='both', expand=True, pady=(5, 0))
         
         tk.Label(inner_header, text="🔬 RT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
@@ -1035,7 +1035,7 @@ class PMIReportApp:
         header_frame.lift()
 
         # Spacer in scrollable area
-        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
+        tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -1175,10 +1175,10 @@ class PMIReportApp:
 
         # FIXED FLOATING Header
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
-        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        header_frame.place(x=0, y=0, relwidth=1, height=40)
         
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
-        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        inner_header.pack(fill='both', expand=True, pady=(5, 0))
         
         tk.Label(inner_header, text="🔬 PT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
@@ -1187,7 +1187,7 @@ class PMIReportApp:
         header_frame.lift()
 
         # Spacer in scrollable area
-        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
+        tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -1355,10 +1355,10 @@ class PMIReportApp:
 
         # FIXED FLOATING Header
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
-        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        header_frame.place(x=0, y=0, relwidth=1, height=40)
         
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
-        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        inner_header.pack(fill='both', expand=True, pady=(5, 0))
         
         tk.Label(inner_header, text="🔬 PAUT (ASME B31.1) 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
@@ -1367,7 +1367,7 @@ class PMIReportApp:
         header_frame.lift()
 
         # Spacer in scrollable area
-        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
+        tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
 
         # 1. File Selection Group
         file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
@@ -5907,10 +5907,10 @@ class PMIReportApp:
 
         # FIXED FLOATING Header
         header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
-        header_frame.place(x=0, y=0, relwidth=1, height=60)
+        header_frame.place(x=0, y=0, relwidth=1, height=40)
         
         inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
-        inner_header.pack(fill='both', expand=True, pady=(15, 0))
+        inner_header.pack(fill='both', expand=True, pady=(5, 0))
         
         tk.Label(inner_header, text="📸 사진대장 관리", font=("Malgun Gothic", 15, "bold"), 
                  background="#f9fafb", foreground="#1e3a8a").pack(side='left')
@@ -5919,7 +5919,7 @@ class PMIReportApp:
         header_frame.lift()
 
         # Spacer in scrollable area
-        tk.Frame(left_pane, height=60, background="#f9fafb").pack(fill='x')
+        tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
 
         # 1. Report Info Group
         info_frame = ttk.LabelFrame(left_pane, text=" 리포트 정보 (Report Info) ", padding=10)
