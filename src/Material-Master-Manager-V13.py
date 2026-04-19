@@ -1797,7 +1797,15 @@ class MaterialManager:
         self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
         self.hidden_sites = ["초안", "롯데현장"]  # [NEW] Default hidden sites as requested
         
+        # [NEW] Optimization Caches for O(1) Lookups
+        self.mat_id_to_display = {}   # ID -> "Name (SN) - Spec"
+        self.mat_id_to_name = {}      # ID -> "Name"
+        self.mat_name_to_id = {}      # lowercase name -> ID (Mainly for lookup fallback)
+        self.mat_id_normalized = set() # Set of cleaned IDs for fast 'in' checks
+        
+        
         self.load_data()
+        self.refresh_lookup_caches()  # [NEW] Build initial caches after loading data
         
         # Centralized list of Carestream films for suggestions
         self.carestream_films = [
@@ -2038,13 +2046,16 @@ class MaterialManager:
                 
                 # Ensure Active is numeric and handle NaNs (treat as Active=1)
                 self.materials_df['Active'] = pd.to_numeric(self.materials_df['Active'], errors='coerce').fillna(1)
+                # Ensure 수량 (Initial Stock) is numeric
+                if '수량' in self.materials_df.columns:
+                    self.materials_df['수량'] = pd.to_numeric(self.materials_df['수량'], errors='coerce').fillna(0.0)
                 
                 # [STABILITY] Ensure MaterialID is consistently numeric
                 if 'MaterialID' in self.materials_df.columns:
                     self.materials_df['MaterialID'] = pd.to_numeric(self.materials_df['MaterialID'], errors='coerce')
                 
                 # Force specific columns to string type and clean numeric artifacts (.0, -0.0)
-                str_cols = ['회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', 
+                str_cols = ['MaterialID', '회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', 
                             '품목군코드', '공급업체', '제조사', '제조국', '관리단위']
                 for col in str_cols:
                     if col in self.materials_df.columns:
@@ -2056,20 +2067,45 @@ class MaterialManager:
                 self.transactions_df = pd.read_excel(self.db_path, sheet_name='Transactions')
                 self.transactions_df = normalize_cols(self.transactions_df)
                 
-                # Ensure it has all required columns
-                for col in ['Site', 'User', 'Note', 'MaterialID', 'Type', 'Quantity', 'Date', '차량번호', '주행거리', '차량점검', '차량비고']:
+                # Ensure it has all required columns, with mapping for Korean names
+                if not self.transactions_df.empty:
+                    mapping = {
+                        '수량': 'Quantity', '구분': 'Type', '날짜': 'Date', '현장': 'Site', 
+                        '비고': 'Note', '사용자': 'User', '품목': '품목명', '모델': '모델명'
+                    }
+                    # Rename only if target column doesn't already exist to avoid overwriting good data
+                    rename_map = {}
+                    for k, v in mapping.items():
+                        if k in self.transactions_df.columns and v not in self.transactions_df.columns:
+                            rename_map[k] = v
+                    if rename_map:
+                        self.transactions_df.rename(columns=rename_map, inplace=True)
+                        print(f"DEBUG: Mapped Korean columns in Transactions: {rename_map}")
+
+                required_cols = [
+                    'Site', 'User', 'Note', 'MaterialID', 'Type', 'Quantity', 'Date', 
+                    '차량번호', '주행거리', '차량점검', '차량비고',
+                    '방법', '장비명', '품목명', '형광자분', '흑색자분', '백색페인트', 
+                    '침투제', '세척제', '현상제', '형광침투제', '회사코드'
+                ]
+                for col in required_cols:
                     if col not in self.transactions_df.columns:
                         self.transactions_df[col] = '' if col != 'Quantity' else 0.0
                 
-                # Ensure Date column is datetime and MaterialID is numeric
+                # Ensure Date column is datetime
                 if not self.transactions_df.empty:
                     self.transactions_df['Date'] = pd.to_datetime(self.transactions_df['Date'], errors='coerce')
-                    self.transactions_df['MaterialID'] = pd.to_numeric(self.transactions_df['MaterialID'], errors='coerce')
                     
                     # Force string columns and clean numeric artifacts
-                    for col in ['Type', 'Note', 'User', 'Site', '차량번호', '주행거리', '차량점검', '차량비고']:
-                        self.transactions_df[col] = self.transactions_df[col].astype(str).replace(['nan', 'None', 'NULL', '-0.0', '0.0', 'NaN'], '')
-                        self.transactions_df[col] = self.transactions_df[col].str.replace(r'\.0$', '', regex=True)
+                    str_cols = [
+                        'MaterialID', 'Type', 'Note', 'User', 'Site', '차량번호', '주행거리', '차량점검', '차량비고',
+                        '방법', '장비명', '품목명', '형광자분', '흑색자분', '백색페인트', 
+                        '침투제', '세척제', '현상제', '형광침투제', '회사코드'
+                    ]
+                    for col in str_cols:
+                        if col in self.transactions_df.columns:
+                            self.transactions_df[col] = self.transactions_df[col].astype(str).replace(['nan', 'None', 'NULL', '-0.0', '0.0', 'NaN'], '').str.strip()
+                            self.transactions_df[col] = self.transactions_df[col].str.replace(r'\.0$', '', regex=True)
                     
                     # One-time cleanup: Remove '현장사용' and redundant model names from historical notes
                     self.transactions_df['Note'] = self.transactions_df['Note'].astype(str).str.replace('현장사용', '', regex=False).str.strip()
@@ -2094,10 +2130,15 @@ class MaterialManager:
                         if 'Site' in self.transactions_df.columns:
                             self.transactions_df['Site'] = self.transactions_df['Site'].astype(str).str.strip().replace(['nan', 'None'], '')
                         
-                        out_mask = (self.transactions_df['Type'] == 'OUT') & (self.transactions_df['Quantity'] > 0)
+                        # [STABILITY] Case-insensitive and localized OUT transaction normalization
+                        type_col_upper = self.transactions_df['Type'].astype(str).str.strip().str.upper()
+                        out_mask = (type_col_upper.isin(['OUT', '출고'])) & (pd.to_numeric(self.transactions_df['Quantity'], errors='coerce') > 0)
                         if out_mask.any():
-                            self.transactions_df.loc[out_mask, 'Quantity'] = -self.transactions_df.loc[out_mask, 'Quantity']
+                            self.transactions_df.loc[out_mask, 'Quantity'] = -pd.to_numeric(self.transactions_df.loc[out_mask, 'Quantity'], errors='coerce')
                             print(f"DEBUG: Normalized {out_mask.sum()} OUT transactions to negative.")
+                        
+                        # Ensure all Quantity is numeric
+                        self.transactions_df['Quantity'] = pd.to_numeric(self.transactions_df['Quantity'], errors='coerce').fillna(0.0)
                 
                 # 3. Monthly Usage
                 try:
@@ -2105,7 +2146,7 @@ class MaterialManager:
                     self.monthly_usage_df = normalize_cols(self.monthly_usage_df)
                     
                     if not self.monthly_usage_df.empty:
-                        self.monthly_usage_df['MaterialID'] = pd.to_numeric(self.monthly_usage_df['MaterialID'], errors='coerce')
+                        self.monthly_usage_df['MaterialID'] = self.monthly_usage_df['MaterialID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().replace(['nan', 'None', 'NaN'], '')
                         self.monthly_usage_df['EntryDate'] = pd.to_datetime(self.monthly_usage_df['EntryDate'])
                         # Add Site column if it doesn't exist (for backward compatibility) and strip
                         if 'Site' not in self.monthly_usage_df.columns:
@@ -2166,9 +2207,14 @@ class MaterialManager:
                              else:
                                  self.daily_usage_df['검사량'] = self.daily_usage_df['수량']
                         
-                        # Ensure MaterialID is numeric
+                        # Ensure MaterialID is stringified and cleaned
                         if 'MaterialID' in self.daily_usage_df.columns:
+<<<<<<< ours
                             self.daily_usage_df['MaterialID'] = pd.to_numeric(self.daily_usage_df['MaterialID'], errors='coerce')
+=======
+                            self.daily_usage_df['MaterialID'] = self.daily_usage_df['MaterialID'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().replace(['nan', 'None', 'NaN'], '')
+                          # Add RTK columns if they don't exist (for backward compatibility)
+>>>>>>> theirs
                         rtk_columns = ['RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크', 
                                       'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타']
                         for col in rtk_columns:
@@ -2190,32 +2236,49 @@ class MaterialManager:
                                                         '단가', '출장비', '일식', '검사비',
                                                         '차량번호', '주행거리', '차량점검', '차량비고'])
                 
-                # 5. Migrate vehicle data from daily_usage_df to transactions_df
+                # 5. Migrate vehicle data from daily_usage_df to transactions_df (Optimized Vectorized Batch Update)
                 if hasattr(self, 'daily_usage_df') and hasattr(self, 'transactions_df'):
                     if not self.daily_usage_df.empty and not self.transactions_df.empty:
-                        # Group daily usage by date, site, material to match transactions
-                        for _, daily_row in self.daily_usage_df.iterrows():
-                            # Handle NaT values safely
-                            daily_date = pd.to_datetime(daily_row['Date'], errors='coerce')
-                            if pd.isna(daily_date):
-                                continue  # Skip rows with invalid dates
-                            daily_date = daily_date.normalize()
-                            daily_site = str(daily_row['Site']).strip()
-                            daily_mat = daily_row['MaterialID']
+                        print("DEBUG: Performing optimized vehicle data migration...")
+                        # 1. Prepare daily usage for merge: drop empty values and duplicates
+                        v_cols = ['Date', 'Site', 'MaterialID', '차량번호', '주행거리', '차량점검', '차량비고']
+                        # Only take rows that have at least one vehicle info and MaterialID
+                        daily_v = self.daily_usage_df[v_cols].copy()
+                        daily_v['Date'] = pd.to_datetime(daily_v['Date'], errors='coerce').dt.normalize()
+                        daily_v['Site'] = daily_v['Site'].astype(str).str.strip()
+                        daily_v['MaterialID'] = daily_v['MaterialID'].astype(str).str.strip()
+                        
+                        # Use only rows with actual vehicle info or non-empty MatID
+                        daily_v = daily_v[daily_v['MaterialID'] != '']
+                        daily_v = daily_v.dropna(subset=['Date'])
+                        
+                        # Keep only the latest entry per Date/Site/Material to avoid ambiguity
+                        daily_v = daily_v.drop_duplicates(subset=['Date', 'Site', 'MaterialID'], keep='last')
+                        
+                        if not daily_v.empty:
+                            # 2. Prepare transactions for merge
+                            trans_temp = self.transactions_df.copy()
+                            trans_temp['Date_norm'] = pd.to_datetime(trans_temp['Date'], errors='coerce').dt.normalize()
+                            trans_temp['Site_norm'] = trans_temp['Site'].astype(str).str.strip()
+                            trans_temp['MaterialID_norm'] = trans_temp['MaterialID'].astype(str).str.strip()
                             
-                            # Find matching transactions
-                            mask = (
-                                (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == daily_date) &
-                                (self.transactions_df['Site'].str.strip() == daily_site) &
-                                (self.transactions_df['MaterialID'] == daily_mat)
+                            # 3. Merge to find matching vehicle info (left join)
+                            merged = trans_temp.merge(
+                                daily_v, 
+                                left_on=['Date_norm', 'Site_norm', 'MaterialID_norm'],
+                                right_on=['Date', 'Site', 'MaterialID'],
+                                how='left',
+                                suffixes=('', '_daily')
                             )
                             
-                            # Update vehicle info for matching transactions
-                            if mask.any():
-                                self.transactions_df.loc[mask, '차량번호'] = str(daily_row.get('차량번호', ''))
-                                self.transactions_df.loc[mask, '주행거리'] = str(daily_row.get('주행거리', ''))
-                                self.transactions_df.loc[mask, '차량점검'] = str(daily_row.get('차량점검', ''))
-                                self.transactions_df.loc[mask, '차량비고'] = str(daily_row.get('차량비고', ''))
+                            # 4. Update the original transactions_df only for rows that got a match
+                            for v_col in ['차량번호', '주행거리', '차량점검', '차량비고']:
+                                daily_v_col = f'{v_col}_daily'
+                                if daily_v_col in merged.columns:
+                                    # Fill original column only if daily version is not empty/null
+                                    mask = (merged[daily_v_col].notna()) & (merged[daily_v_col] != '')
+                                    self.transactions_df.loc[mask, v_col] = merged.loc[mask, daily_v_col].values
+                        print("DEBUG: Vehicle data migration complete.")
 
 
                 
@@ -2259,6 +2322,10 @@ class MaterialManager:
                 except Exception as e:
                     print(f"DEBUG: Budget sheet not found or load failed: {e}")
                     self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail'])
+                
+                # [STABILITY] Removed automatic sync from startup path to prevent Exit Code 1 crashes.
+                # Sync will be triggered manually or after GUI is fully ready.
+                # self.sync_master_with_transactions()
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -2321,20 +2388,27 @@ class MaterialManager:
         self.save_data()
         messagebox.showinfo("마이그레이션 완료", "기존 데이터가 새로운 형식으로 변환되었습니다.")
 
-    def register_new_material(self, name, model='', sn='', **kwargs):
+    def register_new_material(self, name, model='', sn='', save=True, **kwargs):
         """Helper to register a new material in the master list summerly"""
-        new_id = (self.materials_df['MaterialID'].max() + 1) if not self.materials_df.empty else 10001
+        # [ROBUSTNESS] Handle numeric extraction for automatic ID incrementing
+        try:
+            numeric_ids = pd.to_numeric(self.materials_df['MaterialID'], errors='coerce').dropna()
+            next_id = int(numeric_ids.max() + 1) if not numeric_ids.empty else 10001
+        except:
+            next_id = 10001
+            
+        new_id = str(next_id)
         
         # Determine defaults
         new_mat = {
             'MaterialID': new_id,
             '회사코드': kwargs.get('co_code', ''),
-            '관리품번': '',
+            '관리품번': kwargs.get('equipment_code', ''),
             '품목명': name,
             'SN': sn,
             '창고': kwargs.get('warehouse', ''),
             '모델명': model or name,
-            '규격': '',
+            '규격': kwargs.get('specification', ''),
             '품목군코드': '',
             '공급업체': '',
             '제조사': '',
@@ -2351,12 +2425,70 @@ class MaterialManager:
             if k in new_mat: new_mat[k] = v
             
         self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_mat])], ignore_index=True)
-        self.save_data()
-        self.update_material_combo()
-        return new_id
         
-        self.save_data()
-        messagebox.showinfo("마이그레이션 완료", "기존 데이터가 새로운 형식으로 변환되었습니다.")
+        if save:
+            self.save_data()
+            self.update_material_combo()
+        return new_id
+
+    def sync_master_with_transactions(self):
+        """Find orphan transactions and add missing materials to the master list"""
+        if self.transactions_df.empty:
+            return
+            
+        print("DEBUG: Synchronizing master list with transactions...")
+        changes_made = False
+        
+        # Build set of existing material IDs and Names for fast lookup
+        existing_ids = set(self.materials_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True))
+        existing_names = set(self.materials_df['품목명'].astype(str).str.strip().str.lower())
+        
+        # Deduplicate transactions to check
+        trans_to_check = self.transactions_df[['MaterialID', '품목명']].drop_duplicates()
+        
+        for _, row in trans_to_check.iterrows():
+            m_id_raw = str(row.get('MaterialID', '')).strip()
+            m_id = re.sub(r'\.0$', '', m_id_raw)
+            m_name = str(row.get('품목명', '')).strip()
+            
+            if not m_name or m_name.lower() in ['nan', 'none', '']:
+                continue
+                
+            # If ID is missing, check if name exists.
+            id_missing = (not m_id or m_id.lower() in ['nan', 'none', '0.0', '0'])
+            name_missing = m_name.lower() not in existing_names
+            
+            if id_missing and name_missing:
+                print(f"DEBUG: Auto-registering missing material from transaction: {m_name}")
+                new_id = self.register_new_material(m_name, warehouse='자동생성', save=False)
+                # Important: Link the current transaction to the new ID in memory
+                mask = (self.transactions_df['품목명'].astype(str).str.strip() == m_name) & \
+                       (self.transactions_df['MaterialID'].astype(str).str.strip().isin(['', 'nan', 'None', 'NaN', '0', '0.0']))
+                self.transactions_df.loc[mask, 'MaterialID'] = new_id
+                
+                # Refresh our local sets to avoid duplicate registration
+                existing_ids = set(self.materials_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True))
+                existing_names = set(self.materials_df['품목명'].astype(str).str.strip().str.lower())
+                changes_made = True
+            elif id_missing and not name_missing:
+                # [HEALING] ID is missing in transaction but name exists in master. 
+                # Backfill the ID from master to strengthen the link.
+                mat_row = self.materials_df[self.materials_df['품목명'].astype(str).str.strip().str.lower() == m_name.lower()]
+                if not mat_row.empty:
+                    correct_id = str(mat_row.iloc[0]['MaterialID']).strip().replace('.0', '') # Safe here as it's from master
+                    mask = (self.transactions_df['품목명'].astype(str).str.strip() == m_name) & \
+                           (self.transactions_df['MaterialID'].astype(str).str.strip().isin(['', 'nan', 'None', 'NaN', '0', '0.0']))
+                    if mask.any():
+                        print(f"DEBUG: Healing missing ID for '{m_name}' -> {correct_id}")
+                        self.transactions_df.loc[mask, 'MaterialID'] = correct_id
+                        changes_made = True
+                
+        if changes_made:
+            # Batch save all changes once
+            self.save_data()
+            self.update_material_combo()
+            self.update_stock_view()
+            print("DEBUG: Synchronization complete. Missing materials registered and IDs healed.")
     
     def enable_autocomplete(self, combobox, values_list_attr=None, values_list=None, prefix_list=None):
         """Standardize to Native Dropdown: Filter values but use standard system dropdown."""
@@ -2367,9 +2499,12 @@ class MaterialManager:
             """Filter combobox values based on typed text."""
             typed = str(event_widget.get()).strip()
             widget_name = str(event_widget)
+<<<<<<< ours
             
             if not typed and not force_all:
                 return  # Don't filter on empty input unless forced
+=======
+>>>>>>> theirs
             
             if values_list_attr:
                 base_values = getattr(self, values_list_attr, [])
@@ -2377,23 +2512,33 @@ class MaterialManager:
                 base_values = values_list
             else:
                 base_values = []
-            
+                
             all_values = (prefix_list + base_values) if prefix_list else base_values
             
-            if force_all or not typed:
+            # [OPTIMIZATION] Skip expensive filtering if input is empty and we want all values
+            if (force_all or not typed) and not prefix_list:
+                new_values = all_values
+            elif force_all or not typed:
                 new_values = all_values
             elif prefix_list and typed in prefix_list:
                 new_values = all_values
             else:
-                new_values = [v for v in all_values if typed.lower() in str(v).lower()]
+                q = typed.lower()
+                new_values = [v for v in all_values if q in str(v).lower()]
             
-            print(f"[FILTER] new_values count: {len(new_values)}, changed: {list(event_widget['values']) != list(new_values)}")
-            
+<<<<<<< ours
             # Update values if changed
             if list(event_widget['values']) != list(new_values):
                 event_widget['values'] = new_values
             
             # Auto-open dropdown after typing (only if not empty and has focus)
+=======
+            # [OPTIMIZATION] Efficient change check: Compare lengths first, then content only if needed
+            current_vals = combobox['values']
+            if len(current_vals) != len(new_values) or list(current_vals) != list(new_values):
+                combobox['values'] = new_values
+            
+>>>>>>> theirs
             if not force_all and typed and len(new_values) > 0:
                 # Cancel any pending open
                 if hasattr(event_widget, '_dropdown_timer'):
@@ -2532,14 +2677,21 @@ class MaterialManager:
 
         def on_focus_in(event):
             try:
+                # [PERFORMANCE] Only filter on focus if the entry is actually empty 
+                # to prevent stuttering when navigating with values already present
+                if not combobox.get():
+                    perform_filter(combobox, force_all=True)
                 combobox.selection_range(0, tk.END)
             except: pass
-            perform_filter(combobox, force_all=True)
             
         combobox.bind('<FocusIn>', on_focus_in, add=True)
         
-        # Click to show full list
-        combobox.bind('<Button-1>', lambda e: perform_filter(combobox, force_all=True), add=True)
+        # Click to show full list - Skip if already showing to avoid redundant calculations
+        def on_click(event):
+            if not combobox.get():
+                perform_filter(combobox, force_all=True)
+                
+        combobox.bind('<Button-1>', on_click, add=True)
 
 
     def apply_autocomplete_to_all_comboboxes(self):
@@ -2623,7 +2775,8 @@ class MaterialManager:
             for df_name, df in [('Materials', self.materials_df), ('Transactions', self.transactions_df), 
                                 ('Monthly', self.monthly_usage_df), ('Daily', self.daily_usage_df)]:
                 if df is not None and 'MaterialID' in df.columns:
-                    df['MaterialID'] = pd.to_numeric(df['MaterialID'], errors='coerce')
+                    # [FIX] Keep as clean strings, NOT numeric, to match our calculation logic
+                    df['MaterialID'] = df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).replace(['nan', 'None', 'NaN', ''], '')
                 if df is not None and 'Active' in df.columns:
                     # Enforce integer type (1/0) for 'Active' to avoid float/boolean conflicts
                     df['Active'] = pd.to_numeric(df['Active'], errors='coerce').fillna(1).astype(int)
@@ -3067,7 +3220,218 @@ class MaterialManager:
         messagebox.showinfo("완료", "자재 정보가 성공적으로 수정되었습니다.")
 
     
+    def precompute_all_stock(self):
+        """Pre-calculate stock for all materials in a batch including Daily Usage (Optimized)"""
+        try:
+            # 1. Initialize caches always
+            self.cached_stock_by_id = {}
+            self.cached_stock_by_name = {}
+            
+            # 2. Process Transactions (EXCLUDING auto-deductions to avoid double counting)
+            if not self.transactions_df.empty:
+                df = self.transactions_df.copy()
+                
+                # Ensure Note column exists for auto-deduction check
+                if 'Note' not in df.columns:
+                    df['Note'] = ''
+                    
+                # Exclude '(자동 차감)' which are just copies of Daily Usage
+                auto_mask = df['Note'].astype(str).str.contains(r'자동 차감', regex=True, na=False)
+                df = df[~auto_mask]
+                
+                # Standardize ID and Name
+                if 'MaterialID' in df.columns:
+                    df['clean_id'] = df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+                else:
+                    df['clean_id'] = ''
+                    
+                if '품목명' in df.columns:
+                    df['clean_name'] = df['품목명'].astype(str).str.strip().str.lower()
+                else:
+                    df['clean_name'] = ''
+                
+                # Consolidate Quantity and 수량 with OUT/출고 normalization
+                def get_clean_qty(row):
+                    q = pd.to_numeric(row.get('Quantity', 0), errors='coerce')
+                    if (pd.isna(q) or q == 0) and '수량' in row:
+                        q = pd.to_numeric(row.get('수량', 0), errors='coerce')
+                    
+                    t_type = str(row.get('Type', '')).strip().upper()
+                    if t_type in ['OUT', '출고'] and q > 0:
+                        return -q
+                    return q if pd.notna(q) else 0.0
+
+                df['net_qty'] = df.apply(get_clean_qty, axis=1)
+                
+                # Aggregate by ID (Principal)
+                if 'clean_id' in df.columns:
+                    valid_df = df[df['clean_id'] != '']
+                    if not valid_df.empty:
+                        self.cached_stock_by_id = valid_df.groupby('clean_id')['net_qty'].sum().to_dict()
+                
+                # Aggregate by Name (Fallback for orphans)
+                if 'clean_name' in df.columns:
+                    raw_ids = df['MaterialID'].astype(str).str.strip().str.lower() if 'MaterialID' in df.columns else pd.Series([''] * len(df))
+                    no_id_mask = raw_ids.isin(['', 'nan', 'none', 'null', '0.0', '0', 'nan.0'])
+                    orphan_df = df[no_id_mask]
+                    if not orphan_df.empty:
+                        self.cached_stock_by_name = orphan_df.groupby('clean_name')['net_qty'].sum().to_dict()
+
+            # 3. Process Daily Usage (Real-time Site Records)
+            if not self.daily_usage_df.empty:
+                # Aliases for flexible column matching
+                qty_aliases = ['검사량', '필름매수', '수량', 'Usage', 'FilmCount', 'Quantity', 'film_count', 'inspected_qty']
+                id_aliases = ['MaterialID', 'Material_ID', 'ID', 'MatID', '품번']
+                name_aliases = ['품목명', 'MaterialName', 'ItemName', 'item_name', 'name']
+                
+                # [OPTIMIZATION] Pre-load constant NDT data
+                ndt_product_map = self._load_ndt_product_map()
+                ndt_groups = {
+                    'PT약품': ['세척제', '침투제', '현상제', '형광침투제'],
+                    'MT약품': ['백색페인트', '흑색자분', '형광자분']
+                }
+                
+                # Track new materials to auto-register
+                auto_registered = set()
+                
+                # Main material usage (Subtract)
+                for _, row in self.daily_usage_df.iterrows():
+                    # 1. Resolve Material ID
+                    mat_id = ''
+                    for alias in id_aliases:
+                        if alias in row:
+                            val = row.get(alias, '')
+                            if pd.notna(val) and str(val).strip():
+                                mat_id = str(val).strip().replace('.0', '')
+                                break
+                    
+                    # 2. Resolve Material Name
+                    m_name = ''
+                    for alias in name_aliases:
+                        if alias in row:
+                            val = row.get(alias, '')
+                            if pd.notna(val) and str(val).strip():
+                                m_name = str(val).strip()
+                                break
+                    
+                    # Auto-register if not found in master
+                    if mat_id and mat_id.lower() not in ['nan', 'none', '']:
+                        # [OPTIMIZATION] Use pre-calculated set for lookup instead of dataframe filter
+                        if mat_id not in self.mat_id_normalized and mat_id not in auto_registered:
+                            # ID not found - try to match by name first
+                            name_matched = False
+                            if m_name and m_name.lower() not in ['nan', 'none', '']:
+                                # [OPTIMIZATION] Use pre-calculated name map
+                                tid = self.mat_name_to_id.get(m_name.lower())
+                                if tid:
+                                    mat_id = tid
+                                    name_matched = True
+                            
+                            if not name_matched:
+                                # Auto-register with quantity 0
+                                new_id = self.register_new_material(
+                                    name=m_name or f'자동등록-{mat_id}',
+                                    model=m_name or '',
+                                    warehouse='현장',
+                                    규격='자동등록',
+                                    save=False
+                                )
+                                auto_registered.add(mat_id)
+                                auto_registered.add(new_id)
+                                mat_id = new_id
+                    elif m_name and m_name.lower() not in ['nan', 'none', '']:
+                        # Check if exists by name cache
+                        tid = self.mat_name_to_id.get(m_name.lower())
+                        if not tid and m_name not in auto_registered:
+                            new_id = self.register_new_material(
+                                name=m_name,
+                                model=m_name,
+                                warehouse='현장',
+                                규격='자동등록',
+                                save=False
+                            )
+                            auto_registered.add(m_name)
+                            auto_registered.add(new_id)
+                            mat_id = new_id
+                        elif tid:
+                            mat_id = tid
+                    
+                    # 3. Resolve Quantity
+                    qty = 0.0
+                    for alias in qty_aliases:
+                        if alias in row:
+                            val = pd.to_numeric(row.get(alias, 0), errors='coerce')
+                            if pd.notna(val) and val != 0:
+                                qty = val
+                                break
+                    
+                    if qty != 0:
+                        if mat_id and mat_id.lower() not in ['nan', 'none', '']:
+                            self.cached_stock_by_id[mat_id] = self.cached_stock_by_id.get(mat_id, 0.0) - qty
+                        elif m_name and m_name.lower() not in ['nan', 'none', '']:
+                            self.cached_stock_by_name[m_name.lower()] = self.cached_stock_by_name.get(m_name.lower(), 0.0) - qty
+                    
+                    # 2b. Also subtract FilmCount
+                    film_qty = 0.0
+                    for alias in ['FilmCount', '필름매수', 'film_count']:
+                        if alias in row:
+                            val = pd.to_numeric(row.get(alias, 0), errors='coerce')
+                            if pd.notna(val) and val > 0:
+                                film_qty = val
+                                break
+                    
+                    if film_qty > 0:
+                        if mat_id and mat_id.lower() not in ['nan', 'none', '']:
+                            self.cached_stock_by_id[mat_id] = self.cached_stock_by_id.get(mat_id, 0.0) - film_qty
+                        else:
+                            # Try to resolve by name
+                            m_name_inner = ''
+                            for alias in name_aliases:
+                                if alias in row:
+                                    val = row.get(alias, '')
+                                    if pd.notna(val) and str(val).strip():
+                                        m_name_inner = str(val).strip().lower()
+                                        break
+                            if m_name_inner and m_name_inner not in ['nan', 'none', '']:
+                                self.cached_stock_by_name[m_name_inner] = self.cached_stock_by_name.get(m_name_inner, 0.0) - film_qty
+                    
+                    # 3. NDT Chemicals (Subtract)
+                    ndt_search = [c for c in row.index if str(c).startswith('NDT_')]
+                    for col in ndt_search:
+                        c_qty = pd.to_numeric(row[col], errors='coerce')
+                        if pd.notna(c_qty) and c_qty > 0:
+                            raw_chem = str(col).replace('NDT_', '').strip()
+                            db_item_name = ndt_product_map.get(raw_chem, '')
+                            if not db_item_name:
+                                for group_name, members in ndt_groups.items():
+                                    if raw_chem in members:
+                                        db_item_name = group_name
+                                        break
+                            if not db_item_name:
+                                db_item_name = "기타소모품"
+                            
+                            target_key = db_item_name.lower()
+                            self.cached_stock_by_name[target_key] = self.cached_stock_by_name.get(target_key, 0.0) - c_qty
+                            self.cached_stock_by_name[raw_chem.lower()] = self.cached_stock_by_name.get(raw_chem.lower(), 0.0) - c_qty
+
+            # Save auto-registered materials to database
+            if auto_registered:
+                self.save_data()
+                self.refresh_lookup_caches() # Critical: sync cache after auto-registration
+                print(f"DEBUG: Saved {len(auto_registered)} auto-registered materials to database")
+
+            print(f"DEBUG: Precomputed ALL stock (Inc. Daily Usage) for {len(self.cached_stock_by_id)} IDs and {len(self.cached_stock_by_name)} name groups.")
+        except Exception as e:
+            print(f"CRITICAL: precompute_all_stock failed: {e}")
+            traceback.print_exc()
+
+            print(f"DEBUG: Precomputed ALL stock (Inc. Daily Usage) for {len(self.cached_stock_by_id)} IDs and {len(self.cached_stock_by_name)} name groups.")
+        except Exception as e:
+            print(f"CRITICAL: precompute_all_stock failed: {e}")
+            traceback.print_exc()
+
     def calculate_current_stock(self, mat_id):
+<<<<<<< ours
         """Calculate current stock for a material based on transactions (fully robust version)"""
         # 1. Normalize the target mat_id to clean string
         str_mat_id = str(mat_id).strip().replace('.0', '')
@@ -3158,12 +3522,104 @@ class MaterialManager:
             except: stored_qty = 0.0
             
             current_stock = stored_qty + net_trans_qty
+=======
+        """Calculate current stock using precomputed results"""
+        try:
+            tid = re.sub(r'\.0$', '', str(mat_id).strip())
+            net_change = self.cached_stock_by_id.get(tid, 0.0)
             
-            # --- Dynamic Location/Status Tracking ---
-            status_location = "관내 (창고)"
-            row_tag = 'in_stock'
+            # DEBUG: Check if ID exists in cache
+            if tid in ['421', '425', '426']:
+                print(f"DEBUG: calculate_current_stock - ID {tid}, in_cache: {tid in self.cached_stock_by_id}, net_change: {net_change}, cache_ids: {list(self.cached_stock_by_id.keys())[:5]}")
             
-            if current_stock <= 0:
+            mat_id_cleaned = self.materials_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+            mat_row = self.materials_df[mat_id_cleaned == tid]
+            
+            if not mat_row.empty:
+                tname = str(mat_row.iloc[0].get('품목명', '')).strip().lower()
+                tmodel = str(mat_row.iloc[0].get('모델명', '')).strip().lower()
+                
+                # Check stock change by product name
+                if tname:
+                    net_change += self.cached_stock_by_name.get(tname, 0.0)
+                
+                # Also check by model name for NDT chemicals (e.g., '형광자분', '흑색자분')
+                if tmodel:
+                    net_change += self.cached_stock_by_name.get(tmodel, 0.0)
+                    
+                stored_qty = pd.to_numeric(mat_row.iloc[0].get('수량', 0), errors='coerce')
+                if pd.isna(stored_qty): stored_qty = 0
+                return float(stored_qty) + float(net_change)
+            
+            # If no specific master row found, but we have a precomputed net change for this ID/Name
+            return float(net_change)
+        except Exception as e:
+            print(f"DEBUG: Error calculating stock for {mat_id}: {e}")
+            return 0.0
+
+    def update_stock_view(self):
+        """Update the stock status treeview (Throttled during initialization)"""
+        if not getattr(self, 'is_ready', False):
+            return
+            
+        try:
+            # [PERFORMANCE] Precompute all stock totals in a single batch
+            self.precompute_all_stock()
+            
+            # Debug: check materials_df size
+            print(f"DEBUG: update_stock_view - Materials in Master: {len(self.materials_df)}")
+            # DEBUG: Check if ID 421 is in materials_df
+            all_ids = self.materials_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).tolist()
+            print(f"DEBUG: All IDs (first 10): {all_ids[:10]}, last 10: {all_ids[-10:]}")
+            print(f"DEBUG: Is 421 in materials_df? {'421' in all_ids}")
+>>>>>>> theirs
+            
+            # Clear current view
+            for item in self.stock_tree.get_children():
+                self.stock_tree.delete(item)
+            
+            search_term = self.search_var.get().lower() if hasattr(self, 'search_var') else ''
+            
+            # Helper function to safely get value and replace NaN
+            def safe_get(val, default=''):
+                cleaned = self.clean_nan(val)
+                if cleaned == '' and str(val).lower() in ['nan', 'none', 'null', 'nan.0', '0.0', '-0.0', '']:
+                    return default
+                return val if pd.notna(val) else default
+            
+            def to_f(val):
+                if pd.isna(val) or val is None: return 0.0
+                try:
+                    s = str(val).replace(',', '').strip()
+                    if not s: return 0.0
+                    return float(s)
+                except:
+                    return 0.0
+            
+            # Calculate current stock
+            stock_summary = []
+            
+            # Pre-setup tags for equipment status highlighting
+            self.stock_tree.tag_configure('deployed', background='#FFF9C4') # Light Yellow for "Field"
+            self.stock_tree.tag_configure('in_stock', background='') # Default
+            self.stock_tree.tag_configure('negative', background='#FFCDD2') # Light Red for negative stock
+            
+            for _, mat in self.materials_df.iterrows():
+                if mat.get('Active', 1) == 0:
+                    continue
+                
+                mat_id = mat['MaterialID']
+                # DEBUG: Check specific ID
+                mat_id_str = str(mat_id).strip().replace('.0', '')
+                if mat_id_str in ['421', '425', '426']:
+                    print(f"DEBUG: update_stock_view processing ID {mat_id_str}, name: {mat.get('품목명', 'N/A')}, Active: {mat.get('Active', 'N/A')}")
+                current_stock = self.calculate_current_stock(mat_id)
+                
+                # --- Dynamic Location/Status Tracking ---
+                # Always check for last OUT transaction to show usage location
+                status_location = "관내 (창고)"
+                row_tag = 'in_stock'
+                
                 # Look for the last "OUT" transaction to determine where it went
                 if not self.transactions_df.empty:
                     # Optimized last transaction check
@@ -3176,7 +3632,55 @@ class MaterialManager:
                             site_name = self.clean_nan(last_op.get('Site', ''))
                             status_location = f"현장: {site_name}" if site_name else "출고됨"
                             row_tag = 'deployed'
+                
+                # Also check daily usage for site information if no transaction found
+                if status_location == "관내 (창고)" and not self.daily_usage_df.empty:
+                    # Find daily usage records for this material
+                    daily_matches = []
+                    for _, du_row in self.daily_usage_df.iterrows():
+                        du_mat_id = str(du_row.get('MaterialID', '')).strip().replace('.0', '')
+                        if du_mat_id == str(mat_id).strip().replace('.0', ''):
+                            daily_matches.append(du_row)
+                    
+                    if daily_matches:
+                        # Sort by date descending and get the most recent
+                        daily_matches.sort(key=lambda x: x.get('Date', ''), reverse=True)
+                        last_usage = daily_matches[0]
+                        site_name = self.clean_nan(last_usage.get('Site', ''))
+                        if site_name:
+                            status_location = f"현장: {site_name}"
+                            row_tag = 'deployed'
+                
+                # Show negative stock indicator in status
+                if current_stock < 0:
+                    status_location += f" (부족: {current_stock:g})"
+                    row_tag = 'negative'
+                
+                stock_summary.append({
+                    'data': (
+                        mat_id,
+                        safe_get(mat.get('회사코드', ''), ''),
+                        safe_get(mat.get('관리품번', ''), ''),
+                        safe_get(mat.get('품목명', ''), ''),
+                        safe_get(mat.get('SN', ''), ''),
+                        safe_get(mat.get('창고', ''), ''),
+                        safe_get(mat.get('모델명', ''), ''),
+                        safe_get(mat.get('규격', ''), ''),
+                        safe_get(mat.get('품목군코드', ''), ''),
+                        safe_get(mat.get('공급업체', ''), ''),
+                        safe_get(mat.get('제조사', ''), ''),
+                        safe_get(mat.get('제조국', ''), ''),
+                        f"{to_f(mat.get('가격', 0)):,.0f}",
+                        f"{to_f(mat.get('원가', 0)):,.0f}",
+                        safe_get(mat.get('관리단위', 'EA'), 'EA'),
+                        f"{to_f(current_stock):g}",
+                        f"{to_f(mat.get('재고하한', 0)):g}",
+                        status_location
+                    ),
+                    'tag': row_tag
+                })
             
+<<<<<<< ours
             # [NEW] 모델명이 'MT약품'인 경우 수량 표시 제외
             model_name = str(mat.get('모델명', '')).strip().upper()
             display_stock = f"{to_f(current_stock):g}"
@@ -3234,6 +3738,44 @@ class MaterialManager:
                 if search_term not in row_str:
                     continue
             self.stock_tree.insert('', tk.END, values=row, tags=(row_obj['tag'],))
+=======
+            # Filter by search term and dropdowns
+            filter_co = str(self.cb_filter_co.get()).strip() if self.cb_filter_co.get() else "전체"
+            filter_class = str(self.cb_filter_class.get()).strip() if self.cb_filter_class.get() else "전체"
+            filter_mfr = str(self.cb_filter_mfr.get()).strip() if self.cb_filter_mfr.get() else "전체"
+            filter_name = str(self.cb_filter_name.get()).strip() if self.cb_filter_name.get() else "전체"
+            filter_sn = str(self.cb_filter_sn.get()).strip() if self.cb_filter_sn.get() else "전체"
+            filter_model = str(self.cb_filter_model.get()).strip() if self.cb_filter_model.get() else "전체"
+            filter_eq = str(self.cb_filter_eq.get()).strip() if self.cb_filter_eq.get() else "전체"
+            
+            print(f"DEBUG Status Filter: co={filter_co}, class={filter_class}, name={filter_name}, eq={filter_eq}")
+            
+            items_inserted = 0
+            for row_obj in stock_summary:
+                row = row_obj['data']
+                # Dropdown Filters
+                if filter_co != "전체" and filter_co != "" and str(row[1]) != filter_co: continue
+                if filter_class != "전체" and filter_class != "" and str(row[8]) != filter_class: continue
+                if filter_mfr != "전체" and filter_mfr != "" and str(row[10]) != filter_mfr: continue
+                if filter_name != "전체" and filter_name != "" and str(row[3]) != filter_name: continue
+                if filter_sn != "전체" and filter_sn != "" and str(row[4]) != filter_sn: continue
+                if filter_model != "전체" and filter_model != "" and str(row[6]) != filter_model: continue
+                if filter_eq != "전체" and filter_eq != "" and str(row[2]) != filter_eq: continue
+                
+                # General Search Term
+                if search_term:
+                    row_str = ' '.join(str(x).lower() for x in row)
+                    if search_term not in row_str:
+                        continue
+                self.stock_tree.insert('', tk.END, values=row, tags=(row_obj['tag'],))
+                items_inserted += 1
+            
+            print(f"DEBUG: update_stock_view - Total items displayed: {items_inserted}")
+
+        except Exception as e:
+            print(f"CRITICAL: update_stock_view failed: {e}")
+            traceback.print_exc()
+>>>>>>> theirs
 
     def setup_inout_tab(self):
         # Main PanedWindow (Vertical): Top (Registration) vs Bottom (History)
@@ -3473,8 +4015,12 @@ class MaterialManager:
         inout_vsb = ttk.Scrollbar(tree_scroll_frame, orient="vertical")
         inout_hsb = ttk.Scrollbar(tree_scroll_frame, orient="horizontal")
         
+<<<<<<< ours
         # [RESTRUCTURED] Column structure based on Registration and Transaction forms
         columns = ('날짜', '구분', '품목명', 'SN', '규격', '수량', '현장', '창고', '담당자', '비고')
+=======
+        columns = ('날짜', '현장명', '방법', '장비명', '품목명', '수량', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '회사코드')
+>>>>>>> theirs
         self.inout_tree = ttk.Treeview(tree_scroll_frame, columns=columns, show='headings', height=10,
                                        yscrollcommand=inout_vsb.set, xscrollcommand=inout_hsb.set)
         
@@ -3483,8 +4029,14 @@ class MaterialManager:
         
         # [NEW] Default Column Widths for Restructured View
         col_widths = {
+<<<<<<< ours
             '날짜': 150, '구분': 80, '품목명': 180, 'SN': 120, '규격': 120, 
             '수량': 80, '현장': 120, '창고': 100, '담당자': 100, '비고': 200
+=======
+            '날짜': 150, '현장명': 120, '방법': 80, '장비명': 130, '품목명': 180, '수량': 80,
+            '형광자분': 80, '흑색자분': 80, '백색페인트': 80, '침투제': 80, '세척제': 80, 
+            '현상제': 80, '형광침투제': 80, '회사코드': 80
+>>>>>>> theirs
         }
         for col in columns:
             self.inout_tree.heading(col, text=col)
@@ -3527,20 +4079,24 @@ class MaterialManager:
             print(f"Error ensuring inout sash visibility: {e}")
 
 
-    def get_material_display_name(self, mat_id):
-        """Get formatted material name as '품목명 (SN: SN번호) - 규격'"""
-        if self.materials_df.empty:
-            return f"ID: {mat_id}"
+    def refresh_lookup_caches(self):
+        """Build/Refresh lookup dictionaries for Material Data to avoid expensive DF lookups in loops"""
+        try:
+            self.mat_id_to_display = {}
+            self.mat_id_to_name = {}
+            self.mat_name_to_id = {}
+            self.mat_id_normalized = set()
             
-        mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
-        if mat_row.empty:
-            # Try numeric fallback just in case some IDs are still strings
-            try:
-                num_id = int(float(mat_id))
-                mat_row = self.materials_df[self.materials_df['MaterialID'] == num_id]
-            except (ValueError, TypeError):
-                pass
+            if self.materials_df.empty:
+                return
+
+            # Pre-clean MaterialID column and store in dictionary for O(1) access
+            # We iterate once and build multiple maps
+            for _, row in self.materials_df.iterrows():
+                mat_id_raw = row.get('MaterialID', '')
+                if pd.isna(mat_id_raw): continue
                 
+<<<<<<< ours
         if mat_row.empty:
             return f"ID: {mat_id}"
             
@@ -3576,12 +4132,51 @@ class MaterialManager:
         if mat_row.empty:
             return {}
         return mat_row.iloc[0].to_dict()
+=======
+                tid = re.sub(r'\.0$', '', str(mat_id_raw).strip())
+                if not tid: continue
+                
+                name = str(row.get('품목명', '')).strip()
+                sn = str(row.get('SN', '')).strip()
+                spec = str(row.get('규격', '')).strip()
+                
+                # 1. ID -> Display Name
+                display = name
+                if sn and sn.lower() not in ['nan', 'none', '']:
+                    display += f" (SN: {sn})"
+                if spec and spec.lower() not in ['nan', 'none', '']:
+                    display += f" - {spec}"
+                self.mat_id_to_display[tid] = display
+                
+                # 2. ID -> Basic Name
+                self.mat_id_to_name[tid] = name
+                
+                # 3. Name -> ID (Case insensitive, handle duplicates by keeping the first/main one)
+                n_lower = name.lower()
+                if n_lower not in self.mat_name_to_id:
+                    self.mat_name_to_id[n_lower] = tid
+                
+                # 4. Normalized ID Set
+                self.mat_id_normalized.add(tid)
+                
+            print(f"DEBUG: Lookup caches refreshed. {len(self.mat_id_normalized)} items cached.")
+        except Exception as e:
+            print(f"ERROR refreshing lookup caches: {e}")
+
+    def get_material_display_name(self, mat_id):
+        """Get formatted material name using cache for high performance"""
+        target_id = re.sub(r'\.0$', '', str(mat_id).strip())
+>>>>>>> theirs
         
-        # Add specification if exists
-        if spec and pd.notna(spec) and str(spec).strip():
-            display += f" - {spec}"
+        # Try Cache First
+        if target_id in self.mat_id_to_display:
+            return self.mat_id_to_display[target_id]
             
-        return display
+        # Fallback (Slow) - only if not in cache
+        if self.materials_df.empty:
+            return str(mat_id)
+            
+        return str(mat_id)
 
     def update_material_combo(self):
         """Update both In/Out and Daily Usage material comboboxes with unified list"""
@@ -3665,6 +4260,7 @@ class MaterialManager:
                 self.cb_trans_filter_vehicle.set("전체")
 
     def _get_material_candidates(self, include_all=False):
+<<<<<<< ours
         vals = []
         if hasattr(self, 'materials_display_list'):
             vals.extend(getattr(self, 'materials_display_list', []) or [])
@@ -3716,6 +4312,26 @@ class MaterialManager:
                 if e: raw_equip.add(e)
 
         cleaned = sorted([e for e in raw_equip if e != '전체'])
+=======
+        # Use pre-computed cached list if available (updated in update_material_combo)
+        cleaned = getattr(self, 'materials_display_list', [])
+        if not cleaned and hasattr(self, 'cb_daily_material'):
+            # Fallback only if cache is missing
+            vals = list(getattr(self.cb_daily_material, 'cget', lambda _k: [])('values') or [])
+            cleaned = sorted(set(str(v).strip() for v in vals if str(v).strip() and str(v).strip() != '전체'))
+        return (['전체'] + cleaned) if include_all else cleaned
+
+    def _get_equipment_candidates(self, include_all=False):
+        # Use pre-computed cached list if available (updated in update_material_combo)
+        cleaned = getattr(self, 'equipment_suggestions', [])
+        if not cleaned:
+            # Fallback to recalculation if cache empty
+            vals = []
+            if hasattr(self, 'equipments'): vals.extend(self.equipments)
+            if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
+                vals.extend(self.daily_usage_df['장비명'].dropna().astype(str).str.strip().tolist())
+            cleaned = sorted(set(str(v).strip() for v in vals if str(v).strip() and str(v).strip() != '전체'))
+>>>>>>> theirs
         return (['전체'] + cleaned) if include_all else cleaned
 
     def _apply_combobox_word_suggest(self, combobox, source_values, open_dropdown=False):
@@ -3736,7 +4352,11 @@ class MaterialManager:
             cursor_pos = combobox.index(tk.INSERT)
         except Exception:
             cursor_pos = len(text_raw)
+<<<<<<< ours
             
+=======
+        
+>>>>>>> theirs
         source = [str(v).strip() for v in (source_values or []) if str(v).strip()]
 
         if not text:
@@ -3745,16 +4365,20 @@ class MaterialManager:
             q = text.lower()
             filtered = [v for v in source if q in v.lower()]
 
-        # [FIX] Only update if values changed to avoid recursion/flicker
-        values_changed = list(combobox['values']) != list(filtered)
-        if values_changed:
+        # [OPTIMIZATION] Efficiently update values only if they differ
+        current_vals = combobox['values']
+        if len(current_vals) != len(filtered) or list(current_vals) != list(filtered):
             combobox['values'] = filtered
 
         # Always ensure state is reconciled if it had focus
         if had_focus:
             def _restore_state():
                 try:
+<<<<<<< ours
                     if self.root.focus_get() != combobox:
+=======
+                    if had_focus and hasattr(self, 'root') and self.root.focus_get() != combobox:
+>>>>>>> theirs
                         combobox.focus_set()
                     combobox.set(text_raw)
                     combobox.icursor(cursor_pos)
@@ -3763,6 +4387,7 @@ class MaterialManager:
                     pass
 
             _restore_state()
+<<<<<<< ours
             # Double tap with after_idle to ensure it sticks after the internal Tk events
             try: combobox.after_idle(_restore_state)
             except Exception: pass
@@ -3779,6 +4404,8 @@ class MaterialManager:
                 combobox.icursor(cursor_pos)
             except:
                 pass
+=======
+>>>>>>> theirs
 
     def _bind_combobox_word_suggest(self, combobox, source_getter):
         if not combobox:
@@ -4043,9 +4670,10 @@ class MaterialManager:
                         self.materials_df.loc[mask, '창고'] = warehouse
             
             # Create transaction record
+            import datetime
             new_trans = {
                 'Date': datetime.datetime.now(),
-                'MaterialID': mat_id,
+                'MaterialID': re.sub(r'\.0$', '', str(mat_id).strip()),
                 'Type': t_type,
                 'Quantity': qty if t_type == 'IN' else -qty,
                 'Note': note,
@@ -4056,6 +4684,18 @@ class MaterialManager:
                 '차량점검': '',
                 '차량비고': ''
             }
+            
+            # [NEW] Automatically map NDT chemical usage to specific columns for visual consistency
+            ndt_cols = ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']
+            # Get the model name to check too
+            model_name = ""
+            if not mat_rows.empty: model_name = str(mat_rows.iloc[0].get('모델명', '')).lower()
+            
+            search_key = (pure_mat_name + " " + model_name).lower()
+            for col in ndt_cols:
+                if col in search_key:
+                    new_trans[col] = qty
+                    break
             
             # Add to dataframe
             self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
@@ -4106,7 +4746,10 @@ class MaterialManager:
         self.update_transaction_view()
 
     def update_transaction_view(self):
-        """Populate the In/Out history Treeview with Unified Records (Transactions + DailyUsage) summerly"""
+        """Populate the In/Out history Treeview with Unified Records (Throttled during initialization)"""
+        if not getattr(self, 'is_ready', False):
+            return
+            
         try:
             if not hasattr(self, 'inout_tree'):
                 return
@@ -4115,6 +4758,7 @@ class MaterialManager:
             for item in self.inout_tree.get_children():
                 self.inout_tree.delete(item)
                 
+<<<<<<< ours
             def normalize_id(val):
                 if pd.isna(val) or val == '': return ""
                 s = str(val).strip()
@@ -4130,6 +4774,21 @@ class MaterialManager:
                 active_mask = (self.materials_df.get('Active', 1) != 0)
                 active_ids = [normalize_id(x) for x in self.materials_df[active_mask]['MaterialID'].dropna().tolist()]
                 
+=======
+            # 1. Prepare DailyUsage Records
+            df_daily = pd.DataFrame()
+            if not self.daily_usage_df.empty:
+                df_daily = self.daily_usage_df.copy()
+                # Column Compatibility
+                if 'Site' not in df_daily.columns and '현장' in df_daily.columns: df_daily['Site'] = df_daily['현장']
+                if 'Date' not in df_daily.columns and '날짜' in df_daily.columns: df_daily['Date'] = df_daily['날짜']
+                # Drop invalid dates and convert
+                df_daily['Date'] = pd.to_datetime(df_daily['Date'], errors='coerce')
+                # df_daily = df_daily.dropna(subset=['Date']) # [HARDENING] Don't drop, handle NaT in display
+            
+            # 2. Prepare Transaction Records
+            df_trans = pd.DataFrame()
+>>>>>>> theirs
             if not self.transactions_df.empty:
                 df_trans = self.transactions_df.copy()
                 # Column Compatibility
@@ -4139,6 +4798,7 @@ class MaterialManager:
                 # Drop invalid dates and convert
                 # Convert to datetime and provide fallback if missing
                 df_trans['Date'] = pd.to_datetime(df_trans['Date'], errors='coerce')
+<<<<<<< ours
                 # For transactions, if Date is missing, try 'EntryDate' or similar if available
                 if 'EntryDate' in df_trans.columns:
                     df_trans['Date'] = df_trans['Date'].fillna(pd.to_datetime(df_trans['EntryDate'], errors='coerce'))
@@ -4173,6 +4833,115 @@ class MaterialManager:
                     'OrigIdx': idx
                 })
             
+=======
+                # df_trans = df_trans.dropna(subset=['Date']) # [HARDENING]
+            
+            # 3. Create Harmonized Unified Data
+            unified_rows = []
+            
+            # [PERFORMANCE] Pre-calculate ID to Model mapping for efficient lookup
+            id_to_model = {}
+            if not self.materials_df.empty:
+                id_to_model = self.materials_df.set_index('MaterialID')['모델명'].astype(str).to_dict()
+            
+            # Add Daily Usage rows
+            for i, row in df_daily.iterrows():
+                try:
+                    mat_id = str(row.get('MaterialID', '')).strip()
+                    usage_rec = {
+                        '_orig_idx': i,
+                        '_source': 'DAILY',
+                        'Date': row.get('Date'),
+                        '현장명': row.get('Site', row.get('현장명', '')),
+                        '방법': row.get('검사방법', row.get('방법', '')),
+                        '장비명': row.get('장비명', ''),
+                        '품목명': row.get('품목명', '') if str(row.get('품목명', '')).strip().lower() not in ['nan', 'none', ''] else self.get_material_display_name(mat_id),
+                        'MaterialID': mat_id,
+                        '수량': row.get('검사량', row.get('수량', row.get('필름매수', row.get('FilmCount', '0')))),
+                        '형광자분': row.get('NDT_형광자분', row.get('형광자분', '0')),
+                        '흑색자분': row.get('NDT_흑색자분', row.get('흑색자분', '0')),
+                        '백색페인트': row.get('NDT_백색페인트', row.get('백색페인트', '0')),
+                        '침투제': row.get('NDT_침투제', row.get('침투제', '0')),
+                        '세척제': row.get('NDT_세척제', row.get('세척제', '0')),
+                        '현상제': row.get('NDT_현상제', row.get('현상제', '0')),
+                        '형광침투제': row.get('NDT_형광침투제', row.get('형광침투제', '0')),
+                        '차량번호': row.get('차량번호', ''),
+                        '회사코드': row.get('회사코드', '')
+                    }
+                    
+                    # [VISUAL FALLBACK] If NDT columns are empty but material matches an NDT category, fill it
+                    ndt_cols = ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']
+                    item_name = str(row.get('품목명', '')).lower()
+                    model_name = str(id_to_model.get(mat_id, '')).lower()
+                    search_key = (item_name + " " + model_name).lower()
+                    
+                    for col in ndt_cols:
+                        if col in search_key:
+                            # If column currently has 0 or '-', and Quantity exists, use it
+                            current_val = usage_rec.get(col, '0')
+                            if str(current_val) in ['0', '0.0', '-']:
+                                usage_rec[col] = usage_rec.get('수량', '0')
+                            break
+                            
+                    unified_rows.append(usage_rec)
+                except:
+                    pass
+                
+            # Add Transaction rows
+            for i, row in df_trans.iterrows():
+                try:
+                    # [DUPLICATE PREVENTION] Skip auto-deducted inventory records in the history view
+                    # because the 'DAILY' source record already provides full visibility of the usage event.
+                    note = str(row.get('Note', '')).strip()
+                    if '(자동 차감)' in note:
+                        continue
+                        
+                    mat_id = str(row.get('MaterialID', '')).strip()
+                    mat_name = self.get_material_display_name(mat_id)
+                    t_type = row.get('Type', 'OUT')
+                    qty = row.get('Quantity', row.get('수량', 0))
+                    # Format Material Name in transactions to show Type/Qty
+                    display_mat = f"[{t_type}] {mat_name}"
+                    
+                    trans_rec = {
+                        '_orig_idx': i,
+                        '_source': 'TRANS',
+                        'Date': row.get('Date'),
+                        '현장명': row.get('Site', row.get('현장명', '')),
+                        '방법': row.get('방법', ''),
+                        '장비명': row.get('장비명', '[입출고]'), # Indicator
+                        '품목명': display_mat,
+                        'MaterialID': mat_id,
+                        '수량': qty,
+                        '형광자분': row.get('형광자분', '-'),
+                        '흑색자분': row.get('흑색자분', '-'),
+                        '백색페인트': row.get('백색페인트', '-'),
+                        '침투제': row.get('침투제', '-'),
+                        '세척제': row.get('세척제', '-'),
+                        '현상제': row.get('현상제', '-'),
+                        '형광침투제': row.get('형광침투제', '-'),
+                        '차량번호': row.get('차량번호', ''),
+                        '회사코드': row.get('회사코드', '')
+                    }
+                    
+                    # [VISUAL FALLBACK] If NDT columns are empty but material matches an NDT category, fill it
+                    ndt_cols = ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']
+                    model_name = str(id_to_model.get(mat_id, '')).lower()
+                    # Use all available identifying strings
+                    search_key = (mat_name + " " + display_mat + " " + model_name).lower()
+                    
+                    for col in ndt_cols:
+                        if col in search_key:
+                            # If column currently has 0 or '-', and Quantity exists, use it
+                            current_val = trans_rec.get(col, '-')
+                            if str(current_val) in ['0', '0.0', '-']:
+                                trans_rec[col] = abs(float(qty))
+                            break
+                            
+                    unified_rows.append(trans_rec)
+                except:
+                    pass
+>>>>>>> theirs
             if not unified_rows:
                 return
                 
@@ -4181,6 +4950,7 @@ class MaterialManager:
             # Apply Filters
             # Material Filter
             if hasattr(self, 'cb_trans_filter_mat'):
+<<<<<<< ours
                 selected_mat = str(self.cb_trans_filter_mat.get()).strip()
                 if selected_mat and selected_mat != "전체":
                     # Check if MaterialID matches the display name in materials_df
@@ -4200,6 +4970,28 @@ class MaterialManager:
             if hasattr(self, 'cb_trans_filter_vehicle'):
                 selected_vehicle = str(self.cb_trans_filter_vehicle.get()).strip()
                 if selected_vehicle and selected_vehicle != "전체":
+=======
+                selected_mat = self.cb_trans_filter_mat.get()
+                if selected_mat and selected_mat not in ["전체", "all", "All", ""]:
+                    # [OPTIMIZATION] Find matching IDs from cache once, then vectorized filter
+                    matching_ids = {tid for tid, disp in self.mat_id_to_display.items() if disp == selected_mat}
+                    if matching_ids:
+                        df_unified = df_unified[df_unified['MaterialID'].isin(matching_ids)]
+                    else:
+                        # Corner case: fallback to basic name matching if not found by full display name
+                        df_unified = df_unified[df_unified['품목명'].astype(str) == selected_mat]
+            
+            # Site Filter
+            if hasattr(self, 'cb_trans_filter_site'):
+                selected_site = self.cb_trans_filter_site.get()
+                if selected_site and selected_site not in ["전체", "all", "All", ""]:
+                    df_unified = df_unified[df_unified['현장명'].astype(str).str.contains(selected_site, na=False, case=False, regex=False)]
+            
+            # Vehicle Filter
+            if hasattr(self, 'cb_trans_filter_vehicle'):
+                selected_vehicle = self.cb_trans_filter_vehicle.get()
+                if selected_vehicle and selected_vehicle not in ["전체", "all", "All", ""]:
+>>>>>>> theirs
                     df_unified = df_unified[df_unified['차량번호'].astype(str).str.contains(selected_vehicle, na=False, case=False, regex=False)]
 
             # [NEW] Update Filter Dropdowns with latest unified data unique values
@@ -4207,7 +4999,7 @@ class MaterialManager:
                 self._site_filter_busy = True
                 try:
                     s_current = self.cb_trans_filter_site.get()
-                    s_vals = sorted(df_unified['Site'].dropna().astype(str).unique().tolist())
+                    s_vals = sorted(df_unified['현장명'].dropna().astype(str).unique().tolist())
                     self.cb_trans_filter_site['values'] = ["전체"] + [v for v in s_vals if v.strip()]
                     if s_current: self.cb_trans_filter_site.set(s_current)
                     else: self.cb_trans_filter_site.set("전체")
@@ -4229,11 +5021,16 @@ class MaterialManager:
             self.inout_tree['displaycolumns'] = ('날짜', '구분', '품목명', 'SN', '규격', '수량', '현장', '창고', '담당자', '비고')
 
             # Sort and display
-            df_sorted = df_unified.sort_values(by='Date', ascending=False).head(500)
+            try:
+                # Ensure Date is datetime for sorting, but handle NaT safely
+                df_sorted = df_unified.sort_values(by='Date', ascending=False).head(500)
+            except:
+                df_sorted = df_unified.head(500)
             
             # [RESTORED] Column Order based on setup: 날짜, 구분, 품목명, SN, 규격, 수량, 현장, 창고, 담당자, 비고
             for idx, row in df_sorted.iterrows():
                 try:
+<<<<<<< ours
                     # Robust date formatting with fallback for NaT
                     if pd.isna(row['Date']):
                         usage_date = "알 수 없음"
@@ -4252,9 +5049,38 @@ class MaterialManager:
                         self.clean_nan(row.get('User', '')),
                         self.clean_nan(row.get('Note', ''))
                     ), tags=(str(row.get('OrigIdx', '')),))
+=======
+                    # Handle Date formatting safely
+                    dt = row.get('Date')
+                    if pd.isna(dt) or dt is None:
+                        usage_date = "-"
+                    else:
+                        try:
+                            usage_date = dt.strftime('%Y-%m-%d %H:%M')
+                        except:
+                            usage_date = str(dt)
+                            
+                    self.inout_tree.insert('', tk.END, values=(
+                        usage_date,
+                        self.clean_nan(row.get('현장명', '')),
+                        self.clean_nan(row.get('방법', '')),
+                        self.clean_nan(row.get('장비명', '')),
+                        self.clean_nan(row.get('품목명', '')),
+                        self.clean_nan(row.get('수량', '')),
+                        self.clean_nan(row.get('형광자분', '')),
+                        self.clean_nan(row.get('흑색자분', '')),
+                        self.clean_nan(row.get('백색페인트', '')),
+                        self.clean_nan(row.get('침투제', '')),
+                        self.clean_nan(row.get('세척제', '')),
+                        self.clean_nan(row.get('현상제', '')),
+                        self.clean_nan(row.get('형광침투제', '')),
+                        self.clean_nan(row.get('회사코드', ''))
+                    ), tags=(str(row.get('_source', '')), str(row.get('_orig_idx', ''))))
+>>>>>>> theirs
                 except Exception as e:
                     print(f"Row Display Error: {e}")
                     continue
+
                     
         except Exception as e:
             import traceback
@@ -4284,10 +5110,19 @@ class MaterialManager:
             
         for item in selection:
             tags = self.inout_tree.item(item, 'tags')
-            if tags:
-                idx = int(tags[0])
-                if idx in self.transactions_df.index:
-                    self.transactions_df = self.transactions_df.drop(idx)
+            if len(tags) >= 2:
+                try:
+                    source_type = str(tags[0])
+                    idx = int(tags[1])
+                    
+                    if source_type == 'TRANS':
+                        if idx in self.transactions_df.index:
+                            self.transactions_df = self.transactions_df.drop(idx)
+                    elif source_type == 'DAILY':
+                        if idx in self.daily_usage_df.index:
+                            self.daily_usage_df = self.daily_usage_df.drop(idx)
+                except (ValueError, IndexError):
+                    continue
         
         self.save_data()
         self.update_transaction_view()
@@ -8171,36 +9006,6 @@ class MaterialManager:
         # Selection binding
         self.daily_usage_tree.bind('<<TreeviewSelect>>', lambda e: None)
         
-        # Optimize treeview scroll region to prevent unnecessary scrollbars
-        def optimize_treeview_scroll_region():
-            try:
-                if hasattr(self, 'daily_usage_tree'):
-                    self.daily_usage_tree.update_idletasks()
-                    
-                    # Get treeview content dimensions
-                    total_items = len(self.daily_usage_tree.get_children())
-                    if total_items > 0:
-                        # Calculate approximate content height
-                        item_height = 25  # Approximate height per row
-                        content_height = total_items * item_height + 50  # Add some padding
-                        
-                        # Get treeview dimensions
-                        tree_width = self.daily_usage_tree.winfo_width()
-                        tree_height = self.daily_usage_tree.winfo_height()
-                        
-                        # Set scroll region to content size if smaller than treeview
-                        if content_height < tree_height:
-                            self.daily_usage_tree.configure(yscrollcommand=(0, 0, tree_width, content_height))
-                            print(f"Treeview scroll region optimized: (0, 0, {tree_width}, {content_height})")
-                        else:
-                            # Use full treeview dimensions
-                            self.daily_usage_tree.configure(yscrollcommand=(0, 0, tree_width, tree_height))
-                            print(f"Treeview scroll region set to full size: (0, 0, {tree_width}, {tree_height})")
-            except Exception as e:
-                print(f"Error optimizing treeview scroll region: {e}")
-        
-        # Apply optimization after a short delay
-        self.root.after(500, optimize_treeview_scroll_region)
         
         # Initial view update - Moved to end of create_widgets
 
@@ -10417,14 +11222,178 @@ class MaterialManager:
                         if row.get('Active', 1) == 0:
                             self.materials_df.loc[self.materials_df['MaterialID'] == mat_id, 'Active'] = 1
                         break
-                
                 # 미등록 품목 자동 등록 (창고=현장)
                 if not mat_id and mat_display:
                     mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록')
 
-            # 3. 핵심 로직 실행 (단건 저장)
-            if self._add_single_usage_record_logic(mat_id, date_val, site, auto_save=True):
-                # 성공 시 필드 초기화 및 뷰 갱신
+            def to_f(ent):
+                try:
+                    val = ent.get().replace(',', '') if hasattr(ent, 'get') else str(ent).replace(',', '')
+                    return float(val) if val else 0.0
+                except: return 0.0
+            
+            # 2. Collect Common Data (Workers, RTK, Vehicle)
+            common_data = {
+                'Date': date_val,
+                'Site': site,
+                'MaterialID': mat_id,
+                '품목명': mat_display, # [FIX] Capture material display name
+                '장비명': self.cb_daily_equip.get().strip(),
+                '검사방법': self.cb_daily_test_method.get().strip(),
+                '검사량': to_f(self.ent_daily_test_amount),
+                'FilmCount': 0, # Film count removed from UI, default to 0
+                '단가': to_f(self.ent_daily_unit_price),
+                '출장비': to_f(self.ent_daily_travel_cost),
+                '일식': to_f(self.ent_daily_meal_cost),
+                '검사비': to_f(self.ent_daily_test_fee),
+                'Note': "",
+                'EntryTime': datetime.datetime.now()
+            }
+
+            # 3. Worker Data
+            for i in range(1, 11):
+                group = getattr(self, f'worker_group{i}', None)
+                u_key = 'User' if i == 1 else f'User{i}'
+                wt_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
+                ot_key = 'OT' if i == 1 else f'OT{i}'
+                
+                if group:
+                    common_data[u_key] = group.cb_name.get().strip()
+                    common_data[wt_key] = group.ent_worktime.get().strip()
+                    common_data[ot_key] = group.ent_ot.get().strip()
+                else:
+                    common_data[u_key] = ""; common_data[wt_key] = ""; common_data[ot_key] = ""
+
+            # 4. RTK Categories (Common for all companies)
+            rtk_data = {}
+            for cat, ent in self.rtk_entries.items():
+                rtk_data[f'RTK_{cat}'] = to_f(ent)
+
+            # 5. Vehicle Data (Common for all companies)
+            vehicle_data = {'차량번호': "", '주행거리': "", '차량점검': "", '차량비고': ""}
+            if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
+                box = self.vehicle_boxes[0]
+                vehicle_data['차량번호'] = box.cb_veh_no.get().strip()
+                vehicle_data['주행거리'] = box.ent_mileage.get().strip()
+                vehicle_data['차량점검'] = box.ent_inspection.get().strip()
+                vehicle_data['차량비고'] = box.ent_note.get().strip()
+
+            # 6. NDT Materials by Company - Create separate records
+            ndt_product_map = self._load_ndt_product_map()
+            ndt_groups = {
+                'PT약품': ['세척제', '침투제', '현상제', '형광침투제'],
+                'MT약품': ['백색페인트', '흑색자분', '형광자분']
+            }
+            
+            records_to_save = []
+            
+            # Iterate through company sections
+            if hasattr(self, 'ndt_company_entries'):
+                for company_entries in self.ndt_company_entries:
+                    company_code = company_entries['_company'].get().strip()
+                    
+                    # Build NDT data for this company
+                    ndt_data = {}
+                    has_ndt = False
+                    for ndt_name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']:
+                        qty = to_f(company_entries.get(ndt_name, None))
+                        ndt_data[f'NDT_{ndt_name}'] = qty
+                        if qty > 0:
+                            has_ndt = True
+                    
+                    # Create record if company has data or if it's the first company
+                    if has_ndt or company_entries == self.ndt_company_entries[0]:
+                        company_record = {**common_data, **rtk_data, **vehicle_data, **ndt_data}
+                        company_record['회사코드'] = company_code  # Store company code
+                        records_to_save.append(company_record)
+                        print(f"DEBUG SAVE: NDT data for {company_code}: {ndt_data}")
+                        
+                        # Stock deduction for each NDT item with company code in note
+                        for ndt_name, qty in [(k.replace('NDT_', ''), v) for k, v in ndt_data.items() if v > 0]:
+                            db_item_name = ndt_product_map.get(ndt_name, '')
+                            db_model_name = ndt_name
+                            
+                            if not db_item_name:
+                                for group_name, members in ndt_groups.items():
+                                    if ndt_name in members:
+                                        db_item_name = group_name
+                                        break
+                                if not db_item_name: db_item_name = "기타소모품"
+                            
+                            # Include company code in transaction note
+                            note_suffix = f" ({company_code})" if company_code else ""
+                            
+                            mat_rows = self.materials_df[
+                                (self.materials_df['품목명'] == db_item_name) & 
+                                (self.materials_df['모델명'] == db_model_name)
+                            ]
+                            
+                            target_mat_id = ""
+                            if mat_rows.empty:
+                                target_mat_id = self.register_new_material(db_item_name, model=db_model_name, warehouse='현장', 규격='자동등록')
+                            else:
+                                target_mat_id = mat_rows['MaterialID'].values[0]
+                            
+                            new_trans = {
+                                'Date': datetime.datetime.now(),
+                                'MaterialID': target_mat_id,
+                                'Type': 'OUT',
+                                'Quantity': -qty,
+                                'Note': f"{site} 현장 사용 (자동 차감){note_suffix}",
+                                'User': common_data.get('User', ''),
+                                'Site': site,
+                                '방법': common_data.get('검사방법', ''),
+                                '장비명': common_data.get('장비명', ''),
+                                '품목명': db_item_name,
+                                '회사코드': company_code
+                            }
+                            # Add chemical content to the corresponding column
+                            if ndt_name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']:
+                                new_trans[ndt_name] = qty
+                                
+                            self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
+
+            # 7. Create transaction for the main material usage
+            if records_to_save and mat_id and common_data['검사량'] > 0:
+                main_trans = {
+                    'Date': datetime.datetime.now(),
+                    'MaterialID': re.sub(r'\.0$', '', str(mat_id).strip()),
+                    'Type': 'OUT',
+                    'Quantity': -common_data['검사량'],
+                    'Note': f"{site} 현장 사용 (자동 차감)",
+                    'User': common_data.get('User', ''),
+                    'Site': site,
+                    '방법': common_data.get('검사방법', ''),
+                    '장비명': common_data.get('장비명', ''),
+                    '품목명': common_data.get('품목명', ''),
+                    '수량': common_data.get('검사량', 0),
+                    '회사코드': records_to_save[0].get('회사코드', '') if records_to_save else ''
+                }
+                
+                # [NEW] Automatically map NDT chemical usage for main material to specific columns
+                main_mat_name = common_data.get('품목명', '')
+                ndt_cols = ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']
+                for col in ndt_cols:
+                    if col in main_mat_name:
+                        main_trans[col] = common_data['검사량']
+                        break
+                # Also include vehicle data if available in the first record
+                if records_to_save:
+                    for k in ['차량번호', '주행거리', '차량점검', '차량비고']:
+                        if k in records_to_save[0]: main_trans[k] = records_to_save[0][k]
+                
+                self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([main_trans])], ignore_index=True)
+
+            # 8. Save all company records
+            if records_to_save:
+                self.daily_usage_df = pd.concat([self.daily_usage_df, pd.DataFrame(records_to_save)], ignore_index=True)
+            
+            if self.save_data():
+                # [NEW] Immediately refresh stock view so results are visible without restart
+                self.update_stock_view()
+                
+                # [FIX] Automatically clear NDT and RTK fields after success
+                # Clear all company NDT sections
                 if hasattr(self, 'ndt_company_entries'):
                     for company_entries in self.ndt_company_entries:
                         for name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']:
@@ -10859,7 +11828,10 @@ class MaterialManager:
             self.cb_trans_filter_vehicle['values'] = ['전체'] + unique_vehicles
 
     def update_daily_usage_view(self):
-        """Update the daily usage treeview with smarter filters and shift classification"""
+        """Update the daily usage treeview (Throttled during initialization)"""
+        if not getattr(self, 'is_ready', False):
+            return
+            
         import re
         marker_pattern = MARKER_PATTERN
         
@@ -10954,12 +11926,21 @@ class MaterialManager:
             filtered_df = filtered_df[filtered_df['차량번호'].astype(str).str.contains(filter_vehicle, na=False, case=False, regex=False)]
         
         # Filter by material if specified
-        if filter_material != '전체':
-            # Robust filtering: map every MaterialID in the current set to its display name 
-            # and filter by matching the user's selection string. 
-            # This correctly handles both master-linked and orphaned/deleted materials.
-            def get_disp_name(mid): return self.get_material_display_name(mid)
-            filtered_df = filtered_df[filtered_df['MaterialID'].apply(get_disp_name) == filter_material]
+        if filter_material != '전체' and not filter_material.startswith('전체'):
+            # [OPTIMIZATION] Find matching IDs from lookup caches
+            matching_mat_ids = {tid for tid, disp in self.mat_id_to_display.items() if disp == filter_material}
+            
+            if not matching_mat_ids:
+                # If no direct match in display names, try basic name matching
+                tid = self.mat_name_to_id.get(filter_material.lower())
+                if tid:
+                    matching_mat_ids = {tid}
+            
+            if matching_mat_ids:
+                filtered_df = filtered_df[filtered_df['MaterialID'].astype(str).str.replace('.0', '', regex=False).isin(matching_mat_ids)]
+            else:
+                # Absolute fallback: direct partial match on 품목명 in the usage records
+                filtered_df = filtered_df[filtered_df['품목명'].astype(str).str.contains(filter_material, na=False, case=False)]
 
         # Filter by worker or shift (Smarter & Marker-Insensitive)
         if filter_worker != '전체' or filter_shift != '전체':
@@ -13590,7 +14571,13 @@ class MaterialManager:
                     # 7. Mark as ready for future saves AFTER all restoration is done
                     def finalize_loading():
                         self.is_ready = True
-                        print("APP READY: State restoration complete.")
+                        # Trigger FINAL unified refresh
+                        self.refresh_lookup_caches()
+                        self.precompute_all_stock()
+                        self.update_stock_view()
+                        self.update_transaction_view()
+                        self.update_daily_usage_view()
+                        print("APP READY: State restoration complete and caches warmed.")
                     
                     self.root.after(300, finalize_loading) 
                 
