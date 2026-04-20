@@ -736,17 +736,21 @@ class LaborCostDetailWidget(ttk.Frame):
         # Shift types for Table 2
         self.special_types = ["연장근무", "야간근무", "휴일근무"]
         
-        # Base Salaries for Reference (Table 3)
-        self.base_salaries = {
-            "이사": 55250000,
-            "부장": 55250000,
-            "차장": 47670000,
-            "과장": 41170000,
-            "대리": 37920000,
-            "계장": 34670000,
-            "주임": 31420000,
-            "기사": 29250000
-        }
+        # Base Salaries for Reference (Table 3) - Dynamically loaded from master
+        self.base_salaries = {}
+        
+        # Resolve MaterialManager to get rates
+        master = parent
+        while master and not hasattr(master, 'get_base_salaries'):
+            master = getattr(master, 'master', None)
+        
+        if master:
+            self.base_salaries = master.get_base_salaries()
+        else:
+             self.base_salaries = {
+                "이사": 55250000, "부장": 55250000, "차장": 47670000, "과장": 41170000,
+                "대리": 37920000, "계장": 34670000, "주임": 31420000, "기사": 29250000
+            }
         
         self.entries = {} # Key -> Rank/Type -> Column -> Entry
         self.totals = {}  # Key -> Rank/Type -> Label
@@ -810,8 +814,6 @@ class LaborCostDetailWidget(ttk.Frame):
             # [NEW] Default value from base salary / 240
             daily_rate = round(self.base_salaries.get(rank, 0) / 240)
             if daily_rate > 0:
-                # Add a marker check to avoid overwriting user edits if necessary, 
-                # but initially we can just populate it.
                 ent_price.insert(0, f"{daily_rate:,.0f}")
             
             lbl_subtotal = ttk.Label(table1_frame, text="0", relief='solid', anchor='e', padding=5)
@@ -1021,19 +1023,24 @@ class MaterialCostDetailWidget(ttk.Frame):
         super().__init__(parent, **kwargs)
         self.on_change_callback = on_change_callback
         
-        # Default Items from Image
-        self.default_items = [
-            ("PT 약품", "세척액", "CAN", 1500),
-            ("PT 약품", "침투액", "CAN", 2300),
-            ("PT 약품", "현상액", "CAN", 2000),
-            ("MT 약품", "자분페인트", "CAN", 2350),
-            ("MT 약품", "흑색자분", "CAN", 1800),
-            ("방사선투과검사 필름", "MX125", "매", 990),
-            ("글리세린", "20L", "통", 100000),
-            ("필름 현상액", "3L", "통", 16500),
-            ("필름 정착액", "3L", "통", 16500),
-            ("수적방지액", "200mL", "통", 2500)
-        ]
+        # Default Items from settings_df or fallback
+        self.default_items = []
+        
+        # Resolve MaterialManager to get rates
+        master = parent
+        while master and not hasattr(master, 'get_material_defaults'):
+            master = getattr(master, 'master', None)
+        
+        if master:
+            self.default_items = master.get_material_defaults()
+        else:
+            self.default_items = [
+                ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
+                ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
+                ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
+                ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
+            ]
         
         self.entries = [] # List of dicts for each row: {'item': lbl, 'spec': lbl, 'qty': ent, 'unit': lbl, 'price': ent, 'amount': lbl}
         self._create_widgets()
@@ -1213,7 +1220,6 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.get_material_total = get_material_total_func
         self.get_revenue = get_revenue_func
         
-        # Data structures for entries
         self.entries = {
             'site_expense': [], # list of dicts
             'rental': [],
@@ -1221,6 +1227,11 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             'depreciation': []
         }
         
+        # Resolve MaterialManager to get rates
+        self.master_app = parent
+        while self.master_app and not hasattr(self.master_app, 'get_expense_defaults'):
+            self.master_app = getattr(self.master_app, 'master', None)
+            
         self._create_widgets()
 
     def _create_widgets(self):
@@ -1245,13 +1256,17 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             self.s1_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
         enable_column_resize(self.s1_table, len(headers))
 
-        # Default Site Expenses
-        defaults_s1 = [
-            ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 150000 // 30),
-            ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 15000 // 30),
-            ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 50000 // 30),
-            ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 10000000 // 280)
-        ]
+        # Default Site Expenses - Dynamically loaded from master
+        defaults_s1 = []
+        if self.master_app:
+            defaults_s1 = self.master_app.get_expense_defaults()
+        else:
+            defaults_s1 = [
+                ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
+                ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
+                ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+            ]
         
         for i, (cat, cont, ppl, qty, unit, price) in enumerate(defaults_s1):
             self._add_row_s1(cat, cont, ppl, qty, unit, price)
@@ -1287,7 +1302,16 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             self.s3_table.grid_columnconfigure(j, weight=1 if j in [1, 4] else 0)
         enable_column_resize(self.s3_table, len(headers3))
             
-        self._add_row_s3("케이엔디이", "방사선투과검사", 0, 15000)
+        # Outsource defaults from master
+        outsource_defaults = []
+        if self.master_app:
+            outsource_defaults = self.master_app.get_outsource_defaults()
+        else:
+            outsource_defaults = [("케이엔디이", "방사선투과검사", 0, 15000)]
+
+        for cat, content, qty, price in outsource_defaults:
+            self._add_row_s3(cat, content, qty, price)
+
         for _ in range(2): self._add_row_s3()
 
         # --- Section 4: Social Insurance ---
@@ -2128,22 +2152,21 @@ class MaterialManager:
                                                                '차량번호': str, '주행거리': str, '차량점검': str, '차량비고': str})
                     self.daily_usage_df = normalize_cols(self.daily_usage_df)
 
-                    # [NEW] Migrate FilmCount to Usage/수량 before dropping it
+                    # [NEW] Migrate FilmCount to Usage/수량 if needed (for legacy data)
                     if 'FilmCount' in self.daily_usage_df.columns or '필름매수' in self.daily_usage_df.columns:
                         f_col = 'FilmCount' if 'FilmCount' in self.daily_usage_df.columns else '필름매수'
                         u_col = 'Usage' if 'Usage' in self.daily_usage_df.columns else ('수량' if '수량' in self.daily_usage_df.columns else None)
                         
                         if u_col and f_col:
-                            # If usage is 0/empty, take FilmCount.
+                            # If usage is 0/empty, take FilmCount as fallback for legacy records
                             self.daily_usage_df[u_col] = pd.to_numeric(self.daily_usage_df[u_col], errors='coerce').fillna(0)
                             self.daily_usage_df[f_col] = pd.to_numeric(self.daily_usage_df[f_col], errors='coerce').fillna(0)
                             mask = (self.daily_usage_df[u_col] == 0) & (self.daily_usage_df[f_col] > 0)
-                            self.daily_usage_df.loc[mask, u_col] = self.daily_usage_df.loc[mask, f_col]
-                            print(f"DEBUG: Migrated {mask.sum()} records from {f_col} to {u_col}")
-                        
-                        # Drop FilmCount/필름매수 columns after migration
-                        cols_to_drop = [c for c in ['FilmCount', '필름매수'] if c in self.daily_usage_df.columns]
-                        self.daily_usage_df.drop(columns=cols_to_drop, inplace=True)
+                            # self.daily_usage_df.loc[mask, u_col] = self.daily_usage_df.loc[mask, f_col]
+                            # [DEFENSIVE] Do NOT migrate if we want to keep them separate now. 
+                            # We just keep both columns.
+                            pass 
+
                                                         
                     if not self.daily_usage_df.empty:
                         self.daily_usage_df['Date'] = pd.to_datetime(self.daily_usage_df['Date'])
@@ -2314,6 +2337,42 @@ class MaterialManager:
                     print(f"DEBUG: Budget sheet not found or load failed: {e}")
                     self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail'])
                 
+                # [NEW] 7. Settings (Excel-based Rate Management)
+                try:
+                    self.settings_df = pd.read_excel(self.db_path, sheet_name='Settings')
+                    self.settings_df = normalize_cols(self.settings_df)
+                    print("DEBUG: Loaded Settings sheet.")
+                except Exception as e:
+                    print(f"DEBUG: Settings sheet missing or load failed: {e}. Initializing defaults.")
+                    # Initialize with hardcoded defaults
+                    labor_defaults = [
+                        ['Labor', r, '', '', s] for r, s in {
+                            "이사": 55250000, "부장": 55250000, "차장": 47670000, "과장": 41170000,
+                            "대리": 37920000, "계장": 34670000, "주임": 31420000, "기사": 29250000
+                        }.items()
+                    ]
+                    material_defaults = [
+                        ['Material', item, spec, unit, price] for item, spec, unit, price in [
+                            ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
+                            ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                            ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
+                            ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
+                            ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
+                        ]
+                    ]
+                    expense_defaults = [
+                        ['Expense', '차량유지비', '주유, 수리, 통행, 주차 등', '일', 150000 // 30],
+                        ['Expense', '소모품비', '장갑,일회용 작업복외', '일', 15000 // 30],
+                        ['Expense', '복리후생비', '생수, 음료 외 기타', '일', 50000 // 30],
+                        ['Expense', 'Se-175', '방사성동위원소 구매', 'EA', 10000000 // 280]
+                    ]
+                    outsource_defaults = [
+                        ['Outsource', '케이엔디이', '방사선투과검사', '공수', 15000]
+                    ]
+                    self.settings_df = pd.DataFrame(labor_defaults + material_defaults + expense_defaults + outsource_defaults, 
+                                                   columns=['Category', 'Name', 'Spec', 'Unit', 'Rate'])
+                    self.save_data() # Save the newly created sheet
+
                 # [NEW] Ensure budget columns are numeric to prevent NaN assignment errors in some pandas versions
                 numeric_cols = ['Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit']
                 for col in numeric_cols:
@@ -2728,6 +2787,8 @@ class MaterialManager:
                 self.monthly_usage_df.to_excel(writer, sheet_name='MonthlyUsage', index=False)
                 self.daily_usage_df.to_excel(writer, sheet_name='DailyUsage', index=False)
                 self.budget_df.to_excel(writer, sheet_name='Budget', index=False)
+                if hasattr(self, 'settings_df'):
+                    self.settings_df.to_excel(writer, sheet_name='Settings', index=False)
             
             return True
         except Exception as e:
@@ -2735,6 +2796,71 @@ class MaterialManager:
             err_detail = traceback.format_exc()
             self.show_error_dialog("데이터 저장 실패", f"데이터를 저장하는데 실패했습니다:\n{e}\n\n파일이 열려있다면 닫고 다시 시도해주세요.")
             return False
+            
+    def get_base_salaries(self):
+        """Extract labor base salaries from settings_df"""
+        if not hasattr(self, 'settings_df') or self.settings_df.empty:
+            return {
+                "이사": 55250000, "부장": 55250000, "차장": 47670000, "과장": 41170000,
+                "대리": 37920000, "계장": 34670000, "주임": 31420000, "기사": 29250000
+            }
+        df = self.settings_df[self.settings_df['Category'] == 'Labor']
+        if df.empty:
+            return {
+                "이사": 55250000, "부장": 55250000, "차장": 47670000, "과장": 41170000,
+                "대리": 37920000, "계장": 34670000, "주임": 31420000, "기사": 29250000
+            }
+        return df.set_index('Name')['Rate'].to_dict()
+
+    def get_material_defaults(self):
+        """Extract material defaults from settings_df"""
+        if not hasattr(self, 'settings_df') or self.settings_df.empty:
+            return [
+                ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
+                ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
+                ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
+                ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
+            ]
+        df = self.settings_df[self.settings_df['Category'] == 'Material']
+        if df.empty:
+             return [
+                ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
+                ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
+                ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
+                ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
+            ]
+        return [tuple(x) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
+
+    def get_expense_defaults(self):
+        """Extract site expense defaults from settings_df"""
+        if not hasattr(self, 'settings_df') or self.settings_df.empty:
+            return [
+                ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
+                ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
+                ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+            ]
+        df = self.settings_df[self.settings_df['Category'] == 'Expense']
+        if df.empty:
+            return [
+                ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
+                ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
+                ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+            ]
+        # Return in (cat, cont, ppl, qty, unit, price) format as expected by _add_row_s1
+        return [tuple([x[0], x[1], "N/A", 1, x[2], x[3]]) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
+
+    def get_outsource_defaults(self):
+        """Extract outsource defaults from settings_df"""
+        if not hasattr(self, 'settings_df') or self.settings_df.empty:
+            return [("케이엔디이", "방사선투과검사", 0, 15000)]
+        df = self.settings_df[self.settings_df['Category'] == 'Outsource']
+        if df.empty:
+            return [("케이엔디이", "방사선투과검사", 0, 15000)]
+        return [tuple(x) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
 
     def create_widgets(self):
         # Notebook for Tabs
@@ -5819,45 +5945,48 @@ class MaterialManager:
             
             if clean_str(entry.get('Note', '')): has_note = True
             
-            values = (
+            val_tuple = (
                 int(entry['Year']),
                 int(entry['Month']),
                 entry.get('Site', ''),
-                worker_str,  # 작업자
-                worktime_str,  # 작업시간 (concatenated strings)
+                worker_str,
+                worktime_str,
                 f"{ot_hours:.1f}" if ot_hours > 0 else '',
                 f"{ot_amount:,.0f}" if ot_amount > 0 else '',
-                *ot_values,  # OT1-10 (parsed amounts)
+                *ot_values,  # Index 7 to 16
                 f"{test_amount:.1f}" if test_amount > 0 else '',
                 f"{unit_price:,.0f}" if unit_price > 0 else '',
                 f"{travel_cost:,.0f}" if travel_cost > 0 else '',
                 f"{meal_cost:,.0f}" if meal_cost > 0 else '',
                 f"{test_fee:,.0f}" if test_fee > 0 else '',
-                mat_name,
-                f"{rtk_center:.1f}" if rtk_center > 0 else '',
-                f"{rtk_density:.1f}" if rtk_density > 0 else '',
-                f"{rtk_marking:.1f}" if rtk_marking > 0 else '',
-                f"{rtk_film:.1f}" if rtk_film > 0 else '',
-                f"{rtk_handling:.1f}" if rtk_handling > 0 else '',
-                f"{rtk_customer:.1f}" if rtk_customer > 0 else '',
-                f"{rtk_other:.1f}" if rtk_other > 0 else '',
-                f"{rtk_total:.1f}" if rtk_total > 0 else '',
-                f"{ndt_fluorescent_mag:.1f}" if ndt_fluorescent_mag > 0 else '',
-                f"{ndt_magnet:.1f}" if ndt_magnet > 0 else '',
-                f"{ndt_paint:.1f}" if ndt_paint > 0 else '',
-                f"{ndt_penetrant:.1f}" if ndt_penetrant > 0 else '',
-                f"{ndt_cleaner:.1f}" if ndt_cleaner > 0 else '',
-                f"{ndt_developer:.1f}" if ndt_developer > 0 else '',
-                f"{ndt_fluorescent_pen:.1f}" if ndt_fluorescent_pen > 0 else '',
-                '',  # Empty note field
-                ", ".join(sorted(set(all_workers))) # (Full작업자)
+                mat_name, # Index 22: 품목명
+                f"{rtk_center:.1f}" if rtk_center > 0 else '', # 23
+                f"{rtk_density:.1f}" if rtk_density > 0 else '', # 24
+                f"{rtk_marking:.1f}" if rtk_marking > 0 else '', # 25
+                f"{rtk_film:.1f}" if rtk_film > 0 else '', # 26
+                f"{rtk_handling:.1f}" if rtk_handling > 0 else '', # 27
+                f"{rtk_customer:.1f}" if rtk_customer > 0 else '', # 28
+                f"{rtk_other:.1f}" if rtk_other > 0 else '', # 29
+                f"{rtk_total:.1f}" if rtk_total > 0 else '', # 30
+                f"{ndt_fluorescent_mag:.1f}" if ndt_fluorescent_mag > 0 else '', # 31
+                f"{ndt_magnet:.1f}" if ndt_magnet > 0 else '', # 32
+                f"{ndt_paint:.1f}" if ndt_paint > 0 else '', # 33
+                f"{ndt_penetrant:.1f}" if ndt_penetrant > 0 else '', # 34
+                f"{ndt_cleaner:.1f}" if ndt_cleaner > 0 else '', # 35
+                f"{ndt_developer:.1f}" if ndt_developer > 0 else '', # 36: 현상제
+                f"{ndt_fluorescent_pen:.1f}" if ndt_fluorescent_pen > 0 else '', # 37
+                '',  # Index 38: Note
+                ", ".join(sorted(set(all_workers))) # Index 39: Full작업자
             )
-            self.monthly_usage_tree.insert('', tk.END, values=values)
+            # [ROBUST] Final length check for 40 columns
+            while len(val_tuple) < 40: val_tuple += ("",)
+            
+            self.monthly_usage_tree.insert('', tk.END, values=val_tuple)
             
             # [NEW] Popup sync
             if 'monthly' in self.detached_windows:
                 p_tree = self.detached_windows['monthly']['tree']
-                p_tree.insert('', tk.END, values=values[:-1]) # Omit backup col
+                p_tree.insert('', tk.END, values=val_tuple[:-1]) # Omit backup col
         
         # Add total row at the bottom if there's data
         if not grouped.empty:
@@ -7944,13 +8073,18 @@ class MaterialManager:
         self.ent_daily_travel_cost = ttk.Entry(form_content, width=12)
         self.ent_daily_travel_cost.grid(row=4, column=3, padx=2, pady=1, sticky='w')
         
-        # Row 5: Test Fee & Sync
+        # Row 5: Test Fee & Film Count
         ttk.Label(form_content, text="검사비:").grid(row=5, column=0, padx=2, pady=1, sticky='e')
         self.ent_daily_test_fee = ttk.Entry(form_content, width=12)
         self.ent_daily_test_fee.grid(row=5, column=1, padx=2, pady=1, sticky='w')
         
+        ttk.Label(form_content, text="필름매수:").grid(row=5, column=2, padx=2, pady=1, sticky='e')
+        self.ent_daily_film_count = ttk.Entry(form_content, width=12)
+        self.ent_daily_film_count.grid(row=5, column=3, padx=2, pady=1, sticky='w')
+        self.ent_daily_film_count.insert(0, "0")
+        
         btn_sync = ttk.Button(form_content, text="일괄", command=self.sync_worker_times, width=4)
-        btn_sync.grid(row=5, column=3, padx=(10, 1), sticky='w')
+        btn_sync.grid(row=5, column=3, padx=(100, 1), sticky='w') # Positioned after film count
         
         # Removed draggable container logic
         
@@ -8107,7 +8241,8 @@ class MaterialManager:
             self.ent_daily_test_amount,
             self.ent_daily_unit_price, 
             self.ent_daily_travel_cost, 
-            self.ent_daily_test_fee
+            self.ent_daily_test_fee,
+            self.ent_daily_film_count
         ]
         
         for i, ent in enumerate(cost_entries):
@@ -9965,8 +10100,8 @@ class MaterialManager:
 
 
     def clear_budget_form(self):
-        """Reset budget form fields"""
-        self.cb_budget_site.set('')
+        """Reset budget form fields while maintaining site selection context"""
+        # self.cb_budget_site.set('')  <- Removed to preserve 'appearance' as per user request
         self.ent_budget_revenue.delete(0, tk.END)
         if hasattr(self, 'ent_budget_unit_price'):
             self.ent_budget_unit_price.delete(0, tk.END)
@@ -10452,6 +10587,7 @@ class MaterialManager:
             '업체명': self.cb_daily_company.get().strip(),
             '일식': 0.0,
             '검사비': to_f(self.ent_daily_test_fee),
+            'FilmCount': to_f(self.ent_daily_film_count), # [NEW] Added FilmCount
             'Note': "",
             'EntryTime': datetime.datetime.now(),
             '회사코드': "",
@@ -10699,6 +10835,8 @@ class MaterialManager:
                 self.cb_daily_material.set('')
                 self.ent_daily_test_amount.delete(0, tk.END)
                 self.ent_daily_test_fee.delete(0, tk.END)
+                self.ent_daily_film_count.delete(0, tk.END)
+                self.ent_daily_film_count.insert(0, "0")
 
                 self.update_daily_usage_view()
                 self.update_stock_view()
@@ -11293,6 +11431,7 @@ class MaterialManager:
         total_travel_cost = 0.0
         total_meal_cost = 0.0
         total_test_fee = 0.0
+        total_film_count = 0.0 # [NEW] Added for film count
         total_ot_hours = 0.0
         total_ot_amount = 0
         total_work_hours = 0.0 # Added for Total Working Time
@@ -11392,6 +11531,11 @@ class MaterialManager:
             total_travel_cost += t_val_cost
             total_meal_cost += m_val_cost
             total_test_fee += f_val_cost
+            
+            # Film count extraction
+            film_val = to_f(entry.get('FilmCount', 0.0))
+            if film_val == 0.0: film_val = to_f(entry.get('필름매수', 0.0))
+            total_film_count += film_val
 
             # Cumulative mileage
             m_val = to_f(entry.get('주행거리', 0))
@@ -11547,11 +11691,11 @@ class MaterialManager:
             if has_data(entry.get('회사코드')): has_co_code = True
             if has_data(entry.get('업체명')): has_company = True
             
-            # Insert with index as tag for reliable deletion
-            # def clean_str(val): -> Removed, confirmed defined above
-            #    return str(val).replace('nan', '').replace('None', '').strip()
+            # [ROBUST] Ensure rtk_values (8) and ndt_values (7) are correct length
+            while len(rtk_values) < 8: rtk_values.append("")
+            while len(ndt_values) < 7: ndt_values.append("")
 
-            self.daily_usage_tree.insert('', tk.END, values=(
+            val_tuple = (
                 usage_date,
                 entry.get('업체명', ''), # Column 1: 업체명
                 entry.get('Site', ''),   # Column 2: 현장
@@ -11562,6 +11706,7 @@ class MaterialManager:
                 entry.get('검사방법', ''),
                 entry.get('회사코드', ''),  # 회사코드 표시
                 f"{q_val:.1f}",
+                f"{film_val:,.0f}",    # [FIXED] 필름매수 삽입
                 f"{p_val:,.0f}",
                 f"{t_val_cost:,.0f}",
                 f"{f_val_cost:,.0f}",
@@ -11577,7 +11722,11 @@ class MaterialManager:
                 clean_str(entry.get('차량점검', '')),
                 clean_str(entry.get('차량비고', '')),
                 ", ".join(raw_workers) # (Full작업자) storage for Excel export
-            ), tags=(str(idx),))
+            )
+            # [DEFENSIVE] Final length check to prevent Treeview index shift
+            while len(val_tuple) < 48: val_tuple += ("",)
+
+            self.daily_usage_tree.insert('', tk.END, values=val_tuple, tags=(str(idx),))
             
         # Insert last daily subtotal and final total row if data exists
         if not filtered_df.empty:
@@ -11585,10 +11734,16 @@ class MaterialManager:
             # Final overall total
             self.daily_usage_tree.tag_configure('total', background='#E8F4F8', font=('Arial', 9, 'bold'))
             
+            total_rtk_ready = [f"{v:.1f}" if abs(v) > 0.001 else "" for v in total_rtk]
+            while len(total_rtk_ready) < 8: total_rtk_ready.append("")
+            
+            total_ndt_ready = [f"{v:.1f}" if abs(v) > 0.001 else "" for v in total_ndt]
+            while len(total_ndt_ready) < 7: total_ndt_ready.append("")
+
             total_values = [
                 '--- 전체 누계 ---',
-                '', # 현장
-                '', # 업체명 (New placeholder to restore alignment)
+                '', # 업체명
+                '', # 현장 (Restored label alignment)
                 '', # 작업자
                 f"{total_work_hours:.1f} Hrs" if total_work_hours > 0.001 else "", # 작업시간 (Calculated Total)
                 # Individual OT Totals (Simplified: Amount only)
@@ -11597,14 +11752,15 @@ class MaterialManager:
                 '', # 검사방법
                 '', # 회사코드
                 f"{total_test_amount:.1f}" if total_test_amount > 0.001 else "",
+                f"{total_film_count:,.0f}" if total_film_count > 0.001 else "", # [FIXED] 필름매수 합계
                 f"{total_unit_price:,.0f}" if total_unit_price > 0.001 else "",
                 f"{total_travel_cost:,.0f}" if total_travel_cost > 0.001 else "",
                 f"{total_test_fee:,.0f}" if total_test_fee > 0.001 else "",
                 f"{total_ot_hours:.1f}" if total_ot_hours > 0.001 else "", # OT시간 합계
                 f"{total_ot_amount:,}" if total_ot_amount > 0.001 else "",  # OT금액 합계
                 '', # 품목명
-                *[f"{v:.1f}" if abs(v) > 0.001 else "" for v in total_rtk],
-                *[f"{v:.1f}" if abs(v) > 0.001 else "" for v in total_ndt],
+                *total_rtk_ready,
+                *total_ndt_ready,
                 '',   # 비고
                 '',   # 입력시간
                 '',   # 차량번호
@@ -11613,6 +11769,8 @@ class MaterialManager:
                 '',   # 차량비고
                 ''    # (Full작업자)
             ]
+            # [DEFENSIVE] Ensure Total row matches header count exactly
+            while len(total_values) < 48: total_values.append("")
             self.daily_usage_tree.tag_configure('total', background='#E8F4F8', font=('Arial', 12, 'bold'))
             self.daily_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
             
@@ -11986,7 +12144,7 @@ class MaterialManager:
         
         qty_configs = [
             ('검사량', '검사량'), ('단가', '단가'), ('출장비', '출장비'),
-            ('일식', '일식'), ('검사비', '검사비')
+            ('일식', '일식'), ('검사비', '검사비'), ('필름매수', 'FilmCount')
         ]
         for i, (lbl, key) in enumerate(qty_configs):
             row = i // 3
@@ -12084,6 +12242,10 @@ class MaterialManager:
                 fields[k].bind('<KeyRelease>', update_edit_fee_calc, add='+')
                 fields[k].bind('<FocusOut>', lambda e, widget=fields[k]: self.format_entry_with_commas(e, widget), add='+')
                 fields[k].bind('<Return>', lambda e, widget=fields[k]: self.format_entry_with_commas(e, widget), add='+')
+        
+        # Ensure FilmCount field also formats nicely (integer)
+        if 'FilmCount' in fields:
+            fields['FilmCount'].bind('<FocusOut>', lambda e, widget=fields['FilmCount']: self.format_entry_with_commas(e, widget), add='+')
 
         # Grid for workers: 5 rows x 2 cols
         worker_fields = {}
@@ -12157,7 +12319,7 @@ class MaterialManager:
             new_data['검사방법'] = cb_method.get().strip()
             
             # Numeric fields
-            for key in ['검사량', '단가', '출장비', '일식', '검사비']:
+            for key in ['검사량', '단가', '출장비', '일식', '검사비', 'FilmCount']:
                 try: 
                     v_str = fields[key].get().strip().replace(',', '')
                     new_data[key] = float(v_str) if v_str else 0.0
@@ -14248,8 +14410,8 @@ class MaterialManager:
         vsb = ttk.Scrollbar(tree_frame, orient="vertical")
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
         
-        columns = ('연도', '월', '현장', '업체명', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
-                   '수량', '단가', '출장비', '일식', '검사비', '품목명', '필름매수', '센터미스', '농도', '마킹미스', '필름마크', 
+        columns = ('연도', '월', '현장', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
+                   '수량', '단가', '출장비', '일식', '검사비', '품목명', '센터미스', '농도', '마킹미스', '필름마크', 
                    '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
         
         tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -14339,33 +14501,62 @@ class MaterialManager:
         # 데이터 복사
         self.update_monthly_usage_view()
         
-        # [NEW] 셀 선택 시 요약 업데이트 연동
+        # [FIXED] Extraction using standardized indices (Year=0, Month=1, Site=2)
         def on_popup_select(event):
             selection = tree.selection()
             if not selection: return
             item = selection[0]
-            vals = tree.item(item, 'values')
-            tags = tree.item(item, 'tags')
-            
-            if not hasattr(self, 'current_monthly_df'): return
-            
-            if 'total' in tags:
-                subset = self.current_monthly_df
-            else:
-                try:
-                    y, m, s = int(vals[0]), int(vals[1]), str(vals[2]).strip()
-                    subset = self.current_monthly_df[
-                        (self.current_monthly_df['Year'] == y) & 
-                        (self.current_monthly_df['Month'] == m) & 
-                        (self.current_monthly_df['Site'] == s)
-                    ]
-                except: subset = pd.DataFrame()
-            
-            # 메인 summary populate 로직을 detached 모드로 호출
-            # (원래 _populate_monthly_summary_trees는 self.detached_windows['monthly']가 있으면 둘 다 업데이트함)
-            self._populate_monthly_summary_trees(subset)
+            try:
+                vals = tree.item(item, 'values')
+                if not vals: return
+                tags = tree.item(item, 'tags')
+                
+                if not hasattr(self, 'current_monthly_df'): return
+                
+                if 'total' in tags:
+                    subset = self.current_monthly_df
+                else:
+                    # Robust extraction
+                    try:
+                        y = int(vals[0]) 
+                        m = int(vals[1])
+                        s = str(vals[2]).strip()
+                        
+                        # Material name is at index 22 in our formatted tuple
+                        mat_name = str(vals[22]).strip() if len(vals) > 22 else None
+                        
+                        mask = (self.current_monthly_df['Year'] == y) & \
+                               (self.current_monthly_df['Month'] == m) & \
+                               (self.current_monthly_df['Site'] == s)
+                        
+                        if mat_name:
+                            ids = self.materials_df[self.materials_df['품목명'] == mat_name]['MaterialID'].tolist()
+                            if ids:
+                                mask = mask & (self.current_monthly_df['MaterialID'].isin(ids))
+                        
+                        subset = self.current_monthly_df[mask]
+                    except:
+                        subset = pd.DataFrame()
+                
+                # Update summaries
+                self._populate_monthly_summary_trees(subset)
+            except Exception as e:
+                print(f"DEBUG: Detached selection error: {e}")
 
         tree.bind("<<TreeviewSelect>>", on_popup_select)
+        
+        # Initial populate from main window results to stay in sync
+        for item in self.monthly_usage_tree.get_children():
+            tags = self.monthly_usage_tree.item(item, 'tags')
+            if 'total' in tags: continue
+            vals = self.monthly_usage_tree.item(item, 'values')
+            # Insert formatted values (ensuring we don't accidentally insert extra hidden cols)
+            insert_vals = list(vals)
+            while len(insert_vals) < 40: insert_vals.append("")
+            tree.insert('', tk.END, values=insert_vals[:40])
+
+        if hasattr(self, 'current_monthly_df'):
+            self._populate_monthly_summary_trees(self.current_monthly_df)
 
     def open_detached_budget_view(self):
         """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
