@@ -585,6 +585,18 @@ class VehicleInspectionWidget(ttk.Frame):
         self.ent_remarks.grid(row=2, column=1, padx=2, pady=2, sticky='ew')
         input_frame.grid_columnconfigure(1, weight=1)
 
+        # [NEW] Add Standalone Save Button
+        self.on_save_callback = kwargs.get('on_save')
+        if self.on_save_callback:
+            btn_save = ttk.Button(self.scrollable_frame, text="🚗 차량 정보만 개별 저장", 
+                                 command=self.trigger_save, style='Accent.TButton' if 'Accent.TButton' in getattr(parent, 'style_names', []) else 'TButton')
+            btn_save.pack(fill='x', padx=5, pady=5)
+
+    def trigger_save(self):
+        """Invoke the save callback provided by MaterialManager"""
+        if self.on_save_callback:
+            self.on_save_callback(self)
+
     def update_vehicle_list(self, new_list):
         """Update the combobox values (native dropdown)"""
         self.cb_vehicle_info['values'] = new_list
@@ -5818,9 +5830,17 @@ class MaterialManager:
             vals = [" ".join(str(v).split()) for v in series if pd.notna(v) and str(v).strip()]
             return " | ".join(sorted(set(vals)))
         
-        # Also define a sum helper that handles potential type issues
+        # Also define a sum helper that handles potential type issues and commas
         def safe_sum(series):
-            return pd.to_numeric(series, errors='coerce').sum()
+            def to_f(v):
+                if pd.isna(v) or str(v).lower() in ('nan', 'none', ''): return 0.0
+                s = str(v).strip().lower()
+                try: 
+                    # Remove non-numeric markers (comma, unit, etc)
+                    clean_s = re.sub(r'[^0-9\.\-]', '', s)
+                    return float(clean_s) if clean_s else 0.0
+                except: return 0.0
+            return series.apply(to_f).sum()
 
         # Add worker info - combine unique values from User, User2, ..., User10
         worker_cols = ['User', 'User2', 'User3', 'User4', 'User5', 'User6', 'User7', 'User8', 'User9', 'User10']
@@ -7646,6 +7666,67 @@ class MaterialManager:
             
         return check_container
 
+    def save_single_vehicle_data(self, widget):
+        """Save ONLY the requested vehicle's data as a standalone entry in the daily log"""
+        try:
+            # 1. Collect minimal context
+            usage_date = str(self.ent_daily_date.get_date())
+            site = self.cb_daily_site.get().strip()
+            if not site:
+                messagebox.showwarning("입력 필요", "차량 점검을 기록할 '현장'을 선택해주세요.")
+                return
+
+            # 2. Collect vehicle data
+            v_data = widget.get_data()
+            v_no = v_data.get('vehicle_info', '').strip()
+            if not v_no:
+                messagebox.showwarning("입력 필요", "차량번호를 입력해주세요.")
+                return
+
+            # Confirm with user
+            if not messagebox.askyesno("확인", f"[{v_no}] 차량 점검 정보만 단독으로 저장하시겠습니까?"):
+                return
+
+            # 3. Create record (Everything else is zero/empty)
+            record = {
+                '날짜': usage_date,
+                '업체명': self.cb_daily_company.get().strip() or "현장기록",
+                '현장': site,
+                '작업자': "차량점검", # Visual tag in worker column
+                '작업시간': "",
+                '장비명': self.cb_daily_equip.get().strip(),
+                '검사방법': self.cb_daily_test_method.get().strip(),
+                '회사코드': "",
+                '수량': 0, '단가': 0, '출장비': 0, '검사비': 0,
+                'OT시간': 0, 'OT금액': 0,
+                '품목명': "차량점검",
+                '차량번호': v_no,
+                '주행거리': v_data.get('_raw_mileage', '0'),
+                '차량점검': ", ".join([k for k, v in v_data.items() if v is True]),
+                '차량비고': v_data.get('remarks', ''),
+                '입력시간': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                '(Full작업자)': "차량점검"
+            }
+            # Initialize RTK/NDT columns as 0
+            for rtk_cat in ["센터미스", "농도", "마킹미스", "필름마크", "취급부주의", "고객불만", "기타", "RTK총계"]:
+                record[f'RTK_{rtk_cat}'] = 0
+            for ndt_cat in ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]:
+                record[f'NDT_{ndt_cat}'] = 0
+
+            # 4. Append and Save
+            new_df = pd.DataFrame([record])
+            self.daily_usage_df = pd.concat([self.daily_usage_df, new_df], ignore_index=True)
+            self._save_dataframe_to_excel(self.daily_usage_df, 'DailyUsage')
+            
+            # 5. UI Updates
+            self.update_daily_usage_view()
+            self.refresh_inquiry_filters()
+            
+            messagebox.showinfo("성공", f"[{v_no}] 차량 점검 정보가 안전하게 저장되었습니다.")
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"차량 정보 저장 중 오류 발생: {e}")
+
     def add_vehicle_inspection_box(self, initial_data=None, key=None):
         """Create a new movable vehicle inspection box"""
         import time
@@ -7657,7 +7738,8 @@ class MaterialManager:
             self.entry_inner_frame, "차량 점검", VehicleInspectionWidget, key,
             manage_list_key='vehicles',
             theme_bg=getattr(self, 'theme_bg', '#f0f0f0'),
-            vehicle_list=getattr(self, 'vehicles', [])
+            vehicle_list=getattr(self, 'vehicles', []),
+            on_save=self.save_single_vehicle_data
         )
         
         # Track specifically for data gathering
@@ -8544,7 +8626,7 @@ class MaterialManager:
         
         # Define display columns - hidden (Full작업자) and individual OT columns by default
         # [NEW] Also hide 'OT시간' and '필름매수' by default per user request
-        visible_defaults = ['날짜', '업체명', '현장', '작업자', '작업시간', '장비명', '검사방법', '회사코드', '수량', '단가', '출장비', '검사비', 'OT금액', '품목명', 'RTK총계', '차량번호', '주행거리', '차량점검', '차량비고', '입력시간']
+        visible_defaults = ['날짜', '업체명', '현장', '작업자', '작업시간', '장비명', '검사방법', '회사코드', '수량', '단가', '출장비', '검사비', 'OT금액', '품목명', '센터미스', '농도', 'RTK총계', '차량번호', '주행거리', '차량점검', '차량비고', '입력시간']
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         vsb.config(command=self.daily_usage_tree.yview)
@@ -11077,6 +11159,7 @@ class MaterialManager:
                             if name in company_entries:
                                 company_entries[name].delete(0, tk.END)
                 
+                # RTK 필드 초기화
                 for cat, ent in self.rtk_entries.items():
                     if cat != "총계":
                         ent.delete(0, tk.END)
@@ -11084,16 +11167,36 @@ class MaterialManager:
                 self.rtk_entries["총계"].delete(0, tk.END)
                 self.rtk_entries["총계"].config(state='readonly')
                 
-                # 메인 품목 필드 초기화
-                self.cb_daily_company.set('')
-                self.cb_daily_material.set('')
-                self.ent_daily_test_amount.delete(0, tk.END)
-                self.ent_daily_test_fee.delete(0, tk.END)
+                # 메인 폼 필드 초기화 (Exhaustive reset)
+                for cb in [self.cb_daily_site, self.cb_daily_equip, self.cb_daily_test_method, 
+                          self.cb_daily_material, self.cb_daily_company]:
+                    cb.set('')
+                for ent in [self.ent_daily_test_amount, self.ent_daily_unit_price, 
+                           self.ent_daily_travel_cost, self.ent_daily_test_fee]:
+                    ent.delete(0, tk.END)
+
+                # 작업자 필드 초기화 (1~10번)
+                for i in range(1, 11):
+                    group = getattr(self, f'worker_group{i}', None)
+                    if group:
+                        group.cb_name.set('')
+                        group.cb_shift.set('')
+                        group.ent_worktime.set('')
+                        group.ent_ot.delete(0, tk.END)
+
+                # NDT 섹션 초기화
+                if hasattr(self, 'ndt_company_entries'):
+                    while len(self.ndt_company_entries) > 1:
+                        self.remove_last_ndt_company()
+                    if self.ndt_company_entries:
+                        first = self.ndt_company_entries[0]
+                        first['_company'].set('')
+                        for k in ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]:
+                            if k in first: first[k].delete(0, tk.END)
 
                 # 차량 점검 필드 초기화 (safeguarded)
                 if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
                     for box in self.vehicle_boxes:
-                        # [SAFEGUARD] Ensure widget still exists before calling methods
                         if hasattr(box, 'winfo_exists') and box.winfo_exists():
                             box.cb_vehicle_info.set('')
                             box.ent_mileage.delete(0, tk.END)
@@ -11103,6 +11206,7 @@ class MaterialManager:
                                     var.set(False)
 
                 self.update_daily_usage_view()
+                self.refresh_inquiry_filters()
                 self.update_stock_view()
                 
                 # [NEW] Scroll to the bottom to see new entries
@@ -11612,6 +11716,10 @@ class MaterialManager:
         if 'Site' in filtered_df.columns:
             filtered_df['Site'] = filtered_df['Site'].astype(str).apply(self.normalize_site_name)
             
+        # [NEW] Robust column normalization to handle accidental spaces (e.g. "RTK_농도 ")
+        # This matches the logic in update_monthly_usage_view
+        filtered_df.columns = [re.sub(r'\s+', '', str(c)) for c in filtered_df.columns]
+        
         # [OPTIMIZATION] Convert to datetime once
         if 'Date' in filtered_df.columns:
             filtered_df['Date'] = pd.to_datetime(filtered_df['Date'], errors='coerce')
@@ -11623,8 +11731,9 @@ class MaterialManager:
             filtered_df = filtered_df[filtered_df['Date'] <= end_date]
         
         if filter_site != '전체' and 'Site' in filtered_df.columns:
-            # Support partial match for site for more robustness since it's now editable
-            filtered_df = filtered_df[filtered_df['Site'].astype(str).str.contains(filter_site, na=False, case=False, regex=False)]
+            # Use robust normalization to handle inconsistent spacing (e.g. "Site-A" vs "Site - A")
+            target_site = self.normalize_site_name(filter_site)
+            filtered_df = filtered_df[filtered_df['Site'].apply(self.normalize_site_name) == target_site]
         
         if filter_company != '전체' and '업체명' in filtered_df.columns:
             # Support partial match for company name
@@ -11812,8 +11921,6 @@ class MaterialManager:
             t_val_cost = to_f(entry.get('출장비', 0.0))
             m_val_cost = to_f(entry.get('일식', 0.0))
             f_val_cost = to_f(entry.get('검사비', 0.0))
-            film_val = 0.0 # [FIX] NameError protection after consolidation
-
             total_test_amount += q_val
             total_unit_price += p_val
             total_travel_cost += t_val_cost
@@ -11911,10 +12018,14 @@ class MaterialManager:
             # row_ots is already built above!
             
             # Get RTK values
-            def safe_float(v):
+            # [NEW] Robust parsing helper that matches is_active logic
+            def robust_to_f(v):
+                if pd.isna(v) or str(v).lower() in ('nan', 'none', ''): return 0.0
+                s = str(v).strip().lower()
                 try:
-                    if pd.isna(v) or str(v).lower() in ('nan', 'none', ''): return 0.0
-                    return float(str(v).replace(',', ''))
+                    # Remove non-numeric markers (comma, unit, etc)
+                    clean_s = re.sub(r'[^0-9\.\-]', '', s)
+                    return float(clean_s) if clean_s else 0.0
                 except: return 0.0
 
             rtk_values = []
@@ -11924,7 +12035,7 @@ class MaterialManager:
             
             for i, category in enumerate(rtk_cats_only):
                 value = entry.get(f'RTK_{category}', 0)
-                val_float = safe_float(value)
+                val_float = robust_to_f(value)
                 # [VISUAL] Only show value if it's significant, otherwise empty string
                 rtk_values.append(f"{val_float:.1f}" if abs(val_float) > 0.001 else "")
                 row_rtk_total += val_float
@@ -11949,7 +12060,7 @@ class MaterialManager:
                     elif material == "형광침투제": value = entry.get('NDT_형광', 0)
                     else: value = 0
                 
-                val_float = safe_float(value)
+                val_float = robust_to_f(value)
                 ndt_values.append(f"{val_float:.1f}" if abs(val_float) > 0.001 else "")
                 total_ndt[i] += val_float
             
@@ -11995,7 +12106,6 @@ class MaterialManager:
                 entry.get('검사방법', ''),
                 entry.get('회사코드', ''),  # 회사코드 표시
                 f"{q_val:.1f}",
-                f"{film_val:,.0f}",    # [FIXED] 필름매수 삽입
                 f"{p_val:,.0f}",
                 f"{t_val_cost:,.0f}",
                 f"{f_val_cost:,.0f}",
@@ -12041,7 +12151,6 @@ class MaterialManager:
                 '', # 검사방법
                 '', # 회사코드
                 f"{total_test_amount:.1f}" if total_test_amount > 0.001 else "",
-                f"{total_film_count:,.0f}" if total_film_count > 0.001 else "", # [FIXED] 필름매수 합계
                 f"{total_unit_price:,.0f}" if total_unit_price > 0.001 else "",
                 f"{total_travel_cost:,.0f}" if total_travel_cost > 0.001 else "",
                 f"{total_test_fee:,.0f}" if total_test_fee > 0.001 else "",
@@ -12065,7 +12174,8 @@ class MaterialManager:
             
             # --- Dynamic Column Hiding ---
             # Mandatory cols (always show to maintain core row identity)
-            mandatory_cols = ['날짜', '현장', '작업자']
+            # [USER REQUEST] Force '센터미스' and '농도' to be mandatory/always shown
+            mandatory_cols = ['날짜', '현장', '작업자', '센터미스', '농도']
             
             # Use a slightly more robust threshold for data presence
             # Also handle potential string '0.0' leftovers and common empty markers
@@ -12077,7 +12187,6 @@ class MaterialManager:
                     return False
                 try:
                     # Robust cleaning: remove everything except numbers, dots, and minus
-                    import re
                     clean_s = re.sub(r'[^0-9\.\-]', '', s)
                     if not clean_s: return False # Only markers, but no number? Treat as empty.
                     v = float(clean_s)
@@ -12115,7 +12224,17 @@ class MaterialManager:
             # RTK Columns
             rtk_col_names = ["센터미스", "농도", "마킹미스", "필름마크", "취급부주의", "고객불만", "기타"]
             for i, col_name in enumerate(rtk_col_names):
-                dynamic_col_status[col_name] = is_active(total_rtk[i])
+                active_status = is_active(total_rtk[i])
+                # [USER REQUEST] Force hide '마킹미스' and others if they have no significant data
+                if col_name in ["마킹미스", "필름마크", "취급부주의", "고객불만", "기타"]:
+                    dynamic_col_status[col_name] = active_status
+                else:
+                    # '센터미스' and '농도' should follow mandatory_cols but we safeguard here too
+                    dynamic_col_status[col_name] = active_status
+            
+            # Diagnostic Log (visible in terminal for aid)
+            # print(f"DEBUG RTK Totals: {dict(zip(rtk_col_names, total_rtk[:7]))}, Total: {total_rtk[7]}")
+            
             dynamic_col_status['RTK총계'] = is_active(total_rtk[7])
             
             # NDT Columns
@@ -12124,14 +12243,19 @@ class MaterialManager:
                 dynamic_col_status[col_name] = is_active(total_ndt[i])
                 
             # --- BUILD FINAL VISIBILITY (DATA-FIRST LOGIC) ---
-            all_cols = self.daily_usage_tree['columns']
-            # 1. Always show mandatory columns
-            visible_cols = [c for c in mandatory_cols if c in all_cols]
+            all_cols = list(self.daily_usage_tree['columns'])
+            
+            # [USER REQUEST] Define core set that MUST be shown
+            # We use strict identifier matching
+            core_set = ['날짜', '현장', '작업자', '센터미스', '농도', 'RTK총계']
+            visible_cols = [c for c in core_set if c in all_cols]
             
             # 2. Add tracked columns ONLY if they have data
-            # This overrides any manual settings for these specific columns
+            # This handles all other fields like OT, costs, etc.
             for col, has_data_flag in dynamic_col_status.items():
                 if has_data_flag and col in all_cols and col not in visible_cols:
+                    # [USER REQUEST] Exception: Force hide '마킹미스', etc if they are empty
+                    # We already check has_data_flag, but we ensure it's not overriding the mandatory set
                     visible_cols.append(col)
             
             # 3. Add untracked manual columns (if any)
@@ -12139,9 +12263,19 @@ class MaterialManager:
             for col in manual_set:
                 if col in all_cols and col not in dynamic_col_status and col not in visible_cols:
                     visible_cols.append(col)
+            
+            # [STRICT] Double check that '마킹미스' and other RTK are NOT added unless they have REAL data
+            # And '농도' is DEFINITELY there
+            if '농도' in all_cols and '농도' not in visible_cols: visible_cols.append('농도')
+            if '센터미스' in all_cols and '센터미스' not in visible_cols: visible_cols.append('센터미스')
                     
             # Final re-sort to maintain original column sequence (identifiers match order in 'all_cols')
             final_visible = [c for c in all_cols if c in visible_cols]
+            
+            # [USER REQUEST] Final filter: if "마킹미스" is exactly 0 across all records, hide it even if manual
+            if '마킹미스' in final_visible and not dynamic_col_status.get('마킹미스', True):
+                 final_visible.remove('마킹미스')
+            
             self.daily_usage_tree['displaycolumns'] = final_visible
             
             # Header renames (if any)
@@ -12810,6 +12944,7 @@ class MaterialManager:
             # 4. Save & Refresh
             if self.save_data():
                 self.update_daily_usage_view()
+                self.refresh_inquiry_filters()
                 self.update_stock_view()
                 self.update_transaction_view()
                 self.update_material_combo() # Refresh history suggestions
@@ -14680,6 +14815,7 @@ class MaterialManager:
                 messagebox.showinfo("저장 완료", "모든 변경 사항이 마스터 파일(Material_Inventory.xlsx)에 안전하게 저장되었습니다.")
                 # Refresh view to ensure everything is synchronized
                 self.update_daily_usage_view()
+                self.refresh_inquiry_filters()
         except Exception as e:
             messagebox.showerror("저장 오류", f"데이터 저장 중 오류가 발생했습니다: {e}")
 
