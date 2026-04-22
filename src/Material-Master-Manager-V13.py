@@ -8392,8 +8392,7 @@ class MaterialManager:
             self.ent_daily_test_amount,
             self.ent_daily_unit_price, 
             self.ent_daily_travel_cost, 
-            self.ent_daily_test_fee,
-            self.ent_daily_film_count
+            self.ent_daily_test_fee
         ]
         
         for i, ent in enumerate(cost_entries):
@@ -11090,8 +11089,6 @@ class MaterialManager:
                 self.cb_daily_material.set('')
                 self.ent_daily_test_amount.delete(0, tk.END)
                 self.ent_daily_test_fee.delete(0, tk.END)
-                self.ent_daily_film_count.delete(0, tk.END)
-                self.ent_daily_film_count.insert(0, "0")
 
                 # 차량 점검 필드 초기화 (safeguarded)
                 if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
