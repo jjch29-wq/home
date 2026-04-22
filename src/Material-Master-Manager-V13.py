@@ -11812,6 +11812,7 @@ class MaterialManager:
             t_val_cost = to_f(entry.get('출장비', 0.0))
             m_val_cost = to_f(entry.get('일식', 0.0))
             f_val_cost = to_f(entry.get('검사비', 0.0))
+            film_val = 0.0 # [FIX] NameError protection after consolidation
 
             total_test_amount += q_val
             total_unit_price += p_val
