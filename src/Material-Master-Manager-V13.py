@@ -9391,21 +9391,20 @@ class MaterialManager:
             mandatory_cols = {'Date', 'Site', '검사방법', '합계', '비고', '품목명', '작업자'}
             has_data_map = {col: False for col in self.budget_view_cols if col not in mandatory_cols}
 
-            for _, row in df.iterrows():
-                def _clean_str(val):
-                    if pd.isna(val):
-                        return ''
-                    s = str(val).strip()
-                    return '' if s.lower() in ('nan', 'none') else s
+            def _clean_str(val):
+                if pd.isna(val):
+                    return ''
+                s = str(val).strip()
+                return '' if s.lower() in ('nan', 'none') else s
 
-                def _first_text(_row, keys, default=''):
-                    """여러 후보 컬럼 중 첫 유효 문자열 반환 (구버전 컬럼명 호환)."""
-                    for k in keys:
-                        if k in _row.index:
-                            v = _clean_str(_row.get(k, ''))
-                            if v:
-                                return v
-                    return default
+            def _first_text(_row, keys, default=''):
+                """여러 후보 컬럼 중 첫 유효 문자열 반환 (구버전 컬럼명 호환)."""
+                for k in keys:
+                    if k in _row.index:
+                        v = _clean_str(_row.get(k, ''))
+                        if v:
+                            return v
+                return default
 
             def _ndt_val(_row, *keys):
                 for k in keys:
@@ -9413,116 +9412,117 @@ class MaterialManager:
                         return _f(_row.get(k, 0))
                 return 0.0
 
-            # [FIX] OT 컬럼에서 금액 추출 로직 강화 (NaN 방지)
-            parsed_ots = []
-            for i in range(1, 11):
-                raw_ot = row.get('OT' if i == 1 else f'OT{i}', 0)
-                if pd.isna(raw_ot) or not str(raw_ot).strip() or str(raw_ot).lower() == 'nan':
-                    parsed_ots.append(0.0)
-                    continue
+            for _, row in df.iterrows():
+                # [FIX] OT 컬럼에서 금액 추출 로직 강화 (NaN 방지)
+                parsed_ots = []
+                for i in range(1, 11):
+                    raw_ot = row.get('OT' if i == 1 else f'OT{i}', 0)
+                    if pd.isna(raw_ot) or not str(raw_ot).strip() or str(raw_ot).lower() == 'nan':
+                        parsed_ots.append(0.0)
+                        continue
+                    
+                    v_str = str(raw_ot).strip()
+                    if '(' in v_str and '원)' in v_str:
+                        try:
+                            amt_str = v_str.split('(')[1].split('원')[0].replace(',', '').strip()
+                            parsed_ots.append(_f(amt_str))
+                        except: parsed_ots.append(0.0)
+                    else:
+                        parsed_ots.append(_f(v_str))
                 
-                v_str = str(raw_ot).strip()
-                if '(' in v_str and '원)' in v_str:
-                    try:
-                        amt_str = v_str.split('(')[1].split('원')[0].replace(',', '').strip()
-                        parsed_ots.append(_f(amt_str))
-                    except: parsed_ots.append(0.0)
+                ot_sum = sum(parsed_ots)
+
+                net    = _f(row.get('검사비', 0))
+                travel = _f(row.get('출장비', 0))
+                meal   = _f(row.get('일식', 0))
+                qty    = _f(row.get('검사량', 0))
+                price  = _f(row.get('단가', 0))
+
+                # 자재원가
+                test_method = str(row.get('검사방법', '')).upper()
+                if 'RT' in test_method:
+                    usage = _f(row.get('Usage', 0))
                 else:
-                    parsed_ots.append(_f(v_str))
-            
-            ot_sum = sum(parsed_ots)
+                    usage = _f(row.get('Usage', 0))
 
-            net    = _f(row.get('검사비', 0))
-            travel = _f(row.get('출장비', 0))
-            meal   = _f(row.get('일식', 0))
-            qty    = _f(row.get('검사량', 0))
-            price  = _f(row.get('단가', 0))
+                # 일일 탭 NDT 입력값(침투제/세척제/현상제)
+                # 구버전 데이터 호환: NDT_* 컬럼이 없으면 일반 컬럼명(침투제/세척제/현상제)도 조회
+                ndt_penetrant = _ndt_val(row, 'NDT_침투제', '침투제')
+                ndt_cleaner = _ndt_val(row, 'NDT_세척제', '세척제')
+                ndt_developer = _ndt_val(row, 'NDT_현상제', '현상제')
 
-            # 자재원가
-            test_method = str(row.get('검사방법', '')).upper()
-            if 'RT' in test_method:
-                usage = _f(row.get('Usage', 0))
-            else:
-                usage = _f(row.get('Usage', 0))
+                unit_cost = mat_id_cost_map.get(row.get('MaterialID'), 0)
+                mat_cost = usage * float(unit_cost)
 
-            # 일일 탭 NDT 입력값(침투제/세척제/현상제)
-            # 구버전 데이터 호환: NDT_* 컬럼이 없으면 일반 컬럼명(침투제/세척제/현상제)도 조회
-            ndt_penetrant = _ndt_val(row, 'NDT_침투제', '침투제')
-            ndt_cleaner = _ndt_val(row, 'NDT_세척제', '세척제')
-            ndt_developer = _ndt_val(row, 'NDT_현상제', '현상제')
+                # 작업자 통합
+                worker_cols = ['User'] + [f'User{i}' for i in range(2, 11)]
+                raw_workers = []
+                for wcol in worker_cols:
+                    wv = _clean_str(row.get(wcol, ''))
+                    if wv and wv not in raw_workers:
+                        raw_workers.append(wv)
+                consolidated_workers = ', '.join(raw_workers)
 
-            unit_cost = mat_id_cost_map.get(row.get('MaterialID'), 0)
-            mat_cost = usage * float(unit_cost)
+                # 품목명 표시명
+                try:
+                    mat_name = self.get_material_display_name(row.get('MaterialID')) if pd.notna(row.get('MaterialID')) else ''
+                except Exception:
+                    mat_name = ''
 
-            # 작업자 통합
-            worker_cols = ['User'] + [f'User{i}' for i in range(2, 11)]
-            raw_workers = []
-            for wcol in worker_cols:
-                wv = _clean_str(row.get(wcol, ''))
-                if wv and wv not in raw_workers:
-                    raw_workers.append(wv)
-            consolidated_workers = ', '.join(raw_workers)
+                income  = net + ot_sum
+                expense = travel + meal
+                row_sum = income + expense
 
-            # 품목명 표시명
-            try:
-                mat_name = self.get_material_display_name(row.get('MaterialID')) if pd.notna(row.get('MaterialID')) else ''
-            except Exception:
-                mat_name = ''
+                total_income   += income
+                total_expense  += expense
+                total_net_revenue += net
+                total_sum      += row_sum
+                total_mat_cost += mat_cost
+                total_ndt_penetrant += ndt_penetrant
+                total_ndt_cleaner += ndt_cleaner
+                total_ndt_developer += ndt_developer
 
-            income  = net + ot_sum
-            expense = travel + meal
-            row_sum = income + expense
+                row_map = {
+                    'Date': _clean_str(row.get('Date', '')),
+                    'Site': _clean_str(row.get('Site', '')),
+                    '장비명': _clean_str(row.get('장비명', '')),
+                    '검사방법': _clean_str(row.get('검사방법', '')),
+                    '검사량': f"{qty:g}",
+                    '단가': f"{price:,.0f}",
+                    '검사단가': f"{net:,.0f}",
+                    '출장비': f"{travel:,.0f}",
+                    '일식': f"{meal:,.0f}",
+                    'OT합계': f"{ot_sum:,.0f}",
+                    '자재사용량': f"{usage:g}",
+                    '침투제': f"{ndt_penetrant:g}",
+                    '세척제': f"{ndt_cleaner:g}",
+                    '현상제': f"{ndt_developer:g}",
+                    '자재단가': f"{unit_cost:,.0f}",
+                    '합계': f"{row_sum:,.0f}",
+                    '비고': _clean_str(row.get('비고', row.get('Note', ''))),
+                    '작업자': consolidated_workers,
+                    '품목명': mat_name,
+                    '입력시간': _clean_str(row.get('EntryTime', '')),
+                    '차량번호': _first_text(row, ['차량번호', 'vehicle_info', 'VehicleInfo']),
+                    '주행거리': _first_text(row, ['주행거리', 'mileage', 'Mileage']),
+                    '차량점검': _first_text(row, ['차량점검', '차량 점검', 'vehicle_checks', 'inspection', 'Inspection']),
+                    '차량비고': _first_text(row, ['차량비고', '차량 비고', 'remarks', 'vehicle_remarks', 'Remark']),
+                    'MaterialID': _clean_str(row.get('MaterialID', '')),
+                    'Usage': _clean_str(row.get('Usage', '')),
+                }
+                for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
+                    key = custom_col.get('key')
+                    if key:
+                        row_map[key] = custom_col.get('default', '')
+                
+                # [NEW] Mark columns that have non-zero/non-empty data
+                for col, val in row_map.items():
+                    if col in has_data_map and not has_data_map[col]:
+                        v_str = str(val).strip()
+                        if v_str and v_str not in ('0', '0.0', 'nan', 'None'):
+                            has_data_map[col] = True
 
-            total_income   += income
-            total_expense  += expense
-            total_net_revenue += net
-            total_sum      += row_sum
-            total_mat_cost += mat_cost
-            total_ndt_penetrant += ndt_penetrant
-            total_ndt_cleaner += ndt_cleaner
-            total_ndt_developer += ndt_developer
-
-            row_map = {
-                'Date': _clean_str(row.get('Date', '')),
-                'Site': _clean_str(row.get('Site', '')),
-                '장비명': _clean_str(row.get('장비명', '')),
-                '검사방법': _clean_str(row.get('검사방법', '')),
-                '검사량': f"{qty:g}",
-                '단가': f"{price:,.0f}",
-                '검사단가': f"{net:,.0f}",
-                '출장비': f"{travel:,.0f}",
-                '일식': f"{meal:,.0f}",
-                'OT합계': f"{ot_sum:,.0f}",
-                '자재사용량': f"{usage:g}",
-                '침투제': f"{ndt_penetrant:g}",
-                '세척제': f"{ndt_cleaner:g}",
-                '현상제': f"{ndt_developer:g}",
-                '자재단가': f"{unit_cost:,.0f}",
-                '합계': f"{row_sum:,.0f}",
-                '비고': _clean_str(row.get('비고', row.get('Note', ''))),
-                '작업자': consolidated_workers,
-                '품목명': mat_name,
-                '입력시간': _clean_str(row.get('EntryTime', '')),
-                '차량번호': _first_text(row, ['차량번호', 'vehicle_info', 'VehicleInfo']),
-                '주행거리': _first_text(row, ['주행거리', 'mileage', 'Mileage']),
-                '차량점검': _first_text(row, ['차량점검', '차량 점검', 'vehicle_checks', 'inspection', 'Inspection']),
-                '차량비고': _first_text(row, ['차량비고', '차량 비고', 'remarks', 'vehicle_remarks', 'Remark']),
-                'MaterialID': _clean_str(row.get('MaterialID', '')),
-                'Usage': _clean_str(row.get('Usage', '')),
-            }
-            for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
-                key = custom_col.get('key')
-                if key:
-                    row_map[key] = custom_col.get('default', '')
-            
-            # [NEW] Mark columns that have non-zero/non-empty data
-            for col, val in row_map.items():
-                if col in has_data_map and not has_data_map[col]:
-                    v_str = str(val).strip()
-                    if v_str and v_str not in ('0', '0.0', 'nan', 'None'):
-                        has_data_map[col] = True
-
-            self.budget_view_tree.insert('', tk.END, values=tuple(row_map.get(col, '') for col in self.budget_view_cols))
+                self.budget_view_tree.insert('', tk.END, values=tuple(row_map.get(col, '') for col in self.budget_view_cols))
 
 
 
@@ -12232,7 +12232,7 @@ class MaterialManager:
             # --- Dynamic Column Hiding ---
             # Mandatory cols (always show to maintain core row identity)
             # [USER REQUEST] Force '센터미스' and '농도' to be mandatory/always shown
-            mandatory_cols = ['날짜', '현장', '작업자', '센터미스', '농도']
+            mandatory_cols = ['날짜', '현장', '작업자']
             
             # Use a slightly more robust threshold for data presence
             # Also handle potential string '0.0' leftovers and common empty markers
@@ -12299,41 +12299,42 @@ class MaterialManager:
             for i, col_name in enumerate(ndt_col_names):
                 dynamic_col_status[col_name] = is_active(total_ndt[i])
                 
-            # --- BUILD FINAL VISIBILITY (DATA-FIRST LOGIC) ---
+            # --- BUILD FINAL VISIBILITY (MERGED LOGIC) ---
             all_cols = list(self.daily_usage_tree['columns'])
+            manual_set = getattr(self, 'manual_visible_cols', [])
+            if not manual_set:
+                # Fallback: if no manual preference stored yet, consider all as wanted
+                manual_set = all_cols
             
-            # [USER REQUEST] Define core set that MUST be shown
-            # We use strict identifier matching
-            core_set = ['날짜', '현장', '작업자', '센터미스', '농도', 'RTK총계']
-            visible_cols = [c for c in core_set if c in all_cols]
+            # [SAFETY] Core columns that should almost never be hidden unless user is very specific
+            mandatory_cols = ['날짜', '현장', '작업자']
             
-            # 2. Add tracked columns ONLY if they have data
-            # This handles all other fields like OT, costs, etc.
-            for col, has_data_flag in dynamic_col_status.items():
-                if has_data_flag and col in all_cols and col not in visible_cols:
-                    # [USER REQUEST] Exception: Force hide '마킹미스', etc if they are empty
-                    # We already check has_data_flag, but we ensure it's not overriding the mandatory set
-                    visible_cols.append(col)
-            
-            # 3. Add untracked manual columns (if any)
-            manual_set = getattr(self, 'manual_visible_cols', []) or []
-            for col in manual_set:
-                if col in all_cols and col not in dynamic_col_status and col not in visible_cols:
-                    visible_cols.append(col)
-            
-            # [STRICT] Double check that '마킹미스' and other RTK are NOT added unless they have REAL data
-            # And '농도' is DEFINITELY there
-            if '농도' in all_cols and '농도' not in visible_cols: visible_cols.append('농도')
-            if '센터미스' in all_cols and '센터미스' not in visible_cols: visible_cols.append('센터미스')
-                    
-            # Final re-sort to maintain original column sequence (identifiers match order in 'all_cols')
-            final_visible = [c for c in all_cols if c in visible_cols]
-            
-            # [USER REQUEST] Final filter: if "마킹미스" is exactly 0 across all records, hide it even if manual
-            if '마킹미스' in final_visible and not dynamic_col_status.get('마킹미스', True):
-                 final_visible.remove('마킹미스')
-            
+            final_visible = []
+            # We iterate in ALL_COLS order to maintain the original column sequence
+            for col in all_cols:
+                if col == '(Full작업자)': continue
+                
+                # 1. Mandatory override: Always show core columns
+                if col in mandatory_cols:
+                    final_visible.append(col)
+                    continue
+                
+                # 2. User Unchecked override: If user explicitly hid it in Management, hide it.
+                if col not in manual_set:
+                    continue
+                
+                # 3. Dynamic Auto-Hiding: If tracked, show only if it has data.
+                if col in dynamic_col_status:
+                    if dynamic_col_status[col]:
+                        final_visible.append(col)
+                else:
+                    # Column not tracked for data (unlikely for usage tab), show since user wants it.
+                    final_visible.append(col)
+
+            # [STABILITY] Clear the Treeview's displayed columns
             self.daily_usage_tree['displaycolumns'] = final_visible
+            
+
             
             # Header renames (if any)
 
@@ -13093,10 +13094,17 @@ class MaterialManager:
         # NDT/RTK columns are at the end, workers in middle, basic info at start
         selectable_cols = [c for c in all_cols if c != '(Full작업자)']
         
-        # Pre-select columns that are currently visible
-        active_cols = tree['displaycolumns']
-        if not active_cols or active_cols == ('#all'):
-             active_cols = all_cols
+        # [FIX] Use stored manual preferences instead of current filtered displaycolumns
+        # so that hidden-by-data columns still appear checked if user wants them.
+        if tree == self.daily_usage_tree:
+            active_cols = getattr(self, 'manual_visible_cols', [])
+            if not active_cols:
+                # Default to all non-data columns if no preference saved
+                active_cols = [c for c in all_cols if c != '(Full작업자)']
+        else:
+            active_cols = tree['displaycolumns']
+            if not active_cols or active_cols == ('#all'):
+                 active_cols = all_cols
         
         dialog = ColumnSelectionDialog(self.root, selectable_cols, title="표시 컬럼 관리")
         # Overwrite vars with current visibility state
