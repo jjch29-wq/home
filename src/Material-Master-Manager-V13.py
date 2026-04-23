@@ -4515,6 +4515,21 @@ class MaterialManager:
                     mat_name = self.get_material_name_only(mat_id)
                     mat_info = self.get_material_info(mat_id)
                     
+                    # [NEW] Deduplication: Skip auto-generated transactions that are already covered by DAILY usage entries
+                    # This removes the "50 vs -50" duplication while keeping the richer DAILY info.
+                    note = str(row.get('Note', ''))
+                    if "(자동 차감)" in note:
+                        # Only skip if this is the MAIN material being moved (not an NDT consumable)
+                        # We identify this by checking if the MaterialID, Site, and Date exist in the DAILY data.
+                        if not df_daily.empty:
+                            match_mask = (
+                                (df_daily['Date'].dt.date == row['Date'].date()) & 
+                                (df_daily['Site'].astype(str) == str(row.get('Site', ''))) & 
+                                (df_daily['MaterialID'].apply(normalize_id) == mat_id)
+                            )
+                            if match_mask.any():
+                                continue # Skip this TRANS record as it's a duplicate of a DAILY record
+
                     unified_rows.append({
                         'Date': row['Date'],
                         'Site': row.get('Site', ''),
@@ -4532,6 +4547,7 @@ class MaterialManager:
                         'Fee': 0, # Transactions usually don't have inspection fees directly
                         'OrigIdx': idx
                     })
+
 
             # Add Daily Usage rows (Source: DAILY)
             if not df_daily.empty:
@@ -4647,19 +4663,29 @@ class MaterialManager:
                     f_val = row.get('Fee', 0.0)
                     fee_str = f"{f_val:,.0f}" if (isinstance(f_val, (int, float)) and f_val > 0) else ""
 
+                    # Normalize Quantity for display: Use absolute value since 'Type' (IN/OUT) indicates direction
+                    raw_qty = row.get('Quantity', row.get('수량', 0))
+                    try:
+                        clean_qty = abs(float(str(raw_qty).replace(',', '')))
+                        qty_str = f"{clean_qty:.1f}" if clean_qty % 1 != 0 else f"{int(clean_qty)}"
+                    except:
+                        qty_str = self.clean_nan(raw_qty)
+
                     self.inout_tree.insert('', tk.END, values=(
                         usage_date,
                         self.clean_nan(row.get('Type', '-')),
                         self.clean_nan(row.get('품목명', '')),
                         self.clean_nan(row.get('SN', '')),
                         self.clean_nan(row.get('규격', '')),
-                        self.clean_nan(row.get('Quantity', row.get('수량', ''))),
+                        qty_str,
                         self.clean_nan(row.get('Site', '')),
                         self.clean_nan(row.get('Warehouse', '')),
                         self.clean_nan(row.get('User', '')),
                         self.clean_nan(row.get('Note', '')),
                         fee_str
                     ), tags=(str(row.get('OrigIdx', '')),))
+
+
                 except Exception as e:
                     print(f"Row Display Error: {e}")
                     continue
@@ -6090,9 +6116,12 @@ class MaterialManager:
                     ot_values.append(", ".join(parsed_ots))
                     if any(v.replace(',', '').isnumeric() for v in parsed_ots):
                         try:
-                            # Sum only the first numeric value for status check
-                            amt = int(parsed_ots[0].replace(',', ''))
-                            total_indiv_ot_amounts[i-1] += amt
+                            # [FIX] Sum ALL numeric values from this grouped OT slot, not just the first one
+                            for p_val in parsed_ots:
+                                try:
+                                    amt = int(p_val.replace(',', ''))
+                                    total_indiv_ot_amounts[i-1] += amt
+                                except: pass
                         except: pass
                 else:
                     ot_values.append('')
@@ -6157,7 +6186,7 @@ class MaterialManager:
                 f"{total_worker_count:.1f}" if total_worker_count > 0 else '', # 작업시간 (총 공수)
                 f"{total_ot_hours:.1f}" if total_ot_hours > 0 else '',
                 f"{total_ot_amount:,.0f}" if total_ot_amount > 0 else '',
-                '', '', '', '', '', '', '', '', '', '',  # OT1-10
+                *[f"{a:,.0f}" if a > 0 else '' for a in total_indiv_ot_amounts],
                 f"{total_test_amount:,.0f}" if total_test_amount > 0 else '',
                 '', # 단가
                 f"{total_travel_cost:,.0f}" if total_travel_cost > 0 else '',
@@ -7549,11 +7578,9 @@ class MaterialManager:
         import time
         if key is None:
             key = f"memo_{int(time.time() * 1000)}"
-            if not initial_text:
-                now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                initial_text = f"[{now}]\n"
         
         # Create container
+
         memo_container = ttk.LabelFrame(self.entry_inner_frame)
         
         # Controls frame (top of memo)
@@ -8700,8 +8727,16 @@ class MaterialManager:
             
         self.daily_usage_tree.bind('<ButtonRelease-1>', save_column_widths)
 
-        # Selection binding
-        self.daily_usage_tree.bind('<<TreeviewSelect>>', lambda e: None)
+        # [NEW] Note Detail Area for long descriptions
+        detail_frame = ttk.LabelFrame(display_frame, text="상세 비고 (선택된 항목)")
+        detail_frame.pack(fill='x', padx=5, pady=(0, 5))
+        
+        self.txt_daily_note_detail = tk.Text(detail_frame, height=3, font=('Malgun Gothic', 10), wrap='word', bg='#F9F9F9')
+        self.txt_daily_note_detail.pack(fill='both', expand=True, padx=5, pady=5)
+        self.txt_daily_note_detail.config(state='disabled')
+
+        # Selection binding to update detail area
+        self.daily_usage_tree.bind('<<TreeviewSelect>>', self._on_daily_usage_select)
         
         # Optimize treeview scroll region to prevent unnecessary scrollbars
         def optimize_treeview_scroll_region():
@@ -8733,8 +8768,35 @@ class MaterialManager:
         
         # Apply optimization after a short delay
         self.root.after(500, optimize_treeview_scroll_region)
+
+    def _on_daily_usage_select(self, event):
+        """[NEW] Update Note Detail Area when a row is selected in Site tab"""
+        if not hasattr(self, 'txt_daily_note_detail'): return
         
-        # Initial view update - Moved to end of create_widgets
+        selection = self.daily_usage_tree.selection()
+        if not selection:
+            self.txt_daily_note_detail.config(state='normal')
+            self.txt_daily_note_detail.delete('1.0', tk.END)
+            self.txt_daily_note_detail.config(state='disabled')
+            return
+            
+        item = selection[0]
+        values = self.daily_usage_tree.item(item, 'values')
+        if not values: return
+            
+        try:
+            cols = self.daily_usage_tree['columns']
+            if '비고' in cols:
+                note_idx = list(cols).index('비고')
+                if note_idx < len(values):
+                    note_text = values[note_idx]
+                    
+                    self.txt_daily_note_detail.config(state='normal')
+                    self.txt_daily_note_detail.delete('1.0', tk.END)
+                    self.txt_daily_note_detail.insert(tk.END, note_text)
+                    self.txt_daily_note_detail.config(state='disabled')
+        except Exception as e:
+            print(f"Detail view error: {e}")
 
     
 
@@ -11161,14 +11223,14 @@ class MaterialManager:
                     title = m['title_entry'].get().strip()
                     content = m['text_widget'].get('1.0', 'end-1c').strip()
                     if content:
-                        memo_archive.append(f"[{title}] {content}")
+                        memo_archive.append(content)
                 except: continue
         
         if not memo_archive:
             return main_note
             
         archive_text = " | ".join(memo_archive)
-        return f"{main_note} (메모: {archive_text})" if main_note else f"(메모: {archive_text})"
+        return f"{main_note} | {archive_text}" if main_note else archive_text
 
     def add_daily_usage_entry(self):
         """현장별 일일 사용량 단일 등록 (리팩토링 버전)"""
@@ -12208,7 +12270,7 @@ class MaterialManager:
                 '', # 검사방법
                 '', # 회사코드
                 f"{total_test_amount:.1f}" if total_test_amount > 0.001 else "",
-                f"{total_unit_price:,.0f}" if total_unit_price > 0.001 else "",
+                '', # 단가 (Unit Price is not summed)
                 f"{total_travel_cost:,.0f}" if total_travel_cost > 0.001 else "",
                 f"{total_test_fee:,.0f}" if total_test_fee > 0.001 else "",
                 f"{total_ot_hours:.1f}" if total_ot_hours > 0.001 else "", # OT시간 합계
@@ -13344,7 +13406,8 @@ class MaterialManager:
         if hasattr(self, '_drag_start_index') and self._drag_start_index is not None:
             if self._current_drag_index != self._drag_start_index:
                 print(f"Tab reordered: {self._drag_start_index} -> {self._current_drag_index}")
-                self.save_tab_config()
+                # [FIX] Force save on manual drag end to ensure order is persisted
+                self.save_tab_config(force=True)
             
             self._drag_start_index = None
             self._current_drag_index = None
@@ -13795,14 +13858,24 @@ class MaterialManager:
                 
             # Update with current core values
             current_tab_idx = 0
+            current_tab_text = ""
             try:
-                current_tab_idx = self.notebook.index(self.notebook.select())
+                current_tab_widget = self.notebook.select()
+                current_tab_idx = self.notebook.index(current_tab_widget)
+                current_tab_text = self.notebook.tab(current_tab_widget, "text")
             except:
                 current_tab_idx = self.tab_config.get('selected_tab', 0)
+                current_tab_text = self.tab_config.get('selected_tab_text', "")
+
+            # Get current tab order
+            tab_order = []
+            for tab_id in self.notebook.tabs():
+                tab_order.append(self.notebook.tab(tab_id, "text"))
 
             self.tab_config.update({
                 'selected_tab': current_tab_idx,
-                'tab_order': [],
+                'selected_tab_text': current_tab_text,
+                'tab_order': tab_order,
                 'sites': self.sites,
                 'users': getattr(self, 'users', []),
                 'companies': getattr(self, 'companies', []),
@@ -13999,8 +14072,8 @@ class MaterialManager:
                 
                 # Restore tab order if saved order exists
                 saved_order = config.get('tab_order', [])
-                if saved_order and len(saved_order) == len(current_order):
-                    # Reorder tabs according to saved order
+                if saved_order:
+                    # [ROBUST] Reorder tabs according to saved order (relaxed length check)
                     for i, tab_text in enumerate(saved_order):
                         if tab_text in tab_map:
                             tab = tab_map[tab_text]
@@ -14009,13 +14082,27 @@ class MaterialManager:
                                 self.notebook.insert(i, tab, text=tab_text)
                 
                 # Restore selected tab
-                selected = config.get('selected_tab', 0)
-                if 0 <= selected < self.notebook.index('end'):
+                selected_idx = config.get('selected_tab', 0)
+                selected_text = config.get('selected_tab_text', "")
+                
+                tab_restored = False
+                if selected_text:
+                    # [ROBUST] Find tab by name instead of index
+                    for i in range(self.notebook.index('end')):
+                        if self.notebook.tab(i, "text") == selected_text:
+                            try:
+                                self.notebook.select(i)
+                                tab_restored = True
+                                break
+                            except: pass
+                
+                if not tab_restored and 0 <= selected_idx < self.notebook.index('end'):
                     try:
-                        self.notebook.select(selected)
+                        self.notebook.select(selected_idx)
                     except: pass
-                    # Force update after selection so the tab is rendered and children computed
-                    self.root.update_idletasks()
+                
+                # Force update after selection so the tab is rendered and children computed
+                self.root.update_idletasks()
                 
                 # Restore sites list - use in-place update
                 self.sites[:] = config.get('sites', [])
