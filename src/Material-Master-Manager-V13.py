@@ -4630,6 +4630,17 @@ class MaterialManager:
                     mat_name = self.get_material_name_only(mat_id)
                     mat_info = self.get_material_info(mat_id)
                     
+                    # [V23.2_VIEW_FILTER] Mirror the saving restriction: Only show Carestream, PT, MT in history
+                    item_name_up = str(mat_info.get('품목명', '')).upper()
+                    model_name_up = str(mat_info.get('모델명', '')).upper()
+                    allowed_exact = ["PT", "PT약품", "MT", "MT약품"]
+                    
+                    is_carestream = "CARESTREAM" in item_name_up or "CARESTREAM" in model_name_up
+                    is_ndt_chem = any(x in item_name_up or x in model_name_up for x in allowed_exact)
+                    
+                    if not (is_carestream or is_ndt_chem):
+                        continue # Hide non-whitelist site usage from this view
+                    
                     # Collect all worker names from User, User2...User10
                     workers = []
                     for i in range(1, 11):
@@ -11858,29 +11869,58 @@ class MaterialManager:
             self._create_manual_stock_transaction(trans_date, mat_id, 'OUT', qty, site, workers, note)
 
     def _create_manual_stock_transaction(self, date_val, mat_id, trans_type, qty, site, user, note):
-        """Helper to create a stock transaction with normalized quantity"""
-        # [NEW] 모델명이 'MT약품'인 경우 트랜잭션 생성 제외 (비소모품 관리)
-        if not self.materials_df.empty:
-            str_mat_id = re.sub(r'\.0$', '', str(mat_id).strip())
-            mat_info = self.materials_df[self.materials_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == str_mat_id]
-            if not mat_info.empty:
-                model_name = str(mat_info.iloc[0].get('모델명', '')).strip().upper()
-                if model_name == 'MT약품':
-                    return
-
-        # Ensure quantity is negative for OUT
-        signed_qty = -abs(float(qty)) if trans_type == 'OUT' else abs(float(qty))
-        
-        new_trans = {
-            'Date': pd.to_datetime(date_val),
-            'MaterialID': mat_id,
-            'Type': trans_type,
-            'Quantity': signed_qty,
-            'User': user,
-            'Site': site,
-            'Note': note
-        }
-        self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
+        # [V23.1_WATERTIGHT_FILTER] Default to block everything unless it matches the whitelist
+        try:
+            if self.materials_df.empty:
+                return # Can't identify item, don't save
+                
+            # Robust ID matching
+            str_target_id = str(mat_id).strip().replace('.0', '')
+            # Vectorized lookup for speed
+            mask = self.materials_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == str_target_id
+            mat_info = self.materials_df[mask]
+            
+            if mat_info.empty:
+                # If we can't find it in DB, we don't know what it is. To be safe, DON'T save it to history.
+                return
+                
+            row = mat_info.iloc[0]
+            item_name = str(row.get('품목명', '')).strip()
+            model_name = str(row.get('모델명', '')).strip()
+            item_name_up = item_name.upper()
+            model_name_up = model_name.upper()
+            
+            # 1. Check for Carestream (Partial Match, Case Insensitive)
+            is_carestream = "CARESTREAM" in item_name_up or "CARESTREAM" in model_name_up
+            
+            # 2. Check for NDT Chemicals (Exact Match)
+            allowed_exact = ["PT", "PT약품", "MT", "MT약품"]
+            is_ndt_chem = item_name in allowed_exact or model_name in allowed_exact
+            
+            # [CRITICAL] If not a whitelist item, exit NOW
+            if not (is_carestream or is_ndt_chem):
+                return
+                
+        except Exception as e:
+            print(f"Filter error in _create_manual_stock_transaction: {e}")
+            return # Block on error
+            
+        # --- IF WE GOT HERE, THE ITEM IS ALLOWED ---
+        try:
+            # Ensure quantity is negative for OUT
+            signed_qty = -abs(float(qty)) if trans_type == 'OUT' else abs(float(qty))
+            
+            new_trans = {
+                'Date': pd.to_datetime(date_val),
+                'MaterialID': mat_id,
+                'Type': trans_type,
+                'Quantity': signed_qty,
+                'User': user,
+                'Site': site,
+                'Note': note
+            }
+            self.transactions_df = pd.concat([self.transactions_df, pd.DataFrame([new_trans])], ignore_index=True)
+        except: pass
     
     def refresh_inquiry_filters(self):
         """Unified method to populate inquiry filter dropdowns and sync with autocomplete lists"""
