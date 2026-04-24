@@ -3575,13 +3575,83 @@ class MaterialManager:
                             status_location = f"현장: {site_name}" if site_name else "출고됨"
                             row_tag = 'deployed'
             
-            # [NEW] 모델명이 'MT약품'인 경우 수량 표시 제외
-            model_name = str(mat.get('모델명', '')).strip().upper()
-            display_stock = f"{to_f(current_stock):g}"
-            if model_name == 'MT약품':
-                display_stock = "-"
-                status_location = "비소모품 (관리제외)"
+            # [REFINED] PT/MT약품인 경우 세척제, 현상제, 침투액 등으로 분리하여 표시 (중복 차감 이슈 수정)
+            full_item_name = str(mat.get('품목명', '')).strip().upper()
+            model_name_up = str(mat.get('모델명', '')).strip().upper()
             
+            # Sub-item names to hide (as they are summarized in parent splitting)
+            chem_sub_items = ['세척제', '현상제', '침투제', '침투액', '흑색자분', '백색페인트', '형광자분', '자분페인트']
+            
+            # Stricter Detection for Chemicals (avoid splitting equipment)
+            is_parent_pt_mt = (full_item_name in ["PT약품", "MT약품"] or "NDT약품" in full_item_name) and (not model_name_up or model_name_up in ['NAN', 'NONE', ''])
+            is_child_pt_mt = (full_item_name in ["PT약품", "MT약품"] or "NDT약품" in full_item_name) and (model_name_up in [s.upper() for s in chem_sub_items])
+
+            # 1. Hide Child items from the main list (they are summarized under parent)
+            if is_child_pt_mt:
+                continue
+
+            # 2. If it's a Parent, split into components with aggregated stock
+            if is_parent_pt_mt:
+                if "PT" in full_item_name:
+                    chem_configs = [('세척제', '세척제'), ('현상제', '현상제'), ('침투제', '침투액')]
+                else:
+                    chem_configs = [('흑색자분', '흑색자분'), ('백색페인트', '백색페인트'), ('형광자분', '형광자분'), ('자분페인트', '자분페인트')]
+
+                # Aggregated Stock Logic:
+                # Parent Stock (Exclude "자동 차감" notes to avoid double-counting)
+                clean_parent_net = 0.0
+                if not self.transactions_df.empty:
+                    p_mask = (self.transactions_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == str_mat_id)
+                    # [CRITICAL] Exclude "자동 차감" (Automatic Deduction) from parent because it's captured in children
+                    note_mask = ~self.transactions_df['Note'].astype(str).str.contains('자동 차감', na=False)
+                    clean_parent_net = self.transactions_df[p_mask & note_mask]['Quantity'].sum()
+                
+                parent_base_stock = stored_qty + clean_parent_net
+                
+                for db_cat, chem_label in chem_configs:
+                    # Sum all child item stocks for this specific component
+                    child_agg_stock = 0.0
+                    # Find any item in the same group with this model
+                    child_entries = self.materials_df[
+                        (self.materials_df['품목명'] == full_item_name) & 
+                        (self.materials_df['모델명'].astype(str).str.strip().str.upper() == db_cat.upper())
+                    ]
+                    for _, child in child_entries.iterrows():
+                        c_id = re.sub(r'\.0$', '', str(child['MaterialID']).strip())
+                        c_net = stock_lookup.get(c_id, 0.0) # Children use ALL their transactions (including auto-deductions)
+                        try: c_stored = float(str(child.get('수량', 0)).replace(',', '')) if pd.notna(child.get('수량')) else 0.0
+                        except: c_stored = 0.0
+                        child_agg_stock += (c_stored + c_net)
+
+                    total_component_stock = parent_base_stock + child_agg_stock
+                    display_stock = f"{to_f(total_component_stock):g}"
+                    
+                    stock_summary.append({
+                        'data': (
+                            mat_id,
+                            safe_get(mat.get('회사코드', ''), ''),
+                            safe_get(mat.get('관리품번', ''), ''),
+                            safe_get(mat.get('품목명', ''), ''),
+                            safe_get(mat.get('SN', ''), ''),
+                            safe_get(mat.get('창고', ''), ''),
+                            f"{chem_label}", # Put chemical name in 모델명
+                            safe_get(mat.get('규격', ''), ''),
+                            safe_get(mat.get('품목군코드', ''), ''),
+                            safe_get(mat.get('공급업체', ''), ''),
+                            safe_get(mat.get('제조사', ''), ''),
+                            safe_get(mat.get('제조국', ''), ''),
+                            f"{to_f(mat.get('가격', 0)):,.0f}",
+                            f"{to_f(mat.get('원가', 0)):,.0f}",
+                            safe_get(mat.get('관리단위', 'EA'), 'EA'),
+                            display_stock,
+                            f"{to_f(mat.get('재고하한', 0)):g}",
+                            status_location
+                        ),
+                        'tag': row_tag
+                    })
+                continue # Skip the default single-row addition
+
+            # Default single-row addition (for non-PT/MT chemicals or equipment)
             stock_summary.append({
                 'data': (
                     mat_id,
@@ -3599,7 +3669,7 @@ class MaterialManager:
                     f"{to_f(mat.get('가격', 0)):,.0f}",
                     f"{to_f(mat.get('원가', 0)):,.0f}",
                     safe_get(mat.get('관리단위', 'EA'), 'EA'),
-                    display_stock,
+                    f"{to_f(current_stock):g}",
                     f"{to_f(mat.get('재고하한', 0)):g}",
                     status_location
                 ),
@@ -13414,7 +13484,12 @@ class MaterialManager:
             
             # Create transaction for the main material usage
             if new_mat_id and new_qty > 0:
-                self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
+                # [FIX] PT/MT 약품의 경우, 개별 구성품(세척제 등)으로 별도 자동 차감되므로 
+                # 부모 항목인 'PT약품' 자체에 대한 중복 자동 차감(검사량 기준)은 건너뜁니다.
+                mat_info = self.get_material_info(new_mat_id)
+                full_item_name = str(mat_info.get('품목명', '')).strip().upper()
+                if full_item_name not in ["PT약품", "MT약품", "NDT약품"]:
+                    self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
             
             # Reconcile NDT consumables using unified helper
             ndt_data = {
