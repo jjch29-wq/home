@@ -2887,11 +2887,23 @@ class MaterialManager:
 
     def save_data(self):
         try:
-            # [STABILITY] Ensure MaterialID is consistently numeric in all sheets
+            # [STABILITY] Ensure MaterialID is safely normalized (numeric where possible, otherwise original string)
+            def normalize_id(val):
+                if pd.isna(val) or str(val).strip() == '': return val
+                try:
+                    s_val = str(val).strip()
+                    # Handle "10001.0" or "10001"
+                    num = float(s_val)
+                    if num == int(num): return int(num)
+                    return num
+                except:
+                    # Keep as string (for PAUT/manual names)
+                    return str(val).strip()
+
             for df_name, df in [('Materials', self.materials_df), ('Transactions', self.transactions_df), 
                                 ('Monthly', self.monthly_usage_df), ('Daily', self.daily_usage_df)]:
                 if df is not None and 'MaterialID' in df.columns:
-                    df['MaterialID'] = pd.to_numeric(df['MaterialID'], errors='coerce')
+                    df['MaterialID'] = df['MaterialID'].apply(normalize_id)
                 if df is not None and 'Active' in df.columns:
                     df['Active'] = pd.to_numeric(df['Active'], errors='coerce').fillna(1).astype(int)
             
@@ -3942,7 +3954,7 @@ class MaterialManager:
         inout_hsb = ttk.Scrollbar(tree_scroll_frame, orient="horizontal")
         
         # [RESTRUCTURED] Optimized for NDT consumables: Focus on RT, PT, MT quantities
-        columns = ('날짜', '현장', '구분', '품목명', 'RT수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
+        columns = ('날짜', '현장', '구분', '품목명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
         self.inout_tree = ttk.Treeview(tree_scroll_frame, columns=columns, show='headings', height=10,
                                        yscrollcommand=inout_vsb.set, xscrollcommand=inout_hsb.set)
         
@@ -3952,7 +3964,7 @@ class MaterialManager:
         # [NEW] Default Column Widths for NDT-focused View
         col_widths = {
             '날짜': 130, '현장': 120, '구분': 60, '품목명': 160, 
-            'RT수량': 70, '세척제': 60, '침투제': 60, '현상제': 60, '백색페인트': 80, '흑색자분': 80,
+            '수량': 70, '세척제': 60, '침투제': 60, '현상제': 60, '백색페인트': 80, '흑색자분': 80,
             'SN': 100, '규격': 100, '창고': 80, '담당자': 80, '비고': 150, '검사비': 90
         }
         for col in columns:
@@ -3961,7 +3973,7 @@ class MaterialManager:
             self.inout_tree.column(col, width=width, minwidth=50, stretch=False, anchor='center')
         
         # [FIX] Select only the core NDT-relevant columns for initial display
-        visible_cols = ('날짜', '현장', '구분', '품목명', 'RT수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', '비고')
+        visible_cols = ('날짜', '현장', '구분', '품목명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', '비고')
         self.inout_tree['displaycolumns'] = visible_cols
         self.enable_tree_column_drag(self.inout_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.inout_tree))
         self.inout_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config(), add='+')
@@ -4007,15 +4019,8 @@ class MaterialManager:
             
         mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
         if mat_row.empty:
-            # Try numeric fallback just in case some IDs are still strings
-            try:
-                num_id = int(float(mat_id))
-                mat_row = self.materials_df[self.materials_df['MaterialID'] == num_id]
-            except (ValueError, TypeError):
-                pass
-                
-        if mat_row.empty:
-            return f"ID: {mat_id}"
+            # [NEW] Handle non-numeric IDs (raw names for PAUT) and orphans gracefully
+            return str(mat_id)
             
         mat = mat_row.iloc[0]
         name = mat['품목명']
@@ -4799,7 +4804,7 @@ class MaterialManager:
                 finally: self._mat_filter_busy = False
                 
             # [STABILITY] Ensure all standard columns are visible and reset any previous hiding
-            all_inout_cols = ('날짜', '현장', '구분', '품목명', 'RT수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
+            all_inout_cols = ('날짜', '현장', '구분', '품목명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
             
             # Use saved configuration if available
             if hasattr(self, 'tab_config') and 'inout_visible_cols' in self.tab_config:
@@ -4843,7 +4848,7 @@ class MaterialManager:
                         self.clean_nan(row.get('Site', '')),
                         self.clean_nan(row.get('Type', '-')),
                         self.clean_nan(row.get('품목명', '')),
-                        qty_str if 'RT' in str(row.get('품목명', '')).upper() or 'FILM' in str(row.get('품목명', '')).upper() else "",
+                        qty_str,
                         _q_str(row.get('NDT_세척제', 0)),
                         _q_str(row.get('NDT_침투제', 0)),
                         _q_str(row.get('NDT_현상제', 0)),
@@ -5887,13 +5892,13 @@ class MaterialManager:
         
         self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
         
-        site_cols = ('현장', '품목명', '수량', '검사비', '출장비', '형광자분', '흑색자분', '백색페인트', 
+        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '형광자분', '흑색자분', '백색페인트', 
                      '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
         self.site_summary_tree = ttk.Treeview(site_frame, columns=site_cols, show='headings')
         for col in site_cols:
             self.site_summary_tree.heading(col, text=col)
             # Adjust widths based on content
-            if col in ['현장', '품목명']: width = 120
+            if col in ['현장', '검사방법', '품목명']: width = 120
             elif col in ['검사비', '출장비']: width = 100
             else: width = 80
             self.site_summary_tree.column(col, width=width, anchor='center', stretch=False)
@@ -5968,6 +5973,8 @@ class MaterialManager:
         
         # Create a copy of daily usage data and extract year/month from Date column
         df = self.daily_usage_df.copy()
+        # [CRITICAL] Normalize columns to ensure detection (matched_pairs) matches data lookups
+        df.columns = [str(c).strip().replace(' ', '') for c in df.columns]
         
         # Normalize column names - remove ALL types of whitespace using regex
         import re
@@ -6064,23 +6071,29 @@ class MaterialManager:
                 except: return 0.0
             return series.apply(to_f).sum()
 
-        # Add worker info - combine unique values from User, User2, ..., User10
-        worker_cols = ['User', 'User2', 'User3', 'User4', 'User5', 'User6', 'User7', 'User8', 'User9', 'User10']
-        for col in worker_cols:
-            if col in df.columns:
-                agg_dict[col] = join_unique_non_empty
-        
-        # Add work time - join unique values
-        worktime_cols = ['WorkTime', 'WorkTime2', 'WorkTime3', 'WorkTime4', 'WorkTime5', 'WorkTime6', 'WorkTime7', 'WorkTime8', 'WorkTime9', 'WorkTime10']
-        for col in worktime_cols:
-            if col in df.columns:
-                agg_dict[col] = join_unique_non_empty
-        
-        # Add OT - join unique values
-        ot_cols = ['OT', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10']
-        for col in ot_cols:
-            if col in df.columns:
-                agg_dict[col] = join_unique_non_empty
+        # [NEW] Hyper-Robust Column Detection for Workers/WorkTime/OT
+        # Find all columns using exact name matching (not regex with optional suffix)
+        def find_paired_cols(cols):
+            pairs = []
+            col_set = set(cols)
+            for i in range(1, 11):
+                # i=1: 'User', i=2: 'User2', etc.
+                u_name = 'User' if i == 1 else f'User{i}'
+                w_name = 'WorkTime' if i == 1 else f'WorkTime{i}'
+                o_name = 'OT' if i == 1 else f'OT{i}'
+                
+                u_col = u_name if u_name in col_set else None
+                w_col = w_name if w_name in col_set else None
+                o_col = o_name if o_name in col_set else None
+                
+                if u_col: pairs.append((u_col, w_col, o_col))
+            return pairs
+
+        matched_pairs = find_paired_cols(df.columns)
+        for u_c, w_c, o_c in matched_pairs:
+            agg_dict[u_c] = join_unique_non_empty
+            if w_c: agg_dict[w_c] = join_unique_non_empty
+            if o_c: agg_dict[o_c] = join_unique_non_empty
         
         # Removed FilmCount aggregation as it is now integrated into Usage
         
@@ -6097,35 +6110,97 @@ class MaterialManager:
             if col in df.columns:
                 agg_dict[col] = safe_sum
 
-        # Add calculated OT and WorkerCount columns for per-row aggregation
-        def calc_row_values(row):
-            h_sum = 0
+        # [NEW] Pre-aggregation Deduping to ensure parity with Site Tab
+        seen_m_times = set()
+        seen_m_contents = set()
+        
+        # Robust mapping for worker columns in Monthly Tab
+        matched_pairs = find_paired_cols(df.columns)
+
+        def sync_dedup_and_calc_ot(row):
+            # 1. Calculate Activity-based OT (Max of all workers in this row)
+            h_max = 0.0
             a_sum = 0
             w_count = 0
-            for i in range(1, 11):
-                # OT calculation
-                ot_c = 'OT' if i == 1 else f'OT{i}'
-                if ot_c in row and pd.notna(row[ot_c]):
-                    v = str(row[ot_c]).strip()
-                    if v:
-                        h_sum += self._parse_ot_hours(v)
-                        a_sum += self.calculate_ot_amount(v)
+            raw_workers = []
+            
+            for u_c, w_c, o_c in matched_pairs:
+                u_v = self.clean_nan(row.get(u_c, ''))
+                if u_v:
+                    raw_workers.append(u_v)
+                    w_count += 1
                 
-                # Worker count (Man-power)
-                u_c = 'User' if i == 1 else f'User{i}'
-                if u_c in row:
-                    u_val = self.clean_nan(row[u_c])
-                    if u_val:
-                        w_count += 1
-                        
-            return pd.Series([h_sum, a_sum, w_count])
+                if o_c:
+                    ots = str(row.get(o_c, '')).strip()
+                    if ots and ots not in ('nan', '0.0', '0'):
+                        try:
+                            # Use same parsing logic as Site Tab
+                            if '(' in ots and '원)' in ots:
+                                h_p = float(ots.split('시간')[0])
+                                amt_str = _re.sub(r'[^0-9]', '', ots.split('(')[1].split('원')[0])
+                                a_p = int(amt_str) if amt_str else 0
+                            elif ots.replace(',', '').isdigit():
+                                a_p = int(ots.replace(',', ''))
+                                wt_v = str(row.get(w_c, '')).strip() if w_c else ''
+                                h_p, _ = self._calculate_ot_from_worktime(wt_v, pd.to_datetime(row.get('Date', pd.Timestamp.now())))
+                            else:
+                                a_p = self.calculate_ot_amount(ots)
+                                h_p = self._parse_ot_hours(ots)
+                            
+                            h_max = max(h_max, h_p)
+                            a_sum += a_p
+                        except: pass
 
-        df[['OT시간', 'OT금액', 'WorkerCount']] = df.apply(calc_row_values, axis=1)
+            # 2. Deduping Key (Date, Site, WorkTime, Material)
+            # [REFINED] Exclude workers from the key to correctly catch records split across rows.
+            n_date = self._safe_format_datetime(row.get('Date', ''), '%Y-%m-%d')
+            n_site = str(row.get('Site', '')).strip()
+            c_worktime = str(row.get('WorkTime', '')).strip()
+            n_mat = str(row.get('MaterialID', ''))
+            
+            content_key = (n_date, n_site, c_worktime, n_mat)
+            
+            e_t_raw = row.get('EntryTime', '')
+            try:
+                if isinstance(e_t_raw, (pd.Timestamp, datetime.datetime)):
+                    t_key = e_t_raw.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    t_key = str(e_t_raw).split('.')[0].strip() if e_t_raw else ""
+            except: t_key = ""
+            
+            is_dup = (t_key and t_key in seen_m_times) or (content_key in seen_m_contents)
+            
+            if not is_dup:
+                if t_key: seen_m_times.add(t_key)
+                seen_m_contents.add(content_key)
+                
+                # Primary row: return full values
+                return pd.Series([h_max, a_sum, w_count, False])
+            else:
+                # Duplicate row: Zero out quantitative impact for aggregation
+                return pd.Series([0.0, 0, 0, True])
+
+        # Apply calculation and marking
+        calc_results = df.apply(sync_dedup_and_calc_ot, axis=1)
+        df[['OT시간', 'OT금액', 'WorkerCount', '_is_m_dup']] = calc_results
+        
+        # Zero out other quantitative fields for duplicate rows before aggregation
+        # [FIX] Do NOT zero out 'Usage' and '검사량' during view-level deduping.
+        # Database-level splitting already zeros them for valid splits. 
+        # View-level zeroing was causing data loss if the quantity was on a secondary row.
+        q_fields = ['단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액']
+        rtk_fields = [f'RTK_{c}' for c in ['센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타']]
+        ndt_fields = ['NDT_형광자분', 'NDT_자분', 'NDT_흑색자분', 'NDT_페인트', 'NDT_백색페인트', 'NDT_침투제', 'NDT_세척제', 'NDT_현상제', 'NDT_형광', 'NDT_형광침투제']
+        
+        dup_mask = df['_is_m_dup'] == True
+        for f in q_fields + rtk_fields + ndt_fields:
+            if f in df.columns:
+                df.loc[dup_mask, f] = 0.0
+
+        # Group by Year, Month, Site, MaterialID and aggregate
         agg_dict['OT시간'] = 'sum'
         agg_dict['OT금액'] = 'sum'
         agg_dict['WorkerCount'] = 'sum'
-
-        # Group by Year, Month, Site, MaterialID and aggregate
         grouped = df.groupby(['Year', 'Month', 'Site', 'MaterialID'], dropna=False).agg(agg_dict).reset_index()
         
         self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
@@ -6232,9 +6307,9 @@ class MaterialManager:
             
             # Extract worker names from User, User2, ..., User10
             all_workers = []
-            worker_cols = ['User', 'User2', 'User3', 'User4', 'User5', 'User6', 'User7', 'User8', 'User9', 'User10']
-            for col in worker_cols:
-                val = self.clean_nan(entry.get(col, ''))
+            # [ROBUST] Extract workers from matched columns
+            for u_c, _, _ in matched_pairs:
+                val = self.clean_nan(entry.get(u_c, ''))
                 if val:
                     # Split in case it was already joined in aggregation
                     all_workers.extend([v.strip() for v in val.split(' | ') if v.strip()])
@@ -6251,50 +6326,55 @@ class MaterialManager:
             
             # Extract OT amounts only (suppress time strings)
             ot_values = []
-            ot_cols = ['OT', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10']
-            for i, col in enumerate(ot_cols, 1):
-                val = str(entry.get(col, '')).strip()
-                
-                # [FIX] Eliminate ghost OT values in monthly view: Skip if no worker is assigned to this slot
-                user_key = 'User' if i == 1 else f'User{i}'
-                user_val = str(entry.get(user_key, '')).strip()
-                has_worker = user_val and user_val != 'nan'
-                
-                if has_worker and val and val != 'nan' and val != '0.0':
-                    # Handle multiple OTs if joined by aggregation separator ' | '
-                    sub_vals = [v.strip() for v in val.split(' | ') if v.strip()]
-                    parsed_ots = []
-                    for v_str in sub_vals:
-                        if '(' in v_str and '원)' in v_str:
-                            try:
-                                amount_str = v_str.split('(')[1].split('원')[0].replace(',', '').strip()
-                                amount = int(float(amount_str))
-                                parsed_ots.append(f"{amount:,}")
-                            except:
-                                pass # Skip invalid format
-                        else:
-                            # Try to calculate amount from time-like string
-                            try:
-                                amt = self.calculate_ot_amount(v_str)
-                                if amt > 0:
-                                    parsed_ots.append(f"{amt:,}")
-                                # If it looks like time (contains ':', '시', '시간', '~', '-') but amt is 0, hide it
-                                elif any(x in v_str for x in [':', '시', '시간', '~', '-']):
-                                    pass 
-                                else:
-                                    parsed_ots.append(v_str) # Keep non-time comments
-                            except:
-                                pass
-                    ot_values.append(", ".join(parsed_ots))
-                    if any(v.replace(',', '').isnumeric() for v in parsed_ots):
+            # [ROBUST] Pair-based OT extraction (and ensure exactly 10 items for column alignment)
+            for i in range(1, 11):
+                if i <= len(matched_pairs):
+                    u_c, _, o_c = matched_pairs[i-1]
+                    if not o_c:
+                        ot_values.append('')
+                        continue
+                    val = str(entry.get(o_c, '')).strip()
+                    
+                    # [FIX] Eliminate ghost OT values in monthly view: Skip if no worker is assigned to this slot
+                    user_val = str(entry.get(u_c, '')).strip()
+                    has_worker = user_val and user_val != 'nan'
+                    
+                    if has_worker and val and val != 'nan' and val != '0.0':
+                        # Handle multiple OTs if joined by aggregation separator ' | '
+                        sub_vals = [v.strip() for v in val.split(' | ') if v.strip()]
+                        parsed_ots = []
+                        for v_str in sub_vals:
+                            v_clean = v_str.replace(',', '')
+                            if v_clean.isdigit() and int(v_clean) > 100:
+                                # [PARITY] Monetary amount: Calculate hours from paired WorkTime
+                                wt_val = str(entry.get(w_c, '')).strip() if w_c else ''
+                                # Note: for individuals, we usually just show the amount in these columns
+                                parsed_ots.append(f"{int(v_clean):,}")
+                            elif '(' in v_str and '원)' in v_str:
+                                try:
+                                    amount_str = v_str.split('(')[1].split('원')[0].replace(',', '').strip()
+                                    amount = int(float(amount_str))
+                                    parsed_ots.append(f"{amount:,}")
+                                except: pass
+                            else:
+                                try:
+                                    amt = self.calculate_ot_amount(v_str)
+                                    if amt > 0: parsed_ots.append(f"{amt:,}")
+                                    elif any(x in v_str for x in [':', '시', '시간', '~', '-']): pass 
+                                    else: parsed_ots.append(v_str)
+                                except: pass
+                        
+                        ot_values.append(", ".join(parsed_ots))
                         try:
-                            # [FIX] Sum ALL numeric values from this grouped OT slot, not just the first one
+                            # [FIX] Sum ALL values accurately
                             for p_val in parsed_ots:
                                 try:
                                     amt = int(p_val.replace(',', ''))
                                     total_indiv_ot_amounts[i-1] += amt
                                 except: pass
                         except: pass
+                    else:
+                        ot_values.append('')
                 else:
                     ot_values.append('')
             
@@ -6388,84 +6468,62 @@ class MaterialManager:
             # --- [NEW] Populate Summaries (Initial/Total) ---
             self._populate_monthly_summary_trees(df, has_note)
             
-            # --- Dynamic Column Hiding ---
-            mandatory_cols = ['연도', '월', '현장', '작업자', '작업시간']
-            
-            def is_active(val):
+            # --- Dynamic Column Auto-Hide (same logic as Site tab) ---
+            def is_active_m(val):
                 if val is None: return False
                 s = str(val).strip().lower()
-                if s in ('', '0', '0.0', '0.00', 'nan', 'none', '-', '0.0시간', '0 (0원)'):
-                    return False
+                if s in ('', '0', '0.0', '0.00', 'nan', 'none', '-', '0.0시간', '0시간', '0원'): return False
                 try:
-                    v = float(s.replace(',', '').replace('원', '').replace('시간', '').strip())
-                    return abs(v) > 0.001
+                    import re as _rem
+                    clean = _rem.sub(r'[^0-9\.\-]', '', s)
+                    return bool(clean) and abs(float(clean)) > 0.001
                 except:
                     return bool(s)
 
-            dynamic_col_status = {
-                'OT시간': is_active(total_ot_hours),
-                'OT금액': is_active(total_ot_amount),
-                '수량': is_active(total_test_amount),
-                '단가': is_active(total_unit_price),
-                '출장비': is_active(total_travel_cost),
-                '일식': is_active(total_meal_cost),
-                '검사비': is_active(total_test_fee),
-                '품목명': is_active(total_test_amount) or any(is_active(v) for v in [total_rtk_center, total_rtk_density, total_rtk_marking, total_rtk_film, total_rtk_handling, total_rtk_customer, total_rtk_other]),
-                '센터미스': is_active(total_rtk_center),
-                '농도': is_active(total_rtk_density),
-                '마킹미스': is_active(total_rtk_marking),
-                '필름마크': is_active(total_rtk_film),
-                '취급부주의': is_active(total_rtk_handling),
-                '고객불만': is_active(total_rtk_customer),
-                '기타': is_active(total_rtk_other),
-                'RTK총계': is_active(total_rtk_sum),
-                '형광자분': is_active(total_ndt_fluorescent_mag),
-                '흑색자분': is_active(total_ndt_magnet),
-                '백색페인트': is_active(total_ndt_paint),
-                '침투제': is_active(total_ndt_penetrant),
-                '세척제': is_active(total_ndt_cleaner),
-                '현상제': is_active(total_ndt_developer),
-                '형광침투제': is_active(total_ndt_fluorescent_pen),
-                '비고': has_note
-            }
-            # OT1-10 status
+            all_cols = list(self.monthly_usage_tree['columns'])
+            
+            monthly_hide = set()
+            always_show = {'연도', '월', '현장', '작업자', '작업시간', 'OT시간', 'OT금액', '품목명'}
+            
+            # Individual OT slots
             for i in range(1, 11):
-                dynamic_col_status[f'OT{i}'] = is_active(total_indiv_ot_amounts[i-1])
+                col = f'OT{i}' if i > 1 else 'OT시간'
+                # Check from total amounts
+                amt = total_indiv_ot_amounts[i-1] if i <= len(total_indiv_ot_amounts) else 0
+                if not is_active_m(amt):
+                    monthly_hide.add(f'OT{i}')
+                    monthly_hide.add(f'작업자{i}' if i > 1 else '')
+            
+            # Cost columns
+            if not is_active_m(total_travel_cost): monthly_hide.add('출장비')
+            if not is_active_m(total_meal_cost): monthly_hide.add('일식')
+            if not is_active_m(total_test_fee): monthly_hide.add('검사비')
+            if not is_active_m(total_test_amount): monthly_hide.add('수량')
+            if not is_active_m(total_ot_hours): monthly_hide.add('OT시간')
+            if not is_active_m(total_ot_amount): monthly_hide.add('OT금액')
+            
+            # RTK columns
+            rtk_totals = [total_rtk_center, total_rtk_density, total_rtk_marking, total_rtk_film, total_rtk_handling, total_rtk_customer, total_rtk_other]
+            rtk_col_names_m = ['센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계']
+            for i, col in enumerate(rtk_col_names_m[:7]):
+                if not is_active_m(rtk_totals[i]): monthly_hide.add(col)
+            rtk_sum = sum(rtk_totals)
+            if not is_active_m(rtk_sum): monthly_hide.add('RTK총계')
+            
+            # NDT columns
+            ndt_totals = [total_ndt_fluorescent_mag, total_ndt_magnet, total_ndt_paint, total_ndt_penetrant, total_ndt_cleaner, total_ndt_developer, total_ndt_fluorescent_pen]
+            ndt_col_names_m = ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']
+            for i, col in enumerate(ndt_col_names_m):
+                if not is_active_m(ndt_totals[i]): monthly_hide.add(col)
+            
+            # note column
+            if not has_note: monthly_hide.add('비고')
+            
+            display_cols_m = [c for c in all_cols if c not in ('(Full작업자)',) and c not in monthly_hide]
+            self.monthly_usage_tree['displaycolumns'] = display_cols_m
+            if 'monthly' in self.detached_windows:
+                self.detached_windows['monthly']['tree']['displaycolumns'] = display_cols_m
                 
-            # --- BUILD FINAL VISIBILITY (DATA-FIRST LOGIC) ---
-            mandatory_cols = getattr(self, 'monthly_usage_mandatory_cols', ['연도', '월', '현장', '작업자'])
-            all_cols = self.monthly_usage_tree['columns']
-            
-            # 1. Mandatory
-            visible_list = [c for c in mandatory_cols if c in all_cols]
-            
-            # 2. Add dynamic columns with data (Overrides manual settings)
-            for col, has_data_flag in dynamic_col_status.items():
-                if has_data_flag and col in all_cols and col not in visible_list:
-                    visible_list.append(col)
-            
-            # 3. Add other manual columns only if not in dynamic status
-            manual_set = getattr(self, 'manual_visible_monthly_cols', []) or []
-            for col in manual_set:
-                if col in all_cols and col not in dynamic_col_status and col not in visible_list:
-                    visible_list.append(col)
-                    
-            # Re-sort by original order
-            visible_cols = [c for c in all_cols if c in visible_list]
-            self.monthly_usage_tree['displaycolumns'] = visible_cols
-            
-            # Ensure proper configuration for visible columns
-            for col in visible_cols:
-                self.monthly_usage_tree.column(col, stretch=False, minwidth=20)
-            
-            # Re-apply saved widths
-            if hasattr(self, 'tab_config') and 'monthly_usage_col_widths' in self.tab_config:
-                saved_widths = self.tab_config['monthly_usage_col_widths']
-                for col in visible_cols:
-                    if col in saved_widths:
-                        try: self.monthly_usage_tree.column(col, width=int(saved_widths[col]))
-                        except: pass
-
             # Ensure Total Row stays at bottom
             self.monthly_usage_tree.detach(self.monthly_usage_tree.get_children()[-1])
             self.monthly_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
@@ -6508,12 +6566,18 @@ class MaterialManager:
                    (self.current_monthly_df['Month'] == month) & \
                    (self.current_monthly_df['Site'] == site)
             
-            # For material, find matching ID
-            matching_rows = []
-            matching_ids = []
-            for m_id, m_name in zip(self.materials_df['MaterialID'], self.materials_df['품목명']):
-                if m_name == mat_name:
-                    matching_ids.append(m_id)
+            # [ROBUST] Material Filter: matches 품목명 or direct MaterialID (for manual entries)
+            if not matching_ids:
+                # If not in master materials, check if mat_name itself exists as an ID in the data
+                if mat_name in self.current_monthly_df['MaterialID'].astype(str).values:
+                    matching_ids = [mat_name]
+                else:
+                    # Fallback: check case/space insensitive match in data
+                    m_norm = mat_name.replace(' ', '').upper()
+                    possible_ids = self.current_monthly_df['MaterialID'].dropna().unique()
+                    for p_id in possible_ids:
+                        if str(p_id).replace(' ', '').upper() == m_norm:
+                            matching_ids.append(p_id)
             
             if matching_ids:
                 mask = mask & (self.current_monthly_df['MaterialID'].isin(matching_ids))
@@ -6585,12 +6649,16 @@ class MaterialManager:
         # Add Joiner for mixed MaterialIDs in site-only summary
         site_agg_dict['MaterialID'] = join_unique_non_empty
         
-        site_summary = df.groupby(['Site'], dropna=False).agg(site_agg_dict).reset_index()
+        # Ensure Site and Method are strings and filled
+        if 'Site' in df.columns: df['Site'] = df['Site'].fillna('').astype(str)
+        if '검사방법' in df.columns: df['검사방법'] = df['검사방법'].fillna('미지정').astype(str)
+        
+        site_summary = df.groupby(['Site', '검사방법'], dropna=False).agg(site_agg_dict).reset_index()
         
         # [NEW] Track active columns for dynamic hiding
-        site_cols = ('현장', '품목명', '수량', '검사비', '출장비', '형광자분', '흑색자분', '백색페인트', 
+        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '형광자분', '흑색자분', '백색페인트', 
                      '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
-        active_cols = set(['현장', '품목명', '수량']) # Mandatory columns
+        active_cols = set(['현장', '검사방법', '품목명', '수량']) # Mandatory columns
         
         # Define a robust active check for numeric data
         def is_active(val):
@@ -6668,6 +6736,7 @@ class MaterialManager:
 
             values = (
                 row['Site'],
+                row['검사방법'],
                 mat_name,
                 f"{row.get('검사량', 0.0):.1f}" if is_active(row.get('검사량', 0.0)) else '',
                 f"{row['검사비']:,.0f}" if is_active(row['검사비']) else '',
@@ -6700,19 +6769,38 @@ class MaterialManager:
 
         # --- Populate Worker Summary ---
         worker_data = []
-        for i in range(1, 11):
-            u_c = 'User' if i == 1 else f'User{i}'
-            w_c = 'WorkTime' if i == 1 else f'WorkTime{i}'
-            ot_c = 'OT' if i == 1 else f'OT{i}'
-            if u_c in df.columns and w_c in df.columns:
-                # [NEW] Include 'Date' column for each worker entry to correctly determine holiday status in Monthly Aggregation
-                cols = [u_c, w_c, ot_c]
-                if 'Date' in df.columns: cols.append('Date')
-                temp_df = df[cols].copy()
-                new_col_names = ['WorkerName', 'ShiftType', 'OTValue']
-                if 'Date' in df.columns: new_col_names.append('Date')
-                temp_df.columns = new_col_names
-                worker_data.append(temp_df)
+        # [ROBUST] Extract workers from matched pairs
+        import re as _re
+        def find_pairs(cols):
+            p = []
+            for j in range(1, 21):
+                u_p = _re.compile(f'^(User|작업자)\\s*{j}?$', _re.I)
+                w_p = _re.compile(f'^(WorkTime|작업시간)\\s*{j}?$', _re.I)
+                o_p = _re.compile(f'^(OT)\\s*{j}?$', _re.I)
+                uc = next((c for c in cols if u_p.match(c)), None)
+                wc = next((c for c in cols if w_p.match(c)), None)
+                oc = next((c for c in cols if o_p.match(c)), None)
+                if uc: p.append((uc, wc, oc))
+            return p
+            
+        df_norm = df.copy()
+        df_norm.columns = [str(c).strip().replace(' ', '') for c in df_norm.columns]
+            
+        pairs = find_pairs(df_norm.columns)
+        for uc, wc, oc in pairs:
+            # Extract worker data along with activity context for deduping
+            temp_df = pd.DataFrame()
+            temp_df['WorkerName'] = df_norm[uc]
+            temp_df['ShiftType'] = df_norm[wc] if wc else '주간'
+            temp_df['OTValue'] = df_norm[oc] if oc else ''
+            
+            # Context for deduping
+            temp_df['Date'] = df_norm['Date'] if 'Date' in df_norm.columns else None
+            temp_df['Site'] = df_norm['Site'] if 'Site' in df_norm.columns else ''
+            temp_df['MaterialID'] = df_norm['MaterialID'] if 'MaterialID' in df_norm.columns else ''
+            temp_df['WorkTime'] = df_norm['WorkTime'] if 'WorkTime' in df_norm.columns else ''
+            
+            worker_data.append(temp_df)
         
         if worker_data:
             # [NEW] Track active columns for dynamic hiding in Worker Summary
@@ -6722,6 +6810,20 @@ class MaterialManager:
             worker_df = pd.concat(worker_data)
             worker_df['WorkerName'] = worker_df['WorkerName'].apply(self.clean_nan)
             worker_df = worker_df[worker_df['WorkerName'] != '']
+            
+            # [NEW] Worker-level Deduping to prevent double-counting in split records
+            if not worker_df.empty:
+                def make_worker_key(row):
+                    d = self._safe_format_datetime(row.get('Date', ''), '%Y-%m-%d')
+                    s = str(row.get('Site', '')).strip()
+                    w = str(row.get('WorkTime', '')).strip()
+                    m = str(row.get('MaterialID', '')).strip()
+                    un = str(row.get('WorkerName', '')).strip()
+                    return (d, s, w, m, un)
+                
+                worker_df['_dedupe_key'] = worker_df.apply(make_worker_key, axis=1)
+                # Keep the first instance of a worker in any given activity unit
+                worker_df = worker_df.drop_duplicates(subset=['_dedupe_key']).drop(columns=['_dedupe_key'])
             
             if not worker_df.empty:
                 # [FIXED] Use row['Date'] if available, otherwise fallback to first available date in subset
@@ -6810,6 +6912,7 @@ class MaterialManager:
                 worker_df['A_Day'] = worker_df.apply(lambda r: r['H_Day'] * 4000 if r['Shift_Holiday'] == 0 else 0.0, axis=1)
                 worker_df['A_Night'] = worker_df.apply(lambda r: r['H_Night'] * 5000 if r['Shift_Holiday'] == 0 else 0.0, axis=1)
 
+                # [REVERTED] Back to entry-based count
                 worker_summary = worker_df.groupby('WorkerName').agg({
                     'Count': 'sum',
                     'H_Day': 'sum',
@@ -10220,7 +10323,8 @@ class MaterialManager:
             
             # --- Vehicle Tracking ---
             m_id_local = row.get('MaterialID', '')
-            m_name_local = str(mat_id_name_map.get(m_id_local, '')).upper()
+            # [FIX] If MaterialID is a manual name string (not in master map), use it directly as the name
+            m_name_local = str(mat_id_name_map.get(m_id_local, m_id_local)).upper()
             
             # [FIX] Check both Equipment Name (장비명) and Item Name (품목명) for vehicle detection
             car_info = f"{row.get('차량번호', '')} {row.get('차량비고', '')} {row.get('장비명', '')} {m_name_local}".strip()
@@ -10248,13 +10352,20 @@ class MaterialManager:
                 
                 if is_paut:
                     paut_dates.add(date_key)
-                    # [STABILITY] Use space-invariant matching to handle variations like "(MANUAL)" vs " (MANUAL)"
-                    eq_clean = equip_name.replace(' ', '')
-                    m_clean = m_name_local.replace(' ', '')
+                    # Specialized Scanner Detection (Robust matching)
+                    eq_clean = equip_name.replace(' ', '').upper()
+                    m_clean = m_name_local.replace(' ', '').upper()
+                    mid_clean = str(m_id_local).replace(' ', '').upper()
                     
-                    # Specialized Scanner Detection
-                    is_manual_scanner = 'SCANNER(MANUAL)' in eq_clean or 'SCANNER(MANUAL)' in m_clean or ('MANUAL' in eq_clean and 'SCANNER' in eq_clean) or ('MANUAL' in m_clean and 'SCANNER' in m_clean)
-                    is_cobra_scanner = 'SCANNER(COBRA)' in eq_clean or 'SCANNER(COBRA)' in m_clean or ('COBRA' in eq_clean and 'SCANNER' in eq_clean) or ('COBRA' in m_clean and 'SCANNER' in m_clean)
+                    is_manual_scanner = ('SCANNER(MANUAL)' in eq_clean or 'SCANNER(MANUAL)' in m_clean or 'SCANNER(MANUAL)' in mid_clean or
+                                         ('MANUAL' in eq_clean and 'SCANNER' in eq_clean) or 
+                                         ('MANUAL' in m_clean and 'SCANNER' in m_clean) or
+                                         ('MANUAL' in mid_clean and 'SCANNER' in mid_clean))
+                    
+                    is_cobra_scanner = ('SCANNER(COBRA)' in eq_clean or 'SCANNER(COBRA)' in m_clean or 'SCANNER(COBRA)' in mid_clean or
+                                        ('COBRA' in eq_clean and 'SCANNER' in eq_clean) or 
+                                        ('COBRA' in m_clean and 'SCANNER' in m_clean) or
+                                        ('COBRA' in mid_clean and 'SCANNER' in mid_clean))
 
                     if is_manual_scanner:
                         paut_manual_scanner_dates.add(date_key)
@@ -10616,11 +10727,12 @@ class MaterialManager:
                     row_data['days'] = f"{len(starex_dates):g}" if len(starex_dates) > 0 else ""
                 elif '탑차' in item:
                     row_data['days'] = f"{len(toptruck_dates):g}" if len(toptruck_dates) > 0 else ""
-                elif 'PAUT SCANNER (MANUAL)' in str(item).upper():
+                item_upper_clean = str(item).upper().replace(' ', '')
+                if 'PAUTSCANNER(MANUAL)' in item_upper_clean:
                     row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else ""
-                elif 'PAUT SCANNER (COBRA)' in str(item).upper():
+                elif 'PAUTSCANNER(COBRA)' in item_upper_clean:
                     row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else ""
-                elif 'PAUT' in str(item).upper():
+                elif 'PAUT' in item_upper_clean:
                     row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else ""
                 elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
                     row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
@@ -11314,18 +11426,35 @@ class MaterialManager:
             if i < len(company_data_list):
                 cd = company_data_list[i]
                 row_record['회사코드'] = cd['회사코드']
-                # Apply NDT data
+                
+                # [FIX] Multi-counting Prevention: Only the primary row keeps quantitative data
+                if not cd['is_primary']:
+                    # Zero out usage/amounts/costs for secondary rows
+                    for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']:
+                        row_record[k] = 0.0
+                    # Zero out redundant worker quantitative data (WorkTime, OT)
+                    # We keep the NAMES (User, User2...) for identification but clear the times
+                    for j in range(1, 11):
+                        wt_k = 'WorkTime' if j == 1 else f'WorkTime{j}'
+                        ot_k = 'OT' if j == 1 else f'OT{j}'
+                        row_record[wt_k] = ""
+                        row_record[ot_k] = ""
+                    # Zero out RTK data
+                    for k in rtk_data: row_record[k] = 0.0
+                else:
+                    # Primary row: keep everything including RTK
+                    for k, v in rtk_data.items(): row_record[k] = v
+
+                # Apply NDT data (always row-specific)
                 for k, v in cd['ndt_data'].items():
                     row_record[f'NDT_{k}'] = v
-                # Apply RTK only to the primary row to avoid double counting
-                if cd['is_primary']:
-                    for k, v in rtk_data.items(): row_record[k] = v
-                else:
-                    for k in rtk_data: row_record[k] = 0.0
             else:
-                # Vehicle-only secondary row: Zero out all quantities/costs
-                for k in ['Usage', '검사량', '단가', '출장비', '검사비']: row_record[k] = 0.0
+                # Vehicle-only secondary row: Zero out all quantities/costs/times
+                for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']: row_record[k] = 0.0
                 for k in rtk_data: row_record[k] = 0.0
+                for j in range(1, 11):
+                    row_record['WorkTime' if j==1 else f'WorkTime{j}'] = ""
+                    row_record['OT' if j==1 else f'OT{j}'] = ""
                 for name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']:
                     row_record[f'NDT_{name}'] = 0.0
                 row_record['Note'] = "(차량 추가 기록)"
@@ -11359,12 +11488,16 @@ class MaterialManager:
             records_to_save.append(row_record)
 
         # 7. 재고 트랜잭션 처리 (원본 로직 유지 - 출고는 실제 물량만큼 한 번만 발생)
-        for cd in company_data_list:
-             if cd.get('ndt_data') and any(v > 0 for v in cd['ndt_data'].values()):
-                  self._auto_reconcile_and_register_ndt(date_val, site, cd['ndt_data'], all_workers, cd['회사코드'])
+        # [NEW] PAUT은 재고 차감에서 제외 (사용자 요청)
+        is_paut_entry = (common_data.get('검사방법', '') == 'PAUT')
         
-        if mat_id and common_data['검사량'] > 0:
-            self._create_manual_stock_transaction(date_val, mat_id, 'OUT', common_data['검사량'], site, all_workers, f"{site} 현장 사용 (자동 차감)")
+        if not is_paut_entry:
+            for cd in company_data_list:
+                 if cd.get('ndt_data') and any(v > 0 for v in cd['ndt_data'].values()):
+                      self._auto_reconcile_and_register_ndt(date_val, site, cd['ndt_data'], all_workers, cd['회사코드'])
+            
+            if mat_id and common_data['검사량'] > 0:
+                self._create_manual_stock_transaction(date_val, mat_id, 'OUT', common_data['검사량'], site, all_workers, f"{site} 현장 사용 (자동 차감)")
 
         # 8. 데이터프레임 업데이트
         if records_to_save:
@@ -11590,9 +11723,14 @@ class MaterialManager:
                             self.materials_df.loc[self.materials_df['MaterialID'] == mat_id, 'Active'] = 1
                         break
                 
-                # 미등록 품목 자동 등록 (창고=현장)
+                # 미등록 품목 자동 등록 (창고=현장) - PAUT인 경우 자동 등록 방지 (사용자 요청)
+                is_paut_method = (self.cb_daily_test_method.get().strip() == 'PAUT')
                 if not mat_id and mat_display:
-                    mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록')
+                    if not is_paut_method:
+                        mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록')
+                    else:
+                        # [NEW] PAUT인 경우 등록은 생략하되, 입력한 명칭은 저장되도록 mat_id에 할당
+                        mat_id = mat_display
 
             # 3. 핵심 로직 실행 (단건 저장)
             saved_count = self._add_single_usage_record_logic(mat_id, date_val, site, auto_save=True)
@@ -12204,6 +12342,9 @@ class MaterialManager:
         
         # Filter data
         filtered_df = self.daily_usage_df.copy()
+        # [CRITICAL] Normalize columns to ensure detection (site_pairs) matches data lookups
+        filtered_df.columns = [str(c).strip().replace(' ', '') for c in filtered_df.columns]
+        
         print(f"DEBUG: [Daily Usage] Total records in DB: {len(filtered_df)}")
         
         # [V17_CRASH_PROOF_DATE] Maximum resilience to prevent Exit Code 1
@@ -12386,280 +12527,288 @@ class MaterialManager:
         
         current_date = None
         
-
-        for idx, entry in filtered_df.iterrows():
+        # Seen sets for deduping
+        seen_entry_times = set()
+        seen_contents = set()
+        
+        for idx, row in filtered_df.iterrows():
+            entry = row.to_dict()
+            
+            # Metadata formatting
             usage_date = self._safe_format_datetime(entry.get('Date', ''), '%Y-%m-%d')
-            if not usage_date:
-                usage_date = "Unknown"
+            if not usage_date: usage_date = "Unknown"
             
-            current_date = usage_date
-            
-            mat_id = entry['MaterialID']
+            mat_id = entry.get('MaterialID', '')
             mat_name = self.get_material_display_name(mat_id)
             
-            entry_time = self._safe_format_datetime(entry.get('EntryTime', ''), '%Y-%m-%d %H:%M:%S')
+            # Re-calculate workers/worktime early for deduping
+            import re as _re
+            def clean_s(v): return self.clean_nan(v)
+            raw_workers = []
+            for j in range(1, 11):
+                u_k = 'User' if j == 1 else f'User{j}'
+                u_v = clean_s(entry.get(u_k, ''))
+                if u_v: raw_workers.append(u_v)
             
-            # Consolidate workers
-            def clean_str(val):
-                return self.clean_nan(val)
+            c_workers = self.format_worker_summary(raw_workers)
+            c_worktime = clean_s(entry.get('WorkTime', '')) if raw_workers else ""
 
-            all_users = [
-                clean_str(entry.get('User', '')),
-                clean_str(entry.get('User2', '')),
-                clean_str(entry.get('User3', '')),
-                clean_str(entry.get('User4', '')),
-                clean_str(entry.get('User5', '')),
-                clean_str(entry.get('User6', '')),
-                clean_str(entry.get('User7', '')),
-                clean_str(entry.get('User8', '')),
-                clean_str(entry.get('User9', '')),
-                clean_str(entry.get('User10', ''))
-            ]
+            # Content-based Unique Key (Date, Site, WorkTime, Material)
+            # [REFINED] Exclude workers from the key because split records often have different workers per row.
+            n_site = str(entry.get('Site', '')).strip()
+            n_date = usage_date
+            n_mat = str(mat_id)
+            content_key = (n_date, n_site, c_worktime, n_mat)
+
+            # Timestamp-based Key (Legacy/Safety)
+            e_t_raw = entry.get('EntryTime', '')
+            try:
+                if isinstance(e_t_raw, (pd.Timestamp, datetime.datetime)):
+                    t_key = e_t_raw.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    t_key = str(e_t_raw).split('.')[0].strip()
+            except:
+                t_key = str(e_t_raw).strip()
             
-            # [FILTER FIX] If filtering by worker, show only that worker's name and THEIR worktime
-            display_worktime = clean_str(entry.get('WorkTime', '')) # Default to User1
-            raw_workers = [u for u in all_users if u]
+            # Record is duplicate split IF (Timestamp matches) OR (Content matches)
+            is_duplicate_split = (t_key and t_key in seen_entry_times) or (content_key in seen_contents)
             
+            if t_key: seen_entry_times.add(t_key)
+            seen_contents.add(content_key)
+
+            # Metadata formatting (re-mapped for display later)
+            entry_time_display = self._safe_format_datetime(entry.get('EntryTime', ''), '%Y-%m-%d %H:%M:%S')
+
+            # Worker extraction and WorkTime determination (for display)
+            consolidated_workers = c_workers
+            display_worktime = ""
+            
+            # Worker filtering logic
             if filter_worker != '전체':
                 consolidated_workers = filter_worker
-                
-                # Find the worktime for this specific worker
-                f_worker_clean = filter_worker.replace(' ', '').lower()
-                for i in range(1, 11):
-                    u_key = 'User' if i == 1 else f'User{i}'
-                    if u_key not in entry: continue
-                    u_val_raw = clean_str(entry.get(u_key, ''))
-                    u_val_clean = marker_pattern.sub('', u_val_raw.replace(' ', '').lower()).strip()
-                    
-                    if u_val_clean == f_worker_clean:
-                        wt_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
-                        display_worktime = clean_str(entry.get(wt_key, ''))
+                f_w_c = filter_worker.replace(' ', '').lower()
+                for j in range(1, 11):
+                    u_k = 'User' if j == 1 else f'User{j}'
+                    u_v_raw = clean_s(entry.get(u_k, ''))
+                    u_v_c = marker_pattern.sub('', u_v_raw.replace(' ', '').lower()).strip()
+                    if u_v_c == f_w_c:
+                        wt_k = 'WorkTime' if j == 1 else f'WorkTime{j}'
+                        display_worktime = clean_s(entry.get(wt_k, ''))
                         break
             else:
-                consolidated_workers = self.format_worker_summary(raw_workers)
-            
-            
-            # Accumulate cost totals
-            # [NEW] Ensure numeric types for calculation and formatting
-            def to_f(val):
+                display_worktime = c_worktime
+
+            # Numeric calculations
+            def to_f_local(v):
                 try:
-                    if pd.isna(val) or str(val).lower() == 'nan': return 0.0
-                    return float(str(val).replace(',', ''))
+                    if pd.isna(v) or str(v).lower() == 'nan': return 0.0
+                    return float(str(v).replace(',', ''))
                 except: return 0.0
 
-            # [BUG FIX] Prioritize '검사량' (internal key) over '수량' (sometimes empty from import/legacy)
-            q_val = to_f(entry.get('검사량'))
-            if q_val == 0.0:
-                q_val = to_f(entry.get('수량', 0.0))
-            p_val = to_f(entry.get('단가', 0.0))
-            t_val_cost = to_f(entry.get('출장비', 0.0))
-            m_val_cost = to_f(entry.get('일식', 0.0))
-            f_val_cost = to_f(entry.get('검사비', 0.0))
+            q_val = to_f_local(entry.get('검사량', entry.get('수량', 0.0)))
+            p_val = to_f_local(entry.get('단가', 0.0))
+            t_val_cost = to_f_local(entry.get('출장비', 0.0))
+            m_val_cost = to_f_local(entry.get('일식', 0.0))
+            f_val_cost = to_f_local(entry.get('검사비', 0.0))
+            
+            # Sum totals (Usage/Costs are summed for all rows because split-records are already zeroed in DB)
+            # This prevents data loss if a user placed the quantity on a secondary split row.
             total_test_amount += q_val
             total_unit_price += p_val
             total_travel_cost += t_val_cost
             total_meal_cost += m_val_cost
             total_test_fee += f_val_cost
-            
-            # Film count extraction
-            # Film Count logic removed
 
-            # Cumulative mileage
-            m_val = to_f(entry.get('주행거리', 0))
-            if m_val == 0:
-                m_val = to_f(entry.get('거리', 0))
-            total_mileage += m_val
-            if m_val > 0:
-                min_mileage = min(min_mileage, m_val)
-                max_mileage = max(max_mileage, m_val)
-            
-            if clean_str(entry.get('장비명', '')): has_equip = True
-            if clean_str(entry.get('검사방법', '')): has_method = True
-            if clean_str(entry.get('Note', '')): has_note = True
-            
-            # Calculate row OT total
+            # Cumulative mileage (Always sum)
+            milk = to_f_local(entry.get('주행거리', entry.get('거리', 0)))
+            total_mileage += milk
+            if milk > 0.001:
+                min_mileage = min(min_mileage, milk) if min_mileage != float('inf') else milk
+                max_mileage = max(max_mileage, milk) if max_mileage != float('-inf') else milk
+
+            # OT hours and amounts calculation
             row_ot_hours = 0.0
             row_ot_amount = 0
             row_ots = []
             
-            # Calculate row-specific work duration for total accumulation
-            row_duration = 0.0
+            # Exact column name matching for each worker slot
+            site_pairs = []
+            all_keys = set(entry.keys())
+            for j in range(1, 11):
+                # j=1: 'User', j=2: 'User2', etc.
+                uk = ('User' if j == 1 else f'User{j}') if ('User' if j == 1 else f'User{j}') in all_keys else None
+                wk = ('WorkTime' if j == 1 else f'WorkTime{j}') if ('WorkTime' if j == 1 else f'WorkTime{j}') in all_keys else None
+                ok = ('OT' if j == 1 else f'OT{j}') if ('OT' if j == 1 else f'OT{j}') in all_keys else None
+                if uk:
+                    site_pairs.append((uk, wk, ok))
             
-            # Use the already determined display_worktime for the "Total" of this column
-            # This ensures the total below the column matches the sum of values visible in that column.
-            if display_worktime and '~' in display_worktime:
-                try:
-                    # Clean off markers like (주간) before splitting
-                    clean_wt = marker_pattern.sub('', display_worktime).strip()
-                    if '~' in clean_wt:
-                        start_str, end_str = clean_wt.split('~')
-                        sh, sm = map(int, start_str.split(':'))
-                        eh, em = map(int, end_str.split(':'))
-                        
-                        start_min = sh * 60 + sm
-                        end_min = eh * 60 + em
-                        if end_min < start_min: end_min += 24 * 60
-                        
-                        row_duration = (end_min - start_min) / 60.0
-                        total_work_hours += row_duration
-                except:
-                    pass
-
             for i in range(1, 11):
-                # Check worker filter for this slot
-                user_key = 'User' if i == 1 else f'User{i}'
-                user_val = self.clean_nan(entry.get(user_key, ''))
-                
-                # [FIX] Eliminate ghost OT values: Skip if no worker is assigned to this slot
-                if not user_val or (filter_worker != '전체' and user_val != filter_worker):
-                    row_ots.append("") # Empty string looks cleaner than "0" for hidden/empty slots
-                    continue
+                if i <= len(site_pairs):
+                    uk, wk, ok = site_pairs[i-1]
+                    uv = clean_s(entry.get(uk, ''))
+                    
+                    if not uv or (filter_worker != '전체' and uv != filter_worker):
+                        row_ots.append("")
+                        continue
 
-                ot_str = clean_str(entry.get(f'OT{i}' if i > 1 else 'OT', ''))
-                if ot_str:
-                    try:
-                        # [NEW] Robust parsing for both formats
-                        if '(' in ot_str and '원)' in ot_str:
-                            h_part = float(ot_str.split('시간')[0])
-                            a_part = int(ot_str.split('(')[1].split('원')[0].replace(',', ''))
-                        elif ot_str.replace(',', '').isdigit():
-                            a_part = int(ot_str.replace(',', ''))
-                            # Calculate hours from worktime if amount only
-                            wt_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
-                            wt_val = clean_str(entry.get(wt_key, ''))
-                            h_part, _ = self._calculate_ot_from_worktime(wt_val, pd.to_datetime(entry['Date']))
-                        else:
-                            a_part = 0
-                            h_part = self._parse_ot_hours(ot_str)
+                    ots = str(entry.get(ok, '')).strip()
+                    wts = str(entry.get(wk, '')).strip()
+                    
+                    if ots and ots not in ('nan', '0.0', '0'):
+                        try:
+                            if '(' in ots and '원)' in ots:
+                                h_p = float(ots.split('시간')[0])
+                                a_p = int(_re.sub(r'[^0-9]', '', ots.split('(')[1].split('원')[0]))
+                            elif ots.replace(',', '').isdigit():
+                                a_p = int(ots.replace(',', ''))
+                                h_p, _ = self._calculate_ot_from_worktime(wts, pd.to_datetime(entry.get('Date', datetime.datetime.now())))
+                            else:
+                                a_p = 0
+                                h_p = self._parse_ot_hours(ots)
+                                
+                            # Activity-based hours: Max of all workers in this row
+                            row_ot_hours = max(row_ot_hours, h_p)
+                            # Cost-based amounts: Always sum across all workers
+                            row_ot_amount += a_p
                             
-                        row_ot_hours += h_part
-                        row_ot_amount += a_part
-                        total_indiv_ot_hours[i-1] += h_part
-                        total_indiv_ot_amounts[i-1] += a_part
-                        row_ots.append(f"{a_part:,}")
-                    except:
-                        row_ots.append(ot_str)
-                else:
-                    row_ots.append("0")
+                            if not is_duplicate_split:
+                                # Update global individual totals (primarily for column data presence/amounts)
+                                total_ot_amount += a_p
+                                total_indiv_ot_hours[i-1] += h_p
+                                total_indiv_ot_amounts[i-1] += a_p
+                                
+                            row_ots.append(f"{a_p:,}")
+                        except:
+                            row_ots.append(ots)
+                    else:
+                        row_ots.append("")  # Empty when no OT data (not '0')
+                else: row_ots.append("")
             
-            total_ot_hours += row_ot_hours
-            total_ot_amount += row_ot_amount
-            ot_sum_display = f"{row_ot_hours:.1f}시간" if row_ot_hours > 0 else "0"
-            if row_ot_amount > 0:
-                ot_sum_display += f" ({row_ot_amount:,}원)"
-            
-            # Individual OT values for columns (Simplified: Amount only)
-            # row_ots is already built above!
-            
-            # Get RTK values
-            # [NEW] Robust parsing helper that matches is_active logic
+            # Trim trailing empty OT slots so inactive workers don't create visible columns
+            while row_ots and row_ots[-1] == "":
+                row_ots.pop()
+            # Re-pad to 10 with empty strings (the Treeview expects 10 slots)
+            while len(row_ots) < 10:
+                row_ots.append("")
+
+            # Global OT Hours: Sum of per-activity maximums
+            if not is_duplicate_split:
+                total_ot_hours += row_ot_hours
+
+            # Global Work Hours (ONLY for primary rows)
+            if not is_duplicate_split and display_worktime and '~' in str(display_worktime):
+                try:
+                    cwt = marker_pattern.sub('', str(display_worktime)).strip()
+                    if '~' in cwt:
+                        pts = cwt.split('~')
+                        sh, sm = map(int, pts[0].split(':'))
+                        eh, em = map(int, pts[1].split(':'))
+                        sm_t = sh * 60 + sm
+                        em_t = eh * 60 + em
+                        if em_t < sm_t: em_t += 1440
+                        total_work_hours += (em_t - sm_t) / 60.0
+                except: pass
+
+            # RTK values
             def robust_to_f(v):
                 if pd.isna(v) or str(v).lower() in ('nan', 'none', ''): return 0.0
-                s = str(v).strip().lower()
                 try:
-                    # Remove non-numeric markers (comma, unit, etc)
-                    clean_s = re.sub(r'[^0-9\.\-]', '', s)
-                    return float(clean_s) if clean_s else 0.0
+                    cl = _re.sub(r'[^0-9\.\-]', '', str(v))
+                    return float(cl) if cl else 0.0
                 except: return 0.0
 
-            rtk_values = []
-            row_rtk_total = 0
-            # Use categories without '총계' for individual columns
-            rtk_cats_only = rtk_categories[:-1]
+            rtk_vals = []
+            row_rtk_sum = 0.0
+            for i, cat in enumerate(['센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타']):
+                v = robust_to_f(entry.get(f'RTK_{cat}', 0))
+                rtk_vals.append(f"{v:.1f}" if abs(v) > 0.001 else "")
+                row_rtk_sum += v
+                if not is_duplicate_split: total_rtk[i] += v
+            rtk_vals.append(f"{row_rtk_sum:.1f}" if abs(row_rtk_sum) > 0.001 else "")
+            if not is_duplicate_split: total_rtk[7] += row_rtk_sum
             
-            for i, category in enumerate(rtk_cats_only):
-                value = entry.get(f'RTK_{category}', 0)
-                val_float = robust_to_f(value)
-                # [VISUAL] Only show value if it's significant, otherwise empty string
-                rtk_values.append(f"{val_float:.1f}" if abs(val_float) > 0.001 else "")
-                row_rtk_total += val_float
-                total_rtk[i] += val_float
-            
-            # Row total also empty if zero
-            rtk_values.append(f"{row_rtk_total:.1f}" if abs(row_rtk_total) > 0.001 else "")
-            total_rtk[7] += row_rtk_total
-            
-            # Get NDT materials values
-            ndt_values = []
-            ndt_materials = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
-            
-            for i, material in enumerate(ndt_materials):
-                # Map new names to old keys for backward compatibility if needed
-                col_name = f'NDT_{material}'
-                value = entry.get(col_name)
-                # Fallback for old data
-                if pd.isna(value):
-                    if material == "흑색자분": value = entry.get('NDT_자분', 0)
-                    elif material == "백색페인트": value = entry.get('NDT_페인트', 0)
-                    elif material == "형광침투제": value = entry.get('NDT_형광', 0)
-                    else: value = 0
-                
-                val_float = robust_to_f(value)
-                ndt_values.append(f"{val_float:.1f}" if abs(val_float) > 0.001 else "")
-                total_ndt[i] += val_float
-            
-            # Get remark with manager name if exists
-            user_val = entry.get('User', '')
-            if pd.isna(user_val) or str(user_val).lower() == 'nan': user_val = ''
-            
-            note_val = entry.get('Note', '')
-            if pd.isna(note_val) or str(note_val).lower() == 'nan': note_val = ''
-            
-            display_note = f"[{user_val}] {note_val}" if user_val else note_val
+            # NDT values
+            ndt_vals = []
+            for i, mat in enumerate(["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]):
+                v = robust_to_f(entry.get(f'NDT_{mat}'))
+                if v == 0:
+                    if mat == "흑색자분": v = robust_to_f(entry.get('NDT_자분'))
+                    elif mat == "백색페인트": v = robust_to_f(entry.get('NDT_페인트'))
+                    elif mat == "형광침투제": v = robust_to_f(entry.get('NDT_형광'))
+                ndt_vals.append(f"{v:.1f}" if abs(v) > 0.001 else "")
+                if not is_duplicate_split: total_ndt[i] += v
 
-            # [BUG FIX] Update visibility flags during the loop with strict data checks
-            def has_data(val):
-                if pd.isna(val) or str(val).lower() in ('nan', 'none', '') or str(val).strip() in ('', '-', '0', '0.0', '0.00', '0시간', '0(0원)', '0 (0원)'):
-                    return False
+            # Remarks and visibility checks
+            note_raw = str(entry.get('Note', '')).strip() if not pd.isna(entry.get('Note')) else ""
+            display_remark = f"[{consolidated_workers}] {note_raw}" if consolidated_workers and note_raw else note_raw
+            
+            def has_content(v):
+                if pd.isna(v) or str(v).lower() in ('nan', 'none', '') or str(v).strip() in ('', '-', '0', '0.0', '0시간'): return False
                 return True
-
-            if has_data(entry.get('장비명')): has_equip = True
-            if has_data(entry.get('검사방법')): has_method = True
-            if has_data(entry.get('Note')): has_note = True
-            if has_data(entry.get('MaterialID')): has_product = True
-            if has_data(entry.get('EntryTime')): has_entry_time = True
-            if has_data(entry.get('차량번호')): has_vehicle_no = True
-            if has_data(entry.get('주행거리')) or has_data(entry.get('거리')): has_mileage = True
-            if has_data(entry.get('차량점검')): has_veh_insp = True
-            if has_data(entry.get('차량비고')): has_veh_note = True
-            if has_data(entry.get('회사코드')): has_co_code = True
-            if has_data(entry.get('업체명')): has_company = True
             
-            # [ROBUST] Ensure rtk_values (8) and ndt_values (7) are correct length
-            while len(rtk_values) < 8: rtk_values.append("")
-            while len(ndt_values) < 7: ndt_values.append("")
-
-            val_tuple = (
+            if has_content(entry.get('장비명')): has_equip = True
+            if has_content(entry.get('검사방법')): has_method = True
+            if has_content(note_raw): has_note = True
+            if has_content(entry.get('MaterialID')): has_product = True
+            if has_content(entry.get('EntryTime')): has_entry_time = True
+            if has_content(entry.get('차량번호')): has_vehicle_no = True
+            if has_content(entry.get('주행거리')) or has_content(entry.get('거리')): has_mileage = True
+            if has_content(entry.get('차량점검')): has_veh_insp = True
+            if has_content(entry.get('차량비고')): has_veh_note = True
+            if has_content(entry.get('회사코드')): has_co_code = True
+            if has_content(entry.get('업체명')): has_company = True
+            
+            # [VISUAL DEDUPING] If duplicate split row, clear numeric values for cleaner view/export
+            disp_q = f"{q_val:.1f}"
+            disp_p = f"{p_val:,.0f}"
+            disp_t = f"{t_val_cost:,.0f}"
+            disp_f = f"{f_val_cost:,.0f}"
+            disp_oth = f"{row_ot_hours:.1f}"
+            disp_ota = f"{row_ot_amount:,}"
+            disp_row_ots = row_ots
+            disp_rtk = rtk_vals
+            disp_ndt = ndt_vals
+            
+            if is_duplicate_split:
+                disp_q = ""
+                disp_p = ""
+                disp_t = ""
+                disp_f = ""
+                disp_oth = ""
+                disp_ota = ""
+                disp_row_ots = [""] * 10
+                disp_rtk = [""] * 8
+                disp_ndt = [""] * 7
+            
+            v_tuple = (
                 usage_date,
-                entry.get('업체명', ''), # Column 1: 업체명
-                entry.get('Site', ''),   # Column 2: 현장
+                entry.get('업체명', ''),
+                entry.get('Site', ''),
                 consolidated_workers,
                 display_worktime,
-                *row_ots,
+                *disp_row_ots,
                 entry.get('장비명', ''),
                 entry.get('검사방법', ''),
-                entry.get('회사코드', ''),  # 회사코드 표시
-                f"{q_val:.1f}",
-                f"{p_val:,.0f}",
-                f"{t_val_cost:,.0f}",
-                f"{f_val_cost:,.0f}",
-                f"{row_ot_hours:.1f}", # OT시간
-                f"{row_ot_amount:,}",  # OT금액
+                entry.get('회사코드', ''),
+                disp_q,
+                disp_p,
+                disp_t,
+                disp_f,
+                disp_oth, 
+                disp_ota,  
                 mat_name,
-                *rtk_values,
-                *ndt_values,
-                display_note if not note_val else f"{display_note}", 
-                entry_time,
-                clean_str(entry.get('차량번호', '')),
-                clean_str(entry.get('주행거리', '')),
-                clean_str(entry.get('차량점검', '')),
-                clean_str(entry.get('차량비고', '')),
-                ", ".join(raw_workers) # (Full작업자) storage for Excel export
+                *disp_rtk,
+                *disp_ndt,
+                display_remark,
+                str(entry.get('EntryTime', '')),
+                self.clean_nan(entry.get('차량번호', '')),
+                self.clean_nan(entry.get('주행거리', '')),
+                self.clean_nan(entry.get('차량점검', '')),
+                self.clean_nan(entry.get('차량비고', '')),
+                ", ".join(raw_workers)
             )
-            # [DEFENSIVE] Final length check to prevent Treeview index shift
-            while len(val_tuple) < 48: val_tuple += ("",)
-
-            self.daily_usage_tree.insert('', tk.END, values=val_tuple, tags=(str(idx),))
+            while len(v_tuple) < 48: v_tuple += ("",)
+            self.daily_usage_tree.insert('', tk.END, values=v_tuple, tags=(str(idx),))
             
         # Insert last daily subtotal and final total row if data exists
         if not filtered_df.empty:
@@ -12778,10 +12927,8 @@ class MaterialManager:
                 
             # --- BUILD FINAL VISIBILITY (MERGED LOGIC) ---
             all_cols = list(self.daily_usage_tree['columns'])
-            manual_set = getattr(self, 'manual_visible_cols', [])
-            if not manual_set:
-                # Fallback: if no manual preference stored yet, consider all as wanted
-                manual_set = all_cols
+            # manual_set: columns user explicitly hid via column manager (empty = no exclusions)
+            manual_hidden = set(all_cols) - set(getattr(self, 'manual_visible_cols', all_cols))
             
             # [SAFETY] Core columns that should almost never be hidden unless user is very specific
             mandatory_cols = ['날짜', '현장', '작업자']
@@ -12797,15 +12944,15 @@ class MaterialManager:
                     continue
                 
                 # 2. User Unchecked override: If user explicitly hid it in Management, hide it.
-                if col not in manual_set:
+                if col in manual_hidden:
                     continue
                 
-                # 3. Dynamic Auto-Hiding: If tracked, show only if it has data.
+                # 3. Dynamic Auto-Hiding: Always apply - show only if it has data.
                 if col in dynamic_col_status:
                     if dynamic_col_status[col]:
                         final_visible.append(col)
                 else:
-                    # Column not tracked for data (unlikely for usage tab), show since user wants it.
+                    # Column not tracked (e.g. unknown/custom cols): show by default
                     final_visible.append(col)
 
             # [STABILITY] Clear the Treeview's displayed columns
@@ -13453,51 +13600,60 @@ class MaterialManager:
             # 3. Apply New Deduction
             new_date = pd.to_datetime(new_data['Date'])
             new_site = new_data['Site']
+            new_method = new_data.get('검사방법', '')
             new_mat_display = str(new_data.get('MaterialID', '')).strip()
             
-            # Resolve or Register MaterialID
-            new_mat_id = ""
-            if new_mat_display:
-                # Try to find existing
-                for _, row in self.materials_df.iterrows():
-                    if self.get_material_display_name(row['MaterialID']) == new_mat_display:
-                        new_mat_id = row['MaterialID']
-                        # [RE-ACTIVATE] If it was inactive, make it active
-                        if row.get('Active', 1) == 0:
-                            print(f"[DEBUG] Reactivating inactive material: {new_mat_display}")
-                            self.materials_df.loc[self.materials_df['MaterialID'] == new_mat_id, 'Active'] = 1
-                        break
+            # [NEW] PAUT은 재고 차감에서 제외 (사용자 요청)
+            is_paut_edit = (new_method == 'PAUT')
+            
+            if not is_paut_edit:
+                # Resolve or Register MaterialID
+                new_mat_id = ""
+                if new_mat_display:
+                    # Try to find existing
+                    for _, row in self.materials_df.iterrows():
+                        if self.get_material_display_name(row['MaterialID']) == new_mat_display:
+                            new_mat_id = row['MaterialID']
+                            # [RE-ACTIVATE] If it was inactive, make it active
+                            if row.get('Active', 1) == 0:
+                                print(f"[DEBUG] Reactivating inactive material: {new_mat_display}")
+                                self.materials_df.loc[self.materials_df['MaterialID'] == new_mat_id, 'Active'] = 1
+                            break
+                    
+                    # If still not found, auto-register (Skip for PAUT per user request)
+                    if not new_mat_id and new_mat_display:
+                        if not is_paut_edit:
+                            new_mat_id = self.register_new_material(new_mat_display, warehouse='현장', 규격='자동등록')
+                        else:
+                            # [NEW] PAUT인 경우 등록은 생략하되, 입력한 명칭은 저장되도록 mat_id에 할당
+                            new_mat_id = new_mat_display
                 
-                # If still not found, auto-register
-                if not new_mat_id:
-                    new_mat_id = self.register_new_material(new_mat_display, warehouse='현장', 규격='자동등록')
-            
-            new_qty = float(new_data.get('검사량', 0))
-            new_note_pattern = f'{new_site} 현장 사용 (자동 차감)'
-            
-            # Collect all workers names for transaction
-            workers_names = []
-            for i in range(1, 11):
-                n = new_data.get('User' if i == 1 else f'User{i}', '').strip()
-                if n: workers_names.append(n)
-            all_workers = ", ".join(workers_names)
-            
-            # Create transaction for the main material usage
-            if new_mat_id and new_qty > 0:
-                # [FIX] PT/MT 약품의 경우, 개별 구성품(세척제 등)으로 별도 자동 차감되므로 
-                # 부모 항목인 'PT약품' 자체에 대한 중복 자동 차감(검사량 기준)은 건너뜁니다.
-                mat_info = self.get_material_info(new_mat_id)
-                full_item_name = str(mat_info.get('품목명', '')).strip().upper()
-                if full_item_name not in ["PT약품", "MT약품", "NDT약품"]:
-                    self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
-            
-            # Reconcile NDT consumables using unified helper
-            ndt_data = {
-                name: float(new_data.get(f'NDT_{"".join(name.split())}', 0))
-                for name in ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
-            }
-            company_code = new_data.get('회사코드', '')
-            self._auto_reconcile_and_register_ndt(new_date, new_site, ndt_data, all_workers, company_code)
+                new_qty = float(new_data.get('검사량', 0))
+                new_note_pattern = f'{new_site} 현장 사용 (자동 차감)'
+                
+                # Collect all workers names for transaction
+                workers_names = []
+                for i in range(1, 11):
+                    n = new_data.get('User' if i == 1 else f'User{i}', '').strip()
+                    if n: workers_names.append(n)
+                all_workers = ", ".join(workers_names)
+                
+                # Create transaction for the main material usage
+                if new_mat_id and new_qty > 0:
+                    # [FIX] PT/MT 약품의 경우, 개별 구성품(세척제 등)으로 별도 자동 차감되므로 
+                    # 부모 항목인 'PT약품' 자체에 대한 중복 자동 차감(검사량 기준)은 건너뜜
+                    mat_info = self.get_material_info(new_mat_id)
+                    full_item_name = str(mat_info.get('품목명', '')).strip().upper()
+                    if full_item_name not in ["PT약품", "MT약품", "NDT약품"]:
+                        self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
+                
+                # Reconcile NDT consumables using unified helper
+                ndt_data = {
+                    name: float(new_data.get(f'NDT_{"".join(name.split())}', 0))
+                    for name in ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+                }
+                company_code = new_data.get('회사코드', '')
+                self._auto_reconcile_and_register_ndt(new_date, new_site, ndt_data, all_workers, company_code)
 
             # 4. Save & Refresh
             if self.save_data():
@@ -15042,6 +15198,12 @@ class MaterialManager:
                     def finalize_loading():
                         self.is_ready = True
                         print("APP READY: State restoration complete.")
+                        # [NEW] Trigger column auto-hide on both tabs immediately after startup
+                        try:
+                            self.root.after(100, self.update_daily_usage_view)
+                            self.root.after(200, self.update_monthly_usage_view)
+                        except Exception as e:
+                            print(f"[STARTUP] View refresh error: {e}")
                     
                     self.root.after(300, finalize_loading) 
                 
@@ -15466,14 +15628,14 @@ class MaterialManager:
         # 2. 현장별 요약 (중단 - 메인 UI는 3단 수직 분할)
         site_frame = ttk.LabelFrame(paned, text="현장별 누계")
         paned.add(site_frame, weight=1)
-        site_cols = ('현장', '품목명', '수량', '검사비', '출장비', '형광자분', '흑색자분', '백색페인트', 
+        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '형광자분', '흑색자분', '백색페인트', 
                      '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
         site_tree = ttk.Treeview(site_frame, columns=site_cols, show='headings')
         site_vsb = ttk.Scrollbar(site_frame, orient="vertical", command=site_tree.yview)
         site_tree.configure(yscrollcommand=site_vsb.set)
         for col in site_cols:
             site_tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(site_tree, c, False))
-            w = 120 if col in ['현장', '품목명'] else (100 if col in ['검사비', '출장비'] else 80)
+            w = 120 if col in ['현장', '검사방법', '품목명'] else (100 if col in ['검사비', '출장비'] else 80)
             site_tree.column(col, width=w, anchor='center', stretch=False)
         site_tree.pack(side='left', expand=True, fill='both')
         site_vsb.pack(side='right', fill='y')
