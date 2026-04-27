@@ -1,0 +1,75 @@
+{
+    "header": {
+        "date": "F2"
+    },
+    "general": {
+        "company": "E6",
+        "project_name": "E7",
+        "standard": "E8",
+        "equipment": "E9",
+        "report_no": "N6",
+        "inspection_item": "N7",
+        "inspector": "N8",
+        "car_no": "N9"
+    },
+    "methods": {
+        "RT": {
+            "row": "13"
+        },
+        "UT": {
+            "row": "14"
+        },
+        "MT": {
+            "row": "15"
+        },
+        "PT": {
+            "row": "16"
+        },
+        "HT": {
+            "row": "16"
+        },
+        "VT": {
+            "row": "17"
+        },
+        "LT": {
+            "row": "18"
+        },
+        "ET": {
+            "row": "19"
+        },
+        "PAUT": {
+            "row": "20"
+        }
+    },
+    "rtk": {
+        "center_miss": "D34",
+        "density": "F34",
+        "marking_miss": "H34",
+        "film_mark": "J34",
+        "handling": "L34",
+        "customer_complaint": "N34",
+        "etc": "P34",
+        "total": "R34"
+    },
+    "ot": {
+        "row1_name": "B38",
+        "row1_company": "F38",
+        "row1_method": "I38",
+        "row1_hours": "K38",
+        "row1_amount": "N38",
+        "row2_name": "B39",
+        "row2_company": "F39",
+        "row2_method": "I39",
+        "row2_hours": "K39",
+        "row2_amount": "N39"
+    },
+    "materials": {
+        "RT T200": "43",
+        "RT AA400": "44",
+        "MT WHITE": "46",
+        "MT 7C-BLACK": "47",
+        "PT Penetrant": "48",
+        "PT Cleaner": "49",
+        "PT Developer": "50"
+    }
+}

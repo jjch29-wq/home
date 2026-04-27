@@ -11798,77 +11798,95 @@ class MaterialManager:
             pass
         return {}
 
-    def _save_ndt_product_map(self, map_data):
-        """NDT 약품 -> 실제 DB 품목명 매핑 저장"""
-        try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    cfg = json.load(f)
+    def _save_ndt_product_map(self,             # [FIX] Move method initialization before worker loop to avoid UnboundLocalError
+            method = self.cb_daily_test_method.get().strip()
+            unit_val = self.cb_daily_unit.get().strip() 
+            qty_val = self.ent_daily_test_amount.get().strip()
+            price_val = self.ent_daily_unit_price.get().strip()
+            travel_val = self.ent_daily_travel_cost.get().strip()
+            total_val = self.ent_daily_test_fee.get().strip()
+
+            # [USER_REQ] New Worker & OT Collection Logic
+            # Group identical O/T records and strip titles if team size >= 3
+            inspectors = []
+            temp_ot_records = []
+            for i in range(1, 11):
+                group = getattr(self, f'worker_group{i}', None)
+                if group and group.cb_name.get().strip():
+                    name = group.cb_name.get().strip()
+                    inspectors.append(name)
+                    ot_val = group.ent_ot.get().strip()
+                    try:
+                        import re
+                        if '(' in ot_val and ')' in ot_val:
+                            inner = ot_val[ot_val.find('(')+1 : ot_val.find(')')]
+                            ot_amount = "".join(c for c in inner if c.isdigit())
+                        else:
+                            ot_amount = "".join(c for c in ot_val if c.isdigit())
+                        work_time = group.ent_worktime.get().strip()
+                    except: 
+                        work_time = ""
+                        ot_amount = ""
+                    if w            # [USER_REQ] New Worker & OT Collection Logic
+            # Group identical O/T records and strip titles if team size >= 3
+            inspectors = []
+            temp_ot_records = []
+            for i in range(1, 11):
+                group = getattr(self, f'worker_group{i}', None)
+                if group and group.cb_name.get().strip():
+                    name = group.cb_name.get().strip()
+                    inspectors.append(name)
+                    ot_val = group.ent_ot.get().strip()
+                    try:
+                        import re
+                        if '(' in ot_val and ')' in ot_val:
+                            inner = ot_val[ot_val.find('(')+1 : ot_val.find(')')]
+                            ot_amount = "".join(c for c in inner if c.isdigit())
+                        else:
+                            ot_amount = "".join(c for c in ot_val if c.isdigit())
+                        work_time = group.ent_worktime.get().strip()
+                    except: 
+                        work_time = ""
+                        ot_amount = ""
+                    if work_time or ot_amount:
+                        temp_ot_records.append((name, work_time, ot_amount))
+
+            def clean_name(n):
+                import re
+                return re.sub(r'\s*(부장|차장|과장|대리|주임|기사|선임|수석|책임|팀장|이사|본부장|실장)$', '', n).strip()
+
+            # 1. Fill 'inspector' field (strip titles if 3+ people)
+            if len(inspectors) >= 3:
+                display_names = [clean_name(n) for n in inspectors]
             else:
-                cfg = {}
-            cfg['ndt_product_map'] = map_data
-            with open(self.config_path, 'w', encoding='utf-8') as f:
-                json.dump(cfg, f, indent=4, ensure_ascii=False)
-            return True
-        except Exception:
-            return False
+                display_names = inspectors
+            data['inspector'] = ", ".join(display_names)
 
-    def open_ndt_product_map_dialog(self):
-        """NDT 약품 -> 실제 DB 품목명 매핑 설정 다이얼로그"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title("NDT 약품-품목 매핑 설정")
-        dlg.geometry("500x600")
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        main_frame = ttk.Frame(dlg, padding=20)
-        main_frame.pack(fill='both', expand=True)
-
-        ttk.Label(main_frame, text="현장 입력 약품명", font=('Arial', 10, 'bold')).grid(row=0, column=0, pady=10)
-        ttk.Label(main_frame, text="창고 재고 품목 (매핑)", font=('Arial', 10, 'bold')).grid(row=0, column=1, pady=10)
-
-        ndt_materials = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
-        current_map = self._load_ndt_product_map()
-        
-        material_options = []
-        for _, row in self.materials_df.iterrows():
-            disp = self.get_material_display_name(row['MaterialID'])
-            material_options.append(disp)
-        material_options.sort()
-
-        combos = {}
-        for i, mat in enumerate(ndt_materials):
-            ttk.Label(main_frame, text=mat).grid(row=i+1, column=0, padx=5, pady=5, sticky='w')
-            cb = ttk.Combobox(main_frame, values=material_options, width=40)
-            cb.grid(row=i+1, column=1, padx=5, pady=5, sticky='ew')
-            current_id = current_map.get(mat, "")
-            if current_id:
-                cb.set(self.get_material_display_name(current_id))
-            combos[mat] = cb
-
-        def _save():
-            new_map = {}
-            for mat, cb in combos.items():
-                disp = cb.get().strip()
-                if disp:
-                    for _, row in self.materials_df.iterrows():
-                        if self.get_material_display_name(row['MaterialID']) == disp:
-                            new_map[mat] = row['MaterialID']
-                            break
-            if self._save_ndt_product_map(new_map):
-                messagebox.showinfo("성공", "매핑 설정이 저장되었습니다.")
-                dlg.destroy()
-            else:
-                messagebox.showerror("오류", "설정을 저장하지 못했습니다.")
-
-        def _clear():
-            for cb in combos.values():
-                cb.set('')
-
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.grid(row=len(ndt_materials)+1, column=0, columnspan=2, pady=20)
-
-        ttk.Button(btn_frame, text="저장", command=_save, width=10).pack(side='left', padx=8)
+            # 2. Group identical OT records
+            from collections import OrderedDict
+            grouped_ot = OrderedDict() # (time, amount) -> [names]
+            for n, wt, oa in temp_ot_records:
+                key = (wt, oa)
+                if key not in grouped_ot: grouped_ot[key] = []
+                grouped_ot[key].append(n)
+            
+            for (wt, oa), names in grouped_ot.items():
+                if len(names) >= 3:
+                    ot_names = [clean_name(name) for name in names]
+                else:
+                    ot_names = names
+                
+                name_str = ", ".join(ot_names)
+                wt_display = f"{wt} (동일)" if len(names) > 1 else wt
+                
+                data['ot_status'].append({
+                    'names': name_str,
+                    'ot_hours': wt_display,
+                    'ot_amount': f"{int(oa):,}" if oa else "",
+                    'company': data['company'],
+                    'method': method
+                })
+�장", command=_save, width=10).pack(side='left', padx=8)
         ttk.Button(btn_frame, text="전체 초기화", command=_clear, width=10).pack(side='left', padx=8)
         ttk.Button(btn_frame, text="닫기", command=dlg.destroy, width=10).pack(side='left', padx=8)
 
@@ -11959,7 +11977,6 @@ class MaterialManager:
                 group.ent_ot.insert(0, self.clean_nan(record.get(ot_key, '')))
 
             # 5. RTK
-
             for cat, ent in self.rtk_entries.items():
                 if cat == "총계": continue
                 val = record.get(f'RTK_{cat}', 0)
@@ -12335,153 +12352,117 @@ class MaterialManager:
     def export_daily_work_report(self):
         """작업일보를 엑셀 템플릿에 출력합니다."""
         try:
+            # 1. 템플릿 경로 확인
             template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'Template_DailyWorkReport.xlsx')
             if not os.path.exists(template_path):
-                template_path = r'c:\Users\jjch2\Desktop\보고서Project PROVIDENCE\Request\PMI\Na-aba\home\resources\Template_DailyWorkReport.xlsx'
+                # Fallback to absolute path if joined path fails (for some environments)
+                template_path = r'c:\Users\jjch2\Desktop\보고서\Project PROVIDENCE\Request\PMI\Na-aba\home\resources\Template_DailyWorkReport.xlsx'
             
             if not os.path.exists(template_path):
                 messagebox.showerror("오류", "작업일보 템플릿(Template_DailyWorkReport.xlsx)을 찾을 수 없습니다.")
                 return
 
+            # 2. 데이터 수집
             date_val = self.ent_daily_date.get_date()
             site = self.cb_daily_site.get().strip()
             
+            # 현재 폼의 데이터 수집 (1. 일반현황)
             data = {
                 'date': date_val,
-                'company': self.cb_daily_company.get().strip() or '원자력건설',
+                'company': self.cb_daily_company.get().strip() or '롯데건설',
                 'project_name': site,
                 'standard': self.ent_daily_applied_code.get().strip() or 'KS',
                 'equipment': self.cb_daily_equip.get().strip(),
                 'report_no': self.ent_daily_report_no.get().strip(), 
                 'inspection_item': self.ent_daily_inspection_item.get().strip(), 
-                'inspector': '', 
-                'car_no': '', 
+                'inspector': '', # Will be filled from personnel list below
+                'car_no': self.vehicle_boxes[0].cb_vehicle_info.get().strip() if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes else '', 
                 'methods': {},
                 'rtk': {},
                 'ot_status': [],
                 'materials': {}
             }
 
+            # NDT 업체 정보가 있으면 업체명 업데이트
             if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
                 company = self.ndt_company_entries[0].get('_company', tk.Variable()).get().strip()
                 if company: data['company'] = company
 
-            # DB 데이터 집합 (Option 1: 전체 합산 버전)
-            site_records = pd.DataFrame()
-            if not self.daily_usage_df.empty:
-                try:
-                    df_copy = self.daily_usage_df.copy()
-                    df_copy['Date'] = pd.to_datetime(df_copy['Date']).dt.date
-                    check_date = pd.to_datetime(date_val).date()
-                    site_records = df_copy[(df_copy['Date'] == check_date) & (df_copy['Site'] == site)]
-                except: pass
-
-            all_vehicles = []
-            if hasattr(self, 'vehicle_boxes'):
-                for box in self.vehicle_boxes:
-                    v = box.cb_vehicle_info.get().strip()
-                    if v and v not in all_vehicles: all_vehicles.append(v)
-            if not site_records.empty and '차량번호' in site_records.columns:
-                for v in site_records['차량번호'].dropna().unique():
-                    v_str = str(v).strip()
-                    if v_str and v_str not in all_vehicles: all_vehicles.append(v_str)
-            data['car_no'] = ", ".join(all_vehicles)
-
+            # [FIX] Move method initialization before worker loop to avoid UnboundLocalError
             method = self.cb_daily_test_method.get().strip()
             unit_val = self.cb_daily_unit.get().strip() 
-            
-            if not site_records.empty:
-                db_qty = pd.to_numeric(site_records['Usage'], errors='coerce').fillna(0).sum()
-                db_price = pd.to_numeric(site_records['단가'], errors='coerce').fillna(0).max()
-                db_travel = pd.to_numeric(site_records['출장비'], errors='coerce').fillna(0).sum()
-                db_total = pd.to_numeric(site_records['검사비'], errors='coerce').fillna(0).sum()
-                qty_val = str(int(db_qty))
-                price_val = str(int(db_price))
-                travel_val = str(int(db_travel))
-                total_val = str(int(db_total))
-            else:
-                qty_val = self.ent_daily_test_amount.get().strip()
-                price_val = self.ent_daily_unit_price.get().strip()
-                travel_val = self.ent_daily_travel_cost.get().strip()
-                total_val = self.ent_daily_test_fee.get().strip()
+            qty_val = self.ent_daily_test_amount.get().strip()
+            price_val = self.ent_daily_unit_price.get().strip()
+            travel_val = self.ent_daily_travel_cost.get().strip()
+            total_val = self.ent_daily_test_fee.get().strip()
+
+            # 작업자 및 O/T 정보 수집
+            inspectors = []
+            for i in range(1, 11):
+                group = getattr(self, f'worker_group{i}', None)
+                if group and group.cb_name.get().strip():
+                    name = group.cb_name.get().strip()
+                    inspectors.append(name)
+                    ot_val = group.ent_ot.get().strip()
+                    try:
+                        # [ROBUST] Extract OT amount: 
+                        # 1. If contains (45,000원) format, extract number inside
+                        # 2. Otherwise try to take all digits from the string
+                        import re
+                        if '(' in ot_val and ')' in ot_val:
+                            inner = ot_val[ot_val.find('(')+1 : ot_val.find(')')]
+                            ot_amount = "".join(c for c in inner if c.isdigit())
+                        else:
+                            ot_amount = "".join(c for c in ot_val if c.isdigit())
+                        
+                        # [USER_REQ] Work Time from the "Time" field next to the worker
+                        work_time = group.ent_worktime.get().strip()
+                    except: 
+                        work_time = ""
+                        ot_amount = ""
+
+                        
+                    if work_time or ot_amount:
+                        data['ot_status'].append({
+                            'names': name, 
+                            'ot_hours': work_time, # [REPURPOSED] Put work_time in hours column per user request
+                            'ot_amount': f"{int(ot_amount):,}" if ot_amount else "",
+                            'company': data['company'],
+                            'method': method
+                        })
+
+
+            data['inspector'] = ", ".join(inspectors) # All workers included
+
+            # 검사 업무 현황 (RT, UT 등) - 현재 선택된 공법 및 수량
+
+
+
 
             if method:
+                try:
+                    qty = float(qty_val) if qty_val else 0
+                    price = float(price_val.replace(',', '')) if price_val else 0
+                    travel = float(travel_val.replace(',', '')) if travel_val else 0
+                    total = float(total_val.replace(',', '')) if total_val else 0
+                except: qty = price = travel = total = 0
+                
+                # 단위 매핑 (데이터 수집 시점)
                 data['methods'][method] = {
-                    'unit': unit_val,
-                    'qty': float(qty_val.replace(',', '')) if qty_val else 0,
-                    'price': float(price_val.replace(',', '')) if price_val else 0,
-                    'travel': float(travel_val.replace(',', '')) if travel_val else 0,
-                    'total': float(total_val.replace(',', '')) if total_val else 0
+                    'unit': unit_val, # Use selected unit
+                    'qty': qty,
+                    'price': price,
+                    'travel': travel,
+                    'total': total
                 }
 
-            # 작업자 및 O/T (간소화 버전)
-            # [NEW] 작업자 / OT 정보 DB에서 집계 (현장 탭 기록 기준)
-            def _clean_name(n):
-                if not n or str(n).lower() in ('nan', 'none', ''): return ''
-                text = str(n).strip()
-                titles = ['부장', '차장', '과장', '대리', '주임', '기사', '선임', '수석', '책임',
-                          '팀장', '이사', '본부장', '실장', '소장', '직장', '반장', '팀원', '계장']
-                for t in titles:
-                    import re as _re
-                    text = _re.sub(r'[\s/(\[]*' + t + r'[\s)\]]*$', '', text)
-                    text = _re.sub(r'^[\s/(\[]*' + t + r'[\s)\]]*', '', text)
-                return text.strip()
-
-            inspectors = []
-            ot_groups = {}  # key: (work_time, ot_amount) -> {names:[], company:''}
-
-            if not site_records.empty:
-                company_val = data.get('company', '')
-                for _, row in site_records.iterrows():
-                    for i in range(1, 11):
-                        u_key   = 'User'     if i == 1 else f'User{i}'
-                        wt_key  = 'WorkTime' if i == 1 else f'WorkTime{i}'
-                        ot_key  = 'OT'       if i == 1 else f'OT{i}'
-
-                        name = str(row.get(u_key, '')).strip()
-                        if not name or name == 'nan': continue
-
-                        if name not in inspectors:
-                            inspectors.append(name)
-
-                        wt  = str(row.get(wt_key, '')).strip()
-                        ot_raw = str(row.get(ot_key,  '')).strip()
-                        oa  = ''.join(c for c in ot_raw if c.isdigit())
-
-                        if wt == 'nan': wt = ''
-                        if not wt and not oa: continue
-
-                        key = (wt, oa)
-                        if key not in ot_groups:
-                            ot_groups[key] = {'names': [], 'company': company_val}
-                        if name not in ot_groups[key]['names']:
-                            ot_groups[key]['names'].append(name)
-
-            # Inspector display (titles stripped when 3+)
-            if len(inspectors) >= 3:
-                disp_insp = [_clean_name(n) for n in inspectors]
-            else:
-                disp_insp = inspectors
-            data['inspector'] = ', '.join(disp_insp)
-
-            # Build ot_status list
-            data['ot_status'] = []
-            for (wt, oa), grp in ot_groups.items():
-                names = grp['names']
-                if len(names) >= 3:
-                    name_disp = ', '.join([_clean_name(n) for n in names])
-                else:
-                    name_disp = ', '.join(names)
-                wt_disp = f'{wt} (동일)' if len(names) > 1 else wt
-                data['ot_status'].append({
-                    'names':      name_disp,
-                    'ot_hours':   wt_disp,
-                    'ot_amount':  f'{int(oa):,}' if oa else '',
-                    'company':    grp['company'],
-                    'method':     method,
-                })
-
-            
+            # RTK 불량 정보 수집
+            for cat, ent in self.rtk_entries.items():
+                if cat == "총계": continue
+                val = ent.get().strip()
+                try:
+                    data['rtk'][cat] = int(float(val)) if val else 0
+                except: data['rtk'][cat] = 0
 
             # 2.5 차량 및 안전 점검 수집 (섹션 3)
 
@@ -12492,141 +12473,30 @@ class MaterialManager:
 
             # 자재 정보 수집 (NDT 섹션)
             data['selected_material'] = self.cb_daily_material.get().strip()
+            if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
 
-            # [NEW] RT 품목별 수량 - DB site_records의 MaterialID로 그룹화 + 품목명/규격 조회
-            # D열: 품목명(Name), F열: 규격(Spec), M열: 사용수량(Usage)
-            if not site_records.empty and 'MaterialID' in site_records.columns:
-                # MaterialID 기준으로 Usage 합산 및 Name/Spec 조회
-                mat_groups = {}  # key: MaterialID_upper -> {'qty': float, 'name': str, 'spec': str, 'original_id': str}
-                for _, row in site_records.iterrows():
-                    mat_id = str(row.get('MaterialID', '')).strip()
-                    if not mat_id or mat_id == 'nan':
-                        continue
-                    qty = 0
-                    try: qty = float(row.get('Usage', 0) or 0)
-                    except: pass
-
-                    mat_id_upper = mat_id.upper()
-                    if mat_id_upper not in mat_groups:
-                        # MaterialID를 사용하여 materials_df에서 실제 품목명과 규격 조회
-                        mat_name_val = mat_id
-                        mat_spec_val = ''
-                        disp_name = ''
-                        
-                        if hasattr(self, 'materials_df') and not self.materials_df.empty:
-                            try:
-                                # 숫자형 ID 대응 (ID가 405.0 등일 수 있음)
-                                clean_id = str(mat_id).strip().replace('.0', '')
-                                match = self.materials_df[
-                                    self.materials_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == clean_id
-                                ]
-                                if not match.empty:
-                                    # DB에서 값을 가져오되, 품목명 안에 규격이 합쳐져 있을 경우를 대비해 다시 분리
-                                    raw_name = str(match.iloc[0].get('품목명', mat_name_val)).strip()
-                                    raw_spec = str(match.iloc[0].get('규격', '')).strip()
-                                    
-                                    if '-' in raw_name and (not raw_spec or raw_spec == 'nan'):
-                                        # 품목명에 하이픈이 있고 규격 칸이 비어있다면 분리 실행
-                                        dash_idx = raw_name.index('-')
-                                        mat_name_val = raw_name[:dash_idx].strip()
-                                        mat_spec_val = raw_name[dash_idx+1:].strip()
-                                    else:
-                                        mat_name_val = raw_name
-                                        mat_spec_val = raw_spec if raw_spec != 'nan' else ''
-                            except: pass
-
-                        disp_name = f"{mat_name_val}-{mat_spec_val}".upper() if mat_spec_val else mat_name_val.upper()
-                        
-                        mat_groups[mat_id_upper] = {
-                            'qty': 0, 'name': mat_name_val, 'spec': mat_spec_val, 'original_id': mat_id, 'disp': disp_name
-                        }
-                    mat_groups[mat_id_upper]['qty'] += qty
-
-                # Map to data['materials'] keys (T200->row43, AA400->row44, others->row45)
-                def _mat_key(mid_upper):
-                    if 'T200'  in mid_upper: return 'RT T200'
-                    if 'AA400' in mid_upper: return 'RT AA400'
-                    if 'AA'    in mid_upper: return 'RT AA400'
-                    return 'RT Other'
-
-                for mat_id_upper, grp in mat_groups.items():
-                    mat_key = _mat_key(grp.get('disp', mat_id_upper))
-                    if mat_key not in data['materials']:
-                        data['materials'][mat_key] = {'used': 0, 'name': grp['name'], 'spec': grp['spec']}
-                    else:
-                        data['materials'][mat_key]['used'] = data['materials'][mat_key].get('used', 0)
-                        if not data['materials'][mat_key].get('name'):
-                            data['materials'][mat_key]['name'] = grp['name']
-                        if not data['materials'][mat_key].get('spec'):
-                            data['materials'][mat_key]['spec'] = grp['spec']
-                    data['materials'][mat_key]['used'] = data['materials'][mat_key].get('used', 0) + int(grp['qty'])
-
-            else:
-                # DB 데이터 없으면 UI에서 읽기 (fallback)
-                if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
-                    mats = self.ndt_company_entries[0]
-                    for m_key, mat_name in [('RT T200', 'T200'), ('RT AA400', 'AA400')]:
-                        if m_key in mats:
-                            val = mats[m_key].get().strip()
-                            try: used = int(val) if val else 0
-                            except: used = 0
-                            data['materials'][m_key] = {'used': used}
-
-            # [NEW] NDT 화학약품 (MT/PT) - DB site_records에서 합산하여 수집
-            chem_db_map = [
-                ('MT WHITE',     ['NDT_백색페인트', 'NDT_형광자분', 'NDT_백색페인트_MT']), 
-                ('MT 7C-BLACK',  ['NDT_흑색자분']),
-                ('PT Penetrant', ['NDT_침투제']),
-                ('PT Cleaner',   ['NDT_세척제']),
-                ('PT Developer', ['NDT_현상제']),
-            ]
-            
-            db_chem_found = False
-            if not site_records.empty:
-                for m_key, db_cols in chem_db_map:
-                    val_sum = 0
-                    for col in db_cols:
-                        if col in site_records.columns:
-                            try:
-                                val_sum += int(pd.to_numeric(site_records[col], errors='coerce').fillna(0).sum())
-                            except: pass
-                    
-                    if val_sum > 0:
-                        data['materials'][m_key] = {'used': val_sum}
-                        db_chem_found = True
-            
-            # DB에 데이터가 없으면 UI 위젯에서 읽기 (Fallback)
-            if not db_chem_found and hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
-                entries_dict = self.ndt_company_entries[0]
-                mat_keys = [k for k in entries_dict.keys() if k != '_company']
-                fallback_order = [
-                    ('MT WHITE', 0), ('MT 7C-BLACK', 1), 
-                    ('PT Penetrant', 3), ('PT Cleaner', 4), ('PT Developer', 5)
-                ]
-                for m_key, idx in fallback_order:
-                    if idx < len(mat_keys):
+                mats = self.ndt_company_entries[0]
+                # RT 필름
+                for m_key, mat_name in [('RT T200', 'T200'), ('RT AA400', 'AA400')]:
+                    if m_key in mats:
+                        val = mats[m_key].get().strip()
                         try:
-                            val = entries_dict[mat_keys[idx]].get().strip()
                             used = int(val) if val else 0
-                            if used > 0: data['materials'][m_key] = {'used': used}
-                        except: pass
+                        except: used = 0
+                        data['materials'][m_key] = {'used': used}
 
-            data['rtk'] = {}
-            rtk_cats = {
-                '센터미스': 'center_miss', '농도': 'density', '마킹미스': 'marking_miss',
-                '필름마크': 'film_mark', '취급부주의': 'handling', '고객불만': 'customer_complaint', '기타': 'etc'
-            }
-            rtk_total = 0
-            for kor_key in rtk_cats.keys():
-                db_val = 0
-                if not site_records.empty:
-                    col = f"RTK_{kor_key}"
-                    if col in site_records.columns:
-                        db_val = int(pd.to_numeric(site_records[col], errors='coerce').fillna(0).sum())
-                data['rtk'][kor_key] = db_val
-                rtk_total += db_val
-            data['rtk']['총계'] = rtk_total
 
+                # 화학물 (MT, PT)
+                for m_key, chem_key in [('MT WHITE', '백색페인트'), ('MT 7C-BLACK', '흑색자분'), 
+                                        ('PT Penetrant', '침투제'), ('PT Cleaner', '세척제'), ('PT Developer', '현상제')]:
+                    if chem_key in mats:
+                        val = mats[chem_key].get().strip()
+                        try:
+                            used = int(val) if val else 0
+                        except: used = 0
+                        data['materials'][m_key] = {'used': used}
+
+            # 3. 저장 경로 선택
             default_filename = f"작업일보_{site}_{date_val.strftime('%Y%m%d')}.xlsx"
             save_path = filedialog.asksaveasfilename(
                 title="작업일보 저장",
