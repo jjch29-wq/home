@@ -11,7 +11,7 @@ class DailyWorkReportManager:
             'header': {'date': 'F2'},
             'general': {
                 'company': 'E5', 'project_name': 'E6', 'standard': 'E7', 'equipment': 'E8',
-                'report_no': 'K5', 'inspection_item': 'K6', 'inspector': 'K7', 'car_no': 'N9'
+                'report_no': 'K5', 'inspection_item': 'K6', 'inspector': 'K7', 'inspector_n8': 'N8', 'car_no': 'N9'
             },
             'methods': {
                 'RT': {'row': 13}, 'UT': {'row': 14}, 'MT': {'row': 15}, 'PT': {'row': 16},
@@ -30,7 +30,8 @@ class DailyWorkReportManager:
 
 
             'materials': {
-                'RT T200': 43, 'RT AA400': 44, 'MT WHITE': 46, 'MT 7C-BLACK': 47,
+                'RT T200': 43, 'RT AA400': 44, 'RT Other': 45,
+                'MT WHITE': 46, 'MT 7C-BLACK': 47,
                 'PT Penetrant': 48, 'PT Cleaner': 49, 'PT Developer': 50
             },
             'vehicles': {
@@ -51,7 +52,11 @@ class DailyWorkReportManager:
         def safe_write(cell_coord, value):
             if not cell_coord: return
             try:
-                sheet[cell_coord].value = value
+                cell = sheet[cell_coord]
+                cell.value = value
+                cell.font = Font(name='맑은 고딕', size=9)
+                # Ensure text fits inside the cell by shrinking font size if necessary
+                cell.alignment = Alignment(shrinkToFit=True, vertical='center', horizontal=cell.alignment.horizontal or 'center')
             except:
                 pass
 
@@ -63,8 +68,10 @@ class DailyWorkReportManager:
 
         # 2. General
         gen_map = mapping.get('general', {})
-        for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no']:
-            safe_write(gen_map.get(key), data.get(key, ''))
+        for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no', 'inspector_n8']:
+            # If key is inspector_n8, take data from 'inspector' field
+            val_key = 'inspector' if key == 'inspector_n8' else key
+            safe_write(gen_map.get(key), data.get(val_key, ''))
 
         # 3. Methods (Dynamic Population)
         method_map = mapping.get('methods', {})
@@ -126,6 +133,14 @@ class DailyWorkReportManager:
 
         # 5. OT
         ot_map = mapping.get('ot', {})
+        
+        # [NEW] Clear OT placeholders before writing to prevent ghost data from template
+        for row_idx in [1, 2]:
+            for key_suffix in ['_name', '_company', '_method', '_hours', '_amount']:
+                cell_key = f'row{row_idx}{key_suffix}'
+                if cell_key in ot_map:
+                    safe_write(ot_map[cell_key], '')
+
         ot_list = data.get('ot_status', [])
         for i, ot in enumerate(ot_list[:2]):
             idx = i + 1
@@ -161,7 +176,7 @@ class DailyWorkReportManager:
             sheet[cell_n].border = Border(left=thin_side, right=cur_b.right, top=cur_b.top, bottom=cur_b.bottom)
 
 
-        # [NEW] Clear template placeholder in Q39 (which usually contains '숙박')
+        # [NEW] Clear template placeholder in Q39
         safe_write('Q39', '')
 
 
@@ -171,58 +186,77 @@ class DailyWorkReportManager:
 
 
 
-        # 6. Materials
+        # 6. 자재 수행현황 (Materials)
         mat_map = mapping.get('materials', {})
         materials_data = data.get('materials', {})
-        
-        # [NEW] Multi-Item Support for RT Films (Rows 43, 44, 45)
-        # Handle comma-separated list in selected_material
-        import re
-        sel_mat = data.get('selected_material', '')
-        rt_items = []
-        if sel_mat:
-            # Handle multiple entries separated by comma or semicolon
-            rt_items = [s.strip() for s in re.split(r'[,;]', sel_mat) if s.strip()]
-            
-        # 3. Write up to 3 items to rows 43-45
-        for i, item in enumerate(rt_items[:3]):
-            row_idx = 43 + i
-            if '-' in item:
-                parts = item.split('-', 1)
-                p1 = re.sub(r'(?i)Carestream\s*', '', parts[0]).strip()
-                p2 = parts[1].strip()
-            else:
-                p1 = re.sub(r'(?i)Carestream\s*', '', item).strip()
-                p2 = ""
-                
-            safe_write(f'D{row_idx}', p1)
-            if p2: safe_write(f'F{row_idx}', p2)
 
-        # [NEW] Clear template placeholders for unused rows (if fewer than 3 items)
-        for i in range(len(rt_items), 3):
-            row_idx = 43 + i
-            safe_write(f'D{row_idx}', '')
-            safe_write(f'F{row_idx}', '')
-            
-        # [USER_REQ] Always put '매' in H45 (or ensure it's there)
-        safe_write('H45', '매')
+        # --- Material display name mapping (for D column) ---
+        mat_display_names = {
+            'RT T200':      ('RT', 'T200'),
+            'RT AA400':     ('RT', 'AA400'),
+            'RT Other':     ('RT', '기타'),
+            'MT WHITE':     ('MT', '백색페인트'),
+            'MT 7C-BLACK':  ('MT', '흑색자분'),
+            'PT Penetrant': ('PT', '침투제'),
+            'PT Cleaner':   ('PT', '세척제'),
+            'PT Developer': ('PT', '현상제'),
+        }
 
-        # [NEW] Clear range K43:P50 as requested
+        # Clear rows 43-50 first (K~Q for quantities, D/F for names)
         for r in range(43, 51):
-            for c_idx in range(11, 17): # K(11) to P(16)
-                safe_write(f"{chr(64+c_idx)}{r}", "")
+            for c_idx in range(11, 18):  # K(11) to Q(17)
+                safe_write(f"{chr(64 + c_idx)}{r}", None)
+            safe_write(f'D{r}', '')
+            safe_write(f'F{r}', '')
 
+            # --- [STRONG OVERRIDE] 화학자재 행 번호 기반 명칭 및 단위 강제 고정 ---
+            override_names = {
+                46: ('백색페인트', ''),
+                47: ('흑색자분', ''),
+                48: ('침투제', ''),
+                49: ('세척제', ''),
+                50: ('현상제', ''),
+            }
+            d_val_override = None
+            f_val_override = None
+            if r in override_names:
+                d_val_override, f_val_override = override_names[r]
 
+            if d_val_override is not None:
+                safe_write(f'D{r}', d_val_override)
+                safe_write(f'F{r}', f_val_override)
 
-
-
+        # Write each material row
         for mat_name, row in mat_map.items():
-            if mat_name in materials_data:
+            row = int(row)
+            m_data = materials_data.get(mat_name, {})
+            used_val = m_data.get('used', 0)
 
-                m_data = materials_data[mat_name]
+            # DB에서 온 상세 이름/규격 (주로 RT용)
+            d_val = m_data.get('name', '')
+            f_val = m_data.get('spec', '')
+
+            # 해당 행이 고정 명칭 대상이 아닐 때만(예: RT 자재) DB 값 기입
+            # 고정 명칭 대상(46~50)은 위에서 이미 기입했으므로 건너뜀
+            if row not in (46, 47, 48, 49, 50):
+                if d_val: safe_write(f'D{row}', d_val)
+                if f_val: safe_write(f'F{row}', f_val)
+
+            # 수량이 있을 때만 K/M/O 기입
+            if used_val:
                 safe_write(f'K{row}', m_data.get('init', 0))
-                safe_write(f'M{row}', m_data.get('used', 0))
+                safe_write(f'M{row}', used_val)
                 safe_write(f'O{row}', m_data.get('in', 0))
+
+        # Unit column H: RT rows '매', Others by row override
+        for mat_name, r in mat_map.items():
+            row = int(r)
+            if row in (46, 47, 48, 49, 50): 
+                safe_write(f'H{row}', 'CAN')
+            elif row in (43, 44, 45):
+                safe_write(f'H{row}', '매')
+            else:
+                safe_write(f'H{row}', '통')
         
         # 7. Vehicles & Safety (Section 3)
         # Detailed 2x4 Table Implementation (출차/입차)
@@ -249,7 +283,7 @@ class DailyWorkReportManager:
             for c_key, options in chk_cols.items():
                 val = v.get(f"{r_key}_{c_key}")
                 if val and val in options:
-                    safe_write(f"{options[val]}{row}", 'V')
+                    safe_write(f"{options[val]}{row}", f"{val} ✔")
 
         wb.save(output_path)
         return output_path
