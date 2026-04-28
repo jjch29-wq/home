@@ -1,0 +1,17 @@
+{
+  "name": "GitMaster Pro Guide",
+  "short_name": "GitMaster",
+  "description": "Premium Git Command Manual for Developers",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#8b5cf6",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
