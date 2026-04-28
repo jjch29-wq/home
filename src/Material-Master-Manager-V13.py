@@ -3577,6 +3577,14 @@ class MaterialManager:
             if mat.get('Active', 1) == 0:
                 continue
             
+            # [NEW] PAUT 관련 자동 등록 품목만 재고현황에서 제외 (사용자 요청)
+            item_name_up = str(mat.get('품목명', '')).upper()
+            model_name_up = str(mat.get('모델명', '')).upper()
+            spec = str(mat.get('규격', '')).strip()
+            
+            if ("PAUT" in item_name_up or "PAUT" in model_name_up) and spec == "자동등록":
+                continue
+            
             mat_id = mat['MaterialID']
             str_mat_id = re.sub(r'\.0$', '', str(mat_id).strip())
             
@@ -4052,10 +4060,14 @@ class MaterialManager:
         sn = mat.get('SN', '')
         spec = mat.get('규격', '')
         
-        # Build display string: 품목명-SN [규격]
+        # Build display string: 품목명-SN (모델명) [규격]
         display = name
         if sn and pd.notna(sn) and str(sn).strip():
             display = f"{name}-{str(sn).strip()}"
+            
+        model_name = mat.get('모델명', '')
+        if model_name and pd.notna(model_name) and str(model_name).strip():
+            display = f"{display} ({str(model_name).strip()})"
         
         if spec and pd.notna(spec) and str(spec).strip():
             display = f"{display} [{str(spec).strip()}]"
@@ -4681,16 +4693,7 @@ class MaterialManager:
                     # This removes the "50 vs -50" duplication while keeping the richer DAILY info.
                     note = str(row.get('Note', ''))
                     if "(자동 차감)" in note:
-                        # Only skip if this is the MAIN material being moved (not an NDT consumable)
-                        # We identify this by checking if the MaterialID, Site, and Date exist in the DAILY data.
-                        if not df_daily.empty:
-                            match_mask = (
-                                (df_daily['Date'].dt.date == row['Date'].date()) & 
-                                (df_daily['Site'].astype(str) == str(row.get('Site', ''))) & 
-                                (df_daily['MaterialID'].apply(normalize_id) == mat_id)
-                            )
-                            if match_mask.any():
-                                continue # Skip this TRANS record as it's a duplicate of a DAILY record
+                        continue # Skip ALL auto-generated TRANS records as they are aggregated in the DAILY record
 
                     unified_rows.append({
                         'Date': row['Date'],
@@ -4753,6 +4756,11 @@ class MaterialManager:
                     
                     worker_str = ", ".join(workers) if workers else str(row.get('User', ''))
 
+                    # 50과 같은 전체 '검사수량'이 단순 약품 수량과 혼동되지 않도록 'MT약품' 'PT약품' 원본 행의 수량은 뷰에서 숨김
+                    disp_qty = u_val
+                    if item_name_up.replace(' ', '') in ["PT약품", "MT약품", "NDT약품"]:
+                        disp_qty = ''
+
                     unified_rows.append({
                         'Date': row['Date'],
                         'Site': row.get('Site', ''),
@@ -4761,7 +4769,7 @@ class MaterialManager:
                         'SN': mat_info.get('SN', ''),
                         '규격': mat_info.get('규격', ''),
                         'MaterialID': mat_id,
-                        'Quantity': u_val,
+                        'Quantity': disp_qty,
                         'NDT_세척제': row.get('NDT_세척제', row.get('세척제', 0)),
                         'NDT_침투제': row.get('NDT_침투제', row.get('침투제', 0)),
                         'NDT_현상제': row.get('NDT_현상제', row.get('현상제', 0)),
@@ -11668,7 +11676,10 @@ class MaterialManager:
                       self._auto_reconcile_and_register_ndt(date_val, site, cd['ndt_data'], all_workers, cd['회사코드'])
             
             if mat_id and common_data['검사량'] > 0:
-                self._create_manual_stock_transaction(date_val, mat_id, 'OUT', common_data['검사량'], site, all_workers, f"{site} 현장 사용 (자동 차감)")
+                mat_info = self.get_material_info(mat_id)
+                full_item_name = str(mat_info.get('품목명', '')).replace(' ', '').upper()
+                if full_item_name not in ["PT약품", "MT약품", "NDT약품"]:
+                    self._create_manual_stock_transaction(date_val, mat_id, 'OUT', common_data['검사량'], site, all_workers, f"{site} 현장 사용 (자동 차감)")
 
         # 8. 데이터프레임 업데이트
         if records_to_save:
@@ -12457,21 +12468,15 @@ class MaterialManager:
                         if name not in ot_groups[key]['names']:
                             ot_groups[key]['names'].append(name)
 
-            # Inspector display (titles stripped when 3+)
-            if len(inspectors) >= 3:
-                disp_insp = [_clean_name(n) for n in inspectors]
-            else:
-                disp_insp = inspectors
+            # Inspector display (titles always stripped)
+            disp_insp = [_clean_name(n) for n in inspectors]
             data['inspector'] = ', '.join(disp_insp)
 
             # Build ot_status list
             data['ot_status'] = []
             for (wt, oa), grp in ot_groups.items():
                 names = grp['names']
-                if len(names) >= 3:
-                    name_disp = ', '.join([_clean_name(n) for n in names])
-                else:
-                    name_disp = ', '.join(names)
+                name_disp = ', '.join([_clean_name(n) for n in names])
                 wt_disp = f'{wt} (동일)' if len(names) > 1 else wt
                 data['ot_status'].append({
                     'names':      name_disp,
@@ -12916,6 +12921,7 @@ class MaterialManager:
                 for grp, members in ndt_groups.items():
                     if name in members:
                         db_item_name = grp
+                        db_model_name = f"{grp[:2]} {name}" # e.g., 'MT 백색페인트'
                         break
                 if not db_item_name: db_item_name = "기타소모품"
             
@@ -13410,12 +13416,12 @@ class MaterialManager:
             c_workers = self.format_worker_summary(raw_workers)
             c_worktime = clean_s(entry.get('WorkTime', '')) if raw_workers else ""
 
-            # Content-based Unique Key (Date, Site, WorkTime, Material)
-            # [REFINED] Exclude workers from the key because split records often have different workers per row.
+            # Content-based Unique Key (Date, Site, WorkTime, Method)
+            # [REFINED] Include Method and exclude MaterialID so multiple materials for one job are grouped.
             n_site = str(entry.get('Site', '')).strip()
             n_date = usage_date
-            n_mat = str(mat_id)
-            content_key = (n_date, n_site, c_worktime, n_mat)
+            n_method = str(entry.get('검사방법', '')).strip()
+            content_key = (n_date, n_site, c_worktime, n_method)
 
             # Timestamp-based Key (Legacy/Safety)
             e_t_raw = entry.get('EntryTime', '')
@@ -13468,13 +13474,14 @@ class MaterialManager:
             m_val_cost = to_f_local(entry.get('일식', 0.0))
             f_val_cost = to_f_local(entry.get('검사비', 0.0))
             
-            # Sum totals (Usage/Costs are summed for all rows because split-records are already zeroed in DB)
-            # This prevents data loss if a user placed the quantity on a secondary split row.
-            total_test_amount += q_val
-            total_unit_price += p_val
-            total_travel_cost += t_val_cost
-            total_meal_cost += m_val_cost
-            total_test_fee += f_val_cost
+            # Sum totals (Guarded by duplicate check to prevent double-counting)
+            if not is_duplicate_split:
+                total_test_amount += q_val
+                total_unit_price += p_val
+                total_travel_cost += t_val_cost
+                total_meal_cost += m_val_cost
+                total_test_fee += f_val_cost
+                total_film_count += to_f_local(entry.get('FilmCount', 0.0))
 
             # Cumulative mileage (Always sum)
             milk = to_f_local(entry.get('주행거리', entry.get('거리', 0)))
@@ -13690,14 +13697,13 @@ class MaterialManager:
 
             total_values = [
                 '--- 전체 누계 ---',
-                '', # 업체명
-                '', # 적용코드
-                '', # 현장 (Restored label alignment)
-                '', # 검사품명
-                '', # 성적서번호
-                '', # 검사자
-                '', # 작업자
-                f"{total_work_hours:.1f} Hrs" if total_work_hours > 0.001 else "", # 작업시간 (Calculated Total)
+                '', # 업체명 (1)
+                '', # 적용코드 (2)
+                '', # 현장 (3)
+                '', # 검사품명 (4)
+                '', # 성적서번호 (5)
+                '', # 작업자 (6)
+                f"{total_work_hours:.1f} Hrs" if total_work_hours > 0.001 else "", # 작업시간 (7)
                 # Individual OT Totals (Simplified: Amount only)
                 *[f"{a:,}" if a > 0.001 else "" for a in total_indiv_ot_amounts],
                 '', # 장비명
@@ -13706,6 +13712,7 @@ class MaterialManager:
                 f"{total_test_amount:.1f}" if total_test_amount > 0.001 else "",
                 '', # 단가 (Unit Price is not summed)
                 f"{total_travel_cost:,.0f}" if total_travel_cost > 0.001 else "",
+                f"{total_meal_cost:,.0f}" if total_meal_cost > 0.001 else "", # Added back missing index
                 f"{total_test_fee:,.0f}" if total_test_fee > 0.001 else "",
                 f"{total_ot_hours:.1f}" if total_ot_hours > 0.001 else "", # OT시간 합계
                 f"{total_ot_amount:,}" if total_ot_amount > 0.001 else "",  # OT금액 합계
@@ -14540,7 +14547,7 @@ class MaterialManager:
                     # [FIX] PT/MT 약품의 경우, 개별 구성품(세척제 등)으로 별도 자동 차감되므로 
                     # 부모 항목인 'PT약품' 자체에 대한 중복 자동 차감(검사량 기준)은 건너뜜
                     mat_info = self.get_material_info(new_mat_id)
-                    full_item_name = str(mat_info.get('품목명', '')).strip().upper()
+                    full_item_name = str(mat_info.get('품목명', '')).replace(' ', '').upper()
                     if full_item_name not in ["PT약품", "MT약품", "NDT약품"]:
                         self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
                 
