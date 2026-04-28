@@ -11580,6 +11580,7 @@ class MaterialManager:
             '단가': to_f(self.ent_daily_unit_price),
             '출장비': to_f(self.ent_daily_travel_cost),
             '업체명': self.cb_daily_company.get().strip(),
+            'Unit': self.cb_daily_unit.get().strip(), # [V13_FIX] Missing Unit field added
             '일식': to_f(self.ent_daily_meal_cost),
             '검사비': to_f(self.ent_daily_test_fee),
             'FilmCount': 0.0,
@@ -11933,6 +11934,10 @@ class MaterialManager:
                 self.ent_daily_inspection_item.insert(0, str(record['검사품명']))
             if '검사방법' in record:
                 self.cb_daily_test_method.set(str(record['검사방법']))
+            if 'Unit' in record:
+                self.cb_daily_unit.set(str(record['Unit']))
+            elif '단위' in record:
+                self.cb_daily_unit.set(str(record['단위']))
             
             # 2. Quantities & Costs
             def set_val(ent, key):
@@ -11964,8 +11969,9 @@ class MaterialManager:
                 ot_key = 'OT' if i == 1 else f'OT{i}'
                 
                 group.cb_name.set(self.clean_nan(record.get(u_key, '')))
-                group.ent_worktime.delete(0, tk.END)
-                group.ent_worktime.insert(0, self.clean_nan(record.get(wt_key, '')))
+                # [FIX] Use set_time to properly parse (Shift) Time string and populate both shift and time widgets
+                group.set_time(self.clean_nan(record.get(wt_key, '')))
+                
                 group.ent_ot.delete(0, tk.END)
                 group.ent_ot.insert(0, self.clean_nan(record.get(ot_key, '')))
 
@@ -12001,7 +12007,25 @@ class MaterialManager:
                         if k_clean: v_parsed[k_clean] = True # Legacy checkbox support
                 v_widget.set_data(v_parsed)
             
-            # 7. Note
+            # 7. NDT Chemicals
+            if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
+                # [STABILITY] Clear first if multiple companies, but for now focus on the primary/first entry
+                first = self.ndt_company_entries[0]
+                ndt_names = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+                for name in ndt_names:
+                    col_name = f"NDT_{name}"
+                    if col_name in record:
+                        val = record[col_name]
+                        if name in first:
+                            first[name].delete(0, tk.END)
+                            if abs(to_f_local(val)) > 0.001:
+                                first[name].insert(0, str(val))
+                
+                # Also load company if available
+                if '회사코드' in record:
+                    first['_company'].set(str(record['회사코드']))
+
+            # 8. Note
             if 'Note' in record:
                 self.ent_daily_note.delete(0, tk.END)
                 self.ent_daily_note.insert(0, str(record['Note']))
@@ -12009,18 +12033,18 @@ class MaterialManager:
         except Exception as e:
             print(f"Error loading record to form: {e}")
 
-    def clear_daily_usage_form_all(self):
-
+    def clear_daily_usage_form_all(self, keep_date=False):
         """현장별 일일 사용량 입력 폼의 모든 필드를 초기화합니다."""
         # 1. 콤보박스 선택 해제
         for cb in [self.cb_daily_company, self.cb_daily_site, self.cb_daily_equip, 
                    self.cb_daily_test_method, self.cb_daily_material, self.cb_daily_unit]:
             cb.set('')
         
-        # 2. 날짜 초기화 (오늘)
-        try:
-            self.ent_daily_date.set_date(datetime.date.today())
-        except: pass
+        # 2. 날짜 초기화 (연속 기입 시 편의를 위해 keep_date 옵션 제공)
+        if not keep_date:
+            try:
+                self.ent_daily_date.set_date(datetime.date.today())
+            except: pass
         
         # 3. 모든 Entry 필드 비우기
         for ent in [self.ent_daily_inspection_item, self.ent_daily_applied_code, 
@@ -12056,8 +12080,8 @@ class MaterialManager:
             group = getattr(self, f'worker_group{i}', None)
             if group:
                 group.cb_name.set('')
-                group.cb_shift.set('Day')
-                group.ent_worktime.delete(0, tk.END)
+                group.cb_shift.set('주간')
+                group.ent_worktime.set('')
                 group.ent_ot.delete(0, tk.END)
 
     def add_daily_usage_entry(self):
@@ -12140,7 +12164,8 @@ class MaterialManager:
                 self.rtk_entries["총계"].config(state='readonly')
                 
                 # [V13_RESET_REQUESTED] Clearing fields after successful entry based on user request
-                self.clear_daily_usage_form_all()
+                # [FIX] Keep the current date for consecutive entries on the same day
+                self.clear_daily_usage_form_all(keep_date=True)
 
                 # Reset focus to first logical field (Company)
                 self.cb_daily_company.focus_set()
@@ -12354,17 +12379,24 @@ class MaterialManager:
                 messagebox.showerror("오류", "작업일보 템플릿(Template_DailyWorkReport.xlsx)을 찾을 수 없습니다.")
                 return
 
+            def _clean_str(v, default=''):
+                if v is None: return default
+                s = str(v).strip()
+                if s.lower() in ('nan', 'none', ''): return default
+                return s
+
             date_val = self.ent_daily_date.get_date()
             site = self.cb_daily_site.get().strip()
+            method = self.cb_daily_test_method.get().strip() # Default method from UI
             
             data = {
                 'date': date_val,
-                'company': self.cb_daily_company.get().strip() or '원자력건설',
+                'company': _clean_str(self.cb_daily_company.get(), '원자력건설'),
                 'project_name': site,
-                'standard': self.ent_daily_applied_code.get().strip() or 'KS',
-                'equipment': self.cb_daily_equip.get().strip(),
-                'report_no': self.ent_daily_report_no.get().strip(), 
-                'inspection_item': self.ent_daily_inspection_item.get().strip(), 
+                'standard': _clean_str(self.ent_daily_applied_code.get(), 'KS'),
+                'equipment': _clean_str(self.cb_daily_equip.get()),
+                'report_no': _clean_str(self.ent_daily_report_no.get()), 
+                'inspection_item': _clean_str(self.ent_daily_inspection_item.get()), 
                 'inspector': '', 
                 'car_no': '', 
                 'methods': {},
@@ -12382,10 +12414,51 @@ class MaterialManager:
             if not self.daily_usage_df.empty:
                 try:
                     df_copy = self.daily_usage_df.copy()
-                    df_copy['Date'] = pd.to_datetime(df_copy['Date']).dt.date
-                    check_date = pd.to_datetime(date_val).date()
-                    site_records = df_copy[(df_copy['Date'] == check_date) & (df_copy['Site'] == site)]
-                except: pass
+                    
+                    # [SMART SELECTION] 리스트에서 여러 개를 선택했는지 확인
+                    selection = self.daily_usage_tree.selection()
+                    if len(selection) > 1:
+                        # 여러 개 선택된 경우, 선택된 항목들만 모아서 출력
+                        selected_indices = []
+                        for item in selection:
+                            tags = self.daily_usage_tree.item(item, 'tags')
+                            if tags and tags[0].isdigit():
+                                idx = int(tags[0])
+                                if idx in df_copy.index:
+                                    selected_indices.append(idx)
+                        if selected_indices:
+                            site_records = df_copy.loc[selected_indices]
+                            # 현장명/날짜는 첫 번째 선택된 항목 기준으로 업데이트 (데이터 정합성 보장)
+                            if 'Site' in site_records.columns: site = str(site_records.iloc[0]['Site']).strip()
+                            if 'Date' in site_records.columns: date_val = pd.to_datetime(site_records.iloc[0]['Date']).date()
+                        
+                    if site_records.empty:
+                        # 하나만 선택되었거나 선택이 없는 경우: 현재 폼의 날짜/현장 기준으로 전체 합산
+                        # [ROBUST MATCHING] 날짜와 현장명 비교 시 공백 등 무시하여 정확도 향상
+                        check_date = pd.to_datetime(date_val).date()
+                        site_col = 'Site' if 'Site' in df_copy.columns else '현장' if '현장' in df_copy.columns else ''
+                        date_col = 'Date' if 'Date' in df_copy.columns else '날짜' if '날짜' in df_copy.columns else ''
+                        
+                        if site_col and date_col:
+                            df_copy['Date_norm'] = pd.to_datetime(df_copy[date_col], errors='coerce').dt.date
+                            site_records = df_copy[
+                                (df_copy['Date_norm'] == check_date) & 
+                                (df_copy[site_col].astype(str).str.strip().str.upper() == str(site).strip().upper())
+                            ]
+                    
+                    # [NEW] site_records에서 장비명 및 업체명 집계 업데이트
+                    if not site_records.empty:
+                        if '장비명' in site_records.columns:
+                            equips = [_clean_str(x) for x in site_records['장비명'].dropna().unique() if _clean_str(x)]
+                            if equips: data['equipment'] = ", ".join(equips)
+                        
+                        comp_col = '업체명' if '업체명' in site_records.columns else ''
+                        if comp_col:
+                            comps = [_clean_str(x) for x in site_records[comp_col].dropna().unique() if _clean_str(x)]
+                            if comps: data['company'] = comps[0] # 첫 번째 유효한 업체명 사용
+                except Exception as e:
+                    print(f"[DEBUG] Site Records Collection Error: {e}")
+                    pass
 
             all_vehicles = []
             if hasattr(self, 'vehicle_boxes'):
@@ -12398,32 +12471,47 @@ class MaterialManager:
                     if v_str and v_str not in all_vehicles: all_vehicles.append(v_str)
             data['car_no'] = ", ".join(all_vehicles)
 
-            method = self.cb_daily_test_method.get().strip()
-            unit_val = self.cb_daily_unit.get().strip() 
+            # [NEW] 공사 수행현황 (Section 1) - DB site_records에 있는 모든 방식 집계
+            method_col = '검사방법' if '검사방법' in site_records.columns else 'TestMethod' if 'TestMethod' in site_records.columns else ''
             
-            if not site_records.empty:
-                db_qty = pd.to_numeric(site_records['Usage'], errors='coerce').fillna(0).sum()
-                db_price = pd.to_numeric(site_records['단가'], errors='coerce').fillna(0).max()
-                db_travel = pd.to_numeric(site_records['출장비'], errors='coerce').fillna(0).sum()
-                db_total = pd.to_numeric(site_records['검사비'], errors='coerce').fillna(0).sum()
-                qty_val = str(int(db_qty))
-                price_val = str(int(db_price))
-                travel_val = str(int(db_travel))
-                total_val = str(int(db_total))
+            if not site_records.empty and method_col:
+                for m_name, m_group in site_records.groupby(method_col):
+                    if not m_name or str(m_name).lower() == 'nan': continue
+                    m_name_str = str(m_name)
+                    
+                    qty_sum = pd.to_numeric(m_group['Usage'], errors='coerce').fillna(0).sum()
+                    price_max = pd.to_numeric(m_group['단가'], errors='coerce').fillna(0).max()
+                    travel_sum = pd.to_numeric(m_group['출장비'], errors='coerce').fillna(0).sum()
+                    total_sum = pd.to_numeric(m_group['검사비'], errors='coerce').fillna(0).sum()
+                    
+                    # 단위 정보 찾기 (Unit 또는 단위 컬럼)
+                    unit_col = 'Unit' if 'Unit' in m_group.columns else '단위' if '단위' in m_group.columns else ''
+                    unit_val = str(m_group.iloc[0].get(unit_col, '매')) if unit_col else '매'
+                    
+                    data['methods'][m_name_str] = {
+                        'unit': unit_val,
+                        'qty': qty_sum,
+                        'price': price_max,
+                        'travel': travel_sum,
+                        'total': total_sum
+                    }
             else:
+                # Fallback to UI values if DB is empty or column missing
+                method = self.cb_daily_test_method.get().strip()
+                unit_val = self.cb_daily_unit.get().strip() 
                 qty_val = self.ent_daily_test_amount.get().strip()
                 price_val = self.ent_daily_unit_price.get().strip()
                 travel_val = self.ent_daily_travel_cost.get().strip()
                 total_val = self.ent_daily_test_fee.get().strip()
-
-            if method:
-                data['methods'][method] = {
-                    'unit': unit_val,
-                    'qty': float(qty_val.replace(',', '')) if qty_val else 0,
-                    'price': float(price_val.replace(',', '')) if price_val else 0,
-                    'travel': float(travel_val.replace(',', '')) if travel_val else 0,
-                    'total': float(total_val.replace(',', '')) if total_val else 0
-                }
+                
+                if method:
+                    data['methods'][method] = {
+                        'unit': unit_val,
+                        'qty': float(qty_val.replace(',', '')) if qty_val else 0,
+                        'price': float(price_val.replace(',', '')) if price_val else 0,
+                        'travel': float(travel_val.replace(',', '')) if travel_val else 0,
+                        'total': float(total_val.replace(',', '')) if total_val else 0
+                    }
 
             # 작업자 및 O/T (간소화 버전)
             # [NEW] 작업자 / OT 정보 DB에서 집계 (현장 탭 기록 기준)
@@ -12557,14 +12645,24 @@ class MaterialManager:
                 for mat_id_upper, grp in mat_groups.items():
                     mat_key = _mat_key(grp.get('disp', mat_id_upper))
                     if mat_key not in data['materials']:
-                        data['materials'][mat_key] = {'used': 0, 'name': grp['name'], 'spec': grp['spec']}
+                        data['materials'][mat_key] = {'used': 0, 'names': [grp['name']], 'specs': [grp['spec']]}
                     else:
-                        data['materials'][mat_key]['used'] = data['materials'][mat_key].get('used', 0)
-                        if not data['materials'][mat_key].get('name'):
-                            data['materials'][mat_key]['name'] = grp['name']
-                        if not data['materials'][mat_key].get('spec'):
-                            data['materials'][mat_key]['spec'] = grp['spec']
+                        if 'names' not in data['materials'][mat_key]: data['materials'][mat_key]['names'] = []
+                        if 'specs' not in data['materials'][mat_key]: data['materials'][mat_key]['specs'] = []
+                        
+                        if grp['name'] and grp['name'] not in data['materials'][mat_key]['names']:
+                            data['materials'][mat_key]['names'].append(grp['name'])
+                        if grp['spec'] and grp['spec'] not in data['materials'][mat_key]['specs']:
+                            data['materials'][mat_key]['specs'].append(grp['spec'])
                     data['materials'][mat_key]['used'] = data['materials'][mat_key].get('used', 0) + int(grp['qty'])
+                
+                # [Finalize] Join collected names and specs with commas for display
+                for m_key in data['materials']:
+                    m_info = data['materials'][m_key]
+                    if 'names' in m_info:
+                        m_info['name'] = ", ".join([str(n) for n in m_info['names'] if n and str(n).lower() != 'nan'])
+                    if 'specs' in m_info:
+                        m_info['spec'] = ", ".join([str(s) for s in m_info['specs'] if s and str(s).lower() != 'nan'])
 
             else:
                 # DB 데이터 없으면 UI에서 읽기 (fallback)
@@ -12588,12 +12686,23 @@ class MaterialManager:
             
             db_chem_found = False
             if not site_records.empty:
+                # [FIX] DB 컬럼명에 공백이 있을 경우를 대비해 유연하게 매칭 (Normalization)
+                actual_cols = list(site_records.columns)
+                
                 for m_key, db_cols in chem_db_map:
                     val_sum = 0
-                    for col in db_cols:
-                        if col in site_records.columns:
+                    for col_pattern in db_cols:
+                        pattern_norm = col_pattern.replace(' ', '').upper()
+                        # 실세 컬럼 중 일치하는 것 찾기
+                        found_col = None
+                        for actual_col in actual_cols:
+                            if str(actual_col).replace(' ', '').upper() == pattern_norm:
+                                found_col = actual_col
+                                break
+                        
+                        if found_col:
                             try:
-                                val_sum += int(pd.to_numeric(site_records[col], errors='coerce').fillna(0).sum())
+                                val_sum += int(pd.to_numeric(site_records[found_col], errors='coerce').fillna(0).sum())
                             except: pass
                     
                     if val_sum > 0:
@@ -12622,14 +12731,34 @@ class MaterialManager:
                 '필름마크': 'film_mark', '취급부주의': 'handling', '고객불만': 'customer_complaint', '기타': 'etc'
             }
             rtk_total = 0
-            for kor_key in rtk_cats.keys():
-                db_val = 0
-                if not site_records.empty:
-                    col = f"RTK_{kor_key}"
-                    if col in site_records.columns:
-                        db_val = int(pd.to_numeric(site_records[col], errors='coerce').fillna(0).sum())
-                data['rtk'][kor_key] = db_val
-                rtk_total += db_val
+            if not site_records.empty:
+                actual_cols = list(site_records.columns)
+                for kor_key, eng_key in rtk_cats.items():
+                    db_val = 0
+                    col_pattern = f"RTK_{kor_key}"
+                    pattern_norm = col_pattern.replace(' ', '').upper()
+                    
+                    found_col = None
+                    for actual_col in actual_cols:
+                        if str(actual_col).replace(' ', '').upper() == pattern_norm:
+                            found_col = actual_col
+                            break
+                            
+                    if found_col:
+                        db_val = int(pd.to_numeric(site_records[found_col], errors='coerce').fillna(0).sum())
+                    
+                    data['rtk'][kor_key] = db_val
+                    rtk_total += db_val
+            else:
+                # Fallback to UI entries
+                for kor_key in rtk_cats.keys():
+                    db_val = 0
+                    if kor_key in self.rtk_entries:
+                        try: db_val = int(self.rtk_entries[kor_key].get().strip() or 0)
+                        except: pass
+                    data['rtk'][kor_key] = db_val
+                    rtk_total += db_val
+                    
             data['rtk']['총계'] = rtk_total
 
             default_filename = f"작업일보_{site}_{date_val.strftime('%Y%m%d')}.xlsx"
@@ -14077,7 +14206,7 @@ class MaterialManager:
         ttk.Label(basic_frame, text="날짜:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
         ent_date = DateEntry(basic_frame, width=12, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
         curr_date = entry_data.get('Date', datetime.datetime.now().strftime('%Y-%m-%d'))
-        try: ent_date.set_date(datetime.datetime.strptime(str(curr_date), '%Y-%m-%d'))
+        try: ent_date.set_date(pd.to_datetime(curr_date))
         except: pass
         ent_date.grid(row=0, column=1, padx=5, pady=5, sticky='w')
         fields['Date'] = ent_date
@@ -14130,6 +14259,13 @@ class MaterialManager:
         cb_method.set(self.clean_nan(entry_data.get('검사방법', '')))
         cb_method.grid(row=3, column=3, padx=5, pady=5, sticky='w')
         fields['검사방법'] = cb_method
+        
+        # [V13_FIX] Add Unit to basic info
+        ttk.Label(basic_frame, text="단위:").grid(row=3, column=4, padx=5, pady=5, sticky='w')
+        cb_unit = ttk.Combobox(basic_frame, width=10, values=['매', 'P,M,I/D', 'M,I/D', 'Point', 'Meter', 'Inch', 'Dia'])
+        cb_unit.set(self.clean_nan(entry_data.get('Unit', entry_data.get('단위', '매'))))
+        cb_unit.grid(row=3, column=5, padx=5, pady=5, sticky='w')
+        fields['Unit'] = cb_unit
         
         # Inspection Item
         ttk.Label(basic_frame, text="검사품명:").grid(row=4, column=0, padx=5, pady=5, sticky='w')
@@ -14322,6 +14458,7 @@ class MaterialManager:
             
             new_data['장비명'] = cb_equip.get().strip()
             new_data['검사방법'] = cb_method.get().strip()
+            new_data['Unit'] = cb_unit.get().strip() # [V13_FIX] Save Unit field
             
             # Numeric fields
             for key in ['검사량', '단가', '출장비', '일식', '검사비', 'FilmCount']:

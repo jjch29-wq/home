@@ -49,14 +49,17 @@ class DailyWorkReportManager:
         
         mapping = custom_mapping if custom_mapping else self.default_mapping
 
-        def safe_write(cell_coord, value):
+        def safe_write(cell_coord, value, is_currency=False):
             if not cell_coord: return
             try:
                 cell = sheet[cell_coord]
                 cell.value = value
                 cell.font = Font(name='맑은 고딕', size=9)
-                # Ensure text fits inside the cell by shrinking font size if necessary
-                cell.alignment = Alignment(shrinkToFit=True, vertical='center', horizontal=cell.alignment.horizontal or 'center')
+                # 내용을 중앙 정렬로 설정
+                cell.alignment = Alignment(shrinkToFit=True, vertical='center', horizontal='center')
+                # 금액단위(원) 및 콤마 처리
+                if is_currency:
+                    cell.number_format = '#,##0 "원"'
             except:
                 pass
 
@@ -96,23 +99,35 @@ class DailyWorkReportManager:
                 safe_write(f'{col}{row}', '')
 
         # Fill with active methods sequentially
-        if method_rows:
-            current_row_idx = 0
-            # Ensure we only write methods that have data
-            for m_name in methods_data.keys():
-                if current_row_idx >= len(method_rows): break # Out of space in template
-                
-                row = method_rows[current_row_idx]
-                m_data = methods_data[m_name]
-                
-                safe_write(f'B{row}', m_name)               # Method Name to Col B
-                safe_write(f'E{row}', m_data.get('unit', '')) # Unit to Col E
-                safe_write(f'H{row}', m_data.get('qty', 0))   # Qty to Col H
-                safe_write(f'K{row}', m_data.get('price', 0)) # Unit Price to Col K
-                safe_write(f'N{row}', m_data.get('travel', 0)) # Travel Cost to Col N
-                safe_write(f'Q{row}', m_data.get('total', 0)) # Test Fee to Col Q
-                
-                current_row_idx += 1
+        current_methods = list(methods_data.keys())
+        num_methods = len(current_methods)
+        
+        # 4개 초과 시 행 추가 및 기존 18-25행에서 삭제 (동적 레이아웃 유지)
+        method_base_rows = [13, 14, 15, 16]
+        if num_methods > 4:
+            extra_count = num_methods - 4
+            # 17행 위치에 필요한 만큼 행 삽입
+            sheet.insert_rows(17, extra_count)
+            # 기존 18~25행 영역(이제는 18+extra_count 이후)에서 삽입된 만큼 행 삭제
+            # 18행부터 삭제를 시작하여 전체 레이아웃 길이를 맞춤
+            for _ in range(extra_count):
+                sheet.delete_rows(18 + extra_count) 
+            
+            # 사용할 행 리스트 업데이트
+            method_base_rows += list(range(17, 17 + extra_count))
+        
+        for idx, m_name in enumerate(current_methods):
+            if idx >= len(method_base_rows): break
+            
+            row = method_base_rows[idx]
+            m_data = methods_data[m_name]
+            
+            safe_write(f'B{row}', m_name)
+            safe_write(f'E{row}', m_data.get('unit', ''))
+            safe_write(f'H{row}', m_data.get('qty', 0))
+            safe_write(f'K{row}', m_data.get('price', 0), is_currency=True)
+            safe_write(f'N{row}', m_data.get('travel', 0), is_currency=True)
+            safe_write(f'Q{row}', m_data.get('total', 0), is_currency=True)
 
         # 4. RTK
         rtk_map = mapping.get('rtk', {})
@@ -242,11 +257,11 @@ class DailyWorkReportManager:
                 if d_val: safe_write(f'D{row}', d_val)
                 if f_val: safe_write(f'F{row}', f_val)
 
-            # 수량이 있을 때만 K/M/O 기입
-            if used_val:
-                safe_write(f'K{row}', m_data.get('init', 0))
-                safe_write(f'M{row}', used_val)
-                safe_write(f'O{row}', m_data.get('in', 0))
+            # 수량이 있을 때만 K/M/O 기입 (사용량이 없으면 행 전체를 비워둠)
+            if used_val and used_val > 0:
+                safe_write(f'K{row}', '-')                            # K: 하이픈
+                safe_write(f'M{row}', used_val)                       # M: 당일사용량
+                safe_write(f'O{row}', m_data.get('in', 0))           # O: 반입
 
         # Unit column H: RT rows '매', Others by row override
         for mat_name, r in mat_map.items():
