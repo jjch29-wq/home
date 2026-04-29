@@ -3544,6 +3544,11 @@ class MaterialManager:
             if mat.get('Active', 1) == 0:
                 continue
             
+            # [NEW] Hide non-consumables from Inventory Status tab view
+            mat_name = str(mat.get('품목명', '')).strip()
+            if not self.is_consumable(mat_name):
+                continue
+            
             mat_id = mat['MaterialID']
             str_mat_id = re.sub(r'\.0$', '', str(mat_id).strip())
             
@@ -3930,6 +3935,31 @@ class MaterialManager:
             print(f"Error ensuring inout sash visibility: {e}")
 
 
+    def is_consumable(self, name):
+        """Determine if a material is a consumable (Film, Chemicals) or equipment"""
+        if not name or pd.isna(name): return False
+        name_upper = str(name).upper().strip()
+        
+        # Explicit Equipment Keywords (always non-consumable)
+        if any(k in name_upper for k in ["PAUT", "UT", "MPI", "PMI", "SCANNER", "WEDGE", "PROBE", "CABLE", "장비", "본체"]):
+            return False
+        
+        # Consumable Keywords
+        # RT Films
+        rt_keywords = ["필름", "FILM", "CARESTREAM", "FUJIFILM", "AGFA", "KODAK", "AA400", "M100", "MX125", "T200", "HS800"]
+        if any(k in name_upper for k in rt_keywords): return True
+        
+        # MT/PT Chemicals
+        ndt_keywords = ["자분", "페인트", "침투제", "세척제", "현상제", "CHEMICAL", "DEVELOPER", "CLEANER", "PENETRANT", "SM-15", "MP-35", "MEGA-CHECK"]
+        if any(k in name_upper for k in ndt_keywords): return True
+        
+        # Standard NDT consumables list
+        ndt_list = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+        if any(m in name_upper for m in ndt_list): return True
+        
+        # Default: If not matched as consumable, assume it's equipment/other (Non-Stock)
+        return False
+
     def get_material_display_name(self, mat_id):
         """Get formatted material name as '품목명 (SN: SN번호) - 규격'"""
         if self.materials_df.empty:
@@ -3992,8 +4022,8 @@ class MaterialManager:
         if not self.materials_df.empty:
             # Create list with unified display format
             for _, mat in self.materials_df.iterrows():
-                if mat.get('Active', True) == False:
-                    continue
+                # [REVISION] Include ALL items for selection, but we'll still hide them from Inventory view.
+                # Inactive items (Active=0) like PAUT should still be selectable for reporting.
                 display = self.get_material_display_name(mat['MaterialID'])
                 mat_list.append(display)
         
@@ -11294,7 +11324,10 @@ class MaterialManager:
                   self._auto_reconcile_and_register_ndt(date_val, site, cd['ndt_data'], all_workers, cd['회사코드'])
         
         if mat_id and common_data['검사량'] > 0:
-            self._create_manual_stock_transaction(date_val, mat_id, 'OUT', common_data['검사량'], site, all_workers, f"{site} 현장 사용 (자동 차감)")
+            # [NEW] Only create stock transaction if it is a consumable
+            mat_name = self.get_material_display_name(mat_id)
+            if self.is_consumable(mat_name):
+                self._create_manual_stock_transaction(date_val, mat_id, 'OUT', common_data['검사량'], site, all_workers, f"{site} 현장 사용 (자동 차감)")
 
         # 8. 데이터프레임 업데이트
         if records_to_save:
@@ -11522,7 +11555,9 @@ class MaterialManager:
                 
                 # 미등록 품목 자동 등록 (창고=현장)
                 if not mat_id and mat_display:
-                    mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록')
+                    # [NEW] Determine Active status based on consumable check
+                    is_active = 1 if self.is_consumable(mat_display) else 0
+                    mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록', Active=is_active)
 
             # 3. 핵심 로직 실행 (단건 저장)
             saved_count = self._add_single_usage_record_logic(mat_id, date_val, site, auto_save=True)
@@ -11968,12 +12003,18 @@ class MaterialManager:
             if hasattr(self, 'cb_budget_view_site'):
                 self.cb_budget_view_site['values'] = unique_sites
 
-            # 2. Collect Material Info (History Only)
+            # 2. Collect Material Info (History + Master List)
             raw_materials = set()
             if not self.daily_usage_df.empty and 'MaterialID' in self.daily_usage_df.columns:
                 unique_mat_ids = self.daily_usage_df['MaterialID'].dropna().unique()
                 for mat_id in unique_mat_ids:
                     name = self.get_material_display_name(mat_id)
+                    if name: raw_materials.add(name)
+            
+            # [NEW] Ensure all registered materials (even inactive/equipment) are available for Site tab selection
+            if not self.materials_df.empty:
+                for _, row in self.materials_df.iterrows():
+                    name = self.get_material_display_name(row['MaterialID'])
                     if name: raw_materials.add(name)
             
             unique_materials = sorted(list(raw_materials))
@@ -11984,7 +12025,7 @@ class MaterialManager:
                 if not self.cb_daily_filter_material.get(): self.cb_daily_filter_material.set('전체')
             
             if hasattr(self, 'cb_daily_material'):
-                # [NEW] Also ensure the entry form combobox has the history-based options
+                # [NEW] Also ensure the entry form combobox has the full material list (including equipment)
                 self.cb_daily_material['values'] = unique_materials
             
             if hasattr(self, 'cb_daily_filter_site'):
