@@ -20,11 +20,11 @@ echo.
 echo [2/2] Installing OCR Dependencies using %PY_CMD%...
 %PY_CMD% -m pip install --upgrade pip
 %PY_CMD% -m pip uninstall -y opencv-python opencv-python-headless
-%PY_CMD% -m pip install easyocr pillow numpy pyperclip opencv-python google-genai pymupdf xlsxwriter
+%PY_CMD% -m pip install easyocr pillow numpy pandas openpyxl pyperclip opencv-python google-genai pymupdf xlsxwriter
 echo.
 echo --------------------------------------------------
 echo Installation Final Check...
-%PY_CMD% -c "import easyocr; import google.genai; import fitz; import xlsxwriter; print('SUCCESS: All modules ready.')"
+%PY_CMD% -c "import easyocr; import google.genai; import fitz; import xlsxwriter; import pandas; print('SUCCESS: All modules ready.')"
 if %errorlevel% neq 0 (
     echo [WARNING] Some modules might not have installed correctly.
     echo Please check the error messages above.

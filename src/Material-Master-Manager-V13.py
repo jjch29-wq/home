@@ -10,8 +10,38 @@ import json
 import ctypes
 import re
 import traceback
-import pandas as pd
-import numpy as np
+
+def install_and_import(package, import_name=None):
+    if import_name is None: import_name = package
+    try:
+        return __import__(import_name)
+    except ImportError:
+        try:
+            print(f"Installing {package}...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--break-system-packages"])
+            return __import__(import_name)
+        except Exception:
+            # Fallback for uv-managed systems
+            try:
+                subprocess.check_call(["uv", "pip", "install", "--system", "--break-system-packages", package])
+                return __import__(import_name)
+            except:
+                pass
+            sys.exit(1)
+
+# Pre-import critical libraries
+pd = install_and_import('pandas')
+np = install_and_import('numpy')
+install_and_import('openpyxl')
+install_and_import('tkcalendar')
+install_and_import('google-genai', 'google.genai')
+install_and_import('easyocr')
+install_and_import('pymupdf', 'fitz')
+install_and_import('xlsxwriter')
+install_and_import('opencv-python', 'cv2')
+install_and_import('pillow', 'PIL')
+install_and_import('pyperclip')
+
 from daily_work_report_manager import DailyWorkReportManager
 import daily_work_report_manager
 print(f"DEBUG: daily_work_report_manager path: {daily_work_report_manager.__file__}")
@@ -21,26 +51,8 @@ NAN_PATTERN = re.compile(r'^nan(\.0+)?$|^none$|^null$|^0\.0+|-0\.0+$', re.IGNORE
 DOT_ZERO_PATTERN = re.compile(r'\.0$')
 MARKER_PATTERN = re.compile(r'\(.*?\)\s*|익일')
 
-def install_and_import(package):
-    try:
-        __import__(package)
-    except ImportError:
-        try:
-            print(f"Installing {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        except Exception as e:
-            print(f"Failed to install {package}: {e}")
-            messagebox.showerror("Dependency Error", f"Failed to install required package '{package}'.\nPlease install it manually: pip install {package}")
-            sys.exit(1)
-
-# Auto-install dependencies
-try:
-    import tkcalendar
-    from tkcalendar import DateEntry, Calendar
-except ImportError:
-    install_and_import('tkcalendar')
-    import tkcalendar
-    from tkcalendar import DateEntry, Calendar
+# Auto-install additional dependencies
+from tkcalendar import DateEntry, Calendar
 
 # [FIX] Patch tkcalendar for stability in ko_KR locale / Python 3.14.
 # 각 패치를 독립적으로 적용 - 한 패치 실패가 나머지를 무효화하지 않도록 분리.
@@ -1117,8 +1129,8 @@ class MaterialCostDetailWidget(ttk.Frame):
             self.default_items = master.get_material_defaults()
         else:
             self.default_items = [
-                ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
-                ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                ("PT 약품", "세척제", "CAN", 1500), ("PT 약품", "침투제", "CAN", 2300),
+                ("PT 약품", "현상제", "CAN", 2000), ("MT 약품", "백색페인트", "CAN", 2350),
                 ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
                 ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
                 ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
@@ -1830,7 +1842,7 @@ class MaterialManager:
                     if isinstance(parent, tk.Canvas):
                         # Allow scrolling on all canvases
                         parent.yview_scroll(int(-1 * (event.delta / 120)), "units")
-                        return
+                        return "break" # [FIX] Prevent scroll from reaching Combobox/Entry under mouse
 
                     if hasattr(parent, 'master') and parent.master:
                         parent = parent.master
@@ -1838,8 +1850,14 @@ class MaterialManager:
                         break
             except Exception:
                 pass
+            return "break" # Default to break if we are over a canvas-descendant to be safe
                 
         self.root.bind_all("<MouseWheel>", _on_global_mousewheel)
+        
+        # [FIX] Globally disable MouseWheel on Combobox and Entry to prevent unintentional value changes during scrolling
+        self.root.bind_class("TCombobox", "<MouseWheel>", lambda e: "break")
+        self.root.bind_class("TEntry", "<MouseWheel>", lambda e: "break")
+        
         self.style = ttk.Style()
         try:
             self.style.theme_use('clam') # Use 'clam' theme for better grid line visibility
@@ -1892,6 +1910,7 @@ class MaterialManager:
         # db_path 확정
         
         self.sites = [] # Initialize site list
+        self.daily_units = ['매', 'P,M,I/D', 'M,I/D', 'Point', 'Meter', 'Inch', 'Dia']
         self.users = [
             "부장 주진철", "대리 우명광", "주임 김진환", "계장 장승대", "주임 김성렬", "부장 박광복", "과장 주영광"
         ] # Initialize worker/name list
@@ -1919,6 +1938,14 @@ class MaterialManager:
         self.supplier_list = []
         self.equipment_suggestions = []
         self.test_methods = ["RT", "PAUT", "UT", "MT", "PT", "PMI"]  # [NEW] Initialize test methods
+        
+        # [NEW] Centralized NDT Consumable Definitions
+        self.ndt_groups = {
+            'PT약품': ['세척제', '침투제', '현상제', '형광침투제'],
+            'MT약품': ['백색페인트', '흑색자분', '형광자분']
+        }
+        self.ndt_materials_all = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+        
         self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
         self.hidden_sites = ["초안", "롯데현장"]  # [NEW] Default hidden sites as requested
         
@@ -1986,22 +2013,48 @@ class MaterialManager:
             print(f"DEBUG: Failed to pre-load locks: {e}")
 
     def _ensure_canvas_scroll_region(self):
-        """Update canvas scroll region based on all children (grid and place)"""
+        """Update canvas scroll region based on content height (stops at RTK bottom)"""
         try:
             if hasattr(self, 'entry_canvas') and self.entry_canvas:
                 self.entry_canvas.update_idletasks()
-                # Get current bounding box of all items in the inner frame
-                bbox = self.entry_canvas.bbox("all")
-                if bbox:
-                    # Add padding to ensure nothing is cut off. Width is at least 1100 for grid.
-                    scroll_w = max(1100, bbox[2])
-                    scroll_h = bbox[3] + 150
-                    self.entry_canvas.configure(scrollregion=(0, 0, scroll_w, scroll_h))
-                else:
-                    # Fallback if no items
-                    self.entry_canvas.configure(scrollregion=(0, 0, 2000, 2000))
-        except:
-            pass
+                
+                # Get max Y from all core elements
+                max_y = 0
+                
+                # 1. Use the bottom of master_form_panel which contains form, NDT, RTK, and Workers
+                if hasattr(self, 'master_form_panel'):
+                    self.master_form_panel.update_idletasks()
+                    panel_y = self.master_form_panel.winfo_y()
+                    panel_h = self.master_form_panel.winfo_height()
+                    max_y = max(max_y, panel_y + panel_h)
+                
+                # 2. Specifically check RTK bottom if requested by user
+                if hasattr(self, 'rtk_grid'):
+                    # rtk_grid is inside master_form_panel, so calculate relative to master_form_panel master
+                    self.rtk_grid.update_idletasks()
+                    rtk_bottom = self.rtk_grid.winfo_y() + self.rtk_grid.winfo_height()
+                    # Add master_form_panel offset
+                    if hasattr(self, 'master_form_panel'):
+                        rtk_bottom += self.master_form_panel.winfo_y()
+                    max_y = max(max_y, rtk_bottom)
+                
+                # 3. Handle draggable items (Memos, Checklists, etc.)
+                for key, widget in self.draggable_items.items():
+                    try:
+                        if widget.winfo_manager() == 'place':
+                            info = widget.place_info()
+                            y = int(float(info.get('y', 0)))
+                            h = int(float(info.get('height', widget.winfo_height())))
+                            max_y = max(max_y, y + h)
+                    except: pass
+
+                # Final scroll height with minimal buffer
+                scroll_h = max_y + 10
+                scroll_w = max(1100, self.entry_inner_frame.winfo_width())
+                
+                self.entry_canvas.configure(scrollregion=(0, 0, scroll_w, scroll_h))
+        except Exception as e:
+            print(f"DEBUG: Scroll region update error: {e}")
 
     def _on_daily_usage_sash_changed(self, event=None):
         """Handle sash position change to save ratio"""
@@ -2226,6 +2279,24 @@ class MaterialManager:
                         # Ensure all strings are stripped and nan-free
                         self.materials_df[col] = self.materials_df[col].astype(str).str.strip().replace(['nan', 'None', 'NULL', '-0.0', '0.0', 'NaN', 'NaN.0'], '')
                         self.materials_df[col] = self.materials_df[col].str.replace(r'\.0$', '', regex=True)
+                
+                # [NEW] One-time Data Migration: Strip "MT " and "PT " prefixes from NDT medicine models
+                # This ensures existing records are correctly summarized in the Inventory Status tab.
+                if not self.materials_df.empty:
+                    ndt_parent_cats = ["PT약품", "MT약품", "NDT약품"]
+                    # Normalize category names for matching
+                    temp_cats = self.materials_df['품목명'].str.replace(' ', '').str.upper()
+                    mask = temp_cats.isin(ndt_parent_cats)
+                    if mask.any():
+                        def strip_ndt_prefix(model):
+                            s = str(model).strip()
+                            # Check for PT or MT prefix followed by a space
+                            if s.upper().startswith("MT "): return s[3:].strip()
+                            if s.upper().startswith("PT "): return s[3:].strip()
+                            return s
+                        
+                        self.materials_df.loc[mask, '모델명'] = self.materials_df.loc[mask, '모델명'].apply(strip_ndt_prefix)
+                        print(f"DEBUG: Migrated {mask.sum()} NDT items by stripping prefixes.")
                 
                 # 2. Transactions
                 self.transactions_df = pd.read_excel(self.db_path, sheet_name='Transactions')
@@ -2492,8 +2563,8 @@ class MaterialManager:
                     ]
                     material_defaults = [
                         ['Material', item, spec, unit, price] for item, spec, unit, price in [
-                            ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
-                            ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                            ("PT 약품", "세척제", "CAN", 1500), ("PT 약품", "침투제", "CAN", 2300),
+                            ("PT 약품", "현상제", "CAN", 2000), ("MT 약품", "백색페인트", "CAN", 2350),
                             ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
                             ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
                             ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
@@ -3007,8 +3078,8 @@ class MaterialManager:
         """Extract material defaults from settings_df"""
         if not hasattr(self, 'settings_df') or self.settings_df.empty:
             return [
-                ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
-                ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                ("PT 약품", "세척제", "CAN", 1500), ("PT 약품", "침투제", "CAN", 2300),
+                ("PT 약품", "현상제", "CAN", 2000), ("MT 약품", "백색페인트", "CAN", 2350),
                 ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
                 ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
                 ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
@@ -3016,8 +3087,8 @@ class MaterialManager:
         df = self.settings_df[self.settings_df['Category'] == 'Material']
         if df.empty:
              return [
-                ("PT 약품", "세척액", "CAN", 1500), ("PT 약품", "침투액", "CAN", 2300),
-                ("PT 약품", "현상액", "CAN", 2000), ("MT 약품", "자분페인트", "CAN", 2350),
+                ("PT 약품", "세척제", "CAN", 1500), ("PT 약품", "침투제", "CAN", 2300),
+                ("PT 약품", "현상제", "CAN", 2000), ("MT 약품", "백색페인트", "CAN", 2350),
                 ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
                 ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
                 ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
@@ -3621,11 +3692,11 @@ class MaterialManager:
             model_name_up = str(mat.get('모델명', '')).strip().upper()
             
             # Sub-item names to hide (as they are summarized in parent splitting)
-            chem_sub_items = ['세척제', '현상제', '침투제', '침투액', '흑색자분', '백색페인트', '형광자분', '자분페인트']
+            chem_sub_items = [s.upper() for s in self.ndt_materials_all]
             
             # Stricter Detection for Chemicals (avoid splitting equipment)
             is_parent_pt_mt = (full_item_name in ["PT약품", "MT약품"] or "NDT약품" in full_item_name) and (not model_name_up or model_name_up in ['NAN', 'NONE', ''])
-            is_child_pt_mt = (full_item_name in ["PT약품", "MT약품"] or "NDT약품" in full_item_name) and (model_name_up in [s.upper() for s in chem_sub_items])
+            is_child_pt_mt = (full_item_name in ["PT약품", "MT약품"] or "NDT약품" in full_item_name) and (model_name_up in chem_sub_items)
 
             # 1. Hide Child items from the main list (they are summarized under parent)
             if is_child_pt_mt:
@@ -3634,9 +3705,10 @@ class MaterialManager:
             # 2. If it's a Parent, split into components with aggregated stock
             if is_parent_pt_mt:
                 if "PT" in full_item_name:
-                    chem_configs = [('세척제', '세척제'), ('현상제', '현상제'), ('침투제', '침투액')]
+                    # Using consistent names from ndt_groups
+                    chem_configs = [(m, m) for m in self.ndt_groups['PT약품']]
                 else:
-                    chem_configs = [('흑색자분', '흑색자분'), ('백색페인트', '백색페인트'), ('형광자분', '형광자분'), ('자분페인트', '자분페인트')]
+                    chem_configs = [(m, m) for m in self.ndt_groups['MT약품']]
 
                 # Aggregated Stock Logic:
                 # Parent Stock (Exclude "자동 차감" notes to avoid double-counting)
@@ -8029,6 +8101,16 @@ class MaterialManager:
                  new_item_var.set("")
                  self.save_tab_config()
         
+        def _adjust_parent_height(self, parent, force=False):
+            """Adjust parent frame height with performance check"""
+            try:
+                # Only update idletasks if forced or we're not in the middle of a high-speed interaction
+                # This is the single biggest cause of UI stutter.
+                if force:
+                    parent.update_idletasks()
+            except:
+                pass
+        
         entry_new.bind('<Return>', add_item)
         btn_add = ttk.Button(add_frame, text="➕", width=3, command=add_item)
         btn_add.pack(side='right')
@@ -8417,7 +8499,6 @@ class MaterialManager:
             # This is the single biggest cause of UI stutter.
             if force:
                 parent.update_idletasks()
-            
             # 2. Start with the bounding box of all GRIDDED items
             try:
                 # grid_bbox returns (x, y, width, height) of the grid
@@ -8603,207 +8684,149 @@ class MaterialManager:
         
         # 1. Unified Master Form Panel summerly
         self.master_form_panel = ttk.LabelFrame(self.entry_inner_frame, text="일일 검사 및 사용량 기록")
-        self.master_form_panel.grid(row=0, column=0, sticky='nsew', padx=10, pady=10)
+        self.master_form_panel.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
         
-        # Configure columns inside the master panel
-        self.master_form_panel.columnconfigure(0, weight=0, minsize=550)
+        # Configure columns inside the master panel (Reduced minsize)
+        self.master_form_panel.columnconfigure(0, weight=0, minsize=350)
         self.master_form_panel.columnconfigure(1, weight=1)
         
-        # Inner content for the basic form
+                # Inner content for the basic form
         form_content = ttk.Frame(self.master_form_panel, padding=10)
-        form_content.grid(row=0, column=0, sticky='nsew')
+        form_content.grid(row=0, column=0, sticky='w')
         
-        # Row 0: Company Selection & Site Selection
-        ttk.Label(form_content, text="업체명:").grid(row=0, column=0, padx=2, pady=1, sticky='e')
-        self.cb_daily_company = ttk.Combobox(form_content, width=12, values=self.companies)
-        self.cb_daily_company.grid(row=0, column=1, padx=2, pady=1, sticky='w')
+        for c in range(4): form_content.columnconfigure(c, weight=0)
+
+        # Row 0: 업체명, 현장명
+        ttk.Label(form_content, text="업체명:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.cb_daily_company = ttk.Combobox(form_content, width=15, values=self.companies)
+        self.cb_daily_company.grid(row=0, column=1, padx=(2, 10), pady=1, sticky='w')
         
-        # [NEW] Manage Companies list (Overlap style)
         btn_company_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
                                    command=lambda: self.open_list_management_dialog('companies'))
         btn_company_mgr.place(in_=self.cb_daily_company, relx=1.0, x=-18, rely=0.5, anchor='e', width=16, height=16)
 
-        # [NEW] Focus Transition for Company -> Site
-        def on_company_select(e):
-            self.root.after(10, self.cb_daily_site.focus_set)
-            return "break"
-        self.cb_daily_company.bind('<<ComboboxSelected>>', on_company_select)
-        self.cb_daily_company.bind('<Return>', on_company_select)
-
-        ttk.Label(form_content, text="현장명:").grid(row=0, column=2, padx=2, pady=1, sticky='e')
-        self.cb_daily_site = ttk.Combobox(form_content, width=12, values=self.sites)
-        self.cb_daily_site.grid(row=0, column=3, padx=2, pady=1, sticky='w')
-
-        # [NEW] Manage Sites list
+        ttk.Label(form_content, text="현장명:").grid(row=0, column=2, padx=(5, 0), pady=1, sticky='e')
+        self.cb_daily_site = ttk.Combobox(form_content, width=15, values=self.sites)
+        self.cb_daily_site.grid(row=0, column=3, padx=(2, 5), pady=1, sticky='w')
+        
         btn_site_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
                                 command=lambda: self.open_list_management_dialog('sites'))
         btn_site_mgr.place(in_=self.cb_daily_site, relx=1.0, x=-18, rely=0.5, anchor='e', width=16, height=16)
 
-        # [NEW] Focus Transition for Site -> Date
-        def on_site_select(e):
-            self.root.after(10, self.ent_daily_date.focus_set)
-            return "break"
-        self.cb_daily_site.bind('<<ComboboxSelected>>', on_site_select)
-        self.cb_daily_site.bind('<Return>', on_site_select)
+        # Row 1: 날짜, 장비명
+        ttk.Label(form_content, text="날짜:").grid(row=1, column=0, padx=(5, 0), pady=1, sticky='e')
+        from tkcalendar import DateEntry
+        self.ent_daily_date = DateEntry(form_content, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly')
+        self.ent_daily_date.grid(row=1, column=1, padx=(2, 10), pady=1, sticky='w')
 
-        # Row 1: Date & Equipment Selection
-        ttk.Label(form_content, text="날짜:").grid(row=1, column=0, padx=2, pady=1, sticky='e')
-        self.ent_daily_date = DateEntry(form_content, width=12, background='darkblue',
-                                         foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd',
-                                         locale='ko_KR', state='readonly', showweeknumbers=True)
-        self.ent_daily_date.grid(row=1, column=1, padx=2, pady=1, sticky='w')
-
-        # [NEW] Focus Transition for Date -> Equipment
-        def on_date_select_combined(e=None):
-            self.root.after(100, self.cb_daily_equip.focus_set)
-            return "break"
-        self.ent_daily_date.bind('<<DateEntrySelected>>', on_date_select_combined)
-        self.ent_daily_date.bind('<Return>', on_date_select_combined)
-
-        ttk.Label(form_content, text="장비명:").grid(row=1, column=2, padx=2, pady=1, sticky='e')
-        self.cb_daily_equip = ttk.Combobox(form_content, width=12, values=self.equipments)
-        self.cb_daily_equip.grid(row=1, column=3, padx=2, pady=1, sticky='w')
+        ttk.Label(form_content, text="장비명:").grid(row=1, column=2, padx=(5, 0), pady=1, sticky='e')
+        self.cb_daily_equip = ttk.Combobox(form_content, width=15, values=self.equipments)
+        self.cb_daily_equip.grid(row=1, column=3, padx=(2, 5), pady=1, sticky='w')
         
         btn_equip_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
                                  command=lambda: self.open_list_management_dialog('equipments'))
         btn_equip_mgr.place(in_=self.cb_daily_equip, relx=1.0, x=-18, rely=0.5, anchor='e', width=16, height=16)
 
-        self._bind_combobox_word_suggest(self.cb_daily_equip, lambda: self._get_equipment_candidates(include_all=False))
-
-        # [NEW] Focus Transition for Equipment -> Material
-        def on_equip_select(e):
-            self.root.after(10, self.cb_daily_material.focus_set)
-            return "break"
-        self.cb_daily_equip.bind('<<ComboboxSelected>>', on_equip_select)
-        self.cb_daily_equip.bind('<Return>', on_equip_select)
-
-        # Row 2: Material Selection (Full width)
-        ttk.Label(form_content, text="품목명:").grid(row=2, column=0, padx=2, pady=1, sticky='e')
-        self.cb_daily_material = ttk.Combobox(form_content, width=45)
-        self.cb_daily_material.grid(row=2, column=1, columnspan=3, padx=2, pady=1, sticky='ew')
+        # Row 2: 품목명
+        ttk.Label(form_content, text="품목명:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.cb_daily_material = ttk.Combobox(form_content, width=40)
+        self.cb_daily_material.grid(row=2, column=1, columnspan=3, padx=(2, 5), pady=1, sticky='w')
         
         btn_material_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
                                     command=lambda: self.open_list_management_dialog('materials'))
         btn_material_mgr.place(in_=self.cb_daily_material, relx=1.0, x=-18, rely=0.5, anchor='e', width=16, height=16)
+
+        # Row 3: 방법, 검사품명
+        ttk.Label(form_content, text="방법:").grid(row=3, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=['RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
+        self.cb_daily_test_method.grid(row=3, column=1, padx=(2, 10), pady=1, sticky='w')
+        
+        ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_inspection_item = ttk.Entry(form_content, width=18)
+        self.ent_daily_inspection_item.grid(row=3, column=3, padx=(2, 5), pady=1, sticky='w')
+
+        # Row 4: 수량, 단위
+        ttk.Label(form_content, text="수량:").grid(row=4, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_test_amount = ttk.Entry(form_content, width=15)
+        self.ent_daily_test_amount.grid(row=4, column=1, padx=(2, 10), pady=1, sticky='w')
+        
+        ttk.Label(form_content, text="단위:").grid(row=4, column=2, padx=(5, 0), pady=1, sticky='e')
+        self.cb_daily_unit = ttk.Combobox(form_content, width=13, values=self.daily_units)
+        self.cb_daily_unit.grid(row=4, column=3, padx=(2, 5), pady=1, sticky='w')
+
+        # Row 5: 단가, 출장비
+        ttk.Label(form_content, text="단가:").grid(row=5, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_unit_price = ttk.Entry(form_content, width=15)
+        self.ent_daily_unit_price.grid(row=5, column=1, padx=(2, 10), pady=1, sticky='w')
+
+        ttk.Label(form_content, text="출장비:").grid(row=5, column=2, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_travel_cost = ttk.Entry(form_content, width=15)
+        self.ent_daily_travel_cost.grid(row=5, column=3, padx=(2, 5), pady=1, sticky='w')
+
+        # Row 6: 적용코드, 성적서번호
+        ttk.Label(form_content, text="적용코드:").grid(row=6, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_applied_code = ttk.Entry(form_content, width=15)
+        self.ent_daily_applied_code.grid(row=6, column=1, padx=(2, 10), pady=1, sticky='w')
+
+        ttk.Label(form_content, text="성적서번호:").grid(row=6, column=2, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_report_no = ttk.Entry(form_content, width=18)
+        self.ent_daily_report_no.grid(row=6, column=3, padx=(2, 5), pady=1, sticky='w')
+
+        # Row 7: 비고, 일식
+        ttk.Label(form_content, text="비고:").grid(row=7, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_note = ttk.Entry(form_content, width=15)
+        self.ent_daily_note.grid(row=7, column=1, padx=(2, 10), pady=1, sticky='w')
+
+        ttk.Label(form_content, text="일식:").grid(row=7, column=2, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_meal_cost = ttk.Entry(form_content, width=15)
+        self.ent_daily_meal_cost.grid(row=7, column=3, padx=(2, 5), pady=1, sticky='w')
+
+        # Row 8: 검사비
+        ttk.Label(form_content, text="검사비:").grid(row=8, column=0, padx=(5, 0), pady=1, sticky='e')
+        self.ent_daily_test_fee = ttk.Entry(form_content, width=15)
+        self.ent_daily_test_fee.grid(row=8, column=1, padx=(2, 10), pady=1, sticky='w')
+
+        
+        # Restore focus transitions and defaults
+        self.ent_daily_inspection_item.insert(0, "Piping")
+        self.ent_daily_inspection_item.bind('<Return>', lambda e: self.ent_daily_test_amount.focus_set())
+        self.ent_daily_test_amount.bind('<Return>', lambda e: self.cb_daily_unit.focus_set())
+        self.cb_daily_unit.set('매')
+        self.cb_daily_unit.bind('<Return>', lambda e: self.ent_daily_unit_price.focus_set())
+        self.cb_daily_unit.bind('<<ComboboxSelected>>', lambda e: self.ent_daily_unit_price.focus_set())
+        self.ent_daily_unit_price.bind('<Return>', lambda e: self.ent_daily_applied_code.focus_set())
+        self.ent_daily_applied_code.insert(0, "KS")
+        self.ent_daily_applied_code.bind('<Return>', lambda e: self.ent_daily_report_no.focus_set())
+        self.ent_daily_report_no.bind('<Return>', lambda e: self.ent_daily_note.focus_set())
+        self.ent_daily_note.bind('<Return>', lambda e: self.ent_daily_meal_cost.focus_set())
+        self.ent_daily_meal_cost.insert(0, "0")
+        self.ent_daily_meal_cost.bind('<Return>', lambda e: self.ent_daily_test_fee.focus_set())
+        
+        def on_method_select_focus(e):
+            self.root.after(10, self.ent_daily_inspection_item.focus_set)
+            return "break"
+        self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_select_focus, add='+')
+        self.cb_daily_test_method.bind('<Return>', on_method_select_focus, add='+')
+        
+        def on_method_change_auto_unit_logic(e):
+            method = self.cb_daily_test_method.get().strip()
+            unit_map = {'RT': '매', 'UT': 'P,M,I/D', 'MT': 'P,M,I/D', 'PT': 'P,M,I/D', 'PAUT': 'M,I/D'}
+            if method in unit_map: self.cb_daily_unit.set(unit_map[method])
+            return "break"
+        self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit_logic, add='+')
         
         self._bind_combobox_word_suggest(self.cb_daily_material, lambda: self._get_equipment_candidates(include_all=False))
 
-        # [NEW] Focus Transition for Material -> Method
-        def on_mat_select(e):
-            self.root.after(10, self.cb_daily_test_method.focus_set)
-            return "break"
-        self.cb_daily_material.bind('<<ComboboxSelected>>', on_mat_select)
-        self.cb_daily_material.bind('<Return>', on_mat_select)
-
-        # Row 3: Method & Item Name
-        ttk.Label(form_content, text="방법:").grid(row=3, column=0, padx=2, pady=1, sticky='e')
-        self.cb_daily_test_method = ttk.Combobox(form_content, width=12, values=['RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
-        self.cb_daily_test_method.grid(row=3, column=1, padx=2, pady=1, sticky='w')
-
-        # [NEW] Focus Transition for Method -> Inspection Item
-        def on_method_select(e):
-            self.root.after(10, self.ent_daily_inspection_item.focus_set)
-            return "break"
-        self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_select, add='+')
-        self.cb_daily_test_method.bind('<Return>', on_method_select, add='+')
-        
-        def on_method_change_auto_unit(e):
-            method = self.cb_daily_test_method.get().strip()
-            # 단위 매핑 (RT=매, PAUT=M,I/D, MT/PT=P,M,I/D)
-            unit_map = {
-                'RT': '매', 
-                'UT': 'P,M,I/D', 
-                'MT': 'P,M,I/D', 
-                'PT': 'P,M,I/D', 
-                'PAUT': 'M,I/D'
-            }
-            if method in unit_map:
-                self.cb_daily_unit.set(unit_map[method])
-            return "break"
-        self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit, add='+')
-        
-        ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=2, pady=1, sticky='e')
-        self.ent_daily_inspection_item = ttk.Entry(form_content, width=15)
-        self.ent_daily_inspection_item.insert(0, "Piping") # Default
-        self.ent_daily_inspection_item.grid(row=3, column=3, padx=2, pady=1, sticky='w')
-
-        # [NEW] Focus Transition for Item -> Amount
-        self.ent_daily_inspection_item.bind('<Return>', lambda e: self.ent_daily_test_amount.focus_set())
-
-        # Row 4: Quantity, Unit & Unit Price
-        ttk.Label(form_content, text="수량:").grid(row=4, column=0, padx=2, pady=1, sticky='e')
-        self.ent_daily_test_amount = ttk.Entry(form_content, width=12)
-        self.ent_daily_test_amount.grid(row=4, column=1, padx=2, pady=1, sticky='w')
-        
-        self.ent_daily_test_amount.bind('<Return>', lambda e: self.cb_daily_unit.focus_set())
-        
-        ttk.Label(form_content, text="단위:").grid(row=4, column=2, padx=2, pady=1, sticky='e')
-        self.cb_daily_unit = ttk.Combobox(form_content, width=10, values=['매', 'P,M,I/D', 'M,I/D', 'Point', 'Meter', 'Inch', 'Dia'])
-        self.cb_daily_unit.set('매') # Default
-        self.cb_daily_unit.grid(row=4, column=3, padx=2, pady=1, sticky='w')
-        
-        self.cb_daily_unit.bind('<Return>', lambda e: self.ent_daily_unit_price.focus_set())
-        self.cb_daily_unit.bind('<<ComboboxSelected>>', lambda e: self.ent_daily_unit_price.focus_set())
-        
-        ttk.Label(form_content, text="단가:").grid(row=4, column=4, padx=2, pady=1, sticky='e')
-        self.ent_daily_unit_price = ttk.Entry(form_content, width=12)
-        self.ent_daily_unit_price.grid(row=4, column=5, padx=2, pady=1, sticky='w')
-
-        # [NEW] Focus Transition for Price -> Applied Code
-        self.ent_daily_unit_price.bind('<Return>', lambda e: self.ent_daily_applied_code.focus_set())
-        
-        # Row 5: Applied Code, Report No & Travel Cost
-        ttk.Label(form_content, text="적용코드:").grid(row=5, column=0, padx=2, pady=1, sticky='e')
-        self.ent_daily_applied_code = ttk.Entry(form_content, width=12)
-        self.ent_daily_applied_code.insert(0, "KS") # Default
-        self.ent_daily_applied_code.grid(row=5, column=1, padx=2, pady=1, sticky='w')
-
-        self.ent_daily_applied_code.bind('<Return>', lambda e: self.ent_daily_report_no.focus_set())
-
-        ttk.Label(form_content, text="성적서번호:").grid(row=5, column=2, padx=2, pady=1, sticky='e')
-        self.ent_daily_report_no = ttk.Entry(form_content, width=15)
-        self.ent_daily_report_no.grid(row=5, column=3, padx=2, pady=1, sticky='w')
-        
-        self.ent_daily_report_no.bind('<Return>', lambda e: self.ent_daily_travel_cost.focus_set())
-        
-        ttk.Label(form_content, text="출장비:").grid(row=5, column=4, padx=2, pady=1, sticky='e')
-        self.ent_daily_travel_cost = ttk.Entry(form_content, width=12)
-        self.ent_daily_travel_cost.grid(row=5, column=5, padx=2, pady=1, sticky='w')
-        
-        self.ent_daily_travel_cost.bind('<Return>', lambda e: self.ent_daily_meal_cost.focus_set())
-
-        # Row 6: Meal Cost, Test Fee & Note
-        ttk.Label(form_content, text="일식:").grid(row=6, column=0, padx=2, pady=1, sticky='e')
-        self.ent_daily_meal_cost = ttk.Entry(form_content, width=12)
-        self.ent_daily_meal_cost.insert(0, "0")
-        self.ent_daily_meal_cost.grid(row=6, column=1, padx=2, pady=1, sticky='w')
-
-        self.ent_daily_meal_cost.bind('<Return>', lambda e: self.ent_daily_test_fee.focus_set())
-
-        ttk.Label(form_content, text="검사비:").grid(row=6, column=2, padx=2, pady=1, sticky='e')
-        self.ent_daily_test_fee = ttk.Entry(form_content, width=15)
-        self.ent_daily_test_fee.grid(row=6, column=3, padx=2, pady=1, sticky='w')
-        
-        self.ent_daily_test_fee.bind('<Return>', lambda e: self.ent_daily_note.focus_set())
-
-        ttk.Label(form_content, text="비고:").grid(row=6, column=4, padx=2, pady=1, sticky='e')
-        self.ent_daily_note = ttk.Entry(form_content, width=12) 
-        self.ent_daily_note.grid(row=6, column=5, padx=2, pady=1, sticky='w')
-        
-        # [MOVED] btn_sync is now in the header for better visibility
-        
-        # Removed draggable container logic
-        
         # Category definitions for focus flow and loops
-        ndt_materials = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+        ndt_materials = self.ndt_materials_all
         rtk_cats = ["센터미스", "농도", "마킹미스", "필름마크", "취급부주의", "고객불만", "기타", "총계"]
 
 
 
         # Row 1: NDT with Multi-Company Support
         self.ndt_frame = ttk.LabelFrame(self.master_form_panel, text="NDT 자재 소모량 (회사별)")
-        self.ndt_frame.grid(row=1, column=0, padx=10, pady=5, sticky='nsew')
+        self.ndt_frame.grid(row=1, column=0, padx=5, pady=2, sticky='ew')
         
         # Container for company-specific NDT sections
         self.ndt_company_container = ttk.Frame(self.ndt_frame)
@@ -8824,14 +8847,15 @@ class MaterialManager:
         # Removed draggable container logic
 
         # Row 2: RTK
-        rtk_grid = ttk.LabelFrame(self.master_form_panel, text="RTK 분류")
-        rtk_grid.grid(row=2, column=0, padx=10, pady=5, sticky='nsew')
+        self.rtk_grid = ttk.LabelFrame(self.master_form_panel, text="RTK 분류")
+        self.rtk_grid.grid(row=2, column=0, padx=5, pady=2, sticky='ew')
         
+        for c in range(6): self.rtk_grid.columnconfigure(c, weight=1, uniform="ndt_rtk")
         self.rtk_entries = {}
         for i, cat in enumerate(rtk_cats):
-            r = i // 4; col = (i % 4) * 2
-            ttk.Label(rtk_grid, text=f"{cat}:", font=('Arial', 8)).grid(row=r, column=col, padx=1, pady=1, sticky='w')
-            e = ttk.Entry(rtk_grid, width=6)
+            r = i // 3; col = (i % 3) * 2
+            ttk.Label(self.rtk_grid, text=f"{cat}:", font=('Arial', 8)).grid(row=r, column=col, padx=1, pady=1, sticky='w')
+            e = ttk.Entry(self.rtk_grid, width=6)
             e.grid(row=r, column=col+1, padx=1, pady=1, sticky='ew')
             self.rtk_entries[cat] = e
             
@@ -8850,12 +8874,12 @@ class MaterialManager:
         self.rtk_entries["총계"].config(state='readonly')
         # Removed draggable container logic
 
-        # [LAYOUT FIX] Ensure enough baseline row heights so workers panel bottom rows are visible
+        # [LAYOUT FIX] Ensure enough baseline row heights
         try:
             self.entry_inner_frame.grid_rowconfigure(0, minsize=170)
             self.entry_inner_frame.grid_rowconfigure(1, minsize=120)
             self.entry_inner_frame.grid_rowconfigure(2, minsize=130)
-            self.entry_inner_frame.grid_rowconfigure(3, minsize=60)
+            # Row 3 (Extra spacer) removed to minimize whitespace
         except Exception:
             pass
 
@@ -8865,7 +8889,7 @@ class MaterialManager:
         
         # Create a single container for all workers inside the master panel summerly
         workers_box_frame = ttk.Frame(self.master_form_panel)
-        workers_box_frame.grid(row=0, column=1, rowspan=3, sticky='nsew', padx=10, pady=10)
+        workers_box_frame.grid(row=0, column=1, rowspan=3, sticky='nsew', padx=5, pady=5)
         workers_box_frame.columnconfigure(0, weight=1)
         workers_box_frame.rowconfigure(1, weight=1)
         
@@ -11259,27 +11283,42 @@ class MaterialManager:
         except Exception as e:
             print(f"Error handling resize: {e}")
             # Fallback if something went wrong during resize
-            if hasattr(self, 'daily_usage_sash_locked') and self.daily_usage_sash_locked:
-                self._restore_locked_position()
-
 
     def toggle_sash_lock(self):
-        """Toggle sash lock state"""
+        """Toggle sash lock state with auto-fit logic"""
         try:
             self.daily_usage_sash_locked = not self.daily_usage_sash_locked
             
             if self.daily_usage_sash_locked:
-                # If just locked, save current state
-                sash_pos = self.daily_usage_paned.sashpos(0)
+                # [NEW] Auto-fit sash to content height when locking
+                self.root.update_idletasks()
+                
+                # Calculate required height of the top area content
+                content_h = 0
+                if hasattr(self, 'entry_inner_frame'):
+                    # Use grid_bbox of the inner frame
+                    bbox = self.entry_inner_frame.grid_bbox()
+                    content_h = bbox[1] + bbox[3] + 5 # Minimized padding
+                
                 total_height = self.daily_usage_paned.winfo_height()
+                
+                # If content is smaller than total height, fit to content
+                # Otherwise, use current sash position
+                if 460 < content_h < total_height - 100:
+                    sash_pos = content_h
+                else:
+                    sash_pos = self.daily_usage_paned.sashpos(0)
+                
+                # Apply sash position
+                self.daily_usage_paned.sashpos(0, sash_pos)
                 
                 if not hasattr(self, 'tab_config'):
                     self.tab_config = {}
                 
-                # Calculate and save ratio (percentage)
-                ratio = sash_pos / total_height if total_height > 0 else 0.2
+                # Calculate and save ratio and absolute position
+                ratio = sash_pos / total_height if total_height > 0 else 0.5
                 self.tab_config['daily_usage_sash_ratio'] = ratio
-                self.tab_config['daily_usage_sash_pos'] = sash_pos  # Keep as backup
+                self.tab_config['daily_usage_sash_pos'] = sash_pos
                 self.tab_config['daily_usage_sash_locked'] = True
                 
                 # Save configuration immediately
@@ -11290,22 +11329,22 @@ class MaterialManager:
                     self.btn_sash_lock.configure(style="SashLock.TButton")
                     self.style.configure("SashLock.TButton", foreground="red")
                 
-                print(f"Daily usage sash position LOCKED at ratio: {ratio:.3f}")
-                # Start periodic monitoring
                 self._start_sash_monitor()
+                print(f"Daily usage sash position LOCKED at height: {sash_pos}")
             else:
-                if not hasattr(self, 'tab_config'):
-                    self.tab_config = {}
-                self.tab_config['daily_usage_sash_locked'] = False
-                self.save_tab_config(force=True)
-
+                # Unlock
                 if hasattr(self, 'btn_sash_lock'):
-                    self.btn_sash_lock.config(text="🔓 경계 고정")
+                    self.btn_sash_lock.config(text="🔓 경계 자유")
                     self.btn_sash_lock.configure(style="TButton")
-                print("Daily usage sash UNLOCKED")
-                # Stop periodic monitoring
-                self._stop_sash_monitor()
                 
+                self._stop_sash_monitor()
+                if hasattr(self, 'tab_config'):
+                    self.tab_config['daily_usage_sash_locked'] = False
+                    self.save_tab_config(force=True)
+                print("Daily usage sash position UNLOCKED")
+            
+            # [NEW] Refresh scroll region to ensure it stops correctly at the new boundary
+            self._ensure_canvas_scroll_region()
         except Exception as e:
             print(f"Error toggling sash lock: {e}")
     
@@ -11551,7 +11590,7 @@ class MaterialManager:
         if hasattr(self, 'ndt_company_entries'):
             for company_entries in self.ndt_company_entries:
                 company_code = company_entries['_company'].get().strip()
-                ndt_data = {name: to_f(company_entries.get(name)) for name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']}
+                ndt_data = {name: to_f(company_entries.get(name)) for name in self.ndt_materials_all}
                 
                 # [REFINEMENT] Create record if there is NDT data OR it is the first entry (guaranteed row)
                 if any(v > 0 for v in ndt_data.values()) or company_entries == self.ndt_company_entries[0]:
@@ -11580,7 +11619,18 @@ class MaterialManager:
             '단가': to_f(self.ent_daily_unit_price),
             '출장비': to_f(self.ent_daily_travel_cost),
             '업체명': self.cb_daily_company.get().strip(),
-            'Unit': self.cb_daily_unit.get().strip(), # [V13_FIX] Missing Unit field added
+            'Unit': self.cb_daily_unit.get().strip(),
+        }
+
+        # [NEW] Auto-save new unit
+        new_unit = common_data['Unit']
+        if new_unit and new_unit not in self.daily_units:
+            self.daily_units.append(new_unit)
+            self.cb_daily_unit['values'] = self.daily_units
+            self.save_tab_config()
+            print(f"DEBUG: New unit '{new_unit}' added and saved.")
+
+        common_data.update({
             '일식': to_f(self.ent_daily_meal_cost),
             '검사비': to_f(self.ent_daily_test_fee),
             'FilmCount': 0.0,
@@ -11588,7 +11638,7 @@ class MaterialManager:
             'EntryTime': datetime.datetime.now(),
             '회사코드': "",
             **worker_data_map
-        }
+        })
 
         # 6. 레코드 생성 (업체 수 vs 차량 수 중 큰 값만큼 생성)
         records_to_save = []
@@ -11630,7 +11680,7 @@ class MaterialManager:
                 for j in range(1, 11):
                     row_record['WorkTime' if j==1 else f'WorkTime{j}'] = ""
                     row_record['OT' if j==1 else f'OT{j}'] = ""
-                for name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']:
+                for name in self.ndt_materials_all:
                     row_record[f'NDT_{name}'] = 0.0
                 row_record['Note'] = "(차량 추가 기록)"
 
@@ -11715,30 +11765,31 @@ class MaterialManager:
             self.ndt_company_entries = []
         
         company_idx = len(self.ndt_company_entries)
-        ndt_materials = ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]
+        ndt_materials = self.ndt_materials_all
 
 
         
         # Company frame
         company_frame = ttk.LabelFrame(self.ndt_company_container, text=f"회사 #{company_idx + 1}")
-        company_frame.pack(fill='x', expand=True, padx=2, pady=2)
+        company_frame.pack(fill='x', padx=2, pady=2)
         
         # Company code selector
         header_frame = ttk.Frame(company_frame)
         header_frame.pack(fill='x', padx=2, pady=2)
         ttk.Label(header_frame, text="회사코드:", font=('Arial', 8, 'bold')).pack(side='left', padx=2)
-        cb_co = ttk.Combobox(header_frame, width=12, values=getattr(self, 'co_code_list', []))
+        cb_co = ttk.Combobox(header_frame, width=8, values=getattr(self, 'co_code_list', []))
         cb_co.pack(side='left', padx=2)
         cb_co.set('')  # Default empty
         
         # NDT entries grid
         grid_frame = ttk.Frame(company_frame)
+        for c in range(6): grid_frame.columnconfigure(c, weight=1, uniform="ndt_rtk")
         grid_frame.pack(fill='x', padx=2, pady=2)
         
         entries = {'_company': cb_co}  # Store company combobox
         for i, mat in enumerate(ndt_materials):
-            r = i // 4
-            c = (i % 4) * 2
+            r = i // 3
+            c = (i % 3) * 2
             ttk.Label(grid_frame, text=f"{mat}:", font=('Arial', 8)).grid(row=r, column=c, padx=1, pady=1, sticky='w')
             e = ttk.Entry(grid_frame, width=6)
             e.grid(row=r, column=c+1, padx=1, pady=1, sticky='ew')
@@ -12151,7 +12202,7 @@ class MaterialManager:
                 # 성공 시 필드 초기화 및 뷰 갱신
                 if hasattr(self, 'ndt_company_entries'):
                     for company_entries in self.ndt_company_entries:
-                        for name in ['형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제']:
+                        for name in self.ndt_materials_all:
                             if name in company_entries:
                                 company_entries[name].delete(0, tk.END)
                 
@@ -12186,7 +12237,7 @@ class MaterialManager:
                     if self.ndt_company_entries:
                         first = self.ndt_company_entries[0]
                         first['_company'].set('')
-                        for k in ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]:
+                        for k in self.ndt_materials_all:
                             if k in first: first[k].delete(0, tk.END)
 
                 # 차량 점검 필드 초기화 (safeguarded)
@@ -13022,10 +13073,7 @@ class MaterialManager:
     def _auto_reconcile_and_register_ndt(self, date_val, site, ndt_data, workers, company_code=""):
         """Unified helper to auto-register missing consumables and create 'OUT' transactions"""
         ndt_product_map = self._load_ndt_product_map()
-        ndt_groups = {
-            'PT약품': ['세척제', '침투제', '현상제', '형광침투제'],
-            'MT약품': ['백색페인트', '흑색자분', '형광자분']
-        }
+        ndt_groups = self.ndt_groups
         
         note_suffix = f" ({company_code})" if company_code else ""
         note = f"{site} 현장 사용 (자동 차감){note_suffix}"
@@ -13050,7 +13098,7 @@ class MaterialManager:
                 for grp, members in ndt_groups.items():
                     if name in members:
                         db_item_name = grp
-                        db_model_name = f"{grp[:2]} {name}" # e.g., 'MT 백색페인트'
+                        db_model_name = name # [FIX] Remove prefix for consistency with display logic
                         break
                 if not db_item_name: db_item_name = "기타소모품"
             
@@ -13061,7 +13109,8 @@ class MaterialManager:
             ]
             
             if mat_rows.empty:
-                mat_id = self.register_new_material(db_item_name, model=db_model_name, warehouse='현장', 규격='자동등록')
+                # [FIX] Pass company_code to ensure registered item has correct association
+                mat_id = self.register_new_material(db_item_name, model=db_model_name, warehouse='현장', 규격='자동등록', co_code=company_code)
             else:
                 mat_id = mat_rows.iloc[0]['MaterialID']
             
@@ -15105,97 +15154,6 @@ class MaterialManager:
             self.refresh_ui_for_list_change(config_key)
             self.save_tab_config()
 
-    def open_list_management_dialog(self, title, data_list, config_key):
-        """Generic dialog to manage string lists (Add, Delete, Rename) summerly"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title(title)
-        dlg.geometry("400x500")
-        dlg.transient(self.root)
-        dlg.grab_set()
-        
-        main_frame = ttk.Frame(dlg, padding=10)
-        main_frame.pack(fill='both', expand=True)
-        
-        # Listbox with Scrollbar
-        list_frame = ttk.Frame(main_frame)
-        list_frame.pack(fill='both', expand=True, pady=(0, 10))
-        
-        scroll = ttk.Scrollbar(list_frame)
-        scroll.pack(side='right', fill='y')
-        
-        lb = tk.Listbox(list_frame, yscrollcommand=scroll.set, font=('Malgun Gothic', 10))
-        lb.pack(side='left', fill='both', expand=True)
-        scroll.config(command=lb.yview)
-        
-        # Populate list
-        def _populate():
-            lb.delete(0, tk.END)
-            for item in sorted(data_list):
-                lb.insert(tk.END, item)
-        _populate()
-            
-        # Entry for Add/Edit
-        ctrl_frame = ttk.Frame(main_frame)
-        ctrl_frame.pack(fill='x', pady=5)
-        
-        ent = ttk.Entry(ctrl_frame)
-        ent.pack(fill='x', expand=True, side='left', padx=(0, 5))
-        
-        def on_select(e):
-            sel = lb.curselection()
-            if sel:
-                ent.delete(0, tk.END)
-                ent.insert(0, lb.get(sel[0]))
-                
-        lb.bind('<<ListboxSelect>>', on_select)
-        
-        # Buttons
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(fill='x', pady=5)
-        
-        def _refresh():
-            _populate()
-            # Trigger app-wide update
-            self.refresh_ui_for_list_change(config_key)
-            self.save_tab_config()
-            
-        def _add():
-            val = ent.get().strip()
-            if val and val not in data_list:
-                data_list.append(val)
-                _refresh()
-                ent.delete(0, tk.END)
-                
-        def _delete():
-            sel = lb.curselection()
-            if sel:
-                val = lb.get(sel[0])
-                if messagebox.askyesno("삭제 확인", f"'{val}'을(를) 명단에서 삭제할까요?"):
-                    if val in data_list:
-                        data_list.remove(val)
-                        _refresh()
-                        ent.delete(0, tk.END)
-                        
-        def _update():
-            sel = lb.curselection()
-            if sel:
-                old_val = lb.get(sel[0])
-                new_val = ent.get().strip()
-                if new_val and new_val != old_val:
-                    if old_val in data_list:
-                        # Find original index to maintain list position if possible or just replace
-                        try:
-                            idx = data_list.index(old_val)
-                            data_list[idx] = new_val
-                            _refresh()
-                        except: pass
-                        
-        ttk.Button(btn_frame, text="추가", command=_add, width=8).pack(side='left', padx=2)
-        ttk.Button(btn_frame, text="삭제", command=_delete, width=8).pack(side='left', padx=2)
-        ttk.Button(btn_frame, text="수정", command=_update, width=8).pack(side='left', padx=2)
-        ttk.Button(btn_frame, text="닫기", command=dlg.destroy, width=10).pack(side='right', padx=2)
-        
-        ent.focus_set()
 
     def auto_save_worktime(self, event, entry, config_key):
         """Helper to auto-save worktime values and support copy functionality"""
@@ -15515,6 +15473,7 @@ class MaterialManager:
                 'selected_tab_text': current_tab_text,
                 'tab_order': tab_order,
                 'sites': self.sites,
+                'daily_units': self.daily_units,
                 'users': getattr(self, 'users', []),
                 'companies': getattr(self, 'companies', []),
                 'warehouses': getattr(self, 'warehouses', []),
@@ -15690,6 +15649,10 @@ class MaterialManager:
                     print(f"DEBUG: Loaded config raw: {self.tab_config}")
                 
                 config = self.tab_config
+                
+                # Restore lists
+                if 'daily_units' in config:
+                    self.daily_units = config['daily_units']
                 
                 # Apply high-level lock states immediately to internal variables
                 self.layout_locked = config.get('layout_locked', False)
