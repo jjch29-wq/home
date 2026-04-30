@@ -278,14 +278,23 @@ class DailyWorkReportManager:
         veh_map = mapping.get('vehicles', {})
         veh_list = data.get('vehicles', [])
         v = veh_list[0] if veh_list else {}
-        veh_row = veh_map.get('row_start', 22) # Vehicle Info Row
+        
+        # [NEW] Calculate row offset based on dynamic method rows insertion
+        row_offset = 0
+        if 'extra_count' in locals(): # From Step 3 logic
+             row_offset = extra_count
+        elif num_methods > 4:
+             row_offset = num_methods - 4
+             
+        veh_row = veh_map.get('row_start', 22) + row_offset # Vehicle Info Row
         cmap = veh_map.get('col_map', {})
         
-        safe_write(f"{cmap.get('vehicle_info')}{veh_row}", v.get('vehicle_info', ''))
-        safe_write(f"{cmap.get('mileage')}{veh_row}", v.get('mileage', ''))
+        safe_write(f"{cmap.get('vehicle_info', 'B')}{veh_row}", v.get('vehicle_info', ''))
+        safe_write(f"{cmap.get('mileage', 'H')}{veh_row}", v.get('mileage', ''))
 
-        # Detailed Inspection Checklist Mapping
-        chk_rows = {'out': 29, 'in': 30}
+        # Detailed Inspection Checklist Mapping (Section 3)
+        # Row 29: 출차시 / Row 30: 입차시
+        chk_rows = {'out': 29 + row_offset, 'in': 30 + row_offset}
         chk_cols = {
             'exterior':    {'양호': 'E', '불량': 'F'},
             'cleanliness': {'양호': 'H', '불량': 'I'},
@@ -293,7 +302,7 @@ class DailyWorkReportManager:
             'locking':     {'잠김': 'N', '안함': 'O'}
         }
         
-        # [NEW] Calculate Overall Status for Summary Line
+        # [NEW] Calculate Overall Status for Summary Line (from Upstream logic)
         is_bad = False
         inspected = False
         for r_key in ['out', 'in']:
@@ -301,12 +310,9 @@ class DailyWorkReportManager:
                 raw_val = v.get(f"{r_key}_{c_key}")
                 if raw_val:
                     inspected = True
-                    # Check against mapping for bad states
                     if raw_val in ['불량', '안함']:
                         is_bad = True
         
-        # Summary Header Line: Use professional square symbols
-        # ■ (0x25A0), □ (0x25A1)
         m_good = chr(0x25A0) if not is_bad else chr(0x25A1)
         m_bad = chr(0x25A0) if is_bad else chr(0x25A1)
         
@@ -315,8 +321,8 @@ class DailyWorkReportManager:
         else:
             summary_text = f"3. 차량관리   {chr(0x25A1)} 양호    {chr(0x25A1)} 불량"
             
-        # [ROBUST] Search for the cell containing "3. 차량관리" to update it dynamically
-        search_range = sheet['A18':'G32']
+        # Search for the cell containing "3. 차량관리" to update it dynamically
+        search_range = sheet['A18':'G35'] # Expanded range slightly for safety
         found_cell = None
         for row_cells in search_range:
             for cell in row_cells:
@@ -328,53 +334,55 @@ class DailyWorkReportManager:
                     break
             if found_cell: break
         
-        if not found_cell:
-            safe_write("B21", summary_text)
-            sheet["B21"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
-            sheet["B21"].font = Font(name='맑은 고딕', size=10, bold=True)
+        # Individual Checklist Items: Regex-based square ticking (from Stashed logic)
+        import re
+        WHITE_SQ = "\u25a1" # □
+        BLACK_SQ = "\u25a0" # ■
+        
+        chk_mapping_regex = {
+            'exterior': {'col': 'E', 'options': ['양호', '불량']},
+            'cleanliness': {'col': 'H', 'options': ['양호', '불량']},
+            'cleaning': {'col': 'K', 'options': ['함', '안함', '양호']},
+            'locking': {'col': 'N', 'options': ['잠금', '안함', '잠김']}
+        }
 
-        # [REMOVED] Overwriting Row 28 labels to preserve template's category headers like "차량 외부상태"
-        # The labels (양호, 불량, etc.) will now be written alongside the symbols in Rows 29/30.
-
-        for r_key, row in chk_rows.items():
-            for c_key, options in chk_cols.items():
-                raw_val = v.get(f"{r_key}_{c_key}")
-                # Map various states to display labels
-                unified_val = None
-                if c_key == 'locking':
-                    if raw_val in ['잠김', '잠금', '함']: unified_val = '잠김'
-                    elif raw_val in ['안함', '불량']: unified_val = '안함'
-                else:
-                    if raw_val in ['양호', '함', '잠금', '잠김']: unified_val = '양호'
-                    elif raw_val in ['불량', '안함']: unified_val = '불량'
-                
-                # [COMBINED] Combine all options into one string to handle merged cells (e.g., ▣ 양호   □ 불량)
-                combined_results = []
-                for opt_name in options.keys():
-                    is_selected = (unified_val == opt_name)
-                    symbol = "\u25A3" if is_selected else "\u25A1"
-                    combined_results.append(f"{symbol} {opt_name}")
-                
-                # Join with spaces and write to the FIRST column address defined for this category
-                final_text = "   ".join(combined_results)
-                main_col = list(options.values())[0] # e.g., 'E' for exterior
-                cell_coord = f"{main_col}{row}"
-                
-                safe_write(cell_coord, final_text)
-                
-                # Force alignment for the combined cell
-                try:
-                    sheet[cell_coord].alignment = Alignment(horizontal='center', vertical='center')
-                    sheet[cell_coord].font = Font(name='맑은 고딕', size=9)
-                except:
-                    pass
+        for r_key, base_row in chk_rows.items():
+            for c_key, info in chk_mapping_regex.items():
+                val = v.get(f"{r_key}_{c_key}")
+                if val:
+                    cell_coord = f"{info['col']}{base_row}"
+                    try:
+                        current_val = sheet[cell_coord].value
+                        if current_val and isinstance(current_val, str):
+                            # Handle common terminology variations
+                            val_to_find = val
+                            if val == '잠김': val_to_find = '잠금'
+                            elif val == '잠금': val_to_find = '잠김'
+                            
+                            val_esc = re.escape(val_to_find)
+                            pattern = f"({WHITE_SQ})(\\s*){val_esc}"
+                            
+                            if re.search(pattern, current_val):
+                                new_val = re.sub(pattern, f"{BLACK_SQ}\\2{val_esc}", current_val)
+                                sheet[cell_coord].value = new_val
+                            else:
+                                # Try alternate if terminology didn't match exactly
+                                val_alt = '잠김' if val_to_find == '잠금' else '잠금'
+                                val_esc_alt = re.escape(val_alt)
+                                pattern_alt = f"({WHITE_SQ})(\\s*){val_esc_alt}"
+                                if re.search(pattern_alt, current_val):
+                                    new_val = re.sub(pattern_alt, f"{BLACK_SQ}\\2{val_esc_alt}", current_val)
+                                    sheet[cell_coord].value = new_val
+                    except:
+                        pass
 
         # [NEW] Write Remarks (Row 31)
         if v.get('remarks'):
-            safe_write("B31", f"비고: {v.get('remarks')}")
-            if sheet["B31"].value:
-                sheet["B31"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
-                sheet["B31"].font = Font(name='맑은 고딕', size=9)
+            remarks_row = 31 + row_offset
+            safe_write(f"B{remarks_row}", f"비고: {v.get('remarks')}")
+            if sheet[f"B{remarks_row}"].value:
+                sheet[f"B{remarks_row}"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
+                sheet[f"B{remarks_row}"].font = Font(name='맑은 고딕', size=9)
 
         wb.save(output_path)
         return output_path
