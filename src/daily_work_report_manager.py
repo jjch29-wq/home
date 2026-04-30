@@ -201,77 +201,85 @@ class DailyWorkReportManager:
 
 
 
-        # 6. 자재 수행현황 (Materials)
-        mat_map = mapping.get('materials', {})
+        # 6. 자재 수불현황 (Materials) - Dynamic Row Detection
         materials_data = data.get('materials', {})
+        
+        # [NEW] Find the actual starting row for Section 6 by searching for keywords
+        section6_row = None
+        for r_idx in range(35, 60): # Search in a reasonable range
+            cell_val = str(sheet[f'A{r_idx}'].value or '') + str(sheet[f'B{r_idx}'].value or '')
+            if "자재 수불" in cell_val or "자재수불" in cell_val or "6." in cell_val:
+                # Found the header. The actual data usually starts 2-3 rows below.
+                # Look for "품목명" to be more precise
+                for sub_r in range(r_idx, r_idx + 5):
+                    row_content = [str(sheet[f'{chr(64+c)}{sub_r}'].value or '') for c in range(1, 10)]
+                    if any("품목명" in c for c in row_content):
+                        section6_row = sub_r + 1
+                        break
+                if section6_row: break
+        
+        if not section6_row:
+            section6_row = 43 # Fallback to default
+            print("DEBUG: Section 6 header not found, using fallback row 43")
+        else:
+            print(f"DEBUG: Section 6 (Material) starts at row {section6_row}")
 
-        # --- Material display name mapping (for D column) ---
-        mat_display_names = {
-            'RT T200':      ('RT', 'T200'),
-            'RT AA400':     ('RT', 'AA400'),
-            'RT Other':     ('RT', '기타'),
-            'MT WHITE':     ('MT', '백색페인트'),
-            'MT 7C-BLACK':  ('MT', '흑색자분'),
-            'PT Penetrant': ('PT', '침투제'),
-            'PT Cleaner':   ('PT', '세척제'),
-            'PT Developer': ('PT', '현상제'),
+        # Update mat_map with dynamic rows
+        dynamic_mat_map = {
+            'RT T200': section6_row,
+            'RT AA400': section6_row + 1,
+            'RT Other': section6_row + 2,
+            'MT WHITE': section6_row + 3,
+            'MT 7C-BLACK': section6_row + 4,
+            'PT Penetrant': section6_row + 5,
+            'PT Cleaner': section6_row + 6,
+            'PT Developer': section6_row + 7
         }
 
-        # Clear rows 43-50 first (K~Q for quantities, D/F for names)
-        for r in range(43, 51):
-            for c_idx in range(11, 18):  # K(11) to Q(17)
+        # Clear rows first
+        for r in range(section6_row, section6_row + 8):
+            for c_idx in range(4, 18): # D to Q
                 safe_write(f"{chr(64 + c_idx)}{r}", None)
-            safe_write(f'D{r}', '')
-            safe_write(f'F{r}', '')
-
-            # --- [STRONG OVERRIDE] 화학자재 행 번호 기반 명칭 및 단위 강제 고정 ---
+            
+            # [NEW] Set Override names for chemicals based on relative offset
+            rel_idx = r - section6_row
             override_names = {
-                46: ('백색페인트', ''),
-                47: ('흑색자분', ''),
-                48: ('침투제', ''),
-                49: ('세척제', ''),
-                50: ('현상제', ''),
+                3: ('백색페인트', ''),
+                4: ('흑색자분', ''),
+                5: ('침투제', ''),
+                6: ('세척제', ''),
+                7: ('현상제', ''),
             }
-            d_val_override = None
-            f_val_override = None
-            if r in override_names:
-                d_val_override, f_val_override = override_names[r]
-
-            if d_val_override is not None:
-                safe_write(f'D{r}', d_val_override)
-                safe_write(f'F{r}', f_val_override)
+            if rel_idx in override_names:
+                d_nm, f_sp = override_names[rel_idx]
+                safe_write(f'D{r}', d_nm)
+                safe_write(f'F{r}', f_sp)
+                safe_write(f'H{r}', 'CAN')
 
         # Write each material row
-        for mat_name, row in mat_map.items():
-            row = int(row)
+        print(f"DEBUG: Processing materials: {materials_data}")
+        for mat_name, row in dynamic_mat_map.items():
             m_data = materials_data.get(mat_name, {})
             used_val = m_data.get('used', 0)
-
-            # DB에서 온 상세 이름/규격 (주로 RT용)
             d_val = m_data.get('name', '')
             f_val = m_data.get('spec', '')
 
-            # 해당 행이 고정 명칭 대상이 아닐 때만(예: RT 자재) DB 값 기입
-            # 고정 명칭 대상(46~50)은 위에서 이미 기입했으므로 건너뜀
-            if row not in (46, 47, 48, 49, 50):
-                if d_val: safe_write(f'D{row}', d_val)
-                if f_val: safe_write(f'F{row}', f_val)
-
-            # 수량이 있을 때만 K/M/O 기입 (사용량이 없으면 행 전체를 비워둠)
-            if used_val and used_val > 0:
-                safe_write(f'K{row}', '-')                            # K: 하이픈
-                safe_write(f'M{row}', used_val)                       # M: 당일사용량
-                safe_write(f'O{row}', m_data.get('in', 0))           # O: 반입
-
-        # Unit column H: RT rows '매', Others by row override
-        for mat_name, r in mat_map.items():
-            row = int(r)
-            if row in (46, 47, 48, 49, 50): 
-                safe_write(f'H{row}', 'CAN')
-            elif row in (43, 44, 45):
+            # Write RT names (offsets 0, 1, 2)
+            if (row - section6_row) < 3:
+                if d_val: 
+                    safe_write(f'D{row}', d_val)
+                    print(f"DEBUG: Wrote RT Name '{d_val}' to D{row}")
+                if f_val: 
+                    safe_write(f'F{row}', f_val)
+                    print(f"DEBUG: Wrote RT Spec '{f_val}' to F{row}")
                 safe_write(f'H{row}', '매')
-            else:
-                safe_write(f'H{row}', '통')
+
+            # Write quantities if usage exists
+            if used_val is not None and str(used_val) != '0' and str(used_val) != '0.0' and str(used_val) != '':
+                safe_write(f'K{row}', '-')
+                safe_write(f'M{row}', used_val)
+                safe_write(f'O{row}', m_data.get('in', 0))
+                print(f"DEBUG: Wrote Usage '{used_val}' to M{row}")
         
         # 7. Vehicles & Safety (Section 3)
         # Detailed 2x4 Table Implementation (출차/입차)
