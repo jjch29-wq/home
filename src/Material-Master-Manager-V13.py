@@ -2124,20 +2124,24 @@ class MaterialManager:
             print(f"DEBUG: Failed to pre-load locks: {e}")
 
     def _ensure_canvas_scroll_region(self):
-        """Update canvas scroll region based on content height (stops at RTK bottom)"""
+        """Update canvas scroll region based on content height and width (ensures full visibility)"""
         try:
             if hasattr(self, 'entry_canvas') and self.entry_canvas:
                 self.entry_canvas.update_idletasks()
                 
-                # Get max Y from all core elements
+                # Get max Y and X from all core elements
                 max_y = 0
+                max_x = 1100 # Default minimum width
                 
-                # 1. Use the bottom of master_form_panel which contains form, NDT, RTK, and Workers
+                # 1. Use the bounding box of master_form_panel which contains form, NDT, RTK, and Workers
                 if hasattr(self, 'master_form_panel'):
                     self.master_form_panel.update_idletasks()
                     panel_y = self.master_form_panel.winfo_y()
                     panel_h = self.master_form_panel.winfo_height()
+                    panel_x = self.master_form_panel.winfo_x()
+                    panel_w = self.master_form_panel.winfo_width()
                     max_y = max(max_y, panel_y + panel_h)
+                    max_x = max(max_x, panel_x + panel_w)
                 
                 # 2. Specifically check RTK bottom if requested by user
                 if hasattr(self, 'rtk_grid'):
@@ -2154,14 +2158,17 @@ class MaterialManager:
                     try:
                         if widget.winfo_manager() == 'place':
                             info = widget.place_info()
+                            x = int(float(info.get('x', 0)))
                             y = int(float(info.get('y', 0)))
+                            w = int(float(info.get('width', widget.winfo_width())))
                             h = int(float(info.get('height', widget.winfo_height())))
                             max_y = max(max_y, y + h)
+                            max_x = max(max_x, x + w)
                     except: pass
 
-                # Final scroll height with minimal buffer
+                # Final scroll height and width with minimal buffer
                 scroll_h = max_y + 10
-                scroll_w = max(1100, self.entry_inner_frame.winfo_width())
+                scroll_w = max(max_x, self.entry_inner_frame.winfo_width())
                 
                 self.entry_canvas.configure(scrollregion=(0, 0, scroll_w, scroll_h))
         except Exception as e:
@@ -2475,6 +2482,30 @@ class MaterialManager:
                                                                '차량번호': str, '주행거리': str, '차량점검': str, '차량비고': str})
                     print(f"DEBUG: Loaded {len(self.daily_usage_df)} records from DailyUsage sheet.")
                     self.daily_usage_df = normalize_cols(self.daily_usage_df)
+                    
+                    # [NEW] Column Name Migration for Daily Usage
+                    if '날짜' in self.daily_usage_df.columns:
+                        if 'Date' not in self.daily_usage_df.columns:
+                            self.daily_usage_df.rename(columns={'날짜': 'Date'}, inplace=True)
+                        else:
+                            # Merge if both exist
+                            self.daily_usage_df['Date'] = self.daily_usage_df['Date'].fillna(self.daily_usage_df['날짜'])
+                            self.daily_usage_df.drop(columns=['날짜'], inplace=True)
+
+                    if '현장' in self.daily_usage_df.columns:
+                        if 'Site' not in self.daily_usage_df.columns:
+                            self.daily_usage_df.rename(columns={'현장': 'Site'}, inplace=True)
+                        else:
+                            self.daily_usage_df['Site'] = self.daily_usage_df['Site'].fillna(self.daily_usage_df['현장'])
+                            self.daily_usage_df.drop(columns=['현장'], inplace=True)
+
+                    if '수량' in self.daily_usage_df.columns:
+                        if 'Usage' not in self.daily_usage_df.columns:
+                            self.daily_usage_df.rename(columns={'수량': 'Usage'}, inplace=True)
+                        else:
+                            self.daily_usage_df['Usage'] = self.daily_usage_df['Usage'].fillna(self.daily_usage_df['수량'])
+                            self.daily_usage_df.drop(columns=['수량'], inplace=True)
+
                     self.daily_usage_df = self._sync_dataframe_schema(self.daily_usage_df, 'DailyUsage')
 
                     # [NEW] Migrate FilmCount to Usage/수량 if needed (for legacy data)
@@ -2512,7 +2543,9 @@ class MaterialManager:
                             
                             # [SAFE] Ensure NO numeric-locked columns receive an empty string by accident
                             # Only apply string replacement if the column is NOT designated as numeric later
-                            numeric_intended = ['Usage', '검사량', '단가', '출장비', '일식', '검사비', '수량']
+                            numeric_intended = ['Usage', '검사량', '단가', '출장비', '일식', '검사비', '수량', 'OT', 'OT금액']
+                            for i in range(1, 11): numeric_intended.append(f'OT{i}')
+                            
                             if col not in numeric_intended:
                                 # Ensure all strings are stripped and nan-free
                                 self.daily_usage_df[col] = self.daily_usage_df[col].astype(str).str.strip().replace(['nan', 'None', 'NULL', '-0.0', '0.0', 'NaN', 'NAN', 'nan.0'], '')
@@ -4396,8 +4429,9 @@ class MaterialManager:
             display = f"{name}-{str(sn).strip()}"
             
         model_name = mat.get('모델명', '')
-        if model_name and pd.notna(model_name) and str(model_name).strip():
-            display = f"{display} ({str(model_name).strip()})"
+        model_name_val = str(model_name).strip()
+        if model_name_val and pd.notna(model_name) and model_name_val != str(name).strip():
+            display = f"{display} ({model_name_val})"
         
         if spec and pd.notna(spec) and str(spec).strip():
             display = f"{display} [{str(spec).strip()}]"
@@ -6454,9 +6488,20 @@ class MaterialManager:
             unique_mat_ids = self.daily_usage_df[m_id_col].dropna().unique()
             material_names = []
             for mat_id in unique_mat_ids:
-                mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
-                if not mat_row.empty:
-                    material_names.append(mat_row.iloc[0]['품목명'])
+                # [ROBUST] Use same lookup logic for filters
+                try:
+                    m_id_f = float(mat_id)
+                    matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_id_f]
+                    if not matches.empty:
+                        material_names.append(str(matches.iloc[0]['품목명']))
+                    else:
+                        material_names.append(f"ID: {mat_id}")
+                except:
+                    matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(mat_id)]
+                    if not matches.empty:
+                        material_names.append(str(matches.iloc[0]['품목명']))
+                    else:
+                        material_names.append(f"ID: {mat_id}")
             unique_materials = ['전체'] + sorted(set(material_names))
             self.cb_filter_material_monthly['values'] = unique_materials
             if not self.cb_filter_material_monthly.get():
@@ -6665,12 +6710,27 @@ class MaterialManager:
                 return str(val).replace('nan', '').replace('None', '').strip()
                 
             mat_id = entry['MaterialID']
-            mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
             
-            if not mat_row.empty:
-                mat_name = mat_row.iloc[0]['품목명']
-            else:
-                mat_name = f"ID: {mat_id}"
+            # [ROBUST] Handle type mismatch in MaterialID lookup for Monthly Tab
+            def get_mat_name(m_id):
+                if pd.isna(m_id) or str(m_id).lower() == 'nan': return "N/A"
+                # Try to find name from materials_df
+                try:
+                    # Convert both to float for numeric comparison
+                    m_id_f = float(m_id)
+                    matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_id_f]
+                    if not matches.empty:
+                        return str(matches.iloc[0]['품목명'])
+                except: pass
+                
+                # Fallback to string comparison
+                matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(m_id)]
+                if not matches.empty:
+                    return str(matches.iloc[0]['품목명'])
+                
+                return f"ID: {m_id}"
+
+            mat_name = get_mat_name(mat_id)
             
             # Apply material filter
             if filter_material != '전체' and mat_name != filter_material:
@@ -7158,17 +7218,18 @@ class MaterialManager:
                 curr_id = m_id_str.strip()
                 if not curr_id or curr_id.lower() == 'nan': continue
                 
-                # Logic to find material name from ID (handling numeric conversion)
-                try: 
-                    target_id = float(curr_id) if '.' in curr_id or curr_id.isdigit() else curr_id
-                except: 
-                    target_id = curr_id
-                    
-                m_match = self.materials_df[self.materials_df['MaterialID'] == target_id]
-                if not m_match.empty:
-                    mat_names_list.append(str(m_match.iloc[0]['품목명']))
-                else:
-                    mat_names_list.append(f"ID:{curr_id}")
+                # [ROBUST] Logic to find material name from ID (handling numeric conversion)
+                def get_single_mat_name(m_id_val):
+                    try: 
+                        m_f = float(m_id_val)
+                        matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_f]
+                        if not matches.empty: return str(matches.iloc[0]['품목명'])
+                    except: pass
+                    matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(m_id_val)]
+                    if not matches.empty: return str(matches.iloc[0]['품목명'])
+                    return f"ID:{m_id_val}"
+                
+                mat_names_list.append(get_single_mat_name(curr_id))
                     
             mat_name = ", ".join(sorted(set(mat_names_list))) if mat_names_list else "품목 미지정"
 
@@ -7692,7 +7753,7 @@ class MaterialManager:
                 'vehicles': ('차량 목록 관리', getattr(self, 'vehicles', [])),
                 'companies': ('업체 목록 관리', getattr(self, 'companies', [])),
                 'materials': ('품목 목록 관리 (기본)', getattr(self, 'carestream_films', [])),
-                'daily_units': ('단위 목록 관리', self.daily_units)
+                'daily_units': ('단위 목록 관리', getattr(self, 'daily_units', []))
             }
             if config_key not in data_map: return
             title, data_list = data_map[config_key]
@@ -7918,7 +7979,7 @@ class MaterialManager:
             'worktimes': self.worktimes,
             'vehicles': self.vehicles,
             'companies': getattr(self, 'companies', []),
-            'daily_units': self.daily_units
+            'daily_units': getattr(self, 'daily_units', [])
         }
         
         if config_key not in list_map:
@@ -7935,6 +7996,8 @@ class MaterialManager:
                 self.cb_daily_filter_site['values'] = ['전체'] + sorted_vals
             if hasattr(self, 'cb_budget_site'): self.cb_budget_site['values'] = sorted_vals
             if hasattr(self, 'cb_budget_view_site'): self.cb_budget_view_site['values'] = sorted_vals
+        elif config_key == 'daily_units':
+            if hasattr(self, 'cb_daily_unit'): self.cb_daily_unit['values'] = sorted_vals
         elif config_key == 'companies':
             # [NEW] Update company combobox in daily usage
             if hasattr(self, 'cb_daily_company'): self.cb_daily_company['values'] = sorted_vals
@@ -8632,23 +8695,27 @@ class MaterialManager:
                 return
 
             # 3. Create record (Everything else is zero/empty)
+            reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
+            checks = "|".join([f"{k}:{v}" for k, v in v_data.items() if k not in reserved and v])
+
             record = {
-                '날짜': usage_date,
+                'Date': usage_date,
                 '업체명': self.cb_daily_company.get().strip() or "현장기록",
-                '현장': site,
-                '작업자': "차량점검", # Visual tag in worker column
-                '작업시간': "",
+                'Site': site,
+                'User': "차량점검", # Visual tag in worker column
+                'WorkTime': "",
                 '장비명': self.cb_daily_equip.get().strip(),
                 '검사방법': self.cb_daily_test_method.get().strip(),
                 '회사코드': "",
-                '수량': 0, '단가': 0, '출장비': 0, '검사비': 0,
-                'OT시간': 0, 'OT금액': 0,
-                '품목명': "차량점검",
+                'Usage': 0.0, '단가': 0.0, '출장비': 0.0, '검사비': 0.0,
+                '검사량': 0.0,
+                'OT': 0.0, 'OT금액': 0.0,
+                'MaterialID': "차량점검",
                 '차량번호': v_no,
                 '주행거리': v_data.get('_raw_mileage', '0'),
-                '차량점검': ", ".join([k for k, v in v_data.items() if v is True]),
+                '차량점검': checks,
                 '차량비고': v_data.get('remarks', ''),
-                '입력시간': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'EntryTime': datetime.datetime.now(),
                 '(Full작업자)': "차량점검"
             }
             # Initialize RTK/NDT columns as 0
@@ -9134,6 +9201,7 @@ class MaterialManager:
         # Explicitly fix all possible grid rows to weight 0
         for r in range(100):
             self.entry_inner_frame.grid_rowconfigure(r, weight=0)
+        self.entry_inner_frame.columnconfigure(0, weight=1)
         
         # 1. Unified Master Form Panel summerly
         self.master_form_panel = ttk.LabelFrame(self.entry_inner_frame, text="일일 검사 및 사용량 기록")
@@ -9219,8 +9287,12 @@ class MaterialManager:
         self.ent_daily_test_amount = ttk.Entry(form_content, width=15)
         self.ent_daily_test_amount.grid(row=4, column=1, padx=(2, 10), pady=1, sticky='w')
         
-        ttk.Label(form_content, text="단위:").grid(row=4, column=2, padx=(5, 0), pady=1, sticky='e')
-        self.cb_daily_unit = ttk.Combobox(form_content, width=13, values=self.daily_units)
+        # [FIX] Embedded Unit Label - Clickable label to manage unit list
+        lbl_unit_mgmt = ttk.Label(form_content, text="단위:", cursor="hand2", foreground="#0056b3")
+        lbl_unit_mgmt.grid(row=4, column=2, padx=(5, 0), pady=1, sticky='e')
+        lbl_unit_mgmt.bind("<Button-1>", lambda e: self.open_list_management_dialog('daily_units'))
+        
+        self.cb_daily_unit = ttk.Combobox(form_content, width=15, values=self.daily_units)
         self.cb_daily_unit.grid(row=4, column=3, padx=(2, 5), pady=1, sticky='w')
         
         btn_unit_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
@@ -12058,7 +12130,7 @@ class MaterialManager:
                     v_no = v_data.get('vehicle_info', '').strip()
                     v_mileage = v_data.get('_raw_mileage', '').strip()
                     # 차량번호, 주행거리, 혹은 점검 항목이 하나라도 기입된 상자만 데이터로 인정
-                    has_check = any(v is True for k, v in v_data.items() if k not in ['vehicle_info', 'mileage', 'remarks', '_raw_mileage'])
+                    has_check = any(v for k, v in v_data.items() if k not in ['vehicle_info', 'mileage', 'remarks', '_raw_mileage'])
                     if v_no or v_mileage or has_check:
                         living_boxes.append(b)
 
@@ -12212,17 +12284,12 @@ class MaterialManager:
                       self._auto_reconcile_and_register_ndt(date_val, site, cd['ndt_data'], all_workers, cd['회사코드'])
             
             if mat_id and common_data['검사량'] > 0:
-                mat_info = self.get_material_info(mat_id)
-                full_item_name = str(mat_info.get('품목명', '')).replace(' ', '').upper()
-                
-                # [NEW] Exclude PT/MT/NDT items from being deducted via 'Inspection Quantity'
-                # These should only be deducted via specific chemical usage (cans/bottles)
-                is_ndt_generic = any(k in full_item_name for k in ['PT', 'MT', 'NDT', '세척제', '침투제', '현상제', '백색', '흑색', '자분'])
-                
-                if not is_ndt_generic:
+                # [FIX] Only deduct stock if it's a CONSUMABLE. Equipment quantity should stay constant.
+                mat_display = self.get_material_display_name(mat_id)
+                if self._is_consumable_material(mat_display, common_data.get('검사방법', '')):
                     self._create_manual_stock_transaction(date_val, mat_id, 'OUT', common_data['검사량'], site, all_workers, f"{site} 현장 사용 (자동 차감)")
                 else:
-                    print(f"DEBUG: Skipping generic stock subtraction for NDT item '{full_item_name}' (Qty: {common_data['검사량']})")
+                    print(f"[DEBUG] Skipping stock deduction for equipment: {mat_display}")
 
         # 8. 데이터프레임 업데이트
         if records_to_save:
@@ -13145,11 +13212,15 @@ class MaterialManager:
                         if ':' in pair:
                             k, v = pair.split(':', 1)
                             v_parsed[k] = v
-                elif ',' in v_insp_raw:
+                elif ',' in v_insp_raw or v_insp_raw:
                     # Old format (keys only)
                     for k in v_insp_raw.split(','):
                         k_clean = k.strip()
-                        if k_clean: v_parsed[k_clean] = True # Legacy checkbox support
+                        if k_clean:
+                            # Map legacy True to a default "positive" value (since only checked items were saved)
+                            if 'locking' in k_clean: v_parsed[k_clean] = '잠금'
+                            elif 'cleaning' in k_clean: v_parsed[k_clean] = '함'
+                            else: v_parsed[k_clean] = '양호'
                 v_widget.set_data(v_parsed)
             
             # 7. NDT Chemicals
@@ -13252,13 +13323,12 @@ class MaterialManager:
                             self.materials_df.loc[self.materials_df['MaterialID'] == mat_id, 'Active'] = 1
                         break
                 
-                # 미등록 품목 자동 등록 (창고=현장) - PAUT인 경우 자동 등록 방지 (사용자 요청)
-                is_paut_method = (self.cb_daily_test_method.get().strip() == 'PAUT')
+                # [FIX] Only auto-register if it's a CONSUMABLE (Drug/Film). Equipment should NOT be registered.
                 if not mat_id and mat_display:
-                    if not is_paut_method:
+                    if self._is_consumable_material(mat_display, self.cb_daily_test_method.get().strip()):
                         mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록')
                     else:
-                        # [NEW] PAUT인 경우 등록은 생략하되, 입력한 명칭은 저장되도록 mat_id에 할당
+                        # For equipment or non-consumables, just store the name as ID (skips stock tracking)
                         mat_id = mat_display
 
             # 3. 중복 저장 방지 체크
@@ -15445,7 +15515,11 @@ class MaterialManager:
         cb_mat = ttk.Combobox(basic_frame, width=40)
         mat_options = []
         for _, m_row in self.materials_df.iterrows():
+            if m_row.get('Active', 1) == 0: continue
             mat_options.append(self.get_material_display_name(m_row['MaterialID']))
+        
+        # Deduplicate and sort for a clean list
+        mat_options = sorted(list(set([m for m in mat_options if m])))
         cb_mat['values'] = mat_options
         
         # Determine current display name
@@ -15658,10 +15732,12 @@ class MaterialManager:
                         found_id = m_id_check
                         break
                 
-                # [NEW] If still not found, it's a new or manually entered material name.
-                # Auto-register it to get a valid MaterialID, matching add_daily_usage_entry behavior.
+                # [FIX] Only auto-register if it's a CONSUMABLE. Equipment should NOT be registered.
                 if not found_id:
-                    found_id = self.register_new_material(full_mat_name, warehouse='현장', 규격='수정등록')
+                    if self._is_consumable_material(full_mat_name, cb_method.get().strip()):
+                        found_id = self.register_new_material(full_mat_name, warehouse='현장', 규격='수정등록')
+                    else:
+                        found_id = full_mat_name
             
             new_data['MaterialID'] = found_id if found_id is not None else entry_data.get('MaterialID')
             
@@ -15782,6 +15858,73 @@ class MaterialManager:
                 ot_entry.insert(0, "0")
         except: pass
 
+    def _safe_set_daily_df(self, idx, col, val, is_numeric=False):
+        """Defensively set a value in daily_usage_df handling all possible dtype conflicts"""
+        if col not in self.daily_usage_df.columns:
+            self.daily_usage_df.at[idx, col] = val
+            return
+
+        col_dtype = self.daily_usage_df[col].dtype
+        is_stringy = pd.api.types.is_string_dtype(col_dtype) or pd.api.types.is_object_dtype(col_dtype)
+        
+        v_to_set = val
+        if is_stringy and not is_numeric:
+            # Force to cleaned string for string columns
+            v_to_set = str(val).strip() if pd.notna(val) else ""
+            if v_to_set in ('0.0', '0', 'nan', 'None', 'NaT'): v_to_set = ""
+        elif is_numeric:
+            # Force to float for numeric columns
+            try:
+                if isinstance(val, str):
+                    v_to_set = float(val.replace(',', '').strip()) if val.strip() else 0.0
+                else:
+                    v_to_set = float(val) if pd.notna(val) else 0.0
+            except:
+                v_to_set = 0.0
+
+        try:
+            self.daily_usage_df.at[idx, col] = v_to_set
+        except:
+            try:
+                # Type conflict (e.g. float into strict string column or vice versa)
+                # Cast the column to object to allow the mixed/new type
+                self.daily_usage_df[col] = self.daily_usage_df[col].astype(object)
+                self.daily_usage_df.at[idx, col] = v_to_set
+            except:
+                # Final fallback
+                self.daily_usage_df.at[idx, col] = str(v_to_set)
+
+    def _is_consumable_material(self, name, method):
+        """
+        Determines if a material should be automatically registered and tracked as stock.
+        Consumables: RT Films, MT/PT drugs, chemicals.
+        Equipment (exclude): Scanners, Crawlers, Sources, Meters, Yokes, etc.
+        """
+        if not name: return False
+        n = str(name).strip().upper().replace(' ', '')
+        m = str(method).strip().upper()
+
+        # 1. MT/PT consumables (NDT drugs)
+        ndt_keywords = [x.upper().replace(' ', '') for x in self.ndt_materials_all]
+        if any(kw in n for kw in ndt_keywords):
+            return True
+            
+        # 2. RT consumables (Films)
+        rt_keywords = ['FILM', 'CARESTREAM', 'MX125', 'T200', 'AA400', 'HS800', 'IX100', 'AGFA', 'FUJI']
+        if any(kw in n for kw in rt_keywords):
+            return True
+
+        # 3. Method-based logic
+        if m in ['MT', 'PT']:
+            # If method is MT/PT, it's likely a drug unless it contains equipment keywords
+            equip_keywords = ['YOKE', '장비', 'EQUIP', 'METER', 'GAUGE', 'UVLAMP', '전등', '라이트', '자화']
+            if any(kw in n for kw in equip_keywords):
+                return False
+            return True # Default to True for chemicals in MT/PT
+
+        # 4. If method is PAUT/UT/RT/PMI, most items are equipment unless keywords matched above
+        return False
+
     def save_daily_usage_edits(self, df_idx, new_data):
         """Save edited daily usage and reconcile stock"""
         try:
@@ -15821,31 +15964,23 @@ class MaterialManager:
                 if k.startswith('NDT_') or k.startswith('RTK_'):
                     # Search for case-insensitive and space-insensitive match in existing columns
                     k_norm = k.replace(' ', '').upper()
-                    found_existing = False
                     for ex_col in existing_cols:
                         if str(ex_col).replace(' ', '').upper() == k_norm:
                             target_key = ex_col
-                            found_existing = True
                             break
                 
-                if target_key in self.daily_usage_df.columns:
-                    if k == 'MaterialID':
-                        try: self.daily_usage_df.at[df_idx, target_key] = float(v)
-                        except: self.daily_usage_df.at[df_idx, target_key] = v
-                    elif k.startswith('NDT_') or k.startswith('RTK_') or k in ['검사량', '단가', '출장비', '일식', '검사비', 'FilmCount']:
-                        try: self.daily_usage_df.at[df_idx, target_key] = float(v)
-                        except: self.daily_usage_df.at[df_idx, target_key] = 0.0
-                    else:
-                        self.daily_usage_df.at[df_idx, target_key] = v
-                else:
-                    # If column doesn't exist yet, create it
-                    self.daily_usage_df.at[df_idx, target_key] = v
-            
+                # Comprehensive list of columns that MUST be numeric
+                numeric_cols = ['Usage', '수량', '검사량', '단가', '출장비', '일식', '검사비', 'FilmCount', 'OT', 'OT금액']
+                is_numeric = k.startswith('NDT_') or k.startswith('RTK_') or k in numeric_cols or any(f"OT{i}" == k or f"OT금액{i}" == k for i in range(1, 11))
+                
+                # Use safe setter to avoid all dtype crashes
+                self._safe_set_daily_df(df_idx, target_key, v, is_numeric=(is_numeric or k == 'MaterialID'))
+
             # Ensure Usage is consistently updated from Inspection Amount (검사량)
             usage_col = 'Usage' if 'Usage' in self.daily_usage_df.columns else '수량'
-            self.daily_usage_df.at[df_idx, usage_col] = new_data.get('검사량', 0.0)
+            self._safe_set_daily_df(df_idx, usage_col, new_data.get('검사량', 0.0), is_numeric=True)
             if '검사량' in self.daily_usage_df.columns:
-                self.daily_usage_df.at[df_idx, '검사량'] = new_data.get('검사량', 0.0)
+                self._safe_set_daily_df(df_idx, '검사량', new_data.get('검사량', 0.0), is_numeric=True)
             
             # 3. Apply New Deduction
             new_date = pd.to_datetime(new_data['Date'])
@@ -15870,12 +16005,12 @@ class MaterialManager:
                                 self.materials_df.loc[self.materials_df['MaterialID'] == new_mat_id, 'Active'] = 1
                             break
                     
-                    # If still not found, auto-register (Skip for PAUT per user request)
+                    # [FIX] Only auto-register if it's a CONSUMABLE. Equipment should NOT be registered.
                     if not new_mat_id and new_mat_display:
-                        if not is_paut_edit:
+                        if self._is_consumable_material(new_mat_display, new_method):
                             new_mat_id = self.register_new_material(new_mat_display, warehouse='현장', 규격='자동등록')
                         else:
-                            # [NEW] PAUT인 경우 등록은 생략하되, 입력한 명칭은 저장되도록 mat_id에 할당
+                            # [NEW] 장비인 경우 등록은 생략하되, 입력한 명칭은 저장되도록 mat_id에 할당
                             new_mat_id = new_mat_display
                 
                 new_qty = float(new_data.get('검사량', 0))
@@ -15890,12 +16025,16 @@ class MaterialManager:
                 
                 # Create transaction for the main material usage
                 if new_mat_id and new_qty > 0:
-                    # [FIX] PT/MT 약품의 경우, 개별 구성품(세척제 등)으로 별도 자동 차감되므로 
-                    # 부모 항목인 'PT약품' 자체에 대한 중복 자동 차감(검사량 기준)은 건너뜜
-                    mat_info = self.get_material_info(new_mat_id)
-                    full_item_name = str(mat_info.get('품목명', '')).replace(' ', '').upper()
-                    if full_item_name not in ["PT약품", "MT약품", "NDT약품"]:
-                        self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
+                    # [FIX] Only deduct stock if it's a CONSUMABLE. Equipment quantity should stay constant.
+                    if self._is_consumable_material(new_mat_display, new_method):
+                        # PT/MT 약품의 경우, 개별 구성품(세척제 등)으로 별도 자동 차감되므로 
+                        # 부모 항목인 'PT약품' 자체에 대한 중복 자동 차감(검사량 기준)은 건너뜜
+                        mat_info = self.get_material_info(new_mat_id)
+                        full_item_name = str(mat_info.get('품목명', '')).replace(' ', '').upper()
+                        if full_item_name not in ["PT약품", "MT약품", "NDT약품"]:
+                            self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
+                    else:
+                        print(f"[DEBUG] Skipping stock deduction for equipment (edit): {new_mat_display}")
                 
                 # Reconcile NDT consumables using unified helper
                 ndt_data = {
