@@ -285,20 +285,96 @@ class DailyWorkReportManager:
         safe_write(f"{cmap.get('mileage')}{veh_row}", v.get('mileage', ''))
 
         # Detailed Inspection Checklist Mapping
-        # Row 29: 출차시 / Row 30: 입차시
         chk_rows = {'out': 29, 'in': 30}
         chk_cols = {
-            'exterior': {'양호': 'E', '불량': 'F'},
+            'exterior':    {'양호': 'E', '불량': 'F'},
             'cleanliness': {'양호': 'H', '불량': 'I'},
-            'cleaning': {'함': 'K', '안함': 'L'},
-            'locking': {'잠금': 'N', '안함': 'O'}
+            'cleaning':    {'양호': 'K', '불량': 'L'},
+            'locking':     {'잠김': 'N', '안함': 'O'}
         }
         
+        # [NEW] Calculate Overall Status for Summary Line
+        is_bad = False
+        inspected = False
+        for r_key in ['out', 'in']:
+            for c_key in ['exterior', 'cleanliness', 'cleaning', 'locking']:
+                raw_val = v.get(f"{r_key}_{c_key}")
+                if raw_val:
+                    inspected = True
+                    # Check against mapping for bad states
+                    if raw_val in ['불량', '안함']:
+                        is_bad = True
+        
+        # Summary Header Line: Use professional square symbols
+        # ■ (0x25A0), □ (0x25A1)
+        m_good = chr(0x25A0) if not is_bad else chr(0x25A1)
+        m_bad = chr(0x25A0) if is_bad else chr(0x25A1)
+        
+        if inspected:
+            summary_text = f"3. 차량관리   {m_good} 양호    {m_bad} 불량"
+        else:
+            summary_text = f"3. 차량관리   {chr(0x25A1)} 양호    {chr(0x25A1)} 불량"
+            
+        # [ROBUST] Search for the cell containing "3. 차량관리" to update it dynamically
+        search_range = sheet['A18':'G32']
+        found_cell = None
+        for row_cells in search_range:
+            for cell in row_cells:
+                if cell.value and "3. 차량관리" in str(cell.value):
+                    cell.value = summary_text
+                    cell.font = Font(name='맑은 고딕', size=10, bold=True)
+                    cell.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+                    found_cell = cell.coordinate
+                    break
+            if found_cell: break
+        
+        if not found_cell:
+            safe_write("B21", summary_text)
+            sheet["B21"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
+            sheet["B21"].font = Font(name='맑은 고딕', size=10, bold=True)
+
+        # [REMOVED] Overwriting Row 28 labels to preserve template's category headers like "차량 외부상태"
+        # The labels (양호, 불량, etc.) will now be written alongside the symbols in Rows 29/30.
+
         for r_key, row in chk_rows.items():
             for c_key, options in chk_cols.items():
-                val = v.get(f"{r_key}_{c_key}")
-                if val and val in options:
-                    safe_write(f"{options[val]}{row}", f"{val} ✔")
+                raw_val = v.get(f"{r_key}_{c_key}")
+                # Map various states to display labels
+                unified_val = None
+                if c_key == 'locking':
+                    if raw_val in ['잠김', '잠금', '함']: unified_val = '잠김'
+                    elif raw_val in ['안함', '불량']: unified_val = '안함'
+                else:
+                    if raw_val in ['양호', '함', '잠금', '잠김']: unified_val = '양호'
+                    elif raw_val in ['불량', '안함']: unified_val = '불량'
+                
+                # [COMBINED] Combine all options into one string to handle merged cells (e.g., ▣ 양호   □ 불량)
+                combined_results = []
+                for opt_name in options.keys():
+                    is_selected = (unified_val == opt_name)
+                    symbol = "\u25A3" if is_selected else "\u25A1"
+                    combined_results.append(f"{symbol} {opt_name}")
+                
+                # Join with spaces and write to the FIRST column address defined for this category
+                final_text = "   ".join(combined_results)
+                main_col = list(options.values())[0] # e.g., 'E' for exterior
+                cell_coord = f"{main_col}{row}"
+                
+                safe_write(cell_coord, final_text)
+                
+                # Force alignment for the combined cell
+                try:
+                    sheet[cell_coord].alignment = Alignment(horizontal='center', vertical='center')
+                    sheet[cell_coord].font = Font(name='맑은 고딕', size=9)
+                except:
+                    pass
+
+        # [NEW] Write Remarks (Row 31)
+        if v.get('remarks'):
+            safe_write("B31", f"비고: {v.get('remarks')}")
+            if sheet["B31"].value:
+                sheet["B31"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
+                sheet["B31"].font = Font(name='맑은 고딕', size=9)
 
         wb.save(output_path)
         return output_path
