@@ -39,6 +39,11 @@ class DailyWorkReportManager:
         }
 
     def generate_report(self, data, output_path, custom_mapping=None):
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        import re as _re
+        from copy import copy
+
+        custom_mapping = custom_mapping or {}
         if not os.path.exists(self.template_path):
             raise FileNotFoundError(f"Template not found at {self.template_path}")
 
@@ -88,6 +93,10 @@ class DailyWorkReportManager:
                 row_val = int(row)
                 if row_val >= 18: return f"{col}{row_val + offset}"
             return coord
+
+            # [UNIFIED HEIGHT BALANCE] No row deletion for methods either
+            # We will compensate for added method rows by reducing Note heights later
+            pass
 
         method_base_rows = [13, 14, 15, 16]
         if method_offset > 0:
@@ -140,15 +149,40 @@ class DailyWorkReportManager:
         materials_data = data.get('materials', {}); active_rt = []
         for k, v in materials_data.items():
             if isinstance(v, dict) and (k.startswith('RT ') or k.startswith('RT_ROW_') or v.get('is_rt')):
-                item = v.copy(); item['name'] = item.get('name', k); active_rt.append(item)
+                name = v.get('name', '').strip()
+                if not name: continue
+                item = v.copy(); item['name'] = name; active_rt.append(item)
         
-        rt_extra = max(0, len(active_rt) - 3); total_offset = method_offset + rt_extra
-        # [OPTIMIZED LAYOUT] Fill the A4 page and fix Category Merges
-        total_extra_rows = method_offset + rt_extra + 1
+        # RT dynamic rows: if more than 4, insert additional rows
+        rt_count = len(active_rt)
+        base_rt_limit = 4
+        rt_extra = max(0, rt_count - base_rt_limit)
         
-        # Increase Section 2 (Notes) height to absorb bottom white space
-        # [FIXED GRID MODE] No insertions or deletions to protect Row 42 Title and Row 51 End
-        # 1. Category Merges (B:C / 2:3) - STRICTLY FIXED
+        if rt_extra > 0:
+            print(f"DEBUG: Inserting {rt_extra} rows for RT extra materials at row 46")
+            # Insert rows at the end of RT section (starting from Row 46)
+            sheet.insert_rows(46, rt_extra)
+            # [FIX] Copy styles from Row 45 to the newly inserted rows
+            from copy import copy
+            for r_new in range(46, 46 + rt_extra):
+                print(f"DEBUG: Copying style from Row 45 to New Row {r_new}")
+                sheet.row_dimensions[r_new].height = 30
+                for col in range(1, 20): # Columns A to S
+                    try:
+                        source_cell = sheet.cell(row=45, column=col)
+                        target_cell = sheet.cell(row=r_new, column=col)
+                        if source_cell.has_style:
+                            target_cell.font = copy(source_cell.font)
+                            target_cell.border = copy(source_cell.border)
+                            target_cell.fill = copy(source_cell.fill)
+                            target_cell.alignment = copy(source_cell.alignment)
+                            target_cell.number_format = source_cell.number_format
+                    except: pass
+            # We do NOT delete rows from Notes, we will adjust their height later
+        
+        total_offset = method_offset + rt_extra
+        
+        # 1. Category Merges (B:C) Helper
         def safe_merge(sheet, s_row, s_col, e_row, e_col, value):
             for m_range in list(sheet.merged_cells.ranges):
                 if not (e_row < m_range.min_row or s_row > m_range.max_row or 
@@ -162,23 +196,27 @@ class DailyWorkReportManager:
                 cell.alignment = Alignment(horizontal='center', vertical='center')
             except: pass
 
-        safe_merge(sheet, 43, 2, 46, 3, "RT") 
-        safe_merge(sheet, 47, 2, 48, 3, "MT")
-        safe_merge(sheet, 49, 2, 51, 3, "PT")
+        rt_display_count = max(1, rt_count)
+        rt_end_row = 42 + rt_display_count
+        
+        safe_merge(sheet, 43, 2, rt_end_row, 3, "RT") 
+        safe_merge(sheet, 47 + rt_extra, 2, 48 + rt_extra, 3, "MT")
+        safe_merge(sheet, 49 + rt_extra, 2, 51 + rt_extra, 3, "PT")
 
-        # [FIX] Set column widths for D and E so merged D:E cell is wide enough for long names
+        # Set column widths
         sheet.column_dimensions['D'].width = 12
         sheet.column_dimensions['E'].width = 12
 
         # 2. Item Name (D:E) and Spec (F:G) Horizontal Merges
-        for r in range(43, 52):
+        # We process all rows from 43 to 51 + rt_extra
+        for r in range(43, 52 + rt_extra):
             try:
-                # Clean up existing merges in D:G range first
+                # Clean up existing merges first
                 for m_range in list(sheet.merged_cells.ranges):
                     if m_range.min_row == r and m_range.max_row == r and (m_range.min_col >= 4 and m_range.max_col <= 7):
                         sheet.unmerge_cells(m_range.coord)
                 
-                if r <= 46:
+                if r <= 42 + rt_display_count:
                     # RT Area: Separate Name (D:E) and Spec (F:G)
                     sheet.merge_cells(start_row=r, start_column=4, end_row=r, end_column=5)
                     sheet.merge_cells(start_row=r, start_column=6, end_row=r, end_column=7)
@@ -186,22 +224,22 @@ class DailyWorkReportManager:
                     # MT/PT Area: Wide Combined Name/Spec (D:G)
                     sheet.merge_cells(start_row=r, start_column=4, end_row=r, end_column=7)
                     
-                # [SPECIFIC ROW 51 MERGE] I:J, K:L, M:N, O:P, Q:S
-                if r == 51:
-                    for s_c, e_c in [(9,10), (11,12), (13,14), (15,16), (17,19)]:
-                        try:
-                            # Unmerge first
-                            for m_range in list(sheet.merged_cells.ranges):
-                                if m_range.min_row == 51 and m_range.max_row == 51 and m_range.min_col == s_c:
-                                    sheet.unmerge_cells(m_range.coord)
-                            sheet.merge_cells(start_row=51, start_column=s_c, end_row=51, end_column=e_c)
-                        except: pass
+                # [HORIZONTAL MERGES] Apply to ALL material rows (RT, MT, PT)
+                # Merges for: I:J, K:L, M:N, O:P, Q:S
+                for s_c, e_c in [(9,10), (11,12), (13,14), (15,16), (17,19)]:
+                    try:
+                        # Clean existing merges in this row/column range
+                        for m_range in list(sheet.merged_cells.ranges):
+                            if m_range.min_row == r and m_range.max_row == r and m_range.min_col == s_c:
+                                sheet.unmerge_cells(m_range.coord)
+                        sheet.merge_cells(start_row=r, start_column=s_c, end_row=r, end_column=e_c)
+                    except: pass
             except: pass
 
         # [DYNAMIC STYLE COPY & DATA PROTECTION]
-        # 1. Clear the RT Range (43-46) first to remove template remnants
+        # 1. Clear the RT Range (43 to 46 + rt_extra) first to remove template remnants
         mat_start = 43
-        for r in range(mat_start, 47):
+        for r in range(mat_start, 47 + rt_extra):
             for col in range(4, 20): # D to S
                 cell = sheet.cell(row=r, column=col)
                 if not isinstance(cell, MergedCell):
@@ -215,12 +253,16 @@ class DailyWorkReportManager:
             return name
 
         # Write RT Data with Standardized Formatting
+        print(f"DEBUG: Starting RT Data Writing Loop. Total RT items: {len(active_rt)}")
         for idx, m in enumerate(active_rt):
             r = mat_start + idx
-            if r > 46: break
+            if r > 46 + rt_extra: 
+                print(f"DEBUG: Breaking RT loop at r={r} because it exceeds 46 + {rt_extra}")
+                break
             
             # Strip brand prefix so short name fits in merged cell
             display_name = strip_brand(m.get('name', ''))
+            print(f"DEBUG: Writing RT Item {idx+1} to Row {r}: {display_name}")
             safe_write(f'D{r}', display_name)
             # Apply style AFTER safe_write
             cell_name = sheet.cell(row=r, column=4)
@@ -240,8 +282,83 @@ class DailyWorkReportManager:
             safe_write(f'O{r}', f"{in_val} 매")   # Incoming is O
             # Stock (Q) removed per request
 
-        # 3. Add same placeholders to empty RT rows (ensure 43-46 are uniform)
-        for r in range(43, 47):
+        # [SELECTIVE CONTENT CLEARING & SAFETY-MARGIN COMPENSATION]
+        # Clear template text in B18:S25 to allow clean compression
+        for r_clear in range(18 + method_offset, 26 + method_offset):
+            for c_clear in range(2, 20): # B to S
+                cell = sheet.cell(row=r_clear, column=c_clear)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
+
+        # [HARD RESET FORMATTING & HIERARCHY]
+        tiny_font = Font(size=1)
+        no_wrap = Alignment(wrap_text=False, horizontal='center', vertical='center')
+        
+        rt_count = len(active_rt)
+        rt_extra = max(0, rt_count - 4)
+        
+        # [FINAL STABLE COMPRESSION & OFFSET CALCULATION]
+        rt_count = len(active_rt)
+        rt_extra = max(0, rt_count - 4)
+        total_offset = method_offset + rt_extra # CRITICAL for Section 6 mapping
+        
+        # [STABLE COMPRESSION: CLEAR & RESIZE (SAFE)]
+        # We avoid delete_rows as it destroys template merges in Sections 3-6.
+        note_range_start = 18 + method_offset
+        note_range_end = 25 + method_offset
+        
+        # 1. Clear contents and unmerge ONLY in the note range
+        for r in range(note_range_start, note_range_end + 1):
+            # Reset Row Height
+            sheet.row_dimensions[r].height = 6.0
+            sheet.row_dimensions[r].custom_height = True
+            
+            # Clear Cells and Alignment
+            for c in range(1, 20): # A to S
+                cell = sheet.cell(row=r, column=c)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
+                    cell.alignment = Alignment(wrap_text=False, vertical='center', horizontal='center')
+                    cell.font = Font(size=1)
+                
+        # 2. Kill merges in this specific range to allow shrinking
+        merges_to_kill = []
+        for m_range in list(sheet.merged_cells.ranges):
+            if m_range.min_row >= note_range_start and m_range.max_row <= note_range_end:
+                merges_to_kill.append(m_range)
+        for m in merges_to_kill:
+            try: sheet.unmerge_cells(str(m))
+            except: pass
+            
+        # 3. Method Rows (13-17 + inserted)
+        for r in range(13, 18 + method_offset):
+            sheet.row_dimensions[r].height = 15.0
+            sheet.row_dimensions[r].custom_height = True
+            
+        # 4. Materials (Section 6) prominent height
+        for r in range(43, 43 + rt_count):
+            sheet.row_dimensions[r].height = 25.0
+            sheet.row_dimensions[r].custom_height = True
+            
+        # 5. Shrink Spacer Row 42
+        spacer_row = 42 + method_offset
+        sheet.row_dimensions[spacer_row].height = 5
+        sheet.row_dimensions[spacer_row].custom_height = True
+
+        # 3. Hide unused RT rows (Only if count < 4)
+        if rt_count < 4:
+            for r in range(43 + rt_count, 47):
+                sheet.row_dimensions[r].height = 0
+                sheet.row_dimensions[r].hidden = True
+                # Clear content/borders
+                for col in range(1, 20):
+                    cell = sheet.cell(row=r, column=col)
+                    if not isinstance(cell, MergedCell):
+                        cell.value = None
+                        cell.border = Border(left=Side(style=None), right=Side(style=None), top=Side(style=None), bottom=Side(style=None))
+
+        # Add placeholders ONLY to active RT rows that are empty
+        for r in range(43, 43 + rt_count):
             if r >= mat_start + len(active_rt):
                 safe_write(f'K{r}', '-'); safe_write(f'M{r}', '매'); safe_write(f'O{r}', '0 매')
             
@@ -252,8 +369,14 @@ class DailyWorkReportManager:
             'PT Cleaner': ['PT Cleaner', '세척', '세척액', 'Cleaner'],
             'PT Developer': ['PT Developer', '현상', '현상액', '현상제', 'Developer']
         }
-        # Fixed Map matching RT: 43-46, MT: 47-48, PT: 49-51
-        mat_map = {'MT WHITE': 47, 'MT 7C-BLACK': 48, 'PT Penetrant': 49, 'PT Cleaner': 50, 'PT Developer': 51}
+        # [DYNAMIC OFFSET] MT: 47+, PT: 49+
+        mat_map = {
+            'MT WHITE': 47 + total_offset, 
+            'MT 7C-BLACK': 48 + total_offset, 
+            'PT Penetrant': 49 + total_offset, 
+            'PT Cleaner': 50 + total_offset, 
+            'PT Developer': 51 + total_offset
+        }
         
         # Korean Display Names for MT/PT
         display_names = {
@@ -261,16 +384,37 @@ class DailyWorkReportManager:
             'PT Penetrant': '침투액', 'PT Cleaner': '세척액', 'PT Developer': '현상액'
         }
         
+        # Category mapping for Column B
+        categories = {
+            'MT WHITE': 'MT', 'MT 7C-BLACK': 'MT',
+            'PT Penetrant': 'PT', 'PT Cleaner': 'PT', 'PT Developer': 'PT'
+        }
+        
+        print(f"DEBUG: MT/PT Write. total_offset={total_offset}, rt_extra={rt_extra}, method_offset={method_offset}")
+        print(f"DEBUG: mat_map={mat_map}")
+        
         for m_key, r in mat_map.items():
-            # ALWAYS write the chemical name to D (merged with E, F, G)
-            safe_write(f'D{r}', display_names.get(m_key, m_key)) 
-            
+            # B column ("MT"/"PT") is already handled by safe_merge above.
+            # Only write specific name to D:G area here.
+            display_name = display_names.get(m_key, m_key)
+            print(f"DEBUG: Writing '{display_name}' to D{r}")
+            safe_write(f'D{r}', display_name) # Specific name in D:G
+
+            # Merge D:G for Specific Item Name
+            try:
+                for m_range in list(sheet.merged_cells.ranges):
+                    if m_range.min_row == r and m_range.max_row == r and (m_range.min_col >= 4 and m_range.max_col <= 7):
+                        sheet.unmerge_cells(m_range.coord)
+                sheet.merge_cells(start_row=r, start_column=4, end_row=r, end_column=7)
+            except Exception as e:
+                print(f"DEBUG: Merge error at row {r}: {e}")
+
             # ALWAYS write the unit to H (All MT/PT use CAN)
             safe_write(f'H{r}', "CAN")
             
             m_d = {}
             for syn in synonyms.get(m_key, []):
-                m_d = materials_data.get(syn)
+                m_d = data.get('materials', {}).get(syn)
                 if m_d: break
             
             if m_d:
@@ -278,15 +422,57 @@ class DailyWorkReportManager:
                 safe_write(f'K{r}', '-'); safe_write(f'M{r}', int(m_d.get('used', 0)))
                 safe_write(f'O{r}', int(m_d.get('in', 0)))
 
-        # [BORDER & ALIGNMENT] Apply THIN border to B42:S51
+        # [BORDER & ALIGNMENT] Apply THIN border to B42:S(51 + total_offset)
         thin = Side(style='thin')
-        for r in range(42, 52):
+        for r in range(42, 52 + total_offset):
             for col in range(2, 20): # B(2) to S(19)
                 cell = sheet.cell(row=r, column=col)
                 cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
                 cell.alignment = Alignment(horizontal='center', vertical='center')
 
-        # 7. Section 3 (Vehicles) & B27 Cleanup
+        # [MT/PT WRITE - AFTER BORDER LOOP to prevent overwrite]
+        # Write AFTER borders are applied so values are final
+        for m_key, r in mat_map.items():
+            display_name = display_names.get(m_key, m_key)
+            # Write directly to the cell, bypassing safe_write to avoid wrapText interference
+            cell = sheet.cell(row=r, column=4)  # Column D
+            cell.value = display_name
+            cell.font = Font(name='맑은 고딕', size=9)
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
+            print(f"DEBUG: FINAL WRITE '{display_name}' to D{r}")
+            
+            safe_write(f'H{r}', "CAN")
+            m_d = {}
+            for syn in synonyms.get(m_key, []):
+                m_d = data.get('materials', {}).get(syn)
+                if m_d: break
+            if m_d:
+                safe_write(f'K{r}', '-')
+                safe_write(f'M{r}', int(m_d.get('used', 0)))
+                safe_write(f'O{r}', int(m_d.get('in', 0)))
+
+        # [EXCEL PRINT SETUP] Standard A4 Setup & Page Break Reset
+        # (Fit to Page removed to allow manual height shrinking to be visible)
+        print(f"DEBUG: Resetting Page Breaks and Setting Print Area to A1:S{51 + total_offset}")
+        
+        # 1. Clear all existing manual row breaks safely
+        # sheet.row_breaks is a RowBreak object, we must clear its 'brk' list
+        sheet.row_breaks.brk = [] 
+        # 2. Update Print Area to include all shifted rows
+        sheet.print_area = f'A1:S{51 + total_offset}'
+        
+        # 3. Add a new page break ONLY at the very end of our dynamic content
+        from openpyxl.worksheet.pagebreak import Break
+        sheet.row_breaks.append(Break(id=51 + total_offset))
+        
+        # 4. Standard A4 Settings
+        sheet.page_setup.orientation = sheet.ORIENTATION_PORTRAIT
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.fitToHeight = None
+        sheet.page_setup.fitToWidth = None
+        sheet.sheet_properties.pageSetUpPr.fitToPage = False
+
+        # Final Cleanup: Section 3 (Vehicles) & B27 Cleanup
         veh_list = data.get('vehicles', []); v = veh_list[0] if veh_list else {}
         veh_row = 27 + method_offset
         safe_write(f"B{veh_row}", ""); safe_write(f"H{veh_row}", v.get('mileage', ''))
@@ -352,9 +538,10 @@ class DailyWorkReportManager:
         for t_row in [12, 26, 31, 37, 42]:
             try: sheet.row_dimensions[t_row + method_offset].height = 20
             except: pass
-        # Section 2 (Notes): 8 * 25 = 200pt
-        for b_row in range(18+method_offset, 26+method_offset):
-            sheet.row_dimensions[b_row].height = 25
+        # Section 2 (Notes): SKIP - already set by compression logic above
+        # DO NOT overwrite the heights set earlier!
+        # for b_row in range(18+method_offset, 26+method_offset):
+        #     sheet.row_dimensions[b_row].height = 25
         # Materials: ~9 * 16 = 144pt
         for m_row in range(43 + method_offset, 52 + total_offset):
             sheet.row_dimensions[m_row].height = 16
@@ -371,5 +558,65 @@ class DailyWorkReportManager:
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.2
 
         sheet.print_area = f"A1:S{51 + method_offset + rt_extra}"
+        
+        # [ABSOLUTE LAST STEP: CELL-TARGETED UNMERGE + WRITE]
+        from openpyxl.cell.cell import Cell as RealCell
+        black_font = Font(name='맑은 고딕', size=10, bold=False, color='000000')
+        center_align = Alignment(horizontal='center', vertical='center', wrap_text=False)
+        
+        # Helper 1: free a cell by unmerging (used BEFORE merge_cells)
+        def free_cell(sheet, row, col):
+            for m_range in list(sheet.merged_cells.ranges):
+                if row >= m_range.min_row and row <= m_range.max_row and col >= m_range.min_col and col <= m_range.max_col:
+                    sheet.unmerge_cells(m_range.coord)
+            key = (row, col)
+            if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
+                sheet._cells[key] = RealCell(sheet, row=row, column=col)
+        
+        # Helper 2: write to cell via _cells dict WITHOUT unmerging (used AFTER merge_cells)
+        thin = Side(style='thin')
+        thin_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        def write_cell(sheet, row, col, value, font=None, align=None):
+            key = (row, col)
+            if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
+                sheet._cells[key] = RealCell(sheet, row=row, column=col)
+            cell = sheet._cells[key]
+            cell.value = value
+            cell.border = thin_border
+            if font: cell.font = font
+            if align: cell.alignment = align
+        
+        # 1. Category merges (RT, MT, PT)
+        rt_end = 42 + max(1, rt_count)
+        merge_plan = [
+            (43, 2, rt_end, 3, "RT"),
+            (47 + rt_extra, 2, 48 + rt_extra, 3, "MT"),
+            (49 + rt_extra, 2, 51 + rt_extra, 3, "PT"),
+        ]
+        for s_row, s_col, e_row, e_col, label in merge_plan:
+            # Phase 1: Free all cells (unmerge existing)
+            for r in range(s_row, e_row + 1):
+                for c in range(s_col, e_col + 1):
+                    free_cell(sheet, r, c)
+            # Phase 2: Create merge
+            try:
+                sheet.merge_cells(start_row=s_row, start_column=s_col, end_row=e_row, end_column=e_col)
+            except Exception as e:
+                print(f"DEBUG: Merge B{s_row}:C{e_row} error: {e}")
+            # Phase 3: Write to top-left WITHOUT unmerging
+            write_cell(sheet, s_row, s_col, label, black_font, center_align)
+            # Phase 4: Apply border to ALL cells in merge range (including MergedCells)
+            for r in range(s_row, e_row + 1):
+                for c in range(s_col, e_col + 1):
+                    key = (r, c)
+                    if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
+                        sheet._cells[key] = RealCell(sheet, row=r, column=c)
+                    sheet._cells[key].border = thin_border
+            print(f"DEBUG: B{s_row}:C{e_row} = '{label}'")
+        
+        # 2. Force D column item names (write without touching merges)
+        for m_key, r in mat_map.items():
+            display_name = display_names.get(m_key, m_key)
+            write_cell(sheet, r, 4, display_name, black_font, center_align)
         
         wb.save(output_path); return output_path
