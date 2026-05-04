@@ -14011,7 +14011,15 @@ class MaterialManager:
 
                         wt  = str(row.get(wt_key, '')).strip()
                         ot_raw = str(row.get(ot_key,  '')).strip()
-                        oa  = ''.join(c for c in ot_raw if c.isdigit())
+                        
+                        # [FIX] Handle decimals correctly to prevent 26000.0 becoming 260000
+                        try:
+                            # Try parsing as float first to handle .0
+                            oa_num = float(ot_raw.replace(',', '')) if ot_raw and ot_raw != 'nan' else 0
+                            oa = str(int(oa_num)) if oa_num > 0 else ''
+                        except:
+                            # Fallback to digit-only if float parsing fails
+                            oa = ''.join(c for c in ot_raw if c.isdigit())
 
                         if wt == 'nan': wt = ''
                         if not wt and not oa: continue
@@ -14190,11 +14198,11 @@ class MaterialManager:
             # [NEW] NDT 화학약품 (MT/PT) - DB site_records에서 합산하여 수집
             # [FIX] DT_ 접두어 포함하여 매칭 확장
             chem_db_map = [
-                ('MT WHITE',     ['NDT_백색페인트', 'NDT_형광자분', 'NDT_백색페인트_MT', 'DT_백색페인트', 'DT_형광자분']), 
-                ('MT 7C-BLACK',  ['NDT_흑색자분', 'DT_흑색자분']),
-                ('PT Penetrant', ['NDT_침투제', 'DT_침투제']),
-                ('PT Cleaner',   ['NDT_세척제', 'DT_세척제']),
-                ('PT Developer', ['NDT_현상제', 'DT_현상제']),
+                ('MT WHITE',     ['NDT_백색', 'NDT_백색페인트', 'NDT_형광자분', 'NDT_백색페인트_MT', 'DT_백색페인트', 'DT_형광자분']), 
+                ('MT 7C-BLACK',  ['NDT_흑색', 'NDT_흑색자분', 'DT_흑색자분']),
+                ('PT Penetrant', ['NDT_침투', 'NDT_침투제', 'DT_침투', 'DT_침투제']),
+                ('PT Cleaner',   ['NDT_세척', 'NDT_세척제', 'DT_세척', 'DT_세척제']),
+                ('PT Developer', ['NDT_현상', 'NDT_현상제', 'DT_현상', 'DT_현상제']),
             ]
             
             db_chem_found = False
@@ -17820,26 +17828,46 @@ class MaterialManager:
 
                     # 7. Mark as ready for future saves AFTER all restoration is done
                     def finalize_loading():
-                        self.is_ready = True
-                        print("APP READY: State restoration complete.")
-                        
-                        # [V13_RESET_ON_STARTUP] Ensure Daily Usage form starts BLANK as requested
                         try:
-                            self.clear_daily_usage_form_all()
-                        except: pass
-                        
-                        # [NEW] Trigger column auto-hide on both tabs immediately after startup
-                        try:
-                            self.root.after(100, self.update_daily_usage_view)
-                            self.root.after(200, self.update_monthly_usage_view)
-                            self.root.after(300, self.update_budget_site_view) # [FIX] Add Construction Tab refresh at startup
-                        except Exception as e:
-                            print(f"[STARTUP] View refresh error: {e}")
+                            print("[STARTUP] Finalizing loading...")
+                            self.is_ready = True
+                            
+                            # [FIX] Forcibly show and deiconify window to prevent "closing downwards" or disappearing
+                            print("[STARTUP] Ensuring window visibility...")
+                            try:
+                                self.root.deiconify()
+                                self.root.lift()
+                                self.root.focus_force()
+                            except: pass
+                            
+                            # [V13_RESET_ON_STARTUP] Ensure Daily Usage form starts BLANK as requested
+                            print("[STARTUP] Resetting forms...")
+                            try:
+                                self.clear_daily_usage_form_all()
+                            except: pass
+                            
+                            # [NEW] Trigger column auto-hide on both tabs immediately after startup
+                            print("[STARTUP] Refreshing views...")
+                            try:
+                                self.root.after(100, lambda: self.update_daily_usage_view())
+                                self.root.after(200, lambda: self.update_monthly_usage_view())
+                                self.root.after(300, lambda: self.update_budget_site_view()) 
+                            except Exception as e:
+                                print(f"[STARTUP] View refresh error: {e}")
+                                
+                            print("APP READY: State restoration complete.")
+                        except Exception as startup_err:
+                            print(f"[CRITICAL STARTUP ERROR] {startup_err}")
+                            messagebox.showerror("Startup Error", f"An error occurred during startup: {startup_err}\n\n{traceback.format_exc()}")
                     
-                    self.root.after(300, finalize_loading) 
+                    print("[STARTUP] Scheduling finalization...")
+                    self.root.after(500, finalize_loading) 
                 
                 # Execute delayed restoration
-                self.root.after(300, delayed_restore)
+                try:
+                    self.root.after(300, delayed_restore)
+                except Exception as outer_err:
+                    messagebox.showerror("Initialization Error", f"Critical error during initialization: {outer_err}")
 
         except Exception as e:
             print(f"Failed to load tab config: {e}")
