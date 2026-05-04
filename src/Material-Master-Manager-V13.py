@@ -14123,14 +14123,14 @@ class MaterialManager:
                                     # [USER REQUEST] Keep 'Carestream' prefix
                                     # (Removal logic removed)
                                     
-                                    if '-' in raw_name and (not raw_spec or raw_spec == 'nan' or raw_spec == ''):
-                                        # 품목명에 하이픈이 있고 규격 칸이 비어있다면 분리 실행
+                                    if '-' in raw_name and (not raw_spec or raw_spec == 'nan' or raw_spec == '' or raw_spec == '자동등록'):
+                                        # 품목명에 하이픈이 있고 규격 칸이 비어있거나 무의미한 경우 분리 실행
                                         dash_idx = raw_name.index('-')
                                         mat_name_val = raw_name[:dash_idx].strip()
                                         mat_spec_val = raw_name[dash_idx+1:].strip()
                                     else:
                                         mat_name_val = raw_name
-                                        mat_spec_val = raw_spec if (raw_spec and str(raw_spec).lower() != 'nan') else ''
+                                        mat_spec_val = raw_spec if (raw_spec and str(raw_spec).lower() != 'nan' and raw_spec != '자동등록') else ''
                                     
                                     # [NEW] Get Category (Classification)
                                     mat_cat_val = str(match.iloc[0].get('품목군코드', '')).strip()
@@ -14164,10 +14164,21 @@ class MaterialManager:
                 rt_keys = ['RT T200', 'RT AA400', 'RT Other']
                 rt_counter = 0
                 
-                # Separate RT items for sequential keying
-                rt_merged = {k: v for k, v in merged_mats.items() if 'RT ' in k or v.get('category') == 'FILM'}
+                # [DEBUG] Log all merged materials before filtering
+                print(f"DEBUG: All merged materials before RT filtering: {list(merged_mats.keys())}")
                 
+                # Separate RT items for sequential keying
+                # [FIX] Prioritize is_rt flag and ensure 5+ items are included
+                chem_names = ['WHITE', 'BLACK', '7C', 'PENETRANT', 'CLEANER', 'DEVELOPER']
+                rt_merged = {}
+                for d_name, grp in merged_mats.items():
+                    is_chem = any(c in d_name.upper() for c in chem_names)
+                    # If it's a FILM category or name contains RT or it's NOT a chemical, it's RT
+                    if 'RT ' in d_name.upper() or str(grp.get('category')).upper() in ['FILM', 'RT 필름'] or not is_chem:
+                        rt_merged[d_name] = grp
+
                 for d_name, grp in rt_merged.items():
+                    print(f"DEBUG: Processing RT Item {rt_counter+1}: {d_name}")
                     if rt_counter < 3:
                         mat_key = rt_keys[rt_counter]
                     else:
@@ -14179,7 +14190,7 @@ class MaterialManager:
                         'name': grp['name'], 
                         'spec': grp['spec'], 
                         'is_rt': True, 
-                        'category': grp.get('category', 'RT 필름')
+                        'category': 'RT'
                     }
                 
                 # [NOTE] Non-RT (Chemicals) are handled separately below
