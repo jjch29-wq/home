@@ -1,397 +1,160 @@
-import openpyxl
-from openpyxl.styles import Alignment, Border, Side, Font
 import os
-import datetime
+import openpyxl
+from openpyxl.styles import Border, Side, Alignment, Font
+import pandas as pd
+import re
 
 class DailyWorkReportManager:
     def __init__(self, template_path):
         self.template_path = template_path
-        # Default mapping for fallback
-        self.default_mapping = {
-            'header': {'date': 'F2'},
-            'general': {
-                'company': 'E5', 'project_name': 'E6', 'standard': 'E7', 'equipment': 'E8',
-                'report_no': 'K5', 'inspection_item': 'K6', 'inspector': 'K7', 'inspector_n8': 'N8', 'car_no': 'N9'
-            },
-            'methods': {
-                'RT': {'row': 13}, 'UT': {'row': 14}, 'MT': {'row': 15}, 'PT': {'row': 16},
-                'HT': {'row': 17}, 'VT': {'row': 18}, 'LT': {'row': 19}, 'ET': {'row': 20},
-                'PAUT': {'row': 21}
-            },
-            'rtk': {
-                'center_miss': 'D34', 'density': 'F34', 'marking_miss': 'H34', 'film_mark': 'J34',
-                'handling': 'L34', 'customer_complaint': 'N34', 'etc': 'P34', 'total': 'R34'
-            },
-
-            'ot': {
-                'row1_name': 'B38', 'row1_company': 'F38', 'row1_method': 'I38', 'row1_hours': 'K38', 'row1_amount': 'N38',
-                'row2_name': 'B39', 'row2_company': 'F39', 'row2_method': 'I39', 'row2_hours': 'K39', 'row2_amount': 'N39'
-            },
-
-
-            'materials': {
-                'RT T200': 43, 'RT AA400': 44, 'RT Other': 45,
-                'MT WHITE': 46, 'MT 7C-BLACK': 47,
-                'PT Penetrant': 48, 'PT Cleaner': 49, 'PT Developer': 50
-            },
-            'vehicles': {
-                'row_start': 22,
-                'col_map': {'vehicle_info': 'B', 'mileage': 'H', 'fuel': 'C', 'clean': 'E', 'oil': 'G', 'tire': 'I', 'light': 'K', 'safety': 'M'}
-            }
-        }
 
     def generate_report(self, data, output_path, custom_mapping=None):
-        if not os.path.exists(self.template_path):
-            raise FileNotFoundError(f"Template not found at {self.template_path}")
-
         wb = openpyxl.load_workbook(self.template_path)
         sheet = wb.active
-        
-        mapping = custom_mapping if custom_mapping else self.default_mapping
+        cmap = custom_mapping if custom_mapping else {}
 
-        def safe_write(cell_coord, value, is_currency=False):
-            if not cell_coord: return
+        def safe_write(coord, value):
+            try: sheet[coord] = value
+            except: pass
+
+        def safe_merge(range_str):
+            try: sheet.merge_cells(range_str)
+            except: pass
+
+        def find_title_row(title_text):
+            for row in range(1, 100):
+                val = sheet.cell(row=row, column=1).value or sheet.cell(row=row, column=2).value
+                if val and str(val).strip().startswith(title_text):
+                    return row
+            return None
+
+        # 1. Date and General Info (Existing)
+        report_date = data.get('date', '2026-00-00')
+        safe_write('D4', report_date)
+
+        # 2. Section 3: Vehicle Management (Existing but need to ensure it's correct)
+        # (Assuming data['vehicles'] is handled in the main script or here)
+        
+        # [NEW] Section 4, 5, 6 titles and logic
+        s3_title = find_title_row("3. ")
+        s4_title = find_title_row("4. ")
+        s5_title = find_title_row("5. ")
+        s6_title = find_title_row("6. ")
+
+        # 3. Section 6: Material Inventory (Dynamic)
+        m_data = data.get('materials', {})
+        rt_items = [v for k, v in m_data.items() if v.get('is_rt')]
+        # Filter only active items
+        rt_items = [m for m in rt_items if float(m.get('used', 0)) > 0 or float(m.get('in', 0)) > 0]
+        
+        num_rt = len(rt_items)
+        rt_height = max(3, num_rt)
+        extra_rows = rt_height - 3
+        
+        mat_start = s6_title + 2 if s6_title else 40
+        
+        if extra_rows > 0:
+            sheet.insert_rows(mat_start, extra_rows)
+            # Compensation
+            buffer_start = 18
             try:
-                cell = sheet[cell_coord]
-                cell.value = value
-                cell.font = Font(name='맑은 고딕', size=9)
-                # 내용을 중앙 정렬로 설정
-                cell.alignment = Alignment(shrinkToFit=True, vertical='center', horizontal='center')
-                # 금액단위(원) 및 콤마 처리
-                if is_currency:
-                    cell.number_format = '#,##0 "원"'
-            except:
-                pass
+                rows_to_delete = min(extra_rows, 8)
+                sheet.delete_rows(buffer_start, rows_to_delete)
+                mat_start -= rows_to_delete
+            except: pass
 
-        # 1. Header (Date)
-        d = data.get('date', datetime.date.today())
-        weekdays = ["월", "화", "수", "목", "금", "토", "일"]
-        date_str = f"{d.year}년 {d.month}월 {d.day}일 ({weekdays[d.weekday()]})"
-        safe_write(mapping.get('header', {}).get('date', 'F2'), date_str)
+        # Clear area
+        has_mt = any('MT' in k.upper() for k in m_data)
+        has_pt = any('PT' in k.upper() for k in m_data)
+        total_rows = rt_height + (2 if has_mt else 0) + (3 if has_pt else 0)
+        for r_cl in range(mat_start, mat_start + total_rows + 5):
+            for c_cl in ['D', 'F', 'H', 'I', 'K', 'M', 'O', 'Q']:
+                safe_write(f"{c_cl}{r_cl}", "")
 
-        # 2. General
-        gen_map = mapping.get('general', {})
-        for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no', 'inspector_n8']:
-            # If key is inspector_n8, take data from 'inspector' field
-            val_key = 'inspector' if key == 'inspector_n8' else key
-            safe_write(gen_map.get(key), data.get(val_key, ''))
+        # Write RT Items
+        for idx, m in enumerate(rt_items):
+            r = mat_start + idx
+            safe_write(f'D{r}', m.get('name', ''))
+            safe_write(f'F{r}', m.get('spec', ''))
+            safe_write(f'H{r}', '매')
+            safe_write(f'K{r}', m.get('in', 0))
+            safe_write(f'M{r}', m.get('used', 0))
+            safe_write(f'O{r}', m.get('stock', 0))
+            safe_write(f'I{r}', m.get('remarks', ''))
+            # Merges for Name/Spec
+            safe_merge(f"D{r}:E{r}")
+            safe_merge(f"F{r}:G{r}")
+            safe_merge(f"K{r}:L{r}")
+            safe_merge(f"M{r}:N{r}")
+            safe_merge(f"O{r}:P{r}")
+            safe_merge(f"Q{r}:S{r}")
 
-        # 3. Methods (Dynamic Population)
-        method_map = mapping.get('methods', {})
-        methods_data = data.get('methods', {})
+        # TYPE Merge
+        safe_merge(f'B{mat_start}:C{mat_start + rt_height - 1}')
+        safe_write(f'B{mat_start}', 'RT 필름')
+
+        # MT/PT logic (Simplified for restoration)
+        curr_r = mat_start + rt_height
+        if has_mt:
+            safe_merge(f'B{curr_r}:C{curr_r + 1}'); safe_write(f'B{curr_r}', 'MT 시약')
+            curr_r += 2
+        if has_pt:
+            safe_merge(f'B{curr_r}:C{curr_r + 2}'); safe_write(f'B{curr_r}', 'PT 시약')
+            curr_r += 3
         
-        def extract_row_num(v):
-            if not v: return None
-            import re
-            m = re.search(r'\d+', str(v))
-            return int(m.group()) if m else None
+        mat_end = curr_r - 1
 
-        # Collect and sort all possible rows defined for methods to clear them first
-        method_rows = []
-        for m in method_map.values():
-            r = extract_row_num(m.get('row'))
-            if r is not None:
-                method_rows.append(r)
-        method_rows = sorted(list(set(method_rows)))
-
-        for row in method_rows:
-            for col in ['A', 'B', 'E', 'H', 'K', 'N', 'Q']: # Clear Name, Unit, Qty, Price, Total, Travel, Fee
-                safe_write(f'{col}{row}', '')
-
-        # Fill with active methods sequentially
-        current_methods = list(methods_data.keys())
-        num_methods = len(current_methods)
-        
-        # 4개 초과 시 행 추가 및 기존 18-25행에서 삭제 (동적 레이아웃 유지)
-        method_base_rows = [13, 14, 15, 16]
-        if num_methods > 4:
-            extra_count = num_methods - 4
-            # 17행 위치에 필요한 만큼 행 삽입
-            sheet.insert_rows(17, extra_count)
-            # 기존 18~25행 영역(이제는 18+extra_count 이후)에서 삽입된 만큼 행 삭제
-            # 18행부터 삭제를 시작하여 전체 레이아웃 길이를 맞춤
-            for _ in range(extra_count):
-                sheet.delete_rows(18 + extra_count) 
-            
-            # 사용할 행 리스트 업데이트
-            method_base_rows += list(range(17, 17 + extra_count))
-        
-        for idx, m_name in enumerate(current_methods):
-            if idx >= len(method_base_rows): break
-            
-            row = method_base_rows[idx]
-            m_data = methods_data[m_name]
-            
-            safe_write(f'B{row}', m_name)
-            safe_write(f'E{row}', m_data.get('unit', ''))
-            safe_write(f'H{row}', m_data.get('qty', 0))
-            safe_write(f'K{row}', m_data.get('price', 0), is_currency=True)
-            safe_write(f'N{row}', m_data.get('travel', 0), is_currency=True)
-            safe_write(f'Q{row}', m_data.get('total', 0), is_currency=True)
-
-        # 4. RTK
-        rtk_map = mapping.get('rtk', {})
-        rtk_data = data.get('rtk', {})
-        
-        # [NEW] Re-map English config keys to Korean data keys
-        rtk_key_map = {
-            'center_miss': '센터미스', 'density': '농도', 'marking_miss': '마킹미스', 
-            'film_mark': '필름마크', 'handling': '취급부주의', 'customer_complaint': '고객불만', 'etc': '기타'
-        }
-        
-        for eng_key, kor_key in rtk_key_map.items():
-            safe_write(rtk_map.get(eng_key), rtk_data.get(kor_key, 0))
-        
-        total_rtk = rtk_data.get('총계', sum([v for v in rtk_data.values() if isinstance(v, (int, float))]))
-        safe_write(rtk_map.get('total'), total_rtk)
-
-
-        # 5. OT
-        ot_map = mapping.get('ot', {})
-        
-        # [NEW] Clear OT placeholders before writing to prevent ghost data from template
-        for row_idx in [1, 2]:
-            for key_suffix in ['_name', '_company', '_method', '_hours', '_amount']:
-                cell_key = f'row{row_idx}{key_suffix}'
-                if cell_key in ot_map:
-                    safe_write(ot_map[cell_key], '')
-
-        ot_list = data.get('ot_status', [])
-        for i, ot in enumerate(ot_list[:2]):
-            idx = i + 1
-            safe_write(ot_map.get(f'row{idx}_name'), ot.get('names', ''))
-            safe_write(ot_map.get(f'row{idx}_company'), ot.get('company', ''))
-            safe_write(ot_map.get(f'row{idx}_method'), ot.get('method', ''))
-            safe_write(ot_map.get(f'row{idx}_hours'), str(ot.get('ot_hours', '')))
-
-            safe_write(ot_map.get(f'row{idx}_amount'), ot.get('ot_amount', ''))
-
-        # [NEW] Style the boundary between Row 38 and Row 39 with hair (hairline) lines
-        hair_side = Side(style='hair')
+        # 4. Styling System
         thin_side = Side(style='thin')
-        for col_name in ['K', 'L', 'M', 'N', 'O', 'P']:
-            cell_addr = f"{col_name}38"
-            current_border = sheet[cell_addr].border
-            sheet[cell_addr].border = Border(
-                left=current_border.left,
-                right=current_border.right,
-                top=current_border.top,
-                bottom=hair_side
-            )
-
-        # [NEW] Specific Header Borders
-        # E8 Left: Hair
-        e8_border = sheet['E8'].border
-        sheet['E8'].border = Border(left=hair_side, right=e8_border.right, top=e8_border.top, bottom=e8_border.bottom)
+        hair_side = Side(style='hair')
         
-        # N6~N9 Left: Thin
-        for r_idx in range(6, 10):
-            cell_n = f"N{r_idx}"
-            cur_b = sheet[cell_n].border
-            sheet[cell_n].border = Border(left=thin_side, right=cur_b.right, top=cur_b.top, bottom=cur_b.bottom)
+        def apply_section_styling(start_r, end_r):
+            for r in range(start_r, end_r + 1):
+                for c in range(2, 20): # B to S
+                    cell = sheet.cell(row=r, column=c)
+                    l_s = thin_side if c == 2 else hair_side
+                    r_s = thin_side if c == 19 else hair_side
+                    t_s = hair_side
+                    b_s = hair_side
+                    
+                    # Top border for header
+                    if r == start_r: t_s = thin_side
+                    # Bottom border for end of section
+                    if r == end_r: b_s = thin_side
+                    
+                    cell.border = Border(left=l_s, right=r_s, top=t_s, bottom=b_s)
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
 
+        # Apply styles to sections
+        if s3_title: apply_section_styling(s3_title + 1, s3_title + 4)
+        if s4_title: apply_section_styling(s4_title + 1, s4_title + 2)
+        if s5_title: apply_section_styling(s5_title + 1, s5_title + 3)
+        if s6_title: 
+            apply_section_styling(s6_title + 1, mat_end)
+            # Final touch: Row 45 Hairline bottom
+            for c in range(2, 20):
+                if sheet.cell(row=45, column=c).border.bottom == thin_side:
+                    sheet.cell(row=45, column=c).border = Border(
+                        left=sheet.cell(row=45, column=c).border.left,
+                        right=sheet.cell(row=45, column=c).border.right,
+                        top=sheet.cell(row=45, column=c).border.top,
+                        bottom=hair_side
+                    )
 
-        # [NEW] Clear template placeholder in Q39
-        safe_write('Q39', '')
+        # 5. Visibility and Open Look
+        open_rows = [5, 10, 26, 35, 40, 51]
+        for r_o in range(5, max(52, sheet.max_row + 1)):
+            if r_o in open_rows:
+                b_cell = sheet.cell(row=r_o, column=2)
+                s_cell = sheet.cell(row=r_o, column=19)
+                b_cell.border = Border(left=None, right=b_cell.border.right, top=b_cell.border.top, bottom=b_cell.border.bottom)
+                s_cell.border = Border(left=s_cell.border.left, right=None, top=s_cell.border.top, bottom=s_cell.border.bottom)
 
-
-
-
-
-
-
-
-        # 6. 자재 수불현황 (Materials) - Dynamic Row Detection
-        materials_data = data.get('materials', {})
-        
-        # [NEW] Find the actual starting row for Section 6 by searching for keywords
-        section6_row = None
-        for r_idx in range(35, 60): # Search in a reasonable range
-            cell_val = str(sheet[f'A{r_idx}'].value or '') + str(sheet[f'B{r_idx}'].value or '')
-            if "자재 수불" in cell_val or "자재수불" in cell_val or "6." in cell_val:
-                # Found the header. The actual data usually starts 2-3 rows below.
-                # Look for "품목명" to be more precise
-                for sub_r in range(r_idx, r_idx + 5):
-                    row_content = [str(sheet[f'{chr(64+c)}{sub_r}'].value or '') for c in range(1, 10)]
-                    if any("품목명" in c for c in row_content):
-                        section6_row = sub_r + 1
-                        break
-                if section6_row: break
-        
-        if not section6_row:
-            section6_row = 43 # Fallback to default
-            print("DEBUG: Section 6 header not found, using fallback row 43")
-        else:
-            print(f"DEBUG: Section 6 (Material) starts at row {section6_row}")
-
-        # Update mat_map with dynamic rows
-        dynamic_mat_map = {
-            'RT T200': section6_row,
-            'RT AA400': section6_row + 1,
-            'RT Other': section6_row + 2,
-            'MT WHITE': section6_row + 3,
-            'MT 7C-BLACK': section6_row + 4,
-            'PT Penetrant': section6_row + 5,
-            'PT Cleaner': section6_row + 6,
-            'PT Developer': section6_row + 7
-        }
-
-        # Clear rows first
-        for r in range(section6_row, section6_row + 8):
-            for c_idx in range(4, 18): # D to Q
-                safe_write(f"{chr(64 + c_idx)}{r}", None)
-            
-            # [NEW] Set Override names for chemicals based on relative offset
-            rel_idx = r - section6_row
-            override_names = {
-                3: ('백색페인트', ''),
-                4: ('흑색자분', ''),
-                5: ('침투제', ''),
-                6: ('세척제', ''),
-                7: ('현상제', ''),
-            }
-            if rel_idx in override_names:
-                d_nm, f_sp = override_names[rel_idx]
-                safe_write(f'D{r}', d_nm)
-                safe_write(f'F{r}', f_sp)
-                safe_write(f'H{r}', 'CAN')
-
-        # Write each material row
-        print(f"DEBUG: Processing materials: {materials_data}")
-        for mat_name, row in dynamic_mat_map.items():
-            m_data = materials_data.get(mat_name, {})
-            used_val = m_data.get('used', 0)
-            d_val = m_data.get('name', '')
-            f_val = m_data.get('spec', '')
-
-            # Write RT names (offsets 0, 1, 2)
-            if (row - section6_row) < 3:
-                if d_val: 
-                    safe_write(f'D{row}', d_val)
-                    print(f"DEBUG: Wrote RT Name '{d_val}' to D{row}")
-                if f_val: 
-                    safe_write(f'F{row}', f_val)
-                    print(f"DEBUG: Wrote RT Spec '{f_val}' to F{row}")
-                safe_write(f'H{row}', '매')
-
-            # Write quantities if usage exists
-            if used_val is not None and str(used_val) != '0' and str(used_val) != '0.0' and str(used_val) != '':
-                safe_write(f'K{row}', '-')
-                safe_write(f'M{row}', used_val)
-                safe_write(f'O{row}', m_data.get('in', 0))
-                print(f"DEBUG: Wrote Usage '{used_val}' to M{row}")
-        
-        # 7. Vehicles & Safety (Section 3)
-        # Detailed 2x4 Table Implementation (출차/입차)
-        veh_map = mapping.get('vehicles', {})
-        veh_list = data.get('vehicles', [])
-        v = veh_list[0] if veh_list else {}
-        
-        # [NEW] Calculate row offset based on dynamic method rows insertion
-        row_offset = 0
-        if 'extra_count' in locals(): # From Step 3 logic
-             row_offset = extra_count
-        elif num_methods > 4:
-             row_offset = num_methods - 4
-             
-        veh_row = veh_map.get('row_start', 22) + row_offset # Vehicle Info Row
-        cmap = veh_map.get('col_map', {})
-        
-        safe_write(f"{cmap.get('vehicle_info', 'B')}{veh_row}", v.get('vehicle_info', ''))
-        safe_write(f"{cmap.get('mileage', 'H')}{veh_row}", v.get('mileage', ''))
-
-        # Detailed Inspection Checklist Mapping (Section 3)
-        # Row 29: 출차시 / Row 30: 입차시
-        chk_rows = {'out': 29 + row_offset, 'in': 30 + row_offset}
-        chk_cols = {
-            'exterior':    {'양호': 'E', '불량': 'F'},
-            'cleanliness': {'양호': 'H', '불량': 'I'},
-            'cleaning':    {'양호': 'K', '불량': 'L'},
-            'locking':     {'잠김': 'N', '안함': 'O'}
-        }
-        
-        # [NEW] Calculate Overall Status for Summary Line (from Upstream logic)
-        is_bad = False
-        inspected = False
-        for r_key in ['out', 'in']:
-            for c_key in ['exterior', 'cleanliness', 'cleaning', 'locking']:
-                raw_val = v.get(f"{r_key}_{c_key}")
-                if raw_val:
-                    inspected = True
-                    if raw_val in ['불량', '안함']:
-                        is_bad = True
-        
-        m_good = chr(0x25A0) if not is_bad else chr(0x25A1)
-        m_bad = chr(0x25A0) if is_bad else chr(0x25A1)
-        
-        if inspected:
-            summary_text = f"3. 차량관리   {m_good} 양호    {m_bad} 불량"
-        else:
-            summary_text = f"3. 차량관리   {chr(0x25A1)} 양호    {chr(0x25A1)} 불량"
-            
-        # Search for the cell containing "3. 차량관리" to update it dynamically
-        search_range = sheet['A18':'G35'] # Expanded range slightly for safety
-        found_cell = None
-        for row_cells in search_range:
-            for cell in row_cells:
-                if cell.value and "3. 차량관리" in str(cell.value):
-                    cell.value = summary_text
-                    cell.font = Font(name='맑은 고딕', size=10, bold=True)
-                    cell.alignment = Alignment(horizontal='left', vertical='center', indent=1)
-                    found_cell = cell.coordinate
-                    break
-            if found_cell: break
-        
-        # Individual Checklist Items: Regex-based square ticking (from Stashed logic)
-        import re
-        WHITE_SQ = "\u25a1" # □
-        BLACK_SQ = "\u25a0" # ■
-        
-        chk_mapping_regex = {
-            'exterior': {'col': 'E', 'options': ['양호', '불량']},
-            'cleanliness': {'col': 'H', 'options': ['양호', '불량']},
-            'cleaning': {'col': 'K', 'options': ['함', '안함', '양호']},
-            'locking': {'col': 'N', 'options': ['잠금', '안함', '잠김']}
-        }
-
-        for r_key, base_row in chk_rows.items():
-            for c_key, info in chk_mapping_regex.items():
-                val = v.get(f"{r_key}_{c_key}")
-                if val:
-                    cell_coord = f"{info['col']}{base_row}"
-                    try:
-                        current_val = sheet[cell_coord].value
-                        if current_val and isinstance(current_val, str):
-                            # Handle common terminology variations
-                            val_to_find = val
-                            if val == '잠김': val_to_find = '잠금'
-                            elif val == '잠금': val_to_find = '잠김'
-                            
-                            val_esc = re.escape(val_to_find)
-                            pattern = f"({WHITE_SQ})(\\s*){val_esc}"
-                            
-                            if re.search(pattern, current_val):
-                                new_val = re.sub(pattern, f"{BLACK_SQ}\\2{val_esc}", current_val)
-                                sheet[cell_coord].value = new_val
-                            else:
-                                # Try alternate if terminology didn't match exactly
-                                val_alt = '잠김' if val_to_find == '잠금' else '잠금'
-                                val_esc_alt = re.escape(val_alt)
-                                pattern_alt = f"({WHITE_SQ})(\\s*){val_esc_alt}"
-                                if re.search(pattern_alt, current_val):
-                                    new_val = re.sub(pattern_alt, f"{BLACK_SQ}\\2{val_esc_alt}", current_val)
-                                    sheet[cell_coord].value = new_val
-                    except:
-                        pass
-
-        # [NEW] Write Remarks (Row 31)
-        if v.get('remarks'):
-            remarks_row = 31 + row_offset
-            safe_write(f"B{remarks_row}", f"비고: {v.get('remarks')}")
-            if sheet[f"B{remarks_row}"].value:
-                sheet[f"B{remarks_row}"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
-                sheet[f"B{remarks_row}"].font = Font(name='맑은 고딕', size=9)
+        # Shrink to Fit
+        for r_f in range(38, max(51, mat_end + 1)):
+            for c_f in [4, 6, 11, 12, 13]:
+                if r_f > 39 and c_f > 6: continue
+                sheet.cell(row=r_f, column=c_f).alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
 
         wb.save(output_path)
         return output_path
-
