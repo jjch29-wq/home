@@ -7864,7 +7864,7 @@ class MaterialManager:
 
             # 2. Collect vehicle data
             v_data = widget.get_data()
-            v_no = v_data.get('vehicle_info', '').strip()
+            v_no = str(v_data.get('vehicle_info', '')).strip()
             if not v_no:
                 messagebox.showwarning("입력 필요", "차량번호를 입력해주세요.")
                 return
@@ -11217,8 +11217,8 @@ class MaterialManager:
             for b in self.vehicle_boxes:
                 if hasattr(b, 'winfo_exists') and b.winfo_exists():
                     v_data = b.get_data()
-                    v_no = v_data.get('vehicle_info', '').strip()
-                    v_mileage = v_data.get('_raw_mileage', '').strip()
+                    v_no = str(v_data.get('vehicle_info', '')).strip()
+                    v_mileage = str(v_data.get('_raw_mileage', '')).strip()
                     # 차량번호, 주행거리, 혹은 점검 항목이 하나라도 기입된 상자만 데이터로 인정
                     has_check = any(v is True for k, v in v_data.items() if k not in ['vehicle_info', 'mileage', 'remarks', '_raw_mileage'])
                     if v_no or v_mileage or has_check:
@@ -11343,7 +11343,7 @@ class MaterialManager:
             
             # 모든 생성된 레코드에서 차량번호 수집 및 추가
             for r in records_to_save:
-                v_no = r.get('차량번호', '').strip()
+                v_no = str(r.get('차량번호', '')).strip()
                 if v_no and v_no not in self.vehicles:
                     self.vehicles.append(v_no); any_list_changed = True
             
