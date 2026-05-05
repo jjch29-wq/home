@@ -14168,14 +14168,22 @@ class MaterialManager:
                 print(f"DEBUG: All merged materials before RT filtering: {list(merged_mats.keys())}")
                 
                 # Separate RT items for sequential keying
-                # [FIX] Prioritize is_rt flag and ensure 5+ items are included
-                chem_names = ['WHITE', 'BLACK', '7C', 'PENETRANT', 'CLEANER', 'DEVELOPER']
+                # [FIX] Include MT/PT keywords to prevent chemicals from being categorized as RT
+                chem_names = [
+                    'WHITE', 'BLACK', '7C', 'PENETRANT', 'CLEANER', 'DEVELOPER',
+                    '백색', '흑색', '자분', '침투', '세척', '현상', '페인트',
+                    'MT', 'PT'
+                ]
                 rt_merged = {}
                 for d_name, grp in merged_mats.items():
                     is_chem = any(c in d_name.upper() for c in chem_names)
-                    # If it's a FILM category or name contains RT or it's NOT a chemical, it's RT
-                    if 'RT ' in d_name.upper() or str(grp.get('category')).upper() in ['FILM', 'RT 필름'] or not is_chem:
+                    # [FIX] A material is RT ONLY if it has an RT-related category or name AND is NOT a chemical
+                    is_rt_cat = str(grp.get('category')).upper() in ['FILM', 'RT 필름', 'RT', 'RT ']
+                    is_rt_name = 'RT ' in d_name.upper() or 'FILM' in d_name.upper()
+                    
+                    if (is_rt_cat or is_rt_name) and not is_chem:
                         rt_merged[d_name] = grp
+                    # [REMOVED] elif not is_chem fallback - be strict about RT categorization
 
                 for d_name, grp in rt_merged.items():
                     print(f"DEBUG: Processing RT Item {rt_counter+1}: {d_name}")
@@ -14223,9 +14231,28 @@ class MaterialManager:
                 
                 for m_key, db_cols in chem_db_map:
                     val_sum = 0
+                    # [NEW] Check if any rows in site_records have a Material name matching this chemical
+                    # and if so, sum up their 'Usage' or '수량' columns if they look like chemicals
+                    for idx, row in site_records.iterrows():
+                        m_name = str(row.get('Material', row.get('품목명', ''))).upper()
+                        # Check if this row's material matches any of our chemical patterns
+                        is_match = False
+                        for col_pattern in db_cols:
+                            pattern_norm = col_pattern.replace('NDT_', '').replace('DT_', '').replace(' ', '').upper()
+                            if pattern_norm in m_name.replace(' ', ''):
+                                is_match = True
+                                break
+                        
+                        if is_match:
+                            # If it matches, try 'Usage' first, then '수량' if it looks small (like cans)
+                            u_val = pd.to_numeric(row.get('Usage'), errors='coerce')
+                            if pd.isna(u_val): u_val = 0
+                            val_sum += u_val
+                            db_chem_found = True
+
+                    # Also check specific columns if they exist as fallback/alternative
                     for col_pattern in db_cols:
                         pattern_norm = col_pattern.replace(' ', '').upper()
-                        # 실세 컬럼 중 일치하는 것 찾기
                         found_col = None
                         for actual_col in actual_cols:
                             if str(actual_col).replace(' ', '').upper() == pattern_norm:
@@ -14235,6 +14262,7 @@ class MaterialManager:
                         if found_col:
                             try:
                                 val_sum += int(pd.to_numeric(site_records[found_col], errors='coerce').fillna(0).sum())
+                                db_chem_found = True
                             except: pass
                     
                     if val_sum > 0:
@@ -18688,7 +18716,9 @@ class MaterialManager:
         def is_bad_auto(row):
             note = str(row.get('Note', ''))
             # [FIX] Match both English and potentially broken encoding versions of "(자동 차감)"
-            is_auto = "(자동 차감)" in note or "(ڵ )" in note
+            # (ڵ ) is a common corruption of (자동 차감) when read as different encoding
+            is_auto = "(자동 차감)" in note or "(ڵ )" in note or "(\ucac0 \u0020)" in note or "(\u00e1\u00b6\u00bd\u0020)" in note
+
             if not is_auto:
                 return False
             
