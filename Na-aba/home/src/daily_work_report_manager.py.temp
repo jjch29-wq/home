@@ -1,0 +1,111 @@
+import os
+import openpyxl
+from openpyxl.styles import Alignment, Font, Border, Side
+from copy import copy
+import datetime
+
+class DailyWorkReportManager:
+    def __init__(self, template_path):
+        self.template_path = template_path
+        self.current_shift = 0
+
+    def find_row_by_text(self, sheet, text, start_row, end_row, column_name='A'):
+        col_idx = openpyxl.utils.column_index_from_string(column_name)
+        for r in range(start_row, end_row + 1):
+            val = sheet.cell(row=r, column=col_idx).value
+            if val and text in str(val):
+                return r
+        return None
+
+    def generate_report(self, data, output_path):
+        wb = openpyxl.load_workbook(self.template_path)
+        sheet = wb.active
+        self.current_shift = 0
+
+        # Helper for dynamic detection
+        def find_row_by_text(text, start, end, col='A'):
+            return self.find_row_by_text(sheet, text, start, end, col)
+
+        # 3. Methods Expansion (Dynamic)
+        methods = data.get('methods', {})
+        num_methods = len([m for m in methods.values() if m])
+        
+        extra_count = 0
+        if num_methods > 4:
+            extra_count = num_methods - 4
+            sheet.insert_rows(17, extra_count)
+            self.current_shift += extra_count
+
+            # [ROBUSTNESS] Find Section 3 Title NOW to set an absolute deletion boundary
+            s3_limit = find_row_by_text("3.", 15, 100, 'A') or find_row_by_text("차량", 15, 100, 'A') or (27 + extra_count)
+            
+            # [STABILITY] Smart deletion of empty rows only (Buffer compensation)
+            rows_deleted = 0
+            search_row = 18 + extra_count
+            while rows_deleted < extra_count and search_row < s3_limit:
+                row_has_data = False
+                for c in range(1, 20): 
+                    cell_val = sheet.cell(row=search_row, column=c).value
+                    if cell_val is not None and str(cell_val).strip() != "":
+                        row_has_data = True
+                        break
+                
+                if not row_has_data:
+                    for merged_range in sheet.merged_cells.ranges:
+                        if merged_range.min_row <= search_row <= merged_range.max_row:
+                            row_has_data = True
+                            break
+                
+                if not row_has_data:
+                    sheet.delete_rows(search_row)
+                    rows_deleted += 1
+                    self.current_shift -= 1
+                    s3_limit -= 1
+                else:
+                    search_row += 1
+
+            # [USER REQUEST] Force Section 3 to start at Row 26 for a compressed layout
+            try:
+                s3_current = find_row_by_text("3.", 15, 100, 'A') or find_row_by_text("차량", 15, 100, 'A')
+                if s3_current and s3_current > 26:
+                    rows_to_delete = s3_current - 26
+                    deleted_count = 0
+                    sr = 18 + extra_count
+                    while deleted_count < rows_to_delete and sr < s3_current:
+                        is_empty = True
+                        for c in range(1, 15):
+                            if sheet.cell(row=sr, column=c).value:
+                                is_empty = False
+                                break
+                        if is_empty:
+                            sheet.delete_rows(sr)
+                            deleted_count += 1
+                            s3_current -= 1
+                            self.current_shift -= 1
+                        else:
+                            sr += 1
+                    print(f"DEBUG: Compressed layout - pulled Section 3 to {s3_current}")
+            except Exception as e:
+                print(f"DEBUG: Error during Section 3 compression: {e}")
+
+        # [STABILITY] Section 3: Vehicles Management
+        veh_list = data.get('vehicles', [])
+        v = veh_list[0] if veh_list else {}
+        
+        s3_title_row = find_row_by_text("3.", 15, 80, 'A')
+        if not s3_title_row:
+            s3_title_row = find_row_by_text("차량", 15, 80, 'A')
+        
+        if s3_title_row == 27:
+            if not sheet.cell(row=26, column=1).value and not sheet.cell(row=26, column=5).value:
+                s3_title_row = 26
+        
+        if not s3_title_row:
+            s3_title_row = 26
+            
+        print(f"DEBUG: Section 3 Title finalized at row {s3_title_row}")
+
+        # ... (Rest of the logic follows similarly with dynamic row detection)
+        # For brevity, I'm only showing the core changes. 
+        # I will apply the full file rewrite via replace_file_content or similar to ensure integrity.
+        wb.save(output_path)

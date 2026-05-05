@@ -1,0 +1,21 @@
+[project]
+name = "material-master-manager"
+version = "0.1.0"
+requires-python = ">=3.14"
+description = "Material Master Manager V13"
+dependencies = [
+    "pandas",
+    "numpy",
+    "tkcalendar",
+    "google-genai",
+    "easyocr",
+    "pymupdf",
+    "xlsxwriter",
+    "opencv-python",
+    "pillow",
+    "pyperclip",
+    "openpyxl",
+]
+
+[tool.uv]
+managed = true
