@@ -1,0 +1,8 @@
+self.notebook.add(self.tab_stock, text='현재 재고 현황')
+self.notebook.add(self.tab_inout, text='입출고 관리')
+self.notebook.add(self.tab_reports, text='년별 집계')
+self.notebook.add(self.tab_import, text='데이터 가져오기/내보내기')
+self.notebook.add(self.tab_monthly_usage, text='월별 집계')
+self.notebook.add(self.tab_daily_usage, text='현장별 일일 사용량 기입')
+self.notebook.add(self.tab_sales_status, text='매출현황')
+self.notebook.add(self.tab_budget, text='공사실행예산서')

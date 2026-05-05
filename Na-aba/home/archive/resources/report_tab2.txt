@@ -1,0 +1,58 @@
+4028: def update_report_view(self):
+4029: """Update the report treeview with aggregated data from daily usage (same logic as monthly tab)"""
+4030: # Clear current view
+4031: for item in self.report_tree.get_children():
+4032: self.report_tree.delete(item)
+4033: 
+4034: # Get filter values
+4035: filter_year = self.cb_report_filter_year.get() if hasattr(self, 'cb_report_filter_year') else '전체'
+4036: filter_month = self.cb_report_filter_month.get() if hasattr(self, 'cb_report_filter_month') else '전체'
+4037: filter_site = self.cb_report_filter_site.get() if hasattr(self, 'cb_report_filter_site') else '전체'
+4038: filter_material = self.cb_report_filter_material.get() if hasattr(self, 'cb_report_filter_material') else '전체'
+4039: 
+4040: # Return if daily usage data is empty
+4041: if self.daily_usage_df.empty:
+4042: return
+4043: 
+4044: # Create a copy of daily usage data and extract year/month from Date column
+4045: df = self.daily_usage_df.copy()
+4046: df['Year'] = pd.to_datetime(df['Date']).dt.year
+4047: df['Month'] = pd.to_datetime(df['Date']).dt.month
+4048: 
+4049: # Apply filters
+4050: if filter_year != '전체':
+4051: df = df[df['Year'] == int(filter_year)]
+4052: 
+4053: if filter_month != '전체':
+4054: df = df[df['Month'] == int(filter_month)]
+4055: 
+4056: if filter_site != '전체':
+4057: df = df[df['Site'] == filter_site]
+4058: 
+4059: # Populate site filter options from data
+4060: if hasattr(self, 'cb_report_filter_site'):
+4061: unique_sites = ['전체'] + sorted(self.daily_usage_df['Site'].dropna().unique().tolist())
+4062: self.cb_report_filter_site['values'] = unique_sites
+4063: if not self.cb_report_filter_site.get():
+4064: self.cb_report_filter_site.set('전체')
+4065: 
+4066: # Populate material filter options from data
+4067: if hasattr(self, 'cb_report_filter_material'):
+4068: # Get unique material names from materials_df based on MaterialIDs in daily_usage_df
+4069: # Note: MaterialID column name itself might have spaces in self.daily_usage_df
+4070: m_id_col = 'MaterialID' if 'MaterialID' in self.daily_usage_df.columns else 'MaterialID'
+4071: unique_mat_ids = self.daily_usage_df[m_id_col].dropna().unique()
+4072: material_names = []
+4073: for mat_id in unique_mat_ids:
+4074: mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
+4075: if not mat_row.empty:
+4076: material_names.append(mat_row.iloc[0]['품목명'])
+4077: unique_materials = ['전체'] + sorted(set(material_names))
+4078: self.cb_report_filter_material['values'] = unique_materials
+4079: if not self.cb_report_filter_material.get():
+4080: self.cb_report_filter_material.set('전체')
+4081: 
+4082: # Prepare aggregation dictionary for all numeric fields
+4083: agg_dict = {'Usage': 'sum'}
+4084: 
+4085: # Helper for joining workers - clean internal spaces to avoid "11시간" vs "11 시간" mismatch
