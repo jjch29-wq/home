@@ -1,0 +1,63 @@
+420: def bind(self, sequence=None, func=None, add=None):
+628: def trigger_save(self):
+1511: def _add_row_s1(self, cat="", cont="", ppl="", qty="", unit="", price=0):
+1526: def _add_row_s2(self, cat="", spec="", qty="", period="", unit="", price=0):
+1541: def _add_row_s3(self, cat="", work="", count=0, price=0):
+1554: def _add_row_s5(self, item="", spec="", life=5, qty=1, days=0, rate=0):
+2006: def _on_daily_usage_sash_changed(self, event=None):
+2909: def save_data(self):
+3279: messagebox.showinfo("재고 알림", "수량이 10개 미만인 항목이 없습니다.")
+3443: def on_save():
+3451: def save_material_edits(self, mat_id, new_data):
+4489: def add_transaction(self):
+4506: messagebox.showwarning("입력 오류", "수량을 입력해주세요.")
+4510: messagebox.showwarning("입력 오류", "수량은 숫자여야 합니다.")
+5268: def save_df_to_excel_autofit(self, df, save_path, sheet_name='Sheet1'):
+5668: def view_monthly_usage(self):
+5810: def setup_monthly_usage_tab(self):
+5979: def update_monthly_usage_view(self):
+6586: def on_monthly_usage_select(self, event):
+7099: def export_monthly_usage_history(self):
+7352: def add_item():
+7844: def save_current_layout_as_default(self):
+7923: def add_new_memo(self, initial_text="", initial_title="메모", key=None):
+7984: def add_new_checklist(self, initial_data=None, initial_title="체크리스트", key=None):
+8017: def add_item(event=None):
+8070: def save_single_vehicle_data(self, widget):
+8135: def add_vehicle_inspection_box(self, initial_data=None, key=None):
+8165: def add_checklist_item(self, parent_frame, text, checked, checklist_key):
+8486: def setup_daily_usage_tab(self):
+9144: def save_column_widths(event=None):
+9191: def _on_daily_usage_select(self, event):
+9650: def add_budget_view_custom_column(self):
+10932: def save_budget_entry(self):
+11093: def _ensure_daily_usage_sash_visibility(self):
+11230: def _on_daily_usage_resize(self, event):
+11409: def on_daily_usage_tree_select(self, event):
+11490: def _add_single_usage_record_logic(self, mat_id, date_val, site, auto_save=True):
+11700: def add_ndt_company_section(self):
+11801: def _save_ndt_product_map(self, map_data):
+11849: def _save():
+11897: def load_daily_usage_to_form(self, record):
+12001: def clear_daily_usage_form_all(self):
+12052: def add_daily_usage_entry(self):
+12223: def save_report_mapping(self, mapping):
+12310: def save_and_close():
+12652: def _get_usage_session_data(self):
+12699: def _set_usage_session_data(self, data):
+12842: def save_form_session(self):
+13129: def update_daily_usage_view(self):
+13935: def delete_daily_usage_entry(self):
+14009: def open_edit_daily_usage_dialog(self):
+14284: def save_edits():
+14426: def save_daily_usage_edits(self, df_idx, new_data):
+14562: def export_daily_usage_history(self):
+14700: def export_all_daily_usage(self):
+14944: def auto_save_to_list(self, event, combobox, data_list, config_key):
+15012: def _add():
+15050: def auto_save_worktime(self, event, entry, config_key):
+15141: def auto_save_ot(self, event, entry, config_key):
+15333: def save_tab_config(self, force=False):
+16435: def switch_to_daily_usage_details(self):
+16463: def save_all_daily_usage_changes(self):
+16475: def open_detached_monthly_usage_view(self):

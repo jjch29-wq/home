@@ -1,0 +1,63 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+local_artifacts/
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Environments
+.venv
+venv/
+ENV/
+env/
+python/
+
+# Large binaries and archives
+*.zip
+*.exe
+*.msi
+
+# Temporary and log files
+*.log
+_temp_*
+out.txt
+out_utf8.txt
+_temp_grep.txt
+search_out.json
+search_out_expense.json
+
+# Excel and Data (keep template, ignore generated reports and backups)
+# If you want to track specific Excel files, comment them out
+# SIT-PMI-K3-1_Unified_*.xlsm
+# Material_Inventory_backup_*.xlsx
+
+# Local settings
+logo_settings.json
+logo_settings_unified.json
+Material_Manager_Config.json
+pmi_database.db
+
+# Config directory (API keys, etc.)
+config/
