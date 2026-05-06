@@ -14032,7 +14032,10 @@ class MaterialManager:
 
             # Inspector display (titles always stripped)
             disp_insp = [_clean_name(n) for n in inspectors]
-            data['inspector'] = ', '.join(disp_insp)
+            if len(disp_insp) > 3:
+                data['inspector'] = ', '.join(disp_insp[:3]) + f" 외 {len(disp_insp) - 3}명"
+            else:
+                data['inspector'] = ', '.join(disp_insp)
 
             # Build ot_status list
             data['ot_status'] = []
