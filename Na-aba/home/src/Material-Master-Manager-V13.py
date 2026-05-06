@@ -17986,6 +17986,8 @@ class MaterialManager:
                                 self.root.after(100, lambda: self.update_daily_usage_view())
                                 self.root.after(200, lambda: self.update_monthly_usage_view())
                                 self.root.after(300, lambda: self.update_budget_site_view()) 
+                                # [NEW] Set default tab to Daily Usage (Index 4) on startup
+                                self.root.after(400, lambda: self.notebook.select(4))
                             except Exception as e:
                                 print(f"[STARTUP] View refresh error: {e}")
                                 
