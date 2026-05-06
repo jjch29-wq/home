@@ -508,7 +508,7 @@ class DailyWorkReportManager:
                 sheet["B31"].font = Font(name='맑은 고딕', size=9)
 
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
-        sheet.page_margins.left = 0.3; sheet.page_margins.right = 0.3
+        sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
         for r in range(1, 12): sheet.row_dimensions[r].height = 15
         for t_row in [12, 26, 31, 37, 42]:
             try: sheet.row_dimensions[t_row + method_offset].height = 20
@@ -564,13 +564,13 @@ class DailyWorkReportManager:
         for m_key, r in mat_map.items():
             write_cell(sheet, r, 4, display_names.get(m_key, m_key), black_font, center_align)
 
-        def apply_section_style(sheet, s_row, s_col, e_row, e_col, b_style='thin'):
-            main_s = Side(style=b_style); hair_s = Side(style='hair')
+        def apply_section_style(sheet, s_row, s_col, e_row, e_col, b_style='thin', inner_style='hair'):
+            main_s = Side(style=b_style); inner_side = Side(style=inner_style) if inner_style else Side(style=None)
             for r in range(s_row, e_row + 1):
                 for c in range(s_col, e_col + 1):
                     key = (r, c)
                     if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell): sheet._cells[key] = Cell(sheet, row=r, column=c)
-                    cell = sheet._cells[key]; t = hair_s; b = hair_s; l = hair_s; ri = hair_s
+                    cell = sheet._cells[key]; t = inner_side; b = inner_side; l = inner_side; ri = inner_side
                     if r == s_row: t = main_s
                     if r == e_row: b = main_s
                     if c == s_col: l = main_s
@@ -585,7 +585,7 @@ class DailyWorkReportManager:
         for r_idx in range(s2_start, s2_end + 1):
             try: sheet.merge_cells(start_row=r_idx, start_column=2, end_row=r_idx, end_column=19)
             except: pass
-        apply_section_style(sheet, s2_start, 2, s2_end, 19, 'thin')
+        apply_section_style(sheet, s2_start, 2, s2_end, 19, 'thin', inner_style=None)
         apply_section_style(sheet, 12, 2, 16 + method_offset, 19, 'thin')
         apply_section_style(sheet, 6, 2, 9, 19, 'thin')
         v_title_row = 26 + method_offset; v_data_start = 28 + method_offset; v_data_end = 30 + total_offset
