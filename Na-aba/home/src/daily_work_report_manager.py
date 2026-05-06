@@ -267,8 +267,6 @@ class DailyWorkReportManager:
         for i, ot in enumerate(final_ot_list):
             r = ot_header_row + 1 + i
             worker_name = ot.get('names_display', '').strip()
-            safe_write(f"B{r}", worker_name)
-            
             raw_h = ot.get('ot_hours', '')
             clean_h = _re.sub(r'\(.*?\)', '', raw_h).strip()
             try: h_val = float(clean_h)
@@ -276,16 +274,19 @@ class DailyWorkReportManager:
             
             ot_amount = ot.get('ot_amount', '')
             
-            # 동일 작업자가 여러 번 나올 경우 OT 시간과 단가는 한 번만 표기
+            # 동일 작업자가 여러 번 나올 경우 이름, OT 시간, 단가는 한 번만 표기
             if worker_name and worker_name in seen_ot_workers:
+                worker_name_display = ''
                 h_val = ''
                 ot_amount = ''
             else:
+                worker_name_display = worker_name
                 if worker_name:
                     seen_ot_workers.add(worker_name)
                 if isinstance(h_val, float):
                     total_ot_hours += h_val
             
+            safe_write(f"B{r}", worker_name_display)
             safe_write(f"F{r}", ot.get('company', ''))
             safe_write(f"I{r}", ot.get('method', ''))
             safe_write(f"K{r}", h_val)
