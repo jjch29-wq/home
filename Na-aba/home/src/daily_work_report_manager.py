@@ -603,10 +603,12 @@ class DailyWorkReportManager:
         apply_section_style(sheet, ot_header_row, 2, ot_header_row + 2 + ot_extra, 19, 'thin')
         apply_section_style(sheet, 43 + base_shift, 2, 51, 19, 'thin')
         for c in range(2, 20):
+            # 41행은 윗선만 유지
             sheet.cell(row=41 + base_shift, column=c).border = Border(top=thin_side)
-            sheet.cell(row=42 + base_shift, column=c).border = Border(top=thin_side, bottom=thin_side, left=Side(style='hair'), right=Side(style='hair'))
-            if c == 2: sheet.cell(row=42 + base_shift, column=c).border = Border(top=thin_side, bottom=thin_side, left=thin_side, right=Side(style='hair'))
-            if c == 19: sheet.cell(row=42 + base_shift, column=c).border = Border(top=thin_side, bottom=thin_side, left=Side(style='hair'), right=thin_side)
+            # 42행은 윗선을 제거(None)하여 41행과 42행 사이의 선(41행 바닥선)을 없앰
+            sheet.cell(row=42 + base_shift, column=c).border = Border(top=Side(style=None), bottom=thin_side, left=Side(style='hair'), right=Side(style='hair'))
+            if c == 2: sheet.cell(row=42 + base_shift, column=c).border = Border(top=Side(style=None), bottom=thin_side, left=thin_side, right=Side(style='hair'))
+            if c == 19: sheet.cell(row=42 + base_shift, column=c).border = Border(top=Side(style=None), bottom=thin_side, left=Side(style='hair'), right=thin_side)
         if rtk_header_row: apply_section_style(sheet, rtk_header_row + 1, 2, rtk_header_row + 2, 19, 'thin')
         for r_idx in [3, 4]:
             c = sheet.cell(row=r_idx, column=19); c.border = Border(left=c.border.left, top=c.border.top, bottom=c.border.bottom, right=thin_side)
