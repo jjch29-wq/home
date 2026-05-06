@@ -139,7 +139,30 @@ class DailyWorkReportManager:
                 ot_header_row = r_search; break
         else: ot_header_row = 38 + method_offset
         ot_list = data.get('ot_status', [])
-        for i, ot in enumerate(ot_list[:2]):
+        ot_base_count = 2  # 템플릿 기본 OT 행 수
+        ot_extra = max(0, len(ot_list) - ot_base_count)  # [FIX] 초과 인원 수 계산
+
+        # [FIX] OT 인원이 2명 초과 시 행 삽입
+        if ot_extra > 0:
+            ot_insert_row = ot_header_row + ot_base_count + 1  # 기존 2개 행 바로 아래
+            print(f"DEBUG: Inserting {ot_extra} OT rows at row {ot_insert_row}")
+            sheet.insert_rows(ot_insert_row, ot_extra)
+            from copy import copy
+            for r_new in range(ot_insert_row, ot_insert_row + ot_extra):
+                sheet.row_dimensions[r_new].height = sheet.row_dimensions[ot_header_row + 1].height or 15
+                for col in range(1, 20):
+                    try:
+                        source_cell = sheet.cell(row=ot_header_row + 1, column=col)
+                        target_cell = sheet.cell(row=r_new, column=col)
+                        if source_cell.has_style:
+                            target_cell.font = copy(source_cell.font)
+                            target_cell.border = copy(source_cell.border)
+                            target_cell.fill = copy(source_cell.fill)
+                            target_cell.alignment = copy(source_cell.alignment)
+                            target_cell.number_format = source_cell.number_format
+                    except: pass
+
+        for i, ot in enumerate(ot_list):
             r = ot_header_row + 1 + i
             safe_write(f"B{r}", ot.get('names', '')); safe_write(f"F{r}", ot.get('company', ''))
             safe_write(f"I{r}", ot.get('method', '')); safe_write(f"K{r}", ot.get('ot_hours', ''))
@@ -159,17 +182,16 @@ class DailyWorkReportManager:
         rt_extra = max(0, rt_count - base_rt_limit)
         
         if rt_extra > 0:
-            print(f"DEBUG: Inserting {rt_extra} rows for RT extra materials at row 46")
-            # Insert rows at the end of RT section (starting from Row 46)
-            sheet.insert_rows(46, rt_extra)
-            # [FIX] Copy styles from Row 45 to the newly inserted rows
+            print(f"DEBUG: Inserting {rt_extra} rows for RT extra materials at row {46 + ot_extra}")
+            # [FIX] OT 행 삽입 이후이므로 RT 삽입 위치도 ot_extra만큼 이동
+            sheet.insert_rows(46 + ot_extra, rt_extra)
             from copy import copy
-            for r_new in range(46, 46 + rt_extra):
-                print(f"DEBUG: Copying style from Row 45 to New Row {r_new}")
+            for r_new in range(46 + ot_extra, 46 + ot_extra + rt_extra):
+                print(f"DEBUG: Copying style from Row {45 + ot_extra} to New Row {r_new}")
                 sheet.row_dimensions[r_new].height = 30
                 for col in range(1, 20): # Columns A to S
                     try:
-                        source_cell = sheet.cell(row=45, column=col)
+                        source_cell = sheet.cell(row=45 + ot_extra, column=col)
                         target_cell = sheet.cell(row=r_new, column=col)
                         if source_cell.has_style:
                             target_cell.font = copy(source_cell.font)
@@ -180,7 +202,7 @@ class DailyWorkReportManager:
                     except: pass
             # We do NOT delete rows from Notes, we will adjust their height later
         
-        total_offset = method_offset + rt_extra
+        total_offset = method_offset + ot_extra + rt_extra  # [FIX] OT 초과 행 포함
         
         # 1. Category Merges (B:C) Helper
         def safe_merge(sheet, s_row, s_col, e_row, e_col, value):
@@ -197,11 +219,11 @@ class DailyWorkReportManager:
             except: pass
 
         rt_display_count = max(1, rt_count)
-        rt_end_row = 42 + rt_display_count
+        rt_end_row = 42 + method_offset + ot_extra + max(1, rt_count)  # [FIX] method+OT+RT 모두 반영
         
-        safe_merge(sheet, 43, 2, rt_end_row, 3, "RT") 
-        safe_merge(sheet, 47 + rt_extra, 2, 48 + rt_extra, 3, "MT")
-        safe_merge(sheet, 49 + rt_extra, 2, 51 + rt_extra, 3, "PT")
+        safe_merge(sheet, 43 + method_offset + ot_extra, 2, rt_end_row, 3, "RT") 
+        safe_merge(sheet, 47 + total_offset, 2, 48 + total_offset, 3, "MT")
+        safe_merge(sheet, 49 + total_offset, 2, 51 + total_offset, 3, "PT")
 
         # Set column widths
         sheet.column_dimensions['D'].width = 12
@@ -237,9 +259,10 @@ class DailyWorkReportManager:
             except: pass
 
         # [DYNAMIC STYLE COPY & DATA PROTECTION]
-        # 1. Clear the RT Range (43 to 46 + rt_extra) first to remove template remnants
-        mat_start = 43
-        for r in range(mat_start, 47 + rt_extra):
+        # 1. Clear the RT Range first to remove template remnants
+        # [FIX] mat_start reflects method + OT offsets
+        mat_start = 43 + method_offset + ot_extra
+        for r in range(mat_start, mat_start + 4 + rt_extra):
             for col in range(4, 20): # D to S
                 cell = sheet.cell(row=r, column=col)
                 if not isinstance(cell, MergedCell):
@@ -253,11 +276,11 @@ class DailyWorkReportManager:
             return name
 
         # Write RT Data with Standardized Formatting
-        print(f"DEBUG: Starting RT Data Writing Loop. Total RT items: {len(active_rt)}")
+        print(f"DEBUG: Starting RT Data Writing Loop. Total RT items: {len(active_rt)}, mat_start={mat_start}")
         for idx, m in enumerate(active_rt):
-            r = mat_start + idx
-            if r > 46 + rt_extra: 
-                print(f"DEBUG: Breaking RT loop at r={r} because it exceeds 46 + {rt_extra}")
+            r = mat_start + idx  # [FIX] mat_start 사용
+            if r > mat_start + 3 + rt_extra:  # [FIX] 범위 체크도 mat_start 기준
+                print(f"DEBUG: Breaking RT loop at r={r}")
                 break
             
             # Strip brand prefix so short name fits in merged cell
@@ -298,9 +321,8 @@ class DailyWorkReportManager:
         rt_extra = max(0, rt_count - 4)
         
         # [FINAL STABLE COMPRESSION & OFFSET CALCULATION]
-        rt_count = len(active_rt)
-        rt_extra = max(0, rt_count - 4)
-        total_offset = method_offset + rt_extra # CRITICAL for Section 6 mapping
+        # [FIX] ot_extra must be included
+        total_offset = method_offset + ot_extra + rt_extra  # CRITICAL for Section 6 mapping
         
         # [STABLE COMPRESSION: CLEAR & RESIZE (SAFE)]
         # We avoid delete_rows as it destroys template merges in Sections 3-6.
@@ -336,18 +358,19 @@ class DailyWorkReportManager:
             sheet.row_dimensions[r].custom_height = True
             
         # 4. Materials (Section 6) prominent height
-        for r in range(43, 43 + rt_count):
+        mat_start_fixed = 43 + method_offset + ot_extra  # [FIX] RT 시작 행에 OT offset 반영
+        for r in range(mat_start_fixed, mat_start_fixed + rt_count):
             sheet.row_dimensions[r].height = 25.0
             sheet.row_dimensions[r].custom_height = True
             
         # 5. Shrink Spacer Row 42
-        spacer_row = 42 + method_offset
+        spacer_row = 42 + method_offset + ot_extra  # [FIX] spacer row도 OT offset 반영
         sheet.row_dimensions[spacer_row].height = 5
         sheet.row_dimensions[spacer_row].custom_height = True
 
         # 3. Hide unused RT rows (Only if count < 4)
         if rt_count < 4:
-            for r in range(43 + rt_count, 47):
+            for r in range(mat_start + rt_count, mat_start + 4):  # [FIX] mat_start 기준으로 계산
                 sheet.row_dimensions[r].height = 0
                 sheet.row_dimensions[r].hidden = True
                 # Clear content/borders
@@ -358,7 +381,7 @@ class DailyWorkReportManager:
                         cell.border = Border(left=Side(style=None), right=Side(style=None), top=Side(style=None), bottom=Side(style=None))
 
         # Add placeholders ONLY to active RT rows that are empty
-        for r in range(43, 43 + rt_count):
+        for r in range(mat_start, mat_start + rt_count):  # [FIX] mat_start 기준
             if r >= mat_start + len(active_rt):
                 safe_write(f'K{r}', '-'); safe_write(f'M{r}', '매'); safe_write(f'O{r}', '0 매')
             
@@ -587,11 +610,11 @@ class DailyWorkReportManager:
             if align: cell.alignment = align
         
         # 1. Category merges (RT, MT, PT)
-        rt_end = 42 + max(1, rt_count)
+        rt_end = mat_start + max(1, rt_count) - 1  # [FIX] mat_start 기준으로 RT 끝 행 계산
         merge_plan = [
-            (43, 2, rt_end, 3, "RT"),
-            (47 + rt_extra, 2, 48 + rt_extra, 3, "MT"),
-            (49 + rt_extra, 2, 51 + rt_extra, 3, "PT"),
+            (mat_start, 2, rt_end, 3, "RT"),          # [FIX] mat_start 사용
+            (47 + total_offset, 2, 48 + total_offset, 3, "MT"),   # [FIX] total_offset 사용
+            (49 + total_offset, 2, 51 + total_offset, 3, "PT"),   # [FIX] total_offset 사용
         ]
         for s_row, s_col, e_row, e_col, label in merge_plan:
             # Phase 1: Free all cells (unmerge existing)
