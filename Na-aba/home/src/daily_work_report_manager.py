@@ -603,11 +603,8 @@ class DailyWorkReportManager:
         apply_section_style(sheet, ot_header_row, 2, ot_header_row + 2 + ot_extra, 19, 'thin')
         apply_section_style(sheet, 43 + base_shift, 2, 51, 19, 'thin')
         for c in range(1, 20):
-            # 41행은 불필요한 세로선/하단선을 모두 없애고 오직 '윗선'만 유지 (1열은 아예 없음)
-            if c >= 2:
-                sheet.cell(row=41 + base_shift, column=c).border = Border(top=thin_side)
-            else:
-                sheet.cell(row=41 + base_shift, column=c).border = Border()
+            # 자재수불현황 제목행(41+base_shift)은 윗선을 포함한 모든 선을 완전히 제거
+            sheet.cell(row=41 + base_shift, column=c).border = Border()
             
             # 42행은 상단선만 명시적으로 제거하여 41행과의 사이 줄을 없앰
             c42 = sheet.cell(row=42 + base_shift, column=c)
