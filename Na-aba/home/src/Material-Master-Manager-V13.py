@@ -9426,20 +9426,22 @@ class MaterialManager:
 
         # Row 0: 업체명, 현장명
         ttk.Label(form_content, text="업체명:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
-        self.cb_daily_company = ttk.Combobox(form_content, width=15, values=self.companies)
-        self.cb_daily_company.grid(row=0, column=1, padx=(2, 10), pady=1, sticky='w')
-        
-        btn_company_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
+        co_container = ttk.Frame(form_content)
+        co_container.grid(row=0, column=1, padx=(2, 10), pady=1, sticky='w')
+        self.cb_daily_company = ttk.Combobox(co_container, width=12, values=self.companies)
+        self.cb_daily_company.pack(side='left')
+        btn_company_mgr = tk.Button(co_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                    command=lambda: self.open_list_management_dialog('companies', target_cb=self.cb_daily_company))
-        btn_company_mgr.place(in_=self.cb_daily_company, relx=1.0, x=-38, rely=0.5, anchor='e', width=16, height=16)
+        btn_company_mgr.pack(side='left', padx=(2, 0))
 
         ttk.Label(form_content, text="현장명:").grid(row=0, column=2, padx=(5, 0), pady=1, sticky='e')
-        self.cb_daily_site = ttk.Combobox(form_content, width=15, values=self.sites)
-        self.cb_daily_site.grid(row=0, column=3, padx=(2, 5), pady=1, sticky='w')
-        
-        btn_site_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
+        site_container = ttk.Frame(form_content)
+        site_container.grid(row=0, column=3, padx=(2, 5), pady=1, sticky='w')
+        self.cb_daily_site = ttk.Combobox(site_container, width=12, values=self.sites)
+        self.cb_daily_site.pack(side='left')
+        btn_site_mgr = tk.Button(site_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                 command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_site))
-        btn_site_mgr.place(in_=self.cb_daily_site, relx=1.0, x=-38, rely=0.5, anchor='e', width=16, height=16)
+        btn_site_mgr.pack(side='left', padx=(2, 0))
 
         # Row 1: 날짜, 장비명
         ttk.Label(form_content, text="날짜:").grid(row=1, column=0, padx=(5, 0), pady=1, sticky='e')
@@ -9451,7 +9453,7 @@ class MaterialManager:
         equip_container = ttk.Frame(form_content)
         equip_container.grid(row=1, column=3, padx=(2, 5), pady=1, sticky='w')
         
-        self.ent_daily_equip = ttk.Entry(equip_container, width=20)
+        self.ent_daily_equip = ttk.Entry(equip_container, width=15)
         self.ent_daily_equip.pack(side='left', fill='x', expand=True)
         
         # Link to the old variable name to avoid breaking other parts of the code
@@ -9463,15 +9465,17 @@ class MaterialManager:
                                     command=self.open_equipment_search_dialog)
         btn_equip_search.place(relx=1.0, x=-2, rely=0.5, anchor='e', width=18, height=18)
         
-        btn_equip_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
+        btn_equip_mgr = tk.Button(equip_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                  command=lambda: self.open_list_management_dialog('equipments', target_cb=self.ent_daily_equip))
-        # Place to the left of the search icon
-        btn_equip_mgr.place(in_=self.ent_daily_equip, relx=1.0, x=-20, rely=0.5, anchor='e', width=16, height=16)
+        btn_equip_mgr.pack(side='left', padx=(2, 0))
 
         # Row 2: 품목명
         ttk.Label(form_content, text="품목명:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
-        self.cb_daily_material = ttk.Entry(form_content, width=40)
-        self.cb_daily_material.grid(row=2, column=1, columnspan=3, padx=(2, 5), pady=1, sticky='w')
+        mat_container = ttk.Frame(form_content)
+        mat_container.grid(row=2, column=1, columnspan=3, padx=(2, 5), pady=1, sticky='w')
+        
+        self.cb_daily_material = ttk.Entry(mat_container, width=35)
+        self.cb_daily_material.pack(side='left')
         
         # [MODERN] Place the search button INSIDE the entry
         btn_material_search = tk.Button(self.cb_daily_material, text="🔍", font=('Arial', 8), 
@@ -9479,10 +9483,9 @@ class MaterialManager:
                                        command=lambda: self.open_material_search_dialog(target_form='daily_usage'))
         btn_material_search.place(relx=1.0, x=-2, rely=0.5, anchor='e', width=18, height=18)
         
-        btn_material_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
+        btn_material_mgr = tk.Button(mat_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                     command=lambda: self.open_list_management_dialog('materials', target_cb=self.cb_daily_material))
-        # Adjust gear icon position slightly to the left of the search icon
-        btn_material_mgr.place(in_=self.cb_daily_material, relx=1.0, x=-20, rely=0.5, anchor='e', width=16, height=16)
+        btn_material_mgr.pack(side='left', padx=(2, 0))
 
         # Row 3: 방법, 검사품명
         ttk.Label(form_content, text="방법:").grid(row=3, column=0, padx=(5, 0), pady=1, sticky='e')
@@ -9490,12 +9493,14 @@ class MaterialManager:
         self.cb_daily_test_method.grid(row=3, column=1, padx=(2, 10), pady=1, sticky='w')
         
         ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
-        self.ent_daily_inspection_item = ttk.Entry(form_content, width=18)
-        self.ent_daily_inspection_item.grid(row=3, column=3, padx=(2, 5), pady=1, sticky='w')
+        insp_container = ttk.Frame(form_content)
+        insp_container.grid(row=3, column=3, padx=(2, 5), pady=1, sticky='w')
+        self.ent_daily_inspection_item = ttk.Entry(insp_container, width=15)
+        self.ent_daily_inspection_item.pack(side='left')
         
-        btn_insp_item_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
+        btn_insp_item_mgr = tk.Button(insp_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                      command=lambda: self.open_list_management_dialog('test_items', target_cb=self.ent_daily_inspection_item))
-        btn_insp_item_mgr.place(in_=self.ent_daily_inspection_item, relx=1.0, x=-2, rely=0.5, anchor='e', width=16, height=16)
+        btn_insp_item_mgr.pack(side='left', padx=(2, 0))
 
         # Row 4: 수량, 단위
         ttk.Label(form_content, text="수량:").grid(row=4, column=0, padx=(5, 0), pady=1, sticky='e')
@@ -9503,13 +9508,14 @@ class MaterialManager:
         self.ent_daily_test_amount.grid(row=4, column=1, padx=(2, 10), pady=1, sticky='w')
         
         ttk.Label(form_content, text="단위:").grid(row=4, column=2, padx=(5, 0), pady=1, sticky='e')
+        unit_container = ttk.Frame(form_content)
+        unit_container.grid(row=4, column=3, padx=(2, 5), pady=1, sticky='w')
+        self.cb_daily_unit = ttk.Combobox(unit_container, width=12, values=self.daily_units)
+        self.cb_daily_unit.pack(side='left')
         
-        self.cb_daily_unit = ttk.Combobox(form_content, width=15, values=self.daily_units)
-        self.cb_daily_unit.grid(row=4, column=3, padx=(2, 5), pady=1, sticky='w')
-        
-        btn_unit_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
+        btn_unit_mgr = tk.Button(unit_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                 command=lambda: self.open_list_management_dialog('daily_units', target_cb=self.cb_daily_unit))
-        btn_unit_mgr.place(in_=self.cb_daily_unit, relx=1.0, x=-38, rely=0.5, anchor='e', width=16, height=16)
+        btn_unit_mgr.pack(side='left', padx=(2, 0))
 
         # Row 5: 단가, 출장비
         ttk.Label(form_content, text="단가:").grid(row=5, column=0, padx=(5, 0), pady=1, sticky='e')
@@ -9522,12 +9528,14 @@ class MaterialManager:
 
         # Row 6: 적용코드, 성적서번호
         ttk.Label(form_content, text="적용코드:").grid(row=6, column=0, padx=(5, 0), pady=1, sticky='e')
-        self.ent_daily_applied_code = ttk.Entry(form_content, width=15)
-        self.ent_daily_applied_code.grid(row=6, column=1, padx=(2, 10), pady=1, sticky='w')
+        app_container = ttk.Frame(form_content)
+        app_container.grid(row=6, column=1, padx=(2, 10), pady=1, sticky='w')
+        self.ent_daily_applied_code = ttk.Entry(app_container, width=12)
+        self.ent_daily_applied_code.pack(side='left')
         
-        btn_app_code_mgr = tk.Button(form_content, text="⚙", font=('Arial', 7), bd=0, bg=self.theme_bg, fg='gray',
+        btn_app_code_mgr = tk.Button(app_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                     command=lambda: self.open_list_management_dialog('applied_codes', target_cb=self.ent_daily_applied_code))
-        btn_app_code_mgr.place(in_=self.ent_daily_applied_code, relx=1.0, x=-2, rely=0.5, anchor='e', width=16, height=16)
+        btn_app_code_mgr.pack(side='left', padx=(2, 0))
 
         ttk.Label(form_content, text="성적서번호:").grid(row=6, column=2, padx=(5, 0), pady=1, sticky='e')
         self.ent_daily_report_no = ttk.Entry(form_content, width=18)
