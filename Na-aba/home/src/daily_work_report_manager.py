@@ -263,17 +263,33 @@ class DailyWorkReportManager:
                 safe_write(f"{col_let}{r}", '')
         
         total_ot_hours = 0.0
+        seen_ot_workers = set()
         for i, ot in enumerate(final_ot_list):
             r = ot_header_row + 1 + i
-            safe_write(f"B{r}", ot.get('names_display', ''))
+            worker_name = ot.get('names_display', '').strip()
+            safe_write(f"B{r}", worker_name)
+            
             raw_h = ot.get('ot_hours', '')
             clean_h = _re.sub(r'\(.*?\)', '', raw_h).strip()
-            try: h_val = float(clean_h); total_ot_hours += h_val
+            try: h_val = float(clean_h)
             except: h_val = clean_h
+            
+            ot_amount = ot.get('ot_amount', '')
+            
+            # 동일 작업자가 여러 번 나올 경우 OT 시간과 단가는 한 번만 표기
+            if worker_name and worker_name in seen_ot_workers:
+                h_val = ''
+                ot_amount = ''
+            else:
+                if worker_name:
+                    seen_ot_workers.add(worker_name)
+                if isinstance(h_val, float):
+                    total_ot_hours += h_val
+            
             safe_write(f"F{r}", ot.get('company', ''))
             safe_write(f"I{r}", ot.get('method', ''))
             safe_write(f"K{r}", h_val)
-            safe_write(f"N{r}", ot.get('ot_amount', ''), is_currency=True)
+            safe_write(f"N{r}", ot_amount, is_currency=True)
             
         # 6. Section 6 (Materials)
         materials_data = data.get('materials', {}); active_rt = []
