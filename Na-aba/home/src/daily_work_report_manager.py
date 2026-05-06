@@ -444,15 +444,15 @@ class DailyWorkReportManager:
                 safe_write(f'O{r}', int(m_d.get('in', 0)))
 
         thin = Side(style='thin')
-        for r in range(41 + base_shift, 52): # Fixed to Row 51
+        for r in range(41 + base_shift, 52 + total_offset):
             for col in range(2, 20):
                 cell = sheet.cell(row=r, column=col)
                 cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
                 cell.alignment = center_align
         
-        # [CLEANUP] Explicitly remove borders from Row 52 to satisfy "No line on Row 52"
+        # [CLEANUP] Explicitly remove borders from the row after the table
         for col in range(1, 21):
-            sheet.cell(row=52, column=col).border = Border()
+            sheet.cell(row=52 + total_offset, column=col).border = Border()
 
         for m_key, r in mat_map.items():
             display_name = display_names.get(m_key, m_key)
@@ -601,7 +601,7 @@ class DailyWorkReportManager:
             top_border = c.border.top if c.border else Side(style=None)
             c.border = Border(top=top_border, bottom=Side(style=None), left=Side(style=None), right=Side(style=None))
         apply_section_style(sheet, ot_header_row, 2, ot_header_row + 2 + ot_extra, 19, 'thin')
-        apply_section_style(sheet, 43 + base_shift, 2, 51, 19, 'thin')
+        apply_section_style(sheet, 43 + base_shift, 2, 51 + total_offset, 19, 'thin')
         for c in range(1, 20):
             # 자재수불현황 제목행(41+base_shift)은 윗선을 포함한 모든 선을 완전히 제거
             sheet.cell(row=41 + base_shift, column=c).border = Border()
