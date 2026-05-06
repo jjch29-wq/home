@@ -284,7 +284,7 @@ class DailyWorkReportManager:
                 item = v.copy(); item['name'] = name; active_rt.append(item)
         
         rt_count = len(active_rt)
-        base_rt_limit = 4
+        base_rt_limit = 3
         rt_extra = max(0, rt_count - base_rt_limit)
         
         if rt_extra > 0:
@@ -322,8 +322,8 @@ class DailyWorkReportManager:
         rt_end_row = (rt_start_row - 1) + rt_display_count
         
         safe_merge(sheet, rt_start_row, 2, rt_end_row, 3, "RT") 
-        safe_merge(sheet, 47 + total_offset, 2, 48 + total_offset, 3, "MT")
-        safe_merge(sheet, 49 + total_offset, 2, 51 + total_offset, 3, "PT")
+        safe_merge(sheet, 46 + total_offset, 2, 47 + total_offset, 3, "MT")
+        safe_merge(sheet, 48 + total_offset, 2, 50 + total_offset, 3, "PT")
 
         sheet.column_dimensions['D'].width = 12
         sheet.column_dimensions['E'].width = 12
@@ -417,8 +417,8 @@ class DailyWorkReportManager:
             'PT Developer': ['PT Developer', '현상', '현상액', '현상제', 'Developer']
         }
         mat_map = {
-            'MT WHITE': 47 + total_offset, 'MT 7C-BLACK': 48 + total_offset, 
-            'PT Penetrant': 49 + total_offset, 'PT Cleaner': 50 + total_offset, 'PT Developer': 51 + total_offset
+            'MT WHITE': 46 + total_offset, 'MT 7C-BLACK': 47 + total_offset, 
+            'PT Penetrant': 48 + total_offset, 'PT Cleaner': 49 + total_offset, 'PT Developer': 50 + total_offset
         }
         display_names = {
             'MT WHITE': '백색페인트', 'MT 7C-BLACK': '흑색자분', 
@@ -547,8 +547,8 @@ class DailyWorkReportManager:
         
         merge_plan = [
             (rt_start_final, 2, rt_end_final, 3, "RT"), 
-            (47 + total_offset, 2, 48 + total_offset, 3, "MT"), 
-            (49 + total_offset, 2, 51 + total_offset, 3, "PT")
+            (46 + total_offset, 2, 47 + total_offset, 3, "MT"), 
+            (48 + total_offset, 2, 50 + total_offset, 3, "PT")
         ]
         for s_row, s_col, e_row, e_col, label in merge_plan:
             for r in range(s_row, e_row + 1):
