@@ -417,8 +417,8 @@ class DailyWorkReportManager:
             'PT Developer': ['PT Developer', '현상', '현상액', '현상제', 'Developer']
         }
         mat_map = {
-            'MT WHITE': 46 + base_shift, 'MT 7C-BLACK': 47 + base_shift, 
-            'PT Penetrant': 48 + base_shift, 'PT Cleaner': 49 + base_shift, 'PT Developer': 50 + base_shift
+            'MT WHITE': 47 + total_offset, 'MT 7C-BLACK': 48 + total_offset, 
+            'PT Penetrant': 49 + total_offset, 'PT Cleaner': 50 + total_offset, 'PT Developer': 51 + total_offset
         }
         display_names = {
             'MT WHITE': '백색페인트', 'MT 7C-BLACK': '흑색자분', 
@@ -547,8 +547,8 @@ class DailyWorkReportManager:
         
         merge_plan = [
             (rt_start_final, 2, rt_end_final, 3, "RT"), 
-            (46 + base_shift, 2, 47 + base_shift, 3, "MT"), 
-            (48 + base_shift, 2, 50 + base_shift, 3, "PT")
+            (47 + total_offset, 2, 48 + total_offset, 3, "MT"), 
+            (49 + total_offset, 2, 51 + total_offset, 3, "PT")
         ]
         for s_row, s_col, e_row, e_col, label in merge_plan:
             for r in range(s_row, e_row + 1):
@@ -569,9 +569,8 @@ class DailyWorkReportManager:
             main_s = Side(style=b_style); inner_side = Side(style=inner_style) if inner_style else Side(style=None)
             for r in range(s_row, e_row + 1):
                 for c in range(s_col, e_col + 1):
-                    key = (r, c)
-                    if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell): sheet._cells[key] = Cell(sheet, row=r, column=c)
-                    cell = sheet._cells[key]; t = inner_side; b = inner_side; l = inner_side; ri = inner_side
+                    cell = sheet.cell(row=r, column=c)
+                    t = inner_side; b = inner_side; l = inner_side; ri = inner_side
                     if r == s_row: t = main_s
                     if r == e_row: b = main_s
                     if c == s_col: l = main_s
