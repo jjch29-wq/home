@@ -215,10 +215,17 @@ class DailyWorkReportManager:
                 grouped_ot[key]['names'].append(name)
         
         final_ot_list = []
+        seen_ot_workers_prep = set()
         for key in grouped_ot:
             item = grouped_ot[key]
-            item['names_display'] = ", ".join(item['names'])
-            final_ot_list.append(item)
+            # 이미 처리된 작업자를 제외한 새로운 인원만 필터링
+            new_names = [n for n in item['names'] if n not in seen_ot_workers_prep]
+            if new_names:
+                item['names'] = new_names
+                item['names_display'] = ", ".join(new_names)
+                for n in new_names:
+                    seen_ot_workers_prep.add(n)
+                final_ot_list.append(item)
 
         ot_count = len(final_ot_list)
         ot_extra = max(0, ot_count - 2)
@@ -263,10 +270,8 @@ class DailyWorkReportManager:
                 safe_write(f"{col_let}{r}", '')
         
         total_ot_hours = 0.0
-        seen_ot_workers = set()
         for i, ot in enumerate(final_ot_list):
             r = ot_header_row + 1 + i
-            original_names = ot.get('names', [])
             
             raw_h = ot.get('ot_hours', '')
             clean_h = _re.sub(r'\(.*?\)', '', raw_h).strip()
@@ -274,22 +279,10 @@ class DailyWorkReportManager:
             except: h_val = clean_h
             
             ot_amount = ot.get('ot_amount', '')
+            worker_name_display = ot.get('names_display', '')
             
-            # 개별 이름 단위로 중복 체크
-            new_names = [n for n in original_names if n not in seen_ot_workers]
-            
-            if not new_names:
-                # 모든 작업자가 이미 이전에 OT를 기록했으면 이름, 시간, 금액 모두 빈칸
-                worker_name_display = ''
-                h_val = ''
-                ot_amount = ''
-            else:
-                # 아직 OT 기록이 안 된 작업자들만 이름 표시 및 OT 누적
-                worker_name_display = ", ".join(new_names)
-                for n in new_names:
-                    seen_ot_workers.add(n)
-                if isinstance(h_val, float):
-                    total_ot_hours += h_val
+            if isinstance(h_val, float):
+                total_ot_hours += h_val
             
             safe_write(f"B{r}", worker_name_display)
             safe_write(f"F{r}", ot.get('company', ''))
