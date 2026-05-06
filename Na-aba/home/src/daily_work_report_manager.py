@@ -266,7 +266,8 @@ class DailyWorkReportManager:
         seen_ot_workers = set()
         for i, ot in enumerate(final_ot_list):
             r = ot_header_row + 1 + i
-            worker_name = ot.get('names_display', '').strip()
+            original_names = ot.get('names', [])
+            
             raw_h = ot.get('ot_hours', '')
             clean_h = _re.sub(r'\(.*?\)', '', raw_h).strip()
             try: h_val = float(clean_h)
@@ -274,15 +275,19 @@ class DailyWorkReportManager:
             
             ot_amount = ot.get('ot_amount', '')
             
-            # 동일 작업자가 여러 번 나올 경우 이름, OT 시간, 단가는 한 번만 표기
-            if worker_name and worker_name in seen_ot_workers:
+            # 개별 이름 단위로 중복 체크
+            new_names = [n for n in original_names if n not in seen_ot_workers]
+            
+            if not new_names:
+                # 모든 작업자가 이미 이전에 OT를 기록했으면 이름, 시간, 금액 모두 빈칸
                 worker_name_display = ''
                 h_val = ''
                 ot_amount = ''
             else:
-                worker_name_display = worker_name
-                if worker_name:
-                    seen_ot_workers.add(worker_name)
+                # 아직 OT 기록이 안 된 작업자들만 이름 표시 및 OT 누적
+                worker_name_display = ", ".join(new_names)
+                for n in new_names:
+                    seen_ot_workers.add(n)
                 if isinstance(h_val, float):
                     total_ot_hours += h_val
             
