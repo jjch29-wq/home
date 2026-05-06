@@ -444,7 +444,7 @@ class DailyWorkReportManager:
                 safe_write(f'O{r}', int(m_d.get('in', 0)))
 
         thin = Side(style='thin')
-        for r in range(41 + base_shift, 52 + total_offset):
+        for r in range(41 + base_shift, 51 + total_offset):
             for col in range(2, 20):
                 cell = sheet.cell(row=r, column=col)
                 cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -452,7 +452,7 @@ class DailyWorkReportManager:
         
         # [CLEANUP] Explicitly remove borders from the row after the table
         for col in range(1, 21):
-            sheet.cell(row=52 + total_offset, column=col).border = Border()
+            sheet.cell(row=51 + total_offset, column=col).border = Border()
 
         for m_key, r in mat_map.items():
             display_name = display_names.get(m_key, m_key)
@@ -600,24 +600,10 @@ class DailyWorkReportManager:
             top_border = c.border.top if c.border else Side(style=None)
             c.border = Border(top=top_border, bottom=Side(style=None), left=Side(style=None), right=Side(style=None))
         apply_section_style(sheet, ot_header_row, 2, ot_header_row + 2 + ot_extra, 19, 'thin')
-        apply_section_style(sheet, 43 + base_shift, 2, 51 + total_offset, 19, 'thin')
+        apply_section_style(sheet, 43 + base_shift, 2, 50 + total_offset, 19, 'thin')
         for c in range(1, 20):
             # 자재수불현황 제목행(41+base_shift)은 윗선을 포함한 모든 선을 완전히 제거
             sheet.cell(row=41 + base_shift, column=c).border = Border()
-            
-            # 42행은 상단선 제거, 하단선은 명시적으로 강제 추가
-            if c >= 2:
-                c42 = sheet.cell(row=42 + base_shift, column=c)
-                o_l = c42.border.left if c42.border else Side(style=None)
-                o_r = c42.border.right if c42.border else Side(style=None)
-                c42.border = Border(left=o_l, right=o_r, bottom=thin_side, top=Side(style=None))
-                
-                # 43행 윗선도 명시적으로 강제 추가하여 선이 끊기지 않게 보장
-                c43 = sheet.cell(row=43 + base_shift, column=c)
-                o43_l = c43.border.left if c43.border else Side(style=None)
-                o43_r = c43.border.right if c43.border else Side(style=None)
-                o43_b = c43.border.bottom if c43.border else Side(style=None)
-                c43.border = Border(left=o43_l, right=o43_r, bottom=o43_b, top=thin_side)
         if rtk_header_row: apply_section_style(sheet, rtk_header_row + 1, 2, rtk_header_row + 2, 19, 'thin')
         for r_idx in [3, 4]:
             c = sheet.cell(row=r_idx, column=19); c.border = Border(left=c.border.left, top=c.border.top, bottom=c.border.bottom, right=thin_side)
