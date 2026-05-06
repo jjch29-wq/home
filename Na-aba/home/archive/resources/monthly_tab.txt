@@ -1,0 +1,76 @@
+5330: def update_monthly_usage_view(self):
+5331: """Update the monthly usage treeview with aggregated data from daily usage"""
+5332: # Clear current views
+5333: for item in self.monthly_usage_tree.get_children():
+5334: self.monthly_usage_tree.delete(item)
+5335: for item in self.site_summary_tree.get_children():
+5336: self.site_summary_tree.delete(item)
+5337: for item in self.worker_summary_tree.get_children():
+5338: self.worker_summary_tree.delete(item)
+5339: 
+5340: # Get filter values
+5341: filter_year = self.cb_filter_year.get()
+5342: filter_month = self.cb_filter_month.get()
+5343: filter_site = self.cb_filter_site_monthly.get() if hasattr(self, 'cb_filter_site_monthly') else '전체'
+5344: filter_material = self.cb_filter_material_monthly.get() if hasattr(self, 'cb_filter_material_monthly') else '전체'
+5345: 
+5346: # Return if daily usage data is empty
+5347: if self.daily_usage_df.empty:
+5348: return
+5349: 
+5350: # Create a copy of daily usage data and extract year/month from Date column
+5351: df = self.daily_usage_df.copy()
+5352: 
+5353: # Normalize column names - remove ALL types of whitespace using regex
+5354: import re
+5355: df.columns = [re.sub(r'\s+', '', str(c)) for c in df.columns]
+5356: 
+5357: df['Year'] = pd.to_datetime(df['Date']).dt.year
+5358: df['Month'] = pd.to_datetime(df['Date']).dt.month
+5359: 
+5360: # DEBUG: Check what columns exist
+5361: print(f"DEBUG: Normalized daily_usage_df columns: {df.columns.tolist()}")
+5362: print(f"DEBUG: Number of rows before filter: {len(df)}")
+5363: 
+5364: # Apply filters
+5365: if filter_year != '전체':
+5366: df = df[df['Year'] == int(filter_year)]
+5367: 
+5368: if filter_month != '전체':
+5369: df = df[df['Month'] == int(filter_month)]
+5370: 
+5371: if filter_site != '전체':
+5372: df = df[df['Site'] == filter_site]
+5373: 
+5374: print(f"DEBUG: Number of rows after filter: {len(df)}")
+5375: 
+5376: # [NEW] Return early if filtered df is empty to avoid ValueError during assignment
+5377: if df.empty:
+5378: return
+5379: # Populate site filter options from data
+5380: if hasattr(self, 'cb_filter_site_monthly'):
+5381: unique_sites = ['전체'] + sorted(self.daily_usage_df['Site'].dropna().unique().tolist())
+5382: self.cb_filter_site_monthly['values'] = unique_sites
+5383: if not self.cb_filter_site_monthly.get():
+5384: self.cb_filter_site_monthly.set('전체')
+5385: 
+5386: # Populate material filter options from data
+5387: if hasattr(self, 'cb_filter_material_monthly'):
+5388: # Get unique material names from materials_df based on MaterialIDs in daily_usage_df
+5389: # Note: MaterialID column name itself might have spaces in self.daily_usage_df
+5390: m_id_col = 'MaterialID' if 'MaterialID' in self.daily_usage_df.columns else 'MaterialID'
+5391: unique_mat_ids = self.daily_usage_df[m_id_col].dropna().unique()
+5392: material_names = []
+5393: for mat_id in unique_mat_ids:
+5394: mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
+5395: if not mat_row.empty:
+5396: material_names.append(mat_row.iloc[0]['품목명'])
+5397: unique_materials = ['전체'] + sorted(set(material_names))
+5398: self.cb_filter_material_monthly['values'] = unique_materials
+5399: if not self.cb_filter_material_monthly.get():
+5400: self.cb_filter_material_monthly.set('전체')
+5401: 
+5402: # Prepare aggregation dictionary for all numeric fields
+5403: agg_dict = {'Usage': 'sum'}
+5404: 
+5405: # Helper for joining workers - clean internal spaces to avoid "11시간" vs "11 시간" mismatch

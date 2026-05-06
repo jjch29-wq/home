@@ -1,0 +1,158 @@
+858: headers1 = ["구분", "직급", "투입인원(명)", "투입일수/인(일)", "단가/일", "사전원가가액"]
+970: ttk.Label(ref_table, text="직급", style="LaborHeader.TLabel", padding=5, width=10, anchor='center').grid(row=0, column=0, sticky='nsew')
+1065: """Export all entry values as a dictionary"""
+1261: """Export entry values"""
+1703: """Dialog to select columns for Excel export"""
+2204: print("DEBUG: DB found. Reading Excel...")
+2206: self.materials_df = pd.read_excel(self.db_path, sheet_name='Materials')
+2231: self.transactions_df = pd.read_excel(self.db_path, sheet_name='Transactions')
+2275: self.monthly_usage_df = pd.read_excel(self.db_path, sheet_name='MonthlyUsage', dtype={'Site': str, 'Note': str})
+2291: self.daily_usage_df = pd.read_excel(self.db_path, sheet_name='DailyUsage',
+2461: self.budget_df = pd.read_excel(self.db_path, sheet_name='Budget',
+2479: # [NEW] 7. Settings (Excel-based Rate Management)
+2481: self.settings_df = pd.read_excel(self.db_path, sheet_name='Settings')
+2944: with pd.ExcelWriter(self.db_path, engine='openpyxl') as writer:
+2945: self.materials_df.to_excel(writer, sheet_name='Materials', index=False)
+2946: self.transactions_df.to_excel(writer, sheet_name='Transactions', index=False)
+2947: self.monthly_usage_df.to_excel(writer, sheet_name='MonthlyUsage', index=False)
+2948: self.daily_usage_df.to_excel(writer, sheet_name='DailyUsage', index=False)
+2949: self.budget_df.to_excel(writer, sheet_name='Budget', index=False)
+2951: self.settings_df.to_excel(writer, sheet_name='Settings', index=False)
+2965: with pd.ExcelWriter(conflict_path, engine='openpyxl') as writer:
+2966: self.materials_df.to_excel(writer, sheet_name='Materials', index=False)
+2967: self.transactions_df.to_excel(writer, sheet_name='Transactions', index=False)
+2968: self.monthly_usage_df.to_excel(writer, sheet_name='MonthlyUsage', index=False)
+2969: self.daily_usage_df.to_excel(writer, sheet_name='DailyUsage', index=False)
+2970: self.budget_df.to_excel(writer, sheet_name='Budget', index=False)
+2972: self.settings_df.to_excel(writer, sheet_name='Settings', index=False)
+3072: # Tab 4: Import/Export
+3136: btn_export = ttk.Button(action_row, text="엑셀 내보내기", command=self.export_stock_to_excel)
+3137: btn_export.pack(side='left', padx=5)
+3487: # Save to Excel
+3940: btn_export_trans = ttk.Button(filter_row1, text="엑셀 내보내기", command=self.export_transaction_history)
+3941: btn_export_trans.pack(side='left', padx=5)
+5207: def clean_df_export(self, df):
+5208: """Sanitize data for Excel: remove illegal characters, handle empty values, and protect formulas"""
+5244: # These characters cause Excel to report file corruption.
+5268: def save_df_to_excel_autofit(self, df, save_path, sheet_name='Sheet1'):
+5269: """Save a DataFrame to Excel with automatic column width adjustment (AutoFit)"""
+5270: with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+5271: df.to_excel(writer, index=False, sheet_name=sheet_name)
+5333: btn_import = ttk.Button(import_frame, text="엑셀 파일 가져오기", command=self.import_from_excel)
+5338: # Export Section
+5341: btn_export_materials = ttk.Button(import_frame, text="자재 목록 내보내기", command=self.export_materials)
+5342: btn_export_materials.pack(pady=5)
+5344: btn_export_trans = ttk.Button(import_frame, text="거래 내역 내보내기", command=self.export_transactions)
+5345: btn_export_trans.pack(pady=5)
+5347: btn_export_all = ttk.Button(import_frame, text="전체 데이터 내보내기", command=self.export_all)
+5348: btn_export_all.pack(pady=5)
+5350: def import_from_excel(self):
+5353: filetypes=[("Excel files", "*.xlsx *.xls")]
+5361: raw_imported_df = pd.read_excel(file_path)
+5412: # 2. Interior Deduplication: merge same items within the Excel file itself summerly
+5414: final_excel_df = working_df.groupby(['품목명', 'SN', '규격'], as_index=False).agg({
+5431: duplicate_indices = [] # (excel_row_idx, db_row_idx)
+5434: for idx, row in final_excel_df.iterrows():
+5475: ttk.Button(btn_frame, text="기존 정보 덮어쓰기 (Excel 정보로 교체)",
+5491: row_data = final_excel_df.iloc[idx].to_dict()
+5504: ex_row = final_excel_df.iloc[ex_idx]
+5511: # Also update Manufacturer/Supplier if empty in DB but present in Excel
+5520: for col in final_excel_df.columns:
+5552: def export_materials(self):
+5555: initialfile="Materials_Export.xlsx",
+5557: filetypes=[("Excel files", "*.xlsx")]
+5562: self.materials_df.to_excel(save_path, index=False)
+5567: def export_transactions(self):
+5570: initialfile="Transactions_Export.xlsx",
+5572: filetypes=[("Excel files", "*.xlsx")]
+5577: self.transactions_df.to_excel(save_path, index=False)
+5582: def export_transaction_history(self):
+5583: """Export the detailed In/Out history to Excel summerly"""
+5638: filetypes=[("Excel files", "*.xlsx")]
+5644: history_df = self.clean_df_export(history_df)
+5645: self.save_df_to_excel_autofit(history_df, save_path, "입출고내역")
+5650: def export_all(self):
+5653: initialfile="Complete_Export.xlsx",
+5655: filetypes=[("Excel files", "*.xlsx")]
+5660: with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+5661: self.materials_df.to_excel(writer, sheet_name='Materials', index=False)
+5662: self.transactions_df.to_excel(writer, sheet_name='Transactions', index=False)
+5776: report_df.to_excel(save_path, index=False)
+5807: report_df.to_excel(save_path, index=False)
+5846: btn_export = ttk.Button(filter_frame, text="엑셀 내보내기", command=self.export_monthly_usage_history)
+5847: btn_export.pack(side='left', padx=5)
+5865: # Added '(Full작업자)' for full list backup during Excel export
+7099: def export_monthly_usage_history(self):
+7100: """Export monthly usage data, site summaries, and worker summaries to a multi-sheet Excel file"""
+7133: filetypes=[("Excel files", "*.xlsx")]
+7140: columns_to_export = [c for c in columns if c != '(Full작업자)']
+7158: monthly_df = pd.DataFrame(final_monthly_data, columns=columns_to_export)
+7159: monthly_df = self.clean_df_export(monthly_df)
+7163: site_df = self.clean_df_export(site_df)
+7167: worker_df = self.clean_df_export(worker_df)
+7169: # --- Save to Excel with Multiple Sheets and AutoFit ---
+7170: with pd.ExcelWriter(save_path, engine='openpyxl') as writer:
+7173: df.to_excel(writer, index=False, sheet_name=sheet_name)
+8534: self.btn_daily_report = ttk.Button(row1, text="📄 작업일보 출력", command=self.export_daily_work_report, width=15)
+9043: btn_export = ttk.Button(filter_frame, text="엑셀 내보내기", command=self.export_daily_usage_history)
+9044: btn_export.pack(side='left', padx=5)
+9046: btn_export_all = ttk.Button(filter_frame, text="전체 기록 내보내기", command=self.export_all_daily_usage)
+9047: btn_export_all.pack(side='left', padx=5)
+9095: # Added '(Full작업자)' for Excel export backup.
+9232: def export_budget_sales_status(self):
+9233: """Export the currently filtered budget sales status to Excel"""
+9240: filetypes=[("Excel files", "*.xlsx")],
+9284: with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+9285: df.to_excel(writer, sheet_name='SalesStatus', index=False)
+9332: ttk.Button(top_btn_frame, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
+9510: ttk.Button(bottom_filter, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
+11569: '검사자': "", # Derived from workers list in output
+12241: """Open a dialog to configure Excel mapping for Daily Work Report"""
+12243: dialog.title("작업일보 엑셀 매핑 설정")
+12278: ("검사자 (Inspector)", "inspector"), ("차량번호 (Car No)", "car_no")
+12335: def export_daily_work_report(self):
+12336: """작업일보를 엑셀 템플릿에 출력합니다."""
+12343: messagebox.showerror("오류", "작업일보 템플릿(Template_DailyWorkReport.xlsx)을 찾을 수 없습니다.")
+12630: default_filename = f"작업일보_{site}_{date_val.strftime('%Y%m%d')}.xlsx"
+12632: title="작업일보 저장",
+12635: filetypes=[("Excel files", "*.xlsx")]
+12646: messagebox.showinfo("성공", f"작업일보가 생성되었습니다:\n{save_path}")
+12649: if messagebox.askyesno("확인", "생성된 작업일보를 지금 여시겠습니까?"):
+12656: messagebox.showerror("오류", f"작업일보 생성 중 오류 발생: {e}")
+13217: # 2. Handle Numeric/Excel Serial
+13618: # [VISUAL DEDUPING] If duplicate split row, clear numeric values for cleaner view/export
+13698: '', # 검사자
+14568: def export_daily_usage_history(self):
+14569: """Export current filtered daily usage history to Excel"""
+14574: # If no items selected, export all visible items
+14575: items_to_export = self.daily_usage_tree.get_children()
+14577: # Export only selected items
+14578: items_to_export = selected_items
+14581: for item in items_to_export:
+14588: # Export columns currently visible in the Treeview
+14606: save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=filename, filetypes=[("Excel files", "*.xlsx")])
+14628: # Extract only the selected display columns for final export
+14633: df = self.clean_df_export(df)
+14634: self.save_df_to_excel_autofit(df, save_path, "일일사용내역")
+14706: def export_all_daily_usage(self):
+14707: """Export all daily usage records to Excel"""
+14713: # Export all columns from the tree structure
+14717: save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=filename, filetypes=[("Excel files", "*.xlsx")])
+14720: # Ensure we only try to export columns that exist in the dataframe
+14724: # Actually, export_all usually implies backing up the raw dataframe.
+14732: # If we want "All Daily Usage", we should probably export the RAW dataframe for backup purposes,
+14734: # The previous code seemed to try to export based on tree columns but mapped from DF?
+14735: # "export_df = self.daily_usage_df[selected_cols].copy()"
+14744: # export_df = self.daily_usage_df.copy()
+14745: # Let's revert to a safe "Backup" style export for "All Data".
+14747: export_df = self.daily_usage_df.copy()
+14748: export_df = self.clean_df_export(export_df)
+14749: self.save_df_to_excel_autofit(export_df, save_path, "전체사용기록")
+14751: export_df = self.clean_df_export(export_df)
+14752: self.save_df_to_excel_autofit(export_df, save_path, "전체기록")
+14912: # 1-1. 탭 이동 시 실제 데이터(Excel)도 자동 저장
+16130: def export_stock_to_excel(self):
+16131: """Export current stock data to Excel"""
+16169: filetypes=[("Excel files", "*.xlsx")]
+16174: stock_df = self.clean_df_export(stock_df)
+16175: self.save_df_to_excel_autofit(stock_df, save_path, "재고현황")

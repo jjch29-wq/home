@@ -1,5 +1,6 @@
 import openpyxl
 from openpyxl.styles import Alignment, Border, Side, Font
+from openpyxl.cell.cell import MergedCell
 import os
 import datetime
 
@@ -22,360 +23,600 @@ class DailyWorkReportManager:
                 'center_miss': 'D34', 'density': 'F34', 'marking_miss': 'H34', 'film_mark': 'J34',
                 'handling': 'L34', 'customer_complaint': 'N34', 'etc': 'P34', 'total': 'R34'
             },
-
             'ot': {
                 'row1_name': 'B38', 'row1_company': 'F38', 'row1_method': 'I38', 'row1_hours': 'K38', 'row1_amount': 'N38',
                 'row2_name': 'B39', 'row2_company': 'F39', 'row2_method': 'I39', 'row2_hours': 'K39', 'row2_amount': 'N39'
             },
-
-
             'materials': {
                 'RT T200': 43, 'RT AA400': 44, 'RT Other': 45,
                 'MT WHITE': 46, 'MT 7C-BLACK': 47,
                 'PT Penetrant': 48, 'PT Cleaner': 49, 'PT Developer': 50
             },
             'vehicles': {
-                'row_start': 22,
+                'row_start': 26, 
                 'col_map': {'vehicle_info': 'B', 'mileage': 'H', 'fuel': 'C', 'clean': 'E', 'oil': 'G', 'tire': 'I', 'light': 'K', 'safety': 'M'}
             }
         }
 
     def generate_report(self, data, output_path, custom_mapping=None):
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        import re as _re
+        from copy import copy
+
+        custom_mapping = custom_mapping or {}
         if not os.path.exists(self.template_path):
             raise FileNotFoundError(f"Template not found at {self.template_path}")
 
         wb = openpyxl.load_workbook(self.template_path)
         sheet = wb.active
-        
         mapping = custom_mapping if custom_mapping else self.default_mapping
 
-        def safe_write(cell_coord, value, is_currency=False):
+        def safe_write(cell_coord, value, is_currency=False, is_bold=False):
             if not cell_coord: return
             try:
                 cell = sheet[cell_coord]
+                if isinstance(cell, MergedCell):
+                    for m_range in sheet.merged_cells.ranges:
+                        if cell_coord in m_range:
+                            cell = sheet.cell(row=m_range.min_row, column=m_range.min_col)
+                            break
                 cell.value = value
-                cell.font = Font(name='맑은 고딕', size=9)
-                # 내용을 중앙 정렬로 설정
-                cell.alignment = Alignment(shrinkToFit=True, vertical='center', horizontal='center')
-                # 금액단위(원) 및 콤마 처리
+                cell.font = Font(name='맑은 고딕', size=9, bold=is_bold)
+                # [FIX] shrinkToFit and wrapText are mutually exclusive in Excel - use wrapText only
+                cell.alignment = Alignment(wrapText=True, vertical='center', horizontal='center')
                 if is_currency:
                     cell.number_format = '#,##0 "원"'
-            except:
-                pass
+            except: pass
 
-        # 1. Header (Date)
+        # 1. Header & General
         d = data.get('date', datetime.date.today())
         weekdays = ["월", "화", "수", "목", "금", "토", "일"]
         date_str = f"{d.year}년 {d.month}월 {d.day}일 ({weekdays[d.weekday()]})"
         safe_write(mapping.get('header', {}).get('date', 'F2'), date_str)
 
-        # 2. General
         gen_map = mapping.get('general', {})
         for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no', 'inspector_n8']:
-            # If key is inspector_n8, take data from 'inspector' field
             val_key = 'inspector' if key == 'inspector_n8' else key
             safe_write(gen_map.get(key), data.get(val_key, ''))
 
-        # 3. Methods (Dynamic Population)
-        method_map = mapping.get('methods', {})
+        # 2. Methods (Dynamic Offset)
         methods_data = data.get('methods', {})
-        
-        def extract_row_num(v):
-            if not v: return None
-            import re
-            m = re.search(r'\d+', str(v))
-            return int(m.group()) if m else None
-
-        # Collect and sort all possible rows defined for methods to clear them first
-        method_rows = []
-        for m in method_map.values():
-            r = extract_row_num(m.get('row'))
-            if r is not None:
-                method_rows.append(r)
-        method_rows = sorted(list(set(method_rows)))
-
-        for row in method_rows:
-            for col in ['A', 'B', 'E', 'H', 'K', 'N', 'Q']: # Clear Name, Unit, Qty, Price, Total, Travel, Fee
-                safe_write(f'{col}{row}', '')
-
-        # Fill with active methods sequentially
         current_methods = list(methods_data.keys())
-        num_methods = len(current_methods)
+        method_offset = max(0, len(current_methods) - 4)
         
-        # 4개 초과 시 행 추가 및 기존 18-25행에서 삭제 (동적 레이아웃 유지)
+        import re as _re
+        def fix_c(coord, offset):
+            if not coord or not isinstance(coord, str): return coord
+            match = _re.match(r"([A-Z]+)([0-9]+)", coord)
+            if match:
+                col, row = match.groups()
+                row_val = int(row)
+                if row_val >= 18: return f"{col}{row_val + offset}"
+            return coord
+
+            # [UNIFIED HEIGHT BALANCE] No row deletion for methods either
+            # We will compensate for added method rows by reducing Note heights later
+            pass
+
         method_base_rows = [13, 14, 15, 16]
-        if num_methods > 4:
-            extra_count = num_methods - 4
-            # 17행 위치에 필요한 만큼 행 삽입
-            sheet.insert_rows(17, extra_count)
-            # 기존 18~25행 영역(이제는 18+extra_count 이후)에서 삽입된 만큼 행 삭제
-            # 18행부터 삭제를 시작하여 전체 레이아웃 길이를 맞춤
-            for _ in range(extra_count):
-                sheet.delete_rows(18 + extra_count) 
-            
-            # 사용할 행 리스트 업데이트
-            method_base_rows += list(range(17, 17 + extra_count))
-        
+        if method_offset > 0:
+            sheet.insert_rows(17, method_offset)
+            for i in range(method_offset):
+                target_r = 18 + method_offset + i
+                if target_r <= 25 + method_offset:
+                    sheet.row_dimensions[target_r].height = 5
+            method_base_rows += list(range(17, 17 + method_offset))
+
         for idx, m_name in enumerate(current_methods):
-            if idx >= len(method_base_rows): break
-            
-            row = method_base_rows[idx]
-            m_data = methods_data[m_name]
-            
-            safe_write(f'B{row}', m_name)
-            safe_write(f'E{row}', m_data.get('unit', ''))
-            safe_write(f'H{row}', m_data.get('qty', 0))
-            safe_write(f'K{row}', m_data.get('price', 0), is_currency=True)
-            safe_write(f'N{row}', m_data.get('travel', 0), is_currency=True)
-            safe_write(f'Q{row}', m_data.get('total', 0), is_currency=True)
+            if idx < len(method_base_rows):
+                r = method_base_rows[idx]; m = methods_data[m_name]
+                safe_write(f'B{r}', m_name); safe_write(f'E{r}', m.get('unit', ''))
+                safe_write(f'H{r}', m.get('qty', 0)); safe_write(f'K{r}', m.get('price', 0), is_currency=True)
+                safe_write(f'N{r}', m.get('travel', 0), is_currency=True); safe_write(f'Q{r}', m.get('total', 0), is_currency=True)
 
-        # 4. RTK
-        rtk_map = mapping.get('rtk', {})
-        rtk_data = data.get('rtk', {})
+        # 3. Section 2 (Notes) - Styling & Normalize
+        # [NEW] Sync Row 17 height with Row 10 height for consistency
+        h10 = sheet.row_dimensions[10].height if sheet.row_dimensions[10].height else 15
+        sheet.row_dimensions[17].height = h10
+        for m_range in list(sheet.merged_cells.ranges):
+            if 18 + method_offset <= m_range.min_row and m_range.max_row <= 25 + method_offset:
+                try: sheet.unmerge_cells(m_range.coord)
+                except: pass
+        try: sheet.merge_cells(f"B{18+method_offset}:S{25+method_offset}")
+        except: pass
         
-        # [NEW] Re-map English config keys to Korean data keys
-        rtk_key_map = {
-            'center_miss': '센터미스', 'density': '농도', 'marking_miss': '마킹미스', 
-            'film_mark': '필름마크', 'handling': '취급부주의', 'customer_complaint': '고객불만', 'etc': '기타'
-        }
-        
-        for eng_key, kor_key in rtk_key_map.items():
-            safe_write(rtk_map.get(eng_key), rtk_data.get(kor_key, 0))
-        
+        # 4. Section 4 (RTK)
+        rtk_data = data.get('rtk_quality', {}); rtk_map = mapping.get('rtk', {})
+        rtk_key_map = {'center_miss':'센터미스','density':'농도','marking_miss':'마킹미스','film_mark':'필름마크','handling':'취급부주의','customer_complaint':'고객불만','etc':'기타'}
+        for eng, kor in rtk_key_map.items():
+            safe_write(fix_c(rtk_map.get(eng), method_offset), rtk_data.get(kor, 0))
         total_rtk = rtk_data.get('총계', sum([v for v in rtk_data.values() if isinstance(v, (int, float))]))
-        safe_write(rtk_map.get('total'), total_rtk)
+        safe_write(fix_c(rtk_map.get('total'), method_offset), total_rtk)
 
-
-        # 5. OT
-        ot_map = mapping.get('ot', {})
-        
-        # [NEW] Clear OT placeholders before writing to prevent ghost data from template
-        for row_idx in [1, 2]:
-            for key_suffix in ['_name', '_company', '_method', '_hours', '_amount']:
-                cell_key = f'row{row_idx}{key_suffix}'
-                if cell_key in ot_map:
-                    safe_write(ot_map[cell_key], '')
-
+        # 5. Section 5 (OT)
+        for r_search in range(1, 100):
+            if sheet.cell(row=r_search, column=2).value == "검사자":
+                ot_header_row = r_search; break
+        else: ot_header_row = 38 + method_offset
         ot_list = data.get('ot_status', [])
         for i, ot in enumerate(ot_list[:2]):
-            idx = i + 1
-            safe_write(ot_map.get(f'row{idx}_name'), ot.get('names', ''))
-            safe_write(ot_map.get(f'row{idx}_company'), ot.get('company', ''))
-            safe_write(ot_map.get(f'row{idx}_method'), ot.get('method', ''))
-            safe_write(ot_map.get(f'row{idx}_hours'), str(ot.get('ot_hours', '')))
+            r = ot_header_row + 1 + i
+            safe_write(f"B{r}", ot.get('names', '')); safe_write(f"F{r}", ot.get('company', ''))
+            safe_write(f"I{r}", ot.get('method', '')); safe_write(f"K{r}", ot.get('ot_hours', ''))
+            safe_write(f"N{r}", ot.get('ot_amount', ''), is_currency=True)
 
-            safe_write(ot_map.get(f'row{idx}_amount'), ot.get('ot_amount', ''))
-
-        # [NEW] Style the boundary between Row 38 and Row 39 with hair (hairline) lines
-        hair_side = Side(style='hair')
-        thin_side = Side(style='thin')
-        for col_name in ['K', 'L', 'M', 'N', 'O', 'P']:
-            cell_addr = f"{col_name}38"
-            current_border = sheet[cell_addr].border
-            sheet[cell_addr].border = Border(
-                left=current_border.left,
-                right=current_border.right,
-                top=current_border.top,
-                bottom=hair_side
-            )
-
-        # [NEW] Specific Header Borders
-        # E8 Left: Hair
-        e8_border = sheet['E8'].border
-        sheet['E8'].border = Border(left=hair_side, right=e8_border.right, top=e8_border.top, bottom=e8_border.bottom)
+        # 6. Section 6 (Materials)
+        materials_data = data.get('materials', {}); active_rt = []
+        for k, v in materials_data.items():
+            if isinstance(v, dict) and (k.startswith('RT ') or k.startswith('RT_ROW_') or v.get('is_rt')):
+                name = v.get('name', '').strip()
+                if not name: continue
+                item = v.copy(); item['name'] = name; active_rt.append(item)
         
-        # N6~N9 Left: Thin
-        for r_idx in range(6, 10):
-            cell_n = f"N{r_idx}"
-            cur_b = sheet[cell_n].border
-            sheet[cell_n].border = Border(left=thin_side, right=cur_b.right, top=cur_b.top, bottom=cur_b.bottom)
-
-
-        # [NEW] Clear template placeholder in Q39
-        safe_write('Q39', '')
-
-
-
-
-
-
-
-
-        # 6. 자재 수행현황 (Materials)
-        mat_map = mapping.get('materials', {})
-        materials_data = data.get('materials', {})
-
-        # --- Material display name mapping (for D column) ---
-        mat_display_names = {
-            'RT T200':      ('RT', 'T200'),
-            'RT AA400':     ('RT', 'AA400'),
-            'RT Other':     ('RT', '기타'),
-            'MT WHITE':     ('MT', '백색페인트'),
-            'MT 7C-BLACK':  ('MT', '흑색자분'),
-            'PT Penetrant': ('PT', '침투제'),
-            'PT Cleaner':   ('PT', '세척제'),
-            'PT Developer': ('PT', '현상제'),
-        }
-
-        # Clear rows 43-50 first (K~Q for quantities, D/F for names)
-        for r in range(43, 51):
-            for c_idx in range(11, 18):  # K(11) to Q(17)
-                safe_write(f"{chr(64 + c_idx)}{r}", None)
-            safe_write(f'D{r}', '')
-            safe_write(f'F{r}', '')
-
-            # --- [STRONG OVERRIDE] 화학자재 행 번호 기반 명칭 및 단위 강제 고정 ---
-            override_names = {
-                46: ('백색페인트', ''),
-                47: ('흑색자분', ''),
-                48: ('침투제', ''),
-                49: ('세척제', ''),
-                50: ('현상제', ''),
-            }
-            d_val_override = None
-            f_val_override = None
-            if r in override_names:
-                d_val_override, f_val_override = override_names[r]
-
-            if d_val_override is not None:
-                safe_write(f'D{r}', d_val_override)
-                safe_write(f'F{r}', f_val_override)
-
-        # Write each material row
-        for mat_name, row in mat_map.items():
-            row = int(row)
-            m_data = materials_data.get(mat_name, {})
-            used_val = m_data.get('used', 0)
-
-            # DB에서 온 상세 이름/규격 (주로 RT용)
-            d_val = m_data.get('name', '')
-            f_val = m_data.get('spec', '')
-
-            # 해당 행이 고정 명칭 대상이 아닐 때만(예: RT 자재) DB 값 기입
-            # 고정 명칭 대상(46~50)은 위에서 이미 기입했으므로 건너뜀
-            if row not in (46, 47, 48, 49, 50):
-                if d_val: safe_write(f'D{row}', d_val)
-                if f_val: safe_write(f'F{row}', f_val)
-
-            # 수량이 있을 때만 K/M/O 기입 (사용량이 없으면 행 전체를 비워둠)
-            if used_val and used_val > 0:
-                safe_write(f'K{row}', '-')                            # K: 하이픈
-                safe_write(f'M{row}', used_val)                       # M: 당일사용량
-                safe_write(f'O{row}', m_data.get('in', 0))           # O: 반입
-
-        # Unit column H: RT rows '매', Others by row override
-        for mat_name, r in mat_map.items():
-            row = int(r)
-            if row in (46, 47, 48, 49, 50): 
-                safe_write(f'H{row}', 'CAN')
-            elif row in (43, 44, 45):
-                safe_write(f'H{row}', '매')
-            else:
-                safe_write(f'H{row}', '통')
+        # RT dynamic rows: if more than 4, insert additional rows
+        rt_count = len(active_rt)
+        base_rt_limit = 4
+        rt_extra = max(0, rt_count - base_rt_limit)
         
-        # 7. Vehicles & Safety (Section 3)
-        # Detailed 2x4 Table Implementation (출차/입차)
-        veh_map = mapping.get('vehicles', {})
-        veh_list = data.get('vehicles', [])
-        v = veh_list[0] if veh_list else {}
-        veh_row = veh_map.get('row_start', 22) # Vehicle Info Row
-        cmap = veh_map.get('col_map', {})
+        if rt_extra > 0:
+            print(f"DEBUG: Inserting {rt_extra} rows for RT extra materials at row 46")
+            # Insert rows at the end of RT section (starting from Row 46)
+            sheet.insert_rows(46, rt_extra)
+            # [FIX] Copy styles from Row 45 to the newly inserted rows
+            from copy import copy
+            for r_new in range(46, 46 + rt_extra):
+                print(f"DEBUG: Copying style from Row 45 to New Row {r_new}")
+                sheet.row_dimensions[r_new].height = 30
+                for col in range(1, 20): # Columns A to S
+                    try:
+                        source_cell = sheet.cell(row=45, column=col)
+                        target_cell = sheet.cell(row=r_new, column=col)
+                        if source_cell.has_style:
+                            target_cell.font = copy(source_cell.font)
+                            target_cell.border = copy(source_cell.border)
+                            target_cell.fill = copy(source_cell.fill)
+                            target_cell.alignment = copy(source_cell.alignment)
+                            target_cell.number_format = source_cell.number_format
+                    except: pass
+            # We do NOT delete rows from Notes, we will adjust their height later
         
-        safe_write(f"{cmap.get('vehicle_info')}{veh_row}", v.get('vehicle_info', ''))
-        safe_write(f"{cmap.get('mileage')}{veh_row}", v.get('mileage', ''))
+        total_offset = method_offset + rt_extra
+        
+        # 1. Category Merges (B:C) Helper
+        def safe_merge(sheet, s_row, s_col, e_row, e_col, value):
+            for m_range in list(sheet.merged_cells.ranges):
+                if not (e_row < m_range.min_row or s_row > m_range.max_row or 
+                        e_col < m_range.min_col or s_col > m_range.max_col):
+                    try: sheet.unmerge_cells(m_range.coord)
+                    except: pass
+            try:
+                sheet.merge_cells(start_row=s_row, start_column=s_col, end_row=e_row, end_column=e_col)
+                cell = sheet.cell(row=s_row, column=s_col)
+                cell.value = value
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            except: pass
 
-        # Detailed Inspection Checklist Mapping
-        chk_rows = {'out': 29, 'in': 30}
-        chk_cols = {
-            'exterior':    {'양호': 'E', '불량': 'F'},
-            'cleanliness': {'양호': 'H', '불량': 'I'},
-            'cleaning':    {'양호': 'K', '불량': 'L'},
-            'locking':     {'잠김': 'N', '안함': 'O'}
-        }
+        rt_display_count = max(1, rt_count)
+        rt_end_row = 42 + rt_display_count
         
-        # [NEW] Calculate Overall Status for Summary Line
-        is_bad = False
-        inspected = False
-        for r_key in ['out', 'in']:
-            for c_key in ['exterior', 'cleanliness', 'cleaning', 'locking']:
-                raw_val = v.get(f"{r_key}_{c_key}")
-                if raw_val:
-                    inspected = True
-                    # Check against mapping for bad states
-                    if raw_val in ['불량', '안함']:
-                        is_bad = True
-        
-        # Summary Header Line: Use professional square symbols
-        # ■ (0x25A0), □ (0x25A1)
-        m_good = chr(0x25A0) if not is_bad else chr(0x25A1)
-        m_bad = chr(0x25A0) if is_bad else chr(0x25A1)
-        
-        if inspected:
-            summary_text = f"3. 차량관리   {m_good} 양호    {m_bad} 불량"
-        else:
-            summary_text = f"3. 차량관리   {chr(0x25A1)} 양호    {chr(0x25A1)} 불량"
-            
-        # [ROBUST] Search for the cell containing "3. 차량관리" to update it dynamically
-        search_range = sheet['A18':'G32']
-        found_cell = None
-        for row_cells in search_range:
-            for cell in row_cells:
-                if cell.value and "3. 차량관리" in str(cell.value):
-                    cell.value = summary_text
-                    cell.font = Font(name='맑은 고딕', size=10, bold=True)
-                    cell.alignment = Alignment(horizontal='left', vertical='center', indent=1)
-                    found_cell = cell.coordinate
-                    break
-            if found_cell: break
-        
-        if not found_cell:
-            safe_write("B21", summary_text)
-            sheet["B21"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
-            sheet["B21"].font = Font(name='맑은 고딕', size=10, bold=True)
+        safe_merge(sheet, 43, 2, rt_end_row, 3, "RT") 
+        safe_merge(sheet, 47 + rt_extra, 2, 48 + rt_extra, 3, "MT")
+        safe_merge(sheet, 49 + rt_extra, 2, 51 + rt_extra, 3, "PT")
 
-        # [REMOVED] Overwriting Row 28 labels to preserve template's category headers like "차량 외부상태"
-        # The labels (양호, 불량, etc.) will now be written alongside the symbols in Rows 29/30.
+        # Set column widths
+        sheet.column_dimensions['D'].width = 12
+        sheet.column_dimensions['E'].width = 12
 
-        for r_key, row in chk_rows.items():
-            for c_key, options in chk_cols.items():
-                raw_val = v.get(f"{r_key}_{c_key}")
-                # Map various states to display labels
-                unified_val = None
-                if c_key == 'locking':
-                    if raw_val in ['잠김', '잠금', '함']: unified_val = '잠김'
-                    elif raw_val in ['안함', '불량']: unified_val = '안함'
+        # 2. Item Name (D:E) and Spec (F:G) Horizontal Merges
+        # We process all rows from 43 to 51 + rt_extra
+        for r in range(43, 52 + rt_extra):
+            try:
+                # Clean up existing merges first
+                for m_range in list(sheet.merged_cells.ranges):
+                    if m_range.min_row == r and m_range.max_row == r and (m_range.min_col >= 4 and m_range.max_col <= 7):
+                        sheet.unmerge_cells(m_range.coord)
+                
+                if r <= 42 + rt_display_count:
+                    # RT Area: Separate Name (D:E) and Spec (F:G)
+                    sheet.merge_cells(start_row=r, start_column=4, end_row=r, end_column=5)
+                    sheet.merge_cells(start_row=r, start_column=6, end_row=r, end_column=7)
                 else:
-                    if raw_val in ['양호', '함', '잠금', '잠김']: unified_val = '양호'
-                    elif raw_val in ['불량', '안함']: unified_val = '불량'
-                
-                # [COMBINED] Combine all options into one string to handle merged cells (e.g., ▣ 양호   □ 불량)
-                combined_results = []
-                for opt_name in options.keys():
-                    is_selected = (unified_val == opt_name)
-                    symbol = "\u25A3" if is_selected else "\u25A1"
-                    combined_results.append(f"{symbol} {opt_name}")
-                
-                # Join with spaces and write to the FIRST column address defined for this category
-                final_text = "   ".join(combined_results)
-                main_col = list(options.values())[0] # e.g., 'E' for exterior
-                cell_coord = f"{main_col}{row}"
-                
-                safe_write(cell_coord, final_text)
-                
-                # Force alignment for the combined cell
-                try:
-                    sheet[cell_coord].alignment = Alignment(horizontal='center', vertical='center')
-                    sheet[cell_coord].font = Font(name='맑은 고딕', size=9)
-                except:
-                    pass
+                    # MT/PT Area: Wide Combined Name/Spec (D:G)
+                    sheet.merge_cells(start_row=r, start_column=4, end_row=r, end_column=7)
+                    
+                # [HORIZONTAL MERGES] Apply to ALL material rows (RT, MT, PT)
+                # Merges for: I:J, K:L, M:N, O:P, Q:S
+                for s_c, e_c in [(9,10), (11,12), (13,14), (15,16), (17,19)]:
+                    try:
+                        # Clean existing merges in this row/column range
+                        for m_range in list(sheet.merged_cells.ranges):
+                            if m_range.min_row == r and m_range.max_row == r and m_range.min_col == s_c:
+                                sheet.unmerge_cells(m_range.coord)
+                        sheet.merge_cells(start_row=r, start_column=s_c, end_row=r, end_column=e_c)
+                    except: pass
+            except: pass
 
-        # [NEW] Write Remarks (Row 31)
-        if v.get('remarks'):
-            safe_write("B31", f"비고: {v.get('remarks')}")
-            if sheet["B31"].value:
-                sheet["B31"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
-                sheet["B31"].font = Font(name='맑은 고딕', size=9)
+        # [DYNAMIC STYLE COPY & DATA PROTECTION]
+        # 1. Clear the RT Range (43 to 46 + rt_extra) first to remove template remnants
+        mat_start = 43
+        for r in range(mat_start, 47 + rt_extra):
+            for col in range(4, 20): # D to S
+                cell = sheet.cell(row=r, column=col)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
 
-        wb.save(output_path)
-        return output_path
+        # Helper: Remove known brand prefixes for display
+        def strip_brand(name):
+            for prefix in ['Carestream ', 'AGFA ', 'Fuji ', 'Kodak ']:
+                if name.startswith(prefix):
+                    return name[len(prefix):]
+            return name
 
+        # Write RT Data with Standardized Formatting
+        print(f"DEBUG: Starting RT Data Writing Loop. Total RT items: {len(active_rt)}")
+        for idx, m in enumerate(active_rt):
+            r = mat_start + idx
+            if r > 46 + rt_extra: 
+                print(f"DEBUG: Breaking RT loop at r={r} because it exceeds 46 + {rt_extra}")
+                break
+            
+            # Strip brand prefix so short name fits in merged cell
+            display_name = strip_brand(m.get('name', ''))
+            print(f"DEBUG: Writing RT Item {idx+1} to Row {r}: {display_name}")
+            safe_write(f'D{r}', display_name)
+            # Apply style AFTER safe_write
+            cell_name = sheet.cell(row=r, column=4)
+            cell_name.font = Font(name='맑은 고딕', size=9)
+            cell_name.alignment = Alignment(horizontal='center', vertical='center', wrapText=True)
+            sheet.row_dimensions[r].height = 30
+            
+            safe_write(f'F{r}', m.get('spec', ''))
+            sheet.cell(row=r, column=6).alignment = Alignment(horizontal='center', vertical='center', wrapText=True)
+            safe_write(f'H{r}', m.get('unit', '매'))
+            
+            # Correct Mapping: K=Out, M=Used, O=In (Q is intentionally left blank)
+            safe_write(f'K{r}', '-')
+            used_val = int(m.get('used', 0))
+            in_val = int(m.get('in', 0))
+            safe_write(f'M{r}', f"{used_val} 매") # Usage is M
+            safe_write(f'O{r}', f"{in_val} 매")   # Incoming is O
+            # Stock (Q) removed per request
+
+        # [SELECTIVE CONTENT CLEARING & SAFETY-MARGIN COMPENSATION]
+        # Clear template text in B18:S25 to allow clean compression
+        for r_clear in range(18 + method_offset, 26 + method_offset):
+            for c_clear in range(2, 20): # B to S
+                cell = sheet.cell(row=r_clear, column=c_clear)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
+
+        # [HARD RESET FORMATTING & HIERARCHY]
+        tiny_font = Font(size=1)
+        no_wrap = Alignment(wrap_text=False, horizontal='center', vertical='center')
+        
+        rt_count = len(active_rt)
+        rt_extra = max(0, rt_count - 4)
+        
+        # [FINAL STABLE COMPRESSION & OFFSET CALCULATION]
+        rt_count = len(active_rt)
+        rt_extra = max(0, rt_count - 4)
+        total_offset = method_offset + rt_extra # CRITICAL for Section 6 mapping
+        
+        # [STABLE COMPRESSION: CLEAR & RESIZE (SAFE)]
+        # We avoid delete_rows as it destroys template merges in Sections 3-6.
+        note_range_start = 18 + method_offset
+        note_range_end = 25 + method_offset
+        
+        # 1. Clear contents and unmerge ONLY in the note range
+        for r in range(note_range_start, note_range_end + 1):
+            # Reset Row Height
+            sheet.row_dimensions[r].height = 6.0
+            sheet.row_dimensions[r].custom_height = True
+            
+            # Clear Cells and Alignment
+            for c in range(1, 20): # A to S
+                cell = sheet.cell(row=r, column=c)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
+                    cell.alignment = Alignment(wrap_text=False, vertical='center', horizontal='center')
+                    cell.font = Font(size=1)
+                
+        # 2. Kill merges in this specific range to allow shrinking
+        merges_to_kill = []
+        for m_range in list(sheet.merged_cells.ranges):
+            if m_range.min_row >= note_range_start and m_range.max_row <= note_range_end:
+                merges_to_kill.append(m_range)
+        for m in merges_to_kill:
+            try: sheet.unmerge_cells(str(m))
+            except: pass
+            
+        # 3. Method Rows (13-17 + inserted)
+        for r in range(13, 18 + method_offset):
+            sheet.row_dimensions[r].height = 15.0
+            sheet.row_dimensions[r].custom_height = True
+            
+        # 4. Materials (Section 6) prominent height
+        for r in range(43, 43 + rt_count):
+            sheet.row_dimensions[r].height = 25.0
+            sheet.row_dimensions[r].custom_height = True
+            
+        # 5. Shrink Spacer Row 42
+        spacer_row = 42 + method_offset
+        sheet.row_dimensions[spacer_row].height = 5
+        sheet.row_dimensions[spacer_row].custom_height = True
+
+        # 3. Hide unused RT rows (Only if count < 4)
+        if rt_count < 4:
+            for r in range(43 + rt_count, 47):
+                sheet.row_dimensions[r].height = 0
+                sheet.row_dimensions[r].hidden = True
+                # Clear content/borders
+                for col in range(1, 20):
+                    cell = sheet.cell(row=r, column=col)
+                    if not isinstance(cell, MergedCell):
+                        cell.value = None
+                        cell.border = Border(left=Side(style=None), right=Side(style=None), top=Side(style=None), bottom=Side(style=None))
+
+        # Add placeholders ONLY to active RT rows that are empty
+        for r in range(43, 43 + rt_count):
+            if r >= mat_start + len(active_rt):
+                safe_write(f'K{r}', '-'); safe_write(f'M{r}', '매'); safe_write(f'O{r}', '0 매')
+            
+        synonyms = {
+            'MT WHITE': ['MT WHITE', '백색', '백색자분', 'WHITE'],
+            'MT 7C-BLACK': ['MT 7C-BLACK', '7C', '자분', 'BLACK', '7C-BLACK'],
+            'PT Penetrant': ['PT Penetrant', '침투', '침투액', 'Penetrant'],
+            'PT Cleaner': ['PT Cleaner', '세척', '세척액', 'Cleaner'],
+            'PT Developer': ['PT Developer', '현상', '현상액', '현상제', 'Developer']
+        }
+        # [DYNAMIC OFFSET] MT: 47+, PT: 49+
+        mat_map = {
+            'MT WHITE': 47 + total_offset, 
+            'MT 7C-BLACK': 48 + total_offset, 
+            'PT Penetrant': 49 + total_offset, 
+            'PT Cleaner': 50 + total_offset, 
+            'PT Developer': 51 + total_offset
+        }
+        
+        # Korean Display Names for MT/PT
+        display_names = {
+            'MT WHITE': '백색페인트', 'MT 7C-BLACK': '흑색자분', 
+            'PT Penetrant': '침투액', 'PT Cleaner': '세척액', 'PT Developer': '현상액'
+        }
+        
+        # Category mapping for Column B
+        categories = {
+            'MT WHITE': 'MT', 'MT 7C-BLACK': 'MT',
+            'PT Penetrant': 'PT', 'PT Cleaner': 'PT', 'PT Developer': 'PT'
+        }
+        
+        print(f"DEBUG: MT/PT Write. total_offset={total_offset}, rt_extra={rt_extra}, method_offset={method_offset}")
+        print(f"DEBUG: mat_map={mat_map}")
+        
+        for m_key, r in mat_map.items():
+            # B column ("MT"/"PT") is already handled by safe_merge above.
+            # Only write specific name to D:G area here.
+            display_name = display_names.get(m_key, m_key)
+            print(f"DEBUG: Writing '{display_name}' to D{r}")
+            safe_write(f'D{r}', display_name) # Specific name in D:G
+
+            # Merge D:G for Specific Item Name
+            try:
+                for m_range in list(sheet.merged_cells.ranges):
+                    if m_range.min_row == r and m_range.max_row == r and (m_range.min_col >= 4 and m_range.max_col <= 7):
+                        sheet.unmerge_cells(m_range.coord)
+                sheet.merge_cells(start_row=r, start_column=4, end_row=r, end_column=7)
+            except Exception as e:
+                print(f"DEBUG: Merge error at row {r}: {e}")
+
+            # ALWAYS write the unit to H (All MT/PT use CAN)
+            safe_write(f'H{r}', "CAN")
+            
+            m_d = {}
+            for syn in synonyms.get(m_key, []):
+                m_d = data.get('materials', {}).get(syn)
+                if m_d: break
+            
+            if m_d:
+                # K=Out, M=Used, O=In (Q is intentionally left blank)
+                safe_write(f'K{r}', '-'); safe_write(f'M{r}', int(m_d.get('used', 0)))
+                safe_write(f'O{r}', int(m_d.get('in', 0)))
+
+        # [BORDER & ALIGNMENT] Apply THIN border to B42:S(51 + total_offset)
+        thin = Side(style='thin')
+        for r in range(42, 52 + total_offset):
+            for col in range(2, 20): # B(2) to S(19)
+                cell = sheet.cell(row=r, column=col)
+                cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+
+        # [MT/PT WRITE - AFTER BORDER LOOP to prevent overwrite]
+        # Write AFTER borders are applied so values are final
+        for m_key, r in mat_map.items():
+            display_name = display_names.get(m_key, m_key)
+            # Write directly to the cell, bypassing safe_write to avoid wrapText interference
+            cell = sheet.cell(row=r, column=4)  # Column D
+            cell.value = display_name
+            cell.font = Font(name='맑은 고딕', size=9)
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
+            print(f"DEBUG: FINAL WRITE '{display_name}' to D{r}")
+            
+            safe_write(f'H{r}', "CAN")
+            m_d = {}
+            for syn in synonyms.get(m_key, []):
+                m_d = data.get('materials', {}).get(syn)
+                if m_d: break
+            if m_d:
+                safe_write(f'K{r}', '-')
+                safe_write(f'M{r}', int(m_d.get('used', 0)))
+                safe_write(f'O{r}', int(m_d.get('in', 0)))
+
+        # [EXCEL PRINT SETUP] Standard A4 Setup & Page Break Reset
+        # (Fit to Page removed to allow manual height shrinking to be visible)
+        print(f"DEBUG: Resetting Page Breaks and Setting Print Area to A1:S{51 + total_offset}")
+        
+        # 1. Clear all existing manual row breaks safely
+        # sheet.row_breaks is a RowBreak object, we must clear its 'brk' list
+        sheet.row_breaks.brk = [] 
+        # 2. Update Print Area to include all shifted rows
+        sheet.print_area = f'A1:S{51 + total_offset}'
+        
+        # 3. Add a new page break ONLY at the very end of our dynamic content
+        from openpyxl.worksheet.pagebreak import Break
+        sheet.row_breaks.append(Break(id=51 + total_offset))
+        
+        # 4. Standard A4 Settings
+        sheet.page_setup.orientation = sheet.ORIENTATION_PORTRAIT
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.fitToHeight = None
+        sheet.page_setup.fitToWidth = None
+        sheet.sheet_properties.pageSetUpPr.fitToPage = False
+
+        # Final Cleanup: Section 3 (Vehicles) & B27 Cleanup
+        veh_list = data.get('vehicles', []); v = veh_list[0] if veh_list else {}
+        veh_row = 27 + method_offset
+        safe_write(f"B{veh_row}", ""); safe_write(f"H{veh_row}", v.get('mileage', ''))
+        
+        chk_rows = {'out': 29 + total_offset, 'in': 30 + total_offset}
+        for rs in range(25+total_offset, 35+total_offset):
+            val = sheet.cell(row=rs, column=2).value
+            if val == "출차시": chk_rows['out'] = rs
+            if val == "입차시": chk_rows['in'] = rs
+        
+        chk_map = {'exterior':'E','cleanliness':'H','cleaning':'K','locking':'N'}
+        WHITE_SQ, BLACK_SQ = "\u25a1", "\u25a0"
+        import re
+        for rk, row_idx in chk_rows.items():
+            for ck, col_let in chk_map.items():
+                val = v.get(f"{rk}_{ck}")
+                if val:
+                    coord = f"{col_let}{row_idx}"; cell = sheet[coord]
+                    if isinstance(cell, MergedCell):
+                        for mr in sheet.merged_cells.ranges:
+                            if coord in mr: cell = sheet.cell(row=mr.min_row, column=mr.min_col); break
+                    if cell.value and isinstance(cell.value, str):
+                        pattern = f"({WHITE_SQ})(\\s*){re.escape(val)}"
+                        if re.search(pattern, cell.value):
+                            cell.value = re.sub(pattern, f"{BLACK_SQ}\\2{val}", cell.value)
+
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.horizontalCentered = True
+        sheet.page_setup.verticalCentered = False # Top-aligned for precision
+        
+        # Exact Margins (Total 0.8" vertical consumption = 57.6pt)
+        sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
+        sheet.page_margins.left = 0.3; sheet.page_margins.right = 0.3
+        
+        # A4 Usable Height at 100% scale is approx 780pt.
+        # Let's allocate heights precisely:
+        # 1. Fixed Header (1-11): 11 rows * 22pt = 242pt
+        for r in range(1, 12): sheet.row_dimensions[r].height = 22
+        
+        # 2. Title Rows (12, 26, 31, 37, 42): 5 rows * 26pt = 130pt
+        # 2. Title Rows (12, 26, 31, 37, 42)
+        fixed_titles = [12, 26, 31, 37, 42]
+        
+        # [ROW 51 FIT OPTIMIZATION]
+        # 1. Global Row Height Baseline (Aggressive Slimming)
+        for r in range(1, 101):
+            try: sheet.row_dimensions[r].height = 14 # Slimmer baseline
+            except: pass
+        
+        # 2. Precision Column Widths (Remain slim)
+        slim_widths = {
+            'A': 1, 'B': 7, 'C': 1, 'D': 9, 'E': 1, 'F': 9, 'G': 1, 'H': 5, 
+            'I': 4, 'J': 4, 'K': 5, 'L': 4, 'M': 5, 'N': 4, 'O': 5, 
+            'P': 4, 'Q': 5, 'R': 4, 'S': 10
+        }
+        for col, width in slim_widths.items():
+            sheet.column_dimensions[col].width = width
+
+        # 3. Precision Row Heights (Recalibrated for Row 51 fit)
+        # Header (1-11): 11 * 15 = 165pt
+        for r in range(1, 12): sheet.row_dimensions[r].height = 15
+        # Titles: 5 * 20 = 100pt
+        for t_row in [12, 26, 31, 37, 42]:
+            try: sheet.row_dimensions[t_row + method_offset].height = 20
+            except: pass
+        # Section 2 (Notes): SKIP - already set by compression logic above
+        # DO NOT overwrite the heights set earlier!
+        # for b_row in range(18+method_offset, 26+method_offset):
+        #     sheet.row_dimensions[b_row].height = 25
+        # Materials: ~9 * 16 = 144pt
+        for m_row in range(43 + method_offset, 52 + total_offset):
+            sheet.row_dimensions[m_row].height = 16
+            
+        # 8. Final Print Setup - FIXED 95% SCALE & TIGHT MARGINS
+        sheet.sheet_properties.pageSetUpPr.fitToPage = False
+        sheet.page_setup.scale = 95
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.horizontalCentered = True
+        sheet.page_setup.verticalCentered = True
+        
+        # Symmetrical Margins with MINIMIZED BOTTOM for extra space
+        sheet.page_margins.left = 0.5; sheet.page_margins.right = 0.5
+        sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.2
+
+        sheet.print_area = f"A1:S{51 + method_offset + rt_extra}"
+        
+        # [ABSOLUTE LAST STEP: CELL-TARGETED UNMERGE + WRITE]
+        from openpyxl.cell.cell import Cell as RealCell
+        black_font = Font(name='맑은 고딕', size=10, bold=False, color='000000')
+        center_align = Alignment(horizontal='center', vertical='center', wrap_text=False)
+        
+        # Helper 1: free a cell by unmerging (used BEFORE merge_cells)
+        def free_cell(sheet, row, col):
+            for m_range in list(sheet.merged_cells.ranges):
+                if row >= m_range.min_row and row <= m_range.max_row and col >= m_range.min_col and col <= m_range.max_col:
+                    sheet.unmerge_cells(m_range.coord)
+            key = (row, col)
+            if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
+                sheet._cells[key] = RealCell(sheet, row=row, column=col)
+        
+        # Helper 2: write to cell via _cells dict WITHOUT unmerging (used AFTER merge_cells)
+        thin = Side(style='thin')
+        thin_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        def write_cell(sheet, row, col, value, font=None, align=None):
+            key = (row, col)
+            if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
+                sheet._cells[key] = RealCell(sheet, row=row, column=col)
+            cell = sheet._cells[key]
+            cell.value = value
+            cell.border = thin_border
+            if font: cell.font = font
+            if align: cell.alignment = align
+        
+        # 1. Category merges (RT, MT, PT)
+        rt_end = 42 + max(1, rt_count)
+        merge_plan = [
+            (43, 2, rt_end, 3, "RT"),
+            (47 + rt_extra, 2, 48 + rt_extra, 3, "MT"),
+            (49 + rt_extra, 2, 51 + rt_extra, 3, "PT"),
+        ]
+        for s_row, s_col, e_row, e_col, label in merge_plan:
+            # Phase 1: Free all cells (unmerge existing)
+            for r in range(s_row, e_row + 1):
+                for c in range(s_col, e_col + 1):
+                    free_cell(sheet, r, c)
+            # Phase 2: Create merge
+            try:
+                sheet.merge_cells(start_row=s_row, start_column=s_col, end_row=e_row, end_column=e_col)
+            except Exception as e:
+                print(f"DEBUG: Merge B{s_row}:C{e_row} error: {e}")
+            # Phase 3: Write to top-left WITHOUT unmerging
+            write_cell(sheet, s_row, s_col, label, black_font, center_align)
+            # Phase 4: Apply border to ALL cells in merge range (including MergedCells)
+            for r in range(s_row, e_row + 1):
+                for c in range(s_col, e_col + 1):
+                    key = (r, c)
+                    if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
+                        sheet._cells[key] = RealCell(sheet, row=r, column=c)
+                    sheet._cells[key].border = thin_border
+            print(f"DEBUG: B{s_row}:C{e_row} = '{label}'")
+        
+        # 2. Force D column item names (write without touching merges)
+        for m_key, r in mat_map.items():
+            display_name = display_names.get(m_key, m_key)
+            write_cell(sheet, r, 4, display_name, black_font, center_align)
+        
+        wb.save(output_path); return output_path
