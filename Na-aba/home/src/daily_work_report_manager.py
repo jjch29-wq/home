@@ -502,10 +502,11 @@ class DailyWorkReportManager:
 
         sheet.page_setup.horizontalCentered = True; sheet.page_setup.verticalCentered = False 
         if v.get('remarks'):
-            safe_write("B31", f"비고: {v.get('remarks')}")
-            if sheet["B31"].value:
-                sheet["B31"].alignment = Alignment(horizontal='left', vertical='center', indent=1)
-                sheet["B31"].font = Font(name='맑은 고딕', size=9)
+            rem_cell = f"B{31 + method_offset}"
+            safe_write(rem_cell, f"비고: {v.get('remarks')}")
+            if sheet[rem_cell].value:
+                sheet[rem_cell].alignment = Alignment(horizontal='left', vertical='center', indent=1)
+                sheet[rem_cell].font = Font(name='맑은 고딕', size=9)
 
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
         sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
@@ -588,9 +589,17 @@ class DailyWorkReportManager:
         apply_section_style(sheet, s2_start, 2, s2_end, 19, 'thin', inner_style=None)
         apply_section_style(sheet, 12, 2, 16 + method_offset, 19, 'thin')
         apply_section_style(sheet, 6, 2, 9, 19, 'thin')
-        v_title_row = 26 + method_offset; v_data_start = 28 + method_offset; v_data_end = 30 + total_offset
+        v_title_row = 26 + method_offset; v_data_start = 28 + method_offset; v_data_end = 30 + method_offset
         apply_section_style(sheet, v_data_start, 2, v_data_end, 19, 'thin')
         for c_idx in range(2, 20): sheet.cell(row=v_title_row, column=c_idx).border = Border(top=thin_side) 
+        
+        # 31행 좌/우/하단 선 제거 (상단선만 유지하거나 테두리 전체 제거)
+        v_remark_row = 31 + method_offset
+        for c_idx in range(2, 20):
+            c = sheet.cell(row=v_remark_row, column=c_idx)
+            # 기존 위쪽 선은 유지하고 좌,우,아래는 없앰
+            top_border = c.border.top if c.border else Side(style=None)
+            c.border = Border(top=top_border, bottom=Side(style=None), left=Side(style=None), right=Side(style=None))
         apply_section_style(sheet, ot_header_row, 2, ot_header_row + 2 + ot_extra, 19, 'thin')
         apply_section_style(sheet, 43 + base_shift, 2, 51, 19, 'thin')
         for c in range(2, 20):
