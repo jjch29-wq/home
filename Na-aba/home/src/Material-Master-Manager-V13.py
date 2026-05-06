@@ -9801,6 +9801,10 @@ class MaterialManager:
         self.cb_daily_filter_site.pack(side='left', padx=2)
         self.cb_daily_filter_site.set('전체')
         
+        btn_site_mgr_daily_filter = tk.Button(filter_panel, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
+                                       command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_filter_site))
+        btn_site_mgr_daily_filter.pack(side='left', padx=(2, 10))
+        
 
 
         self._bind_combobox_word_suggest(self.cb_daily_filter_site, lambda: ['전체'] + sorted(list(set(self.sites))))
