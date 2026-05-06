@@ -9781,115 +9781,110 @@ class MaterialManager:
         filter_frame = ttk.Frame(display_frame)
         filter_frame.pack(fill='x', padx=5, pady=5)
         
-        # Create a sub-frame for filters that need autocomplete
-        filter_panel = ttk.Frame(filter_frame)
-        filter_panel.pack(fill='x', padx=0, pady=0) # Pack below date filters
+        # --- Row 1: Date Filters ---
+        date_row = ttk.Frame(filter_frame)
+        date_row.pack(fill='x', pady=2)
         
-        ttk.Label(filter_frame, text="시작일:").pack(side='left', padx=5)
-        self.ent_daily_start_date = DateEntry(filter_frame, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
+        ttk.Label(date_row, text="시작일:").pack(side='left', padx=5)
+        self.ent_daily_start_date = DateEntry(date_row, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
         self.ent_daily_start_date.pack(side='left', padx=5)
         # Default to showing all history (starting from 2024)
         start_date = datetime.datetime(2024, 1, 1)
         self.ent_daily_start_date.set_date(start_date)
         
-        ttk.Label(filter_frame, text="종료일:").pack(side='left', padx=5)
-        self.ent_daily_end_date = DateEntry(filter_frame, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
+        ttk.Label(date_row, text="종료일:").pack(side='left', padx=5)
+        self.ent_daily_end_date = DateEntry(date_row, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
         self.ent_daily_end_date.pack(side='left', padx=5)
         self.ent_daily_end_date.set_date(datetime.datetime.now())
         
-        ttk.Label(filter_panel, text="업체명:").pack(side='left', padx=(5, 2))
-        self.cb_daily_filter_company = ttk.Combobox(filter_panel, width=12)
+        # --- Row 2: Search Filters ---
+        filter_row = ttk.Frame(filter_frame)
+        filter_row.pack(fill='x', pady=2)
+        
+        ttk.Label(filter_row, text="업체명:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_company = ttk.Combobox(filter_row, width=12)
         self.cb_daily_filter_company.pack(side='left', padx=2)
         self.cb_daily_filter_company.set('전체')
+        tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
+                  command=lambda: self.open_list_management_dialog('companies', target_cb=self.cb_daily_filter_company)).pack(side='left', padx=(0, 5))
         
-
-        
-        ttk.Label(filter_panel, text="현장:").pack(side='left', padx=(5, 2))
-        self.cb_daily_filter_site = ttk.Combobox(filter_panel, width=12)
+        ttk.Label(filter_row, text="현장:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_site = ttk.Combobox(filter_row, width=12)
         self.cb_daily_filter_site.pack(side='left', padx=2)
         self.cb_daily_filter_site.set('전체')
-        
-        btn_site_mgr_daily_filter = tk.Button(filter_panel, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
-                                       command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_filter_site))
-        btn_site_mgr_daily_filter.pack(side='left', padx=(2, 10))
-        
-
-
+        tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
+                  command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_filter_site)).pack(side='left', padx=(0, 5))
         self._bind_combobox_word_suggest(self.cb_daily_filter_site, lambda: ['전체'] + sorted(list(set(self.sites))))
         
-        ttk.Label(filter_panel, text="품목명:").pack(side='left', padx=(5, 2))
-        self.cb_daily_filter_material = ttk.Combobox(filter_panel, width=15)
+        ttk.Label(filter_row, text="품목명:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_material = ttk.Combobox(filter_row, width=15)
         self.cb_daily_filter_material.pack(side='left', padx=2)
         self.cb_daily_filter_material.set('전체')
-        # [ROBUST_AUTOCOMPLETE] Enable for Filter
+        tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
+                  command=lambda: self.open_list_management_dialog('materials', target_cb=self.cb_daily_filter_material)).pack(side='left', padx=(0, 5))
         self._bind_combobox_word_suggest(self.cb_daily_filter_material, lambda: self._get_material_candidates(include_all=True))
         
-        ttk.Label(filter_panel, text="장비명:").pack(side='left', padx=(5, 2))
-        self.cb_daily_filter_equipment = ttk.Combobox(filter_panel, width=15)
+        ttk.Label(filter_row, text="장비명:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_equipment = ttk.Combobox(filter_row, width=15)
         self.cb_daily_filter_equipment.pack(side='left', padx=2)
         self.cb_daily_filter_equipment.set('전체')
+        tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
+                  command=lambda: self.open_list_management_dialog('equipments', target_cb=self.cb_daily_filter_equipment)).pack(side='left', padx=(0, 5))
         self._bind_combobox_word_suggest(self.cb_daily_filter_equipment, lambda: self._get_equipment_candidates(include_all=True))
         
-        ttk.Label(filter_panel, text="작업자:").pack(side='left', padx=(5, 2))
-        self.cb_daily_filter_worker = ttk.Combobox(filter_panel, width=12)
+        ttk.Label(filter_row, text="작업자:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_worker = ttk.Combobox(filter_row, width=10)
         self.cb_daily_filter_worker.pack(side='left', padx=2)
         self.cb_daily_filter_worker.set('전체')
         
-        ttk.Label(filter_panel, text="차량번호:").pack(side='left', padx=(5, 2))
-        self.cb_daily_filter_vehicle = ttk.Combobox(filter_panel, width=12)
-        self.cb_daily_filter_vehicle.pack(side='left', padx=2)
-        self.cb_daily_filter_vehicle.set('전체')
-        
-        ttk.Label(filter_panel, text="분류:").pack(side='left', padx=(5, 2))
-        self.cb_daily_filter_shift = ttk.Combobox(filter_panel, width=10, state="readonly", values=["전체", "주간", "야간", "주야간", "휴일"])
+        ttk.Label(filter_row, text="분류:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_shift = ttk.Combobox(filter_row, width=8, state="readonly", values=["전체", "주간", "야간", "주야간", "휴일"])
         self.cb_daily_filter_shift.pack(side='left', padx=2)
         self.cb_daily_filter_shift.set('전체')
         
-        btn_filter = ttk.Button(filter_frame, text="조회", command=self.update_daily_usage_view)
+        # --- Row 3: Action Buttons ---
+        btn_row = ttk.Frame(filter_frame)
+        btn_row.pack(fill='x', pady=5)
+        
+        btn_filter = ttk.Button(btn_row, text="조회", style='Action.TButton', command=self.update_daily_usage_view)
         btn_filter.pack(side='left', padx=5)
         
-        btn_filter_reset = ttk.Button(filter_frame, text="♻️ 필터 초기화", command=self.reset_daily_usage_filters)
+        btn_filter_reset = ttk.Button(btn_row, text="♻️ 필터 초기화", command=self.reset_daily_usage_filters)
         btn_filter_reset.pack(side='left', padx=5)
         
-        btn_delete = ttk.Button(filter_frame, text="선택 항목 삭제", command=self.delete_daily_usage_entry)
+        btn_delete = ttk.Button(btn_row, text="선택 항목 삭제", command=self.delete_daily_usage_entry)
         btn_delete.pack(side='left', padx=10)
         
-        btn_edit = ttk.Button(filter_frame, text="선택 항목 수정", command=self.open_edit_daily_usage_dialog)
+        btn_edit = ttk.Button(btn_row, text="선택 항목 수정", command=self.open_edit_daily_usage_dialog)
         btn_edit.pack(side='left', padx=5)
         
-        btn_export = ttk.Button(filter_frame, text="엑셀 내보내기", command=self.export_daily_usage_history)
+        btn_export = ttk.Button(btn_row, text="엑셀 내보내기", command=self.export_daily_usage_history)
         btn_export.pack(side='left', padx=5)
         
-        btn_export_all = ttk.Button(filter_frame, text="전체 기록 내보내기", command=self.export_all_daily_usage)
+        btn_export_all = ttk.Button(btn_row, text="전체 기록 내보내기", command=self.export_all_daily_usage)
         btn_export_all.pack(side='left', padx=5)
         
-        btn_col_manage = ttk.Button(filter_frame, text="컬럼 관리", command=self.show_column_visibility_dialog)
+        btn_col_manage = ttk.Button(btn_row, text="컬럼 관리", command=self.show_column_visibility_dialog)
         btn_col_manage.pack(side='left', padx=10)
 
-        # [NEW] Dedicated Save Button for the List View
-        self.btn_daily_save_list = ttk.Button(filter_frame, text="저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
+        # Dedicated Save Button for the List View
+        self.btn_daily_save_list = ttk.Button(btn_row, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
         self.btn_daily_save_list.pack(side='left', padx=10)
 
-        # [NEW] Bind Enter key and selection events to all filter widgets for convenience
+        # Bindings
         filter_widgets = [
             self.cb_daily_filter_site, self.cb_daily_filter_company, self.cb_daily_filter_material, 
             self.cb_daily_filter_equipment, self.cb_daily_filter_worker, 
-            self.cb_daily_filter_vehicle, self.cb_daily_filter_shift
+            self.cb_daily_filter_shift
         ]
         for widget in filter_widgets:
             widget.bind("<Return>", lambda e: self.update_daily_usage_view())
             widget.bind("<<ComboboxSelected>>", lambda e: self.update_daily_usage_view())
 
-        # DateEntry widgets require binding to their internal entry or using their own events
         for date_widget in [self.ent_daily_start_date, self.ent_daily_end_date]:
-            # [NEW] Auto-search on date selection
             date_widget.bind("<<DateEntrySelected>>", lambda e: self.update_daily_usage_view())
-            
-            # Some versions of tkcalendar.DateEntry allow direct binding, 
-            # but binding to the underlying entry is most reliable for <Return>
             try:
                 date_widget.bind("<Return>", lambda e: self.update_daily_usage_view())
-                # If DateEntry has an internal entry child, bind to it too
                 for child in date_widget.winfo_children():
                     if isinstance(child, (tk.Entry, ttk.Entry)):
                         child.bind("<Return>", lambda e: self.update_daily_usage_view())
