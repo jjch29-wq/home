@@ -528,7 +528,8 @@ class DailyWorkReportManager:
         
         # Exact Margins (Total 0.8" vertical consumption = 57.6pt)
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
-        sheet.page_margins.left = 0.3; sheet.page_margins.right = 0.3
+        # Left margin increased for binding, Right margin reduced to fit
+        sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
         
         # A4 Usable Height at 100% scale is approx 780pt.
         # Let's allocate heights precisely:
@@ -576,8 +577,8 @@ class DailyWorkReportManager:
         sheet.page_setup.horizontalCentered = True
         sheet.page_setup.verticalCentered = True
         
-        # Symmetrical Margins with MINIMIZED BOTTOM for extra space
-        sheet.page_margins.left = 0.5; sheet.page_margins.right = 0.5
+        # Left margin increased for binding, Right margin reduced to fit
+        sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.2
 
         sheet.print_area = f"A1:S{51 + method_offset + rt_extra}"
