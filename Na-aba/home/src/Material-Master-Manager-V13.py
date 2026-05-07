@@ -3617,8 +3617,8 @@ class MaterialManager:
         mat_id = mat_values[0]
         
         # Get full material data from DF (Robust matching)
-        target_id_str = str(mat_id).strip()
-        mask = self.materials_df['MaterialID'].astype(str).str.strip() == target_id_str
+        target_id_str = self.normalize_id(mat_id)
+        mask = self.materials_df['MaterialID'].apply(self.normalize_id) == target_id_str
         matches = self.materials_df[mask]
         
         if matches.empty:
@@ -3716,8 +3716,8 @@ class MaterialManager:
     def save_material_edits(self, mat_id, new_data):
         """Save edited material data back to the database"""
         # Update DataFrame (Robust matching)
-        target_id_str = str(mat_id).strip()
-        mask = self.materials_df['MaterialID'].astype(str).str.strip() == target_id_str
+        target_id_str = self.normalize_id(mat_id)
+        mask = self.materials_df['MaterialID'].apply(self.normalize_id) == target_id_str
         idx = self.materials_df.index[mask].tolist()
         if not idx:
             messagebox.showerror("오류", "자재를 찾을 수 없습니다.")
@@ -3935,10 +3935,13 @@ class MaterialManager:
             except:
                 display_id = str(mat_id)
 
-            # [RE-ADDED] 모든 자동 등록 품목 및 비소모품 재고현황에서 제외
+            # [REFINED] Skip non-consumables OR auto-registered items that are NOT consumables.
+            # We ALLOW auto-registered items if they are confirmed as consumables (like films/drugs).
             spec = str(mat.get('규격', '')).strip()
             mat_name_str = str(mat.get('품목명', mat.get('ǰ', ''))).strip()
-            if spec == "자동등록" or not self._is_consumable_material(mat_name_str, ''):
+            is_consumable = self._is_consumable_material(mat_name_str, '')
+            
+            if not is_consumable or (spec == "자동등록" and not is_consumable):
                 continue
             str_mat_id = self.normalize_id(mat_id)
             
@@ -4002,88 +4005,7 @@ class MaterialManager:
                             status_location = f"현장: {site_name}" if site_name else "출고됨"
                             row_tag = 'deployed'
             
-            # [REFINED] PT/MT약품인 경우 세척제, 현상제, 침투액 등으로 분리하여 표시 (중복 차감 이슈 수정)
-            full_item_name = str(mat.get('품목명', '')).strip().upper()
-            model_name_up = str(mat.get('모델명', '')).strip().upper()
-            
-            # Sub-item names to hide (as they are summarized in parent splitting)
-            chem_sub_items = [s.upper() for s in self.ndt_materials_all]
-            
-            # Stricter Detection for Chemicals (avoid splitting equipment)
-            is_parent_pt_mt = (full_item_name in ["PT약품", "MT약품"] or "NDT약품" in full_item_name) and (not model_name_up or model_name_up in ['NAN', 'NONE', ''])
-            is_child_pt_mt = (full_item_name in ["PT약품", "MT약품"] or "NDT약품" in full_item_name) and (model_name_up in chem_sub_items)
-
-            # 1. Hide Child items from the main list (they are summarized under parent)
-            if is_child_pt_mt:
-                continue
-
-            # 2. If it's a Parent, split into components with aggregated stock
-            if is_parent_pt_mt:
-                if "PT" in full_item_name:
-                    # Using consistent names from ndt_groups
-                    chem_configs = [(m, m) for m in self.ndt_groups['PT약품']]
-                else:
-                    chem_configs = [(m, m) for m in self.ndt_groups['MT약품']]
-
-                # Aggregated Stock Logic:
-                # Parent Stock (Exclude "자동 차감" notes to avoid double-counting)
-                clean_parent_net = 0.0
-                if not self.transactions_df.empty:
-                    p_mask = (self.transactions_df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == str_mat_id)
-                    # [CRITICAL] Exclude "자동 차감" (Automatic Deduction) from parent because it's captured in children
-                    note_mask = ~self.transactions_df['Note'].astype(str).str.contains('자동 차감', na=False)
-                    clean_parent_net = self.transactions_df[p_mask & note_mask]['Quantity'].sum()
-                
-                parent_base_stock = stored_qty + clean_parent_net
-                
-                for db_cat, chem_label in chem_configs:
-                    # Sum all child item stocks for this specific component
-                    child_agg_stock = 0.0
-                    # Find any item in the same group with this model
-                    child_entries = self.materials_df[
-                        (self.materials_df['품목명'] == full_item_name) & 
-                        (self.materials_df['모델명'].astype(str).str.strip().str.upper() == db_cat.upper())
-                    ]
-                    for _, child in child_entries.iterrows():
-                        c_id = re.sub(r'\.0$', '', str(child['MaterialID']).strip())
-                        c_net = stock_lookup.get(c_id, 0.0) 
-                        try: c_stored = float(str(child.get('수량', 0)).replace(',', '')) if pd.notna(child.get('수량')) else 0.0
-                        except: c_stored = 0.0
-                        child_agg_stock += (c_stored + c_net)
-
-                    # [NEW] Subtract dynamic usage for the specific NDT component to match exclusion in stock_lookup
-                    comp_usage = ndt_name_lookup.get(db_cat, 0.0)
-                    total_component_stock = parent_base_stock + child_agg_stock - comp_usage
-                    display_stock = f"{to_f(total_component_stock):g}"
-                    
-                    stock_summary.append({
-                        'data': (
-                            display_id,
-                            safe_get(mat.get('회사코드', ''), ''),
-                            safe_get(mat.get('관리품번', ''), ''),
-                            safe_get(mat.get('품목명', ''), ''),
-                            safe_get(mat.get('SN', ''), ''),
-                            safe_get(mat.get('창고', ''), ''),
-                            f"{chem_label}", # Put chemical name in 모델명
-                            safe_get(mat.get('규격', ''), ''),
-                            safe_get(mat.get('품목군코드', ''), ''),
-                            safe_get(mat.get('공급업체', ''), ''),
-                            safe_get(mat.get('제조사', ''), ''),
-                            safe_get(mat.get('제조국', ''), ''),
-                            f"{to_f(mat.get('가격', 0)):,.0f}",
-                            f"{to_f(mat.get('원가', 0)):,.0f}",
-                            safe_get(mat.get('관리단위', 'EA'), 'EA'),
-                            display_stock,
-                            f"{to_f(mat.get('재고하한', 0)):g}",
-                            status_location
-                        ),
-                        'tag': row_tag
-                    })
-                continue # Skip the default single-row addition
-
-            # Default single-row addition (for non-PT/MT chemicals or equipment)
-
-            # Default single-row addition (for non-PT/MT chemicals or equipment)
+            # Default row display
             stock_summary.append({
                 'data': (
                     display_id,
@@ -4843,17 +4765,20 @@ class MaterialManager:
     def update_registration_combos(self):
         """Update registration comboboxes with unique values from database and centralized list"""
         # 1. Update registration fields from database
-        fields = {
-            '회사코드': self.cb_co_code,
-            '관리품번': self.cb_eq_code,
-            '품목명': self.cb_item_name,
-            '품목군코드': self.cb_class,
-            '규격': self.cb_spec,
-            '관리단위': self.cb_unit,
-            '공급업체': self.cb_supplier,
-            '제조사': self.cb_mfr,
-            '제조국': self.cb_origin
-        }
+        fields = {}
+        for key, attr in [
+            ('회사코드', 'cb_co_code'),
+            ('관리품번', 'cb_eq_code'),
+            ('품목명', 'cb_item_name'),
+            ('품목군코드', 'cb_class'),
+            ('규격', 'cb_spec'),
+            ('관리단위', 'cb_unit'),
+            ('공급업체', 'cb_supplier'),
+            ('제조사', 'cb_mfr'),
+            ('제조국', 'cb_origin')
+        ]:
+            if hasattr(self, attr):
+                fields[key] = getattr(self, attr)
         
         # Store lists for autocomplete (Main Catalog + History)
         self.co_code_list = []
@@ -4896,6 +4821,8 @@ class MaterialManager:
             if col == '관리단위':
                 # Merge DB units with the managed daily_units
                 self.unit_list = list(dict.fromkeys(self.daily_units + vals))
+                if hasattr(self, 'cb_daily_unit'):
+                    self.cb_daily_unit['values'] = self.unit_list
             else:
                 setattr(self, list_attr, vals)
             
@@ -7922,7 +7849,7 @@ class MaterialManager:
                 'vehicles': ('차량 목록 관리', getattr(self, 'vehicles', [])),
                 'companies': ('업체 목록 관리', getattr(self, 'companies', [])),
                 'materials': ('품목 목록 관리 (기본)', getattr(self, 'carestream_films', [])),
-                'daily_units': ('단위 목록 관리', getattr(self, 'daily_units', [])),
+                'daily_units': ('단위 목록 관리', self.daily_units),
                 'test_items': ('검사품명 목록 관리', getattr(self, 'test_items', [])),
                 'applied_codes': ('적용코드 목록 관리', getattr(self, 'applied_codes', []))
             }
@@ -7945,7 +7872,7 @@ class MaterialManager:
         dialog = tk.Toplevel(self.root)
         self._list_mgmt_dialogs[config_key] = dialog  # 창 추적 등록
         dialog.title(title)
-        dialog.geometry("400x450")
+        dialog.geometry("600x450")
         dialog.transient(self.root)
         dialog.grab_set()
         
@@ -8190,6 +8117,10 @@ class MaterialManager:
         unique_vals = sorted(list(set([str(v).strip() for v in current_vals if v])))
         sorted_vals = unique_vals
         
+        # [FIX] Update the list in-place to ensure all UI dialogs holding references see the changes
+        if isinstance(current_vals, list):
+            current_vals[:] = sorted_vals
+        
         # 1. Update standard widgets
         if config_key == 'sites':
             if hasattr(self, 'cb_daily_site'): self.cb_daily_site['values'] = sorted_vals
@@ -8205,19 +8136,10 @@ class MaterialManager:
                 self.cb_daily_filter_company['values'] = ['전체'] + sorted_vals
         elif config_key == 'daily_units':
             print(f"DEBUG: Refreshing All Unit Comboboxes with: {sorted_vals}")
-            # 0. Update internal unit_list for registration/autocomplete
-            self.unit_list = sorted_vals
-            
-            # 1. Update Main Site Tab Input Form
-            if hasattr(self, 'cb_daily_unit'):
-                self.cb_daily_unit['values'] = sorted_vals
-            
-            # 2. Update Inventory Tab Registration Form
-            if hasattr(self, 'cb_unit'):
-                self.cb_unit['values'] = sorted_vals
-            
-            # 3. [OPTIONAL] If there are other unit filters, update them here
-            # (Note: cb_daily_filter_unit was a ghost reference, removed)
+            # [FIX] daily_units is already updated in-place above via current_vals[:] = sorted_vals
+            # 1. Re-merge to include DB units and update all UI automatically
+            self.update_registration_combos()
+            # update_registration_combos() handles cb_daily_unit and cb_unit automatically
         elif config_key == 'users':
             # Updated to match current attribute names if needed, 
             # but usually it's cb_daily_user for 1, and cb_daily_user{i} for 2-10
@@ -14187,13 +14109,14 @@ class MaterialManager:
                 rt_merged = {}
                 for d_name, grp in merged_mats.items():
                     is_chem = any(c in d_name.upper() for c in chem_names)
-                    # [FIX] A material is RT ONLY if it has an RT-related category or name AND is NOT a chemical
-                    is_rt_cat = str(grp.get('category')).upper() in ['FILM', 'RT 필름', 'RT', 'RT ']
-                    is_rt_name = 'RT ' in d_name.upper() or 'FILM' in d_name.upper()
+                    # [IMPROVED] Expanded RT detection to catch films by brand and model
+                    rt_keywords = ['RT ', 'RT-', 'FILM', 'CARESTREAM', 'AGFA', 'FUJI', 'KODAK', 'T200', 'AA400', 'MX125', 'M100']
+                    cat_upper = str(grp.get('category', '')).upper()
+                    is_rt_cat = any(k in cat_upper for k in ['FILM', 'RT'])
+                    is_rt_name = any(k in d_name.upper() for k in rt_keywords)
                     
                     if (is_rt_cat or is_rt_name) and not is_chem:
                         rt_merged[d_name] = grp
-                    # [REMOVED] elif not is_chem fallback - be strict about RT categorization
 
                 for d_name, grp in rt_merged.items():
                     print(f"DEBUG: Processing RT Item {rt_counter+1}: {d_name}")
@@ -14316,34 +14239,47 @@ class MaterialManager:
             if not site_records.empty:
                 print(f"DEBUG: --- ALL DB COLUMNS: {site_records.columns.tolist()} ---")
                 for idx, row in site_records.iterrows():
-                    # [FINAL FIX] Use actual DB column names: 'User' and 'WorkTime'
-                    worker_name = clean_val(row.get('User', row.get('작업자', '')))
-                    if not worker_name or worker_name == "": continue
-                    
-                    ot_val = clean_val(row.get('WorkTime', ''))
-                    if not ot_val:
-                        ot_val = clean_val(row.get('작업시간', ''))
-                    if not ot_val:
-                        # Scan all columns for time-like strings if explicit names fail
-                        for col_name in row.index:
-                            potential_val = str(row[col_name])
-                            if any(k in potential_val for k in ["09:00", "24:00", "(주야간)", "~"]):
-                                ot_val = potential_val.strip()
-                                break
-                    
-                    if not ot_val:
-                        ot_val = clean_val(row.get('OT시간', ''))
+                    # [FINAL FIX] Scan all 10 user columns to ensure no one is missed (e.g. User2, User3...)
+                    for i in range(1, 11):
+                        u_key = 'User' if i == 1 else f'User{i}'
+                        wt_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
+                        oa_key = 'OT' if i == 1 else f'OT{i}'
                         
-                    # For amount, 'OT' seems to have it in this DB
-                    ot_amount = clean_val(row.get('OT', row.get('OT금액', '')))
-                    
-                    data['ot_status'].append({
-                        'names': worker_name,
-                        'company': clean_val(row.get('업체명', '')),
-                        'method': clean_val(row.get('검사방법', '')),
-                        'ot_hours': ot_val,
-                        'ot_amount': ot_amount
-                    })
+                        worker_name = clean_val(row.get(u_key, row.get('작업자' if i==1 else f'작업자{i}', '')))
+                        if not worker_name or worker_name == "": continue
+                        
+                        ot_val = clean_val(row.get(wt_key, ''))
+                        if not ot_val:
+                            ot_val = clean_val(row.get('작업시간' if i==1 else f'작업시간{i}', ''))
+                        
+                        # Fallback for WorkTime: If specific UserX's WorkTime is missing, try general WorkTime column
+                        if not ot_val:
+                            ot_val = clean_val(row.get('WorkTime', row.get('작업시간', '')))
+                        
+                        if not ot_val:
+                            # Scan all columns for time-like strings if explicit names fail
+                            for col_name in row.index:
+                                potential_val = str(row[col_name])
+                                if any(k in potential_val for k in ["09:00", "24:00", "(주야간)", "~"]):
+                                    ot_val = potential_val.strip()
+                                    break
+                        
+                        if not ot_val:
+                            ot_val = clean_val(row.get('OT시간' if i==1 else f'OT시간{i}', ''))
+                            
+                        # For amount, 'OT' seems to have it in this DB
+                        ot_amount = clean_val(row.get(oa_key, row.get('OT금액' if i==1 else f'OT금액{i}', '')))
+                        if not ot_amount and i > 1:
+                            # Fallback to general OT column if specific one is empty
+                            ot_amount = clean_val(row.get('OT', row.get('OT금액', '')))
+                        
+                        data['ot_status'].append({
+                            'names': worker_name,
+                            'company': clean_val(row.get('업체명', '')),
+                            'method': clean_val(row.get('검사방법', '')),
+                            'ot_hours': ot_val,
+                            'ot_amount': ot_amount
+                        })
                 print(f"DEBUG: Gathered {len(data['ot_status'])} OT items from DB")
 
             # 2) Fallback: If DB is empty, check UI entries
