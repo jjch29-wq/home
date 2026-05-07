@@ -77,6 +77,7 @@ class PhotoLogApp:
         self.photo_align_var = tk.StringVar(value="중앙 정렬")
         self.fit_width_var = tk.BooleanVar(value=True)
         self.width_factor_var = tk.StringVar(value="7.14")
+        self.auto_rotate_var = tk.BooleanVar(value=False)
         
         self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photo_log_settings.json")
         
@@ -213,6 +214,7 @@ class PhotoLogApp:
         align_combo = ttk.Combobox(opt_frame, textvariable=self.photo_align_var, values=["중앙 정렬", "좌측 정렬"], state="readonly", width=10)
         align_combo.grid(row=5, column=1, sticky="w", padx=10, pady=2)
         ttk.Checkbutton(opt_frame, text="가로 폭 맞춤 (Fit to Width)", variable=self.fit_width_var).grid(row=5, column=2, padx=20, sticky="w")
+        ttk.Checkbutton(opt_frame, text="세로 사진 가로로 자동 회전", variable=self.auto_rotate_var).grid(row=5, column=3, padx=10, sticky="w")
 
         tk.Label(opt_frame, text="너비 보정 계수:", font=("Malgun Gothic", 10, "bold"), foreground="#1e3a8a").grid(row=6, column=0, sticky="w", pady=2)
         ttk.Entry(opt_frame, textvariable=self.width_factor_var, width=10).grid(row=6, column=1, sticky="w", padx=10, pady=2)
@@ -373,6 +375,7 @@ class PhotoLogApp:
                 "desc_height": self.desc_height_var.get(),
                 "photo_align": self.photo_align_var.get(),
                 "fit_width": self.fit_width_var.get(),
+                "auto_rotate": self.auto_rotate_var.get(),
                 "selected_files": self.selected_files,
             }
             if not self.embedded:
@@ -428,6 +431,7 @@ class PhotoLogApp:
                 if "desc_height" in data: self.desc_height_var.set(data["desc_height"])
                 if "photo_align" in data: self.photo_align_var.set(data["photo_align"])
                 if "fit_width" in data: self.fit_width_var.set(data["fit_width"])
+                if "auto_rotate" in data: self.auto_rotate_var.set(data["auto_rotate"])
                 
                 if "selected_files" in data:
                     self.selected_files = data["selected_files"]
@@ -487,7 +491,17 @@ class PhotoLogApp:
             if not output_name_val.endswith(".xlsx"):
                 output_name_val += ".xlsx"
                 
-            output_path = os.path.join(os.path.dirname(img_folder), output_name_val)
+            # Robust Path Calculation: Check if parent directory exists
+            parent_dir = os.path.dirname(img_folder)
+            if not parent_dir or not os.path.exists(parent_dir):
+                self.log(f"경고: 저장 대상 폴더({parent_dir})가 존재하지 않아 대체 경로를 사용합니다.")
+                # Fallback priority: Desktop -> Current Working Directory
+                parent_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+                if not os.path.exists(parent_dir):
+                    parent_dir = os.getcwd()
+                self.log(f"새 저장 위치: {parent_dir}")
+                
+            output_path = os.path.join(parent_dir, output_name_val)
             output_path = self._get_unique_path(output_path) # Auto-versioning support
             
             self.log(f"파일 생성 중: {os.path.basename(output_path)}")
@@ -590,59 +604,71 @@ class PhotoLogApp:
             except: DESC_ROW_HEIGHT = 22.0
             
             CELL_ROW_HEIGHT = float(self.cell_height_var.get())
+            row_h_px = CELL_ROW_HEIGHT * ROW_PT_TO_PX
             total = len(image_files)
             
+            # Keep track of the maximum height needed for the current row
+            current_row_max_h_pt = CELL_ROW_HEIGHT
+
             for i, img_path in enumerate(image_files):
-                worksheet.set_row(row, CELL_ROW_HEIGHT)
+                # Reset max height for a new row of photos
+                if col_ptr == 0:
+                    current_row_max_h_pt = CELL_ROW_HEIGHT
+                
                 try:
                     with Image.open(img_path) as img:
+                        # 1. EXIF Normalization
                         img = ImageOps.exif_transpose(img)
+                        
+                        # 2. Auto-rotate vertical to horizontal if option enabled
+                        if self.auto_rotate_var.get() and img.height > img.width:
+                            img = img.rotate(90, expand=True)
+                            self.log(f"자동 회전 적용: {os.path.basename(img_path)}")
+                        
                         img_w, img_h = img.size
+                        
+                        # 3. Prepare image data for xlsxwriter
+                        img_buffer = io.BytesIO()
+                        img.save(img_buffer, format='PNG')
+                        img_buffer.seek(0)
+                        
                         c_start, c_end = photo_col_spans[col_ptr]
                         if c_start != c_end:
                             worksheet.merge_range(row, c_start, row, c_end, "", center_border)
                         
+                        # 4. Calculation for Scaling and Centering
                         MARGIN = 2
                         TOTAL_BUFFER = MARGIN * 2
                         
-                        if i < 2:
-                            # Row 6: Precise Rotation
-                            with Image.open(img_path) as img_pil:
-                                img_pil = ImageOps.exif_transpose(img_pil)
-                                if img_pil.width > img_pil.height:
-                                    img_pil = img_pil.rotate(90, expand=True)
-                                
-                                w_proc, h_proc = img_pil.size
-                                worksheet.set_row(row, 350)
-                                row_h_px = 350 * ROW_PT_TO_PX
-                                
-                                x_scale = (C_WIDTH - TOTAL_BUFFER) / w_proc
-                                y_scale = (row_h_px - TOTAL_BUFFER) / h_proc
-                                
-                                img_buffer = io.BytesIO()
-                                img_pil.save(img_buffer, format='PNG')
-                                img_buffer.seek(0)
-                                
-                                worksheet.insert_image(row, c_start, f"rotated_{i}.png", {
-                                    'image_data': img_buffer,
-                                    'x_scale': x_scale, 'y_scale': y_scale,
-                                    'x_offset': MARGIN, 'y_offset': MARGIN,
-                                    'object_position': 1
-                                })
-                        else:
-                            # Row 8+: Precise Stretch
-                            row_h_px = CELL_ROW_HEIGHT * ROW_PT_TO_PX
-                            
+                        # [DYNAMIC] Determine scaling and update row height if 'Fit to Width'
+                        if self.fit_width_var.get():
+                            x_scale = (C_WIDTH - TOTAL_BUFFER) / img_w
+                            y_scale = x_scale
+                            # Calculate required height for this photo
+                            req_h_px = (img_h * y_scale) + TOTAL_BUFFER
+                            req_h_pt = req_h_px / ROW_PT_TO_PX
+                            current_row_max_h_pt = max(current_row_max_h_pt, req_h_pt)
+                        elif not self.keep_aspect.get():
                             x_scale = (C_WIDTH - TOTAL_BUFFER) / img_w
                             y_scale = (row_h_px - TOTAL_BUFFER) / img_h
-                            x_off = y_off = MARGIN
-
-                            worksheet.insert_image(row, c_start, img_path, {
-                                'x_scale': x_scale, 'y_scale': y_scale, 
-                                'x_offset': x_off, 'y_offset': y_off, 
-                                'object_position': 1,
-                                'image_data': None
-                            })
+                        else:
+                            scale = min((C_WIDTH - TOTAL_BUFFER) / img_w, (row_h_px - TOTAL_BUFFER) / img_h)
+                            x_scale = y_scale = scale
+                        
+                        # Apply the potentially updated row height
+                        worksheet.set_row(row, current_row_max_h_pt)
+                        
+                        # Re-calculate Y offset based on the final row height
+                        final_row_h_px = current_row_max_h_pt * ROW_PT_TO_PX
+                        x_off = (C_WIDTH - (img_w * x_scale)) / 2 if self.photo_align_var.get() == "중앙 정렬" else MARGIN
+                        y_off = (final_row_h_px - (img_h * y_scale)) / 2
+                        
+                        worksheet.insert_image(row, c_start, img_path, {
+                            'image_data': img_buffer,
+                            'x_scale': x_scale, 'y_scale': y_scale,
+                            'x_offset': x_off, 'y_offset': y_off,
+                            'object_position': 1
+                        })
 
                 except Exception as e:
                     self.log(f"이미지 오류({os.path.basename(img_path)}): {e}")
@@ -701,4 +727,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = PhotoLogApp(root)
     root.mainloop()
-

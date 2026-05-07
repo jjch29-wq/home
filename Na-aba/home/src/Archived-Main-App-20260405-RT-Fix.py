@@ -15,6 +15,7 @@ import threading
 import xlsxwriter
 import datetime
 from PIL import Image as PILImage, ImageChops, ImageOps
+import io
 
 # DPI Awareness for Windows
 try:
@@ -270,6 +271,8 @@ class PMIReportApp:
         self.photo_desc_height_var = tk.StringVar(value="20.0")
         self.photo_align_var = tk.StringVar(value="중앙 정렬")
         self.photo_fit_width_var = tk.BooleanVar(value=True)
+        self.photo_auto_rotate_var = tk.BooleanVar(value=False)
+        self.photo_width_factor_var = tk.StringVar(value="7.142")
         self.photo_selected_files = [] 
         
         self.load_settings()
@@ -386,7 +389,8 @@ class PMIReportApp:
                         'm_top': self.photo_margin_top_var, 'm_bottom': self.photo_margin_bottom_var,
                         'm_left': self.photo_margin_left_var, 'm_right': self.photo_margin_right_var,
                         'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
-                        'photo_align': self.photo_align_var, 'fit_width': self.photo_fit_width_var
+                        'photo_align': self.photo_align_var, 'fit_width': self.photo_fit_width_var,
+                        'auto_rotate': self.photo_auto_rotate_var, 'width_factor': self.photo_width_factor_var
                     }
                     if 'PHOTO_LOG_SETTINGS' in saved_data:
                         plist = saved_data['PHOTO_LOG_SETTINGS']
@@ -482,6 +486,7 @@ class PMIReportApp:
                     'm_left': self.photo_margin_left_var.get(), 'm_right': self.photo_margin_right_var.get(),
                     'print_scale': self.photo_print_scale_var.get(), 'desc_height': self.photo_desc_height_var.get(),
                     'photo_align': self.photo_align_var.get(), 'fit_width': self.photo_fit_width_var.get(),
+                    'auto_rotate': self.photo_auto_rotate_var.get(), 'width_factor': self.photo_width_factor_var.get(),
                     'selected_files': self.photo_selected_files
                 }
             except: pass
@@ -5986,7 +5991,14 @@ class PMIReportApp:
         b_f = tk.Frame(layout_frame)
         b_f.grid(row=5, column=1, columnspan=2, sticky='w')
         ttk.Combobox(b_f, textvariable=self.photo_align_var, values=["좌측 정렬", "중앙 정렬"], state="readonly", width=10).pack(side='left', padx=2)
-        ttk.Checkbutton(b_f, text="너비 맞춤", variable=self.photo_fit_width_var).pack(side='left', padx=5)
+        ttk.Checkbutton(b_f, text="가로 폭 맞춤 (Fit to Width)", variable=self.photo_fit_width_var).pack(side='left', padx=5)
+        ttk.Checkbutton(b_f, text="세로 사진 자동 회전", variable=self.photo_auto_rotate_var).pack(side='left', padx=5)
+        
+        tk.Label(layout_frame, text="너비 보정 계수:").grid(row=6, column=0, sticky='w')
+        wf_f = tk.Frame(layout_frame)
+        wf_f.grid(row=6, column=1, columnspan=2, sticky='w')
+        ttk.Entry(wf_f, textvariable=self.photo_width_factor_var, width=10).pack(side='left', padx=2)
+        tk.Label(wf_f, text="(여백 조절용: 7.1~7.4 권장)", font=('', 9), foreground='gray').pack(side='left', padx=5)
 
         # 3. Logo Options
         logo_frame = ttk.LabelFrame(left_pane, text=" 로고 및 출력 설정 ", padding=10)
@@ -6105,8 +6117,15 @@ class PMIReportApp:
             if not output_name_val.endswith(".xlsx"):
                 output_name_val += ".xlsx"
                 
-            # Use parent dir of images to avoid cluttering image folder
-            output_path = os.path.join(os.path.dirname(img_folder), output_name_val)
+            # [ROBUST] Use parent dir of images to avoid cluttering image folder
+            parent_dir = os.path.dirname(img_folder)
+            if not parent_dir or not os.path.exists(parent_dir):
+                self.log(f"[PhotoLog] 경고: 저장 대상 폴더({parent_dir})가 존재하지 않아 바탕 화면을 사용합니다.")
+                parent_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+                if not os.path.exists(parent_dir):
+                    parent_dir = os.getcwd()
+
+            output_path = os.path.join(parent_dir, output_name_val)
             
             # Simple unique path logic
             if os.path.exists(output_path):
@@ -6153,15 +6172,22 @@ class PMIReportApp:
 
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
             
+            # [REFINED] High-Precision Width Calculation
+            try:
+                # Get factor from UI or default to 7.142
+                WIDTH_FACTOR = float(getattr(self, 'photo_width_factor_var', tk.StringVar(value="7.142")).get())
+            except:
+                WIDTH_FACTOR = 7.142
+                
             if num_cols == 1:
                 photo_col_spans = [(0, GRID_COLS - 1)]
-                CELL_WIDTH_PX = (unit_per_grid * 6 * 7.0) + (6 * 5)
+                CELL_WIDTH_PX = (unit_per_grid * 6 * WIDTH_FACTOR) + (6 * 5)
             elif num_cols == 2:
                 photo_col_spans = [(0, 2), (3, 5)]
-                CELL_WIDTH_PX = (unit_per_grid * 3 * 7.0) + (3 * 5)
+                CELL_WIDTH_PX = (unit_per_grid * 3 * WIDTH_FACTOR) + (3 * 5)
             else: # 3 Columns
                 photo_col_spans = [(0, 1), (2, 3), (4, 5)]
-                CELL_WIDTH_PX = (unit_per_grid * 2 * 7.0) + (2 * 5)
+                CELL_WIDTH_PX = (unit_per_grid * 2 * WIDTH_FACTOR) + (2 * 5)
 
             worksheet.set_row(0, 30)
             worksheet.merge_range(0, 0, 0, GRID_COLS-1, self.photo_report_title.get(), title_format)
@@ -6201,26 +6227,63 @@ class PMIReportApp:
             CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
             
             total = len(image_files)
+            # Keep track of the maximum height needed for the current row
+            current_row_max_h_pt = CELL_ROW_HEIGHT
+            ROW_PT_TO_PX = 1.33333
+
             for i, img_path in enumerate(image_files):
-                worksheet.set_row(row, CELL_ROW_HEIGHT)
+                # Reset max height for a new row of photos
+                if col_ptr == 0:
+                    current_row_max_h_pt = CELL_ROW_HEIGHT
+                
                 try:
                     with PILImage.open(img_path) as img:
                         img = ImageOps.exif_transpose(img)
                         img_w, img_h = img.size
+                        
+                        # [NEW] Auto-rotate vertical images to horizontal if option enabled
+                        if self.photo_auto_rotate_var.get() and img_h > img_w:
+                            img = img.rotate(90, expand=True)
+                            img_w, img_h = img.size
+                            self.log(f"[PhotoLog] 자동 회전 적용: {os.path.basename(img_path)}")
+                        
+                        # [FIX] Prepare image data to preserve rotation in Excel
+                        img_buffer = io.BytesIO()
+                        img.save(img_buffer, format='PNG')
+                        img_buffer.seek(0)
+                        
                         c_start, c_end = photo_col_spans[col_ptr]
                         if c_start != c_end: worksheet.merge_range(row, c_start, row, c_end, "", center_border)
                         
-                        scale = min(CELL_WIDTH_PX / img_w, CELL_HEIGHT_PX / img_h)
-                        if not self.photo_keep_aspect.get():
+                        # [REFINED] Scaling Logic with 'Fit to Width' support
+                        if self.photo_fit_width_var.get():
+                            x_scale = CELL_WIDTH_PX / img_w
+                            y_scale = x_scale
+                            # Calculate required height for this photo
+                            req_h_px = (img_h * y_scale) + 4 # Margin
+                            req_h_pt = req_h_px / ROW_PT_TO_PX
+                            current_row_max_h_pt = max(current_row_max_h_pt, req_h_pt)
+                        elif not self.photo_keep_aspect.get():
                             x_scale = CELL_WIDTH_PX / img_w
                             y_scale = CELL_HEIGHT_PX / img_h
                         else:
+                            scale = min(CELL_WIDTH_PX / img_w, CELL_HEIGHT_PX / img_h)
                             x_scale = y_scale = scale
                         
-                        x_off = (CELL_WIDTH_PX - (img_w * x_scale)) / 2 if self.photo_align_var.get() == "중앙 정렬" else 2
-                        y_off = (CELL_HEIGHT_PX - (img_h * y_scale)) / 2
+                        # Apply the potentially updated row height
+                        worksheet.set_row(row, current_row_max_h_pt)
                         
-                        worksheet.insert_image(row, c_start, img_path, {'x_scale': x_scale, 'y_scale': y_scale, 'x_offset': x_off, 'y_offset': y_off, 'object_position': 1})
+                        # Re-calculate Y offset based on the final row height
+                        final_row_h_px = current_row_max_h_pt * ROW_PT_TO_PX
+                        x_off = (CELL_WIDTH_PX - (img_w * x_scale)) / 2 if self.photo_align_var.get() == "중앙 정렬" else 2
+                        y_off = (final_row_h_px - (img_h * y_scale)) / 2
+                        
+                        worksheet.insert_image(row, c_start, img_path, {
+                            'image_data': img_buffer,
+                            'x_scale': x_scale, 'y_scale': y_scale, 
+                            'x_offset': x_off, 'y_offset': y_off, 
+                            'object_position': 1
+                        })
                 except Exception as e:
                     self.log(f"[Error] {os.path.basename(img_path)}: {e}")
 
