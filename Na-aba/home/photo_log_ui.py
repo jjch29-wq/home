@@ -1,4 +1,4 @@
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import xlsxwriter
 import os
@@ -9,6 +9,7 @@ import datetime
 import math
 import threading
 import json
+import io
 
 def _get_resource_dir():
     """PyInstaller 번들 및 일반 실행 모두 에서 resources 폴더 경로 반환"""
@@ -75,6 +76,7 @@ class PhotoLogApp:
         self.desc_height_var = tk.StringVar(value="20.0")
         self.photo_align_var = tk.StringVar(value="중앙 정렬")
         self.fit_width_var = tk.BooleanVar(value=True)
+        self.width_factor_var = tk.StringVar(value="7.14")
         
         self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "photo_log_settings.json")
         
@@ -210,7 +212,11 @@ class PhotoLogApp:
         tk.Label(opt_frame, text="사진 정렬:", font=("Malgun Gothic", 10)).grid(row=5, column=0, sticky="w", pady=2)
         align_combo = ttk.Combobox(opt_frame, textvariable=self.photo_align_var, values=["중앙 정렬", "좌측 정렬"], state="readonly", width=10)
         align_combo.grid(row=5, column=1, sticky="w", padx=10, pady=2)
-        ttk.Checkbutton(opt_frame, text="가로 폭 맞춤 (Fit to Width)", variable=self.fit_width_var).grid(row=5, column=2, columnspan=2, padx=20, sticky="w")
+        ttk.Checkbutton(opt_frame, text="가로 폭 맞춤 (Fit to Width)", variable=self.fit_width_var).grid(row=5, column=2, padx=20, sticky="w")
+
+        tk.Label(opt_frame, text="너비 보정 계수:", font=("Malgun Gothic", 10, "bold"), foreground="#1e3a8a").grid(row=6, column=0, sticky="w", pady=2)
+        ttk.Entry(opt_frame, textvariable=self.width_factor_var, width=10).grid(row=6, column=1, sticky="w", padx=10, pady=2)
+        tk.Label(opt_frame, text="(우측 여백 조절: 7.1~7.3 권장)", font=("Malgun Gothic", 9), foreground="#6b7280").grid(row=6, column=2, columnspan=2, sticky="w", pady=2)
 
         self.paned_window.add(settings_container, minsize=350) 
 
@@ -505,160 +511,139 @@ class PhotoLogApp:
             worksheet.set_footer('&C&P / &N')
             worksheet.repeat_rows(0, 4)  # 1~5행(제목+회사정보+PHOTO LOG) 2페이지부터 반복
             
-            # Layout
+            # [STABLE] Layout & Format Setup
             num_cols = int(self.cols_per_row.get())
             photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
             total_pages = math.ceil(len(image_files) / photos_per_page)
             worksheet.fit_to_pages(1, total_pages)
 
-            # Formats
             title_format = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'shrink': True})
             company_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9, 'text_wrap': True})
             center_border = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
             bold_format = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1})
             desc_format = workbook.add_format({'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10, 'shrink': True, 'text_wrap': False, 'indent': 1})
 
-            # Layout Calculation
-            num_cols = int(self.cols_per_row.get())
-            # Standard Excel pixel mapping (Optimized for 96 DPI / Calibri 11)
-            COL_UNIT_TO_PX = 7.03 # Golden ratio for full A4 coverage
+            # [STABLE] High-Precision Width Calculation
+            try:
+                WIDTH_FACTOR = float(self.width_factor_var.get())
+            except:
+                WIDTH_FACTOR = 7.142 # Precision default
+            
             ROW_PT_TO_PX = 1.33333
-            MARGIN_1MM_PX = 0
-
-            # Fixed 6-column Grid System for consistent layout
             GRID_COLS = 6
-            # Total width derived from user-defined unit (default 38)
             unit_per_grid = (float(self.cell_width_var.get()) * 2) / GRID_COLS
             worksheet.set_column(0, GRID_COLS - 1, unit_per_grid)
 
-            # User-controlled cell height from UI
-            CELL_ROW_HEIGHT = float(self.cell_height_var.get())
-            
-            # Precise Column spans and width calculations based on grid units
             if num_cols == 1:
+                C_WIDTH = (unit_per_grid * 6 * WIDTH_FACTOR) + (6 * 5)
                 photo_col_spans = [(0, GRID_COLS - 1)]
-                CELL_WIDTH_PX = (unit_per_grid * 6 * 7.0) + (6 * 5)
             elif num_cols == 2:
+                C_WIDTH = (unit_per_grid * 3 * WIDTH_FACTOR) + (3 * 5)
                 photo_col_spans = [(0, 2), (3, 5)]
-                CELL_WIDTH_PX = (unit_per_grid * 3 * 7.0) + (3 * 5)
-            else: # 3 Columns
+            else:
+                C_WIDTH = (unit_per_grid * 2 * WIDTH_FACTOR) + (2 * 5)
                 photo_col_spans = [(0, 1), (2, 3), (4, 5)]
-                CELL_WIDTH_PX = (unit_per_grid * 2 * 7.0) + (2 * 5)
-
-            last_col_idx = GRID_COLS - 1
-            last_col_letter = chr(65 + last_col_idx)
-            header_range = f"A1:{last_col_letter}1"
-            worksheet.set_row(0, 30) # Explicitly set title row height
-            worksheet.merge_range(header_range, self.report_title.get(), title_format)
             
-            # Company Info (Left side, takes 3 grid units - symmetry)
+            self.log(f"정밀 너비 보정 계수: {WIDTH_FACTOR:.3f} 적용")
+            self.log(f"계산된 사진 칸 너비: {C_WIDTH:.2f} 픽셀")
+
+            # Header / Logo Restoration
+            last_col_letter = chr(65 + GRID_COLS - 1)
+            worksheet.set_row(0, 30)
+            worksheet.merge_range(f"A1:{last_col_letter}1", self.report_title.get(), title_format)
+            
             company_info_text = "서   울   檢   査   株   式   會   社\nSEOUL INSPECTION & TESTING Co., Ltd.\nTEL : (02) 552-1112   FAX : (02) 2058-0720"
             worksheet.merge_range(1, 0, 3, 2, company_info_text, company_format)
 
-            # Logo Placement within Company Info range
             logo_p = self.logo_path.get()
             if os.path.exists(logo_p):
                 try:
-                    total_header_h = 45 # 15 * 3 rows
                     for r in range(1, 4): worksheet.set_row(r, 15) 
                     with Image.open(logo_p) as img:
                         w, h = img.size
-                        # Dynamic logo width based on user input (default 80)
-                        try:
-                            max_w_logo = float(self.logo_width_var.get())
-                        except:
-                            max_w_logo = 80.0
-                        
+                        try: max_w_logo = float(self.logo_width_var.get())
+                        except: max_w_logo = 80.0
                         try:
                             manual_x = float(self.logo_x_var.get())
                             manual_y = float(self.logo_y_var.get())
-                        except:
-                            manual_x = 2.0
-                            manual_y = 0.0
+                        except: manual_x, manual_y = 2.0, 0.0
 
-                        scale = min(max_w_logo/w, 42/h) * 0.95 
-                        logo_h = h * scale
-                        # Auto-centered Y plus manual adjustment
-                        y_offset = (total_header_h - logo_h) / 2 + manual_y
-                        
+                        scale_logo = min(max_w_logo/w, 42/h) * 0.95 
                         worksheet.insert_image('A2', logo_p, {
-                            'x_scale': scale, 
-                            'y_scale': scale, 
-                            'x_offset': manual_x, 
-                            'y_offset': y_offset, 
+                            'x_scale': scale_logo, 'y_scale': scale_logo, 
+                            'x_offset': manual_x, 'y_offset': (45 - (h*scale_logo))/2 + manual_y, 
                             'object_position': 1
                         })
                 except: pass
 
-            # Info (Right side, takes 3 grid units - symmetry)
-            # Merge info across columns 3, 4, 5
             worksheet.merge_range(1, 3, 1, 5, f"발주처: {self.orderer.get()}", center_border)
             worksheet.merge_range(2, 3, 2, 5, f"REPORT NO: {self.report_no.get()}", center_border)
             worksheet.merge_range(3, 3, 3, 5, f"검사일자: {self.inspect_date.get()}", center_border)
             
-            # Photo Log Header (Row 5 - Row idx 4)
             worksheet.set_row(4, 25)
             worksheet.merge_range(f"A5:{last_col_letter}5", "PHOTO LOG (사진 대장)", bold_format)
 
-            # Image Insertion Logic
-            row = 5
-            col_ptr = 0
+            # [STABLE] Main Image Loop
+            row, col_ptr = 5, 0
             page_breaks = []
-            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
-            try:
-                DESC_ROW_HEIGHT = float(self.desc_height_var.get())
-            except:
-                DESC_ROW_HEIGHT = 22.0
-
-            CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * ROW_PT_TO_PX) - 2
+            try: DESC_ROW_HEIGHT = float(self.desc_height_var.get())
+            except: DESC_ROW_HEIGHT = 22.0
+            
+            CELL_ROW_HEIGHT = float(self.cell_height_var.get())
             total = len(image_files)
+            
             for i, img_path in enumerate(image_files):
                 worksheet.set_row(row, CELL_ROW_HEIGHT)
                 try:
                     with Image.open(img_path) as img:
-                        # Auto Rotate based on EXIF
                         img = ImageOps.exif_transpose(img)
                         img_w, img_h = img.size
-                        # Determine insertion col and merge based on grid
                         c_start, c_end = photo_col_spans[col_ptr]
                         if c_start != c_end:
                             worksheet.merge_range(row, c_start, row, c_end, "", center_border)
                         
-                        target_w_px = CELL_WIDTH_PX
+                        MARGIN = 2
+                        TOTAL_BUFFER = MARGIN * 2
                         
-                        if self.fit_width_var.get():
-                            # Fit to width, but cap at height to avoid covering description
-                            scale = min(target_w_px / img_w, CELL_HEIGHT_PX / img_h)
-                        elif self.keep_aspect.get():
-                            # Smart Fitting (Fit to box)
-                            scale = min(target_w_px / img_w, CELL_HEIGHT_PX / img_h)
+                        if i < 2:
+                            # Row 6: Precise Rotation
+                            with Image.open(img_path) as img_pil:
+                                img_pil = ImageOps.exif_transpose(img_pil)
+                                if img_pil.width > img_pil.height:
+                                    img_pil = img_pil.rotate(90, expand=True)
+                                
+                                w_proc, h_proc = img_pil.size
+                                worksheet.set_row(row, 350)
+                                row_h_px = 350 * ROW_PT_TO_PX
+                                
+                                x_scale = (C_WIDTH - TOTAL_BUFFER) / w_proc
+                                y_scale = (row_h_px - TOTAL_BUFFER) / h_proc
+                                
+                                img_buffer = io.BytesIO()
+                                img_pil.save(img_buffer, format='PNG')
+                                img_buffer.seek(0)
+                                
+                                worksheet.insert_image(row, c_start, f"rotated_{i}.png", {
+                                    'image_data': img_buffer,
+                                    'x_scale': x_scale, 'y_scale': y_scale,
+                                    'x_offset': MARGIN, 'y_offset': MARGIN,
+                                    'object_position': 1
+                                })
                         else:
-                            # Force Stretch to full box
-                            scale = 1.0 # Placeholder, will use explicit x/y scale below
-
-                        if not self.keep_aspect.get() and not self.fit_width_var.get():
-                            # Force Stretch
-                            x_scale = target_w_px / img_w
-                            y_scale = CELL_HEIGHT_PX / img_h
-                            x_offset = MARGIN_1MM_PX
-                            y_offset = MARGIN_1MM_PX
-                        else:
-                            x_scale = y_scale = scale
-                            # Horizontal Alignment
-                            if self.photo_align_var.get() == "좌측 정렬":
-                                x_offset = MARGIN_1MM_PX
-                            else: # 중앙 정렬
-                                x_offset = (target_w_px - (img_w * scale)) / 2 + MARGIN_1MM_PX
+                            # Row 8+: Precise Stretch
+                            row_h_px = CELL_ROW_HEIGHT * ROW_PT_TO_PX
                             
-                            # Vertical Centering (always maintained for non-stretched)
-                            y_offset = (CELL_HEIGHT_PX - (img_h * scale)) / 2 + MARGIN_1MM_PX
+                            x_scale = (C_WIDTH - TOTAL_BUFFER) / img_w
+                            y_scale = (row_h_px - TOTAL_BUFFER) / img_h
+                            x_off = y_off = MARGIN
 
-                        worksheet.insert_image(row, c_start, img_path, {
-                            'x_scale': x_scale, 'y_scale': y_scale, 
-                            'x_offset': x_offset, 'y_offset': y_offset, 
-                            'object_position': 1,
-                            'image_data': None
-                        })
+                            worksheet.insert_image(row, c_start, img_path, {
+                                'x_scale': x_scale, 'y_scale': y_scale, 
+                                'x_offset': x_off, 'y_offset': y_off, 
+                                'object_position': 1,
+                                'image_data': None
+                            })
+
                 except Exception as e:
                     self.log(f"이미지 오류({os.path.basename(img_path)}): {e}")
 
@@ -679,17 +664,12 @@ class PhotoLogApp:
                         col_ptr = 0
                         row += 2
                 
-                # Calculate if a page break is needed
-                # For 1 col: every 1 photo row (2 excel rows) * 4 photos
-                # For 2/3 cols: after every 'photos_per_page' images are processed
                 if (i + 1) % photos_per_page == 0 and (i + 1) < total:
-                    # The current 'row' is already pointing to the next available row index
                     page_breaks.append(row)
-
+                
                 self.progress["value"] = ((i + 1) / total) * 100
                 self.log(f"처리 중.. ({i+1}/{total})")
 
-            # Fill remaining empty cells in last row if incomplete
             if num_cols > 1 and col_ptr > 0:
                 worksheet.set_row(row, CELL_ROW_HEIGHT)
                 worksheet.set_row(row + 1, DESC_ROW_HEIGHT)
