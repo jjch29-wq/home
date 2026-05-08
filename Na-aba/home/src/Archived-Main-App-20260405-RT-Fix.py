@@ -143,7 +143,10 @@ class PMIReportApp:
             'PAUT_START_ROW': 11, 'PAUT_DATA_END_ROW': 40, 'PAUT_PRINT_END_ROW': 45,
             
             # RT Specific (Radiographic Testing)
-            'RT_START_ROW': 11, 'RT_DATA_END_ROW': 45, 'RT_PRINT_END_ROW': 47
+            'RT_START_ROW': 11, 'RT_DATA_END_ROW': 45, 'RT_PRINT_END_ROW': 47,
+            
+            # Photo Log Sash
+            'PHOTO_SASH_RATIO': 0.45
         }
 
         # 2. State Variables
@@ -272,7 +275,10 @@ class PMIReportApp:
         self.photo_align_var = tk.StringVar(value="중앙 정렬")
         self.photo_fit_width_var = tk.BooleanVar(value=True)
         self.photo_auto_rotate_var = tk.BooleanVar(value=False)
-        self.photo_width_factor_var = tk.StringVar(value="7.142")
+        self.photo_width_pct_var = tk.StringVar(value="100.0")
+        self.photo_width_pixel_adj_var = tk.StringVar(value="0")
+        self.photo_shift_x_var = tk.StringVar(value="0")
+        self.photo_shift_y_var = tk.StringVar(value="0")
         self.photo_selected_files = [] 
         
         self.load_settings()
@@ -281,6 +287,10 @@ class PMIReportApp:
         
         # [NEW] Sync initial file info from loaded config
         self._sync_all_file_infos()
+        
+        # [NEW] Auto-save on exit
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self.log("[INFO] 통합 버전을 시작했습니다.")
         
     def _safe_update_scrollregion(self):
@@ -390,7 +400,9 @@ class PMIReportApp:
                         'm_left': self.photo_margin_left_var, 'm_right': self.photo_margin_right_var,
                         'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
                         'photo_align': self.photo_align_var, 'fit_width': self.photo_fit_width_var,
-                        'auto_rotate': self.photo_auto_rotate_var, 'width_factor': self.photo_width_factor_var
+                        'auto_rotate': self.photo_auto_rotate_var, 'width_pct': self.photo_width_pct_var,
+                        'pixel_adj': self.photo_width_pixel_adj_var, 'shift_x': self.photo_shift_x_var,
+                        'shift_y': self.photo_shift_y_var
                     }
                     if 'PHOTO_LOG_SETTINGS' in saved_data:
                         plist = saved_data['PHOTO_LOG_SETTINGS']
@@ -398,6 +410,8 @@ class PMIReportApp:
                             if pk in plist:
                                 if isinstance(pvar, tk.BooleanVar): pvar.set(bool(plist[pk]))
                                 else: pvar.set(str(plist[pk]))
+                        # Log success for key fine-tune variables
+                        self.log(f"[Restore] 사진대장 설정 복구: 비율({self.photo_width_pct_var.get()}%), 추가({self.photo_width_pixel_adj_var.get()}px), 이동({self.photo_shift_x_var.get()}px)")
                         if 'selected_files' in plist:
                             self.photo_selected_files = plist['selected_files']
                             if hasattr(self, 'photo_listbox'):
@@ -406,7 +420,7 @@ class PMIReportApp:
                                     self.photo_listbox.insert(tk.END, f_path)
 
                     self.config.update(saved_data)
-                print("SUCCESS: 사용자 저장 설정을 적용했습니다.")
+                self.log("[SUCCESS] 사용자 저장 설정을 모두 불러왔습니다.")
                 
                 # Restore Window Geometry/State
                 if 'WINDOW_GEOMETRY' in saved_data:
@@ -478,19 +492,25 @@ class PMIReportApp:
                 self.config['PHOTO_LOG_SETTINGS'] = {
                     'orderer': self.photo_orderer.get(), 'inspect_date': self.photo_inspect_date.get(),
                     'inspect_type': self.photo_inspect_type.get(), 'report_title': self.photo_report_title.get(),
+                    'report_no': self.photo_report_no.get(),
                     'cols_per_row': self.photo_cols_per_row.get(), 'keep_aspect': self.photo_keep_aspect.get(),
-                    'output_name': self.photo_output_name.get(), 'logo_width': self.photo_logo_width_var.get(),
+                    'output_name': self.photo_output_name.get(), 'logo_path': self.photo_logo_path.get(),
+                    'logo_width': self.photo_logo_width_var.get(),
                     'logo_x': self.photo_logo_x_var.get(), 'logo_y': self.photo_logo_y_var.get(),
                     'cell_width': self.photo_cell_width_var.get(), 'cell_height': self.photo_cell_height_var.get(),
                     'm_top': self.photo_margin_top_var.get(), 'm_bottom': self.photo_margin_bottom_var.get(),
                     'm_left': self.photo_margin_left_var.get(), 'm_right': self.photo_margin_right_var.get(),
                     'print_scale': self.photo_print_scale_var.get(), 'desc_height': self.photo_desc_height_var.get(),
                     'photo_align': self.photo_align_var.get(), 'fit_width': self.photo_fit_width_var.get(),
-                    'auto_rotate': self.photo_auto_rotate_var.get(), 'width_factor': self.photo_width_factor_var.get(),
+                    'auto_rotate': self.photo_auto_rotate_var.get(), 'width_pct': self.photo_width_pct_var.get(),
+                    'pixel_adj': self.photo_width_pixel_adj_var.get(), 'shift_x': self.photo_shift_x_var.get(),
+                    'shift_y': self.photo_shift_y_var.get(),
                     'selected_files': self.photo_selected_files
                 }
-            except: pass
-        except: pass
+            except Exception as e:
+                self.log(f"[ERROR] UI 상태 캡처 실패: {e}")
+        except Exception as e:
+            self.log(f"[ERROR] 전체 상태 캡처 실패: {e}")
 
     def save_settings(self):
         """현재 설정을 파일(JSON)에 저장"""
@@ -529,12 +549,26 @@ class PMIReportApp:
             self.config['WINDOW_STATE'] = self.root.state()
             try: self.config['ACTIVE_TAB'] = self.mode_notebook.index("current")
             except: pass
+            # [FIX] Ensure the config directory exists (Prevents Errno 2)
+            os.makedirs(CONFIG_DIR, exist_ok=True)
 
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, indent=4)
-            self.log("[SUCCESS] 설정이 파일에 저장되었습니다.")
+                json.dump(self.config, f, indent=4, default=str)
+            self.log("[SUCCESS] 모든 설정이 파일에 안전하게 저장되었습니다.")
+            return True, "성공"
         except Exception as e:
-            self.log(f"[WARNING] 설정 저장 실패: {e}")
+            import traceback
+            err_msg = traceback.format_exc()
+            self.log(f"[ERROR] 설정 저장 실패 상세:\n{err_msg}")
+            return False, str(e)
+
+    def manual_save_settings(self):
+        """사용자가 수동으로 버튼을 눌러 저장할 때 알림 표시"""
+        success, msg = self.save_settings()
+        if success:
+            messagebox.showinfo("성공", "현재 설정이 안전하게 저장되었습니다.")
+        else:
+            messagebox.showerror("오류", f"설정 저장 중 문제가 발생했습니다.\n\n원인: {msg}")
 
     def on_closing(self):
         """애플리케이션 종료 시 최종 상태 저장"""
@@ -5900,12 +5934,15 @@ class PMIReportApp:
     # --- PHOTO LOG UI & LOGIC ---
     def _setup_photo_log_ui(self, parent):
         """Standardized Photo Log UI with Dual-Pane Layout."""
-        self.photo_paned = tk.PanedWindow(parent, orient='horizontal', sashwidth=4, sashrelief='flat', background="#e2e8f0")
+        # [SYNC] Match PAUT PanedWindow properties exactly
+        self.photo_paned = tk.PanedWindow(parent, orient='horizontal', background="#d1d5db", 
+                            sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.photo_paned.pack(fill='both', expand=True)
 
         # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.photo_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
-        self.photo_paned.add(left_container, width=425)
+        # Add with minwidth to prevent content from being completely hidden
+        self.photo_paned.add(left_container, width=425, minsize=200)
         
         # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
@@ -5937,16 +5974,16 @@ class PMIReportApp:
         type_combo.bind("<<ComboboxSelected>>", self._on_photo_type_change)
 
         tk.Label(info_frame, text="리포트 제목:").grid(row=1, column=0, sticky='w', pady=2)
-        ttk.Entry(info_frame, textvariable=self.photo_report_title).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_report_title, width=1).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
 
         tk.Label(info_frame, text="발주처:").grid(row=2, column=0, sticky='w', pady=2)
-        ttk.Entry(info_frame, textvariable=self.photo_orderer).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_orderer, width=1).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
 
         tk.Label(info_frame, text="리포트 번호:").grid(row=3, column=0, sticky='w', pady=2)
-        ttk.Entry(info_frame, textvariable=self.photo_report_no).grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_report_no, width=1).grid(row=3, column=1, sticky='ew', padx=5, pady=2)
 
         tk.Label(info_frame, text="검사 일자:").grid(row=4, column=0, sticky='w', pady=2)
-        ttk.Entry(info_frame, textvariable=self.photo_inspect_date).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_inspect_date, width=1).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
         
         tk.Label(info_frame, text="로고 파일:").grid(row=5, column=0, sticky='w', pady=2)
         logo_f = tk.Frame(info_frame)
@@ -5994,11 +6031,17 @@ class PMIReportApp:
         ttk.Checkbutton(b_f, text="가로 폭 맞춤 (Fit to Width)", variable=self.photo_fit_width_var).pack(side='left', padx=5)
         ttk.Checkbutton(b_f, text="세로 사진 자동 회전", variable=self.photo_auto_rotate_var).pack(side='left', padx=5)
         
-        tk.Label(layout_frame, text="너비 보정 계수:").grid(row=6, column=0, sticky='w')
+        tk.Label(layout_frame, text="너비비율(%):").grid(row=6, column=0, sticky='w')
         wf_f = tk.Frame(layout_frame)
         wf_f.grid(row=6, column=1, columnspan=2, sticky='w')
-        ttk.Entry(wf_f, textvariable=self.photo_width_factor_var, width=10).pack(side='left', padx=2)
-        tk.Label(wf_f, text="(여백 조절용: 7.1~7.4 권장)", font=('', 9), foreground='gray').pack(side='left', padx=5)
+        ttk.Entry(wf_f, textvariable=self.photo_width_pct_var, width=7).pack(side='left', padx=2)
+        tk.Label(wf_f, text="너비추가(px):").pack(side='left', padx=(10, 0))
+        ttk.Entry(wf_f, textvariable=self.photo_width_pixel_adj_var, width=4).pack(side='left', padx=2)
+        tk.Label(wf_f, text="좌우(px):").pack(side='left', padx=(10, 0))
+        ttk.Entry(wf_f, textvariable=self.photo_shift_x_var, width=4).pack(side='left', padx=2)
+        tk.Label(wf_f, text="상하(px):").pack(side='left', padx=(10, 0))
+        ttk.Entry(wf_f, textvariable=self.photo_shift_y_var, width=4).pack(side='left', padx=2)
+        tk.Label(wf_f, text="(100% 기준 미세조정)", font=('', 9), foreground='gray').pack(side='left', padx=5)
 
         # 3. Logo Options
         logo_frame = ttk.LabelFrame(left_pane, text=" 로고 및 출력 설정 ", padding=10)
@@ -6014,12 +6057,17 @@ class PMIReportApp:
         ttk.Entry(xy_f, textvariable=self.photo_logo_y_var, width=5).pack(side='left', padx=2)
         
         tk.Label(logo_frame, text="출력 파일명:").grid(row=2, column=0, sticky='w', pady=2)
-        ttk.Entry(logo_frame, textvariable=self.photo_output_name).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Entry(logo_frame, textvariable=self.photo_output_name, width=1).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
         logo_frame.columnconfigure(1, weight=1)
 
-        # Action Button at bottom of sidebar
-        ttk.Button(left_pane, text="🚀 사진대장 리포트 생성", style="Accent.TButton", 
-                   command=self.start_photo_generation).pack(fill='x', padx=20, pady=20)
+        # Action Buttons at bottom of sidebar
+        btn_f = tk.Frame(left_pane, background="#f1f5f9")
+        btn_f.pack(fill='x', padx=20, pady=10)
+        
+        ttk.Button(btn_f, text="🚀 사진대장 리포트 생성", style="Accent.TButton", 
+                   command=self.start_photo_generation).pack(fill='x', pady=5)
+        ttk.Button(btn_f, text="💾 현재 설정 저장", 
+                   command=self.manual_save_settings).pack(fill='x', pady=5)
 
         # [RIGHT] Preview & File List
         right_container = tk.Frame(self.photo_paned, background="#ffffff")
@@ -6047,14 +6095,38 @@ class PMIReportApp:
         self.photo_listbox.pack(side='left', fill='both', expand=True)
         
         list_vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.photo_listbox.yview)
-        self.photo_listbox.configure(yscrollcommand=list_vsb.set)
-        list_vsb.pack(side='right', fill='y')
+        # [SYNC] Sash persistence bindings (Match PAUT)
+        self.photo_pane_ratio = self.config.get('PHOTO_SASH_RATIO', 0.45)
+        self.photo_paned.bind("<Configure>", lambda e: [self._on_photo_paned_configure(e), self.root.update_idletasks()])
+        self.photo_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_photo_ratio))
         
-        # Sync listbox if any files were loaded from settings
+        # [RESTORED] Sync listbox if any files were loaded from settings
         if self.photo_selected_files:
             self.photo_listbox.delete(0, tk.END)
             for f in self.photo_selected_files:
                 self.photo_listbox.insert(tk.END, f)
+                
+        self._apply_sash_ratio("PHOTO")
+        self.root.after(500, lambda: self._on_photo_paned_configure(None))
+
+    def _update_photo_ratio(self):
+        try:
+            total_w = self.photo_paned.winfo_width()
+            if total_w > 100:
+                current_sash = self.photo_paned.sash_coord(0)[0]
+                self.photo_pane_ratio = current_sash / total_w
+                self.config['PHOTO_SASH_RATIO'] = self.photo_pane_ratio
+                self.save_settings()
+        except: pass
+
+    def _on_photo_paned_configure(self, event):
+        try:
+            total_w = self.photo_paned.winfo_width()
+            if total_w > 100:
+                if event and event.widget == self.photo_paned:
+                    new_pos = int(total_w * self.photo_pane_ratio)
+                    self.photo_paned.sash_place(0, new_pos, 0)
+        except: pass
 
     def _on_photo_type_change(self, event=None):
         new_type = self.photo_inspect_type.get()
@@ -6103,6 +6175,7 @@ class PMIReportApp:
         if not self.photo_selected_files:
             messagebox.showwarning("경고", "리포트에 포함할 이미지를 먼저 선택해주세요.")
             return
+        self.save_settings() # Auto-save before generation
         threading.Thread(target=self.generate_photo_report, daemon=True).start()
 
     def generate_photo_report(self):
@@ -6172,22 +6245,35 @@ class PMIReportApp:
 
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
             
-            # [REFINED] High-Precision Width Calculation
+            # [REFINED] Percentage-Based Precision Scaling
             try:
-                # Get factor from UI or default to 7.142
-                WIDTH_FACTOR = float(getattr(self, 'photo_width_factor_var', tk.StringVar(value="7.142")).get())
+                WIDTH_PCT = float(self.photo_width_pct_var.get().strip()) / 100.0
+                PIXEL_ADJ = float(self.photo_width_pixel_adj_var.get().strip())
+                SHIFT_X = float(self.photo_shift_x_var.get().strip())
+                SHIFT_Y = float(self.photo_shift_y_var.get().strip())
             except:
-                WIDTH_FACTOR = 7.142
+                WIDTH_PCT, PIXEL_ADJ, SHIFT_X, SHIFT_Y = 1.0, 0.0, 0.0, 0.0
+                
+            # Fixed internal factor for stability
+            INTERNAL_FACTOR = 7.142
                 
             if num_cols == 1:
                 photo_col_spans = [(0, GRID_COLS - 1)]
-                CELL_WIDTH_PX = (unit_per_grid * 6 * WIDTH_FACTOR) + (6 * 5)
+                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 6), 1)
             elif num_cols == 2:
                 photo_col_spans = [(0, 2), (3, 5)]
-                CELL_WIDTH_PX = (unit_per_grid * 3 * WIDTH_FACTOR) + (3 * 5)
+                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 3), 1)
             else: # 3 Columns
                 photo_col_spans = [(0, 1), (2, 3), (4, 5)]
-                CELL_WIDTH_PX = (unit_per_grid * 2 * WIDTH_FACTOR) + (2 * 5)
+                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 2), 1)
+            
+            # Target width based on percentage and padding
+            SAFE_WIDTH = (CELL_WIDTH_PX - 10) * WIDTH_PCT + PIXEL_ADJ
+            
+            # Detailed Logging for user calibration
+            self.log(f"[PhotoLog] 설정: 너비비율={WIDTH_PCT*100:.1f}%, 보정={PIXEL_ADJ}px")
+            self.log(f"[PhotoLog] 이동: 가로={SHIFT_X}px, 세로={SHIFT_Y}px")
+            self.log(f"[PhotoLog] 계산결과: 셀너비 {CELL_WIDTH_PX}px -> 사진너비 {SAFE_WIDTH:.1f}px")
 
             worksheet.set_row(0, 30)
             worksheet.merge_range(0, 0, 0, GRID_COLS-1, self.photo_report_title.get(), title_format)
@@ -6256,18 +6342,19 @@ class PMIReportApp:
                         if c_start != c_end: worksheet.merge_range(row, c_start, row, c_end, "", center_border)
                         
                         # [REFINED] Scaling Logic with 'Fit to Width' support
+                        TOTAL_BUFFER = 10 # Aggressive Safety Margin
                         if self.photo_fit_width_var.get():
-                            x_scale = CELL_WIDTH_PX / img_w
+                            x_scale = SAFE_WIDTH / img_w
                             y_scale = x_scale
                             # Calculate required height for this photo
-                            req_h_px = (img_h * y_scale) + 4 # Margin
+                            req_h_px = (img_h * y_scale) + 10 # Buffer
                             req_h_pt = req_h_px / ROW_PT_TO_PX
                             current_row_max_h_pt = max(current_row_max_h_pt, req_h_pt)
                         elif not self.photo_keep_aspect.get():
-                            x_scale = CELL_WIDTH_PX / img_w
-                            y_scale = CELL_HEIGHT_PX / img_h
+                            x_scale = SAFE_WIDTH / img_w
+                            y_scale = (CELL_HEIGHT_PX - 10) / img_h
                         else:
-                            scale = min(CELL_WIDTH_PX / img_w, CELL_HEIGHT_PX / img_h)
+                            scale = min(SAFE_WIDTH / img_w, (CELL_HEIGHT_PX - 10) / img_h)
                             x_scale = y_scale = scale
                         
                         # Apply the potentially updated row height
@@ -6275,14 +6362,24 @@ class PMIReportApp:
                         
                         # Re-calculate Y offset based on the final row height
                         final_row_h_px = current_row_max_h_pt * ROW_PT_TO_PX
-                        x_off = (CELL_WIDTH_PX - (img_w * x_scale)) / 2 if self.photo_align_var.get() == "중앙 정렬" else 2
-                        y_off = (final_row_h_px - (img_h * y_scale)) / 2
+                        
+                        # [UNIFIED] Uniform Margin Distribution with Manual Shift (High Precision)
+                        x_off_float = ((CELL_WIDTH_PX - (img_w * x_scale)) / 2) + SHIFT_X
+                        y_off_float = ((final_row_h_px - (img_h * y_scale)) / 2) + SHIFT_Y
+                        
+                        x_off = round(x_off_float)
+                        y_off = round(y_off_float)
+                        
+                        # Log precision offsets for user calibration
+                        self.log(f"[PhotoLog] 사진 배치: {os.path.basename(img_path)}")
+                        self.log(f"           - 가로위치: {x_off_float:.2f} -> {x_off}px")
+                        self.log(f"           - 세로위치: {y_off_float:.2f} -> {y_off}px")
                         
                         worksheet.insert_image(row, c_start, img_path, {
                             'image_data': img_buffer,
                             'x_scale': x_scale, 'y_scale': y_scale, 
                             'x_offset': x_off, 'y_offset': y_off, 
-                            'object_position': 1
+                            'object_position': 2 # Move but don't size with cells
                         })
                 except Exception as e:
                     self.log(f"[Error] {os.path.basename(img_path)}: {e}")
