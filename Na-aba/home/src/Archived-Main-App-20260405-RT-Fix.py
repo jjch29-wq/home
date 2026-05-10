@@ -16,6 +16,7 @@ import xlsxwriter
 import datetime
 from PIL import Image as PILImage, ImageChops, ImageOps
 import io
+import time
 
 # DPI Awareness for Windows
 try:
@@ -33,8 +34,8 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font, Border, Side
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
+from openpyxl.utils.units import pixels_to_EMU
 from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
-
 # Ignore library warnings
 warnings.simplefilter("ignore")
 
@@ -150,6 +151,7 @@ class PMIReportApp:
         }
 
         # 2. State Variables
+        self.setting_vars = {} # [CRITICAL FIX] Container for all dynamic UI variables
         self.logo_folder_path = tk.StringVar(value=RESOURCE_DIR)
         self.target_file_path = tk.StringVar(value=self.config.get('PMI_TARGET_PATH', ""))
         self.template_file_path = tk.StringVar(value=self.config.get('PMI_TEMPLATE_PATH', ""))
@@ -157,6 +159,7 @@ class PMIReportApp:
         self.extraction_mode = tk.StringVar(value="전체")
         self.auto_verify = tk.BooleanVar(value=True)
         self.pmi_pane_ratio = self.config.get('PMI_SASH_RATIO', 0.5)
+        self.current_mode = "PMI" # [NEW] Track active report mode
         
         self.show_selected_only = tk.BooleanVar(value=False)
         self.extracted_data = [] 
@@ -225,8 +228,13 @@ class PMIReportApp:
         # [NEW] Handle Application Closing for Final State Capture
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.rt_date_listbox = None
-        self.pt_date_listbox = None
         self.paut_date_listbox = None
+
+        # [NEW] Add traces for Template-Linked Config Auto-Load
+        self.rt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.rt_template_file_path.get(), "RT"))
+        self.pt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.pt_template_file_path.get(), "PT"))
+        self.paut_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.paut_template_file_path.get(), "PAUT"))
+        self.template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.template_file_path.get(), "PMI"))
 
         # Keys are now verified to match Treeview column indices 1-N.
 
@@ -239,7 +247,20 @@ class PMIReportApp:
             'PAUT': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PHOTO': tk.StringVar(value="📸 사진 리스트를 구성해주세요.")
         }
+
+        # --- Gapji (Cover) Metadata Variables ---
+        self.gapji_project = tk.StringVar(value=self.config.get('GAPJI_PROJECT', ""))
+        self.gapji_customer = tk.StringVar(value=self.config.get('GAPJI_CUSTOMER', ""))
+        self.gapji_item = tk.StringVar(value=self.config.get('GAPJI_ITEM', ""))
+        self.gapji_material = tk.StringVar(value=self.config.get('GAPJI_MATERIAL', ""))
+        self.gapji_report_no = tk.StringVar(value=self.config.get('GAPJI_REPORT_NO', ""))
+        self.gapji_exam_date = tk.StringVar(value=self.config.get('GAPJI_EXAM_DATE', datetime.datetime.now().strftime("%Y-%m-%d")))
         
+        # [NEW] Trace Gapji metadata for real-time preview updates
+        for var in [self.gapji_project, self.gapji_customer, self.gapji_item, 
+                    self.gapji_material, self.gapji_report_no, self.gapji_exam_date]:
+            var.trace_add("write", lambda *a: self._update_gapji_preview(getattr(self, 'current_mode', 'PMI')))
+
         # --- Photo Log State Variables ---
         self.photo_header_map = {
             "PAUT": "REPORT OF PHASED ARRAY UT EXAMINATION (위 상 배 열 초 음 파 탐 상 검 사 보 고 서)",
@@ -282,6 +303,7 @@ class PMIReportApp:
         self.photo_selected_files = [] 
         
         self.load_settings()
+        self.last_photo_save_dir = self.config.get('PHOTO_LOG_SETTINGS', {}).get('last_save_dir', "")
 
         self.create_widgets()
         
@@ -439,6 +461,9 @@ class PMIReportApp:
                 new_k = k.replace("UT_", "PAUT_")
                 if new_k not in self.config:
                     self.config[new_k] = self.config[k]
+        
+        # [NEW] Load Photo Log specific config
+        self.load_photo_log_config()
 
     def capture_ui_state(self):
         """UI 요소들의 현재 상태(컬럼 너비, 분할선 위치 등)를 config에 반영"""
@@ -505,12 +530,150 @@ class PMIReportApp:
                     'auto_rotate': self.photo_auto_rotate_var.get(), 'width_pct': self.photo_width_pct_var.get(),
                     'pixel_adj': self.photo_width_pixel_adj_var.get(), 'shift_x': self.photo_shift_x_var.get(),
                     'shift_y': self.photo_shift_y_var.get(),
-                    'selected_files': self.photo_selected_files
+                    'selected_files': self.photo_selected_files,
+                    'last_save_dir': getattr(self, 'last_photo_save_dir', "")
                 }
             except Exception as e:
                 self.log(f"[ERROR] UI 상태 캡처 실패: {e}")
         except Exception as e:
             self.log(f"[ERROR] 전체 상태 캡처 실패: {e}")
+
+    def save_photo_log_config(self):
+        """Save Photo Log specific layout settings to a separate JSON."""
+        config_path = os.path.join(os.getcwd(), "photolog_config.json")
+        self.capture_ui_state()
+        plist = self.config.get('PHOTO_LOG_SETTINGS', {})
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(plist, f, indent=4, ensure_ascii=False)
+            self.log("💾 사진대장 전용 설정이 저장되었습니다.")
+            messagebox.showinfo("저장 완료", "사진대장 레이아웃 설정이 저장되었습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"저장 실패: {e}")
+
+    def load_photo_log_config(self):
+        """Load Photo Log specific layout settings."""
+        config_path = os.path.join(os.getcwd(), "photolog_config.json")
+        if not os.path.exists(config_path): return
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                plist = json.load(f)
+            
+            # Update UI vars (using same logic as in load_settings)
+            photo_vars = {
+                'orderer': self.photo_orderer, 'inspect_date': self.photo_inspect_date,
+                'inspect_type': self.photo_inspect_type, 'report_title': self.photo_report_title,
+                'report_no': self.photo_report_no,
+                'cols_per_row': self.photo_cols_per_row, 'keep_aspect': self.photo_keep_aspect,
+                'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
+                'logo_width': self.photo_logo_width_var,
+                'logo_x': self.photo_logo_x_var, 'logo_y': self.photo_logo_y_var,
+                'cell_width': self.photo_cell_width_var, 'cell_height': self.photo_cell_height_var,
+                'm_top': self.photo_margin_top_var, 'm_bottom': self.photo_margin_bottom_var,
+                'm_left': self.photo_margin_left_var, 'm_right': self.photo_margin_right_var,
+                'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
+                'photo_align': self.photo_align_var, 'fit_width': self.photo_fit_width_var,
+                'auto_rotate': self.photo_auto_rotate_var, 'width_pct': self.photo_width_pct_var,
+                'pixel_adj': self.photo_width_pixel_adj_var, 'shift_x': self.photo_shift_x_var,
+                'shift_y': self.photo_shift_y_var
+            }
+            for pk, pvar in photo_vars.items():
+                if pk in plist:
+                    if isinstance(pvar, tk.BooleanVar): pvar.set(bool(plist[pk]))
+                    else: pvar.set(str(plist[pk]))
+            
+            if 'selected_files' in plist:
+                self.photo_selected_files = plist['selected_files']
+                if hasattr(self, 'photo_listbox'):
+                    self.photo_listbox.delete(0, tk.END)
+                    for f_path in self.photo_selected_files:
+                        self.photo_listbox.insert(tk.END, f_path)
+            
+            self.log("📂 사진대장 전용 설정을 불러왔습니다.")
+        except Exception as e:
+            print(f"Error loading photolog config: {e}")
+
+    def load_template_specific_config(self, template_path, mode="RT"):
+        """템플릿 파일과 연동된 JSON 설정 파일을 로드하여 UI에 반영"""
+        if not template_path or not os.path.exists(template_path): return
+        
+        config_path = os.path.splitext(template_path)[0] + ".json"
+        if not os.path.exists(config_path): return
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                t_config = json.load(f)
+            
+            self.log(f"📂 [Auto-Load] '{os.path.basename(template_path)}' 전용 설정을 불러왔습니다.")
+            
+            # Update self.config and UI variables
+            for key, value in t_config.items():
+                self.config[key] = value
+                if key in self.setting_vars:
+                    self.setting_vars[key].set(str(value))
+            
+            # Mode-specific UI update (Force refresh logic if needed)
+            if mode == "RT": self._update_rt_target_fsh()
+            elif mode == "PT": self._update_pt_target_fsh()
+            elif mode == "PAUT": self._update_paut_target_fsh()
+            elif mode == "PMI": self._update_target_fsh()
+
+        except Exception as e:
+            self.log(f"[ERROR] 템플릿 전용 설정 로드 실패: {e}")
+
+    def save_template_specific_config(self, mode="RT"):
+        """현재 설정을 선택된 템플릿 전용 JSON 파일로 저장"""
+        if mode == "RT": template_path = self.rt_template_file_path.get()
+        elif mode == "PT": template_path = self.pt_template_file_path.get()
+        elif mode == "PAUT": template_path = self.paut_template_file_path.get()
+        else: template_path = self.template_file_path.get()
+        
+        if not template_path or not os.path.exists(template_path):
+            messagebox.showwarning("경고", "먼저 템플릿 파일을 선택해주세요.")
+            return
+            
+        config_path = os.path.splitext(template_path)[0] + ".json"
+        self.capture_ui_state() # Ensure current UI is in self.config
+        
+        # Determine relevant keys to save for this template
+        # 1. Logos & Print settings (Template-dependent)
+        keys_to_save = []
+        for ctx in ["COVER", "DATA"]:
+            # Correct Prefix mapping: SITCO_RT_COVER, etc.
+            # Actually, mode is like "RT", ctx is "COVER" -> prefix is "RT_COVER"
+            # In UI: self._create_setting_grid(t_cover, "RT_COVER")
+            # Inside grid: keys are SITCO_RT_COVER_X etc.
+            for prefix in ["SITCO", "SEOUL", "FOOTER", "FOOTER_PT"]:
+                for suffix in ["_PATH", "_ANCHOR", "_W", "_H", "_X", "_Y"]:
+                    keys_to_save.append(f"{prefix}_{mode}_{ctx}{suffix}")
+            for suffix in ["_TOP", "_BOTTOM", "_LEFT", "_RIGHT"]:
+                keys_to_save.append(f"MARGIN_{mode}_{ctx}{suffix}")
+            keys_to_save.append(f"PRINT_SCALE_{mode}_{ctx}")
+            keys_to_save.append(f"PRINT_AREA_{mode}_{ctx}")
+            
+        # 2. Mode-specific boundaries and column mappings
+        if mode == "RT":
+            keys_to_save += ["RT_START_ROW", "RT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("RT_COL_") or k.startswith("RT_NAME_")]
+        elif mode == "PT":
+            keys_to_save += ["PT_START_ROW", "PT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PT_COL_") or k.startswith("PT_NAME_")]
+        elif mode == "PAUT":
+            keys_to_save += ["PAUT_START_ROW", "PAUT_END_ROW"]
+        elif mode == "PMI":
+            keys_to_save += ["PMI_START_ROW", "PMI_DATA_END_ROW", "PMI_PRINT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PMI_COL_") or k.startswith("PMI_NAME_")]
+
+        # Build template-specific dict
+        t_data = {k: self.config[k] for k in keys_to_save if k in self.config}
+        
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(t_data, f, indent=4, ensure_ascii=False)
+            self.log(f"💾 [SUCCESS] '{os.path.basename(template_path)}' 전용 설정이 저장되었습니다.")
+            messagebox.showinfo("저장 완료", f"템플릿 전용 설정이 저장되었습니다.\n{os.path.basename(config_path)}")
+        except Exception as e:
+            messagebox.showerror("저장 실패", f"설정 저장 중 오류 발생: {e}")
 
     def save_settings(self):
         """현재 설정을 파일(JSON)에 저장"""
@@ -520,13 +683,24 @@ class PMIReportApp:
                 for key, var in self.setting_vars.items():
                     val = var.get()
                     try:
-                        if key.endswith(('_X', '_Y', '_W', '_H')) or 'MARGIN' in key:
-                            self.config[key] = float(val)
+                        # [FIX] Handle Print Area as string, others as float/int
+                        # [FIX] Robust parsing for coordinates/margins to avoid skipping updates
+                        if "AREA" in key:
+                            self.config[key] = str(val).strip()
+                        elif any(x in key for x in ['_X', '_Y', '_W', '_H', 'MARGIN', 'HEIGHT', 'WIDTH']):
+                            try: 
+                                self.config[key] = float(val) if str(val).strip() else 0.0
+                                if "_X" in key or "_Y" in key:
+                                    pass
+                            except: self.config[key] = 0.0
                         elif 'SCALE' in key or key.endswith('_ROW'):
-                            self.config[key] = int(float(val))
+                            try: self.config[key] = int(float(val)) if str(val).strip() else 0
+                            except: self.config[key] = 0
                         else:
                             self.config[key] = str(val)
-                    except: pass
+                    except Exception as e:
+                        print(f"?? Error saving {key}: {e}")
+                        self.config[key] = str(val)
 
             # [NEW] 필터 설정 저장 (PMI)
             if hasattr(self, 'element_filters'):
@@ -668,6 +842,16 @@ class PMIReportApp:
         if actual_a_t <= allowed_a_t: return "Accept", loc
         return f"Reject ({loc} a/t: {actual_a_t:.3f} > {allowed_a_t:.3f})", loc
 
+    def _on_main_tab_changed(self, event):
+        try:
+            tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+            if "PMI" in tab_text: self.current_mode = "PMI"
+            elif "RT" in tab_text: self.current_mode = "RT"
+            elif "PT" in tab_text: self.current_mode = "PT"
+            elif "PAUT" in tab_text: self.current_mode = "PAUT"
+            elif "사진" in tab_text: self.current_mode = "PHOTO"
+        except: pass
+
     def create_widgets(self):
         style = ttk.Style()
         style.theme_use('clam')
@@ -785,6 +969,9 @@ class PMIReportApp:
         self.mode_notebook = ttk.Notebook(self.root, style="Main.TNotebook")
         self.mode_notebook.pack(fill='both', expand=True, padx=5, pady=(5, 0))
         
+        # [NEW] Track mode change
+        self.mode_notebook.bind("<<NotebookTabChanged>>", self._on_main_tab_changed)
+        
         self.pmi_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.rt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
@@ -797,7 +984,7 @@ class PMIReportApp:
         self.mode_notebook.add(self.paut_mode_frame, text=" 🔬 Phased Array (PAUT) ")
         self.mode_notebook.add(self.photo_mode_frame, text=" 📸 사진대장 (Photo Log) ")
 
-        # Setup each mode
+        # Setup each mode (One time only)
         self._setup_pmi_ui(self.pmi_mode_frame)
         self._setup_rt_ui(self.rt_mode_frame)
         self._setup_pt_ui(self.pt_mode_frame)
@@ -889,38 +1076,45 @@ class PMIReportApp:
             cmd = (lambda : self._browse_dir(var)) if is_dir else (lambda : self._browse_file(var, types))
             ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
-        _add_very_compact_row(file_container, "로고:", self.logo_folder_path, 0, is_dir=True)
+        _add_very_compact_row(file_container, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
         _add_very_compact_row(file_container, "데이터:", self.target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_very_compact_row(file_container, "양식:", self.template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        
+        # [NEW] Template Config Save Button
+        btn_frame = tk.Frame(file_container, background="#f0f0f0")
+        btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
+        ttk.Button(btn_frame, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("PMI")).pack(side='left', padx=2)
 
         # 2. Configuration Notebook (Cover, Data, Rows - NO Preview tab here)
         config_frame = ttk.LabelFrame(left_pane, text=" 설정 (Config) ", padding=2)
         config_frame.pack(fill='both', expand=True, pady=(0, 10))
 
-        self.tab_notebook = ttk.Notebook(config_frame)
-        self.tab_notebook.pack(fill='both', expand=True)
+        self.pmi_tab_notebook = ttk.Notebook(config_frame)
+        self.pmi_tab_notebook.pack(fill='both', expand=True)
 
-        tab_cover = ttk.Frame(self.tab_notebook, padding=5)
-        tab_data = ttk.Frame(self.tab_notebook, padding=5)
-        tab_rows = ttk.Frame(self.tab_notebook, padding=5)
-        tab_filter = ttk.Frame(self.tab_notebook, padding=10)
-        tab_cols = ttk.Frame(self.tab_notebook, padding=5)
+        tab_cover = ttk.Frame(self.pmi_tab_notebook, padding=5)
+        tab_data = ttk.Frame(self.pmi_tab_notebook, padding=5)
+        tab_rows = ttk.Frame(self.pmi_tab_notebook, padding=5)
+        tab_filter = ttk.Frame(self.pmi_tab_notebook, padding=10)
+        tab_cols = ttk.Frame(self.pmi_tab_notebook, padding=5)
         
         # [CRITICAL] Allow children to expand within tabs
         for t in [tab_cover, tab_data, tab_rows, tab_filter, tab_cols]: t.columnconfigure(0, weight=1)
 
-        self.tab_notebook.add(tab_cover, text="갑지")
-        self.tab_notebook.add(tab_data, text="을지")
-        self.tab_notebook.add(tab_rows, text="행 설정")
-        self.tab_notebook.add(tab_cols, text="컬럼 설정")
-        self.tab_notebook.add(tab_filter, text="필터/옵션")
+        self.pmi_tab_notebook.add(tab_cover, text="갑지")
+        self.pmi_tab_notebook.add(tab_data, text="을지")
+        self.pmi_tab_notebook.add(tab_rows, text="행 설정")
+        self.pmi_tab_notebook.add(tab_cols, text="컬럼 설정")
+        self.pmi_tab_notebook.add(tab_filter, text="필터/옵션")
 
-        self.setting_vars = {}
-        # [ALIGNED] Direct grid expansion (as in RT/PT)
-        next_row_cover = self._create_setting_grid(tab_cover, "COVER")
-        next_row_data = self._create_setting_grid(tab_data, "DATA")
-        self._create_margin_settings(tab_cover, "COVER", next_row_cover)
-        self._create_margin_settings(tab_data, "DATA", next_row_data)
+        # [FIX] Do NOT reset setting_vars here to prevent data loss when switching tabs
+        # [ALIGNED] Mode-specific context for logo grid
+        self._create_gapji_meta_ui(tab_cover, use_pack=False)
+        self.pmi_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
+        next_row_cover = self._create_setting_grid(tab_cover, "PMI_COVER")
+        next_row_data = self._create_setting_grid(tab_data, "PMI_DATA")
+        self._create_margin_settings(tab_cover, "PMI_COVER", use_pack=False)
+        self._create_margin_settings(tab_data, "PMI_DATA", use_pack=False)
         self._create_row_settings(tab_rows, mode="PMI")
         
         pmi_items = [
@@ -967,12 +1161,25 @@ class PMIReportApp:
 
         self._update_pmi_filter_ui()
 
-        # [RIGHT] Data Preview Pane (Always visible)
-        right_frame = ttk.LabelFrame(self.pmi_paned, text=" 🔬 실시간 데이터 관리 (Live Preview) ", padding=10)
-        self.pmi_paned.add(right_frame, stretch="always")
-        self._create_preview_ui(right_frame)
+        # [RIGHT] Multi-Preview Pane (Data & Gapji)
+        right_container = tk.Frame(self.pmi_paned, background="#f3f4f6")
+        self.pmi_paned.add(right_container, stretch="always")
+        
+        if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
+        nb = ttk.Notebook(right_container)
+        nb.pack(fill='both', expand=True)
+        self.preview_notebooks["PMI"] = nb
+        
+        tab_data = tk.Frame(nb, background="#ffffff")
+        tab_gapji = tk.Frame(nb, background="#ffffff")
+        nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
+        nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
+        
+        self._create_preview_ui(tab_data)
+        self._create_gapji_preview_ui(tab_gapji, "PMI")
         self._apply_sash_ratio("PMI")
         
+        self.template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("PMI"))
 
     def _update_pmi_ratio(self):
         """Saves current sash position and persists it."""
@@ -1087,9 +1294,15 @@ class PMIReportApp:
             cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
             ttk.Button(parent_frame, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
-        _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
+        _add_file_row(file_frame, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
         _add_file_row(file_frame, "RT 데이터:", self.rt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_file_row(file_frame, "RT 양식:", self.rt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        
+        # [NEW] Template Config Save Button
+        btn_frame = tk.Frame(file_frame, background="#f0f0f0")
+        btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
+        ttk.Button(btn_frame, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("RT")).pack(side='left', padx=2)
+        tk.Label(btn_frame, text="* 양식 파일과 같은 폴더에 .json 파일로 저장됩니다.", font=("Malgun Gothic", 8), fg="gray", background="#f0f0f0").pack(side='left', padx=5)
 
         # 2. Configuration Tabs
         rt_config_frame = ttk.LabelFrame(left_pane, text=" 리포트 세부 설정 ", padding=2)
@@ -1100,21 +1313,36 @@ class PMIReportApp:
 
         rt_tab_cover = ttk.Frame(self.rt_tab_notebook, padding=5)
         rt_tab_data = ttk.Frame(self.rt_tab_notebook, padding=5)
+        rt_tab_logo = ttk.Frame(self.rt_tab_notebook, padding=5) # [NEW] Dedicated Logo Tab
         rt_tab_rows = ttk.Frame(self.rt_tab_notebook, padding=5)
         rt_tab_cols = ttk.Frame(self.rt_tab_notebook, padding=5)
         
-        # [CRITICAL] Allow children to expand
-        for t in [rt_tab_cover, rt_tab_data, rt_tab_rows, rt_tab_cols]: t.columnconfigure(0, weight=1)
+        # [FIX] Apply columnconfigure only to tabs using GRID (Cover, Data, Logo)
+        # Rows and Cols tabs use PACK internally, so we avoid calling grid methods on them.
+        for t in [rt_tab_cover, rt_tab_data, rt_tab_logo]: t.columnconfigure(0, weight=1)
 
-        self.rt_tab_notebook.add(rt_tab_cover, text="갑지")
-        self.rt_tab_notebook.add(rt_tab_data, text="을지")
+        self.rt_tab_notebook.add(rt_tab_cover, text="갑지 설정")
+        self.rt_tab_notebook.add(rt_tab_data, text="을지 설정")
+        self.rt_tab_notebook.add(rt_tab_logo, text="로고 설정") # [NEW]
         self.rt_tab_notebook.add(rt_tab_rows, text="행 설정")
         self.rt_tab_notebook.add(rt_tab_cols, text="컬럼 설정")
 
-        next_row_rt_cover = self._create_setting_grid(rt_tab_cover, "COVER")
-        next_row_rt_data = self._create_setting_grid(rt_tab_data, "DATA")
-        self._create_margin_settings(rt_tab_cover, "COVER", next_row_rt_cover)
-        self._create_margin_settings(rt_tab_data, "DATA", next_row_rt_data)
+        # [ALIGNED] Mode-specific context for logo grid
+        self._create_gapji_meta_ui(rt_tab_cover, use_pack=False)
+        self.rt_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
+        
+        # [NEW] Separate Logo Grids in Logo Tab (Using GRID exclusively to avoid TclError)
+        tk.Label(rt_tab_logo, text="🚩 [갑지] 로고 설정", font=("Malgun Gothic", 9, "bold"), background="#f9fafb", fg="#1e3a8a").grid(row=0, column=0, sticky='w', pady=(5, 0))
+        next_r = self._create_setting_grid(rt_tab_logo, "RT_COVER")
+        
+        sep = tk.Frame(rt_tab_logo, height=1, background="#d1d5db")
+        sep.grid(row=next_r + 1, column=0, sticky='ew', pady=10)
+        
+        tk.Label(rt_tab_logo, text="🚩 [을지] 로고 설정", font=("Malgun Gothic", 9, "bold"), background="#f9fafb", fg="#1e3a8a").grid(row=next_r + 2, column=0, sticky='w', pady=(5, 0))
+        self._create_setting_grid(rt_tab_logo, "RT_DATA")
+
+        self._create_margin_settings(rt_tab_cover, "RT_COVER", use_pack=False)
+        self._create_margin_settings(rt_tab_data, "RT_DATA", use_pack=False)
         self._create_row_settings(rt_tab_rows, mode="RT")
         
         rt_items = [
@@ -1163,12 +1391,25 @@ class PMIReportApp:
         ttk.Button(btn_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
         ttk.Button(btn_row, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x')
 
-        # [RIGHT] Preview Pane
-        right_frame = ttk.LabelFrame(self.rt_paned, text=" 🔬 실시간 데이터 관리 (RT Preview) ", padding=10)
-        self.rt_paned.add(right_frame, stretch="always")
-        self._create_rt_preview_ui(right_frame)
+        # [RIGHT] Multi-Preview Pane (Data & Gapji)
+        right_container = tk.Frame(self.rt_paned, background="#f3f4f6")
+        self.rt_paned.add(right_container, stretch="always")
+        
+        if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
+        nb = ttk.Notebook(right_container)
+        nb.pack(fill='both', expand=True)
+        self.preview_notebooks["RT"] = nb
+        
+        tab_data = tk.Frame(nb, background="#ffffff")
+        tab_gapji = tk.Frame(nb, background="#ffffff")
+        nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
+        nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
+        
+        self._create_rt_preview_ui(tab_data)
+        self._create_gapji_preview_ui(tab_gapji, "RT")
         self._apply_sash_ratio("RT")
         
+        self.rt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("RT"))
 
         # Adaptive Resizing Bindings
         self.rt_pane_ratio = self.config.get('RT_SASH_RATIO', 0.5)
@@ -1239,9 +1480,14 @@ class PMIReportApp:
             cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
             ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
-        _add_file_row(file_frame, "로고 폴더:", self.logo_folder_path, 0, is_dir=True)
+        _add_file_row(file_frame, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
         _add_file_row(file_frame, "PT 데이터:", self.pt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
         _add_file_row(file_frame, "PT 양식:", self.pt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        
+        # [NEW] Template Config Save Button
+        btn_frame = tk.Frame(file_frame, background="#f0f0f0")
+        btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
+        ttk.Button(btn_frame, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("PT")).pack(side='left', padx=2)
 
         # 2. Configuration Tabs
         pt_config_frame = ttk.LabelFrame(left_pane, text=" 리포트 세부 설정 ", padding=2)
@@ -1263,10 +1509,13 @@ class PMIReportApp:
         self.pt_tab_notebook.add(pt_tab_rows, text="행 설정")
         self.pt_tab_notebook.add(pt_tab_cols, text="컬럼 설정")
 
-        next_row_pt_cover = self._create_setting_grid(pt_tab_cover, "COVER")
-        next_row_pt_data = self._create_setting_grid(pt_tab_data, "DATA")
-        self._create_margin_settings(pt_tab_cover, "COVER", next_row_pt_cover)
-        self._create_margin_settings(pt_tab_data, "DATA", next_row_pt_data)
+        # [ALIGNED] Mode-specific context for logo grid
+        self._create_gapji_meta_ui(pt_tab_cover, use_pack=False)
+        self.pt_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
+        next_row_pt_cover = self._create_setting_grid(pt_tab_cover, "PT_COVER")
+        next_row_pt_data = self._create_setting_grid(pt_tab_data, "PT_DATA")
+        self._create_margin_settings(pt_tab_cover, "PT_COVER", use_pack=False)
+        self._create_margin_settings(pt_tab_data, "PT_DATA", use_pack=False)
         self._create_row_settings(pt_tab_rows, mode="PT")
         
         pt_items = [
@@ -1297,12 +1546,25 @@ class PMIReportApp:
         ttk.Button(btn_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
         ttk.Button(btn_row, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x')
 
-        # [RIGHT] Preview Pane
-        right_frame = ttk.LabelFrame(self.pt_paned, text=" 🔬 실시간 데이터 관리 (PT Preview) ", padding=10)
-        self.pt_paned.add(right_frame, stretch="always")
-        self._create_pt_preview_ui(right_frame)
+        # [RIGHT] Multi-Preview Pane (Data & Gapji)
+        right_container = tk.Frame(self.pt_paned, background="#f3f4f6")
+        self.pt_paned.add(right_container, stretch="always")
+        
+        if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
+        nb = ttk.Notebook(right_container)
+        nb.pack(fill='both', expand=True)
+        self.preview_notebooks["PT"] = nb
+        
+        tab_data = tk.Frame(nb, background="#ffffff")
+        tab_gapji = tk.Frame(nb, background="#ffffff")
+        nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
+        nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
+        
+        self._create_pt_preview_ui(tab_data)
+        self._create_gapji_preview_ui(tab_gapji, "PT")
         self._apply_sash_ratio("PT")
         
+        self.pt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("PT"))
 
         # Adaptive Resizing Bindings
         self.pt_pane_ratio = self.config.get('PT_SASH_RATIO', 0.5)
@@ -1419,8 +1681,9 @@ class PMIReportApp:
             cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
             ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
 
-        _add_file_row(file_frame, "PAUT 데이터:", self.paut_target_file_path, 0, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
-        _add_file_row(file_frame, "PAUT 양식:", self.paut_template_file_path, 1, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
+        _add_file_row(file_frame, "PAUT 데이터:", self.paut_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "PAUT 양식:", self.paut_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
 
         # --- 2. Configuration Notebook (갑, 을, 행 설정, 개별 판정) ---
         config_frame = ttk.LabelFrame(left_pane, text=" 설정 및 판정 (Config & Eval) ", padding=2)
@@ -1445,10 +1708,12 @@ class PMIReportApp:
         self.paut_tab_notebook.add(tab_cols, text="컬럼 설정")
 
         # [NEW] Populate Settings
+        self._create_gapji_meta_ui(tab_cover, use_pack=False)
+        self.paut_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
         next_row_cover = self._create_setting_grid(tab_cover, "PAUT_COVER")
         next_row_data = self._create_setting_grid(tab_data, "PAUT_DATA")
-        self._create_margin_settings(tab_cover, "PAUT_COVER", next_row_cover)
-        self._create_margin_settings(tab_data, "PAUT_DATA", next_row_data)
+        self._create_margin_settings(tab_cover, "PAUT_COVER", use_pack=False)
+        self._create_margin_settings(tab_data, "PAUT_DATA", use_pack=False)
         self._create_row_settings(tab_rows, mode="PAUT")
         
         paut_items = [
@@ -1555,23 +1820,41 @@ class PMIReportApp:
         ttk.Button(paut_session_row, text=" 💾 세션 저장 ", command=self._export_paut_session).pack(side='left', fill='x', expand=True, padx=(0, 5))
         ttk.Button(paut_session_row, text=" 📂 세션 불러오기 ", command=self._import_paut_session).pack(side='left', fill='x', expand=True)
 
-        # [RIGHT] Batch & Preview Pane
-        right_frame = ttk.LabelFrame(self.paut_paned, text=" 🔬 일괄 판정 및 미리보기 (Batch & Preview) ", padding=10)
-        self.paut_paned.add(right_frame, stretch="always")
+        # [RIGHT] Multi-Preview Pane (Data & Gapji)
+        right_container = tk.Frame(self.paut_paned, background="#f3f4f6")
+        self.paut_paned.add(right_container, stretch="always")
+        
+        if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
+        nb = ttk.Notebook(right_container)
+        nb.pack(fill='both', expand=True)
+        self.preview_notebooks["PAUT"] = nb
+        
+        tab_data = tk.Frame(nb, background="#ffffff")
+        tab_gapji = tk.Frame(nb, background="#ffffff")
+        nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
+        nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
+        
+        self._create_paut_preview_ui(tab_data)
+        self._create_gapji_preview_ui(tab_gapji, "PAUT")
         self._apply_sash_ratio("PAUT")
         
+    def _create_paut_preview_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb")
+        container.pack(fill='both', expand=True)
+
         # [NEW] File Info Header
-        header_info = tk.Frame(right_frame, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
+        header_info = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
         header_info.pack(fill='x', pady=(0, 5))
         tk.Label(header_info, textvariable=self.file_info_vars['PAUT'], background="#ffffff", 
                  foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
 
-        tree_frame = tk.Frame(right_frame, background="#f9fafb")
+        tree_frame = tk.Frame(container, background="#f9fafb")
         tree_frame.pack(fill='both', expand=True)
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
         
-        self.paut_preview_tree = ttk.Treeview(tree_frame, columns=("V", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"), show='headings', height=10, selectmode='extended')
+        cols = ("V", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks")
+        self.paut_preview_tree = ttk.Treeview(tree_frame, columns=cols, show='headings', height=10, selectmode='extended')
         
         saved_widths = self.config.get("PAUT_COL_WIDTHS", {})
         default_widths = {"V": 40, "No": 50, "Line No.": 250, "Joint No.": 120, "Th'k(mm)": 60, "Start": 60, "End": 60, "Length(mm)": 80, "Upper": 60, "Lower": 60, "Height(mm)": 80, "Type of Flaw": 100, "a/l": 60, "a/t": 60, "Evaluation": 80, "Remarks": 150}
@@ -1603,14 +1886,6 @@ class PMIReportApp:
             w = saved_widths.get(col, default_widths.get(col, 80))
             self.paut_preview_tree.column(col, width=w, anchor='center', stretch=False)
         
-        # Add Sidebar first
-        self._setup_preview_sidebar(self.paut_preview_tree, right_frame, mode="PAUT")
-        
-        # Then pack tree frame to take remaining space
-        tree_frame.pack(side='left', fill='both', expand=True)
-        tree_frame.grid_rowconfigure(0, weight=1)
-        tree_frame.grid_columnconfigure(0, weight=1)
-        
         self.paut_preview_tree.grid(row=0, column=0, sticky='nsew')
         
         paut_vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.paut_preview_tree.yview)
@@ -1619,6 +1894,8 @@ class PMIReportApp:
         
         paut_vsb.grid(row=0, column=1, sticky='ns')
         paut_hsb.grid(row=1, column=0, sticky='ew')
+
+        self._setup_preview_sidebar(self.paut_preview_tree, container, mode="PAUT")
 
 
         # Adaptive Resizing Bindings
@@ -1881,6 +2158,7 @@ class PMIReportApp:
         self.log(f"✅ 판정 완료: 총 {len(self.paut_extracted_data)} 건 (합격: {count_ok}, 불합격: {count_ng})")
 
     def _generate_paut_report(self):
+        self.save_settings() # Ensure UI -> config sync
         template_path = self.paut_template_file_path.get()
         if not template_path or not os.path.exists(template_path):
             messagebox.showwarning("파일 미선택", "PAUT 성적서 양식 파일을 선택해주세요.")
@@ -1895,7 +2173,7 @@ class PMIReportApp:
         self.progress['value'] = 0
         
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            wb = openpyxl.load_workbook(template_path)
             ws = wb.worksheets[0]
             ws.title = f"PAUT_Report_001"
             
@@ -2128,6 +2406,201 @@ class PMIReportApp:
                     self.current_entry.delete("sel.first", "sel.last")
         except Exception: pass
 
+    def _create_gapji_preview_ui(self, parent, mode):
+        """Create the Gapji (Cover) preview tab content."""
+        container = tk.Frame(parent, background="#f3f4f6")
+        container.pack(fill='both', expand=True)
+        
+        # Toolbar
+        toolbar = tk.Frame(container, background="#ffffff", pady=5, padx=10, highlightthickness=1, highlightbackground="#e5e7eb")
+        toolbar.pack(fill='x')
+        ttk.Label(toolbar, text=f"📄 {mode} 갑지 레이아웃 미리보기", font=("Malgun Gothic", 9, "bold"), background="#ffffff").pack(side='left')
+        
+        btn_f = tk.Frame(toolbar, background="#ffffff")
+        btn_f.pack(side='right')
+        ttk.Button(btn_f, text=" 🚀 이대로 성적서 생성 ", command=self.run_process).pack(side='right')
+        ttk.Button(btn_f, text=" 🔄 새로고침 ", command=lambda: self._update_gapji_preview(mode)).pack(side='right', padx=5)
+        
+        # Scrollable area
+        outer_f = tk.Frame(container, background="#9ca3af") # Desk background
+        outer_f.pack(fill='both', expand=True)
+        
+        # Canvas
+        self.gapji_canvases = getattr(self, 'gapji_canvases', {})
+        # A4 @ 72dpi is ~595x842. We'll use a slightly smaller view to fit.
+        self.gapji_scale = 2.5 # 1mm = 2.5px
+        canv_w, canv_h = int(210 * self.gapji_scale), int(297 * self.gapji_scale)
+        
+        canv = tk.Canvas(outer_f, background="#ffffff", width=canv_w, height=canv_h, 
+                         highlightthickness=1, highlightbackground="#374151")
+        canv.pack(pady=20)
+        self.gapji_canvases[mode] = canv
+
+    def _excel_anchor_to_px(self, anchor, scale):
+        """Roughly map Excel cell to A4 pixel coordinates."""
+        import re
+        m = re.match(r"([A-Z]+)(\d+)", anchor.upper())
+        if not m: return 0, 0
+        
+        col_str, row_str = m.groups()
+        # Col to Num (A=0, B=1...)
+        col = 0
+        for char in col_str: col = col * 26 + (ord(char) - ord('A'))
+        row = int(row_str) - 1
+        
+        # Rough estimates for A4 grid (210mm / 10 cols, 297mm / 50 rows)
+        # Adjusting to feel more like typical report templates
+        x = (col * 15) * scale # 15mm per col
+        y = (row * 6) * scale  # 6mm per row
+        return x, y
+
+    def _update_gapji_preview(self, mode):
+        """Render a visual representation of the Gapji on the Canvas."""
+        if not hasattr(self, 'gapji_canvases') or mode not in self.gapji_canvases: return
+        canv = self.gapji_canvases[mode]
+        canv.delete("all")
+        
+        scale = getattr(self, 'gapji_scale', 2.5)
+        
+        # 1. Draw Title Text (Approximation of Template)
+        canv.create_text(105*scale, 40*scale, text=f"{mode} EXAMINATION REPORT", 
+                         font=("Arial", 16, "bold"), fill="#1e3a8a")
+        canv.create_line(30*scale, 50*scale, 180*scale, 50*scale, fill="#1e3a8a", width=2)
+        
+        # 2. Draw Metadata
+        y_start = 120 # mm
+        info = [
+            ("PROJECT:", self.gapji_project.get(), y_start),
+            ("CUSTOMER:", self.gapji_customer.get(), y_start + 12),
+            ("ITEM:", self.gapji_item.get(), y_start + 24),
+            ("MATERIAL:", self.gapji_material.get(), y_start + 36),
+            ("DATE:", self.gapji_exam_date.get(), y_start + 48),
+            ("REPORT NO:", self.gapji_report_no.get(), y_start + 60),
+        ]
+        
+        for label, val, y in info:
+            canv.create_text(40*scale, y*scale, text=label, font=("Arial", 9, "bold"), anchor='w')
+            canv.create_text(80*scale, y*scale, text=val if val else "(입력 안 됨)", 
+                             font=("Arial", 9), anchor='w', fill="#374151" if val else "#9ca3af")
+            canv.create_line(80*scale, (y+2)*scale, 180*scale, (y+2)*scale, fill="#e5e7eb")
+
+        # 3. Draw Logos
+        from PIL import Image, ImageTk
+        logo_types = [
+            ("SITCO", ["로고", "SITCO"]),
+            ("SEOUL", ["서울검사", "SEOUL"]),
+            ("FOOTER", ["바닥글", "FOOTER"]),
+            ("FOOTER_PT", ["바닥글", "PT", "LOGO"])
+        ]
+        
+        if not hasattr(self, '_preview_img_refs'): self._preview_img_refs = {}
+        
+        for lt, keywords in logo_types:
+            prefix = f"{lt}_{mode}_COVER"
+            if prefix not in self.config and f"{lt}_COVER" in self.config: prefix = f"{lt}_COVER"
+            
+            path = self.config.get(f"{prefix}_PATH", "")
+            if not path:
+                # Fallback to smart search if empty
+                found = self.find_image_smart(keywords[0])
+                if found: path = found
+            
+            if path and os.path.exists(path):
+                try:
+                    img = Image.open(path)
+                    w_mm = float(self.config.get(f"{prefix}_W", 40))
+                    h_mm = float(self.config.get(f"{prefix}_H", 15))
+                    x_off = float(self.config.get(f"{prefix}_X", 0))
+                    y_off = float(self.config.get(f"{prefix}_Y", 0))
+                    anchor = self.config.get(f"{prefix}_ANCHOR", "A1")
+                    
+                    # Convert to pixels
+                    w_px, h_px = int(w_mm * scale), int(h_mm * scale)
+                    ax, ay = self._excel_anchor_to_px(anchor, scale)
+                    
+                    final_x = ax + (x_off * scale)
+                    final_y = ay + (y_off * scale)
+                    
+                    # Scale and keep reference
+                    img = img.resize((max(1, w_px), max(1, h_px)), Image.Resampling.LANCZOS)
+                    photo = ImageTk.PhotoImage(img)
+                    self._preview_img_refs[f"{mode}_{lt}"] = photo
+                    
+                    canv.create_image(final_x, final_y, image=photo, anchor='nw')
+                except Exception as e:
+                    print(f"Preview error for {lt}: {e}")
+
+    def _create_gapji_meta_ui(self, parent, use_pack=True):
+        block = tk.LabelFrame(parent, text=" 리포트 기본 정보 (Gapji Info) ", padx=10, pady=5, background="#ffffff", font=("Malgun Gothic", 9, "bold"))
+        if use_pack:
+            block.pack(fill='x', pady=5, padx=2)
+        else:
+            block.grid(row=0, column=0, sticky='ew', pady=5, padx=2)
+        
+        # Grid for info entries
+        for col in [1, 3]: block.columnconfigure(col, weight=1)
+        
+        fields = [
+            ("공사명:", self.gapji_project, 0, 0),
+            ("발주처:", self.gapji_customer, 0, 2),
+            ("품명:", self.gapji_item, 1, 0),
+            ("재질:", self.gapji_material, 1, 2),
+            ("리포트번호:", self.gapji_report_no, 2, 0),
+            ("검사일자:", self.gapji_exam_date, 2, 2)
+        ]
+        
+        for lbl, var, r, c in fields:
+            tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
+            ttk.Entry(block, textvariable=var, width=15).grid(row=r, column=c+1, sticky='ew', padx=2, pady=2)
+            # Add to setting_vars for auto-save
+            cfg_key = f"GAPJI_{lbl.replace(':', '').upper()}"
+            if "공사명" in lbl: cfg_key = "GAPJI_PROJECT"
+            elif "발주처" in lbl: cfg_key = "GAPJI_CUSTOMER"
+            elif "품명" in lbl: cfg_key = "GAPJI_ITEM"
+            elif "재질" in lbl: cfg_key = "GAPJI_MATERIAL"
+            elif "리포트번호" in lbl: cfg_key = "GAPJI_REPORT_NO"
+            elif "검사일자" in lbl: cfg_key = "GAPJI_EXAM_DATE"
+            self.setting_vars[cfg_key] = var
+            
+        # Add a refresh button for preview
+        btn_f = tk.Frame(block, background="#ffffff")
+        btn_f.grid(row=3, column=0, columnspan=4, pady=5, sticky='ew')
+        ttk.Button(btn_f, text="✨ 갑지 미리보기 업데이트", command=self._update_gapji_preview_current).pack(side='top', fill='x', padx=5)
+
+    def _update_gapji_preview_current(self, event=None):
+        """Detect current mode and refresh Gapji preview. Triggered by tab change or button."""
+        try:
+            # 1. Determine Mode
+            mode = "PMI"
+            try:
+                tab_idx = self.mode_notebook.index("current")
+                if tab_idx == 1: mode = "RT"
+                elif tab_idx == 2: mode = "PT"
+                elif tab_idx == 3: mode = "PAUT"
+            except: pass
+            
+            # 2. Logic for tab change event
+            if event and event.widget:
+                try:
+                    nb = event.widget
+                    tab_text = nb.tab(nb.select(), "text")
+                    if "갑지" in tab_text:
+                        if hasattr(self, 'preview_notebooks') and mode in self.preview_notebooks:
+                            self.preview_notebooks[mode].select(1)
+                            self._update_gapji_preview(mode)
+                    else:
+                        if hasattr(self, 'preview_notebooks') and mode in self.preview_notebooks:
+                            self.preview_notebooks[mode].select(0)
+                except: pass
+            else:
+                # Manual trigger (Button)
+                if hasattr(self, 'preview_notebooks') and mode in self.preview_notebooks:
+                    self.preview_notebooks[mode].select(1)
+                self._update_gapji_preview(mode)
+        except Exception as e:
+            self.log(f"미리보기 업데이트 실패: {e}")
+            self.log(f"미리보기 업데이트 실패: {e}")
+
     def _create_setting_grid(self, parent, context):
         # [REFINED] More organized layout for logo settings
         items = [
@@ -2142,7 +2615,8 @@ class PMIReportApp:
             # [HYPER-REACTIVE] Force columnspan=1 to match weighted col 0 of parent
             short_label = label.split(" ")[0].replace("로고", "")
             block = tk.LabelFrame(parent, text=f" {short_label} ", padx=2, pady=1, background="#ffffff", font=("Malgun Gothic", 8, "bold"))
-            block.grid(row=i, column=0, sticky='ew', pady=1, padx=2)
+            # [FIX] Offset row by 1 to leave room for Gapji Info at row 0 if present
+            block.grid(row=i + 1, column=0, sticky='ew', pady=1, padx=2)
             
             frame = tk.Frame(block, background="#ffffff")
             frame.pack(fill='x')
@@ -2151,22 +2625,27 @@ class PMIReportApp:
             
             tk.Label(frame, text="P:", width=2, anchor='e', background="#ffffff", font=("Malgun Gothic", 7)).grid(row=0, column=0)
             v_path = tk.StringVar(value=self.config.get(f"{key_prefix}_PATH", ""))
-            ttk.Entry(frame, textvariable=v_path, width=1, exportselection=False).grid(row=0, column=1, sticky='ew', padx=1)
+            ttk.Entry(frame, textvariable=v_path, width=15, exportselection=False).grid(row=0, column=1, sticky='ew', padx=1) # [FIX] Width 1 -> 15
             ttk.Button(frame, text="..", width=2, command=lambda v=v_path: self._browse_file(v, [("Images", "*.png;*.jpg;*.jpeg")])).grid(row=0, column=2, padx=1)
             self.setting_vars[f"{key_prefix}_PATH"] = v_path
             
             for idx, (coord, key_suffix) in enumerate([("X", "X"), ("Y", "Y"), ("W", "W"), ("H", "H")]):
                 tk.Label(frame, text=f"{coord}:", width=1, anchor='e', background="#ffffff", font=("Malgun Gothic", 7)).grid(row=0, column=3+idx*2)
                 v = tk.StringVar(value=str(self.config.get(f"{key_prefix}_{key_suffix}", "0.0")))
-                ttk.Entry(frame, textvariable=v, width=1, exportselection=False).grid(row=0, column=4+idx*2, sticky='ew', padx=1)
+                ttk.Entry(frame, textvariable=v, width=6, exportselection=False).grid(row=0, column=4+idx*2, sticky='ew', padx=1) # [FIX] Width 1 -> 6
                 self.setting_vars[f"{key_prefix}_{key_suffix}"] = v
             next_row = i + 1
         return next_row
             
-    def _create_margin_settings(self, parent, context, start_row):
-        # [HYPER-REACTIVE] Elastic Margin Grid (columnspan=1 for weighted parent)
+    def _create_margin_settings(self, parent, context, use_pack=True):
+        # [FIX] Adaptive layout to avoid TclError (grid vs pack conflict)
         frame = ttk.LabelFrame(parent, text=" 인쇄 및 여백 (Margins) ", padding=2)
-        frame.grid(row=start_row, column=0, sticky='ew', pady=(5, 0)) 
+        if use_pack:
+            frame.pack(fill='x', pady=(5, 0))
+        else:
+            # Inside Notebook tabs, we usually use grid. 
+            # We assume it's placed at the bottom of the existing grid.
+            frame.grid(row=100, column=0, columnspan=10, sticky='ew', pady=(10, 0))
         
         # Force 0 minsize for elasticity
         for col in range(10): frame.columnconfigure(col, minsize=0)
@@ -2190,9 +2669,18 @@ class PMIReportApp:
         ent_s.bind("<Return>", lambda e: self.root.focus_set())
         self.setting_vars[f"PRINT_SCALE_{context}"] = v_s
 
-        # Adjusters Row (Proportional weights - only entries grow)
+        # [NEW] Print Area Row
+        area_f = ttk.Frame(frame)
+        area_f.grid(row=1, column=0, columnspan=10, sticky='ew', pady=(2, 0))
+        ttk.Label(area_f, text="Area:", font=("Arial", 7)).pack(side='left', padx=1)
+        v_a = tk.StringVar(value=str(self.config.get(f"PRINT_AREA_{context}", "")))
+        ent_a = ttk.Entry(area_f, textvariable=v_a)
+        ent_a.pack(side='left', fill='x', expand=True, padx=1)
+        self.setting_vars[f"PRINT_AREA_{context}"] = v_a
+        
+        # Adjusters Row
         sub = ttk.Frame(frame)
-        sub.grid(row=1, column=0, columnspan=10, sticky='ew', pady=2)
+        sub.grid(row=2, column=0, columnspan=10, sticky='ew', pady=2)
         for c in [1, 3, 5, 7]: sub.columnconfigure(c, weight=1, minsize=0)
         for c in [0, 2, 4, 6]: sub.columnconfigure(c, weight=0, minsize=0)
         
@@ -4216,7 +4704,9 @@ class PMIReportApp:
         #         self.tab_notebook.select(self.tab_preview)
 
     def _browse_dir(self, var):
-        path = filedialog.askdirectory(initialdir=var.get() or RESOURCE_DIR)
+        current = var.get()
+        init_dir = current if current and os.path.exists(current) else RESOURCE_DIR
+        path = filedialog.askdirectory(initialdir=init_dir)
         if path: var.set(path)
 
     def _update_file_info(self, mode, path):
@@ -4248,7 +4738,9 @@ class PMIReportApp:
             self._update_file_info(mode, path)
 
     def _browse_file(self, var, types):
-        path = filedialog.askopenfilename(initialdir=os.path.dirname(var.get() or BASE_DIR), filetypes=types)
+        current = var.get()
+        init_dir = os.path.dirname(current) if current and os.path.exists(current) else BASE_DIR
+        path = filedialog.askopenfilename(initialdir=init_dir, filetypes=types)
         if path: 
             var.set(path)
             # Find which mode this belongs to and update info
@@ -4514,90 +5006,343 @@ class PMIReportApp:
     def place_image_freely(self, ws, img_path, anchor_cell_str, w, h, x_offset, y_offset):
         try:
             if not img_path or not os.path.exists(img_path): return
-            # [NEW] Check for valid anchor cell string
-            if not anchor_cell_str or not isinstance(anchor_cell_str, str) or len(anchor_cell_str) < 2:
-                self.log(f"[WARNING] {os.path.basename(img_path)} 배치 실패: 잘못된 앵커 셀 ({anchor_cell_str})")
-                return
-
+            
+            # [ENHANCED] Robust image processing with terminal & UI logging
             original = PILImage.open(img_path).convert("RGBA")
-            # [NEW] Ensure w, h are positive
-            w = max(1, int(w)); h = max(1, int(h))
-            resized = original.resize((w, h), PILImage.Resampling.LANCZOS)
-            temp_name = f"temp_{os.path.basename(img_path)}"
+            w_px = max(5, int(float(w))); h_px = max(5, int(float(h)))
+            
+            temp_name = f"temp_{int(time.time())}_{os.path.basename(img_path)}.png"
             temp_full_path = os.path.join(tempfile.gettempdir(), temp_name)
-            resized.save(temp_full_path)
             
-            img = XLImage(temp_full_path); img.width = w; img.height = h
-            col_str, row_num = coordinate_from_string(anchor_cell_str)
-            col_idx = max(0, column_index_from_string(col_str) - 1)
-            row_idx = max(0, row_num - 1) 
-            # [FIX] EMU offsets and dimensions MUST be non-negative
-            emu_x = max(0, int(x_offset * 9525)); emu_y = max(0, int(y_offset * 9525))
-            emu_w = max(1, int(w * 9525)); emu_h = max(1, int(h * 9525))
+            resized = original.resize((w_px, h_px), PILImage.Resampling.LANCZOS)
+            resized.save(temp_full_path, "PNG")
             
-            marker = AnchorMarker(col=col_idx, colOff=emu_x, row=row_idx, rowOff=emu_y)
+            from openpyxl.drawing.image import Image as XLImage
+            img = XLImage(temp_full_path)
+            img.width = w_px; img.height = h_px
+            from openpyxl.utils import column_index_from_string
+            from openpyxl.utils.cell import coordinate_from_string
+            from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker, XDRPositiveSize2D
+            
+            # [FIX] Handle 'None' or empty anchor string
+            if not anchor_cell_str or str(anchor_cell_str).strip() == "None" or len(str(anchor_cell_str).strip()) < 2:
+                anchor_cell_str = "A1"
+
+            try:
+                col_str, row_num = coordinate_from_string(anchor_cell_str)
+                col_idx = max(0, column_index_from_string(col_str) - 1)
+                row_idx = max(0, row_num - 1) 
+            except Exception as e:
+                col_idx, row_idx = 0, 0
+                anchor_cell_str = "A1"
+            
+            # [STABLE] Use OneCellAnchor instead of AbsoluteAnchor for better Excel compatibility (prevents corruption)
+            # 1 Pixel = 9525 EMU (Standard 96 DPI)
+            final_emu_x = max(0, int(float(x_offset) * 9525))
+            final_emu_y = max(0, int(float(y_offset) * 9525))
+            emu_w = max(9525, int(float(w_px) * 9525))
+            emu_h = max(9525, int(float(h_px) * 9525))
+            
+            # [FIX] Use AnchorMarker (cell + offset) for stable positioning
+            marker = AnchorMarker(col=col_idx, colOff=final_emu_x, row=row_idx, rowOff=final_emu_y)
             size = XDRPositiveSize2D(cx=emu_w, cy=emu_h)
+            
             img.anchor = OneCellAnchor(_from=marker, ext=size)
             ws.add_image(img)
-        except Exception as e: self.log(f"[WARNING] {os.path.basename(img_path)} 배치 실패: {e}")
+            
+            msg = f"[SUCCESS] 로고 배치 완료: {os.path.basename(img_path)}"
+            self.log(f"   {msg}")
+        except Exception as e:
+            msg = f"[ERROR] 로고 배치 실패: {e}"
+            self.log(f"   {msg}")
 
-    def add_logos_to_sheet(self, ws, is_cover=False, clear_existing=True):
+    def add_logos_to_sheet(self, ws, is_cover=False, clear_existing=True, mode=None):
+        # [SUPER SAFE] Identify if this is the first sheet (Cover/Gapji) of the workbook
+        try:
+            is_first_sheet = (ws == ws.parent.worksheets[0])
+        except:
+            is_first_sheet = is_cover
+
+        # [FIX] Never clear existing images on the Cover sheet (Gapji) or in RT mode to preserve template diagrams (e.g. Shooting Sketches)
+        if is_first_sheet or is_cover or mode == "RT":
+            clear_existing = False
+            
         if clear_existing:
             try: ws._images = [] 
             except: pass
-        ctx = "COVER" if is_cover else "DATA"
-        def _get_params(key_prefix):
-            return (self.config.get(f"{key_prefix}_{ctx}_PATH", ""), self.config[f"{key_prefix}_{ctx}_ANCHOR"], self.config[f"{key_prefix}_{ctx}_W"], self.config[f"{key_prefix}_{ctx}_H"], self.config[f"{key_prefix}_{ctx}_X"], self.config[f"{key_prefix}_{ctx}_Y"])
         
+        # [ENHANCED] Use provided mode or tracked current_mode
+        if mode is None:
+            mode = getattr(self, 'current_mode', "PMI")
+            try:
+                tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+                if "PMI" in tab_text: mode = "PMI"
+                elif "RT" in tab_text: mode = "RT"
+                elif "PT" in tab_text: mode = "PT"
+                elif "PAUT" in tab_text: mode = "PAUT"
+            except: pass
+            
+        ctx = "COVER" if is_cover else "DATA"
+        context = f"{mode}_{ctx}"
+        
+        debug_msg = f"?? 로고 엔진 가동: {context} (Mode: {mode}, Sheet: {ws.title})"
+        self.log(debug_msg)
+        
+        def _get_val(prefix, suffix, default):
+            # [FIX] Match ACTUAL UI key format: {prefix}_{mode}_{ctx}{suffix}
+            # e.g., SITCO_RT_COVER_X
+            full_key = f"{prefix}_{context}{suffix}"
+            v = self.config.get(full_key)
+            
+            # If value is missing or effectively zero for coordinates/size
+            is_coord = suffix in ["_X", "_Y", "_W", "_H"]
+            if v is not None and v != "":
+                try:
+                    if is_coord and float(v) <= 0: pass # Fallback if zero
+                    else: return v
+                except: pass
+                
+            # [FIX] Enhanced Fallback: If DATA is missing, try COVER of the same mode first
+            if "_DATA" in context:
+                cover_key = f"{prefix}_" + context.replace("_DATA", "_COVER") + suffix
+                cv = self.config.get(cover_key)
+                if cv is not None and cv != "":
+                    try:
+                        if is_coord and float(cv) <= 0: pass
+                        else: return cv
+                    except: pass
+
+            # [FIX] Enhanced Fallback: If current mode settings are missing, try PMI_COVER
+            if mode != "PMI":
+                pmi_fallback_key = f"{prefix}_PMI_COVER{suffix}"
+                pv = self.config.get(pmi_fallback_key)
+                if pv is not None and pv != "":
+                    try:
+                        if is_coord and float(pv) <= 0: pass
+                        else: return pv
+                    except: pass
+
+            # [FIX] Final Global Fallback (e.g., SITCO_COVER_X)
+            global_ctx = "COVER" if "COVER" in context else "DATA"
+            global_key = f"{prefix}_{global_ctx}{suffix}"
+            gv = self.config.get(global_key, default)
+            if is_coord:
+                try:
+                    if gv is None or gv == "" or float(gv) <= 0: return default
+                except: return default
+            return gv
+
+        def _get_effective_path(prefix, keywords):
+            # 1. [FIX] Match ACTUAL UI key format: {prefix}_{mode}_{ctx}_PATH
+            # e.g., SITCO_RT_COVER_PATH
+            k1 = f"{prefix}_{context}_PATH"
+            path = self.config.get(k1, "")
+            
+            # [FIX] Enhanced Fallback: If DATA path is empty, try COVER path of same mode
+            if (not path or not str(path).strip()) and "_DATA" in context:
+                k2 = f"{prefix}_" + context.replace("_DATA", "_COVER") + "_PATH"
+                path = self.config.get(k2, "")
+            
+            # [FIX] Enhanced Fallback: If current mode path is empty, try PMI_COVER path
+            if (not path or not str(path).strip()) and mode != "PMI":
+                k3 = f"{prefix}_PMI_COVER_PATH"
+                path = self.config.get(k3, "")
+            
+            # [FIX] Final Global Fallback (e.g., SITCO_COVER_PATH)
+            if (not path or not str(path).strip()):
+                global_ctx = "COVER" if "COVER" in context else "DATA"
+                k4 = f"{prefix}_{global_ctx}_PATH"
+                path = self.config.get(k4, "")
+
+            self.log(f"   > '{prefix}' 검색 시작 (Target Context: {context})")
+            
+            # 2. If path is valid and exists, use it
+            if path and str(path).strip() and os.path.exists(str(path).strip()):
+                self.log(f"   [OK] '{prefix}' 수동 지정 경로 발견: {os.path.basename(str(path))}")
+                return str(path).strip()
+            
+            # 3. Fallback to global path if mode-specific is empty
+            global_ctx = "COVER" if "COVER" in context else "DATA"
+            # [FIX] Match UI key format for global fallback path
+            g_path = self.config.get(f"{global_ctx}_{prefix}_PATH", "")
+            if g_path and str(g_path).strip() and os.path.exists(str(g_path).strip()):
+                self.log(f"   [OK] '{prefix}' 공용 설정 경로 사용: {os.path.basename(str(g_path))}")
+                return str(g_path).strip()
+
+            # 4. If manual path is empty or invalid, try Smart Search in Logo Folder
+            self.log(f"   ? '{prefix}' 설정 없음 -> 기본 폴더 자동 검색 시작...")
+            for kw in keywords:
+                found = self.find_image_smart(kw)
+                if found:
+                    self.log(f"   [OK] '{prefix}' 자동 검색 성공: {os.path.basename(found)}")
+                    return found
+            
+            self.log(f"   [FAIL] '{prefix}' 로고를 어디에서도 찾을 수 없습니다.")
+            return None
+
         # 1. SITCO
-        path, anchor, w, h, x, y = _get_params("SITCO")
-        if not path or not os.path.exists(path): path = self.find_image_smart("SITCO")
-        self.place_image_freely(ws, path, anchor, w, h, x, y)
+        p = _get_effective_path("SITCO", ["SITCO"])
+        if p: self.place_image_freely(ws, p, _get_val("SITCO", "_ANCHOR", "A1"), float(_get_val("SITCO", "_W", 100)), float(_get_val("SITCO", "_H", 50)), float(_get_val("SITCO", "_X", 0)), float(_get_val("SITCO", "_Y", 0)))
         
         # 2. SEOUL
-        path, anchor, w, h, x, y = _get_params("SEOUL")
-        if not path or not os.path.exists(path): path = self.find_image_smart("서울검사")
-        self.place_image_freely(ws, path, anchor, w, h, x, y)
+        p = _get_effective_path("SEOUL", ["서울검사"])
+        if p: self.place_image_freely(ws, p, _get_val("SEOUL", "_ANCHOR", "A1"), float(_get_val("SEOUL", "_W", 100)), float(_get_val("SEOUL", "_H", 50)), float(_get_val("SEOUL", "_X", 0)), float(_get_val("SEOUL", "_Y", 0)))
         
         # 3. FOOTER
-        path, anchor, w, h, x, y = _get_params("FOOTER")
-        if not path or not os.path.exists(path):
-            path = self.find_image_smart("바닥글", exclude_keyword="PMI-1")
-            if not path: path = self.find_image_smart("PMI", exclude_keyword="PMI-1")
-        self.place_image_freely(ws, path, anchor, w, h, x, y)
-        
+        p = _get_effective_path("FOOTER", ["바닥글", "PMI"])
+        if p: self.place_image_freely(ws, p, _get_val("FOOTER", "_ANCHOR", "A1"), float(_get_val("FOOTER", "_W", 100)), float(_get_val("FOOTER", "_H", 50)), float(_get_val("FOOTER", "_X", 0)), float(_get_val("FOOTER", "_Y", 0)))
+
         # 4. FOOTER_PT (Left)
-        path, anchor, w, h, x, y = _get_params("FOOTER_PT")
-        if not path or not os.path.exists(path):
-            path = self.find_image_smart("PMI갑") if is_cover else None
-            if not path: path = self.find_image_smart("PMI-1")
-            if not path: path = self.find_image_smart("PT")
-        self.place_image_freely(ws, path, anchor, w, h, x, y)
+        p = _get_effective_path("FOOTER_PT", ["PMI갑", "PMI-1", "PT"])
+        if p: self.place_image_freely(ws, p, _get_val("FOOTER_PT", "_ANCHOR", "A1"), float(_get_val("FOOTER_PT", "_W", 100)), float(_get_val("FOOTER_PT", "_H", 50)), float(_get_val("FOOTER_PT", "_X", 0)), float(_get_val("FOOTER_PT", "_Y", 0)))
+
+    def inject_drawing_layer(self, template_path, target_path):
+        import zipfile, shutil, os, re
+        final_out = target_path + ".final"
+        shutil.copy2(template_path, final_out)
+        try:
+            with zipfile.ZipFile(target_path, 'r') as z_data:
+                # 1. 리포트 데이터 추출 (인라인 변환 포함)
+                ws_files = [f for f in z_data.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')]
+                rep_shared_strings = []
+                if 'xl/sharedStrings.xml' in z_data.namelist():
+                    ss_content = z_data.read('xl/sharedStrings.xml').decode('utf-8', errors='ignore')
+                    rep_shared_strings = re.findall(r'<t[^>]*>(.*?)</t>', ss_content, re.DOTALL)
+
+                processed_data_blocks = {}
+                for f in ws_files:
+                    content = z_data.read(f).decode('utf-8', errors='ignore')
+                    # t="s" 속성을 가진 셀을 인라인화
+                    def replace_to_inline(match):
+                        attrs, idx = match.group(1), int(match.group(2))
+                        if 0 <= idx < len(rep_shared_strings):
+                            text = rep_shared_strings[idx]
+                            new_attrs = attrs.replace('t="s"', 't="inlineStr"')
+                            return f'<c {new_attrs}><is><t>{text}</t></is>'
+                        return match.group(0)
+                    content = re.sub(r'<c ([^>]*t="s"[^>]*)>[ \t\r\n]*<v>(\d+)</v>', replace_to_inline, content)
+                    # <sheetData> 블록만 추출 (세포 단위 이식용)
+                    data_match = re.search(r'<sheetData>(.*?)</sheetData>', content, re.DOTALL)
+                    if data_match: processed_data_blocks[f] = data_match.group(1)
+
+                # 2. 로고 미디어 정보 확보
+                report_drawings = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/drawing' in f and f.endswith('.xml')}
+                report_drawing_rels = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/_rels/drawing' in f}
+                logo_media = {f: z_data.read(f) for f in z_data.namelist() if 'xl/media/image' in f}
+
+                temp_swap = final_out + ".swap"
+                with zipfile.ZipFile(final_out, 'r') as z_tmpl_in:
+                    with zipfile.ZipFile(temp_swap, 'w') as z_out:
+                        for item in z_tmpl_in.infolist():
+                            fname = item.filename
+                            # [CELL SURGERY] 템플릿의 시트 데이터만 교체
+                            if fname in processed_data_blocks:
+                                tmpl_sheet = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                # 템플릿의 sheetData를 리포트의 데이터로 핀셋 교체
+                                new_sheet = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{processed_data_blocks[fname]}</sheetData>', tmpl_sheet, flags=re.DOTALL)
+                                z_out.writestr(item, new_sheet.encode('utf-8'))
+                            
+                            # [LOGO MERGE] 드로잉 병합 (이미 템플릿 것이므로 로고만 추가)
+                            elif 'xl/drawings/drawing' in fname and fname.endswith('.xml'):
+                                tmpl_xml = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                rep_drawing_xml = report_drawings.get(fname, report_drawings.get('xl/drawings/drawing1.xml', ""))
+                                if rep_drawing_xml:
+                                    rep_drawing_xml = rep_drawing_xml.decode('utf-8', errors='ignore')
+                                    existing_rids = set(re.findall(r'r:id=["\'](rId\d+)["\']', tmpl_xml))
+                                    existing_obj_ids = [int(x) for x in re.findall(r'id=["\'](\d+)["\']', tmpl_xml) if x.isdigit()]
+                                    max_obj_id = max(existing_obj_ids) if existing_obj_ids else 100
+                                    logo_anchors = re.findall(r'<(xdr:(?:one|two)CellAnchor|xdr:grpSp).*?</\1>', rep_drawing_xml, re.DOTALL)
+                                    
+                                    merged_xml = tmpl_xml
+                                    def get_safe_rid(old_rid, used_set):
+                                        num = int(old_rid.replace("rId", "")); new_rid = f"rId{num + 1000}"
+                                        while new_rid in used_set: num += 1; new_rid = f"rId{num + 1000}"
+                                        return new_rid
+
+                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
+                                    for i, anchor in enumerate(logo_anchors):
+                                        anchor_rids = set(re.findall(r'r:(?:id|embed|dm|lo|qs|cs)=["\'](rId\d+)["\']', anchor))
+                                        for old_rid in anchor_rids:
+                                            new_rid = get_safe_rid(old_rid, existing_rids)
+                                            anchor = re.sub(f'=["\']{old_rid}["\']', f'="{new_rid}"', anchor)
+                                            if not hasattr(self, '_rid_map'): self._rid_map = {}
+                                            self._rid_map[f"{dr_name}_{old_rid}"] = new_rid
+                                        new_id = max_obj_id + 1000 + i
+                                        anchor = re.sub(r'id=["\']\d+["\']', f'id="{new_id}"', anchor)
+                                        anchor = re.sub(r'name=["\'][^"\']+["\']', f'name="Logo_Obj_{new_id}"', anchor)
+                                        if '</xdr:wsDr>' in merged_xml: merged_xml = merged_xml.replace('</xdr:wsDr>', anchor + '</xdr:wsDr>')
+                                    z_out.writestr(item, merged_xml.encode('utf-8'))
+                                else: z_out.writestr(item, tmpl_xml.encode('utf-8'))
+                                    
+                            elif 'xl/drawings/_rels/drawing' in fname:
+                                tmpl_rels = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                rep_rels_xml = report_drawing_rels.get(fname, report_drawing_rels.get('xl/drawings/_rels/drawing1.xml.rels', ""))
+                                if rep_rels_xml:
+                                    rep_rels_xml = rep_rels_xml.decode('utf-8', errors='ignore')
+                                    logo_rels = re.findall(r'<Relationship [^>]*/>', rep_rels_xml)
+                                    merged_rels = tmpl_rels
+                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
+                                    for rel in logo_rels:
+                                        r_id_match = re.search(r'Id=["\'](rId\d+)["\']', rel)
+                                        if r_id_match:
+                                            old_rid = r_id_match.group(1)
+                                            new_rid = getattr(self, '_rid_map', {}).get(f"{dr_name}_{old_rid}")
+                                            if new_rid:
+                                                rel = rel.replace(f'Id="{old_rid}"', f'Id="{new_rid}"')
+                                                if new_rid not in merged_rels: merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
+                                            elif old_rid not in merged_rels: merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
+                                    z_out.writestr(item, merged_rels.encode('utf-8'))
+                                else: z_out.writestr(item, tmpl_rels.encode('utf-8'))
+                            else:
+                                # 템플릿의 나머지 파일(Styles, SharedStrings 등)은 100% 보존
+                                z_out.writestr(item, z_tmpl_in.read(fname))
+                        
+                        # 미디어(로고 이미지) 추가
+                        tmpl_media_list = z_tmpl_in.namelist()
+                        for f_path, f_data in logo_media.items():
+                            if f_path not in tmpl_media_list: z_out.writestr(f_path, f_data)
+            os.remove(target_path)
+            os.rename(temp_swap, target_path)
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log("   🛡️ [보호] 전 시트 제로-로스 데이터 주입 + 로고 복구 완료")
+        except Exception as e:
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log(f"   ⚠️ [주의] 제로-로스 수술 실패: {e}")
 
     def force_print_settings(self, ws, context="DATA"):
         try:
-            # Context-specific logic for print area
-            mode = "PMI" # Default
-            # Attempt to detect mode from active tab or context
+            # [ENHANCED] Use tracked current_mode
+            mode = getattr(self, 'current_mode', "PMI")
             try:
-                active_tab = self.tab_control.index("current")
-                if active_tab == 1: mode = "RT"
-                elif active_tab == 2: mode = "PT"
-                elif active_tab == 3: mode = "PAUT"
+                tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+                if "PMI" in tab_text: mode = "PMI"
+                elif "RT" in tab_text: mode = "RT"
+                elif "PT" in tab_text: mode = "PT"
+                elif "PAUT" in tab_text: mode = "PAUT"
             except: pass
+            
+            full_context = f"{mode}_{context}"
 
-            if context == "COVER":
-                # [NEW] Highly Dynamic print area for Gapji
-                key = f"{mode}_GAPJI_PRINT_END_ROW" if mode != "PMI" else "GAPJI_PRINT_END_ROW"
-                end_r = int(self.config.get(key, 51))
-                if end_r > 0:
-                    ws.print_area = f'A1:T{end_r}'
+            # [NEW] Manual Print Area Override (Priority: Mode-Specific > Global)
+            manual_area = self.config.get(f'PRINT_AREA_{full_context}', "").strip()
+            if not manual_area:
+                manual_area = self.config.get(f'PRINT_AREA_{context}', "").strip()
+                
+            if manual_area:
+                ws.print_area = manual_area
             else:
-                # [NEW] Highly Dynamic print area for Eulji
-                key = f"{mode}_PRINT_END_ROW" if mode != "PMI" else "PRINT_END_ROW"
-                end_r = int(self.config.get(key, 47))
-                if end_r > 0:
-                    ws.print_area = f'A1:M{end_r}'
+                if context == "COVER":
+                    # [NEW] Highly Dynamic print area for Gapji
+                    key = f"{mode}_GAPJI_PRINT_END_ROW" if mode != "PMI" else "GAPJI_PRINT_END_ROW"
+                    end_r = int(self.config.get(key, 51))
+                    if end_r > 0:
+                        ws.print_area = f'A1:T{end_r}'
+                else:
+                    # [NEW] Highly Dynamic print area for Eulji
+                    key = f"{mode}_PRINT_END_ROW" if mode != "PMI" else "PRINT_END_ROW"
+                    end_r = int(self.config.get(key, 47))
+                    if end_r > 0:
+                        ws.print_area = f'A1:M{end_r}'
             ws.page_setup.paperSize = 9; ws.page_setup.orientation = 'portrait'
             
             # [REFINED] 사용자 설정 배율 및 여백 적용
@@ -4665,14 +5410,17 @@ class PMIReportApp:
         except Exception: pass
 
     def safe_merge_cells(self, ws, start_row, start_column, end_row, end_column):
-        """이미 병합된 영역이 있는지 확인하고 안전하게 병합을 수행합니다."""
+        """[FIX] Prevent unmerging or conflicting merges on the cover sheet"""
         try:
-            # 병합하려는 영역이 이미 다른 병합 영역과 겹치는지 체크
-            # openpyxl은 겹치는 병합을 허용하지 않으므로, 겹치면 해당 영역을 풀거나 스킵해야 함
+            # If it's the cover sheet, be extremely conservative with merging/unmerging
+            if ws == ws.parent.worksheets[0]:
+                return
+        except: pass
+        
+        try:
             ws.merge_cells(start_row=start_row, start_column=start_column, end_row=end_row, end_column=end_column)
         except Exception as e:
-            # 겹치는 경우 기존 병합을 해제하고 시도하거나, 로그만 남김
-            self.log(f"⚠️ 병합 실패 ({start_row},{start_column}~{end_row},{end_column}): {e}")
+            self.log(f"   ⚠️ 셀 병합 실패 ({start_row},{start_column}): {e}")
 
     def set_eulji_headers(self, ws):
         headers = ["NI", "CR", "MO"]
@@ -4696,20 +5444,46 @@ class PMIReportApp:
         
     def prepare_next_sheet(self, wb, source_sheet_idx, page_num):
         source_sheet = wb.worksheets[source_sheet_idx]; new_sheet = wb.copy_worksheet(source_sheet) 
+        
+        # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them for RT to preserve Shooting Sketches.
+        if getattr(self, 'current_mode', "") == "RT":
+            try:
+                import copy
+                for img in source_sheet._images:
+                    new_img = copy.copy(img)
+                    if hasattr(img, 'anchor'):
+                        new_img.anchor = copy.copy(img.anchor)
+                    new_sheet.add_image(new_img)
+            except: pass
+            
         base_title = source_sheet.title.split('_')[0]; new_sheet.title = f"{base_title[:20]}_{page_num:03d}"
-        self.force_print_settings(new_sheet, context="DATA"); self.add_logos_to_sheet(new_sheet, is_cover=False)
+        self.force_print_settings(new_sheet, context="DATA")
+        
+        # [FIX] Only add logos if they weren't already copied from the source sheet
+        if getattr(self, 'current_mode', "") != "RT" or not new_sheet._images:
+            self.add_logos_to_sheet(new_sheet, is_cover=False)
         self.apply_custom_dimensions(new_sheet, "DATA")
         for col_letter, col_dim in source_sheet.column_dimensions.items(): new_sheet.column_dimensions[col_letter].width = col_dim.width
         data_font = Font(size=9); grade_font = Font(size=8.5)
         for r in range(self.config['START_ROW'], self.config['DATA_END_ROW'] + 1):
             rd = new_sheet.row_dimensions[r] # [REMOVED] Hardcoded 20.55 override
         
-        for r in range(self.config['START_ROW'] + 1, self.config['DATA_END_ROW'] + 1):
+        # [FIX] RT 모드일 경우 Shooting Sketch(32행~42행)를 보호하기 위해 데이터 종료 행을 조절
+        current_mode = getattr(self, 'current_mode', "")
+        start_row = self.config.get('START_ROW', 17)
+        end_row = self.config.get('DATA_END_ROW', 45)
+        
+        if current_mode == "RT":
+            start_row = int(self.config.get('RT_START_ROW', 17))
+            end_row = int(self.config.get('RT_END_ROW', 31))
+            
+        for r in range(start_row + 1, end_row + 1):
             for c in range(1, 14):
                 cell = new_sheet.cell(row=r, column=c)
                 cell.font = grade_font if c == 13 else data_font
                 self.safe_set_value(new_sheet, cell, None)
-        merged_to_clear = [rng for rng in new_sheet.merged_cells.ranges if rng.min_row >= self.config['START_ROW'] and rng.max_row <= self.config['DATA_END_ROW']]
+                
+        merged_to_clear = [rng for rng in new_sheet.merged_cells.ranges if rng.min_row >= start_row and rng.max_row <= end_row]
         for rng in merged_to_clear: new_sheet.unmerge_cells(str(rng))
         
         # [FIX] 갑지 데이터 수식으로 연결 (첫번째 시트 참조)
@@ -4738,6 +5512,190 @@ class PMIReportApp:
         
         new_sheet.column_dimensions['M'].width = 18.0
         return new_sheet
+
+    def inject_drawing_layer(self, template_path, target_path):
+        """
+        [SURGERY - MULTI-SHEET ZERO LOSS] 
+        갑지(Cover)뿐만 아니라 을지(Eulji)까지 모든 시트의 그림 레이어를 병합합니다.
+        """
+        import zipfile, shutil, os, re
+        
+        final_out = target_path + ".final"
+        shutil.copy2(template_path, final_out)
+        
+        try:
+            with zipfile.ZipFile(target_path, 'r') as z_data:
+                # 1. 리포트 데이터 추출 및 인라인화 (템플릿의 sharedStrings 보호용)
+                ws_files = [f for f in z_data.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')]
+                
+                # 리포트의 공유 문자열 읽기
+                rep_shared_strings = []
+                if 'xl/sharedStrings.xml' in z_data.namelist():
+                    ss_content = z_data.read('xl/sharedStrings.xml').decode('utf-8', errors='ignore')
+                    rep_shared_strings = re.findall(r'<t[^>]*>(.*?)</t>', ss_content, re.DOTALL)
+
+                def deshare_xml(xml_content, shared_list):
+                    """공유 문자열 인덱스를 실제 텍스트(inlineStr)로 변환"""
+                    def replace_val(match):
+                        idx = int(match.group(1))
+                        if 0 <= idx < len(shared_list):
+                            text = shared_list[idx]
+                            return f'<is><t>{text}</t></is>'
+                        return match.group(0)
+                    # <v>0</v> 형태를 찾아서 변환 (t="s" 속성이 있는 경우만)
+                    return re.sub(r't="s"[^>]*>.*?<v>(\d+)</v>', r't="inlineStr">\1', xml_content).replace('t="inlineStr">', 't="inlineStr">').replace('</v>', '</is>') # 복잡한 정규식 대신 단순 치환 유도
+                
+                # 정교한 인라인 변환 (공용 자원 충돌 방지 핵심)
+                processed_sheets = {}
+                for f in ws_files:
+                    content = z_data.read(f).decode('utf-8', errors='ignore')
+                    
+                    # [OPTIMIZED DESHARE] 성능 최적화된 패턴 사용 (DOTALL 제거 및 범위 제한)
+                    def replace_to_inline(match):
+                        attrs = match.group(1)
+                        idx = int(match.group(2))
+                        if 0 <= idx < len(rep_shared_strings):
+                            text = rep_shared_strings[idx]
+                            new_attrs = attrs.replace('t="s"', 't="inlineStr"')
+                            return f'<c {new_attrs}><is><t>{text}</t></is>'
+                        return match.group(0)
+
+                    # 셀 태그 내부만 한정하여 검색하도록 패턴 최적화
+                    content = re.sub(r'<c ([^>]*t="s"[^>]*)>[ \t\r\n]*<v>(\d+)</v>', replace_to_inline, content)
+                    processed_sheets[f] = content.encode('utf-8')
+
+                # 2. 리포트의 미디어 및 드로잉 정보 확보
+                report_drawings = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/drawing' in f and f.endswith('.xml')}
+                report_drawing_rels = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/_rels/drawing' in f}
+                logo_media = {f: z_data.read(f) for f in z_data.namelist() if 'xl/media/image' in f}
+                workbook_xml = z_data.read('xl/workbook.xml') if 'xl/workbook.xml' in z_data.namelist() else None
+
+                temp_swap = final_out + ".swap"
+                with zipfile.ZipFile(final_out, 'r') as z_tmpl_in:
+                    # 템플릿 보호 대상 매핑 (시트별 드로잉 rId 보존)
+                    sheet_to_rid = {}
+                    for f in z_tmpl_in.namelist():
+                        if f.startswith('xl/worksheets/sheet') and f.endswith('.xml'):
+                            content = z_tmpl_in.read(f).decode('utf-8', errors='ignore')
+                            m = re.search(r'<drawing [^>]*r:id="(rId\d+)"', content)
+                            if m: sheet_to_rid[f] = m.group(1)
+                    
+                    with zipfile.ZipFile(temp_swap, 'w') as z_out:
+                        # 템플릿 파일들 순회하며 교체/병합
+                        for item in z_tmpl_in.infolist():
+                            fname = item.filename
+                            # [ZERO LOSS] 미리 가공된 인라인 시트 데이터 주입
+                            if fname in processed_sheets:
+                                content_str = processed_sheets[fname].decode('utf-8')
+                                tm_rid = sheet_to_rid.get(fname)
+                                if tm_rid:
+                                    # 템플릿의 그림 연결 고리(rId)를 리포트 시트에 이식
+                                    content_str = re.sub(r'<drawing [^>]*r:id="rId\d+"', f'<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="{tm_rid}"', content_str)
+                                z_out.writestr(item, content_str.encode('utf-8'))
+                            # 템플릿의 공용 자원(SharedStrings, Styles)은 건드리지 않고 원본 유지
+                            elif fname == 'xl/workbook.xml' and workbook_xml:
+                                z_out.writestr(item, workbook_xml)
+                            
+                            # [MULTI-SHEET LOGO MERGE with FULL ID REMAP]
+                            elif 'xl/drawings/drawing' in fname and fname.endswith('.xml'):
+                                tmpl_xml = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                rep_drawing_xml = report_drawings.get(fname, report_drawings.get('xl/drawings/drawing1.xml', ""))
+                                if rep_drawing_xml:
+                                    rep_drawing_xml = rep_drawing_xml.decode('utf-8', errors='ignore')
+                                    
+                                    # 1. 템플릿의 기존 rId 및 객체 ID(id="..") 수집
+                                    existing_rids = set(re.findall(r'r:id="(rId\d+)"', tmpl_xml))
+                                    existing_obj_ids = [int(x) for x in re.findall(r'id="(\d+)"', tmpl_xml) if x.isdigit()]
+                                    max_obj_id = max(existing_obj_ids) if existing_obj_ids else 100
+                                    
+                                    # 2. 로고 앵커 추출
+                                    logo_anchors = re.findall(r'<(xdr:(?:one|two)CellAnchor|xdr:grpSp).*?</\1>', rep_drawing_xml, re.DOTALL)
+                                    
+                                    merged_xml = tmpl_xml
+                                    
+                                    def get_safe_rid(old_rid, used_set):
+                                        num = int(old_rid.replace("rId", ""))
+                                        new_rid = f"rId{num + 1000}" # 1000번 뒤로
+                                        while new_rid in used_set:
+                                            num += 1; new_rid = f"rId{num + 1000}"
+                                        return new_rid
+
+                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
+                                    # 3. 앵커 내부의 모든 ID 리매핑 (r:id, r:embed 등 모든 관계 추적)
+                                    for i, anchor in enumerate(logo_anchors):
+                                        # [FIX] 공백 제거 및 더 정확한 패턴 매칭
+                                        anchor_rids = set(re.findall(r'r:(?:id|embed|dm|lo|qs|cs)=["\'](rId\d+)["\']', anchor))
+                                        # 기타 모든 속성값 내의 rId 검색
+                                        anchor_rids.update(set(re.findall(r'=["\'](rId\d+)["\']', anchor)))
+                                        
+                                        for old_rid in anchor_rids:
+                                            new_rid = get_safe_rid(old_rid, existing_rids)
+                                            # [FIX] 공백 없이 정확히 매칭하여 교체
+                                            anchor = re.sub(f'=["\']{old_rid}["\']', f'="{new_rid}"', anchor)
+                                            if not hasattr(self, '_rid_map'): self._rid_map = {}
+                                            self._rid_map[f"{dr_name}_{old_rid}"] = new_rid
+                                        
+                                        # 객체 ID 및 이름 리매핑 (충돌 방지)
+                                        new_id = max_obj_id + 1000 + i
+                                        anchor = re.sub(r'id=["\']\d+["\']', f'id="{new_id}"', anchor)
+                                        anchor = re.sub(r'name=["\'][^"\']+["\']', f'name="Logo_Obj_{new_id}"', anchor)
+                                        
+                                        if '</xdr:wsDr>' in merged_xml:
+                                            merged_xml = merged_xml.replace('</xdr:wsDr>', anchor + '</xdr:wsDr>')
+                                    
+                                    z_out.writestr(item, merged_xml.encode('utf-8'))
+                                else:
+                                    z_out.writestr(item, tmpl_xml.encode('utf-8'))
+                                    
+                            elif 'xl/drawings/_rels/drawing' in fname:
+                                tmpl_rels = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                rep_rels_xml = report_drawing_rels.get(fname, report_drawing_rels.get('xl/drawings/_rels/drawing1.xml.rels', ""))
+                                if rep_rels_xml:
+                                    rep_rels_xml = rep_rels_xml.decode('utf-8', errors='ignore')
+                                    logo_rels = re.findall(r'<Relationship [^>]*/>', rep_rels_xml)
+                                    merged_rels = tmpl_rels
+                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
+                                    
+                                    for rel in logo_rels:
+                                        r_id_match = re.search(r'Id="(rId\d+)"', rel)
+                                        if r_id_match:
+                                            old_rid = r_id_match.group(1)
+                                            # 리매핑된 새 번호가 있으면 교체
+                                            new_rid = getattr(self, '_rid_map', {}).get(f"{dr_name}_{old_rid}")
+                                            if new_rid:
+                                                rel = rel.replace(f'Id="{old_rid}"', f'Id="{new_rid}"')
+                                                if new_rid not in merged_rels:
+                                                    merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
+                                            elif old_rid not in merged_rels:
+                                                merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
+                                                
+                                    z_out.writestr(item, merged_rels.encode('utf-8'))
+                                else:
+                                    z_out.writestr(item, tmpl_rels.encode('utf-8'))
+                            else:
+                                z_out.writestr(item, z_tmpl_in.read(fname))
+                        
+                        # 미디어 추가
+                        tmpl_media_list = z_tmpl_in.namelist()
+                        for f_path, f_data in logo_media.items():
+                            if f_path not in tmpl_media_list:
+                                z_out.writestr(f_path, f_data)
+                                
+            os.remove(target_path)
+            os.rename(temp_swap, target_path)
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log("   🛡️ [보호] 전 시트 제로-로스 데이터 주입 + 로고 복구 완료")
+            
+        except Exception as e:
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log(f"   ⚠️ [주의] 멀티시트 수술 실패: {e}")
+            
+        except Exception as e:
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log(f"   ⚠️ [주의] 제로-로스 수술 실패: {e}")
+
+
+
 
     def extract_only(self, show_msg=True):
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
@@ -4996,14 +5954,22 @@ class PMIReportApp:
                             
                             item_row = {
                                 'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
-                                'NPS': size_v, 'Thk.': thk_converted, 
+                                'NPS': size_v, 'Thk.': thk_converted
+                            }
+
+                            def _run_pmi_process(self, final_list, template_path):
+                                """PMI 성적서 생성 로직"""
+                                self.save_settings() # Ensure UI -> config sync
+                                self.log(f"🚀 PMI 성적서 생성 시작 (총 {len(final_list)} 건)...")
+
+                            item_row.update({
                                 'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "",
                                 'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
                                 'WType': str(row[col_wtype]).strip() if col_wtype is not None else "",
                                 'Result': "Acc",
                                 'selected': True,
                                 'order_index': len(self.pt_extracted_data) + len(all_extracted_data)
-                            }
+                            })
                             # [NEW] 기존 수동 추가 컬럼 보존
                             for k in self.pt_column_keys:
                                 if k not in item_row and k != "selected":
@@ -5076,13 +6042,6 @@ class PMIReportApp:
                     f_max = self.to_float(f_item['max'].get())
                     
                     if f_min > 0 or f_max > 0:
-                        original_count = len(all_extracted_data)
-                        if f_min > 0 and f_max > 0:
-                            all_extracted_data = [d for d in all_extracted_data if f_min <= d.get(f_key, d.get(f_key.capitalize(), 0.0)) <= f_max]
-                        elif f_min > 0:
-                            all_extracted_data = [d for d in all_extracted_data if d.get(f_key, d.get(f_key.capitalize(), 0.0)) >= f_min]
-                        elif f_max > 0:
-                            all_extracted_data = [d for d in all_extracted_data if d.get(f_key, d.get(f_key.capitalize(), 0.0)) <= f_max]
                         
                         if len(all_extracted_data) != original_count:
                              self.log(f"🔍 원소 필터 적용 ({f_key}: {f_min}~{f_max}): {original_count} -> {len(all_extracted_data)}건 남음")
@@ -5223,8 +6182,7 @@ class PMIReportApp:
         if not os.path.exists(template_path):
             messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다:\n{template_path}")
             return
-            
-        self.save_settings()
+        self.save_settings() # This now captures all setting_vars (Logo X/Y, Print Area, etc.)
         
         # 데이터가 비어있거나 새로 추출이 필요한 경우 수행
         if not data:
@@ -5245,7 +6203,25 @@ class PMIReportApp:
         else:
             self._run_pmi_process(final_list, template_path)
 
+    def _write_gapji_metadata(self, ws):
+        """Write common report metadata to the cover sheet."""
+        # Default mapping: Project: B5, Customer: B6, Item: B7, Material: B8, Date: B9, Report No: B10
+        mapping = [
+            ('GAPJI_PROJECT', 'B5'),
+            ('GAPJI_CUSTOMER', 'B6'),
+            ('GAPJI_ITEM', 'B7'),
+            ('GAPJI_MATERIAL', 'B8'),
+            ('GAPJI_EXAM_DATE', 'B9'),
+            ('GAPJI_REPORT_NO', 'B10')
+        ]
+        
+        for cfg_key, coord in mapping:
+            val = self.config.get(cfg_key, "")
+            if val:
+                self.safe_set_value(ws, coord, val)
+
     def _run_pmi_process(self, final_list, template_path):
+        self.save_settings() # Ensure UI -> config sync
         self.log(f"🚀 PMI 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         all_extracted_data = final_list
@@ -5255,35 +6231,58 @@ class PMIReportApp:
         data_end_row = int(self.config.get('DATA_END_ROW', 45))
         
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            wb = openpyxl.load_workbook(template_path)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
             if len(wb.worksheets) >= 1:
-                ws0 = wb.worksheets[0]; self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False)
+                ws0 = wb.worksheets[0]
+                self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="PMI")
+                self._write_gapji_metadata(ws0)
                 self.force_print_settings(ws0, context="COVER") # [NEW] 갑지 전용 여백 적용
                 
-                # [NEW] 갑지 전용 여백 적용
-                self.force_print_settings(ws0, context="COVER")
-                # [NEW] Dynamic Gapji Border Range (Using Standardized Gapji Data Start/End)
+                # [DYNAMIC ELEMENTS] Gapji Signature Area Border Stabilization
+                # Signature usually ends at row 48. We must ensure no vertical lines extend below it.
                 b_start = int(self.config.get('GAPJI_START_ROW', 23))
                 b_end = int(self.config.get('GAPJI_DATA_END_ROW', 38))
+                sig_end = 48 # Standard signature end row for this template
                 
-                if b_start > 0 and b_end >= b_start:
-                    for r in range(b_start, b_end + 1):
-                        try:
-                            cell_a = ws0.cell(row=r, column=1); eb = cell_a.border
-                            cell_a.border = Border(left=medium_side, right=eb.right, top=eb.top, bottom=eb.bottom)
+                # 1. Apply side borders only within the valid range
+                for r in range(b_start, sig_end + 1):
+                    try:
+                        # Left Border (Column A)
+                        cell_a = ws0.cell(row=r, column=1); eb = cell_a.border
+                        ws0.cell(row=r, column=1).border = Border(left=medium_side, right=eb.right, top=eb.top, bottom=eb.bottom)
+                        # Right Border (Column M/13)
+                        cell_m = ws0.cell(row=r, column=13); eb_m = cell_m.border
+                        ws0.cell(row=r, column=13).border = Border(left=eb_m.left, right=medium_side, top=eb_m.top, bottom=eb_m.bottom)
+                    except: pass
+                
+                # 2. [FIX] AGGRESSIVE CLEAR below row 48 (Signature end)
+                # Unmerge and clear all borders to ensure no ghost lines remain
+                for r in range(sig_end + 1, sig_end + 30):
+                    # Clear merges first
+                    merged_ranges = [str(rng) for rng in ws0.merged_cells.ranges if rng.min_row >= r]
+                    for m_rng in merged_ranges:
+                        try: ws0.unmerge_cells(m_rng)
                         except: pass
+                    # Clear all column borders in this row
+                    for c in range(1, 26): # Columns A to Z
+                        try: ws0.cell(row=r, column=c).border = Border()
+                        except: pass
+
+                # [FORCE] Strict Print Area for Gapji to prevent printing row 49+
+                ws0.print_area = f'A1:M{sig_end}'
                 
                 ws0['I35'].border = Border() # [FIX] I35 셀 선 제거
                 self.safe_set_value(ws0, 'I35', None) 
-                self.apply_custom_dimensions(ws0, "COVER") # [MOVED] Ensure it has the final say
+                self.apply_custom_dimensions(ws0, "COVER")
             
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
             ws = wb.worksheets[data_sheet_id]; ws.title = f"{ws.title[:20]}_001"
             # 을지 기본 설정
-            self.add_logos_to_sheet(ws, is_cover=False); self.force_print_settings(ws, context="DATA"); self.set_eulji_headers(ws)
+            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="PMI")
+            self.force_print_settings(ws, context="DATA"); self.set_eulji_headers(ws)
             # self.apply_custom_dimensions(ws, "DATA") # [MOVED] To the end of process
             
             try:
@@ -5505,22 +6504,34 @@ class PMIReportApp:
                 dv_q.add(ws.cell(row=current_row, column=13))
                 current_row += this_block_size
 
-            # [FORCE] 모든 데이터 시트의 45행 바닥선(A-L) 설정
-            data_end_row = int(self.config.get('DATA_END_ROW', 45))
+            # [NEW] 서식 정리 도구
+            def clear_borders_in_range(sheet, start_r, end_r, start_c=1, end_c=15):
+                for r_idx in range(start_r, end_r + 1):
+                    for c_idx in range(start_c, end_c + 1):
+                        try: sheet.cell(row=r_idx, column=c_idx).border = Border()
+                        except: pass
+
+            # [FORCE] 모든 데이터 시트의 바닥선 및 하단 서식 정리
+            data_end_row = int(float(self.config.get('DATA_END_ROW', 45)))
             for idx, s in enumerate(wb.worksheets):
+                # 데이터 영역 아래쪽(60행까지)의 불필요한 선 제거
+                clear_borders_in_range(s, data_end_row + 1, data_end_row + 15)
+                
                 if s.max_row >= data_end_row:
                     for c in range(1, 14):
                         cell = s.cell(row=data_end_row, column=c)
                         curr_border = cell.border
+                        # [CRITICAL] Force synchronize UI variables to config before generation
+                        self.save_settings()
                         l_s = curr_border.left; r_s = curr_border.right; t_s = curr_border.top
                         
                         if idx == 0: # 갑지
                             if c in [1, 2, 3, 11, 12, 13]: # A, B, C, K, L, M 바닥선 제거
                                 b_s = Side(style=None)
                             else: # D~J 는 약한선
-                                b_s = thin_side
+                                b_s = Side(style='thin')
                         else: # 을지
-                            b_s = medium_side
+                            b_s = Side(style='medium')
                             
                         cell.border = Border(left=l_s, right=r_s, top=t_s, bottom=b_s)
 
@@ -5622,16 +6633,18 @@ class PMIReportApp:
 
     def _run_pt_process(self, final_list, template_path):
         """PT 성적서 생성 (1-row-per-data 레이아웃 + ISO 병합)"""
+        self.save_settings() # Ensure UI -> config sync
         self.log(f"🚀 PT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            wb = openpyxl.load_workbook(template_path)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
             # 갑지 (Cover)
             ws0 = wb.worksheets[0]
-            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False)
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="PT")
+            self._write_gapji_metadata(ws0)
             self.force_print_settings(ws0, context="COVER")
             self.apply_custom_dimensions(ws0, "COVER")
 
@@ -5639,7 +6652,8 @@ class PMIReportApp:
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
             ws = wb.worksheets[data_sheet_id]
             ws.title = f"{ws.title[:20]}_001"
-            self.add_logos_to_sheet(ws, is_cover=False)
+            # [FIX] Do NOT clear existing images if data sheet is the same as cover
+            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="PT")
             self.force_print_settings(ws, context="DATA")
 
             # 헤더 감지 및 시작 행 결정
@@ -5725,14 +6739,21 @@ class PMIReportApp:
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
 
             total_p = len(wb.worksheets)
+            # [NEW] 서식 정리 (48행 유령 선 제거용)
+            pt_data_end_row = int(float(self.config.get('PT_END_ROW', 37)))
             for p_idx, s in enumerate(wb.worksheets):
+                if p_idx > 0: # 을지
+                    for r_idx in range(pt_data_end_row + 1, pt_data_end_row + 15):
+                        for c_idx in range(1, 15):
+                            try: s.cell(row=r_idx, column=c_idx).border = Border()
+                            except: pass
+                
                 page_num = p_idx + 1
-                self.apply_custom_dimensions(s, "DATA" if p_idx > 0 else "COVER")
                 # 페이지 번호 기입
                 try:
                     p_text = f"Page    {page_num}    of    {total_p}"
-                    if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
-                    else: self.safe_set_value(s, 'V3', p_text)
+                    # if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
+                    if p_idx > 0: self.safe_set_value(s, 'V3', p_text)
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -5760,16 +6781,21 @@ class PMIReportApp:
 
     def _run_rt_process(self, final_list, template_path):
         """RT 성적서 생성 (1-row-per-data 레이아웃)"""
+        # [CRITICAL] Force synchronize UI variables to config before generation
+        self.save_settings() 
+            
         self.log(f"🚀 RT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            wb = openpyxl.load_workbook(template_path)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
+            self.log("?? [DEBUG] RT 갑지 로고 삽입 시도 중...")
             # Gapji (Cover) Logic (Simplified for RT, using generic SITCO style)
             ws0 = wb.worksheets[0]
-            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False)
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="RT")
+            self._write_gapji_metadata(ws0)
             self.force_print_settings(ws0, context="COVER")
             self.apply_custom_dimensions(ws0, "COVER")
 
@@ -5777,14 +6803,15 @@ class PMIReportApp:
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
             ws = wb.worksheets[data_sheet_id]
             ws.title = f"{ws.title[:20]}_001"
-            self.add_logos_to_sheet(ws, is_cover=False)
+            # [FIX] Do NOT clear existing images if data sheet is the same as cover
+            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="RT")
             self.force_print_settings(ws, context="DATA")
             # RT usually doesn't have the same headers as PMI
             # self.set_eulji_headers(ws) 
 
-            # Configizable or Default RT boundaries
+            # Configizable or Default RT boundaries (Standard: Start 17, End 31 to avoid Shooting Sketch at 32)
             start_row = int(self.config.get('RT_START_ROW', 17))
-            end_row = int(self.config.get('RT_END_ROW', 41))
+            end_row = int(self.config.get('RT_END_ROW', 31))
             rows_per_page = end_row - start_row + 1
             
             current_row = start_row
@@ -5887,31 +6914,59 @@ class PMIReportApp:
                 rem_col = self.col_to_num(self.config.get('RT_COL_REM', '30'))
                 if rem_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rem_col).coordinate, item.get('Remarks', ''))
                 
-                # Styling for individual row
-                for c in range(1, 31):
-                    cell = ws.cell(row=current_row, column=c)
-                    cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
-                    cell.font = Font(name='바탕', size=9)
+                # Styling for individual row - [DISABLED] to keep template style
+                # for c in range(1, 31):
+                #     cell = ws.cell(row=current_row, column=c)
+                #     cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+                #     cell.font = Font(name='바탕', size=9)
 
                 data_ptr += 1
                 current_row += 1
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
 
             total_p = len(wb.worksheets)
+            # [NEW] 서식 정리 [DISABLED] - 템플릿 선(Border) 보존을 위해 주석 처리
+            # rt_data_end_row = int(float(self.config.get('RT_DATA_END_ROW', 31)))
             for p_idx, s in enumerate(wb.worksheets):
+                # if p_idx > 0: # 을지
+                #     for r_idx in range(rt_data_end_row + 1, rt_data_end_row + 15):
+                #         for c_idx in range(1, 31):
+                #             try: s.cell(row=r_idx, column=c_idx).border = Border()
+                #             except: pass
+                
                 page_num = p_idx + 1
                 self.apply_custom_dimensions(s, "DATA" if p_idx > 0 else "COVER")
                 # Page Numbers
                 try:
-                    if p_idx == 0: cell = s["O35"] if "O35" in s else s.cell(row=35, column=15)
-                    else: cell = s["V3"] if "V3" in s else s.cell(row=3, column=22)
-                    self.safe_set_value(s, cell.coordinate, f"Page   {page_num}   of   {total_p}")
+                    # if p_idx == 0: cell = s["O35"] if "O35" in s else s.cell(row=35, column=15)
+                    if p_idx > 0: 
+                        cell = s["V3"] if "V3" in s else s.cell(row=3, column=22)
+                        self.safe_set_value(s, cell.coordinate, f"Page   {page_num}   of   {total_p}")
                 except: pass
+
+            # [FINAL CLEANUP] Standardized cleanup for RT
+            try:
+                ws0 = wb.worksheets[0]
+                sig_end = 48
+                # [SAFE] Only clear far below the Shooting Sketch (Rows 65+)
+                for r in range(65, 80):
+                    # Do NOT unmerge on Gapji anymore to be safe
+                    # merged_ranges = [str(rng) for rng in ws0.merged_cells.ranges if rng.min_row >= r]
+                    for c in range(1, 21):
+                        try: ws0.cell(row=r, column=c).border = Border()
+                        except: pass
+                self.log("   ✅ RT 갑지 하단 잔여 서식 정리 완료 (65-80행)")
+            except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             output_name = f"RT_Report_{now_str}.xlsx"
             save_path = os.path.join(os.path.dirname(template_path), output_name)
             wb.save(save_path)
+            
+            # [SURGERY] openpyxl destroys complex drawings (like grouped shapes). 
+            # We surgically inject the template's drawing layer back into the generated file.
+            self.inject_drawing_layer(template_path, save_path)
+            
             self.progress['value'] = 100
             self.log(f"✨ RT 완료! 저장됨: {output_name}")
             messagebox.showinfo("성공", f"RT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
@@ -6056,6 +7111,18 @@ class PMIReportApp:
         ttk.Entry(xy_f, textvariable=self.photo_logo_x_var, width=5).pack(side='left', padx=2)
         ttk.Entry(xy_f, textvariable=self.photo_logo_y_var, width=5).pack(side='left', padx=2)
         
+        # [NEW] Photo Log Layout Save Button
+        btn_f = tk.Frame(logo_frame, background="#ffffff")
+        btn_f.grid(row=2, column=0, columnspan=2, sticky='ew', pady=5)
+        ttk.Button(btn_f, text="💾 사진대장 레이아웃 설정 저장", command=self.save_photo_log_config).pack(side='left', padx=5)
+        tk.Label(btn_f, text="* 로고위치, 여백 등이 photolog_config.json에 저장됩니다.", font=("Malgun Gothic", 8), fg="gray", background="#ffffff").pack(side='left')
+        
+        # [NEW] Save Photo Log Config Button
+        btn_f = tk.Frame(logo_frame, background="#ffffff")
+        btn_f.grid(row=2, column=0, columnspan=2, sticky='ew', pady=5)
+        ttk.Button(btn_f, text="💾 사진대장 레이아웃 설정 저장", command=self.save_photo_log_config).pack(side='left', padx=5)
+        tk.Label(btn_f, text="* 여백, 로고위치, 너비비율 등이 저장됩니다.", font=("Malgun Gothic", 8), fg="gray", background="#ffffff").pack(side='left')
+        
         tk.Label(logo_frame, text="출력 파일명:").grid(row=2, column=0, sticky='w', pady=2)
         ttk.Entry(logo_frame, textvariable=self.photo_output_name, width=1).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
         logo_frame.columnconfigure(1, weight=1)
@@ -6067,7 +7134,7 @@ class PMIReportApp:
         ttk.Button(btn_f, text="🚀 사진대장 리포트 생성", style="Accent.TButton", 
                    command=self.start_photo_generation).pack(fill='x', pady=5)
         ttk.Button(btn_f, text="💾 현재 설정 저장", 
-                   command=self.manual_save_settings).pack(fill='x', pady=5)
+                   command=self.save_settings).pack(fill='x', pady=5)
 
         # [RIGHT] Preview & File List
         right_container = tk.Frame(self.photo_paned, background="#ffffff")
@@ -6180,30 +7247,36 @@ class PMIReportApp:
 
     def generate_photo_report(self):
         try:
-            self.progress["value"] = 0
-            self.log("[PhotoLog] 작업을 시작합니다..")
+            if not self.photo_selected_files: return
             
             image_files = sorted(self.photo_selected_files)
-            img_folder = os.path.dirname(image_files[0])
             
-            output_name_val = self.photo_output_name.get()
-            if not output_name_val.endswith(".xlsx"):
-                output_name_val += ".xlsx"
+            # [REMEMBER] Load last save dir from class variable
+            initial_folder = self.last_photo_save_dir if self.last_photo_save_dir and os.path.exists(self.last_photo_save_dir) else os.path.dirname(image_files[0])
+            
+            default_name = self.photo_output_name.get()
+            if not default_name.endswith(".xlsx"):
+                default_name += ".xlsx"
                 
-            # [ROBUST] Use parent dir of images to avoid cluttering image folder
-            parent_dir = os.path.dirname(img_folder)
-            if not parent_dir or not os.path.exists(parent_dir):
-                self.log(f"[PhotoLog] 경고: 저장 대상 폴더({parent_dir})가 존재하지 않아 바탕 화면을 사용합니다.")
-                parent_dir = os.path.join(os.path.expanduser("~"), "Desktop")
-                if not os.path.exists(parent_dir):
-                    parent_dir = os.getcwd()
-
-            output_path = os.path.join(parent_dir, output_name_val)
+            # [NEW] Ask for save folder and filename
+            output_path = filedialog.asksaveasfilename(
+                title="사진대장 저장 위치 선택",
+                initialdir=initial_folder,
+                initialfile=default_name,
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")]
+            )
             
-            # Simple unique path logic
-            if os.path.exists(output_path):
-                base, ext = os.path.splitext(output_path)
-                output_path = f"{base}_{datetime.datetime.now().strftime('%H%M%S')}{ext}"
+            if not output_path:
+                self.log("[PhotoLog] 작업을 취소했습니다.")
+                return
+
+            # [REMEMBER] Update last save directory
+            self.last_photo_save_dir = os.path.dirname(output_path)
+            self.save_settings() # Silent save
+
+            self.progress["value"] = 0
+            self.log("[PhotoLog] 작업을 시작합니다..")
             
             workbook = xlsxwriter.Workbook(output_path)
             worksheet = workbook.add_worksheet()
@@ -6281,9 +7354,13 @@ class PMIReportApp:
             company_text = "서   울   檢   査   株   式   會   社\nSEOUL INSPECTION & TESTING Co., Ltd.\nTEL : (02) 552-1112   FAX : (02) 2058-0720"
             worksheet.merge_range(1, 0, 3, 2, company_text, company_format)
 
-            # Logo
+            # Logo Insertion with Smart Fallback
             logo_f = self.photo_logo_path.get()
-            if os.path.exists(logo_f):
+            if not logo_f or not os.path.exists(logo_f):
+                logo_f = self.find_image_smart("SITCO")
+                if not logo_f: logo_f = self.find_image_smart("서울검사")
+            
+            if logo_f and os.path.exists(logo_f):
                 try:
                     total_header_h = 45 # 15 * 3 rows
                     for r in range(1, 4): worksheet.set_row(r, 15) 
@@ -6296,7 +7373,8 @@ class PMIReportApp:
                         logo_h = h * scale
                         y_offset = (total_header_h - logo_h) / 2 + my
                         worksheet.insert_image('A2', logo_f, {'x_scale': scale, 'y_scale': scale, 'x_offset': mx, 'y_offset': y_offset, 'object_position': 1})
-                except: pass
+                except Exception as e:
+                    self.log(f"[PhotoLog] 로고 삽입 중 오류: {e}")
 
             worksheet.merge_range(1, 3, 1, 5, f"발주처: {self.photo_orderer.get()}", center_border)
             worksheet.merge_range(2, 3, 2, 5, f"REPORT NO: {self.photo_report_no.get()}", center_border)
@@ -6405,6 +7483,11 @@ class PMIReportApp:
             self.log(f"[PhotoLog] 완료: {os.path.basename(output_path)}")
             messagebox.showinfo("성공", f"사진대장이 생성되었습니다.\n{output_path}")
 
+            # [NEW] Open the folder
+            try:
+                os.startfile(os.path.dirname(output_path))
+            except: pass
+
         except Exception as e:
             self.log(f"[Error] {e}")
             messagebox.showerror("오류", f"작업 중 오류 발생:\n{e}")
@@ -6420,5 +7503,5 @@ class PMIReportApp:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    PMIReportApp(root)
+    app = PMIReportApp(root)
     root.mainloop()

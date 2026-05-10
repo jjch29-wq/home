@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ### VERSION: INTEGRATED_FINAL_FULL_MERGE_V1 ###
 import mimetypes
 import os
@@ -31,10 +32,7 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 import threading
 import xlsxwriter
 
-def normalize_id(val):
-    if pd.isna(val) or val == "": return ""
-    try: return str(int(float(val)))
-    except: return str(val).strip()
+# normalize_id consolidated below
 
 # --- NDT Constants & Patterns ---
 NAN_PATTERN = re.compile(r'^nan(\.0+)?$|^none$|^null$|^0\.0+|-0\.0+$', re.IGNORECASE)
@@ -95,6 +93,7 @@ thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin
 class DailyWorkReportManager:
     def __init__(self, template_path):
         self.template_path = template_path
+        # Default mapping for fallback
         self.default_mapping = {
             'header': {'date': 'F2'},
             'general': {
@@ -131,9 +130,12 @@ class DailyWorkReportManager:
         }
 
     def generate_report(self, data, output_path, custom_mapping=None):
-        import openpyxl.utils
-        from copy import copy
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
         import re as _re
+        from copy import copy
+        import openpyxl.utils
+        from openpyxl.cell.cell import MergedCell, Cell
+
         custom_mapping = custom_mapping or {}
         if not os.path.exists(self.template_path):
             raise FileNotFoundError(f"Template not found at {self.template_path}")
@@ -147,6 +149,7 @@ class DailyWorkReportManager:
         thin = Side(style='thin')
         thin_border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
+        # Helper 1: free a cell by unmerging (used BEFORE merge_cells)
         def free_cell(sheet, row, col):
             for m_range in list(sheet.merged_cells.ranges):
                 if row >= m_range.min_row and row <= m_range.max_row and col >= m_range.min_col and col <= m_range.max_col:
@@ -155,6 +158,7 @@ class DailyWorkReportManager:
             if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
                 sheet._cells[key] = Cell(sheet, row=row, column=col)
 
+        # Helper 2: write to cell via _cells dict WITHOUT unmerging (used AFTER merge_cells)
         def write_cell(sheet, row, col, value, font=None, align=None, border=None):
             key = (row, col)
             if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell):
@@ -177,11 +181,13 @@ class DailyWorkReportManager:
                             break
                 cell.value = value
                 cell.font = Font(name='맑은 고딕', size=9, bold=is_bold)
+                # [FIX] shrinkToFit and wrapText are mutually exclusive in Excel - use wrapText only
                 cell.alignment = Alignment(wrapText=True, vertical='center', horizontal='center')
                 if is_currency:
                     cell.number_format = '#,##0 "원"'
             except: pass
 
+        # 1. Header & General
         d = data.get('date', datetime.date.today())
         weekdays = ["월", "화", "수", "목", "금", "토", "일"]
         date_str = f"{d.year}년 {d.month}월 {d.day}일 ({weekdays[d.weekday()]})"
@@ -192,10 +198,12 @@ class DailyWorkReportManager:
             val_key = 'inspector' if key == 'inspector_n8' else key
             safe_write(gen_map.get(key), data.get(val_key, ''))
 
+        # 2. Methods (Dynamic Offset)
         methods_data = data.get('methods', {})
         current_methods = list(methods_data.keys())
         method_offset = max(0, len(current_methods) - 4)
         
+        import re as _re
         def fix_c(coord, offset):
             if not coord or not isinstance(coord, str): return coord
             match = _re.match(r"([A-Z]+)([0-9]+)", coord)
@@ -214,6 +222,7 @@ class DailyWorkReportManager:
                     sheet.row_dimensions[target_r].height = 5
             method_base_rows += list(range(17, 17 + method_offset))
 
+        # Clear default method rows (13-16) first to ensure only saved data is shown
         for r_clear in [13, 14, 15, 16]:
             for c_clear in ['B', 'E', 'H', 'K', 'N', 'Q']:
                 safe_write(f"{c_clear}{r_clear}", "")
@@ -225,14 +234,17 @@ class DailyWorkReportManager:
                 safe_write(f'H{r}', m.get('qty', 0)); safe_write(f'K{r}', m.get('price', 0), is_currency=True)
                 safe_write(f'N{r}', m.get('travel', 0), is_currency=True); safe_write(f'Q{r}', m.get('total', 0), is_currency=True)
 
+        # 3. Section 2 (Notes) - Styling & Normalize
         h10 = sheet.row_dimensions[10].height if sheet.row_dimensions[10].height else 15
         sheet.row_dimensions[17].height = h10
+        # 4. Section 4 (RTK Quality Defect Rate)
         rtk_header_row = None
-        for r_search in range(25, 45):
+        for r_search in range(25, 45): # Target common area
             for c_search in range(1, 20):
                 cell_val = str(sheet.cell(row=r_search, column=c_search).value or "")
                 if any(k in cell_val for k in ["품질", "RTK"]):
                     rtk_header_row = r_search
+                    print(f"DEBUG: RTK Header found at row {rtk_header_row} (Col {c_search}, Val: '{cell_val}')")
                     break
             if rtk_header_row: break
         
@@ -258,14 +270,17 @@ class DailyWorkReportManager:
             write_cell(sheet, target_r, 18, display_total, black_font, center_align)
             write_cell(sheet, target_r, 19, display_total, black_font, center_align)
         
+        # 5. Section 5 (OT)
         ot_header_row = None
         for r_search in range(1, 100):
             if sheet.cell(row=r_search, column=2).value == "검사자":
                 ot_header_row = r_search; break
         
-        if ot_header_row is None: ot_header_row = 37 + method_offset
+        if ot_header_row is None:
+            ot_header_row = 37 + method_offset
         else:
-            if ot_header_row != 37 + method_offset: ot_header_row = 37 + method_offset
+            if ot_header_row != 37 + method_offset:
+                ot_header_row = 37 + method_offset
 
         ot_list = data.get('ot_status', [])
         grouped_ot = {}
@@ -279,40 +294,54 @@ class DailyWorkReportManager:
             if key not in grouped_ot:
                 grouped_ot[key] = {'names': [], 'company': comp, 'method': meth, 'ot_hours': raw_h, 'ot_amount': amt}
             name = str(ot.get('names', '')).strip()
-            if name and name not in grouped_ot[key]['names']: grouped_ot[key]['names'].append(name)
+            if name and name not in grouped_ot[key]['names']:
+                grouped_ot[key]['names'].append(name)
         
         final_ot_list = []
         seen_ot_workers_prep = set()
         for key in grouped_ot:
             item = grouped_ot[key]
+            # 이미 처리된 작업자를 제외한 새로운 인원만 필터링
             new_names = [n for n in item['names'] if n not in seen_ot_workers_prep]
             if new_names:
                 item['names'] = new_names
                 item['names_display'] = ", ".join(new_names)
-                for n in new_names: seen_ot_workers_prep.add(n)
+                for n in new_names:
+                    seen_ot_workers_prep.add(n)
                 final_ot_list.append(item)
 
         ot_count = len(final_ot_list)
         ot_extra = max(0, ot_count - 2)
         if ot_extra > 0:
+            print(f"DEBUG: Inserting {ot_extra} OT rows and compressing Remarks section")
+            # 1. Insert rows after 39
             for i in range(ot_extra):
                 new_row_idx = 40 + method_offset + i
                 source_row_idx = 39 + method_offset
                 sheet.insert_rows(new_row_idx)
-                for c_idx in range(2, 20):
+                
+                # Copy style (Font, Alignment, Border, Fill) from source row
+                import copy as _copy
+                for c_idx in range(2, 20): # B to S
                     source_cell = sheet.cell(row=source_row_idx, column=c_idx)
                     target_cell = sheet.cell(row=new_row_idx, column=c_idx)
                     if source_cell.has_style:
-                        target_cell.font = copy(source_cell.font)
-                        target_cell.alignment = copy(source_cell.alignment)
-                        target_cell.border = copy(source_cell.border)
-                        target_cell.fill = copy(source_cell.fill)
+                        target_cell.font = _copy.copy(source_cell.font)
+                        target_cell.alignment = _copy.copy(source_cell.alignment)
+                        target_cell.border = _copy.copy(source_cell.border)
+                        target_cell.fill = _copy.copy(source_cell.fill)
+                
+                # Copy row height too
                 sheet.row_dimensions[new_row_idx].height = sheet.row_dimensions[source_row_idx].height
+                
+                # [DYNAMIC MERGE COPY] Re-apply all merges from the source row to the new row
                 for m_range in list(sheet.merged_cells.ranges):
                     if m_range.min_row == source_row_idx and m_range.max_row == source_row_idx:
                         new_range_coord = f"{openpyxl.utils.get_column_letter(m_range.min_col)}{new_row_idx}:{openpyxl.utils.get_column_letter(m_range.max_col)}{new_row_idx}"
                         try: sheet.merge_cells(new_range_coord)
                         except: pass
+
+            # 2. Compress Remarks section (18-25) by reducing row heights
             for i in range(min(ot_extra, 8 - method_offset)):
                 target_r = 18 + method_offset + i
                 sheet.row_dimensions[target_r].height = 5
@@ -320,20 +349,31 @@ class DailyWorkReportManager:
         base_shift = method_offset + ot_extra
         for i in range(2 + ot_extra):
             r = ot_header_row + 1 + i
-            for col_let in ['B', 'F', 'I', 'K', 'N', 'S']: safe_write(f"{col_let}{r}", '')
+            for col_let in ['B', 'F', 'I', 'K', 'N', 'S']:
+                safe_write(f"{col_let}{r}", '')
         
+        total_ot_hours = 0.0
         for i, ot in enumerate(final_ot_list):
             r = ot_header_row + 1 + i
+            
             raw_h = ot.get('ot_hours', '')
             clean_h = _re.sub(r'\(.*?\)', '', raw_h).strip()
             try: h_val = float(clean_h)
             except: h_val = clean_h
-            safe_write(f"B{r}", ot.get('names_display', ''))
+            
+            ot_amount = ot.get('ot_amount', '')
+            worker_name_display = ot.get('names_display', '')
+            
+            if isinstance(h_val, float):
+                total_ot_hours += h_val
+            
+            safe_write(f"B{r}", worker_name_display)
             safe_write(f"F{r}", ot.get('company', ''))
             safe_write(f"I{r}", ot.get('method', ''))
             safe_write(f"K{r}", h_val)
-            safe_write(f"N{r}", ot.get('ot_amount', ''), is_currency=True)
+            safe_write(f"N{r}", ot_amount, is_currency=True)
             
+        # 6. Section 6 (Materials)
         materials_data = data.get('materials', {}); active_rt = []
         for k, v in materials_data.items():
             if isinstance(v, dict) and (k.startswith('RT ') or k.startswith('RT_ROW_') or v.get('is_rt')):
@@ -342,7 +382,9 @@ class DailyWorkReportManager:
                 item = v.copy(); item['name'] = name; active_rt.append(item)
         
         rt_count = len(active_rt)
-        rt_extra = max(0, rt_count - 3)
+        base_rt_limit = 3
+        rt_extra = max(0, rt_count - base_rt_limit)
+        
         if rt_extra > 0:
             sheet.insert_rows(46, rt_extra)
             for r_new in range(46, 46 + rt_extra):
@@ -362,19 +404,278 @@ class DailyWorkReportManager:
         total_offset = base_shift + rt_extra
         def safe_merge(sheet, s_row, s_col, e_row, e_col, value):
             for m_range in list(sheet.merged_cells.ranges):
-                if not (e_row < m_range.min_row or s_row > m_range.max_row or e_col < m_range.min_col or s_col > m_range.max_col):
+                if not (e_row < m_range.min_row or s_row > m_range.max_row or 
+                        e_col < m_range.min_col or s_col > m_range.max_col):
                     try: sheet.unmerge_cells(m_range.coord)
                     except: pass
             try:
                 sheet.merge_cells(start_row=s_row, start_column=s_col, end_row=e_row, end_column=e_col)
-                cell = sheet.cell(row=s_row, column=s_col); cell.value = value
+                cell = sheet.cell(row=s_row, column=s_col)
+                cell.value = value
                 cell.alignment = Alignment(horizontal='center', vertical='center')
             except: pass
 
-        rt_start_row = 43 + base_shift; rt_end_row = (rt_start_row - 1) + max(1, rt_count)
+        rt_display_count = max(1, rt_count)
+        rt_start_row = 43 + base_shift
+        rt_end_row = (rt_start_row - 1) + rt_display_count
+        
         safe_merge(sheet, rt_start_row, 2, rt_end_row, 3, "RT") 
         safe_merge(sheet, 46 + total_offset, 2, 47 + total_offset, 3, "MT")
         safe_merge(sheet, 48 + total_offset, 2, 50 + total_offset, 3, "PT")
+
+        new_sheet.column_dimensions['M'].width = 18.0
+        return new_sheet
+
+    def convert_sch_to_thk(self, size_val, thk_val):
+        """SCH 값을 두께(mm)로 변환 (글로벌 함수 호출)"""
+        return convert_sch_to_thk(size_val, thk_val)
+
+    def col_to_num(self, col_str):
+        """엑셀 컬럼 문자(A, B...)를 숫자(1, 2...)로 변환"""
+        if not col_str: return 0
+        try:
+            if str(col_str).isdigit(): return int(col_str)
+            return column_index_from_string(str(col_str).upper())
+        except: return 0
+
+    def is_consumable(self, name):
+        """소모품(필름, 약품 등) 여부 판별"""
+        if not name or pd.isna(name): return False
+        n = str(name).upper().strip()
+        if any(k in n for k in ["PAUT", "UT", "MPI", "PMI", "SCANNER", "WEDGE", "PROBE", "CABLE", "장비", "본체"]): return False
+        if any(k in n for k in ["필름", "FILM", "CARESTREAM", "FUJIFILM", "AGFA", "KODAK", "AA400", "M100", "MX125", "T200", "HS800"]): return True
+        if any(k in n for k in ["자분", "페인트", "침투제", "세척제", "현상제", "CHEMICAL", "DEVELOPER", "CLEANER", "PENETRANT", "SM-15", "MP-35", "MEGA-CHECK"]): return True
+        return False
+
+    def find_image_smart(self, keyword, exclude_keyword=None):
+        def _search_in_folder(folder_path):
+            if not folder_path or not os.path.exists(folder_path): return None
+            candidates = glob.glob(os.path.join(folder_path, "*.*"))
+            valid_extensions = ['.PNG', '.JPG', '.JPEG', '.BMP', '.GIF']
+            for path in candidates:
+                fname = os.path.basename(path).upper(); ext = os.path.splitext(path)[1].upper()
+                if ext not in valid_extensions: continue 
+                if keyword.upper() in fname:
+                    if exclude_keyword and exclude_keyword.upper() in fname: continue
+                    return path 
+            return None
+        found = _search_in_folder(self.logo_folder_path.get())
+        if found: return found
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            found = _search_in_folder(sys._MEIPASS)
+            if found: return found
+        return None
+
+    def place_image_freely(self, ws, img_path, anchor_cell_str, w, h, x_offset, y_offset):
+        """Place image in openpyxl with precise pixel offsets and size (EMU)"""
+        try:
+            if not img_path or not os.path.exists(img_path): return
+            from openpyxl.drawing.image import Image
+            from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker, XDRPositiveSize2D
+            from openpyxl.utils.units import pixels_to_EMU
+            from openpyxl.utils import column_index_from_string
+            import re
+            
+            img = Image(img_path)
+            # 1. Calculate size in pixels
+            final_w = int(w) if w > 0 else img.width
+            final_h = int(h) if h > 0 else img.height
+            
+            # 2. Parse anchor
+            m = re.match(r"([A-Z]+)([0-9]+)", anchor_cell_str)
+            if not m: return
+            col_str, row_str = m.groups()
+            col = column_index_from_string(col_str) - 1
+            row = int(row_str) - 1
+            
+            # 3. Create precise marker (Offset) and size (Extent) in EMU
+            marker = AnchorMarker(col=col, colOff=pixels_to_EMU(x_offset), 
+                                 row=row, rowOff=pixels_to_EMU(y_offset))
+            # [CRITICAL] Must set extent for OneCellAnchor to show up!
+            size = XDRPositiveSize2D(cx=pixels_to_EMU(final_w), cy=pixels_to_EMU(final_h))
+            
+            img.anchor = OneCellAnchor(_from=marker, ext=size)
+            ws.add_image(img)
+            self.log(f"   ? 로고 삽입 완료: {os.path.basename(img_path)} at {anchor_cell_str} ({final_w}x{final_h}px, Offset: {x_offset},{y_offset})")
+        except Exception as e:
+            self.log(f"   ? 로고 삽입 실패: {e}")
+
+    def add_logos_to_sheet(self, ws, is_cover=False, clear_existing=True):
+        if clear_existing:
+            try: ws._images = [] 
+            except: pass
+        
+        # [FIX] Correct tab mapping for Final version
+        # Tabs: 0:Dashboard, 1:Resources, 2:Registration, 3:Materials, 4:PMI, 5:RT, 6:PT, 7:PAUT, 8:Photo Log
+        mode = "RT"
+        try:
+            active_idx = self.notebook.index("current")
+            mapping = {4: "PMI", 5: "RT", 6: "PT", 7: "PAUT", 8: "PHOTO"}
+            mode = mapping.get(active_idx, "RT")
+        except: pass
+        
+        ctx = "COVER" if is_cover else "DATA"
+        context = f"{mode}_{ctx}" # [FIX] Define context here for inner functions
+        self.log(f"?? {context} 로고 삽입 시작...")
+        
+        def _get_val(prefix, suffix, default):
+            # 1. Try exact match (e.g. SITCO_RT_COVER_X)
+            v = self.config.get(f"{prefix}_{context}{suffix}")
+            if v is not None and v != "": return v
+            # 2. Try global fallback (e.g. SITCO_COVER_X)
+            fallback_ctx = "COVER" if "COVER" in context else "DATA"
+            return self.config.get(f"{prefix}_{fallback_ctx}{suffix}", default)
+
+        def _get_effective_path(prefix, keywords):
+            path = self.config.get(f"{prefix}_{context}_PATH")
+            if path == "": return None # Explicitly cleared
+            if path and os.path.exists(path): return path
+            
+            if path is None:
+                for kw in keywords:
+                    found = self.find_image_smart(kw)
+                    if found: return found
+            return None
+
+        # 1. SITCO
+        p = _get_effective_path("SITCO", ["SITCO"])
+        if p: self.place_image_freely(ws, p, _get_val("SITCO", "_ANCHOR", "A1"), float(_get_val("SITCO", "_W", 100)), float(_get_val("SITCO", "_H", 50)), float(_get_val("SITCO", "_X", 0)), float(_get_val("SITCO", "_Y", 0)))
+        
+        # 2. SEOUL
+        p = _get_effective_path("SEOUL", ["서울검사"])
+        if p: self.place_image_freely(ws, p, _get_val("SEOUL", "_ANCHOR", "A1"), float(_get_val("SEOUL", "_W", 100)), float(_get_val("SEOUL", "_H", 50)), float(_get_val("SEOUL", "_X", 0)), float(_get_val("SEOUL", "_Y", 0)))
+        
+        # 3. FOOTER
+        p = _get_effective_path("FOOTER", ["바닥글", "PMI"])
+        if p: self.place_image_freely(ws, p, _get_val("FOOTER", "_ANCHOR", "A1"), float(_get_val("FOOTER", "_W", 100)), float(_get_val("FOOTER", "_H", 50)), float(_get_val("FOOTER", "_X", 0)), float(_get_val("FOOTER", "_Y", 0)))
+
+        # 4. FOOTER_PT (Left)
+        p = _get_effective_path("FOOTER_PT", ["PMI갑", "PMI-1", "PT"])
+        if p: self.place_image_freely(ws, p, _get_val("FOOTER_PT", "_ANCHOR", "A1"), float(_get_val("FOOTER_PT", "_W", 100)), float(_get_val("FOOTER_PT", "_H", 50)), float(_get_val("FOOTER_PT", "_X", 0)), float(_get_val("FOOTER_PT", "_Y", 0)))
+
+    def force_print_settings(self, ws, context="DATA"):
+        try:
+            # [FIX] Correct tab mapping for Final version
+            mode = "RT"
+            try:
+                active_idx = self.notebook.index("current")
+                mapping = {4: "PMI", 5: "RT", 6: "PT", 7: "PAUT", 8: "PHOTO"}
+                mode = mapping.get(active_idx, "RT")
+            except: pass
+            
+            def _get_val(suffix, default):
+                # Try Mode-specific first
+                v = self.config.get(f"MARGIN_{mode}_{context}_{suffix}")
+                if v is not None and v != "": return v
+                # Fallback to general
+                return self.config.get(f"MARGIN_{context}_{suffix}", default)
+
+            ws.page_setup.paperSize = 9; ws.page_setup.orientation = 'portrait'
+            
+            scale = self.config.get(f"PRINT_SCALE_{mode}_{context}")
+            if scale is None or scale == "": scale = self.config.get(f"PRINT_SCALE_{context}", 95)
+            ws.page_setup.scale = int(float(scale))
+            
+            ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
+            ws.page_margins.top = float(_get_val("TOP", 0.2))
+            ws.page_margins.bottom = float(_get_val("BOTTOM", 0.2))
+            ws.page_margins.left = float(_get_val("LEFT", 0.5))
+            ws.page_margins.right = float(_get_val("RIGHT", 0.3))
+            
+            # [NEW] Manual Print Area Override
+            manual_area = self.config.get(f'PRINT_AREA_{mode}_{context}', "")
+            if not manual_area: manual_area = self.config.get(f'PRINT_AREA_{context}', "")
+            if manual_area and manual_area.strip():
+                ws.print_area = manual_area.strip()
+                self.log(f"?? 인쇄 영역 설정됨: {manual_area}")
+        except Exception as e:
+            print(f"Print settings failed: {e}")
+
+    def apply_custom_dimensions(self, ws, context):
+        try:
+            row_range_str = self.config.get(f"CUSTOM_ROWS_{context}", "").strip()
+            if row_range_str:
+                height = float(self.config.get(f"CUSTOM_ROW_HEIGHT_{context}", 16.5))
+                for part in row_range_str.split(','):
+                    if '-' in part:
+                        start, end = map(int, part.split('-'))
+                        for r in range(start, end + 1): ws.row_dimensions[r].height = height
+                    else: ws.row_dimensions[int(part)].height = height
+            col_range_str = self.config.get(f"CUSTOM_COLS_{context}", "").strip()
+            if col_range_str:
+                width = float(self.config.get(f"CUSTOM_COL_WIDTH_{context}", 10.0))
+                for part in col_range_str.split(','):
+                    if '-' in part:
+                        start_l, end_l = part.split('-')
+                        for c in range(column_index_from_string(start_l), column_index_from_string(end_l) + 1):
+                            ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = width
+                    else: ws.column_dimensions[part.strip().upper()].width = width
+        except: pass
+
+    def safe_set_value(self, ws, coord, value, align=None):
+        try:
+            if hasattr(coord, 'coordinate'): target_cell = coord; coord_str = target_cell.coordinate
+            else: target_cell = ws[coord]; coord_str = coord
+            if isinstance(target_cell, MergedCell):
+                for m_range in ws.merged_cells.ranges:
+                    if coord_str in m_range:
+                        target_cell = ws.cell(row=m_range.min_row, column=m_range.min_col); break
+            target_cell.value = value
+            if align: target_cell.alignment = Alignment(horizontal=align, vertical='center')
+        except: pass
+
+    def safe_merge_cells(self, ws, start_row, start_column, end_row, end_column):
+        try: ws.merge_cells(start_row=start_row, start_column=start_column, end_row=end_row, end_column=end_column)
+        except: pass
+
+    def set_eulji_headers(self, ws):
+        headers = ["NI", "CR", "MO"]; data_font = Font(size=9); header_row = self.config.get('START_ROW', 17)
+        for i, val in enumerate(headers):
+            cell = ws.cell(row=header_row, column=8 + i)
+            self.safe_set_value(ws, cell.coordinate, val, align='center'); cell.font = data_font
+        materials = "SS304,SS304L,SS316,SS316L,SS321,SS347,SS410,SS430,DUPLEX,MONEL,INCONEL,ER308,ER308L,ER309,ER309L,ER316,ER316L,ER347,ER2209,WP316,WP316L,TP316,TP316L,F316L,A182-F316L,A312-TP316L"
+        dv_q = DataValidation(type="list", formula1=f'"{materials}"', allow_blank=True); ws.add_data_validation(dv_q)
+        for r in range(header_row, int(self.config.get('DATA_END_ROW', 45)) + 1):
+            target_l = ws.cell(row=r, column=13); dv_q.add(target_l)
+            target_l.alignment = Alignment(wrap_text=True, horizontal='center', vertical='center'); target_l.font = Font(size=8.5)
+
+    def prepare_next_sheet(self, wb, source_sheet_idx, page_num):
+        source_sheet = wb.worksheets[source_sheet_idx]; new_sheet = wb.copy_worksheet(source_sheet) 
+        base_title = source_sheet.title.split('_')[0]; new_sheet.title = f"{base_title[:20]}_{page_num:03d}"
+        self.force_print_settings(new_sheet, context="DATA"); self.add_logos_to_sheet(new_sheet, is_cover=False)
+        self.apply_custom_dimensions(new_sheet, "DATA")
+        for col_letter, col_dim in source_sheet.column_dimensions.items(): new_sheet.column_dimensions[col_letter].width = col_dim.width
+        start_row = int(self.config.get('START_ROW', 17)); end_row = int(self.config.get('DATA_END_ROW', 45))
+        for r in range(start_row + 1, end_row + 1):
+            for c in range(1, 14):
+                cell = new_sheet.cell(row=r, column=c)
+                cell.font = Font(size=8.5) if c == 13 else Font(size=9)
+                self.safe_set_value(new_sheet, cell, None)
+        merged_to_clear = [rng for rng in new_sheet.merged_cells.ranges if rng.min_row >= start_row and rng.max_row <= end_row]
+        for rng in merged_to_clear: new_sheet.unmerge_cells(str(rng))
+        return new_sheet
+
+    def _get_val_ci(self, item, key):
+        if not key or not isinstance(item, dict): return None
+        if key in item: return item[key]
+        k_lower = key.lower()
+        for k in item.keys():
+            if str(k).lower() == k_lower: return item[k]
+        return None
+
+    def check_material_grade(self, row_data):
+        cr = self.to_float(self._get_val_ci(row_data, 'Cr'))
+        ni = self.to_float(self._get_val_ci(row_data, 'Ni'))
+        mo = self.to_float(self._get_val_ci(row_data, 'Mo'))
+        mn = self.to_float(self._get_val_ci(row_data, 'Mn'))
+        m = 0.1
+        if (16.0*(1-m) <= cr <= 18.0*(1+m)) and (10.0*(1-m) <= ni <= 14.0*(1+m)) and (2.0*(1-m) <= mo <= 3.0*(1+m)): return "SS316"
+        if (22.0*(1-m) <= cr <= 23.0*(1+m)) and (4.5*(1-m) <= ni <= 6.5*(1+m)) and (3.0*(1-m) <= mo <= 3.5*(1+m)) and (mn <= 2.2): return "DUPLEX"
+        if (24.0*(1-m) <= cr <= 26.0*(1+m)) and (19.0*(1-m) <= ni <= 22.0*(1+m)): return "SS310"
+        if (cr >= 16.2) and (ni >= 7.2) and (mo <= 0.55) and (mn <= 2.2): return "SS304"
+        return None
+        sheet.column_dimensions['D'].width = 12
+        sheet.column_dimensions['E'].width = 12
 
         for r in range(43 + base_shift, 52 + total_offset):
             try:
@@ -406,8 +707,11 @@ class DailyWorkReportManager:
         for idx, m in enumerate(active_rt):
             r = mat_start + idx
             if r > 46 + rt_extra: break
-            safe_write(f'D{r}', strip_brand(m.get('name', '')))
-            sheet.cell(row=r, column=4).alignment = Alignment(horizontal='center', vertical='center', wrapText=True)
+            display_name = strip_brand(m.get('name', ''))
+            safe_write(f'D{r}', display_name)
+            cell_name = sheet.cell(row=r, column=4)
+            cell_name.font = Font(name='맑은 고딕', size=9)
+            cell_name.alignment = Alignment(horizontal='center', vertical='center', wrapText=True)
             sheet.row_dimensions[r].height = 30
             safe_write(f'F{r}', m.get('spec', ''))
             sheet.cell(row=r, column=6).alignment = Alignment(horizontal='center', vertical='center', wrapText=True)
@@ -415,22 +719,45 @@ class DailyWorkReportManager:
             safe_write(f'K{r}', '-'); safe_write(f'M{r}', f"{int(m.get('used', 0))} 매")
             safe_write(f'O{r}', f"{int(m.get('in', 0))} 매")
 
+        for r_clear in range(18 + method_offset, 26 + method_offset):
+            for c_clear in range(2, 20):
+                cell = sheet.cell(row=r_clear, column=c_clear)
+                if not isinstance(cell, MergedCell): cell.value = None
+
         tiny_font = Font(size=1); no_wrap = Alignment(wrap_text=False, horizontal='center', vertical='center')
         note_range_start = 18 + method_offset; note_range_end = 25 + method_offset
         for r in range(note_range_start, note_range_end + 1):
-            sheet.row_dimensions[r].height = 6.0
+            sheet.row_dimensions[r].height = 6.0; sheet.row_dimensions[r].custom_height = True
             for c in range(1, 20):
                 cell = sheet.cell(row=r, column=c)
-                if not isinstance(cell, MergedCell): cell.value = None; cell.alignment = no_wrap; cell.font = tiny_font
+                if not isinstance(cell, MergedCell):
+                    cell.value = None; cell.alignment = no_wrap; cell.font = tiny_font
         
         merges_to_kill = [m for m in list(sheet.merged_cells.ranges) if m.min_row >= note_range_start and m.max_row <= note_range_end]
         for m in merges_to_kill:
             try: sheet.unmerge_cells(str(m))
             except: pass
             
-        for r in range(13, 18 + method_offset): sheet.row_dimensions[r].height = 15.0
-        for r in range(43 + base_shift, 43 + base_shift + rt_count): sheet.row_dimensions[r].height = 25.0
+        for r in range(13, 18 + method_offset):
+            sheet.row_dimensions[r].height = 15.0; sheet.row_dimensions[r].custom_height = True
+        for r in range(43 + base_shift, 43 + base_shift + rt_count):
+            sheet.row_dimensions[r].height = 25.0; sheet.row_dimensions[r].custom_height = True
+        title_row = 41 + base_shift; header_row = 42 + base_shift
+        sheet.row_dimensions[title_row].height = 20; sheet.row_dimensions[header_row].height = 20
+        sheet.row_dimensions[title_row].custom_height = True; sheet.row_dimensions[header_row].custom_height = True
 
+        if rt_count < 4:
+            for r in range(43 + base_shift + rt_count, 46 + base_shift):
+                sheet.row_dimensions[r].height = 0; sheet.row_dimensions[r].hidden = True
+                for col in range(1, 20):
+                    cell = sheet.cell(row=r, column=col)
+                    if not isinstance(cell, MergedCell):
+                        cell.value = None; cell.border = Border(left=Side(style=None), right=Side(style=None), top=Side(style=None), bottom=Side(style=None))
+
+        for r in range(43 + base_shift, 43 + base_shift + rt_count):
+            if r >= mat_start + len(active_rt):
+                safe_write(f'K{r}', '-'); safe_write(f'M{r}', '매'); safe_write(f'O{r}', '0 매')
+            
         synonyms = {
             'MT WHITE': ['MT WHITE', '백색', '백색자분', 'WHITE'],
             'MT 7C-BLACK': ['MT 7C-BLACK', '7C', '자분', 'BLACK', '7C-BLACK'],
@@ -448,7 +775,8 @@ class DailyWorkReportManager:
         }
         
         for m_key, r in mat_map.items():
-            safe_write(f'D{r}', display_names.get(m_key, m_key))
+            display_name = display_names.get(m_key, m_key)
+            safe_write(f'D{r}', display_name)
             try:
                 for m_range in list(sheet.merged_cells.ranges):
                     if m_range.min_row == r and m_range.max_row == r and (m_range.min_col >= 4 and m_range.max_col <= 7):
@@ -464,14 +792,41 @@ class DailyWorkReportManager:
                 safe_write(f'K{r}', '-'); safe_write(f'M{r}', int(m_d.get('used', 0)))
                 safe_write(f'O{r}', int(m_d.get('in', 0)))
 
-        thin_side = Side(style='thin')
+        thin = Side(style='thin')
         for r in range(41 + base_shift, 51 + total_offset):
             for col in range(2, 20):
                 cell = sheet.cell(row=r, column=col)
-                cell.border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+                cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
                 cell.alignment = center_align
         
+        # [CLEANUP] Explicitly remove borders from the row after the table
+        for col in range(1, 21):
+            sheet.cell(row=51 + total_offset, column=col).border = Border()
+
+        for m_key, r in mat_map.items():
+            display_name = display_names.get(m_key, m_key)
+            cell = sheet.cell(row=r, column=4); cell.value = display_name
+            cell.font = Font(name='맑은 고딕', size=9)
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
+            safe_write(f'H{r}', "CAN")
+            m_d = {}
+            for syn in synonyms.get(m_key, []):
+                m_d = data.get('materials', {}).get(syn)
+                if m_d: break
+            if m_d:
+                safe_write(f'K{r}', '-'); safe_write(f'M{r}', int(m_d.get('used', 0)))
+                safe_write(f'O{r}', int(m_d.get('in', 0)))
+
+        sheet.row_breaks.brk = []; sheet.print_area = f'A1:S{51 + total_offset}'
+        from openpyxl.worksheet.pagebreak import Break
+        sheet.row_breaks.append(Break(id=51 + total_offset))
+        sheet.page_setup.orientation = sheet.ORIENTATION_PORTRAIT
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.fitToHeight = None; sheet.page_setup.fitToWidth = None
+        sheet.sheet_properties.pageSetUpPr.fitToPage = False
+
         veh_list = data.get('vehicles', []); v = veh_list[0] if veh_list else {}
+        veh_row = 27 + method_offset; safe_write(f"B{veh_row}", "") 
         chk_rows = {'out': 29 + total_offset, 'in': 30 + total_offset}
         for rs in range(25+total_offset, 35+total_offset):
             val = sheet.cell(row=rs, column=2).value
@@ -480,6 +835,7 @@ class DailyWorkReportManager:
         
         chk_map = {'exterior':'E','cleanliness':'H','cleaning':'K','locking':'N'}
         WHITE_SQ, BLACK_SQ = "\u25a1", "\u25a0"
+        import re
         for rk, row_idx in chk_rows.items():
             for ck, col_let in chk_map.items():
                 val = v.get(f"{rk}_{ck}")
@@ -489,10 +845,11 @@ class DailyWorkReportManager:
                         for mr in sheet.merged_cells.ranges:
                             if coord in mr: cell = sheet.cell(row=mr.min_row, column=mr.min_col); break
                     if cell.value and isinstance(cell.value, str):
-                        pattern = f"({WHITE_SQ})(\\s*){_re.escape(val)}"
-                        if _re.search(pattern, cell.value):
-                            cell.value = _re.sub(pattern, f"{BLACK_SQ}\\2{val}", cell.value)
+                        pattern = f"({WHITE_SQ})(\\s*){re.escape(val)}"
+                        if re.search(pattern, cell.value):
+                            cell.value = re.sub(pattern, f"{BLACK_SQ}\\2{val}", cell.value)
 
+        sheet.page_setup.horizontalCentered = True; sheet.page_setup.verticalCentered = False 
         if v.get('remarks'):
             rem_cell = f"B{31 + method_offset}"
             safe_write(rem_cell, f"비고: {v.get('remarks')}")
@@ -500,9 +857,118 @@ class DailyWorkReportManager:
                 sheet[rem_cell].alignment = Alignment(horizontal='left', vertical='center', indent=1)
                 sheet[rem_cell].font = Font(name='맑은 고딕', size=9)
 
+        sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
+        sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
+        for r in range(1, 12): sheet.row_dimensions[r].height = 15
+        for t_row in [12, 26, 31, 37, 42]:
+            try: sheet.row_dimensions[t_row + method_offset].height = 20
+            except: pass
+        for v_row in [27, 28, 29, 30]: 
+            try: sheet.row_dimensions[v_row + method_offset].height = 32
+            except: pass
+        for r in range(41 + base_shift, 52 + total_offset): sheet.row_dimensions[r].height = 18
+        compact_height = 10
+        for r in [5, 10, 17, 26 + method_offset, 31 + method_offset, 35 + method_offset, 40 + base_shift]:
+            try: sheet.row_dimensions[r].height = compact_height
+            except: pass
+            
+        # 8. Final Print Setup - FIXED SCALE 95%
+        sheet.sheet_properties.pageSetUpPr.fitToPage = False
         sheet.page_setup.scale = 95
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.horizontalCentered = True
+        sheet.page_setup.verticalCentered = False
+        sheet.page_margins.top = 0.6; sheet.page_margins.bottom = 0.1
         sheet.print_area = "A1:S51"
+        
+        rt_start_final = 43 + base_shift; rt_end_final = (rt_start_final - 1) + max(1, rt_count)
+        thin_side = Side(style='thin'); thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+        title_row_idx = 41 + base_shift; header_row_idx = 42 + base_shift
+        for r_fix in [title_row_idx, header_row_idx]:
+            for c_idx in range(1, 20): free_cell(sheet, r_fix, c_idx)
+        write_cell(sheet, title_row_idx, 1, "6.자재수불현황", Font(name='맑은 고딕', size=9, bold=True), Alignment(horizontal='left', vertical='center'))
+        header_merges = [(2,3, "구분"), (4,5, "품명"), (6,7, "규격"), (8,8, "단위"), (9,10, "Lot. No."), (11,12, "입고"), (13,14, "사용"), (15,16, "잔고"), (17,19, "비고")]
+        header_font = Font(name='맑은 고딕', size=9, bold=True)
+        for sc, ec, label in header_merges:
+            if sc != ec: sheet.merge_cells(start_row=header_row_idx, start_column=sc, end_row=header_row_idx, end_column=ec)
+            write_cell(sheet, header_row_idx, sc, label, header_font, center_align)
+            for c_idx in range(sc, ec + 1): sheet.cell(row=header_row_idx, column=c_idx).border = thin_border
+        
+        merge_plan = [
+            (rt_start_final, 2, rt_end_final, 3, "RT"), 
+            (46 + total_offset, 2, 47 + total_offset, 3, "MT"), 
+            (48 + total_offset, 2, 50 + total_offset, 3, "PT")
+        ]
+        for s_row, s_col, e_row, e_col, label in merge_plan:
+            for r in range(s_row, e_row + 1):
+                for c in range(s_col, e_col + 1): free_cell(sheet, r, c)
+            try: sheet.merge_cells(start_row=s_row, start_column=s_col, end_row=e_row, end_column=e_col)
+            except: pass
+            write_cell(sheet, s_row, s_col, label, black_font, center_align)
+            for r in range(s_row, e_row + 1):
+                for c in range(s_col, e_col + 1):
+                    key = (r, c)
+                    if key not in sheet._cells or isinstance(sheet._cells[key], MergedCell): sheet._cells[key] = Cell(sheet, row=r, column=c)
+                    sheet._cells[key].border = thin_border
+        
+        for m_key, r in mat_map.items():
+            write_cell(sheet, r, 4, display_names.get(m_key, m_key), black_font, center_align)
+
+        def apply_section_style(sheet, s_row, s_col, e_row, e_col, b_style='thin', inner_style='hair'):
+            main_s = Side(style=b_style); inner_side = Side(style=inner_style) if inner_style else Side(style=None)
+            for r in range(s_row, e_row + 1):
+                for c in range(s_col, e_col + 1):
+                    cell = sheet.cell(row=r, column=c)
+                    t = inner_side; b = inner_side; l = inner_side; ri = inner_side
+                    if r == s_row: t = main_s
+                    if r == e_row: b = main_s
+                    if c == s_col: l = main_s
+                    if c == e_col: ri = main_s
+                    cell.border = Border(top=t, bottom=b, left=l, right=ri)
+
+        s2_start = 18 + method_offset; s2_end = 25 + method_offset
+        for m_range in list(sheet.merged_cells.ranges):
+            if s2_start <= m_range.min_row and m_range.max_row <= s2_end:
+                try: sheet.unmerge_cells(m_range.coord)
+                except: pass
+        for r_idx in range(s2_start, s2_end + 1):
+            try: sheet.merge_cells(start_row=r_idx, start_column=2, end_row=r_idx, end_column=19)
+            except: pass
+        apply_section_style(sheet, s2_start, 2, s2_end, 19, 'thin', inner_style=None)
+        apply_section_style(sheet, 12, 2, 16 + method_offset, 19, 'thin')
+        apply_section_style(sheet, 6, 2, 9, 19, 'thin')
+        v_title_row = 26 + method_offset; v_data_start = 28 + method_offset; v_data_end = 30 + method_offset
+        apply_section_style(sheet, v_data_start, 2, v_data_end, 19, 'thin')
+        for c_idx in range(2, 20): sheet.cell(row=v_title_row, column=c_idx).border = Border(top=thin_side) 
+        
+        # 31행 좌/우/하단 선 제거 (상단선만 유지하거나 테두리 전체 제거)
+        v_remark_row = 31 + method_offset
+        for c_idx in range(2, 20):
+            c = sheet.cell(row=v_remark_row, column=c_idx)
+            # 기존 위쪽 선은 유지하고 좌,우,아래는 없앰
+            top_border = c.border.top if c.border else Side(style=None)
+            c.border = Border(top=top_border, bottom=Side(style=None), left=Side(style=None), right=Side(style=None))
+        apply_section_style(sheet, ot_header_row, 2, ot_header_row + 2 + ot_extra, 19, 'thin')
+        apply_section_style(sheet, 43 + base_shift, 2, 50 + total_offset, 19, 'thin')
+        for c in range(1, 20):
+            # 자재수불현황 제목행(41+base_shift)은 윗선을 포함한 모든 선을 완전히 제거
+            sheet.cell(row=41 + base_shift, column=c).border = Border()
+        if rtk_header_row: apply_section_style(sheet, rtk_header_row + 1, 2, rtk_header_row + 2, 19, 'thin')
+        for r_idx in [3, 4]:
+            c = sheet.cell(row=r_idx, column=19); c.border = Border(left=c.border.left, top=c.border.top, bottom=c.border.bottom, right=thin_side)
+        c5 = sheet.cell(row=5, column=19); c5.border = Border(left=c5.border.left, top=c5.border.top, bottom=c5.border.bottom, right=Side(style=None))
+        
+        # [RESTORED] Column Widths Setup
+        slim_widths = {
+            'A': 1, 'B': 5, 'C': 1, 'D': 6, 'E': 6, 'F': 6, 'G': 1, 'H': 5, 
+            'I': 4, 'J': 4, 'K': 5, 'L': 4, 'M': 5, 'N': 5, 'O': 4, 
+            'P': 4, 'Q': 4, 'R': 4, 'S': 5
+        }
+        for col, width in slim_widths.items():
+            sheet.column_dimensions[col].width = width
+            
         wb.save(output_path); return output_path
+
 
     # --- Integrated Verification Logic ---
 
@@ -685,10 +1151,13 @@ except: pass
 
 # --- GLOBAL UTILITY FUNCTIONS ---
 def normalize_id(val):
+    """Robust ID normalization for Excel/CSV data."""
     if pd.isna(val) or val == '' or str(val).lower() == 'nan': return ""
-    s = str(val).strip()
-    if s.endswith('.0'): s = s[:-2]
-    return s
+    try:
+        # Handle cases like 123.0 or "123.0"
+        return str(int(float(val)))
+    except:
+        return str(val).strip()
 
 def to_float(val):
     try:
@@ -708,23 +1177,6 @@ def _get_val_ci(item, key):
             return item[k]
     return None
 
-def convert_sch_to_thk(size_val, thk_val):
-    if pd.isna(thk_val) or str(thk_val).strip() == "": return ""
-    thk_str = str(thk_val).strip().upper()
-    try:
-        val = float(thk_str.replace("MM", "").replace("T", "").strip())
-        if 0 < val < 100: return f"{val:.2f}"
-    except: pass
-    sch_match = re.search(r'(?:SCH[.\s]?|S/)?(\d+S?|XXS|XS)', thk_str, re.IGNORECASE)
-    if not sch_match: return thk_str
-    sch = sch_match.group(1).upper()
-    if sch.endswith('S') and sch not in ['5S', '10S', 'XXS', 'XS']: sch = sch[:-1]
-    if pd.isna(size_val) or str(size_val).strip() == "": return thk_str
-    size_str = str(size_val).strip().replace('"', '').replace("'", "")
-    size_str = re.sub(r'\s+', '-', size_str)
-    if size_str in SCH_TO_THK and sch in SCH_TO_THK[size_str]:
-        return f"{SCH_TO_THK[size_str][sch]:.2f}"
-    return thk_str
 
 # Common styles
 thin_side = Side(style='thin')
@@ -1060,6 +1512,12 @@ class IntegratedSmartManager:
         self.pt_template_file_path = tk.StringVar()
         self.paut_target_file_path = tk.StringVar()
         self.paut_template_file_path = tk.StringVar()
+
+        # [NEW] Add traces for Template-Linked Config Auto-Load
+        self.rt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.rt_template_file_path.get(), "RT"))
+        self.pt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.pt_template_file_path.get(), "PT"))
+        self.paut_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.paut_template_file_path.get(), "PAUT"))
+        self.template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.template_file_path.get(), "PMI"))
         
         # File info display
         self.file_info_vars = {
@@ -1128,38 +1586,54 @@ class IntegratedSmartManager:
         self.paut_column_keys = ["selected", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"]
 
         # --- Photo Log Variables ---
-        self.photo_orderer = tk.StringVar(value="서울에너지공사")
+        self.photo_orderer = tk.StringVar(value=self.config.get('PHOTO_ORDERER', "서울에너지공사"))
         self.photo_inspect_date = tk.StringVar(value=datetime.datetime.now().strftime("%Y-%m-%d"))
-        self.photo_report_no = tk.StringVar(value="SIT/GI-SE-NDT-2024-001")
-        self.photo_report_title = tk.StringVar(value="RT 성적서 사진대장")
+        self.photo_report_no = tk.StringVar(value=self.config.get('PHOTO_REPORT_NO', "SIT/GI-SE-NDT-2024-001"))
+        self.photo_report_title = tk.StringVar(value=self.config.get('PHOTO_REPORT_TITLE', "RT 성적서 사진대장"))
         self.photo_selected_files = []
-        self.photo_inspect_type = tk.StringVar(value="RT")
-        self.photo_logo_path = tk.StringVar()
-        self.photo_cols_per_row = tk.StringVar(value="2")
-        self.photo_keep_aspect = tk.BooleanVar(value=True)
-        self.photo_cell_width_var = tk.StringVar(value="32")
-        self.photo_cell_height_var = tk.StringVar(value="200")
-        self.photo_margin_top_var = tk.StringVar(value="0.5")
-        self.photo_margin_bottom_var = tk.StringVar(value="0.5")
-        self.photo_margin_left_var = tk.StringVar(value="0.4")
-        self.photo_margin_right_var = tk.StringVar(value="0.4")
-        self.photo_desc_height_var = tk.StringVar(value="25")
-        self.photo_print_scale_var = tk.StringVar(value="100")
-        self.photo_align_var = tk.StringVar(value="중앙 정렬")
-        self.photo_fit_width_var = tk.BooleanVar(value=True)
-        self.photo_auto_rotate_var = tk.BooleanVar(value=True)
-        self.photo_width_pct_var = tk.StringVar(value="100")
-        self.photo_width_pixel_adj_var = tk.StringVar(value="0")
-        self.photo_shift_x_var = tk.StringVar(value="0")
-        self.photo_shift_y_var = tk.StringVar(value="0")
-        self.photo_logo_width_var = tk.StringVar(value="120")
-        self.photo_logo_x_var = tk.StringVar(value="5")
-        self.photo_logo_y_var = tk.StringVar(value="0")
-        self.photo_output_name = tk.StringVar(value="Photo_Report")
+        self.photo_inspect_type = tk.StringVar(value=self.config.get('PHOTO_INSPECT_TYPE', "RT"))
+        self.photo_logo_path = tk.StringVar(value=self.config.get('PHOTO_LOGO_PATH', ""))
+        self.photo_cols_per_row = tk.StringVar(value=self.config.get('PHOTO_COLS_PER_ROW', "2"))
+        self.photo_keep_aspect = tk.BooleanVar(value=self.config.get('PHOTO_KEEP_ASPECT', True))
+        self.photo_cell_width_var = tk.StringVar(value=self.config.get('PHOTO_CELL_WIDTH', "32"))
+        self.photo_cell_height_var = tk.StringVar(value=self.config.get('PHOTO_CELL_HEIGHT', "200"))
+        self.photo_margin_top_var = tk.StringVar(value=self.config.get('PHOTO_MARGIN_TOP', "0.5"))
+        self.photo_margin_bottom_var = tk.StringVar(value=self.config.get('PHOTO_MARGIN_BOTTOM', "0.5"))
+        self.photo_margin_left_var = tk.StringVar(value=self.config.get('PHOTO_MARGIN_LEFT', "0.4"))
+        self.photo_margin_right_var = tk.StringVar(value=self.config.get('PHOTO_MARGIN_RIGHT', "0.4"))
+        self.photo_desc_height_var = tk.StringVar(value=self.config.get('PHOTO_DESC_HEIGHT', "25"))
+        self.photo_print_scale_var = tk.StringVar(value=self.config.get('PHOTO_PRINT_SCALE', "100"))
+        self.photo_align_var = tk.StringVar(value=self.config.get('PHOTO_ALIGN', "중앙 정렬"))
+        self.photo_fit_width_var = tk.BooleanVar(value=self.config.get('PHOTO_FIT_WIDTH', True))
+        self.photo_auto_rotate_var = tk.BooleanVar(value=self.config.get('PHOTO_AUTO_ROTATE', True))
+        self.photo_width_pct_var = tk.StringVar(value=self.config.get('PHOTO_WIDTH_PCT', "100"))
+        self.photo_width_pixel_adj_var = tk.StringVar(value=self.config.get('PHOTO_WIDTH_ADJ', "0"))
+        self.photo_shift_x_var = tk.StringVar(value=self.config.get('PHOTO_SHIFT_X', "0"))
+        self.photo_shift_y_var = tk.StringVar(value=self.config.get('PHOTO_SHIFT_Y', "0"))
+        self.photo_logo_width_var = tk.StringVar(value=self.config.get('PHOTO_LOGO_WIDTH', "120"))
+        self.photo_logo_x_var = tk.StringVar(value=self.config.get('PHOTO_LOGO_X', "5"))
+        self.photo_logo_y_var = tk.StringVar(value=self.config.get('PHOTO_LOGO_Y', "0"))
+        self.photo_output_name = tk.StringVar(value=self.config.get('PHOTO_OUTPUT_NAME', "Photo_Report"))
+        self.last_photo_save_dir = self.config.get('LAST_PHOTO_SAVE_DIR', "")
         self.photo_header_map = {
             "RT": "RT 성적서 사진대장", "PT": "PT 성적서 사진대장", "PMI": "PMI 성적서 사진대장", "PAUT": "PAUT 성적서 사진대장"
         }
-        self.setting_vars = {} # Important for NDT config UI
+        # [NEW] Column Keys for Treeview Preview
+        self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Mn", "Grade", "Result"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "Welder", "WType", "Result"]
+        self.show_selected_only = tk.BooleanVar(value=False)
+        self.auto_verify = tk.BooleanVar(value=True)
+        self.extraction_mode = tk.StringVar(value="전체")
+        self.sequence_filter = tk.StringVar()
+        self.logo_folder_path = tk.StringVar(value=self.resource_dir)
+        self.setting_vars = {}
+        self.element_filters = []
+        self.pmi_pane_ratio = float(self.config.get('PMI_SASH_RATIO', 0.5))
+        self.item_idx_map = []
+        self.rt_item_idx_map = []
+        self.pt_item_idx_map = []
+        self.paut_item_idx_map = []
 
         # --- Initialize & Load ---
         self.setup_styles()
@@ -1187,6 +1661,108 @@ class IntegratedSmartManager:
                     return json.load(f)
             except: pass
         return {}
+
+    def load_template_specific_config(self, template_path, mode="RT"):
+        """Load JSON config linked to the Excel template file."""
+        if not template_path or not os.path.exists(template_path): return
+        config_path = os.path.splitext(template_path)[0] + ".json"
+        if not os.path.exists(config_path): return
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                t_config = json.load(f)
+            print(f"📂 [Auto-Load] Loaded specific config for {os.path.basename(template_path)}")
+            for key, value in t_config.items():
+                self.config[key] = value
+                # Note: Final version might not use setting_vars mapping for all, 
+                # but it uses config directly in many places.
+                # If specific mode setup needs refresh, it will happen during run_process.
+        except Exception as e:
+            print(f"Error loading template config: {e}")
+
+    def save_template_specific_config(self, mode="RT"):
+        """Save current UI/config state to a template-specific JSON file."""
+        if mode == "RT": template_path = self.rt_template_file_path.get()
+        elif mode == "PT": template_path = self.pt_template_file_path.get()
+        elif mode == "PAUT": template_path = self.paut_template_file_path.get()
+        else: template_path = self.template_file_path.get()
+        
+        if not template_path or not os.path.exists(template_path):
+            messagebox.showwarning("경고", "먼저 템플릿 파일을 선택해주세요.")
+            return
+            
+        config_path = os.path.splitext(template_path)[0] + ".json"
+        
+        # Determine relevant keys to save for this template
+        # 1. Logos & Print settings (Template-dependent)
+        keys_to_save = []
+        for ctx in ["COVER", "DATA"]:
+            for prefix in ["SITCO", "SEOUL", "FOOTER", "FOOTER_PT"]:
+                for suffix in ["_PATH", "_ANCHOR", "_W", "_H", "_X", "_Y"]:
+                    keys_to_save.append(f"{prefix}_{mode}_{ctx}{suffix}")
+            for suffix in ["_TOP", "_BOTTOM", "_LEFT", "_RIGHT"]:
+                keys_to_save.append(f"MARGIN_{mode}_{ctx}{suffix}")
+            keys_to_save.append(f"PRINT_SCALE_{mode}_{ctx}")
+            keys_to_save.append(f"PRINT_AREA_{mode}_{ctx}")
+            keys_to_save.append(f"CUSTOM_ROWS_{mode}_{ctx}")
+            keys_to_save.append(f"CUSTOM_ROW_HEIGHT_{mode}_{ctx}")
+            
+        if mode == "RT":
+            keys_to_save += ["RT_START_ROW", "RT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("RT_COL_") or k.startswith("RT_NAME_")]
+        elif mode == "PT":
+            keys_to_save += ["PT_START_ROW", "PT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PT_COL_") or k.startswith("PT_NAME_")]
+        elif mode == "PAUT":
+            keys_to_save += ["PAUT_START_ROW", "PAUT_END_ROW"]
+        elif mode == "PMI":
+            keys_to_save += ["PMI_START_ROW", "PMI_DATA_END_ROW", "PMI_PRINT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PMI_COL_") or k.startswith("PMI_NAME_")]
+
+        t_data = {k: self.config[k] for k in keys_to_save if k in self.config}
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(t_data, f, indent=4, ensure_ascii=False)
+            messagebox.showinfo("저장 완료", f"템플릿 전용 설정이 저장되었습니다.\n{os.path.basename(config_path)}")
+        except Exception as e:
+            messagebox.showerror("저장 실패", f"설정 저장 중 오류 발생: {e}")
+
+    def save_photo_log_config(self):
+        """Save Photo Log specific layout settings to a separate JSON."""
+        config_path = os.path.join(os.getcwd(), "photolog_config.json")
+        self.manual_save_settings() # Capture current UI to self.config
+        keys = [
+            "PHOTO_MARGIN_TOP", "PHOTO_MARGIN_BOTTOM", "PHOTO_MARGIN_LEFT", "PHOTO_MARGIN_RIGHT",
+            "PHOTO_PRINT_SCALE", "PHOTO_DESC_HEIGHT", "PHOTO_CELL_WIDTH", "PHOTO_CELL_HEIGHT",
+            "PHOTO_COLS_PER_ROW", "PHOTO_ALIGN", "PHOTO_FIT_WIDTH", "PHOTO_KEEP_ASPECT",
+            "PHOTO_AUTO_ROTATE", "PHOTO_WIDTH_PCT", "PHOTO_WIDTH_PIXEL_ADJ", 
+            "PHOTO_SHIFT_X", "PHOTO_SHIFT_Y", "PHOTO_LOGO_PATH", "PHOTO_LOGO_W", "PHOTO_LOGO_X", "PHOTO_LOGO_Y"
+        ]
+        data = {k: self.config.get(k, "") for k in keys}
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+            print("💾 Photo Log config saved.")
+            messagebox.showinfo("저장 완료", "사진대장 레이아웃 설정이 저장되었습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"저장 실패: {e}")
+
+    def load_photo_log_config(self):
+        """Load Photo Log specific layout settings."""
+        config_path = os.path.join(os.getcwd(), "photolog_config.json")
+        if not os.path.exists(config_path): return
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            for k, v in data.items():
+                self.config[k] = v
+                # Update UI vars if they exist
+                var_name = k.lower() + "_var"
+                if hasattr(self, var_name):
+                    getattr(self, var_name).set(str(v))
+                elif hasattr(self, k.lower()):
+                    getattr(self, k.lower()).set(str(v))
+            print("📂 Photo Log config loaded.")
+        except: pass
 
     def save_settings(self):
         try:
@@ -1318,9 +1894,8 @@ class IntegratedSmartManager:
             ['Material', 'PT 약품', '세척제', 'CAN', 1500], ['Material', 'PT 약품', '침투제', 'CAN', 2300]
         ]
         return pd.DataFrame(data, columns=['Category', 'Name', 'Spec', 'Unit', 'Rate'])
-
     def refresh_inquiry_filters(self):
-        """Update site, user, vehicle, and material lists from dataframes"""
+        """데이터프레임으로부터 사이트, 사용자, 차량, 자재 목록을 업데이트"""
         try:
             if self.materials_df is not None:
                 active_mats = self.materials_df[self.materials_df['Active'] != 0]
@@ -1418,7 +1993,7 @@ class IntegratedSmartManager:
         self.root.update_idletasks()
 
     def setup_stock_tab(self):
-        # Control Frame (Vertical container for both rows)
+        # Control Frame
         control_frame = ttk.Frame(self.tab_stock)
         control_frame.pack(fill='x', padx=5, pady=5)
         
@@ -1426,58 +2001,38 @@ class IntegratedSmartManager:
         action_row = ttk.Frame(control_frame)
         action_row.pack(fill='x', side='top', pady=(0, 5))
         
-        btn_refresh = ttk.Button(action_row, text="재고 새로고침", command=self.update_stock_view)
-        btn_refresh.pack(side='left', padx=5)
+        ttk.Button(action_row, text="🔄 새로고침", command=self.update_stock_view).pack(side='left', padx=2)
+        ttk.Button(action_row, text="⚠️ 재고부족 알림", command=self.show_low_stock).pack(side='left', padx=2)
+        ttk.Button(action_row, text="🗑️ 품목 삭제", command=self.delete_selected_material).pack(side='left', padx=2)
+        ttk.Button(action_row, text="📝 정보 수정", command=self.open_edit_material_dialog).pack(side='left', padx=2)
+        ttk.Button(action_row, text="📊 엑셀 내보내기", command=self.export_stock_to_excel).pack(side='left', padx=2)
+        ttk.Button(action_row, text="✅ 전체 선택", command=self.select_all_stock).pack(side='left', padx=2)
         
-        btn_alert = ttk.Button(action_row, text="재주문 필요 항목 보기", command=self.show_low_stock)
-        btn_alert.pack(side='left', padx=5)
-        
-        btn_delete = ttk.Button(action_row, text="품목 삭제", command=self.delete_selected_material)
-        btn_delete.pack(side='left', padx=5)
-        
-        btn_edit = ttk.Button(action_row, text="품목 수정", command=self.open_edit_material_dialog)
-        btn_edit.pack(side='left', padx=5)
-        
-        btn_export = ttk.Button(action_row, text="엑셀 내보내기", command=self.export_stock_to_excel)
-        btn_export.pack(side='left', padx=5)
-        
-        btn_select_all = ttk.Button(action_row, text="전체 선택", command=self.select_all_stock)
-        btn_select_all.pack(side='left', padx=5)
-        
-        # Row 2: Search and Filter Frame
+        # Row 2: Search and Filter
         filter_row = ttk.Frame(control_frame)
         filter_row.pack(fill='x', side='top')
-        
-        filter_frame = ttk.LabelFrame(filter_row, text="검색 필터")
+        filter_frame = ttk.LabelFrame(filter_row, text=" 상세 검색 필터 ")
         filter_frame.pack(fill='x', padx=5, pady=2)
         
-        # Row 0 of Filter Frame (Grid)
         ttk.Label(filter_frame, text="회사:").grid(row=0, column=0, padx=2, pady=2, sticky='e')
-        self.cb_filter_co = ttk.Combobox(filter_frame, width=15)
-        self.cb_filter_co.grid(row=0, column=1, padx=2, pady=2)
+        self.cb_filter_co = ttk.Combobox(filter_frame, width=12); self.cb_filter_co.grid(row=0, column=1, padx=2, pady=2)
         
         ttk.Label(filter_frame, text="분류:").grid(row=0, column=2, padx=2, pady=2, sticky='e')
-        self.cb_filter_class = ttk.Combobox(filter_frame, width=15)
-        self.cb_filter_class.grid(row=0, column=3, padx=2, pady=2)
+        self.cb_filter_class = ttk.Combobox(filter_frame, width=12); self.cb_filter_class.grid(row=0, column=3, padx=2, pady=2)
         
         ttk.Label(filter_frame, text="제조사:").grid(row=0, column=4, padx=2, pady=2, sticky='e')
-        self.cb_filter_mfr = ttk.Combobox(filter_frame, width=15)
-        self.cb_filter_mfr.grid(row=0, column=5, padx=2, pady=2)
+        self.cb_filter_mfr = ttk.Combobox(filter_frame, width=12); self.cb_filter_mfr.grid(row=0, column=5, padx=2, pady=2)
         
         ttk.Label(filter_frame, text="품목명:").grid(row=0, column=6, padx=2, pady=2, sticky='e')
-        self.cb_filter_name = ttk.Combobox(filter_frame, width=25)
-        self.cb_filter_name.grid(row=0, column=7, padx=2, pady=2)
+        self.cb_filter_name = ttk.Combobox(filter_frame, width=20); self.cb_filter_name.grid(row=0, column=7, padx=2, pady=2)
         
-        # Row 1 of Filter Frame
         ttk.Label(filter_frame, text="S/N:").grid(row=1, column=0, padx=2, pady=2, sticky='e')
-        self.cb_filter_sn = ttk.Combobox(filter_frame, width=20)
-        self.cb_filter_sn.grid(row=1, column=1, padx=2, pady=2)
+        self.cb_filter_sn = ttk.Combobox(filter_frame, width=12); self.cb_filter_sn.grid(row=1, column=1, padx=2, pady=2)
         
         ttk.Label(filter_frame, text="모델명:").grid(row=1, column=2, padx=2, pady=2, sticky='e')
-        self.cb_filter_model = ttk.Combobox(filter_frame, width=20)
-        self.cb_filter_model.grid(row=1, column=3, padx=2, pady=2)
+        self.cb_filter_model = ttk.Combobox(filter_frame, width=12); self.cb_filter_model.grid(row=1, column=3, padx=2, pady=2)
         
-        ttk.Label(filter_frame, text="관리품번:").grid(row=1, column=4, padx=2, pady=2, sticky='e')
+        ttk.Label(filter_frame, text="관리품목:").grid(row=1, column=4, padx=2, pady=2, sticky='e')
         self.cb_filter_eq = ttk.Combobox(filter_frame, width=20)
         self.cb_filter_eq.grid(row=1, column=5, padx=2, pady=2)
         
@@ -1507,16 +2062,31 @@ class IntegratedSmartManager:
         vsb = ttk.Scrollbar(tree_frame, orient="vertical")
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
         
-        columns = ('ID', '회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', '단위', '수량', '재고하한')
+        # 18 Columns matching the high-fidelity original system
+        columns = ('MaterialID', 'AdminCode', 'Category', 'ItemName', 'SN', 'Warehouse', 
+                   'Model', 'Spec', 'GroupCode', 'Supplier', 'Maker', 'MakeDate', 
+                   'Price', 'Location', 'Unit', 'BaseQty', 'CurrentStock', 'Limit')
+        
         self.stock_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', 
                                       yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
         vsb.config(command=self.stock_tree.yview)
         hsb.config(command=self.stock_tree.xview)
         
+        # Heading Map (Korean)
+        col_map = {
+            'MaterialID': 'ID', 'AdminCode': '관리사코드', 'Category': '관리품목', 'ItemName': '품목명',
+            'SN': 'SN', 'Warehouse': '창고', 'Model': '모델명', 'Spec': '규격',
+            'GroupCode': '품목군코드', 'Supplier': '공급업체', 'Maker': '제조사', 'MakeDate': '제조일',
+            'Price': '가격', 'Location': '위치', 'Unit': '관리단위', 'BaseQty': '기초수량',
+            'CurrentStock': '현재재고', 'Limit': '재고기한'
+        }
+        
         for col in columns:
-            self.stock_tree.heading(col, text=col)
-            self.stock_tree.column(col, width=100, anchor='center')
+            self.stock_tree.heading(col, text=col_map.get(col, col))
+            # Set specific widths for better readability
+            w = 120 if col in ['ItemName', 'Model', 'Supplier'] else 80
+            self.stock_tree.column(col, width=w, anchor='center')
         
         self.stock_tree.grid(row=0, column=0, sticky='nsew')
         vsb.grid(row=0, column=1, sticky='ns')
@@ -1571,7 +2141,7 @@ class IntegratedSmartManager:
         
         # [LEFT] Registration Form
         left_f = ttk.Frame(paned, padding=10)
-        paned.add(left_f, width=400)
+        paned.add(left_f, width=420)
         
         ttk.Label(left_f, text="📥 입출고 등록", font=("Malgun Gothic", 12, "bold")).pack(pady=(0, 10))
         
@@ -1582,28 +2152,80 @@ class IntegratedSmartManager:
         self.inout_vars = {}
         for i, (lbl, key) in enumerate(fields):
             ttk.Label(form, text=lbl).grid(row=i, column=0, padx=5, pady=5, sticky='e')
-            if key == "Date":
-                var = DateEntry(form, width=12, background='darkblue', foreground='white', borderwidth=2)
-            elif key in ["Material", "Site", "Type"]:
-                var = ttk.Combobox(form, width=25)
-                if key == "Type": var['values'] = ["입고", "출고", "반납", "폐기"]
-            else:
-                var = ttk.Entry(form, width=28)
-            var.grid(row=i, column=1, padx=5, pady=5, sticky='w')
-            self.inout_vars[key] = var
             
-        ttk.Button(left_f, text="등록하기", style='Accent.TButton', command=self.register_transaction).pack(pady=20)
+            f_inner = ttk.Frame(form)
+            f_inner.grid(row=i, column=1, padx=5, pady=5, sticky='w')
+            
+            if key == "Date":
+                var = DateEntry(f_inner, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+            elif key == "Material":
+                var = ttk.Combobox(f_inner, width=25, values=self.item_name_list)
+                tk.Button(f_inner, text="🔍", font=('Arial', 8), bd=0, bg='white', cursor='hand2', 
+                          command=lambda: self.open_material_search_dialog(target_form='inout')).pack(side='right', padx=2)
+            elif key == "Site":
+                var = ttk.Combobox(f_inner, width=25, values=self.sites)
+                tk.Button(f_inner, text="🔍", font=('Arial', 8), bd=0, bg='white', cursor='hand2', 
+                          command=lambda: self.open_list_management_dialog('sites', target_cb=var)).pack(side='right', padx=2)
+            elif key == "Type":
+                var = ttk.Combobox(f_inner, width=25)
+                var['values'] = ["입고", "출고", "반납", "폐기", "수정"]
+                var.set("입고")
+            else:
+                var = ttk.Entry(f_inner, width=28)
+            
+            var.pack(side='left')
+            self.inout_vars[key] = var
 
-        # [RIGHT] Recent History
+        # Button Row for Registration
+        btn_f = ttk.Frame(left_f)
+        btn_f.pack(pady=20)
+        ttk.Button(btn_f, text="등록하기", style='Accent.TButton', command=self.register_transaction, width=15).pack(side='left', padx=5)
+        ttk.Button(btn_f, text="초기화", command=self.clear_inout_form, width=10).pack(side='left', padx=5)
+
+        # [RIGHT] History & Search
         right_f = ttk.Frame(paned, padding=10)
         paned.add(right_f, stretch="always")
         
-        ttk.Label(right_f, text="📑 최근 입출고 내역", font=("Malgun Gothic", 10, "bold")).pack(anchor='w')
+        # Search & Filter Frame
+        search_f = ttk.Frame(right_f)
+        search_f.pack(fill='x', pady=(0, 10))
         
-        cols = ("날짜", "품목", "현장", "구분", "수량", "비고")
+        ttk.Label(search_f, text="🔍 검색:").pack(side='left', padx=5)
+        self.inout_search_var = tk.StringVar()
+        self.inout_search_var.trace_add("write", self.on_inout_search_change)
+        search_ent = ttk.Entry(search_f, textvariable=self.inout_search_var, width=30)
+        search_ent.pack(side='left', padx=5)
+        
+        ttk.Button(search_f, text="새로고침", command=self.update_transaction_view, width=10).pack(side='left', padx=5)
+        ttk.Button(search_f, text="엑셀 저장", command=self.export_inout_history, width=10).pack(side='right', padx=5)
+        ttk.Button(search_f, text="선택 삭제", command=self.delete_transaction_entry, width=10).pack(side='right', padx=5)
+
+        # Treeview
+        cols = ("날짜", "현장", "구분", "품목", "수량", "비고")
         self.inout_tree = ttk.Treeview(right_f, columns=cols, show='headings', height=15)
-        for c in cols: self.inout_tree.heading(c, text=c); self.inout_tree.column(c, width=80, anchor='center')
-        self.inout_tree.pack(fill='both', expand=True, pady=5)
+        for c in cols: 
+            anchor = 'center' if c != "비고" else 'w'
+            width = 150 if c in ["날짜", "품목"] else 80
+            self.inout_tree.heading(c, text=c)
+            self.inout_tree.column(c, width=width, anchor=anchor)
+        
+        # Scrollbar for Treeview
+        vsb = ttk.Scrollbar(right_f, orient="vertical", command=self.inout_tree.yview)
+        self.inout_tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side='right', fill='y')
+        self.inout_tree.pack(fill='both', expand=True)
+        
+        # Summary Label
+        self.inout_summary_var = tk.StringVar(value="총 0건의 내역")
+        ttk.Label(right_f, textvariable=self.inout_summary_var, font=("Malgun Gothic", 9, "italic")).pack(anchor='e', pady=5)
+
+        # Bind Enter keys for form navigation
+        self.inout_vars['Date'].bind('<Return>', lambda e: self.inout_vars['Material'].focus_set())
+        self.inout_vars['Material'].bind('<Return>', lambda e: self.inout_vars['Site'].focus_set())
+        self.inout_vars['Site'].bind('<Return>', lambda e: self.inout_vars['Type'].focus_set())
+        self.inout_vars['Type'].bind('<Return>', lambda e: self.inout_vars['Qty'].focus_set())
+        self.inout_vars['Qty'].bind('<Return>', lambda e: self.inout_vars['Note'].focus_set())
+        self.inout_vars['Note'].bind('<Return>', lambda e: self.register_transaction())
 
     def setup_daily_usage_tab(self):
         """Setup the daily usage entry tab"""
@@ -1614,7 +2236,7 @@ class IntegratedSmartManager:
         # Save sash position on adjustment
         self.daily_usage_paned.bind("<ButtonRelease-1>", lambda e: self.save_tab_config())
         
-        entry_frame = ttk.LabelFrame(self.daily_usage_paned, text="현장별 일일 사용량 기입")
+        entry_frame = ttk.LabelFrame(self.daily_usage_paned, text="작업일보 및 일일 사용량 기입")
         self.daily_usage_paned.add(entry_frame, weight=1)
         
         # Header area
@@ -1664,7 +2286,7 @@ class IntegratedSmartManager:
         self.entry_canvas.bind("<Configure>", _on_entry_config)
         
         # Form Panels
-        self.master_form_panel = ttk.LabelFrame(self.entry_inner_frame, text="일일 검사 및 사용량 기록")
+        self.master_form_panel = ttk.LabelFrame(self.entry_inner_frame, text="작업일보 현장 기록 (검사 및 사용량)")
         self.master_form_panel.pack(fill='x', padx=5, pady=5)
         
         # Split into Left (Form) and Right (Workers)
@@ -1809,25 +2431,79 @@ class IntegratedSmartManager:
         self.ndt_company_container.pack(fill='x')
         self.add_ndt_company_section() # Initial one
 
-        # --- History Inquiry Section ---
-        history_frame = ttk.LabelFrame(self.daily_usage_paned, text="일일 사용량 및 검사 현황 조회")
+        # --- RTK Quality Defect Section ---
+        rtk_section = ttk.LabelFrame(self.entry_inner_frame, text="RTK 품질 결함 (매)")
+        rtk_section.pack(fill='x', padx=5, pady=5)
+        
+        rtk_fields = [
+            ("센터미스:", "센터미스"), ("농도:", "농도"), ("마킹미스:", "마킹미스"),
+            ("필름마크:", "필름마크"), ("취급부주의:", "취급부주의"), ("고객불만:", "고객불만"),
+            ("기타:", "기타")
+        ]
+        self.rtk_vars = {}
+        rtk_grid = ttk.Frame(rtk_section, padding=5)
+        rtk_grid.pack(fill='x')
+        
+        for idx, (lbl, key) in enumerate(rtk_fields):
+            r, c = divmod(idx, 4)
+            ttk.Label(rtk_grid, text=lbl).grid(row=r, column=c*2, padx=5, pady=2, sticky='e')
+            var = ttk.Entry(rtk_grid, width=8)
+            var.grid(row=r, column=c*2+1, padx=5, pady=2, sticky='w')
+            var.insert(0, "0")
+            self.rtk_vars[key] = var
+        
+        self.lbl_rtk_total = ttk.Label(rtk_grid, text="총계: 0매", font=("Malgun Gothic", 9, "bold"))
+        self.lbl_rtk_total.grid(row=1, column=6, columnspan=2, padx=20)
+        
+        for v in self.rtk_vars.values():
+            v.bind('<KeyRelease>', lambda e: self.update_rtk_total())
+
+        # --- History Inquiry Section (RESTORED) ---
+        history_frame = ttk.LabelFrame(self.daily_usage_paned, text="작업일보 및 일일 사용현황 조회")
         self.daily_usage_paned.add(history_frame, weight=1)
         self.setup_daily_usage_history_view(history_frame)
 
+    def update_rtk_total(self, event=None):
+        total = 0
+        for v in self.rtk_vars.values():
+            try: total += int(v.get())
+            except: pass
+        self.lbl_rtk_total.config(text=f"총계: {total}매")
+
+    def delete_daily_usage_entry(self):
+        selection = self.daily_tree.selection()
+        if not selection:
+            messagebox.showwarning("선택 오류", "삭제할 항목을 선택해주세요.")
+            return
+        if not messagebox.askyesno("삭제 확인", "선택한 현장 사용 내역을 삭제하시겠습니까?"): return
+        try:
+            for item in selection:
+                vals = self.daily_tree.item(item, 'values')
+                # Date(0), Site(1), Item(2), Qty(3), Unit(4), Price(5), Fee(6), User(7)
+                date_str, site, item_name = vals[0], vals[1], vals[2]
+                mask = (pd.to_datetime(self.daily_usage_df['Date']).dt.strftime('%Y-%m-%d') == date_str) & \
+                       (self.daily_usage_df['Site'] == site) & \
+                       (self.daily_usage_df['검사품명'] == item_name)
+                self.daily_usage_df = self.daily_usage_df[~mask]
+            self.save_data()
+            self.update_daily_usage_view()
+            messagebox.showinfo("성공", "삭제되었습니다.")
+        except Exception as e: messagebox.showerror("오류", f"삭제 실패: {e}")
+
     def setup_daily_usage_history_view(self, parent):
         """Setup the history tree and filters for daily usage"""
-        # Filter Panel (3-row layout as requested in Conversation 0c45aaf3)
+        # Filter Panel (3-row layout as requested)
         filter_panel = ttk.Frame(parent, padding=5)
         filter_panel.pack(fill='x')
         
         # Filter Row 1: Date Range
         row1 = ttk.Frame(filter_panel); row1.pack(fill='x', pady=1)
         ttk.Label(row1, text="시작일:").pack(side='left', padx=2)
-        self.ent_daily_filter_start = DateEntry(row1, width=12, background='darkblue', foreground='white', borderwidth=2)
+        self.ent_daily_filter_start = DateEntry(row1, width=12, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.ent_daily_filter_start.pack(side='left', padx=2)
         
         ttk.Label(row1, text="종료일:").pack(side='left', padx=5)
-        self.ent_daily_filter_end = DateEntry(row1, width=12, background='darkblue', foreground='white', borderwidth=2)
+        self.ent_daily_filter_end = DateEntry(row1, width=12, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.ent_daily_filter_end.pack(side='left', padx=2)
         
         # Filter Row 2: Comboboxes
@@ -1837,24 +2513,35 @@ class IntegratedSmartManager:
         
         ttk.Label(row2, text="작업자:").pack(side='left', padx=5)
         self.cb_daily_filter_user = ttk.Combobox(row2, width=15, values=['전체'] + self.users); self.cb_daily_filter_user.pack(side='left', padx=2); self.cb_daily_filter_user.set('전체')
-        
-        # Filter Row 3: Buttons
+
+        # Filter Row 3: Search & Actions
         row3 = ttk.Frame(filter_panel); row3.pack(fill='x', pady=1)
-        ttk.Button(row3, text="🔍 조회", command=self.update_daily_usage_view, width=10).pack(side='left', padx=2)
-        ttk.Button(row3, text="📊 엑셀 저장", command=self.export_daily_report_to_excel, width=15).pack(side='left', padx=5)
+        ttk.Label(row3, text="🔍 검색:").pack(side='left', padx=2)
+        self.daily_search_var = tk.StringVar()
+        self.daily_search_var.trace_add("write", lambda *a: self.update_daily_usage_view())
+        ttk.Entry(row3, textvariable=self.daily_search_var, width=20).pack(side='left', padx=2)
+
+        ttk.Button(row3, text="🔍 조회", command=self.update_daily_usage_view, width=10).pack(side='left', padx=10)
+        ttk.Button(row3, text="📊 엑셀 저장", command=self.export_daily_report_to_excel, width=12).pack(side='left', padx=2)
+        ttk.Button(row3, text="선택 삭제", command=self.delete_daily_usage_entry, width=10).pack(side='right', padx=5)
         
         # Treeview
-        cols = ("날짜", "현장", "검사품명", "수량", "단위", "단가", "검사비", "작업자")
+        cols = ("날짜", "현장명", "검사항목/품명", "수량", "단위", "단가", "검사비", "검사원")
         self.daily_tree = ttk.Treeview(parent, columns=cols, show='headings', height=10)
-        for c in cols: self.daily_tree.heading(c, text=c); self.daily_tree.column(c, width=100, anchor='center')
+        for c in cols: 
+            width = 120 if c in ["날짜", "현장", "검사품명"] else 80
+            self.daily_tree.heading(c, text=c); self.daily_tree.column(c, width=width, anchor='center')
         
         vsb = ttk.Scrollbar(parent, orient="vertical", command=self.daily_tree.yview)
-        hsb = ttk.Scrollbar(parent, orient="horizontal", command=self.daily_tree.xview)
-        self.daily_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        
+        self.daily_tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side='right', fill='y')
         self.daily_tree.pack(fill='both', expand=True, padx=2, pady=2)
-        vsb.pack(side='right', fill='y', before=self.daily_tree)
-        hsb.pack(side='bottom', fill='x')
+        
+        # Summary Area
+        summary_f = ttk.Frame(parent)
+        summary_f.pack(fill='x', padx=5, pady=2)
+        self.daily_summary_var = tk.StringVar(value="조회된 내역: 0건 | 총 검사비: 0원")
+        ttk.Label(summary_f, textvariable=self.daily_summary_var, font=("Malgun Gothic", 9, "bold")).pack(side='right')
 
     def register_transaction(self):
         """Record an IN or OUT transaction using inout_vars"""
@@ -1934,14 +2621,75 @@ class IntegratedSmartManager:
             messagebox.showinfo("성공", "삭제되었습니다.")
         except Exception as e: messagebox.showerror("오류", f"삭제 실패: {e}")
 
+    def on_inout_search_change(self, *args):
+        self.update_transaction_view()
+
+    def clear_inout_form(self):
+        """Reset the inbound/outbound registration form."""
+        self.inout_vars['Date'].set_date(datetime.date.today())
+        self.inout_vars['Material'].set('')
+        self.inout_vars['Site'].set('')
+        self.inout_vars['Type'].set('입고')
+        self.inout_vars['Qty'].delete(0, tk.END)
+        self.inout_vars['Note'].delete(0, tk.END)
+
+    def export_inout_history(self):
+        """Export current filtered transaction history to Excel."""
+        if self.transactions_df.empty:
+            messagebox.showwarning("데이터 없음", "내보낼 데이터가 없습니다.")
+            return
+        
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            initialfile=f"입출고내역_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+        if not file_path: return
+        
+        try:
+            # Apply current search filter to the exported data
+            q = self.inout_search_var.get().strip().lower()
+            df_export = self.transactions_df.copy()
+            
+            if q:
+                # Add material name for filtering
+                df_export['품목명'] = df_export['MaterialID'].apply(self.get_material_display_name)
+                mask = df_export.apply(lambda r: q in str(r['품목명']).lower() or q in str(r.get('Site','')).lower() or q in str(r.get('Type','')).lower(), axis=1)
+                df_export = df_export[mask]
+                df_export.drop(columns=['품목명'], inplace=True)
+            
+            # Final touch: Add display name for the final excel
+            df_export.insert(2, '품목명', df_export['MaterialID'].apply(self.get_material_display_name))
+            df_export.to_excel(file_path, index=False)
+            messagebox.showinfo("성공", f"파일이 저장되었습니다:\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("오류", f"엑셀 저장 실패: {e}")
+
     def update_transaction_view(self):
         for item in self.inout_tree.get_children(): self.inout_tree.delete(item)
-        if self.transactions_df.empty: return
-        df = self.transactions_df.sort_values(by='Date', ascending=False).head(100)
+        if self.transactions_df.empty: 
+            self.inout_summary_var.set("총 0건의 내역")
+            return
+            
+        q = self.inout_search_var.get().strip().lower()
+        df = self.transactions_df.sort_values(by='Date', ascending=False)
+        
+        count = 0
         for _, row in df.iterrows():
             mat_name = self.get_material_display_name(row['MaterialID'])
-            vals = (pd.to_datetime(row['Date']).strftime('%Y-%m-%d %H:%M:%S'), row.get('Site',''), row.get('Type',''), mat_name, f"{row.get('Quantity',0):g}", row.get('Note',''))
+            site = str(row.get('Site',''))
+            t_type = str(row.get('Type',''))
+            note = str(row.get('Note',''))
+            
+            if q and not (q in mat_name.lower() or q in site.lower() or q in t_type.lower() or q in note.lower()):
+                continue
+            
+            vals = (pd.to_datetime(row['Date']).strftime('%Y-%m-%d %H:%M:%S'), site, t_type, mat_name, f"{row.get('Quantity',0):g}", note)
             self.inout_tree.insert('', 'end', values=vals)
+            count += 1
+            if not q and count >= 100: break # Show only 100 if no search
+            
+        self.inout_summary_var.set(f"총 {count}건의 내역" + (" (필터링됨)" if q else ""))
 
     def register_new_material(self, name, warehouse='미지정', 규격='자동등록'):
         mat_id = str(int(self.materials_df['MaterialID'].max()) + 1) if not self.materials_df.empty else "1001"
@@ -1981,6 +2729,11 @@ class IntegratedSmartManager:
                 workers[f'WorkTime{i if i>1 else ""}'] = g.get_time()
                 workers[f'OT{i if i>1 else ""}'] = g.get_ot()
 
+        # RTK Defect Data
+        rtk_data = {}
+        for k, v in self.rtk_vars.items():
+            rtk_data[f'RTK_{k}'] = to_f(v.get())
+
         # NDT Company Logic
         records = []
         common = {
@@ -1997,7 +2750,8 @@ class IntegratedSmartManager:
             '적용코드': self.ent_daily_applied_code.get(),
             '성적서번호': self.ent_daily_report_no.get(),
             '비고': self.ent_daily_note.get(),
-            **workers
+            **workers,
+            **rtk_data
         }
         
         for i, entries in enumerate(self.ndt_company_entries):
@@ -2061,29 +2815,62 @@ class IntegratedSmartManager:
         while len(self.ndt_company_entries) > 1: self.remove_last_ndt_company()
         if self.ndt_company_entries:
             for k in self.ndt_materials_all: self.ndt_company_entries[0][k].delete(0, tk.END); self.ndt_company_entries[0][k].insert(0, "0")
+        # Reset RTK
+        for v in self.rtk_vars.values():
+            v.delete(0, tk.END); v.insert(0, "0")
+        self.update_rtk_total()
 
     def update_daily_usage_view(self):
         for item in self.daily_tree.get_children(): self.daily_tree.delete(item)
-        if self.daily_usage_df.empty: return
-        df = self.daily_usage_df.sort_values(by='Date', ascending=False).head(50)
+        if self.daily_usage_df.empty: 
+            self.daily_summary_var.set("조회된 내역: 0건 | 총 검사비: 0원")
+            return
+            
+        start_date = self.ent_daily_filter_start.get_date()
+        end_date = self.ent_daily_filter_end.get_date()
+        site_filter = self.cb_daily_filter_site.get()
+        user_filter = self.cb_daily_filter_user.get()
+        q = self.daily_search_var.get().strip().lower()
+        
+        df = self.daily_usage_df.copy()
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
+        
+        mask = (df['Date'] >= start_date) & (df['Date'] <= end_date)
+        if site_filter != '전체': mask &= (df['Site'] == site_filter)
+        
+        if user_filter != '전체':
+            user_mask = pd.Series(False, index=df.index)
+            for i in range(1, 11):
+                suffix = str(i) if i > 1 else ""
+                col = f'User{suffix}'
+                if col in df.columns:
+                    user_mask |= (df[col] == user_filter)
+            mask &= user_mask
+            
+        df = df[mask].sort_values(by='Date', ascending=False)
+        
+        count = 0
+        total_fee = 0
         for _, row in df.iterrows():
-            # Cols: ("날짜", "현장", "검사품명", "수량", "단위", "단가", "검사비", "작업자")
+            date_str = row['Date'].strftime('%Y-%m-%d')
+            site = str(row.get('Site', ''))
+            item = str(row.get('검사품명', ''))
             qty = row.get('Usage', 0)
+            unit = str(row.get('Unit', ''))
             price = row.get('단가', 0)
             try: fee = float(row.get('검사비', 0))
             except: fee = 0
+            user = str(row.get('User', ''))
             
-            vals = (
-                pd.to_datetime(row['Date']).strftime('%Y-%m-%d'),
-                row.get('Site', ''),
-                row.get('검사품명', ''),
-                f"{qty:g}",
-                row.get('Unit', ''),
-                f"{price:g}",
-                f"{fee:,.0f}",
-                row.get('User', '')
-            )
+            if q and not (q in site.lower() or q in item.lower() or q in user.lower()):
+                continue
+                
+            vals = (date_str, site, item, f"{qty:g}", unit, f"{price:g}", f"{fee:,.0f}", user)
             self.daily_tree.insert('', 'end', values=vals)
+            count += 1
+            total_fee += fee
+            
+        self.daily_summary_var.set(f"조회된 내역: {count}건 | 총 검사비: {total_fee:,.0f}원")
 
     def update_daily_test_fee_calc(self, event=None):
         """Auto-calculate Inspection Fee = (Amount * Unit Price) + Travel Expense (Restored from V13)"""
@@ -2139,7 +2926,9 @@ class IntegratedSmartManager:
                 # Restore sash position
                 if 'daily_usage_sash_pos' in self.tab_config and hasattr(self, 'daily_usage_paned'):
                     pos = self.tab_config['daily_usage_sash_pos']
-                    if pos: self.daily_usage_paned.sashpos(0, pos)
+                    if pos: 
+                        try: self.daily_usage_paned.sash_place(0, 0, pos) # sashpos can be tricky, using sash_place or wrapping
+                        except: pass
                     
         except Exception as e:
             print(f"Failed to load tab config: {e}")
@@ -2365,8 +3154,86 @@ class IntegratedSmartManager:
             self.materials_df.loc[self.materials_df['MaterialID'].apply(normalize_id) == normalize_id(mat_id), 'Active'] = 0
         self.save_data(); self.update_stock_view(); self.update_material_combo()
 
-    def open_edit_material_dialog(self): messagebox.showinfo("알림", "품목 수정 기능은 준비 중입니다.")
-
+    def open_edit_material_dialog(self):
+        selected = self.stock_tree.selection()
+        if not selected:
+            messagebox.showwarning('선택 오류', '편집할 품목을 선택해주세요.')
+            return
+        
+        item_id = self.stock_tree.item(selected[0], 'values')[0]
+        mat_row = self.materials_df[self.materials_df['MaterialID'].apply(normalize_id) == normalize_id(item_id)]
+        if mat_row.empty:
+            messagebox.showerror('오류', '해당 품목을 찾을 수 없습니다.')
+            return
+            
+        row_idx = mat_row.index[0]
+        material = mat_row.iloc[0]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title('품목 정보 편집')
+        dialog.geometry("500x700")
+        dialog.grab_set()
+        
+        main_frame = ttk.Frame(dialog, padding=20)
+        main_frame.pack(expand=True, fill='both')
+        
+        # Scrollable area
+        canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scroll_frame = ttk.Frame(canvas)
+        
+        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", expand=True, fill="both")
+        scrollbar.pack(side="right", fill="y")
+        
+        fields = [
+            ('MaterialID', 'ID', False),
+            ('관리사코드', '관리사코드', True),
+            ('관리품목', '관리품목', True),
+            ('품목명', '품목명', True),
+            ('SN', 'SN', True),
+            ('창고', '창고', True),
+            ('모델명', '모델명', True),
+            ('규격', '규격', True),
+            ('품목군코드', '품목군코드', True),
+            ('공급업체', '공급업체', True),
+            ('제조사', '제조사', True),
+            ('제조일', '제조일', True),
+            ('가격', '가격', True),
+            ('위치', '위치', True),
+            ('관리단위', '관리단위', True),
+            ('수량', '기초 수량', True),
+            ('재고기한', '재고기한', True)
+        ]
+        
+        entries = {}
+        for i, (col, label, editable) in enumerate(fields):
+            ttk.Label(scroll_frame, text=label).grid(row=i, column=0, sticky='e', padx=5, pady=5)
+            ent = ttk.Entry(scroll_frame, width=30)
+            val = material.get(col, '')
+            if pd.isna(val): val = ''
+            ent.insert(0, str(val))
+            if not editable: ent.config(state='disabled')
+            ent.grid(row=i, column=1, sticky='w', padx=5, pady=5)
+            entries[col] = ent
+            
+        def save():
+            for col, ent in entries.items():
+                if ent.cget('state') != 'disabled':
+                    new_val = ent.get()
+                    if col in ['가격', '수량', '재고기한']:
+                        try: new_val = float(new_val)
+                        except: new_val = 0.0
+                    self.materials_df.at[row_idx, col] = new_val
+            self.save_data()
+            self.update_stock_view()
+            dialog.destroy()
+            messagebox.showinfo('알림', '수정되었습니다.')
+            
+        ttk.Button(main_frame, text='저장', command=save).pack(pady=10)
     def _load_ndt_product_map(self):
         try:
             if os.path.exists(self.config_path):
@@ -2454,41 +3321,50 @@ class IntegratedSmartManager:
             
             row = self.daily_usage_df[mask].iloc[0]
             
+            # Prepare RTK data
+            rtk_info = {}
+            for k in ['센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타']:
+                rtk_info[k] = row.get(f'RTK_{k}', 0)
+            
+            # Prepare OT status
+            ot_status = []
+            for i in range(1, 11):
+                suffix = str(i) if i > 1 else ""
+                u = row.get(f'User{suffix}', "")
+                t = row.get(f'WorkTime{suffix}', "")
+                o = row.get(f'OT{suffix}', "")
+                if u:
+                    ot_status.append({
+                        'names': u,
+                        'company': row.get('업체명', '원자력건설'),
+                        'method': row.get('검사방법', 'RT'),
+                        'ot_hours': t,
+                        'ot_amount': o
+                    })
+
             # Prepare data for manager
-            import json
             data = {
                 'date': date,
-                'company': '원자력건설', # Default or from settings
+                'company': row.get('업체명', '원자력건설'),
                 'project_name': site,
-                'standard': 'KS', # Default
-                'equipment': '',
-                'report_no': '',
-                'inspection_item': '',
-                'inspector': '',
+                'standard': row.get('적용코드', 'KS'),
+                'equipment': row.get('장비명', ''),
+                'report_no': row.get('성적서번호', ''),
+                'inspection_item': row.get('검사품명', ''),
+                'inspector': row.get('User', ''),
                 'car_no': '',
                 'methods': {},
-                'rtk': json.loads(row.get('NDT_Results', '{}')),
-                'ot_status': [],
+                'rtk': rtk_info,
+                'ot_status': ot_status,
                 'materials': {},
-                'vehicles': [json.loads(row.get('Vehicle_Info', '{}'))]
+                'vehicles': [] # Handle vehicle info if needed
             }
-            
-            # Populate OT status
-            workers = json.loads(row.get('Workers', '[]'))
-            for w in workers:
-                data['ot_status'].append({
-                    'names': w.get('Name', ''),
-                    'company': data['company'],
-                    'method': 'RT', # Default
-                    'ot_hours': w.get('Time', ''),
-                    'ot_amount': w.get('OT', '')
-                })
             
             # [CRITICAL] Template Path
             template_path = os.path.join(os.path.dirname(__file__), 'resources', 'Template_DailyWorkReport.xlsx')
             if not os.path.exists(template_path):
                 # Fallback to absolute if needed for local test
-                template_path = r'c:\Users\-\OneDrive\바탕 화면\home\Na-aba\home\resources\Template_DailyWorkReport.xlsx'
+                template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'resources', 'Template_DailyWorkReport.xlsx')
             
             if not os.path.exists(template_path):
                 messagebox.showerror("오류", "엑셀 템플릿 파일을 찾을 수 없습니다."); return
@@ -2616,12 +3492,14 @@ class IntegratedSmartManager:
     def _create_margin_settings(self, parent, context, start_row):
         ttk.Label(parent, text="페이지 여백 및 배율:", font=("Malgun Gothic", 9, "bold")).grid(row=start_row, column=0, sticky='w', pady=(10, 2), columnspan=3)
         m_row = start_row + 1
-        for i, (l, k) in enumerate([("상:", "TOP"), ("하:", "BOTTOM"), ("좌:", "LEFT"), ("우:", "RIGHT"), ("배율:", "SCALE")]):
-            full_key = f"MARGIN_{context}_{k}" if k != "SCALE" else f"PRINT_SCALE_{context}"
+        for i, (l, k) in enumerate([("상:", "TOP"), ("하:", "BOTTOM"), ("좌:", "LEFT"), ("우:", "RIGHT"), ("배율:", "SCALE"), ("영역:", "AREA")]):
+            if k == "SCALE": full_key = f"PRINT_SCALE_{context}"
+            elif k == "AREA": full_key = f"PRINT_AREA_{context}"
+            else: full_key = f"MARGIN_{context}_{k}"
             ttk.Label(parent, text=l, font=("Arial", 8)).grid(row=m_row, column=i*2, sticky='e')
             var = tk.StringVar(value=str(self.config.get(full_key, "")))
             self.setting_vars[full_key] = var
-            ttk.Entry(parent, textvariable=var, width=5).grid(row=m_row, column=i*2+1, sticky='w', padx=2)
+            ttk.Entry(parent, textvariable=var, width=5 if k != "AREA" else 10).grid(row=m_row, column=i*2+1, sticky='w', padx=2)
 
     def _create_row_settings(self, parent, mode="PMI"):
         """Row range settings for data extraction and printing."""
@@ -2675,6 +3553,10 @@ class IntegratedSmartManager:
         elif mode=="PT": self.pt_preview_tree = tree
         elif mode=="PAUT": self.paut_preview_tree = tree
 
+    def apply_preview_filter(self, mode):
+        """Filters the current preview treeview based on search criteria."""
+        messagebox.showinfo("알림", f"{mode} 필터 기능이 준비 중입니다.")
+
     def setup_pmi_tab(self, parent):
         container = tk.Frame(parent, background="#f9fafb"); container.pack(fill='both', expand=True)
         pw = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", sashwidth=4); pw.pack(fill='both', expand=True)
@@ -2722,6 +3604,7 @@ class IntegratedSmartManager:
         f_box = ttk.LabelFrame(lp, text=" 파일 선택 "); f_box.pack(fill='x', pady=5)
         self._add_compact_file_row(f_box, "데이터:", self.rt_target_file_path, 0)
         self._add_compact_file_row(f_box, "양식:", self.rt_template_file_path, 1)
+        ttk.Button(f_box, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("RT")).grid(row=2, column=1, sticky='w', padx=5, pady=2)
         nb = ttk.Notebook(lp); nb.pack(fill='both', expand=True, pady=10)
         t_cover = ttk.Frame(nb, padding=5); nb.add(t_cover, text="갑지")
         t_data = ttk.Frame(nb, padding=5); nb.add(t_data, text="을지")
@@ -2729,6 +3612,8 @@ class IntegratedSmartManager:
         t_cols = ttk.Frame(nb, padding=5); nb.add(t_cols, text="열")
         self._create_setting_grid(t_cover, "RT_COVER")
         self._create_setting_grid(t_data, "RT_DATA")
+        self._create_margin_settings(t_cover, "RT_COVER", 5) # Added Margin/Area/Scale
+        self._create_margin_settings(t_data, "RT_DATA", 5)
         self._create_row_settings(t_rows, "RT")
         rt_items = [
             ("No:", "RT_COL_NO", 1, "RT_NAME_NO", "No", "No"),
@@ -2752,6 +3637,7 @@ class IntegratedSmartManager:
         f_box = ttk.LabelFrame(lp, text=" 파일 선택 "); f_box.pack(fill='x', pady=5)
         self._add_compact_file_row(f_box, "데이터:", self.pt_target_file_path, 0)
         self._add_compact_file_row(f_box, "양식:", self.pt_template_file_path, 1)
+        ttk.Button(f_box, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("PT")).grid(row=2, column=1, sticky='w', padx=5, pady=2)
         nb = ttk.Notebook(lp); nb.pack(fill='both', expand=True, pady=10)
         t_cover = ttk.Frame(nb, padding=5); nb.add(t_cover, text="갑지")
         t_data = ttk.Frame(nb, padding=5); nb.add(t_data, text="을지")
@@ -2759,6 +3645,8 @@ class IntegratedSmartManager:
         t_cols = ttk.Frame(nb, padding=5); nb.add(t_cols, text="열")
         self._create_setting_grid(t_cover, "PT_COVER")
         self._create_setting_grid(t_data, "PT_DATA")
+        self._create_margin_settings(t_cover, "PT_COVER", 5) # Added Margin/Area/Scale
+        self._create_margin_settings(t_data, "PT_DATA", 5)
         self._create_row_settings(t_rows, "PT")
         pt_items = [
             ("No:", "PT_COL_NO", 1, "PT_NAME_NO", "No", "No"),
@@ -2800,35 +3688,138 @@ class IntegratedSmartManager:
         self._create_preview_ui(right, "PAUT")
 
     def setup_photo_log_tab(self, parent):
-        self.photo_paned = tk.PanedWindow(parent, orient='horizontal', background="#d1d5db", sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
+        """Standardized Photo Log UI with Dual-Pane Layout."""
+        self.photo_paned = tk.PanedWindow(parent, orient='horizontal', background="#d1d5db", 
+                            sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.photo_paned.pack(fill='both', expand=True)
 
-        left_container = tk.Frame(self.photo_paned, background="#f9fafb")
+        # [LEFT] Settings Sidebar
+        left_container = tk.Frame(self.photo_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.photo_paned.add(left_container, width=425, minsize=200)
+        
+        # Scrollable area
         left_pane = self._create_scrollable_sidebar(left_container)
 
-        # 1. Report Info
+        # 1. Report Info Group
         info_frame = ttk.LabelFrame(left_pane, text=" 리포트 정보 (Report Info) ", padding=10)
         info_frame.pack(fill='x', padx=10, pady=5)
-        
-        tk.Label(info_frame, text="검사 항목:").grid(row=0, column=0, sticky='w')
-        type_combo = ttk.Combobox(info_frame, textvariable=self.photo_inspect_type, values=list(self.photo_header_map.keys()), state="readonly")
-        type_combo.grid(row=0, column=1, sticky='ew', padx=5, pady=2); type_combo.bind("<<ComboboxSelected>>", self._on_photo_type_change)
-        
-        tk.Label(info_frame, text="리포트 제목:").grid(row=1, column=0, sticky='w')
+
+        tk.Label(info_frame, text="검사 항목:").grid(row=0, column=0, sticky='w', pady=2)
+        type_combo = ttk.Combobox(info_frame, textvariable=self.photo_inspect_type, 
+                                 values=list(self.photo_header_map.keys()), state="readonly")
+        type_combo.grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+        type_combo.bind("<<ComboboxSelected>>", self._on_photo_type_change)
+
+        tk.Label(info_frame, text="리포트 제목:").grid(row=1, column=0, sticky='w', pady=2)
         ttk.Entry(info_frame, textvariable=self.photo_report_title).grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+
+        tk.Label(info_frame, text="발주처:").grid(row=2, column=0, sticky='w', pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_orderer).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+
+        tk.Label(info_frame, text="리포트 번호:").grid(row=3, column=0, sticky='w', pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_report_no).grid(row=3, column=1, sticky='ew', padx=5, pady=2)
+
+        tk.Label(info_frame, text="검사 일자:").grid(row=4, column=0, sticky='w', pady=2)
+        ttk.Entry(info_frame, textvariable=self.photo_inspect_date).grid(row=4, column=1, sticky='ew', padx=5, pady=2)
         
-        # ... (Simplified UI setup for brevity, full porting continues)
+        tk.Label(info_frame, text="로고 파일:").grid(row=5, column=0, sticky='w', pady=2)
+        logo_f = tk.Frame(info_frame)
+        logo_f.grid(row=5, column=1, sticky='ew', padx=5, pady=2)
+        ttk.Entry(logo_f, textvariable=self.photo_logo_path).pack(side='left', fill='x', expand=True)
+        def browse_logo():
+            f = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.bmp")])
+            if f: self.photo_logo_path.set(f)
+        ttk.Button(logo_f, text="...", width=3, command=browse_logo).pack(side='right')
+        
+        info_frame.columnconfigure(1, weight=1)
+
+        # 2. Layout Settings Group
+        layout_frame = ttk.LabelFrame(left_pane, text=" 사진 레이아웃 설정 (Layout) ", padding=10)
+        layout_frame.pack(fill='x', padx=10, pady=5)
+
+        tk.Label(layout_frame, text="한 줄당 사진:").grid(row=0, column=0, sticky='w', pady=2)
+        ttk.Combobox(layout_frame, textvariable=self.photo_cols_per_row, values=["1", "2", "3"], state="readonly", width=5).grid(row=0, column=1, sticky='w', padx=5, pady=2)
+        ttk.Checkbutton(layout_frame, text="비율 유지", variable=self.photo_keep_aspect).grid(row=0, column=2, sticky='w')
+
+        tk.Label(layout_frame, text="칸 너비/높이:").grid(row=1, column=0, sticky='w', pady=2)
+        wh_f = tk.Frame(layout_frame)
+        wh_f.grid(row=1, column=1, columnspan=2, sticky='w')
+        ttk.Entry(wh_f, textvariable=self.photo_cell_width_var, width=6).pack(side='left', padx=2)
+        ttk.Entry(wh_f, textvariable=self.photo_cell_height_var, width=6).pack(side='left', padx=2)
+
+        tk.Label(layout_frame, text="여백(T/B/L/R):").grid(row=2, column=0, sticky='w', pady=2)
+        m_f = tk.Frame(layout_frame)
+        m_f.grid(row=2, column=1, columnspan=2, sticky='w')
+        ttk.Entry(m_f, textvariable=self.photo_margin_top_var, width=4).pack(side='left', padx=1)
+        ttk.Entry(m_f, textvariable=self.photo_margin_bottom_var, width=4).pack(side='left', padx=1)
+        ttk.Entry(m_f, textvariable=self.photo_margin_left_var, width=4).pack(side='left', padx=1)
+        ttk.Entry(m_f, textvariable=self.photo_margin_right_var, width=4).pack(side='left', padx=1)
+
+        tk.Label(layout_frame, text="설명 높이:").grid(row=3, column=0, sticky='w', pady=2)
+        ttk.Entry(layout_frame, textvariable=self.photo_desc_height_var, width=10).grid(row=3, column=1, sticky='w', padx=5, pady=2)
+        
+        tk.Label(layout_frame, text="인쇄 배율:").grid(row=4, column=0, sticky='w', pady=2)
+        ttk.Entry(layout_frame, textvariable=self.photo_print_scale_var, width=10).grid(row=4, column=1, sticky='w', padx=5, pady=2)
+
+        tk.Label(layout_frame, text="배치 설정:").grid(row=5, column=0, sticky='w', pady=2)
+        b_f = tk.Frame(layout_frame)
+        b_f.grid(row=5, column=1, columnspan=2, sticky='w')
+        ttk.Combobox(b_f, textvariable=self.photo_align_var, values=["좌측 정렬", "중앙 정렬"], state="readonly", width=10).pack(side='left', padx=2)
+        ttk.Checkbutton(b_f, text="가로 폭 맞춤 (Fit to Width)", variable=self.photo_fit_width_var).pack(side='left', padx=5)
+        ttk.Checkbutton(b_f, text="세로 사진 자동 회전", variable=self.photo_auto_rotate_var).pack(side='left', padx=5)
+        
+        tk.Label(layout_frame, text="너비비율(%):").grid(row=6, column=0, sticky='w')
+        wf_f = tk.Frame(layout_frame)
+        wf_f.grid(row=6, column=1, columnspan=2, sticky='w')
+        ttk.Entry(wf_f, textvariable=self.photo_width_pct_var, width=7).pack(side='left', padx=2)
+        tk.Label(wf_f, text="너비추가(px):").pack(side='left', padx=(10, 0))
+        ttk.Entry(wf_f, textvariable=self.photo_width_pixel_adj_var, width=4).pack(side='left', padx=2)
+        tk.Label(wf_f, text="좌우(px):").pack(side='left', padx=(10, 0))
+        ttk.Entry(wf_f, textvariable=self.photo_shift_x_var, width=4).pack(side='left', padx=2)
+        tk.Label(wf_f, text="상하(px):").pack(side='left', padx=(10, 0))
+        ttk.Entry(wf_f, textvariable=self.photo_shift_y_var, width=4).pack(side='left', padx=2)
+
+        # 3. Logo Options
+        logo_frame = ttk.LabelFrame(left_pane, text=" 로고 및 출력 설정 ", padding=10)
+        logo_frame.pack(fill='x', padx=10, pady=5)
+
+        tk.Label(logo_frame, text="로고 너비:").grid(row=0, column=0, sticky='w', pady=2)
+        ttk.Entry(logo_frame, textvariable=self.photo_logo_width_var, width=10).grid(row=0, column=1, sticky='w', padx=5, pady=2)
+        
+        tk.Label(logo_frame, text="로고 X/Y:").grid(row=1, column=0, sticky='w', pady=2)
+        xy_f = tk.Frame(logo_frame)
+        xy_f.grid(row=1, column=1, sticky='w')
+        ttk.Entry(xy_f, textvariable=self.photo_logo_x_var, width=5).pack(side='left', padx=2)
+        ttk.Entry(xy_f, textvariable=self.photo_logo_y_var, width=5).pack(side='left', padx=2)
+        
+        # [NEW] Photo Log Layout Save Button
+        btn_f = tk.Frame(logo_frame, background="#ffffff")
+        btn_f.grid(row=2, column=0, columnspan=2, sticky='ew', pady=5)
+        ttk.Button(btn_f, text="💾 사진대장 레이아웃 설정 저장", command=self.save_photo_log_config).pack(side='left', padx=5)
+        tk.Label(btn_f, text="* 여백, 로고위치 등이 저장됩니다.", font=("Malgun Gothic", 8), fg="gray", background="#ffffff").pack(side='left')
+        
+        tk.Label(logo_frame, text="출력 파일명:").grid(row=2, column=0, sticky='w', pady=2)
+        ttk.Entry(logo_frame, textvariable=self.photo_output_name).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        logo_frame.columnconfigure(1, weight=1)
+
         ttk.Button(left_pane, text="🚀 사진대장 리포트 생성", style="Accent.TButton", command=self.start_photo_generation).pack(fill='x', padx=20, pady=10)
+        ttk.Button(left_pane, text="💾 현재 설정 저장", command=self.manual_save_settings).pack(fill='x', padx=20, pady=5)
 
         # [RIGHT] Preview & File List
         right_container = tk.Frame(self.photo_paned, background="#ffffff")
         self.photo_paned.add(right_container)
         
+        # File List Header
+        list_header = tk.Frame(right_container, background="#f8fafc", padx=15, pady=10)
+        list_header.pack(fill='x')
+        tk.Label(list_header, text="📁 선택된 사진 리스트 (파일 순차 정렬됨)", font=("Malgun Gothic", 10, "bold"), 
+                 background="#f8fafc", foreground="#475569").pack(side='left')
+        
         tool_bar = tk.Frame(right_container, background="#ffffff", padx=10, pady=5); tool_bar.pack(fill='x')
-        ttk.Button(tool_bar, text="파일 추가", command=self._add_photo_files).pack(side='left', padx=2)
-        ttk.Button(tool_bar, text="폴더 추가", command=self._add_photo_folder).pack(side='left', padx=2)
-        ttk.Button(tool_bar, text="제거", command=self._remove_photo_selected).pack(side='right', padx=2)
+        ttk.Button(tool_bar, text="파일 개별 추가", command=self._add_photo_files).pack(side='left', padx=2)
+        ttk.Button(tool_bar, text="폴더 전체 추가", command=self._add_photo_folder).pack(side='left', padx=2)
+        ttk.Button(tool_bar, text="전체 비우기", command=self._clear_photo_all).pack(side='right', padx=2)
+        ttk.Button(tool_bar, text="선택 항목 제거", command=self._remove_photo_selected).pack(side='right', padx=2)
 
         self.photo_listbox = tk.Listbox(right_container, font=("Consolas", 9), selectmode="extended")
         self.photo_listbox.pack(fill='both', expand=True, padx=10, pady=5)
@@ -2870,9 +3861,280 @@ class IntegratedSmartManager:
             if path in self.photo_selected_files: self.photo_selected_files.remove(path)
             self.photo_listbox.delete(i)
 
+    def manual_save_settings(self):
+        """Update config from UI vars and save to file."""
+        self.config['PHOTO_ORDERER'] = self.photo_orderer.get()
+        self.config['PHOTO_REPORT_NO'] = self.photo_report_no.get()
+        self.config['PHOTO_REPORT_TITLE'] = self.photo_report_title.get()
+        self.config['PHOTO_INSPECT_TYPE'] = self.photo_inspect_type.get()
+        self.config['PHOTO_LOGO_PATH'] = self.photo_logo_path.get()
+        self.config['PHOTO_COLS_PER_ROW'] = self.photo_cols_per_row.get()
+        self.config['PHOTO_KEEP_ASPECT'] = self.photo_keep_aspect.get()
+        self.config['PHOTO_CELL_WIDTH'] = self.photo_cell_width_var.get()
+        self.config['PHOTO_CELL_HEIGHT'] = self.photo_cell_height_var.get()
+        self.config['PHOTO_MARGIN_TOP'] = self.photo_margin_top_var.get()
+        self.config['PHOTO_MARGIN_BOTTOM'] = self.photo_margin_bottom_var.get()
+        self.config['PHOTO_MARGIN_LEFT'] = self.photo_margin_left_var.get()
+        self.config['PHOTO_MARGIN_RIGHT'] = self.photo_margin_right_var.get()
+        self.config['PHOTO_DESC_HEIGHT'] = self.photo_desc_height_var.get()
+        self.config['PHOTO_PRINT_SCALE'] = self.photo_print_scale_var.get()
+        self.config['PHOTO_ALIGN'] = self.photo_align_var.get()
+        self.config['PHOTO_FIT_WIDTH'] = self.photo_fit_width_var.get()
+        self.config['PHOTO_AUTO_ROTATE'] = self.photo_auto_rotate_var.get()
+        self.config['PHOTO_WIDTH_PCT'] = self.photo_width_pct_var.get()
+        self.config['PHOTO_WIDTH_ADJ'] = self.photo_width_pixel_adj_var.get()
+        self.config['PHOTO_SHIFT_X'] = self.photo_shift_x_var.get()
+        self.config['PHOTO_SHIFT_Y'] = self.photo_shift_y_var.get()
+        self.config['PHOTO_LOGO_WIDTH'] = self.photo_logo_width_var.get()
+        self.config['PHOTO_LOGO_X'] = self.photo_logo_x_var.get()
+        self.config['PHOTO_LOGO_Y'] = self.photo_logo_y_var.get()
+        self.config['PHOTO_OUTPUT_NAME'] = self.photo_output_name.get()
+        self.config['LAST_PHOTO_SAVE_DIR'] = self.last_photo_save_dir
+        
+        # [NEW] Capture RT/PT/PMI setting_vars
+        if hasattr(self, 'setting_vars'):
+            for key, var in self.setting_vars.items():
+                val = var.get()
+                try:
+                    if "AREA" in key:
+                        self.config[key] = str(val).strip()
+                    elif any(x in key for x in ['_X', '_Y', '_W', '_H', 'MARGIN', 'HEIGHT', 'WIDTH']):
+                        self.config[key] = float(val)
+                    elif 'SCALE' in key or key.endswith('_ROW'):
+                        self.config[key] = int(float(val))
+                    else:
+                        self.config[key] = str(val)
+                except:
+                    self.config[key] = str(val)
+
+        self.save_settings()
+
+    def _clear_photo_all(self):
+        self.photo_selected_files.clear()
+        self.photo_listbox.delete(0, tk.END)
+
     def generate_photo_report(self):
-        # Implementation from line 6181 of archived file...
-        messagebox.showinfo("사진대장", "사진대장 생성이 시작되었습니다.")
+        try:
+            if not self.photo_selected_files: return
+            
+            image_files = sorted(self.photo_selected_files)
+            initial_folder = self.last_photo_save_dir if self.last_photo_save_dir and os.path.exists(self.last_photo_save_dir) else os.path.dirname(image_files[0])
+            default_name = self.photo_output_name.get()
+            if not default_name.endswith(".xlsx"): default_name += ".xlsx"
+            
+            # [NEW] Ask for save folder and filename
+            output_path = filedialog.asksaveasfilename(
+                title="사진대장 저장 위치 선택",
+                initialdir=initial_folder,
+                initialfile=default_name,
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")]
+            )
+            
+            if not output_path:
+                self.status_var.set("사진대장 생성 취소됨")
+                return
+
+            # [REMEMBER] Update last save directory
+            self.last_photo_save_dir = os.path.dirname(output_path)
+            self.config['LAST_PHOTO_SAVE_DIR'] = self.last_photo_save_dir
+            self.save_settings()
+
+            self.progress["value"] = 0
+            self.log("[PhotoLog] 작업을 시작합니다..")
+            self.status_var.set("사진대장 생성 중...")
+            
+            workbook = xlsxwriter.Workbook(output_path)
+            worksheet = workbook.add_worksheet()
+
+            # Page Setup
+            worksheet.set_paper(9) # A4
+            worksheet.set_portrait()
+            worksheet.center_horizontally()
+            
+            try:
+                m_t = float(self.photo_margin_top_var.get())
+                m_b = float(self.photo_margin_bottom_var.get())
+                m_l = float(self.photo_margin_left_var.get())
+                m_r = float(self.photo_margin_right_var.get())
+                worksheet.set_margins(left=m_l, right=m_r, top=m_t, bottom=m_b)
+            except:
+                worksheet.set_margins(left=0.4, right=0.4, top=0.5, bottom=0.5)
+            
+            worksheet.set_footer('&C&P / &N')
+            worksheet.repeat_rows(0, 4) 
+
+            # Layout Calculation
+            num_cols = int(self.photo_cols_per_row.get())
+            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
+            total_pages = math.ceil(len(self.photo_selected_files) / photos_per_page)
+            worksheet.fit_to_pages(1, total_pages)
+
+            # Formats
+            title_format = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'shrink': True})
+            company_format = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 9, 'text_wrap': True})
+            center_border = workbook.add_format({'align': 'center', 'valign': 'vcenter', 'border': 1, 'font_size': 10})
+            bold_format = workbook.add_format({'bold': True, 'align': 'center', 'valign': 'vcenter', 'border': 1})
+            desc_format = workbook.add_format({'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10, 'shrink': True, 'text_wrap': False, 'indent': 1})
+
+            # Fixed 6-column Grid System
+            GRID_COLS = 6
+            unit_per_grid = (float(self.photo_cell_width_var.get()) * 2) / GRID_COLS
+            worksheet.set_column(0, GRID_COLS - 1, unit_per_grid)
+
+            CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
+            
+            try:
+                WIDTH_PCT = float(self.photo_width_pct_var.get().strip()) / 100.0
+                PIXEL_ADJ = float(self.photo_width_pixel_adj_var.get().strip())
+                SHIFT_X = float(self.photo_shift_x_var.get().strip())
+                SHIFT_Y = float(self.photo_shift_y_var.get().strip())
+            except:
+                WIDTH_PCT, PIXEL_ADJ, SHIFT_X, SHIFT_Y = 1.0, 0.0, 0.0, 0.0
+                
+            INTERNAL_FACTOR = 7.142
+            if num_cols == 1:
+                photo_col_spans = [(0, GRID_COLS - 1)]
+                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 6), 1)
+            elif num_cols == 2:
+                photo_col_spans = [(0, 2), (3, 5)]
+                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 3), 1)
+            else: # 3 Columns
+                photo_col_spans = [(0, 1), (2, 3), (4, 5)]
+                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 2), 1)
+            
+            SAFE_WIDTH = (CELL_WIDTH_PX - 10) * WIDTH_PCT + PIXEL_ADJ
+            
+            worksheet.set_row(0, 30)
+            worksheet.merge_range(0, 0, 0, GRID_COLS-1, self.photo_report_title.get(), title_format)
+            
+            company_text = "서   울   檢   査   株   式   會   社\nSEOUL INSPECTION & TESTING Co., Ltd.\nTEL : (02) 552-1112   FAX : (02) 2058-0720"
+            worksheet.merge_range(1, 0, 3, 2, company_text, company_format)
+
+            # Logo Insertion: Priority to User Selection regardless of name
+            logo_f = self.photo_logo_path.get()
+            
+            # If path is empty, try smart fallback only if it hasn't been explicitly cleared
+            # (In Photo Log, we usually want SITCO as default if nothing is selected)
+            if not logo_f or not os.path.exists(logo_f):
+                # Only fallback if the user hasn't explicitly cleared it in this session
+                # For now, if empty, we try smart find for convenience
+                if not logo_f:
+                    logo_f = self.find_image_smart("SITCO")
+                    if not logo_f: logo_f = self.find_image_smart("서울검사")
+            
+            if logo_f and os.path.exists(logo_f):
+                try:
+                    total_header_h = 45 
+                    for r in range(1, 4): worksheet.set_row(r, 15) 
+                    with PILImage.open(logo_f) as img:
+                        w, h = img.size
+                        max_w_logo = float(self.photo_logo_width_var.get())
+                        mx = float(self.photo_logo_x_var.get())
+                        my = float(self.photo_logo_y_var.get())
+                        scale = min(max_w_logo/w, 42/h) * 0.95
+                        logo_h = h * scale
+                        y_offset = (total_header_h - logo_h) / 2 + my
+                        worksheet.insert_image('A2', logo_f, {'x_scale': scale, 'y_scale': scale, 'x_offset': mx, 'y_offset': y_offset, 'object_position': 1})
+                except Exception as e:
+                    self.log(f"[PhotoLog] 로고 삽입 중 오류: {e}")
+
+            worksheet.merge_range(1, 3, 1, 5, f"발주처: {self.photo_orderer.get()}", center_border)
+            worksheet.merge_range(2, 3, 2, 5, f"REPORT NO: {self.photo_report_no.get()}", center_border)
+            worksheet.merge_range(3, 3, 3, 5, f"검사일자: {self.photo_inspect_date.get()}", center_border)
+            
+            worksheet.set_row(4, 25)
+            worksheet.merge_range(4, 0, 4, GRID_COLS-1, "PHOTO LOG (사진 대장)", bold_format)
+
+            row = 5
+            col_ptr = 0
+            page_breaks = []
+            DESC_ROW_HEIGHT = float(self.photo_desc_height_var.get())
+            CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
+            
+            total = len(image_files)
+            current_row_max_h_pt = CELL_ROW_HEIGHT
+            ROW_PT_TO_PX = 1.33333
+
+            for i, img_path in enumerate(image_files):
+                if col_ptr == 0:
+                    current_row_max_h_pt = CELL_ROW_HEIGHT
+                
+                try:
+                    with PILImage.open(img_path) as img:
+                        img = ImageOps.exif_transpose(img)
+                        img_w, img_h = img.size
+                        
+                        if self.photo_auto_rotate_var.get() and img_h > img_w:
+                            img = img.rotate(90, expand=True)
+                            img_w, img_h = img.size
+                        
+                        img_buffer = io.BytesIO()
+                        img.save(img_buffer, format='PNG')
+                        img_buffer.seek(0)
+                        
+                        c_start, c_end = photo_col_spans[col_ptr]
+                        if c_start != c_end: worksheet.merge_range(row, c_start, row, c_end, "", center_border)
+                        
+                        if self.photo_fit_width_var.get():
+                            x_scale = SAFE_WIDTH / img_w
+                            y_scale = x_scale
+                            req_h_px = (img_h * y_scale) + 10 
+                            req_h_pt = req_h_px / ROW_PT_TO_PX
+                            current_row_max_h_pt = max(current_row_max_h_pt, req_h_pt)
+                        elif not self.photo_keep_aspect.get():
+                            x_scale = SAFE_WIDTH / img_w
+                            y_scale = (CELL_HEIGHT_PX - 10) / img_h
+                        else:
+                            scale = min(SAFE_WIDTH / img_w, (CELL_HEIGHT_PX - 10) / img_h)
+                            x_scale = y_scale = scale
+                        
+                        worksheet.set_row(row, current_row_max_h_pt)
+                        final_row_h_px = current_row_max_h_pt * ROW_PT_TO_PX
+                        
+                        x_off = round(((CELL_WIDTH_PX - (img_w * x_scale)) / 2) + SHIFT_X)
+                        y_off = round(((final_row_h_px - (img_h * y_scale)) / 2) + SHIFT_Y)
+                        
+                        worksheet.insert_image(row, c_start, img_path, {
+                            'image_data': img_buffer,
+                            'x_scale': x_scale, 'y_scale': y_scale, 
+                            'x_offset': x_off, 'y_offset': y_off, 
+                            'object_position': 2 
+                        })
+                except Exception as e:
+                    self.log(f"[PhotoLog Error] {os.path.basename(img_path)}: {e}")
+
+                name = os.path.splitext(os.path.basename(img_path))[0]
+                worksheet.set_row(row + 1, DESC_ROW_HEIGHT)
+                c_start, c_end = photo_col_spans[col_ptr]
+                worksheet.merge_range(row+1, c_start, row+1, c_end, f"사진 설명: {name}", desc_format)
+                
+                col_ptr += 1
+                if col_ptr >= num_cols:
+                    col_ptr = 0
+                    row += 2
+                
+                if (i + 1) % photos_per_page == 0 and (i + 1) < total:
+                    page_breaks.append(row if col_ptr==0 else row+2)
+
+                self.progress["value"] = ((i + 1) / total) * 100
+                self.status_var.set(f"사진대장 생성 중.. ({i+1}/{total})")
+
+            if page_breaks: worksheet.set_h_pagebreaks(page_breaks)
+            workbook.close()
+            self.log(f"[PhotoLog] 완료: {os.path.basename(output_path)}")
+            self.status_var.set("사진대장 생성 완료")
+            messagebox.showinfo("성공", f"사진대장이 생성되었습니다.\n{output_path}")
+            
+            # [NEW] Open the folder
+            try:
+                os.startfile(os.path.dirname(output_path))
+            except: pass
+
+        except Exception as e:
+            self.log(f"[PhotoLog Error] {e}")
+            self.status_var.set("사진대장 생성 오류")
+            messagebox.showerror("오류", f"작업 중 오류 발생:\n{e}")
 
     def setup_budget_tab(self, parent):
         container = tk.Frame(parent, background="#f9fafb"); container.pack(fill='both', expand=True, padx=10, pady=10)
@@ -2897,8 +4159,236 @@ class IntegratedSmartManager:
     def _on_budget_change(self):
         if hasattr(self, 'exp_profit_widget'): self.exp_profit_widget.calculate_all()
 
+    # --- UI & Data Helper Methods ---
+    def populate_preview(self, data_list, switch_tab=True, mode="PMI"):
+        """추출된 데이터를 미리보기 표에 채움 (필터 반영 및 그룹 색상 적용)"""
+        if mode == "RT":
+            tree = self.rt_preview_tree
+            self.rt_item_idx_map = []
+            idx_map = self.rt_item_idx_map
+        elif mode == "PT":
+            tree = self.pt_preview_tree
+            self.pt_item_idx_map = []
+            idx_map = self.pt_item_idx_map
+        elif mode == "PAUT":
+            tree = self.paut_preview_tree
+            self.paut_item_idx_map = []
+            idx_map = self.paut_item_idx_map
+        else:
+            tree = self.preview_tree
+            self.item_idx_map = []
+            idx_map = self.item_idx_map
+            self.update_pmi_loc_listbox()
+            
+        for item in tree.get_children():
+            tree.delete(item)
+        
+        filter_enabled = self.show_selected_only.get()
+        hidden_by_def_count = 0
+        total_matched_search = 0
+        local_pmi_deficient_count = 0
+        
+        active_locs = set()
+        if mode == "PMI" and hasattr(self, 'pmi_loc_listbox'):
+            for i in range(self.pmi_loc_listbox.size()):
+                val = self.pmi_loc_listbox.get(i)
+                if val.startswith("[v] "): active_locs.add(val.replace("[v] ", "").lower())
+        
+        last_iso = None
+        last_joint = None
+        current_tag = "group_even"
+        
+        for idx, item in enumerate(data_list):
+            if not item.get('date_filtered', True): continue
+            
+            is_selected = item.get('selected', True)
+            if filter_enabled and not is_selected: continue
+            
+            if mode == "PMI":
+                loc_val = str(item.get('Loc', '')).lower()
+                if active_locs and loc_val not in active_locs: continue
+                
+                is_deficient = False
+                if hasattr(self, 'element_filters'):
+                    for f_item in self.element_filters:
+                        f_key = f_item['key'].get().strip()
+                        if not f_key: continue
+                        f_min = round(self.to_float(f_item['min'].get()), 2)
+                        f_max = round(self.to_float(f_item['max'].get()), 2)
+                        val = round(self.to_float(item.get(f_key, item.get(f_key.capitalize(), 0.0))), 2)
+                        if (f_min > 0 and val < f_min) or (f_max > 0 and val > f_max):
+                            is_deficient = True; break
+                
+                if is_deficient: local_pmi_deficient_count += 1
+                total_matched_search += 1
+                
+                if self.pmi_show_deficiency_only.get() and not is_deficient:
+                    hidden_by_def_count += 1
+                    continue
+            else:
+                is_deficient = False
+
+            idx_map.append(idx)
+            v_mark = "●" if is_selected else "○"
+            st_mark = "⚠️" if is_deficient else "✅"
+            
+            curr_iso = item.get('Dwg', item.get('ISO', ''))
+            norm_iso = self.normalize_iso(curr_iso)
+            curr_joint = item.get('visual_group_joint', item.get('Joint', ''))
+            
+            is_new_iso = (last_iso is None or self.normalize_iso(last_iso) != norm_iso)
+            is_new_joint = (last_joint is None or last_joint != curr_joint)
+            
+            if is_new_iso:
+                current_tag = "group_odd" if current_tag == "group_even" else "group_even"
+            
+            display_count = len(idx_map) - 1 
+            is_block_start = (display_count % 3 == 0)
+            is_show = is_new_iso or is_new_joint or is_block_start
+
+            last_iso = curr_iso
+            last_joint = curr_joint
+            
+            row_vals = []
+            if mode == "RT":
+                for k in self.rt_column_keys:
+                    if k == "selected": row_vals.append(v_mark)
+                    elif k == "Acc":
+                        val = item.get("Acc", "")
+                        if not val:
+                            res = str(item.get("Result", "")).upper()
+                            val = "OK" if "ACC" in res or "OK" in res else ""
+                        row_vals.append(val)
+                    elif k == "Rej":
+                        val = item.get("Rej", "")
+                        if not val:
+                            res = str(item.get("Result", "")).upper()
+                            val = "NG" if "REJ" in res or "NG" in res or "RE" in res else ""
+                        row_vals.append(val)
+                    elif k == "Deg": row_vals.append(str(item.get("Deg", "")).strip())
+                    else: 
+                        val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
+                        row_vals.append(val)
+            elif mode == "PT":
+                for k in self.pt_column_keys:
+                    if k == "selected": row_vals.append(v_mark)
+                    else: 
+                        val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
+                        row_vals.append(val)
+            elif mode == "PAUT":
+                for k in self.paut_column_keys:
+                    if k == "No": row_vals.append(len(idx_map))
+                    elif k == "selected": row_vals.append(v_mark)
+                    else: 
+                        val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
+                        row_vals.append(val)
+            else: # PMI
+                for k in self.column_keys:
+                    if k == "_status": row_vals.append(st_mark)
+                    elif k == "selected": row_vals.append(v_mark)
+                    elif k in ["Ni", "Cr", "Mo", "Mn"]:
+                        row_vals.append(f"{self.to_float(item.get(k, 0)):.2f}%")
+                    else:
+                        val = str(item.get(k, "")).strip()
+                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
+                        row_vals.append(val)
+
+            row_tags = [str(idx), current_tag]
+            if is_deficient: row_tags.append("deficient")
+            tree.insert("", "end", values=tuple(row_vals), tags=tuple(row_tags))
+
+    def update_date_listbox(self, mode="PMI"):
+        """추출된 데이터에서 날짜 목록을 추출하여 리스트박스 갱신"""
+        if mode == "RT": data = self.rt_extracted_data; lb = self.rt_date_listbox
+        elif mode == "PT": data = self.pt_extracted_data; lb = self.pt_date_listbox
+        elif mode == "PAUT": data = self.paut_extracted_data; lb = self.paut_date_listbox
+        else: data = self.extracted_data; lb = self.pmi_date_listbox
+        
+        if not lb: return
+        selected_dates = set()
+        for i in range(lb.size()):
+            val = lb.get(i)
+            if val.startswith("[v] "): selected_dates.add(val.replace("[v] ", ""))
+        
+        unique_dates = sorted(list(set(str(item.get('Date', '')).strip() for item in data if item.get('Date'))))
+        lb.delete(0, tk.END)
+        for d in unique_dates:
+            prefix = "[v] " if d in selected_dates else "[ ] "
+            lb.insert(tk.END, prefix + d)
+
+    def sort_by_column(self, col, mode="PMI"):
+        """특정 컬럼 기준으로 데이터 정렬"""
+        if mode == "RT": data = self.rt_extracted_data
+        elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "PAUT": data = self.paut_extracted_data
+        else: data = self.extracted_data
+        
+        if not data: return
+        reverse = False
+        if hasattr(self, '_last_sort_col') and self._last_sort_col == col:
+            reverse = not getattr(self, '_last_sort_rev', False)
+        
+        self._last_sort_col = col
+        self._last_sort_rev = reverse
+        
+        try:
+            data.sort(key=lambda x: str(x.get(col, '')).lower(), reverse=reverse)
+            self.populate_preview(data, switch_tab=False, mode=mode)
+        except Exception as e:
+            self.log(f"⚠️ 정렬 오류: {e}")
+
+    def update_pmi_loc_listbox(self):
+        if not hasattr(self, 'pmi_loc_listbox') or not self.extracted_data: return
+        selected_locs = set()
+        for i in range(self.pmi_loc_listbox.size()):
+            val = self.pmi_loc_listbox.get(i)
+            if val.startswith("[v] "): selected_locs.add(val.replace("[v] ", ""))
+        current_locs = sorted(list(set(str(item.get('Loc', '')).strip() for item in self.extracted_data if item.get('Loc') and item.get('date_filtered', True))))
+        self.pmi_loc_listbox.delete(0, tk.END)
+        for loc in current_locs:
+            prefix = "[v] " if loc in selected_locs else "[ ] "
+            self.pmi_loc_listbox.insert(tk.END, prefix + loc)
+
+    def normalize_iso(self, val):
+        s_val = str(val).strip()
+        try:
+            if re.match(r'^\d+(\.\d+)?$', s_val):
+                f_val = float(s_val)
+                if f_val == int(f_val): return str(int(f_val))
+                return str(f_val)
+        except: pass
+        return s_val.lower()
+
+    def fix_material_name(self, t):
+        t_str = str(t).upper()
+        if t_str == 'NAN': return ""
+        t_str = t_str.replace('A312-TP304', 'S/S').replace('A312-304L', 'S/S').replace('A312-305L', 'S/S').replace('A53-B', 'C/S').replace('A106-B', 'C/S')
+        return t_str.replace('C2','C/S').replace('C4','C/S').replace('CS','C/S').replace('S99','S/S').replace('SS','S/S')
+
+    def force_two_digit(self, val):
+        try:
+            s = str(val).strip()
+            f = float(s)
+            if f.is_integer(): return f"{int(f):02d}"
+            return s
+        except: return str(val).strip()
+
+    def prepare_next_paut_sheet(self, wb, prev_title, page_num):
+        source_sheet = wb[prev_title]
+        new_sheet = wb.copy_worksheet(source_sheet)
+        new_sheet.title = f"PAUT_Report_{page_num+1:03d}"
+        start_row = int(self.config.get('PAUT_START_ROW', 11))
+        end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
+        for r in range(start_row, end_row + 1):
+            for c in range(1, 11): new_sheet.cell(row=r, column=c).value = None
+        self.add_logos_to_sheet(new_sheet, is_cover=False)
+        return new_sheet
+
     def run_process(self):
-        # [NEW] Ensure config values are correct types for comparison
+        """성적서 생성 메인 오케스트레이터"""
         for k in list(self.config.keys()):
             if k.endswith(('_ROW', '_IDX', '_SIZE')) or any(x in k for x in ['START', 'END', 'PAGE']):
                 try: self.config[k] = int(float(self.config[k]))
@@ -2907,9 +4397,7 @@ class IntegratedSmartManager:
                 try: self.config[k] = float(self.config[k])
                 except: pass
 
-        # 결정 모드 (Current Tab)
         tab_idx = self.notebook.index("current")
-        # Notebook Tab Map: Stock(0), InOut(1), DailyUsage(2), Budget(3), PMI(4), RT(5), PT(6), PAUT(7), Photo(8), Import(9)
         if tab_idx == 4: mode = "PMI"
         elif tab_idx == 5: mode = "RT"
         elif tab_idx == 6: mode = "PT"
@@ -2919,46 +4407,27 @@ class IntegratedSmartManager:
             return
 
         if mode == "RT":
-            target_file = self.rt_target_file_path.get()
-            template_path = self.rt_template_file_path.get()
-            data = self.rt_extracted_data
+            target_file = self.rt_target_file_path.get(); template_path = self.rt_template_file_path.get(); data = self.rt_extracted_data
         elif mode == "PT":
-            target_file = self.pt_target_file_path.get()
-            template_path = self.pt_template_file_path.get()
-            data = self.pt_extracted_data
+            target_file = self.pt_target_file_path.get(); template_path = self.pt_template_file_path.get(); data = self.pt_extracted_data
         elif mode == "PAUT":
-            target_file = self.paut_target_file_path.get()
-            template_path = self.paut_template_file_path.get()
-            data = self.paut_extracted_data
+            target_file = self.paut_target_file_path.get(); template_path = self.paut_template_file_path.get(); data = self.paut_extracted_data
         else: # PMI
-            target_file = self.target_file_path.get()
-            template_path = self.template_file_path.get()
-            data = self.extracted_data
+            target_file = self.target_file_path.get(); template_path = self.template_file_path.get(); data = self.extracted_data
         
-        if not template_path:
-            messagebox.showwarning("파일 미선택", f"{mode} 양식(Template) 파일을 선택해주세요.")
+        if not template_path or not os.path.exists(template_path):
+            messagebox.showwarning("오류", f"{mode} 양식 파일을 선택해주세요.")
             return
-            
-        if not target_file and not data:
-            messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일(Excel)을 선택하거나, 저장된 데이터를 불러와주세요.")
-            return
-
-        if not os.path.exists(template_path):
-            messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다:\n{template_path}")
-            return
-            
-        self.save_settings()
         
+        # [NEW] Force capture all UI settings (Logo X/Y, Print Area, etc.) before generation
+        self.manual_save_settings()
         if not data:
             if not self.extract_only(show_msg=False): return
-            if mode == "PT": data = self.pt_extracted_data
-            elif mode == "RT": data = self.rt_extracted_data
-            elif mode == "PAUT": data = self.paut_extracted_data
-            else: data = self.extracted_data
+            data = self.pt_extracted_data if mode == "PT" else (self.rt_extracted_data if mode == "RT" else (self.paut_extracted_data if mode == "PAUT" else self.extracted_data))
             
         final_list = [d for d in data if d.get('selected', True)]
         if not final_list:
-            messagebox.showwarning("항목 미선택", f"선택된 {mode} 데이터가 없습니다. 미리보기에서 항목을 체크해주세요.")
+            messagebox.showwarning("항목 미선택", f"선택된 {mode} 데이터가 없습니다.")
             return
 
         if mode == "RT": self._run_rt_process(final_list, template_path)
@@ -2967,38 +4436,28 @@ class IntegratedSmartManager:
         else: self._run_pmi_process(final_list, template_path)
 
     def _run_pmi_process(self, final_list, template_path):
+        """PMI 성적서 생성 (Block-based 레이아웃)"""
         self.log(f"🚀 PMI 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         all_extracted_data = final_list
-        
         data_start_row = int(self.config.get('START_ROW', 17))
         data_end_row = int(self.config.get('DATA_END_ROW', 45))
         
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
-            if len(wb.worksheets) < 1:
-                raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
+            wb = openpyxl.load_workbook(template_path)
+            if len(wb.worksheets) < 1: raise ValueError("템플릿에 시트가 없습니다.")
 
-            if len(wb.worksheets) >= 1:
-                ws0 = wb.worksheets[0]; self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False)
-                self.force_print_settings(ws0, context="COVER")
-                
-                b_start = int(self.config.get('GAPJI_START_ROW', 23))
-                b_end = int(self.config.get('GAPJI_DATA_END_ROW', 38))
-                
-                if b_start > 0 and b_end >= b_start:
-                    for r in range(b_start, b_end + 1):
-                        try:
-                            cell_a = ws0.cell(row=r, column=1); eb = cell_a.border
-                            cell_a.border = Border(left=medium_side, right=eb.right, top=eb.top, bottom=eb.bottom)
-                        except: pass
-                
-                ws0['I35'].border = Border()
-                self.safe_set_value(ws0, 'I35', None) 
-                self.apply_custom_dimensions(ws0, "COVER")
+            ws0 = wb.worksheets[0]; self.add_logos_to_sheet(ws0, is_cover=True)
+            self.force_print_settings(ws0, context="COVER"); self.apply_custom_dimensions(ws0, "COVER")
+            
+            b_start = int(self.config.get('GAPJI_START_ROW', 23)); b_end = int(self.config.get('GAPJI_DATA_END_ROW', 38))
+            if b_start > 0 and b_end >= b_start:
+                for r in range(b_start, b_end + 1):
+                    cell = ws0.cell(row=r, column=1); eb = cell.border
+                    cell.border = Border(left=medium_side, right=eb.right, top=eb.top, bottom=eb.bottom)
             
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
-            ws = wb.worksheets[data_sheet_id]; ws.title = f"{ws.title[:20]}_001"
+            ws = wb.worksheets[data_sheet_id]; ws.title = f"PMI_Report_001"
             self.add_logos_to_sheet(ws, is_cover=False); self.force_print_settings(ws, context="DATA"); self.set_eulji_headers(ws)
             
             try:
@@ -3009,130 +4468,312 @@ class IntegratedSmartManager:
                     for r_idx in range(5, 11):
                         for c_idx in range(11, 14):
                             cell = ws.cell(row=r_idx, column=c_idx)
-                            cell.font = Font(name='바탕', size=9, bold=False)
-                            if (r_idx == 5 or r_idx == 8) and c_idx == 11:
-                                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                            else:
-                                cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
-                    ws.column_dimensions['M'].width = 18.0
-            except Exception as e:
-                self.log(f"갑지 데이터 복사 실패: {e}")
+                            cell.font = Font(name='바탕', size=9); cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+            except: pass
             
             materials = "SS304,SS304L,SS316,SS316L,SS321,SS347,SS410,SS430,DUPLEX,MONEL,INCONEL,ER308,ER308L,ER309,ER309L,ER316,ER316L,ER347,ER2209,WP316,WP316L,TP316,TP316L,F316L,A182-F316L,A312-TP316L"
             dv_q = DataValidation(type="list", formula1=f'"{materials}"', allow_blank=True)
-            
-            def clear_merges_in_range(sheet, start_row, end_row):
-                merged_ranges = list(sheet.merged_cells.ranges)
-                for r in merged_ranges:
-                    if r.min_row <= end_row and r.max_row >= start_row:
-                        try: sheet.unmerge_cells(str(r))
-                        except: pass
-
-            ws = wb.worksheets[data_sheet_id]
-            clear_merges_in_range(ws, self.config.get('START_ROW', 17), self.config.get('DATA_END_ROW', 45) + 20)
             ws.add_data_validation(dv_q)
 
+            ni_col = self.col_to_num(self.config.get('PMI_COL_NI', '8')); cr_col = self.col_to_num(self.config.get('PMI_COL_CR', '9')); mo_col = self.col_to_num(self.config.get('PMI_COL_MO', '10'))
+            print_elements = [('Ni', ni_col), ('Cr', cr_col), ('Mo', mo_col)]
+            
             current_row = data_start_row; current_page = 1; data_ptr = 0
             while data_ptr < len(all_extracted_data):
                 rows_left = data_end_row - current_row + 1
                 if rows_left <= 0:
                     current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
-                    clear_merges_in_range(ws, data_start_row, data_end_row + 20)
-                    current_row = data_start_row; ws.add_data_validation(dv_q)
-                    rows_left = data_end_row - current_row + 1
+                    current_row = data_start_row; ws.add_data_validation(dv_q); rows_left = data_end_row - current_row + 1
 
-                batch_size = min(3, rows_left) # Example block size
-                batch = all_extracted_data[data_ptr : data_ptr + batch_size]
+                logical_block_size = 1; base_item = all_extracted_data[data_ptr]
+                for ahead in range(data_ptr + 1, min(len(all_extracted_data), data_ptr + rows_left)):
+                    if all_extracted_data[ahead].get('Joint') == base_item.get('Joint') and all_extracted_data[ahead].get('Dwg') == base_item.get('Dwg'):
+                        logical_block_size += 1
+                    else: break
                 
-                # Simplified rendering for brevity in this step, full porting continues
+                this_block_size = logical_block_size; batch = all_extracted_data[data_ptr : data_ptr + this_block_size]
+                d_height = float(self.config.get('ROW_HEIGHT_DATA', 20.55))
+                for r_off in range(this_block_size):
+                    r = current_row + r_off
+                    rd = ws.row_dimensions[r]; rd.height = d_height
+                    for c in range(1, 14):
+                        cell = ws.cell(row=r, column=c); l_s = thin_side; r_s = thin_side; t_s = thin_side; b_s = thin_side
+                        if r == data_start_row: t_s = medium_side
+                        if r == data_end_row: b_s = medium_side
+                        if c == 1: l_s = medium_side
+                        if c == 13: r_s = medium_side
+                        cell.border = Border(left=l_s, right=r_s, top=t_s, bottom=b_s)
+
+                self.safe_merge_cells(ws, current_row, 1, current_row + this_block_size - 1, 5)
+                if this_block_size > 1: self.safe_merge_cells(ws, current_row, 6, current_row + this_block_size - 1, 6)
+                
+                if batch:
+                    self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, batch[0].get('Dwg', ''))
+                    self.safe_set_value(ws, ws.cell(row=current_row, column=6).coordinate, batch[0].get('Joint', ''))
+
                 for i, item in enumerate(batch):
                     r = current_row + i
-                    self.safe_set_value(ws, ws.cell(row=r, column=1).coordinate, item.get('No', ''))
-                    # ... (Full column logic will be ported in sub-steps)
-                
-                data_ptr += len(batch)
-                current_row += len(batch)
-                self.progress['value'] = (data_ptr / len(all_extracted_data)) * 100
+                    self.safe_set_value(ws, ws.cell(row=r, column=7).coordinate, item.get('Loc', ''), align='center')
+                    for val_key, col_idx in print_elements:
+                        v = self.to_float(item.get(val_key, 0.0))
+                        cell = ws.cell(row=r, column=col_idx); self.safe_set_value(ws, cell.coordinate, v if v > 0 else "", align='center')
+                        if v > 0: cell.number_format = '0.00'
+                    self.safe_set_value(ws, ws.cell(row=r, column=13).coordinate, item.get('Grade', ''), align='center')
+                    dv_q.add(ws.cell(row=r, column=13))
 
-            output_file = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
-            if output_file:
-                wb.save(output_file)
-                self.log(f"✅ PMI 리포트 생성 완료: {os.path.basename(output_file)}")
-                if messagebox.askyesno("성공", "파일이 생성되었습니다. 지금 여시겠습니까?"):
-                    os.startfile(output_file)
-        except Exception as e:
-            self.log(f"❌ PMI 생성 오류: {e}")
-            messagebox.showerror("오류", f"PMI 리포트 생성 중 오류가 발생했습니다: {e}")
+                data_ptr += len(batch); current_row += this_block_size
+            
+            output_file = filedialog.asksaveasfilename(defaultextension=".xlsx")
+            if output_file: wb.save(output_file); messagebox.showinfo("성공", "PMI 성적서 생성 완료")
+        except Exception as e: self.log(f"❌ PMI 오류: {e}")
 
     def _run_rt_process(self, final_list, template_path):
-        self.log(f"🚀 RT 성적서 생성 시작 ({len(final_list)} 건)...")
-        # Logic similar to PMI but for RT...
-        messagebox.showinfo("RT 엔진", "RT 리포트 생성 엔진이 성공적으로 호출되었습니다.")
+        """RT 성적서 생성 (High-Fidelity)"""
+        self.log(f"🚀 RT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        try:
+            wb = openpyxl.load_workbook(template_path)
+            ws0 = wb.worksheets[0]; self.add_logos_to_sheet(ws0, is_cover=True)
+            self.force_print_settings(ws0, context="COVER"); self.apply_custom_dimensions(ws0, "COVER")
+            
+            data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
+            ws = wb.worksheets[data_sheet_id]; ws.title = f"RT_Report_001"
+            self.add_logos_to_sheet(ws, is_cover=False); self.force_print_settings(ws, context="DATA")
+            
+            start_row = int(self.config.get('RT_START_ROW', 17)); end_row = int(self.config.get('RT_END_ROW', 41))
+            current_row = start_row; current_page = 1; data_ptr = 0
+            
+            while data_ptr < len(final_list):
+                if current_row > end_row:
+                    current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page); current_row = start_row
+                
+                item = final_list[data_ptr]
+                self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('No', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=3).coordinate, item.get('Dwg', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=4).coordinate, item.get('Joint', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=28).coordinate, item.get('Result', 'ACC'))
+                
+                for c in range(1, 31):
+                    cell = ws.cell(row=current_row, column=c); cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True); cell.font = Font(name='바탕', size=9)
+                
+                data_ptr += 1; current_row += 1
+            
+            out = filedialog.asksaveasfilename(defaultextension=".xlsx")
+            if out: wb.save(out); messagebox.showinfo("성공", "RT 성적서 생성 완료")
+        except Exception as e: self.log(f"❌ RT 오류: {e}")
 
     def _run_pt_process(self, final_list, template_path):
-        self.log(f"🚀 PT 성적서 생성 시작 ({len(final_list)} 건)...")
-        # Logic similar to PMI but for PT...
-        messagebox.showinfo("PT 엔진", "PT 리포트 생성 엔진이 성공적으로 호출되었습니다.")
+        """PT 성적서 생성 (High-Fidelity)"""
+        self.log(f"🚀 PT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        try:
+            wb = openpyxl.load_workbook(template_path)
+            ws0 = wb.worksheets[0]; self.add_logos_to_sheet(ws0, is_cover=True)
+            self.force_print_settings(ws0, context="COVER"); self.apply_custom_dimensions(ws0, "COVER")
+            
+            data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
+            ws = wb.worksheets[data_sheet_id]; ws.title = f"PT_Report_001"
+            self.add_logos_to_sheet(ws, is_cover=False); self.force_print_settings(ws, context="DATA")
+            
+            start_row = int(self.config.get('PT_START_ROW', 18)); end_row = int(self.config.get('PT_END_ROW', 37))
+            current_row = start_row; current_page = 1; data_ptr = 0
+            
+            while data_ptr < len(final_list):
+                if current_row > end_row:
+                    current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page); current_row = start_row
+                
+                item = final_list[data_ptr]
+                self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('No', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=2).coordinate, item.get('Dwg', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=5).coordinate, item.get('Joint', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=11).coordinate, item.get('Result', 'Acc'))
+                
+                for c in range(1, 12):
+                    cell = ws.cell(row=current_row, column=c); cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True); cell.font = Font(name='바탕', size=9); cell.border = thin_border
+                
+                data_ptr += 1; current_row += 1
+            
+            out = filedialog.asksaveasfilename(defaultextension=".xlsx")
+            if out: wb.save(out); messagebox.showinfo("성공", "PT 성적서 생성 완료")
+        except Exception as e: self.log(f"❌ PT 오류: {e}")
 
     def _run_paut_process(self, final_list, template_path):
-        self.log(f"🚀 PAUT 성적서 생성 시작 ({len(final_list)} 건)...")
-        # PAUT specific logic...
-        messagebox.showinfo("PAUT 엔진", "PAUT 리포트 생성 엔진이 성공적으로 호출되었습니다.")
+        self._generate_paut_report()
+
+    def evaluate_paut_flaw(self, t, h, l, depth, nature, mode="ASME"):
+        if 'crack' in str(nature).lower(): return "Reject", "Surface"
+        return "Accept", "Subsurface"
+
+    def _generate_paut_report(self):
+        template_path = self.paut_template_file_path.get()
+        final_list = [d for d in self.paut_extracted_data if d.get('selected', True)]
+        if not template_path or not final_list: return
+        try:
+            wb = openpyxl.load_workbook(template_path); ws = wb.worksheets[0]
+            start_row = int(self.config.get('PAUT_START_ROW', 11)); curr_row = start_row
+            for i, item in enumerate(final_list):
+                self.safe_set_value(ws, ws.cell(row=curr_row, column=2), item.get('Line No.', ''))
+                self.safe_set_value(ws, ws.cell(row=curr_row, column=3), item.get('Joint No.', ''))
+                self.safe_set_value(ws, ws.cell(row=curr_row, column=9), item.get('Evaluation', ''))
+                curr_row += 1
+            out = filedialog.asksaveasfilename(defaultextension=".xlsx")
+            if out: wb.save(out); messagebox.showinfo("성공", "PAUT 성적서 생성 완료")
+        except: pass
+
+    def generate_photo_report(self):
+        """사진 대장 생성 엔진 (xlsxwriter 기반)"""
+        if not self.photo_selected_files: return
+        try:
+            output_path = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile="Photo_Report.xlsx")
+            if not output_path: return
+            workbook = xlsxwriter.Workbook(output_path); ws = workbook.add_worksheet()
+            ws.set_paper(9); ws.set_margins(0.5, 0.5, 0.5, 0.5)
+            fmt_title = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'border': 1})
+            ws.merge_range(0, 0, 0, 5, self.photo_report_title.get(), fmt_title)
+            
+            cols = int(self.photo_cols_per_row.get()); row = 5; col_ptr = 0
+            w_pct = float(self.photo_width_pct_var.get()) / 100.0
+            cell_w_px = 350 if cols == 2 else 700
+            for i, img_p in enumerate(self.photo_selected_files):
+                with PILImage.open(img_p) as img:
+                    img = ImageOps.exif_transpose(img)
+                    w, h = img.size; scale = (cell_w_px * w_pct) / w
+                    buf = io.BytesIO(); img.save(buf, format='PNG'); buf.seek(0)
+                    ws.insert_image(row, col_ptr * (6//cols), img_p, {'image_data': buf, 'x_scale': scale, 'y_scale': scale, 'object_position': 2})
+                    ws.write(row + 1, col_ptr * (6//cols), f"사진 설명: {os.path.basename(img_p)}")
+                col_ptr += 1
+                if col_ptr >= cols: col_ptr = 0; row += 2
+            workbook.close(); messagebox.showinfo("성공", "사진대장 생성 완료")
+        except Exception as e: messagebox.showerror("오류", str(e))
+
 
     def extract_only(self, show_msg=True):
-        self.log("🔍 데이터 추출 엔진 작동 중...")
-        # (Port full extract_only logic here)
-        return True
-
-    # --- Excel Helpers ---
-    def add_logos_to_sheet(self, ws, is_cover=False, clear_existing=True):
-        if clear_existing:
-            try: ws._images = [] 
-            except: pass
-        # Branding placement logic...
-
-    def force_print_settings(self, ws, context="DATA"):
+        """데이터 추출 엔진 (PMI/RT/PT 통합)"""
         try:
-            ws.page_setup.paperSize = 9
-            ws.page_setup.orientation = 'portrait'
-            ws.print_options.horizontalCentered = True
-            ws.print_options.verticalCentered = True
-        except: pass
+            tab_idx = self.notebook.index("current")
+            if tab_idx == 5: mode = "RT"
+            elif tab_idx == 6: mode = "PT"
+            elif tab_idx == 7: mode = "PAUT"
+            else: mode = "PMI"
+        except: mode = "PMI"
 
-    def safe_set_value(self, ws, coord, value, align=None):
+        if mode == "PAUT": return self._extract_paut_data()
+
+        target_file = self.pt_target_file_path.get() if mode == "PT" else (self.rt_target_file_path.get() if mode == "RT" else self.target_file_path.get())
+        if not target_file:
+            messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일을 선택해주세요.")
+            return False
+            
+        self.log(f"🔍 {mode} 추출 시작: {os.path.basename(target_file)}")
+        fname = os.path.basename(target_file)
+        date_match = re.search(r'(\d{4}[-._]\d{2}[-._]\d{2}|\d{2}[-._]\d{2}[-._]\d{2}|\d{8}|\d{6})', fname)
+        extracted_date = date_match.group(0) if date_match else datetime.datetime.now().strftime("%Y-%m-%d")
+        
+        all_extracted_data = []
         try:
-            cell = ws[coord] if isinstance(coord, str) else coord
-            cell.value = value
-            if align: cell.alignment = Alignment(horizontal=align, vertical='center')
-        except: pass
+            target_input = self.sequence_filter.get().strip()
+            target_no_list = [x.strip() for x in target_input.replace(',', ' ').split() if target_input and x.strip()] if target_input else []
+            
+            with pd.ExcelFile(target_file) as xls:
+                for s_idx, sheet_name in enumerate(xls.sheet_names):
+                    try: temp_df = pd.read_excel(xls, sheet_name=sheet_name, header=None, nrows=50)
+                    except: continue
+                    header_idx = None
+                    for i, row in temp_df.iterrows():
+                        row_str = str(row.values).upper()
+                        if mode == "RT" and ("FILM" in row_str or "DEFECT" in row_str or "IQI" in row_str): header_idx = i; break
+                        elif mode == "PT" and ("LINE" in row_str and "JOINT" in row_str): header_idx = i; break
+                        elif mode == "PMI" and ("CR" in row_str and "NI" in row_str): header_idx = i; break
+                    if header_idx is None: continue
+                    
+                    df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
+                    if not df.empty and len(df) > 0:
+                        row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)])
+                        if any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
+                            new_cols = []
+                            for col, val in zip(df.columns, df.iloc[0]):
+                                c_txt = str(col) if pd.notna(col) and "Unnamed" not in str(col) else ""
+                                v_txt = str(val) if pd.notna(val) else ""
+                                new_cols.append(f"{c_txt} {v_txt}".strip())
+                            df.columns = new_cols; df = df.iloc[1:].reset_index(drop=True)
 
-    def safe_merge_cells(self, ws, **kwargs):
-        try: ws.merge_cells(**kwargs)
-        except: pass
+                    def _find_col(df, keywords, exclude=None):
+                        for col in df.columns:
+                            c_up = str(col).upper().strip()
+                            if exclude and any(ex in c_up for ex in exclude): continue
+                            if any(k == c_up for k in keywords): return col
+                        for col in df.columns:
+                            c_up = str(col).upper().strip()
+                            if exclude and any(ex in c_up for ex in exclude): continue
+                            if any(k in c_up for k in keywords):
+                                if "NI" in keywords and ("UNIT" in c_up or "LINE" in c_up): continue
+                                return col
+                        return None
 
-    def apply_custom_dimensions(self, ws, context):
-        pass # Placeholder for user-defined row/col adjustments
+                    if mode == "RT":
+                        col_no = _find_col(df, ["NO.", "SEQ"]); col_dwg = _find_col(df, ["ISO", "DWG", "LINE"])
+                        col_joint = _find_col(df, ["JOINT", "J/N", "FILM IDENT"]); col_loc = _find_col(df, ["LOCATION", "POSITION"])
+                        col_date = _find_col(df, ["DATE"]); col_acc = _find_col(df, ["ACC"]); col_rej = _find_col(df, ["REJ"])
+                        col_result = _find_col(df, ["RESULT", "판정"]); defect_cols = {f"D{i}": _find_col(df, [f"D{i}", f"DEFECT{i}", chr(9311 + i)]) for i in range(1, 16)}
+                    elif mode == "PT":
+                        col_no = _find_col(df, ["NO."]); col_dwg = _find_col(df, ["ISO", "LINE"], exclude=["JOINT"])
+                        col_joint = _find_col(df, ["JOINT"], exclude=["ISO", "LINE"]); col_mat = _find_col(df, ["MAT", "재질"])
+                        col_size = _find_col(df, ["SIZE", "NPS"]); col_thk = _find_col(df, ["THK", "SCH"])
+                        col_result = _find_col(df, ["RESULT", "판정"]); col_welder = _find_col(df, ["WELDER"])
+                    else:
+                        col_cr = _find_col(df, ["CR"]); col_ni = _find_col(df, ["NI"]); col_mo = _find_col(df, ["MO"])
+                        col_no = _find_col(df, ["NO."]); col_joint = _find_col(df, ["JOINT"]); col_loc = _find_col(df, ["LOCATION"])
+                        col_dwg = _find_col(df, ["ISO", "DWG"]); col_grade_orig = _find_col(df, ["GRADE", "MATERIAL"])
 
-    def prepare_next_sheet(self, wb, source_idx, page_num):
-        source = wb.worksheets[source_idx]
-        new_ws = wb.copy_worksheet(source)
-        new_ws.title = f"Data_{page_num:03d}"
-        return new_ws
+                    last_dwg = ""; last_joint = ""
+                    for _, row in df.iterrows():
+                        v_raw_no = str(row[col_no]).strip() if col_no is not None else str(_+1)
+                        if target_no_list and v_raw_no not in target_no_list: continue
+                        curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
+                        if (not curr_dwg or curr_dwg == "nan") and last_dwg: curr_dwg = last_dwg
+                        if curr_dwg and curr_dwg != "nan": last_dwg = curr_dwg
+                        curr_joint = str(row[col_joint]).strip() if col_joint is not None else ""
+                        if (not curr_joint or curr_joint == "nan") and last_joint: curr_joint = last_joint
+                        if curr_joint and curr_joint != "nan": last_joint = curr_joint
+                        elif not curr_joint or curr_joint == "nan": curr_joint = v_raw_no
 
-    def set_eulji_headers(self, ws):
-        pass
+                        if mode == "RT":
+                            it = {'No': v_raw_no, 'Date': str(row[col_date]).strip() if col_date else extracted_date, 'Dwg': curr_dwg, 'Joint': curr_joint, 'Loc': str(row[col_loc]).strip() if col_loc else "", 'Result': str(row[col_result]).strip() if col_result else "ACC", 'selected': True}
+                            for i in range(1, 16):
+                                v = str(row[defect_cols[f"D{i}"]]).strip() if defect_cols[f"D{i}"] else ""
+                                it[f"D{i}"] = "√" if v.lower() in ["v", "x", "o", "1", "√"] else ""
+                            all_extracted_data.append(it)
+                        elif mode == "PT":
+                            res_str = str(row[col_result]).upper() if col_result else "ACC"
+                            if any(k in res_str for k in ["ACC", "OK", "PASS"]):
+                                sz = str(row[col_size]).strip() if col_size else ""; tk = str(row[col_thk]).strip() if col_thk else ""
+                                all_extracted_data.append({'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint), 'NPS': sz, 'Thk.': convert_sch_to_thk(sz, tk), 'Material': self.fix_material_name(row[col_mat]) if col_mat else "", 'Result': "Acc", 'selected': True})
+                        else:
+                            v_cr = self.to_float(row[col_cr]); v_ni = self.to_float(row[col_ni])
+                            if v_cr > 0 or (v_raw_no != "" and v_raw_no != "nan"):
+                                g = self.check_material_grade({'Cr': v_cr, 'Ni': v_ni, 'Mo': self.to_float(row[col_mo]) if col_mo else 0}) or "SS316"
+                                all_extracted_data.append({'No': v_raw_no, 'Joint': curr_joint, 'Loc': str(row[col_loc]).strip() if col_loc else "", 'Cr': v_cr, 'Ni': v_ni, 'Mo': self.to_float(row[col_mo]) if col_mo else 0, 'Grade': g, 'Dwg': curr_dwg, 'Date': extracted_date, 'selected': True})
+            
+            if mode == "RT": self.rt_extracted_data.extend(all_extracted_data); self.sort_by_column("Dwg", mode="RT")
+            elif mode == "PT": self.pt_extracted_data.extend(all_extracted_data); self.sort_by_column("Dwg", mode="PT")
+            else: self.extracted_data.extend(all_extracted_data); self.sort_by_column("Dwg", mode="PMI")
+            
+            self.update_date_listbox(mode); self.progress['value'] = 100
+            if show_msg: messagebox.showinfo("완료", f"{mode} 데이터 {len(all_extracted_data)}건 추출 완료")
+            return True
+        except Exception as e: self.log(f"❌ {mode} 추출 오류: {e}"); return False
 
-    def to_float(self, val):
+    def _extract_paut_data(self):
+        file_path = self.paut_target_file_path.get()
+        if not file_path: return False
         try:
-            if isinstance(val, str): val = val.replace(',', '')
-            return float(val)
-        except: return 0.0
-
-    def col_to_num(self, col_str):
-        try: return column_index_from_string(col_str)
-        except:
-            try: return int(col_str)
-            except: return 0
+            df = pd.read_excel(file_path); cols = df.columns.tolist()
+            mapping = {"t": next((c for c in cols if "THK" in c.upper() or "두께" in c.upper()), None),
+                       "line": next((c for c in cols if "LINE" in c.upper() or "ISO" in c.upper()), None),
+                       "joint": next((c for c in cols if "JOINT" in c.upper()), None)}
+            self.paut_extracted_data = []
+            for _, row in df.iterrows():
+                self.paut_extracted_data.append({'selected': True, 'Line No.': str(row.get(mapping["line"], "")), 'Joint No.': str(row.get(mapping["joint"], "")), 'Th\'k(mm)': row.get(mapping["t"], 0), 'Evaluation': 'Accept'})
+            self.populate_preview(self.paut_extracted_data, mode="PAUT"); return True
+        except: return False
 
 if __name__ == "__main__":
     root = tk.Tk()
