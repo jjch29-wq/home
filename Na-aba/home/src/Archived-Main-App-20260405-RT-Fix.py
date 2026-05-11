@@ -5066,7 +5066,12 @@ class PMIReportApp:
         # [FIX] Never clear existing images on the Cover sheet (Gapji) or in RT mode to preserve template diagrams (e.g. Shooting Sketches)
         if is_first_sheet or is_cover or mode == "RT":
             clear_existing = False
-            
+
+        # [NEW] If RT mode and images already exist, skip adding logos to preserve the template perfectly
+        if mode == "RT" and getattr(ws, '_images', None):
+            self.log(f"   ℹ️ [RT] 시트에 이미 그림(도면)이 있어 추가 로고 삽입을 건너뜁니다.")
+            return
+
         if clear_existing:
             try: ws._images = [] 
             except: pass
@@ -5568,6 +5573,8 @@ class PMIReportApp:
                 report_drawings = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/drawing' in f and f.endswith('.xml')}
                 report_drawing_rels = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/_rels/drawing' in f}
                 logo_media = {f: z_data.read(f) for f in z_data.namelist() if 'xl/media/image' in f}
+                styles_xml = z_data.read('xl/styles.xml') if 'xl/styles.xml' in z_data.namelist() else None
+                shared_strings_xml = z_data.read('xl/sharedStrings.xml') if 'xl/sharedStrings.xml' in z_data.namelist() else None
                 workbook_xml = z_data.read('xl/workbook.xml') if 'xl/workbook.xml' in z_data.namelist() else None
 
                 temp_swap = final_out + ".swap"
@@ -5581,99 +5588,47 @@ class PMIReportApp:
                             if m: sheet_to_rid[f] = m.group(1)
                     
                     with zipfile.ZipFile(temp_swap, 'w') as z_out:
-                        # 템플릿 파일들 순회하며 교체/병합
                         for item in z_tmpl_in.infolist():
                             fname = item.filename
-                            # [ZERO LOSS] 미리 가공된 인라인 시트 데이터 주입
                             if fname in processed_sheets:
-                                content_str = processed_sheets[fname].decode('utf-8')
-                                tm_rid = sheet_to_rid.get(fname)
-                                if tm_rid:
-                                    # 템플릿의 그림 연결 고리(rId)를 리포트 시트에 이식
-                                    content_str = re.sub(r'<drawing [^>]*r:id="rId\d+"', f'<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="{tm_rid}"', content_str)
-                                z_out.writestr(item, content_str.encode('utf-8'))
-                            # 템플릿의 공용 자원(SharedStrings, Styles)은 건드리지 않고 원본 유지
-                            elif fname == 'xl/workbook.xml' and workbook_xml:
-                                z_out.writestr(item, workbook_xml)
-                            
-                            # [MULTI-SHEET LOGO MERGE with FULL ID REMAP]
-                            elif 'xl/drawings/drawing' in fname and fname.endswith('.xml'):
-                                tmpl_xml = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
-                                rep_drawing_xml = report_drawings.get(fname, report_drawings.get('xl/drawings/drawing1.xml', ""))
-                                if rep_drawing_xml:
-                                    rep_drawing_xml = rep_drawing_xml.decode('utf-8', errors='ignore')
-                                    
-                                    # 1. 템플릿의 기존 rId 및 객체 ID(id="..") 수집
-                                    existing_rids = set(re.findall(r'r:id="(rId\d+)"', tmpl_xml))
-                                    existing_obj_ids = [int(x) for x in re.findall(r'id="(\d+)"', tmpl_xml) if x.isdigit()]
-                                    max_obj_id = max(existing_obj_ids) if existing_obj_ids else 100
-                                    
-                                    # 2. 로고 앵커 추출
-                                    logo_anchors = re.findall(r'<(xdr:(?:one|two)CellAnchor|xdr:grpSp).*?</\1>', rep_drawing_xml, re.DOTALL)
-                                    
-                                    merged_xml = tmpl_xml
-                                    
-                                    def get_safe_rid(old_rid, used_set):
-                                        num = int(old_rid.replace("rId", ""))
-                                        new_rid = f"rId{num + 1000}" # 1000번 뒤로
-                                        while new_rid in used_set:
-                                            num += 1; new_rid = f"rId{num + 1000}"
-                                        return new_rid
+                                tmpl_sheet = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                # [PINCET SURGERY] Replace ONLY sheetData block to preserve all other tags (drawings, etc.)
+                                data_match = re.search(r'<sheetData>(.*?)</sheetData>', processed_sheets[fname].decode('utf-8'), re.DOTALL)
+                                if data_match:
+                                    new_sheet_xml = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{data_match.group(1)}</sheetData>', tmpl_sheet, flags=re.DOTALL)
+                                    z_out.writestr(item, new_sheet_xml.encode('utf-8'))
+                                else:
+                                    z_out.writestr(item, tmpl_sheet.encode('utf-8'))
+                            elif fname == 'xl/workbook.xml' and workbook_xml: z_out.writestr(item, workbook_xml)
+                            elif fname == 'xl/styles.xml' and styles_xml: z_out.writestr(item, styles_xml)
+                            elif fname == 'xl/sharedStrings.xml' and shared_strings_xml: z_out.writestr(item, shared_strings_xml)
+                            else: z_out.writestr(item, z_tmpl_in.read(fname))
+                        
+                        # [NEW] Add extra sheets from report that are missing in template
+                        # To keep print settings (Print Area, Page Breaks), we use the template's first sheet as a blueprint
+                        blueprint_xml = None
+                        first_sheet_name = next((f for f in z_tmpl_in.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')), None)
+                        if first_sheet_name:
+                            blueprint_xml = z_tmpl_in.read(first_sheet_name).decode('utf-8', errors='ignore')
 
-                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
-                                    # 3. 앵커 내부의 모든 ID 리매핑 (r:id, r:embed 등 모든 관계 추적)
-                                    for i, anchor in enumerate(logo_anchors):
-                                        # [FIX] 공백 제거 및 더 정확한 패턴 매칭
-                                        anchor_rids = set(re.findall(r'r:(?:id|embed|dm|lo|qs|cs)=["\'](rId\d+)["\']', anchor))
-                                        # 기타 모든 속성값 내의 rId 검색
-                                        anchor_rids.update(set(re.findall(r'=["\'](rId\d+)["\']', anchor)))
-                                        
-                                        for old_rid in anchor_rids:
-                                            new_rid = get_safe_rid(old_rid, existing_rids)
-                                            # [FIX] 공백 없이 정확히 매칭하여 교체
-                                            anchor = re.sub(f'=["\']{old_rid}["\']', f'="{new_rid}"', anchor)
-                                            if not hasattr(self, '_rid_map'): self._rid_map = {}
-                                            self._rid_map[f"{dr_name}_{old_rid}"] = new_rid
-                                        
-                                        # 객체 ID 및 이름 리매핑 (충돌 방지)
-                                        new_id = max_obj_id + 1000 + i
-                                        anchor = re.sub(r'id=["\']\d+["\']', f'id="{new_id}"', anchor)
-                                        anchor = re.sub(r'name=["\'][^"\']+["\']', f'name="Logo_Obj_{new_id}"', anchor)
-                                        
-                                        if '</xdr:wsDr>' in merged_xml:
-                                            merged_xml = merged_xml.replace('</xdr:wsDr>', anchor + '</xdr:wsDr>')
-                                    
-                                    z_out.writestr(item, merged_xml.encode('utf-8'))
+                        tmpl_files = set(z_tmpl_in.namelist())
+                        for f_report in processed_sheets:
+                            if f_report not in tmpl_files:
+                                # Use blueprint if available to inherit print settings/page breaks
+                                if blueprint_xml:
+                                    data_match = re.search(r'<sheetData>(.*?)</sheetData>', processed_sheets[f_report].decode('utf-8'), re.DOTALL)
+                                    if data_match:
+                                        extra_sheet_xml = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{data_match.group(1)}</sheetData>', blueprint_xml, flags=re.DOTALL)
+                                        # Also remove any drawing tags from extra sheets if they are not supposed to be there (blueprint might have them)
+                                        extra_sheet_xml = re.sub(r'<drawing [^>]*/>', '', extra_sheet_xml)
+                                        z_out.writestr(f_report, extra_sheet_xml.encode('utf-8'))
+                                    else:
+                                        z_out.writestr(f_report, processed_sheets[f_report])
                                 else:
-                                    z_out.writestr(item, tmpl_xml.encode('utf-8'))
-                                    
-                            elif 'xl/drawings/_rels/drawing' in fname:
-                                tmpl_rels = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
-                                rep_rels_xml = report_drawing_rels.get(fname, report_drawing_rels.get('xl/drawings/_rels/drawing1.xml.rels', ""))
-                                if rep_rels_xml:
-                                    rep_rels_xml = rep_rels_xml.decode('utf-8', errors='ignore')
-                                    logo_rels = re.findall(r'<Relationship [^>]*/>', rep_rels_xml)
-                                    merged_rels = tmpl_rels
-                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
-                                    
-                                    for rel in logo_rels:
-                                        r_id_match = re.search(r'Id="(rId\d+)"', rel)
-                                        if r_id_match:
-                                            old_rid = r_id_match.group(1)
-                                            # 리매핑된 새 번호가 있으면 교체
-                                            new_rid = getattr(self, '_rid_map', {}).get(f"{dr_name}_{old_rid}")
-                                            if new_rid:
-                                                rel = rel.replace(f'Id="{old_rid}"', f'Id="{new_rid}"')
-                                                if new_rid not in merged_rels:
-                                                    merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
-                                            elif old_rid not in merged_rels:
-                                                merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
-                                                
-                                    z_out.writestr(item, merged_rels.encode('utf-8'))
-                                else:
-                                    z_out.writestr(item, tmpl_rels.encode('utf-8'))
-                            else:
-                                z_out.writestr(item, z_tmpl_in.read(fname))
+                                    z_out.writestr(f_report, processed_sheets[f_report])
+                                
+                                rel_path = f"xl/worksheets/_rels/{os.path.basename(f_report)}.rels"
+                                if rel_path in z_data.namelist(): z_out.writestr(rel_path, z_data.read(rel_path))
                         
                         # 미디어 추가
                         tmpl_media_list = z_tmpl_in.namelist()
@@ -5685,10 +5640,6 @@ class PMIReportApp:
             os.rename(temp_swap, target_path)
             if os.path.exists(final_out): os.remove(final_out)
             self.log("   🛡️ [보호] 전 시트 제로-로스 데이터 주입 + 로고 복구 완료")
-            
-        except Exception as e:
-            if os.path.exists(final_out): os.remove(final_out)
-            self.log(f"   ⚠️ [주의] 멀티시트 수술 실패: {e}")
             
         except Exception as e:
             if os.path.exists(final_out): os.remove(final_out)

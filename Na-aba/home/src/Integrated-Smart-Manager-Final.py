@@ -3,6 +3,8 @@
 import mimetypes
 import os
 import sys
+import zipfile
+import shutil
 import subprocess
 import time
 import datetime
@@ -501,6 +503,24 @@ class DailyWorkReportManager:
             self.log(f"   ? 로고 삽입 실패: {e}")
 
     def add_logos_to_sheet(self, ws, is_cover=False, clear_existing=True):
+        # [SUPER SAFE] Identify if this is the first sheet (Cover/Gapji) of the workbook
+        try: is_first_sheet = (ws == ws.parent.worksheets[0])
+        except: is_first_sheet = is_cover
+
+        # [FIX] Never clear existing images on the Cover sheet or in RT mode to preserve template diagrams
+        try:
+            tab_idx = self.notebook.index("current")
+            is_rt = (tab_idx == 5)
+        except: is_rt = False
+
+        if is_first_sheet or is_cover or is_rt:
+            clear_existing = False
+
+        # [NEW] If RT mode and images already exist, skip adding logos to preserve the template perfectly
+        if is_rt and getattr(ws, '_images', None):
+            self.log(f"   ℹ️ [RT] 시트에 이미 그림(도면)이 있어 추가 로고 삽입을 건너뜁니다.")
+            return
+
         if clear_existing:
             try: ws._images = [] 
             except: pass
@@ -1616,7 +1636,14 @@ class IntegratedSmartManager:
         self.photo_output_name = tk.StringVar(value=self.config.get('PHOTO_OUTPUT_NAME', "Photo_Report"))
         self.last_photo_save_dir = self.config.get('LAST_PHOTO_SAVE_DIR', "")
         self.photo_header_map = {
-            "RT": "RT 성적서 사진대장", "PT": "PT 성적서 사진대장", "PMI": "PMI 성적서 사진대장", "PAUT": "PAUT 성적서 사진대장"
+            "PAUT": "REPORT OF PHASED ARRAY UT EXAMINATION (위 상 배 열 초 음 파 탐 상 검 사 보 고 서)",
+            "RT": "REPORT OF RADIOGRAPHIC EXAMINATION (방 사 선 투 과 검 사 보 고 서)",
+            "PT": "REPORT OF LIQUID PENETRANT EXAMINATION (침 투 탐 상 검 사 보 고 서)",
+            "MT": "REPORT OF MAGNETIC PARTICLE EXAMINATION (자 분 탐 상 검 사 보 고 서)",
+            "PMI": "REPORT OF POSITIVE MATERIAL IDENTIFICATION (재 질 성 분 분 석 검 사 보 고 서)",
+            "UT": "REPORT OF ULTRASONIC EXAMINATION (초 음 파 탐 상 검 사 보 고 서)",
+            "NDT": "REPORT OF NON-DESTRUCTIVE EXAMINATION (비 파 괴 검 사 보 고 서)",
+            "기타 (직접 입력)": ""
         }
         # [NEW] Column Keys for Treeview Preview
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Mn", "Grade", "Result"]
@@ -4376,16 +4403,180 @@ class IntegratedSmartManager:
             return s
         except: return str(val).strip()
 
-    def prepare_next_paut_sheet(self, wb, prev_title, page_num):
-        source_sheet = wb[prev_title]
-        new_sheet = wb.copy_worksheet(source_sheet)
-        new_sheet.title = f"PAUT_Report_{page_num+1:03d}"
-        start_row = int(self.config.get('PAUT_START_ROW', 11))
-        end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
-        for r in range(start_row, end_row + 1):
-            for c in range(1, 11): new_sheet.cell(row=r, column=c).value = None
-        self.add_logos_to_sheet(new_sheet, is_cover=False)
+    def prepare_next_sheet(self, wb, source_sheet_idx, page_num):
+        source_sheet = wb.worksheets[source_sheet_idx]
+        new_sheet = wb.copy_worksheet(source_sheet) 
+        
+        # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them for RT to preserve Shooting Sketches.
+        try:
+            tab_idx = self.notebook.index("current")
+            is_rt = (tab_idx == 5)
+        except: is_rt = False
+
+        if is_rt:
+            try:
+                import copy
+                for img in source_sheet._images:
+                    new_img = copy.copy(img)
+                    if hasattr(img, 'anchor'):
+                        new_img.anchor = copy.copy(img.anchor)
+                    new_sheet.add_image(new_img)
+            except: pass
+            
+        base_title = source_sheet.title.split('_')[0]
+        new_sheet.title = f"{base_title[:20]}_{page_num:03d}"
+        self.force_print_settings(new_sheet, context="DATA")
+        
+        # [FIX] Only add logos if they weren't already copied from the source sheet
+        if not is_rt or not new_sheet._images:
+            self.add_logos_to_sheet(new_sheet, is_cover=False)
+        
+        self.apply_custom_dimensions(new_sheet, "DATA")
+        for col_letter, col_dim in source_sheet.column_dimensions.items(): 
+            new_sheet.column_dimensions[col_letter].width = col_dim.width
+            
+        data_font = Font(size=9); grade_font = Font(size=8.5)
+        
+        # [FIX] RT 모드일 경우 Shooting Sketch(32행~42행)를 보호하기 위해 데이터 종료 행을 조절
+        start_row = int(self.config.get('START_ROW', 17))
+        end_row = int(self.config.get('DATA_END_ROW', 45))
+        
+        if is_rt:
+            start_row = int(self.config.get('RT_START_ROW', 17))
+            end_row = int(self.config.get('RT_END_ROW', 31))
+            
+        for r in range(start_row + 1, end_row + 1):
+            for c in range(1, 14):
+                cell = new_sheet.cell(row=r, column=c)
+                cell.font = grade_font if c == 13 else data_font
+                self.safe_set_value(new_sheet, cell, None)
+                
+        merged_to_clear = [rng for rng in new_sheet.merged_cells.ranges if rng.min_row >= start_row and rng.max_row <= end_row]
+        for rng in merged_to_clear: new_sheet.unmerge_cells(str(rng))
+        
+        # [FIX] 갑지 데이터 수식으로 연결 (첫번째 시트 참조)
+        try:
+            ws0 = wb.worksheets[0]
+            if len(wb.worksheets) > 1:
+                self.safe_set_value(new_sheet, 'K5', f"='{ws0.title}'!L5")
+                self.safe_set_value(new_sheet, 'M5', f"='{ws0.title}'!N5")
+                self.safe_set_value(new_sheet, 'M8', f"='{ws0.title}'!N8")
+                for r_idx in range(5, 11):
+                    for c_idx in range(11, 14): # K(11) ~ M(13)
+                        cell = new_sheet.cell(row=r_idx, column=c_idx)
+                        cell.font = Font(name='바탕', size=9)
+                        cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+        except: pass
         return new_sheet
+
+    def inject_drawing_layer(self, template_path, target_path):
+        """[ADVANCED SURGERY] Multi-sheet drawing preservation logic."""
+        import zipfile, shutil, os, re
+        final_out = target_path + ".final"
+        shutil.copy2(template_path, final_out)
+        try:
+            with zipfile.ZipFile(target_path, 'r') as z_data:
+                ws_files = [f for f in z_data.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')]
+                rep_shared_strings = []
+                if 'xl/sharedStrings.xml' in z_data.namelist():
+                    ss_content = z_data.read('xl/sharedStrings.xml').decode('utf-8', errors='ignore')
+                    rep_shared_strings = re.findall(r'<t[^>]*>(.*?)</t>', ss_content, re.DOTALL)
+
+                processed_sheets = {}
+                for f in ws_files:
+                    content = z_data.read(f).decode('utf-8', errors='ignore')
+                    def replace_to_inline(match):
+                        attrs, idx = match.group(1), int(match.group(2))
+                        if 0 <= idx < len(rep_shared_strings):
+                            text = rep_shared_strings[idx]; new_attrs = attrs.replace('t="s"', 't="inlineStr"')
+                            return f'<c {new_attrs}><is><t>{text}</t></is>'
+                        return match.group(0)
+                    content = re.sub(r'<c ([^>]*t="s"[^>]*)>[ \t\r\n]*<v>(\d+)</v>', replace_to_inline, content)
+                    processed_sheets[f] = content
+
+                report_drawings = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/drawing' in f and f.endswith('.xml')}
+                report_drawing_rels = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/_rels/drawing' in f}
+                logo_media = {f: z_data.read(f) for f in z_data.namelist() if 'xl/media/image' in f}
+                styles_xml = z_data.read('xl/styles.xml') if 'xl/styles.xml' in z_data.namelist() else None
+                shared_strings_xml = z_data.read('xl/sharedStrings.xml') if 'xl/sharedStrings.xml' in z_data.namelist() else None
+                workbook_xml = z_data.read('xl/workbook.xml') if 'xl/workbook.xml' in z_data.namelist() else None
+
+                temp_swap = final_out + ".swap"
+                with zipfile.ZipFile(final_out, 'r') as z_tmpl_in:
+                    sheet_to_rid = {}
+                    for f in z_tmpl_in.namelist():
+                        if f.startswith('xl/worksheets/sheet') and f.endswith('.xml'):
+                            content = z_tmpl_in.read(f).decode('utf-8', errors='ignore')
+                            m = re.search(r'<drawing [^>]*r:id="(rId\d+)"', content)
+                            if m: sheet_to_rid[f] = m.group(1)
+
+                    with zipfile.ZipFile(temp_swap, 'w') as z_out:
+                        for item in z_tmpl_in.infolist():
+                            fname = item.filename
+                            if fname in processed_sheets:
+                                tmpl_sheet = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                # [PINCET SURGERY] Replace ONLY sheetData block to preserve all other tags (drawings, etc.)
+                                data_match = re.search(r'<sheetData>(.*?)</sheetData>', processed_sheets[fname], re.DOTALL)
+                                if data_match:
+                                    new_sheet_xml = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{data_match.group(1)}</sheetData>', tmpl_sheet, flags=re.DOTALL)
+                                    z_out.writestr(item, new_sheet_xml.encode('utf-8'))
+                                else:
+                                    z_out.writestr(item, tmpl_sheet.encode('utf-8'))
+                            elif fname == 'xl/workbook.xml' and workbook_xml: z_out.writestr(item, workbook_xml)
+                            elif fname == 'xl/styles.xml' and styles_xml: z_out.writestr(item, styles_xml)
+                            elif fname == 'xl/sharedStrings.xml' and shared_strings_xml: z_out.writestr(item, shared_strings_xml)
+                            else: z_out.writestr(item, z_tmpl_in.read(fname))
+                        
+                        # [NEW] Add extra sheets from report that are missing in template
+                        # To keep print settings (Print Area, Page Breaks), we use the template's first sheet as a blueprint
+                        blueprint_xml = None
+                        first_sheet_name = next((f for f in z_tmpl_in.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')), None)
+                        if first_sheet_name:
+                            blueprint_xml = z_tmpl_in.read(first_sheet_name).decode('utf-8', errors='ignore')
+
+                        tmpl_files = set(z_tmpl_in.namelist())
+                        for f_report in processed_sheets:
+                            if f_report not in tmpl_files:
+                                # Use blueprint if available to inherit print settings/page breaks
+                                if blueprint_xml:
+                                    # [FIX] processed_sheets[f_report] is already a string in Final app (check previous turn)
+                                    # Wait, let's check if it's bytes or string.
+                                    # In Final app: processed_sheets[f] = content (string)
+                                    report_sheet_content = processed_sheets[f_report]
+                                    if isinstance(report_sheet_content, bytes):
+                                        report_sheet_content = report_sheet_content.decode('utf-8')
+                                    
+                                    data_match = re.search(r'<sheetData>(.*?)</sheetData>', report_sheet_content, re.DOTALL)
+                                    if data_match:
+                                        extra_sheet_xml = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{data_match.group(1)}</sheetData>', blueprint_xml, flags=re.DOTALL)
+                                        extra_sheet_xml = re.sub(r'<drawing [^>]*/>', '', extra_sheet_xml)
+                                        z_out.writestr(f_report, extra_sheet_xml.encode('utf-8'))
+                                    else:
+                                        z_out.writestr(f_report, report_sheet_content.encode('utf-8'))
+                                else:
+                                    z_out.writestr(f_report, processed_sheets[f_report].encode('utf-8'))
+                                
+                                rel_path = f"xl/worksheets/_rels/{os.path.basename(f_report)}.rels"
+                                if rel_path in z_data.namelist(): z_out.writestr(rel_path, z_data.read(rel_path))
+                        tmpl_media_list = z_tmpl_in.namelist()
+                        for f_path, f_data in logo_media.items():
+                            if f_path not in tmpl_media_list: z_out.writestr(f_path, f_data)
+            os.remove(target_path); os.rename(temp_swap, target_path)
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log("   🛡️ [보호] 전 시트 제로-로스 데이터 주입 + 로고 복구 완료")
+        except Exception as e:
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log(f"   ⚠️ [주의] 제로-로스 수술 실패: {e}")
+
+    def _write_gapji_metadata(self, ws):
+        mapping = [
+            ('GAPJI_PROJECT', 'B5'), ('GAPJI_CUSTOMER', 'B6'),
+            ('GAPJI_ITEM', 'B7'), ('GAPJI_MATERIAL', 'B8'),
+            ('GAPJI_EXAM_DATE', 'B9'), ('GAPJI_REPORT_NO', 'B10')
+        ]
+        for cfg_key, coord in mapping:
+            val = self.config.get(cfg_key, "")
+            if val: self.safe_set_value(ws, coord, val)
 
     def run_process(self):
         """성적서 생성 메인 오케스트레이터"""
@@ -4529,37 +4720,65 @@ class IntegratedSmartManager:
 
     def _run_rt_process(self, final_list, template_path):
         """RT 성적서 생성 (High-Fidelity)"""
+        self.manual_save_settings() 
         self.log(f"🚀 RT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        self.progress['value'] = 0
         try:
             wb = openpyxl.load_workbook(template_path)
-            ws0 = wb.worksheets[0]; self.add_logos_to_sheet(ws0, is_cover=True)
-            self.force_print_settings(ws0, context="COVER"); self.apply_custom_dimensions(ws0, "COVER")
+            if len(wb.worksheets) < 1: raise ValueError("템플릿에 시트가 없습니다.")
+
+            ws0 = wb.worksheets[0]
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False)
+            self._write_gapji_metadata(ws0)
+            self.force_print_settings(ws0, context="COVER")
+            self.apply_custom_dimensions(ws0, "COVER")
             
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
-            ws = wb.worksheets[data_sheet_id]; ws.title = f"RT_Report_001"
-            self.add_logos_to_sheet(ws, is_cover=False); self.force_print_settings(ws, context="DATA")
+            ws = wb.worksheets[data_sheet_id]
+            ws.title = f"RT_Report_001"
+            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0))
+            self.force_print_settings(ws, context="DATA")
             
-            start_row = int(self.config.get('RT_START_ROW', 17)); end_row = int(self.config.get('RT_END_ROW', 41))
+            # RT Boundaries (Standard: Start 17, End 31 to protect Shooting Sketch at 32-42)
+            start_row = int(self.config.get('RT_START_ROW', 17))
+            end_row = int(self.config.get('RT_END_ROW', 31))
             current_row = start_row; current_page = 1; data_ptr = 0
             
             while data_ptr < len(final_list):
                 if current_row > end_row:
-                    current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page); current_row = start_row
+                    current_page += 1
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    current_row = start_row
                 
                 item = final_list[data_ptr]
-                self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('No', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=3).coordinate, item.get('Dwg', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=4).coordinate, item.get('Joint', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=28).coordinate, item.get('Result', 'ACC'))
+                # Dynamic column mapping
+                def _c(key, default): return self.col_to_num(self.config.get(key, default))
                 
-                for c in range(1, 31):
-                    cell = ws.cell(row=current_row, column=c); cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True); cell.font = Font(name='바탕', size=9)
+                self.safe_set_value(ws, ws.cell(row=current_row, column=_c('RT_COL_NO', '1')).coordinate, item.get('No', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=_c('RT_COL_DWG', '3')).coordinate, item.get('Dwg', ''))
+                self.safe_set_value(ws, ws.cell(row=current_row, column=_c('RT_COL_JOINT', '4')).coordinate, item.get('Joint', ''))
+                
+                # Defect columns (D1-D15)
+                for d_i in range(1, 16):
+                    d_col = _c(f'RT_COL_D{d_i}', str(12+d_i))
+                    if d_col >= 1:
+                        self.safe_set_value(ws, ws.cell(row=current_row, column=d_col).coordinate, item.get(f'D{d_i}', ''))
+
+                self.safe_set_value(ws, ws.cell(row=current_row, column=_c('RT_COL_RES', '28')).coordinate, item.get('Result', 'ACC'))
                 
                 data_ptr += 1; current_row += 1
-            
+                self.progress['value'] = (data_ptr / len(final_list)) * 95
+
+            # Save and surgery
             out = filedialog.asksaveasfilename(defaultextension=".xlsx")
-            if out: wb.save(out); messagebox.showinfo("성공", "RT 성적서 생성 완료")
-        except Exception as e: self.log(f"❌ RT 오류: {e}")
+            if out:
+                wb.save(out)
+                self.inject_drawing_layer(template_path, out)
+                self.progress['value'] = 100
+                messagebox.showinfo("성공", "RT 성적서 생성 완료 (도면 레이어 보호 적용)")
+        except Exception as e:
+            self.log(f"❌ RT 오류: {e}")
+            messagebox.showerror("오류", str(e))
 
     def _run_pt_process(self, final_list, template_path):
         """PT 성적서 생성 (High-Fidelity)"""
