@@ -5250,16 +5250,26 @@ class PMIReportApp:
 
             ws.page_setup.paperSize = 9; ws.page_setup.orientation = 'portrait'
             
-            # [REFINED] 사용자 설정 배율 및 여백 적용
+            # [FIX] 모드별 설정 우선 읽기 (RT_COVER → COVER 순 폴백)
             default_scale = 95
-            if mode == "RT" and context == "COVER": default_scale = 90 # [FIX] 안전하게 한 페이지에 넣기 위해 90%로 조정
-            ws.page_setup.scale = int(float(self.config.get(f'PRINT_SCALE_{context}', default_scale)))
+            if mode == "RT" and context == "COVER": default_scale = 90
+            scale_val = (self.config.get(f'PRINT_SCALE_{full_context}', '').strip() or
+                         self.config.get(f'PRINT_SCALE_{context}', '').strip() or
+                         str(default_scale))
+            ws.page_setup.scale = int(float(scale_val))
             ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
             
-            ws.page_margins.top = float(self.config.get(f'MARGIN_{context}_TOP', 0.2))
-            ws.page_margins.bottom = float(self.config.get(f'MARGIN_{context}_BOTTOM', 0.2))
-            ws.page_margins.left = float(self.config.get(f'MARGIN_{context}_LEFT', 0.5))
-            ws.page_margins.right = float(self.config.get(f'MARGIN_{context}_RIGHT', 0.3))
+            def _margin(name, default):
+                return float(
+                    self.config.get(f'MARGIN_{full_context}_{name}', '').strip() or
+                    self.config.get(f'MARGIN_{context}_{name}', '').strip() or
+                    default
+                )
+            ws.page_margins.top    = _margin('TOP',    0.2)
+            ws.page_margins.bottom = _margin('BOTTOM', 0.2)
+            ws.page_margins.left   = _margin('LEFT',   0.5)
+            ws.page_margins.right  = _margin('RIGHT',  0.3)
+
         except Exception as e:
             print(f"[WARNING] Print settings failed: {e}")
             print(f"[WARNING] Print settings failed: {e}")
@@ -5467,11 +5477,19 @@ class PMIReportApp:
                             processed_sheets[f.lower()] = content
                         except: pass
 
-                # 리포트 pageSetup scale 추출
+                # 리포트 pageSetup & pageMargins 추출 (force_print_settings 적용값)
+                rep_page_settings = {}  # fl_lower → {'setup': '...', 'margins': '...'}
                 rep_scale = None
-                for _, c in processed_sheets.items():
-                    m = re.search(r'<pageSetup\b[^>]*\bscale="(\d+)"', c)
-                    if m: rep_scale = m.group(1); break
+                for fl_s, c in processed_sheets.items():
+                    setup_m  = re.search(r'<pageSetup\b[^>]*/>', c)
+                    margin_m = re.search(r'<pageMargins\b[^>]*/>', c)
+                    scale_m  = re.search(r'<pageSetup\b[^>]*\bscale="(\d+)"', c)
+                    if scale_m and not rep_scale:
+                        rep_scale = scale_m.group(1)
+                    rep_page_settings[fl_s] = {
+                        'setup':   setup_m.group(0)  if setup_m  else None,
+                        'margins': margin_m.group(0) if margin_m else None,
+                    }
 
                 # 리포트의 workbook 메타 파일들 (raw bytes)
                 rep_workbook_xml  = next((z_rep.read(f) for f in rep_names if f.lower() == 'xl/workbook.xml'), None)
@@ -5558,9 +5576,25 @@ class PMIReportApp:
                             tmpl_sheet = re.sub(r'<rowBreaks[^>]*>.*?</rowBreaks>', '', tmpl_sheet, flags=re.DOTALL)
                             tmpl_sheet = re.sub(r'<rowBreaks[^>]*/>', '', tmpl_sheet)
                             tmpl_sheet = re.sub(r'<colBreaks[^>]*>.*?</colBreaks>', '', tmpl_sheet, flags=re.DOTALL)
-                            # scale 패치
-                            if rep_scale:
+                            # pageSetup 전체 교체 (배율 + 방향 + 용지 크기)
+                            rep_ps = rep_page_settings.get(fl_lower, {}).get('setup')
+                            if rep_ps:
+                                if re.search(r'<pageSetup\b[^>]*/>', tmpl_sheet):
+                                    tmpl_sheet = re.sub(r'<pageSetup\b[^>]*/>', rep_ps, tmpl_sheet, count=1)
+                                else:
+                                    # pageSetup 태그가 없으면 sheetData 앞에 삽입
+                                    tmpl_sheet = tmpl_sheet.replace('</sheetData>', '</sheetData>' + rep_ps, 1)
+                            elif rep_scale:
+                                # pageSetup은 없지만 scale만 있으면 기존 방식으로 패치
                                 tmpl_sheet = re.sub(r'<pageSetup\b[^>]*/>', lambda m: re.sub(r'\bscale="\d+"', f'scale="{rep_scale}"', m.group(0)) if 'scale=' in m.group(0) else m.group(0).replace('<pageSetup', f'<pageSetup scale="{rep_scale}"', 1), tmpl_sheet)
+                            
+                            # pageMargins 교체 (여백 설정)
+                            rep_pm = rep_page_settings.get(fl_lower, {}).get('margins')
+                            if rep_pm:
+                                if re.search(r'<pageMargins\b[^>]*/>', tmpl_sheet):
+                                    tmpl_sheet = re.sub(r'<pageMargins\b[^>]*/>', rep_pm, tmpl_sheet, count=1)
+                                else:
+                                    tmpl_sheet = tmpl_sheet.replace('</pageSetup>', '</pageSetup>' + rep_pm, 1)
                             # sheetData 주입 + 행 높이 보존
                             if fl_lower in processed_sheets:
                                 rc = processed_sheets[fl_lower]
