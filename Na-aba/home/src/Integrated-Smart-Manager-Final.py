@@ -3519,14 +3519,27 @@ class IntegratedSmartManager:
     def _create_margin_settings(self, parent, context, start_row):
         ttk.Label(parent, text="페이지 여백 및 배율:", font=("Malgun Gothic", 9, "bold")).grid(row=start_row, column=0, sticky='w', pady=(10, 2), columnspan=3)
         m_row = start_row + 1
-        for i, (l, k) in enumerate([("상:", "TOP"), ("하:", "BOTTOM"), ("좌:", "LEFT"), ("우:", "RIGHT"), ("배율:", "SCALE"), ("영역:", "AREA")]):
+        items = [
+            ("상:", "TOP"), ("하:", "BOTTOM"), ("좌:", "LEFT"), ("우:", "RIGHT"), 
+            ("배율:", "SCALE"), ("영역:", "AREA"), ("행:", "ROWS"), ("H:", "HEIGHT")
+        ]
+        for i, (l, k) in enumerate(items):
             if k == "SCALE": full_key = f"PRINT_SCALE_{context}"
             elif k == "AREA": full_key = f"PRINT_AREA_{context}"
+            elif k == "ROWS": full_key = f"CUSTOM_ROWS_{context}"
+            elif k == "HEIGHT": full_key = f"CUSTOM_ROW_HEIGHT_{context}"
             else: full_key = f"MARGIN_{context}_{k}"
-            ttk.Label(parent, text=l, font=("Arial", 8)).grid(row=m_row, column=i*2, sticky='e')
+            
+            # 4 columns per row
+            grid_row = m_row + (i // 4)
+            grid_col = (i % 4) * 2
+            
+            ttk.Label(parent, text=l, font=("Arial", 8)).grid(row=grid_row, column=grid_col, sticky='e')
             var = tk.StringVar(value=str(self.config.get(full_key, "")))
             self.setting_vars[full_key] = var
-            ttk.Entry(parent, textvariable=var, width=5 if k != "AREA" else 10).grid(row=m_row, column=i*2+1, sticky='w', padx=2)
+            ent_w = 5
+            if k == "AREA" or k == "ROWS": ent_w = 8
+            ttk.Entry(parent, textvariable=var, width=ent_w).grid(row=grid_row, column=grid_col+1, sticky='w', padx=2)
 
     def _create_row_settings(self, parent, mode="PMI"):
         """Row range settings for data extraction and printing."""
@@ -3923,7 +3936,7 @@ class IntegratedSmartManager:
             for key, var in self.setting_vars.items():
                 val = var.get()
                 try:
-                    if "AREA" in key:
+                    if "AREA" in key or "ROWS" in key:
                         self.config[key] = str(val).strip()
                     elif any(x in key for x in ['_X', '_Y', '_W', '_H', 'MARGIN', 'HEIGHT', 'WIDTH']):
                         self.config[key] = float(val)
