@@ -61,3 +61,14 @@ pmi_database.db
 
 # Config directory (API keys, etc.)
 config/
+
+# Generated reports (RT, PMI, PT - 자동 생성 리포트)
+Na-aba/home/data/RT_Report_*.xlsx
+Na-aba/home/data/PMI_Report_*.xlsx
+Na-aba/home/data/PT_Report_*.xlsx
+Na-aba/home/data/*.xlsx.final
+Na-aba/home/data/*.xlsx.final.swap
+Na-aba/home/data/~$*.xlsx
+
+# Python backup files
+*.py.bak
