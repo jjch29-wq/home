@@ -152,7 +152,7 @@ class PMIReportApp:
 
         # 2. State Variables
         self.setting_vars = {} # [CRITICAL FIX] Container for all dynamic UI variables
-        self.logo_folder_path = tk.StringVar(value=RESOURCE_DIR)
+        self.logo_folder_path = tk.StringVar(value="")
         self.target_file_path = tk.StringVar(value=self.config.get('PMI_TARGET_PATH', ""))
         self.template_file_path = tk.StringVar(value=self.config.get('PMI_TEMPLATE_PATH', ""))
         self.sequence_filter = tk.StringVar()
@@ -5164,7 +5164,7 @@ class PMIReportApp:
                 k4 = f"{prefix}_{global_ctx}_PATH"
                 path = self.config.get(k4, "")
 
-            self.log(f"   > '{prefix}' 검색 시작 (Target Context: {context})")
+            # self.log(f"   > '{prefix}' 검색 시작 (Target Context: {context})")
             
             # 2. If path is valid and exists, use it
             if path and str(path).strip() and os.path.exists(str(path).strip()):
@@ -5180,14 +5180,14 @@ class PMIReportApp:
                 return str(g_path).strip()
 
             # 4. If manual path is empty or invalid, try Smart Search in Logo Folder
-            self.log(f"   ? '{prefix}' 설정 없음 -> 기본 폴더 자동 검색 시작...")
+            # self.log(f"   ? '{prefix}' 설정 없음 -> 기본 폴더 자동 검색 시작...")
             for kw in keywords:
                 found = self.find_image_smart(kw)
                 if found:
                     self.log(f"   [OK] '{prefix}' 자동 검색 성공: {os.path.basename(found)}")
                     return found
             
-            self.log(f"   [FAIL] '{prefix}' 로고를 어디에서도 찾을 수 없습니다.")
+            # self.log(f"   [FAIL] '{prefix}' 로고를 어디에서도 찾을 수 없습니다.")
             return None
 
         # 1. SITCO
@@ -6852,8 +6852,8 @@ class PMIReportApp:
             # self.set_eulji_headers(ws) 
 
             # Configizable or Default RT boundaries (Standard: Start 17, End 31 to avoid Shooting Sketch at 32)
-            start_row = int(self.config.get('RT_START_ROW', 17))
-            end_row = int(self.config.get('RT_END_ROW', 31))
+            start_row = int(self.config.get('RT_START_ROW', 11))
+            end_row = int(self.config.get('RT_END_ROW', 34))
             rows_per_page = end_row - start_row + 1
             
             current_row = start_row
@@ -6975,13 +6975,19 @@ class PMIReportApp:
                 
                 page_num = p_idx + 1
                 self.apply_custom_dimensions(s, "DATA" if p_idx > 0 else "COVER")
-                # Page Numbers
+                # [FIX] RT Page Numbers: Gab-sheet -> N3, Eul-sheet -> S2
                 try:
-                    # if p_idx == 0: cell = s["O35"] if "O35" in s else s.cell(row=35, column=15)
-                    if p_idx > 0: 
-                        cell = s["V3"] if "V3" in s else s.cell(row=3, column=22)
-                        self.safe_set_value(s, cell.coordinate, f"Page   {page_num}   of   {total_p}")
-                except: pass
+                    p_text = f"Page    {page_num}    of    {total_p}"
+                    if p_idx == 0: # Gapji (Cover)
+                        self.safe_set_value(s, "N3", p_text)
+                        s["N3"].alignment = Alignment(horizontal='center', vertical='center')
+                        s["N3"].font = Font(name='맑은 고딕', size=11, bold=True)
+                    else: # Eulji (Data)
+                        self.safe_set_value(s, "S2", p_text)
+                        s["S2"].alignment = Alignment(horizontal='center', vertical='center')
+                        s["S2"].font = Font(name='맑은 고딕', size=11, bold=True)
+                except Exception as pe:
+                    self.log(f"   ⚠️ 페이지 번호 기입 실패 ({p_idx}): {pe}")
 
             # [FINAL CLEANUP] Standardized cleanup for RT
             try:
