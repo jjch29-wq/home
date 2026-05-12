@@ -5253,16 +5253,19 @@ class PMIReportApp:
             # [FIX] 모드별 설정 우선 읽기 (RT_COVER → COVER 순 폴백)
             default_scale = 95
             if mode == "RT" and context == "COVER": default_scale = 90
-            scale_val = (self.config.get(f'PRINT_SCALE_{full_context}', '').strip() or
-                         self.config.get(f'PRINT_SCALE_{context}', '').strip() or
+            def _cfg_str(key):
+                v = self.config.get(key, '')
+                return str(v).strip() if v != '' else ''
+            scale_val = (_cfg_str(f'PRINT_SCALE_{full_context}') or
+                         _cfg_str(f'PRINT_SCALE_{context}') or
                          str(default_scale))
             ws.page_setup.scale = int(float(scale_val))
             ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
             
             def _margin(name, default):
                 return float(
-                    self.config.get(f'MARGIN_{full_context}_{name}', '').strip() or
-                    self.config.get(f'MARGIN_{context}_{name}', '').strip() or
+                    _cfg_str(f'MARGIN_{full_context}_{name}') or
+                    _cfg_str(f'MARGIN_{context}_{name}') or
                     default
                 )
             ws.page_margins.top    = _margin('TOP',    0.2)
@@ -5551,12 +5554,26 @@ class PMIReportApp:
                     rep_workbook_xml = wb_str.encode('utf-8')
                     self.log(f"   📐 [인쇄영역] {pa_norm} → {len(snames)}개 시트 확정 주입")
                 
-                # 리포트의 workbook 메타 파일 먼저 기록 (올바른 구조, 인쇄영역, 시트 등록 포함)
-                if rep_workbook_xml:  z_out.writestr('xl/workbook.xml',             rep_workbook_xml)
-                if rep_wb_rels:       z_out.writestr('xl/_rels/workbook.xml.rels',   rep_wb_rels)
-                if rep_content_types: z_out.writestr('[Content_Types].xml',          rep_content_types)
-                if rep_styles:        z_out.writestr('xl/styles.xml',                rep_styles)
-                if rep_ss_data:       z_out.writestr('xl/sharedStrings.xml',         rep_ss_data)
+                # [Content_Types].xml: 템플릿 기반 + 리포트의 추가 시트 Override 병합
+                # (템플릿 버전: drawing, media 등 포함 / 리포트 버전: 추가 시트 항목 포함)
+                merged_ct = tmpl_map.get('[content_types].xml', b'')
+                if merged_ct and rep_content_types:
+                    tmpl_ct_str = merged_ct.decode('utf-8', errors='ignore')
+                    rep_ct_str  = rep_content_types.decode('utf-8', errors='ignore')
+                    # 템플릿에 없는 Override 항목을 리포트에서 추가
+                    tmpl_parts  = set(re.findall(r'PartName="([^"]+)"', tmpl_ct_str))
+                    for m_ov in re.finditer(r'<Override\b[^/]*/>', rep_ct_str):
+                        pn_m = re.search(r'PartName="([^"]+)"', m_ov.group(0))
+                        if pn_m and pn_m.group(1) not in tmpl_parts:
+                            tmpl_ct_str = tmpl_ct_str.replace('</Types>', m_ov.group(0) + '</Types>', 1)
+                    merged_ct = tmpl_ct_str.encode('utf-8')
+                z_out.writestr('[Content_Types].xml', merged_ct if merged_ct else (rep_content_types or b''))
+
+                # 리포트의 workbook 메타 파일 기록
+                if rep_workbook_xml:  z_out.writestr('xl/workbook.xml',           rep_workbook_xml)
+                if rep_wb_rels:       z_out.writestr('xl/_rels/workbook.xml.rels', rep_wb_rels)
+                if rep_styles:        z_out.writestr('xl/styles.xml',              rep_styles)
+                if rep_ss_data:       z_out.writestr('xl/sharedStrings.xml',       rep_ss_data)
                 self.log("   📋 [workbook] 리포트 workbook 구조 적용")
 
 
