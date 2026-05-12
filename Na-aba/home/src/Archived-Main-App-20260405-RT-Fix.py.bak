@@ -5201,7 +5201,118 @@ class PMIReportApp:
         p = _get_effective_path("FOOTER_PT", ["PMI갑", "PMI-1", "PT"])
         if p: self.place_image_freely(ws, p, _get_val("FOOTER_PT", "_ANCHOR", "A1"), float(_get_val("FOOTER_PT", "_W", 100)), float(_get_val("FOOTER_PT", "_H", 50)), float(_get_val("FOOTER_PT", "_X", 0)), float(_get_val("FOOTER_PT", "_Y", 0)))
 
+    def inject_drawing_layer(self, template_path, target_path):
+        import zipfile, shutil, os, re
+        final_out = target_path + ".final"
+        shutil.copy2(template_path, final_out)
+        try:
+            with zipfile.ZipFile(target_path, 'r') as z_data:
+                # 1. 리포트 데이터 추출 (인라인 변환 포함)
+                ws_files = [f for f in z_data.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')]
+                rep_shared_strings = []
+                if 'xl/sharedStrings.xml' in z_data.namelist():
+                    ss_content = z_data.read('xl/sharedStrings.xml').decode('utf-8', errors='ignore')
+                    rep_shared_strings = re.findall(r'<t[^>]*>(.*?)</t>', ss_content, re.DOTALL)
 
+                processed_data_blocks = {}
+                for f in ws_files:
+                    content = z_data.read(f).decode('utf-8', errors='ignore')
+                    # t="s" 속성을 가진 셀을 인라인화
+                    def replace_to_inline(match):
+                        attrs, idx = match.group(1), int(match.group(2))
+                        if 0 <= idx < len(rep_shared_strings):
+                            text = rep_shared_strings[idx]
+                            new_attrs = attrs.replace('t="s"', 't="inlineStr"')
+                            return f'<c {new_attrs}><is><t>{text}</t></is>'
+                        return match.group(0)
+                    content = re.sub(r'<c ([^>]*t="s"[^>]*)>[ \t\r\n]*<v>(\d+)</v>', replace_to_inline, content)
+                    # <sheetData> 블록만 추출 (세포 단위 이식용)
+                    data_match = re.search(r'<sheetData>(.*?)</sheetData>', content, re.DOTALL)
+                    if data_match: processed_data_blocks[f] = data_match.group(1)
+
+                # 2. 로고 미디어 정보 확보
+                report_drawings = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/drawing' in f and f.endswith('.xml')}
+                report_drawing_rels = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/_rels/drawing' in f}
+                logo_media = {f: z_data.read(f) for f in z_data.namelist() if 'xl/media/image' in f}
+
+                temp_swap = final_out + ".swap"
+                with zipfile.ZipFile(final_out, 'r') as z_tmpl_in:
+                    with zipfile.ZipFile(temp_swap, 'w') as z_out:
+                        for item in z_tmpl_in.infolist():
+                            fname = item.filename
+                            # [CELL SURGERY] 템플릿의 시트 데이터만 교체
+                            if fname in processed_data_blocks:
+                                tmpl_sheet = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                # 템플릿의 sheetData를 리포트의 데이터로 핀셋 교체
+                                new_sheet = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{processed_data_blocks[fname]}</sheetData>', tmpl_sheet, flags=re.DOTALL)
+                                z_out.writestr(item, new_sheet.encode('utf-8'))
+                            
+                            # [LOGO MERGE] 드로잉 병합 (이미 템플릿 것이므로 로고만 추가)
+                            elif 'xl/drawings/drawing' in fname and fname.endswith('.xml'):
+                                tmpl_xml = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                rep_drawing_xml = report_drawings.get(fname, report_drawings.get('xl/drawings/drawing1.xml', ""))
+                                if rep_drawing_xml:
+                                    rep_drawing_xml = rep_drawing_xml.decode('utf-8', errors='ignore')
+                                    existing_rids = set(re.findall(r'r:id=["\'](rId\d+)["\']', tmpl_xml))
+                                    existing_obj_ids = [int(x) for x in re.findall(r'id=["\'](\d+)["\']', tmpl_xml) if x.isdigit()]
+                                    max_obj_id = max(existing_obj_ids) if existing_obj_ids else 100
+                                    logo_anchors = re.findall(r'<(xdr:(?:one|two)CellAnchor|xdr:grpSp).*?</\1>', rep_drawing_xml, re.DOTALL)
+                                    
+                                    merged_xml = tmpl_xml
+                                    def get_safe_rid(old_rid, used_set):
+                                        num = int(old_rid.replace("rId", "")); new_rid = f"rId{num + 1000}"
+                                        while new_rid in used_set: num += 1; new_rid = f"rId{num + 1000}"
+                                        return new_rid
+
+                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
+                                    for i, anchor in enumerate(logo_anchors):
+                                        anchor_rids = set(re.findall(r'r:(?:id|embed|dm|lo|qs|cs)=["\'](rId\d+)["\']', anchor))
+                                        for old_rid in anchor_rids:
+                                            new_rid = get_safe_rid(old_rid, existing_rids)
+                                            anchor = re.sub(f'=["\']{old_rid}["\']', f'="{new_rid}"', anchor)
+                                            if not hasattr(self, '_rid_map'): self._rid_map = {}
+                                            self._rid_map[f"{dr_name}_{old_rid}"] = new_rid
+                                        new_id = max_obj_id + 1000 + i
+                                        anchor = re.sub(r'id=["\']\d+["\']', f'id="{new_id}"', anchor)
+                                        anchor = re.sub(r'name=["\'][^"\']+["\']', f'name="Logo_Obj_{new_id}"', anchor)
+                                        if '</xdr:wsDr>' in merged_xml: merged_xml = merged_xml.replace('</xdr:wsDr>', anchor + '</xdr:wsDr>')
+                                    z_out.writestr(item, merged_xml.encode('utf-8'))
+                                else: z_out.writestr(item, tmpl_xml.encode('utf-8'))
+                                    
+                            elif 'xl/drawings/_rels/drawing' in fname:
+                                tmpl_rels = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                rep_rels_xml = report_drawing_rels.get(fname, report_drawing_rels.get('xl/drawings/_rels/drawing1.xml.rels', ""))
+                                if rep_rels_xml:
+                                    rep_rels_xml = rep_rels_xml.decode('utf-8', errors='ignore')
+                                    logo_rels = re.findall(r'<Relationship [^>]*/>', rep_rels_xml)
+                                    merged_rels = tmpl_rels
+                                    dr_name = fname.replace('/_rels', '').replace('.rels', '')
+                                    for rel in logo_rels:
+                                        r_id_match = re.search(r'Id=["\'](rId\d+)["\']', rel)
+                                        if r_id_match:
+                                            old_rid = r_id_match.group(1)
+                                            new_rid = getattr(self, '_rid_map', {}).get(f"{dr_name}_{old_rid}")
+                                            if new_rid:
+                                                rel = rel.replace(f'Id="{old_rid}"', f'Id="{new_rid}"')
+                                                if new_rid not in merged_rels: merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
+                                            elif old_rid not in merged_rels: merged_rels = merged_rels.replace('</Relationships>', rel + '</Relationships>')
+                                    z_out.writestr(item, merged_rels.encode('utf-8'))
+                                else: z_out.writestr(item, tmpl_rels.encode('utf-8'))
+                            else:
+                                # 템플릿의 나머지 파일(Styles, SharedStrings 등)은 100% 보존
+                                z_out.writestr(item, z_tmpl_in.read(fname))
+                        
+                        # 미디어(로고 이미지) 추가
+                        tmpl_media_list = z_tmpl_in.namelist()
+                        for f_path, f_data in logo_media.items():
+                            if f_path not in tmpl_media_list: z_out.writestr(f_path, f_data)
+            os.remove(target_path)
+            os.rename(temp_swap, target_path)
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log("   🛡️ [보호] 전 시트 제로-로스 데이터 주입 + 로고 복구 완료")
+        except Exception as e:
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log(f"   ⚠️ [주의] 제로-로스 수술 실패: {e}")
 
     def force_print_settings(self, ws, context="DATA"):
         try:
@@ -5229,11 +5340,7 @@ class PMIReportApp:
                     # [NEW] Highly Dynamic print area for Gapji
                     key = f"{mode}_GAPJI_PRINT_END_ROW" if mode != "PMI" else "GAPJI_PRINT_END_ROW"
                     end_r = int(self.config.get(key, 51))
-                    
-                    # [FIX] 사용자의 요청에 따라 RT 갑지의 인쇄 영역을 A1:P49로 강제 최적화
-                    if mode == "RT":
-                        ws.print_area = 'A1:P49'
-                    elif end_r > 0:
+                    if end_r > 0:
                         ws.print_area = f'A1:T{end_r}'
                 else:
                     # [NEW] Highly Dynamic print area for Eulji
@@ -5241,19 +5348,10 @@ class PMIReportApp:
                     end_r = int(self.config.get(key, 47))
                     if end_r > 0:
                         ws.print_area = f'A1:M{end_r}'
-            
-            # [FIX] Clear any manual page breaks that might cause mid-page splitting
-            try:
-                ws.row_breaks = []
-                ws.col_breaks = []
-            except: pass
-
             ws.page_setup.paperSize = 9; ws.page_setup.orientation = 'portrait'
             
             # [REFINED] 사용자 설정 배율 및 여백 적용
-            default_scale = 95
-            if mode == "RT" and context == "COVER": default_scale = 90 # [FIX] 안전하게 한 페이지에 넣기 위해 90%로 조정
-            ws.page_setup.scale = int(float(self.config.get(f'PRINT_SCALE_{context}', default_scale)))
+            ws.page_setup.scale = int(float(self.config.get(f'PRINT_SCALE_{context}', 95)))
             ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
             
             ws.page_margins.top = float(self.config.get(f'MARGIN_{context}_TOP', 0.2))
@@ -5261,7 +5359,6 @@ class PMIReportApp:
             ws.page_margins.left = float(self.config.get(f'MARGIN_{context}_LEFT', 0.5))
             ws.page_margins.right = float(self.config.get(f'MARGIN_{context}_RIGHT', 0.3))
         except Exception as e:
-            print(f"[WARNING] Print settings failed: {e}")
             print(f"[WARNING] Print settings failed: {e}")
 
     def apply_custom_dimensions(self, ws, context):
@@ -5423,230 +5520,130 @@ class PMIReportApp:
 
     def inject_drawing_layer(self, template_path, target_path):
         """
-        [FINAL V4] Definitive hybrid surgery.
-        - Report's workbook.xml, workbook.xml.rels, [Content_Types].xml → correct structure, print area, all pages
-        - Template's drawings, media, sheet structure → drawings preserved
-        - Report's sheetData injected into template's sheet XMLs → content preserved
-        - Blueprint for extra sheets (multipage RT)
+        [SURGERY - MULTI-SHEET ZERO LOSS] 
+        갑지(Cover)뿐만 아니라 을지(Eulji)까지 모든 시트의 그림 레이어를 병합합니다.
         """
-        import zipfile, shutil, os, re, traceback
-
+        import zipfile, shutil, os, re
+        
         final_out = target_path + ".final"
         shutil.copy2(template_path, final_out)
-        temp_swap = final_out + ".swap"
-
+        
         try:
-            # ── Step 1: 리포트에서 필요한 모든 데이터 수집 ──────────────────
-            with zipfile.ZipFile(target_path, 'r') as z_rep:
-                rep_names = z_rep.namelist()
-
-                # sharedStrings 읽기
-                rep_shared_strings = []
-                ss_f = next((f for f in rep_names if f.lower() == 'xl/sharedstrings.xml'), None)
-                if ss_f:
-                    try:
-                        ss_xml = z_rep.read(ss_f).decode('utf-8', errors='ignore')
-                        rep_shared_strings = re.findall(r'<t(?:\s[^>]*)?>([^<]*)</t>', ss_xml)
-                    except: pass
-
-                # 시트 데이터 추출 (sharedStr → inlineStr 변환)
-                processed_sheets = {}
-                for f in rep_names:
-                    if f.lower().startswith('xl/worksheets/sheet') and f.lower().endswith('.xml'):
-                        try:
-                            content = z_rep.read(f).decode('utf-8', errors='ignore')
-                            def _to_inline(m, _ss=rep_shared_strings):
-                                try:
-                                    idx = int(m.group(2))
-                                    if 0 <= idx < len(_ss):
-                                        t = _ss[idx].replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
-                                        return f'<c {m.group(1).replace(chr(116)+"=\"s\"","t=\"inlineStr\"")}><is><t>{t}</t></is>'
-                                except: pass
-                                return m.group(0)
-                            content = re.sub(r'<c ([^>]*t="s"[^>]*)>\s*<v>(\d+)</v>', _to_inline, content)
-                            processed_sheets[f.lower()] = content
-                        except: pass
-
-                # 리포트 pageSetup scale 추출
-                rep_scale = None
-                for _, c in processed_sheets.items():
-                    m = re.search(r'<pageSetup\b[^>]*\bscale="(\d+)"', c)
-                    if m: rep_scale = m.group(1); break
-
-                # 리포트의 workbook 메타 파일들 (raw bytes)
-                rep_workbook_xml  = next((z_rep.read(f) for f in rep_names if f.lower() == 'xl/workbook.xml'), None)
-                rep_wb_rels       = next((z_rep.read(f) for f in rep_names if f.lower() == 'xl/_rels/workbook.xml.rels'), None)
-                rep_content_types = next((z_rep.read(f) for f in rep_names if f.lower() == '[content_types].xml'), None)
-                rep_styles        = next((z_rep.read(f) for f in rep_names if f.lower() == 'xl/styles.xml'), None)
-                rep_ss_data       = next((z_rep.read(f) for f in rep_names if f.lower() == 'xl/sharedstrings.xml'), None)
-
-            # ── Step 2: 템플릿에서 드로잉/Blueprint 수집 ────────────────────
-            with zipfile.ZipFile(final_out, 'r') as z_tmpl:
-                blueprint_xml  = None
-                blueprint_rels = None
-                first_sheet_f  = next((f for f in z_tmpl.namelist()
-                                       if f.lower().startswith('xl/worksheets/sheet') and f.lower().endswith('.xml')), None)
-                if first_sheet_f:
-                    blueprint_xml = z_tmpl.read(first_sheet_f).decode('utf-8', errors='ignore')
-                    rel_p = f"xl/worksheets/_rels/{os.path.basename(first_sheet_f)}.rels"
-                    if rel_p in z_tmpl.namelist():
-                        blueprint_rels = z_tmpl.read(rel_p)
-
-                # 템플릿 파일 맵 (소문자 경로 → 파일 내용)
-                tmpl_map = {}
-                for item in z_tmpl.infolist():
-                    tmpl_map[item.filename.lower()] = z_tmpl.read(item.filename)
-
-            # ── Step 3: 출력 ZIP 구성 ────────────────────────────────────────
-            with zipfile.ZipFile(temp_swap, 'w', compression=zipfile.ZIP_DEFLATED) as z_out:
-
-                # ── 인쇄영역 강제 확정 주입 (config 기준, 가장 신뢰할 수 있는 값)
-                if rep_workbook_xml:
-                    wb_str = rep_workbook_xml.decode('utf-8', errors='ignore')
-                    
-                    # config에서 인쇄영역 읽기 (force_print_settings와 동일 소스)
-                    pa = (self.config.get('PRINT_AREA_RT_COVER', '').strip() or
-                          self.config.get('PRINT_AREA_COVER', '').strip() or 'A1:P49')
-                    # $A$1:$P$49 형식으로 정규화
-                    pa_norm = re.sub(r'\$?([A-Za-z]+)\$?(\d+)',
-                                     lambda m2: f'${m2.group(1).upper()}${m2.group(2)}', pa)
-                    
-                    # 시트 이름 추출 (workbook.xml의 <sheets> 내부)
-                    snames = re.findall(r'<sheet\b[^>]*\bname="([^"]+)"', wb_str)
-                    
-                    # 기존 Print_Area definedName 전체 제거
-                    wb_str = re.sub(r'<definedName[^>]*name="_xlnm\.Print_Area"[^/]*/>', '', wb_str)
-                    wb_str = re.sub(r'<definedName[^>]*name="_xlnm\.Print_Area"[^>]*>.*?</definedName>\s*',
-                                    '', wb_str, flags=re.DOTALL)
-                    
-                    # 각 시트에 Print_Area 삽입
-                    new_dns = ''.join(
-                        f'<definedName name="_xlnm.Print_Area" localSheetId="{i}">\'{s}\'!{pa_norm}</definedName>'
-                        for i, s in enumerate(snames)
-                    )
-                    if '<definedNames' in wb_str:
-                        wb_str = re.sub(r'(<definedNames[^>]*>)', r'\1' + new_dns, wb_str, count=1)
-                    elif '</workbook>' in wb_str:
-                        wb_str = wb_str.replace('</workbook>',
-                                                f'<definedNames>{new_dns}</definedNames></workbook>', 1)
-                    
-                    rep_workbook_xml = wb_str.encode('utf-8')
-                    self.log(f"   📐 [인쇄영역] {pa_norm} → {len(snames)}개 시트 확정 주입")
+            with zipfile.ZipFile(target_path, 'r') as z_data:
+                # 1. 리포트 데이터 추출 및 인라인화 (템플릿의 sharedStrings 보호용)
+                ws_files = [f for f in z_data.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')]
                 
-                # 리포트의 workbook 메타 파일 먼저 기록 (올바른 구조, 인쇄영역, 시트 등록 포함)
-                if rep_workbook_xml:  z_out.writestr('xl/workbook.xml',             rep_workbook_xml)
-                if rep_wb_rels:       z_out.writestr('xl/_rels/workbook.xml.rels',   rep_wb_rels)
-                if rep_content_types: z_out.writestr('[Content_Types].xml',          rep_content_types)
-                if rep_styles:        z_out.writestr('xl/styles.xml',                rep_styles)
-                if rep_ss_data:       z_out.writestr('xl/sharedStrings.xml',         rep_ss_data)
-                self.log("   📋 [workbook] 리포트 workbook 구조 적용")
+                # 리포트의 공유 문자열 읽기
+                rep_shared_strings = []
+                if 'xl/sharedStrings.xml' in z_data.namelist():
+                    ss_content = z_data.read('xl/sharedStrings.xml').decode('utf-8', errors='ignore')
+                    rep_shared_strings = re.findall(r'<t[^>]*>(.*?)</t>', ss_content, re.DOTALL)
 
+                def deshare_xml(xml_content, shared_list):
+                    """공유 문자열 인덱스를 실제 텍스트(inlineStr)로 변환"""
+                    def replace_val(match):
+                        idx = int(match.group(1))
+                        if 0 <= idx < len(shared_list):
+                            text = shared_list[idx]
+                            return f'<is><t>{text}</t></is>'
+                        return match.group(0)
+                    # <v>0</v> 형태를 찾아서 변환 (t="s" 속성이 있는 경우만)
+                    return re.sub(r't="s"[^>]*>.*?<v>(\d+)</v>', r't="inlineStr">\1', xml_content).replace('t="inlineStr">', 't="inlineStr">').replace('</v>', '</is>') # 복잡한 정규식 대신 단순 치환 유도
+                
+                # 정교한 인라인 변환 (공용 자원 충돌 방지 핵심)
+                processed_sheets = {}
+                for f in ws_files:
+                    content = z_data.read(f).decode('utf-8', errors='ignore')
+                    
+                    # [OPTIMIZED DESHARE] 성능 최적화된 패턴 사용 (DOTALL 제거 및 범위 제한)
+                    def replace_to_inline(match):
+                        attrs = match.group(1)
+                        idx = int(match.group(2))
+                        if 0 <= idx < len(rep_shared_strings):
+                            text = rep_shared_strings[idx]
+                            new_attrs = attrs.replace('t="s"', 't="inlineStr"')
+                            return f'<c {new_attrs}><is><t>{text}</t></is>'
+                        return match.group(0)
 
-                written = {'xl/workbook.xml', 'xl/_rels/workbook.xml.rels',
-                           '[content_types].xml', 'xl/styles.xml', 'xl/sharedstrings.xml'}
+                    # 셀 태그 내부만 한정하여 검색하도록 패턴 최적화
+                    content = re.sub(r'<c ([^>]*t="s"[^>]*)>[ \t\r\n]*<v>(\d+)</v>', replace_to_inline, content)
+                    processed_sheets[f] = content.encode('utf-8')
 
-                # 템플릿의 모든 파일 처리 (sheet, drawing, media 등)
-                for fl_lower, raw in tmpl_map.items():
-                    if fl_lower in written:
-                        continue  # 이미 리포트 버전으로 기록됨
+                # 2. 리포트의 미디어 및 드로잉 정보 확보
+                report_drawings = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/drawing' in f and f.endswith('.xml')}
+                report_drawing_rels = {f: z_data.read(f) for f in z_data.namelist() if 'xl/drawings/_rels/drawing' in f}
+                logo_media = {f: z_data.read(f) for f in z_data.namelist() if 'xl/media/image' in f}
+                styles_xml = z_data.read('xl/styles.xml') if 'xl/styles.xml' in z_data.namelist() else None
+                shared_strings_xml = z_data.read('xl/sharedStrings.xml') if 'xl/sharedStrings.xml' in z_data.namelist() else None
+                workbook_xml = z_data.read('xl/workbook.xml') if 'xl/workbook.xml' in z_data.namelist() else None
 
-                    if fl_lower.startswith('xl/worksheets/sheet') and fl_lower.endswith('.xml'):
-                        # 시트 XML: 템플릿 구조 + 리포트 데이터
-                        try:
-                            tmpl_sheet = raw.decode('utf-8', errors='ignore')
-                            # rowBreaks 제거
-                            tmpl_sheet = re.sub(r'<rowBreaks[^>]*>.*?</rowBreaks>', '', tmpl_sheet, flags=re.DOTALL)
-                            tmpl_sheet = re.sub(r'<rowBreaks[^>]*/>', '', tmpl_sheet)
-                            tmpl_sheet = re.sub(r'<colBreaks[^>]*>.*?</colBreaks>', '', tmpl_sheet, flags=re.DOTALL)
-                            # scale 패치
-                            if rep_scale:
-                                tmpl_sheet = re.sub(r'<pageSetup\b[^>]*/>', lambda m: re.sub(r'\bscale="\d+"', f'scale="{rep_scale}"', m.group(0)) if 'scale=' in m.group(0) else m.group(0).replace('<pageSetup', f'<pageSetup scale="{rep_scale}"', 1), tmpl_sheet)
-                            # sheetData 주입 + 행 높이 보존
-                            if fl_lower in processed_sheets:
-                                rc = processed_sheets[fl_lower]
-                                s, e = '<sheetData>', '</sheetData>'
-                                si, ei = rc.find(s), rc.find(e)
-                                ts, te = tmpl_sheet.find(s), tmpl_sheet.find(e)
-                                if si != -1 and ei != -1 and ts != -1 and te != -1:
-                                    # 1) 템플릿의 행 높이/속성 추출 (ht, customHeight, hidden)
-                                    tmpl_sd = tmpl_sheet[ts+len(s):te]
-                                    tmpl_row_attrs = {}
-                                    for rm in re.finditer(r'<row\b([^>]*)>', tmpl_sd):
-                                        ra = rm.group(1)
-                                        rid = re.search(r'\br="(\d+)"', ra)
-                                        if rid:
-                                            tmpl_row_attrs[rid.group(1)] = ra
+                temp_swap = final_out + ".swap"
+                with zipfile.ZipFile(final_out, 'r') as z_tmpl_in:
+                    # 템플릿 보호 대상 매핑 (시트별 드로잉 rId 보존)
+                    sheet_to_rid = {}
+                    for f in z_tmpl_in.namelist():
+                        if f.startswith('xl/worksheets/sheet') and f.endswith('.xml'):
+                            content = z_tmpl_in.read(f).decode('utf-8', errors='ignore')
+                            m = re.search(r'<drawing [^>]*r:id="(rId\d+)"', content)
+                            if m: sheet_to_rid[f] = m.group(1)
+                    
+                    with zipfile.ZipFile(temp_swap, 'w') as z_out:
+                        for item in z_tmpl_in.infolist():
+                            fname = item.filename
+                            if fname in processed_sheets:
+                                tmpl_sheet = z_tmpl_in.read(fname).decode('utf-8', errors='ignore')
+                                # [PINCET SURGERY] Replace ONLY sheetData block to preserve all other tags (drawings, etc.)
+                                data_match = re.search(r'<sheetData>(.*?)</sheetData>', processed_sheets[fname].decode('utf-8'), re.DOTALL)
+                                if data_match:
+                                    new_sheet_xml = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{data_match.group(1)}</sheetData>', tmpl_sheet, flags=re.DOTALL)
+                                    z_out.writestr(item, new_sheet_xml.encode('utf-8'))
+                                else:
+                                    z_out.writestr(item, tmpl_sheet.encode('utf-8'))
+                            elif fname == 'xl/workbook.xml' and workbook_xml: z_out.writestr(item, workbook_xml)
+                            elif fname == 'xl/styles.xml' and styles_xml: z_out.writestr(item, styles_xml)
+                            elif fname == 'xl/sharedStrings.xml' and shared_strings_xml: z_out.writestr(item, shared_strings_xml)
+                            else: z_out.writestr(item, z_tmpl_in.read(fname))
+                        
+                        # [NEW] Add extra sheets from report that are missing in template
+                        # To keep print settings (Print Area, Page Breaks), we use the template's first sheet as a blueprint
+                        blueprint_xml = None
+                        first_sheet_name = next((f for f in z_tmpl_in.namelist() if f.startswith('xl/worksheets/sheet') and f.endswith('.xml')), None)
+                        if first_sheet_name:
+                            blueprint_xml = z_tmpl_in.read(first_sheet_name).decode('utf-8', errors='ignore')
 
-                                    # 2) 리포트 sheetData 주입
-                                    tmpl_sheet = tmpl_sheet[:ts+len(s)] + rc[si+len(s):ei] + tmpl_sheet[te:]
-
-                                    # 3) 템플릿 행 높이 복원 (ht, customHeight 속성만 덮어씀)
-                                    def _restore_height(m, _ra=tmpl_row_attrs):
-                                        attrs = m.group(1)
-                                        rid = re.search(r'\br="(\d+)"', attrs)
-                                        if rid and rid.group(1) in _ra:
-                                            ta = _ra[rid.group(1)]
-                                            for attr in ('ht', 'customHeight', 'hidden'):
-                                                am = re.search(fr'\b{attr}="([^"]+)"', ta)
-                                                if am:
-                                                    val = f'{attr}="{am.group(1)}"'
-                                                    if f'{attr}=' in attrs:
-                                                        attrs = re.sub(fr'\b{attr}="[^"]*"', val, attrs)
-                                                    else:
-                                                        attrs = attrs.rstrip() + f' {val}'
-                                        return f'<row {attrs}>'
-                                    # 주입된 sheetData 영역에만 적용
-                                    ts2 = tmpl_sheet.find(s)
-                                    te2 = tmpl_sheet.find(e)
-                                    if ts2 != -1 and te2 != -1:
-                                        sd_inner = tmpl_sheet[ts2+len(s):te2]
-                                        sd_inner = re.sub(r'<row\b([^>]*)>', _restore_height, sd_inner)
-                                        tmpl_sheet = tmpl_sheet[:ts2+len(s)] + sd_inner + tmpl_sheet[te2:]
-                                    self.log(f"   ✅ [V4] {os.path.basename(fl_lower)} 데이터 주입 (행높이 보존)")
-                            z_out.writestr(fl_lower, tmpl_sheet.encode('utf-8'))
-
-                        except:
-                            z_out.writestr(fl_lower, raw)
-                    else:
-                        # 나머지 (drawing, media, rels, etc.) → 템플릿 그대로
-                        z_out.writestr(fl_lower, raw)
-                    written.add(fl_lower)
-
-                # 추가 시트 (템플릿에 없는 멀티페이지 시트) → Blueprint 적용
-                for fl_rep, rc in processed_sheets.items():
-                    if fl_rep in written:
-                        continue
-                    if blueprint_xml:
-                        try:
-                            s, e = '<sheetData>', '</sheetData>'
-                            si, ei = rc.find(s), rc.find(e)
-                            bp = re.sub(r'<rowBreaks[^>]*>.*?</rowBreaks>', '', blueprint_xml, flags=re.DOTALL)
-                            ts, te = bp.find(s), bp.find(e)
-                            if si != -1 and ei != -1 and ts != -1 and te != -1:
-                                new_xml = bp[:ts+len(s)] + rc[si+len(s):ei] + bp[te:]
-                                z_out.writestr(fl_rep, new_xml.encode('utf-8'))
-                                if blueprint_rels:
-                                    z_out.writestr(f"xl/worksheets/_rels/{os.path.basename(fl_rep)}.rels", blueprint_rels)
-                                self.log(f"   📄 [V4] {os.path.basename(fl_rep)} Blueprint 추가")
-                                written.add(fl_rep)
-                        except: pass
-
+                        tmpl_files = set(z_tmpl_in.namelist())
+                        for f_report in processed_sheets:
+                            if f_report not in tmpl_files:
+                                # Use blueprint if available to inherit print settings/page breaks
+                                if blueprint_xml:
+                                    data_match = re.search(r'<sheetData>(.*?)</sheetData>', processed_sheets[f_report].decode('utf-8'), re.DOTALL)
+                                    if data_match:
+                                        extra_sheet_xml = re.sub(r'<sheetData>.*?</sheetData>', f'<sheetData>{data_match.group(1)}</sheetData>', blueprint_xml, flags=re.DOTALL)
+                                        # Also remove any drawing tags from extra sheets if they are not supposed to be there (blueprint might have them)
+                                        extra_sheet_xml = re.sub(r'<drawing [^>]*/>', '', extra_sheet_xml)
+                                        z_out.writestr(f_report, extra_sheet_xml.encode('utf-8'))
+                                    else:
+                                        z_out.writestr(f_report, processed_sheets[f_report])
+                                else:
+                                    z_out.writestr(f_report, processed_sheets[f_report])
+                                
+                                rel_path = f"xl/worksheets/_rels/{os.path.basename(f_report)}.rels"
+                                if rel_path in z_data.namelist(): z_out.writestr(rel_path, z_data.read(rel_path))
+                        
+                        # 미디어 추가
+                        tmpl_media_list = z_tmpl_in.namelist()
+                        for f_path, f_data in logo_media.items():
+                            if f_path not in tmpl_media_list:
+                                z_out.writestr(f_path, f_data)
+                                
             os.remove(target_path)
             os.rename(temp_swap, target_path)
             if os.path.exists(final_out): os.remove(final_out)
-            self.log("   🛡️ [V4 완료] 인쇄영역 + 그림 + 내용 모두 보존")
-
+            self.log("   🛡️ [보호] 전 시트 제로-로스 데이터 주입 + 로고 복구 완료")
+            
         except Exception as e:
-            for fc in [temp_swap, final_out]:
-                if os.path.exists(fc):
-                    try: os.remove(fc)
-                    except: pass
-            self.log(f"   ⚠️ [오류] 드로잉 수술 실패: {e}")
-            traceback.print_exc()
-
-
-
-
+            if os.path.exists(final_out): os.remove(final_out)
+            self.log(f"   ⚠️ [주의] 제로-로스 수술 실패: {e}")
 
 
 
