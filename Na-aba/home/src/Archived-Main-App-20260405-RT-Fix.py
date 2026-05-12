@@ -683,24 +683,29 @@ class PMIReportApp:
                 for key, var in self.setting_vars.items():
                     val = var.get()
                     try:
-                        # [FIX] Handle Print Area as string, others as float/int
-                        # [FIX] Robust parsing for coordinates/margins to avoid skipping updates
-                        if "AREA" in key:
+                        # [FIX] Handle various key types correctly for persistence
+                        if "AREA" in key or "_PATH" in key:
                             self.config[key] = str(val).strip()
                         elif any(x in key for x in ['_X', '_Y', '_W', '_H', 'MARGIN', 'HEIGHT', 'WIDTH']):
-                            try: 
-                                self.config[key] = float(val) if str(val).strip() else 0.0
-                                if "_X" in key or "_Y" in key:
-                                    pass
+                            try: self.config[key] = float(val) if str(val).strip() else 0.0
                             except: self.config[key] = 0.0
-                        elif 'SCALE' in key or key.endswith('_ROW'):
-                            try: self.config[key] = int(float(val)) if str(val).strip() else 0
-                            except: self.config[key] = 0
+                        elif 'SCALE' in key or key.endswith(('_ROW', '_COL', '_IDX')):
+                            # Column indexes and row numbers should be handled as strings if they are like 'A', 
+                            # but for safety in logic we often use col_to_num. 
+                            # Here we store them as strings to preserve 'A', 'B' etc.
+                            self.config[key] = str(val).strip()
                         else:
                             self.config[key] = str(val)
                     except Exception as e:
-                        print(f"?? Error saving {key}: {e}")
                         self.config[key] = str(val)
+
+            # [NEW] 즉시 파일로 기록하여 리셋 방지
+            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config', 'logo_settings_unified.json')
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            try:
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(self.config, f, indent=4, ensure_ascii=False)
+            except: pass
 
             # [NEW] 필터 설정 저장 (PMI)
             if hasattr(self, 'element_filters'):
@@ -5278,34 +5283,57 @@ class PMIReportApp:
             print(f"[WARNING] Print settings failed: {e}")
 
     def apply_custom_dimensions(self, ws, context):
-        """[NEW] 사용자의 행/열 조절 설정을 파싱하여 적용"""
+        """[NEW] 사용자의 행/열 조절 설정을 파싱하여 적용 (모드별 설정 대응)"""
         try:
+            # Determine current mode for key fallback
+            mode = getattr(self, 'current_mode', "PMI")
+            try:
+                tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+                if "PMI" in tab_text: mode = "PMI"
+                elif "RT" in tab_text: mode = "RT"
+                elif "PT" in tab_text: mode = "PT"
+                elif "PAUT" in tab_text: mode = "PAUT"
+            except: pass
+            
+            full_context = f"{mode}_{context}" if "_" not in context else context
+
             # Row Adjustment
-            row_range_str = self.config.get(f"CUSTOM_ROWS_{context}", "").strip()
+            row_range_str = (self.config.get(f"CUSTOM_ROWS_{full_context}", "") or 
+                             self.config.get(f"CUSTOM_ROWS_{context}", "")).strip()
+            
             if row_range_str:
-                height = float(self.config.get(f"CUSTOM_ROW_HEIGHT_{context}", 16.5))
+                height_val = (self.config.get(f"CUSTOM_ROW_HEIGHT_{full_context}") or 
+                              self.config.get(f"CUSTOM_ROW_HEIGHT_{context}", 16.5))
+                height = float(height_val)
                 for part in row_range_str.split(','):
-                    if '-' in part:
-                        start, end = map(int, part.split('-'))
+                    part = part.strip()
+                    if not part: continue
+                    if '-' in part or '~' in part:
+                        sep = '-' if '-' in part else '~'
+                        start, end = map(int, part.split(sep))
                         for r in range(start, end + 1):
                             ws.row_dimensions[r].height = height
                     else:
                         ws.row_dimensions[int(part)].height = height
             
             # Column Adjustment
-            col_range_str = self.config.get(f"CUSTOM_COLS_{context}", "").strip()
+            col_range_str = (self.config.get(f"CUSTOM_COLS_{full_context}", "") or 
+                             self.config.get(f"CUSTOM_COLS_{context}", "")).strip()
             if col_range_str:
-                width = float(self.config.get(f"CUSTOM_COL_WIDTH_{context}", 10.0))
+                width_val = (self.config.get(f"CUSTOM_COL_WIDTH_{full_context}") or 
+                             self.config.get(f"CUSTOM_COL_WIDTH_{context}", 10.0))
+                width = float(width_val)
                 for part in col_range_str.split(','):
                     if '-' in part:
-                        start_letter, end_letter = part.split('-')
-                        for c in range(column_index_from_string(start_letter), column_index_from_string(end_letter) + 1):
-                            col_letter = openpyxl.utils.get_column_letter(c)
-                            ws.column_dimensions[col_letter].width = width
+                        bits = part.split('-')
+                        if len(bits) == 2:
+                            start_l, end_l = bits
+                            for c in range(column_index_from_string(start_l), column_index_from_string(end_l) + 1):
+                                ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = width
                     else:
                         ws.column_dimensions[part.strip().upper()].width = width
         except Exception as e:
-            print(f"[DEBUG] Custom dimension failed: {e}")
+            print(f"[DEBUG] Custom dimension failed for {context}: {e}")
 
     def safe_set_value(self, ws, coord, value, align=None):
         """병합된 셀이라도 기준 셀(Top-Left)을 찾아 안전하게 값을 입력합니다. (성능 최적화 버전)"""
@@ -5344,8 +5372,12 @@ class PMIReportApp:
             self.log(f"   ⚠️ 셀 병합 실패 ({start_row},{start_column}): {e}")
 
     def set_eulji_headers(self, ws):
+        # [FIX] RT 모드일 때는 헤더를 자동으로 쓰지 않음 (템플릿 보존)
+        if getattr(self, 'current_mode', "") == "RT":
+            return
+
         headers = ["NI", "CR", "MO"]
-        data_font = Font(size=9); header_row = self.config['START_ROW']
+        data_font = Font(size=9); header_row = self.config.get('START_ROW', 10)
         for i, val in enumerate(headers):
             col = 8 + i
             cell = ws.cell(row=header_row, column=col)
@@ -5521,18 +5553,9 @@ class PMIReportApp:
             # ── Step 3: 출력 ZIP 구성 ────────────────────────────────────────
             with zipfile.ZipFile(temp_swap, 'w', compression=zipfile.ZIP_DEFLATED) as z_out:
 
-                # ── 인쇄영역 강제 확정 주입 (config 기준, 가장 신뢰할 수 있는 값)
+                # ── 인쇄영역 강제 확정 주입 (시트별 구분: 갑지 vs 을지)
                 if rep_workbook_xml:
                     wb_str = rep_workbook_xml.decode('utf-8', errors='ignore')
-                    
-                    # config에서 인쇄영역 읽기 (force_print_settings와 동일 소스)
-                    pa = (self.config.get('PRINT_AREA_RT_COVER', '').strip() or
-                          self.config.get('PRINT_AREA_COVER', '').strip() or 'A1:P49')
-                    # $A$1:$P$49 형식으로 정규화
-                    pa_norm = re.sub(r'\$?([A-Za-z]+)\$?(\d+)',
-                                     lambda m2: f'${m2.group(1).upper()}${m2.group(2)}', pa)
-                    
-                    # 시트 이름 추출 (workbook.xml의 <sheets> 내부)
                     snames = re.findall(r'<sheet\b[^>]*\bname="([^"]+)"', wb_str)
                     
                     # 기존 Print_Area definedName 전체 제거
@@ -5540,19 +5563,29 @@ class PMIReportApp:
                     wb_str = re.sub(r'<definedName[^>]*name="_xlnm\.Print_Area"[^>]*>.*?</definedName>\s*',
                                     '', wb_str, flags=re.DOTALL)
                     
-                    # 각 시트에 Print_Area 삽입
-                    new_dns = ''.join(
-                        f'<definedName name="_xlnm.Print_Area" localSheetId="{i}">\'{s}\'!{pa_norm}</definedName>'
-                        for i, s in enumerate(snames)
-                    )
+                    def _get_norm_pa(pa_str):
+                        return re.sub(r'\$?([A-Za-z]+)\$?(\d+)', lambda m2: f'${m2.group(1).upper()}${m2.group(2)}', pa_str)
+
+                    new_dns_list = []
+                    for i, s_name in enumerate(snames):
+                        if i == 0: # 갑지 (Cover)
+                            pa = (self.config.get('PRINT_AREA_RT_COVER', '').strip() or 
+                                  self.config.get('PRINT_AREA_COVER', '').strip() or 'A1:P49')
+                        else: # 을지 (Data)
+                            pa = (self.config.get('PRINT_AREA_RT_DATA', '').strip() or 
+                                  self.config.get('PRINT_AREA_DATA', '').strip() or 'A1:M47')
+                        
+                        pa_norm = _get_norm_pa(pa)
+                        new_dns_list.append(f'<definedName name="_xlnm.Print_Area" localSheetId="{i}">\'{s_name}\'!{pa_norm}</definedName>')
+                    
+                    new_dns = ''.join(new_dns_list)
                     if '<definedNames' in wb_str:
                         wb_str = re.sub(r'(<definedNames[^>]*>)', r'\1' + new_dns, wb_str, count=1)
                     elif '</workbook>' in wb_str:
-                        wb_str = wb_str.replace('</workbook>',
-                                                f'<definedNames>{new_dns}</definedNames></workbook>', 1)
+                        wb_str = wb_str.replace('</workbook>', f'<definedNames>{new_dns}</definedNames></workbook>', 1)
                     
                     rep_workbook_xml = wb_str.encode('utf-8')
-                    self.log(f"   📐 [인쇄영역] {pa_norm} → {len(snames)}개 시트 확정 주입")
+                    self.log(f"   📐 [인쇄영역] 갑지/을지 개별 영역 주입 완료")
                 
                 # [Content_Types].xml: 템플릿 기반 + 리포트의 추가 시트 Override 병합
                 # (템플릿 버전: drawing, media 등 포함 / 리포트 버전: 추가 시트 항목 포함)
@@ -5638,6 +5671,10 @@ class PMIReportApp:
                                         if rid and rid.group(1) in _ra:
                                             ta = _ra[rid.group(1)]
                                             for attr in ('ht', 'customHeight', 'hidden'):
+                                                # [FIX] If ht or customHeight already exists in attrs (user set it), skip overwriting from template
+                                                if attr in ('ht', 'customHeight') and f'{attr}=' in attrs:
+                                                    continue
+                                                
                                                 am = re.search(fr'\b{attr}="([^"]+)"', ta)
                                                 if am:
                                                     val = f'{attr}="{am.group(1)}"'
@@ -6150,7 +6187,7 @@ class PMIReportApp:
             if k.endswith(('_ROW', '_IDX', '_SIZE')) or any(x in k for x in ['START', 'END', 'PAGE']):
                 try: self.config[k] = int(float(self.config[k]))
                 except: pass
-            elif any(x in k for x in ['MARGIN', 'SCALE', 'RATIO', 'POS']):
+            elif any(x in k for x in ['MARGIN', 'SCALE', 'RATIO', 'POS', 'HEIGHT', 'WIDTH']):
                 try: self.config[k] = float(self.config[k])
                 except: pass
 
@@ -6831,35 +6868,32 @@ class PMIReportApp:
                 
                 item = final_list[data_ptr]
                 
-                # [NEW] Write headers to Excel on the row above start_row
-                if current_row == start_row:
-                    try:
-                        h_row = start_row - 1
-                        if h_row >= 1:
-                            # Use existing mapping keys to place headers
-                            h_map = {
-                                'RT_COL_NO': 'RT_NAME_NO', 'RT_COL_DATE': 'RT_NAME_DATE',
-                                'RT_COL_DWG': 'RT_NAME_DWG', 'RT_COL_JOINT': 'RT_NAME_JOINT',
-                                'RT_COL_LOC': 'RT_NAME_LOC', 'RT_COL_THK': 'RT_NAME_THK',
-                                'RT_COL_MAT': 'RT_NAME_MAT', 'RT_COL_ACC': 'RT_NAME_ACC',
-                                'RT_COL_REJ': 'RT_NAME_REJ', 'RT_COL_DEG': 'RT_NAME_DEG',
-                                'RT_COL_RES': 'RT_NAME_RES', 'RT_COL_WELDER': 'RT_NAME_WELDER',
-                                'RT_COL_REM': 'RT_NAME_REM'
-                            }
-                            for c_key, n_key in h_map.items():
-                                c_idx = self.col_to_num(self.config.get(c_key, '0'))
-                                if c_idx >= 1:
-                                    h_default = c_key.replace('RT_COL_', '').capitalize()
-                                    h_text = self.config.get(n_key, h_default)
-                                    self.safe_set_value(ws, ws.cell(row=h_row, column=c_idx).coordinate, h_text)
-                            
-                            # Defects D1-D15 headers
-                            for d_i in range(1, 16):
-                                d_c_idx = self.col_to_num(self.config.get(f'RT_COL_D{d_i}', '0'))
-                                if d_c_idx >= 1:
-                                    d_text = self.config.get(f'RT_NAME_D{d_i}', f'D{d_i}')
-                                    self.safe_set_value(ws, ws.cell(row=h_row, column=d_c_idx).coordinate, d_text)
-                    except: pass
+                # [DISABLED] Do NOT write headers automatically to preserve template's own headers
+                # if current_row == start_row:
+                #     try:
+                #         h_row = start_row - 1
+                #         if h_row >= 1:
+                #             h_map = {
+                #                 'RT_COL_NO': 'RT_NAME_NO', 'RT_COL_DATE': 'RT_NAME_DATE',
+                #                 'RT_COL_DWG': 'RT_NAME_DWG', 'RT_COL_JOINT': 'RT_NAME_JOINT',
+                #                 'RT_COL_LOC': 'RT_NAME_LOC', 'RT_COL_THK': 'RT_NAME_THK',
+                #                 'RT_COL_MAT': 'RT_NAME_MAT', 'RT_COL_ACC': 'RT_NAME_ACC',
+                #                 'RT_COL_REJ': 'RT_NAME_REJ', 'RT_COL_DEG': 'RT_NAME_DEG',
+                #                 'RT_COL_RES': 'RT_NAME_RES', 'RT_COL_WELDER': 'RT_NAME_WELDER',
+                #                 'RT_COL_REM': 'RT_NAME_REM'
+                #             }
+                #             for c_key, n_key in h_map.items():
+                #                 c_idx = self.col_to_num(self.config.get(c_key, '0'))
+                #                 if c_idx >= 1:
+                #                     h_default = c_key.replace('RT_COL_', '').capitalize()
+                #                     h_text = self.config.get(n_key, h_default)
+                #                     self.safe_set_value(ws, ws.cell(row=h_row, column=c_idx).coordinate, h_text)
+                #             for d_i in range(1, 16):
+                #                 d_c_idx = self.col_to_num(self.config.get(f'RT_COL_D{d_i}', '0'))
+                #                 if d_c_idx >= 1:
+                #                     d_text = self.config.get(f'RT_NAME_D{d_i}', f'D{d_i}')
+                #                     self.safe_set_value(ws, ws.cell(row=h_row, column=d_c_idx).coordinate, d_text)
+                #     except: pass
 
                 # Column Data Mapping (standardized layout)
                 no_col = self.col_to_num(self.config.get('RT_COL_NO', '1'))
