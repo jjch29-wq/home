@@ -156,6 +156,7 @@ class PMIReportApp:
         self.target_file_path = tk.StringVar(value=self.config.get('PMI_TARGET_PATH', ""))
         self.template_file_path = tk.StringVar(value=self.config.get('PMI_TEMPLATE_PATH', ""))
         self.sequence_filter = tk.StringVar()
+        self.rt_extract_keyword = tk.StringVar()  # [NEW] 추출 키워드 필터
         self.extraction_mode = tk.StringVar(value="전체")
         self.auto_verify = tk.BooleanVar(value=True)
         self.pmi_pane_ratio = self.config.get('PMI_SASH_RATIO', 0.5)
@@ -215,7 +216,7 @@ class PMIReportApp:
         self.kogas_extracted_data = []
         
         # --- Column Keys Initialization ---
-        self.column_keys = ["selected", "No", "Date", "Drawing No.", "Joint No.", "Location", "Ni", "Cr", "Mo", "Result"]
+        self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Result"]
         self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
         self.kogas_column_keys = self.rt_column_keys + ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
@@ -232,7 +233,7 @@ class PMIReportApp:
         
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
-        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"]
         
@@ -875,7 +876,8 @@ class PMIReportApp:
             
             # [NEW] 모드 변경 시 해당 모드의 설정을 다시 로드
             if self.current_mode in ["RT", "KOGAS"]:
-                self.load_template_specific_config(self.current_mode)
+                t_path = self.rt_template_file_path.get() if self.current_mode == "RT" else self.kogas_template_file_path.get()
+                self.load_template_specific_config(t_path, self.current_mode)
         except: pass
 
     def create_widgets(self):
@@ -1007,8 +1009,7 @@ class PMIReportApp:
         self.mode_notebook.add(self.pmi_mode_frame, text=" 🔬 PMI (OES) ")
         self.mode_notebook.add(self.rt_mode_frame, text=" 🔬 RT (Standard) ")
         
-        self.kogas_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
-        self.mode_notebook.add(self.kogas_mode_frame, text=" 🇰🇷 KOGAS RT (가스공사) ")
+
         
         self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.mode_notebook.add(self.pt_mode_frame, text=" 🔬 Penetrant (PT) ")
@@ -1150,9 +1151,9 @@ class PMIReportApp:
         
         pmi_items = [
             ("No:", "PMI_COL_NO", 13, "PMI_NAME_NO", "No", "No"),
-            ("Drawing No:", "PMI_COL_DWG", 1, "PMI_NAME_DWG", "Drawing No.", "Drawing No."),
-            ("Joint No:", "PMI_COL_JOINT", 6, "PMI_NAME_JOINT", "Joint No.", "Joint No."),
-            ("Location:", "PMI_COL_LOC", 7, "PMI_NAME_LOC", "Location", "Location"),
+            ("Drawing No:", "PMI_COL_DWG", 1, "PMI_NAME_DWG", "Drawing No.", "Dwg"),
+            ("Joint No:", "PMI_COL_JOINT", 6, "PMI_NAME_JOINT", "Joint No.", "Joint"),
+            ("Location:", "PMI_COL_LOC", 7, "PMI_NAME_LOC", "Location", "Loc"),
             ("Ni:", "PMI_COL_NI", 8, "PMI_NAME_NI", "Ni", "Ni"),
             ("Cr:", "PMI_COL_CR", 9, "PMI_NAME_CR", "Cr", "Cr"),
             ("Mo:", "PMI_COL_MO", 10, "PMI_NAME_MO", "Mo", "Mo"),
@@ -1355,13 +1356,24 @@ class PMIReportApp:
         # 3. Actions
         action_f = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
         action_f.pack(fill='x', pady=(0, 10))
-        ttk.Label(action_f, text="📊 특정순번 필터:", background="#ffffff").pack(side='left')
-        ttk.Entry(action_f, textvariable=self.sequence_filter, width=15).pack(side='left', padx=5, fill='x', expand=True)
+        
+        # Row 1: Sequence Filter
+        r1 = tk.Frame(action_f, background="#ffffff")
+        r1.pack(fill='x', pady=2)
+        ttk.Label(r1, text="📊 특정순번 필터:", background="#ffffff").pack(side='left')
+        ttk.Entry(r1, textvariable=self.sequence_filter, width=15).pack(side='left', padx=5, fill='x', expand=True)
+        
+        # Row 2: Keyword Filter
+        r2 = tk.Frame(action_f, background="#ffffff")
+        r2.pack(fill='x', pady=2)
+        ttk.Label(r2, text="🔍 추출 키워드:", background="#ffffff").pack(side='left')
+        ttk.Entry(r2, textvariable=self.rt_extract_keyword, width=15).pack(side='left', padx=5, fill='x', expand=True)
 
         btn_r = tk.Frame(left_pane, background="#f9fafb")
         btn_r.pack(fill='x', pady=5)
         ttk.Button(btn_r, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
-        ttk.Button(btn_r, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x')
+        ttk.Button(btn_r, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x', pady=(0, 5))
+        ttk.Button(btn_r, text=" 🔄 의뢰서에 결과 반영 ", command=self.sync_results_to_request).pack(fill='x')
 
         # [RIGHT] Multi-Preview (Sub-tabs)
         right_f = tk.Frame(self.rt_paned, background="#f3f4f6")
@@ -1446,23 +1458,54 @@ class PMIReportApp:
         # Row Settings
         self._create_row_settings(t_rows, mode=mode)
         
-        # Column Mapping
-        rt_items = [
-            ("No:", f"{mode}_COL_NO", 1, f"{mode}_NAME_NO", "No", "No"),
-            ("Date:", f"{mode}_COL_DATE", 2, f"{mode}_NAME_DATE", "Date", "Date"),
-            ("Dwg No.:", f"{mode}_COL_DWG", 3, f"{mode}_NAME_DWG", "Drawing No.", "Dwg"),
-            ("Film No.:", f"{mode}_COL_JOINT", 4, f"{mode}_NAME_JOINT", "Film Ident. No.", "Joint"),
-            ("Location:", f"{mode}_COL_LOC", 5, f"{mode}_NAME_LOC", "Film Location", "Loc"),
-            ("T:", f"{mode}_COL_THK", 6, f"{mode}_NAME_THK", "T", "T"),
-            ("Mat:", f"{mode}_COL_MAT", 7, f"{mode}_NAME_MAT", "Mat", "Mat"),
-            ("Deg:", f"{mode}_COL_DEG", 10, f"{mode}_NAME_DEG", "Deg", "Deg"),
-            ("Acc:", f"{mode}_COL_ACC", 8, f"{mode}_NAME_ACC", "Acc", "Acc"),
-            ("Rej:", f"{mode}_COL_REJ", 9, f"{mode}_NAME_REJ", "Rej", "Rej"),
-            ("① Crack:", f"{mode}_COL_D1", 13, f"{mode}_NAME_D1", "① Crack", "D1"),
-            ("판정(Result):", f"{mode}_COL_RES", 28, f"{mode}_NAME_RES", "Result", "Result"),
-            ("용접사:", f"{mode}_COL_WELDER", 29, f"{mode}_NAME_WELDER", "Welder No", "Welder"),
-            ("비고:", f"{mode}_COL_REM", 30, f"{mode}_NAME_REM", "Remarks", "Remarks")
-        ]
+        # Column Mapping (Ordered by current preview keys)
+        all_possible = {
+            "No": ("No:", f"{mode}_COL_NO", 1, f"{mode}_NAME_NO", "No", "No"),
+            "Date": ("Date:", f"{mode}_COL_DATE", 2, f"{mode}_NAME_DATE", "Date", "Date"),
+            "Dwg": ("Dwg No.:", f"{mode}_COL_DWG", 3, f"{mode}_NAME_DWG", "Drawing No.", "Dwg"),
+            "Joint": ("Film No.:", f"{mode}_COL_JOINT", 4, f"{mode}_NAME_JOINT", "Film Ident. No.", "Joint"),
+            "Loc": ("Location:", f"{mode}_COL_LOC", 5, f"{mode}_NAME_LOC", "Film Location", "Loc"),
+            "T": ("T:", f"{mode}_COL_THK", 6, f"{mode}_NAME_THK", "T", "T"),
+            "Mat": ("Mat:", f"{mode}_COL_MAT", 7, f"{mode}_NAME_MAT", "Mat", "Mat"),
+            "Size": ("구경(Size):", f"{mode}_COL_SIZE", 0, f"{mode}_NAME_SIZE", "Size", "Size"),
+            "Acc": ("Acc:", f"{mode}_COL_ACC", 8, f"{mode}_NAME_ACC", "Acc", "Acc"),
+            "Rej": ("Rej:", f"{mode}_COL_REJ", 9, f"{mode}_NAME_REJ", "Rej", "Rej"),
+            "Deg": ("Deg:", f"{mode}_COL_DEG", 10, f"{mode}_NAME_DEG", "Deg", "Deg"),
+            "D1": ("① Crack:", f"{mode}_COL_D1", 13, f"{mode}_NAME_D1", "① Crack", "D1"),
+            "D2": ("② IP:", f"{mode}_COL_D2", 14, f"{mode}_NAME_D2", "② IP", "D2"),
+            "D3": ("③ LF:", f"{mode}_COL_D3", 15, f"{mode}_NAME_D3", "③ LF", "D3"),
+            "D4": ("④ Slag:", f"{mode}_COL_D4", 16, f"{mode}_NAME_D4", "④ Slag", "D4"),
+            "D5": ("⑤ Por:", f"{mode}_COL_D5", 17, f"{mode}_NAME_D5", "⑤ Por", "D5"),
+            "⑥ U/C": ("⑥ U/C:", f"{mode}_COL_D6", 18, f"{mode}_NAME_D6", "⑥ U/C", "D6"),
+            "D6": ("⑥ U/C:", f"{mode}_COL_D6", 18, f"{mode}_NAME_D6", "⑥ U/C", "D6"),
+            "D7": ("⑦ RUC:", f"{mode}_COL_D7", 19, f"{mode}_NAME_D7", "⑦ RUC", "D7"),
+            "D8": ("⑧ BT:", f"{mode}_COL_D8", 20, f"{mode}_NAME_D8", "⑧ BT", "D8"),
+            "D9": ("⑨ TI:", f"{mode}_COL_D9", 21, f"{mode}_NAME_D9", "⑨ TI", "D9"),
+            "D10": ("⑩ CP:", f"{mode}_COL_D10", 22, f"{mode}_NAME_D10", "⑩ CP", "D10"),
+            "D11": ("⑪ RC:", f"{mode}_COL_D11", 23, f"{mode}_NAME_D11", "⑪ RC", "D11"),
+            "D12": ("⑫ Mis:", f"{mode}_COL_D12", 24, f"{mode}_NAME_D12", "⑫ Mis", "D12"),
+            "D13": ("⑬ EP:", f"{mode}_COL_D13", 25, f"{mode}_NAME_D13", "⑬ EP", "D13"),
+            "D14": ("⑭ SD:", f"{mode}_COL_D14", 26, f"{mode}_NAME_D14", "⑭ SD", "D14"),
+            "D15": ("⑮ Oth:", f"{mode}_COL_D15", 27, f"{mode}_NAME_D15", "⑮ Oth", "D15"),
+            "Result": ("판정(Result):", f"{mode}_COL_RES", 28, f"{mode}_NAME_RES", "Result", "Result"),
+            "Welder": ("용접사:", f"{mode}_COL_WELDER", 29, f"{mode}_NAME_WELDER", "Welder No", "Welder"),
+            "Remarks": ("비고:", f"{mode}_COL_REM", 30, f"{mode}_NAME_REM", "Remarks", "Remarks")
+        }
+        
+        keys_attr = "rt_column_keys" if mode == "RT" else "kogas_column_keys"
+        current_keys = getattr(self, keys_attr)
+        
+        # 1. Start with items that are currently visible/ordered
+        rt_items = []
+        for k in current_keys:
+            if k in all_possible:
+                rt_items.append(all_possible[k])
+        
+        # 2. Add remaining items at the end (so they remain configurable even if hidden)
+        for k, v in all_possible.items():
+            if v not in rt_items:
+                rt_items.append(v)
+
         if mode == "KOGAS":
             rt_items += [
                 ("Dwg_Sub:", "KOGAS_COL_DWG_SUB", 0, "KOGAS_NAME_DWG_SUB", "Dwg(Sub)", "Dwg_Sub"),
@@ -1487,11 +1530,12 @@ class PMIReportApp:
         self._update_rt_path_ui()
         self._refresh_rt_config_tabs()
         
-        # 3. 템플릿 로드 트리거
-        self.load_template_specific_config(mode)
+        # 3. 템플릿 로드 트리거 [FIX] Pass correct path and avoid forced tab switch
+        t_path = self.rt_template_file_path.get() if mode == "RT" else self.kogas_template_file_path.get()
+        self.load_template_specific_config(t_path, mode)
         
         # 4. 갑지 미리보기 갱신
-        self._update_gapji_preview_current()
+        self._update_gapji_preview(mode)
 
     def _update_rt_ratio(self):
         try:
@@ -1541,38 +1585,40 @@ class PMIReportApp:
         self._update_rt_preview_columns()
 
     def _update_rt_preview_columns(self, mode="RT"):
-        """모드 여부에 따라 RT 미리보기 컬럼을 동적으로 변경"""
+        """모드 여부에 따라 RT 미리보기 컬럼을 동적으로 변경 (사용자 설정 키 준수)"""
         tree = self.rt_preview_tree if mode == "RT" else self.kogas_preview_tree
         if not tree: return
         
-        base_cols = ["V", "No", "Date", "Drawing No.", "Film Ident. No.", "Film Location", "Acc", "Rej", "Deg", "① Crack", "② IP", "③ LF", "④ Slag", "⑤ Por", "⑥ U/C", "⑦ RUC", "⑧ BT", "⑨ TI", "⑩ CP", "⑪ RC", "⑫ Mis", "⑬ EP", "⑭ SD", "⑮ Oth", "Welder No", "Remarks"]
-        
-        if mode == "KOGAS":
-            # 가스공사 모드 전용 컬럼 (Sub 필드) 추가
-            current_cols = base_cols + ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]
-        else:
-            current_cols = base_cols
+        # [DYNAMIC] 고정된 리스트 대신 사용자가 설정한 키(rt_column_keys 등)를 사용
+        keys_attr = "rt_column_keys" if mode == "RT" else "kogas_column_keys"
+        current_cols = list(getattr(self, keys_attr))
             
         tree["columns"] = tuple(current_cols)
         
+        # [NEW] 기본 표시 이름 맵핑
+        default_names = {
+            "selected": "V", "No": "No", "Date": "Date", "Dwg": "Drawing No.", 
+            "Joint": "Film Ident. No.", "Loc": "Film Location", "T": "T", "Mat": "Mat",
+            "Acc": "Acc", "Rej": "Rej", "Deg": "Deg", "Welder": "Welder No", "Remarks": "Remarks",
+            "Dwg_Sub": "Dwg(Sub)", "Welder_Sub": "Welder(Sub)", "Mat_Sub": "Mat(Sub)",
+            "D1": "① Crack", "D2": "② IP", "D3": "③ LF", "D4": "④ Slag", "D5": "⑤ Por",
+            "D6": "⑥ U/C", "D7": "⑦ RUC", "D8": "⑧ BT", "D9": "⑨ TI", "D10": "⑩ CP",
+            "D11": "⑪ RC", "D12": "⑫ Mis", "D13": "⑬ EP", "D14": "⑭ SD", "D15": "⑮ Oth"
+        }
+        
         saved_widths = self.config.get(f"{mode}_COL_WIDTHS", {})
-        default_widths = {"V": 40, "No": 50, "Date": 90, "Drawing No.": 300, "Film Ident. No.": 120, "Film Location": 100, "Acc": 40, "Rej": 40, "Deg": 40, "Welder No": 100, "Remarks": 120, "Dwg_Sub": 200, "Welder_Sub": 100, "Mat_Sub": 100}
+        default_widths = {
+            "selected": 40, "No": 50, "Date": 90, "Dwg": 300, "Joint": 120, "Loc": 100, 
+            "Acc": 40, "Rej": 40, "Deg": 40, "Welder": 100, "Remarks": 120,
+            "Dwg_Sub": 200, "Welder_Sub": 100, "Mat_Sub": 100
+        }
         
         for col in current_cols:
-            name_key = f"{mode}_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').replace('①', '').replace('②', '').replace('③', '').replace('④', '').replace('⑤', '').upper()}"
-            if col == "Drawing No.": name_key = f"{mode}_NAME_DWG"
-            elif col == "Film Ident. No.": name_key = f"{mode}_NAME_JOINT"
-            elif col == "Film Location": name_key = f"{mode}_NAME_LOC"
-            elif col == "Welder No": name_key = f"{mode}_NAME_WELDER"
-            elif col == "Acc": name_key = f"{mode}_NAME_ACC"
-            elif col == "Rej": name_key = f"{mode}_NAME_REJ"
-            elif col == "Dwg_Sub": display_text = "Dwg(Sub)"
-            elif col == "Welder_Sub": display_text = "Welder(Sub)"
-            elif col == "Mat_Sub": display_text = "Mat(Sub)"
-            else: name_key = None
+            name_key = f"{mode}_NAME_{col.upper()}"
+            if col == "selected": name_key = None
             
-            if col not in ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]:
-                display_text = self.config.get(name_key, col) if name_key else col
+            fallback_name = default_names.get(col, col)
+            display_text = self.config.get(name_key, fallback_name) if name_key else fallback_name
                 
             tree.heading(col, text=display_text, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode=mode))
             w = saved_widths.get(col, default_widths.get(col, 80))
@@ -2209,7 +2255,6 @@ class PMIReportApp:
                 self.paut_res_label.config(text=f"{res} (위치: {loc})", fg="white", bg="#e74c3c")
         except Exception as e:
             messagebox.showerror("입력 오류", f"입력값을 확인해주세요: {e}")
-
 
     def _extract_paut_data(self):
         file_path = self.paut_target_file_path.get()
@@ -2852,12 +2897,35 @@ class PMIReportApp:
             self.setting_vars[key] = v
 
     def _create_column_mapping_ui(self, parent, mode, mapping_items):
-        """[NEW] 전 모듈 공용 엑셀 컬럼 매핑 및 이름 설정 UI"""
-        container = ttk.LabelFrame(parent, text=f" {mode} 성적서 및 미리보기 컬럼 설정 ", padding=10)
-        container.pack(fill='both', expand=True, pady=5)
+        """[NEW] 전 모듈 공용 엑셀 컬럼 매핑 및 이름 설정 UI (스크롤바 추가)"""
+        # Outer Frame for Scrollbar
+        outer_frame = tk.Frame(parent, background="#f9fafb")
+        outer_frame.pack(fill='both', expand=True)
+        
+        canvas = tk.Canvas(outer_frame, background="#f9fafb", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(outer_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, background="#f9fafb")
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        # Mouse wheel support
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        container = ttk.LabelFrame(scrollable_frame, text=f" {mode} 성적서 및 미리보기 컬럼 설정 ", padding=10)
+        container.pack(fill='both', expand=True, pady=5, padx=10)
         
         # Grid settings
-        # [Label] [Excel Col #] [Display Name]
         container.columnconfigure(2, weight=1)
         container.columnconfigure(5, weight=1)
         
@@ -2890,23 +2958,28 @@ class PMIReportApp:
             ent_name.bind("<Return>", lambda e: self.root.focus_set())
             self.setting_vars[key_name] = v_name
             
-            # Trace to update preview tree heading
-            v_name.trace_add("write", lambda *args, tid=internal_id, m=mode, var=v_name: self._update_mode_heading(m, tid, var))
+            # Trace to update config and preview tree heading in real-time
+            v_name.trace_add("write", lambda *args, tid=internal_id, m=mode, var=v_name, kn=key_name: self._update_mode_heading(m, tid, var, kn))
 
         ttk.Label(container, text="* 엑셀열: 알파벳(A, B...) 또는 숫자(1, 2...) 입력 (0=제외)", foreground="gray", font=("Malgun Gothic", 8)).grid(row=last_row+1, column=0, columnspan=6, pady=10)
 
-    def _update_mode_heading(self, mode, internal_id, var):
-        """[NEW] 특정 모드의 미리보기 헤더 이름을 실시간으로 업데이트"""
+    def _update_mode_heading(self, mode, internal_id, var, key_name):
+        """[NEW] 특정 모드의 미리보기 헤더 이름을 실시간으로 업데이트 및 설정 저장"""
         try:
             new_text = var.get()
+            # 1. Update config immediately so it survives refreshes
+            self.config[key_name] = new_text
+            
+            # 2. Update existing tree UI
             tree = None
             if mode == "PMI": tree = self.preview_tree
             elif mode == "RT": tree = self.rt_preview_tree
+            elif mode == "KOGAS": tree = self.kogas_preview_tree
             elif mode == "PT": tree = self.pt_preview_tree
-            elif mode == "PAUT": tree = self.paut_preview_tree
             
             if tree:
-                tree.heading(internal_id, text=new_text)
+                try: tree.heading(internal_id, text=new_text)
+                except: pass
         except Exception:
             pass
 
@@ -2961,17 +3034,21 @@ class PMIReportApp:
                 self.setting_vars[key] = v
                 ttk.Label(ut_row_frame, text=f"({tip})", foreground="gray", font=("Malgun Gothic", 9)).grid(row=i, column=2, sticky='w')
 
-        if mode is None or mode == "RT":
-            # RT Rows
-            rt_row_frame = ttk.LabelFrame(parent, text=" RT 행 설정 ", padding=10)
+        if mode is None or mode in ["RT", "KOGAS"]:
+            # RT/KOGAS Rows
+            m_label = "KOGAS" if mode == "KOGAS" else "RT"
+            rt_row_frame = ttk.LabelFrame(parent, text=f" {m_label} 행 설정 ", padding=10)
             rt_row_frame.pack(fill='x', pady=5)
+            
+            # Use mode-specific keys
+            m_key = "KOGAS" if mode == "KOGAS" else "RT"
             rt_rows = [
-                ("을지 데이터 시작", "RT_START_ROW", "RT 데이터 시작"), 
-                ("을지 데이터 종료", "RT_DATA_END_ROW", "RT 데이터 종료"), 
-                ("을지 인쇄 영역 끝", "RT_PRINT_END_ROW", "RT 인쇄 끝"),
-                ("갑지 데이터 시작", "RT_GAPJI_START_ROW", "RT 갑지 데이터 시작"),
-                ("갑지 데이터 종료", "RT_GAPJI_DATA_END_ROW", "RT 갑지 데이터 종료"),
-                ("갑지 인쇄 영역 끝", "RT_GAPJI_PRINT_END_ROW", "RT 갑지 끝")
+                ("을지 데이터 시작", f"{m_key}_START_ROW", f"{m_label} 데이터 시작"), 
+                ("을지 데이터 종료", f"{m_key}_DATA_END_ROW", f"{m_label} 데이터 종료"), 
+                ("을지 인쇄 영역 끝", f"{m_key}_PRINT_END_ROW", f"{m_label} 인쇄 끝"),
+                ("갑지 데이터 시작", f"{m_key}_GAPJI_START_ROW", f"{m_label} 갑지 데이터 시작"),
+                ("갑지 데이터 종료", f"{m_key}_GAPJI_DATA_END_ROW", f"{m_label} 갑지 데이터 종료"),
+                ("갑지 인쇄 영역 끝", f"{m_key}_GAPJI_PRINT_END_ROW", f"{m_label} 갑지 끝")
             ]
             for i, (label, key, tip) in enumerate(rt_rows):
                 ttk.Label(rt_row_frame, text=label + ":").grid(row=i, column=0, sticky='e', padx=5, pady=2)
@@ -3654,12 +3731,18 @@ class PMIReportApp:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # RT용 레이블 매핑 정의
+        # Mouse wheel support for popup
+        def _on_popup_mw(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_popup_mw)
+        
+        # RT용 레이블 매핑 정의 (표준화된 ID 대응)
         label_map = {}
-        if mode == "RT":
+        if mode == "RT" or mode == "KOGAS":
             label_map = {
                 "Dwg": "Drawing No.", "Joint": "Film Ident. No.", "Loc": "Film Location",
-                "Accept": "Acc", "Reject": "Rej", "Grade": "Deg", "Welder": "Welder No",
+                "Acc": "Acc", "Rej": "Rej", "Deg": "Deg", "Welder": "Welder No",
+                "T": "T", "Mat": "Mat", "No": "No", "Date": "Date", "Remarks": "Remarks",
                 "D1": "① Crack", "D2": "② IP", "D3": "③ LF", "D4": "④ Slag", "D5": "⑤ Por",
                 "D6": "⑥ U/C", "D7": "⑦ RUC", "D8": "⑧ BT", "D9": "⑨ TI", "D10": "⑩ CP",
                 "D11": "⑪ RC", "D12": "⑫ Mis", "D13": "⑬ EP", "D14": "⑭ SD", "D15": "⑮ Oth"
@@ -3668,14 +3751,45 @@ class PMIReportApp:
             label_map = {"ISO": "ISO/DWG", "Location": "Loc"}
 
         vars_dict = {}
-        current_keys = getattr(self, keys_attr)
+        current_keys = list(getattr(self, keys_attr))
+        
+        # [ORDERING] 표시할 키들을 현재 설정된 순서대로 정렬 (나머지는 뒤로)
+        ordered_keys = [k for k in current_keys if k in display_keys]
         for k in display_keys:
-            v = tk.BooleanVar(value=(k in current_keys))
-            # 매핑된 레이블이 있으면 사용, 없으면 키 원본 사용
-            display_name = label_map.get(k, k)
-            cb = ttk.Checkbutton(scrollable_frame, text=display_name, variable=v)
-            cb.pack(fill='x', anchor='w', pady=5)
-            vars_dict[k] = v
+            if k not in ordered_keys: ordered_keys.append(k)
+            
+        def _refresh_list():
+            for widget in scrollable_frame.winfo_children():
+                widget.destroy()
+            
+            for i, k in enumerate(ordered_keys):
+                f = tk.Frame(scrollable_frame, background="#ffffff")
+                f.pack(fill='x', pady=2)
+                
+                v = vars_dict.get(k)
+                if v is None:
+                    v = tk.BooleanVar(value=(k in current_keys))
+                    vars_dict[k] = v
+                
+                display_name = label_map.get(k, k)
+                cb = ttk.Checkbutton(f, text=display_name, variable=v)
+                cb.pack(side='left', padx=5)
+                
+                # Up/Down Buttons
+                btn_f = tk.Frame(f, background="#ffffff")
+                btn_f.pack(side='right', padx=5)
+                
+                if i > 0:
+                    ttk.Button(btn_f, text="▲", width=2, command=lambda _i=i: _move(_i, -1)).pack(side='left')
+                if i < len(ordered_keys) - 1:
+                    ttk.Button(btn_f, text="▼", width=2, command=lambda _i=i: _move(_i, 1)).pack(side='left')
+
+        def _move(idx, delta):
+            target = idx + delta
+            ordered_keys[idx], ordered_keys[target] = ordered_keys[target], ordered_keys[idx]
+            _refresh_list()
+
+        _refresh_list()
 
         # 컬럼 관리 버튼 영역 (추가/삭제)
         mgr_btn_frame = ttk.Frame(main_frame)
@@ -3747,54 +3861,46 @@ class PMIReportApp:
             elif "No" not in selected_keys:
                 selected_keys.append("No") # Fallback safety
 
-            for k in display_keys:
-                if k not in ["ST", "_status", "No"] and vars_dict[k].get():
+            # [FIX] 사용자가 조정한 순서(ordered_keys)를 기준으로 컬럼 수집
+            for k in ordered_keys:
+                if k not in ["ST", "_status", "No", "selected"] and vars_dict[k].get():
                     selected_keys.append(k)
             
             setattr(self, keys_attr, selected_keys)
             
-            # Treeview Columns Re-setup
-            header_mapping = {}
-            current_cols = []
-            
-            # Fetch existing drag-rearranged visual order for persistence
-            old_display_cols = list(tree["displaycolumns"])
-            if old_display_cols == ["#all"] or not old_display_cols:
-                old_display_cols = list(tree["columns"])
-            
-            for k in selected_keys:
-                # 내부 ID 결정
-                col_id = k
-                if k == "selected": col_id = "V"
-                elif k == "_status": col_id = "ST"
-                elif k in ["ISO", "ISO/DWG", "Dwg"]: col_id = ("Dwg" if mode == "RT" else "ISO/DWG")
-                elif mode == "PMI":
-                    if k == "Joint": col_id = "Joint No"
-                    elif k == "Loc": col_id = "Test Location"
+            # [FIX] RT/KOGAS 모드는 전용 UI 갱신 함수 호출로 처리 (ID 정합성 보장)
+            if mode in ["RT", "KOGAS"]:
+                self._update_rt_preview_columns(mode=mode)
+                self._refresh_rt_config_tabs() # [NEW] 세부 설정 탭도 함께 새로고침
+            else:
+                # 타 모드(PMI 등)용 기존 로직
+                header_mapping = {}
+                current_cols = []
+                old_display_cols = list(tree["displaycolumns"])
+                if old_display_cols == ["#all"] or not old_display_cols:
+                    old_display_cols = list(tree["columns"])
                 
-                current_cols.append(col_id)
-                # 표시용 헤더 텍스트 결정
-                if k == "Joint" and mode != "RT":
-                    header_mapping[col_id] = "Joint No"
-                elif mode == "PMI" and k == "Loc":
-                    header_mapping[col_id] = "Test Location"
-                else:
+                for k in selected_keys:
+                    col_id = k
+                    if k == "selected": col_id = "V"
+                    elif k == "_status": col_id = "ST"
+                    elif mode == "PMI":
+                        if k == "Dwg": col_id = "Dwg"
+                        elif k == "Joint": col_id = "Joint"
+                    
+                    current_cols.append(col_id)
                     header_mapping[col_id] = label_map.get(k, col_id)
 
-            # Reconstruct sequence preserving old elements, adding new ones at the end
-            new_display = [x for x in old_display_cols if x in current_cols]
-            for x in current_cols:
-                if x not in new_display:
-                    new_display.append(x)
-
-            tree["columns"] = tuple(current_cols)
-            tree["displaycolumns"] = tuple(new_display)
-            
-            for col in tree["columns"]:
-                # Width heuristics
-                w = 120 if any(x in col.upper() for x in ["ISO", "DWG", "JOINT"]) else (40 if col in ["V", "No", "t", "h", "l", "d"] else 80)
-                tree.heading(col, text=header_mapping.get(col, col), anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode=mode))
-                tree.column(col, width=w, anchor='center', stretch=False)
+                tree["columns"] = tuple(current_cols)
+                new_display = [x for x in old_display_cols if x in current_cols]
+                for x in current_cols:
+                    if x not in new_display: new_display.append(x)
+                tree["displaycolumns"] = tuple(new_display)
+                
+                for col in tree["columns"]:
+                    w = 80
+                    tree.heading(col, text=header_mapping.get(col, col), anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode=mode))
+                    tree.column(col, width=w, anchor='center', stretch=False)
             
             self.populate_preview(data if data else [], switch_tab=False, mode=mode)
             self.log(f"⚙️ {mode} 미리보기 컬럼 설정 변경 완료")
@@ -5888,12 +5994,15 @@ class PMIReportApp:
         try:
             main_tab = self.mode_notebook.tab(self.mode_notebook.select(), "text")
             if "RT" in main_tab:
-                sub_tab = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
-                mode = "KOGAS" if "가스공사" in sub_tab else "RT"
+                # [FIX] 하부 탭 이름을 직접 확인하여 모드 결정
+                sub_tab_text = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
+                mode = "KOGAS" if "가스공사" in sub_tab_text else "RT"
             elif "PT" in main_tab: mode = "PT"
             elif "PAUT" in main_tab: mode = "PAUT"
             else: mode = "PMI"
-        except: mode = "PMI"
+        except Exception as e:
+            self.log(f"⚠️ 모드 판별 오류: {e}")
+            mode = "PMI"
 
         target_file = self.pt_target_file_path.get() if mode == "PT" else (self.rt_target_file_path.get() if mode == "RT" else self.target_file_path.get())
         if not target_file:
@@ -6077,9 +6186,29 @@ class PMIReportApp:
                     last_dwg = ""
                     last_joint = ""
 
+                    def clean_v(v):
+                        if pd.isna(v): return ""
+                        try:
+                            if isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.','').isdigit()):
+                                fv = float(v)
+                                if fv.is_integer(): return str(int(fv))
+                                return str(fv)
+                        except: pass
+                        return str(v).strip()
+
                     for _, row in df.iterrows():
-                        v_raw_no = str(row[col_no]).strip() if col_no is not None else str(_+1)
+                        # [FIX] 순번(No) 정규화 적용
+                        v_raw_no = clean_v(row[col_no]) if col_no is not None else str(_+1)
                         if target_no_list and v_raw_no not in target_no_list: continue
+                        
+                        # [NEW] Keyword Filter Logic (Improved with numeric normalization)
+                        extract_key = self.rt_extract_keyword.get().strip().lower()
+                        if extract_key:
+                            # 모든 셀 값을 정규화하여 합침 (1.0 -> 1)
+                            row_vals = [clean_v(v).lower() for v in row.values if pd.notna(v)]
+                            row_str = " ".join(row_vals)
+                            if extract_key not in row_str:
+                                continue
                         
                         # [NEW] Common Fill-down Logic
                         curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
@@ -6095,17 +6224,30 @@ class PMIReportApp:
                             size_val = str(row[col_size]).strip() if col_size is not None else ""
                             num_shots = self.calculate_rt_shots(size_val)
                             
+                            raw_welder = str(row[col_welder]).strip() if col_welder is not None else ""
+                            # [RULE] 용접사 번호는 뒤의 3자리만 추출
+                            v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
+
                             item_data = {
                                 'No': v_raw_no, 'Date': str(row[col_date]).strip() if col_date is not None else (extracted_date if extracted_date else ""),
                                 'Dwg': curr_dwg, 'Joint': curr_joint, 'Loc': '-',
                                 'Acc': str(row[col_acc]).strip() if col_acc is not None else "", 'Rej': str(row[col_rej]).strip() if col_rej is not None else "",
-                                'Deg': str(row[col_deg]).strip() if col_deg is not None else "", 'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
+                                'Deg': str(row[col_deg]).strip() if col_deg is not None else "", 'Welder': v_welder,
                                 'Remarks': str(row[col_remarks]).strip() if col_remarks is not None else "", 'T': str(row[col_t]).strip() if col_t is not None else "",
                                 'Mat': str(row[col_mat]).strip() if col_mat is not None else "", 'Weld': str(row[col_weld]).strip() if col_weld is not None else "",
                                 'IQI': str(row[col_iqi]).strip() if col_iqi is not None else "", 'Sens': str(row[col_sens]).strip() if col_sens is not None else "",
                                 'Den': str(row[col_den]).strip() if col_den is not None else "", 'Result': str(row[col_result]).strip() if col_result is not None else "ACC",
                                 'Size': size_val, 'num_shots': num_shots,
-                                'selected': True, 'order_index': len(self.rt_extracted_data) + len(all_extracted_data)
+                                'selected': True, 'order_index': len(self.rt_extracted_data) + len(all_extracted_data),
+                                '_src': {
+                                    'sheet': sheet_name,
+                                    'row': _ + header_idx + 2,
+                                    'col_result': list(df.columns).index(col_result) + 1 if col_result is not None else None,
+                                    'col_remarks': list(df.columns).index(col_remarks) + 1 if col_remarks is not None else None,
+                                    'col_acc': list(df.columns).index(col_acc) + 1 if col_acc is not None else None,
+                                    'col_rej': list(df.columns).index(col_rej) + 1 if col_rej is not None else None,
+                                    'col_defects': {k: list(df.columns).index(v) + 1 for k, v in defect_cols.items()}
+                                }
                             }
                             # Defects
                             for i in range(1, 16):
@@ -6240,11 +6382,13 @@ class PMIReportApp:
             if mode == "RT":
                 self.rt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("RT")
-                self.sort_by_column("Dwg", mode="RT") # Using internal key Dwg
+                self._update_rt_preview_columns(mode="RT") # [FIX] 표시 이름 보존을 위해 호출
+                self.sort_by_column("Dwg", mode="RT") 
                 total_count = len(self.rt_extracted_data)
             elif mode == "KOGAS":
                 self.kogas_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("KOGAS")
+                self._update_rt_preview_columns(mode="KOGAS") # [FIX] 표시 이름 보존을 위해 호출
                 self.sort_by_column("Dwg", mode="KOGAS")
                 total_count = len(self.kogas_extracted_data)
             elif mode == "PT":
@@ -6267,6 +6411,87 @@ class PMIReportApp:
             self.log(f"❌ {mode} 추출 오류: {e}")
             traceback.print_exc()
             return False
+
+    def sync_results_to_request(self):
+        """입력된 결과를 원본 의뢰서 파일로 역전송 (RT/KOGAS 대응)"""
+        try:
+            main_tab = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+            if "RT" in main_tab:
+                sub_tab = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
+                mode = "KOGAS" if "가스공사" in sub_tab else "RT"
+            else:
+                messagebox.showwarning("경고", "현재 RT 모드에서만 지원됩니다.")
+                return
+
+            target_file = self.rt_target_file_path.get() if mode == "RT" else self.kogas_target_file_path.get()
+            if not target_file or not os.path.exists(target_file):
+                messagebox.showwarning("파일 오류", "원본 의뢰서 파일을 찾을 수 없습니다.")
+                return
+
+            data = self.rt_extracted_data if mode == "RT" else self.kogas_extracted_data
+            if not data:
+                messagebox.showwarning("데이터 오류", "반영할 데이터가 없습니다.")
+                return
+
+            if not messagebox.askyesno("확인", f"현재 입력된 결과를 원본 의뢰서({os.path.basename(target_file)})에 반영하시겠습니까?"):
+                return
+
+            self.log(f"🔄 의뢰서 결과 반영 시작: {os.path.basename(target_file)}")
+            
+            import openpyxl
+            wb = openpyxl.load_workbook(target_file)
+            count = 0
+            
+            # Group items by source row to handle multi-shot joints
+            groups = {}
+            for item in data:
+                if not item.get('_src'): continue
+                src_key = (item['_src']['sheet'], item['_src']['row'])
+                if src_key not in groups: groups[src_key] = []
+                groups[src_key].append(item)
+
+            for (sheet_name, row_idx), items in groups.items():
+                if sheet_name not in wb.sheetnames: continue
+                ws = wb[sheet_name]
+                src = items[0]['_src']
+                
+                # Determine final result (If any item is Rej, result is Rej)
+                final_res = "ACC"
+                all_remarks = []
+                has_defects = {k: False for k in src.get('col_defects', {}).keys()}
+                
+                for it in items:
+                    res = str(it.get('Result', '')).upper()
+                    if any(x in res for x in ["REJ", "NG", "불합격"]): final_res = "REJ"
+                    
+                    rem = str(it.get('Remarks', '')).strip()
+                    if rem and rem not in all_remarks: all_remarks.append(rem)
+                    
+                    if src.get('col_defects'):
+                        for d_key in src['col_defects'].keys():
+                            if it.get(d_key) in ["√", "1", "v", "V", "o", "O"]: has_defects[d_key] = True
+
+                # Write back to Excel
+                if src.get('col_result'):
+                    ws.cell(row=row_idx, column=src['col_result'], value=final_res)
+                
+                if src.get('col_remarks') and all_remarks:
+                    ws.cell(row=row_idx, column=src['col_remarks'], value=", ".join(all_remarks))
+                
+                if src.get('col_defects'):
+                    for d_key, col_idx in src['col_defects'].items():
+                        if has_defects[d_key]:
+                            ws.cell(row=row_idx, column=col_idx, value="√")
+                
+                count += 1
+
+            wb.save(target_file)
+            self.log(f"✅ 총 {count}개 행의 결과를 의뢰서에 성공적으로 반영했습니다.")
+            messagebox.showinfo("완료", f"{count}개 행의 결과가 의뢰서에 반영되었습니다.")
+
+        except Exception as e:
+            self.log(f"❌ 의뢰서 결과 반영 실패: {e}")
+            messagebox.showerror("오류", f"의뢰서 결과 반영 중 오류가 발생했습니다: {e}")
 
     def duplicate_selected_rows(self):
         """선택된 행들을 복제하여 데이터 리스트에 삽입"""
@@ -6972,40 +7197,40 @@ class PMIReportApp:
                 try: os.remove(f)
                 except: pass
 
-    def _run_rt_process(self, final_list, template_path):
+    def _run_rt_process(self, final_list, template_path, mode="RT"):
         """RT 성적서 생성 (1-row-per-data 레이아웃)"""
         # [CRITICAL] Force synchronize UI variables to config before generation
         self.save_settings() 
             
-        self.log(f"🚀 RT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        self.log(f"🚀 {mode} 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
             wb = openpyxl.load_workbook(template_path)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
-            self.log("?? [DEBUG] RT 갑지 로고 삽입 시도 중...")
-            # Gapji (Cover) Logic (Simplified for RT, using generic SITCO style)
+            self.log(f"?? [DEBUG] {mode} 갑지 로고 삽입 시도 중...")
+            # Gapji (Cover) Logic
             ws0 = wb.worksheets[0]
-            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="RT")
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode=mode)
             self._write_gapji_metadata(ws0)
-            self.force_print_settings(ws0, context="COVER")
-            self.apply_custom_dimensions(ws0, "COVER")
+            self.force_print_settings(ws0, context=f"{mode}_COVER")
+            self.apply_custom_dimensions(ws0, f"{mode}_COVER")
 
             # Data Sheet Logic (1-row-per-data)
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
             ws = wb.worksheets[data_sheet_id]
             ws.title = f"{ws.title[:20]}_001"
             # [FIX] Do NOT clear existing images if data sheet is the same as cover
-            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="RT")
-            self.force_print_settings(ws, context="DATA")
+            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode=mode)
+            self.force_print_settings(ws, context=f"{mode}_DATA")
             # RT usually doesn't have the same headers as PMI
             # self.set_eulji_headers(ws) 
 
             # Configurable or Default RT boundaries
-            is_kogas = self.rt_kogas_mode.get()
-            start_row = int(self.config.get('RT_START_ROW', 14 if is_kogas else 11))
-            end_row = int(self.config.get('RT_END_ROW', 25 if is_kogas else 34))
+            is_kogas = (mode == "KOGAS")
+            start_row = int(self.config.get(f'{mode}_START_ROW', 14 if is_kogas else 11))
+            end_row = int(self.config.get(f'{mode}_DATA_END_ROW', 25 if is_kogas else 34))
             block_size = 2 if is_kogas else 1
             
             current_row = start_row
