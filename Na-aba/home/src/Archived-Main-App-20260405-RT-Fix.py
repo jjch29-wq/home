@@ -5739,6 +5739,24 @@ class PMIReportApp:
 
 
 
+    def calculate_rt_shots(self, size_str):
+        """배관 구경을 분석하여 [표 1] 기준 촬영 매수 반환"""
+        try:
+            nums = re.findall(r"[-+]?\d*\.\d+|\d+", str(size_str))
+            if not nums: return 1
+            val = float(nums[0])
+            if val >= 30: return 7
+            if val >= 26: return 6
+            if val >= 20: return 5
+            if val == 18: return 6
+            if val >= 14: return 5
+            if val >= 10: return 4
+            if val >= 6: return 3
+            if val >= 3: return 3
+            if val <= 2.5: return 2
+            return 1
+        except: return 1
+
     def extract_only(self, show_msg=True):
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
         # 현재 활성 탭에 따른 모드 결정
@@ -5869,32 +5887,27 @@ class PMIReportApp:
                             return col
                     return None
                 if mode == "RT":
-                    col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
-                    col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
-                    col_joint = _find_col(df, ["JOINT", "WELD NO", "J/N", "FILM IDENT"])
-                    col_loc = _find_col(df, ["LOCATION", "POSITION", "FILM LOC"])
-                    col_grade = _find_col(df, ["GRADE", "DEG"]) # DEG for RT
-                    col_welder = _find_col(df, ["WELDER", "W/N"])
-                    col_remarks = _find_col(df, ["REMARKS", "REMARK", "비고"])
-                    # RT Specifics
-                    col_date = _find_col(df, ["DATE", "검사일"])
-                    col_t = _find_col(df, ["T", "THICK", "THK"])
-                    col_mat = _find_col(df, ["MAT", "MATERIAL"])
-                    col_weld = _find_col(df, ["WELD", "TYPE"])
-                    col_iqi = _find_col(df, ["IQI"])
-                    col_sens = _find_col(df, ["SENS", "SENSITIVITY"])
-                    col_den = _find_col(df, ["DEN", "DENSITY"])
-                    col_acc = _find_col(df, ["ACC", "합격"])
-                    col_rej = _find_col(df, ["REJ", "불합격"])
-                    col_deg = _find_col(df, ["DEG", "물성", "수정브랜드", "GRADE"])
-                    col_result = _find_col(df, ["RESULT", "판정"])
-                    
-                    defect_cols = {}
-                    for i in range(1, 16):
-                        # Support for D1, DEFECT1, and circled numbers ① to ⑮
-                        circle_num = chr(9311 + i) # ① is 9312
-                        c = _find_col(df, [f"D{i}", f"DEFECT{i}", circle_num, f"{i}"])
-                        if c: defect_cols[f"D{i}"] = c
+                    def _get_kw(k): return [x.strip().upper() for x in self.rt_extract_mappings[k].get().split(',')] if k in self.rt_extract_mappings else []
+                    col_no = _find_col(df, _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM"])
+                    col_dwg = _find_col(df, _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE"])
+                    col_joint = _find_col(df, _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT"])
+                    col_loc = _find_col(df, _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
+                    col_size = _find_col(df, _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
+                    col_welder = _find_col(df, _get_kw('Welder') or ["WELDER", "W/N"])
+                    col_remarks = _find_col(df, _get_kw('Remarks') or ["REMARKS", "REMARK", "비고"])
+                    col_date = _find_col(df, _get_kw('Date') or ["DATE", "검사일"])
+                    col_t = _find_col(df, _get_kw('T') or ["T", "THICK", "THK"])
+                    col_mat = _find_col(df, _get_kw('Mat') or ["MAT", "MATERIAL"])
+                    col_weld = _find_col(df, _get_kw('Weld') or ["WELD", "TYPE"])
+                    col_iqi = _find_col(df, _get_kw('IQI') or ["IQI"])
+                    col_sens = _find_col(df, _get_kw('Sens') or ["SENS", "SENSITIVITY"])
+                    col_den = _find_col(df, _get_kw('Den') or ["DEN", "DENSITY"])
+                    col_acc = _find_col(df, _get_kw('Acc') or ["ACC", "합격"])
+                    col_rej = _find_col(df, _get_kw('Rej') or ["REJ", "불합격"])
+                    col_deg = _find_col(df, _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
+                    col_result = _find_col(df, _get_kw('Result') or ["RESULT", "판정"])
+                    defect_cols = {f"D{i}": _find_col(df, [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"]) for i in range(1, 16)}
+                    defect_cols = {k: v for k, v in defect_cols.items() if v}
                 elif mode == "PT":
                     col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
                     col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
@@ -5928,95 +5941,83 @@ class PMIReportApp:
                                 if c_found is not None:
                                     custom_cols[f_key] = c_found
 
-                # [NEW] Forward-fill (Fill Down) for ISO and Joint
-                last_dwg = ""
-                last_joint = ""
+                    # [NEW] Forward-fill (Fill Down) for ISO and Joint
+                    last_dwg = ""
+                    last_joint = ""
 
-                for _, row in df.iterrows():
-                    v_raw_no = str(row[col_no]).strip() if col_no is not None else str(_+1)
-                    if target_no_list and v_raw_no not in target_no_list: continue
-                    
-                    # [NEW] Common Fill-down Logic
-                    curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
-                    if (not curr_dwg or curr_dwg == "nan") and last_dwg: curr_dwg = last_dwg
-                    if curr_dwg and curr_dwg != "nan": last_dwg = curr_dwg
+                    for _, row in df.iterrows():
+                        v_raw_no = str(row[col_no]).strip() if col_no is not None else str(_+1)
+                        if target_no_list and v_raw_no not in target_no_list: continue
+                        
+                        # [NEW] Common Fill-down Logic
+                        curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
+                        if (not curr_dwg or curr_dwg == "nan") and last_dwg: curr_dwg = last_dwg
+                        if curr_dwg and curr_dwg != "nan": last_dwg = curr_dwg
 
-                    curr_joint = str(row[col_joint]).strip() if col_joint is not None else ""
-                    if (not curr_joint or curr_joint == "nan") and last_joint: curr_joint = last_joint
-                    if curr_joint and curr_joint != "nan": last_joint = curr_joint
-                    elif not curr_joint or curr_joint == "nan": curr_joint = v_raw_no
+                        curr_joint = str(row[col_joint]).strip() if col_joint is not None else ""
+                        if (not curr_joint or curr_joint == "nan") and last_joint: curr_joint = last_joint
+                        if curr_joint and curr_joint != "nan": last_joint = curr_joint
+                        elif not curr_joint or curr_joint == "nan": curr_joint = v_raw_no
 
-                    if mode == "RT":
-                        # RT-specific Row Data
-                        item_data = {
-                            'No': v_raw_no, 
-                            'Date': str(row[col_date]).strip() if col_date is not None else (extracted_date if extracted_date else ""),
-                            'Dwg': curr_dwg, 'Joint': curr_joint,
-                            'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
-                            'Acc': str(row[col_acc]).strip() if col_acc is not None else "",
-                            'Rej': str(row[col_rej]).strip() if col_rej is not None else "",
-                            'Deg': str(row[col_deg]).strip() if col_deg is not None else "",
-                            'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
-                            'Remarks': str(row[col_remarks]).strip() if col_remarks is not None else "",
-                            'T': str(row[col_t]).strip() if col_t is not None else "",
-                            'Mat': str(row[col_mat]).strip() if col_mat is not None else "",
-                            'Weld': str(row[col_weld]).strip() if col_weld is not None else "",
-                            'IQI': str(row[col_iqi]).strip() if col_iqi is not None else "",
-                            'Sens': str(row[col_sens]).strip() if col_sens is not None else "",
-                            'Den': str(row[col_den]).strip() if col_den is not None else "",
-                            'Result': str(row[col_result]).strip() if col_result is not None else "ACC",
-                            'selected': True,
-                            'order_index': len(self.rt_extracted_data) + len(all_extracted_data)
-                        }
-                        # Defects D1-D15 (Normalization)
-                        for i in range(1, 16):
-                            key = f"D{i}"
-                            c = defect_cols.get(key)
-                            val = str(row[c]).strip() if c is not None else ""
-                            if val and val.lower() in ["v", "x", "o", "1", "√", "v"]: val = "√"
-                            else: val = ""
-                            item_data[key] = val
+                        if mode == "RT":
+                            size_val = str(row[col_size]).strip() if col_size is not None else ""
+                            num_shots = self.calculate_rt_shots(size_val)
                             
-                        # [NEW] 기존에 수동으로 추가된 컬럼이 있다면 해당 키도 포함하여 초기화
-                        for k in self.rt_column_keys:
-                            if k not in item_data and k != "selected":
-                                item_data[k] = ""
-
-                        all_extracted_data.append(item_data)
-                    elif mode == "PT":
-                        # PT-specific Row Data (Filter for ACC only)
-                        res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
-                        is_pass = any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"])
-                        is_fail = any(k in res_str for k in ["REJ", "RW", "FAIL", "UNACC"])
-                        if is_pass and not is_fail:
-                            size_v = str(row[col_size]).strip() if col_size is not None else ""
-                            thk_v = str(row[col_thk]).strip() if col_thk is not None else ""
-                            # SCH -> Thk 변환
-                            thk_converted = convert_sch_to_thk(size_v, thk_v)
-                            
-                            item_row = {
-                                'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
-                                'NPS': size_v, 'Thk.': thk_converted
+                            item_data = {
+                                'No': v_raw_no, 'Date': str(row[col_date]).strip() if col_date is not None else (extracted_date if extracted_date else ""),
+                                'Dwg': curr_dwg, 'Joint': curr_joint, 'Loc': '-',
+                                'Acc': str(row[col_acc]).strip() if col_acc is not None else "", 'Rej': str(row[col_rej]).strip() if col_rej is not None else "",
+                                'Deg': str(row[col_deg]).strip() if col_deg is not None else "", 'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
+                                'Remarks': str(row[col_remarks]).strip() if col_remarks is not None else "", 'T': str(row[col_t]).strip() if col_t is not None else "",
+                                'Mat': str(row[col_mat]).strip() if col_mat is not None else "", 'Weld': str(row[col_weld]).strip() if col_weld is not None else "",
+                                'IQI': str(row[col_iqi]).strip() if col_iqi is not None else "", 'Sens': str(row[col_sens]).strip() if col_sens is not None else "",
+                                'Den': str(row[col_den]).strip() if col_den is not None else "", 'Result': str(row[col_result]).strip() if col_result is not None else "ACC",
+                                'Size': size_val, 'num_shots': num_shots,
+                                'selected': True, 'order_index': len(self.rt_extracted_data) + len(all_extracted_data)
                             }
+                            # Defects
+                            for i in range(1, 16):
+                                key = f"D{i}"; src_col = defect_cols.get(key)
+                                src_val = str(row[src_col]).strip() if src_col is not None else ""
+                                item_data[key] = src_val if src_val else ("1" if i <= num_shots else "")
 
-                            def _run_pmi_process(self, final_list, template_path):
-                                """PMI 성적서 생성 로직"""
-                                self.save_settings() # Ensure UI -> config sync
-                                self.log(f"🚀 PMI 성적서 생성 시작 (총 {len(final_list)} 건)...")
-
-                            item_row.update({
-                                'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "",
-                                'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
-                                'WType': str(row[col_wtype]).strip() if col_wtype is not None else "",
-                                'Result': "Acc",
-                                'selected': True,
-                                'order_index': len(self.pt_extracted_data) + len(all_extracted_data)
-                            })
-                            # [NEW] 기존 수동 추가 컬럼 보존
-                            for k in self.pt_column_keys:
-                                if k not in item_row and k != "selected":
-                                    item_row[k] = ""
-                            all_extracted_data.append(item_row)
+                            if self.rt_kogas_mode.get():
+                                # [KOGAS GROUPING] Find existing item with same Joint to merge pipe info
+                                existing = next((x for x in all_extracted_data if x['Joint'] == curr_joint), None)
+                                if existing:
+                                    existing['Dwg_Sub'] = curr_dwg
+                                    existing['Welder_Sub'] = item_data['Welder']
+                                    existing['Mat_Sub'] = item_data['Mat']
+                                    # RT Results usually stick to the first row's data in Kogas
+                                    continue 
+                                else:
+                                    item_data['Dwg_Sub'] = "" # Initialize Sub fields
+                                    item_data['Welder_Sub'] = ""
+                                    item_data['Mat_Sub'] = ""
+                                    all_extracted_data.append(item_data)
+                            else:
+                                # [STANDARD MODE] Row splitting by shot count
+                                for shot_idx in range(1, num_shots + 1):
+                                    shot_item = item_data.copy()
+                                    shot_item['Loc'] = f"{shot_idx}-{(shot_idx % num_shots) + 1}"
+                                    # Reset D-results for each shot in standard mode normalization
+                                    for i in range(1, 16):
+                                        key = f"D{i}"; c = defect_cols.get(key); val = str(row[c]).strip() if c is not None else ""
+                                        shot_item[key] = "√" if val and val.lower() in ["v", "x", "o", "1", "√"] else ""
+                                    all_extracted_data.append(shot_item)
+                        elif mode == "PT":
+                            res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
+                            if any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"]):
+                                item_row = {
+                                    'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
+                                    'NPS': str(row[col_size]).strip() if col_size is not None else "", 'Thk.': convert_sch_to_thk(str(row[col_size]).strip() if col_size is not None else "", str(row[col_thk]).strip() if col_thk is not None else ""),
+                                    'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "", 'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
+                                    'WType': str(row[col_wtype]).strip() if col_wtype is not None else "", 'Result': "Acc", 'selected': True,
+                                    'order_index': len(self.pt_extracted_data) + len(all_extracted_data)
+                                }
+                                for k in self.pt_column_keys:
+                                    if k not in item_row and k != "selected": item_row[k] = ""
+                                all_extracted_data.append(item_row)
                     else:
                         # PMI-specific Row Data
                         v_cr = self.to_float(row[col_cr])
@@ -6084,7 +6085,8 @@ class PMIReportApp:
                     f_max = self.to_float(f_item['max'].get())
                     
                     if f_min > 0 or f_max > 0:
-                        
+                        original_count = len(all_extracted_data)
+                        all_extracted_data = [d for d in all_extracted_data if (f_min <= d.get(f_key, 0.0) <= (f_max if f_max > 0 else 999.9))]
                         if len(all_extracted_data) != original_count:
                              self.log(f"🔍 원소 필터 적용 ({f_key}: {f_min}~{f_max}): {original_count} -> {len(all_extracted_data)}건 남음")
 
@@ -6851,17 +6853,19 @@ class PMIReportApp:
             # RT usually doesn't have the same headers as PMI
             # self.set_eulji_headers(ws) 
 
-            # Configizable or Default RT boundaries (Standard: Start 17, End 31 to avoid Shooting Sketch at 32)
-            start_row = int(self.config.get('RT_START_ROW', 11))
-            end_row = int(self.config.get('RT_END_ROW', 34))
-            rows_per_page = end_row - start_row + 1
+            # Configurable or Default RT boundaries
+            is_kogas = self.rt_kogas_mode.get()
+            start_row = int(self.config.get('RT_START_ROW', 14 if is_kogas else 11))
+            end_row = int(self.config.get('RT_END_ROW', 25 if is_kogas else 34))
+            block_size = 2 if is_kogas else 1
             
             current_row = start_row
             current_page = 1
             data_ptr = 0
             
             while data_ptr < len(final_list):
-                if current_row > end_row:
+                # 페이지 넘김 체크: 가스공사는 2행 블록 기준
+                if current_row + block_size - 1 > end_row:
                     current_page += 1
                     ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
                     current_row = start_row
@@ -6895,72 +6899,146 @@ class PMIReportApp:
                 #                     self.safe_set_value(ws, ws.cell(row=h_row, column=d_c_idx).coordinate, d_text)
                 #     except: pass
 
-                # Column Data Mapping (standardized layout)
-                no_col = self.col_to_num(self.config.get('RT_COL_NO', '1'))
-                if no_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=no_col).coordinate, item.get('No', ''))
-                
-                date_col = self.col_to_num(self.config.get('RT_COL_DATE', '2'))
-                if date_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=date_col).coordinate, item.get('Date', ''))
-                
-                dwg_col = self.col_to_num(self.config.get('RT_COL_DWG', '3'))
-                if dwg_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=dwg_col).coordinate, item.get('Dwg', ''))
-                
-                joint_col = self.col_to_num(self.config.get('RT_COL_JOINT', '4'))
-                if joint_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=joint_col).coordinate, item.get('Joint', ''))
-                
-                loc_col = self.col_to_num(self.config.get('RT_COL_LOC', '5'))
-                if loc_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=loc_col).coordinate, item.get('Loc', ''))
-                
-                # Standard columns (Dynamic mapping)
-                thk_col = self.col_to_num(self.config.get('RT_COL_THK', '6'))
-                if thk_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=thk_col).coordinate, item.get('T', ''))
-                
-                mat_col = self.col_to_num(self.config.get('RT_COL_MAT', '7'))
-                if mat_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=mat_col).coordinate, item.get('Mat', ''))
-                
-                acc_col = self.col_to_num(self.config.get('RT_COL_ACC', '7'))
-                if acc_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=acc_col).coordinate, item.get('Acc', ''))
-                
-                rej_col = self.col_to_num(self.config.get('RT_COL_REJ', '8'))
-                if rej_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rej_col).coordinate, item.get('Rej', ''))
-                
-                deg_col = self.col_to_num(self.config.get('RT_COL_DEG', '9'))
-                if deg_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=deg_col).coordinate, item.get('Deg', ''))
+                if is_kogas:
+                    # ===== 가스공사 전용: 2행 1세트 블록 주입 =====
+                    row_top = current_row      # 상단 행 (Pipe 1 정보)
+                    row_bot = current_row + 1  # 하단 행 (Pipe 2 정보)
 
-                # IQI/Sens/Den (Legacy or fixed for now)
-                iqi_col = self.col_to_num(self.config.get('RT_COL_IQI', '10'))
-                if iqi_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=iqi_col).coordinate, item.get('IQI', ''))
-                
-                sens_col = self.col_to_num(self.config.get('RT_COL_SENS', '11'))
-                if sens_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=sens_col).coordinate, item.get('Sens', ''))
-                
-                den_col = self.col_to_num(self.config.get('RT_COL_DEN', '12'))
-                if den_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=den_col).coordinate, item.get('Den', ''))
-                
-                # Defects D1-D15 (Dynamic)
-                for d_i in range(1, 16):
-                    d_col_key = f'RT_COL_D{d_i}'
-                    d_col_idx = self.col_to_num(self.config.get(d_col_key, str(12 + d_i)))
-                    if d_col_idx >= 1:
-                        self.safe_set_value(ws, ws.cell(row=current_row, column=d_col_idx).coordinate, item.get(f'D{d_i}', ''))
-                
-                res_col = self.col_to_num(self.config.get('RT_COL_RES', '28'))
-                if res_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=res_col).coordinate, item.get('Result', 'ACC'))
-                
-                wld_col = self.col_to_num(self.config.get('RT_COL_WELDER', '29'))
-                if wld_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=wld_col).coordinate, item.get('Welder', ''))
-                
-                rem_col = self.col_to_num(self.config.get('RT_COL_REM', '30'))
-                if rem_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rem_col).coordinate, item.get('Remarks', ''))
-                
-                # Styling for individual row - [DISABLED] to keep template style
-                # for c in range(1, 31):
-                #     cell = ws.cell(row=current_row, column=c)
-                #     cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
-                #     cell.font = Font(name='바탕', size=9)
+                    # 순번(No) - 2행 수직 병합
+                    no_col = self.col_to_num(self.config.get('RT_COL_NO', '1'))
+                    if no_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, no_col, row_bot, no_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=no_col).coordinate, item.get('No', ''))
+                        ws.cell(row=row_top, column=no_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    # 용접부(Joint) - 2행 수직 병합
+                    joint_col = self.col_to_num(self.config.get('RT_COL_JOINT', '4'))
+                    if joint_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, joint_col, row_bot, joint_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=joint_col).coordinate, item.get('Joint', ''))
+                        ws.cell(row=row_top, column=joint_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    # 검사일(Date) - 2행 수직 병합
+                    date_col = self.col_to_num(self.config.get('RT_COL_DATE', '2'))
+                    if date_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, date_col, row_bot, date_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=date_col).coordinate, item.get('Date', ''))
+                        ws.cell(row=row_top, column=date_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    # 도면번호(Dwg) - 상단: 주 파이프, 하단: 보조(_Sub)
+                    dwg_col = self.col_to_num(self.config.get('RT_COL_DWG', '3'))
+                    if dwg_col >= 1:
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=dwg_col).coordinate, item.get('Dwg', ''))
+                        self.safe_set_value(ws, ws.cell(row=row_bot, column=dwg_col).coordinate, item.get('Dwg_Sub', ''))
+
+                    # 재질(Mat) - 상/하단 분리
+                    mat_col = self.col_to_num(self.config.get('RT_COL_MAT', '7'))
+                    if mat_col >= 1:
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=mat_col).coordinate, item.get('Mat', ''))
+                        self.safe_set_value(ws, ws.cell(row=row_bot, column=mat_col).coordinate, item.get('Mat_Sub', ''))
+
+                    # 용접사(Welder) - 상/하단 분리
+                    wld_col = self.col_to_num(self.config.get('RT_COL_WELDER', '29'))
+                    if wld_col >= 1:
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=wld_col).coordinate, item.get('Welder', ''))
+                        self.safe_set_value(ws, ws.cell(row=row_bot, column=wld_col).coordinate, item.get('Welder_Sub', ''))
+
+                    # 두께(T) - 2행 수직 병합
+                    thk_col = self.col_to_num(self.config.get('RT_COL_THK', '6'))
+                    if thk_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, thk_col, row_bot, thk_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=thk_col).coordinate, item.get('T', ''))
+                        ws.cell(row=row_top, column=thk_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    # D1~D7 결과 - 상단 행에 가로로 기입 (기본: Q=17열 시작)
+                    kogas_d_start_col = int(self.config.get('RT_KOGAS_D_START_COL', '17'))
+                    for d_i in range(1, 8):
+                        d_col_idx = kogas_d_start_col + (d_i - 1)
+                        d_val = item.get(f'D{d_i}', '')
+                        if d_val:
+                            self.safe_set_value(ws, ws.cell(row=row_top, column=d_col_idx).coordinate, d_val)
+
+                    # 합/불(Result) - 2행 수직 병합
+                    res_col = self.col_to_num(self.config.get('RT_COL_RES', '28'))
+                    if res_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, res_col, row_bot, res_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=res_col).coordinate, item.get('Result', 'ACC'))
+                        ws.cell(row=row_top, column=res_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    # 비고(Remarks) - 2행 수직 병합
+                    rem_col = self.col_to_num(self.config.get('RT_COL_REM', '30'))
+                    if rem_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, rem_col, row_bot, rem_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=rem_col).coordinate, item.get('Remarks', ''))
+                        ws.cell(row=row_top, column=rem_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    current_row += block_size  # 2행씩 전진
+
+                else:
+                    # ===== 일반 모드: 1행 1데이터 =====
+                    no_col = self.col_to_num(self.config.get('RT_COL_NO', '1'))
+                    if no_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=no_col).coordinate, item.get('No', ''))
+                    
+                    date_col = self.col_to_num(self.config.get('RT_COL_DATE', '2'))
+                    if date_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=date_col).coordinate, item.get('Date', ''))
+                    
+                    dwg_col = self.col_to_num(self.config.get('RT_COL_DWG', '3'))
+                    if dwg_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=dwg_col).coordinate, item.get('Dwg', ''))
+                    
+                    joint_col = self.col_to_num(self.config.get('RT_COL_JOINT', '4'))
+                    if joint_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=joint_col).coordinate, item.get('Joint', ''))
+                    
+                    loc_col = self.col_to_num(self.config.get('RT_COL_LOC', '5'))
+                    if loc_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=loc_col).coordinate, item.get('Loc', ''))
+                    
+                    thk_col = self.col_to_num(self.config.get('RT_COL_THK', '6'))
+                    if thk_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=thk_col).coordinate, item.get('T', ''))
+                    
+                    mat_col = self.col_to_num(self.config.get('RT_COL_MAT', '7'))
+                    if mat_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=mat_col).coordinate, item.get('Mat', ''))
+                    
+                    acc_col = self.col_to_num(self.config.get('RT_COL_ACC', '7'))
+                    if acc_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=acc_col).coordinate, item.get('Acc', ''))
+                    
+                    rej_col = self.col_to_num(self.config.get('RT_COL_REJ', '8'))
+                    if rej_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rej_col).coordinate, item.get('Rej', ''))
+                    
+                    deg_col = self.col_to_num(self.config.get('RT_COL_DEG', '9'))
+                    if deg_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=deg_col).coordinate, item.get('Deg', ''))
+
+                    iqi_col = self.col_to_num(self.config.get('RT_COL_IQI', '10'))
+                    if iqi_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=iqi_col).coordinate, item.get('IQI', ''))
+                    
+                    sens_col = self.col_to_num(self.config.get('RT_COL_SENS', '11'))
+                    if sens_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=sens_col).coordinate, item.get('Sens', ''))
+                    
+                    den_col = self.col_to_num(self.config.get('RT_COL_DEN', '12'))
+                    if den_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=den_col).coordinate, item.get('Den', ''))
+                    
+                    for d_i in range(1, 16):
+                        d_col_key = f'RT_COL_D{d_i}'
+                        d_col_idx = self.col_to_num(self.config.get(d_col_key, str(12 + d_i)))
+                        if d_col_idx >= 1:
+                            self.safe_set_value(ws, ws.cell(row=current_row, column=d_col_idx).coordinate, item.get(f'D{d_i}', ''))
+                    
+                    res_col = self.col_to_num(self.config.get('RT_COL_RES', '28'))
+                    if res_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=res_col).coordinate, item.get('Result', 'ACC'))
+                    
+                    wld_col = self.col_to_num(self.config.get('RT_COL_WELDER', '29'))
+                    if wld_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=wld_col).coordinate, item.get('Welder', ''))
+                    
+                    rem_col = self.col_to_num(self.config.get('RT_COL_REM', '30'))
+                    if rem_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rem_col).coordinate, item.get('Remarks', ''))
+
+                    current_row += 1
 
                 data_ptr += 1
-                current_row += 1
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
 
             total_p = len(wb.worksheets)
