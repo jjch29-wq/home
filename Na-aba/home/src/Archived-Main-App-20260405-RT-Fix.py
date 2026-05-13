@@ -206,7 +206,20 @@ class PMIReportApp:
         # --- RT State Variables ---
         self.rt_target_file_path = tk.StringVar(value=self.config.get('RT_TARGET_PATH', ""))
         self.rt_template_file_path = tk.StringVar(value=self.config.get('RT_TEMPLATE_PATH', ""))
+        self.kogas_target_file_path = tk.StringVar()
+        self.kogas_template_file_path = tk.StringVar()
+        self.rt_kogas_mode = tk.BooleanVar(value=False) 
+        self.rt_kogas_mode.trace_add("write", lambda *a: self._on_rt_kogas_mode_change())
+        self.extracted_data = []
         self.rt_extracted_data = []
+        self.kogas_extracted_data = []
+        
+        # --- Column Keys Initialization ---
+        self.column_keys = ["selected", "No", "Date", "Drawing No.", "Joint No.", "Location", "Ni", "Cr", "Mo", "Result"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
+        self.kogas_column_keys = self.rt_column_keys + ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]
+        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
+        self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Loc", "T", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
         
         # --- PT State Variables ---
         self.pt_target_file_path = tk.StringVar(value=self.config.get('PT_TARGET_PATH', ""))
@@ -468,12 +481,12 @@ class PMIReportApp:
     def capture_ui_state(self):
         """UI 요소들의 현재 상태(컬럼 너비, 분할선 위치 등)를 config에 반영"""
         try:
-            # 1. 트리뷰 컬럼 너비 캡처
             trees = [
                 ('PMI', getattr(self, 'preview_tree', None)), 
                 ('RT', getattr(self, 'rt_preview_tree', None)), 
                 ('PT', getattr(self, 'pt_preview_tree', None)), 
-                ('PAUT', getattr(self, 'paut_preview_tree', None))
+                ('PAUT', getattr(self, 'paut_preview_tree', None)),
+                ('KOGAS', getattr(self, 'kogas_preview_tree', None))
             ]
             for mode, tree in trees:
                 if tree:
@@ -512,6 +525,8 @@ class PMIReportApp:
                 self.config['PT_TEMPLATE_PATH'] = self.pt_template_file_path.get()
                 self.config['PAUT_TARGET_PATH'] = self.paut_target_file_path.get()
                 self.config['PAUT_TEMPLATE_PATH'] = self.paut_template_file_path.get()
+                self.config['KOGAS_TARGET_PATH'] = self.kogas_target_file_path.get()
+                self.config['KOGAS_TEMPLATE_PATH'] = self.kogas_template_file_path.get()
                 
                 # 5. Photo Log Settings Capture
                 self.config['PHOTO_LOG_SETTINGS'] = {
@@ -851,10 +866,16 @@ class PMIReportApp:
         try:
             tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
             if "PMI" in tab_text: self.current_mode = "PMI"
-            elif "RT" in tab_text: self.current_mode = "RT"
+            elif "RT" in tab_text:
+                # RT 탭 진입 시 현재 설정된 서브 모드(표준/가스공사) 확인
+                self.current_mode = self.rt_sub_mode.get()
             elif "PT" in tab_text: self.current_mode = "PT"
             elif "PAUT" in tab_text: self.current_mode = "PAUT"
             elif "사진" in tab_text: self.current_mode = "PHOTO"
+            
+            # [NEW] 모드 변경 시 해당 모드의 설정을 다시 로드
+            if self.current_mode in ["RT", "KOGAS"]:
+                self.load_template_specific_config(self.current_mode)
         except: pass
 
     def create_widgets(self):
@@ -984,14 +1005,19 @@ class PMIReportApp:
         self.photo_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
 
         self.mode_notebook.add(self.pmi_mode_frame, text=" 🔬 PMI (OES) ")
-        self.mode_notebook.add(self.rt_mode_frame, text=" 🔬 Radiographic (RT) ")
+        self.mode_notebook.add(self.rt_mode_frame, text=" 🔬 RT (Standard) ")
+        
+        self.kogas_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
+        self.mode_notebook.add(self.kogas_mode_frame, text=" 🇰🇷 KOGAS RT (가스공사) ")
+        
+        self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.mode_notebook.add(self.pt_mode_frame, text=" 🔬 Penetrant (PT) ")
         self.mode_notebook.add(self.paut_mode_frame, text=" 🔬 Phased Array (PAUT) ")
         self.mode_notebook.add(self.photo_mode_frame, text=" 📸 사진대장 (Photo Log) ")
 
         # Setup each mode (One time only)
         self._setup_pmi_ui(self.pmi_mode_frame)
-        self._setup_rt_ui(self.rt_mode_frame)
+        self._setup_rt_ui(self.rt_mode_frame) # [RE-INTEGRATED]
         self._setup_pt_ui(self.pt_mode_frame)
         self._setup_paut_ui(self.paut_mode_frame)
         self._setup_photo_log_ui(self.photo_mode_frame)
@@ -1256,7 +1282,7 @@ class PMIReportApp:
             btn_del.grid(row=0, column=5, padx=(2, 0))
 
     def _setup_rt_ui(self, parent):
-        # [FORCE] Ensure parent (rt_mode_frame) allows expansion
+        """[RE-INTEGRATED] RT 탭 통합 구성 (내부에 서브 미리보기 탭 배치)"""
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
@@ -1265,162 +1291,207 @@ class PMIReportApp:
                             sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
         self.rt_paned.pack(fill='both', expand=True)
 
-        # [LEFT] Scrollable Settings Sidebar
+        # [LEFT] Settings Sidebar
         left_container = tk.Frame(self.rt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
         self.rt_paned.add(left_container, width=425)
-        
-        # Scrollable area (Full size)
         left_pane = self._create_scrollable_sidebar(left_container)
 
-        # FIXED FLOATING Header
-        header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        # FIXED Header
+        header_frame = tk.Frame(left_container, background="#f9fafb")
         header_frame.place(x=0, y=0, relwidth=1, height=40)
-        
-        inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
-        inner_header.pack(fill='both', expand=True, pady=(5, 0))
-        
-        tk.Label(inner_header, text="🔬 RT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
-                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
-        
+        tk.Label(header_frame, text="🔬 RT 성적서 통합 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left', padx=20, pady=5)
         tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
-        header_frame.lift()
-
-        # Spacer in scrollable area
         tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
 
-        # 1. File Selection Group
-        file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
-        file_frame.pack(fill='x', pady=(0, 10))
-
-        def _add_file_row(parent_frame, label, var, row, is_dir=False, types=None):
-            parent_frame.columnconfigure(1, weight=1)
-            ttk.Label(parent_frame, text=label, font=("Malgun Gothic", 8)).grid(row=row, column=0, sticky='e', padx=2, pady=2)
-            ttk.Entry(parent_frame, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=row, column=1, padx=2, pady=2, sticky='ew')
-            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
-            ttk.Button(parent_frame, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
-
-        _add_file_row(file_frame, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
-        _add_file_row(file_frame, "RT 데이터:", self.rt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
-        _add_file_row(file_frame, "RT 양식:", self.rt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        # [NEW] 모드 선택 (표준 vs 가스공사)
+        mode_select_f = tk.Frame(left_pane, background="#f9fafb")
+        mode_select_f.pack(fill='x', pady=(0, 10))
+        self.rt_sub_mode = tk.StringVar(value="RT")
         
-        # [NEW] Template Config Save Button
-        btn_frame = tk.Frame(file_frame, background="#f0f0f0")
-        btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
-        ttk.Button(btn_frame, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("RT")).pack(side='left', padx=2)
-        tk.Label(btn_frame, text="* 양식 파일과 같은 폴더에 .json 파일로 저장됩니다.", font=("Malgun Gothic", 8), fg="gray", background="#f0f0f0").pack(side='left', padx=5)
+        style = ttk.Style()
+        style.configure("Mode.TRadiobutton", font=("Malgun Gothic", 9, "bold"))
+        
+        ttk.Radiobutton(mode_select_f, text=" 🔬 표준 RT ", variable=self.rt_sub_mode, value="RT", 
+                        style="Mode.TRadiobutton", command=self._on_rt_sub_mode_change).pack(side='left', padx=5)
+        ttk.Radiobutton(mode_select_f, text=" 🇰🇷 가스공사 ", variable=self.rt_sub_mode, value="KOGAS", 
+                        style="Mode.TRadiobutton", command=self._on_rt_sub_mode_change).pack(side='left', padx=5)
 
-        # 2. Configuration Tabs
-        rt_config_frame = ttk.LabelFrame(left_pane, text=" 리포트 세부 설정 ", padding=2)
+        # 1. File Selection (Adaptive)
+        self.rt_file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
+        self.rt_file_frame.pack(fill='x', pady=(0, 10))
+        
+        # We need to show different path entries based on mode
+        self.rt_path_container = tk.Frame(self.rt_file_frame)
+        self.rt_path_container.pack(fill='x')
+        
+        def _add_file_row(p, lbl, var, r, is_dir=False, types=None):
+            p.columnconfigure(1, weight=1)
+            ttk.Label(p, text=lbl, font=("Malgun Gothic", 8)).grid(row=r, column=0, sticky='e', padx=2, pady=2)
+            ttk.Entry(p, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=r, column=1, padx=2, pady=2, sticky='ew')
+            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
+            ttk.Button(p, text="...", width=3, command=cmd).grid(row=r, column=2, padx=2, pady=2)
+
+        # Container for actual path rows (will be cleared/re-added on mode change)
+        self._update_rt_path_ui()
+
+        # 2. Tabs for Configuration
+        rt_config_frame = ttk.LabelFrame(left_pane, text=" 세부 설정 (Config) ", padding=2)
         rt_config_frame.pack(fill='both', expand=True, pady=(0, 10))
 
-        self.rt_tab_notebook = ttk.Notebook(rt_config_frame)
-        self.rt_tab_notebook.pack(fill='both', expand=True)
+        self.rt_tab_nb = ttk.Notebook(rt_config_frame)
+        self.rt_tab_nb.pack(fill='both', expand=True)
 
-        rt_tab_cover = ttk.Frame(self.rt_tab_notebook, padding=5)
-        rt_tab_data = ttk.Frame(self.rt_tab_notebook, padding=5)
-        rt_tab_logo = ttk.Frame(self.rt_tab_notebook, padding=5) # [NEW] Dedicated Logo Tab
-        rt_tab_rows = ttk.Frame(self.rt_tab_notebook, padding=5)
-        rt_tab_cols = ttk.Frame(self.rt_tab_notebook, padding=5)
-        
-        # [FIX] Apply columnconfigure only to tabs using GRID (Cover, Data, Logo)
-        # Rows and Cols tabs use PACK internally, so we avoid calling grid methods on them.
-        for t in [rt_tab_cover, rt_tab_data, rt_tab_logo]: t.columnconfigure(0, weight=1)
+        self.rt_tabs = {}
+        for t_name in ["갑지", "을지", "로고", "행 설정", "컬럼 설정"]:
+            f = ttk.Frame(self.rt_tab_nb, padding=5)
+            self.rt_tab_nb.add(f, text=t_name)
+            self.rt_tabs[t_name] = f
+            if t_name not in ["행 설정", "컬럼 설정"]: f.columnconfigure(0, weight=1)
 
-        self.rt_tab_notebook.add(rt_tab_cover, text="갑지 설정")
-        self.rt_tab_notebook.add(rt_tab_data, text="을지 설정")
-        self.rt_tab_notebook.add(rt_tab_logo, text="로고 설정") # [NEW]
-        self.rt_tab_notebook.add(rt_tab_rows, text="행 설정")
-        self.rt_tab_notebook.add(rt_tab_cols, text="컬럼 설정")
+        self.rt_tab_nb.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
+        self._refresh_rt_config_tabs() # Initial UI build
 
-        # [ALIGNED] Mode-specific context for logo grid
-        self._create_gapji_meta_ui(rt_tab_cover, use_pack=False)
-        self.rt_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
-        
-        # [NEW] Separate Logo Grids in Logo Tab (Using GRID exclusively to avoid TclError)
-        tk.Label(rt_tab_logo, text="🚩 [갑지] 로고 설정", font=("Malgun Gothic", 9, "bold"), background="#f9fafb", fg="#1e3a8a").grid(row=0, column=0, sticky='w', pady=(5, 0))
-        next_r = self._create_setting_grid(rt_tab_logo, "RT_COVER")
-        
-        sep = tk.Frame(rt_tab_logo, height=1, background="#d1d5db")
-        sep.grid(row=next_r + 1, column=0, sticky='ew', pady=10)
-        
-        tk.Label(rt_tab_logo, text="🚩 [을지] 로고 설정", font=("Malgun Gothic", 9, "bold"), background="#f9fafb", fg="#1e3a8a").grid(row=next_r + 2, column=0, sticky='w', pady=(5, 0))
-        self._create_setting_grid(rt_tab_logo, "RT_DATA")
+        # 3. Actions
+        action_f = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
+        action_f.pack(fill='x', pady=(0, 10))
+        ttk.Label(action_f, text="📊 특정순번 필터:", background="#ffffff").pack(side='left')
+        ttk.Entry(action_f, textvariable=self.sequence_filter, width=15).pack(side='left', padx=5, fill='x', expand=True)
 
-        self._create_margin_settings(rt_tab_cover, "RT_COVER", use_pack=False)
-        self._create_margin_settings(rt_tab_data, "RT_DATA", use_pack=False)
-        self._create_row_settings(rt_tab_rows, mode="RT")
-        
-        rt_items = [
-            ("No:", "RT_COL_NO", 1, "RT_NAME_NO", "No", "No"),
-            ("Date:", "RT_COL_DATE", 2, "RT_NAME_DATE", "Date", "Date"),
-            ("Drawing No.:", "RT_COL_DWG", 3, "RT_NAME_DWG", "Drawing No.", "Drawing No."),
-            ("Film Ident. No.:", "RT_COL_JOINT", 4, "RT_NAME_JOINT", "Film Ident. No.", "Film Ident. No."),
-            ("Film Location:", "RT_COL_LOC", 5, "RT_NAME_LOC", "Film Location", "Film Location"),
-            ("두께(T):", "RT_COL_THK", 6, "RT_NAME_THK", "T", "T"),
-            ("재질(Mat):", "RT_COL_MAT", 7, "RT_NAME_MAT", "Mat", "Mat"),
-            ("물성(Deg):", "RT_COL_DEG", 10, "RT_NAME_DEG", "Deg", "Deg"),
-            ("Acc:", "RT_COL_ACC", 8, "RT_NAME_ACC", "Acc", "Acc"),
-            ("Rej:", "RT_COL_REJ", 9, "RT_NAME_REJ", "Rej", "Rej"),
-            ("① Crack:", "RT_COL_D1", 13, "RT_NAME_D1", "① Crack", "① Crack"),
-            ("② IP:", "RT_COL_D2", 14, "RT_NAME_D2", "② IP", "② IP"),
-            ("③ LF:", "RT_COL_D3", 15, "RT_NAME_D3", "③ LF", "③ LF"),
-            ("④ Slag:", "RT_COL_D4", 16, "RT_NAME_D4", "④ Slag", "④ Slag"),
-            ("⑤ Por:", "RT_COL_D5", 17, "RT_NAME_D5", "⑤ Por", "⑤ Por"),
-            ("⑥ U/C:", "RT_COL_D6", 18, "RT_NAME_D6", "⑥ U/C", "⑥ U/C"),
-            ("⑦ RUC:", "RT_COL_D7", 19, "RT_NAME_D7", "⑦ RUC", "⑦ RUC"),
-            ("⑧ BT:", "RT_COL_D8", 20, "RT_NAME_D8", "⑧ BT", "⑧ BT"),
-            ("⑨ TI:", "RT_COL_D9", 21, "RT_NAME_D9", "⑨ TI", "⑨ TI"),
-            ("⑩ CP:", "RT_COL_D10", 22, "RT_NAME_D10", "⑩ CP", "⑩ CP"),
-            ("⑪ RC:", "RT_COL_D11", 23, "RT_NAME_D11", "⑪ RC", "⑪ RC"),
-            ("⑫ Mis:", "RT_COL_D12", 24, "RT_NAME_D12", "⑫ Mis", "⑫ Mis"),
-            ("⑬ EP:", "RT_COL_D13", 25, "RT_NAME_D13", "⑬ EP", "⑬ EP"),
-            ("⑭ SD:", "RT_COL_D14", 26, "RT_NAME_D14", "⑭ SD", "⑭ SD"),
-            ("⑮ Oth:", "RT_COL_D15", 27, "RT_NAME_D15", "⑮ Oth", "⑮ Oth"),
-            ("판정(Result):", "RT_COL_RES", 28, "RT_NAME_RES", "Result", "Result"),
-            ("용접사(Welder):", "RT_COL_WELDER", 29, "RT_NAME_WELDER", "Welder No", "Welder No"),
-            ("비고(Remarks):", "RT_COL_REM", 30, "RT_NAME_REM", "Remarks", "Remarks")
-        ]
-        self._create_column_mapping_ui(rt_tab_cols, "RT", rt_items)
+        btn_r = tk.Frame(left_pane, background="#f9fafb")
+        btn_r.pack(fill='x', pady=5)
+        ttk.Button(btn_r, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
+        ttk.Button(btn_r, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x')
 
-        # 3. Action Section
-        action_frame = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
-        action_frame.pack(fill='x', pady=(0, 10))
-
-        filter_row = tk.Frame(action_frame, background="#ffffff")
-        filter_row.pack(fill='x', pady=2)
-        ttk.Label(filter_row, text="📊 특정순번:", background="#ffffff", font=("Malgun Gothic", 8)).pack(side='left')
-        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=15, font=("Arial", 9), exportselection=False).pack(side='left', padx=5, fill='x', expand=True)
-
-        btn_row = tk.Frame(left_pane, background="#f9fafb")
-        btn_row.pack(fill='x', pady=5)
-        ttk.Button(btn_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
-        ttk.Button(btn_row, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x')
-
-        # [RIGHT] Multi-Preview Pane (Data & Gapji)
-        right_container = tk.Frame(self.rt_paned, background="#f3f4f6")
-        self.rt_paned.add(right_container, stretch="always")
+        # [RIGHT] Multi-Preview (Sub-tabs)
+        right_f = tk.Frame(self.rt_paned, background="#f3f4f6")
+        self.rt_paned.add(right_f, stretch="always")
         
-        if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
-        nb = ttk.Notebook(right_container)
-        nb.pack(fill='both', expand=True)
-        self.preview_notebooks["RT"] = nb
+        self.rt_preview_nb = ttk.Notebook(right_f)
+        self.rt_preview_nb.pack(fill='both', expand=True)
         
-        tab_data = tk.Frame(nb, background="#ffffff")
-        tab_gapji = tk.Frame(nb, background="#ffffff")
-        nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
-        nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
+        t_std = tk.Frame(self.rt_preview_nb, background="#ffffff")
+        t_kogas = tk.Frame(self.rt_preview_nb, background="#ffffff")
+        t_gapji = tk.Frame(self.rt_preview_nb, background="#ffffff")
         
-        self._create_rt_preview_ui(tab_data)
-        self._create_gapji_preview_ui(tab_gapji, "RT")
+        self.rt_preview_nb.add(t_std, text=" 🔬 표준 미리보기 ")
+        self.rt_preview_nb.add(t_kogas, text=" 🇰🇷 가스공사 미리보기 ")
+        self.rt_preview_nb.add(t_gapji, text=" 📄 갑지 미리보기 ")
+        
+        # Link Preview Tab to Mode Switch
+        def _on_rt_preview_tab_changed(event):
+            tab_text = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
+            if "가스공사" in tab_text: self.rt_sub_mode.set("KOGAS")
+            elif "표준" in tab_text: self.rt_sub_mode.set("RT")
+            self._on_rt_sub_mode_change(from_tab=True)
+        self.rt_preview_nb.bind("<<NotebookTabChanged>>", _on_rt_preview_tab_changed)
+
+        self._create_rt_preview_ui(t_std, mode="RT")
+        self._create_rt_preview_ui(t_kogas, mode="KOGAS")
+        self._create_gapji_preview_ui(t_gapji, "RT") # Gapji uses current sub-mode context internally
+        
         self._apply_sash_ratio("RT")
-        
-        self.rt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("RT"))
-
-        # Adaptive Resizing Bindings
         self.rt_pane_ratio = self.config.get('RT_SASH_RATIO', 0.5)
         self.rt_paned.bind("<Configure>", lambda e: [self._on_rt_paned_configure(e), self.root.update_idletasks()])
         self.rt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_rt_ratio))
         self.root.after(500, lambda: self._on_rt_paned_configure(None))
+
+    def _update_rt_path_ui(self):
+        """모드에 따라 파일 선택 경로 입력 UI 갱신"""
+        for w in self.rt_path_container.winfo_children(): w.destroy()
+        mode = self.rt_sub_mode.get()
+        v_target = self.rt_target_file_path if mode == "RT" else self.kogas_target_file_path
+        v_template = self.rt_template_file_path if mode == "RT" else self.kogas_template_file_path
+
+        def _add_file_row(p, lbl, var, r, is_dir=False, types=None):
+            p.columnconfigure(1, weight=1)
+            ttk.Label(p, text=lbl, font=("Malgun Gothic", 8)).grid(row=r, column=0, sticky='e', padx=2, pady=2)
+            ttk.Entry(p, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=r, column=1, padx=2, pady=2, sticky='ew')
+            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
+            ttk.Button(p, text="...", width=3, command=cmd).grid(row=r, column=2, padx=2, pady=2)
+
+        _add_file_row(self.rt_path_container, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
+        _add_file_row(self.rt_path_container, f"{mode} 데이터:", v_target, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(self.rt_path_container, f"{mode} 양식:", v_template, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        
+        btn_f = tk.Frame(self.rt_path_container, background="#f0f0f0")
+        btn_f.grid(row=3, column=1, sticky='ew', pady=2)
+        ttk.Button(btn_f, text="💾 전용 설정 저장", command=lambda: self.save_template_specific_config(mode)).pack(side='left', padx=2)
+
+    def _refresh_rt_config_tabs(self):
+        """모드에 따라 행/컬럼 설정 탭 내용 갱신"""
+        mode = self.rt_sub_mode.get()
+        t_cover = self.rt_tabs["갑지"]
+        t_data = self.rt_tabs["을지"]
+        t_logo = self.rt_tabs["로고"]
+        t_rows = self.rt_tabs["행 설정"]
+        t_cols = self.rt_tabs["컬럼 설정"]
+        
+        for t in [t_rows, t_cols, t_logo, t_cover, t_data]:
+            for w in t.winfo_children(): w.destroy()
+        
+        # Meta & Margins (Cover/Data)
+        self._create_gapji_meta_ui(t_cover, use_pack=False)
+        ctx_cover = f"{mode}_COVER"
+        ctx_data = f"{mode}_DATA"
+        self._create_margin_settings(t_cover, ctx_cover, use_pack=False)
+        self._create_margin_settings(t_data, ctx_data, use_pack=False)
+        
+        # Logos
+        tk.Label(t_logo, text="🚩 [갑지] 로고", font=("Malgun Gothic", 9, "bold"), background="#f9fafb").grid(row=0, column=0, sticky='w')
+        r_next = self._create_setting_grid(t_logo, ctx_cover)
+        tk.Label(t_logo, text="🚩 [을지] 로고", font=("Malgun Gothic", 9, "bold"), background="#f9fafb").grid(row=r_next+1, column=0, sticky='w', pady=(10, 0))
+        self._create_setting_grid(t_logo, ctx_data)
+        
+        # Row Settings
+        self._create_row_settings(t_rows, mode=mode)
+        
+        # Column Mapping
+        rt_items = [
+            ("No:", f"{mode}_COL_NO", 1, f"{mode}_NAME_NO", "No", "No"),
+            ("Date:", f"{mode}_COL_DATE", 2, f"{mode}_NAME_DATE", "Date", "Date"),
+            ("Dwg No.:", f"{mode}_COL_DWG", 3, f"{mode}_NAME_DWG", "Drawing No.", "Dwg"),
+            ("Film No.:", f"{mode}_COL_JOINT", 4, f"{mode}_NAME_JOINT", "Film Ident. No.", "Joint"),
+            ("Location:", f"{mode}_COL_LOC", 5, f"{mode}_NAME_LOC", "Film Location", "Loc"),
+            ("T:", f"{mode}_COL_THK", 6, f"{mode}_NAME_THK", "T", "T"),
+            ("Mat:", f"{mode}_COL_MAT", 7, f"{mode}_NAME_MAT", "Mat", "Mat"),
+            ("Deg:", f"{mode}_COL_DEG", 10, f"{mode}_NAME_DEG", "Deg", "Deg"),
+            ("Acc:", f"{mode}_COL_ACC", 8, f"{mode}_NAME_ACC", "Acc", "Acc"),
+            ("Rej:", f"{mode}_COL_REJ", 9, f"{mode}_NAME_REJ", "Rej", "Rej"),
+            ("① Crack:", f"{mode}_COL_D1", 13, f"{mode}_NAME_D1", "① Crack", "D1"),
+            ("판정(Result):", f"{mode}_COL_RES", 28, f"{mode}_NAME_RES", "Result", "Result"),
+            ("용접사:", f"{mode}_COL_WELDER", 29, f"{mode}_NAME_WELDER", "Welder No", "Welder"),
+            ("비고:", f"{mode}_COL_REM", 30, f"{mode}_NAME_REM", "Remarks", "Remarks")
+        ]
+        if mode == "KOGAS":
+            rt_items += [
+                ("Dwg_Sub:", "KOGAS_COL_DWG_SUB", 0, "KOGAS_NAME_DWG_SUB", "Dwg(Sub)", "Dwg_Sub"),
+                ("Welder_Sub:", "KOGAS_COL_WELDER_SUB", 0, "KOGAS_NAME_WELDER_SUB", "Welder(Sub)", "Welder_Sub"),
+                ("Mat_Sub:", "KOGAS_COL_MAT_SUB", 0, "KOGAS_NAME_MAT_SUB", "Mat(Sub)", "Mat_Sub")
+            ]
+        self._create_column_mapping_ui(t_cols, mode, rt_items)
+
+    def _on_rt_sub_mode_change(self, from_tab=False):
+        """RT 내부 서브 모드(표준/가스공사) 변경 시 UI 및 상태 동기화"""
+        mode = self.rt_sub_mode.get()
+        self.current_mode = mode
+        self.log(f"🔄 RT 서브 모드 전환: {mode}")
+        
+        # 1. 오른쪽 미리보기 탭 동기화 (라디오 버튼으로 바꾼 경우)
+        if not from_tab:
+            target_idx = 0 if mode == "RT" else 1
+            if self.rt_preview_nb.index("current") != target_idx:
+                self.rt_preview_nb.select(target_idx)
+        
+        # 2. 왼쪽 사이드바 UI 갱신 (파일 경로 및 세부 설정 탭)
+        self._update_rt_path_ui()
+        self._refresh_rt_config_tabs()
+        
+        # 3. 템플릿 로드 트리거
+        self.load_template_specific_config(mode)
+        
+        # 4. 갑지 미리보기 갱신
+        self._update_gapji_preview_current()
 
     def _update_rt_ratio(self):
         try:
@@ -1440,6 +1511,77 @@ class PMIReportApp:
                     new_pos = int(total_w * self.rt_pane_ratio)
                     self.rt_paned.sash_place(0, new_pos, 0)
         except: pass
+
+    def _on_rt_kogas_mode_change(self):
+        """가스공사 모드 변경 시 템플릿 경로 자동 설정 및 미리보기 컬럼 업데이트"""
+        if self.rt_kogas_mode.get():
+            # 가스공사 템플릿 경로 탐색
+            data_dir = os.path.join(BASE_DIR, "Na-aba", "home", "data")
+            if not os.path.exists(data_dir):
+                data_dir = os.path.join(os.getcwd(), "Na-aba", "home", "data")
+            
+            kogas_template = os.path.join(data_dir, "가스공사 의뢰서.xlsx")
+            if os.path.exists(kogas_template):
+                self.rt_template_file_path.set(kogas_template)
+                self.log("💡 가스공사 전용 템플릿이 자동으로 선택되었습니다.")
+            else:
+                self.log("⚠️ 가스공사 의뢰서.xlsx 파일을 찾을 수 없습니다. (data 폴더 확인 필요)")
+        else:
+            # 일반 KS 양식으로 복구 시도 (있는 경우)
+            data_dir = os.path.join(BASE_DIR, "Na-aba", "home", "data")
+            if not os.path.exists(data_dir):
+                data_dir = os.path.join(os.getcwd(), "Na-aba", "home", "data")
+                
+            ks_template = os.path.join(data_dir, "RT KS양식.xlsx")
+            if os.path.exists(ks_template):
+                self.rt_template_file_path.set(ks_template)
+                self.log("💡 일반 KS 양식 템플릿으로 복구되었습니다.")
+        
+        # [NEW] 미리보기 컬럼 구성 업데이트
+        self._update_rt_preview_columns()
+
+    def _update_rt_preview_columns(self, mode="RT"):
+        """모드 여부에 따라 RT 미리보기 컬럼을 동적으로 변경"""
+        tree = self.rt_preview_tree if mode == "RT" else self.kogas_preview_tree
+        if not tree: return
+        
+        base_cols = ["V", "No", "Date", "Drawing No.", "Film Ident. No.", "Film Location", "Acc", "Rej", "Deg", "① Crack", "② IP", "③ LF", "④ Slag", "⑤ Por", "⑥ U/C", "⑦ RUC", "⑧ BT", "⑨ TI", "⑩ CP", "⑪ RC", "⑫ Mis", "⑬ EP", "⑭ SD", "⑮ Oth", "Welder No", "Remarks"]
+        
+        if mode == "KOGAS":
+            # 가스공사 모드 전용 컬럼 (Sub 필드) 추가
+            current_cols = base_cols + ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]
+        else:
+            current_cols = base_cols
+            
+        tree["columns"] = tuple(current_cols)
+        
+        saved_widths = self.config.get(f"{mode}_COL_WIDTHS", {})
+        default_widths = {"V": 40, "No": 50, "Date": 90, "Drawing No.": 300, "Film Ident. No.": 120, "Film Location": 100, "Acc": 40, "Rej": 40, "Deg": 40, "Welder No": 100, "Remarks": 120, "Dwg_Sub": 200, "Welder_Sub": 100, "Mat_Sub": 100}
+        
+        for col in current_cols:
+            name_key = f"{mode}_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').replace('①', '').replace('②', '').replace('③', '').replace('④', '').replace('⑤', '').upper()}"
+            if col == "Drawing No.": name_key = f"{mode}_NAME_DWG"
+            elif col == "Film Ident. No.": name_key = f"{mode}_NAME_JOINT"
+            elif col == "Film Location": name_key = f"{mode}_NAME_LOC"
+            elif col == "Welder No": name_key = f"{mode}_NAME_WELDER"
+            elif col == "Acc": name_key = f"{mode}_NAME_ACC"
+            elif col == "Rej": name_key = f"{mode}_NAME_REJ"
+            elif col == "Dwg_Sub": display_text = "Dwg(Sub)"
+            elif col == "Welder_Sub": display_text = "Welder(Sub)"
+            elif col == "Mat_Sub": display_text = "Mat(Sub)"
+            else: name_key = None
+            
+            if col not in ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]:
+                display_text = self.config.get(name_key, col) if name_key else col
+                
+            tree.heading(col, text=display_text, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode=mode))
+            w = saved_widths.get(col, default_widths.get(col, 80))
+            tree.column(col, width=w, anchor='center', stretch=False)
+        
+        # 데이터가 이미 있다면 리프레시
+        data = self.rt_extracted_data if mode == "RT" else self.kogas_extracted_data
+        if data:
+            self.populate_preview(data, mode=mode, switch_tab=False)
 
     def _setup_pt_ui(self, parent):
         # [FORCE] Ensure parent (pt_mode_frame) allows expansion
@@ -2573,37 +2715,45 @@ class PMIReportApp:
         ttk.Button(btn_f, text="✨ 갑지 미리보기 업데이트", command=self._update_gapji_preview_current).pack(side='top', fill='x', padx=5)
 
     def _update_gapji_preview_current(self, event=None):
-        """Detect current mode and refresh Gapji preview. Triggered by tab change or button."""
+        """통합된 RT 탭 및 서브 미리보기 구조에 맞춰 갑지 미리보기 갱신"""
         try:
-            # 1. Determine Mode
+            tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
             mode = "PMI"
-            try:
-                tab_idx = self.mode_notebook.index("current")
-                if tab_idx == 1: mode = "RT"
-                elif tab_idx == 2: mode = "PT"
-                elif tab_idx == 3: mode = "PAUT"
-            except: pass
+            nb_inner = None
             
+            if "RT" in tab_text:
+                mode = self.rt_sub_mode.get()
+                nb_inner = getattr(self, 'rt_preview_nb', None)
+            elif "PT" in tab_text:
+                mode = "PT"
+                # PT는 기존 preview_notebooks 구조 사용 가능 여부 확인
+                if hasattr(self, 'preview_notebooks'): nb_inner = self.preview_notebooks.get("PT")
+            elif "PAUT" in tab_text:
+                mode = "PAUT"
+                if hasattr(self, 'preview_notebooks'): nb_inner = self.preview_notebooks.get("PAUT")
+            elif "PMI" in tab_text or "OES" in tab_text:
+                mode = "PMI"
+                if hasattr(self, 'preview_notebooks'): nb_inner = self.preview_notebooks.get("PMI")
+
             # 2. Logic for tab change event
             if event and event.widget:
                 try:
                     nb = event.widget
-                    tab_text = nb.tab(nb.select(), "text")
-                    if "갑지" in tab_text:
-                        if hasattr(self, 'preview_notebooks') and mode in self.preview_notebooks:
-                            self.preview_notebooks[mode].select(1)
-                            self._update_gapji_preview(mode)
-                    else:
-                        if hasattr(self, 'preview_notebooks') and mode in self.preview_notebooks:
-                            self.preview_notebooks[mode].select(0)
+                    inner_tab_text = nb.tab(nb.select(), "text")
+                    if "갑지" in inner_tab_text:
+                        if nb_inner: nb_inner.select(2) # [Standard, KOGAS, Gapji] -> Gapji is 2
+                        self._update_gapji_preview(mode)
+                    elif "미리보기" in inner_tab_text:
+                        if nb_inner:
+                            # 만약 서브 미리보기가 가스공사라면 1번, 아니면 0번
+                            target_idx = 1 if "가스공사" in inner_tab_text else 0
+                            nb_inner.select(target_idx)
                 except: pass
             else:
                 # Manual trigger (Button)
-                if hasattr(self, 'preview_notebooks') and mode in self.preview_notebooks:
-                    self.preview_notebooks[mode].select(1)
+                if nb_inner: nb_inner.select(2) # Force select Gapji tab
                 self._update_gapji_preview(mode)
         except Exception as e:
-            self.log(f"미리보기 업데이트 실패: {e}")
             self.log(f"미리보기 업데이트 실패: {e}")
 
     def _create_setting_grid(self, parent, context):
@@ -2924,64 +3074,36 @@ class PMIReportApp:
         self._setup_preview_sidebar(self.preview_tree, container, mode="PMI")
         tree_frame.pack(side="left", fill="both", expand=True)
 
-    def _create_rt_preview_ui(self, parent):
+    def _create_rt_preview_ui(self, parent, mode="RT"):
         container = tk.Frame(parent, background="#f9fafb")
         container.pack(fill='both', expand=True)
 
         # [NEW] File Info Header
         header_info = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
         header_info.pack(fill='x', pady=(0, 5))
-        tk.Label(header_info, textvariable=self.file_info_vars['RT'], background="#ffffff", 
+        tk.Label(header_info, textvariable=self.file_info_vars.get(mode, tk.StringVar()), background="#ffffff", 
                  foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
-
-        self.rt_display_cols = ["V", "No", "Date", "Drawing No.", "Film Ident. No.", "Film Location", "Acc", "Rej", "Deg", "① Crack", "② IP", "③ LF", "④ Slag", "⑤ Por", "⑥ U/C", "⑦ RUC", "⑧ BT", "⑨ TI", "⑩ CP", "⑪ RC", "⑫ Mis", "⑬ EP", "⑭ SD", "⑮ Oth", "Welder No", "Remarks"]
-        saved_widths = self.config.get("RT_COL_WIDTHS", {})
-        default_widths = {"V": 40, "No": 50, "Date": 90, "Drawing No.": 300, "Film Ident. No.": 120, "Film Location": 100, "Acc": 40, "Rej": 40, "Deg": 40, "Welder No": 100, "Remarks": 120}
 
         # Inner frame for horizontal/vertical scroll
         tree_frame = tk.Frame(container, background="#f9fafb")
-        self.rt_preview_tree = ttk.Treeview(tree_frame, columns=self.rt_display_cols, show='headings', height=10, selectmode='extended')
-        for col in self.rt_preview_tree["columns"]:
-            name_key = f"RT_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').replace('①', '').replace('②', '').replace('③', '').replace('④', '').replace('⑤', '').upper()}"
-            if col == "Drawing No.": name_key = "RT_NAME_DWG"
-            elif col == "Film Ident. No.": name_key = "RT_NAME_JOINT"
-            elif col == "Film Location": name_key = "RT_NAME_LOC"
-            elif col == "Welder No": name_key = "RT_NAME_WELDER"
-            elif col == "Acc": name_key = "RT_NAME_ACC"
-            elif col == "Rej": name_key = "RT_NAME_REJ"
-            elif col == "① Crack": name_key = "RT_NAME_D1"
-            elif col == "② IP": name_key = "RT_NAME_D2"
-            elif col == "③ LF": name_key = "RT_NAME_D3"
-            elif col == "④ Slag": name_key = "RT_NAME_D4"
-            elif col == "⑤ Por": name_key = "RT_NAME_D5"
-            elif col == "⑥ U/C": name_key = "RT_NAME_D6"
-            elif col == "⑦ RUC": name_key = "RT_NAME_D7"
-            elif col == "⑧ BT": name_key = "RT_NAME_D8"
-            elif col == "⑨ TI": name_key = "RT_NAME_D9"
-            elif col == "⑩ CP": name_key = "RT_NAME_D10"
-            elif col == "⑪ RC": name_key = "RT_NAME_D11"
-            elif col == "⑫ Mis": name_key = "RT_NAME_D12"
-            elif col == "⑬ EP": name_key = "RT_NAME_D13"
-            elif col == "⑭ SD": name_key = "RT_NAME_D14"
-            elif col == "⑮ Oth": name_key = "RT_NAME_D15"
-            else: name_key = None
-            
-            display_text = self.config.get(name_key, col) if name_key else col
-            self.rt_preview_tree.heading(col, text=display_text, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode="RT"))
-            w = saved_widths.get(col, default_widths.get(col, 80))
-            self.rt_preview_tree.column(col, width=w, anchor='center', stretch=False)
+        tree = ttk.Treeview(tree_frame, columns=[], show='headings', height=10, selectmode='extended')
+        if mode == "RT": self.rt_preview_tree = tree
+        else: self.kogas_preview_tree = tree
+
+        # [DYNAMIC] 가스공사 모드 여부에 따른 초기 컬럼 설정
+        self._update_rt_preview_columns(mode=mode)
         
-        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.rt_preview_tree.yview)
-        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.rt_preview_tree.xview)
-        self.rt_preview_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
         
-        self.rt_preview_tree.grid(row=0, column=0, sticky='nsew')
+        tree.grid(row=0, column=0, sticky='nsew')
         scroll_y.grid(row=0, column=1, sticky='ns')
         scroll_x.grid(row=1, column=0, sticky='ew')
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
 
-        self._setup_preview_sidebar(self.rt_preview_tree, container, mode="RT")
+        self._setup_preview_sidebar(tree, container, mode=mode)
         tree_frame.pack(side="left", fill="both", expand=True)
 
     def _setup_preview_sidebar(self, tree, container, mode):
@@ -3685,6 +3807,9 @@ class PMIReportApp:
         if mode == "RT":
             listbox = self.rt_date_listbox
             data = self.rt_extracted_data
+        elif mode == "KOGAS":
+            listbox = self.kogas_date_listbox
+            data = self.kogas_extracted_data
         elif mode == "PT":
             listbox = self.pt_date_listbox
             data = self.pt_extracted_data
@@ -3715,6 +3840,8 @@ class PMIReportApp:
             return (self.preview_tree, self.item_idx_map, self.extracted_data, self.column_keys)
         elif mode == "RT":
             return (self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data, self.rt_column_keys)
+        elif mode == "KOGAS":
+            return (self.kogas_preview_tree, self.kogas_item_idx_map, self.kogas_extracted_data, self.kogas_column_keys)
         elif mode == "PT":
             return (self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data, self.pt_column_keys)
         elif mode == "PAUT":
@@ -4527,6 +4654,10 @@ class PMIReportApp:
             tree = self.paut_preview_tree
             self.paut_item_idx_map = []
             idx_map = self.paut_item_idx_map
+        elif mode == "KOGAS":
+            tree = self.kogas_preview_tree
+            self.kogas_item_idx_map = []
+            idx_map = self.kogas_item_idx_map
         else:
             tree = self.preview_tree
             self.item_idx_map = []
@@ -4629,8 +4760,9 @@ class PMIReportApp:
             last_joint = curr_joint
             
             row_vals = []
-            if mode == "RT":
-                for k in self.rt_column_keys:
+            if mode == "RT" or mode == "KOGAS":
+                keys = self.kogas_column_keys if mode == "KOGAS" else self.rt_column_keys
+                for k in keys:
                     if k == "selected": row_vals.append(v_mark)
                     elif k == "Acc":
                         val = item.get("Acc", "")
@@ -5644,7 +5776,7 @@ class PMIReportApp:
                                 if re.search(r'<pageMargins\b[^>]*/>', tmpl_sheet):
                                     tmpl_sheet = re.sub(r'<pageMargins\b[^>]*/>', rep_pm, tmpl_sheet, count=1)
                                 else:
-                                    tmpl_sheet = tmpl_sheet.replace('</pageSetup>', '</pageSetup>' + rep_pm, 1)
+                                    tmpl_sheet = tmpl_sheet.replace('</pageSetup>', '</pageSetup>' + rep_pm)
                             # sheetData 주입 + 행 높이 보존
                             if fl_lower in processed_sheets:
                                 rc = processed_sheets[fl_lower]
@@ -5732,13 +5864,6 @@ class PMIReportApp:
             self.log(f"   ⚠️ [오류] 드로잉 수술 실패: {e}")
             traceback.print_exc()
 
-
-
-
-
-
-
-
     def calculate_rt_shots(self, size_str):
         """배관 구경을 분석하여 [표 1] 기준 촬영 매수 반환"""
         try:
@@ -5761,9 +5886,12 @@ class PMIReportApp:
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
         # 현재 활성 탭에 따른 모드 결정
         try:
-            tab_idx = self.mode_notebook.index("current") # Main notebook (PMI, RT, PT...)
-            if tab_idx == 1: mode = "RT"
-            elif tab_idx == 2: mode = "PT"
+            main_tab = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+            if "RT" in main_tab:
+                sub_tab = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
+                mode = "KOGAS" if "가스공사" in sub_tab else "RT"
+            elif "PT" in main_tab: mode = "PT"
+            elif "PAUT" in main_tab: mode = "PAUT"
             else: mode = "PMI"
         except: mode = "PMI"
 
@@ -5776,13 +5904,11 @@ class PMIReportApp:
         
         # [NEW] Extract date from filename
         fname = os.path.basename(target_file)
-        # More flexible regex for dates like 2024.03.05, 24.03.05, 24_03_05, 240305, etc.
         date_match = re.search(r'(\d{4}[-._]\d{2}[-._]\d{2}|\d{2}[-._]\d{2}[-._]\d{2}|\d{8}|\d{6})', fname)
         extracted_date = date_match.group(0) if date_match else ""
         
         # Standardize formatting
         if extracted_date:
-            # Remove separators like . or _
             clean_date = re.sub(r'[-._]', '', extracted_date)
             if len(clean_date) == 8:
                 extracted_date = f"{clean_date[:4]}-{clean_date[4:6]}-{clean_date[6:]}"
@@ -5834,6 +5960,24 @@ class PMIReportApp:
                     self.preview_tree.heading(c, text=header_txt, anchor='center', command=lambda _c=c: self.sort_by_column(_c, mode="PMI"))
                     self.preview_tree.column(c, width=w, anchor='center', stretch=False)
         
+        def _find_col(df, keywords, exclude=None):
+            for col in df.columns:
+                c_up = str(col).upper().strip()
+                if exclude and any(ex in c_up for ex in exclude): continue
+                if any(k == c_up for k in keywords): return col
+            for col in df.columns:
+                c_up = str(col).upper().strip()
+                if exclude and any(ex in c_up for ex in exclude): continue
+                if any(k in c_up for k in keywords):
+                    if "NI" in keywords and ("UNIT" in c_up or "LINE" in c_up): continue
+                    return col
+            return None
+
+        def _get_kw(k): 
+            if hasattr(self, 'rt_extract_mappings') and k in self.rt_extract_mappings:
+                return [x.strip().upper() for x in self.rt_extract_mappings[k].get().split(',')]
+            return []
+
         try:
             target_input = self.sequence_filter.get().strip()
             target_no_list = [x.strip() for x in target_input.replace(',', ' ').split() if target_input and x.strip()] if target_input else []
@@ -5843,11 +5987,12 @@ class PMIReportApp:
                     self.log(f"📄 시트 스캔: {sheet_name}")
                     try: temp_df = pd.read_excel(xls, sheet_name=sheet_name, header=None, nrows=50)
                     except: continue
+                    
                     header_idx = None
                     for i, row in temp_df.iterrows():
                         row_str = str(row.values).upper()
                         if mode == "RT":
-                            if "FILM" in row_str or "DEFECT" in row_str or "IQI" in row_str:
+                            if any(k in row_str for k in ["FILM", "DEFECT", "IQI", "순번", "용접부"]):
                                 header_idx = i; break
                         elif mode == "PT":
                             if (("LINE" in row_str or "ISO" in row_str or "DWG" in row_str) and ("JOINT" in row_str or "WELD" in row_str)):
@@ -5855,91 +6000,78 @@ class PMIReportApp:
                         else:
                             if ("CR" in row_str and "NI" in row_str) or ("CHROMIUM" in row_str):
                                 header_idx = i; break
+                    
                     if header_idx is None: continue
                     
                     df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
-                    
-                    # [NEW] [Refinement] Two-line header detection and merging
-                    if not df.empty and len(df) > 0:
-                        row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)])
-                        if any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
-                            self.log(f"   ℹ️ [자동보정] 두 줄 헤더 감지됨 (시트: {sheet_name})")
-                            new_cols = []
-                            for col, val in zip(df.columns, df.iloc[0]):
-                                c_txt = str(col) if pd.notna(col) and "Unnamed" not in str(col) else ""
-                                v_txt = str(val) if pd.notna(val) else ""
-                                new_cols.append(f"{c_txt} {v_txt}".strip())
-                            df.columns = new_cols
-                            df = df.iloc[1:].reset_index(drop=True)
+                    if df.empty: continue
 
-                def _find_col(df, keywords, exclude=None):
-                    # 1. 우선 정확히 일치하는 컬럼을 찾음
-                    for col in df.columns:
-                        c_up = str(col).upper().strip()
-                        if exclude and any(ex in c_up for ex in exclude): continue
-                        if any(k == c_up for k in keywords): return col
-                    # 2. 포함된 컬럼을 찾되, NI의 경우 UNIT 등 오진 가능성 차단
-                    for col in df.columns:
-                        c_up = str(col).upper().strip()
-                        if exclude and any(ex in c_up for ex in exclude): continue
-                        if any(k in c_up for k in keywords):
-                            if "NI" in keywords and ("UNIT" in c_up or "LINE" in c_up): continue
-                            return col
-                    return None
-                if mode == "RT":
-                    def _get_kw(k): return [x.strip().upper() for x in self.rt_extract_mappings[k].get().split(',')] if k in self.rt_extract_mappings else []
-                    col_no = _find_col(df, _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM"])
-                    col_dwg = _find_col(df, _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE"])
-                    col_joint = _find_col(df, _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT"])
-                    col_loc = _find_col(df, _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
-                    col_size = _find_col(df, _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
-                    col_welder = _find_col(df, _get_kw('Welder') or ["WELDER", "W/N"])
-                    col_remarks = _find_col(df, _get_kw('Remarks') or ["REMARKS", "REMARK", "비고"])
-                    col_date = _find_col(df, _get_kw('Date') or ["DATE", "검사일"])
-                    col_t = _find_col(df, _get_kw('T') or ["T", "THICK", "THK"])
-                    col_mat = _find_col(df, _get_kw('Mat') or ["MAT", "MATERIAL"])
-                    col_weld = _find_col(df, _get_kw('Weld') or ["WELD", "TYPE"])
-                    col_iqi = _find_col(df, _get_kw('IQI') or ["IQI"])
-                    col_sens = _find_col(df, _get_kw('Sens') or ["SENS", "SENSITIVITY"])
-                    col_den = _find_col(df, _get_kw('Den') or ["DEN", "DENSITY"])
-                    col_acc = _find_col(df, _get_kw('Acc') or ["ACC", "합격"])
-                    col_rej = _find_col(df, _get_kw('Rej') or ["REJ", "불합격"])
-                    col_deg = _find_col(df, _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
-                    col_result = _find_col(df, _get_kw('Result') or ["RESULT", "판정"])
-                    defect_cols = {f"D{i}": _find_col(df, [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"]) for i in range(1, 16)}
-                    defect_cols = {k: v for k, v in defect_cols.items() if v}
-                elif mode == "PT":
-                    col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
-                    col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
-                    col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
-                    if not col_joint:
-                        col_joint = _find_col(df, ["JOINT", "WELD"], exclude=["ISO", "LINE", "ITEM", "WPS", "REPORT", "DATE", "TYPE"])
-                    col_mat = _find_col(df, ["MAT", "MATERIAL", "재질", "CLASS", "M'TL"])
-                    col_size = _find_col(df, ["SIZE", "NPS", "DIA", "INCH", "관경", "ORIGIN", "DI ORIGIN"])
-                    col_thk = _find_col(df, ["THK", "THICK", "SCH", "두께"])
-                    col_welder = _find_col(df, ["WELDER", "ID", "용접사", "WELDER1"])
-                    col_wtype = _find_col(df, ["WELD TYPE", "WELDTYPE", "W.TYPE", "TYPE"], exclude=["JOINT"])
-                    col_result = _find_col(df, ["RESULT", "결과", "판정"])
+                    # [NEW] [Refinement] Two-line header detection and merging
+                    row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)])
+                    if any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
+                        self.log(f"   ℹ️ [자동보정] 두 줄 헤더 감지됨 (시트: {sheet_name})")
+                        new_cols = []
+                        for col, val in zip(df.columns, df.iloc[0]):
+                            c_txt = str(col) if pd.notna(col) and "Unnamed" not in str(col) else ""
+                            v_txt = str(val) if pd.notna(val) else ""
+                            new_cols.append(f"{c_txt} {v_txt}".strip())
+                        df.columns = new_cols
+                        df = df.iloc[1:].reset_index(drop=True)
+
+                    # --- Column Identification for THIS sheet ---
+                    if mode == "RT":
+                        col_no = _find_col(df, _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM", "순번"])
+                        col_dwg = _find_col(df, _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE", "도면", "파이프"])
+                        col_joint = _find_col(df, _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT", "용접부"])
+                        col_loc = _find_col(df, _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
+                        col_size = _find_col(df, _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
+                        col_welder = _find_col(df, _get_kw('Welder') or ["WELDER", "W/N"])
+                        col_remarks = _find_col(df, _get_kw('Remarks') or ["REMARKS", "REMARK", "비고"])
+                        col_date = _find_col(df, _get_kw('Date') or ["DATE", "검사일"])
+                        col_t = _find_col(df, _get_kw('T') or ["T", "THICK", "THK", "두께"])
+                        col_mat = _find_col(df, _get_kw('Mat') or ["MAT", "MATERIAL"])
+                        col_weld = _find_col(df, _get_kw('Weld') or ["WELD", "TYPE"])
+                        col_iqi = _find_col(df, _get_kw('IQI') or ["IQI"])
+                        col_sens = _find_col(df, _get_kw('Sens') or ["SENS", "SENSITIVITY"])
+                        col_den = _find_col(df, _get_kw('Den') or ["DEN", "DENSITY"])
+                        col_acc = _find_col(df, _get_kw('Acc') or ["ACC", "합격"])
+                        col_rej = _find_col(df, _get_kw('Rej') or ["REJ", "불합격"])
+                        col_deg = _find_col(df, _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
+                        col_result = _find_col(df, _get_kw('Result') or ["RESULT", "판정"])
+                        defect_cols = {f"D{i}": _find_col(df, [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"]) for i in range(1, 16)}
+                        defect_cols = {k: v for k, v in defect_cols.items() if v}
+                    elif mode == "PT":
+                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
+                        col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
+                        col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
+                        if not col_joint:
+                            col_joint = _find_col(df, ["JOINT", "WELD"], exclude=["ISO", "LINE", "ITEM", "WPS", "REPORT", "DATE", "TYPE"])
+                        col_mat = _find_col(df, ["MAT", "MATERIAL", "재질", "CLASS", "M'TL"])
+                        col_size = _find_col(df, ["SIZE", "NPS", "DIA", "INCH", "관경", "ORIGIN", "DI ORIGIN"])
+                        col_thk = _find_col(df, ["THK", "THICK", "SCH", "두께"])
+                        col_welder = _find_col(df, ["WELDER", "ID", "용접사", "WELDER1"])
+                        col_wtype = _find_col(df, ["WELD TYPE", "WELDTYPE", "W.TYPE", "TYPE"], exclude=["JOINT"])
+                        col_result = _find_col(df, ["RESULT", "결과", "판정"])
                     # Placeholder for Loc to maintain structure
-                    col_loc = None 
-                else:
-                    col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
-                    col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
-                    col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"])
-                    col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
-                    col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
-                    col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
-                    col_grade_orig = _find_col(df, ["GRADE", "MATERIAL", "SPEC", "TYPE"])
-                    
-                    # [DYNAMIC] Scan for dynamically added filter elements (e.g., C, P, S)
-                    custom_cols = {}
-                    if hasattr(self, 'element_filters') and self.element_filters:
-                        for f_item in self.element_filters:
-                            f_key = f_item['key'].get().strip()
-                            if f_key and f_key.upper() not in ["CR", "NI", "MO", "MN"]:
-                                c_found = _find_col(df, [f_key.upper()])
-                                if c_found is not None:
-                                    custom_cols[f_key] = c_found
+                        col_loc = None 
+                    else:
+                        col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
+                        col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
+                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"])
+                        col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
+                        col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
+                        col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
+                        col_grade_orig = _find_col(df, ["GRADE", "MATERIAL", "SPEC", "TYPE"])
+                        
+                        # [DYNAMIC] Scan for dynamically added filter elements (e.g., C, P, S)
+                        custom_cols = {}
+                        if hasattr(self, 'element_filters') and self.element_filters:
+                            for f_item in self.element_filters:
+                                f_key = f_item['key'].get().strip()
+                                if f_key and f_key.upper() not in ["CR", "NI", "MO", "MN"]:
+                                    c_found = _find_col(df, [f_key.upper()])
+                                    if c_found is not None:
+                                        custom_cols[f_key] = c_found
 
                     # [NEW] Forward-fill (Fill Down) for ISO and Joint
                     last_dwg = ""
@@ -5981,7 +6113,7 @@ class PMIReportApp:
                                 src_val = str(row[src_col]).strip() if src_col is not None else ""
                                 item_data[key] = src_val if src_val else ("1" if i <= num_shots else "")
 
-                            if self.rt_kogas_mode.get():
+                            if mode == "KOGAS":
                                 # [KOGAS GROUPING] Find existing item with same Joint to merge pipe info
                                 existing = next((x for x in all_extracted_data if x['Joint'] == curr_joint), None)
                                 if existing:
@@ -6018,40 +6150,40 @@ class PMIReportApp:
                                 for k in self.pt_column_keys:
                                     if k not in item_row and k != "selected": item_row[k] = ""
                                 all_extracted_data.append(item_row)
-                    else:
-                        # PMI-specific Row Data
-                        v_cr = self.to_float(row[col_cr])
-                        if v_cr > 0 or (v_raw_no != "" and v_raw_no != "nan"):
-                            v_ni = self.to_float(row[col_ni])
-                            v_mo = self.to_float(row[col_mo]) if col_mo is not None else 0.0
-                            v_mn = self.to_float(row[col_mn]) if col_mn is not None else 0.0
-                            orig_grade = str(row[col_grade_orig]).strip() if col_grade_orig is not None else ""
-                            
-                            final_grade = orig_grade
-                            if self.auto_verify.get():
-                                detected = self.check_material_grade({'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn})
-                                if detected: final_grade = detected
-                            if not final_grade or final_grade == "nan":
-                                final_grade = "SS316" if v_mo >= 1.5 else "SS304"
+                        else:
+                            # PMI-specific Row Data
+                            v_cr = self.to_float(row[col_cr])
+                            if v_cr > 0 or (v_raw_no != "" and v_raw_no != "nan"):
+                                v_ni = self.to_float(row[col_ni])
+                                v_mo = self.to_float(row[col_mo]) if col_mo is not None else 0.0
+                                v_mn = self.to_float(row[col_mn]) if col_mn is not None else 0.0
+                                orig_grade = str(row[col_grade_orig]).strip() if col_grade_orig is not None else ""
+                                
+                                final_grade = orig_grade
+                                if self.auto_verify.get():
+                                    detected = self.check_material_grade({'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn})
+                                    if detected: final_grade = detected
+                                if not final_grade or final_grade == "nan":
+                                    final_grade = "SS316" if v_mo >= 1.5 else "SS304"
 
-                            pmi_item = {
-                                'No': v_raw_no, 
-                                'Joint': curr_joint,
-                                'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
-                                'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
-                                'Grade': final_grade, 'Dwg': curr_dwg,
-                                'Date': extracted_date,
-                                'selected': True,
-                                'order_index': len(self.extracted_data) + len(all_extracted_data)
-                            }
-                            # Extract dynamically found elements
-                            for c_key, c_idx in custom_cols.items():
-                                pmi_item[c_key] = self.to_float(row[c_idx])
-                            # [NEW] 기존 수동 추가 컬럼 보존
-                            for k in self.column_keys:
-                                if k not in pmi_item and k != "selected":
-                                    pmi_item[k] = ""
-                            all_extracted_data.append(pmi_item)
+                                pmi_item = {
+                                    'No': v_raw_no, 
+                                    'Joint': curr_joint,
+                                    'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
+                                    'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
+                                    'Grade': final_grade, 'Dwg': curr_dwg,
+                                    'Date': extracted_date,
+                                    'selected': True,
+                                    'order_index': len(self.extracted_data) + len(all_extracted_data)
+                                }
+                                # Extract dynamically found elements
+                                for c_key, c_idx in custom_cols.items():
+                                    pmi_item[c_key] = self.to_float(row[c_idx])
+                                # [NEW] 기존 수동 추가 컬럼 보존
+                                for k in self.column_keys:
+                                    if k not in pmi_item and k != "selected":
+                                        pmi_item[k] = ""
+                                all_extracted_data.append(pmi_item)
                 self.progress['value'] = ((s_idx + 1) / len(xls.sheet_names)) * 50
 
             if not all_extracted_data:
@@ -6108,17 +6240,22 @@ class PMIReportApp:
             if mode == "RT":
                 self.rt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("RT")
-                self.sort_by_column("ISO Drawing No.", mode="RT") # Auto sort for RT
+                self.sort_by_column("Dwg", mode="RT") # Using internal key Dwg
                 total_count = len(self.rt_extracted_data)
+            elif mode == "KOGAS":
+                self.kogas_extracted_data.extend(all_extracted_data)
+                self.update_date_listbox("KOGAS")
+                self.sort_by_column("Dwg", mode="KOGAS")
+                total_count = len(self.kogas_extracted_data)
             elif mode == "PT":
                 self.pt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("PT")
-                self.sort_by_column("ISO Drawing No.", mode="PT") # Auto sort for PT
+                self.sort_by_column("Dwg", mode="PT") 
                 total_count = len(self.pt_extracted_data)
             else:
                 self.extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("PMI")
-                self.sort_by_column("ISO/DWG", mode="PMI") # Auto sort for PMI
+                self.sort_by_column("Dwg", mode="PMI")
                 total_count = len(self.extracted_data)
             
             self.progress['value'] = 100
@@ -6195,9 +6332,12 @@ class PMIReportApp:
 
         # 현재 활성 탭에 따른 모드 결정
         try:
-            tab_idx = self.mode_notebook.index("current")
-            if tab_idx == 1: mode = "RT"
-            elif tab_idx == 2: mode = "PT"
+            tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+            if "RT" in tab_text:
+                sub_tab = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
+                mode = "KOGAS" if "가스공사" in sub_tab else "RT"
+            elif "PT" in tab_text: mode = "PT"
+            elif "PAUT" in tab_text: mode = "PAUT"
             else: mode = "PMI"
         except: mode = "PMI"
 
@@ -6205,6 +6345,10 @@ class PMIReportApp:
             target_file = self.rt_target_file_path.get()
             template_path = self.rt_template_file_path.get()
             data = self.rt_extracted_data
+        elif mode == "KOGAS":
+            target_file = self.kogas_target_file_path.get()
+            template_path = self.kogas_template_file_path.get()
+            data = self.kogas_extracted_data
         elif mode == "PT":
             target_file = self.pt_target_file_path.get()
             template_path = self.pt_template_file_path.get()
@@ -6232,7 +6376,10 @@ class PMIReportApp:
         if not data:
             if not self.extract_only(show_msg=False): return
             # Re-fetch data after extraction
-            data = self.pt_extracted_data if mode == "PT" else (self.rt_extracted_data if mode == "RT" else self.extracted_data)
+            if mode == "PT": data = self.pt_extracted_data
+            elif mode == "RT": data = self.rt_extracted_data
+            elif mode == "KOGAS": data = self.kogas_extracted_data
+            else: data = self.extracted_data
             
         # [NEW] 체크된 항목만 필터링 (기본값은 True)
         final_list = [d for d in data if d.get('selected', True) and d.get('date_filtered', True)]
@@ -6241,7 +6388,9 @@ class PMIReportApp:
             return
 
         if mode == "RT":
-            self._run_rt_process(final_list, template_path)
+            self._run_rt_process(final_list, template_path, mode="RT")
+        elif mode == "KOGAS":
+            self._run_rt_process(final_list, template_path, mode="KOGAS")
         elif mode == "PT":
             self._run_pt_process(final_list, template_path)
         else:
