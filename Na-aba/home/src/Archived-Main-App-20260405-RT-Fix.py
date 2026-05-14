@@ -230,6 +230,7 @@ class PMIReportApp:
         self.rt_item_idx_map = []   # [NEW] Missing for RT
         self.pt_item_idx_map = []
         self.paut_item_idx_map = [] 
+        self.kogas_item_idx_map = []
         
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
@@ -243,6 +244,7 @@ class PMIReportApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.rt_date_listbox = None
         self.paut_date_listbox = None
+        self.kogas_date_listbox = None
 
         # [NEW] Add traces for Template-Linked Config Auto-Load
         self.rt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.rt_template_file_path.get(), "RT"))
@@ -1613,12 +1615,37 @@ class PMIReportApp:
             "Dwg_Sub": 200, "Welder_Sub": 100, "Mat_Sub": 100
         }
         
+        # [NEW] 내부 컬럼 ID와 설정 Key(rt_items 정의) 간의 맵핑
+        key_map = {
+            "T": "THK", "Remarks": "REM", "Result": "RES"
+        }
+        
         for col in current_cols:
-            name_key = f"{mode}_NAME_{col.upper()}"
+            suffix = key_map.get(col, col.upper())
+            name_key = f"{mode}_NAME_{suffix}"
             if col == "selected": name_key = None
             
+            display_text = None
+            if name_key:
+                # 1. 현재 UI 입력값 확인 (최우선)
+                if name_key in self.setting_vars:
+                    display_text = self.setting_vars[name_key].get()
+                
+                # 2. 설정 파일(config) 확인
+                if not display_text:
+                    display_text = self.config.get(name_key)
+                
+                # 3. 보조 키 형식 확인 (소문자 등 대비)
+                if not display_text:
+                    alt_key = f"{mode}_NAME_{col}"
+                    if alt_key in self.setting_vars:
+                        display_text = self.setting_vars[alt_key].get()
+                    else:
+                        display_text = self.config.get(alt_key)
+
             fallback_name = default_names.get(col, col)
-            display_text = self.config.get(name_key, fallback_name) if name_key else fallback_name
+            if not display_text:
+                display_text = fallback_name
                 
             tree.heading(col, text=display_text, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode=mode))
             w = saved_widths.get(col, default_widths.get(col, 80))
@@ -3325,6 +3352,7 @@ class PMIReportApp:
         if mode == "RT": self.rt_date_listbox = listbox
         elif mode == "PT": self.pt_date_listbox = listbox
         elif mode == "PAUT": self.paut_date_listbox = listbox
+        elif mode == "KOGAS": self.kogas_date_listbox = listbox
         else: self.date_listbox = listbox
         
         def _toggle_date(event, lb=listbox):
@@ -4586,9 +4614,9 @@ class PMIReportApp:
                     row["ISO/DWG"] = item.get('Dwg', '')
                     row["Joint No"] = item.get('Joint', '')
                     row["Test Location"] = item.get('Loc', '')
-                    row["Ni"] = f"{self.to_float(item.get('Ni', 0)):.2f}%"
-                    row["Cr"] = f"{self.to_float(item.get('Cr', 0)):.2f}%"
-                    row["Mo"] = f"{self.to_float(item.get('Mo', 0)):.2f}%"
+                    row["Ni"] = round(self.to_float(item.get('Ni', 0)), 2)
+                    row["Cr"] = round(self.to_float(item.get('Cr', 0)), 2)
+                    row["Mo"] = round(self.to_float(item.get('Mo', 0)), 2)
                     row["Grade"] = item.get('Grade', '')
                 else:
                     # Generic mapping for other modes
@@ -4732,9 +4760,8 @@ class PMIReportApp:
         target_tree = tree_map.get(mode)
         if target_tree:
             for c in target_tree["columns"]:
-                clean_text = c.replace("▲ ", "").replace("▼ ", "")
-                # identifier 가 key_map에 기술된 'ST', 'V' 등인 경우와 Dwg 등인 경우 혼재하므로
-                # heading text 자체를 조회해서 쓰지 않고 identifier 기반으로 prefix 추가
+                current_text = target_tree.heading(c).get("text", c)
+                clean_text = current_text.replace("▲ ", "").replace("▼ ", "")
                 prefix = ""
                 if c == col:
                     prefix = "▼ " if sort_rev else "▲ "
@@ -4908,7 +4935,7 @@ class PMIReportApp:
                     if k == "_status": row_vals.append(st_mark)
                     elif k == "selected": row_vals.append(v_mark)
                     elif k in ["Ni", "Cr", "Mo", "Mn"]:
-                        row_vals.append(f"{self.to_float(item.get(k, 0)):.2f}%")
+                        row_vals.append(f"{self.to_float(item.get(k, 0)):.2f}")
                     else:
                         val = str(item.get(k, "")).strip()
                         if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
@@ -5990,6 +6017,7 @@ class PMIReportApp:
 
     def extract_only(self, show_msg=True):
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
+        self.save_settings() # [FIX] UI 설정(컬럼명 등)을 즉시 반영하여 리셋 방지
         # 현재 활성 탭에 따른 모드 결정
         try:
             main_tab = self.mode_notebook.tab(self.mode_notebook.select(), "text")
@@ -6004,7 +6032,16 @@ class PMIReportApp:
             self.log(f"⚠️ 모드 판별 오류: {e}")
             mode = "PMI"
 
-        target_file = self.pt_target_file_path.get() if mode == "PT" else (self.rt_target_file_path.get() if mode == "RT" else self.target_file_path.get())
+        if mode == "PT":
+            target_file = self.pt_target_file_path.get()
+        elif mode == "PAUT":
+            target_file = self.paut_target_file_path.get()
+        elif mode == "RT":
+            target_file = self.rt_target_file_path.get()
+        elif mode == "KOGAS":
+            target_file = self.kogas_target_file_path.get()
+        else:
+            target_file = self.target_file_path.get()
         if not target_file:
             messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일을 선택해주세요.")
             return False
@@ -6098,57 +6135,95 @@ class PMIReportApp:
                     except: continue
                     
                     header_idx = None
-                    for i, row in temp_df.iterrows():
-                        row_str = str(row.values).upper()
-                        if mode == "RT":
-                            if any(k in row_str for k in ["FILM", "DEFECT", "IQI", "순번", "용접부"]):
-                                header_idx = i; break
-                        elif mode == "PT":
-                            if (("LINE" in row_str or "ISO" in row_str or "DWG" in row_str) and ("JOINT" in row_str or "WELD" in row_str)):
-                                header_idx = i; break
-                        else:
-                            if ("CR" in row_str and "NI" in row_str) or ("CHROMIUM" in row_str):
-                                header_idx = i; break
+                    is_fixed_range = False
+                    # [NEW] KOGAS 고정 영역 처리 (A9:AB13 헤더, A14:AB25 데이터)
+                    if mode == "KOGAS":
+                        header_idx = 8 # Excel Row 9
+                        is_fixed_range = True
+                    else:
+                        for i, row in temp_df.iterrows():
+                            row_str = str(row.values).upper()
+                            if mode == "RT":
+                                if any(k in row_str for k in ["FILM", "DEFECT", "IQI", "순번", "용접부"]):
+                                    header_idx = i; break
+                            elif mode == "PT":
+                                if (("LINE" in row_str or "ISO" in row_str or "DWG" in row_str) and ("JOINT" in row_str or "WELD" in row_str)):
+                                    header_idx = i; break
+                            else:
+                                if ("CR" in row_str and "NI" in row_str) or ("CHROMIUM" in row_str):
+                                    header_idx = i; break
                     
                     if header_idx is None: continue
                     
                     df = pd.read_excel(xls, sheet_name=sheet_name, header=header_idx)
                     if df.empty: continue
 
-                    # [NEW] [Refinement] Two-line header detection and merging
-                    row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)])
-                    if any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
-                        self.log(f"   ℹ️ [자동보정] 두 줄 헤더 감지됨 (시트: {sheet_name})")
+                    if is_fixed_range:
+                        # [KOGAS] 9~13행 헤더 병합 (df.columns + df.iloc[0:3])
                         new_cols = []
-                        for col, val in zip(df.columns, df.iloc[0]):
-                            c_txt = str(col) if pd.notna(col) and "Unnamed" not in str(col) else ""
-                            v_txt = str(val) if pd.notna(val) else ""
-                            new_cols.append(f"{c_txt} {v_txt}".strip())
+                        for col_idx in range(len(df.columns)):
+                            parts = [str(df.columns[col_idx])]
+                            for r_idx in range(0, 4): # 10, 11, 12, 13행
+                                val = df.iloc[r_idx, col_idx]
+                                if pd.notna(val) and "UNNAMED" not in str(val).upper():
+                                    parts.append(str(val))
+                            new_cols.append(" ".join(parts).upper())
                         df.columns = new_cols
-                        df = df.iloc[1:].reset_index(drop=True)
+                        # [KOGAS] 14~25행 데이터 추출 (인덱스 4~15)
+                        df = df.iloc[4:16].reset_index(drop=True)
+                    else:
+                        # [STANDARD] 기존 자동 보정 로직 (두 줄 헤더 등)
+                        row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)])
+                        if any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
+                            self.log(f"   ℹ️ [자동보정] 두 줄 헤더 감지됨 (시트: {sheet_name})")
+                            new_cols = []
+                            for col, val in zip(df.columns, df.iloc[0]):
+                                c_txt = str(col) if pd.notna(col) and "Unnamed" not in str(col) else ""
+                                v_txt = str(val) if pd.notna(val) else ""
+                                new_cols.append(f"{c_txt} {v_txt}".strip())
+                            df.columns = new_cols
+                            df = df.iloc[1:].reset_index(drop=True)
 
                     # --- Column Identification for THIS sheet ---
-                    if mode == "RT":
-                        col_no = _find_col(df, _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM", "순번"])
-                        col_dwg = _find_col(df, _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE", "도면", "파이프"])
-                        col_joint = _find_col(df, _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT", "용접부"])
-                        col_loc = _find_col(df, _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
-                        col_size = _find_col(df, _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
-                        col_welder = _find_col(df, _get_kw('Welder') or ["WELDER", "W/N"])
-                        col_remarks = _find_col(df, _get_kw('Remarks') or ["REMARKS", "REMARK", "비고"])
-                        col_date = _find_col(df, _get_kw('Date') or ["DATE", "검사일"])
-                        col_t = _find_col(df, _get_kw('T') or ["T", "THICK", "THK", "두께"])
-                        col_mat = _find_col(df, _get_kw('Mat') or ["MAT", "MATERIAL"])
-                        col_weld = _find_col(df, _get_kw('Weld') or ["WELD", "TYPE"])
-                        col_iqi = _find_col(df, _get_kw('IQI') or ["IQI"])
-                        col_sens = _find_col(df, _get_kw('Sens') or ["SENS", "SENSITIVITY"])
-                        col_den = _find_col(df, _get_kw('Den') or ["DEN", "DENSITY"])
-                        col_acc = _find_col(df, _get_kw('Acc') or ["ACC", "합격"])
-                        col_rej = _find_col(df, _get_kw('Rej') or ["REJ", "불합격"])
-                        col_deg = _find_col(df, _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
-                        col_result = _find_col(df, _get_kw('Result') or ["RESULT", "판정"])
-                        defect_cols = {f"D{i}": _find_col(df, [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"]) for i in range(1, 16)}
+                    if mode in ["RT", "KOGAS"]:
+                        def _get_col(config_key, search_keywords):
+                            c_idx_str = str(self.config.get(config_key, "")).strip()
+                            if c_idx_str:
+                                try:
+                                    idx = self.col_to_num(c_idx_str)
+                                    if 1 <= idx <= len(df.columns):
+                                        return df.columns[idx - 1]
+                                except: pass
+                            return _find_col(df, search_keywords)
+
+                        col_no = _get_col(f"{mode}_COL_NO", _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM", "순번"])
+                        col_dwg = _get_col(f"{mode}_COL_DWG", _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE", "도면", "파이프"])
+                        col_joint = _get_col(f"{mode}_COL_JOINT", _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT", "용접부"])
+                        col_loc = _get_col(f"{mode}_COL_LOC", _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
+                        col_size = _get_col(f"{mode}_COL_SIZE", _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
+                        col_welder = _get_col(f"{mode}_COL_WELDER", _get_kw('Welder') or ["WELDER", "W/N"])
+                        col_remarks = _get_col(f"{mode}_COL_REM", _get_kw('Remarks') or ["REMARKS", "REMARK", "비고"])
+                        col_date = _get_col(f"{mode}_COL_DATE", _get_kw('Date') or ["DATE", "검사일"])
+                        col_t = _get_col(f"{mode}_COL_THK", _get_kw('T') or ["T", "THICK", "THK", "두께"])
+                        col_mat = _get_col(f"{mode}_COL_MAT", _get_kw('Mat') or ["MAT", "MATERIAL"])
+                        col_weld = _get_col(f"{mode}_COL_WELD", _get_kw('Weld') or ["WELD", "TYPE"])
+                        col_iqi = _get_col(f"{mode}_COL_IQI", _get_kw('IQI') or ["IQI"])
+                        col_sens = _get_col(f"{mode}_COL_SENS", _get_kw('Sens') or ["SENS", "SENSITIVITY"])
+                        col_den = _get_col(f"{mode}_COL_DEN", _get_kw('Den') or ["DEN", "DENSITY"])
+                        col_acc = _get_col(f"{mode}_COL_ACC", _get_kw('Acc') or ["ACC", "합격"])
+                        col_rej = _get_col(f"{mode}_COL_REJ", _get_kw('Rej') or ["REJ", "불합격"])
+                        col_deg = _get_col(f"{mode}_COL_DEG", _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
+                        col_result = _get_col(f"{mode}_COL_RES", _get_kw('Result') or ["RESULT", "판정"])
+                        
+                        defect_cols = {}
+                        for i in range(1, 16):
+                            defect_cols[f"D{i}"] = _get_col(f"{mode}_COL_D{i}", [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"])
                         defect_cols = {k: v for k, v in defect_cols.items() if v}
+
+                        # [NEW] KOGAS Fallback (B column for Joint, E column for Size) ONLY if not found
+                        if mode == "KOGAS":
+                            if col_joint is None and len(df.columns) > 1: col_joint = df.columns[1]
+                            if col_size is None and len(df.columns) > 4: col_size = df.columns[4]
                     elif mode == "PT":
                         col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
                         col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
@@ -6220,12 +6295,15 @@ class PMIReportApp:
                         if curr_joint and curr_joint != "nan": last_joint = curr_joint
                         elif not curr_joint or curr_joint == "nan": curr_joint = v_raw_no
 
-                        if mode == "RT":
-                            size_val = str(row[col_size]).strip() if col_size is not None else ""
+                        if mode in ["RT", "KOGAS"]:
+                            raw_size = str(row[col_size]).strip() if col_size is not None else ""
+                            # [NEW] Extract first numeric part (e.g. 300 from 300A)
+                            s_match = re.search(r"(\d+\.?\d*)", raw_size)
+                            size_val = s_match.group(1) if s_match else raw_size
+                            
                             num_shots = self.calculate_rt_shots(size_val)
                             
                             raw_welder = str(row[col_welder]).strip() if col_welder is not None else ""
-                            # [RULE] 용접사 번호는 뒤의 3자리만 추출
                             v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
 
                             item_data = {
@@ -6255,30 +6333,27 @@ class PMIReportApp:
                                 src_val = str(row[src_col]).strip() if src_col is not None else ""
                                 item_data[key] = src_val if src_val else ("1" if i <= num_shots else "")
 
-                            if mode == "KOGAS":
-                                # [KOGAS GROUPING] Find existing item with same Joint to merge pipe info
-                                existing = next((x for x in all_extracted_data if x['Joint'] == curr_joint), None)
-                                if existing:
-                                    existing['Dwg_Sub'] = curr_dwg
-                                    existing['Welder_Sub'] = item_data['Welder']
-                                    existing['Mat_Sub'] = item_data['Mat']
-                                    # RT Results usually stick to the first row's data in Kogas
-                                    continue 
-                                else:
-                                    item_data['Dwg_Sub'] = "" # Initialize Sub fields
-                                    item_data['Welder_Sub'] = ""
-                                    item_data['Mat_Sub'] = ""
-                                    all_extracted_data.append(item_data)
-                            else:
-                                # [STANDARD MODE] Row splitting by shot count
+                            # [REFINED] Row splitting for both RT and KOGAS
+                            # Based on user request: 1-2, 2-3, ... sequence
+                            if num_shots > 1:
                                 for shot_idx in range(1, num_shots + 1):
                                     shot_item = item_data.copy()
                                     shot_item['Loc'] = f"{shot_idx}-{(shot_idx % num_shots) + 1}"
-                                    # Reset D-results for each shot in standard mode normalization
+                                    # Reset D-results for each shot in standard normalization
                                     for i in range(1, 16):
                                         key = f"D{i}"; c = defect_cols.get(key); val = str(row[c]).strip() if c is not None else ""
                                         shot_item[key] = "√" if val and val.lower() in ["v", "x", "o", "1", "√"] else ""
+                                    
+                                    if mode == "KOGAS":
+                                        # KOGAS still maintains some sub-fields if needed
+                                        shot_item['Dwg_Sub'] = ""
+                                        shot_item['Welder_Sub'] = ""
+                                        shot_item['Mat_Sub'] = ""
+                                    
                                     all_extracted_data.append(shot_item)
+                            else:
+                                # Single shot or grouping fallback
+                                all_extracted_data.append(item_data)
                         elif mode == "PT":
                             res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
                             if any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"]):
