@@ -235,6 +235,7 @@ class PMIReportApp:
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
         self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.kogas_column_keys = self.rt_column_keys + ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"]
         
@@ -3711,9 +3712,11 @@ class PMIReportApp:
         self.ctx_menu.post(event.x_root, event.y_root)
 
     def manage_columns(self, mode="PMI"):
-        """미리보기에서 표시할 컬럼을 동적으로 관리하는 다이얼로그 (모든 모드 지원)"""
+        """프로그램의 각 모드별 미리보기 컬럼 보이기/숨기기 관리"""
         if mode == "RT":
             tree, idx_map, data, keys_attr = self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data, "rt_column_keys"
+        elif mode == "KOGAS":
+            tree, idx_map, data, keys_attr = self.kogas_preview_tree, self.kogas_item_idx_map, self.kogas_extracted_data, "kogas_column_keys"
         elif mode == "PT":
             tree, idx_map, data, keys_attr = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data, "pt_column_keys"
         elif mode == "PAUT":
@@ -6260,6 +6263,7 @@ class PMIReportApp:
                     # [NEW] Forward-fill (Fill Down) for ISO and Joint
                     last_dwg = ""
                     last_joint = ""
+                    last_date = ""
 
                     def clean_v(v):
                         if pd.isna(v): return ""
@@ -6271,50 +6275,182 @@ class PMIReportApp:
                         except: pass
                         return str(v).strip()
 
-                    for _, row in df.iterrows():
-                        # [FIX] 순번(No) 정규화 적용
-                        v_raw_no = clean_v(row[col_no]) if col_no is not None else str(_+1)
-                        if target_no_list and v_raw_no not in target_no_list: continue
-                        
-                        # [NEW] Keyword Filter Logic (Improved with numeric normalization)
+                if mode == "KOGAS":
+                    # ===== 가스공사 모드: 2개 행을 1개 Joint로 페어링 =====
+                    num_rows = len(df)
+                    r_idx = 0
+                    while r_idx < num_rows:
+                        row_top = df.iloc[r_idx]
+                        row_bot = df.iloc[r_idx + 1] if (r_idx + 1 < num_rows) else None
+
+                        # 1. 순번 (No)
+                        v_raw_no = clean_v(row_top[col_no]) if col_no is not None else str((r_idx // 2) + 1)
+                        if not v_raw_no and row_bot is not None and col_no is not None:
+                            v_raw_no = clean_v(row_bot[col_no])
+                        if not v_raw_no or v_raw_no == 'nan':
+                            v_raw_no = str((r_idx // 2) + 1)
+
+                        if target_no_list and v_raw_no not in target_no_list:
+                            r_idx += 2
+                            continue
+
+                        # 키워드 필터링
                         extract_key = self.rt_extract_keyword.get().strip().lower()
                         if extract_key:
-                            # 모든 셀 값을 정규화하여 합침 (1.0 -> 1)
+                            top_vals = [clean_v(v).lower() for v in row_top.values if pd.notna(v)]
+                            bot_vals = [clean_v(v).lower() for v in row_bot.values if pd.notna(v)] if row_bot is not None else []
+                            row_str = ' '.join(top_vals + bot_vals)
+                            if extract_key not in row_str:
+                                r_idx += 2
+                                continue
+
+                        # 2. 도면번호 (Dwg) 및 Dwg_Sub
+                        curr_dwg = str(row_top[col_dwg]).strip() if col_dwg is not None else ''
+                        if (not curr_dwg or curr_dwg == 'nan') and last_dwg: curr_dwg = last_dwg
+                        if curr_dwg and curr_dwg != 'nan': last_dwg = curr_dwg
+
+                        curr_dwg_sub = ''
+                        if row_bot is not None and col_dwg is not None:
+                            curr_dwg_sub = str(row_bot[col_dwg]).strip()
+                        if not curr_dwg_sub or curr_dwg_sub == 'nan':
+                            curr_dwg_sub = curr_dwg
+
+                        # 3. 공동 (Joint)
+                        curr_joint = str(row_top[col_joint]).strip() if col_joint is not None else ''
+                        if (not curr_joint or curr_joint == 'nan') and last_joint: curr_joint = last_joint
+                        if curr_joint and curr_joint != 'nan': last_joint = curr_joint
+                        elif not curr_joint or curr_joint == 'nan': curr_joint = v_raw_no
+
+                        # 4. 일자 (Date)
+                        curr_date = clean_v(row_top[col_date]) if col_date is not None else ''
+                        if (not curr_date or curr_date.lower() == 'nan') and last_date: curr_date = last_date
+                        if curr_date and curr_date.lower() != 'nan': last_date = curr_date
+                        elif not curr_date or curr_date.lower() == 'nan': curr_date = extracted_date if extracted_date else ''
+
+                        # 5. 규격 (Size) 및 촬영 매수 (Shots)
+                        raw_size = str(row_top[col_size]).strip() if col_size is not None else ''
+                        s_match = re.search(r'(\d+\.?\d*)', raw_size)
+                        size_val = s_match.group(1) if s_match else raw_size
+                        num_shots = self.calculate_rt_shots(size_val)
+
+                        # 6. 용접사 (Welder) 및 Welder_Sub
+                        raw_welder = str(row_top[col_welder]).strip() if col_welder is not None else ''
+                        v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
+
+                        raw_welder_sub = ''
+                        if row_bot is not None and col_welder is not None:
+                            raw_welder_sub = str(row_bot[col_welder]).strip()
+                        v_welder_sub = raw_welder_sub[-3:] if len(raw_welder_sub) > 3 else raw_welder_sub
+                        if not v_welder_sub or v_welder_sub == 'nan':
+                            v_welder_sub = v_welder
+
+                        # 7. 재질 (Mat) 및 Mat_Sub
+                        raw_mat = clean_v(row_top[col_mat]) if col_mat is not None else ''
+                        raw_mat_sub = ''
+                        if row_bot is not None and col_mat is not None:
+                            raw_mat_sub = clean_v(row_bot[col_mat])
+                        if not raw_mat_sub or raw_mat_sub == 'nan':
+                            raw_mat_sub = raw_mat
+
+                        # 8. 두께 (T)
+                        raw_t = clean_v(row_top[col_t]) if col_t is not None else ''
+
+                        # 9. 위치 (Loc) - 촬영 위치 추출 추가!
+                        v_loc = clean_v(row_top[col_loc]) if col_loc is not None else ''
+                        if not v_loc or v_loc == 'nan':
+                            v_loc = '-'
+
+                        item_data = {
+                            'No': v_raw_no, 'Date': curr_date,
+                            'Dwg': curr_dwg, 'Dwg_Sub': curr_dwg_sub,
+                            'Joint': curr_joint, 'Loc': v_loc,
+                            'Acc': clean_v(row_top[col_acc]) if col_acc is not None else '',
+                            'Rej': clean_v(row_top[col_rej]) if col_rej is not None else '',
+                            'Deg': clean_v(row_top[col_deg]) if col_deg is not None else '',
+                            'Welder': v_welder, 'Welder_Sub': v_welder_sub,
+                            'Remarks': clean_v(row_top[col_remarks]) if col_remarks is not None else '',
+                            'T': raw_t,
+                            'Mat': raw_mat, 'Mat_Sub': raw_mat_sub,
+                            'Weld': clean_v(row_top[col_weld]) if col_weld is not None else '',
+                            'IQI': clean_v(row_top[col_iqi]) if col_iqi is not None else '',
+                            'Sens': clean_v(row_top[col_sens]) if col_sens is not None else '',
+                            'Den': clean_v(row_top[col_den]) if col_den is not None else '',
+                            'Result': clean_v(row_top[col_result]) if col_result is not None else 'ACC',
+                            'Size': size_val, 'num_shots': num_shots,
+                            'selected': True, 'order_index': len(self.rt_extracted_data) + len(all_extracted_data),
+                            '_src': {
+                                'sheet': sheet_name,
+                                'row': r_idx + header_idx + 2,
+                                'col_result': list(df.columns).index(col_result) + 1 if col_result is not None else None,
+                                'col_remarks': list(df.columns).index(col_remarks) + 1 if col_remarks is not None else None,
+                                'col_acc': list(df.columns).index(col_acc) + 1 if col_acc is not None else None,
+                                'col_rej': list(df.columns).index(col_rej) + 1 if col_rej is not None else None,
+                                'col_defects': {k: list(df.columns).index(v) + 1 for k, v in defect_cols.items()}
+                            }
+                        }
+                        # Defects
+                        for i in range(1, 16):
+                            key = f'D{i}'; src_col = defect_cols.get(key)
+                            src_val = str(row_top[src_col]).strip() if src_col is not None else ''
+                            item_data[key] = src_val if src_val else ('1' if i <= num_shots else '')
+
+                        all_extracted_data.append(item_data)
+                        r_idx += 2
+
+                else:
+                    # ===== 표준 모드 (RT, PT, PMI) =====
+                    for _, row in df.iterrows():
+                        v_raw_no = clean_v(row[col_no]) if col_no is not None else str(_+1)
+                        if target_no_list and v_raw_no not in target_no_list: continue
+
+                        extract_key = self.rt_extract_keyword.get().strip().lower()
+                        if extract_key:
                             row_vals = [clean_v(v).lower() for v in row.values if pd.notna(v)]
-                            row_str = " ".join(row_vals)
+                            row_str = ' '.join(row_vals)
                             if extract_key not in row_str:
                                 continue
-                        
-                        # [NEW] Common Fill-down Logic
-                        curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
-                        if (not curr_dwg or curr_dwg == "nan") and last_dwg: curr_dwg = last_dwg
-                        if curr_dwg and curr_dwg != "nan": last_dwg = curr_dwg
 
-                        curr_joint = str(row[col_joint]).strip() if col_joint is not None else ""
-                        if (not curr_joint or curr_joint == "nan") and last_joint: curr_joint = last_joint
-                        if curr_joint and curr_joint != "nan": last_joint = curr_joint
-                        elif not curr_joint or curr_joint == "nan": curr_joint = v_raw_no
+                        curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ''
+                        if (not curr_dwg or curr_dwg == 'nan') and last_dwg: curr_dwg = last_dwg
+                        if curr_dwg and curr_dwg != 'nan': last_dwg = curr_dwg
 
-                        if mode in ["RT", "KOGAS"]:
-                            raw_size = str(row[col_size]).strip() if col_size is not None else ""
-                            # [NEW] Extract first numeric part (e.g. 300 from 300A)
-                            s_match = re.search(r"(\d+\.?\d*)", raw_size)
+                        curr_joint = str(row[col_joint]).strip() if col_joint is not None else ''
+                        if (not curr_joint or curr_joint == 'nan') and last_joint: curr_joint = last_joint
+                        if curr_joint and curr_joint != 'nan': last_joint = curr_joint
+                        elif not curr_joint or curr_joint == 'nan': curr_joint = v_raw_no
+
+                        curr_date = clean_v(row[col_date]) if col_date is not None else ''
+                        if (not curr_date or curr_date.lower() == 'nan') and last_date: curr_date = last_date
+                        if curr_date and curr_date.lower() != 'nan': last_date = curr_date
+                        elif not curr_date or curr_date.lower() == 'nan': curr_date = extracted_date if extracted_date else ''
+
+                        if mode == 'RT':
+                            raw_size = str(row[col_size]).strip() if col_size is not None else ''
+                            s_match = re.search(r'(\d+\.?\d*)', raw_size)
                             size_val = s_match.group(1) if s_match else raw_size
-                            
+
                             num_shots = self.calculate_rt_shots(size_val)
-                            
-                            raw_welder = str(row[col_welder]).strip() if col_welder is not None else ""
+
+                            raw_welder = str(row[col_welder]).strip() if col_welder is not None else ''
                             v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
 
+                            v_date = curr_date
+
                             item_data = {
-                                'No': v_raw_no, 'Date': str(row[col_date]).strip() if col_date is not None else (extracted_date if extracted_date else ""),
+                                'No': v_raw_no, 'Date': v_date,
                                 'Dwg': curr_dwg, 'Joint': curr_joint, 'Loc': '-',
-                                'Acc': str(row[col_acc]).strip() if col_acc is not None else "", 'Rej': str(row[col_rej]).strip() if col_rej is not None else "",
-                                'Deg': str(row[col_deg]).strip() if col_deg is not None else "", 'Welder': v_welder,
-                                'Remarks': str(row[col_remarks]).strip() if col_remarks is not None else "", 'T': str(row[col_t]).strip() if col_t is not None else "",
-                                'Mat': str(row[col_mat]).strip() if col_mat is not None else "", 'Weld': str(row[col_weld]).strip() if col_weld is not None else "",
-                                'IQI': str(row[col_iqi]).strip() if col_iqi is not None else "", 'Sens': str(row[col_sens]).strip() if col_sens is not None else "",
-                                'Den': str(row[col_den]).strip() if col_den is not None else "", 'Result': str(row[col_result]).strip() if col_result is not None else "ACC",
+                                'Acc': clean_v(row[col_acc]) if col_acc is not None else '',
+                                'Rej': clean_v(row[col_rej]) if col_rej is not None else '',
+                                'Deg': clean_v(row[col_deg]) if col_deg is not None else '',
+                                'Welder': v_welder,
+                                'Remarks': clean_v(row[col_remarks]) if col_remarks is not None else '',
+                                'T': clean_v(row[col_t]) if col_t is not None else '',
+                                'Mat': clean_v(row[col_mat]) if col_mat is not None else '',
+                                'Weld': clean_v(row[col_weld]) if col_weld is not None else '',
+                                'IQI': clean_v(row[col_iqi]) if col_iqi is not None else '',
+                                'Sens': clean_v(row[col_sens]) if col_sens is not None else '',
+                                'Den': clean_v(row[col_den]) if col_den is not None else '',
+                                'Result': clean_v(row[col_result]) if col_result is not None else 'ACC',
                                 'Size': size_val, 'num_shots': num_shots,
                                 'selected': True, 'order_index': len(self.rt_extracted_data) + len(all_extracted_data),
                                 '_src': {
@@ -6327,32 +6463,20 @@ class PMIReportApp:
                                     'col_defects': {k: list(df.columns).index(v) + 1 for k, v in defect_cols.items()}
                                 }
                             }
-                            # Defects
                             for i in range(1, 16):
-                                key = f"D{i}"; src_col = defect_cols.get(key)
-                                src_val = str(row[src_col]).strip() if src_col is not None else ""
-                                item_data[key] = src_val if src_val else ("1" if i <= num_shots else "")
+                                key = f'D{i}'; src_col = defect_cols.get(key)
+                                src_val = str(row[src_col]).strip() if src_col is not None else ''
+                                item_data[key] = src_val if src_val else ('1' if i <= num_shots else '')
 
-                            # [REFINED] Row splitting for both RT and KOGAS
-                            # Based on user request: 1-2, 2-3, ... sequence
                             if num_shots > 1:
                                 for shot_idx in range(1, num_shots + 1):
                                     shot_item = item_data.copy()
-                                    shot_item['Loc'] = f"{shot_idx}-{(shot_idx % num_shots) + 1}"
-                                    # Reset D-results for each shot in standard normalization
+                                    shot_item['Loc'] = f'{shot_idx}-{(shot_idx % num_shots) + 1}'
                                     for i in range(1, 16):
-                                        key = f"D{i}"; c = defect_cols.get(key); val = str(row[c]).strip() if c is not None else ""
-                                        shot_item[key] = "√" if val and val.lower() in ["v", "x", "o", "1", "√"] else ""
-                                    
-                                    if mode == "KOGAS":
-                                        # KOGAS still maintains some sub-fields if needed
-                                        shot_item['Dwg_Sub'] = ""
-                                        shot_item['Welder_Sub'] = ""
-                                        shot_item['Mat_Sub'] = ""
-                                    
+                                        key = f'D{i}'; c = defect_cols.get(key); val = str(row[c]).strip() if c is not None else ''
+                                        shot_item[key] = '?' if val and val.lower() in ['v', 'x', 'o', '1', '?'] else ''
                                     all_extracted_data.append(shot_item)
                             else:
-                                # Single shot or grouping fallback
                                 all_extracted_data.append(item_data)
                         elif mode == "PT":
                             res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
