@@ -218,7 +218,7 @@ class PMIReportApp:
         # --- Column Keys Initialization ---
         self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Result"]
         self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
-        self.kogas_column_keys = self.rt_column_keys + ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]
+        self.kogas_column_keys = self.rt_column_keys
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Loc", "T", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
         
@@ -235,7 +235,7 @@ class PMIReportApp:
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
         self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
-        self.kogas_column_keys = self.rt_column_keys + ["Dwg_Sub", "Welder_Sub", "Mat_Sub"]
+        self.kogas_column_keys = self.rt_column_keys
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"]
         
@@ -249,6 +249,7 @@ class PMIReportApp:
 
         # [NEW] Add traces for Template-Linked Config Auto-Load
         self.rt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.rt_template_file_path.get(), "RT"))
+        self.kogas_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.kogas_template_file_path.get(), "KOGAS"))
         self.pt_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.pt_template_file_path.get(), "PT"))
         self.paut_template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.paut_template_file_path.get(), "PAUT"))
         self.template_file_path.trace_add("write", lambda *args: self.load_template_specific_config(self.template_file_path.get(), "PMI"))
@@ -260,6 +261,7 @@ class PMIReportApp:
         self.file_info_vars = {
             'PMI': tk.StringVar(value="📄 파일을 선택해주세요."),
             'RT': tk.StringVar(value="📄 파일을 선택해주세요."),
+            'KOGAS': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PT': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PAUT': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PHOTO': tk.StringVar(value="📸 사진 리스트를 구성해주세요.")
@@ -632,10 +634,17 @@ class PMIReportApp:
                     self.setting_vars[key].set(str(value))
             
             # Mode-specific UI update (Force refresh logic if needed)
-            if mode == "RT": self._update_rt_target_fsh()
-            elif mode == "PT": self._update_pt_target_fsh()
-            elif mode == "PAUT": self._update_paut_target_fsh()
-            elif mode == "PMI": self._update_target_fsh()
+            if mode in ["RT", "KOGAS"]:
+                self._update_rt_preview_columns(mode)
+            elif mode == "PT":
+                try: self._update_pt_preview_columns()
+                except: pass
+            elif mode == "PAUT":
+                try: self._update_paut_target_fsh()
+                except: pass
+            elif mode == "PMI":
+                try: self._update_pmi_filter_ui()
+                except: pass
 
         except Exception as e:
             self.log(f"[ERROR] 템플릿 전용 설정 로드 실패: {e}")
@@ -643,6 +652,7 @@ class PMIReportApp:
     def save_template_specific_config(self, mode="RT"):
         """현재 설정을 선택된 템플릿 전용 JSON 파일로 저장"""
         if mode == "RT": template_path = self.rt_template_file_path.get()
+        elif mode == "KOGAS": template_path = self.kogas_template_file_path.get()
         elif mode == "PT": template_path = self.pt_template_file_path.get()
         elif mode == "PAUT": template_path = self.paut_template_file_path.get()
         else: template_path = self.template_file_path.get()
@@ -674,6 +684,9 @@ class PMIReportApp:
         if mode == "RT":
             keys_to_save += ["RT_START_ROW", "RT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("RT_COL_") or k.startswith("RT_NAME_")]
+        elif mode == "KOGAS":
+            keys_to_save += ["KOGAS_START_ROW", "KOGAS_DATA_END_ROW", "RT_KOGAS_D_START_COL"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("KOGAS_COL_") or k.startswith("KOGAS_NAME_")]
         elif mode == "PT":
             keys_to_save += ["PT_START_ROW", "PT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("PT_COL_") or k.startswith("PT_NAME_")]
@@ -1510,12 +1523,9 @@ class PMIReportApp:
                 rt_items.append(v)
 
         if mode == "KOGAS":
-            rt_items += [
-                ("Dwg_Sub:", "KOGAS_COL_DWG_SUB", 0, "KOGAS_NAME_DWG_SUB", "Dwg(Sub)", "Dwg_Sub"),
-                ("Welder_Sub:", "KOGAS_COL_WELDER_SUB", 0, "KOGAS_NAME_WELDER_SUB", "Welder(Sub)", "Welder_Sub"),
-                ("Mat_Sub:", "KOGAS_COL_MAT_SUB", 0, "KOGAS_NAME_MAT_SUB", "Mat(Sub)", "Mat_Sub")
-            ]
-        self._create_column_mapping_ui(t_cols, mode, rt_items)
+            self._create_kogas_separated_column_mapping_ui(t_cols)
+        else:
+            self._create_column_mapping_ui(t_cols, mode, rt_items)
 
     def _on_rt_sub_mode_change(self, from_tab=False):
         """RT 내부 서브 모드(표준/가스공사) 변경 시 UI 및 상태 동기화"""
@@ -2990,6 +3000,138 @@ class PMIReportApp:
             v_name.trace_add("write", lambda *args, tid=internal_id, m=mode, var=v_name, kn=key_name: self._update_mode_heading(m, tid, var, kn))
 
         ttk.Label(container, text="* 엑셀열: 알파벳(A, B...) 또는 숫자(1, 2...) 입력 (0=제외)", foreground="gray", font=("Malgun Gothic", 8)).grid(row=last_row+1, column=0, columnspan=6, pady=10)
+
+    def _create_kogas_separated_column_mapping_ui(self, parent):
+        """[NEW] 가스공사(KOGAS) 모드 전용 의뢰서(읽기) 및 보고서(쓰기) 분리 컬럼 설정 UI"""
+        # Outer Frame for Scrollbar
+        outer_frame = tk.Frame(parent, background="#f9fafb")
+        outer_frame.pack(fill='both', expand=True)
+        
+        canvas = tk.Canvas(outer_frame, background="#f9fafb", highlightthickness=0)
+        scrollbar = ttk.Scrollbar(outer_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, background="#f9fafb")
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        # Mouse wheel support
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Main horizontal container to hold Read and Write side-by-side
+        main_container = tk.Frame(scrollable_frame, background="#f9fafb")
+        main_container.pack(fill='both', expand=True, pady=5, padx=5)
+
+        # 1. Left LabelFrame: [의뢰서 읽기] 설정
+        read_frame = ttk.LabelFrame(main_container, text=" 📄 [의뢰서 읽기] 컬럼 설정 (Input) ", padding=10)
+        read_frame.pack(side='left', fill='both', expand=True, padx=5, pady=5)
+
+        # 2. Right LabelFrame: [보고서 쓰기] 설정
+        write_frame = ttk.LabelFrame(main_container, text=" 📝 [보고서 쓰기] 컬럼 설정 (Output) ", padding=10)
+        write_frame.pack(side='right', fill='both', expand=True, padx=5, pady=5)
+
+        # Helper to render mappings inside a frame
+        def render_fields(frame, items, is_read):
+            frame.columnconfigure(2, weight=1)
+            # Header
+            ttk.Label(frame, text="항목", font=("Malgun Gothic", 8, "bold")).grid(row=0, column=0, sticky='w', pady=(0,5))
+            ttk.Label(frame, text="열", font=("Malgun Gothic", 8, "bold")).grid(row=0, column=1, sticky='w', pady=(0,5))
+            ttk.Label(frame, text="이름", font=("Malgun Gothic", 8, "bold")).grid(row=0, column=2, sticky='w', pady=(0,5))
+
+            for idx, (label, key_idx, def_idx, key_name, def_name, internal_id) in enumerate(items):
+                row = idx + 1
+                ttk.Label(frame, text=label, font=("Malgun Gothic", 8)).grid(row=row, column=0, sticky='w', padx=2, pady=2)
+                
+                v_idx = tk.StringVar(value=str(self.config.get(key_idx, def_idx)))
+                ent_idx = ttk.Entry(frame, textvariable=v_idx, width=4)
+                ent_idx.grid(row=row, column=1, sticky='w', padx=2, pady=2)
+                ent_idx.bind("<Return>", lambda e: self.root.focus_set())
+                self.setting_vars[key_idx] = v_idx
+
+                v_name = tk.StringVar(value=str(self.config.get(key_name, def_name)))
+                ent_name = ttk.Entry(frame, textvariable=v_name, width=12)
+                ent_name.grid(row=row, column=2, sticky='ew', padx=2, pady=2)
+                ent_name.bind("<Return>", lambda e: self.root.focus_set())
+                self.setting_vars[key_name] = v_name
+
+                # Real-time heading update (only update for tree preview if it's the Read setting since tree is built on Read data!)
+                if is_read:
+                    v_name.trace_add("write", lambda *args, tid=internal_id, var=v_name, kn=key_name: self._update_mode_heading("KOGAS", tid, var, kn))
+                else:
+                    v_name.trace_add("write", lambda *args, kn=key_name, var=v_name: self.config.update({kn: var.get()}))
+
+        # Read items
+        read_items = [
+            ("No:", "KOGAS_R_COL_NO", "1", "KOGAS_R_NAME_NO", "No", "No"),
+            ("Date:", "KOGAS_R_COL_DATE", "2", "KOGAS_R_NAME_DATE", "Date", "Date"),
+            ("Dwg No.:", "KOGAS_R_COL_DWG", "3", "KOGAS_R_NAME_DWG", "Dwg No", "Dwg"),
+            ("Joint No.:", "KOGAS_R_COL_JOINT", "4", "KOGAS_R_NAME_JOINT", "Joint No", "Joint"),
+            ("Location:", "KOGAS_R_COL_LOC", "5", "KOGAS_R_NAME_LOC", "Location", "Loc"),
+            ("T:", "KOGAS_R_COL_THK", "6", "KOGAS_R_NAME_THK", "T", "T"),
+            ("Mat:", "KOGAS_R_COL_MAT", "7", "KOGAS_R_NAME_MAT", "Mat", "Mat"),
+            ("구경(Size):", "KOGAS_R_COL_SIZE", "8", "KOGAS_R_NAME_SIZE", "Size", "Size"),
+            ("판정(Result):", "KOGAS_R_COL_RES", "9", "KOGAS_R_NAME_RES", "Result", "Result"),
+            ("용접사:", "KOGAS_R_COL_WELDER", "10", "KOGAS_R_NAME_WELDER", "Welder", "Welder"),
+            ("비고:", "KOGAS_R_COL_REM", "11", "KOGAS_R_NAME_REM", "Remarks", "Remarks"),
+            ("① Crack:", "KOGAS_R_COL_D1", "12", "KOGAS_R_NAME_D1", "① Crack", "D1"),
+            ("② IP:", "KOGAS_R_COL_D2", "13", "KOGAS_R_NAME_D2", "② IP", "D2"),
+            ("③ LF:", "KOGAS_R_COL_D3", "14", "KOGAS_R_NAME_D3", "③ LF", "D3"),
+            ("④ Slag:", "KOGAS_R_COL_D4", "15", "KOGAS_R_NAME_D4", "④ Slag", "D4"),
+            ("⑤ Por:", "KOGAS_R_COL_D5", "16", "KOGAS_R_NAME_D5", "⑤ Por", "D5"),
+            ("⑥ U/C:", "KOGAS_R_COL_D6", "17", "KOGAS_R_NAME_D6", "⑥ U/C", "D6"),
+            ("⑦ RUC:", "KOGAS_R_COL_D7", "18", "KOGAS_R_NAME_D7", "⑦ RUC", "D7"),
+            ("⑧ BT:", "KOGAS_R_COL_D8", "19", "KOGAS_R_NAME_D8", "⑧ BT", "D8"),
+            ("⑨ IC:", "KOGAS_R_COL_D9", "20", "KOGAS_R_NAME_D9", "⑨ IC", "D9"),
+            ("⑩ CP:", "KOGAS_R_COL_D10", "21", "KOGAS_R_NAME_D10", "⑩ CP", "D10"),
+            ("⑪ RC:", "KOGAS_R_COL_D11", "22", "KOGAS_R_NAME_D11", "⑪ RC", "D11"),
+            ("⑫ Mis:", "KOGAS_R_COL_D12", "23", "KOGAS_R_NAME_D12", "⑫ Mis", "D12"),
+            ("⑬ EP:", "KOGAS_R_COL_D13", "24", "KOGAS_R_NAME_D13", "⑬ EP", "D13"),
+            ("⑭ SD:", "KOGAS_R_COL_D14", "25", "KOGAS_R_NAME_D14", "⑭ SD", "D14"),
+            ("⑮ Oth:", "KOGAS_R_COL_D15", "26", "KOGAS_R_NAME_D15", "⑮ Oth", "D15")
+        ]
+
+        # Write items
+        write_items = [
+            ("No:", "KOGAS_W_COL_NO", "1", "KOGAS_W_NAME_NO", "No", "No"),
+            ("Date:", "KOGAS_W_COL_DATE", "2", "KOGAS_W_NAME_DATE", "Date", "Date"),
+            ("Dwg No.:", "KOGAS_W_COL_DWG", "3", "KOGAS_W_NAME_DWG", "Drawing No.", "Dwg"),
+            ("Joint No.:", "KOGAS_W_COL_JOINT", "4", "KOGAS_W_NAME_JOINT", "Film Ident. No.", "Joint"),
+            ("Location:", "KOGAS_W_COL_LOC", "5", "KOGAS_W_NAME_LOC", "Film Location", "Loc"),
+            ("T:", "KOGAS_W_COL_THK", "6", "KOGAS_W_NAME_THK", "T", "T"),
+            ("Mat:", "KOGAS_W_COL_MAT", "7", "KOGAS_W_NAME_MAT", "Mat", "Mat"),
+            ("판정(Result):", "KOGAS_W_COL_RES", "28", "KOGAS_W_NAME_RES", "Result", "Result"),
+            ("용접사:", "KOGAS_W_COL_WELDER", "29", "KOGAS_W_NAME_WELDER", "Welder No", "Welder"),
+            ("비고:", "KOGAS_W_COL_REM", "30", "KOGAS_W_NAME_REM", "Remarks", "Remarks"),
+            ("① Crack:", "KOGAS_W_COL_D1", "17", "KOGAS_W_NAME_D1", "① Crack", "D1"),
+            ("② IP:", "KOGAS_W_COL_D2", "18", "KOGAS_W_NAME_D2", "② IP", "D2"),
+            ("③ LF:", "KOGAS_W_COL_D3", "19", "KOGAS_W_NAME_D3", "③ LF", "D3"),
+            ("④ Slag:", "KOGAS_W_COL_D4", "20", "KOGAS_W_NAME_D4", "④ Slag", "D4"),
+            ("⑤ Por:", "KOGAS_W_COL_D5", "21", "KOGAS_W_NAME_D5", "⑤ Por", "D5"),
+            ("⑥ U/C:", "KOGAS_W_COL_D6", "22", "KOGAS_W_NAME_D6", "⑥ U/C", "D6"),
+            ("⑦ RUC:", "KOGAS_W_COL_D7", "23", "KOGAS_W_NAME_D7", "⑦ RUC", "D7"),
+            ("⑧ BT:", "KOGAS_W_COL_D8", "24", "KOGAS_W_NAME_D8", "⑧ BT", "D8"),
+            ("⑨ IC:", "KOGAS_W_COL_D9", "25", "KOGAS_W_NAME_D9", "⑨ IC", "D9"),
+            ("⑩ CP:", "KOGAS_W_COL_D10", "26", "KOGAS_W_NAME_D10", "⑩ CP", "D10"),
+            ("⑪ RC:", "KOGAS_W_COL_D11", "27", "KOGAS_W_NAME_D11", "⑪ RC", "D11"),
+            ("⑫ Mis:", "KOGAS_W_COL_D12", "28", "KOGAS_W_NAME_D12", "⑫ Mis", "D12"),
+            ("⑬ EP:", "KOGAS_W_COL_D13", "29", "KOGAS_W_NAME_D13", "⑬ EP", "D13"),
+            ("⑭ SD:", "KOGAS_W_COL_D14", "30", "KOGAS_W_NAME_D14", "⑭ SD", "D14"),
+            ("⑮ Oth:", "KOGAS_W_COL_D15", "31", "KOGAS_W_NAME_D15", "⑮ Oth", "D15")
+        ]
+
+        render_fields(read_frame, read_items, is_read=True)
+        render_fields(write_frame, write_items, is_read=False)
+
+        ttk.Label(scrollable_frame, text="* 엑셀열: 알파벳(A, B...) 또는 숫자(1, 2...) 입력 (0=제외)", foreground="gray", font=("Malgun Gothic", 8)).pack(pady=10)
 
     def _update_mode_heading(self, mode, internal_id, var, key_name):
         """[NEW] 특정 모드의 미리보기 헤더 이름을 실시간으로 업데이트 및 설정 저장"""
@@ -4914,6 +5056,13 @@ class PMIReportApp:
                         row_vals.append(val)
                     elif k == "Deg":
                         row_vals.append(str(item.get("Deg", "")).strip())
+                    elif mode == "KOGAS" and k in ["Dwg", "Mat", "Welder"]:
+                        main_val = str(item.get(k, "")).strip()
+                        sub_val = str(item.get(f"{k}_Sub", "")).strip()
+                        if sub_val and sub_val != main_val:
+                            row_vals.append(f"{main_val} / {sub_val}")
+                        else:
+                            row_vals.append(main_val)
                     else: 
                         val = str(item.get(k, "")).strip()
                         if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
@@ -5004,6 +5153,7 @@ class PMIReportApp:
         modes = [
             ('PMI', self.target_file_path.get()),
             ('RT', self.rt_target_file_path.get()),
+            ('KOGAS', self.kogas_target_file_path.get()),
             ('PT', self.pt_target_file_path.get()),
             ('PAUT', self.paut_target_file_path.get())
         ]
@@ -5018,7 +5168,8 @@ class PMIReportApp:
             var.set(path)
             # Find which mode this belongs to and update info
             for mode, m_var in [('PMI', self.target_file_path), ('RT', self.rt_target_file_path), 
-                               ('PT', self.pt_target_file_path), ('PAUT', self.paut_target_file_path)]:
+                               ('KOGAS', self.kogas_target_file_path), ('PT', self.pt_target_file_path), 
+                               ('PAUT', self.paut_target_file_path)]:
                 if var == m_var:
                     self._update_file_info(mode, path)
                     break 
@@ -6199,28 +6350,29 @@ class PMIReportApp:
                                 except: pass
                             return _find_col(df, search_keywords)
 
-                        col_no = _get_col(f"{mode}_COL_NO", _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM", "순번"])
-                        col_dwg = _get_col(f"{mode}_COL_DWG", _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE", "도면", "파이프"])
-                        col_joint = _get_col(f"{mode}_COL_JOINT", _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT", "용접부"])
-                        col_loc = _get_col(f"{mode}_COL_LOC", _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
-                        col_size = _get_col(f"{mode}_COL_SIZE", _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
-                        col_welder = _get_col(f"{mode}_COL_WELDER", _get_kw('Welder') or ["WELDER", "W/N"])
-                        col_remarks = _get_col(f"{mode}_COL_REM", _get_kw('Remarks') or ["REMARKS", "REMARK", "비고"])
-                        col_date = _get_col(f"{mode}_COL_DATE", _get_kw('Date') or ["DATE", "검사일"])
-                        col_t = _get_col(f"{mode}_COL_THK", _get_kw('T') or ["T", "THICK", "THK", "두께"])
-                        col_mat = _get_col(f"{mode}_COL_MAT", _get_kw('Mat') or ["MAT", "MATERIAL"])
-                        col_weld = _get_col(f"{mode}_COL_WELD", _get_kw('Weld') or ["WELD", "TYPE"])
-                        col_iqi = _get_col(f"{mode}_COL_IQI", _get_kw('IQI') or ["IQI"])
-                        col_sens = _get_col(f"{mode}_COL_SENS", _get_kw('Sens') or ["SENS", "SENSITIVITY"])
-                        col_den = _get_col(f"{mode}_COL_DEN", _get_kw('Den') or ["DEN", "DENSITY"])
-                        col_acc = _get_col(f"{mode}_COL_ACC", _get_kw('Acc') or ["ACC", "합격"])
-                        col_rej = _get_col(f"{mode}_COL_REJ", _get_kw('Rej') or ["REJ", "불합격"])
-                        col_deg = _get_col(f"{mode}_COL_DEG", _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
-                        col_result = _get_col(f"{mode}_COL_RES", _get_kw('Result') or ["RESULT", "판정"])
+                        col_prefix = "KOGAS_R" if mode == "KOGAS" else "RT"
+                        col_no = _get_col(f"{col_prefix}_COL_NO", _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM", "순번"])
+                        col_dwg = _get_col(f"{col_prefix}_COL_DWG", _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE", "도면", "파이프"])
+                        col_joint = _get_col(f"{col_prefix}_COL_JOINT", _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT", "용접부"])
+                        col_loc = _get_col(f"{col_prefix}_COL_LOC", _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
+                        col_size = _get_col(f"{col_prefix}_COL_SIZE", _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
+                        col_welder = _get_col(f"{col_prefix}_COL_WELDER", _get_kw('Welder') or ["WELDER", "W/N"])
+                        col_remarks = _get_col(f"{col_prefix}_COL_REM", _get_kw('Remarks') or ["REMARKS", "REMARK", "비고"])
+                        col_date = _get_col(f"{col_prefix}_COL_DATE", _get_kw('Date') or ["DATE", "검사일"])
+                        col_t = _get_col(f"{col_prefix}_COL_THK", _get_kw('T') or ["T", "THICK", "THK", "두께"])
+                        col_mat = _get_col(f"{col_prefix}_COL_MAT", _get_kw('Mat') or ["MAT", "MATERIAL"])
+                        col_weld = _get_col(f"{col_prefix}_COL_WELD", _get_kw('Weld') or ["WELD", "TYPE"])
+                        col_iqi = _get_col(f"{col_prefix}_COL_IQI", _get_kw('IQI') or ["IQI"])
+                        col_sens = _get_col(f"{col_prefix}_COL_SENS", _get_kw('Sens') or ["SENS", "SENSITIVITY"])
+                        col_den = _get_col(f"{col_prefix}_COL_DEN", _get_kw('Den') or ["DEN", "DENSITY"])
+                        col_acc = _get_col(f"{col_prefix}_COL_ACC", _get_kw('Acc') or ["ACC", "합격"])
+                        col_rej = _get_col(f"{col_prefix}_COL_REJ", _get_kw('Rej') or ["REJ", "불합격"])
+                        col_deg = _get_col(f"{col_prefix}_COL_DEG", _get_kw('Deg') or ["DEG", "물성", "수정브랜드", "GRADE"])
+                        col_result = _get_col(f"{col_prefix}_COL_RES", _get_kw('Result') or ["RESULT", "판정"])
                         
                         defect_cols = {}
                         for i in range(1, 16):
-                            defect_cols[f"D{i}"] = _get_col(f"{mode}_COL_D{i}", [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"])
+                            defect_cols[f"D{i}"] = _get_col(f"{col_prefix}_COL_D{i}", [f"D{i}", f"DEFECT{i}", chr(9311 + i), f"{i}"])
                         defect_cols = {k: v for k, v in defect_cols.items() if v}
 
                         # [NEW] KOGAS Fallback (B column for Joint, E column for Size) ONLY if not found
@@ -7473,12 +7625,12 @@ class PMIReportApp:
                 #     except: pass
 
                 if is_kogas:
-                    # ===== 가스공사 전용: 2행 1세트 블록 주입 =====
+                    # ===== 가스공사 전용: 2행 1세트 블록 주입 (KOGAS_W_COL_... 적용) =====
                     row_top = current_row      # 상단 행 (Pipe 1 정보)
                     row_bot = current_row + 1  # 하단 행 (Pipe 2 정보)
 
                     # 순번(No) - 2행 수직 병합
-                    no_col = self.col_to_num(self.config.get('RT_COL_NO', '1'))
+                    no_col = self.col_to_num(self.config.get('KOGAS_W_COL_NO', '1'))
                     if no_col >= 1:
                         try: self.safe_merge_cells(ws, row_top, no_col, row_bot, no_col)
                         except: pass
@@ -7486,7 +7638,7 @@ class PMIReportApp:
                         ws.cell(row=row_top, column=no_col).alignment = Alignment(horizontal='center', vertical='center')
 
                     # 용접부(Joint) - 2행 수직 병합
-                    joint_col = self.col_to_num(self.config.get('RT_COL_JOINT', '4'))
+                    joint_col = self.col_to_num(self.config.get('KOGAS_W_COL_JOINT', '4'))
                     if joint_col >= 1:
                         try: self.safe_merge_cells(ws, row_top, joint_col, row_bot, joint_col)
                         except: pass
@@ -7494,7 +7646,7 @@ class PMIReportApp:
                         ws.cell(row=row_top, column=joint_col).alignment = Alignment(horizontal='center', vertical='center')
 
                     # 검사일(Date) - 2행 수직 병합
-                    date_col = self.col_to_num(self.config.get('RT_COL_DATE', '2'))
+                    date_col = self.col_to_num(self.config.get('KOGAS_W_COL_DATE', '2'))
                     if date_col >= 1:
                         try: self.safe_merge_cells(ws, row_top, date_col, row_bot, date_col)
                         except: pass
@@ -7502,41 +7654,45 @@ class PMIReportApp:
                         ws.cell(row=row_top, column=date_col).alignment = Alignment(horizontal='center', vertical='center')
 
                     # 도면번호(Dwg) - 상단: 주 파이프, 하단: 보조(_Sub)
-                    dwg_col = self.col_to_num(self.config.get('RT_COL_DWG', '3'))
+                    dwg_col = self.col_to_num(self.config.get('KOGAS_W_COL_DWG', '3'))
                     if dwg_col >= 1:
                         self.safe_set_value(ws, ws.cell(row=row_top, column=dwg_col).coordinate, item.get('Dwg', ''))
                         self.safe_set_value(ws, ws.cell(row=row_bot, column=dwg_col).coordinate, item.get('Dwg_Sub', ''))
 
                     # 재질(Mat) - 상/하단 분리
-                    mat_col = self.col_to_num(self.config.get('RT_COL_MAT', '7'))
+                    mat_col = self.col_to_num(self.config.get('KOGAS_W_COL_MAT', '7'))
                     if mat_col >= 1:
                         self.safe_set_value(ws, ws.cell(row=row_top, column=mat_col).coordinate, item.get('Mat', ''))
                         self.safe_set_value(ws, ws.cell(row=row_bot, column=mat_col).coordinate, item.get('Mat_Sub', ''))
 
                     # 용접사(Welder) - 상/하단 분리
-                    wld_col = self.col_to_num(self.config.get('RT_COL_WELDER', '29'))
+                    wld_col = self.col_to_num(self.config.get('KOGAS_W_COL_WELDER', '29'))
                     if wld_col >= 1:
                         self.safe_set_value(ws, ws.cell(row=row_top, column=wld_col).coordinate, item.get('Welder', ''))
                         self.safe_set_value(ws, ws.cell(row=row_bot, column=wld_col).coordinate, item.get('Welder_Sub', ''))
 
                     # 두께(T) - 2행 수직 병합
-                    thk_col = self.col_to_num(self.config.get('RT_COL_THK', '6'))
+                    thk_col = self.col_to_num(self.config.get('KOGAS_W_COL_THK', '6'))
                     if thk_col >= 1:
                         try: self.safe_merge_cells(ws, row_top, thk_col, row_bot, thk_col)
                         except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=thk_col).coordinate, item.get('T', ''))
                         ws.cell(row=row_top, column=thk_col).alignment = Alignment(horizontal='center', vertical='center')
 
-                    # D1~D7 결과 - 상단 행에 가로로 기입 (기본: Q=17열 시작)
-                    kogas_d_start_col = int(self.config.get('RT_KOGAS_D_START_COL', '17'))
-                    for d_i in range(1, 8):
-                        d_col_idx = kogas_d_start_col + (d_i - 1)
-                        d_val = item.get(f'D{d_i}', '')
-                        if d_val:
-                            self.safe_set_value(ws, ws.cell(row=row_top, column=d_col_idx).coordinate, d_val)
+                    # D1~D15 결과 - 상단 행에 개별 지정 열 또는 기본 순차 열 기입
+                    for d_i in range(1, 16):
+                        d_col_idx = self.col_to_num(self.config.get(f'KOGAS_W_COL_D{d_i}', '0'))
+                        if d_col_idx == 0:
+                            kogas_d_start_col = int(self.config.get('KOGAS_W_D_START_COL', self.config.get('RT_KOGAS_D_START_COL', '17')))
+                            d_col_idx = kogas_d_start_col + (d_i - 1)
+                        
+                        if d_col_idx >= 1:
+                            d_val = item.get(f'D{d_i}', '')
+                            if d_val:
+                                self.safe_set_value(ws, ws.cell(row=row_top, column=d_col_idx).coordinate, d_val)
 
                     # 합/불(Result) - 2행 수직 병합
-                    res_col = self.col_to_num(self.config.get('RT_COL_RES', '28'))
+                    res_col = self.col_to_num(self.config.get('KOGAS_W_COL_RES', '28'))
                     if res_col >= 1:
                         try: self.safe_merge_cells(ws, row_top, res_col, row_bot, res_col)
                         except: pass
@@ -7544,7 +7700,7 @@ class PMIReportApp:
                         ws.cell(row=row_top, column=res_col).alignment = Alignment(horizontal='center', vertical='center')
 
                     # 비고(Remarks) - 2행 수직 병합
-                    rem_col = self.col_to_num(self.config.get('RT_COL_REM', '30'))
+                    rem_col = self.col_to_num(self.config.get('KOGAS_W_COL_REM', '30'))
                     if rem_col >= 1:
                         try: self.safe_merge_cells(ws, row_top, rem_col, row_bot, rem_col)
                         except: pass
