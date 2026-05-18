@@ -2541,7 +2541,7 @@ class PMIReportApp:
     def col_to_num(self, col_str):
         """[NEW] 엑셀 열 이름(A, B, AA...)을 숫자 인덱스(1, 2, 27...)로 변환"""
         if not col_str: return 0
-        s = str(col_str).strip().upper()
+        s = str(col_str).strip().upper().replace("열", "").replace("행", "").strip()
         if s.isdigit(): return int(s)
         
         res = 0
@@ -3512,7 +3512,12 @@ class PMIReportApp:
         
         def _apply_date_filter(m=mode, lb=listbox):
             sel_dates = [lb.get(i).replace("[v] ", "").replace("[ ] ", "") for i in range(lb.size()) if lb.get(i).startswith("[v]")]
-            data = self.rt_extracted_data if m == "RT" else self.extracted_data
+            if m == "RT": data = self.rt_extracted_data
+            elif m == "KOGAS": data = self.kogas_extracted_data
+            elif m == "PT": data = self.pt_extracted_data
+            elif m == "PAUT": data = self.paut_extracted_data
+            else: data = self.extracted_data
+            
             for item in data:
                 item['date_filtered'] = (item.get('Date', '') in sel_dates)
             
@@ -3554,7 +3559,14 @@ class PMIReportApp:
 
         # [NEW] Sticky 'Show Selected Only' Checkbox
         tk.Checkbutton(sticky_top_frame, text="선택만", variable=self.show_selected_only, 
-                       command=lambda: self.populate_preview(self.rt_extracted_data if mode=="RT" else self.extracted_data, switch_tab=False, mode=mode),
+                       command=lambda: self.populate_preview(
+                           self.rt_extracted_data if mode == "RT" else (
+                               self.kogas_extracted_data if mode == "KOGAS" else (
+                                   self.pt_extracted_data if mode == "PT" else (
+                                       self.paut_extracted_data if mode == "PAUT" else self.extracted_data
+                                   )
+                               )
+                           ), switch_tab=False, mode=mode),
                        background="#f1f5f9", font=("Malgun Gothic", 8)).pack(pady=(0, 3), anchor='w')
 
         # --- SCROLLABLE BUTTONS AREA ---
@@ -4595,6 +4607,8 @@ class PMIReportApp:
         """선택된 아이템 삭제"""
         if mode == "RT":
             tree, idx_map, data = self.rt_preview_tree, self.rt_item_idx_map, self.rt_extracted_data
+        elif mode == "KOGAS":
+            tree, idx_map, data = self.kogas_preview_tree, self.kogas_item_idx_map, self.kogas_extracted_data
         elif mode == "PT":
             tree, idx_map, data = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data
         elif mode == "PAUT":
@@ -4620,6 +4634,7 @@ class PMIReportApp:
     def save_preview_data(self, mode="PMI"):
         """현재 추출/편집된 데이터를 JSON 파일로 저장"""
         if mode == "RT": data = self.rt_extracted_data
+        elif mode == "KOGAS": data = self.kogas_extracted_data
         elif mode == "PT": data = self.pt_extracted_data
         elif mode == "PAUT": data = self.paut_extracted_data
         else: data = self.extracted_data
@@ -4659,12 +4674,19 @@ class PMIReportApp:
                 if not isinstance(loaded_data, list):
                     raise ValueError("올바른 데이터 형식이 아닙니다.")
                 
-                data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+                if mode == "RT": data = self.rt_extracted_data
+                elif mode == "KOGAS": data = self.kogas_extracted_data
+                elif mode == "PT": data = self.pt_extracted_data
+                elif mode == "PAUT": data = self.paut_extracted_data
+                else: data = self.extracted_data
                 
                 if data and not messagebox.askyesno("확인", f"현재 작업 중인 {mode} 데이터가 있습니다. 불러온 데이터로 덮어쓰시겠습니까?\n(아니오를 선택하면 기존 데이터에 추가됩니다.)"):
                     data.extend(loaded_data)
                 else:
                     if mode == "RT": self.rt_extracted_data = loaded_data
+                    elif mode == "KOGAS": self.kogas_extracted_data = loaded_data
+                    elif mode == "PT": self.pt_extracted_data = loaded_data
+                    elif mode == "PAUT": self.paut_extracted_data = loaded_data
                     else: self.extracted_data = loaded_data
                     data = loaded_data
             
@@ -4686,6 +4708,7 @@ class PMIReportApp:
         """모든 데이터 초기화"""
         if messagebox.askyesno("확인", f"모든 {mode} 데이터를 초기화하시겠습니까?"):
             if mode == "RT": self.rt_extracted_data = []
+            elif mode == "KOGAS": self.kogas_extracted_data = []
             elif mode == "PT": self.pt_extracted_data = []
             elif mode == "PAUT": self.paut_extracted_data = []
             else: self.extracted_data = []
@@ -6288,6 +6311,64 @@ class PMIReportApp:
                     try: temp_df = pd.read_excel(xls, sheet_name=sheet_name, header=None, nrows=50)
                     except: continue
                     
+                    # [지능형 시트 내 날짜 추출]
+                    # 의뢰서의 L5, L6 셀(머지된 영역)을 직접 파싱하여 
+                    # 파일명 날짜보다 우선하여 해당 시트의 기본 날짜(sheet_level_date)로 활용합니다.
+                    sheet_level_date = extracted_date
+                    try:
+                        for r_pos in [4, 5]: # 0-indexed 4=5행, 5=6행
+                            for c_pos in [11, 10, 12]: # 11=L열, 10=K열, 12=M열
+                                if r_pos < len(temp_df) and c_pos < len(temp_df.columns):
+                                    val = temp_df.iloc[r_pos, c_pos]
+                                    if pd.notna(val):
+                                        if isinstance(val, (datetime.datetime, datetime.date, pd.Timestamp)) or hasattr(val, 'strftime'):
+                                            sheet_level_date = val.strftime('%Y-%m-%d')
+                                            break
+                                        cleaned = str(val).strip()
+                                        # YYYY-MM-DD 혹은 YYYY.MM.DD 등의 형태에서 날짜만 클리닝
+                                        cleaned_num = re.sub(r'[^0-9]', '', cleaned)
+                                        if len(cleaned_num) == 8:
+                                            sheet_level_date = f"{cleaned_num[:4]}-{cleaned_num[4:6]}-{cleaned_num[6:]}"
+                                            break
+                                        elif len(cleaned_num) == 6:
+                                            prefix = "20" if int(cleaned_num[:2]) < 50 else "19"
+                                            sheet_level_date = f"{prefix}{cleaned_num[:2]}-{cleaned_num[2:4]}-{cleaned_num[4:]}"
+                                            break
+                            if sheet_level_date != extracted_date: break
+                    except: pass
+                    
+                    if sheet_level_date != extracted_date:
+                        self.log(f"   📅 의뢰서 헤더(L5/L6 셀)에서 날짜 파싱 성공: {sheet_level_date}")
+                        
+                    # [지능형 시트 내 도면번호 추출]
+                    # 의뢰서의 C5, C6 셀(머지된 영역)을 직접 파싱하여
+                    # 해당 시트의 기본 도면번호(sheet_level_dwg)로 활용합니다.
+                    sheet_level_dwg = ""
+                    try:
+                        for r_pos in [4, 5]: # 0-indexed 4=5행, 5=6행
+                            for c_pos in [2, 1, 3]: # 2=C열, 1=B열, 3=D열
+                                if r_pos < len(temp_df) and c_pos < len(temp_df.columns):
+                                    val = temp_df.iloc[r_pos, c_pos]
+                                    if pd.notna(val):
+                                        val_str = str(val).strip()
+                                        if val_str and val_str.lower() != 'nan' and len(val_str) > 2:
+                                            # "도면번호", "도면", "DWG" 같은 라벨 텍스트는 제외
+                                            if val_str in ["도면번호", "도면", "DWG", "DWG NO", "DWG.NO", "도면 NO", "도면 NO."]:
+                                                continue
+                                            # "SEOUL INSPECTION...", 회사명 혹은 주소 등 공백이 너무 많은 텍스트 제외
+                                            val_upper = val_str.upper()
+                                            if any(k in val_upper for k in ["CO.", "LTD", "INSPECTION", "TESTING", "CORP", "INC", "SEOUL", "주식회사"]):
+                                                continue
+                                            if val_str.count(" ") > 2:
+                                                continue
+                                            sheet_level_dwg = val_str
+                                            break
+                            if sheet_level_dwg: break
+                    except: pass
+                    
+                    if sheet_level_dwg:
+                        self.log(f"   📐 의뢰서 헤더(C5/C6 셀)에서 도면번호 파싱 성공: {sheet_level_dwg}")
+                    
                     header_idx = None
                     is_fixed_range = False
                     # [NEW] KOGAS 고정 영역 처리 (A9:AB13 헤더, A14:AB25 데이터)
@@ -6346,13 +6427,41 @@ class PMIReportApp:
                                 try:
                                     idx = self.col_to_num(c_idx_str)
                                     if 1 <= idx <= len(df.columns):
-                                        return df.columns[idx - 1]
+                                        candidate = df.columns[idx - 1]
+                                        
+                                        # [지능형 자동 매핑 우선 정책] 
+                                        # 오직 사용자가 설정을 변경하지 않고 '기본값' 상태일 때만, 헤더 매칭이 틀렸을 경우 자동 매핑을 시도합니다.
+                                        # 사용자가 명시적으로 컬럼을 직접 변경한 경우는 설정을 100% 신뢰하여 그대로 사용합니다.
+                                        DEFAULT_COLUMNS = {
+                                            "KOGAS_R_COL_NO": "1", "KOGAS_R_COL_DATE": "2", "KOGAS_R_COL_DWG": "3",
+                                            "KOGAS_R_COL_JOINT": "4", "KOGAS_R_COL_LOC": "5", "KOGAS_R_COL_THK": "6",
+                                            "KOGAS_R_COL_MAT": "7", "KOGAS_R_COL_SIZE": "8", "KOGAS_R_COL_RES": "9",
+                                            "KOGAS_R_COL_WELDER": "10", "KOGAS_R_COL_REM": "11", "KOGAS_R_COL_D1": "12",
+                                            "RT_COL_NO": "1", "RT_COL_DATE": "2", "RT_COL_DWG": "3", "RT_COL_JOINT": "4",
+                                            "RT_COL_LOC": "5", "RT_COL_THK": "6", "RT_COL_MAT": "7", "RT_COL_SIZE": "0",
+                                            "RT_COL_ACC": "8", "RT_COL_REJ": "9", "RT_COL_DEG": "10", "RT_COL_RES": "0",
+                                        }
+                                        is_default = False
+                                        default_val = DEFAULT_COLUMNS.get(config_key)
+                                        if default_val is not None:
+                                            try:
+                                                is_default = (self.col_to_num(c_idx_str) == self.col_to_num(default_val))
+                                            except:
+                                                is_default = (c_idx_str == default_val)
+                                                
+                                        if is_default:
+                                            cand_up = str(candidate).upper()
+                                            if search_keywords and not any(k in cand_up for k in search_keywords):
+                                                found = _find_col(df, search_keywords)
+                                                if found: return found
+                                                
+                                        return candidate
                                 except: pass
                             return _find_col(df, search_keywords)
 
                         col_prefix = "KOGAS_R" if mode == "KOGAS" else "RT"
                         col_no = _get_col(f"{col_prefix}_COL_NO", _get_kw('No') or ["NO.", "NO", "SEQ", "ITEM", "순번"])
-                        col_dwg = _get_col(f"{col_prefix}_COL_DWG", _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "LINE", "도면", "파이프"])
+                        col_dwg = _get_col(f"{col_prefix}_COL_DWG", _get_kw('Dwg') or ["ISO", "DWG", "DRAWING", "도면"])
                         col_joint = _get_col(f"{col_prefix}_COL_JOINT", _get_kw('Joint') or ["JOINT", "WELD NO", "J/N", "FILM IDENT", "용접부"])
                         col_loc = _get_col(f"{col_prefix}_COL_LOC", _get_kw('Loc') or ["LOCATION", "POSITION", "FILM LOC"])
                         col_size = _get_col(f"{col_prefix}_COL_SIZE", _get_kw('Size') or ["SIZE", "DIA", "INCH", "구경", "관경"])
@@ -6419,13 +6528,27 @@ class PMIReportApp:
 
                     def clean_v(v):
                         if pd.isna(v): return ""
+                        # 만약 날짜/시간(Timestamp) 형태라면 YYYY-MM-DD 형식으로 클리닝
+                        if isinstance(v, (datetime.datetime, datetime.date, pd.Timestamp)) or hasattr(v, 'strftime'):
+                            try:
+                                return v.strftime('%Y-%m-%d')
+                            except: pass
                         try:
                             if isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.','').isdigit()):
                                 fv = float(v)
                                 if fv.is_integer(): return str(int(fv))
                                 return str(fv)
                         except: pass
-                        return str(v).strip()
+                        # 만약 문자열이고 날짜 형식인 경우 시간 정보(00:00:00) 제거
+                        ret_str = str(v).strip()
+                        if len(ret_str) >= 10:
+                            if ret_str[4] == '-' and ret_str[7] == '-':
+                                ret_str = ret_str[:10]
+                            elif ret_str[4] == '.' and ret_str[7] == '.':
+                                ret_str = ret_str[:10]
+                            elif ret_str[4] == '/' and ret_str[7] == '/':
+                                ret_str = ret_str[:10]
+                        return ret_str
 
                 if mode == "KOGAS":
                     # ===== 가스공사 모드: 2개 행을 1개 Joint로 페어링 =====
@@ -6436,9 +6559,16 @@ class PMIReportApp:
                         row_bot = df.iloc[r_idx + 1] if (r_idx + 1 < num_rows) else None
 
                         # 1. 순번 (No)
-                        v_raw_no = clean_v(row_top[col_no]) if col_no is not None else str((r_idx // 2) + 1)
+                        v_raw_no = clean_v(row_top[col_no]) if col_no is not None else ""
                         if not v_raw_no and row_bot is not None and col_no is not None:
                             v_raw_no = clean_v(row_bot[col_no])
+                        
+                        # 만약 NO 컬럼이 지정되어 있는데 값이 완전히 비어있거나 'nan'인 경우, 데이터가 없는 행이므로 건너뜁니다.
+                        if col_no is not None and (not v_raw_no or v_raw_no == 'nan'):
+                            r_idx += 2
+                            continue
+                            
+                        # NO 컬럼이 지정되어 있지 않은 경우에만 인덱스 기반으로 번호를 생성합니다.
                         if not v_raw_no or v_raw_no == 'nan':
                             v_raw_no = str((r_idx // 2) + 1)
 
@@ -6457,12 +6587,15 @@ class PMIReportApp:
                                 continue
 
                         # 2. 도면번호 (Dwg) 및 Dwg_Sub
-                        curr_dwg = str(row_top[col_dwg]).strip() if col_dwg is not None else ''
-                        if (not curr_dwg or curr_dwg == 'nan') and last_dwg: curr_dwg = last_dwg
+                        curr_dwg = sheet_level_dwg if sheet_level_dwg else (str(row_top[col_dwg]).strip() if col_dwg is not None else '')
+                        if (not curr_dwg or curr_dwg == 'nan'):
+                            curr_dwg = last_dwg if last_dwg else ''
                         if curr_dwg and curr_dwg != 'nan': last_dwg = curr_dwg
 
                         curr_dwg_sub = ''
-                        if row_bot is not None and col_dwg is not None:
+                        if sheet_level_dwg:
+                            curr_dwg_sub = sheet_level_dwg
+                        elif row_bot is not None and col_dwg is not None:
                             curr_dwg_sub = str(row_bot[col_dwg]).strip()
                         if not curr_dwg_sub or curr_dwg_sub == 'nan':
                             curr_dwg_sub = curr_dwg
@@ -6477,7 +6610,7 @@ class PMIReportApp:
                         curr_date = clean_v(row_top[col_date]) if col_date is not None else ''
                         if (not curr_date or curr_date.lower() == 'nan') and last_date: curr_date = last_date
                         if curr_date and curr_date.lower() != 'nan': last_date = curr_date
-                        elif not curr_date or curr_date.lower() == 'nan': curr_date = extracted_date if extracted_date else ''
+                        elif not curr_date or curr_date.lower() == 'nan': curr_date = sheet_level_date if sheet_level_date else ''
 
                         # 5. 규격 (Size) 및 촬영 매수 (Shots)
                         raw_size = str(row_top[col_size]).strip() if col_size is not None else ''
@@ -6553,6 +6686,8 @@ class PMIReportApp:
                     # ===== 표준 모드 (RT, PT, PMI) =====
                     for _, row in df.iterrows():
                         v_raw_no = clean_v(row[col_no]) if col_no is not None else str(_+1)
+                        if col_no is not None and (not v_raw_no or v_raw_no == "nan"):
+                            continue
                         if target_no_list and v_raw_no not in target_no_list: continue
 
                         extract_key = self.rt_extract_keyword.get().strip().lower()
@@ -6562,8 +6697,9 @@ class PMIReportApp:
                             if extract_key not in row_str:
                                 continue
 
-                        curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ''
-                        if (not curr_dwg or curr_dwg == 'nan') and last_dwg: curr_dwg = last_dwg
+                        curr_dwg = sheet_level_dwg if sheet_level_dwg else (str(row[col_dwg]).strip() if col_dwg is not None else '')
+                        if (not curr_dwg or curr_dwg == 'nan'):
+                            curr_dwg = last_dwg if last_dwg else ''
                         if curr_dwg and curr_dwg != 'nan': last_dwg = curr_dwg
 
                         curr_joint = str(row[col_joint]).strip() if col_joint is not None else ''
@@ -6574,7 +6710,7 @@ class PMIReportApp:
                         curr_date = clean_v(row[col_date]) if col_date is not None else ''
                         if (not curr_date or curr_date.lower() == 'nan') and last_date: curr_date = last_date
                         if curr_date and curr_date.lower() != 'nan': last_date = curr_date
-                        elif not curr_date or curr_date.lower() == 'nan': curr_date = extracted_date if extracted_date else ''
+                        elif not curr_date or curr_date.lower() == 'nan': curr_date = sheet_level_date if sheet_level_date else ''
 
                         if mode == 'RT':
                             raw_size = str(row[col_size]).strip() if col_size is not None else ''
@@ -6634,7 +6770,7 @@ class PMIReportApp:
                             res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
                             if any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"]):
                                 item_row = {
-                                    'No': v_raw_no, 'Date': extracted_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
+                                    'No': v_raw_no, 'Date': sheet_level_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
                                     'NPS': str(row[col_size]).strip() if col_size is not None else "", 'Thk.': convert_sch_to_thk(str(row[col_size]).strip() if col_size is not None else "", str(row[col_thk]).strip() if col_thk is not None else ""),
                                     'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "", 'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
                                     'WType': str(row[col_wtype]).strip() if col_wtype is not None else "", 'Result': "Acc", 'selected': True,
@@ -6665,7 +6801,7 @@ class PMIReportApp:
                                     'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
                                     'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
                                     'Grade': final_grade, 'Dwg': curr_dwg,
-                                    'Date': extracted_date,
+                                    'Date': sheet_level_date,
                                     'selected': True,
                                     'order_index': len(self.extracted_data) + len(all_extracted_data)
                                 }
