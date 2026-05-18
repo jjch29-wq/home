@@ -4958,6 +4958,8 @@ class IntegratedSmartManager:
                     last_dwg = ""; last_joint = ""
                     for _, row in df.iterrows():
                         v_raw_no = str(row[col_no]).strip() if col_no is not None else str(_+1)
+                        if col_no is not None and (not v_raw_no or v_raw_no == "nan"):
+                            continue
                         if target_no_list and v_raw_no not in target_no_list: continue
                         curr_dwg = str(row[col_dwg]).strip() if col_dwg is not None else ""
                         if (not curr_dwg or curr_dwg == "nan") and last_dwg: curr_dwg = last_dwg
