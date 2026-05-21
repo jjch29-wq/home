@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
 import glob
@@ -217,8 +218,8 @@ class PMIReportApp:
         
         # --- Column Keys Initialization ---
         self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Result"]
-        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
-        self.kogas_column_keys = self.rt_column_keys
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
+        self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Loc", "T", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
         
@@ -234,8 +235,8 @@ class PMIReportApp:
         
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
-        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
-        self.kogas_column_keys = self.rt_column_keys
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"]
         
@@ -460,6 +461,18 @@ class PMIReportApp:
                                 for f_path in self.photo_selected_files:
                                     self.photo_listbox.insert(tk.END, f_path)
 
+                    # [NEW] Restore custom column layouts if they exist
+                    if 'column_keys' in saved_data and isinstance(saved_data['column_keys'], list):
+                        self.column_keys = list(saved_data['column_keys'])
+                    if 'rt_column_keys' in saved_data and isinstance(saved_data['rt_column_keys'], list):
+                        self.rt_column_keys = list(saved_data['rt_column_keys'])
+                    if 'kogas_column_keys' in saved_data and isinstance(saved_data['kogas_column_keys'], list):
+                        self.kogas_column_keys = list(saved_data['kogas_column_keys'])
+                    if 'pt_column_keys' in saved_data and isinstance(saved_data['pt_column_keys'], list):
+                        self.pt_column_keys = list(saved_data['pt_column_keys'])
+                    if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
+                        self.paut_column_keys = list(saved_data['paut_column_keys'])
+                    
                     self.config.update(saved_data)
                 self.log("[SUCCESS] 사용자 저장 설정을 모두 불러왔습니다.")
                 
@@ -554,6 +567,13 @@ class PMIReportApp:
                     'selected_files': self.photo_selected_files,
                     'last_save_dir': getattr(self, 'last_photo_save_dir', "")
                 }
+                
+                # [NEW] Save custom column list configurations
+                self.config['column_keys'] = list(self.column_keys)
+                self.config['rt_column_keys'] = list(self.rt_column_keys)
+                self.config['kogas_column_keys'] = list(self.kogas_column_keys)
+                self.config['pt_column_keys'] = list(self.pt_column_keys)
+                self.config['paut_column_keys'] = list(self.paut_column_keys)
             except Exception as e:
                 self.log(f"[ERROR] UI 상태 캡처 실패: {e}")
         except Exception as e:
@@ -1612,6 +1632,7 @@ class PMIReportApp:
         default_names = {
             "selected": "V", "No": "No", "Date": "Date", "Dwg": "Drawing No.", 
             "Joint": "Film Ident. No.", "Loc": "Film Location", "T": "T", "Mat": "Mat",
+            "Size": "구경",
             "Acc": "Acc", "Rej": "Rej", "Deg": "Deg", "Welder": "Welder No", "Remarks": "Remarks",
             "Dwg_Sub": "Dwg(Sub)", "Welder_Sub": "Welder(Sub)", "Mat_Sub": "Mat(Sub)",
             "D1": "① Crack", "D2": "② IP", "D3": "③ LF", "D4": "④ Slag", "D5": "⑤ Por",
@@ -1633,7 +1654,10 @@ class PMIReportApp:
         
         for col in current_cols:
             suffix = key_map.get(col, col.upper())
-            name_key = f"{mode}_NAME_{suffix}"
+            if mode == "KOGAS":
+                name_key = f"KOGAS_R_NAME_{suffix}"
+            else:
+                name_key = f"{mode}_NAME_{suffix}"
             if col == "selected": name_key = None
             
             display_text = None
@@ -1648,7 +1672,10 @@ class PMIReportApp:
                 
                 # 3. 보조 키 형식 확인 (소문자 등 대비)
                 if not display_text:
-                    alt_key = f"{mode}_NAME_{col}"
+                    if mode == "KOGAS":
+                        alt_key = f"KOGAS_R_NAME_{col}"
+                    else:
+                        alt_key = f"{mode}_NAME_{col}"
                     if alt_key in self.setting_vars:
                         display_text = self.setting_vars[alt_key].get()
                     else:
@@ -3108,6 +3135,7 @@ class PMIReportApp:
             ("Location:", "KOGAS_W_COL_LOC", "5", "KOGAS_W_NAME_LOC", "Film Location", "Loc"),
             ("T:", "KOGAS_W_COL_THK", "6", "KOGAS_W_NAME_THK", "T", "T"),
             ("Mat:", "KOGAS_W_COL_MAT", "7", "KOGAS_W_NAME_MAT", "Mat", "Mat"),
+            ("구경(Size):", "KOGAS_W_COL_SIZE", "0", "KOGAS_W_NAME_SIZE", "Size", "Size"),
             ("판정(Result):", "KOGAS_W_COL_RES", "28", "KOGAS_W_NAME_RES", "Result", "Result"),
             ("용접사:", "KOGAS_W_COL_WELDER", "29", "KOGAS_W_NAME_WELDER", "Welder No", "Welder"),
             ("비고:", "KOGAS_W_COL_REM", "30", "KOGAS_W_NAME_REM", "Remarks", "Remarks"),
@@ -3928,6 +3956,7 @@ class PMIReportApp:
                 "Dwg": "Drawing No.", "Joint": "Film Ident. No.", "Loc": "Film Location",
                 "Acc": "Acc", "Rej": "Rej", "Deg": "Deg", "Welder": "Welder No",
                 "T": "T", "Mat": "Mat", "No": "No", "Date": "Date", "Remarks": "Remarks",
+                "Size": "구경",
                 "D1": "① Crack", "D2": "② IP", "D3": "③ LF", "D4": "④ Slag", "D5": "⑤ Por",
                 "D6": "⑥ U/C", "D7": "⑦ RUC", "D8": "⑧ BT", "D9": "⑨ TI", "D10": "⑩ CP",
                 "D11": "⑪ RC", "D12": "⑫ Mis", "D13": "⑬ EP", "D14": "⑭ SD", "D15": "⑮ Oth"
@@ -6284,15 +6313,16 @@ class PMIReportApp:
                     self.preview_tree.column(c, width=w, anchor='center', stretch=False)
         
         def _find_col(df, keywords, exclude=None):
+            cleaned_keywords = [re.sub(r'\s+', '', k).upper() for k in keywords]
             for col in df.columns:
-                c_up = str(col).upper().strip()
-                if exclude and any(ex in c_up for ex in exclude): continue
-                if any(k == c_up for k in keywords): return col
+                c_clean = re.sub(r'\s+', '', str(col)).upper()
+                if exclude and any(re.sub(r'\s+', '', ex).upper() in c_clean for ex in exclude): continue
+                if any(k == c_clean for k in cleaned_keywords): return col
             for col in df.columns:
-                c_up = str(col).upper().strip()
-                if exclude and any(ex in c_up for ex in exclude): continue
-                if any(k in c_up for k in keywords):
-                    if "NI" in keywords and ("UNIT" in c_up or "LINE" in c_up): continue
+                c_clean = re.sub(r'\s+', '', str(col)).upper()
+                if exclude and any(re.sub(r'\s+', '', ex).upper() in c_clean for ex in exclude): continue
+                if any(k in c_clean for k in cleaned_keywords):
+                    if "NI" in keywords and ("UNIT" in c_clean or "LINE" in c_clean): continue
                     return col
             return None
 
@@ -6451,8 +6481,9 @@ class PMIReportApp:
                                                 is_default = (c_idx_str == default_val)
                                                 
                                         if is_default:
-                                            cand_up = str(candidate).upper()
-                                            if search_keywords and not any(k in cand_up for k in search_keywords):
+                                            cand_clean = re.sub(r'\s+', '', str(candidate)).upper()
+                                            cleaned_keywords = [re.sub(r'\s+', '', k).upper() for k in search_keywords]
+                                            if search_keywords and not any(k in cand_clean for k in cleaned_keywords):
                                                 found = _find_col(df, search_keywords)
                                                 if found: return found
                                                 
@@ -6640,6 +6671,15 @@ class PMIReportApp:
 
                         # 8. 두께 (T)
                         raw_t = clean_v(row_top[col_t]) if col_t is not None else ''
+                        if raw_t:
+                            if '*' in raw_t or 'x' in raw_t.lower():
+                                t_match = re.search(r'[*xX]\s*(\d+\.?\d*)\s*[tT]?', raw_t)
+                                if t_match:
+                                    raw_t = t_match.group(1)
+                            else:
+                                t_suffix_match = re.search(r'^(\d+\.?\d*)\s*[tT]?$', raw_t)
+                                if t_suffix_match:
+                                    raw_t = t_suffix_match.group(1)
 
                         # 9. 위치 (Loc) - 촬영 위치 추출 추가!
                         v_loc = clean_v(row_top[col_loc]) if col_loc is not None else ''
@@ -7815,6 +7855,22 @@ class PMIReportApp:
                         except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=thk_col).coordinate, item.get('T', ''))
                         ws.cell(row=row_top, column=thk_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    # 위치(Location) - 2행 수직 병합
+                    loc_col = self.col_to_num(self.config.get('KOGAS_W_COL_LOC', '0'))
+                    if loc_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, loc_col, row_bot, loc_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=loc_col).coordinate, item.get('Loc', ''))
+                        ws.cell(row=row_top, column=loc_col).alignment = Alignment(horizontal='center', vertical='center')
+
+                    # 구경(Size) - 2행 수직 병합
+                    size_col = self.col_to_num(self.config.get('KOGAS_W_COL_SIZE', '0'))
+                    if size_col >= 1:
+                        try: self.safe_merge_cells(ws, row_top, size_col, row_bot, size_col)
+                        except: pass
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=size_col).coordinate, item.get('Size', ''))
+                        ws.cell(row=row_top, column=size_col).alignment = Alignment(horizontal='center', vertical='center')
 
                     # D1~D15 결과 - 상단 행에 개별 지정 열 또는 기본 순차 열 기입
                     for d_i in range(1, 16):
