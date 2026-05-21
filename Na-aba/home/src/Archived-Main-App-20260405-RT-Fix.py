@@ -6420,6 +6420,7 @@ class PMIReportApp:
                             df = df.iloc[1:].reset_index(drop=True)
 
                     # --- Column Identification for THIS sheet ---
+                    col_date = None
                     if mode in ["RT", "KOGAS"]:
                         def _get_col(config_key, search_keywords):
                             c_idx_str = str(self.config.get(config_key, "")).strip()
