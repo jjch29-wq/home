@@ -3427,8 +3427,8 @@ class PMIReportApp:
                                  self.populate_preview(data_list, switch_tab=False, mode=m)
                                  return "break"
                     
-                    # RT Specific specialized toggle
-                    if m == "RT" and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Acc", "Rej"])):
+                    # RT/KOGAS Specific specialized toggle
+                    if m in ["RT", "KOGAS"] and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Acc", "Rej"])):
                         view_idx = t.index(item_id)
                         if 0 <= view_idx < len(idx_map):
                             actual_idx = idx_map[view_idx]
@@ -3438,7 +3438,7 @@ class PMIReportApp:
                             if key in ["Acc", "Rej"] and new_v == "√":
                                 other = "Rej" if key == "Acc" else "Acc"
                                 data_list[actual_idx][other] = ""
-                            self.populate_preview(data_list, switch_tab=False, mode="RT")
+                            self.populate_preview(data_list, switch_tab=False, mode=m)
                             return "break"
             except: pass
 
