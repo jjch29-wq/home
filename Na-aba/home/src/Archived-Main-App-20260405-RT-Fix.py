@@ -6720,7 +6720,16 @@ class PMIReportApp:
                             src_val = str(row_top[src_col]).strip() if src_col is not None else ''
                             item_data[key] = src_val if src_val else ('1' if i <= num_shots else '')
 
-                        all_extracted_data.append(item_data)
+                        if num_shots > 1:
+                            for shot_idx in range(1, num_shots + 1):
+                                shot_item = item_data.copy()
+                                shot_item['Loc'] = f'{shot_idx}-{(shot_idx % num_shots) + 1}'
+                                for i in range(1, 16):
+                                    key = f'D{i}'; c = defect_cols.get(key); val = str(row_top[c]).strip() if c is not None else ''
+                                    shot_item[key] = '?' if val and val.lower() in ['v', 'x', 'o', '1', '?'] else ''
+                                all_extracted_data.append(shot_item)
+                        else:
+                            all_extracted_data.append(item_data)
                         r_idx += 2
 
                 else:
