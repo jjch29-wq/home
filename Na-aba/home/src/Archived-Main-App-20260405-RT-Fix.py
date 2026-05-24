@@ -800,7 +800,7 @@ class PMIReportApp:
                         # [FIX] Handle various key types correctly for persistence
                         if "AREA" in key or "_PATH" in key:
                             self.config[key] = str(val).strip()
-                        elif any(x in key for x in ['_X', '_Y', '_W', '_H', 'MARGIN', 'HEIGHT', 'WIDTH']):
+                        elif any(key.endswith(x) for x in ['_X', '_Y', '_W', '_H']) or any(x in key for x in ['MARGIN', 'HEIGHT', 'WIDTH']):
                             try: self.config[key] = float(val) if str(val).strip() else 0.0
                             except: self.config[key] = 0.0
                         elif 'SCALE' in key or key.endswith(('_ROW', '_COL', '_IDX')):
@@ -1570,8 +1570,8 @@ class PMIReportApp:
             "No": ("No:", f"{mode}_COL_NO", 1, f"{mode}_NAME_NO", "No", "No"),
             "Date": ("Date:", f"{mode}_COL_DATE", 2, f"{mode}_NAME_DATE", "Date", "Date"),
             "Dwg": ("Dwg No.:", f"{mode}_COL_DWG", 3, f"{mode}_NAME_DWG", "Drawing No.", "Dwg"),
-            "Joint": ("Film No.:", f"{mode}_COL_JOINT", 4, f"{mode}_NAME_JOINT", "Film Ident. No.", "Joint"),
-            "Loc": ("Location:", f"{mode}_COL_LOC", 5, f"{mode}_NAME_LOC", "Film Location", "Loc"),
+            "Joint": ("Film Ident. No.:", f"{mode}_COL_JOINT", 4, f"{mode}_NAME_JOINT", "Film Ident. No.", "Joint"),
+            "Loc": ("Film Location:", f"{mode}_COL_LOC", 5, f"{mode}_NAME_LOC", "Film Location", "Loc"),
             "T": ("T:", f"{mode}_COL_THK", 6, f"{mode}_NAME_THK", "T", "T"),
             "Mat": ("Mat:", f"{mode}_COL_MAT", 7, f"{mode}_NAME_MAT", "Mat", "Mat"),
             "Size": ("구경(Size):", f"{mode}_COL_SIZE", 0, f"{mode}_NAME_SIZE", "Size", "Size"),
@@ -1701,7 +1701,7 @@ class PMIReportApp:
 
     def _update_rt_preview_columns(self, mode="RT"):
         """모드 여부에 따라 RT 미리보기 컬럼을 동적으로 변경 (사용자 설정 키 준수)"""
-        tree = self.rt_preview_tree if mode == "RT" else self.kogas_preview_tree
+        tree = getattr(self, "rt_preview_tree", None) if mode == "RT" else getattr(self, "kogas_preview_tree", None)
         if not tree: return
         
         # [DYNAMIC] 고정된 리스트 대신 사용자가 설정한 키(rt_column_keys 등)를 사용
@@ -3184,8 +3184,8 @@ class PMIReportApp:
             ("No:", "KOGAS_R_COL_NO", "1", "KOGAS_R_NAME_NO", "No", "No"),
             ("Date:", "KOGAS_R_COL_DATE", "2", "KOGAS_R_NAME_DATE", "Date", "Date"),
             ("Dwg No.:", "KOGAS_R_COL_DWG", "3", "KOGAS_R_NAME_DWG", "Dwg No", "Dwg"),
-            ("Joint No.:", "KOGAS_R_COL_JOINT", "4", "KOGAS_R_NAME_JOINT", "Joint No", "Joint"),
-            ("Location:", "KOGAS_R_COL_LOC", "5", "KOGAS_R_NAME_LOC", "Location", "Loc"),
+            ("Film Ident. No.:", "KOGAS_R_COL_JOINT", "4", "KOGAS_R_NAME_JOINT", "Joint No", "Joint"),
+            ("Film Location:", "KOGAS_R_COL_LOC", "5", "KOGAS_R_NAME_LOC", "Location", "Loc"),
             ("T:", "KOGAS_R_COL_THK", "6", "KOGAS_R_NAME_THK", "T", "T"),
             ("Mat:", "KOGAS_R_COL_MAT", "7", "KOGAS_R_NAME_MAT", "Mat", "Mat"),
             ("구경(Size):", "KOGAS_R_COL_SIZE", "8", "KOGAS_R_NAME_SIZE", "Size", "Size"),
@@ -3214,11 +3214,14 @@ class PMIReportApp:
             ("No:", "KOGAS_W_COL_NO", "1", "KOGAS_W_NAME_NO", "No", "No"),
             ("Date:", "KOGAS_W_COL_DATE", "2", "KOGAS_W_NAME_DATE", "Date", "Date"),
             ("Dwg No.:", "KOGAS_W_COL_DWG", "3", "KOGAS_W_NAME_DWG", "Drawing No.", "Dwg"),
-            ("Joint No.:", "KOGAS_W_COL_JOINT", "4", "KOGAS_W_NAME_JOINT", "Film Ident. No.", "Joint"),
-            ("Location:", "KOGAS_W_COL_LOC", "5", "KOGAS_W_NAME_LOC", "Film Location", "Loc"),
+            ("Film Ident. No.:", "KOGAS_W_COL_JOINT", "4", "KOGAS_W_NAME_JOINT", "Film Ident. No.", "Joint"),
+            ("Film Location:", "KOGAS_W_COL_LOC", "5", "KOGAS_W_NAME_LOC", "Film Location", "Loc"),
             ("T:", "KOGAS_W_COL_THK", "6", "KOGAS_W_NAME_THK", "T", "T"),
             ("Mat:", "KOGAS_W_COL_MAT", "7", "KOGAS_W_NAME_MAT", "Mat", "Mat"),
             ("구경(Size):", "KOGAS_W_COL_SIZE", "0", "KOGAS_W_NAME_SIZE", "Size", "Size"),
+            ("합격(ACC):", "KOGAS_W_COL_ACC", "14", "KOGAS_W_NAME_ACC", "Accept", "Acc"),
+            ("불합격(REJ):", "KOGAS_W_COL_REJ", "15", "KOGAS_W_NAME_REJ", "Reject", "Rej"),
+            ("등급(Grade):", "KOGAS_W_COL_DEG", "16", "KOGAS_W_NAME_DEG", "Grade", "Deg"),
             ("판정(Result):", "KOGAS_W_COL_RES", "28", "KOGAS_W_NAME_RES", "Result", "Result"),
             ("용접사:", "KOGAS_W_COL_WELDER", "29", "KOGAS_W_NAME_WELDER", "Welder No", "Welder"),
             ("비고:", "KOGAS_W_COL_REM", "30", "KOGAS_W_NAME_REM", "Remarks", "Remarks"),
@@ -6020,19 +6023,22 @@ class PMIReportApp:
         self.apply_custom_dimensions(new_sheet, "DATA")
         for col_letter, col_dim in source_sheet.column_dimensions.items(): new_sheet.column_dimensions[col_letter].width = col_dim.width
         data_font = Font(size=9); grade_font = Font(size=8.5)
-        for r in range(self.config['START_ROW'], self.config['DATA_END_ROW'] + 1):
+        for r in range(int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 1):
             rd = new_sheet.row_dimensions[r] # [REMOVED] Hardcoded 20.55 override
         
         # [FIX] RT 모드일 경우 Shooting Sketch(32행~42행)를 보호하기 위해 데이터 종료 행을 조절
         current_mode = getattr(self, 'current_mode', "")
-        start_row = self.config.get('START_ROW', 17)
-        end_row = self.config.get('DATA_END_ROW', 45)
+        start_row = int(self.config.get('START_ROW', 17))
+        end_row = int(self.config.get('DATA_END_ROW', 45))
         
         if current_mode == "RT":
             start_row = int(self.config.get('RT_START_ROW', 17))
             end_row = int(self.config.get('RT_END_ROW', 31))
+        elif current_mode == "KOGAS":
+            start_row = int(self.config.get('KOGAS_START_ROW', 14))
+            end_row = int(self.config.get('KOGAS_DATA_END_ROW', 25))
             
-        for r in range(start_row + 1, end_row + 1):
+        for r in range(start_row, end_row + 1):
             for c in range(1, 14):
                 cell = new_sheet.cell(row=r, column=c)
                 cell.font = grade_font if c == 13 else data_font
@@ -6750,7 +6756,7 @@ class PMIReportApp:
                                 continue
 
                         # 2. 도면번호 (Dwg) 및 Dwg_Sub
-                        curr_dwg = sheet_level_dwg if sheet_level_dwg else (str(row_top[col_dwg]).strip() if col_dwg is not None else '')
+                        curr_dwg = sheet_level_dwg if sheet_level_dwg else (clean_v(row_top[col_dwg]) if col_dwg is not None else '')
                         if (not curr_dwg or curr_dwg == 'nan'):
                             curr_dwg = last_dwg if last_dwg else ''
                         if curr_dwg and curr_dwg != 'nan': last_dwg = curr_dwg
@@ -6764,7 +6770,7 @@ class PMIReportApp:
                             curr_dwg_sub = curr_dwg
 
                         # 3. 공동 (Joint)
-                        curr_joint = str(row_top[col_joint]).strip() if col_joint is not None else ''
+                        curr_joint = clean_v(row_top[col_joint]) if col_joint is not None else ''
                         if (not curr_joint or curr_joint == 'nan') and last_joint: curr_joint = last_joint
                         if curr_joint and curr_joint != 'nan': last_joint = curr_joint
                         elif not curr_joint or curr_joint == 'nan': curr_joint = v_raw_no
@@ -6782,7 +6788,7 @@ class PMIReportApp:
                         num_shots = self.calculate_rt_shots(size_val)
 
                         # 6. 용접사 (Welder) 및 Welder_Sub
-                        raw_welder = str(row_top[col_welder]).strip() if col_welder is not None else ''
+                        raw_welder = clean_v(row_top[col_welder]) if col_welder is not None else ''
                         v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
 
                         raw_welder_sub = ''
@@ -6857,7 +6863,12 @@ class PMIReportApp:
                                 shot_item['Loc'] = f'{shot_idx}-{(shot_idx % num_shots) + 1}'
                                 for i in range(1, 16):
                                     key = f'D{i}'; c = defect_cols.get(key); val = str(row_top[c]).strip() if c is not None else ''
-                                    shot_item[key] = '?' if val and val.lower() in ['v', 'x', 'o', '1', '?'] else ''
+                                    shot_item[key] = val if (val and val.lower() not in ['nan', ''] and val.lower() in ['v', 'x', 'o', '1', '?']) else ''
+                                
+                                # [NEW] Clear repetitive Joint number for 2nd shot and beyond
+                                if shot_idx > 1:
+                                    shot_item['Joint'] = ''
+                                    
                                 all_extracted_data.append(shot_item)
                         else:
                             all_extracted_data.append(item_data)
@@ -6878,12 +6889,12 @@ class PMIReportApp:
                             if extract_key not in row_str:
                                 continue
 
-                        curr_dwg = sheet_level_dwg if sheet_level_dwg else (str(row[col_dwg]).strip() if col_dwg is not None else '')
+                        curr_dwg = sheet_level_dwg if sheet_level_dwg else (clean_v(row[col_dwg]) if col_dwg is not None else '')
                         if (not curr_dwg or curr_dwg == 'nan'):
                             curr_dwg = last_dwg if last_dwg else ''
                         if curr_dwg and curr_dwg != 'nan': last_dwg = curr_dwg
 
-                        curr_joint = str(row[col_joint]).strip() if col_joint is not None else ''
+                        curr_joint = clean_v(row[col_joint]) if col_joint is not None else ''
                         if (not curr_joint or curr_joint == 'nan') and last_joint: curr_joint = last_joint
                         if curr_joint and curr_joint != 'nan': last_joint = curr_joint
                         elif not curr_joint or curr_joint == 'nan': curr_joint = v_raw_no
@@ -6900,7 +6911,7 @@ class PMIReportApp:
 
                             num_shots = self.calculate_rt_shots(size_val)
 
-                            raw_welder = str(row[col_welder]).strip() if col_welder is not None else ''
+                            raw_welder = clean_v(row[col_welder]) if col_welder is not None else ''
                             v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
 
                             v_date = curr_date
@@ -6944,6 +6955,11 @@ class PMIReportApp:
                                     for i in range(1, 16):
                                         key = f'D{i}'; c = defect_cols.get(key); val = str(row[c]).strip() if c is not None else ''
                                         shot_item[key] = '?' if val and val.lower() in ['v', 'x', 'o', '1', '?'] else ''
+                                        
+                                    # [NEW] Clear repetitive Joint number for 2nd shot and beyond
+                                    if shot_idx > 1:
+                                        shot_item['Joint'] = ''
+                                        
                                     all_extracted_data.append(shot_item)
                             else:
                                 all_extracted_data.append(item_data)
@@ -7976,6 +7992,7 @@ class PMIReportApp:
             # [FIX] Do NOT clear existing images if data sheet is the same as cover
             self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode=mode)
             self.force_print_settings(ws, context=f"{mode}_DATA")
+            self.apply_custom_dimensions(ws, f"{mode}_DATA")
             # RT usually doesn't have the same headers as PMI
             # self.set_eulji_headers(ws) 
 
@@ -7983,7 +8000,7 @@ class PMIReportApp:
             is_kogas = (mode == "KOGAS")
             start_row = int(self.config.get(f'{mode}_START_ROW', 14 if is_kogas else 11))
             end_row = int(self.config.get(f'{mode}_DATA_END_ROW', 25 if is_kogas else 34))
-            block_size = 2 if is_kogas else 1
+            block_size = 1
             
             current_row = start_row
             current_page = 1
@@ -8026,105 +8043,76 @@ class PMIReportApp:
                 #     except: pass
 
                 if is_kogas:
-                    # ===== 가스공사 전용: 2행 1세트 블록 주입 (KOGAS_W_COL_... 적용) =====
-                    row_top = current_row      # 상단 행 (Pipe 1 정보)
-                    row_bot = current_row + 1  # 하단 행 (Pipe 2 정보)
+                    # ===== 가스공사 전용: 1행 1세트 블록 주입 (KOGAS_W_COL_... 적용) =====
+                    row_top = current_row      # 단일 행
 
-                    # 순번(No) - 2행 수직 병합
                     no_col = self.col_to_num(self.config.get('KOGAS_W_COL_NO', '1'))
                     if no_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, no_col, row_bot, no_col)
-                        except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=no_col).coordinate, item.get('No', ''))
-                        ws.cell(row=row_top, column=no_col).alignment = Alignment(horizontal='center', vertical='center')
 
-                    # 용접부(Joint) - 2행 수직 병합
                     joint_col = self.col_to_num(self.config.get('KOGAS_W_COL_JOINT', '4'))
                     if joint_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, joint_col, row_bot, joint_col)
-                        except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=joint_col).coordinate, item.get('Joint', ''))
-                        ws.cell(row=row_top, column=joint_col).alignment = Alignment(horizontal='center', vertical='center')
 
-                    # 검사일(Date) - 2행 수직 병합
                     date_col = self.col_to_num(self.config.get('KOGAS_W_COL_DATE', '2'))
                     if date_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, date_col, row_bot, date_col)
-                        except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=date_col).coordinate, item.get('Date', ''))
-                        ws.cell(row=row_top, column=date_col).alignment = Alignment(horizontal='center', vertical='center')
 
-                    # 도면번호(Dwg) - 상단: 주 파이프, 하단: 보조(_Sub)
                     dwg_col = self.col_to_num(self.config.get('KOGAS_W_COL_DWG', '3'))
                     if dwg_col >= 1:
                         self.safe_set_value(ws, ws.cell(row=row_top, column=dwg_col).coordinate, item.get('Dwg', ''))
-                        self.safe_set_value(ws, ws.cell(row=row_bot, column=dwg_col).coordinate, item.get('Dwg_Sub', ''))
 
-                    # 재질(Mat) - 상/하단 분리
                     mat_col = self.col_to_num(self.config.get('KOGAS_W_COL_MAT', '7'))
                     if mat_col >= 1:
                         self.safe_set_value(ws, ws.cell(row=row_top, column=mat_col).coordinate, item.get('Mat', ''))
-                        self.safe_set_value(ws, ws.cell(row=row_bot, column=mat_col).coordinate, item.get('Mat_Sub', ''))
 
-                    # 용접사(Welder) - 상/하단 분리
                     wld_col = self.col_to_num(self.config.get('KOGAS_W_COL_WELDER', '29'))
                     if wld_col >= 1:
                         self.safe_set_value(ws, ws.cell(row=row_top, column=wld_col).coordinate, item.get('Welder', ''))
-                        self.safe_set_value(ws, ws.cell(row=row_bot, column=wld_col).coordinate, item.get('Welder_Sub', ''))
 
-                    # 두께(T) - 2행 수직 병합
                     thk_col = self.col_to_num(self.config.get('KOGAS_W_COL_THK', '6'))
                     if thk_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, thk_col, row_bot, thk_col)
-                        except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=thk_col).coordinate, item.get('T', ''))
-                        ws.cell(row=row_top, column=thk_col).alignment = Alignment(horizontal='center', vertical='center')
 
-                    # 위치(Location) - 2행 수직 병합
                     loc_col = self.col_to_num(self.config.get('KOGAS_W_COL_LOC', '0'))
                     if loc_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, loc_col, row_bot, loc_col)
-                        except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=loc_col).coordinate, item.get('Loc', ''))
-                        ws.cell(row=row_top, column=loc_col).alignment = Alignment(horizontal='center', vertical='center')
 
-                    # 구경(Size) - 2행 수직 병합
                     size_col = self.col_to_num(self.config.get('KOGAS_W_COL_SIZE', '0'))
                     if size_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, size_col, row_bot, size_col)
-                        except: pass
                         self.safe_set_value(ws, ws.cell(row=row_top, column=size_col).coordinate, item.get('Size', ''))
-                        ws.cell(row=row_top, column=size_col).alignment = Alignment(horizontal='center', vertical='center')
 
                     # D1~D15 결과 - 상단 행에 개별 지정 열 또는 기본 순차 열 기입
                     for d_i in range(1, 16):
                         d_col_idx = self.col_to_num(self.config.get(f'KOGAS_W_COL_D{d_i}', '0'))
-                        if d_col_idx == 0:
-                            kogas_d_start_col = int(self.config.get('KOGAS_W_D_START_COL', self.config.get('RT_KOGAS_D_START_COL', '17')))
-                            d_col_idx = kogas_d_start_col + (d_i - 1)
-                        
                         if d_col_idx >= 1:
                             d_val = item.get(f'D{d_i}', '')
                             if d_val:
                                 self.safe_set_value(ws, ws.cell(row=row_top, column=d_col_idx).coordinate, d_val)
 
-                    # 합/불(Result) - 2행 수직 병합
-                    res_col = self.col_to_num(self.config.get('KOGAS_W_COL_RES', '28'))
-                    if res_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, res_col, row_bot, res_col)
-                        except: pass
-                        self.safe_set_value(ws, ws.cell(row=row_top, column=res_col).coordinate, item.get('Result', 'ACC'))
-                        ws.cell(row=row_top, column=res_col).alignment = Alignment(horizontal='center', vertical='center')
+                    acc_col = self.col_to_num(self.config.get('KOGAS_W_COL_ACC', '0'))
+                    if acc_col >= 1:
+                        res_str = str(item.get('Result', '')).upper()
+                        acc_val = item.get('Acc', '')
+                        if not acc_val:
+                            acc_val = "O" if ("ACC" in res_str or "OK" in res_str) else ""
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=acc_col).coordinate, acc_val)
 
-                    # 비고(Remarks) - 2행 수직 병합
-                    rem_col = self.col_to_num(self.config.get('KOGAS_W_COL_REM', '30'))
-                    if rem_col >= 1:
-                        try: self.safe_merge_cells(ws, row_top, rem_col, row_bot, rem_col)
-                        except: pass
-                        self.safe_set_value(ws, ws.cell(row=row_top, column=rem_col).coordinate, item.get('Remarks', ''))
-                        ws.cell(row=row_top, column=rem_col).alignment = Alignment(horizontal='center', vertical='center')
+                    rej_col = self.col_to_num(self.config.get('KOGAS_W_COL_REJ', '0'))
+                    if rej_col >= 1:
+                        res_str = str(item.get('Result', '')).upper()
+                        rej_val = item.get('Rej', '')
+                        if not rej_val:
+                            rej_val = "O" if any(x in res_str for x in ["REJ", "NG", "불합격"]) else ""
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=rej_col).coordinate, rej_val)
 
-                    current_row += block_size  # 2행씩 전진
+                    deg_col = self.col_to_num(self.config.get('KOGAS_W_COL_DEG', '0'))
+                    if deg_col >= 1:
+                        deg_val = str(item.get('Deg', '')).strip()
+                        if deg_val.lower() == 'nan': deg_val = ''
+                        self.safe_set_value(ws, ws.cell(row=row_top, column=deg_col).coordinate, deg_val)
+
+                    current_row += block_size  # 블록 사이즈만큼 전진 (1행)
 
                 else:
                     # ===== 일반 모드: 1행 1데이터 =====
