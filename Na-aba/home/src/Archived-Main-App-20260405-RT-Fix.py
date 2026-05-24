@@ -205,11 +205,10 @@ class PMIReportApp:
         self.paut_manual_vars['db'].trace_add("write", lambda *args: self._update_paut_target_fsh())
         self.paut_extracted_data = []
         
-        # --- RT State Variables ---
         self.rt_target_file_path = tk.StringVar(value=self.config.get('RT_TARGET_PATH', ""))
         self.rt_template_file_path = tk.StringVar(value=self.config.get('RT_TEMPLATE_PATH', ""))
-        self.kogas_target_file_path = tk.StringVar()
-        self.kogas_template_file_path = tk.StringVar()
+        self.kogas_target_file_path = tk.StringVar(value=self.config.get('KOGAS_TARGET_PATH', ""))
+        self.kogas_template_file_path = tk.StringVar(value=self.config.get('KOGAS_TEMPLATE_PATH', ""))
         self.rt_kogas_mode = tk.BooleanVar(value=False) 
         self.rt_kogas_mode.trace_add("write", lambda *a: self._on_rt_kogas_mode_change())
         self.extracted_data = []
@@ -472,8 +471,19 @@ class PMIReportApp:
                         self.pt_column_keys = list(saved_data['pt_column_keys'])
                     if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
                         self.paut_column_keys = list(saved_data['paut_column_keys'])
-                    
                     self.config.update(saved_data)
+                    
+                    # Restore Path StringVars in UI
+                    self.target_file_path.set(self.config.get('PMI_TARGET_PATH', ""))
+                    self.template_file_path.set(self.config.get('PMI_TEMPLATE_PATH', ""))
+                    self.rt_target_file_path.set(self.config.get('RT_TARGET_PATH', ""))
+                    self.rt_template_file_path.set(self.config.get('RT_TEMPLATE_PATH', ""))
+                    self.kogas_target_file_path.set(self.config.get('KOGAS_TARGET_PATH', ""))
+                    self.kogas_template_file_path.set(self.config.get('KOGAS_TEMPLATE_PATH', ""))
+                    self.pt_target_file_path.set(self.config.get('PT_TARGET_PATH', ""))
+                    self.pt_template_file_path.set(self.config.get('PT_TEMPLATE_PATH', ""))
+                    self.paut_target_file_path.set(self.config.get('PAUT_TARGET_PATH', ""))
+                    self.paut_template_file_path.set(self.config.get('PAUT_TEMPLATE_PATH', ""))
                 self.log("[SUCCESS] 사용자 저장 설정을 모두 불러왔습니다.")
                 
                 # Restore Window Geometry/State
@@ -706,12 +716,13 @@ class PMIReportApp:
             keys_to_save += [k for k in self.config.keys() if k.startswith("RT_COL_") or k.startswith("RT_NAME_")]
         elif mode == "KOGAS":
             keys_to_save += ["KOGAS_START_ROW", "KOGAS_DATA_END_ROW", "RT_KOGAS_D_START_COL"]
-            keys_to_save += [k for k in self.config.keys() if k.startswith("KOGAS_COL_") or k.startswith("KOGAS_NAME_")]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("KOGAS_")]
         elif mode == "PT":
             keys_to_save += ["PT_START_ROW", "PT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("PT_COL_") or k.startswith("PT_NAME_")]
         elif mode == "PAUT":
             keys_to_save += ["PAUT_START_ROW", "PAUT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PAUT_COL_") or k.startswith("PAUT_NAME_")]
         elif mode == "PMI":
             keys_to_save += ["PMI_START_ROW", "PMI_DATA_END_ROW", "PMI_PRINT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("PMI_COL_") or k.startswith("PMI_NAME_")]
@@ -726,6 +737,57 @@ class PMIReportApp:
             messagebox.showinfo("저장 완료", f"템플릿 전용 설정이 저장되었습니다.\n{os.path.basename(config_path)}")
         except Exception as e:
             messagebox.showerror("저장 실패", f"설정 저장 중 오류 발생: {e}")
+
+    def save_template_specific_config_silent(self, mode="RT"):
+        """현재 설정을 선택된 템플릿 전용 JSON 파일로 조용히(팝업 없이) 저장"""
+        if mode == "RT": template_path = self.rt_template_file_path.get()
+        elif mode == "KOGAS": template_path = self.kogas_template_file_path.get()
+        elif mode == "PT": template_path = self.pt_template_file_path.get()
+        elif mode == "PAUT": template_path = self.paut_template_file_path.get()
+        else: template_path = self.template_file_path.get()
+        
+        if not template_path or not os.path.exists(template_path):
+            return
+            
+        config_path = os.path.splitext(template_path)[0] + ".json"
+        
+        # Determine relevant keys to save for this template
+        keys_to_save = []
+        for ctx in ["COVER", "DATA"]:
+            for prefix in ["SITCO", "SEOUL", "FOOTER", "FOOTER_PT"]:
+                for suffix in ["_PATH", "_ANCHOR", "_W", "_H", "_X", "_Y"]:
+                    keys_to_save.append(f"{prefix}_{mode}_{ctx}{suffix}")
+            for suffix in ["_TOP", "_BOTTOM", "_LEFT", "_RIGHT"]:
+                keys_to_save.append(f"MARGIN_{mode}_{ctx}{suffix}")
+            keys_to_save.append(f"PRINT_SCALE_{mode}_{ctx}")
+            keys_to_save.append(f"PRINT_AREA_{mode}_{ctx}")
+            
+        # 2. Mode-specific boundaries and column mappings
+        if mode == "RT":
+            keys_to_save += ["RT_START_ROW", "RT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("RT_COL_") or k.startswith("RT_NAME_")]
+        elif mode == "KOGAS":
+            keys_to_save += ["KOGAS_START_ROW", "KOGAS_DATA_END_ROW", "RT_KOGAS_D_START_COL"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("KOGAS_")]
+        elif mode == "PT":
+            keys_to_save += ["PT_START_ROW", "PT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PT_COL_") or k.startswith("PT_NAME_")]
+        elif mode == "PAUT":
+            keys_to_save += ["PAUT_START_ROW", "PAUT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PAUT_COL_") or k.startswith("PAUT_NAME_")]
+        elif mode == "PMI":
+            keys_to_save += ["PMI_START_ROW", "PMI_DATA_END_ROW", "PMI_PRINT_END_ROW"]
+            keys_to_save += [k for k in self.config.keys() if k.startswith("PMI_COL_") or k.startswith("PMI_NAME_")]
+
+        # Build template-specific dict
+        t_data = {k: self.config[k] for k in keys_to_save if k in self.config}
+        
+        try:
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(t_data, f, indent=4, ensure_ascii=False)
+            self.log(f"💾 [Auto-Save] '{os.path.basename(template_path)}' 전용 설정이 자동 저장되었습니다.")
+        except Exception as e:
+            self.log(f"[ERROR] 템플릿 전용 설정 자동 저장 실패: {e}")
 
     def save_settings(self):
         """현재 설정을 파일(JSON)에 저장"""
@@ -785,6 +847,11 @@ class PMIReportApp:
 
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=4, default=str)
+
+            # [NEW] 모든 모드의 템플릿 전용 설정 파일도 함께 동기화(자동 저장)하여 값 덮어쓰기 방지
+            for m in ["PMI", "RT", "KOGAS", "PT", "PAUT"]:
+                self.save_template_specific_config_silent(m)
+
             self.log("[SUCCESS] 모든 설정이 파일에 안전하게 저장되었습니다.")
             return True, "성공"
         except Exception as e:
@@ -900,6 +967,10 @@ class PMIReportApp:
         return f"Reject ({loc} a/t: {actual_a_t:.3f} > {allowed_a_t:.3f})", loc
 
     def _on_main_tab_changed(self, event):
+        try:
+            # [NEW] 탭 전환 전 기존 설정 내용을 안전하게 자동 저장
+            self.save_settings()
+        except: pass
         try:
             tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
             if "PMI" in tab_text: self.current_mode = "PMI"
@@ -1549,8 +1620,15 @@ class PMIReportApp:
 
     def _on_rt_sub_mode_change(self, from_tab=False):
         """RT 내부 서브 모드(표준/가스공사) 변경 시 UI 및 상태 동기화"""
+        try:
+            # [NEW] 서브 모드 전환 전 기존 설정 내용을 안전하게 자동 저장
+            self.save_settings()
+        except: pass
         mode = self.rt_sub_mode.get()
         self.current_mode = mode
+        self._sub_mode_switching = True  # guard: prevent _on_rt_kogas_mode_change from overwriting paths
+        self.rt_kogas_mode.set(mode == "KOGAS")
+        self._sub_mode_switching = False
         self.log(f"🔄 RT 서브 모드 전환: {mode}")
         
         # 1. 오른쪽 미리보기 탭 동기화 (라디오 버튼으로 바꾼 경우)
@@ -1591,6 +1669,10 @@ class PMIReportApp:
 
     def _on_rt_kogas_mode_change(self):
         """가스공사 모드 변경 시 템플릿 경로 자동 설정 및 미리보기 컬럼 업데이트"""
+        # 서브 모드 전환 중이면 경로 자동 설정을 건너뜀 (중복 실행 방지)
+        if getattr(self, '_sub_mode_switching', False):
+            self._update_rt_preview_columns("KOGAS" if self.rt_kogas_mode.get() else "RT")
+            return
         if self.rt_kogas_mode.get():
             # 가스공사 템플릿 경로 탐색
             data_dir = os.path.join(BASE_DIR, "Na-aba", "home", "data")
@@ -1599,7 +1681,7 @@ class PMIReportApp:
             
             kogas_template = os.path.join(data_dir, "가스공사 의뢰서.xlsx")
             if os.path.exists(kogas_template):
-                self.rt_template_file_path.set(kogas_template)
+                self.kogas_template_file_path.set(kogas_template)
                 self.log("💡 가스공사 전용 템플릿이 자동으로 선택되었습니다.")
             else:
                 self.log("⚠️ 가스공사 의뢰서.xlsx 파일을 찾을 수 없습니다. (data 폴더 확인 필요)")
@@ -1615,7 +1697,7 @@ class PMIReportApp:
                 self.log("💡 일반 KS 양식 템플릿으로 복구되었습니다.")
         
         # [NEW] 미리보기 컬럼 구성 업데이트
-        self._update_rt_preview_columns()
+        self._update_rt_preview_columns("KOGAS" if self.rt_kogas_mode.get() else "RT")
 
     def _update_rt_preview_columns(self, mode="RT"):
         """모드 여부에 따라 RT 미리보기 컬럼을 동적으로 변경 (사용자 설정 키 준수)"""
@@ -1627,6 +1709,7 @@ class PMIReportApp:
         current_cols = list(getattr(self, keys_attr))
             
         tree["columns"] = tuple(current_cols)
+        tree["displaycolumns"] = tuple(current_cols)
         
         # [NEW] 기본 표시 이름 맵핑
         default_names = {
@@ -3908,14 +3991,15 @@ class PMIReportApp:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(f"{mode} 컬럼 관리")
-        dialog.geometry("400x550")
+        dialog.geometry("420x600")
         dialog.transient(self.root)
         dialog.grab_set()
         
         main_frame = ttk.Frame(dialog, padding=20)
         main_frame.pack(fill='both', expand=True)
         
-        ttk.Label(main_frame, text=f"{mode} 표시할 컬럼을 선택하세요:", font=("Malgun Gothic", 10, "bold")).pack(pady=(0, 10), anchor='w')
+        ttk.Label(main_frame, text=f"{mode} 표시할 컬럼을 클릭 순서대로 정렬 및 선택하세요:", font=("Malgun Gothic", 10, "bold")).pack(pady=(0, 5), anchor='w')
+        ttk.Label(main_frame, text="* 체크 시 클릭한 순서대로 번호(순서)가 부여됩니다.", foreground="gray", font=("Malgun Gothic", 8)).pack(pady=(0, 10), anchor='w')
         
         # 엑셀 데이터 또는 기존 정의에서 모든 키 추출
         all_keys = []
@@ -3967,16 +4051,24 @@ class PMIReportApp:
         vars_dict = {}
         current_keys = list(getattr(self, keys_attr))
         
-        # [ORDERING] 표시할 키들을 현재 설정된 순서대로 정렬 (나머지는 뒤로)
-        ordered_keys = [k for k in current_keys if k in display_keys]
-        for k in display_keys:
-            if k not in ordered_keys: ordered_keys.append(k)
+        # 클릭 순서를 추적할 리스트 초기화 (현재 활성화된 키들의 순서 반영)
+        click_ordered_keys = [k for k in current_keys if k in display_keys]
+        ordered_keys_for_ui = list(display_keys)
             
+        def _on_check_toggled(key, var):
+            if var.get():
+                if key not in click_ordered_keys:
+                    click_ordered_keys.append(key)
+            else:
+                if key in click_ordered_keys:
+                    click_ordered_keys.remove(key)
+            _refresh_list()
+
         def _refresh_list():
             for widget in scrollable_frame.winfo_children():
                 widget.destroy()
             
-            for i, k in enumerate(ordered_keys):
+            for i, k in enumerate(ordered_keys_for_ui):
                 f = tk.Frame(scrollable_frame, background="#ffffff")
                 f.pack(fill='x', pady=2)
                 
@@ -3986,24 +4078,59 @@ class PMIReportApp:
                     vars_dict[k] = v
                 
                 display_name = label_map.get(k, k)
-                cb = ttk.Checkbutton(f, text=display_name, variable=v)
+                if v.get() and k in click_ordered_keys:
+                    order_num = click_ordered_keys.index(k) + 1
+                    label_text = f"[{order_num}] {display_name}"
+                else:
+                    label_text = f"[ ] {display_name}"
+                
+                cb = ttk.Checkbutton(f, text=label_text, variable=v, command=lambda _k=k, _v=v: _on_check_toggled(_k, _v))
                 cb.pack(side='left', padx=5)
                 
-                # Up/Down Buttons
+                # Up/Down Buttons as supplementary tool inside order list
                 btn_f = tk.Frame(f, background="#ffffff")
                 btn_f.pack(side='right', padx=5)
                 
-                if i > 0:
-                    ttk.Button(btn_f, text="▲", width=2, command=lambda _i=i: _move(_i, -1)).pack(side='left')
-                if i < len(ordered_keys) - 1:
-                    ttk.Button(btn_f, text="▼", width=2, command=lambda _i=i: _move(_i, 1)).pack(side='left')
+                if k in click_ordered_keys:
+                    o_idx = click_ordered_keys.index(k)
+                    if o_idx > 0:
+                        ttk.Button(btn_f, text="▲", width=2, command=lambda _k=k: _move_in_order(_k, -1)).pack(side='left')
+                    if o_idx < len(click_ordered_keys) - 1:
+                        ttk.Button(btn_f, text="▼", width=2, command=lambda _k=k: _move_in_order(_k, 1)).pack(side='left')
 
-        def _move(idx, delta):
-            target = idx + delta
-            ordered_keys[idx], ordered_keys[target] = ordered_keys[target], ordered_keys[idx]
-            _refresh_list()
+        def _move_in_order(key, delta):
+            if key in click_ordered_keys:
+                idx = click_ordered_keys.index(key)
+                target = idx + delta
+                if 0 <= target < len(click_ordered_keys):
+                    click_ordered_keys[idx], click_ordered_keys[target] = click_ordered_keys[target], click_ordered_keys[idx]
+                    _refresh_list()
 
         _refresh_list()
+
+        # 도구 버튼 영역 (전체 선택/전체 해제/컬럼 추가/컬럼 삭제)
+        tool_btn_frame = ttk.Frame(main_frame)
+        tool_btn_frame.pack(fill='x', pady=5)
+
+        def _select_all():
+            for k in ordered_keys_for_ui:
+                if k not in vars_dict:
+                    vars_dict[k] = tk.BooleanVar(value=True)
+                else:
+                    vars_dict[k].set(True)
+                if k not in click_ordered_keys:
+                    click_ordered_keys.append(k)
+            _refresh_list()
+
+        def _clear_all():
+            for k in ordered_keys_for_ui:
+                if k in vars_dict:
+                    vars_dict[k].set(False)
+            click_ordered_keys.clear()
+            _refresh_list()
+
+        ttk.Button(tool_btn_frame, text="모두 선택", command=_select_all).pack(side='left', padx=2, expand=True, fill='x')
+        ttk.Button(tool_btn_frame, text="모두 해제", command=_clear_all).pack(side='left', padx=2, expand=True, fill='x')
 
         # 컬럼 관리 버튼 영역 (추가/삭제)
         mgr_btn_frame = ttk.Frame(main_frame)
@@ -4057,8 +4184,8 @@ class PMIReportApp:
                     dialog.destroy()
                     self.manage_columns(mode)
 
-        ttk.Button(mgr_btn_frame, text="컬럼 추가", command=_add_col).pack(side='left', padx=5, expand=True)
-        ttk.Button(mgr_btn_frame, text="컬럼 삭제", command=_del_col).pack(side='left', padx=5, expand=True)
+        ttk.Button(mgr_btn_frame, text="컬럼 추가", command=_add_col).pack(side='left', padx=2, expand=True, fill='x')
+        ttk.Button(mgr_btn_frame, text="컬럼 삭제", command=_del_col).pack(side='left', padx=2, expand=True, fill='x')
             
         def _apply():
             selected_keys = []
@@ -4075,9 +4202,14 @@ class PMIReportApp:
             elif "No" not in selected_keys:
                 selected_keys.append("No") # Fallback safety
 
-            # [FIX] 사용자가 조정한 순서(ordered_keys)를 기준으로 컬럼 수집
-            for k in ordered_keys:
+            # [FIX] 사용자가 클릭한 순서(click_ordered_keys)를 기준으로 컬럼 수집
+            for k in click_ordered_keys:
                 if k not in ["ST", "_status", "No", "selected"] and vars_dict[k].get():
+                    selected_keys.append(k)
+            
+            # click_ordered_keys에 없지만 체크되어 있는 예외적인 항목 처리 (안전장치)
+            for k, v in vars_dict.items():
+                if k not in ["ST", "_status", "No", "selected"] and v.get() and k not in selected_keys:
                     selected_keys.append(k)
             
             setattr(self, keys_attr, selected_keys)
@@ -4106,10 +4238,7 @@ class PMIReportApp:
                     header_mapping[col_id] = label_map.get(k, col_id)
 
                 tree["columns"] = tuple(current_cols)
-                new_display = [x for x in old_display_cols if x in current_cols]
-                for x in current_cols:
-                    if x not in new_display: new_display.append(x)
-                tree["displaycolumns"] = tuple(new_display)
+                tree["displaycolumns"] = tuple(current_cols)
                 
                 for col in tree["columns"]:
                     w = 80
@@ -4878,6 +5007,7 @@ class PMIReportApp:
         data_targets = {
             "PMI": self.extracted_data,
             "RT": self.rt_extracted_data,
+            "KOGAS": self.kogas_extracted_data,
             "PT": self.pt_extracted_data,
             "PAUT": self.paut_extracted_data
         }
@@ -4893,7 +5023,7 @@ class PMIReportApp:
             "ST": "_status", "ISO Drawing No.": "Dwg", "Joint No": "Joint", "Test Location": "Loc", "Weld Type": "WType",
             "Drawing No.": "Dwg", "Joint No.": "Joint"
         }
-        data_key = key_map.get(col)
+        data_key = key_map.get(col, col)
         if not data_key: return
 
         # 2. 정렬 방향 결정 (기존 방향과 같으면 토글)
@@ -4952,6 +5082,7 @@ class PMIReportApp:
         # 5. 헤더 텍스트 갱신 (화살표)
         tree_map = {
             "PMI": self.preview_tree, "RT": self.rt_preview_tree,
+            "KOGAS": self.kogas_preview_tree,
             "PT": self.pt_preview_tree, "PAUT": self.paut_preview_tree
         }
         target_tree = tree_map.get(mode)
@@ -6706,7 +6837,7 @@ class PMIReportApp:
                             'selected': True, 'order_index': len(self.rt_extracted_data) + len(all_extracted_data),
                             '_src': {
                                 'sheet': sheet_name,
-                                'row': r_idx + header_idx + 2,
+                                'row': r_idx + 4 + header_idx + 2,
                                 'col_result': list(df.columns).index(col_result) + 1 if col_result is not None else None,
                                 'col_remarks': list(df.columns).index(col_remarks) + 1 if col_remarks is not None else None,
                                 'col_acc': list(df.columns).index(col_acc) + 1 if col_acc is not None else None,
@@ -6718,7 +6849,7 @@ class PMIReportApp:
                         for i in range(1, 16):
                             key = f'D{i}'; src_col = defect_cols.get(key)
                             src_val = str(row_top[src_col]).strip() if src_col is not None else ''
-                            item_data[key] = src_val if src_val else ('1' if i <= num_shots else '')
+                            item_data[key] = src_val if (src_val and src_val.lower() != 'nan') else ''
 
                         if num_shots > 1:
                             for shot_idx in range(1, num_shots + 1):
@@ -6995,30 +7126,110 @@ class PMIReportApp:
                 # Determine final result (If any item is Rej, result is Rej)
                 final_res = "ACC"
                 all_remarks = []
-                has_defects = {k: False for k in src.get('col_defects', {}).keys()}
                 
-                for it in items:
-                    res = str(it.get('Result', '')).upper()
-                    if any(x in res for x in ["REJ", "NG", "불합격"]): final_res = "REJ"
+                if mode == "KOGAS":
+                    for it in items:
+                        res = str(it.get('Result', '')).upper()
+                        if any(x in res for x in ["REJ", "NG", "불합격"]): final_res = "REJ"
+                        rem = str(it.get('Remarks', '')).strip()
+                        if rem and rem not in all_remarks: all_remarks.append(rem)
                     
-                    rem = str(it.get('Remarks', '')).strip()
-                    if rem and rem not in all_remarks: all_remarks.append(rem)
+                    # KOGAS 비고란은 컬럼 11 (K열)
+                    ws.cell(row=row_idx, column=11, value=", ".join(all_remarks) if all_remarks else None)
+                    
+                    # NDT 의뢰방식 확인 (13:RT, 14:UT, 15:PT)
+                    rt_val = ws.cell(row=row_idx, column=13).value
+                    ut_val = ws.cell(row=row_idx, column=14).value
+                    pt_val = ws.cell(row=row_idx, column=15).value
+                    
+                    def is_marked(v):
+                        if v is None: return False
+                        cleaned = str(v).strip().upper()
+                        return cleaned in ["O", "V", "X", "●", "합격", "1", "TRUE"]
+                    
+                    rt_req = is_marked(rt_val)
+                    ut_req = is_marked(ut_val)
+                    pt_req = is_marked(pt_val)
+                    
+                    has_rt_films = False
+                    for it in items:
+                        loc_str = str(it.get('Loc', '')).strip()
+                        if re.match(r'^\d+', loc_str):
+                            has_rt_films = True
+                            break
+                    
+                    defect_map = {
+                        "D1": "C", "D2": "IP", "D3": "LF", "D4": "S", "D5": "P",
+                        "D6": "UC", "D7": "RUC", "D8": "BT", "D9": "TI", "D10": "CP",
+                        "D11": "RC", "D12": "Mis", "D13": "EP", "D14": "SD", "D15": "Oth"
+                    }
+                    
+                    def get_item_val(it):
+                        grade = str(it.get('Deg', '')).strip()
+                        if grade.lower() == 'nan':
+                            grade = ''
+                        checked = []
+                        for d_key, abbrev in defect_map.items():
+                            val = str(it.get(d_key, '')).strip()
+                            if val in ["√", "1", "v", "V", "o", "O", "●", "?"]:
+                                checked.append(abbrev)
+                        if checked:
+                            return f"{grade if grade else '4'}/{','.join(checked)}"
+                        else:
+                            if any(x in str(it.get('Result', '')).upper() for x in ["ACC", "OK"]):
+                                return "1"
+                            return grade if grade else "4"
+
+                    # RT (Q~W: 17~23) 반영
+                    if rt_req or has_rt_films:
+                        for col in range(17, 24):
+                            ws.cell(row=row_idx, column=col, value=None)
+                        for it in items:
+                            loc_str = str(it.get('Loc', '')).strip()
+                            film_num = None
+                            match = re.match(r'^(\d+)', loc_str)
+                            if match:
+                                film_num = int(match.group(1))
+                            if film_num and 1 <= film_num <= 7:
+                                val = get_item_val(it)
+                                ws.cell(row=row_idx, column=16 + film_num, value=val)
+                                
+                    # UT/UP (X: 24) 반영
+                    if ut_req:
+                        it = items[0] if items else {}
+                        val = get_item_val(it)
+                        ws.cell(row=row_idx, column=24, value=val)
+                        
+                    # PT (Y: 25) 반영
+                    if pt_req:
+                        it = items[0] if items else {}
+                        val = get_item_val(it)
+                        ws.cell(row=row_idx, column=25, value=val)
+                else:
+                    has_defects = {k: False for k in src.get('col_defects', {}).keys()}
+                    
+                    for it in items:
+                        res = str(it.get('Result', '')).upper()
+                        if any(x in res for x in ["REJ", "NG", "불합격"]): final_res = "REJ"
+                        
+                        rem = str(it.get('Remarks', '')).strip()
+                        if rem and rem not in all_remarks: all_remarks.append(rem)
+                        
+                        if src.get('col_defects'):
+                            for d_key, col_idx in src['col_defects'].items():
+                                if it.get(d_key) in ["√", "1", "v", "V", "o", "O"]: has_defects[d_key] = True
+
+                    # Write back to Excel
+                    if src.get('col_result'):
+                        ws.cell(row=row_idx, column=src['col_result'], value=final_res)
+                    
+                    if src.get('col_remarks') and all_remarks:
+                        ws.cell(row=row_idx, column=src['col_remarks'], value=", ".join(all_remarks))
                     
                     if src.get('col_defects'):
-                        for d_key in src['col_defects'].keys():
-                            if it.get(d_key) in ["√", "1", "v", "V", "o", "O"]: has_defects[d_key] = True
-
-                # Write back to Excel
-                if src.get('col_result'):
-                    ws.cell(row=row_idx, column=src['col_result'], value=final_res)
-                
-                if src.get('col_remarks') and all_remarks:
-                    ws.cell(row=row_idx, column=src['col_remarks'], value=", ".join(all_remarks))
-                
-                if src.get('col_defects'):
-                    for d_key, col_idx in src['col_defects'].items():
-                        if has_defects[d_key]:
-                            ws.cell(row=row_idx, column=col_idx, value="√")
+                        for d_key, col_idx in src['col_defects'].items():
+                            if has_defects[d_key]:
+                                ws.cell(row=row_idx, column=col_idx, value="√")
                 
                 count += 1
 
@@ -7026,6 +7237,10 @@ class PMIReportApp:
             self.log(f"✅ 총 {count}개 행의 결과를 의뢰서에 성공적으로 반영했습니다.")
             messagebox.showinfo("완료", f"{count}개 행의 결과가 의뢰서에 반영되었습니다.")
 
+        except PermissionError:
+            msg = f"파일이 Excel에서 열려 있어 저장할 수 없습니다.\n\n'{os.path.basename(target_file)}' 파일을 Excel에서 닫은 후 다시 시도해 주세요."
+            self.log(f"❌ 의뢰서 결과 반영 실패: 파일이 열려 있음 (PermissionError)")
+            messagebox.showerror("파일 접근 오류", msg)
         except Exception as e:
             self.log(f"❌ 의뢰서 결과 반영 실패: {e}")
             messagebox.showerror("오류", f"의뢰서 결과 반영 중 오류가 발생했습니다: {e}")
