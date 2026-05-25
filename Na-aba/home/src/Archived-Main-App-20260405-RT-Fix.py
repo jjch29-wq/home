@@ -6702,6 +6702,12 @@ class PMIReportApp:
                             try:
                                 return v.strftime('%Y-%m-%d')
                             except: pass
+                        if isinstance(v, str):
+                            v_strip = v.strip()
+                            # [NEW] Preserve leading zeros for purely numeric strings (e.g. "075")
+                            if v_strip.startswith('0') and v_strip.isdigit() and len(v_strip) > 1:
+                                return v_strip
+                                
                         try:
                             if isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.','').isdigit()):
                                 fv = float(v)
@@ -6718,6 +6724,19 @@ class PMIReportApp:
                             elif ret_str[4] == '/' and ret_str[7] == '/':
                                 ret_str = ret_str[:10]
                         return ret_str
+
+                    def process_welder_string(w_str):
+                        if not w_str or str(w_str).lower() == 'nan': return ''
+                        import re
+                        parts = re.split(r'[/,]', str(w_str))
+                        processed = []
+                        for p in parts:
+                            p = p.strip()
+                            if len(p) > 3:
+                                p = p[-3:]
+                            if p and p not in processed:
+                                processed.append(p)
+                        return "/".join(processed)
 
                 if mode == "KOGAS":
                     # ===== 가스공사 모드: 2개 행을 1개 Joint로 페어링 =====
@@ -6789,14 +6808,22 @@ class PMIReportApp:
 
                         # 6. 용접사 (Welder) 및 Welder_Sub
                         raw_welder = clean_v(row_top[col_welder]) if col_welder is not None else ''
-                        v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
+                        v_welder = process_welder_string(raw_welder)
 
                         raw_welder_sub = ''
                         if row_bot is not None and col_welder is not None:
-                            raw_welder_sub = str(row_bot[col_welder]).strip()
-                        v_welder_sub = raw_welder_sub[-3:] if len(raw_welder_sub) > 3 else raw_welder_sub
-                        if not v_welder_sub or v_welder_sub == 'nan':
-                            v_welder_sub = v_welder
+                            raw_welder_sub = clean_v(row_bot[col_welder])
+                        v_welder_sub = process_welder_string(raw_welder_sub)
+                        
+                        # [NEW] Combine both welders into one string if they are different and not already included
+                        v_welder_parts = v_welder.split('/') if v_welder else []
+                        if v_welder_sub and v_welder_sub != 'nan':
+                            for sub_part in v_welder_sub.split('/'):
+                                if sub_part and sub_part not in v_welder_parts:
+                                    v_welder_parts.append(sub_part)
+                        v_welder = "/".join(v_welder_parts)
+                        
+                        v_welder_sub = v_welder
 
                         # 7. 재질 (Mat) 및 Mat_Sub
                         raw_mat = clean_v(row_top[col_mat]) if col_mat is not None else ''
@@ -6912,7 +6939,7 @@ class PMIReportApp:
                             num_shots = self.calculate_rt_shots(size_val)
 
                             raw_welder = clean_v(row[col_welder]) if col_welder is not None else ''
-                            v_welder = raw_welder[-3:] if len(raw_welder) > 3 else raw_welder
+                            v_welder = process_welder_string(raw_welder)
 
                             v_date = curr_date
 
@@ -7067,22 +7094,26 @@ class PMIReportApp:
                 self.rt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("RT")
                 self._update_rt_preview_columns(mode="RT") # [FIX] 표시 이름 보존을 위해 호출
+                self.rt_sort_col = "" # [NEW] Force Ascending
                 self.sort_by_column("Dwg", mode="RT") 
                 total_count = len(self.rt_extracted_data)
             elif mode == "KOGAS":
                 self.kogas_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("KOGAS")
                 self._update_rt_preview_columns(mode="KOGAS") # [FIX] 표시 이름 보존을 위해 호출
+                self.kogas_sort_col = "" # [NEW] Force Ascending
                 self.sort_by_column("Dwg", mode="KOGAS")
                 total_count = len(self.kogas_extracted_data)
             elif mode == "PT":
                 self.pt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("PT")
+                self.pt_sort_col = "" # [NEW] Force Ascending
                 self.sort_by_column("Dwg", mode="PT") 
                 total_count = len(self.pt_extracted_data)
             else:
                 self.extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("PMI")
+                self.pmi_sort_col = "" # [NEW] Force Ascending
                 self.sort_by_column("Dwg", mode="PMI")
                 total_count = len(self.extracted_data)
             
@@ -7129,6 +7160,7 @@ class PMIReportApp:
             # Group items by source row to handle multi-shot joints
             groups = {}
             for item in data:
+                if not item.get('date_filtered', True): continue # [NEW] Apply Date filter
                 if not item.get('_src'): continue
                 src_key = (item['_src']['sheet'], item['_src']['row'])
                 if src_key not in groups: groups[src_key] = []
