@@ -934,7 +934,7 @@ class PMIReportApp:
                 
             limit = h_surf_max if loc == "Surface" else h_sub_max
             if h_val > limit: return f"Reject ({loc} h: {h_val} > {limit}mm)", loc
-            return "Accept", loc
+            return f"Accept (h: {h_val} <= {limit}mm)", loc
 
         # 1.2 Special Rules for 13mm <= t < 25.4mm
         if 13 <= t_val < 25.4:
@@ -942,7 +942,7 @@ class PMIReportApp:
             actual_h_t = h_val / t_val
             allowed_h_t = 0.087 if loc == "Surface" else 0.143 
             if actual_h_t > allowed_h_t: return f"Reject ({loc} h/t: {actual_h_t:.3f} > {allowed_h_t:.3f})", loc
-            return "Accept", loc
+            return f"Accept (h/t: {actual_h_t:.3f} <= {allowed_h_t:.3f})", loc
                 
         # 2. Aspect Ratio (a/l) logic for t >= 25.4mm
         a_val = h_val if loc == "Surface" else h_val / 2
@@ -963,7 +963,7 @@ class PMIReportApp:
         if allowed_a_t == 0: allowed_a_t = master_table[-1][1] if loc == 'Surface' else master_table[-1][2]
 
         actual_a_t = a_val / t_val
-        if actual_a_t <= allowed_a_t: return "Accept", loc
+        if actual_a_t <= allowed_a_t: return f"Accept (a/t: {actual_a_t:.3f} <= {allowed_a_t:.3f})", loc
         return f"Reject ({loc} a/t: {actual_a_t:.3f} > {allowed_a_t:.3f})", loc
 
     def _on_main_tab_changed(self, event):
