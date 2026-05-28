@@ -59,6 +59,11 @@ class ExcelMergerApp:
         keyword_entry = tk.Entry(smart_frame, textvariable=self.keyword_var, font=("Malgun Gothic", 10), bg="#ecf0f1")
         keyword_entry.pack(fill=tk.X, pady=5)
         
+        self.only_totals_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(smart_frame, text="합계(소계/총합계)만 추출", variable=self.only_totals_var,
+                       font=("Malgun Gothic", 9), fg="#ecf0f1", bg="#2c3e50", selectcolor="#2c3e50",
+                       activebackground="#2c3e50", activeforeground="#ecf0f1").pack(anchor="w", pady=(2, 5))
+        
         tk.Label(smart_frame, text="💡 v2.7: 중복 헤더 방지 및 전역 정보(Report No) 추출이 최적화되었습니다.", 
                  font=("Malgun Gothic", 8), fg="#95a5a6", bg="#2c3e50").pack(anchor="w")
 
@@ -215,6 +220,11 @@ class ExcelMergerApp:
                                                 extracted_val = ""
                             if "Report No" in meta_info: break
 
+                        if "Report No" not in meta_info:
+                            base_name = os.path.splitext(file)[0]
+                            meta_info["Report No"] = base_name
+                            self.add_log(f"   📌 메타데이터 (파일명 기준): Report No -> {base_name}")
+
                         # 2. 제목 줄 찾기 (유의어 기반 고도화 점수제)
                         best_row = 0
                         max_score = 0
@@ -341,45 +351,79 @@ class ExcelMergerApp:
             
             # [NEW] No. of Film 수량 원본 파일별 소계 및 전체 총합산 기능
             film_col = next((c for c in combined_df.columns if "film" in self.normalize(c) and "size" not in self.normalize(c) and "loc" not in self.normalize(c)), None)
+            joint_col = next((c for c in combined_df.columns if self.normalize(c) == "joint"), None)
             
-            if film_col:
-                # combined_df 컬럼 중에서 no_col에 해당하는 컬럼 찾기
+            if len(combined_df) > 0:
                 no_col_name = next((c for c in combined_df.columns if self.normalize(c) == "no"), None)
                 
-                report_col = next((c for c in combined_df.columns if "report" in self.normalize(c) and "no" in self.normalize(c)), None)
-                label_col = no_col_name if no_col_name else combined_df.columns[0]
+                report_col = next((c for c in combined_df.columns if self.normalize(c) == "reportno" or any(syn in self.normalize(c) for syn in NORM_SYNONYMS.get("reportno", []))), None)
+                label_col = no_col_name if no_col_name else next((c for c in combined_df.columns if c != joint_col and c != film_col and c != report_col), combined_df.columns[0])
                 
-                combined_df['_temp_numeric_film'] = pd.to_numeric(combined_df[film_col].astype(str).str.extract(r'(\d+\.?\d*)')[0], errors='coerce')
+                if film_col:
+                    combined_df['_temp_numeric_film'] = pd.to_numeric(combined_df[film_col].astype(str).str.extract(r'(\d+\.?\d*)')[0], errors='coerce')
                 
                 new_dfs = []
                 grand_total = 0
+                grand_joint_total = 0
                 
                 if report_col:
                     for rep_no, group in combined_df.groupby(report_col, sort=False):
                         new_dfs.append(group)
-                        sub_total = group['_temp_numeric_film'].sum()
+                        
+                        sub_total = group['_temp_numeric_film'].sum() if film_col else 0
                         grand_total += sub_total
                         
-                        if sub_total > 0:
-                            sub_row = {col: "" for col in combined_df.columns}
+                        sub_joint = 0
+                        if joint_col:
+                            valid_joints = group[joint_col].dropna().astype(str).str.strip()
+                            valid_joints = valid_joints[valid_joints != ""]
+                            sub_joint = valid_joints.nunique()
+                        grand_joint_total += sub_joint
+                        
+                        sub_row = {col: "" for col in combined_df.columns}
+                        if label_col == report_col:
+                            sub_row[report_col] = f"{rep_no} (소계)"
+                        else:
                             sub_row[label_col] = "Sub-Total"
                             sub_row[report_col] = rep_no
+                        if film_col and film_col != label_col:
                             sub_row[film_col] = int(sub_total) if sub_total % 1 == 0 else sub_total
-                            new_dfs.append(pd.DataFrame([sub_row]))
+                        if joint_col and joint_col != label_col:
+                            sub_row[joint_col] = int(sub_joint)
+                        new_dfs.append(pd.DataFrame([sub_row]))
                     
                     combined_df = pd.concat(new_dfs, ignore_index=True)
                 else:
-                    grand_total = combined_df['_temp_numeric_film'].sum()
+                    grand_total = combined_df['_temp_numeric_film'].sum() if film_col else 0
+                    if joint_col:
+                        valid_joints = combined_df[joint_col].dropna().astype(str).str.strip()
+                        valid_joints = valid_joints[valid_joints != ""]
+                        grand_joint_total = valid_joints.nunique()
+                    else:
+                        grand_joint_total = 0
 
-                if grand_total > 0:
-                    total_row = {col: "" for col in combined_df.columns}
+                total_row = {col: "" for col in combined_df.columns}
+                if label_col == report_col:
+                    total_row[report_col] = "총합계 (Grand Total)"
+                else:
                     total_row[label_col] = "Grand Total"
+                if film_col and film_col != label_col:
                     total_row[film_col] = int(grand_total) if grand_total % 1 == 0 else grand_total
-                    combined_df = pd.concat([combined_df, pd.DataFrame([total_row])], ignore_index=True)
-                    self.add_log(f"   ➕ '{film_col}' 원본별 소계 및 총합계({total_row[film_col]}) 추가 완료")
+                if joint_col and joint_col != label_col:
+                    total_row[joint_col] = int(grand_joint_total)
+                combined_df = pd.concat([combined_df, pd.DataFrame([total_row])], ignore_index=True)
                 
-                if '_temp_numeric_film' in combined_df.columns:
+                log_msg = "   ➕ 소계 및 총합계 추가 완료"
+                if film_col or joint_col:
+                    log_msg += " (수량 합산 포함)"
+                self.add_log(log_msg)
+                
+                if film_col and '_temp_numeric_film' in combined_df.columns:
                     combined_df.drop(columns=['_temp_numeric_film'], inplace=True)
+                
+                if self.only_totals_var.get():
+                    mask = combined_df.astype(str).apply(lambda row: row.str.contains("Sub-Total|Grand Total|소계|총합계", case=False).any(), axis=1)
+                    combined_df = combined_df[mask]
 
             out_name = f"Final_Smart_Merged_v2.8_{datetime.now().strftime('%H%M%S')}.xlsx"
             out_path = os.path.join(self.selected_folder, out_name)
