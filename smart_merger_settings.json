@@ -2,6 +2,7 @@
     "keywords": " Report No, Joint,film no,Defect Rev",
     "only_totals": true,
     "export_box_label": true,
-    "box_label_type": "외부 엑셀 양식 파일 선택...",
-    "external_box_label_path": "C:/Users/jjch2/Desktop/박스라벨/박스라벨.xls"
+    "box_label_type": "외부 엑셀 양식 사용",
+    "external_box_label_path": "C:/Users/jjch2/Desktop/박스라벨/박스라벨.xls",
+    "output_folder": "C:/Users/jjch2/Desktop/요청서 저장폴더"
 }

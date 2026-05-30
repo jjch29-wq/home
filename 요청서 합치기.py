@@ -24,6 +24,7 @@ class ExcelMergerApp:
         self.root.configure(bg="#2c3e50")
         
         self.selected_folder = ""
+        self.output_folder = ""
         self.excel_files = []
         
         self.setup_ui()
@@ -40,15 +41,24 @@ class ExcelMergerApp:
                                font=("Malgun Gothic", 18, "bold"), fg="#0be881", bg="#2c3e50")
         title_label.pack(pady=(0, 20))
 
-        # 폴더 선택
+        # 폴더 선택 (입력 데이터)
         folder_frame = tk.Frame(main_frame, bg="#34495e", padx=10, pady=10)
         folder_frame.pack(fill=tk.X, pady=5)
-        self.folder_path_var = tk.StringVar(value="폴더를 선택해주세요...")
+        self.folder_path_var = tk.StringVar(value="원본 데이터 폴더를 선택해주세요...")
         tk.Label(folder_frame, textvariable=self.folder_path_var, fg="#bdc3c7", bg="#34495e", 
                  font=("Malgun Gothic", 10), anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
         tk.Button(folder_frame, text="📄 파일 선택", command=self.select_files, bg="#9b59b6", fg="white", 
                   font=("Malgun Gothic", 10, "bold"), relief=tk.FLAT, padx=15).pack(side=tk.RIGHT, padx=(5, 0))
-        tk.Button(folder_frame, text="📁 폴더 선택", command=self.select_folder, bg="#3498db", fg="white", 
+        tk.Button(folder_frame, text="📁 데이터 폴더 선택", command=self.select_folder, bg="#3498db", fg="white", 
+                  font=("Malgun Gothic", 10, "bold"), relief=tk.FLAT, padx=15).pack(side=tk.RIGHT)
+
+        # 저장 폴더 선택 (출력)
+        save_folder_frame = tk.Frame(main_frame, bg="#34495e", padx=10, pady=10)
+        save_folder_frame.pack(fill=tk.X, pady=5)
+        self.output_folder_var = tk.StringVar(value="(선택 안 함) 원본 데이터 폴더에 함께 저장됩니다.")
+        tk.Label(save_folder_frame, textvariable=self.output_folder_var, fg="#bdc3c7", bg="#34495e", 
+                 font=("Malgun Gothic", 10), anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(save_folder_frame, text="💾 저장 폴더 지정", command=self.select_output_folder, bg="#e67e22", fg="white", 
                   font=("Malgun Gothic", 10, "bold"), relief=tk.FLAT, padx=15).pack(side=tk.RIGHT)
 
         # 추출 설정
@@ -76,29 +86,35 @@ class ExcelMergerApp:
                        activebackground="#2c3e50", activeforeground="#f1c40f").pack(side=tk.LEFT)
                        
         self.box_label_type_var = tk.StringVar(value="기본 2열 양식")
-        self.box_label_combo = ttk.Combobox(box_label_frame, textvariable=self.box_label_type_var, state="readonly", width=25, font=("Malgun Gothic", 9))
-        self.box_label_combo['values'] = ("기본 2열 양식", "기본 1열 양식", "외부 엑셀 양식 파일 선택...")
-        self.box_label_combo.pack(side=tk.LEFT, padx=(10, 0))
+        self.box_label_combo = ttk.Combobox(box_label_frame, textvariable=self.box_label_type_var, state="readonly", width=20, font=("Malgun Gothic", 9))
+        self.box_label_combo['values'] = ("기본 2열 양식", "기본 1열 양식", "외부 엑셀 양식 사용")
+        self.box_label_combo.pack(side=tk.LEFT, padx=(10, 5))
         self.box_label_combo.bind("<<ComboboxSelected>>", self.on_box_label_type_selected)
         
         self.external_box_label_path = ""
+        self.btn_browse_template = tk.Button(box_label_frame, text="양식 찾아보기...", command=self.browse_external_template, bg="#7f8c8d", fg="white", font=("Malgun Gothic", 8), relief=tk.FLAT)
+        self.btn_browse_template.pack(side=tk.LEFT, padx=(0, 10))
+        
+        self.template_path_var = tk.StringVar(value="")
+        tk.Label(box_label_frame, textvariable=self.template_path_var, font=("Malgun Gothic", 8), fg="#bdc3c7", bg="#2c3e50").pack(side=tk.LEFT)
         
         tk.Label(smart_frame, text="💡 v2.8: Joint/Film/Defect/Rev 추출 및 유의어 매칭이 대폭 강화되었습니다.", 
                  font=("Malgun Gothic", 8), fg="#95a5a6", bg="#2c3e50").pack(anchor="w")
 
-        # 실시간 로그창
-        log_label = tk.Label(main_frame, text="작업 진행 로그:", font=("Malgun Gothic", 10), fg="#ecf0f1", bg="#2c3e50")
-        log_label.pack(anchor="w")
-        self.log_text = tk.Text(main_frame, height=22, bg="#1e272e", fg="#0be881", font=("Consolas", 9), padx=10, pady=10)
-        self.log_text.pack(fill=tk.BOTH, expand=True, pady=5)
-        
+        # 시작 버튼 및 상태 (상단 배치)
         self.status_var = tk.StringVar(value="대기 중...")
-        tk.Label(main_frame, textvariable=self.status_var, font=("Malgun Gothic", 10, "bold"), fg="#e67e22", bg="#2c3e50").pack(pady=5)
+        tk.Label(main_frame, textvariable=self.status_var, font=("Malgun Gothic", 10, "bold"), fg="#e67e22", bg="#2c3e50").pack(pady=(10, 5))
 
         self.btn_merge = tk.Button(main_frame, text="🚀 지능형 병합 시작 (v2.8)", command=self.start_merge_thread,
                                    bg="#2ecc71", fg="white", font=("Malgun Gothic", 12, "bold"), relief=tk.FLAT, pady=10)
-        self.btn_merge.pack(fill=tk.X, pady=10)
+        self.btn_merge.pack(fill=tk.X, pady=(0, 20))
         self.btn_merge["state"] = tk.DISABLED
+
+        # 실시간 로그창
+        log_label = tk.Label(main_frame, text="작업 진행 로그:", font=("Malgun Gothic", 10), fg="#ecf0f1", bg="#2c3e50")
+        log_label.pack(anchor="w")
+        self.log_text = tk.Text(main_frame, height=20, bg="#1e272e", fg="#0be881", font=("Consolas", 9), padx=10, pady=10)
+        self.log_text.pack(fill=tk.BOTH, expand=True, pady=5)
 
         # 설정 파일 저장 경로
         self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "smart_merger_settings.json")
@@ -119,6 +135,11 @@ class ExcelMergerApp:
                         self.box_label_type_var.set(data["box_label_type"])
                     if "external_box_label_path" in data:
                         self.external_box_label_path = data["external_box_label_path"]
+                        if hasattr(self, 'template_path_var'):
+                            self.template_path_var.set(os.path.basename(self.external_box_label_path))
+                    if "output_folder" in data and data["output_folder"]:
+                        self.output_folder = data["output_folder"]
+                        self.output_folder_var.set(self.output_folder)
             except Exception as e:
                 print("설정 파일 로드 실패:", e)
 
@@ -128,7 +149,8 @@ class ExcelMergerApp:
             "only_totals": self.only_totals_var.get(),
             "export_box_label": self.export_box_label_var.get(),
             "box_label_type": self.box_label_type_var.get(),
-            "external_box_label_path": self.external_box_label_path
+            "external_box_label_path": self.external_box_label_path,
+            "output_folder": getattr(self, 'output_folder', "")
         }
         try:
             with open(self.settings_file, "w", encoding="utf-8") as f:
@@ -136,19 +158,27 @@ class ExcelMergerApp:
         except Exception as e:
             print("설정 파일 저장 실패:", e)
 
+    def browse_external_template(self):
+        initial_dir = os.path.dirname(self.external_box_label_path) if self.external_box_label_path and os.path.exists(self.external_box_label_path) else ""
+        if not initial_dir:
+            initial_dir = os.path.expanduser("~\\Desktop")
+            
+        filepath = filedialog.askopenfilename(
+            title="외부 박스라벨 양식 파일 선택",
+            initialdir=initial_dir,
+            filetypes=[("Excel files", "*.xlsx *.xls")]
+        )
+        if filepath:
+            self.external_box_label_path = filepath
+            self.template_path_var.set(os.path.basename(filepath))
+            self.add_log(f"🔗 외부 양식 지정됨: {os.path.basename(filepath)}")
+            self.box_label_type_var.set("외부 엑셀 양식 사용")
+            self.export_box_label_var.set(True)
+
     def on_box_label_type_selected(self, event):
-        if self.box_label_type_var.get() == "외부 엑셀 양식 파일 선택...":
-            filepath = filedialog.askopenfilename(
-                title="외부 박스라벨 양식 파일 선택",
-                filetypes=[("Excel files", "*.xlsx *.xls")]
-            )
-            if filepath:
-                self.external_box_label_path = filepath
-                self.add_log(f"🔗 외부 박스라벨 양식 선택됨: {os.path.basename(filepath)}")
-                self.export_box_label_var.set(True)
-            else:
-                self.box_label_type_var.set("기본 2열 양식")
-                self.external_box_label_path = ""
+        if self.box_label_type_var.get() == "외부 엑셀 양식 사용":
+            if not self.external_box_label_path:
+                self.browse_external_template()
 
     def add_log(self, msg):
         timestamp = datetime.now().strftime("[%H:%M:%S] ")
@@ -157,15 +187,26 @@ class ExcelMergerApp:
         self.root.update_idletasks()
 
     def select_folder(self):
-        folder = filedialog.askdirectory()
+        initial_dir = self.selected_folder if self.selected_folder and os.path.exists(self.selected_folder) else ""
+        folder = filedialog.askdirectory(initialdir=initial_dir, title="원본 엑셀 데이터가 있는 폴더 선택")
         if folder:
             self.selected_folder = folder
             self.folder_path_var.set(folder)
             self.scan_files()
+            
+    def select_output_folder(self):
+        initial_dir = self.output_folder if self.output_folder and os.path.exists(self.output_folder) else ""
+        folder = filedialog.askdirectory(initialdir=initial_dir, title="최종 결과물을 저장할 폴더 선택")
+        if folder:
+            self.output_folder = folder
+            self.output_folder_var.set(folder)
+            self.add_log(f"💾 저장 폴더 지정됨: {folder}")
 
     def select_files(self):
+        initial_dir = self.selected_folder if self.selected_folder and os.path.exists(self.selected_folder) else ""
         files = filedialog.askopenfilenames(
             title="병합할 엑셀 파일들을 선택하세요",
+            initialdir=initial_dir,
             filetypes=[("Excel files", "*.xlsx *.xlsm *.xls")]
         )
         if files:
@@ -352,7 +393,21 @@ class ExcelMergerApp:
         film_col = get_col(['film', '필름'])
         defect_col = get_col(['defect', '결함', 'repair'])
         
-        # 100매 초과 시 박스 분할 로직 (Report No는 고정, Box Number에 -1, -2 붙임)
+        # 성적서 번호(Report No) 기준으로 알파벳/숫자 오름차순 정렬
+        # 이를 통해 0022 -> 0022R1 순서가 자연스럽게 이어지도록 함
+        if report_col:
+            df_sub = df_sub.sort_values(by=report_col, na_position='last').reset_index(drop=True)
+            
+        # R1 보고서의 경우 REPAIR(결함) 수량 강제로 0매 처리 (단, R1-1, R1-2 등은 제외)
+        if report_col and defect_col:
+            for idx, row in df_sub.iterrows():
+                if pd.notna(row[report_col]):
+                    r_str = str(row[report_col]).upper()
+                    if "R1" in r_str and not re.search(r'R1-\d+', r_str):
+                        df_sub.at[idx, defect_col] = 0
+                        
+
+        # 100매 초과 시 박스 분할 로직
         if film_col:
             expanded_rows = []
             box_counter = 1
@@ -368,41 +423,49 @@ class ExcelMergerApp:
                     num_splits = math.ceil(film_count / 100)
                     for i in range(num_splits):
                         new_row = row.copy()
-                        # 보고서 번호는 수정 없이 그대로 둠
+                        # 보고서 번호는 동일하게 유지
+                        
+                        # 분할된 나머지 박스들은 결함(REPAIR) 수량을 0으로 처리
+                        if i > 0 and defect_col:
+                            new_row[defect_col] = 0
                         
                         if i == num_splits - 1:
                             new_row[film_col] = int(film_count - (i * 100))
                         else:
                             new_row[film_col] = 100
                             
-                        # 박스 번호에 -1, -2 붙임 (분할 시)
+                        # 박스 번호에 -1, -2 붙임 (예: 2-1, 2-2)
                         new_row['_box_num'] = f"{box_counter}-{i+1}"
                         expanded_rows.append(new_row)
                 else:
                     new_row = row.copy()
                     new_row['_box_num'] = box_counter
                     expanded_rows.append(new_row)
+                
                 box_counter += 1
             df_sub = pd.DataFrame(expanded_rows)
         else:
             df_sub['_box_num'] = range(1, len(df_sub) + 1)
+                    
+
         
         box_type = self.box_label_type_var.get()
+        save_dir = self.output_folder if hasattr(self, 'output_folder') and self.output_folder else self.selected_folder
         
         if box_type == "기본 1열 양식":
-            out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
+            out_path = os.path.join(save_dir, f"Final_BoxLabel_{timestamp}.xlsx")
             self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=1)
             return
             
         elif box_type == "기본 2열 양식":
-            out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
+            out_path = os.path.join(save_dir, f"Final_BoxLabel_{timestamp}.xlsx")
             self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=2)
             return
             
         # 외부 엑셀 양식 처리 로직
         if not self.external_box_label_path or not os.path.exists(self.external_box_label_path):
             self.add_log(f"⚠️ 선택된 외부 템플릿을 찾을 수 없어 기본 양식으로 생성합니다.")
-            out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
+            out_path = os.path.join(save_dir, f"Final_BoxLabel_{timestamp}.xlsx")
             self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=2)
             return
 
@@ -411,7 +474,7 @@ class ExcelMergerApp:
         try:
             import win32com.client as win32
         except ImportError:
-            out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
+            out_path = os.path.join(save_dir, f"Final_BoxLabel_{timestamp}.xlsx")
             self.add_log("⚠️ pywin32(엑셀 제어) 패키지가 없어 기본 양식으로 생성합니다.")
             self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=2)
             return
@@ -421,7 +484,7 @@ class ExcelMergerApp:
         excel = None
         wb = None
         out_name = f"Final_BoxLabel_원본양식_{timestamp}.xlsx"
-        out_path = os.path.normpath(os.path.abspath(os.path.join(self.selected_folder, out_name)))
+        out_path = os.path.normpath(os.path.abspath(os.path.join(save_dir, out_name)))
         
         try:
             excel = win32.DispatchEx('Excel.Application')
@@ -923,8 +986,9 @@ class ExcelMergerApp:
             if '_is_total' in combined_df.columns:
                 combined_df.drop(columns=['_is_total'], inplace=True)
 
-            out_name = f"Final_Smart_Merged_v2.8_{timestamp}.xlsx"
-            out_path = os.path.join(self.selected_folder, out_name)
+            save_dir = self.output_folder if hasattr(self, 'output_folder') and self.output_folder else self.selected_folder
+            out_name = f"Smart_Merged_Report_{timestamp}.xlsx"
+            out_path = os.path.join(save_dir, out_name)
             combined_df.to_excel(out_path, index=False)
             
             self.add_log(f"✨ 완료: {out_name}")
