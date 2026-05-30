@@ -85,6 +85,21 @@ class ExcelMergerApp:
                        font=("Malgun Gothic", 9, "bold"), fg="#f1c40f", bg="#2c3e50", selectcolor="#2c3e50",
                        activebackground="#2c3e50", activeforeground="#f1c40f").pack(side=tk.LEFT)
                        
+        list_frame = tk.Frame(smart_frame, bg="#2c3e50")
+        list_frame.pack(fill=tk.X, pady=(5, 5))
+        
+        self.export_list_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(list_frame, text="📋 리스트(목록) 엑셀 자동 생성", variable=self.export_list_var,
+                       font=("Malgun Gothic", 9, "bold"), fg="#2ecc71", bg="#2c3e50", selectcolor="#2c3e50",
+                       activebackground="#2c3e50", activeforeground="#2ecc71").pack(side=tk.LEFT)
+                       
+        self.external_list_template_path = ""
+        self.btn_browse_list_template = tk.Button(list_frame, text="리스트 양식 찾아보기...", command=self.browse_list_template, bg="#7f8c8d", fg="white", font=("Malgun Gothic", 8), relief=tk.FLAT)
+        self.btn_browse_list_template.pack(side=tk.LEFT, padx=(10, 10))
+        
+        self.list_template_path_var = tk.StringVar(value="(선택 안 함: 내장 기본 양식 사용)")
+        tk.Label(list_frame, textvariable=self.list_template_path_var, font=("Malgun Gothic", 8), fg="#bdc3c7", bg="#2c3e50").pack(side=tk.LEFT)
+                       
         self.box_label_type_var = tk.StringVar(value="기본 2열 양식")
         self.box_label_combo = ttk.Combobox(box_label_frame, textvariable=self.box_label_type_var, state="readonly", width=20, font=("Malgun Gothic", 9))
         self.box_label_combo['values'] = ("기본 2열 양식", "기본 1열 양식", "외부 엑셀 양식 사용")
@@ -131,12 +146,18 @@ class ExcelMergerApp:
                         self.only_totals_var.set(data["only_totals"])
                     if "export_box_label" in data:
                         self.export_box_label_var.set(data["export_box_label"])
+                    if "export_list" in data:
+                        self.export_list_var.set(data["export_list"])
                     if "box_label_type" in data:
                         self.box_label_type_var.set(data["box_label_type"])
                     if "external_box_label_path" in data:
                         self.external_box_label_path = data["external_box_label_path"]
                         if hasattr(self, 'template_path_var'):
                             self.template_path_var.set(os.path.basename(self.external_box_label_path))
+                    if "external_list_template_path" in data:
+                        self.external_list_template_path = data["external_list_template_path"]
+                        if hasattr(self, 'list_template_path_var') and self.external_list_template_path:
+                            self.list_template_path_var.set(os.path.basename(self.external_list_template_path))
                     if "output_folder" in data and data["output_folder"]:
                         self.output_folder = data["output_folder"]
                         self.output_folder_var.set(self.output_folder)
@@ -148,8 +169,10 @@ class ExcelMergerApp:
             "keywords": self.keyword_var.get(),
             "only_totals": self.only_totals_var.get(),
             "export_box_label": self.export_box_label_var.get(),
+            "export_list": self.export_list_var.get(),
             "box_label_type": self.box_label_type_var.get(),
-            "external_box_label_path": self.external_box_label_path,
+            "external_box_label_path": getattr(self, 'external_box_label_path', ""),
+            "external_list_template_path": getattr(self, 'external_list_template_path', ""),
             "output_folder": getattr(self, 'output_folder', "")
         }
         try:
@@ -174,6 +197,22 @@ class ExcelMergerApp:
             self.add_log(f"🔗 외부 양식 지정됨: {os.path.basename(filepath)}")
             self.box_label_type_var.set("외부 엑셀 양식 사용")
             self.export_box_label_var.set(True)
+
+    def browse_list_template(self):
+        initial_dir = os.path.dirname(self.external_list_template_path) if getattr(self, 'external_list_template_path', "") and os.path.exists(self.external_list_template_path) else ""
+        if not initial_dir:
+            initial_dir = os.path.expanduser("~\\Desktop")
+            
+        filepath = filedialog.askopenfilename(
+            title="외부 리스트 양식 파일 선택",
+            initialdir=initial_dir,
+            filetypes=[("Excel files", "*.xlsx *.xls")]
+        )
+        if filepath:
+            self.external_list_template_path = filepath
+            self.list_template_path_var.set(os.path.basename(filepath))
+            self.add_log(f"🔗 리스트 전용 양식 지정됨: {os.path.basename(filepath)}")
+            self.export_list_var.set(True)
 
     def on_box_label_type_selected(self, event):
         if self.box_label_type_var.get() == "외부 엑셀 양식 사용":
@@ -446,11 +485,18 @@ class ExcelMergerApp:
             df_sub = pd.DataFrame(expanded_rows)
         else:
             df_sub['_box_num'] = range(1, len(df_sub) + 1)
-                    
+            
+        save_dir = self.output_folder if hasattr(self, 'output_folder') and self.output_folder else self.selected_folder
+        
+        # 리스트 생성 (체크된 경우)
+        if hasattr(self, 'export_list_var') and self.export_list_var.get():
+            self.add_log("📋 리스트(목록) 생성을 시작합니다...")
+            self.generate_list_excel(df_sub, save_dir, timestamp, report_col, joint_col, film_col, defect_col)
 
+        if not self.export_box_label_var.get():
+            return
         
         box_type = self.box_label_type_var.get()
-        save_dir = self.output_folder if hasattr(self, 'output_folder') and self.output_folder else self.selected_folder
         
         if box_type == "기본 1열 양식":
             out_path = os.path.join(save_dir, f"Final_BoxLabel_{timestamp}.xlsx")
@@ -1000,6 +1046,153 @@ class ExcelMergerApp:
             messagebox.showerror("오류", f"프로세스 오류: {e}")
         finally:
             self.btn_merge["state"] = tk.NORMAL
+
+    def generate_list_excel(self, df_sub, save_dir, timestamp, report_col, joint_col, film_col, defect_col):
+        list_data = []
+        for idx, row in df_sub.iterrows():
+            box_no = str(row.get('_box_num', ''))
+            report_no = str(row[report_col]) if report_col and pd.notna(row[report_col]) else ''
+            joint = str(row[joint_col]) if joint_col and pd.notna(row[joint_col]) else ''
+            film = str(row[film_col]) if film_col and pd.notna(row[film_col]) else ''
+            defect = str(row[defect_col]) if defect_col and pd.notna(row[defect_col]) else '0'
+            
+            # Format numbers to remove trailing .0
+            if film.replace('.','',1).isdigit() and float(film) % 1 == 0: film = str(int(float(film)))
+            if defect.replace('.','',1).isdigit() and float(defect) % 1 == 0: defect = str(int(float(defect)))
+            if joint.replace('.','',1).isdigit() and float(joint) % 1 == 0: joint = str(int(float(joint)))
+            
+            list_data.append({
+                "No.": idx + 1,
+                "BOX NO.": box_no,
+                "Report No.": report_no,
+                "Joint": joint,
+                "Film": film,
+                "Repair": defect,
+                "Remark": ""
+            })
+            
+        df_list = pd.DataFrame(list_data)
+        out_name = f"Final_List_{timestamp}.xlsx"
+        
+        # 외부 템플릿 사용
+        if hasattr(self, 'external_list_template_path') and self.external_list_template_path and os.path.exists(self.external_list_template_path):
+            template_path = os.path.normpath(os.path.abspath(self.external_list_template_path))
+            out_path = os.path.normpath(os.path.abspath(os.path.join(save_dir, f"Final_List_외부양식_{timestamp}.xlsx")))
+            
+            try:
+                import win32com.client as win32
+                excel = win32.DispatchEx('Excel.Application')
+                excel.Visible = False
+                excel.DisplayAlerts = False
+                wb = excel.Workbooks.Open(template_path)
+                ws = wb.Sheets(1)
+                
+                for i, item in enumerate(list_data):
+                    page = i // 40
+                    pos = i % 40
+                    
+                    page_start_row = 1 + page * 23
+                    
+                    # 새로운 페이지 생성
+                    if page > 0 and pos == 0:
+                        ws.Range("A1:L23").Copy()
+                        ws.Range(f"A{page_start_row}").PasteSpecial(-4104) # xlPasteAll
+                        for r in range(1, 24):
+                            ws.Rows(page_start_row + r - 1).RowHeight = ws.Rows(r).RowHeight
+                        ws.HPageBreaks.Add(ws.Range(f"A{page_start_row}"))
+                        
+                    # 2단 배치 (0~19는 왼쪽, 20~39는 오른쪽)
+                    if pos < 20:
+                        row_idx = page_start_row + 3 + pos
+                        col_offset = 0
+                    else:
+                        row_idx = page_start_row + 3 + (pos - 20)
+                        col_offset = 6
+                        
+                    # ORI, RE, TOTAL 계산
+                    ori = int(float(item["Film"])) if str(item["Film"]).replace('.','',1).isdigit() else 0
+                    re_count = int(float(item["Repair"])) if str(item["Repair"]).replace('.','',1).isdigit() else 0
+                    total_count = ori + re_count
+                    
+                    ws.Cells(row_idx, 1 + col_offset).Value = item["Report No."]
+                    ws.Cells(row_idx, 2 + col_offset).Value = item["BOX NO."]
+                    ws.Cells(row_idx, 3 + col_offset).Value = item["Joint"]
+                    ws.Cells(row_idx, 4 + col_offset).Value = ori if ori > 0 else ""
+                    ws.Cells(row_idx, 5 + col_offset).Value = re_count if re_count > 0 else ""
+                    ws.Cells(row_idx, 6 + col_offset).Value = total_count if total_count > 0 else ""
+                    
+                if list_data:
+                    max_page = (len(list_data) - 1) // 40
+                    last_row = (max_page + 1) * 23
+                    ws.PageSetup.PrintArea = f"A1:L{last_row}"
+                    
+                wb.SaveAs(out_path)
+                wb.Close()
+                excel.Quit()
+                self.add_log(f"📋 외부 템플릿 기반 리스트 엑셀 생성 완료: {os.path.basename(out_path)}")
+                return
+            except Exception as e:
+                self.add_log(f"⚠️ 외부 템플릿 리스트 생성 실패 (기본 양식으로 대체): {e}")
+                if 'wb' in locals() and wb: wb.Close(False)
+                if 'excel' in locals() and excel: excel.Quit()
+                
+        # 기본 템플릿 사용
+        out_path = os.path.join(save_dir, out_name)
+        try:
+            # openpyxl을 통해 서식을 예쁘게 적용
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Report List"
+            
+            headers = ["No.", "BOX NO.", "Report No.", "Joint", "Film", "Repair", "Remark"]
+            ws.append(headers)
+            
+            # 헤더 스타일
+            header_fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+            header_font = Font(bold=True)
+            align_center = Alignment(horizontal="center", vertical="center")
+            border_thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+            
+            for col_idx, col_name in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col_idx)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = align_center
+                cell.border = border_thin
+                
+            # 데이터 채우기
+            for r_idx, row in enumerate(list_data, 2):
+                ws.cell(row=r_idx, column=1, value=row["No."])
+                ws.cell(row=r_idx, column=2, value=row["BOX NO."])
+                ws.cell(row=r_idx, column=3, value=row["Report No."])
+                ws.cell(row=r_idx, column=4, value=row["Joint"])
+                ws.cell(row=r_idx, column=5, value=float(row["Film"]) if row["Film"].isdigit() else row["Film"])
+                ws.cell(row=r_idx, column=6, value=float(row["Repair"]) if row["Repair"].isdigit() else row["Repair"])
+                ws.cell(row=r_idx, column=7, value="")
+                
+                for c_idx in range(1, 8):
+                    cell = ws.cell(row=r_idx, column=c_idx)
+                    cell.alignment = align_center
+                    cell.border = border_thin
+                    
+            # 열 너비 조정
+            ws.column_dimensions['A'].width = 8
+            ws.column_dimensions['B'].width = 12
+            ws.column_dimensions['C'].width = 30
+            ws.column_dimensions['D'].width = 10
+            ws.column_dimensions['E'].width = 10
+            ws.column_dimensions['F'].width = 10
+            ws.column_dimensions['G'].width = 20
+            
+            wb.save(out_path)
+            self.add_log(f"📋 리스트 엑셀 생성 완료: {out_name}")
+        except Exception as e:
+            # openpyxl 실패 시 pandas 기본 저장으로 대체
+            df_list.to_excel(out_path, index=False)
+            self.add_log(f"📋 리스트 기본 엑셀 생성 완료: {out_name} (서식 오류: {str(e)})")
 
 if __name__ == "__main__":
     root = tk.Tk()
