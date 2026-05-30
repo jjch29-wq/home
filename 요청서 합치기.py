@@ -7,6 +7,7 @@ import threading
 import re
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side
+import json
 
 # ============================================================
 # Excel Smart Merger v2.8 - Robust Joint/Film/Defect/Rev Quantity Fix
@@ -66,10 +67,21 @@ class ExcelMergerApp:
                        font=("Malgun Gothic", 9), fg="#ecf0f1", bg="#2c3e50", selectcolor="#2c3e50",
                        activebackground="#2c3e50", activeforeground="#ecf0f1").pack(anchor="w", pady=(2, 2))
                        
+        box_label_frame = tk.Frame(smart_frame, bg="#2c3e50")
+        box_label_frame.pack(fill=tk.X, pady=(0, 5))
+        
         self.export_box_label_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(smart_frame, text="📦 박스라벨 양식으로 자동 생성", variable=self.export_box_label_var,
+        tk.Checkbutton(box_label_frame, text="📦 박스라벨 양식으로 자동 생성", variable=self.export_box_label_var,
                        font=("Malgun Gothic", 9, "bold"), fg="#f1c40f", bg="#2c3e50", selectcolor="#2c3e50",
-                       activebackground="#2c3e50", activeforeground="#f1c40f").pack(anchor="w", pady=(0, 5))
+                       activebackground="#2c3e50", activeforeground="#f1c40f").pack(side=tk.LEFT)
+                       
+        self.box_label_type_var = tk.StringVar(value="기본 2열 양식")
+        self.box_label_combo = ttk.Combobox(box_label_frame, textvariable=self.box_label_type_var, state="readonly", width=25, font=("Malgun Gothic", 9))
+        self.box_label_combo['values'] = ("기본 2열 양식", "기본 1열 양식", "외부 엑셀 양식 파일 선택...")
+        self.box_label_combo.pack(side=tk.LEFT, padx=(10, 0))
+        self.box_label_combo.bind("<<ComboboxSelected>>", self.on_box_label_type_selected)
+        
+        self.external_box_label_path = ""
         
         tk.Label(smart_frame, text="💡 v2.8: Joint/Film/Defect/Rev 추출 및 유의어 매칭이 대폭 강화되었습니다.", 
                  font=("Malgun Gothic", 8), fg="#95a5a6", bg="#2c3e50").pack(anchor="w")
@@ -87,6 +99,56 @@ class ExcelMergerApp:
                                    bg="#2ecc71", fg="white", font=("Malgun Gothic", 12, "bold"), relief=tk.FLAT, pady=10)
         self.btn_merge.pack(fill=tk.X, pady=10)
         self.btn_merge["state"] = tk.DISABLED
+
+        # 설정 파일 저장 경로
+        self.settings_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "smart_merger_settings.json")
+        self.load_settings()
+
+    def load_settings(self):
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if "keywords" in data:
+                        self.keyword_var.set(data["keywords"])
+                    if "only_totals" in data:
+                        self.only_totals_var.set(data["only_totals"])
+                    if "export_box_label" in data:
+                        self.export_box_label_var.set(data["export_box_label"])
+                    if "box_label_type" in data:
+                        self.box_label_type_var.set(data["box_label_type"])
+                    if "external_box_label_path" in data:
+                        self.external_box_label_path = data["external_box_label_path"]
+            except Exception as e:
+                print("설정 파일 로드 실패:", e)
+
+    def save_settings(self):
+        data = {
+            "keywords": self.keyword_var.get(),
+            "only_totals": self.only_totals_var.get(),
+            "export_box_label": self.export_box_label_var.get(),
+            "box_label_type": self.box_label_type_var.get(),
+            "external_box_label_path": self.external_box_label_path
+        }
+        try:
+            with open(self.settings_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print("설정 파일 저장 실패:", e)
+
+    def on_box_label_type_selected(self, event):
+        if self.box_label_type_var.get() == "외부 엑셀 양식 파일 선택...":
+            filepath = filedialog.askopenfilename(
+                title="외부 박스라벨 양식 파일 선택",
+                filetypes=[("Excel files", "*.xlsx *.xls")]
+            )
+            if filepath:
+                self.external_box_label_path = filepath
+                self.add_log(f"🔗 외부 박스라벨 양식 선택됨: {os.path.basename(filepath)}")
+                self.export_box_label_var.set(True)
+            else:
+                self.box_label_type_var.set("기본 2열 양식")
+                self.external_box_label_path = ""
 
     def add_log(self, msg):
         timestamp = datetime.now().strftime("[%H:%M:%S] ")
@@ -129,6 +191,7 @@ class ExcelMergerApp:
             self.add_log("⚠️ 폴더에 엑셀 파일이 없습니다.")
 
     def start_merge_thread(self):
+        self.save_settings()
         self.btn_merge["state"] = tk.DISABLED
         self.log_text.delete("1.0", tk.END)
         threading.Thread(target=self.merge_logic, daemon=True).start()
@@ -147,7 +210,7 @@ class ExcelMergerApp:
                 return std_key
         return None
 
-    def generate_box_label_openpyxl(self, df_sub, out_path, report_col, joint_col, film_col, defect_col):
+    def generate_box_label_openpyxl(self, df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=2):
         try:
             import openpyxl
             from openpyxl.styles import Font, Alignment, Border, Side
@@ -161,8 +224,7 @@ class ExcelMergerApp:
         
         font_bold = Font(name='맑은 고딕', bold=True, size=11)
         font_normal = Font(name='맑은 고딕', size=11)
-        align_center = Alignment(horizontal='center', vertical='center')
-        align_left = Alignment(horizontal='left', vertical='center')
+        align_center = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
         
         thin = Side(border_style="thin", color="000000")
         border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -178,78 +240,98 @@ class ExcelMergerApp:
         row_idx = 1
         box_num = 1
         
-        for i in range(0, len(df_sub), 2):
-            row1 = df_sub.iloc[i] if i < len(df_sub) else None
-            row2 = df_sub.iloc[i+1] if i+1 < len(df_sub) else None
-            
-            for col_offset, row_data in [(0, row1), (4, row2)]:
-                if row_data is None: continue
-                    
+        for i in range(0, len(df_sub), columns):
+            page_base = row_idx          # 이 박스 쌍의 첫 번째 행 (상단 상세 라벨)
+            side_base = row_idx + 7      # 하단 측면 라벨 시작 행
+
+            items = []
+            for j in range(columns):
+                r_data = df_sub.iloc[i+j] if i+j < len(df_sub) else None
+                items.append((j, j*4, r_data))
+            def _write_label_block(base_row, col_offset, row_data, current_box, is_side, joint_val_override=None):
                 report_val = str(row_data.get(report_col, '')) if report_col and pd.notna(row_data.get(report_col)) else ''
-                joint_val = str(row_data.get(joint_col, '')) if joint_col and pd.notna(row_data.get(joint_col)) else ''
-                film_val = str(row_data.get(film_col, '')) if film_col and pd.notna(row_data.get(film_col)) else ''
+                joint_count_val = str(int(row_data.get('_joint_count'))) if '_joint_count' in row_data.index and pd.notna(row_data.get('_joint_count')) else (str(row_data.get(joint_col, '')) if joint_col and pd.notna(row_data.get(joint_col)) else '')
+                joint_val = joint_val_override if joint_val_override is not None else joint_count_val
+                film_val   = str(row_data.get(film_col,   '')) if film_col   and pd.notna(row_data.get(film_col))   else ''
                 defect_val = str(row_data.get(defect_col, '')) if defect_col and pd.notna(row_data.get(defect_col)) else ''
-                
-                if not str(film_val).strip() or str(film_val).upper() == 'NAN': film_val = '0'
+                if not str(film_val).strip()   or str(film_val).upper()   == 'NAN': film_val   = '0'
                 if not str(defect_val).strip() or str(defect_val).upper() == 'NAN': defect_val = '0'
-                
-                if float(film_val) % 1 == 0 if film_val.replace('.','',1).isdigit() else False: film_val = str(int(float(film_val)))
+                if float(film_val)   % 1 == 0 if film_val.replace('.','',1).isdigit()   else False: film_val   = str(int(float(film_val)))
                 if float(defect_val) % 1 == 0 if defect_val.replace('.','',1).isdigit() else False: defect_val = str(int(float(defect_val)))
-                
-                fixed_box_num = 1 if col_offset == 0 else 2
-                
-                c_box_label = ws.cell(row=row_idx, column=1 + col_offset, value=f"BOX NO. < {fixed_box_num} >")
-                c_box_label.font = font_bold
-                c_box_label.alignment = align_center
-                ws.merge_cells(start_row=row_idx, start_column=1 + col_offset, end_row=row_idx, end_column=3 + col_offset)
-                
-                c_rep_label = ws.cell(row=row_idx+1, column=1 + col_offset, value="Report No.")
-                c_rep_label.font = font_bold
-                c_rep_label.alignment = align_center
-                c_rep_val = ws.cell(row=row_idx+1, column=2 + col_offset, value=report_val)
-                c_rep_val.font = font_normal
-                c_rep_val.alignment = align_center
-                ws.merge_cells(start_row=row_idx+1, start_column=2 + col_offset, end_row=row_idx+1, end_column=3 + col_offset)
-                
-                c_jnt_label = ws.cell(row=row_idx+2, column=1 + col_offset, value="JOINT NO.")
-                c_jnt_label.font = font_bold
-                c_jnt_label.alignment = align_center
-                c_jnt_val = ws.cell(row=row_idx+2, column=2 + col_offset, value=joint_val)
-                c_jnt_val.font = font_normal
-                c_jnt_val.alignment = align_center
-                ws.merge_cells(start_row=row_idx+2, start_column=2 + col_offset, end_row=row_idx+2, end_column=3 + col_offset)
-                
-                c_film_label = ws.cell(row=row_idx+3, column=1 + col_offset, value="촬영매수")
-                c_film_label.font = font_bold
-                c_film_label.alignment = align_center
-                ws.merge_cells(start_row=row_idx+3, start_column=1 + col_offset, end_row=row_idx+4, end_column=1 + col_offset)
-                
-                c_ori_label = ws.cell(row=row_idx+3, column=2 + col_offset, value="ORIGINAL")
-                c_ori_label.font = font_normal
-                c_ori_label.alignment = align_center
-                c_ori_val = ws.cell(row=row_idx+3, column=3 + col_offset, value=film_val)
-                c_ori_val.font = font_normal
-                c_ori_val.alignment = align_center
-                
-                c_rep_label2 = ws.cell(row=row_idx+4, column=2 + col_offset, value="REPAIR")
-                c_rep_label2.font = font_normal
-                c_rep_label2.alignment = align_center
-                c_rep_val2 = ws.cell(row=row_idx+4, column=3 + col_offset, value=defect_val)
-                c_rep_val2.font = font_normal
-                c_rep_val2.alignment = align_center
-                
-                c_sitco = ws.cell(row=row_idx+5, column=1 + col_offset, value="SITCO 검사(인)")
-                c_sitco.font = font_bold
-                c_sitco.alignment = align_left
-                ws.merge_cells(start_row=row_idx+5, start_column=1 + col_offset, end_row=row_idx+5, end_column=3 + col_offset)
-                
-                for r in range(row_idx, row_idx+6):
-                    ws.row_dimensions[r].height = 25
-                    for c in range(1 + col_offset, 4 + col_offset):
-                        ws.cell(row=r, column=c).border = border_all
-                        
-            row_idx += 7
-            
+                r = base_row
+                c = 1 + col_offset
+                current_box_val = row_data.get('_box_num', current_box)
+                cell = ws.cell(row=r, column=c, value=f"BOX NO. < {current_box_val} >")
+                cell.font = font_bold; cell.alignment = align_center
+                ws.merge_cells(start_row=r, start_column=c, end_row=r, end_column=c+2)
+                cell = ws.cell(row=r+1, column=c, value="Report No.")
+                cell.font = font_bold; cell.alignment = align_center
+                cell = ws.cell(row=r+1, column=c+1, value=report_val)
+                cell.font = font_normal; cell.alignment = align_center
+                ws.merge_cells(start_row=r+1, start_column=c+1, end_row=r+1, end_column=c+2)
+                if not is_side:
+                    cell = ws.cell(row=r+2, column=c, value="Inspection point.")
+                    cell.font = font_bold; cell.alignment = align_center
+                    cell = ws.cell(row=r+2, column=c+1, value=joint_val)
+                    cell.font = font_normal; cell.alignment = align_center
+                    ws.merge_cells(start_row=r+2, start_column=c+1, end_row=r+2, end_column=c+2)
+                    cell = ws.cell(row=r+3, column=c, value="필름 매수")
+                    cell.font = font_bold; cell.alignment = align_center
+                    ws.merge_cells(start_row=r+3, start_column=c, end_row=r+4, end_column=c)
+                    cell = ws.cell(row=r+3, column=c+1, value="ORIGINAL")
+                    cell.font = font_normal; cell.alignment = align_center
+                    cell = ws.cell(row=r+3, column=c+2, value=f"{film_val} 매" if film_val.strip() else "")
+                    cell.font = font_normal; cell.alignment = align_center
+                    cell = ws.cell(row=r+4, column=c+1, value="REPAIR")
+                    cell.font = font_normal; cell.alignment = align_center
+                    cell = ws.cell(row=r+4, column=c+2, value=f"{defect_val} 매" if defect_val.strip() else "")
+                    cell.font = font_normal; cell.alignment = align_center
+                else:
+                    # 측면 라벨: 먼저 해당 영역 셀 초기화 (B9 오버플로우 방지)
+                    for _r in range(r+2, r+5):
+                        for _c in range(c, c+3):
+                            ws.cell(row=_r, column=_c).value = None
+                    cell = ws.cell(row=r+2, column=c, value="Inspection point.")
+                    cell.font = font_bold; cell.alignment = align_center
+                    ws.merge_cells(start_row=r+2, start_column=c, end_row=r+4, end_column=c)
+                    # joint_val이 비어있을 경우 공백 문자로 채워 오버플로우 방지
+                    _jv = joint_val if joint_val.strip() else " "
+                    cell = ws.cell(row=r+2, column=c+1, value=_jv)
+                    cell.font = Font(name='맑은 고딕', bold=True, size=16)
+                    cell.alignment = align_center
+                    ws.merge_cells(start_row=r+2, start_column=c+1, end_row=r+4, end_column=c+2)
+                try:
+                    from openpyxl.cell.rich_text import TextBlock, CellRichText
+                    from openpyxl.cell.text import InlineFont
+                    sitco_cell = ws.cell(row=r+5, column=c)
+                    rf = InlineFont(color='FF0000', rFont='맑은 고딕', b=True, sz=11)
+                    bf = InlineFont(color='000000', rFont='맑은 고딕', b=True, sz=11)
+                    sitco_cell.value = CellRichText([TextBlock(rf, 'SITCO '), TextBlock(bf, '서울검사(주)')])
+                except Exception:
+                    sitco_cell = ws.cell(row=r+5, column=c, value="SITCO 서울검사(주)")
+                    sitco_cell.font = font_bold
+                sitco_cell.alignment = align_center
+                ws.merge_cells(start_row=r+5, start_column=c, end_row=r+5, end_column=c+2)
+                for row_r in range(r, r+6):
+                    ws.row_dimensions[row_r].height = 25
+                    for col_c in range(c, c+3):
+                        ws.cell(row=row_r, column=col_c).border = border_all
+                return joint_val  # detail 패스에서 저장용
+
+            saved_joint_vals = {}
+            for j, col_offset, row_data in items:
+                if row_data is None: continue
+                jv = _write_label_block(page_base, col_offset, row_data, box_num + j, is_side=False)
+                saved_joint_vals[j] = jv
+            for j, col_offset, row_data in items:
+                if row_data is None: continue
+                _write_label_block(side_base, col_offset, row_data, box_num + j, is_side=True,
+                                   joint_val_override=saved_joint_vals.get(j))
+
+            row_idx += 14
+            box_num += columns
+
+        ws.print_area = f"A1:G{row_idx-1}"
         wb.save(out_path)
         self.add_log(f"📦 박스라벨(새 양식) 생성 완료: {os.path.basename(out_path)}")
 
@@ -270,24 +352,68 @@ class ExcelMergerApp:
         film_col = get_col(['film', '필름'])
         defect_col = get_col(['defect', '결함', 'repair'])
         
-        template_name = "박스라벨.xls"
-        template_path = os.path.join(self.selected_folder, template_name)
+        # 100매 초과 시 박스 분할 로직 (Report No는 고정, Box Number에 -1, -2 붙임)
+        if film_col:
+            expanded_rows = []
+            box_counter = 1
+            for _, row in df_sub.iterrows():
+                try:
+                    f_val = str(row[film_col]).replace(',', '').strip()
+                    film_count = float(f_val) if f_val else 0
+                except:
+                    film_count = 0
+                    
+                if film_count > 100:
+                    import math
+                    num_splits = math.ceil(film_count / 100)
+                    for i in range(num_splits):
+                        new_row = row.copy()
+                        # 보고서 번호는 수정 없이 그대로 둠
+                        
+                        if i == num_splits - 1:
+                            new_row[film_col] = int(film_count - (i * 100))
+                        else:
+                            new_row[film_col] = 100
+                            
+                        # 박스 번호에 -1, -2 붙임 (분할 시)
+                        new_row['_box_num'] = f"{box_counter}-{i+1}"
+                        expanded_rows.append(new_row)
+                else:
+                    new_row = row.copy()
+                    new_row['_box_num'] = box_counter
+                    expanded_rows.append(new_row)
+                box_counter += 1
+            df_sub = pd.DataFrame(expanded_rows)
+        else:
+            df_sub['_box_num'] = range(1, len(df_sub) + 1)
         
-        if not os.path.exists(template_path):
-            if os.path.exists(os.path.join(self.selected_folder, "박스라벨.xlsx")):
-                template_path = os.path.join(self.selected_folder, "박스라벨.xlsx")
-            else:
-                out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
-                self.add_log(f"⚠️ 원본 템플릿 '{template_name}'을 찾을 수 없어 기본 양식으로 생성합니다.")
-                self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col)
-                return
+        box_type = self.box_label_type_var.get()
+        
+        if box_type == "기본 1열 양식":
+            out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
+            self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=1)
+            return
+            
+        elif box_type == "기본 2열 양식":
+            out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
+            self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=2)
+            return
+            
+        # 외부 엑셀 양식 처리 로직
+        if not self.external_box_label_path or not os.path.exists(self.external_box_label_path):
+            self.add_log(f"⚠️ 선택된 외부 템플릿을 찾을 수 없어 기본 양식으로 생성합니다.")
+            out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
+            self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=2)
+            return
+
+        template_path = os.path.normpath(os.path.abspath(self.external_box_label_path))
 
         try:
             import win32com.client as win32
         except ImportError:
             out_path = os.path.join(self.selected_folder, f"Final_BoxLabel_{timestamp}.xlsx")
             self.add_log("⚠️ pywin32(엑셀 제어) 패키지가 없어 기본 양식으로 생성합니다.")
-            self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col)
+            self.generate_box_label_openpyxl(df_sub, out_path, report_col, joint_col, film_col, defect_col, columns=2)
             return
 
         self.add_log(f"📦 원본 템플릿({os.path.basename(template_path)})을 사용하여 박스라벨 생성을 시작합니다...")
@@ -295,7 +421,7 @@ class ExcelMergerApp:
         excel = None
         wb = None
         out_name = f"Final_BoxLabel_원본양식_{timestamp}.xlsx"
-        out_path = os.path.join(self.selected_folder, out_name)
+        out_path = os.path.normpath(os.path.abspath(os.path.join(self.selected_folder, out_name)))
         
         try:
             excel = win32.DispatchEx('Excel.Application')
@@ -308,28 +434,37 @@ class ExcelMergerApp:
             try: ws = wb.Sheets('2021')
             except: ws = wb.Sheets(1)
             
-            template_range = ws.Range("A1:G6")
-            ws.Range("A7:G1000").Clear()
+            template_range = ws.Range("A1:G25")
+            ws.Range("A26:G5000").Clear()
             
-            row_idx = 1
+            boxes = [df_sub.iloc[i] for i in range(len(df_sub))]
             box_num = 1
             
-            for i in range(0, len(df_sub), 2):
-                row1 = df_sub.iloc[i] if i < len(df_sub) else None
-                row2 = df_sub.iloc[i+1] if i+1 < len(df_sub) else None
+            for p in range(0, len(boxes), 4):
+                page_boxes = boxes[p:p+4]
+                page_start_row = 1 + (p // 4) * 25
                 
-                if row_idx > 1:
+                if p > 0:
                     template_range.Copy()
-                    ws.Cells(row_idx, 1).PasteSpecial(Paste=-4104) # xlPasteAll
+                    ws.Cells(page_start_row, 1).PasteSpecial(Paste=-4104) # xlPasteAll
                     
-                for col_offset, row_data in [(0, row1), (4, row2)]:
-                    if row_data is None:
-                        if col_offset == 4:
-                            ws.Range(ws.Cells(row_idx, 5), ws.Cells(row_idx+5, 7)).Clear()
-                        continue
+                    # 첫 페이지의 행 높이 복사
+                    for i in range(25):
+                        ws.Rows(page_start_row + i).RowHeight = ws.Rows(i + 1).RowHeight
                         
+                for idx, row_data in enumerate(page_boxes):
+                    if idx < 2:
+                        base_row = page_start_row
+                        col_offset = 0 if idx == 0 else 4
+                    else:
+                        base_row = page_start_row + 13
+                        col_offset = 0 if idx == 2 else 4
+                        
+                    current_box = box_num + idx
+                    
                     report_val = str(row_data.get(report_col, '')) if report_col and pd.notna(row_data.get(report_col)) else ''
-                    joint_val = str(row_data.get(joint_col, '')) if joint_col and pd.notna(row_data.get(joint_col)) else ''
+                    joint_val = str(int(row_data.get('_joint_count'))) if '_joint_count' in row_data.index and pd.notna(row_data.get('_joint_count')) else (str(row_data.get(joint_col, '')) if joint_col and pd.notna(row_data.get(joint_col)) else '')
+                    self.add_log(f"   🔍 [DEBUG] BOX {current_box}: _joint_count={'있음:'+str(row_data.get('_joint_count')) if '_joint_count' in row_data.index else '없음'}, joint_col={joint_col}, joint_val={joint_val}")
                     film_val = str(row_data.get(film_col, '')) if film_col and pd.notna(row_data.get(film_col)) else ''
                     defect_val = str(row_data.get(defect_col, '')) if defect_col and pd.notna(row_data.get(defect_col)) else ''
                     
@@ -339,15 +474,34 @@ class ExcelMergerApp:
                     if float(film_val) % 1 == 0 if film_val.replace('.','',1).isdigit() else False: film_val = str(int(float(film_val)))
                     if float(defect_val) % 1 == 0 if defect_val.replace('.','',1).isdigit() else False: defect_val = str(int(float(defect_val)))
                     
-                    fixed_box_num = 1 if col_offset == 0 else 2
+                    for repeat in range(2):
+                        r = base_row + repeat * 7
+                        current_box_val = row_data.get('_box_num', current_box)
+                        ws.Cells(r, 1 + col_offset).Value = f"BOX NO. < {current_box_val} >"
+                        ws.Cells(r+1, 2 + col_offset).Value = report_val
+                        
+                        if repeat == 0:
+                            ws.Cells(r+2, 2 + col_offset).Value = joint_val
+                            ws.Cells(r+3, 3 + col_offset).Value = film_val
+                            ws.Cells(r+4, 3 + col_offset).Value = defect_val
+                        else:
+                            # 하단 측면 라벨 — 기존 템플릿에 남아있을 수 있는 값/수식 완벽히 지우기
+                            ws.Range(ws.Cells(r+2, 2 + col_offset), ws.Cells(r+4, 3 + col_offset)).ClearContents()
+                            # 좌상단 셀에 값 입력
+                            ws.Cells(r+2, 2 + col_offset).Value = str(joint_val)
+                        
+                if len(page_boxes) == 1:
+                    ws.Range(ws.Cells(page_start_row, 5), ws.Cells(page_start_row+12, 7)).Clear()
+                    ws.Range(ws.Cells(page_start_row+13, 1), ws.Cells(page_start_row+24, 7)).Clear()
+                elif len(page_boxes) == 2:
+                    ws.Range(ws.Cells(page_start_row+13, 1), ws.Cells(page_start_row+24, 7)).Clear()
+                elif len(page_boxes) == 3:
+                    ws.Range(ws.Cells(page_start_row+13, 5), ws.Cells(page_start_row+24, 7)).Clear()
                     
-                    ws.Cells(row_idx, 1 + col_offset).Value = f"BOX NO. < {fixed_box_num} >"
-                    ws.Cells(row_idx+1, 2 + col_offset).Value = report_val
-                    ws.Cells(row_idx+2, 2 + col_offset).Value = joint_val
-                    ws.Cells(row_idx+3, 3 + col_offset).Value = film_val
-                    ws.Cells(row_idx+4, 3 + col_offset).Value = defect_val
-                    
-                row_idx += 7
+                box_num += len(page_boxes)
+                
+            last_row = 25 + ((max(0, len(boxes) - 1)) // 4) * 25
+            ws.PageSetup.PrintArea = f"A1:G{last_row}"
                 
             wb.SaveAs(out_path, FileFormat=51) # xlOpenXMLWorkbook (.xlsx)
             wb.Close(SaveChanges=False)
@@ -664,6 +818,7 @@ class ExcelMergerApp:
                             sub_row[report_col] = f"{rep_no}"
                         if joint_col:
                             sub_row[joint_col] = int(sub_joint)
+                        sub_row['_joint_count'] = int(sub_joint)
                         if film_col:
                             sub_row[film_col] = int(sub_total) if isinstance(sub_total, float) and sub_total % 1 == 0 else sub_total
                         if defect_col:
