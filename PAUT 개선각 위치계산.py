@@ -49,14 +49,37 @@ class App(ctk.CTk):
         sep = ctk.CTkFrame(self.input_frame, height=2, fg_color="gray50")
         sep.pack(fill="x", padx=20, pady=10)
         
-        # 결함 위치 계산기 섹션
-        defect_title = ctk.CTkLabel(self.input_frame, text="결함 위치(X) 역산 시뮬레이터", font=ctk.CTkFont(size=18, weight="bold"))
+        # 결함 시뮬레이터 섹션
+        defect_title = ctk.CTkLabel(self.input_frame, text="결함 시뮬레이터", font=ctk.CTkFont(size=18, weight="bold"))
         defect_title.pack(pady=(10, 10))
         
         self.create_input_field("결함 시작 깊이(Z_start) [mm]:", "defect_start_depth", "5.0")
         self.create_input_field("결함 끝 깊이(Z_end) [mm]:", "defect_end_depth", "9.0")
+        self.create_input_field("결함 X 오프셋 [mm]:", "defect_x_offset", "0.0")
+        self.create_input_field("결함 폭(Width) [mm]:", "defect_width", "2.0")
+        self.create_input_field("결함 회전각(Angle) [°]:", "defect_angle", "0.0")
+
+        # 마우스 조작 안내
+        hint_lbl = ctk.CTkLabel(self.input_frame, text="*좌클릭 드래그: 이동 | 우클릭 드래그: 회전*", text_color="orange", font=ctk.CTkFont(size=12))
+        hint_lbl.pack(pady=(0, 5))
+
+        # 결함 모양 콤보박스
+        shape_frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
+        shape_frame.pack(fill="x", padx=20, pady=8)
+        ctk.CTkLabel(shape_frame, text="결함 형상:", width=150, anchor="w").pack(side="left")
+        self.shape_var = ctk.StringVar(value="타원형(Ellipse)")
+        self.shape_menu = ctk.CTkOptionMenu(shape_frame, values=["원형(Circle)", "타원형(Ellipse)", "사각형(Rectangle)", "선(Line)"], variable=self.shape_var, width=120)
+        self.shape_menu.pack(side="right")
+
+        # 결함 발생 방향 콤보박스
+        side_frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
+        side_frame.pack(fill="x", padx=20, pady=8)
+        ctk.CTkLabel(side_frame, text="결함 방향:", width=150, anchor="w").pack(side="left")
+        self.side_var = ctk.StringVar(value="우측(Right)")
+        self.side_menu = ctk.CTkOptionMenu(side_frame, values=["우측(Right)", "좌측(Left)", "양측(Both)"], variable=self.side_var, width=120)
+        self.side_menu.pack(side="right")
         
-        self.defect_btn = ctk.CTkButton(self.input_frame, text="선형 결함 중심거리(X) 계산", command=self.calculate_defect, fg_color="#28a745", hover_color="#218838", height=35)
+        self.defect_btn = ctk.CTkButton(self.input_frame, text="결함 위치 및 형상 적용", command=self.calculate_defect, fg_color="#28a745", hover_color="#218838", height=35)
         self.defect_btn.pack(pady=(10, 10), padx=20, fill="x")
         
         self.result_box = ctk.CTkTextbox(self.input_frame, height=100, font=ctk.CTkFont(size=13))
@@ -81,6 +104,16 @@ class App(ctk.CTk):
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.plot_frame)
         self.canvas_widget = self.canvas.get_tk_widget()
         self.canvas_widget.pack(fill="both", expand=True)
+        
+        # 드래그 이벤트 관련 변수
+        self.dragging = False
+        self.drag_start_x = None
+        self.drag_start_z = None
+        
+        # 캔버스 이벤트 바인딩
+        self.canvas.mpl_connect('button_press_event', self.on_press)
+        self.canvas.mpl_connect('motion_notify_event', self.on_motion)
+        self.canvas.mpl_connect('button_release_event', self.on_release)
         
         # 초기 그래프 그리기
         self.update_plot()
@@ -164,33 +197,125 @@ class App(ctk.CTk):
             self.ax.plot(x, z, 'ro')
             self.ax.text(x + 0.5, z - 0.5 if z > t/2 else z + 0.8, f"({x:.2f}, {z:.2f})", color='white', fontsize=9)
             
-        # 결함 위치가 입력되어 있다면 그리기 (선분형 결함)
+        # 결함 위치가 입력되어 있다면 그리기
         try:
-            defect_start_z = float(self.entries["defect_start_depth"].get())
-            defect_end_z = float(self.entries["defect_end_depth"].get())
+            defect_start_z_input = float(self.entries["defect_start_depth"].get())
+            defect_end_z_input = float(self.entries["defect_end_depth"].get())
+            defect_x_offset = float(self.entries["defect_x_offset"].get())
+            defect_width = float(self.entries["defect_width"].get())
             
-            if 0 <= defect_start_z <= t and 0 <= defect_end_z <= t:
-                # 시작점 X 계산
-                if defect_start_z >= z_root_top:
-                    defect_start_x = r_g
-                else:
-                    defect_start_x = r_g + ((z_root_top - defect_start_z) * math.tan(bevel_angle_rad))
+            try:
+                defect_angle_offset = float(self.entries["defect_angle"].get())
+            except ValueError:
+                defect_angle_offset = 0.0
                 
-                # 끝점 X 계산
-                if defect_end_z >= z_root_top:
-                    defect_end_x = r_g
+            shape = self.shape_var.get() if hasattr(self, 'shape_var') else "선(Line)"
+            side = self.side_var.get() if hasattr(self, 'side_var') else "우측(Right)"
+            
+            if 0 <= defect_start_z_input <= t and 0 <= defect_end_z_input <= t:
+                # 시작점 기본 X 계산
+                if defect_start_z_input >= z_root_top:
+                    base_start_x = r_g
                 else:
-                    defect_end_x = r_g + ((z_root_top - defect_end_z) * math.tan(bevel_angle_rad))
+                    base_start_x = r_g + ((z_root_top - defect_start_z_input) * math.tan(bevel_angle_rad))
+                
+                # 끝점 기본 X 계산
+                if defect_end_z_input >= z_root_top:
+                    base_end_x = r_g
+                else:
+                    base_end_x = r_g + ((z_root_top - defect_end_z_input) * math.tan(bevel_angle_rad))
                     
-                # 선으로 그리기 (빨간색 굵은 선)
-                self.ax.plot([defect_start_x, defect_end_x], [defect_start_z, defect_end_z], 'r-', linewidth=4, label='Defect (Line)')
-                self.ax.plot([-defect_start_x, -defect_end_x], [defect_start_z, defect_end_z], 'r-', linewidth=4)
+                dx_base = base_end_x - base_start_x
+                dz_base = defect_end_z_input - defect_start_z_input
+                length = math.hypot(dx_base, dz_base)
+                if length == 0: length = 0.1
                 
-                # 위아래 끝점 별표 마킹
-                self.ax.plot(defect_start_x, defect_start_z, 'y*', markersize=10)
-                self.ax.plot(defect_end_x, defect_end_z, 'y*', markersize=10)
-                self.ax.plot(-defect_start_x, defect_start_z, 'y*', markersize=10)
-                self.ax.plot(-defect_end_x, defect_end_z, 'y*', markersize=10)
+                # 중심점 및 회전 계산
+                center_z = (defect_start_z_input + defect_end_z_input) / 2
+                if center_z >= z_root_top:
+                    base_center_x = r_g
+                else:
+                    base_center_x = r_g + ((z_root_top - center_z) * math.tan(bevel_angle_rad))
+                    
+                center_x_right = base_center_x + defect_x_offset
+                center_x_left = -center_x_right
+                
+                base_angle_rad = math.atan2(dz_base, dx_base)
+                final_angle_deg = math.degrees(base_angle_rad) + defect_angle_offset
+                final_angle_rad = math.radians(final_angle_deg)
+                
+                final_angle_deg_l = 180 - final_angle_deg
+                final_angle_rad_l = math.radians(final_angle_deg_l)
+                
+                hx = math.cos(final_angle_rad) * length / 2
+                hz = math.sin(final_angle_rad) * length / 2
+                p_start_r = (center_x_right - hx, center_z - hz)
+                p_end_r = (center_x_right + hx, center_z + hz)
+                
+                hx_l = math.cos(final_angle_rad_l) * length / 2
+                hz_l = math.sin(final_angle_rad_l) * length / 2
+                p_start_l = (center_x_left - hx_l, center_z - hz_l)
+                p_end_l = (center_x_left + hx_l, center_z + hz_l)
+                
+                if shape == "선(Line)":
+                    if side in ["우측(Right)", "양측(Both)"]:
+                        self.ax.plot([p_start_r[0], p_end_r[0]], [p_start_r[1], p_end_r[1]], 'r-', linewidth=4, label='Defect')
+                        self.ax.plot(p_start_r[0], p_start_r[1], 'y*', markersize=10)
+                        self.ax.plot(p_end_r[0], p_end_r[1], 'y*', markersize=10)
+                    if side in ["좌측(Left)", "양측(Both)"]:
+                        lbl = 'Defect' if side == "좌측(Left)" else None
+                        self.ax.plot([p_start_l[0], p_end_l[0]], [p_start_l[1], p_end_l[1]], 'r-', linewidth=4, label=lbl)
+                        self.ax.plot(p_start_l[0], p_start_l[1], 'y*', markersize=10)
+                        self.ax.plot(p_end_l[0], p_end_l[1], 'y*', markersize=10)
+                elif shape == "원형(Circle)":
+                    if side in ["우측(Right)", "양측(Both)"]:
+                        circ_right = patches.Ellipse((center_x_right, center_z), width=length, height=length, angle=0, 
+                                                    edgecolor='red', facecolor='red', alpha=0.7, label='Defect')
+                        self.ax.add_patch(circ_right)
+                    if side in ["좌측(Left)", "양측(Both)"]:
+                        lbl = 'Defect' if side == "좌측(Left)" else None
+                        circ_left = patches.Ellipse((center_x_left, center_z), width=length, height=length, angle=0, 
+                                                   edgecolor='red', facecolor='red', alpha=0.7, label=lbl)
+                        self.ax.add_patch(circ_left)
+                elif shape == "타원형(Ellipse)":
+                    if side in ["우측(Right)", "양측(Both)"]:
+                        ell_right = patches.Ellipse((center_x_right, center_z), width=length, height=defect_width, angle=final_angle_deg, 
+                                                    edgecolor='red', facecolor='red', alpha=0.7, label='Defect')
+                        self.ax.add_patch(ell_right)
+                    if side in ["좌측(Left)", "양측(Both)"]:
+                        lbl = 'Defect' if side == "좌측(Left)" else None
+                        ell_left = patches.Ellipse((center_x_left, center_z), width=length, height=defect_width, angle=final_angle_deg_l, 
+                                                   edgecolor='red', facecolor='red', alpha=0.7, label=lbl)
+                        self.ax.add_patch(ell_left)
+                elif shape == "사각형(Rectangle)":
+                    dx_r = p_end_r[0] - p_start_r[0]
+                    dz_r = p_end_r[1] - p_start_r[1]
+                    ux_r, uz_r = dx_r/length, dz_r/length
+                    nx_r, nz_r = -uz_r, ux_r
+                    hw = defect_width / 2
+                    
+                    p1_r = (p_start_r[0] + nx_r*hw, p_start_r[1] + nz_r*hw)
+                    p2_r = (p_start_r[0] - nx_r*hw, p_start_r[1] - nz_r*hw)
+                    p3_r = (p_end_r[0] - nx_r*hw, p_end_r[1] - nz_r*hw)
+                    p4_r = (p_end_r[0] + nx_r*hw, p_end_r[1] + nz_r*hw)
+                    
+                    dx_l = p_end_l[0] - p_start_l[0]
+                    dz_l = p_end_l[1] - p_start_l[1]
+                    ux_l, uz_l = dx_l/length, dz_l/length
+                    nx_l, nz_l = -uz_l, ux_l
+                    
+                    p1_l = (p_start_l[0] + nx_l*hw, p_start_l[1] + nz_l*hw)
+                    p2_l = (p_start_l[0] - nx_l*hw, p_start_l[1] - nz_l*hw)
+                    p3_l = (p_end_l[0] - nx_l*hw, p_end_l[1] - nz_l*hw)
+                    p4_l = (p_end_l[0] + nx_l*hw, p_end_l[1] + nz_l*hw)
+                    
+                    if side in ["우측(Right)", "양측(Both)"]:
+                        rect_right = patches.Polygon([p1_r, p2_r, p3_r, p4_r], closed=True, edgecolor='red', facecolor='red', alpha=0.7, label='Defect')
+                        self.ax.add_patch(rect_right)
+                    if side in ["좌측(Left)", "양측(Both)"]:
+                        lbl = 'Defect' if side == "좌측(Left)" else None
+                        rect_left = patches.Polygon([p1_l, p2_l, p3_l, p4_l], closed=True, edgecolor='red', facecolor='red', alpha=0.7, label=lbl)
+                        self.ax.add_patch(rect_left)
         except ValueError:
             pass
 
@@ -224,8 +349,10 @@ class App(ctk.CTk):
         try:
             defect_start_z = float(self.entries["defect_start_depth"].get())
             defect_end_z = float(self.entries["defect_end_depth"].get())
+            defect_x_offset = float(self.entries["defect_x_offset"].get())
+            defect_width = float(self.entries["defect_width"].get())
         except ValueError:
-            self.show_result("결함 깊이(Z)에는 숫자를 입력해주세요.")
+            self.show_result("결함 관련 입력값에는 숫자를 입력해주세요.")
             return
             
         t = p["thickness"]
@@ -240,22 +367,63 @@ class App(ctk.CTk):
             
         bevel_angle_rad = math.radians(ang)
         
-        # 시작점 계산
+        # 시작점 기본 X 계산
         if defect_start_z >= z_root_top:
-            start_x = r_g
+            base_start_x = r_g
         else:
-            start_x = r_g + ((z_root_top - defect_start_z) * math.tan(bevel_angle_rad))
+            base_start_x = r_g + ((z_root_top - defect_start_z) * math.tan(bevel_angle_rad))
             
-        # 끝점 계산
+        # 끝점 기본 X 계산
         if defect_end_z >= z_root_top:
-            end_x = r_g
+            base_end_x = r_g
         else:
-            end_x = r_g + ((z_root_top - defect_end_z) * math.tan(bevel_angle_rad))
+            base_end_x = r_g + ((z_root_top - defect_end_z) * math.tan(bevel_angle_rad))
             
-        msg = f"[선형 결함 구간: {defect_start_z:.1f}mm ~ {defect_end_z:.1f}mm]\n"
-        msg += f"▶ 윗단(Upper) X: 중심선에서 {start_x:.2f} mm\n"
-        msg += f"▶ 아랫단(Lower) X: 중심선에서 {end_x:.2f} mm\n"
-        msg += f"(결함의 높이(Z-extent): {defect_end_z - defect_start_z:.1f} mm)"
+        try:
+            defect_angle_offset = float(self.entries["defect_angle"].get())
+        except ValueError:
+            defect_angle_offset = 0.0
+            
+        dx_base = base_end_x - base_start_x
+        dz_base = defect_end_z - defect_start_z
+        length = math.hypot(dx_base, dz_base)
+        if length == 0: length = 0.1
+        
+        center_z = (defect_start_z + defect_end_z) / 2
+        if center_z >= z_root_top:
+            base_center_x = r_g
+        else:
+            base_center_x = r_g + ((z_root_top - center_z) * math.tan(bevel_angle_rad))
+            
+        center_x_r = base_center_x + defect_x_offset
+        
+        base_angle_rad = math.atan2(dz_base, dx_base)
+        final_angle_deg = math.degrees(base_angle_rad) + defect_angle_offset
+        final_angle_rad = math.radians(final_angle_deg)
+        
+        final_angle_deg_l = 180 - final_angle_deg
+        final_angle_rad_l = math.radians(final_angle_deg_l)
+        
+        hx = math.cos(final_angle_rad) * length / 2
+        hz = math.sin(final_angle_rad) * length / 2
+        start_x_r = center_x_r - hx
+        end_x_r = center_x_r + hx
+        
+        hx_l = math.cos(final_angle_rad_l) * length / 2
+        hz_l = math.sin(final_angle_rad_l) * length / 2
+        start_x_l = -center_x_r - hx_l
+        end_x_l = -center_x_r + hx_l
+        
+        shape = self.shape_var.get() if hasattr(self, 'shape_var') else "선(Line)"
+        side = self.side_var.get() if hasattr(self, 'side_var') else "우측(Right)"
+            
+        msg = f"[{shape} 결함 구간(원래 깊이): {defect_start_z:.1f}mm ~ {defect_end_z:.1f}mm]\n"
+        msg += f"▶ 방향: {side} | 오프셋: {defect_x_offset:.2f} mm | 폭: {defect_width:.2f} mm | 회전: {defect_angle_offset:.1f}°\n"
+        if side in ["우측(Right)", "양측(Both)"]:
+            msg += f"▶ 우측 윗단 X, Z: {start_x_r:.2f}, {center_z - hz:.2f} | 아랫단 X, Z: {end_x_r:.2f}, {center_z + hz:.2f}\n"
+        if side in ["좌측(Left)", "양측(Both)"]:
+            msg += f"▶ 좌측 윗단 X, Z: {start_x_l:.2f}, {center_z - hz_l:.2f} | 아랫단 X, Z: {end_x_l:.2f}, {center_z + hz_l:.2f}\n"
+        msg += f"(투영 높이(Z-extent): {abs(hz*2):.1f} mm, 길이: {length:.1f} mm)"
             
         # 계산 후 그래프에 결함 위치(별표) 업데이트 (먼저 호출해야 덮어쓰지 않음)
         self.update_plot()
@@ -268,6 +436,170 @@ class App(ctk.CTk):
         self.result_box.delete("0.0", "end")
         self.result_box.insert("0.0", text)
         self.result_box.configure(state="disabled")
+
+    def on_press(self, event):
+        if event.inaxes != self.ax: return
+        
+        try:
+            self.orig_z_start = float(self.entries["defect_start_depth"].get())
+            self.orig_z_end = float(self.entries["defect_end_depth"].get())
+            self.orig_x_offset = float(self.entries["defect_x_offset"].get())
+            try:
+                self.orig_angle = float(self.entries["defect_angle"].get())
+            except ValueError:
+                self.orig_angle = 0.0
+        except ValueError:
+            return
+            
+        p = self.get_params()
+        if not p: return
+        
+        t = p["thickness"]
+        r_f = p["root_face"]
+        r_g = p["root_gap_half"]
+        ang = p["bevel_angle_deg"]
+        z_root_top = t - r_f
+        bevel_angle_rad = math.radians(ang)
+        
+        center_z = (self.orig_z_start + self.orig_z_end) / 2
+        
+        if center_z >= z_root_top:
+            base_center_x = r_g
+        else:
+            base_center_x = r_g + ((z_root_top - center_z) * math.tan(bevel_angle_rad))
+            
+        side = self.side_var.get() if hasattr(self, 'side_var') else "우측(Right)"
+        right_cx = base_center_x + self.orig_x_offset
+        left_cx = -(base_center_x + self.orig_x_offset)
+        
+        cx, cz = event.xdata, event.ydata
+        if cx is None or cz is None: return
+        
+        try:
+            defect_width = float(self.entries["defect_width"].get())
+        except ValueError:
+            defect_width = 2.0
+            
+        dz = abs(cz - center_z)
+        height_half = max(2.0, abs(self.orig_z_end - self.orig_z_start) / 2)
+        width_margin = max(2.0, defect_width * 1.5)
+        
+        hit = False
+        self.drag_side = None
+        self.drag_mode = None
+        
+        if side in ["우측(Right)", "양측(Both)"]:
+            dx = abs(cx - right_cx)
+            if dx <= width_margin and dz <= height_half:
+                hit = True
+                self.drag_side = "우측(Right)"
+                
+        if not hit and side in ["좌측(Left)", "양측(Both)"]:
+            dx = abs(cx - left_cx)
+            if dx <= width_margin and dz <= height_half:
+                hit = True
+                self.drag_side = "좌측(Left)"
+                
+        if hit:
+            self.dragging = True
+            self.drag_start_x = cx
+            self.drag_start_z = cz
+            
+            if self.drag_side == "우측(Right)":
+                self.orig_cx = right_cx
+            else:
+                self.orig_cx = left_cx
+                
+            self.orig_cz = center_z
+            self.mouse_offset_x = cx - self.orig_cx
+            self.mouse_offset_z = cz - self.orig_cz
+            
+            if event.button == 1: # 좌클릭
+                self.drag_mode = "translate"
+            elif event.button == 3: # 우클릭
+                self.drag_mode = "rotate"
+                self.start_mouse_angle = math.degrees(math.atan2(cz - self.orig_cz, cx - self.orig_cx))
+            else:
+                self.dragging = False
+                return
+            
+            # 양측(Both) 모드일 때 하나를 클릭해 드래그하면, 해당 결함만 움직이도록 모드를 전환
+            if side == "양측(Both)":
+                self.side_var.set(self.drag_side)
+
+    def on_motion(self, event):
+        if not getattr(self, 'dragging', False) or event.inaxes != self.ax: return
+        if event.xdata is None or event.ydata is None: return
+        
+        if self.drag_mode == "translate":
+            desired_cz = event.ydata - self.mouse_offset_z
+            desired_cx = event.xdata - self.mouse_offset_x
+            
+            dz = desired_cz - self.orig_cz
+            
+            new_z_start = self.orig_z_start + dz
+            new_z_end = self.orig_z_end + dz
+            
+            # 클램핑 (0과 thickness 사이)
+            p = self.get_params()
+            if p:
+                t = p["thickness"]
+                if new_z_start < 0:
+                    shift = -new_z_start
+                    new_z_start += shift
+                    new_z_end += shift
+                    desired_cz += shift
+                elif new_z_end > t:
+                    shift = new_z_end - t
+                    new_z_start -= shift
+                    new_z_end -= shift
+                    desired_cz -= shift
+                    
+            # 새로운 Z 높이에서의 기준 X값 계산
+            new_center_z = (new_z_start + new_z_end) / 2
+            r_f = p["root_face"]
+            r_g = p["root_gap_half"]
+            ang = p["bevel_angle_deg"]
+            z_root_top = t - r_f
+            bevel_angle_rad = math.radians(ang)
+            
+            if new_center_z >= z_root_top:
+                new_base_center_x = r_g
+            else:
+                new_base_center_x = r_g + ((z_root_top - new_center_z) * math.tan(bevel_angle_rad))
+                
+            # 드래그한 위치(desired_cx)에 맞춰 X 오프셋 역산
+            if self.drag_side == "우측(Right)":
+                new_x_offset = desired_cx - new_base_center_x
+            else:
+                new_x_offset = (-desired_cx) - new_base_center_x
+                
+            self.entries["defect_start_depth"].delete(0, "end")
+            self.entries["defect_start_depth"].insert(0, f"{new_z_start:.2f}")
+            
+            self.entries["defect_end_depth"].delete(0, "end")
+            self.entries["defect_end_depth"].insert(0, f"{new_z_end:.2f}")
+            
+            self.entries["defect_x_offset"].delete(0, "end")
+            self.entries["defect_x_offset"].insert(0, f"{new_x_offset:.2f}")
+            
+        elif self.drag_mode == "rotate":
+            current_mouse_angle = math.degrees(math.atan2(event.ydata - self.orig_cz, event.xdata - self.orig_cx))
+            angle_diff = current_mouse_angle - self.start_mouse_angle
+            
+            if self.drag_side == "좌측(Left)":
+                angle_diff = -angle_diff
+                
+            new_angle = self.orig_angle + angle_diff
+            self.entries["defect_angle"].delete(0, "end")
+            self.entries["defect_angle"].insert(0, f"{new_angle:.1f}")
+            
+        self.calculate_defect()
+
+    def on_release(self, event):
+        self.dragging = False
+        self.drag_start_x = None
+        self.drag_start_z = None
 
 if __name__ == "__main__":
     app = App()
