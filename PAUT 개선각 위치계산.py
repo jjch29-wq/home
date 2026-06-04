@@ -264,7 +264,7 @@ class App(ctk.CTk):
                 offset_z = -2.0
                 va = 'bottom'
                 
-                ax.text(px + offset_x, z + offset_z, f"({x:.1f}, {z:.1f})", color='white', fontsize=9, ha=ha, va=va)
+                ax.text(px + offset_x, z + offset_z, f"({px:.1f}, {z:.1f})", color='white', fontsize=9, ha=ha, va=va)
             
         # == Top View (C-Scan) ==
         self.ax_top.axvline(0, color='gray', linestyle='-.', linewidth=1, label='Centerline')
@@ -463,13 +463,22 @@ class App(ctk.CTk):
                 text_l = f"{cnums_side_l} {custom_lbl}" if custom_lbl else f"{cnums_side_l}"
                 rest_l = f" {custom_lbl}" if custom_lbl else ""
             
+            rest_r_front = rest_r
+            rest_l_front = rest_l
+            rest_r_back = rest_r
+            rest_l_back = rest_l
+            
             if is_selected:
-                extra_r = f"\nY:{center_x_right:.1f} (Ys:{abs(p_start_r[0]):.1f} Ye:{abs(p_end_r[0]):.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
-                extra_l = f"\nY:{abs(center_x_left):.1f} (Ys:{abs(p_start_l[0]):.1f} Ye:{abs(p_end_l[0]):.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
-                text_r += extra_r
-                text_l += extra_l
-                rest_r += extra_r
-                rest_l += extra_l
+                extra_r_front = f"\nY:{center_x_right:.1f} (Ys:{p_start_r[0]:.1f} Ye:{p_end_r[0]:.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
+                extra_l_front = f"\nY:{center_x_left:.1f} (Ys:{p_start_l[0]:.1f} Ye:{p_end_l[0]:.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
+                
+                extra_r_back = f"\nY:{-center_x_right:.1f} (Ys:{-p_start_r[0]:.1f} Ye:{-p_end_r[0]:.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
+                extra_l_back = f"\nY:{-center_x_left:.1f} (Ys:{-p_start_l[0]:.1f} Ye:{-p_end_l[0]:.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
+                
+                rest_r_front += extra_r_front
+                rest_l_front += extra_l_front
+                rest_r_back += extra_r_back
+                rest_l_back += extra_l_back
                 
             font_color = 'yellow' if is_selected else 'white'
             font_weight = 'bold' if is_selected else 'normal'
@@ -516,10 +525,10 @@ class App(ctk.CTk):
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
                     self.ax_side.annotate(cnums_side_r, xy=(center_x_right, center_z), xytext=(8, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=16, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
-                    if rest_r: self.ax_side.annotate(rest_r, xy=(center_x_right, center_z), xytext=(8 + offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_r_front: self.ax_side.annotate(rest_r_front, xy=(center_x_right, center_z), xytext=(8 + offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
                     self.ax_side_back.annotate(cnums_side_r, xy=(-center_x_right, center_z), xytext=(-8, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=16, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
-                    if rest_r: self.ax_side_back.annotate(rest_r, xy=(-center_x_right, center_z), xytext=(-8 - offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_r_back: self.ax_side_back.annotate(rest_r_back, xy=(-center_x_right, center_z), xytext=(-8 - offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
             if side in ["좌측(Left)", "양측(Both)"] and not skip_text_l:
                 offset_pt_l = len(cnums_side_l) * 15.0 if cnums_side_l else 0
                 coord_l = (round(center_x_left, 1), round(center_z, 1))
@@ -528,10 +537,10 @@ class App(ctk.CTk):
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
                     self.ax_side.annotate(cnums_side_l, xy=(center_x_left, center_z), xytext=(-8, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=16, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
-                    if rest_l: self.ax_side.annotate(rest_l, xy=(center_x_left, center_z), xytext=(-8 - offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_l_front: self.ax_side.annotate(rest_l_front, xy=(center_x_left, center_z), xytext=(-8 - offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
                     self.ax_side_back.annotate(cnums_side_l, xy=(-center_x_left, center_z), xytext=(8, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=16, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
-                    if rest_l: self.ax_side_back.annotate(rest_l, xy=(-center_x_left, center_z), xytext=(8 + offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_l_back: self.ax_side_back.annotate(rest_l_back, xy=(-center_x_left, center_z), xytext=(8 + offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
 
             # == Draw defect in Top View ==
             y_pos = dfct.get("y_pos", 0.0)
@@ -744,9 +753,7 @@ class App(ctk.CTk):
             
             ticks = [-half_width, -100, -30, 0, 30, 100, half_width]
             ax.set_xticks(ticks)
-            if invert_x:
-                ax.set_xticklabels([-t for t in ticks])
-                
+            # Back B-Scan에서도 좌측이 '-', 우측이 '+'가 되도록 라벨 뒤집기(invert_x)를 제거합니다. (사용자 요청)
             ax.set_ylim(t + 15, -10) # 결함이 잘리지 않도록 여백을 넉넉히 줍니다.
         
         # Top View 설정
@@ -875,8 +882,18 @@ class App(ctk.CTk):
             
             hx = math.cos(final_angle_rad) * length / 2
             
-            y_start = abs(defect_y_center - hx)
-            y_end = abs(defect_y_center + hx)
+            base_y_s = abs(defect_y_center - hx)
+            base_y_e = abs(defect_y_center + hx)
+            
+            if dfct.get("side", "") == "좌측(Left)":
+                y_s_str = f"{-base_y_s:.1f}"
+                y_e_str = f"{-base_y_e:.1f}"
+            elif dfct.get("side", "") == "양측(Both)":
+                y_s_str = f"±{base_y_s:.1f}"
+                y_e_str = f"±{base_y_e:.1f}"
+            else:
+                y_s_str = f"{base_y_s:.1f}"
+                y_e_str = f"{base_y_e:.1f}"
             
             values = (
                 no_str,
@@ -885,8 +902,8 @@ class App(ctk.CTk):
                 dfct.get("scan_view", ""),
                 f'{defect_start_z_input:.1f}',
                 f'{defect_end_z_input:.1f}',
-                f'{y_start:.1f}',
-                f'{y_end:.1f}',
+                y_s_str,
+                y_e_str,
                 f'{dfct.get("width", 0):.1f}',
                 f'{defect_angle_offset:.1f}',
                 f'{dfct.get("y_pos", 0):.1f}',
@@ -975,8 +992,18 @@ class App(ctk.CTk):
                 
                 hx = math.cos(final_angle_rad) * length / 2
                 
-                y_start = abs(defect_y_center - hx)
-                y_end = abs(defect_y_center + hx)
+                base_y_s = abs(defect_y_center - hx)
+                base_y_e = abs(defect_y_center + hx)
+                
+                if dfct.get("side", "") == "좌측(Left)":
+                    y_s_str = f"{-base_y_s:.1f}"
+                    y_e_str = f"{-base_y_e:.1f}"
+                elif dfct.get("side", "") == "양측(Both)":
+                    y_s_str = f"±{base_y_s:.1f}"
+                    y_e_str = f"±{base_y_e:.1f}"
+                else:
+                    y_s_str = f"{base_y_s:.1f}"
+                    y_e_str = f"{base_y_e:.1f}"
                 
                 row = [
                     no_str,
@@ -985,8 +1012,8 @@ class App(ctk.CTk):
                     dfct.get("scan_view", "").replace(" B-Scan", ""),
                     f'{defect_start_z_input:.1f}',
                     f'{defect_end_z_input:.1f}',
-                    f'{y_start:.1f}',
-                    f'{y_end:.1f}',
+                    y_s_str,
+                    y_e_str,
                     f'{dfct.get("width", 0):.1f}',
                     f'{defect_angle_offset:.1f}',
                     f'{dfct.get("y_pos", 0):.1f}',
