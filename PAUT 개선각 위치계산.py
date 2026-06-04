@@ -5,7 +5,7 @@ import matplotlib.patches as patches
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import warnings
 import json
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 # 불필요한 Matplotlib 경고 숨김
 warnings.filterwarnings("ignore", message="Ignoring fixed y limits")
@@ -126,6 +126,12 @@ class App(ctk.CTk):
         
         self.load_btn = ctk.CTkButton(save_load_frame, text="설정 불러오기", command=self.load_project, width=100, fg_color="#17a2b8", hover_color="#138496")
         self.load_btn.pack(side="right", expand=True, padx=(5, 0))
+        
+        self.table_btn = ctk.CTkButton(self.input_frame, text="결함 정보 표 보기", command=self.show_defect_table, height=35, fg_color="#6f42c1", hover_color="#59339d")
+        self.table_btn.pack(pady=(0, 10), padx=20, fill="x")
+        
+        self.export_btn = ctk.CTkButton(self.input_frame, text="A4 보고서 저장 (PDF)", command=self.export_a4_report, height=35, fg_color="#fd7e14", hover_color="#e37012")
+        self.export_btn.pack(pady=(0, 20), padx=20, fill="x")
         
         # ---------------- 우측 프레임 (그래프부) ----------------
         self.plot_frame = ctk.CTkFrame(self)
@@ -296,14 +302,17 @@ class App(ctk.CTk):
         seen_top_l = set()
         seen_y_pos = set()
         
-        dim_count_side_r = {}
-        dim_count_side_l = {}
+        dim_count_top_len_r = {}
+        dim_count_top_len_l = {}
         dim_count_top_len_r = {}
         dim_count_top_len_l = {}
         lbl_count_side_r = {}
         lbl_count_side_l = {}
         lbl_count_top_r = {}
         lbl_count_top_l = {}
+        
+        dim_counter_side_r = 0
+        dim_counter_side_l = 0
         
         for idx, dfct in enumerate(getattr(self, 'defects', [])):
             defect_start_z_input = dfct["z_start"]
@@ -455,12 +464,12 @@ class App(ctk.CTk):
                 rest_l = f" {custom_lbl}" if custom_lbl else ""
             
             if is_selected:
-                extra_r = f"\nY:{center_x_right:.1f} X:{y_pos:.1f}\nd:{center_z:.1f} W:{defect_width:.1f}"
-                extra_l = f"\nY:{abs(center_x_left):.1f} X:{y_pos:.1f}\nd:{center_z:.1f} W:{defect_width:.1f}"
+                extra_r = f"\nY:{center_x_right:.1f} (Ys:{abs(p_start_r[0]):.1f} Ye:{abs(p_end_r[0]):.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
+                extra_l = f"\nY:{abs(center_x_left):.1f} (Ys:{abs(p_start_l[0]):.1f} Ye:{abs(p_end_l[0]):.1f})\nX:{y_pos:.1f} d:{center_z:.1f} W:{defect_width:.1f}"
                 text_r += extra_r
                 text_l += extra_l
-                if rest_r: rest_r += extra_r
-                if rest_l: rest_l += extra_l
+                rest_r += extra_r
+                rest_l += extra_l
                 
             font_color = 'yellow' if is_selected else 'white'
             font_weight = 'bold' if is_selected else 'normal'
@@ -506,11 +515,11 @@ class App(ctk.CTk):
                 lbl_count_side_r[coord_r] = lbl_count_side_r.get(coord_r, 0) + 1
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
-                    self.ax_side.annotate(cnums_side_r, xy=(center_x_right, actual_bottom_z + 2), xytext=(2, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=16, ha='left', va='top', fontweight=font_weight)
-                    if rest_r: self.ax_side.annotate(rest_r, xy=(center_x_right, actual_bottom_z + 2), xytext=(2 + offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='top', fontweight=font_weight)
+                    self.ax_side.annotate(cnums_side_r, xy=(center_x_right, center_z), xytext=(8, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=16, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_r: self.ax_side.annotate(rest_r, xy=(center_x_right, center_z), xytext=(8 + offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
-                    self.ax_side_back.annotate(cnums_side_r, xy=(-center_x_right, actual_bottom_z + 2), xytext=(-2, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=16, ha='right', va='top', fontweight=font_weight)
-                    if rest_r: self.ax_side_back.annotate(rest_r, xy=(-center_x_right, actual_bottom_z + 2), xytext=(-2 - offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='top', fontweight=font_weight)
+                    self.ax_side_back.annotate(cnums_side_r, xy=(-center_x_right, center_z), xytext=(-8, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=16, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_r: self.ax_side_back.annotate(rest_r, xy=(-center_x_right, center_z), xytext=(-8 - offset_pt, lbl_offset_y), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
             if side in ["좌측(Left)", "양측(Both)"] and not skip_text_l:
                 offset_pt_l = len(cnums_side_l) * 15.0 if cnums_side_l else 0
                 coord_l = (round(center_x_left, 1), round(center_z, 1))
@@ -518,11 +527,11 @@ class App(ctk.CTk):
                 lbl_count_side_l[coord_l] = lbl_count_side_l.get(coord_l, 0) + 1
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
-                    self.ax_side.annotate(cnums_side_l, xy=(center_x_left, actual_bottom_z + 2), xytext=(-2, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=16, ha='right', va='top', fontweight=font_weight)
-                    if rest_l: self.ax_side.annotate(rest_l, xy=(center_x_left, actual_bottom_z + 2), xytext=(-2 - offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='top', fontweight=font_weight)
+                    self.ax_side.annotate(cnums_side_l, xy=(center_x_left, center_z), xytext=(-8, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=16, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_l: self.ax_side.annotate(rest_l, xy=(center_x_left, center_z), xytext=(-8 - offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='right', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
-                    self.ax_side_back.annotate(cnums_side_l, xy=(-center_x_left, actual_bottom_z + 2), xytext=(2, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=16, ha='left', va='top', fontweight=font_weight)
-                    if rest_l: self.ax_side_back.annotate(rest_l, xy=(-center_x_left, actual_bottom_z + 2), xytext=(2 + offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='top', fontweight=font_weight)
+                    self.ax_side_back.annotate(cnums_side_l, xy=(-center_x_left, center_z), xytext=(8, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=16, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    if rest_l: self.ax_side_back.annotate(rest_l, xy=(-center_x_left, center_z), xytext=(8 + offset_pt_l, lbl_offset_y_l), textcoords='offset points', color=font_color, fontsize=12, ha='left', va='center', fontweight=font_weight, zorder=5, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
 
             # == Draw defect in Top View ==
             y_pos = dfct.get("y_pos", 0.0)
@@ -596,11 +605,14 @@ class App(ctk.CTk):
                 seen_y_pos.add(round_y_pos)
                 
             if not skip_y_pos:
-                dim_x_ypos = -calc_top_bevel_x - 15 - (len(seen_y_pos) * 15)
+                offset_idx = len(seen_y_pos) - 1 if len(seen_y_pos) > 0 else 0
+                base_start = max(80, calc_top_bevel_x + 60)
+                dim_x_ypos = -(base_start * (1.35 ** offset_idx))
+                
                 self.ax_top.plot([0, dim_x_ypos - 2], [0, 0], color='red', lw=0.5, linestyle='--')
                 self.ax_top.plot([0, dim_x_ypos - 2], [y_pos, y_pos], color='red', lw=0.5, linestyle='--')
                 self.ax_top.annotate('', xy=(dim_x_ypos, y_pos), xytext=(dim_x_ypos, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                self.ax_top.text(dim_x_ypos - 1, y_pos / 2, f"{y_pos:.0f}", color='red', fontsize=11, ha='right', va='center', rotation=90, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                self.ax_top.text(dim_x_ypos, y_pos / 2 if y_pos != 0 else 5, f"{y_pos:.0f}", color='red', fontsize=11, ha='center', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
             
             # 2. Top View Length (y_len) near the defect
             if side in ["우측(Right)", "양측(Both)"] and not skip_top_r:
@@ -612,7 +624,7 @@ class App(ctk.CTk):
                 self.ax_top.plot([center_x_right, dim_x_len + 2], [y_pos, y_pos], color='red', lw=0.5, linestyle='--')
                 self.ax_top.plot([center_x_right, dim_x_len + 2], [y_pos + y_len, y_pos + y_len], color='red', lw=0.5, linestyle='--')
                 self.ax_top.annotate('', xy=(dim_x_len, y_pos), xytext=(dim_x_len, y_pos + y_len), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                self.ax_top.text(dim_x_len + 1, y_pos + y_len/2, f"L:{y_len:.0f}", color='red', fontsize=11, ha='left', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                self.ax_top.text(dim_x_len, y_pos + y_len/2, f"L:{y_len:.0f}", color='red', fontsize=11, ha='center', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 
                 offset_top_pt = len(cnums_top_r) * 15.0 if cnums_top_r else 0
                 lbl_x_r = dim_x_len + 25
@@ -628,7 +640,7 @@ class App(ctk.CTk):
                 self.ax_top.plot([center_x_left, dim_x_len_l - 2], [y_pos, y_pos], color='red', lw=0.5, linestyle='--')
                 self.ax_top.plot([center_x_left, dim_x_len_l - 2], [y_pos + y_len, y_pos + y_len], color='red', lw=0.5, linestyle='--')
                 self.ax_top.annotate('', xy=(dim_x_len_l, y_pos), xytext=(dim_x_len_l, y_pos + y_len), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                self.ax_top.text(dim_x_len_l - 1, y_pos + y_len/2, f"L:{y_len:.0f}", color='red', fontsize=11, ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                self.ax_top.text(dim_x_len_l, y_pos + y_len/2, f"L:{y_len:.0f}", color='red', fontsize=11, ha='center', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 
                 offset_top_pt_l = len(top_rest_l.split('\n')[0]) * 10.0 if top_rest_l else 0
                 lbl_x_l = dim_x_len_l - 25
@@ -639,76 +651,91 @@ class App(ctk.CTk):
             scan_view = dfct.get("scan_view", "Front B-Scan")
             
             if side in ["우측(Right)", "양측(Both)"] and not skip_text_r:
-                cx_round = round(center_x_right, 1)
-                offset = dim_count_side_r.get(cx_round, 0) * 35
-                dim_count_side_r[cx_round] = dim_count_side_r.get(cx_round, 0) + 1
+                offset_idx = dim_counter_side_r
+                dim_counter_side_r += 1
                 
-                dim_x_z = center_x_right + defect_width/2 + 10 + offset
-                dim_x_h = center_x_right + defect_width/2 + 25 + offset
+                idx_h = offset_idx * 2
+                idx_z = offset_idx * 2 + 1
+                base_start = max(45, calc_top_bevel_x + 15)
+                dim_x_z = base_start * (1.22 ** idx_z)
+                dim_x_h = base_start * (1.22 ** idx_h)
+                depth_text_z = actual_top_z / 2 if actual_top_z >= 2.0 else -2.5
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
                     # Depth
                     self.ax_side.plot([center_x_right, dim_x_z + 2], [0, 0], color='red', lw=0.5, linestyle='--')
                     self.ax_side.plot([center_x_right, dim_x_z + 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
                     self.ax_side.annotate('', xy=(dim_x_z, actual_top_z), xytext=(dim_x_z, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side.text(dim_x_z + 1, actual_top_z + 2.5, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='left', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side.text(dim_x_z, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     # Height
                     if shape != "원형(Circle)":
                         self.ax_side.plot([center_x_right, dim_x_h + 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
                         self.ax_side.annotate('', xy=(dim_x_h, actual_top_z), xytext=(dim_x_h, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side.text(dim_x_h + 1, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='left', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side.text(dim_x_h, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
-                    dim_x_z_m = -center_x_right - defect_width/2 - 10 - offset
-                    dim_x_h_m = -center_x_right - defect_width/2 - 25 - offset
+                    dim_x_z_m = -dim_x_z
+                    dim_x_h_m = -dim_x_h
                     self.ax_side_back.plot([-center_x_right, dim_x_z_m - 2], [0, 0], color='red', lw=0.5, linestyle='--')
                     self.ax_side_back.plot([-center_x_right, dim_x_z_m - 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
                     self.ax_side_back.annotate('', xy=(dim_x_z_m, actual_top_z), xytext=(dim_x_z_m, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side_back.text(dim_x_z_m - 1, actual_top_z + 2.5, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side_back.text(dim_x_z_m, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     if shape != "원형(Circle)":
                         self.ax_side_back.plot([-center_x_right, dim_x_h_m - 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
                         self.ax_side_back.annotate('', xy=(dim_x_h_m, actual_top_z), xytext=(dim_x_h_m, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side_back.text(dim_x_h_m - 1, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side_back.text(dim_x_h_m, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 
             if side in ["좌측(Left)", "양측(Both)"] and not skip_text_l:
-                cxl_round = round(center_x_left, 1)
-                offset_l = dim_count_side_l.get(cxl_round, 0) * 35
-                dim_count_side_l[cxl_round] = dim_count_side_l.get(cxl_round, 0) + 1
+                offset_idx_l = dim_counter_side_l
+                dim_counter_side_l += 1
                 
-                dim_x_z_l = center_x_left - defect_width/2 - 10 - offset_l
-                dim_x_h_l = center_x_left - defect_width/2 - 25 - offset_l
+                idx_h = offset_idx_l * 2
+                idx_z = offset_idx_l * 2 + 1
+                base_start = max(45, calc_top_bevel_x + 15)
+                dim_x_z_l = -(base_start * (1.22 ** idx_z))
+                dim_x_h_l = -(base_start * (1.22 ** idx_h))
+                depth_text_z = actual_top_z / 2 if actual_top_z >= 2.0 else -2.5
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
                     self.ax_side.plot([center_x_left, dim_x_z_l - 2], [0, 0], color='red', lw=0.5, linestyle='--')
                     self.ax_side.plot([center_x_left, dim_x_z_l - 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
                     self.ax_side.annotate('', xy=(dim_x_z_l, actual_top_z), xytext=(dim_x_z_l, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side.text(dim_x_z_l - 1, actual_top_z + 2.5, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side.text(dim_x_z_l, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     if shape != "원형(Circle)":
                         self.ax_side.plot([center_x_left, dim_x_h_l - 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
                         self.ax_side.annotate('', xy=(dim_x_h_l, actual_top_z), xytext=(dim_x_h_l, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side.text(dim_x_h_l - 1, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side.text(dim_x_h_l, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
-                    dim_x_z_l_m = -center_x_left + defect_width/2 + 10 + offset_l
-                    dim_x_h_l_m = -center_x_left + defect_width/2 + 25 + offset_l
+                    dim_x_z_l_m = -dim_x_z_l
+                    dim_x_h_l_m = -dim_x_h_l
                     self.ax_side_back.plot([-center_x_left, dim_x_z_l_m + 2], [0, 0], color='red', lw=0.5, linestyle='--')
                     self.ax_side_back.plot([-center_x_left, dim_x_z_l_m + 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
                     self.ax_side_back.annotate('', xy=(dim_x_z_l_m, actual_top_z), xytext=(dim_x_z_l_m, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side_back.text(dim_x_z_l_m + 1, actual_top_z + 2.5, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='left', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side_back.text(dim_x_z_l_m, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     if shape != "원형(Circle)":
                         self.ax_side_back.plot([-center_x_left, dim_x_h_l_m + 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
                         self.ax_side_back.annotate('', xy=(dim_x_h_l_m, actual_top_z), xytext=(dim_x_h_l_m, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side_back.text(dim_x_h_l_m + 1, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='left', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side_back.text(dim_x_h_l_m, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
 
         # Side View 설정
         for ax, title, invert_x in [(self.ax_side, 'Side View (Front B-Scan)', False), 
                                     (self.ax_side_back, 'Side View (Back B-Scan)', True)]:
             ax.invert_yaxis()
+            
+            # Front B-Scan에서는 두께 표시 생략 (사용자 요청)
+            if ax != self.ax_side:
+                # 우측 끝에 모재 두께(T) 표시
+                t_dim_x = half_width - 25
+                ax.annotate('', xy=(t_dim_x, t), xytext=(t_dim_x, 0), arrowprops=dict(arrowstyle='<|-|>', color='#00ffcc', lw=1.5, shrinkA=0, shrinkB=0))
+                ax.text(t_dim_x - 5, t / 2, f"T: {t:.2f}", color='#00ffcc', fontsize=12, fontweight='bold', ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=2))
+
             ax.set_xlabel('Y Position (mm)', color='white')
             ax.set_ylabel('Z Depth (mm)', color='white')
             ax.set_title(title, color='white', fontweight='bold')
             ax.grid(True, linestyle=':', alpha=0.3)
-            legend_side = ax.legend(loc='upper right')
-            if legend_side:
-                for text in legend_side.get_texts(): text.set_color("black")
+            # 범례(Legend) 제거 요청 반영
+            # legend_side = ax.legend(loc='upper right')
+            # if legend_side:
+            #     for text in legend_side.get_texts(): text.set_color("black")
             
             from matplotlib.ticker import ScalarFormatter
             ax.set_xlim(-half_width, half_width)
@@ -727,9 +754,10 @@ class App(ctk.CTk):
         self.ax_top.set_ylabel('X Position (mm)', color='white')
         self.ax_top.set_title('Top View (C-Scan)', color='white', fontweight='bold')
         self.ax_top.grid(True, linestyle=':', alpha=0.3)
-        legend_top = self.ax_top.legend(loc='upper right')
-        if legend_top:
-            for text in legend_top.get_texts(): text.set_color("black")
+        # 범례(Legend) 제거 요청 반영
+        # legend_top = self.ax_top.legend(loc='upper right')
+        # if legend_top:
+        #     for text in legend_top.get_texts(): text.set_color("black")
         from matplotlib.ticker import ScalarFormatter
         self.ax_top.set_xlim(-half_width, half_width)
         self.ax_top.set_xscale('symlog', linthresh=30, linscale=0.56)
@@ -760,6 +788,231 @@ class App(ctk.CTk):
         self.result_box.delete("0.0", "end")
         self.result_box.insert("0.0", text + "\n")
         self.result_box.configure(state="disabled")
+
+    def show_defect_table(self):
+        table_win = ctk.CTkToplevel(self)
+        table_win.title("결함 정보 표")
+        table_win.geometry("1000x400")
+        table_win.transient(self)
+        
+        frame = ctk.CTkFrame(table_win)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        columns = ("No", "Shape", "Side", "View", "Z Start", "Z End", "Y Start", "Y End", "Width", "Angle", "X Pos", "Length", "Label")
+        
+        style = ttk.Style(table_win)
+        style.theme_use("default")
+        style.configure("Treeview", 
+                        background="#2b2b2b", 
+                        foreground="white", 
+                        rowheight=25, 
+                        fieldbackground="#2b2b2b",
+                        bordercolor="#343638",
+                        borderwidth=0)
+        style.map('Treeview', background=[('selected', '#22559b')])
+        style.configure("Treeview.Heading", 
+                        background="#565b5e", 
+                        foreground="white", 
+                        relief="flat", 
+                        font=("Roboto", 10, "bold"))
+        style.map("Treeview.Heading", background=[('active', '#3484F0')])
+        
+        tree = ttk.Treeview(frame, columns=columns, show="headings", height=15)
+        
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=65, anchor="center")
+            
+        tree.column("No", width=40)
+        tree.column("Shape", width=110)
+        tree.column("Side", width=70)
+        tree.column("View", width=90)
+        tree.column("Label", width=80)
+        
+        vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        
+        vsb.pack(side="right", fill="y")
+        tree.pack(side="left", fill="both", expand=True)
+        
+        p = self.get_params()
+        if p:
+            t = p["thickness"]
+            r_f = p["root_face"]
+            r_g = p["root_gap_half"]
+            ang = p["bevel_angle_deg"]
+        else:
+            t, r_f, r_g, ang = 15.88, 1.6, 1.5, 37.5
+            
+        z_root_top = t - r_f
+        bevel_angle_rad = math.radians(ang)
+        
+        for idx, dfct in enumerate(self.defects):
+            no_str = chr(0x2460 + idx) if idx < 20 else str(idx + 1)
+            
+            defect_start_z_input = dfct.get("z_start", 0)
+            defect_end_z_input = dfct.get("z_end", 0)
+            defect_y_center = dfct.get("y_center", 0)
+            defect_angle_offset = dfct.get("angle", 0)
+            
+            if defect_start_z_input >= z_root_top:
+                base_start_x = r_g
+            else:
+                base_start_x = r_g + ((z_root_top - defect_start_z_input) * math.tan(bevel_angle_rad))
+            if defect_end_z_input >= z_root_top:
+                base_end_x = r_g
+            else:
+                base_end_x = r_g + ((z_root_top - defect_end_z_input) * math.tan(bevel_angle_rad))
+                
+            dx_base = base_end_x - base_start_x
+            dz_base = defect_end_z_input - defect_start_z_input
+            length = math.hypot(dx_base, dz_base)
+            if length == 0: length = 0.1
+            
+            base_angle_rad = math.atan2(dz_base, dx_base)
+            final_angle_deg = math.degrees(base_angle_rad) + defect_angle_offset
+            final_angle_rad = math.radians(final_angle_deg)
+            
+            hx = math.cos(final_angle_rad) * length / 2
+            
+            y_start = abs(defect_y_center - hx)
+            y_end = abs(defect_y_center + hx)
+            
+            values = (
+                no_str,
+                dfct.get("shape", ""),
+                dfct.get("side", ""),
+                dfct.get("scan_view", ""),
+                f'{defect_start_z_input:.1f}',
+                f'{defect_end_z_input:.1f}',
+                f'{y_start:.1f}',
+                f'{y_end:.1f}',
+                f'{dfct.get("width", 0):.1f}',
+                f'{defect_angle_offset:.1f}',
+                f'{dfct.get("y_pos", 0):.1f}',
+                f'{dfct.get("y_length", 0):.1f}',
+                dfct.get("custom_label", "")
+            )
+            tree.insert("", "end", values=values)
+
+    def export_a4_report(self):
+        file_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF files", "*.pdf")], title="A4 보고서 저장")
+        if not file_path:
+            return
+            
+        try:
+            import io
+            import matplotlib.pyplot as plt
+            import matplotlib.image as mpimg
+            import matplotlib as mpl
+            
+            mpl.rcParams['font.family'] = 'Malgun Gothic'
+            mpl.rcParams['axes.unicode_minus'] = False
+            
+            original_size = self.fig.get_size_inches()
+            self.fig.set_size_inches(8.0, 9.0)
+            
+            buf = io.BytesIO()
+            self.fig.savefig(buf, format='png', dpi=300, facecolor=self.fig.get_facecolor(), bbox_inches='tight')
+            buf.seek(0)
+            
+            self.fig.set_size_inches(original_size)
+            
+            plot_img = mpimg.imread(buf, format='png')
+            
+            fig_a4 = plt.figure(figsize=(8.27, 11.69))
+            fig_a4.patch.set_facecolor('white')
+            
+            fig_a4.suptitle("PAUT 결함 시뮬레이션 보고서", fontsize=18, fontweight='bold', y=0.96)
+            
+            ax_img = fig_a4.add_axes([0.05, 0.28, 0.9, 0.65])
+            ax_img.imshow(plot_img, aspect='auto')
+            ax_img.axis('off')
+            
+            ax_table = fig_a4.add_axes([0.05, 0.05, 0.9, 0.22])
+            ax_table.axis('off')
+            
+            col_labels = ["No", "Shape", "Side", "View", "Z Start", "Z End", "Y Start", "Y End", "Width", "Angle", "X Pos", "Length", "Label"]
+            table_data = []
+            
+            p = self.get_params()
+            if p:
+                t = p["thickness"]
+                r_f = p["root_face"]
+                r_g = p["root_gap_half"]
+                ang = p["bevel_angle_deg"]
+            else:
+                t, r_f, r_g, ang = 15.88, 1.6, 1.5, 37.5
+                
+            z_root_top = t - r_f
+            bevel_angle_rad = math.radians(ang)
+            
+            for idx, dfct in enumerate(self.defects):
+                no_str = chr(0x2460 + idx) if idx < 20 else str(idx + 1)
+                
+                defect_start_z_input = dfct.get("z_start", 0)
+                defect_end_z_input = dfct.get("z_end", 0)
+                defect_y_center = dfct.get("y_center", 0)
+                defect_angle_offset = dfct.get("angle", 0)
+                
+                if defect_start_z_input >= z_root_top:
+                    base_start_x = r_g
+                else:
+                    base_start_x = r_g + ((z_root_top - defect_start_z_input) * math.tan(bevel_angle_rad))
+                if defect_end_z_input >= z_root_top:
+                    base_end_x = r_g
+                else:
+                    base_end_x = r_g + ((z_root_top - defect_end_z_input) * math.tan(bevel_angle_rad))
+                    
+                dx_base = base_end_x - base_start_x
+                dz_base = defect_end_z_input - defect_start_z_input
+                length = math.hypot(dx_base, dz_base)
+                if length == 0: length = 0.1
+                
+                base_angle_rad = math.atan2(dz_base, dx_base)
+                final_angle_deg = math.degrees(base_angle_rad) + defect_angle_offset
+                final_angle_rad = math.radians(final_angle_deg)
+                
+                hx = math.cos(final_angle_rad) * length / 2
+                
+                y_start = abs(defect_y_center - hx)
+                y_end = abs(defect_y_center + hx)
+                
+                row = [
+                    no_str,
+                    dfct.get("shape", "").replace("(Circle)", "").replace("(Ellipse)", "").replace("(Rectangle)", "").replace("(Line)", ""),
+                    dfct.get("side", "").replace("(Right)", "").replace("(Left)", "").replace("(Both)", ""),
+                    dfct.get("scan_view", "").replace(" B-Scan", ""),
+                    f'{defect_start_z_input:.1f}',
+                    f'{defect_end_z_input:.1f}',
+                    f'{y_start:.1f}',
+                    f'{y_end:.1f}',
+                    f'{dfct.get("width", 0):.1f}',
+                    f'{defect_angle_offset:.1f}',
+                    f'{dfct.get("y_pos", 0):.1f}',
+                    f'{dfct.get("y_length", 0):.1f}',
+                    dfct.get("custom_label", "")
+                ]
+                table_data.append(row)
+                
+            if not table_data:
+                table_data = [["-" for _ in col_labels]]
+                
+            tbl = ax_table.table(cellText=table_data, colLabels=col_labels, loc='upper center', cellLoc='center')
+            tbl.auto_set_font_size(False)
+            tbl.set_fontsize(8)
+            tbl.scale(1, 1.8)
+            
+            for i in range(len(col_labels)):
+                tbl[(0, i)].set_facecolor('#d3d3d3')
+                tbl[(0, i)].set_text_props(weight='bold')
+                
+            fig_a4.savefig(file_path, format='pdf', bbox_inches='tight')
+            plt.close(fig_a4)
+            
+            messagebox.showinfo("저장 완료", f"A4 보고서가 PDF로 성공적으로 저장되었습니다.\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("오류", f"PDF 저장 중 오류가 발생했습니다:\n{str(e)}")
 
     def add_front_defect(self):
         self.add_defect(scan_view="Front B-Scan")
