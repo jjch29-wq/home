@@ -1121,6 +1121,28 @@ class ExcelMergerApp:
                     ws.Cells(row_idx, 5 + col_offset).Value = re_count if re_count > 0 else ""
                     ws.Cells(row_idx, 6 + col_offset).Value = total_count if total_count > 0 else ""
                     
+                # 마지막 페이지에 남은 이전 페이지 복사 데이터(잔여 셀) 지우기
+                if list_data:
+                    total_items = len(list_data)
+                    remainder = total_items % 40
+                    if remainder > 0:
+                        last_page = (total_items - 1) // 40
+                        last_page_start_row = 1 + last_page * 23
+                        for pos in range(remainder, 40):
+                            if pos < 20:
+                                row_idx = last_page_start_row + 3 + pos
+                                col_offset = 0
+                            else:
+                                row_idx = last_page_start_row + 3 + (pos - 20)
+                                col_offset = 6
+                                
+                            ws.Cells(row_idx, 1 + col_offset).Value = ""
+                            ws.Cells(row_idx, 2 + col_offset).Value = ""
+                            ws.Cells(row_idx, 3 + col_offset).Value = ""
+                            ws.Cells(row_idx, 4 + col_offset).Value = ""
+                            ws.Cells(row_idx, 5 + col_offset).Value = ""
+                            ws.Cells(row_idx, 6 + col_offset).Value = ""
+
                 if list_data:
                     max_page = (len(list_data) - 1) // 40
                     last_row = (max_page + 1) * 23
