@@ -1,0 +1,36 @@
+<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head>
+<meta charset="utf-8">
+<style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid black; text-align: center; vertical-align: middle; padding: 10px; font-family: "Malgun Gothic", sans-serif; height: 40px; }
+    th { font-weight: bold; background-color: #f2f2f2; }
+    .title { font-size: 16pt; font-weight: bold; height: 60px; border: none; background-color: transparent; }
+</style>
+</head>
+<body>
+    <table>
+        <tr>
+            <td colspan="6" class="title">가산~가평 천연가스 공급시설 건설공사 비파괴검사 기술용역 투입인원 명단</td>
+        </tr>
+        <tr>
+            <th style="width: 60px;">연번</th>
+            <th style="width: 180px;">직책 (담당분야)</th>
+            <th style="width: 100px;">성명</th>
+            <th style="width: 140px;">생년월일</th>
+            <th style="width: 140px;">서명 (인)</th>
+            <th style="width: 180px;">비고</th>
+        </tr>
+        <tr><td>1</td><td>총괄 책임자</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>2</td><td>방사선투과검사(RT)</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>3</td><td>초음파탐상검사(UT)</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>4</td><td>자기탐상검사(MT)</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>5</td><td>침투탐상검사(PT)</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>6</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>7</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>8</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>9</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>10</td><td></td><td></td><td></td><td></td><td></td></tr>
+    </table>
+</body>
+</html>
