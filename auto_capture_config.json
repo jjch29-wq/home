@@ -1,0 +1,20 @@
+{
+    "data_dir": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/data",
+    "capture_dir": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/captuer",
+    "shortcut": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/OmniPC 6.0.lnk",
+    "delay": 12,
+    "use_click": true,
+    "click1_x": 517,
+    "click1_y": 128,
+    "click2_x": 522,
+    "click2_y": 159,
+    "click3_x": 524,
+    "click3_y": 319,
+    "use_region": true,
+    "region": [
+        2,
+        230,
+        1817,
+        805
+    ]
+}
