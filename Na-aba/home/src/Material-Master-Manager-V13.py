@@ -3428,6 +3428,15 @@ class MaterialManager:
         ttk.Label(filter_frame, text="관리품번:").grid(row=1, column=4, padx=2, pady=2, sticky='e')
         self.cb_filter_eq = ttk.Combobox(filter_frame, width=20)
         self.cb_filter_eq.grid(row=1, column=5, padx=2, pady=2)
+        
+        # [UX IMPROVEMENT] 장비 포함 전체 보기 체크박스 추가
+        self.chk_show_all_equipment_var = tk.BooleanVar(value=False)
+        self.chk_show_all_equipment = ttk.Checkbutton(
+            filter_frame, text="☑ 장비 포함 전체 보기", 
+            variable=self.chk_show_all_equipment_var, 
+            command=self.update_stock_view
+        )
+        self.chk_show_all_equipment.grid(row=0, column=8, columnspan=2, padx=15, pady=2, sticky='w')
 
         # [NEW] Bind actions to all stock filter comboboxes for consistency and focus handling
         stock_filters = [
@@ -3481,7 +3490,7 @@ class MaterialManager:
         vsb = ttk.Scrollbar(tree_frame, orient="vertical")
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
         
-        columns = ('ID', '회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', '품목군코드', '공급업체', '제조사', '제조국', '가격', '원가', '관리단위', '수량', '재고하한', '상태/위치')
+        columns = ('No.', '회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', '품목군코드', '공급업체', '제조사', '제조국', '가격', '원가', '관리단위', '수량', '재고하한', '상태/위치')
         self.stock_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', 
                                       yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
@@ -3562,7 +3571,8 @@ class MaterialManager:
             values = self.stock_tree.item(item, 'values')
             if values:
                 # Ensure we match the type of MaterialID in the dataframe
-                mat_ids_to_remove.append(type(self.materials_df['MaterialID'].iloc[0])(values[0]))
+                # [UX IMPROVEMENT] Get hidden MaterialID from the end of values
+                mat_ids_to_remove.append(type(self.materials_df['MaterialID'].iloc[0])(values[-1]))
         
         # Soft delete: Set Active=0 instead of removing from materials_df
         if 'Active' not in self.materials_df.columns:
@@ -3614,7 +3624,8 @@ class MaterialManager:
             
         item = self.stock_tree.item(selection[0])
         mat_values = item['values']
-        mat_id = mat_values[0]
+        # [UX IMPROVEMENT] Get hidden MaterialID from the end of values
+        mat_id = mat_values[-1]
         
         # Get full material data from DF (Robust matching)
         target_id_str = self.normalize_id(mat_id)
@@ -3918,6 +3929,8 @@ class MaterialManager:
         # Calculate current stock
         stock_summary = []
         
+        row_idx = 1 # [UX IMPROVEMENT] 순차 번호 (No.) 부여
+        
         # Pre-setup tags for equipment status highlighting
         self.stock_tree.tag_configure('deployed', background='#FFF9C4') # Light Yellow for "Field"
         self.stock_tree.tag_configure('in_stock', background='') # Default
@@ -3927,13 +3940,6 @@ class MaterialManager:
                 continue
             
             mat_id = mat['MaterialID']
-            # [NEW] Format MaterialID as integer for display at the start of loop
-            display_id = ""
-            try:
-                if pd.notna(mat_id) and str(mat_id).strip():
-                    display_id = str(int(float(str(mat_id).strip())))
-            except:
-                display_id = str(mat_id)
 
             # [REFINED] Skip non-consumables OR auto-registered items that are NOT consumables.
             # We ALLOW auto-registered items if they are confirmed as consumables (like films/drugs).
@@ -3941,8 +3947,11 @@ class MaterialManager:
             mat_name_str = str(mat.get('품목명', mat.get('ǰ', ''))).strip()
             is_consumable = self._is_consumable_material(mat_name_str, '')
             
-            if not is_consumable or (spec == "자동등록" and not is_consumable):
-                continue
+            # [UX IMPROVEMENT] '장비 포함 전체 보기' 체크 해제 상태일 때만 비소모성 자재 숨김
+            if not getattr(self, 'chk_show_all_equipment_var', None) or not self.chk_show_all_equipment_var.get():
+                if not is_consumable or (spec == "자동등록" and not is_consumable):
+                    continue
+
             str_mat_id = self.normalize_id(mat_id)
             
             # Use optimized lookup
@@ -4008,7 +4017,7 @@ class MaterialManager:
             # Default row display
             stock_summary.append({
                 'data': (
-                    display_id,
+                    str(row_idx),
                     safe_get(mat.get('회사코드', ''), ''),
                     safe_get(mat.get('관리품번', ''), ''),
                     safe_get(mat.get('품목명', ''), ''),
@@ -4025,10 +4034,12 @@ class MaterialManager:
                     safe_get(mat.get('관리단위', 'EA'), 'EA'),
                     f"{to_f(current_stock):g}",
                     f"{to_f(mat.get('재고하한', 0)):g}",
-                    status_location
+                    status_location,
+                    mat_id # [UX IMPROVEMENT] Hidden real MaterialID at values[-1]
                 ),
                 'tag': row_tag
             })
+            row_idx += 1
         
         # [NEW] Sort by Item Name (Index 3) then Model Name (Index 6)
         stock_summary.sort(key=lambda x: (str(x['data'][3]), str(x['data'][6])))
@@ -4042,6 +4053,7 @@ class MaterialManager:
         filter_model = str(self.cb_filter_model.get()).strip() if self.cb_filter_model.get() else "전체"
         filter_eq = str(self.cb_filter_eq.get()).strip() if self.cb_filter_eq.get() else "전체"
         
+        final_row_idx = 1
         for row_obj in stock_summary:
             row = row_obj['data']
             # Dropdown Filters
@@ -4058,7 +4070,13 @@ class MaterialManager:
                 row_str = ' '.join(str(x).lower() for x in row)
                 if search_term not in row_str:
                     continue
-            self.stock_tree.insert('', tk.END, values=row, tags=(row_obj['tag'],))
+            
+            # [UX IMPROVEMENT] 튜플을 리스트로 변환 후 화면에 보이는 순서대로 순차 번호 부여
+            final_row = list(row)
+            final_row[0] = str(final_row_idx)
+            
+            self.stock_tree.insert('', tk.END, values=final_row, tags=(row_obj['tag'],))
+            final_row_idx += 1
         
     def treeview_sort_column(self, tv, col, reverse):
         """Standard sorting function for Treeview columns"""
@@ -9736,7 +9754,6 @@ class MaterialManager:
         self.cb_daily_filter_site.set('전체')
         tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                   command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_filter_site)).pack(side='left', padx=(0, 5))
-        self._bind_combobox_word_suggest(self.cb_daily_filter_site, lambda: ['전체'] + sorted(list(set(self.sites))))
         
         ttk.Label(filter_row, text="품목명:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_material = ttk.Combobox(filter_row, width=15)
@@ -9744,7 +9761,6 @@ class MaterialManager:
         self.cb_daily_filter_material.set('전체')
         tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                   command=lambda: self.open_list_management_dialog('materials', target_cb=self.cb_daily_filter_material)).pack(side='left', padx=(0, 5))
-        self._bind_combobox_word_suggest(self.cb_daily_filter_material, lambda: self._get_material_candidates(include_all=True))
         
         ttk.Label(filter_row, text="장비명:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_equipment = ttk.Combobox(filter_row, width=15)
@@ -9752,7 +9768,6 @@ class MaterialManager:
         self.cb_daily_filter_equipment.set('전체')
         tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                   command=lambda: self.open_list_management_dialog('equipments', target_cb=self.cb_daily_filter_equipment)).pack(side='left', padx=(0, 5))
-        self._bind_combobox_word_suggest(self.cb_daily_filter_equipment, lambda: self._get_equipment_candidates(include_all=True))
         
         ttk.Label(filter_row, text="작업자:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_worker = ttk.Combobox(filter_row, width=10)
@@ -13503,7 +13518,11 @@ class MaterialManager:
                 # [FIX] Only auto-register if it's a CONSUMABLE (Drug/Film). Equipment should NOT be registered.
                 if not mat_id and mat_display:
                     if self._is_consumable_material(mat_display, self.cb_daily_test_method.get().strip()):
-                        mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록')
+                        # [UX IMPROVEMENT] 등록되지 않은 소모품 감지 시, 사용자의 승인을 받도록 알림 팝업 추가
+                        if messagebox.askyesno("신규 자재 등록", f"등록되지 않은 소모품 자재명('{mat_display}')입니다.\n재고 마스터에 신규 자재로 등록하시겠습니까?\n\n(아니오를 누르면 작업일보에는 저장되지만 재고 연동(차감) 대상에서 제외됩니다.)"):
+                            mat_id = self.register_new_material(mat_display, warehouse='현장', 규격='자동등록')
+                        else:
+                            mat_id = mat_display
                     else:
                         # For equipment or non-consumables, just store the name as ID (skips stock tracking)
                         mat_id = mat_display
@@ -16406,7 +16425,11 @@ class MaterialManager:
                     
                     if not new_mat_id and new_mat_display:
                         if self._is_consumable_material(new_mat_display, method):
-                            new_mat_id = self.register_new_material(new_mat_display, warehouse='현장', 규격='자동등록')
+                            # [UX IMPROVEMENT] 등록되지 않은 소모품 감지 시 승인 팝업 추가 (수정/저장 동일)
+                            if messagebox.askyesno("신규 자재 등록", f"등록되지 않은 소모품 자재명('{new_mat_display}')입니다.\n재고 마스터에 신규 자재로 등록하시겠습니까?\n\n(아니오를 누르면 기록에는 변경되지만 재고 연동(차감) 대상에서 제외됩니다.)"):
+                                new_mat_id = self.register_new_material(new_mat_display, warehouse='현장', 규격='자동등록')
+                            else:
+                                new_mat_id = new_mat_display
                         else:
                             new_mat_id = new_mat_display
                 
@@ -17967,7 +17990,7 @@ class MaterialManager:
             for item in self.stock_tree.get_children():
                 values = self.stock_tree.item(item, 'values')
                 stock_data.append({
-                    'ID': values[0],
+                    'No.': values[0],
                     '회사코드': values[1],
                     '관리품번': values[2],
                     '품목명': values[3],
