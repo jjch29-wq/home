@@ -392,8 +392,19 @@ class DailyWorkReportManager:
 
         tiny_font = Font(size=1); no_wrap = Alignment(wrap_text=False, horizontal='center', vertical='center')
         note_range_start = 18 + method_offset; note_range_end = 25 + method_offset
+        
+        # [DYNAMIC HEIGHT ADJUSTMENT]
+        # 위아래 여백을 일정하게 맞추기 위해, 추가된 OT, 자재, Method 행의 높이를 합산하여
+        # 18~25행(비고란 버퍼)의 전체 높이에서 그만큼을 정확히 빼줍니다.
+        base_total_height = 120.0  # 기본 버퍼의 총 높이 (변경 가능)
+        extra_h = (ot_extra * 18.0) + (rt_extra * 30.0) + (method_offset * 15.0)
+        
+        # 남은 높이를 계산하되 최소 24.0(행당 3.0)은 유지
+        total_buffer = max(24.0, base_total_height - extra_h)
+        dynamic_height = total_buffer / (note_range_end - note_range_start + 1)
+        
         for r in range(note_range_start, note_range_end + 1):
-            sheet.row_dimensions[r].height = 6.0; sheet.row_dimensions[r].custom_height = True
+            sheet.row_dimensions[r].height = dynamic_height; sheet.row_dimensions[r].custom_height = True
             for c in range(1, 20):
                 cell = sheet.cell(row=r, column=c)
                 if not isinstance(cell, MergedCell):

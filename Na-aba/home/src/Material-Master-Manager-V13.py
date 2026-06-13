@@ -17978,7 +17978,8 @@ class MaterialManager:
     
     def on_closing(self):
         """Handle window closing event"""
-        self.save_tab_config()
+        self.save_tab_config(force=True)
+        self.is_ready = False  # 프로그램 종료 중 발생하는 UI 이벤트가 설정을 덮어쓰는 것 방지
         self.root.destroy()
     
     def export_stock_to_excel(self):
