@@ -17161,8 +17161,11 @@ class MaterialManager:
                 return
 
             # Force update to ensure all coordinates and sizes are accurate
-            self.root.update_idletasks()
-            
+            try:
+                self.root.update_idletasks()
+            except:
+                pass
+
             # Initialize or keep existing tab_config
             if not hasattr(self, 'tab_config'):
                 self.tab_config = {}
@@ -17183,6 +17186,30 @@ class MaterialManager:
             for tab_id in self.notebook.tabs():
                 tab_order.append(self.notebook.tab(tab_id, "text"))
 
+            daily_usage_sash_pos = None
+            if hasattr(self, 'daily_usage_paned'):
+                try: daily_usage_sash_pos = self.daily_usage_paned.sashpos(0)
+                except: pass
+
+            daily_history_sash_pos = None
+            if hasattr(self, 'daily_history_paned'):
+                try: daily_history_sash_pos = self.daily_history_paned.sashpos(0)
+                except: pass
+
+            entry_inner_frame_height = None
+            if hasattr(self, 'entry_inner_frame'):
+                try: entry_inner_frame_height = self.entry_inner_frame.winfo_height()
+                except: pass
+                
+            window_state = 'normal'
+            window_width = 1200
+            window_height = 800
+            try:
+                window_state = self.root.state()
+                window_width = self.root.winfo_width()
+                window_height = self.root.winfo_height()
+            except: pass
+
             self.tab_config.update({
                 'selected_tab': current_tab_idx,
                 'selected_tab_text': current_tab_text,
@@ -17201,18 +17228,18 @@ class MaterialManager:
                 'resolution_locked': getattr(self, 'resolution_locked', False),
                 'locked_width': getattr(self, 'locked_width', 1200),
                 'locked_height': getattr(self, 'locked_height', 800),
-                'daily_usage_sash_locked': self.daily_usage_sash_locked,
-                'daily_usage_sash_pos': self.daily_usage_paned.sashpos(0) if hasattr(self, 'daily_usage_paned') else None,
-                'daily_history_sash_pos': self.daily_history_paned.sashpos(0) if hasattr(self, 'daily_history_paned') else None,
-                'entry_inner_frame_height': self.entry_inner_frame.winfo_height() if hasattr(self, 'entry_inner_frame') else None,
+                'daily_usage_sash_locked': getattr(self, 'daily_usage_sash_locked', False),
+                'daily_usage_sash_pos': daily_usage_sash_pos,
+                'daily_history_sash_pos': daily_history_sash_pos,
+                'entry_inner_frame_height': entry_inner_frame_height,
                 'history_visible_cols': getattr(self, 'manual_visible_cols', []),
                 'monthly_visible_cols': getattr(self, 'monthly_visible_cols', []),
                 'budget_view_visible_cols': getattr(self, 'budget_view_visible_cols', []),
                 'budget_view_heading_aliases': getattr(self, 'budget_view_heading_aliases', {}),
                 'budget_view_custom_columns': getattr(self, 'budget_view_custom_columns', []),
-                'window_state': self.root.state(),
-                'window_width': self.root.winfo_width(),
-                'window_height': self.root.winfo_height()
+                'window_state': window_state,
+                'window_width': window_width,
+                'window_height': window_height
             })
             
             # Save current stock column widths
@@ -17275,51 +17302,54 @@ class MaterialManager:
             current_geometries = {}
             
             for key, widget in self.draggable_items.items():
-                # [LAYOUT FIX] 핵심 박스는 좌표 저장 제외
-                # 재시작 시 기본 grid 배치로 복원하여 겹침/잘림 방지
-                if key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
-                    continue
+                try:
+                    # [LAYOUT FIX] 핵심 박스는 좌표 저장 제외
+                    # 재시작 시 기본 grid 배치로 복원하여 겹침/잘림 방지
+                    if key in getattr(self, 'CORE_DRAGGABLE_KEYS', []):
+                        continue
 
-                manager = widget.winfo_manager()
-                # Capture everything that is visible and managed
-                if manager in ['place', 'grid']:
-                    current_geometries[key] = {
-                        'x': widget.winfo_x(),
-                        'y': widget.winfo_y(),
-                        'width': widget.winfo_width(),
-                        'height': widget.winfo_height(),
-                        'hidden': False
-                    }
-                    
-                    if hasattr(widget, '_label_widget'):
-                        current_geometries[key]['custom_label'] = widget._label_widget.cget('text')
-                    if hasattr(widget, '_manage_list_key') and widget._manage_list_key:
-                        current_geometries[key]['manage_list_key'] = widget._manage_list_key
-                    if key.startswith('clone_'):
-                        current_geometries[key]['is_clone'] = True
-                        current_geometries[key]['widget_class_name'] = widget._widget_class.__name__
-                        saved_kwargs = widget._widget_kwargs.copy()
-                        if 'values' in saved_kwargs: del saved_kwargs['values']
-                        current_geometries[key]['widget_kwargs'] = saved_kwargs
-                    if key.startswith('memo_'):
-                        current_geometries[key]['text'] = self.memos[key]['text_widget'].get('1.0', 'end-1c')
-                        current_geometries[key]['memo_title'] = self.memos[key]['title_entry'].get()
-                    if key in self.checklists:
-                        current_geometries[key]['checklist_title'] = self.checklists[key]['title_entry'].get()
-                        items_data = []
-                        for child in self.checklists[key]['item_frame'].winfo_children():
-                            if hasattr(child, '_checklist_data'):
-                                items_data.append({
-                                    'text': child._checklist_data['entry'].get(),
-                                    'checked': child._checklist_data['var'].get()
-                                })
-                        current_geometries[key]['checklist_items'] = items_data
-                    if key in self.vehicle_inspections:
-                        current_geometries[key]['vehicle_data'] = self.vehicle_inspections[key].get_data()
-                elif manager == '': # Hidden or not managed
-                    # Only mark as hidden if it was previously in place/grid (to avoid junk)
-                    if key in self.tab_config.get('draggable_geometries', {}):
-                        current_geometries[key] = {'hidden': True}
+                    manager = widget.winfo_manager()
+                    # Capture everything that is visible and managed
+                    if manager in ['place', 'grid']:
+                        current_geometries[key] = {
+                            'x': widget.winfo_x(),
+                            'y': widget.winfo_y(),
+                            'width': widget.winfo_width(),
+                            'height': widget.winfo_height(),
+                            'hidden': False
+                        }
+                        
+                        if hasattr(widget, '_label_widget'):
+                            current_geometries[key]['custom_label'] = widget._label_widget.cget('text')
+                        if hasattr(widget, '_manage_list_key') and widget._manage_list_key:
+                            current_geometries[key]['manage_list_key'] = widget._manage_list_key
+                        if key.startswith('clone_'):
+                            current_geometries[key]['is_clone'] = True
+                            current_geometries[key]['widget_class_name'] = widget._widget_class.__name__
+                            saved_kwargs = widget._widget_kwargs.copy()
+                            if 'values' in saved_kwargs: del saved_kwargs['values']
+                            current_geometries[key]['widget_kwargs'] = saved_kwargs
+                        if key.startswith('memo_'):
+                            current_geometries[key]['text'] = self.memos[key]['text_widget'].get('1.0', 'end-1c')
+                            current_geometries[key]['memo_title'] = self.memos[key]['title_entry'].get()
+                        if key in getattr(self, 'checklists', {}):
+                            current_geometries[key]['checklist_title'] = self.checklists[key]['title_entry'].get()
+                            items_data = []
+                            for child in self.checklists[key]['item_frame'].winfo_children():
+                                if hasattr(child, '_checklist_data'):
+                                    items_data.append({
+                                        'text': child._checklist_data['entry'].get(),
+                                        'checked': child._checklist_data['var'].get()
+                                    })
+                            current_geometries[key]['checklist_items'] = items_data
+                        if key in getattr(self, 'vehicle_inspections', {}):
+                            current_geometries[key]['vehicle_data'] = self.vehicle_inspections[key].get_data()
+                    elif manager == '': # Hidden or not managed
+                        # Only mark as hidden if it was previously in place/grid (to avoid junk)
+                        if key in self.tab_config.get('draggable_geometries', {}):
+                            current_geometries[key] = {'hidden': True}
+                except Exception as e:
+                    print(f"Skipping save for draggable widget {key}: {e}")
 
             # [DEFINITIVE FIX] Deep merge current_geometries into disk config
             final_config = {}
@@ -17952,8 +17982,7 @@ class MaterialManager:
                                 self.root.after(100, lambda: self.update_daily_usage_view())
                                 self.root.after(200, lambda: self.update_monthly_usage_view())
                                 self.root.after(300, lambda: self.update_budget_site_view()) 
-                                # [NEW] Set default tab to Daily Usage (Index 4) on startup
-                                self.root.after(400, lambda: self.notebook.select(4))
+                                # Removed hardcoded default tab selection so the user's saved tab is preserved
                             except Exception as e:
                                 print(f"[STARTUP] View refresh error: {e}")
                                 
