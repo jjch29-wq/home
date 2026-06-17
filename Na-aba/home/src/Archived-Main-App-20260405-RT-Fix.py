@@ -2419,10 +2419,10 @@ class PMIReportApp:
             
             mapping = {
                 "t": next((c for c in cols if any(x in c.upper() for x in ["THK", "두께", "TH'K", "THICKNESS"])), None),
-                "h": next((c for c in cols if any(x in c.upper() for x in ["HEIGHT", "높이", "FLAW_HEIGHT"])), None),
-                "l": next((c for c in cols if any(x in c.upper() for x in ["LENGTH", "길이", "FLAW_LENGTH", "LENTH"])), None),
-                "d": next((c for c in cols if any(x in c.upper() for x in ["DEPTH", "깊이", "FLAW_DEPTH"])), None),
-                "nature": next((c for c in cols if any(x in c.upper() for x in ["NAT", "종류", "FLAW_NATURE", "TYPE"])), None),
+                "h": next((c for c in cols if any(x in str(c).upper() for x in ["HEIGHT", "높이", "FLAW_HEIGHT"]) or str(c).strip().upper() == "H"), None),
+                "l": next((c for c in cols if any(x in str(c).upper() for x in ["LENGTH", "길이", "FLAW_LENGTH", "LENTH"]) or str(c).strip().upper() == "L"), None),
+                "d": next((c for c in cols if any(x in str(c).upper() for x in ["DEPTH", "깊이", "FLAW_DEPTH"]) or str(c).strip().upper() == "D"), None),
+                "nature": next((c for c in cols if any(x in str(c).upper() for x in ["NAT", "종류", "FLAW_NATURE", "TYPE"])), None),
                 "line": next((c for c in cols if any(x in c.upper() for x in ["LINE", "ISO", "DWG", "DRAWING"])), None),
                 "joint": next((c for c in cols if any(x in c.upper() for x in ["JOINT", "WELD"])), None),
                 "start": next((c for c in cols if any(x in c.upper() for x in ["START", "L1"])), None),
