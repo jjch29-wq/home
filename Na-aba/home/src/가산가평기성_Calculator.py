@@ -2,40 +2,86 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
 import os
+import json
 import win32com.client as win32
 
-# --- 상수 및 단가 정의 ---
-MATERIAL_COST = {
-    'RT (B필름: 3⅓"x17")': 3379,
-    'RT (A필름: 3⅓"x12")': 2540,
-    'RT (A/2필름: 3⅓"x6")': 1515,
-    "UT": 1115,
-    "PT": 3971
+CONFIG_FILE = "config.json"
+
+DEFAULT_CONFIG = {
+    "MATERIAL_COST": {
+        'RT (B필름: 3⅓"x17")': 3379,
+        'RT (A필름: 3⅓"x12")': 2540,
+        'RT (A/2필름: 3⅓"x6")': 1515,
+        "UT": 1115,
+        "PT": 3971
+    },
+    "LABOR_COST": {
+        "일반": {"RT": 34863, "UT": 25000, "PT": 20000},
+        "야간": {"RT": 49240, "UT": 37500, "PT": 30000},
+        "휴일": {"RT": 49313, "UT": 37500, "PT": 30000}
+    }
 }
 
-# 엑셀 기준 보정물량(매/M)당 인건비 단가 (단위: 원)
-LABOR_COST = {
-    "일반": {"RT": 34863, "UT": 25000, "PT": 20000},
-    "야간": {"RT": 49240, "UT": 37500, "PT": 30000},
-    "휴일": {"RT": 49313, "UT": 37500, "PT": 30000}
-}
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=4)
+        return DEFAULT_CONFIG
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return DEFAULT_CONFIG
+
+def save_config(config):
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=4)
+
+# 글로벌 단가 변수
+CONFIG = load_config()
+MATERIAL_COST = CONFIG["MATERIAL_COST"]
+LABOR_COST = CONFIG["LABOR_COST"]
 
 class NDTCalculator(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("비파괴검사 기성 산출 계산기 (가산~가평)")
-        self.geometry("1100x950")  
+        self.geometry("1150x1000")  
         self.configure(padx=20, pady=20)
         self.style = ttk.Style(self)
         self.style.theme_use("clam")
         
         self.records = [] # 저장된 기록 목록
         
+        self.create_menu()
         self.create_widgets()
         
+    def create_menu(self):
+        menubar = tk.Menu(self)
+        
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="작업 불러오기 (Load)", command=self.load_project)
+        file_menu.add_command(label="작업 저장하기 (Save)", command=self.save_project)
+        file_menu.add_separator()
+        file_menu.add_command(label="단가 설정 (Settings)", command=self.open_settings)
+        file_menu.add_separator()
+        file_menu.add_command(label="종료", command=self.quit)
+        
+        menubar.add_cascade(label="파일 (File)", menu=file_menu)
+        self.config(menu=menubar)
+
     def create_widgets(self):
-        # 1. 상단 프레임 (기본 정보)
-        info_frame = ttk.Frame(self)
+        main_pane = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
+        main_pane.pack(fill=tk.BOTH, expand=True)
+        
+        left_frame = ttk.Frame(main_pane)
+        right_frame = ttk.Frame(main_pane, padding=(10, 0, 0, 0))
+        
+        main_pane.add(left_frame, weight=3)
+        main_pane.add(right_frame, weight=1)
+        
+        # --- LEFT FRAME (기존 검사 입력부) ---
+        info_frame = ttk.Frame(left_frame)
         info_frame.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Label(info_frame, text="• 검사일자:", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
@@ -46,34 +92,29 @@ class NDTCalculator(tk.Tk):
         self.loc_var = tk.StringVar(value="")
         ttk.Entry(info_frame, textvariable=self.loc_var, width=30).pack(side=tk.LEFT, padx=5)
 
-        # 1. 검사 종류
-        ttk.Label(self, text="1. 검사 종류", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
+        ttk.Label(left_frame, text="1. 검사 종류", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
         self.ndt_type_var = tk.StringVar(value="RT")
-        type_frame = ttk.Frame(self)
+        type_frame = ttk.Frame(left_frame)
         type_frame.pack(fill=tk.X, pady=5)
         for t in ["RT", "UT", "PT"]:
             ttk.Radiobutton(type_frame, text=t, value=t, variable=self.ndt_type_var, command=self.update_dynamic_ui).pack(side=tk.LEFT, padx=10)
             
-        # 2. 작업 형태
-        ttk.Label(self, text="2. 작업 형태 (근무 시간대)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
+        ttk.Label(left_frame, text="2. 작업 형태 (근무 시간대)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
         self.work_time_var = tk.StringVar(value="일반")
-        time_frame = ttk.Frame(self)
+        time_frame = ttk.Frame(left_frame)
         time_frame.pack(fill=tk.X, pady=5)
         for t in ["일반", "야간", "휴일"]:
             ttk.Radiobutton(time_frame, text=t, value=t, variable=self.work_time_var).pack(side=tk.LEFT, padx=10)
 
-        # 3. 사용 자재
-        self.material_lbl = ttk.Label(self, text="3. 사용 자재 (RT 필름 규격)", font=("Arial", 11, "bold"))
+        self.material_lbl = ttk.Label(left_frame, text="3. 사용 자재 (RT 필름 규격)", font=("Arial", 11, "bold"))
         self.material_lbl.pack(anchor=tk.W, pady=(10, 5))
         self.material_var = tk.StringVar(value='RT (B필름: 3⅓"x17")')
-        self.material_combo = ttk.Combobox(self, textvariable=self.material_var, values=['RT (B필름: 3⅓"x17")', 'RT (A필름: 3⅓"x12")', 'RT (A/2필름: 3⅓"x6")'], state="readonly")
+        self.material_combo = ttk.Combobox(left_frame, textvariable=self.material_var, values=['RT (B필름: 3⅓"x17")', 'RT (A필름: 3⅓"x12")', 'RT (A/2필름: 3⅓"x6")'], state="readonly")
         self.material_combo.pack(fill=tk.X, pady=5)
         
-        # --- 동적 UI 영역 ---
-        self.dynamic_frame = ttk.LabelFrame(self, text="4. 보정계수 조건 선택", padding=10)
+        self.dynamic_frame = ttk.LabelFrame(left_frame, text="4. 보정계수 조건 선택", padding=10)
         self.dynamic_frame.pack(fill=tk.X, pady=(10, 5))
         
-        # 4-1. 방사선원 (RT)
         self.source_frame = ttk.Frame(self.dynamic_frame)
         ttk.Label(self.source_frame, text="• 방사선원 :", width=15).pack(side=tk.LEFT)
         self.source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
@@ -81,27 +122,23 @@ class NDTCalculator(tk.Tk):
         self.source_combo['values'] = ["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"]
         self.source_combo.pack(side=tk.LEFT)
         
-        # 4-2. 관경 (UT, PT)
         self.pipe_frame = ttk.Frame(self.dynamic_frame)
         ttk.Label(self.pipe_frame, text="• 관경(구경) :", width=15).pack(side=tk.LEFT)
         self.pipe_var = tk.StringVar()
         self.pipe_combo = ttk.Combobox(self.pipe_frame, textvariable=self.pipe_var, state="readonly", width=35)
         self.pipe_combo.pack(side=tk.LEFT)
         
-        # 4-3. 두께 (RT, UT)
         self.thickness_frame = ttk.Frame(self.dynamic_frame)
         ttk.Label(self.thickness_frame, text="• 투과/모재두께 :", width=15).pack(side=tk.LEFT)
         self.thickness_var = tk.StringVar()
         self.thickness_combo = ttk.Combobox(self.thickness_frame, textvariable=self.thickness_var, state="readonly", width=35)
         self.thickness_combo.pack(side=tk.LEFT)
         
-        # 5. 검사 물량
-        ttk.Label(self, text="5. 실검사 물량 (RT: 매 / UT,PT: Meter)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
+        ttk.Label(left_frame, text="5. 실검사 물량 (RT: 매 / UT,PT: Meter)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
         self.quantity_var = tk.DoubleVar(value=10.0)
-        ttk.Entry(self, textvariable=self.quantity_var).pack(fill=tk.X, pady=5)
+        ttk.Entry(left_frame, textvariable=self.quantity_var).pack(fill=tk.X, pady=5)
         
-        # 6. 적용 요율 (제경비, 기술료)
-        rate_frame = ttk.Frame(self)
+        rate_frame = ttk.Frame(left_frame)
         rate_frame.pack(fill=tk.X, pady=(15, 5))
         ttk.Label(rate_frame, text="6. 적용 요율 (%)", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=(0, 20))
         
@@ -113,27 +150,50 @@ class NDTCalculator(tk.Tk):
         self.tech_fee_rate_var = tk.DoubleVar(value=5.86)
         ttk.Entry(rate_frame, textvariable=self.tech_fee_rate_var, width=8).pack(side=tk.LEFT, padx=5)
         
-        # 버튼 영역
-        btn_frame = ttk.Frame(self)
+        btn_frame = ttk.Frame(left_frame)
         btn_frame.pack(fill=tk.X, pady=15)
         
         ttk.Button(btn_frame, text="금액 계산하기", command=self.calculate).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, ipady=8)
         ttk.Button(btn_frame, text="기록 목록에 추가", command=self.add_to_record).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5, ipady=8)
         
-        # 7. 단일 계산 결과 출력 영역
-        ttk.Label(self, text="[ 단일 계산 결과 ]", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        self.result_text = tk.Text(self, height=5, width=50, state=tk.DISABLED, font=("Consolas", 11))
+        ttk.Label(left_frame, text="[ 단일 계산 결과 ]", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 5))
+        self.result_text = tk.Text(left_frame, height=5, width=50, state=tk.DISABLED, font=("Consolas", 11))
         self.result_text.pack(fill=tk.X, expand=False)
         
-        # 8. 누적 기록 테이블
-        lbl_frame = ttk.Frame(self)
-        lbl_frame.pack(fill=tk.X, pady=(15, 5))
+        # --- RIGHT FRAME (기타 경비 및 실비 정산) ---
+        exp_frame = ttk.LabelFrame(right_frame, text="기타 경비 및 실비 정산 (월간)", padding=10)
+        exp_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(exp_frame, text="엑셀 청구서 하단에 합산될\n추가 실비정산 금액을 입력하세요.\n(세액 미포함 금액)").pack(pady=(0, 10))
+        
+        ttk.Label(exp_frame, text="장비손료 (원):").pack(anchor=tk.W)
+        self.equip_cost_var = tk.IntVar(value=0)
+        ttk.Entry(exp_frame, textvariable=self.equip_cost_var).pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(exp_frame, text="안전관리비 (원):").pack(anchor=tk.W)
+        self.safety_cost_var = tk.IntVar(value=0)
+        ttk.Entry(exp_frame, textvariable=self.safety_cost_var).pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(exp_frame, text="주재비 및 출장여비 (원):").pack(anchor=tk.W)
+        self.travel_cost_var = tk.IntVar(value=0)
+        ttk.Entry(exp_frame, textvariable=self.travel_cost_var).pack(fill=tk.X, pady=(0, 10))
+        
+        ttk.Label(exp_frame, text="도서인쇄비 (원):").pack(anchor=tk.W)
+        self.print_cost_var = tk.IntVar(value=0)
+        ttk.Entry(exp_frame, textvariable=self.print_cost_var).pack(fill=tk.X, pady=(0, 10))
+        
+        # --- BOTTOM FRAME (누적 테이블) ---
+        bottom_frame = ttk.Frame(self)
+        bottom_frame.pack(fill=tk.BOTH, expand=True, pady=(15, 0))
+        
+        lbl_frame = ttk.Frame(bottom_frame)
+        lbl_frame.pack(fill=tk.X, pady=(0, 5))
         ttk.Label(lbl_frame, text="[ 일일 작업 기록 목록 ]", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
         ttk.Button(lbl_frame, text="엑셀 파일로 저장", command=self.export_to_excel).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
 
         columns = ("date", "loc", "type", "time", "mat", "qty", "unit", "corr", "adj_qty", "overhead", "tech", "total_amt")
-        self.tree = ttk.Treeview(self, columns=columns, show="headings", height=8)
+        self.tree = ttk.Treeview(bottom_frame, columns=columns, show="headings", height=8)
         
         self.tree.heading("date", text="일자")
         self.tree.heading("loc", text="구간/위치")
@@ -224,7 +284,6 @@ class NDTCalculator(tk.Tk):
         material_type = self.material_var.get()
         qty = float(self.quantity_var.get())
         
-        # 단위 판별
         unit_str = "매" if ndt_type == "RT" else "M"
         
         overhead_rate = float(self.overhead_rate_var.get()) / 100.0
@@ -298,7 +357,6 @@ class NDTCalculator(tk.Tk):
             return
             
         res = self.records[idx]
-        
         mat_unit = MATERIAL_COST.get(res['material_type'], 0)
         lab_unit = LABOR_COST[res['work_time']][res['ndt_type']]
         
@@ -317,24 +375,108 @@ class NDTCalculator(tk.Tk):
         if res:
             self.records.append(res)
             self.tree.insert("", tk.END, values=(
-                res["date"],
-                res["loc"],
-                res["ndt_type"], 
-                res["work_time"], 
-                res["material_type"], 
-                f"{res['qty']:.1f}", 
-                res["unit"],
-                f"{res['corr']:.2f}", 
-                f"{res['adjusted_qty']:.2f}", 
-                f"{res['overhead']:,}",
-                f"{res['tech']:,}",
-                f"{res['subtotal']:,}" # 공급가액 소계 출력
+                res["date"], res["loc"], res["ndt_type"], res["work_time"], 
+                res["material_type"], f"{res['qty']:.1f}", res["unit"],
+                f"{res['corr']:.2f}", f"{res['adjusted_qty']:.2f}", 
+                f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
             ))
             
     def clear_records(self):
         self.records = []
         for item in self.tree.get_children():
             self.tree.delete(item)
+            
+    def save_project(self):
+        try:
+            filepath = filedialog.asksaveasfilename(defaultextension=".ndt", filetypes=[("NDT Project", "*.ndt")], title="작업 저장하기")
+            if not filepath: return
+            
+            data = {
+                "records": self.records,
+                "expenses": {
+                    "equip": self.equip_cost_var.get(),
+                    "safety": self.safety_cost_var.get(),
+                    "travel": self.travel_cost_var.get(),
+                    "print": self.print_cost_var.get()
+                }
+            }
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            messagebox.showinfo("저장 완료", "작업이 성공적으로 저장되었습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"저장 중 오류가 발생했습니다: {e}")
+
+    def load_project(self):
+        try:
+            filepath = filedialog.askopenfilename(filetypes=[("NDT Project", "*.ndt")], title="작업 불러오기")
+            if not filepath: return
+            
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            self.clear_records()
+            self.records = data.get("records", [])
+            for res in self.records:
+                self.tree.insert("", tk.END, values=(
+                    res["date"], res["loc"], res["ndt_type"], res["work_time"], 
+                    res["material_type"], f"{res['qty']:.1f}", res["unit"],
+                    f"{res['corr']:.2f}", f"{res['adjusted_qty']:.2f}", 
+                    f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
+                ))
+            
+            ex = data.get("expenses", {})
+            self.equip_cost_var.set(ex.get("equip", 0))
+            self.safety_cost_var.set(ex.get("safety", 0))
+            self.travel_cost_var.set(ex.get("travel", 0))
+            self.print_cost_var.set(ex.get("print", 0))
+            
+            messagebox.showinfo("불러오기 완료", "작업을 성공적으로 불러왔습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"불러오기 중 오류가 발생했습니다: {e}")
+
+    def open_settings(self):
+        top = tk.Toplevel(self)
+        top.title("단가 설정 (Settings)")
+        top.geometry("450x550")
+        top.configure(padx=20, pady=20)
+        
+        ttk.Label(top, text="[재료비 단가 설정]", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 5))
+        mat_vars = {}
+        for k, v in MATERIAL_COST.items():
+            f = ttk.Frame(top)
+            f.pack(fill=tk.X, pady=2)
+            ttk.Label(f, text=k, width=25).pack(side=tk.LEFT)
+            var = tk.IntVar(value=v)
+            ttk.Entry(f, textvariable=var, width=15).pack(side=tk.RIGHT)
+            mat_vars[k] = var
+            
+        ttk.Label(top, text="[인건비 단가 설정]", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(20, 5))
+        lab_vars = {}
+        for w_time in ["일반", "야간", "휴일"]:
+            ttk.Label(top, text=f"■ {w_time}", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(5, 2))
+            lab_vars[w_time] = {}
+            for t in ["RT", "UT", "PT"]:
+                f = ttk.Frame(top)
+                f.pack(fill=tk.X, pady=2)
+                ttk.Label(f, text=f"{w_time} - {t}", width=25).pack(side=tk.LEFT)
+                var = tk.IntVar(value=LABOR_COST[w_time][t])
+                ttk.Entry(f, textvariable=var, width=15).pack(side=tk.RIGHT)
+                lab_vars[w_time][t] = var
+                
+        def save_and_close():
+            global MATERIAL_COST, LABOR_COST
+            for k, var in mat_vars.items():
+                MATERIAL_COST[k] = var.get()
+            for w_time in lab_vars:
+                for t, var in lab_vars[w_time].items():
+                    LABOR_COST[w_time][t] = var.get()
+            CONFIG["MATERIAL_COST"] = MATERIAL_COST
+            CONFIG["LABOR_COST"] = LABOR_COST
+            save_config(CONFIG)
+            messagebox.showinfo("저장 완료", "새로운 단가가 저장되었습니다.")
+            top.destroy()
+            
+        ttk.Button(top, text="단가 저장하기", command=save_and_close).pack(pady=20, ipady=5, fill=tk.X)
 
     def export_to_excel(self):
         if not self.records:
@@ -342,18 +484,10 @@ class NDTCalculator(tk.Tk):
             return
             
         default_name = f"기성청구내역서_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".xlsx",
-            initialfile=default_name,
-            filetypes=[("Excel File", "*.xlsx")],
-            title="정식 기성청구 엑셀 양식으로 저장"
-        )
-        
-        if not filepath:
-            return
+        filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="정식 기성청구 엑셀 양식으로 저장")
+        if not filepath: return
             
         try:
-            # 엑셀 애플리케이션 실행
             excel = win32.Dispatch("Excel.Application")
             excel.Visible = False
             excel.DisplayAlerts = False
@@ -367,7 +501,7 @@ class NDTCalculator(tk.Tk):
             ws.Range("A1").Value = "비파괴검사기술용역 기성청구 내역서"
             ws.Range("A1").Font.Size = 20
             ws.Range("A1").Font.Bold = True
-            ws.Range("A1").HorizontalAlignment = -4108 # xlCenter
+            ws.Range("A1").HorizontalAlignment = -4108
             ws.Range("A1").VerticalAlignment = -4108
             
             ws.Range("A4:B4").Merge()
@@ -379,64 +513,47 @@ class NDTCalculator(tk.Tk):
             ws.Range("L4:M4").Merge()
             ws.Range("L4").Value = "청구일자 :"
             ws.Range("L4").Font.Bold = True
-            ws.Range("L4").HorizontalAlignment = -4152 # xlRight
+            ws.Range("L4").HorizontalAlignment = -4152
             ws.Range("N4:O4").Merge()
             ws.Range("N4").Value = datetime.now().strftime('%Y년 %m월 %d일')
             
-            # 총 합계 계산용
-            total_sum = sum(r["total_amount"] for r in self.records)
-            
-            ws.Range("A5:B5").Merge()
-            ws.Range("A5").Value = "총청구액 :"
-            ws.Range("A5").Font.Bold = True
-            ws.Range("C5:F5").Merge()
-            ws.Range("C5").Value = f"₩ {total_sum:,}"
-            ws.Range("C5").Font.Bold = True
-            ws.Range("C5").Font.Size = 12
-            
-            # --- 테이블 헤더 ---
             headers = ["No.", "검사일자", "작업구간", "검사종류", "규격/자재", "근무형태", "실물량", "단위", "보정계수", "환산물량", 
                        "재료비", "직접인건비", "제경비", "기술료", "공급가액소계"]
             
-            start_row = 7
+            start_row = 6
             for col, h in enumerate(headers, start=1):
                 cell = ws.Cells(start_row, col)
                 cell.Value = h
                 cell.Font.Bold = True
-                cell.Interior.Color = 14277081 # Light Gray
+                cell.Interior.Color = 14277081
                 cell.HorizontalAlignment = -4108
                 cell.Borders.LineStyle = 1
             
-            # 열 너비 설정
-            ws.Columns(1).ColumnWidth = 4  # No
-            ws.Columns(2).ColumnWidth = 11 # 일자
-            ws.Columns(3).ColumnWidth = 20 # 구간
-            ws.Columns(4).ColumnWidth = 9  # 종류
-            ws.Columns(5).ColumnWidth = 22 # 규격
-            ws.Columns(6).ColumnWidth = 9  # 형태
-            ws.Columns(7).ColumnWidth = 8  # 실물량
-            ws.Columns(8).ColumnWidth = 5  # 단위
-            ws.Columns(9).ColumnWidth = 9  # 계수
-            ws.Columns(10).ColumnWidth = 9 # 환산
-            ws.Columns(11).ColumnWidth = 11 # 재료비
-            ws.Columns(12).ColumnWidth = 12 # 인건비
-            ws.Columns(13).ColumnWidth = 11 # 제경비
-            ws.Columns(14).ColumnWidth = 11 # 기술료
-            ws.Columns(15).ColumnWidth = 13 # 공급가액
+            ws.Columns(1).ColumnWidth = 4
+            ws.Columns(2).ColumnWidth = 11
+            ws.Columns(3).ColumnWidth = 20
+            ws.Columns(4).ColumnWidth = 9
+            ws.Columns(5).ColumnWidth = 22
+            ws.Columns(6).ColumnWidth = 9
+            ws.Columns(7).ColumnWidth = 8
+            ws.Columns(8).ColumnWidth = 5
+            ws.Columns(9).ColumnWidth = 9
+            ws.Columns(10).ColumnWidth = 9
+            ws.Columns(11).ColumnWidth = 11
+            ws.Columns(12).ColumnWidth = 12
+            ws.Columns(13).ColumnWidth = 11
+            ws.Columns(14).ColumnWidth = 11
+            ws.Columns(15).ColumnWidth = 13
             
-            # --- 그룹별 데이터 채우기 ---
             current_row = start_row + 1
             total_mat = total_lab = total_ovr = total_tech = total_sub = 0
             idx = 1
             
             for g_type in ["RT", "UT", "PT"]:
                 group_records = [r for r in self.records if r["ndt_type"] == g_type]
-                if not group_records:
-                    continue
+                if not group_records: continue
                 
                 sub_mat = sub_lab = sub_ovr = sub_tech = sub_sub = 0
-                
-                # 그룹별 레코드 작성
                 for r in group_records:
                     ws.Cells(current_row, 1).Value = idx
                     ws.Cells(current_row, 2).Value = r["date"]
@@ -448,36 +565,23 @@ class NDTCalculator(tk.Tk):
                     ws.Cells(current_row, 8).Value = r["unit"]
                     ws.Cells(current_row, 9).Value = r["corr"]
                     ws.Cells(current_row, 10).Value = r["adjusted_qty"]
-                    
                     ws.Cells(current_row, 11).Value = r["mat_cost"]
                     ws.Cells(current_row, 12).Value = r["lab_cost"]
                     ws.Cells(current_row, 13).Value = r["overhead"]
                     ws.Cells(current_row, 14).Value = r["tech"]
                     ws.Cells(current_row, 15).Value = r["subtotal"]
                     
-                    # 테두리 및 정렬
                     for c in range(1, 16):
                         cell = ws.Cells(current_row, c)
                         cell.Borders.LineStyle = 1
-                        if c <= 4 or c == 6 or c == 8:
-                            cell.HorizontalAlignment = -4108 # 가운데
-                        elif c == 5 or c == 3:
-                            cell.HorizontalAlignment = -4131 # 왼쪽
-                        else:
-                            if c >= 11:
-                                cell.NumberFormat = "#,##0" # 통화 포맷
-                            else:
-                                cell.NumberFormat = "0.00"
+                        if c <= 4 or c == 6 or c == 8: cell.HorizontalAlignment = -4108
+                        elif c == 5 or c == 3: cell.HorizontalAlignment = -4131
+                        else: cell.NumberFormat = "#,##0" if c >= 11 else "0.00"
                     
-                    sub_mat += r["mat_cost"]
-                    sub_lab += r["lab_cost"]
-                    sub_ovr += r["overhead"]
-                    sub_tech += r["tech"]
-                    sub_sub += r["subtotal"]
-                    idx += 1
-                    current_row += 1
+                    sub_mat += r["mat_cost"]; sub_lab += r["lab_cost"]; sub_ovr += r["overhead"]
+                    sub_tech += r["tech"]; sub_sub += r["subtotal"]
+                    idx += 1; current_row += 1
                 
-                # 소계 (Subtotal) 행 작성
                 ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
                 ws.Cells(current_row, 1).Value = f"[{g_type}] 검사 소계"
                 ws.Cells(current_row, 1).HorizontalAlignment = -4108
@@ -493,20 +597,16 @@ class NDTCalculator(tk.Tk):
                     cell = ws.Cells(current_row, c)
                     cell.Borders.LineStyle = 1
                     cell.Font.Bold = True
-                    cell.Interior.Color = 15987699 # Light Blue
-                    if c >= 11:
-                        cell.NumberFormat = "#,##0"
+                    cell.Interior.Color = 15987699
+                    if c >= 11: cell.NumberFormat = "#,##0"
                 
-                total_mat += sub_mat
-                total_lab += sub_lab
-                total_ovr += sub_ovr
-                total_tech += sub_tech
-                total_sub += sub_sub
+                total_mat += sub_mat; total_lab += sub_lab; total_ovr += sub_ovr
+                total_tech += sub_tech; total_sub += sub_sub
                 current_row += 1
                 
-            # --- 전체 합계 행 ---
+            # --- 전체 합계 ---
             ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
-            ws.Cells(current_row, 1).Value = "총   합   계"
+            ws.Cells(current_row, 1).Value = "검사 비용 합계"
             ws.Cells(current_row, 1).HorizontalAlignment = -4108
             ws.Cells(current_row, 1).Font.Bold = True
             
@@ -521,27 +621,59 @@ class NDTCalculator(tk.Tk):
                 cell.Borders.LineStyle = 1
                 cell.Font.Bold = True
                 cell.Interior.Color = 14277081
-                if c >= 11:
-                    cell.NumberFormat = "#,##0"
+                if c >= 11: cell.NumberFormat = "#,##0"
                     
-            # --- 부가세 및 총 청구액 ---
+            # --- 실비 정산 추가 ---
+            current_row += 1
+            extra_items = [
+                ("장비손료", self.equip_cost_var.get()),
+                ("안전관리비", self.safety_cost_var.get()),
+                ("주재비 및 출장여비", self.travel_cost_var.get()),
+                ("도서인쇄비", self.print_cost_var.get())
+            ]
+            
+            total_extra = 0
+            for name, val in extra_items:
+                if val > 0:
+                    ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+                    ws.Cells(current_row, 1).Value = f"+ {name}"
+                    ws.Cells(current_row, 1).HorizontalAlignment = -4152
+                    ws.Cells(current_row, 15).Value = val
+                    ws.Cells(current_row, 15).NumberFormat = "#,##0"
+                    for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+                    total_extra += val
+                    current_row += 1
+            
+            # --- 총 공급가액 (검사합계 + 실비) ---
+            grand_subtotal = total_sub + total_extra
+            
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+            ws.Cells(current_row, 1).Value = "공급가액 총액"
+            ws.Cells(current_row, 1).HorizontalAlignment = -4152
+            ws.Cells(current_row, 1).Font.Bold = True
+            ws.Cells(current_row, 15).Value = grand_subtotal
+            ws.Cells(current_row, 15).NumberFormat = "#,##0"
+            ws.Cells(current_row, 15).Font.Bold = True
+            for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+            
+            # --- 부가세 및 최종 청구액 ---
             current_row += 1
             ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
-            ws.Cells(current_row, 1).Value = "부가가치세 (10%)"
-            ws.Cells(current_row, 1).HorizontalAlignment = -4152 # xlRight
-            ws.Cells(current_row, 15).Value = int(total_sub * 0.1)
+            ws.Cells(current_row, 1).Value = "+ 부가가치세 (10%)"
+            ws.Cells(current_row, 1).HorizontalAlignment = -4152
+            vat_val = int(grand_subtotal * 0.1)
+            ws.Cells(current_row, 15).Value = vat_val
             ws.Cells(current_row, 15).NumberFormat = "#,##0"
-            for c in range(1, 16):
-                ws.Cells(current_row, c).Borders.LineStyle = 1
+            for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
             
             current_row += 1
             ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
-            ws.Cells(current_row, 1).Value = "최 종 총 기 성 청 구 액"
+            ws.Cells(current_row, 1).Value = "최 종 기 성 청 구 액"
             ws.Cells(current_row, 1).HorizontalAlignment = -4152
             ws.Cells(current_row, 1).Font.Bold = True
             ws.Cells(current_row, 1).Font.Size = 12
             
-            total_final = total_sub + int(total_sub * 0.1)
+            total_final = grand_subtotal + vat_val
             ws.Cells(current_row, 15).Value = total_final
             ws.Cells(current_row, 15).NumberFormat = "#,##0"
             ws.Cells(current_row, 15).Font.Bold = True
@@ -550,23 +682,20 @@ class NDTCalculator(tk.Tk):
             for c in range(1, 16):
                 cell = ws.Cells(current_row, c)
                 cell.Borders.LineStyle = 1
-                cell.Interior.Color = 13434879 # Light Yellow
+                cell.Interior.Color = 13434879
                 
-            # 파일 저장
             filepath = filepath.replace("/", "\\")
             wb.SaveAs(filepath)
             wb.Close()
             excel.Quit()
             
-            messagebox.showinfo("저장 완료", f"그룹화된 엑셀 기성청구 내역서가 성공적으로 생성되었습니다.\n{filepath}")
+            messagebox.showinfo("저장 완료", f"엑셀 기성청구 내역서가 성공적으로 생성되었습니다.\n{filepath}")
             os.startfile(filepath)
             
         except Exception as e:
             messagebox.showerror("저장 오류", f"엑셀 파일 생성 중 오류가 발생했습니다.\n{str(e)}")
-            try:
-                excel.Quit()
-            except:
-                pass
+            try: excel.Quit()
+            except: pass
 
 if __name__ == "__main__":
     app = NDTCalculator()
