@@ -58,12 +58,12 @@ class EconomicDashboard:
         port_frame = ttk.LabelFrame(top_content_frame, text=" 💡 100만 원 초보자 맞춤 포트폴리오 (실시간) ", padding=5)
         port_frame.pack(side='right', expand=True, fill='both', padx=(5, 0))
         
-        cols_port = ('추천 종목', '현재가(원/$)', '전일비(%)', '투자 성향', '매수 타이밍')
+        cols_port = ('추천 종목', '현재가(원/$)', '전일비(%)', '투자 성향', 'AI 매매 시그널')
         self.tv_port = ttk.Treeview(port_frame, columns=cols_port, show='headings', height=15)
         for col in cols_port:
             self.tv_port.heading(col, text=col)
             if col == '추천 종목': w = 220
-            elif col == '매수 타이밍': w = 150
+            elif col == 'AI 매매 시그널': w = 180
             else: w = 90
             self.tv_port.column(col, anchor='center', width=w)
             
@@ -105,6 +105,8 @@ class EconomicDashboard:
         self.tv_market.tag_configure('down', foreground='blue')
         self.tv_port.tag_configure('up', foreground='red')
         self.tv_port.tag_configure('down', foreground='blue')
+        self.tv_port.tag_configure('sell', foreground='purple')  # 매도 시그널용 색상
+        self.tv_port.tag_configure('value', foreground='darkorange') # 숨은 진주용 색상
         
         # 자동 갱신 타이머 설정 (5분 = 300,000ms)
         self.refresh_interval = 300000
@@ -175,9 +177,13 @@ class EconomicDashboard:
             sign = "+" if row['전일비(%)'] > 0 else ""
             pct_str = f"{sign}{row['전일비(%)']}%"
             
-            signal = row.get('매수 타이밍', '')
-            if '적극' in signal or '좋은' in signal:
+            signal = row.get('AI 매매 시그널', '')
+            if '진주' in signal:
+                tag = 'value'
+            elif '적극' in signal or '좋은' in signal:
                 tag = 'up'
+            elif '매도' in signal:
+                tag = 'sell'
                 
             self.tv_port.insert('', 'end', values=(row['추천 종목'], row['현재가(원/$)'], pct_str, row.get('투자 성향', ''), signal), tags=(tag,))
             

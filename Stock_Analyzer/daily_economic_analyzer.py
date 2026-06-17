@@ -61,7 +61,10 @@ def get_portfolio_data():
         'URA (글로벌 우라늄/원자력 ETF)': 'URA',
         'REMX (글로벌 희토류/전략금속 ETF)': 'REMX',
         'LIT (글로벌 리튬/배터리 ETF)': 'LIT',
-        'COPX (글로벌 구리 광산 ETF)': 'COPX'
+        'COPX (글로벌 구리 광산 ETF)': 'COPX',
+        'LG에너지솔루션 (국내 1위 배터리)': '373220.KS',
+        '삼성SDI (프리미엄/전고체 배터리)': '006400.KS',
+        '에코프로비엠 (국내 양극재 1위)': '247540.KQ'
     }
     
     data_list = []
@@ -89,17 +92,37 @@ def get_portfolio_data():
                 rsi = 100 - (100 / (1 + rs))
                 current_rsi = rsi.iloc[-1]
                 
-                # 매수 타이밍 신호 생성
-                if pd.isna(current_rsi):
-                    buy_signal = "데이터 부족"
-                elif current_rsi <= 35:
-                    buy_signal = "🔥 적극 매수 (RSI 바닥)"
-                elif current_price < ma20:
-                    buy_signal = "👍 좋은 기회 (20일선 아래)"
+                # 최근 20일 최고가 대비 하락률 계산 (트레일링 스탑 논리)
+                high_20d = hist['Close'].rolling(window=20).max().iloc[-1]
+                drawdown_from_high = ((current_price - high_20d) / high_20d) * 100
+                
+                # PBR 및 배당수익률 가져오기 (가치주 필터링용)
+                info = stock.info
+                pbr = info.get('priceToBook')
+                div_yield = info.get('dividendYield')
+                
+                pbr_value = pbr if pbr is not None else 999
+                div_yield_value = div_yield if div_yield is not None else 0
+                
+                is_value_stock = (pbr_value < 1.0) and (div_yield_value >= 0.04) and (current_rsi <= 40)
+                
+                # AI 매수/매도 타이밍 신호 생성 (모든 경우의 수 반영)
+                if is_value_stock:
+                    trade_signal = "👑 숨은 진주 (초저평가 매수)"
+                elif pd.isna(current_rsi):
+                    trade_signal = "데이터 부족"
+                elif current_rsi >= 75 and current_price < ma20:
+                    trade_signal = "🚨 강력 매도 (과열 후 이탈)"
+                elif drawdown_from_high <= -5.0 and current_price < ma20:
+                    trade_signal = "✂️ 부분 매도 (고점대비 5%하락)"
                 elif current_rsi >= 70:
-                    buy_signal = "⚠️ 단기 고점 (관망)"
+                    trade_signal = "⚠️ 단기 고점 (매도 준비/관망)"
+                elif current_rsi <= 35:
+                    trade_signal = "🔥 적극 매수 (RSI 바닥)"
+                elif current_price < ma20:
+                    trade_signal = "👍 좋은 기회 (20일선 아래)"
                 else:
-                    buy_signal = "✅ 꾸준히 분할 매수"
+                    trade_signal = "✅ 보유 및 분할 매수"
                 
                 # 투자 성향 분류
                 if 'S&P500' in name: style = "코어(필수)"
@@ -107,7 +130,7 @@ def get_portfolio_data():
                 elif '배당' in name or 'KB' in name or '기아' in name or '현대차' in name: style = "배당/가치(안전)"
                 elif '인도' in name: style = "신흥국(알파)"
                 elif 'PHO' in name or 'MOO' in name or '대동' in name or '시노펙스' in name: style = "기후/식량(방어)"
-                elif 'URA' in name or 'REMX' in name or 'LIT' in name or 'COPX' in name: style = "미래자원(테마)"
+                elif 'URA' in name or 'REMX' in name or 'LIT' in name or 'COPX' in name or '에너지솔루션' in name or 'SDI' in name or '에코프로' in name: style = "미래자원/배터리"
                 else: style = "국내 우량주"
                 
                 data_list.append({
@@ -115,7 +138,7 @@ def get_portfolio_data():
                     '현재가(원/$)': price_str,
                     '전일비(%)': round(change_pct, 2),
                     '투자 성향': style,
-                    '매수 타이밍': buy_signal
+                    'AI 매매 시그널': trade_signal
                 })
         except Exception as e:
             pass
