@@ -6391,7 +6391,7 @@ class MaterialManager:
         # Treeview with columns including worker, work time, and OT fields
         # Added '(Full작업자)' for full list backup during Excel export
         columns = ('연도', '월', '현장', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
-                   '수량', '단가', '출장비', '일식', '검사비', '품목명', '센터미스', '농도', '마킹미스', '필름마크', 
+                   '수량', '단가', '출장비', '일식', '검사비', '제경비', '기술료', '환산물량', '재료비', '인건비', '품목명', '센터미스', '농도', '마킹미스', '필름마크', 
                    '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
         self.monthly_usage_tree = ttk.Treeview(tree_frame, columns=columns, show='headings',
                                                yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -6409,7 +6409,8 @@ class MaterialManager:
             'OT1': 100, 'OT2': 100, 'OT3': 100, 'OT4': 100, 'OT5': 100,
             'OT6': 100, 'OT7': 100, 'OT8': 100, 'OT9': 100, 'OT10': 100,
             '수량': 110, '단가': 110, '출장비': 110, '일식': 110, '검사비': 110,
-            '품목명': 220, '수량': 110, '센터미스': 80, '농도': 80, '마킹미스': 80,
+            '제경비': 100, '기술료': 100, '환산물량': 100, '재료비': 100, '인건비': 100,
+            '품목명': 220, '센터미스': 80, '농도': 80, '마킹미스': 80,
             '필름마크': 80, '취급부주의': 80, '고객불만': 80, '기타': 80, 'RTK총계': 80,
             '형광자분': 90, '흑색자분': 90, '백색페인트': 90, '침투제': 90, '세척제': 90,
             '현상제': 90, '형광침투제': 90, '비고': 220
@@ -6444,14 +6445,14 @@ class MaterialManager:
         
         self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
         
-        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '형광자분', '흑색자분', '백색페인트', 
+        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
                      '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
         self.site_summary_tree = ttk.Treeview(site_frame, columns=site_cols, show='headings')
         for col in site_cols:
             self.site_summary_tree.heading(col, text=col)
             # Adjust widths based on content
             if col in ['현장', '검사방법', '품목명']: width = 120
-            elif col in ['검사비', '출장비']: width = 100
+            elif col in ['검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비']: width = 100
             else: width = 80
             self.site_summary_tree.column(col, width=width, anchor='center', stretch=False)
         
@@ -6687,7 +6688,7 @@ class MaterialManager:
         
         # Add NDT materials and cost fields
         other_agg_cols = ['NDT_형광자분', 'NDT_자분', 'NDT_흑색자분', 'NDT_페인트', 'NDT_백색페인트', 'NDT_침투제', 'NDT_세척제', 'NDT_현상제', 'NDT_형광', 'NDT_형광침투제',
-                          '검사량', '단가', '출장비', '일식', '검사비']
+                          '검사량', '단가', '출장비', '일식', '검사비', '제경비', '기술료', '환산물량', '재료비', '인건비']
         for col in other_agg_cols:
             if col in df.columns:
                 agg_dict[col] = safe_sum
@@ -6770,7 +6771,7 @@ class MaterialManager:
         # [FIX] Do NOT zero out 'Usage' and '검사량' during view-level deduping.
         # Database-level splitting already zeros them for valid splits. 
         # View-level zeroing was causing data loss if the quantity was on a secondary row.
-        q_fields = ['단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액']
+        q_fields = ['단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '제경비', '기술료', '환산물량', '재료비', '인건비']
         rtk_fields = [f'RTK_{c}' for c in ['센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타']]
         ndt_fields = ['NDT_형광자분', 'NDT_자분', 'NDT_흑색자분', 'NDT_페인트', 'NDT_백색페인트', 'NDT_침투제', 'NDT_세척제', 'NDT_현상제', 'NDT_형광', 'NDT_형광침투제']
         
@@ -6799,6 +6800,11 @@ class MaterialManager:
         total_travel_cost = 0.0
         total_meal_cost = 0.0
         total_test_fee = 0.0
+        total_overhead_cost = 0.0
+        total_tech_fee = 0.0
+        total_conv_qty = 0.0
+        total_mat_cost = 0.0
+        total_labor_cost = 0.0
         total_rtk_center = 0.0
         total_rtk_density = 0.0
         total_rtk_marking = 0.0
@@ -6857,6 +6863,11 @@ class MaterialManager:
             travel_cost = entry.get('출장비', 0.0)
             meal_cost = entry.get('일식', 0.0)
             test_fee = entry.get('검사비', 0.0)
+            overhead_cost = entry.get('제경비', 0.0)
+            tech_fee = entry.get('기술료', 0.0)
+            conv_qty = entry.get('환산물량', 0.0)
+            mat_cost = entry.get('재료비', 0.0)
+            labor_cost = entry.get('인건비', 0.0)
             
             # RTK values
             rtk_center = entry.get('RTK_센터미스', 0.0)
@@ -6886,6 +6897,11 @@ class MaterialManager:
             total_travel_cost += travel_cost
             total_meal_cost += meal_cost
             total_test_fee += test_fee
+            total_overhead_cost += overhead_cost
+            total_tech_fee += tech_fee
+            total_conv_qty += conv_qty
+            total_mat_cost += mat_cost
+            total_labor_cost += labor_cost
             
             total_rtk_center += rtk_center
             total_rtk_density += rtk_density
@@ -6991,7 +7007,12 @@ class MaterialManager:
                 f"{travel_cost:,.0f}" if travel_cost > 0 else '',
                 f"{meal_cost:,.0f}" if meal_cost > 0 else '',
                 f"{test_fee:,.0f}" if test_fee > 0 else '',
-                mat_name, # Index 22: 품목명
+                f"{overhead_cost:,.0f}" if overhead_cost > 0 else '',
+                f"{tech_fee:,.0f}" if tech_fee > 0 else '',
+                f"{conv_qty:.2f}" if conv_qty > 0 else '',
+                f"{mat_cost:,.0f}" if mat_cost > 0 else '',
+                f"{labor_cost:,.0f}" if labor_cost > 0 else '',
+                mat_name, # 품목명
                 f"{rtk_center:.1f}" if rtk_center > 0 else '', # 23
                 f"{rtk_density:.1f}" if rtk_density > 0 else '', # 24
                 f"{rtk_marking:.1f}" if rtk_marking > 0 else '', # 25
@@ -7010,8 +7031,8 @@ class MaterialManager:
                 '',  # Index 38: Note
                 ", ".join(sorted(set(all_workers))) # Index 39: Full작업자
             )
-            # [ROBUST] Final length check for 40 columns
-            while len(val_tuple) < 40: val_tuple += ("",)
+            # [ROBUST] Final length check for 45 columns
+            while len(val_tuple) < 45: val_tuple += ("",)
             
             self.monthly_usage_tree.insert('', tk.END, values=val_tuple)
             
@@ -7041,6 +7062,11 @@ class MaterialManager:
                 f"{total_travel_cost:,.0f}" if total_travel_cost > 0 else '',
                 f"{total_meal_cost:,.0f}" if total_meal_cost > 0 else '',
                 f"{total_test_fee:,.0f}" if total_test_fee > 0 else '',
+                f"{total_overhead_cost:,.0f}" if total_overhead_cost > 0 else '',
+                f"{total_tech_fee:,.0f}" if total_tech_fee > 0 else '',
+                f"{total_conv_qty:.2f}" if total_conv_qty > 0 else '',
+                f"{total_mat_cost:,.0f}" if total_mat_cost > 0 else '',
+                f"{total_labor_cost:,.0f}" if total_labor_cost > 0 else '',
                 '', # 품목명
                 f"{total_rtk_center:.1f}" if total_rtk_center > 0 else '',
                 f"{total_rtk_density:.1f}" if total_rtk_density > 0 else '',
@@ -10425,29 +10451,37 @@ class MaterialManager:
 
         # 전체 컬럼: 기본 표시 컬럼 + 사용자가 "추가" 할 수 있는 숨김 기본 컬럼 + 사용자정의 컬럼
         self.budget_view_builtin_cols = (
-            'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
-            'OT합계', '침투제', '세척제', '현상제', '자재단가', '합계', '비고',
-            '작업자', '품목명', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고',
-            'MaterialID'
+            'Date', 'Site', '장비명', '검사방법', '작업자', '품목명',
+            '총기성액', '청구인건비', '청구재료비', '제경비', '기술료',
+            '총지출액', '자재원가', 'OT합계', '출장비', '일식', 
+            '예상이윤', '이익률', '검사량', '단가', '검사단가', '합계', 
+            '침투제', '세척제', '현상제', '자재단가', '비고',
+            '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', 'MaterialID'
         )
         self.budget_view_builtin_width_map = {
             'Date': 90, 'Site': 120, '장비명': 100, '검사방법': 80, '검사량': 70, '단가': 80,
             '검사단가': 90, '출장비': 80, '일식': 70, 'OT합계': 80, '침투제': 70, '세척제': 70, '현상제': 70, '자재단가': 90,
             '합계': 100, '비고': 150, '작업자': 170, '품목명': 180, '입력시간': 140,
-            '차량번호': 110, '주행거리': 100, '차량점검': 120, '차량비고': 140, 'MaterialID': 90
+            '차량번호': 110, '주행거리': 100, '차량점검': 120, '차량비고': 140, 'MaterialID': 90,
+            '총기성액': 100, '청구인건비': 90, '청구재료비': 90, '제경비': 90, '기술료': 90,
+            '총지출액': 100, '자재원가': 90, '예상이윤': 100, '이익률': 70
         }
         self.budget_view_builtin_head_map = {
             'Date': '날짜', 'Site': '현장', '장비명': '장비', '검사방법': '검사방법', '검사량': '수량', '단가': '단가',
-            '검사단가': '매출금액', '출장비': '출장비', '일식': '일식', 'OT합계': 'OT합계', '침투제': '침투제', '세척제': '세척제', '현상제': '현상제',
+            '검사단가': '매출금액', '출장비': '출장비', '일식': '일식', 'OT합계': 'OT지급액', '침투제': '침투제', '세척제': '세척제', '현상제': '현상제',
             '자재단가': '자재단가', '합계': '합계', '비고': '비고', '작업자': '작업자', '품목명': '품목명',
             '입력시간': '입력시간', '차량번호': '차량번호', '주행거리': '주행거리', '차량점검': '차량점검',
-            '차량비고': '차량비고', 'MaterialID': '자재ID'
+            '차량비고': '차량비고', 'MaterialID': '자재ID',
+            '총기성액': '총기성액', '청구인건비': '인건비(청구)', '청구재료비': '재료비(청구)', '제경비': '제경비', '기술료': '기술료',
+            '총지출액': '총지출액', '자재원가': '자재원가', '예상이윤': '예상이윤', '이익률': '이익률(%)'
         }
         self.budget_view_heading_aliases = getattr(self, 'budget_view_heading_aliases', {})
         self.budget_view_custom_columns = getattr(self, 'budget_view_custom_columns', [])
         self.budget_view_default_cols = (
-            'Date', 'Site', '장비명', '검사방법', '검사량', '단가', '검사단가', '출장비', '일식',
-            'OT합계', '침투제', '세척제', '현상제', '자재단가', '합계', '비고'
+            'Date', 'Site', '장비명', '검사방법', '작업자', '품목명',
+            '총기성액', '청구인건비', '청구재료비', '제경비', '기술료',
+            '총지출액', '자재원가', 'OT합계', '출장비', '일식', 
+            '예상이윤', '이익률', '비고'
         )
 
         vsb = ttk.Scrollbar(tree_outer, orient='vertical')
@@ -10546,7 +10580,7 @@ class MaterialManager:
             heading_text = alias_map.get(col, head_map.get(col, col))
             self.budget_view_tree.heading(col, text=heading_text,
                                           command=lambda c=col: self.treeview_sort_column(self.budget_view_tree, c, False))
-            self.budget_view_tree.column(col, width=width_map.get(col, 100), minwidth=40, anchor='center')
+            self.budget_view_tree.column(col, width=width_map.get(col, 100), minwidth=40, anchor='center', stretch=False)
 
         visible_source = getattr(self, 'budget_view_visible_cols', []) or list(self.budget_view_default_cols)
         visible = [c for c in visible_source if c in self.budget_view_cols]
@@ -10794,6 +10828,15 @@ class MaterialManager:
             total_ndt_penetrant = 0.0 # NDT 침투제 합계
             total_ndt_cleaner = 0.0 # NDT 세척제 합계
             total_ndt_developer = 0.0 # NDT 현상제 합계
+            
+            # [NEW] Enhanced Budget Totals
+            sys_total_revenue = 0.0
+            sys_total_labor = 0.0
+            sys_total_mat_bill = 0.0
+            sys_total_overhead = 0.0
+            sys_total_tech = 0.0
+            sys_total_expense_cost = 0.0
+            sys_total_profit = 0.0
 
             import re as _re
             
@@ -10909,15 +10952,37 @@ class MaterialManager:
 
                 unit_cost = mat_id_cost_map.get(row.get('MaterialID'), 0)
                 mat_cost = usage * float(unit_cost)
-                # Material cost should also be counted carefully (main items are row-wise, but consumables are entry-wise)
-                # However, for consistency with the material cost section, we track total_mat_cost here.
                 total_mat_cost += mat_cost
+
+                # [NEW] Calculate Revenue and Profit per row
+                nd_labor = _f(row.get('인건비', 0))
+                nd_mat = _f(row.get('재료비', 0))
+                nd_overhead = _f(row.get('제경비', 0))
+                nd_tech = _f(row.get('기술료', 0))
+                
+                # If NDT fields exist, use them. Otherwise fallback to standard net revenue.
+                row_revenue = nd_labor + nd_mat + nd_overhead + nd_tech
+                if row_revenue <= 0:
+                    row_revenue = net
+
+                row_expense_cost = travel + meal + ot_sum + mat_cost
+                row_profit = row_revenue - row_expense_cost
+                row_margin = (row_profit / row_revenue * 100) if row_revenue > 0 else 0.0
 
                 # --- Financial Totals (Sum for ALL rows) ---
                 total_net_revenue += net
                 total_expense += (travel + meal)
                 total_income += (net + ot_sum)
                 total_sum += (net + travel + meal)
+                
+                # [NEW] Accumulate system totals
+                sys_total_revenue += row_revenue
+                sys_total_labor += nd_labor
+                sys_total_mat_bill += nd_mat
+                sys_total_overhead += nd_overhead
+                sys_total_tech += nd_tech
+                sys_total_expense_cost += row_expense_cost
+                sys_total_profit += row_profit
 
                 # 작업자 통합
                 worker_cols = ['User'] + [f'User{i}' for i in range(2, 11)]
@@ -10960,6 +11025,15 @@ class MaterialManager:
                     '차량비고': _first_text(row, ['차량비고', '차량 비고', 'remarks', 'vehicle_remarks', 'Remark']),
                     'MaterialID': _clean_str(row.get('MaterialID', '')),
                     'Usage': _clean_str(row.get('Usage', '')),
+                    '총기성액': f"{row_revenue:,.0f}" if row_revenue else '',
+                    '청구인건비': f"{nd_labor:,.0f}" if nd_labor else '',
+                    '청구재료비': f"{nd_mat:,.0f}" if nd_mat else '',
+                    '제경비': f"{nd_overhead:,.0f}" if nd_overhead else '',
+                    '기술료': f"{nd_tech:,.0f}" if nd_tech else '',
+                    '총지출액': f"{row_expense_cost:,.0f}" if row_expense_cost else '',
+                    '자재원가': f"{mat_cost:,.0f}" if mat_cost else '',
+                    '예상이윤': f"{row_profit:,.0f}" if row_profit else '',
+                    '이익률': f"{row_margin:.1f}%" if row_revenue > 0 else '',
                 }
                 for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
                     key = custom_col.get('key')
@@ -11018,6 +11092,15 @@ class MaterialManager:
                     '차량비고': '',
                     'MaterialID': '',
                     'Usage': '',
+                    '총기성액': f"{sys_total_revenue:,.0f}" if sys_total_revenue else '',
+                    '청구인건비': f"{sys_total_labor:,.0f}" if sys_total_labor else '',
+                    '청구재료비': f"{sys_total_mat_bill:,.0f}" if sys_total_mat_bill else '',
+                    '제경비': f"{sys_total_overhead:,.0f}" if sys_total_overhead else '',
+                    '기술료': f"{sys_total_tech:,.0f}" if sys_total_tech else '',
+                    '총지출액': f"{sys_total_expense_cost:,.0f}" if sys_total_expense_cost else '',
+                    '자재원가': f"{total_mat_cost:,.0f}" if total_mat_cost else '',
+                    '예상이윤': f"{sys_total_profit:,.0f}" if sys_total_profit else '',
+                    '이익률': f"{(sys_total_profit / sys_total_revenue * 100):.1f}%" if sys_total_revenue > 0 else '',
                 }
                 for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
                     key = custom_col.get('key')
@@ -11366,7 +11449,15 @@ class MaterialManager:
             except:
                 is_weekday = True
 
-            total_net_revenue += _f(row.get('검사비', 0))
+            # [NEW] Enhanced Revenue Logic
+            nd_labor = _f(row.get('인건비', 0))
+            nd_mat = _f(row.get('재료비', 0))
+            nd_overhead = _f(row.get('제경비', 0))
+            nd_tech = _f(row.get('기술료', 0))
+            row_revenue = nd_labor + nd_mat + nd_overhead + nd_tech
+            if row_revenue <= 0:
+                row_revenue = _f(row.get('검사비', 0))
+            total_net_revenue += row_revenue
             total_travel += _f(row.get('출장비', 0))
             total_meal += _f(row.get('일식', 0))
 
