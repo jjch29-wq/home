@@ -9665,6 +9665,18 @@ class MaterialManager:
             unit_map = {'RT': '매', 'UT': 'P,M,I/D', 'MT': 'P,M,I/D', 'PT': 'P,M,I/D', 'PAUT': 'M,I/D'}
             if method in unit_map: self.cb_daily_unit.set(unit_map[method])
             
+            if method in ["MT", "PT"]:
+                try:
+                    self.ndt_frame.grid()
+                except:
+                    pass
+            else:
+                try:
+                    self.ndt_frame.grid_remove()
+                except:
+                    pass
+
+            
             if method in ["RT", "UT", "PT"]:
                 try:
                     self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
@@ -9672,16 +9684,20 @@ class MaterialManager:
                 except Exception as ex:
                     print(f"Error in grid: {ex}")
                 if method == "RT":
+                    self.rtk_grid.grid() # [NEW] Show RTK
                     self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
                     self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"])
                 elif method == "UT":
+                    self.rtk_grid.grid_remove() # [NEW] Hide RTK
                     self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"])
                     self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"])
                 elif method == "PT":
+                    self.rtk_grid.grid_remove() # [NEW] Hide RTK
                     self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["150mm 초과 [6인치 이상] (1.2)", "150mm 이하 [4인치 이하] (1.4)"])
                     self.cb_ndt_cond2.config(values=[])
             else:
                 self.ndt_calc_frame.grid_remove()
+                self.rtk_grid.grid_remove() # [NEW] Hide RTK
             return "break" 
         self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit_logic, add='+')
         self.cb_daily_test_method.bind('<KeyRelease>', on_method_change_auto_unit_logic, add='+')
@@ -9702,6 +9718,7 @@ class MaterialManager:
         # Row 1: NDT with Multi-Company Support
         self.ndt_frame = ttk.LabelFrame(self.master_form_panel, text="NDT 자재 소모량 (회사별)")
         self.ndt_frame.grid(row=1, column=0, padx=5, pady=2, sticky='ew')
+        self.ndt_frame.grid_remove() # [NEW] Hide NDT frame by default
         
         # Container for company-specific NDT sections
         self.ndt_company_container = ttk.Frame(self.ndt_frame)
@@ -9724,6 +9741,7 @@ class MaterialManager:
         # Row 2: RTK
         self.rtk_grid = ttk.LabelFrame(self.master_form_panel, text="RTK 분류")
         self.rtk_grid.grid(row=2, column=0, padx=5, pady=2, sticky='ew')
+        self.rtk_grid.grid_remove() # [NEW] Hide RTK by default
         
         for c in range(6): self.rtk_grid.columnconfigure(c, weight=1, uniform="ndt_rtk")
         self.rtk_entries = {}
@@ -10013,7 +10031,7 @@ class MaterialManager:
         
         # Define display columns - hidden (Full작업자) and individual OT columns by default
         # [NEW] Also hide 'OT시간' and '필름매수' by default per user request
-        visible_defaults = ['날짜', '업체명', '적용코드', '현장', '검사품명', '성적서번호', '작업자', '작업시간', '장비명', '검사방법', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT금액', '품목명', 'RTK총계', '비고', '입력시간']
+        visible_defaults = ['날짜', '업체명', '적용코드', '현장', '검사품명', '성적서번호', '작업자', '작업시간', '장비명', '검사방법', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT금액', '품목명', 'RTK총계', '비고']
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
@@ -13594,6 +13612,7 @@ class MaterialManager:
                 self.ent_daily_inspection_item.insert(0, str(record['검사품명']))
             if '검사방법' in record:
                 self.cb_daily_test_method.set(str(record['검사방법']))
+                self.cb_daily_test_method.event_generate('<<ComboboxSelected>>')
             if 'Unit' in record:
                 self.cb_daily_unit.set(str(record['Unit']))
             elif '단위' in record:
@@ -13739,6 +13758,8 @@ class MaterialManager:
         self.ndt_overhead_var.set(80.0)
         self.ndt_tech_var.set(5.86)
         self.ndt_calc_frame.grid_remove()
+        self.rtk_grid.grid_remove() # [NEW] Hide RTK on clear
+        self.ndt_frame.grid_remove() # [NEW] Hide NDT frame on clear
         
         # 4. NDT 자재 및 RTK 필드 초기화
         if hasattr(self, 'ndt_company_entries'):
