@@ -2054,7 +2054,7 @@ class MaterialManager:
         self.model_list = []
         self.supplier_list = []
         self.equipment_suggestions = []
-        self.test_methods = ["RT", "PAUT", "UT", "MT", "PT", "PMI"]  # [NEW] Initialize test methods
+        self.test_methods = [" ", "RT", "PAUT", "UT", "MT", "PT", "PMI", "ETC"]  # [NEW] Initialize test methods
         
         # [NEW] Centralized NDT Consumable Definitions
         self.ndt_groups = {
@@ -9455,7 +9455,7 @@ class MaterialManager:
 
         # Row 3: 방법, 검사품명
         ttk.Label(form_content, text="방법:").grid(row=3, column=0, padx=(5, 0), pady=1, sticky='e')
-        self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=['RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
+        self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=[' ', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
         self.cb_daily_test_method.grid(row=3, column=1, padx=(2, 10), pady=1, sticky='w')
         
         ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
