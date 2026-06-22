@@ -3,8 +3,15 @@ from tkinter import ttk, messagebox
 import threading
 import webbrowser
 import os
+import sys
 import pandas as pd
 from datetime import datetime
+
+# Add Stock_Analyzer to sys.path
+stock_analyzer_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'Stock_Analyzer'))
+if stock_analyzer_path not in sys.path:
+    sys.path.insert(0, stock_analyzer_path)
+
 import daily_economic_analyzer as analyzer
 import json
 
