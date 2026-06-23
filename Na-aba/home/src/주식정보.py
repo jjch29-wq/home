@@ -3,8 +3,13 @@ from tkinter import ttk, messagebox
 import threading
 import webbrowser
 import os
+import sys
 import pandas as pd
 from datetime import datetime
+
+# Stock_Analyzer 모듈 경로 추가
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Stock_Analyzer")))
+
 import daily_economic_analyzer as analyzer
 import json
 
