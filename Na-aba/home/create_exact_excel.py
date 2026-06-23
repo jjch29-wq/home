@@ -115,12 +115,12 @@ ws['N7'] = "(서명)"
 ws.merge_cells('O3:P9')
 
 for r in range(2, 10):
-    for c in range(1, 15):
+    for c in range(1, 16):
         cell = ws.cell(row=r, column=c)
         cell.alignment = center_align
         cell.font = Font(size=10)
 
-set_border(ws, 1, 2, 14, 9)
+set_border(ws, 1, 2, 15, 9)
 
 # --- Table Sub-Header (Rows 10-12) ---
 ws.merge_cells('A10:I10')
@@ -144,7 +144,7 @@ ws.merge_cells('K11:K12')
 ws['K11'] = "담당자\n(담당부서)"
 ws.merge_cells('L11:L12')
 ws['L11'] = "완료일"
-ws.merge_cells('M11:N11')
+ws.merge_cells('M11:O11')
 ws['M11'] = "개선 후 위험성 (재평가)"
 
 ws['B12'] = "위험\n분류"
@@ -155,15 +155,16 @@ ws['G12'] = "중대성\n(강도)"
 ws['H12'] = "위험성\n(등급)"
 ws['M12'] = "가능성\n(빈도)"
 ws['N12'] = "중대성\n(강도)"
+ws['O12'] = "위험성\n(등급)"
 
 for r in range(10, 13):
-    for c in range(1, 15):
+    for c in range(1, 16):
         cell = ws.cell(row=r, column=c)
         cell.alignment = center_align
         cell.font = bold_font
         cell.fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
 
-set_border(ws, 1, 10, 14, 12)
+set_border(ws, 1, 10, 15, 12)
 
 # --- Data Definition (Exactly matching user's images) ---
 data = [
@@ -247,7 +248,7 @@ def merge_sub_categories():
 
 merge_sub_categories()
 
-set_border(ws, 1, 13, 14, current_row - 1)
+set_border(ws, 1, 13, 15, current_row - 1)
 
 wb.save(output_path)
 print(f"Excel file created at: {output_path}")
