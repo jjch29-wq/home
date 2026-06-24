@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import json
 import win32com.client as win32
@@ -128,6 +128,10 @@ class NDTCalculator(tk.Tk):
         
         tab_billing = ttk.Frame(self.notebook)
         self.notebook.add(tab_billing, text="2. 기성 계약관리")
+        
+        tab_worker = ttk.Frame(self.notebook)
+        self.notebook.add(tab_worker, text="3. 작업자별 실적 요약")
+        
         # --- TAB 1: WORK (입력 폼 및 목록 사이드바이사이드) ---
         self.work_pane = tk.PanedWindow(tab_work, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=5, bg="#b0b0b0")
         self.work_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -143,7 +147,11 @@ class NDTCalculator(tk.Tk):
         self.date_entry = DateEntry(info_frame, textvariable=self.date_var, width=13, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2)
         self.date_entry.pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(info_frame, text="• 작업구간 (Joint No 등):", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(20, 5))
+        ttk.Label(info_frame, text="• 작업자:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(15, 5))
+        self.worker_var = tk.StringVar(value="")
+        ttk.Entry(info_frame, textvariable=self.worker_var, width=12).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(info_frame, text="• 작업위치:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(15, 5))
         self.loc_var = tk.StringVar(value="")
         ttk.Entry(info_frame, textvariable=self.loc_var, width=30).pack(side=tk.LEFT, padx=5)
 
@@ -461,10 +469,11 @@ class NDTCalculator(tk.Tk):
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
 
-        columns = ("date", "loc", "type", "time", "mat", "qty", "unit", "corr", "adj_qty", "mat_cost", "lab_cost", "overhead", "tech", "total_amt")
+        columns = ("date", "worker", "loc", "type", "time", "mat", "qty", "unit", "corr", "adj_qty", "mat_cost", "lab_cost", "overhead", "tech", "total_amt")
         self.tree = ttk.Treeview(bottom_frame, columns=columns, show="headings", height=8)
         
         self.tree.heading("date", text="일자", anchor="center")
+        self.tree.heading("worker", text="작업자", anchor="center")
         self.tree.heading("loc", text="구간/위치", anchor="center")
         self.tree.heading("type", text="종류", anchor="center")
         self.tree.heading("time", text="형태", anchor="center")
@@ -480,13 +489,14 @@ class NDTCalculator(tk.Tk):
         self.tree.heading("total_amt", text="공급가액(원)", anchor="center")
         
         default_widths = {
-            "date": 80, "loc": 120, "type": 40, "time": 40, "mat": 90, 
+            "date": 80, "worker": 70, "loc": 120, "type": 40, "time": 40, "mat": 90, 
             "qty": 40, "unit": 40, "corr": 50, "adj_qty": 50,
             "mat_cost": 70, "lab_cost": 70, "overhead": 60, "tech": 60, "total_amt": 80
         }
         saved_widths = CONFIG.get("TREE_WIDTHS", {})
         
         self.tree.column("date", width=saved_widths.get("date", default_widths["date"]), anchor="center")
+        self.tree.column("worker", width=saved_widths.get("worker", default_widths["worker"]), anchor="center")
         self.tree.column("loc", width=saved_widths.get("loc", default_widths["loc"]), anchor="w")
         self.tree.column("type", width=saved_widths.get("type", default_widths["type"]), anchor="center")
         self.tree.column("time", width=saved_widths.get("time", default_widths["time"]), anchor="center")
@@ -510,6 +520,9 @@ class NDTCalculator(tk.Tk):
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
         self.tree.bind('<Delete>', self.delete_selected_records)
         self.tree.bind('<BackSpace>', self.delete_selected_records)
+        
+        # --- TAB 3: WORKER SUMMARY ---
+        self.create_worker_summary_tab(tab_worker)
         
         # 저장된 탭 영역(Sash) 너비 복원
         def restore_sash(event=None):
@@ -581,6 +594,7 @@ class NDTCalculator(tk.Tk):
 
     def _do_calculate(self):
         date_str = self.date_var.get()
+        worker_str = getattr(self, 'worker_var', tk.StringVar()).get()
         loc_str = self.loc_var.get()
         ndt_type = self.ndt_type_var.get()
         work_time = self.work_time_var.get()
@@ -618,6 +632,7 @@ class NDTCalculator(tk.Tk):
         
         return {
             "date": date_str,
+            "worker": worker_str,
             "loc": display_loc,
             "ndt_type": ndt_type,
             "work_time": work_time,
@@ -649,7 +664,7 @@ class NDTCalculator(tk.Tk):
             else:
                 lab_unit = LABOR_COST.get(res['work_time'], {}).get(res['ndt_type'], 0)
             
-            txt = (f"▶ [현재 입력값] 일자: {res['date']} | 구간: {res['loc']}\n"
+            txt = (f"▶ [현재 입력값] 일자: {res['date']} | 작업자: {res.get('worker', '')} | 구간: {res['loc']}\n"
                    f"▶ [적용 기준] 보정계수: {res['corr']:.2f} | 재료비 단가: {mat_unit:,}원 | 인건비 단가: {lab_unit:,}원\n"
                    f"▶ [공급 가액] {res['subtotal']:,} 원 (재료비 {res['mat_cost']:,} + 인건비 {res['lab_cost']:,} + 제경비 {res['overhead']:,} + 기술료 {res['tech']:,})\n"
                    f"▶ [최종 금액] 총 청구액 {res['total_amount']:,} 원 (부가세 {res['vat']:,}원 포함)\n")
@@ -685,7 +700,7 @@ class NDTCalculator(tk.Tk):
         else:
             lab_unit = LABOR_COST.get(res['work_time'], {}).get(res['ndt_type'], 0)
         
-        txt = (f"▶ [선택된 기록] 일자: {res['date']} | 구간: {res['loc']}\n"
+        txt = (f"▶ [선택된 기록] 일자: {res['date']} | 작업자: {res.get('worker', '')} | 구간: {res['loc']}\n"
                f"▶ [적용 기준] 보정계수: {res['corr']:.2f} | 재료비 단가: {mat_unit:,}원 | 인건비 단가: {lab_unit:,}원\n"
                f"▶ [공급 가액] {res['subtotal']:,} 원 (재료비 {res['mat_cost']:,} + 인건비 {res['lab_cost']:,} + 제경비 {res['overhead']:,} + 기술료 {res['tech']:,})\n"
                f"▶ [최종 금액] 총 청구액 {res['total_amount']:,} 원 (부가세 {res['vat']:,}원 포함)\n")
@@ -718,7 +733,7 @@ class NDTCalculator(tk.Tk):
         if res:
             self.records.append(res)
             self.tree.insert("", tk.END, values=(
-                res["date"], res["loc"], res["ndt_type"], res["work_time"], 
+                res["date"], res.get("worker", ""), res["loc"], res["ndt_type"], res["work_time"], 
                 res["material_type"], f"{res['qty']:.1f}", res["unit"],
                 f"{res['corr']:.2f}", f"{res['adjusted_qty']:.2f}", 
                 f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
@@ -929,7 +944,7 @@ class NDTCalculator(tk.Tk):
                 
                 for res in current_records:
                     self.tree.insert("", tk.END, values=(
-                        res["date"], res["loc"], res["ndt_type"], res["work_time"], 
+                        res["date"], res.get("worker", ""), res["loc"], res["ndt_type"], res["work_time"], 
                         res["material_type"], f"{res['qty']:.1f}", res["unit"],
                         f"{res['corr']:.2f}", f"{res['adjusted_qty']:.2f}", 
                         f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
@@ -1518,6 +1533,142 @@ class NDTCalculator(tk.Tk):
                 messagebox.showerror("오류", "모든 단가는 숫자 형식이어야 합니다.", parent=settings_win)
                 
         ttk.Button(settings_win, text="저장 및 닫기", command=save_and_close).pack(pady=10)
+
+    def create_worker_summary_tab(self, parent_frame):
+        # Top filter frame
+        filter_frame = ttk.LabelFrame(parent_frame, text="기간 설정 및 조회", padding=10)
+        filter_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(filter_frame, text="시작일:").pack(side=tk.LEFT, padx=5)
+        self.worker_start_date = tk.StringVar(value=(datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+        DateEntry(filter_frame, textvariable=self.worker_start_date, width=12, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(filter_frame, text="종료일:").pack(side=tk.LEFT, padx=5)
+        self.worker_end_date = tk.StringVar(value=datetime.now().strftime('%Y-%m-%d'))
+        DateEntry(filter_frame, textvariable=self.worker_end_date, width=12, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2).pack(side=tk.LEFT, padx=5)
+        
+        ttk.Button(filter_frame, text="조회하기", command=self.update_worker_summary).pack(side=tk.LEFT, padx=20)
+        
+        # Summary Treeview
+        tree_frame = ttk.Frame(parent_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        columns = (
+            "worker", "count", "normal", "night", "holiday", "ot_count",
+            "lab_normal", "lab_night", "lab_holiday", "lab_ot", "lab_total", "total_amt"
+        )
+        self.worker_tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
+        
+        self.worker_tree.heading("worker", text="작업자", anchor="center")
+        self.worker_tree.heading("count", text="총건수", anchor="center")
+        self.worker_tree.heading("normal", text="일반(건)", anchor="center")
+        self.worker_tree.heading("night", text="야간(건)", anchor="center")
+        self.worker_tree.heading("holiday", text="휴일(건)", anchor="center")
+        self.worker_tree.heading("ot_count", text="OT총건수", anchor="center")
+        
+        self.worker_tree.heading("lab_normal", text="일반(금액)", anchor="center")
+        self.worker_tree.heading("lab_night", text="야간(금액)", anchor="center")
+        self.worker_tree.heading("lab_holiday", text="휴일(금액)", anchor="center")
+        self.worker_tree.heading("lab_ot", text="OT총금액", anchor="center")
+        self.worker_tree.heading("lab_total", text="인건비 합계", anchor="center")
+        self.worker_tree.heading("total_amt", text="총 공급가액", anchor="center")
+        
+        self.worker_tree.column("worker", width=90, anchor="center")
+        self.worker_tree.column("count", width=60, anchor="center")
+        self.worker_tree.column("normal", width=60, anchor="center")
+        self.worker_tree.column("night", width=60, anchor="center")
+        self.worker_tree.column("holiday", width=60, anchor="center")
+        self.worker_tree.column("ot_count", width=70, anchor="center")
+        
+        self.worker_tree.column("lab_normal", width=90, anchor="e")
+        self.worker_tree.column("lab_night", width=90, anchor="e")
+        self.worker_tree.column("lab_holiday", width=90, anchor="e")
+        self.worker_tree.column("lab_ot", width=90, anchor="e")
+        self.worker_tree.column("lab_total", width=100, anchor="e")
+        self.worker_tree.column("total_amt", width=110, anchor="e")
+        
+        scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.worker_tree.yview)
+        self.worker_tree.configure(yscrollcommand=scroll.set)
+        scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.worker_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    def update_worker_summary(self):
+        for item in self.worker_tree.get_children():
+            self.worker_tree.delete(item)
+            
+        start_str = self.worker_start_date.get()
+        end_str = self.worker_end_date.get()
+        
+        summary = {}
+        total_count = total_normal = total_night = total_holiday = total_ot_count = 0
+        total_lab_normal = total_lab_night = total_lab_holiday = total_lab_ot = total_lab_total = 0
+        total_amt = 0
+        
+        for rec in self.records:
+            r_date = rec.get("date", "")
+            if start_str <= r_date <= end_str:
+                w = rec.get("worker", "").strip()
+                if not w: w = "미지정"
+                
+                if w not in summary:
+                    summary[w] = {
+                        "count": 0, "normal": 0, "night": 0, "holiday": 0, "ot_count": 0,
+                        "lab_normal": 0, "lab_night": 0, "lab_holiday": 0, "lab_ot": 0, "lab_total": 0,
+                        "amt": 0
+                    }
+                
+                summary[w]["count"] += 1
+                total_count += 1
+                
+                wt = rec.get("work_time", "")
+                lab_val = rec.get("lab_cost", 0)
+                
+                if wt == "야간": 
+                    summary[w]["night"] += 1
+                    summary[w]["ot_count"] += 1
+                    summary[w]["lab_night"] += lab_val
+                    summary[w]["lab_ot"] += lab_val
+                    total_night += 1
+                    total_ot_count += 1
+                    total_lab_night += lab_val
+                    total_lab_ot += lab_val
+                elif wt == "휴일": 
+                    summary[w]["holiday"] += 1
+                    summary[w]["ot_count"] += 1
+                    summary[w]["lab_holiday"] += lab_val
+                    summary[w]["lab_ot"] += lab_val
+                    total_holiday += 1
+                    total_ot_count += 1
+                    total_lab_holiday += lab_val
+                    total_lab_ot += lab_val
+                else: 
+                    summary[w]["normal"] += 1
+                    summary[w]["lab_normal"] += lab_val
+                    total_normal += 1
+                    total_lab_normal += lab_val
+                    
+                summary[w]["lab_total"] += lab_val
+                summary[w]["amt"] += rec.get("subtotal", 0)
+                
+                total_lab_total += lab_val
+                total_amt += rec.get("subtotal", 0)
+                
+        # Sort by worker name
+        for w in sorted(summary.keys()):
+            s = summary[w]
+            self.worker_tree.insert("", tk.END, values=(
+                w, f"{s['count']}건", f"{s['normal']}건", f"{s['night']}건", f"{s['holiday']}건", f"{s['ot_count']}건",
+                f"{s['lab_normal']:,}", f"{s['lab_night']:,}", f"{s['lab_holiday']:,}", f"{s['lab_ot']:,}", f"{s['lab_total']:,}", 
+                f"{s['amt']:,}"
+            ))
+            
+        if summary:
+            self.worker_tree.insert("", tk.END, values=(
+                "[총계]", f"{total_count}건", f"{total_normal}건", f"{total_night}건", f"{total_holiday}건", f"{total_ot_count}건",
+                f"{total_lab_normal:,}", f"{total_lab_night:,}", f"{total_lab_holiday:,}", f"{total_lab_ot:,}", f"{total_lab_total:,}", 
+                f"{total_amt:,}"
+            ), tags=('total',))
+            self.worker_tree.tag_configure('total', background='#e6f2ff', font=('Arial', 10, 'bold'))
 
 if __name__ == "__main__":
     app = NDTCalculator()

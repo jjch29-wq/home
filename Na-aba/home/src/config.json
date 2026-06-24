@@ -60,6 +60,7 @@
     },
     "TREE_WIDTHS": {
         "date": 112,
+        "worker": 70,
         "loc": 133,
         "type": 73,
         "time": 78,
@@ -74,5 +75,5 @@
         "tech": 82,
         "total_amt": 107
     },
-    "SASH_POS": 569
+    "SASH_POS": 655
 }

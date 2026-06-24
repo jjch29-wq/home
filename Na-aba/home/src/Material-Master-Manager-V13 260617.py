@@ -15911,33 +15911,28 @@ class MaterialManager:
                 
             # --- BUILD FINAL VISIBILITY (MERGED LOGIC) ---
             all_cols = list(self.daily_usage_tree['columns'])
-            # manual_set: columns user explicitly hid via column manager (empty = no exclusions)
-            manual_hidden = set(all_cols) - set(getattr(self, 'manual_visible_cols', all_cols))
-            
-            # [SAFETY] Core columns that should almost never be hidden unless user is very specific
-            # [REFINED] Minimal mandatory columns to allow smarter auto-hiding of empty fields
-            mandatory_cols = ['날짜', '현장', '작업자']
+            manual_cols = getattr(self, 'manual_visible_cols', [])
             
             final_visible = []
-            # We iterate in ALL_COLS order to maintain the original column sequence
-            for col in all_cols:
-                if col == '(Full작업자)': continue
-                
-                # 1. Mandatory override: Always show core columns
-                if col in mandatory_cols:
-                    final_visible.append(col)
-                    continue
-                
-                # 2. SMART HIDING: For columns we track data status for
-                if col in dynamic_col_status:
-                    # Show ONLY if it has data AND isn't manually hidden
-                    if dynamic_col_status[col] and col not in manual_hidden:
+            
+            # [FIX] 컬럼 관리에서 설정한 내역이 있다면(manual_cols가 비어있지 않다면) 무조건 따름
+            if manual_cols:
+                for col in all_cols:
+                    if col == '(Full작업자)': continue
+                    if col in manual_cols:
                         final_visible.append(col)
-                    # Skip untracked fallback for this column (i.e. if NO data, it's HIDDEN)
-                    continue
-                
-                # 3. Fallback for untracked columns (e.g. manually added custom columns)
-                if col not in manual_hidden:
+            else:
+                # 설정이 없을 경우에만 스마트 하이딩(데이터 있는 컬럼만 표시) 적용
+                mandatory_cols = ['날짜', '업체명', '현장', '작업자', '검사품명', '수량', '단위', '단가', '검사비', 'OT시간', 'OT금액', '비고']
+                for col in all_cols:
+                    if col == '(Full작업자)': continue
+                    if col in mandatory_cols:
+                        final_visible.append(col)
+                        continue
+                    if col in dynamic_col_status:
+                        if dynamic_col_status[col]:
+                            final_visible.append(col)
+                        continue
                     final_visible.append(col)
 
             # [STABILITY] Clear the Treeview's displayed columns
@@ -15970,9 +15965,15 @@ class MaterialManager:
             self.daily_usage_tree.detach(self.daily_usage_tree.get_children()[-1])
             self.daily_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
         else:
-            # If empty, show only mandatory columns to keep the view clean
-            all_cols = self.daily_usage_tree['columns']
-            final_visible = ['날짜', '현장', '작업자']
+            # If empty, respect manual settings or show defaults
+            all_cols = list(self.daily_usage_tree['columns'])
+            manual_cols = getattr(self, 'manual_visible_cols', [])
+            
+            if manual_cols:
+                final_visible = [c for c in all_cols if c in manual_cols and c != '(Full작업자)']
+            else:
+                final_visible = ['날짜', '업체명', '현장', '작업자', '검사품명', '수량', '단위', '단가', '검사비', 'OT시간', 'OT금액', '비고']
+                
             self.daily_usage_tree['displaycolumns'] = final_visible
             
             # Standard column setup for display
