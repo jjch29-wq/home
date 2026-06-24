@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 import json
 import win32com.client as win32
+from tkcalendar import DateEntry
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
@@ -80,6 +81,28 @@ class NDTCalculator(tk.Tk):
         
         self.create_menu()
         self.create_widgets()
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+    def on_closing(self):
+        try:
+            widths = {}
+            for col in self.tree["columns"]:
+                widths[col] = self.tree.column(col, "width")
+            global CONFIG
+            CONFIG["TREE_WIDTHS"] = widths
+            
+            if hasattr(self, 'work_pane'):
+                try:
+                    # tk.PanedWindow는 sash_coord(n)로 sash 위치를 반환
+                    sash_x, sash_y = self.work_pane.sash_coord(0)
+                    CONFIG["SASH_POS"] = int(sash_x)
+                except:
+                    pass
+                
+            save_config(CONFIG)
+        except:
+            pass
+        self.destroy()
         
     def create_menu(self):
         menubar = tk.Menu(self)
@@ -106,18 +129,19 @@ class NDTCalculator(tk.Tk):
         tab_billing = ttk.Frame(self.notebook)
         self.notebook.add(tab_billing, text="2. 기성 계약관리")
         # --- TAB 1: WORK (입력 폼 및 목록 사이드바이사이드) ---
-        work_pane = ttk.PanedWindow(tab_work, orient=tk.HORIZONTAL)
-        work_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.work_pane = tk.PanedWindow(tab_work, orient=tk.HORIZONTAL, sashrelief=tk.RAISED, sashwidth=5, bg="#b0b0b0")
+        self.work_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        left_frame = ttk.Frame(work_pane)
-        work_pane.add(left_frame, weight=1)
+        left_frame = ttk.Frame(self.work_pane)
+        self.work_pane.add(left_frame, stretch="always")
         
         info_frame = ttk.Frame(left_frame)
         info_frame.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Label(info_frame, text="• 검사일자:", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
         self.date_var = tk.StringVar(value=datetime.now().strftime('%Y-%m-%d'))
-        ttk.Entry(info_frame, textvariable=self.date_var, width=15).pack(side=tk.LEFT, padx=5)
+        self.date_entry = DateEntry(info_frame, textvariable=self.date_var, width=13, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2)
+        self.date_entry.pack(side=tk.LEFT, padx=5)
         
         ttk.Label(info_frame, text="• 작업구간 (Joint No 등):", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(20, 5))
         self.loc_var = tk.StringVar(value="")
@@ -204,7 +228,20 @@ class NDTCalculator(tk.Tk):
         billing_container = ttk.Frame(tab_billing)
         billing_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        contract_frame = ttk.LabelFrame(billing_container, text="항목별 계약 및 전회 기성 (세액 미포함)", padding=10)
+        round_frame = ttk.Frame(billing_container)
+        round_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.round_var = tk.IntVar(value=1)
+        ttk.Label(round_frame, text="기성 청구 회차: 제", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+        ttk.Entry(round_frame, textvariable=self.round_var, width=5, justify="center", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=5)
+        ttk.Label(round_frame, text="회", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+        
+        ttk.Button(round_frame, text="다음 회차로 이월하기 (전회 누적 & 금회 초기화)", command=self.carry_over_round).pack(side=tk.RIGHT)
+        
+        content_frame = ttk.Frame(billing_container)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        
+        contract_frame = ttk.LabelFrame(content_frame, text="항목별 계약 및 전회 기성 (세액 미포함)", padding=10)
         contract_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
         ttk.Button(contract_frame, text="프로젝트 총 계약수량 자동입력", command=self.auto_load_contract_qty).pack(fill=tk.X, pady=(0, 10))
@@ -242,33 +279,93 @@ class NDTCalculator(tk.Tk):
         self.get_float = get_float
         
         self.contract_vars = {}
-        default_qtys = {"RT": "24,536", "UT": "319.02", "PT": "338.63"}
         
-        for idx, t in enumerate(["RT", "UT", "PT"]):
+        items = [
+            ("RT_B", 'RT (B필름)', "20,368"),
+            ("RT_A", 'RT (A필름)', "2,464"),
+            ("RT_A2", 'RT (A/2필름)', "1,704"),
+            ("UT", "UT", "319.02"),
+            ("PT", "PT", "338.63")
+        ]
+        
+        for key, display_name, default_val in items:
             f = ttk.Frame(contract_frame)
             f.pack(fill=tk.X, pady=2)
-            ttk.Label(f, text=f"[{t}]", width=8).grid(row=0, column=0, rowspan=2, sticky=tk.W)
             
-            c_qty = tk.StringVar(value=default_qtys[t])
+            lbl_f = ttk.Frame(f)
+            lbl_f.pack(side=tk.LEFT, padx=(0, 5))
+            ttk.Label(lbl_f, text=f"[{display_name}]", width=12, font=("Arial", 9, "bold")).pack(anchor=tk.W)
+            
+            grid_f = ttk.Frame(f)
+            grid_f.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            
+            c_qty = tk.StringVar(value=default_val)
+            p_qty = tk.StringVar(value="0")
+            curr_qty = tk.StringVar(value="0")
+            rem_qty = tk.StringVar(value=default_val)
+            
+            # backward compatibility
             c_price = tk.IntVar(value=0)
             c_var = tk.StringVar(value="0")
-            p_qty = tk.StringVar(value="0")
             p_var = tk.StringVar(value="0")
             
             c_qty.trace_add("write", lambda *a, v=c_qty: format_qty(var=v))
             p_qty.trace_add("write", lambda *a, v=p_qty: format_qty(var=v))
             
-            unit = "매" if t == "RT" else "M"
-            ttk.Label(f, text="계약 물량:").grid(row=0, column=1, sticky=tk.W)
-            ttk.Entry(f, textvariable=c_qty, width=10).grid(row=0, column=2, padx=2)
-            ttk.Label(f, text=unit).grid(row=0, column=3, sticky=tk.W, padx=(0, 15))
+            def update_rem_qty(*args, k=key):
+                try:
+                    c = self.get_float(self.contract_vars[k]["c_qty"])
+                    p = self.get_float(self.contract_vars[k]["p_qty"])
+                    cur = self.get_float(self.contract_vars[k]["curr_qty"])
+                    rem = c - p - cur
+                    formatted_rem = f"{int(rem):,}" if rem.is_integer() else f"{rem:,.2f}"
+                    self.contract_vars[k]["rem_qty"].set(formatted_rem)
+                    
+                    if rem < 0:
+                        self.contract_vars[k]["lbl_rem"].config(foreground="red")
+                    else:
+                        self.contract_vars[k]["lbl_rem"].config(foreground="blue")
+                except:
+                    pass
+
+            c_qty.trace_add("write", update_rem_qty)
+            p_qty.trace_add("write", update_rem_qty)
+            curr_qty.trace_add("write", update_rem_qty)
             
-            ttk.Label(f, text="전회 물량:").grid(row=1, column=1, sticky=tk.W, pady=2)
-            ttk.Entry(f, textvariable=p_qty, width=10).grid(row=1, column=2, padx=2)
-            ttk.Label(f, text=unit).grid(row=1, column=3, sticky=tk.W)
+            unit = "매" if key.startswith("RT") else "M"
+            
+            ttk.Label(grid_f, text="계약:").grid(row=0, column=0, sticky=tk.E, padx=2)
+            ttk.Entry(grid_f, textvariable=c_qty, width=8).grid(row=0, column=1, padx=2)
+            ttk.Label(grid_f, text=unit).grid(row=0, column=2, sticky=tk.W, padx=(0, 10))
+            
+            ttk.Label(grid_f, text="전회:").grid(row=0, column=3, sticky=tk.E, padx=2)
+            ttk.Entry(grid_f, textvariable=p_qty, width=8).grid(row=0, column=4, padx=2)
+            ttk.Label(grid_f, text=unit).grid(row=0, column=5, sticky=tk.W, padx=(0, 10))
+            
+            ttk.Label(grid_f, text="금회:").grid(row=0, column=6, sticky=tk.E, padx=2)
+            ttk.Label(grid_f, textvariable=curr_qty, width=6, anchor="e", foreground="green").grid(row=0, column=7, padx=2)
+            ttk.Label(grid_f, text=unit).grid(row=0, column=8, sticky=tk.W, padx=(0, 10))
+            
+            ttk.Label(grid_f, text="잔여:").grid(row=0, column=9, sticky=tk.E, padx=2)
+            lbl_rem = ttk.Label(grid_f, textvariable=rem_qty, width=8, anchor="e", font=("Arial", 9, "bold"))
+            lbl_rem.grid(row=0, column=10, padx=2)
+            ttk.Label(grid_f, text=unit).grid(row=0, column=11, sticky=tk.W)
+            
+            c_var.trace_add("write", lambda *a, v=c_var: format_currency(var=v))
+            p_var.trace_add("write", lambda *a, v=p_var: format_currency(var=v))
+            
+            ttk.Label(grid_f, text="계약금액:").grid(row=1, column=0, sticky=tk.E, padx=2, pady=(2, 0))
+            ttk.Entry(grid_f, textvariable=c_var, width=12).grid(row=1, column=1, columnspan=2, sticky=tk.W, padx=2, pady=(2, 0))
+            
+            ttk.Label(grid_f, text="전회금액:").grid(row=1, column=3, sticky=tk.E, padx=2, pady=(2, 0))
+            ttk.Entry(grid_f, textvariable=p_var, width=12).grid(row=1, column=4, columnspan=2, sticky=tk.W, padx=2, pady=(2, 0))
+            
             ttk.Separator(contract_frame, orient='horizontal').pack(fill=tk.X, pady=3)
             
-            self.contract_vars[t] = {"c_qty": c_qty, "c_price": c_price, "contract": c_var, "p_qty": p_qty, "prev": p_var}
+            self.contract_vars[key] = {
+                "c_qty": c_qty, "p_qty": p_qty, "curr_qty": curr_qty, "rem_qty": rem_qty, "lbl_rem": lbl_rem,
+                "c_price": c_price, "contract": c_var, "prev": p_var
+            }
 
         f = ttk.Frame(contract_frame)
         f.pack(fill=tk.X, pady=2)
@@ -285,7 +382,7 @@ class NDTCalculator(tk.Tk):
         ttk.Entry(f, textvariable=self.total_prev_var, width=15).grid(row=1, column=2, padx=2)
         ttk.Label(f, text="원").grid(row=1, column=3)
         
-        exp_frame = ttk.LabelFrame(billing_container, text="기타 경비 및 실비 정산 (월간)", padding=10)
+        exp_frame = ttk.LabelFrame(content_frame, text="기타 경비 및 실비 정산 (월간)", padding=10)
         exp_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         self.exp_budget_var = tk.StringVar(value="72,215,000")
@@ -354,43 +451,55 @@ class NDTCalculator(tk.Tk):
         update_exp_rem()
         
         # --- RIGHT FRAME (누적 테이블, TAB 1에 배치) ---
-        bottom_frame = ttk.Frame(work_pane)
-        work_pane.add(bottom_frame, weight=2)
+        bottom_frame = ttk.Frame(self.work_pane)
+        self.work_pane.add(bottom_frame, stretch="always")
         
         lbl_frame = ttk.Frame(bottom_frame)
         lbl_frame.pack(fill=tk.X, pady=(0, 5))
         ttk.Label(lbl_frame, text="[ 일일 작업 기록 목록 ]", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
-        ttk.Button(lbl_frame, text="엑셀 파일로 저장", command=self.export_to_excel).pack(side=tk.RIGHT)
+        ttk.Button(lbl_frame, text="기성청구", command=self.export_to_excel).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
 
-        columns = ("date", "loc", "type", "time", "mat", "qty", "unit", "corr", "adj_qty", "overhead", "tech", "total_amt")
+        columns = ("date", "loc", "type", "time", "mat", "qty", "unit", "corr", "adj_qty", "mat_cost", "lab_cost", "overhead", "tech", "total_amt")
         self.tree = ttk.Treeview(bottom_frame, columns=columns, show="headings", height=8)
         
-        self.tree.heading("date", text="일자")
-        self.tree.heading("loc", text="구간/위치")
-        self.tree.heading("type", text="종류")
-        self.tree.heading("time", text="형태")
-        self.tree.heading("mat", text="자재")
-        self.tree.heading("qty", text="실물량")
-        self.tree.heading("unit", text="단위")
-        self.tree.heading("corr", text="보정계수")
-        self.tree.heading("adj_qty", text="보정물량")
-        self.tree.heading("overhead", text="제경비(원)")
-        self.tree.heading("tech", text="기술료(원)")
-        self.tree.heading("total_amt", text="공급가액(원)")
+        self.tree.heading("date", text="일자", anchor="center")
+        self.tree.heading("loc", text="구간/위치", anchor="center")
+        self.tree.heading("type", text="종류", anchor="center")
+        self.tree.heading("time", text="형태", anchor="center")
+        self.tree.heading("mat", text="자재", anchor="center")
+        self.tree.heading("qty", text="실물량", anchor="center")
+        self.tree.heading("unit", text="단위", anchor="center")
+        self.tree.heading("corr", text="보정계수", anchor="center")
+        self.tree.heading("adj_qty", text="보정물량", anchor="center")
+        self.tree.heading("mat_cost", text="재료비(원)", anchor="center")
+        self.tree.heading("lab_cost", text="인건비(원)", anchor="center")
+        self.tree.heading("overhead", text="제경비(원)", anchor="center")
+        self.tree.heading("tech", text="기술료(원)", anchor="center")
+        self.tree.heading("total_amt", text="공급가액(원)", anchor="center")
         
-        self.tree.column("date", width=80, anchor="center")
-        self.tree.column("loc", width=120, anchor="w")
-        self.tree.column("type", width=40, anchor="center")
-        self.tree.column("time", width=40, anchor="center")
-        self.tree.column("mat", width=90, anchor="center")
-        self.tree.column("qty", width=50, anchor="e")
-        self.tree.column("unit", width=40, anchor="center")
-        self.tree.column("corr", width=50, anchor="e")
-        self.tree.column("adj_qty", width=50, anchor="e")
-        self.tree.column("overhead", width=70, anchor="e")
-        self.tree.column("tech", width=70, anchor="e")
-        self.tree.column("total_amt", width=90, anchor="e")
+        default_widths = {
+            "date": 80, "loc": 120, "type": 40, "time": 40, "mat": 90, 
+            "qty": 40, "unit": 40, "corr": 50, "adj_qty": 50,
+            "mat_cost": 70, "lab_cost": 70, "overhead": 60, "tech": 60, "total_amt": 80
+        }
+        saved_widths = CONFIG.get("TREE_WIDTHS", {})
+        
+        self.tree.column("date", width=saved_widths.get("date", default_widths["date"]), anchor="center")
+        self.tree.column("loc", width=saved_widths.get("loc", default_widths["loc"]), anchor="w")
+        self.tree.column("type", width=saved_widths.get("type", default_widths["type"]), anchor="center")
+        self.tree.column("time", width=saved_widths.get("time", default_widths["time"]), anchor="center")
+        self.tree.column("mat", width=saved_widths.get("mat", default_widths["mat"]), anchor="center")
+        self.tree.column("qty", width=saved_widths.get("qty", default_widths["qty"]), anchor="center")
+        self.tree.column("unit", width=saved_widths.get("unit", default_widths["unit"]), anchor="center")
+        self.tree.column("corr", width=saved_widths.get("corr", default_widths["corr"]), anchor="center")
+        self.tree.column("adj_qty", width=saved_widths.get("adj_qty", default_widths["adj_qty"]), anchor="center")
+        self.tree.column("mat_cost", width=saved_widths.get("mat_cost", default_widths["mat_cost"]), anchor="center")
+        self.tree.column("lab_cost", width=saved_widths.get("lab_cost", default_widths["lab_cost"]), anchor="center")
+        self.tree.column("overhead", width=saved_widths.get("overhead", default_widths["overhead"]), anchor="center")
+        self.tree.column("tech", width=saved_widths.get("tech", default_widths["tech"]), anchor="center")
+        self.tree.column("total_amt", width=saved_widths.get("total_amt", default_widths["total_amt"]), anchor="center")
         
         tree_scroll = ttk.Scrollbar(bottom_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=tree_scroll.set)
@@ -399,7 +508,25 @@ class NDTCalculator(tk.Tk):
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+        self.tree.bind('<Delete>', self.delete_selected_records)
+        self.tree.bind('<BackSpace>', self.delete_selected_records)
         
+        # 저장된 탭 영역(Sash) 너비 복원
+        def restore_sash(event=None):
+            if getattr(self, "_sash_restored", False):
+                return
+            if "SASH_POS" not in CONFIG:
+                return
+            try:
+                sash_pos = int(CONFIG["SASH_POS"])
+                self.work_pane.sash_place(0, sash_pos, 0)
+                self._sash_restored = True
+            except:
+                pass
+                
+        # tk.PanedWindow는 Configure 시 사이즈가 확정된 후 복원
+        self.work_pane.bind("<Configure>", restore_sash)
+                
         self.update_dynamic_ui()
 
     def update_dynamic_ui(self, *args):
@@ -487,9 +614,11 @@ class NDTCalculator(tk.Tk):
         vat = int(subtotal * 0.1)
         total_amount = subtotal + vat
         
+        display_loc = f"[{loc_type_val}] {loc_str}".strip() if loc_str else f"[{loc_type_val}]"
+        
         return {
             "date": date_str,
-            "loc": loc_str,
+            "loc": display_loc,
             "ndt_type": ndt_type,
             "work_time": work_time,
             "material_type": material_type,
@@ -545,7 +674,16 @@ class NDTCalculator(tk.Tk):
             
         res = self.records[idx]
         mat_unit = MATERIAL_COST.get(res['material_type'], 0)
-        lab_unit = LABOR_COST[res['work_time']][res['ndt_type']]
+        
+        if "[플랜트(관리소)]" in res['loc']:
+            loc_type_val = "플랜트(관리소)"
+        else:
+            loc_type_val = "수송배관(주배관)"
+            
+        if loc_type_val in LABOR_COST:
+            lab_unit = LABOR_COST[loc_type_val].get(res['work_time'], {}).get(res['ndt_type'], 0)
+        else:
+            lab_unit = LABOR_COST.get(res['work_time'], {}).get(res['ndt_type'], 0)
         
         txt = (f"▶ [선택된 기록] 일자: {res['date']} | 구간: {res['loc']}\n"
                f"▶ [적용 기준] 보정계수: {res['corr']:.2f} | 재료비 단가: {mat_unit:,}원 | 인건비 단가: {lab_unit:,}원\n"
@@ -557,6 +695,24 @@ class NDTCalculator(tk.Tk):
         self.result_text.insert(tk.END, txt)
         self.result_text.config(state=tk.DISABLED)
 
+    def update_qty_summary(self):
+        totals = {"RT_B": 0.0, "RT_A": 0.0, "RT_A2": 0.0, "UT": 0.0, "PT": 0.0}
+        for rec in self.records:
+            if rec["ndt_type"] == "RT":
+                if "17" in rec["material_type"]:
+                    totals["RT_B"] += rec["qty"]
+                elif "12" in rec["material_type"]:
+                    totals["RT_A"] += rec["qty"]
+                elif "6" in rec["material_type"]:
+                    totals["RT_A2"] += rec["qty"]
+            elif rec["ndt_type"] in totals:
+                totals[rec["ndt_type"]] += rec["qty"]
+                
+        for k, v in totals.items():
+            if k in self.contract_vars:
+                formatted = f"{int(v):,}" if v.is_integer() else f"{v:,.2f}"
+                self.contract_vars[k]["curr_qty"].set(formatted)
+
     def add_to_record(self):
         res = self.calculate()
         if res:
@@ -565,13 +721,140 @@ class NDTCalculator(tk.Tk):
                 res["date"], res["loc"], res["ndt_type"], res["work_time"], 
                 res["material_type"], f"{res['qty']:.1f}", res["unit"],
                 f"{res['corr']:.2f}", f"{res['adjusted_qty']:.2f}", 
+                f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
                 f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
             ))
+            self.update_qty_summary()
             
     def clear_records(self):
         self.records = []
         for item in self.tree.get_children():
             self.tree.delete(item)
+        self.update_qty_summary()
+        
+    def delete_selected_records(self, event=None):
+        selected_items = self.tree.selection()
+        if not selected_items:
+            if event is None: # 버튼 클릭으로 호출된 경우에만 경고창
+                messagebox.showwarning("선택 오류", "삭제할 항목을 먼저 선택해주세요.")
+            return
+            
+        if not messagebox.askyesno("선택 삭제", f"선택한 {len(selected_items)}개의 기록을 영구히 삭제하시겠습니까?"):
+            return
+            
+        indices = sorted([self.tree.index(item) for item in selected_items], reverse=True)
+        for i in indices:
+            self.records.pop(i)
+            
+        for item in selected_items:
+            self.tree.delete(item)
+            
+        self.update_qty_summary()
+            
+    def carry_over_round(self):
+        selected_items = self.tree.selection()
+        if selected_items:
+            msg = f"선택한 {len(selected_items)}개의 작업 기록만 '전회'로 누적하고 지우시겠습니까?\n(선택되지 않은 기록은 남습니다.)\n\n※ 데이터 안전을 위해 이월 전 현재 상태를 파일로 먼저 저장해야 합니다."
+            is_partial = True
+        else:
+            msg = "선택된 항목이 없습니다.\n전체 기록(금회 물량/금액 전체)을 '전회'로 누적하고 초기화하시겠습니까?\n\n※ 데이터 안전을 위해 이월 전 현재 상태를 파일로 먼저 저장해야 합니다."
+            is_partial = False
+            
+        if not messagebox.askyesno("다음 회차로 이월", msg):
+            return
+            
+        # 강제 백업 로직 추가
+        current_round = self.round_var.get()
+        default_backup_name = f"제{current_round}회_마감기록_{datetime.now().strftime('%Y%m%d_%H%M')}.ndt"
+        filepath = filedialog.asksaveasfilename(defaultextension=".ndt", initialfile=default_backup_name, filetypes=[("NDT Project", "*.ndt")], title="[안전장치] 이월 전 현재 상태 백업 저장")
+        
+        if not filepath:
+            messagebox.showwarning("이월 취소", "저장이 취소되어 이월 작업을 중단합니다.")
+            return
+            
+        try:
+            data = {
+                "round": self.round_var.get(),
+                "records": self.records,
+                "contract": {
+                    t: {
+                        "c_qty": self.get_float(v["c_qty"]),
+                        "contract": self.get_int(v["contract"]),
+                        "p_qty": self.get_float(v["p_qty"]),
+                        "prev": self.get_int(v["prev"])
+                    } for t, v in self.contract_vars.items()
+                },
+                "expenses": {
+                    "equip": self.equip_cost_var.get(),
+                    "safety": self.safety_cost_var.get(),
+                    "travel": self.travel_cost_var.get(),
+                    "print": self.print_cost_var.get(),
+                    "budget": self.get_int(self.exp_budget_var),
+                    "prev": self.get_int(self.exp_prev_var)
+                }
+            }
+            data["total_amt"] = {"contract": self.get_int(self.total_contract_var), "prev": self.get_int(self.total_prev_var)}
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            messagebox.showerror("저장 오류", f"저장 중 오류가 발생하여 이월을 중단합니다: {e}")
+            return
+            
+        if is_partial:
+            indices = [self.tree.index(item) for item in selected_items]
+            target_records = [self.records[i] for i in indices]
+        else:
+            target_records = self.records
+            
+        for cat, v in self.contract_vars.items():
+            p_qty = self.get_float(v["p_qty"])
+            p_amt = self.get_int(v["prev"])
+            
+            c_qty = 0.0
+            cur_amt = 0
+            if cat.startswith("RT"):
+                if cat == "RT_B":
+                    c_qty = sum(r["qty"] for r in target_records if r["ndt_type"] == "RT" and "17" in r["material_type"])
+                    cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == "RT" and "17" in r["material_type"])
+                elif cat == "RT_A":
+                    c_qty = sum(r["qty"] for r in target_records if r["ndt_type"] == "RT" and "12" in r["material_type"])
+                    cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == "RT" and "12" in r["material_type"])
+                else:
+                    c_qty = sum(r["qty"] for r in target_records if r["ndt_type"] == "RT" and "6" in r["material_type"])
+                    cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == "RT" and "6" in r["material_type"])
+            else:
+                c_qty = sum(r["qty"] for r in target_records if r["ndt_type"] == cat)
+                cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == cat)
+                
+            new_p_qty = p_qty + c_qty
+            formatted_qty = f"{int(new_p_qty):,}" if new_p_qty.is_integer() else f"{new_p_qty:,.2f}"
+            v["p_qty"].set(formatted_qty)
+            v["prev"].set(f"{p_amt + cur_amt:,}")
+            
+        exp_curr = sum([self.equip_cost_var.get(), self.safety_cost_var.get(), self.travel_cost_var.get(), self.print_cost_var.get()])
+        exp_prev = self.get_int(self.exp_prev_var)
+        self.exp_prev_var.set(f"{exp_prev + exp_curr:,}")
+        
+        self.equip_cost_var.set(0)
+        self.safety_cost_var.set(0)
+        self.travel_cost_var.set(0)
+        self.print_cost_var.set(0)
+        
+        total_sub_cur = sum(r["subtotal"] for r in target_records) + exp_curr
+        prev_total = self.get_int(self.total_prev_var)
+        self.total_prev_var.set(f"{prev_total + total_sub_cur:,}")
+
+        if is_partial:
+            for item in reversed(selected_items):
+                idx = self.tree.index(item)
+                del self.records[idx]
+                self.tree.delete(item)
+            self.update_qty_summary()
+        else:
+            self.clear_records()
+            
+        self.round_var.set(self.round_var.get() + 1)
+        messagebox.showinfo("이월 완료", f"제 {self.round_var.get()} 회차 기성으로 이월되었습니다.")
             
     def save_project(self):
         try:
@@ -579,6 +862,7 @@ class NDTCalculator(tk.Tk):
             if not filepath: return
             
             data = {
+                "round": self.round_var.get(),
                 "records": self.records,
                 "contract": {
                     t: {
@@ -608,36 +892,64 @@ class NDTCalculator(tk.Tk):
         pipe = CONTRACT_QTY.get("수송배관(주배관)", {})
         plant = CONTRACT_QTY.get("플랜트(관리소)", {})
         
-        rt_total = (pipe.get("RT_B", 0) + pipe.get("RT_A", 0) + pipe.get("RT_A2", 0) +
-                    plant.get("RT_B", 0) + plant.get("RT_A", 0) + plant.get("RT_A2", 0))
+        rt_b = pipe.get("RT_B", 0) + plant.get("RT_B", 0)
+        rt_a = pipe.get("RT_A", 0) + plant.get("RT_A", 0)
+        rt_a2 = pipe.get("RT_A2", 0) + plant.get("RT_A2", 0)
         ut_total = pipe.get("UT", 0) + plant.get("UT", 0)
         pt_total = pipe.get("PT", 0) + plant.get("PT", 0)
         
-        self.contract_vars["RT"]["c_qty"].set(f"{int(rt_total):,}")
+        self.contract_vars["RT_B"]["c_qty"].set(f"{int(rt_b):,}")
+        self.contract_vars["RT_A"]["c_qty"].set(f"{int(rt_a):,}")
+        self.contract_vars["RT_A2"]["c_qty"].set(f"{int(rt_a2):,}")
         self.contract_vars["UT"]["c_qty"].set(f"{ut_total:,.2f}")
         self.contract_vars["PT"]["c_qty"].set(f"{pt_total:,.2f}")
         
-        messagebox.showinfo("불러오기 완료", "프로젝트 전체 총 계약 물량이 자동으로 입력되었습니다.\n\nRT 항목의 금액은 엑셀 내역서에서 확인 후 직접 입력하시고, UT와 PT는 단가를 입력하시면 자동으로 금액이 산출됩니다.")
+        messagebox.showinfo("불러오기 완료", "프로젝트 전체 총 계약 물량이 자동으로 입력되었습니다.")
 
     def load_project(self):
         try:
-            filepath = filedialog.askopenfilename(filetypes=[("NDT Project", "*.ndt")], title="작업 불러오기")
-            if not filepath: return
+            filepaths = filedialog.askopenfilenames(filetypes=[("NDT Project", "*.ndt")], title="작업 불러오기 (여러 파일 선택 시 병합됨)")
+            if not filepaths: return
             
-            with open(filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
             self.clear_records()
-            self.records = data.get("records", [])
-            for res in self.records:
-                self.tree.insert("", tk.END, values=(
-                    res["date"], res["loc"], res["ndt_type"], res["work_time"], 
-                    res["material_type"], f"{res['qty']:.1f}", res["unit"],
-                    f"{res['corr']:.2f}", f"{res['adjusted_qty']:.2f}", 
-                    f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
-                ))
+            self.records = []
             
-            cont = data.get("contract", {})
+            # 다중 파일 선택 시 순서 보장을 위해 정렬
+            filepaths = sorted(filepaths)
+            
+            latest_data = None
+            max_round = -1
+            
+            for filepath in filepaths:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+                current_records = data.get("records", [])
+                self.records.extend(current_records)
+                
+                for res in current_records:
+                    self.tree.insert("", tk.END, values=(
+                        res["date"], res["loc"], res["ndt_type"], res["work_time"], 
+                        res["material_type"], f"{res['qty']:.1f}", res["unit"],
+                        f"{res['corr']:.2f}", f"{res['adjusted_qty']:.2f}", 
+                        f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
+                        f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
+                    ))
+                    
+                curr_round = data.get("round", 1)
+                if curr_round > max_round:
+                    max_round = curr_round
+                    latest_data = data
+            
+            if not latest_data: return
+            
+            self.round_var.set(latest_data.get("round", max_round))
+            cont = latest_data.get("contract", {})
+            
+            # 하위 호환성 (과거 저장 파일에 'RT' 하나만 있는 경우 RT_B에 모두 몰아넣음)
+            if "RT" in cont and "RT_B" not in cont:
+                cont["RT_B"] = cont.pop("RT")
+                
             for t, v in self.contract_vars.items():
                 if t in cont:
                     cq = cont[t].get("c_qty", 0.0)
@@ -647,7 +959,9 @@ class NDTCalculator(tk.Tk):
                     v["p_qty"].set(f"{int(pq):,}" if pq.is_integer() else f"{pq:,.2f}")
                     v["prev"].set(f"{cont[t].get('prev', 0):,}")
             
-            ex = data.get("expenses", {})
+            self.update_qty_summary()
+            
+            ex = latest_data.get("expenses", {})
             self.equip_cost_var.set(ex.get("equip", 0))
             self.safety_cost_var.set(ex.get("safety", 0))
             self.travel_cost_var.set(ex.get("travel", 0))
@@ -655,11 +969,12 @@ class NDTCalculator(tk.Tk):
             self.exp_budget_var.set(f"{ex.get('budget', 72215000):,}")
             self.exp_prev_var.set(f"{ex.get('prev', 0):,}")
             
-            tot = data.get("total_amt", {})
+            tot = latest_data.get("total_amt", {})
             self.total_contract_var.set(f"{tot.get('contract', 2628702818):,}")
             self.total_prev_var.set(f"{tot.get('prev', 0):,}")
             
-            messagebox.showinfo("불러오기 완료", "작업을 성공적으로 불러왔습니다.")
+            msg = f"총 {len(filepaths)}개의 작업 파일에서 {len(self.records)}개의 기록을 성공적으로 병합하여 불러왔습니다."
+            messagebox.showinfo("불러오기 완료", msg)
         except Exception as e:
             messagebox.showerror("오류", f"불러오기 중 오류가 발생했습니다: {e}")
 
@@ -709,10 +1024,30 @@ class NDTCalculator(tk.Tk):
 
     def export_to_excel(self):
         if not self.records:
-            messagebox.showwarning("기록 없음", "저장할 작업 기록이 없습니다.")
+            messagebox.showwarning("기록 없음", "출력할 작업 기록이 없습니다.")
             return
             
-        default_name = f"기성청구내역서_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        selected_items = self.tree.selection()
+        if selected_items:
+            if not messagebox.askyesno("부분 출력", f"선택된 {len(selected_items)}개의 기록만 기성 청구 내역서로 출력하시겠습니까?"):
+                return
+            indices = [self.tree.index(item) for item in selected_items]
+            target_records = [self.records[i] for i in indices]
+        else:
+            if not messagebox.askyesno("전체 출력", "선택된 항목이 없습니다. 전체 기록을 기성 청구 내역서로 출력하시겠습니까?"):
+                return
+            target_records = self.records
+            
+        dates_all = sorted([r["date"] for r in target_records])
+        if dates_all:
+            start_date = dates_all[0].replace("-", ".")
+            end_date = dates_all[-1].replace("-", ".")
+            global_period = f"{start_date} ~ {end_date}" if start_date != end_date else start_date
+        else:
+            global_period = "기간 없음"
+            
+        round_val = self.round_var.get()
+        default_name = f"제{round_val}회_기성청구내역서_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
         filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="정식 기성청구 엑셀 양식으로 저장")
         if not filepath: return
             
@@ -727,7 +1062,7 @@ class NDTCalculator(tk.Tk):
             
             # --- 상단 기본 정보 ---
             ws.Range("A1:O2").Merge()
-            ws.Range("A1").Value = "비파괴검사기술용역 기성청구 내역서"
+            ws.Range("A1").Value = f"제 {round_val} 회 비파괴검사기술용역 기성청구 내역서"
             ws.Range("A1").Font.Size = 20
             ws.Range("A1").Font.Bold = True
             ws.Range("A1").HorizontalAlignment = -4108
@@ -742,14 +1077,15 @@ class NDTCalculator(tk.Tk):
             ws.Range("C4").Font.Bold = True
             ws.Range("C4").Font.Size = 14
             
-            ws.Range("L4:M4").Merge()
-            ws.Range("L4").Value = "청구일자 :"
-            ws.Range("L4").Font.Bold = True
-            ws.Range("L4").Font.Size = 11
-            ws.Range("L4").HorizontalAlignment = -4152
-            ws.Range("N4:O4").Merge()
-            ws.Range("N4").Value = datetime.now().strftime('%Y년 %m월 %d일')
-            ws.Range("N4").Font.Size = 11
+            ws.Range("K4:L4").Merge()
+            ws.Range("K4").Value = "청구 기간 :"
+            ws.Range("K4").Font.Bold = True
+            ws.Range("K4").Font.Size = 11
+            ws.Range("K4").HorizontalAlignment = -4152
+            ws.Range("M4:O4").Merge()
+            ws.Range("M4").Value = global_period
+            ws.Range("M4").Font.Size = 11
+            ws.Range("M4").HorizontalAlignment = -4108
             
             # --- 기성 요약 테이블 ---
             ws.Cells(6, 1).Value = "구분"
@@ -771,14 +1107,19 @@ class NDTCalculator(tk.Tk):
                 ws.Cells(6, c).Interior.Color = 14277081
                 ws.Cells(7, c).Interior.Color = 14277081
             
-            ws.Range(ws.Cells(6, 1), ws.Cells(12, 11)).Borders.LineStyle = 1
+            ws.Range(ws.Cells(6, 1), ws.Cells(14, 11)).Borders.LineStyle = 1
             
             extra_items_total = sum([self.equip_cost_var.get(), self.safety_cost_var.get(), self.travel_cost_var.get(), self.print_cost_var.get()])
             
-            categories = ["RT", "UT", "PT", "기타실비", "총 계"]
+            categories = ["RT_B", "RT_A", "RT_A2", "UT", "PT", "기타실비", "총 계"]
+            display_names = {
+                "RT_B": "RT (B필름)", "RT_A": "RT (A필름)", "RT_A2": "RT (A/2필름)",
+                "UT": "UT", "PT": "PT", "기타실비": "기타실비", "총 계": "총 계"
+            }
+            
             for i, cat in enumerate(categories):
                 row = 8 + i
-                ws.Cells(row, 1).Value = cat
+                ws.Cells(row, 1).Value = display_names[cat]
                 ws.Cells(row, 1).HorizontalAlignment = -4108
                 if cat == "총 계":
                     ws.Range(ws.Cells(row, 1), ws.Cells(row, 11)).Interior.Color = 15987699
@@ -801,11 +1142,31 @@ class NDTCalculator(tk.Tk):
                 else:
                     c_qty = self.get_float(self.contract_vars[cat]["c_qty"])
                     p_qty = self.get_float(self.contract_vars[cat]["p_qty"])
-                    cur_qty = sum(r["adjusted_qty"] for r in self.records if r["ndt_type"] == cat)
+                    
+                    c_amt_val = self.get_int(self.contract_vars[cat]["contract"])
+                    p_amt_val = self.get_int(self.contract_vars[cat]["prev"])
+                    
+                    if cat.startswith("RT"):
+                        if cat == "RT_B":
+                            cur_qty = sum(r["adjusted_qty"] for r in target_records if r["ndt_type"] == "RT" and "17" in r["material_type"])
+                            cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == "RT" and "17" in r["material_type"])
+                        elif cat == "RT_A":
+                            cur_qty = sum(r["adjusted_qty"] for r in target_records if r["ndt_type"] == "RT" and "12" in r["material_type"])
+                            cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == "RT" and "12" in r["material_type"])
+                        else:
+                            cur_qty = sum(r["adjusted_qty"] for r in target_records if r["ndt_type"] == "RT" and "6" in r["material_type"])
+                            cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == "RT" and "6" in r["material_type"])
+                    else:
+                        cur_qty = sum(r["adjusted_qty"] for r in target_records if r["ndt_type"] == cat)
+                        cur_amt = sum(r["subtotal"] for r in target_records if r["ndt_type"] == cat)
+                        
                     tot_qty = p_qty + cur_qty
                     rem_qty = c_qty - tot_qty
-                    c_amt = p_amt = tot_amt = rem_amt = ""
-                    cur_amt = sum(r["subtotal"] for r in self.records if r["ndt_type"] == cat)
+                    
+                    tot_amt = p_amt_val + cur_amt
+                    rem_amt = c_amt_val - tot_amt
+                    c_amt = c_amt_val
+                    p_amt = p_amt_val
                 
                 vals = [c_qty, c_amt, p_qty, p_amt, cur_qty, cur_amt, tot_qty, tot_amt, rem_qty, rem_amt]
                 for col_idx, val in enumerate(vals, start=2):
@@ -831,7 +1192,7 @@ class NDTCalculator(tk.Tk):
             headers = ["No.", "검사일자", "작업구간", "검사종류", "규격/자재", "근무형태", "실물량", "단위", "보정계수", "환산물량", 
                        "재료비", "직접인건비", "제경비", "기술료", "공급가액소계"]
             
-            start_row = 15
+            start_row = 17
             for col, h in enumerate(headers, start=1):
                 cell = ws.Cells(start_row, col)
                 cell.Value = h
@@ -840,7 +1201,7 @@ class NDTCalculator(tk.Tk):
                 cell.HorizontalAlignment = -4108
                 cell.Borders.LineStyle = 1
             
-            ws.Columns(1).ColumnWidth = 9
+            ws.Columns(1).ColumnWidth = 15
             ws.Columns(2).ColumnWidth = 11
             ws.Columns(3).ColumnWidth = 16
             ws.Columns(4).ColumnWidth = 11
@@ -860,27 +1221,66 @@ class NDTCalculator(tk.Tk):
             total_mat = total_lab = total_ovr = total_tech = total_sub = 0
             idx = 1
             
-            for g_type in ["RT", "UT", "PT"]:
-                group_records = [r for r in self.records if r["ndt_type"] == g_type]
+            categories_det = ["RT_B", "RT_A", "RT_A2", "UT", "PT"]
+            display_names_det = {
+                "RT_B": "RT (B필름)", "RT_A": "RT (A필름)", "RT_A2": "RT (A/2필름)",
+                "UT": "UT", "PT": "PT"
+            }
+            
+            for g_type in categories_det:
+                if g_type.startswith("RT"):
+                    if g_type == "RT_B":
+                        group_records = [r for r in target_records if r["ndt_type"] == "RT" and "17" in r["material_type"]]
+                    elif g_type == "RT_A":
+                        group_records = [r for r in target_records if r["ndt_type"] == "RT" and "12" in r["material_type"]]
+                    else:
+                        group_records = [r for r in target_records if r["ndt_type"] == "RT" and "6" in r["material_type"]]
+                else:
+                    group_records = [r for r in target_records if r["ndt_type"] == g_type]
+                    
                 if not group_records: continue
                 
                 sub_mat = sub_lab = sub_ovr = sub_tech = sub_sub = 0
+                
+                aggregated = {}
                 for r in group_records:
+                    key = (r["loc"], r["ndt_type"], r["material_type"], r["work_time"], r["unit"], r["corr"])
+                    if key not in aggregated:
+                        aggregated[key] = {
+                            "date_list": [], "qty": 0.0, "adjusted_qty": 0.0,
+                            "mat_cost": 0, "lab_cost": 0, "overhead": 0, "tech": 0, "subtotal": 0
+                        }
+                    aggregated[key]["date_list"].append(r["date"])
+                    aggregated[key]["qty"] += r["qty"]
+                    aggregated[key]["adjusted_qty"] += r["adjusted_qty"]
+                    aggregated[key]["mat_cost"] += r["mat_cost"]
+                    aggregated[key]["lab_cost"] += r["lab_cost"]
+                    aggregated[key]["overhead"] += r["overhead"]
+                    aggregated[key]["tech"] += r["tech"]
+                    aggregated[key]["subtotal"] += r["subtotal"]
+                
+                for key, data in aggregated.items():
+                    dates = sorted(list(set(data["date_list"])))
+                    if len(dates) == 1:
+                        date_str = dates[0]
+                    else:
+                        date_str = f"{dates[0]} ~ {dates[-1]}"
+                    
                     ws.Cells(current_row, 1).Value = idx
-                    ws.Cells(current_row, 2).Value = r["date"]
-                    ws.Cells(current_row, 3).Value = r["loc"]
-                    ws.Cells(current_row, 4).Value = r["ndt_type"]
-                    ws.Cells(current_row, 5).Value = r["material_type"]
-                    ws.Cells(current_row, 6).Value = r["work_time"]
-                    ws.Cells(current_row, 7).Value = r["qty"]
-                    ws.Cells(current_row, 8).Value = r["unit"]
-                    ws.Cells(current_row, 9).Value = r["corr"]
-                    ws.Cells(current_row, 10).Value = r["adjusted_qty"]
-                    ws.Cells(current_row, 11).Value = r["mat_cost"]
-                    ws.Cells(current_row, 12).Value = r["lab_cost"]
-                    ws.Cells(current_row, 13).Value = r["overhead"]
-                    ws.Cells(current_row, 14).Value = r["tech"]
-                    ws.Cells(current_row, 15).Value = r["subtotal"]
+                    ws.Cells(current_row, 2).Value = date_str
+                    ws.Cells(current_row, 3).Value = key[0]
+                    ws.Cells(current_row, 4).Value = key[1]
+                    ws.Cells(current_row, 5).Value = key[2]
+                    ws.Cells(current_row, 6).Value = key[3]
+                    ws.Cells(current_row, 7).Value = data["qty"]
+                    ws.Cells(current_row, 8).Value = key[4]
+                    ws.Cells(current_row, 9).Value = key[5]
+                    ws.Cells(current_row, 10).Value = data["adjusted_qty"]
+                    ws.Cells(current_row, 11).Value = data["mat_cost"]
+                    ws.Cells(current_row, 12).Value = data["lab_cost"]
+                    ws.Cells(current_row, 13).Value = data["overhead"]
+                    ws.Cells(current_row, 14).Value = data["tech"]
+                    ws.Cells(current_row, 15).Value = data["subtotal"]
                     
                     for c in range(1, 16):
                         cell = ws.Cells(current_row, c)
@@ -889,12 +1289,13 @@ class NDTCalculator(tk.Tk):
                         elif c == 5 or c == 3: cell.HorizontalAlignment = -4131
                         else: cell.NumberFormat = "#,##0" if c >= 11 else "0.00"
                     
-                    sub_mat += r["mat_cost"]; sub_lab += r["lab_cost"]; sub_ovr += r["overhead"]
-                    sub_tech += r["tech"]; sub_sub += r["subtotal"]
+                    sub_mat += data["mat_cost"]; sub_lab += data["lab_cost"]
+                    sub_ovr += data["overhead"]; sub_tech += data["tech"]
+                    sub_sub += data["subtotal"]
                     idx += 1; current_row += 1
                 
                 ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
-                ws.Cells(current_row, 1).Value = f"[{g_type}] 검사 소계"
+                ws.Cells(current_row, 1).Value = f"[{display_names_det[g_type]}] 검사 소계"
                 ws.Cells(current_row, 1).HorizontalAlignment = -4108
                 ws.Cells(current_row, 1).Font.Bold = True
                 
