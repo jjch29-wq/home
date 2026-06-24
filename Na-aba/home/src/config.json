@@ -67,12 +67,12 @@
         "qty": 52,
         "unit": 70,
         "corr": 82,
-        "adj_qty": 81,
-        "mat_cost": 98,
-        "lab_cost": 95,
-        "overhead": 81,
-        "tech": 82,
-        "total_amt": 107
+        "adj_qty": 82,
+        "mat_cost": 99,
+        "lab_cost": 96,
+        "overhead": 82,
+        "tech": 83,
+        "total_amt": 108
     },
-    "SASH_POS": 569
+    "SASH_POS": 327
 }
