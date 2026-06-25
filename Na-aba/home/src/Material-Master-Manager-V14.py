@@ -2040,6 +2040,8 @@ class MaterialManager:
         self.companies = [] # Initialize companies list
         self.worktimes = [] # Initialize worktimes list
         self.ot_times = [] # Initialize ot_times list
+        self.test_items = [] # [NEW] Initialize test_items
+        self.applied_codes = [] # [NEW] Initialize applied_codes
         
         # [NEW] Pre-initialize autocomplete/display lists to prevent AttributeError during load_data/refresh_filters
         self.materials_display_list = []
@@ -10272,7 +10274,7 @@ class MaterialManager:
 
     def setup_ndt_billing_tab(self):
         # Embed the NDT Calculator as a frame inside this tab
-        self.ndt_calculator = NDTCalculatorTab(self.tab_ndt_billing)
+        self.ndt_calculator = NDTCalculatorTab(self.tab_ndt_billing, main_app=self)
         self.ndt_calculator.pack(fill='both', expand=True)
 
     def setup_budget_tab(self):
@@ -12305,27 +12307,10 @@ class MaterialManager:
             self.daily_usage_sash_locked = not self.daily_usage_sash_locked
             
             if self.daily_usage_sash_locked:
-                # [NEW] Auto-fit sash to content height when locking
                 self.root.update_idletasks()
                 
-                # Calculate required height of the top area content
-                content_h = 0
-                if hasattr(self, 'entry_inner_frame'):
-                    # Use grid_bbox of the inner frame
-                    bbox = self.entry_inner_frame.grid_bbox()
-                    content_h = bbox[1] + bbox[3] + 5 # Minimized padding
-                
                 total_height = self.daily_usage_paned.winfo_height()
-                
-                # If content is smaller than total height, fit to content
-                # Otherwise, use current sash position
-                if 460 < content_h < total_height - 100:
-                    sash_pos = content_h
-                else:
-                    sash_pos = self.daily_usage_paned.sashpos(0)
-                
-                # Apply sash position
-                self.daily_usage_paned.sashpos(0, sash_pos)
+                sash_pos = self.daily_usage_paned.sashpos(0)
                 
                 if not hasattr(self, 'tab_config'):
                     self.tab_config = {}
@@ -13666,8 +13651,16 @@ class MaterialManager:
                 if record.get('검사방법') == 'RT': self.ndt_source_var.set(record['조건1'])
                 else: self.ndt_pipe_var.set(record['조건1'])
             if '조건2' in record and record['조건2']: self.ndt_thickness_var.set(record['조건2'])
-            if '제경비율' in record: self.ndt_overhead_var.set(float(record['제경비율']) if record['제경비율'] else 80.0)
-            if '기술료율' in record: self.ndt_tech_var.set(float(record['기술료율']) if record['기술료율'] else 5.86)
+            def get_valid_rate(key, default_val):
+                if key in record:
+                    val = record[key]
+                    if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
+                        try: return float(val)
+                        except: pass
+                return default_val
+            
+            self.ndt_overhead_var.set(get_valid_rate('제경비율', 80.0))
+            self.ndt_tech_var.set(get_valid_rate('기술료율', 5.86))
 
             
             # 3. Material
@@ -17839,6 +17832,8 @@ class MaterialManager:
                 'companies': getattr(self, 'companies', []),
                 'warehouses': getattr(self, 'warehouses', []),
                 'equipments': getattr(self, 'equipments', []),
+                'test_items': getattr(self, 'test_items', []),
+                'applied_codes': getattr(self, 'applied_codes', []),
                 'vehicles': getattr(self, 'vehicles', []),
                 'materials': getattr(self, 'carestream_films', []),
                 'worktimes': getattr(self, 'worktimes', []),
@@ -18099,6 +18094,8 @@ class MaterialManager:
                 # Restore vehicles, equipments, and preferred materials
                 self.vehicles[:] = config.get('vehicles', [])
                 self.equipments[:] = config.get('equipments', [])
+                self.test_items[:] = config.get('test_items', [])
+                self.applied_codes[:] = config.get('applied_codes', [])
                 if 'materials' in config:
                     self.carestream_films[:] = config['materials']
                 
