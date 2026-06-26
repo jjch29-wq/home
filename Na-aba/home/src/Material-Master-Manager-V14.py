@@ -265,6 +265,20 @@ try:
 except Exception:
     pass
 
+# 12.5) tk.Misc.destroy : Python 3.13+ 종료 시 TclError ("can't delete Tcl command") 예외 방지
+try:
+    _orig_misc_destroy = tk.Misc.destroy
+    def _patched_misc_destroy(self):
+        try:
+            _orig_misc_destroy(self)
+        except tk.TclError:
+            pass
+        except Exception:
+            pass
+    tk.Misc.destroy = _patched_misc_destroy
+except Exception:
+    pass
+
 # 13) DateEntry._on_focus_out_cal : 년도/월 네비게이션 버튼 클릭 시 달력 닫힘 방지
 # [근본 원인] 년도 버튼(_l_year/_r_year) 클릭 → Calendar에 <FocusOut> 발생
 # → focus_get()이 버튼 위젯(DateEntry가 아닌 _top_cal 자식)을 반환
