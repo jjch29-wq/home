@@ -526,14 +526,14 @@ def generate_cover_sheet(ws, data):
 def generate_edu_sheet(wb, data):
     ws = wb.create_sheet("안전보건교육 이수 관리대장")
 
-    ft_title  = Font(name='맑은 고딕', size=13, bold=True)
-    ft_sub    = Font(name='맑은 고딕', size=10, bold=True)
-    ft_bold   = Font(name='맑은 고딕', size=8,  bold=True)
-    ft_normal = Font(name='맑은 고딕', size=8)
-    ft_small  = Font(name='맑은 고딕', size=7)
+    ft_title  = Font(name='맑은 고딕', size=18, bold=True)
+    ft_sub    = Font(name='맑은 고딕', size=14, bold=True)
+    ft_bold   = Font(name='맑은 고딕', size=12, bold=True)
+    ft_normal = Font(name='맑은 고딕', size=12)
+    ft_small  = Font(name='맑은 고딕', size=11)
 
-    ac = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    al = Alignment(horizontal='left',   vertical='center', wrap_text=True)
+    ac = Alignment(horizontal='center', vertical='center', wrap_text=True, shrink_to_fit=True)
+    al = Alignment(horizontal='left',   vertical='center', wrap_text=True, shrink_to_fit=True)
     thin  = Side(style='thin')
     bdr_t = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -546,19 +546,20 @@ def generate_edu_sheet(wb, data):
     fill_mgr  = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
     fill_wkr  = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
     fill_gray = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    fill_white= PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
 
     LAST_COL = 30
 
     col_w = {
-        1:4,  2:9,  3:7,  4:8,  5:8,  6:11, 7:7,  8:8,
-        9:6,  10:9, 11:12,
-        12:5, 13:5, 14:5,
-        15:5, 16:5, 17:5,
-        18:5, 19:5, 20:5,
-        21:5, 22:5, 23:5,
-        24:6, 25:6,
-        26:6, 27:6, 28:6, 29:6,
-        30:11,
+        1:5,  2:11, 3:9,  4:12, 5:12, 6:13, 7:9,  8:10,
+        9:9,  10:13,11:18,
+        12:6, 13:6, 14:6,
+        15:6, 16:6, 17:6,
+        18:6, 19:6, 20:6,
+        21:6, 22:6, 23:6,
+        24:7, 25:7,
+        26:7, 27:7, 28:7, 29:7,
+        30:18,
     }
     for c, w in col_w.items():
         ws.column_dimensions[get_column_letter(c)].width = w
@@ -584,7 +585,7 @@ def generate_edu_sheet(wb, data):
     manager  = data.get("교육관리_현장대리인", data.get("현장대리인", ""))
     records  = data.get("교육관리_직원목록",   [])
 
-    for rn, ht in [(1,28),(2,16),(3,20),(4,30),(5,26),(6,24)]:
+    for rn, ht in [(1,50),(2,30),(3,40),(4,60),(5,50),(6,45)]:
         ws.row_dimensions[rn].height = ht
 
     # ── 행1: 제목
@@ -594,9 +595,9 @@ def generate_edu_sheet(wb, data):
 
     # ── 행2: 수급업체명 / 계약명
     mg(2,1,2,2);   bc(2,1, "- 수급업체명 :", font=ft_sub, align=al)
-    mg(2,3,2,10);  bc(2,3, company,          font=ft_normal, align=al)
+    mg(2,3,2,10);  bc(2,3, company,          font=ft_sub, align=al)
     mg(2,11,2,13); bc(2,11,"- 계  약  명 :", font=ft_sub, align=al)
-    mg(2,14,2,LAST_COL); bc(2,14, contract,  font=ft_normal, align=al)
+    mg(2,14,2,LAST_COL); bc(2,14, contract,  font=ft_sub, align=al)
 
     # ── 행3: 확인 문구
     mg(3,1,3,19)
@@ -604,7 +605,7 @@ def generate_edu_sheet(wb, data):
        "본인(현장대리인)은 당사 근로자에 대한 산업안전보건법상의 안전보건교육을 철저히 이행하였음을 확인합니다.",
        font=ft_sub, align=al)
     mg(3,20,3,23); bc(3,20,"현장대리인 :", font=ft_sub, align=ac)
-    mg(3,24,3,28); bc(3,24, manager,       font=ft_normal, align=ac)
+    mg(3,24,3,28); bc(3,24, manager,       font=ft_sub, align=ac)
     mg(3,29,3,30); bc(3,29,"(인)",          font=ft_sub, align=ac)
 
     # ════════════════════════════════════════════════════
@@ -614,18 +615,15 @@ def generate_edu_sheet(wb, data):
     # ── 대분류 (행4)
     big = [
         (4,1, 6,1,  "NO",                                             fill_gray),
-        (4,2, 4,2,  "성  명",                                          fill_hdr),
+        (4,2, 5,2,  "성명",                                            fill_hdr),
         (4,3, 4,5,  "업무형태 구분 Check:",                             fill_hdr),
         (4,6, 6,6,  "채용일자\n(최초투입일)",                           fill_hdr),
-        (4,7, 4,8,  "채용·시교육이수현황Check:",                        fill_hdr),
-        (4,9, 4,11, "근로자 특별안전·보건교육\n[일용(단기)&강별]:2시간  그 외:16시간", fill_spec),
-        (4,12,4,14, "1분기 (시간)",                                    fill_q1),
-        (4,15,4,17, "2분기 (시간)",                                    fill_q2),
-        (4,18,4,20, "3분기 (시간)",                                    fill_q3),
-        (4,21,4,23, "4분기 (시간)",                                    fill_q4),
+        (4,7, 4,8,  "채용·시교육이수현황 Check:",                        fill_hdr),
+        (4,9, 4,11, "근로자 특별안전·보건교육\n[일용(단기&간헐): 2시간, 그 외: 16시간]", fill_spec),
+        (4,12,4,23, "정기안전보건교육 이수현황 기입란\n[각 월 기입란에 교육이수 시간 기입]", fill_white),
         (4,24,4,25, "관리감독자\n연간 16시간",                          fill_mgr),
         (4,26,4,29, "작업(근로)자\n매반기 12시간",                      fill_wkr),
-        (4,30,6,30, "비  고",                                         fill_gray),
+        (4,30,6,30, "비 고",                                         fill_gray),
     ]
     for r1,c1,r2,c2,text,fill in big:
         if not (r1==r2 and c1==c2): mg(r1,c1,r2,c2)
@@ -633,45 +631,43 @@ def generate_edu_sheet(wb, data):
 
     # ── 중분류 (행5)
     mid = [
-        (5,2, 6,2,  "성명",                  fill_hdr),
-        (5,3, 5,5,  "작업(근로)자/관리감독자",  fill_hdr),
-        (5,7, 6,7,  "일용\n1시간",            fill_hdr),
-        (5,8, 6,8,  "일용 외\n8시간",         fill_hdr),
-        (5,9, 5,10, "대상여부\nCheck",        fill_spec),
-        (5,11,6,11, "교육이수일\n[이수사대]",  fill_spec),
-        (5,12,6,12, "1월",  fill_q1),
-        (5,13,6,13, "2월",  fill_q1),
-        (5,14,6,14, "3월",  fill_q1),
-        (5,15,6,15, "4월",  fill_q2),
-        (5,16,6,16, "5월",  fill_q2),
-        (5,17,6,17, "6월",  fill_q2),
-        (5,18,6,18, "7월",  fill_q3),
-        (5,19,6,19, "8월",  fill_q3),
-        (5,20,6,20, "9월",  fill_q3),
-        (5,21,6,21, "10월", fill_q4),
-        (5,22,6,22, "11월", fill_q4),
-        (5,23,6,23, "12월", fill_q4),
-        (5,24,6,24, "매반",  fill_mgr),
-        (5,25,6,25, "3월",   fill_mgr),
-        (5,26,6,26, "매반",  fill_wkr),
-        (5,27,6,27, "6월",   fill_wkr),
-        (5,28,6,28, "매반",  fill_wkr),
-        (5,29,6,29, "12월",  fill_wkr),
+        (6,2, 6,2,  "생년월일",                  fill_hdr),
+        (5,3, 6,3,  "관리감독자",                fill_hdr),
+        (5,4, 5,5,  "작업(근로)자",              fill_hdr),
+        (6,4, 6,4,  "상용",                     fill_hdr),
+        (6,5, 6,5,  "일용",                     fill_hdr),
+        (5,7, 6,7,  "일용\n1시간",              fill_hdr),
+        (5,8, 6,8,  "일용 외\n8시간",           fill_hdr),
+        (5,9, 6,9,  "대상여부\nCheck",          fill_spec),
+        (5,10, 6,10, "대상\n작업명",            fill_spec),
+        (5,11, 6,11, "교육이수일\n[이수시간]",   fill_spec),
+        (5,12, 5,14, "1분기 (시간)",            fill_q1),
+        (5,15, 5,17, "2분기 (시간)",            fill_q2),
+        (5,18, 5,20, "3분기 (시간)",            fill_q3),
+        (5,21, 5,23, "4분기 (시간)",            fill_q4),
+        (6,12, 6,12, "1월",   fill_q1),
+        (6,13, 6,13, "2월",   fill_q1),
+        (6,14, 6,14, "3월",   fill_q1),
+        (6,15, 6,15, "4월",   fill_q2),
+        (6,16, 6,16, "5월",   fill_q2),
+        (6,17, 6,17, "6월",   fill_q2),
+        (6,18, 6,18, "7월",   fill_q3),
+        (6,19, 6,19, "8월",   fill_q3),
+        (6,20, 6,20, "9월",   fill_q3),
+        (6,21, 6,21, "10월",  fill_q4),
+        (6,22, 6,22, "11월",  fill_q4),
+        (6,23, 6,23, "12월",  fill_q4),
+        (5,24, 6,24, "매반",   fill_mgr),
+        (5,25, 6,25, "3월",    fill_mgr),
+        (5,26, 6,26, "매반",   fill_wkr),
+        (5,27, 6,27, "6월",    fill_wkr),
+        (5,28, 6,28, "매반",   fill_wkr),
+        (5,29, 6,29, "12월",   fill_wkr),
     ]
     for r1,c1,r2,c2,text,fill in mid:
         if not (r1==r2 and c1==c2): mg(r1,c1,r2,c2)
         bc(r1,c1, val=text, font=ft_bold, fill=fill, align=ac)
 
-    # ── 소분류 (행6)
-    sub6 = [
-        (6,3,  "작업\n(근로)자",   fill_hdr),
-        (6,4,  "관리감독자\n상용", fill_hdr),
-        (6,5,  "관리감독자\n임용", fill_hdr),
-        (6,9,  "대상",             fill_spec),
-        (6,10, "비대상\n(작업명)", fill_spec),
-    ]
-    for r,c,text,fill in sub6:
-        bc(r,c, val=text, font=ft_bold, fill=fill, align=ac)
 
     apply_bdr(4,1,6,LAST_COL)
 
@@ -697,8 +693,8 @@ def generate_edu_sheet(wb, data):
     for i in range(MAX_PERSONS):
         ra = DATA_START + i*2
         rb = DATA_START + i*2 + 1
-        ws.row_dimensions[ra].height = 16
-        ws.row_dimensions[rb].height = 14
+        ws.row_dimensions[ra].height = 35
+        ws.row_dimensions[rb].height = 30
         rec = records[i] if i < len(records) else {}
 
         t = rec.get("type", "")
@@ -750,7 +746,7 @@ def generate_edu_sheet(wb, data):
     ]
     for j, note in enumerate(notes):
         nr = note_start + j
-        ws.row_dimensions[nr].height = 15
+        ws.row_dimensions[nr].height = 35
         mg(nr,1,nr,LAST_COL)
         bc(nr,1, note, font=ft_small, align=al)
 
@@ -759,4 +755,12 @@ def generate_edu_sheet(wb, data):
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToPage   = True
     ws.page_setup.fitToWidth  = 1
-    ws.page_setup.fitToHeight = 0
+    ws.page_setup.fitToHeight = 1
+    ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = True
+    ws.page_margins.left = 0.25
+    ws.page_margins.right = 0.25
+    ws.page_margins.top = 0.25
+    ws.page_margins.bottom = 0.25
+    ws.page_margins.header = 0
+    ws.page_margins.footer = 0
