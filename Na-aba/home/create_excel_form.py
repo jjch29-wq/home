@@ -1,6 +1,7 @@
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.pagebreak import Break
 import os
 
 def insert_image_to_excel(ws, paths_str, cell_str, cell_h_px, cell_w_px):
@@ -34,18 +35,16 @@ def insert_image_to_excel(ws, paths_str, cell_str, cell_h_px, cell_w_px):
                 combined.paste(img, (x_offset, 0))
                 x_offset += img.width + spacing
             
-            # Center crop to target size
-            cropped_img = ImageOps.fit(combined, (target_w_px, target_h_px), method=PILImage.Resampling.LANCZOS)
+            img_to_paste = ImageOps.fit(combined, (target_w_px, target_h_px), method=PILImage.Resampling.LANCZOS)
         else:
             img = PILImage.open(paths[0]).convert('RGBA')
-            # Center crop to target size
-            cropped_img = ImageOps.fit(img, (target_w_px, target_h_px), method=PILImage.Resampling.LANCZOS)
+            img_to_paste = ImageOps.fit(img, (target_w_px, target_h_px), method=PILImage.Resampling.LANCZOS)
             
-        # Place cropped image into a full cell-sized transparent canvas to act as a margin
+        # Place resized image into a full cell-sized transparent canvas to act as a margin
         final_img = PILImage.new('RGBA', (cell_w_px, cell_h_px), (255, 255, 255, 0))
-        offset_x = (cell_w_px - target_w_px) // 2
-        offset_y = (cell_h_px - target_h_px) // 2
-        final_img.paste(cropped_img, (offset_x, offset_y))
+        offset_x = (cell_w_px - img_to_paste.width) // 2
+        offset_y = (cell_h_px - img_to_paste.height) // 2
+        final_img.paste(img_to_paste, (offset_x, offset_y))
         
         final_img.save(out_path, format="PNG")
             
@@ -397,6 +396,10 @@ def generate_excel(data, output_path):
 
     # 세 번째 시트: 교육이수관리대장
     generate_edu_sheet(wb, data)
+    
+    # 네 번째 시트: 위험성평가 이행·점검 보고서
+    generate_review_sheet(wb, data)
+    
     wb.save(output_path)
     return output_path
 
@@ -764,3 +767,314 @@ def generate_edu_sheet(wb, data):
     ws.page_margins.bottom = 0.25
     ws.page_margins.header = 0
     ws.page_margins.footer = 0
+
+
+def generate_review_sheet(wb, data):
+    ws = wb.create_sheet("이행·점검 검토보고서")
+
+    ft_title_sub = Font(name='맑은 고딕', size=12, bold=True, color='FFFFFF')
+    ft_title = Font(name='맑은 고딕', size=18, bold=True)
+    ft_header = Font(name='맑은 고딕', size=11, bold=True)
+    ft_normal = Font(name='맑은 고딕', size=10)
+    
+    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    align_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    align_right = Alignment(horizontal='right', vertical='center', wrap_text=True)
+    
+    thin = Side(style='thin')
+    double = Side(style='double')
+    border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
+    border_double = Border(left=double, right=double, top=double, bottom=double)
+    
+    fill_darkblue = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    
+    for col in 'ABCDEFGH':
+        ws.column_dimensions[col].width = 11.5
+
+    def mg(r1, c1, r2, c2):
+        ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+
+    def bc(r, c, val, font=ft_normal, align=align_center, fill=None, border=None):
+        cell = ws.cell(row=r, column=c)
+        cell.value = val
+        cell.font = font
+        cell.alignment = align
+        if fill: cell.fill = fill
+        if border: cell.border = border
+        return cell
+
+    def apply_bdr(r1, c1, r2, c2, bdr=border_all):
+        for row in range(r1, r2 + 1):
+            for col in range(c1, c2 + 1):
+                ws.cell(row=row, column=col).border = bdr
+
+    # 1. Base border for all cells in the table (Rows 6 to 23, Cols 1 to 8)
+    apply_bdr(6, 1, 23, 8, border_all)
+
+    # Row 2: 첨부 2
+    ws.row_dimensions[2].height = 25
+    ws.cell(row=2, column=1).value = "첨부 2"
+    ws.cell(row=2, column=1).font = ft_title_sub
+    ws.cell(row=2, column=1).alignment = align_center
+    ws.cell(row=2, column=1).fill = fill_darkblue
+    
+    mg(2, 2, 2, 8)
+    bc(2, 2, " 위험성평가 이행·점검 검토보고서", font=Font(name='맑은 고딕', size=14, bold=True), align=Alignment(horizontal='left', vertical='center'))
+
+    # Row 4: 대제목
+    ws.row_dimensions[4].height = 35
+    apply_bdr(4, 1, 4, 8, border_double)
+    mg(4, 1, 4, 8)
+    bc(4, 1, "위험성평가 이행·점검 검토보고서", font=ft_title, align=align_center)
+
+    # Row 6: 1. 기관개요
+    ws.row_dimensions[6].height = 25
+    mg(6, 1, 6, 8)
+    bc(6, 1, " 1. 기관개요", font=ft_header, align=align_left)
+
+    # Row 7, 8
+    for r in [7, 8]: ws.row_dimensions[r].height = 25
+    mg(7, 1, 7, 2); bc(7, 1, "기관명", font=ft_header)
+    mg(7, 3, 7, 4); bc(7, 3, "")
+    mg(7, 5, 7, 6); bc(7, 5, "대표자", font=ft_header)
+    mg(7, 7, 7, 8); bc(7, 7, "")
+
+    mg(8, 1, 8, 2); bc(8, 1, "소재지", font=ft_header)
+    mg(8, 3, 8, 4); bc(8, 3, "")
+    mg(8, 5, 8, 6); bc(8, 5, "전화번호", font=ft_header)
+    mg(8, 7, 8, 8); bc(8, 7, "")
+
+    # Row 9: 2. 점검현장
+    ws.row_dimensions[9].height = 25
+    mg(9, 1, 9, 8)
+    bc(9, 1, " 2. 점검현장", font=ft_header, align=align_left)
+
+    # Row 10, 11
+    for r in [10, 11]: ws.row_dimensions[r].height = 25
+    mg(10, 1, 10, 2); bc(10, 1, "회사명", font=ft_header)
+    mg(10, 3, 10, 4); bc(10, 3, "사업장명", font=ft_header)
+    mg(10, 5, 10, 6); bc(10, 5, "점검일", font=ft_header)
+    mg(10, 7, 10, 8); bc(10, 7, "전화번호", font=ft_header)
+    
+    c_name = data.get("계약상대자(업체명)", "")
+    c_site = data.get("장소", "")
+    c_date = data.get("제출년월", "")
+    mg(11, 1, 11, 2); bc(11, 1, c_name)
+    mg(11, 3, 11, 4); bc(11, 3, c_site)
+    mg(11, 5, 11, 6); bc(11, 5, c_date)
+    mg(11, 7, 11, 8); bc(11, 7, "-     -")
+
+    # Row 12: 3. 참여인원
+    ws.row_dimensions[12].height = 25
+    mg(12, 1, 12, 8)
+    bc(12, 1, " 3. 참여인원", font=ft_header, align=align_left)
+
+    # Row 13-16
+    for r in range(13, 17): ws.row_dimensions[r].height = 25
+    mg(13, 1, 14, 2); bc(13, 1, "점검반원", font=ft_header)
+    mg(13, 3, 13, 4); bc(13, 3, "소      속", font=ft_header)
+    mg(13, 5, 13, 6); bc(13, 5, "직      책", font=ft_header)
+    mg(13, 7, 13, 8); bc(13, 7, "성      명", font=ft_header)
+
+    mg(14, 3, 14, 4); bc(14, 3, "")
+    mg(14, 5, 14, 6); bc(14, 5, "")
+    mg(14, 7, 14, 8); bc(14, 7, "(인)", align=align_right)
+
+    mg(15, 1, 16, 2); bc(15, 1, "사업장 참여자", font=ft_header)
+    mg(15, 3, 15, 4); bc(15, 3, "")
+    mg(15, 5, 15, 6); bc(15, 5, "")
+    mg(15, 7, 15, 8); bc(15, 7, "(인)", align=align_right)
+
+    mg(16, 3, 16, 4); bc(16, 3, "")
+    mg(16, 5, 16, 6); bc(16, 5, "")
+    mg(16, 7, 16, 8); bc(16, 7, "(인)", align=align_right)
+
+    # Row 17: 4. 검토 의견
+    ws.row_dimensions[17].height = 25
+    mg(17, 1, 17, 4)
+    bc(17, 1, " 4. 검토 의견", font=ft_header, align=align_left)
+    mg(17, 5, 17, 8)
+    bc(17, 5, "※ 자유롭게 기술하고, 해당 없는 경우는 항목 삭제 가능 ", font=Font(name='맑은 고딕', size=9, color='808080', italic=True), align=align_right)
+
+    # Row 18-23: Opinions
+    opinions = [
+        ("<A. 계획>", data.get("검토의견_계획", "")),
+        ("<B. 이행>", data.get("검토의견_이행", "")),
+        ("<C. 지속관리>", data.get("검토의견_지속관리", "")),
+        ("<D. 기록>", data.get("검토의견_기록", "")),
+        ("<E. 교육>", data.get("검토의견_교육", "")),
+        ("<종합의견>", data.get("검토의견_종합", "")),
+    ]
+
+    r = 18
+    ft_opinion = Font(name='맑은 고딕', size=10, italic=True, color='E26B00') # 주황/빨강 톤
+    for title, text in opinions:
+        ws.row_dimensions[r].height = 65
+        mg(r, 1, r, 2)
+        bc(r, 1, " " + title, font=ft_header, align=Alignment(horizontal='left', vertical='top', wrap_text=True))
+        mg(r, 3, r, 8)
+        bc(r, 3, text, font=ft_opinion, align=Alignment(horizontal='left', vertical='top', wrap_text=True))
+        r += 1
+    
+    # Outer border function
+    def draw_thick_outer(r1, c1, r2, c2):
+        thick_side = Side(border_style='medium', color="000000")
+        for r_idx in range(r1, r2 + 1):
+            for c_idx in range(c1, c2 + 1):
+                cell = ws.cell(row=r_idx, column=c_idx)
+                b = cell.border
+                if not b: continue
+                left = thick_side if c_idx == c1 else b.left
+                right = thick_side if c_idx == c2 else b.right
+                top = thick_side if r_idx == r1 else b.top
+                bottom = thick_side if r_idx == r2 else b.bottom
+                cell.border = Border(left=left, right=right, top=top, bottom=bottom)
+
+    draw_thick_outer(6, 1, 23, 8)
+
+    # ─────────────────────────────────────────────────────────
+    # Page 2: 사업장 위험성평가 자체점검 체크리스트
+    # ─────────────────────────────────────────────────────────
+    ws.row_breaks.append(Break(id=25)) # Page break after row 25
+
+    start_r = 27
+    ws.row_dimensions[start_r].height = 30
+    mg(start_r, 1, start_r, 8)
+    bc(start_r, 1, "사업장 위험성평가 자체점검 체크리스트", font=Font(name='맑은 고딕', size=14, bold=True, color='FFFFFF'), fill=PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid"))
+    
+    r = 28
+    ws.row_dimensions[r].height = 30
+    apply_bdr(r, 1, r, 8, border_all)
+    bc(r, 1, "업무절차", font=Font(name='맑은 고딕', size=10, bold=True, color='FFFFFF'), fill=fill_darkblue)
+    mg(r, 2, r, 5)
+    bc(r, 2, "확인사항\n(한 가지라도 준수되고 있지 않는 경우 '아니오' 체크)", font=Font(name='맑은 고딕', size=9, bold=True), fill=PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid"))
+    bc(r, 6, "예", font=Font(name='맑은 고딕', size=10, bold=True), fill=PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid"))
+    bc(r, 7, "아니오", font=Font(name='맑은 고딕', size=10, bold=True), fill=PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid"))
+    bc(r, 8, "해당없음", font=Font(name='맑은 고딕', size=10, bold=True), fill=PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid"))
+
+    questions = [
+        ("전 단계", "① 위험성평가 전 과정에 해당 작업 근로자가 참여하는지"),
+        ("1. 사전준비", "② 위험성평가 실시 규정(또는 필수항목을 포함한 별도 운영표준/지침)이 문서화 되어 있는지"),
+        ("1. 사전준비", "③ 위험성평가 실시 전 평가담당자들 대상 위험성평가 제도 및 수행방법에 대한 사전교육이 이루어지고 기록으로 남겨있는지\n※ 사업장 자체 교육 또는 외부 전문기관에서 실시한 교육 가능\n※ 위험성평가 실시 후 결과 공유를 위한 사후교육과는 별개"),
+        ("1. 사전준비", "④ (권장사항) 위험성평가에 활용할 안전보건정보를 사전에 조사하고 있는지"),
+        ("2. 유해·위험요인\n파악", "⑤ 사업장 순회점검 방법을 통해 유해·위험요인을 파악하는지"),
+        ("2. 유해·위험요인\n파악", "⑥ 위험기계·기구, 아차사고 및 기 발생한 산업재해에 대한 유해·위험요인을 위험성평가 대상에 포함하고 있는지"),
+        ("2. 유해·위험요인\n파악", "⑦ 중대재해가 발생한 때 중대재해의 원인이 되는 유해·위험요인에 대해 수시 위험성평가를 실시하는지"),
+        ("3. 평가실시\n(합동/각각)", "⑧ 합동(KOGAS, 수급업체) 위험성평가 표준서식 활용하여 합동 위험성평가를 실시하는지\n⇨ 사업소 안전보건관리책임자의 위험성평가 결과 승인 포함"),
+        ("3. 평가실시\n(합동/각각)", "⑨ 도급사업 대상, KOGAS 감독부서가 위험성평가를 실시하는지\n⇨ 사업소 안전보건관리책임자의 위험성평가 결과 승인 포함"),
+        ("3. 평가실시\n(합동/각각)", "⑩ 수급업체가 실시한 위험성평가 결과를 검토하고 KOGAS가 개선할 사항이 있는 경우 이를 개선하였는지"),
+        ("4. 감소대책 수립\n및 실행", "⑪ 위험성 감소대책 수립·이행 시 법령규정 및 대책수립 우선순위(본질적 대책⇨공학적 대책⇨관리적 대책⇨개인보호구 사용)가 반영되고 있는지"),
+        ("4. 감소대책 수립\n및 실행", "⑫ 개선예정일은 유해·위험요인의 위험도, 시급성 등이 고려되었는지"),
+        ("4. 감소대책 수립\n및 실행", "⑬ 위험성 감소대책 실시 후 위험성 재평가를 실시하였는지"),
+        ("4. 감소대책 수립\n및 실행", "⑭ 위험성평가 결과 고위험요소(위험성 Ⅳ등급 이상)에 대하여 위험관리목록을 작성하고 관리하고 있는지"),
+        ("4. 감소대책 수립\n및 실행", "⑮ 위험성 감소대책 시행 이후 남아있는 위험에 대해 근로자에게 주지했는지"),
+        ("5. 위험성평가\n실시 후 교육", "⑯ 위험성평가 결과를 작업에 참여하는 근로자들 대상으로 교육하고 기록으로 남겼는지"),
+        ("6. 작업허가서 발급\n(작업승인계획서)", "⑰ 위험성평가 기반 위험성이 높은(Ⅳ등급 이상) 유해·위험요인 및 감소대책을 반영하고 실행하였는지"),
+        ("7. 작업 전 안전\n점검회의(TBM)", "⑱ 해당 작업 근로자 대상 중대재해로 이어질 수 있는 유해·위험요인의 상시 공유가 이루어졌는지\n⇨ 위험성평가 시 미발굴된 유해·위험요인의 예방조치 후 공유"),
+        ("8. 수급업체 위험성\n평가 이행점검", "⑲ 수급업체가 실시한 위험성 감소대책 이행여부 등에 대해 현장 점검하고 문서를 통해 기록유지 되는지"),
+        ("9. 기록 및 보존", "⑳ 위험성평가 과정, 방법, 결과를 문서로 작성하여 3년간 보존하고 있는지\n⇨ 합동 위험성평가를 실시한 경우, KOGAS와 수급사업주 각각 기록물 보관·관리 해야함")
+    ]
+
+    r = 29
+    apply_bdr(29, 1, 28 + len(questions), 8, border_all)
+    
+    prev_cat = ""
+    cat_start_r = 29
+    ft_q = Font(name='맑은 고딕', size=8)
+    ft_cat = Font(name='맑은 고딕', size=9, bold=True)
+    
+    for cat, q in questions:
+        q_lines = 0
+        for line in q.split('\n'):
+            q_lines += max(0, len(line) - 1) // 34 + 1
+            
+        c_lines = 0
+        for line in cat.split('\n'):
+            c_lines += max(0, len(line) - 1) // 8 + 1
+        
+        cat_span = sum(1 for c, _ in questions if c == cat)
+        if cat_span > 1:
+            lines_needed = q_lines
+        else:
+            lines_needed = max(q_lines, c_lines)
+            
+        h = max(24, lines_needed * 12 + 8)
+        ws.row_dimensions[r].height = h
+        
+        mg(r, 2, r, 5)
+        bc(r, 2, q, font=ft_q, align=Alignment(horizontal='left', vertical='center', wrap_text=True))
+        
+        # Default checks
+        bc(r, 6, "O", font=Font(name='맑은 고딕', size=10, bold=True))
+        
+        if cat != prev_cat:
+            if prev_cat != "":
+                mg(cat_start_r, 1, r-1, 1)
+                bc(cat_start_r, 1, prev_cat, font=ft_cat, align=align_center)
+            cat_start_r = r
+            prev_cat = cat
+            
+        r += 1
+    
+    # Last category merge
+    mg(cat_start_r, 1, r-1, 1)
+    bc(cat_start_r, 1, prev_cat, font=ft_cat, align=align_center)
+    
+    draw_thick_outer(28, 1, r-1, 8)
+
+    # ─────────────────────────────────────────────────────────
+    # Page 3: 사진대지(감소대책 이행 전·후 사진 포함)
+    # ─────────────────────────────────────────────────────────
+    ws.row_breaks.append(Break(id=r-1)) # Page break after Checklist
+
+    p3_start_r = r
+    
+    # Header
+    ws.row_dimensions[p3_start_r].height = 35
+    mg(p3_start_r, 1, p3_start_r, 8)
+    apply_bdr(p3_start_r, 1, p3_start_r, 8, border_all)
+    bc(p3_start_r, 1, "사진대지(감소대책 이행 전·후 사진 포함)", font=Font(name='맑은 고딕', size=14, bold=True), align=align_center)
+    draw_thick_outer(p3_start_r, 1, p3_start_r, 8)
+    
+    # Gap
+    ws.row_dimensions[p3_start_r + 1].height = 5
+    
+    review_photos_str = data.get("검토보고서_사진", "")
+    photo_list = [p.strip() for p in review_photos_str.split('|') if p.strip()]
+
+    # 4 Rows of Photo cells
+    img_r = p3_start_r + 2
+    for i in range(4):
+        ws.row_dimensions[img_r].height = 180
+        
+        # Left Box (Cols 1-4)
+        mg(img_r, 1, img_r, 4)
+        apply_bdr(img_r, 1, img_r, 4, border_all)
+        bc(img_r, 1, "", align=align_center)
+        if i*2 < len(photo_list):
+            insert_image_to_excel(ws, photo_list[i*2], f"A{img_r}", 232, 378)
+        
+        # Right Box (Cols 5-8)
+        mg(img_r, 5, img_r, 8)
+        apply_bdr(img_r, 5, img_r, 8, border_all)
+        bc(img_r, 5, "", align=align_center)
+        if i*2+1 < len(photo_list):
+            insert_image_to_excel(ws, photo_list[i*2+1], f"E{img_r}", 232, 378)
+        
+        img_r += 1
+        
+    p3_end_r = img_r - 1
+    draw_thick_outer(p3_start_r + 2, 1, p3_end_r, 8)
+
+    ws.print_area = f"A1:H{p3_end_r}"
+    ws.page_setup.paperSize = 9
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0 # Allow multiple pages
+    ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = True
+    ws.page_margins.left = 0.5
+    ws.page_margins.right = 0.5
+    ws.page_margins.top = 0.5
+    ws.page_margins.bottom = 0.5

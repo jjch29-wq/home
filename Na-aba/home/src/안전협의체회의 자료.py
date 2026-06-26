@@ -62,7 +62,13 @@ DEFAULT_DATA = {
     "교육관리_계약명": "가산~가평 천연가스 공급시설 비파괴검사 용역",
     "교육관리_현장대리인": "곽재운",
     "교육관리_년월": "2026년 6월",
-    "교육관리_직원목록": []
+    "교육관리_직원목록": [],
+    "검토의견_계획": "매월 1회 정기 위험성평가 실시 계획이 수립되어 있으며, 평가 시 현장 작업자의 의견을 적극 청취하고 반영하였음.",
+    "검토의견_이행": "방사선(RT) 작업 전 경고 표지판 설치 및 통제선(Barricade) 구축 상태가 양호하며, 전 작업자 개인보호구(선량계 등) 착용 상태 적합함.",
+    "검토의견_지속관리": "매일 작업 전 TBM(안전조회)을 통해 그날의 위험 요인을 전파하고 있으며, 관리감독자가 1일 2회 이상 현장 순회 점검을 실시하여 지속 관리 중임.",
+    "검토의견_기록": "위험성평가표 및 TBM 일지에 작업자 서명이 누락 없이 관리되고 있으며, 관련 서류 현장 사무실에 상시 비치 완료.",
+    "검토의견_교육": "신규 채용자 및 특별작업 투입 전 특별안전보건교육 이수 완료하였으며, 매월 정기교육 정상 실시함.",
+    "검토의견_종합": "전반적인 위험성평가 수립 및 현장 이행 상태가 우수함. 단, 타 공정과의 간섭 구간 발생 시 사전 조율(핫라인 가동)에 더욱 만전을 기할 것을 권고함."
 }
 
 class ScrollableFrame(ttk.Frame):
@@ -181,18 +187,21 @@ class FormGeneratorApp:
         tab3_base = ScrollableFrame(self.notebook)
         tab4_base = ScrollableFrame(self.notebook)
         tab5_base = ScrollableFrame(self.notebook)
+        tab6_base = ScrollableFrame(self.notebook)
         
         tab1_scroll = tab1_base.scrollable_frame
         tab2_scroll = tab2_base.scrollable_frame
         tab3_scroll = tab3_base.scrollable_frame
         tab4_scroll = tab4_base.scrollable_frame
         tab5_scroll = tab5_base.scrollable_frame
+        tab6_scroll = tab6_base.scrollable_frame
         
         self.notebook.add(tab1_base, text="1. 기본 정보")
         self.notebook.add(tab2_base, text="2. 위험성평가 현황")
         self.notebook.add(tab3_base, text="3. 아차사고 보고서")
         self.notebook.add(tab4_base, text="4. 건의 및 제의사항")
         self.notebook.add(tab5_base, text="5. 안전보건교육 이수 관리")
+        self.notebook.add(tab6_base, text="6. 이행·점검 보고서")
 
         # 필드 생성 도우미 함수
         def create_entry(parent, key, label_text, is_text=False):
@@ -425,6 +434,43 @@ class FormGeneratorApp:
         
         create_entry(lbl_frame9, "건의_개진사항", "개진사항:", is_text=True)
         create_entry(lbl_frame9, "건의_제안사유", "제안사유:", is_text=True)
+
+        # ── 탭6: 이행·점검 검토보고서 ──────────────────────────────
+        lbl_frame_review = ttk.LabelFrame(tab6_scroll, text="위험성평가 이행·점검 검토의견")
+        lbl_frame_review.pack(fill="x", padx=20, pady=10)
+        
+        create_entry(lbl_frame_review, "검토의견_계획", "<A. 계획> 의견:", is_text=True)
+        create_entry(lbl_frame_review, "검토의견_이행", "<B. 이행> 의견:", is_text=True)
+        create_entry(lbl_frame_review, "검토의견_지속관리", "<C. 지속관리> 의견:", is_text=True)
+        create_entry(lbl_frame_review, "검토의견_기록", "<D. 기록> 의견:", is_text=True)
+        create_entry(lbl_frame_review, "검토의견_교육", "<E. 교육> 의견:", is_text=True)
+        create_entry(lbl_frame_review, "검토의견_종합", "<종합의견> 총평:", is_text=True)
+
+        # 사진대지용 사진 첨부
+        img_frame_review = ttk.Frame(lbl_frame_review)
+        img_frame_review.pack(fill="x", padx=10, pady=5)
+        
+        lbl_review_img = ttk.Label(img_frame_review, text="사진대지 (최대 8장):", width=18, anchor="e")
+        lbl_review_img.pack(side="left", padx=(0, 10))
+        
+        self.img_entry_review = ttk.Entry(img_frame_review, font=("맑은 고딕", 10))
+        self.img_entry_review.insert(0, self.data.get("검토보고서_사진", ""))
+        self.img_entry_review.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.entries["검토보고서_사진"] = self.img_entry_review
+        
+        def browse_review_img():
+            init_dir = os.path.dirname(self.img_entry_review.get().split('|')[0]) if self.img_entry_review.get() else os.path.expanduser("~")
+            if not os.path.exists(init_dir): init_dir = os.path.expanduser("~")
+            filepaths = filedialog.askopenfilenames(title="사진대지 첨부 사진 선택 (최대 8장)", filetypes=[("이미지 파일", "*.jpg *.jpeg *.png *.bmp")])
+            if filepaths:
+                if len(filepaths) > 8:
+                    messagebox.showwarning("경고", "사진은 최대 8장까지만 첨부할 수 있습니다.")
+                    filepaths = filepaths[:8]
+                self.img_entry_review.delete(0, tk.END)
+                self.img_entry_review.insert(0, "|".join(filepaths))
+                
+        btn_review_img = ttk.Button(img_frame_review, text="사진 찾기...", command=browse_review_img)
+        btn_review_img.pack(side="left")
 
         # ── 탭5: 안전보건교육 이수 관리대장 ──────────────────────────────
         lbl_frame_edu_header = ttk.LabelFrame(tab5_scroll, text="관리대장 기본 정보")
