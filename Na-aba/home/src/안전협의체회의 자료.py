@@ -65,6 +65,31 @@ DEFAULT_DATA = {
     "교육관리_직원목록": []
 }
 
+class ScrollableFrame(ttk.Frame):
+    def __init__(self, container, *args, **kwargs):
+        super().__init__(container, *args, **kwargs)
+        self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = ttk.Frame(self.canvas)
+
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw", tags="frame")
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfig("frame", width=e.width))
+
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+        
+        # Simple mousewheel binding
+        def _on_mousewheel(event):
+            self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        self.canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+
 class FormGeneratorApp:
     def __init__(self, root):
         self.root = root
@@ -151,17 +176,23 @@ class FormGeneratorApp:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True, padx=20, pady=10)
         
-        tab1_scroll = ttk.Frame(self.notebook)
-        tab2_scroll = ttk.Frame(self.notebook)
-        tab3_scroll = ttk.Frame(self.notebook)
-        tab4_scroll = ttk.Frame(self.notebook)
-        tab5_scroll = ttk.Frame(self.notebook)
+        tab1_base = ScrollableFrame(self.notebook)
+        tab2_base = ScrollableFrame(self.notebook)
+        tab3_base = ScrollableFrame(self.notebook)
+        tab4_base = ScrollableFrame(self.notebook)
+        tab5_base = ScrollableFrame(self.notebook)
         
-        self.notebook.add(tab1_scroll, text="1. 기본 정보")
-        self.notebook.add(tab2_scroll, text="2. 위험성평가 현황")
-        self.notebook.add(tab3_scroll, text="3. 아차사고 보고서")
-        self.notebook.add(tab4_scroll, text="4. 건의 및 제의사항")
-        self.notebook.add(tab5_scroll, text="5. 안전보건교육 이수 관리")
+        tab1_scroll = tab1_base.scrollable_frame
+        tab2_scroll = tab2_base.scrollable_frame
+        tab3_scroll = tab3_base.scrollable_frame
+        tab4_scroll = tab4_base.scrollable_frame
+        tab5_scroll = tab5_base.scrollable_frame
+        
+        self.notebook.add(tab1_base, text="1. 기본 정보")
+        self.notebook.add(tab2_base, text="2. 위험성평가 현황")
+        self.notebook.add(tab3_base, text="3. 아차사고 보고서")
+        self.notebook.add(tab4_base, text="4. 건의 및 제의사항")
+        self.notebook.add(tab5_base, text="5. 안전보건교육 이수 관리")
 
         # 필드 생성 도우미 함수
         def create_entry(parent, key, label_text, is_text=False):
