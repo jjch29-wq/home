@@ -15,7 +15,7 @@ CONFIG_FILE = os.path.join(os.path.dirname(__file__), "form_config.json")
 
 # 기본 데이터 템플릿
 DEFAULT_DATA = {
-    "템플릿_경로": r"C:\Users\-\OneDrive\바탕 화면\1. 안전보건협의체 수급업체 회의자료(서식).hwp",
+    "템플릿_경로": os.path.join(os.path.expanduser("~"), "Desktop", "1. 안전보건협의체 수급업체 회의자료(서식).hwp"),
     "제출년월": "2026년 7월",
     "실적년월": "2026년 6월",
     "계획년월": "2026년 7월",
@@ -589,7 +589,7 @@ class FormGeneratorApp:
     def do_generate_excel(self):
         self.save_config()
         data = self.get_current_data()
-        desktop_path = os.path.join(os.path.expanduser("~"), "OneDrive", "바탕 화면")
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         base_name = f"{data['제출년월'].replace(' ', '_')}_안전보건협의체_회의자료"
 
         # 파일이 이미 열려있는 경우 _2, _3 ... 으로 자동 대체
@@ -629,7 +629,7 @@ class FormGeneratorApp:
         self.save_config()
         data = self.get_current_data()
         out_name = f"{data['제출년월'].replace(' ', '_')}_안전보건협의체_회의자료_작성본.hwp"
-        desktop_path = os.path.join(os.path.expanduser("~"), "OneDrive", "바탕 화면")
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
         output_path = os.path.join(desktop_path, out_name)
         
         template_hwp = self.entries["템플릿_경로"].get()

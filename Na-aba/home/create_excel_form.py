@@ -3,17 +3,66 @@ from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 import os
 
+def insert_image_to_excel(ws, paths_str, cell_str, cell_h_px, cell_w_px):
+    if not paths_str: return
+    try:
+        from openpyxl.drawing.image import Image as OpenpyxlImage
+        from PIL import Image as PILImage
+        from PIL import ImageOps
+        import os, uuid
+        
+        paths = [p.strip() for p in paths_str.split("|") if p.strip() and os.path.exists(p.strip())]
+        if not paths: return
+        
+        # 95% of the cell size
+        target_h_px = int(cell_h_px * 0.95)
+        target_w_px = int(cell_w_px * 0.95)
+        
+        out_dir = os.path.join(os.path.expanduser("~"), ".gemini", "scratch")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"temp_excel_img_{uuid.uuid4().hex[:8]}.png")
+
+        if len(paths) > 1:
+            images = [PILImage.open(p).convert('RGBA') for p in paths]
+            min_height = min(img.height for img in images)
+            resized_images = [img.resize((int(img.width * min_height / img.height), min_height)) for img in images]
+            spacing = 10
+            total_width = sum(img.width for img in resized_images) + spacing * (len(resized_images) - 1)
+            combined = PILImage.new('RGBA', (total_width, min_height), (255, 255, 255, 0))
+            x_offset = 0
+            for img in resized_images:
+                combined.paste(img, (x_offset, 0))
+                x_offset += img.width + spacing
+            
+            # Center crop to target size
+            cropped_img = ImageOps.fit(combined, (target_w_px, target_h_px), method=PILImage.Resampling.LANCZOS)
+        else:
+            img = PILImage.open(paths[0]).convert('RGBA')
+            # Center crop to target size
+            cropped_img = ImageOps.fit(img, (target_w_px, target_h_px), method=PILImage.Resampling.LANCZOS)
+            
+        # Place cropped image into a full cell-sized transparent canvas to act as a margin
+        final_img = PILImage.new('RGBA', (cell_w_px, cell_h_px), (255, 255, 255, 0))
+        offset_x = (cell_w_px - target_w_px) // 2
+        offset_y = (cell_h_px - target_h_px) // 2
+        final_img.paste(cropped_img, (offset_x, offset_y))
+        
+        final_img.save(out_path, format="PNG")
+            
+        xl_img = OpenpyxlImage(out_path)
+        xl_img.width = cell_w_px
+        xl_img.height = cell_h_px
+        
+        ws.add_image(xl_img, cell_str)
+    except Exception as e:
+        print(f"이미지 삽입 오류: {e}")
 
 def generate_excel(data, output_path):
     wb = openpyxl.Workbook()
 
-    # 첫 번째 시트: 표지
-    ws_cover = wb.active
-    ws_cover.title = "표지"
-    generate_cover_sheet(ws_cover, data)
-
-    # 두 번째 시트: 회의자료 본문
-    ws = wb.create_sheet("안전보건협의체 회의자료")
+    # 첫 번째 시트: 회의자료 본문 (표지와 통합)
+    ws = wb.active
+    ws.title = "안전보건협의체 회의자료"
 
     font_title    = Font(name='맑은 고딕', size=16, bold=True)
     font_subtitle = Font(name='맑은 고딕', size=12, bold=True)
@@ -28,23 +77,26 @@ def generate_excel(data, output_path):
     fill_header = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
     ws.column_dimensions['A'].width = 18
-    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['B'].width = 30
     ws.column_dimensions['C'].width = 18
-    ws.column_dimensions['D'].width = 45
+    ws.column_dimensions['D'].width = 30
 
     def apply_border(range_str):
         for row in ws[range_str]:
             for cell in row:
                 cell.border = thin_border
 
+    font_cover_sub = Font(name='맑은 고딕', size=16, bold=True, italic=True, color='4472C4')
+    font_cover_title = Font(name='맑은 고딕', size=28, bold=True)
+
     ws.merge_cells('A1:D1')
-    ws['A1'] = "가산~가평 천연가스 공급시설 건설공사"
-    ws['A1'].font = font_subtitle
+    ws['A1'] = "「가산~가평 천연가스 공급시설 건설공사」"
+    ws['A1'].font = font_cover_sub
     ws['A1'].alignment = align_center
 
     ws.merge_cells('A2:D2')
     ws['A2'] = "{} 안전 및 보건에 관한 협의체 회의자료".format(data.get('제출년월', '2026년 7월'))
-    ws['A2'].font = font_title
+    ws['A2'].font = font_cover_title
     ws['A2'].alignment = align_center
 
     apply_border('A5:D6')
@@ -56,13 +108,25 @@ def generate_excel(data, output_path):
     ws['A6'].font = font_bold; ws['A6'].alignment = align_center; ws['A6'].fill = fill_header
     ws.merge_cells('C6:D6'); ws['C6'] = data.get("제출년월", "2026년 7월")
     ws['C6'].font = font_normal; ws['C6'].alignment = align_center
-    ws.row_dimensions[5].height = 25
-    ws.row_dimensions[6].height = 25
+
+    # 1~6행이 A4 한 페이지(표지)를 꽉 채우도록 높이 대폭 확대
+    ws.row_dimensions[1].height = 200
+    ws.row_dimensions[2].height = 150
+    ws.row_dimensions[3].height = 120
+    ws.row_dimensions[4].height = 120
+    ws.row_dimensions[5].height = 40
+    ws.row_dimensions[6].height = 40
+    ws.row_dimensions[7].height = 30 # 다음 페이지와의 간격
+
+    # 7행 아래에 페이지 나누기 추가 (A4 1페이지로 분리)
+    from openpyxl.worksheet.pagebreak import Break
+    ws.row_breaks.append(Break(id=7))
 
     ws.merge_cells('A8:D8')
     ws['A8'] = "1. 수급업체 현황"
     ws['A8'].font = font_subtitle
     ws['A8'].alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[8].height = 40
 
     table_data = [
         ("계 약 명",   data.get("계약명", "")),
@@ -72,7 +136,7 @@ def generate_excel(data, output_path):
         ("작업의 시작시간", data.get("작업의 시작시간", "")),
         ("작업 또는 작업장 간의 연락방법", data.get("작업 또는 작업장 간의 연락방법", "")),
         ("재해발생 위험시의 대피방법", data.get("재해발생 위험시의 대피방법", "")),
-        ("사업자와 수급인 또는 수급인 상호간의 연락방법\n현장소장 및 안전관리자 핫라인 구축", ""),
+        ("사업자와 수급인 또는 수급인 상호간의 연락방법", data.get("사업자와 수급인 또는 수급인 상호간의 연락방법", "현장소장 및 안전관리자 핫라인 구축")),
         ("작업공정의 조정 및 협의 요청사항", data.get("작업공정의 조정 및 협의 요청사항", "")),
         ("{}\n주요 활동실적\n(작업사항)".format(data.get('실적년월', '2026년 6월')), data.get("주요 활동실적", "")),
         ("{}\n주요 활동계획\n(작업사항)".format(data.get('계획년월', '2026년 7월')), data.get("주요 활동계획", "")),
@@ -91,14 +155,16 @@ def generate_excel(data, output_path):
         ws.cell(row=row, column=3).alignment = align_left
         if '\n' in label or '\n' in val:
             lines = max(label.count('\n'), val.count('\n')) + 1
-            ws.row_dimensions[row].height = lines * 15 + 10
+            ws.row_dimensions[row].height = lines * 18 + 20
         else:
-            ws.row_dimensions[row].height = 25
+            ws.row_dimensions[row].height = 35
 
     current_row = start_row + len(table_data) + 1
+    ws.row_dimensions[current_row-1].height = 30
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=1, value="2. 위험성평가 실시 현황").font = font_subtitle
     ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[current_row].height = 40
     current_row += 1
 
     headers = ["구분", "실시여부(O,X)", "작성 날짜", "비고"]
@@ -107,7 +173,7 @@ def generate_excel(data, output_path):
         ws.cell(row=current_row, column=col, value=h).font = font_bold
         ws.cell(row=current_row, column=col).alignment = align_center
         ws.cell(row=current_row, column=col).fill = fill_header
-    ws.row_dimensions[current_row].height = 25
+    ws.row_dimensions[current_row].height = 40
     current_row += 1
 
     risk_data = [
@@ -128,8 +194,206 @@ def generate_excel(data, output_path):
                 ws.cell(row=current_row, column=col).font = font_bold
             elif col == 4:
                 ws.cell(row=current_row, column=col).alignment = align_left
-        ws.row_dimensions[current_row].height = 25
+        ws.row_dimensions[current_row].height = 40
         current_row += 1
+
+    # 빠진 부분 추가: 위험성평가서 별첨 및 변동 없음 체크
+    apply_border(f'A{current_row}:D{current_row}')
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value="  ☐ 위험성평가서 별첨          ☐ 정기평가와 변동 없음(아래 1항~5항 해당없을시 생략가능)").font = font_normal
+    ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='center', vertical='center')
+    ws.row_dimensions[current_row].height = 30
+    current_row += 1
+
+    # 빠진 부분 추가: 안내 문구 라인
+    apply_border(f'A{current_row}:D{current_row}')
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    info_text = (
+        "1. 사업장 건설물의 설치·이전·변경 또는 해체          2. 기계,기구,설비,원재료 등의 신규 도입 또는 변경\n"
+        "3. 건설물,기계·기구,설비 등의 정비 또는 보수 (주기적, 반복적 작업으로서 정기평가를 실시한 경우에는 제외)\n"
+        "4. 작업방법 또는 작업절차의 신규도입 또는 변경  5. 중대산업사고 또는 산업재해 발생\n"
+        "6. 위험요인 추가발굴 및 아차사고보고서 내용 반영"
+    )
+    ws.cell(row=current_row, column=1, value=info_text).font = Font(name='맑은 고딕', size=9)
+    ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    ws.row_dimensions[current_row].height = 65
+    current_row += 1
+
+    # 25행 뒤에 페이지 나누기를 추가하여 2페이지를 여기서 마감
+    from openpyxl.worksheet.pagebreak import Break
+    ws.row_breaks.append(Break(id=current_row - 1))
+
+    # --- 3. 위험성평가 중점관리항목 개선사항 ---
+    current_row += 1
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value="3. 위험성평가 중점관리항목 개선사항").font = font_subtitle
+    ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[current_row].height = 40
+    current_row += 1
+
+    apply_border(f'A{current_row}:D{current_row+1}')
+    ws.cell(row=current_row, column=1, value="관리 주관부서").font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.cell(row=current_row, column=1).fill = fill_header
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=2, value=data.get("관리주관부서", "")).font = font_normal
+    ws.cell(row=current_row, column=2).alignment = align_left
+    ws.row_dimensions[current_row].height = 45
+    current_row += 1
+    
+    ws.cell(row=current_row, column=1, value="장소").font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.cell(row=current_row, column=1).fill = fill_header
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=2, value=data.get("장소", "")).font = font_normal
+    ws.cell(row=current_row, column=2).alignment = align_left
+    ws.row_dimensions[current_row].height = 45
+    current_row += 1
+
+    apply_border(f'A{current_row}:D{current_row}')
+    ws.cell(row=current_row, column=1, value="위험성평가 중점관리항목").font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.cell(row=current_row, column=1).fill = fill_header
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=2, value=data.get("위험성평가_중점관리항목", "")).font = font_normal
+    ws.cell(row=current_row, column=2).alignment = align_left
+    ws.row_dimensions[current_row].height = 140
+    current_row += 1
+
+    apply_border(f'A{current_row}:D{current_row}')
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=2)
+    ws.cell(row=current_row, column=1, value="위험성 감소대책 수립 및 실행방법 Check").font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.cell(row=current_row, column=1).fill = fill_header
+    
+    check_texts = []
+    if data.get("감소대책_위험성제거"): check_texts.append("1.위험성제거(✔)")
+    else: check_texts.append("1.위험성제거( )")
+    if data.get("감소대책_공학적"): check_texts.append("2.공학적(✔)")
+    else: check_texts.append("2.공학적( )")
+    if data.get("감소대책_관리적"): check_texts.append("3.관리적(✔)")
+    else: check_texts.append("3.관리적( )")
+    if data.get("감소대책_개인보호구"): check_texts.append("4.개인보호구(✔)")
+    else: check_texts.append("4.개인보호구( )")
+    
+    ws.merge_cells(start_row=current_row, start_column=3, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=3, value=" ".join(check_texts)).font = font_normal
+    ws.cell(row=current_row, column=3).alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+    ws.row_dimensions[current_row].height = 45
+    current_row += 1
+
+    apply_border(f'A{current_row}:D{current_row}')
+    ws.cell(row=current_row, column=1, value="안전·보건 개선조치 이행사항").font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.cell(row=current_row, column=1).fill = fill_header
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=2, value=data.get("개선조치_이행사항", "")).font = font_normal
+    ws.cell(row=current_row, column=2).alignment = align_left
+    ws.row_dimensions[current_row].height = 140
+    current_row += 1
+
+    # Photos for Section 3
+    apply_border(f'A{current_row}:D{current_row+1}')
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=2)
+    ws.cell(row=current_row, column=1, value="조치 전 사진").font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.cell(row=current_row, column=1).fill = fill_header
+    ws.merge_cells(start_row=current_row, start_column=3, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=3, value="조치 후 사진").font = font_bold
+    ws.cell(row=current_row, column=3).alignment = align_center
+    ws.cell(row=current_row, column=3).fill = fill_header
+    ws.row_dimensions[current_row].height = 40
+    current_row += 1
+
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=2)
+    ws.merge_cells(start_row=current_row, start_column=3, end_row=current_row, end_column=4)
+    ws.row_dimensions[current_row].height = 360
+    insert_image_to_excel(ws, data.get("조치사진_경로", ""), f"A{current_row}", 470, 384)
+    insert_image_to_excel(ws, data.get("개선후사진_경로", ""), f"C{current_row}", 470, 384)
+    current_row += 1
+
+    # 3페이지 마감 (Section 3 끝)
+    ws.row_breaks.append(Break(id=current_row - 1))
+
+    # --- 4. 아차사고 보고서 ---
+    current_row += 1
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value="4. 아차사고 보고서").font = font_subtitle
+    ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[current_row].height = 40
+    current_row += 1
+
+    acha_data = [
+        ("사 고 명", data.get("아차사고_사고명", "")),
+        ("발생일시", data.get("아차사고_발생일시", "")),
+        ("장 소 (설 비)", data.get("아차사고_장소", "")),
+        ("보 고 자", data.get("아차사고_보고자", "")),
+        ("소    속", data.get("아차사고_소속", "")),
+        ("사고내용\n(6하원칙)", data.get("아차사고_사고내용", "")),
+        ("문제점 및\n원인분석", data.get("아차사고_원인분석", ""))
+    ]
+    for label, val in acha_data:
+        apply_border(f'A{current_row}:D{current_row}')
+        ws.cell(row=current_row, column=1, value=label).font = font_bold
+        ws.cell(row=current_row, column=1).alignment = align_center
+        ws.cell(row=current_row, column=1).fill = fill_header
+        ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+        ws.cell(row=current_row, column=2, value=val).font = font_normal
+        ws.cell(row=current_row, column=2).alignment = align_left
+        if '\n' in label or '\n' in val:
+            ws.row_dimensions[current_row].height = 70
+        else:
+            ws.row_dimensions[current_row].height = 45
+        current_row += 1
+
+    apply_border(f'A{current_row}:D{current_row+1}')
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value="사진대지").font = font_bold
+    ws.cell(row=current_row, column=1).alignment = align_center
+    ws.cell(row=current_row, column=1).fill = fill_header
+    ws.row_dimensions[current_row].height = 40
+    current_row += 1
+
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=2)
+    ws.merge_cells(start_row=current_row, start_column=3, end_row=current_row, end_column=4)
+    ws.row_dimensions[current_row].height = 380
+    insert_image_to_excel(ws, data.get("아차사고_조치전사진", ""), f"A{current_row}", 490, 384)
+    insert_image_to_excel(ws, data.get("아차사고_조치후사진", ""), f"C{current_row}", 490, 384)
+    current_row += 1
+
+    # 4페이지 마감 (Section 4 끝)
+    ws.row_breaks.append(Break(id=current_row - 1))
+
+    # --- 5. 안전·보건관련 건의 및 제의사항 ---
+    current_row += 1
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value="5. 안전·보건관련 건의 및 제의사항").font = font_subtitle
+    ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[current_row].height = 50
+    current_row += 1
+
+    align_top_left = Alignment(horizontal='left', vertical='top', wrap_text=True)
+
+    apply_border(f'A{current_row}:D{current_row+1}')
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value=f"\n  󰏚 개진사항\n    ❍ {data.get('건의_개진사항', '')}").font = font_normal
+    ws.cell(row=current_row, column=1).alignment = align_top_left
+    ws.row_dimensions[current_row].height = 390
+    current_row += 1
+
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=1, value=f"\n  󰏚 제안사유\n    ❍ {data.get('건의_제안사유', '')}").font = font_normal
+    ws.cell(row=current_row, column=1).alignment = align_top_left
+    ws.row_dimensions[current_row].height = 390
+    current_row += 1
+
+    # 인쇄 영역 및 페이지 설정 (너비는 1페이지 맞춤, 길이는 자동)
+    ws.print_area = f'A1:D{current_row}'
+    ws.page_setup.paperSize = 9  # A4 사이즈
+    ws.page_setup.orientation = 'portrait'
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
 
     # 세 번째 시트: 교육이수관리대장
     generate_edu_sheet(wb, data)

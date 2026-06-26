@@ -33,7 +33,7 @@ def generate_hwp(data, template_path, output_path):
     hwp = None
     try:
         # HWP COM 객체 생성 (화면에 띄움)
-        hwp = win32.Dispatch("HWPFrame.HwpObject")
+        hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
         hwp.RegisterModule("FilePathCheckDLL", "SecurityModule")
         hwp.XHwpWindows.Item(0).Visible = True
 
@@ -45,7 +45,7 @@ def generate_hwp(data, template_path, output_path):
             hwp.HAction.Run("MoveDocBegin")
 
         def try_put_field(label, text):
-            field_str = hwp.GetFieldList()
+            field_str = hwp.GetFieldList(0, 0)
             if not field_str:
                 return False
             fields = field_str.split('\x02')
@@ -194,7 +194,7 @@ def generate_hwp(data, template_path, output_path):
                 if hwp.MoveToField("조치사진", True, True, False):
                     hwp.HAction.Run("SelectAll")
                     hwp.HAction.Run("Delete")
-                    hwp.InsertPicture(proc_path1, Embedded=True, sizeoption=3 if is_multiple else 2)
+                    hwp.InsertPicture(proc_path1, True, 3 if is_multiple else 2, False, False, 0, 0, 0)
 
         # 6. 사진 삽입 (개선후사진)
         img_path2 = data.get("개선후사진_경로", "")
@@ -205,7 +205,7 @@ def generate_hwp(data, template_path, output_path):
                 if hwp.MoveToField("개선후사진", True, True, False):
                     hwp.HAction.Run("SelectAll")
                     hwp.HAction.Run("Delete")
-                    hwp.InsertPicture(proc_path2, Embedded=True, sizeoption=3 if is_multiple else 2)
+                    hwp.InsertPicture(proc_path2, True, 3 if is_multiple else 2, False, False, 0, 0, 0)
                 
         # 7. 아차사고 사진 삽입 (조치전)
         img_acha1 = data.get("아차사고_조치전사진", "")
@@ -216,7 +216,7 @@ def generate_hwp(data, template_path, output_path):
                 if hwp.MoveToField("아차조치전", True, True, False):
                     hwp.HAction.Run("SelectAll")
                     hwp.HAction.Run("Delete")
-                    hwp.InsertPicture(proc_path3, Embedded=True, sizeoption=3 if is_multiple else 2)
+                    hwp.InsertPicture(proc_path3, True, 3 if is_multiple else 2, False, False, 0, 0, 0)
 
         # 8. 아차사고 사진 삽입 (조치후)
         img_acha2 = data.get("아차사고_조치후사진", "")
@@ -227,13 +227,15 @@ def generate_hwp(data, template_path, output_path):
                 if hwp.MoveToField("아차조치후", True, True, False):
                     hwp.HAction.Run("SelectAll")
                     hwp.HAction.Run("Delete")
-                    hwp.InsertPicture(proc_path4, Embedded=True, sizeoption=3 if is_multiple else 2)
+                    hwp.InsertPicture(proc_path4, True, 3 if is_multiple else 2, False, False, 0, 0, 0)
 
         # 문서 저장
         hwp.SaveAs(output_path)
         return output_path
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"오류 발생: {e}")
         raise e
     finally:
