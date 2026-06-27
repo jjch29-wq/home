@@ -54,10 +54,10 @@ class EconomicDashboard:
         
         ttk.Label(top_frame, text="📊 데일리 경제 & 증시 대시보드", font=('Malgun Gothic', 18, 'bold')).pack(side='left')
         
-        self.lbl_goal = ttk.Label(top_frame, text="🎯 하루 1만 원 수익 목표: 데이터 수집 중...", font=('Malgun Gothic', 12, 'bold'), foreground="purple")
+        self.lbl_goal = ttk.Label(top_frame, text="🎯 10만원으로 3000원 벌기: 데이터 수집 중...", font=('Malgun Gothic', 12, 'bold'), foreground="purple")
         self.lbl_goal.pack(side='left', padx=15)
         
-        self.btn_swing = ttk.Button(top_frame, text="🏆 1만 원 스윙 추천", command=self.open_swing_window)
+        self.btn_swing = ttk.Button(top_frame, text="🏆 10만원으로 3000원 스윙", command=self.open_swing_window)
         self.btn_swing.pack(side='left', padx=5)
         
         self.btn_trend = ttk.Button(top_frame, text="🔥 AI 핫 트렌드 예측", command=self.open_trend_window)
@@ -326,7 +326,7 @@ class EconomicDashboard:
             return
             
         win = tk.Toplevel(self.root)
-        win.title("🏆 1만 원 수익 달성 스윙 추천 종목")
+        win.title("🏆 10만원으로 3000원 벌기 스윙 추천 종목")
         win.geometry("600x400")
         
         ttk.Label(win, text="📊 현재 가장 저평가된 스윙 매매 추천 종목 TOP 3", font=('Malgun Gothic', 14, 'bold')).pack(pady=10)
@@ -348,13 +348,18 @@ class EconomicDashboard:
                 profit_per_share = resistance - curr
                 if profit_per_share > 0:
                     dist = (curr - support) / support
-                    shares_needed = int(10000 / profit_per_share) + 1
-                    capital_needed = shares_needed * curr
-                    results.append({
-                        'name': name, 'curr': curr, 'support': support, 'resistance': resistance,
-                        'dist': dist, 'profit': profit_per_share, 'shares': shares_needed, 'capital': capital_needed,
-                        'is_korea': '원' in str(row['현재가(원/$)'])
-                    })
+                    # 10만원으로 매수 가능한 수량
+                    shares_to_buy = int(100000 // curr) if curr > 0 else 0
+                    actual_capital = shares_to_buy * curr
+                    expected_total_profit = shares_to_buy * profit_per_share
+                    
+                    # 10만원 투자 시 기대수익이 3000원 이상인 종목만 추천
+                    if shares_to_buy > 0 and expected_total_profit >= 3000:
+                        results.append({
+                            'name': name, 'curr': curr, 'support': support, 'resistance': resistance,
+                            'dist': dist, 'expected_profit': expected_total_profit, 'shares': shares_to_buy, 'capital': actual_capital,
+                            'is_korea': '원' in str(row['현재가(원/$)'])
+                        })
             except Exception as e:
                 pass
                 
@@ -363,14 +368,14 @@ class EconomicDashboard:
         text_widget = tk.Text(win, font=('Malgun Gothic', 11), wrap='word', padx=10, pady=10)
         text_widget.pack(expand=True, fill='both')
         
-        msg = "목표: 1주당 매도 수익을 극대화하여 1만 원 벌기\n\n"
+        msg = "목표: 10만 원을 투자하여 안전하게 3,000원 이상 수익 내기\n\n"
         for i, r in enumerate(results[:3], 1):
             unit = "원" if r['is_korea'] else "$"
             fmt = lambda x: f"{int(x):,}{unit}" if r['is_korea'] else f"${x:.2f}"
             msg += f"[{i}순위] {r['name']} (현재가 {fmt(r['curr'])})\n"
             msg += f" • 추천 매수: {fmt(r['support'])} 부근 예약 매수\n"
             msg += f" • 추천 매도: {fmt(r['resistance'])} 부근 전량 매도\n"
-            msg += f" • 1만원 달성법: {r['shares']}주 매수 (필요 자본금 약 {fmt(r['capital'])})\n"
+            msg += f" • 달성 시나리오: {r['shares']}주 매수 (자본금 {fmt(r['capital'])}) ➔ 예상 수익: {fmt(r['expected_profit'])}\n"
             msg += "-" * 50 + "\n"
             
         msg += "\n💡 팁: 현재가에 바로 사지 마시고, 증권사 앱에서 추천 매수가(지지선)에 예약 주문을 걸어두세요!"
@@ -603,14 +608,14 @@ class EconomicDashboard:
             
         # 목표 달성률 UI 업데이트
         total_daily_profit = int(portfolio_df['일간 변동금액'].sum())
-        if total_daily_profit >= 10000:
-            goal_text = f"🎯 하루 1만 원 수익 목표: 달성! 🥳 (+{total_daily_profit:,}원)"
+        if total_daily_profit >= 3000:
+            goal_text = f"🎯 10만원으로 3000원 벌기: 달성! 🥳 (+{total_daily_profit:,}원)"
             goal_color = "green"
         elif total_daily_profit > 0:
-            goal_text = f"🎯 하루 1만 원 수익 목표: {int((total_daily_profit/10000)*100)}% 진행 중 (+{total_daily_profit:,}원)"
+            goal_text = f"🎯 10만원으로 3000원 벌기: {int((total_daily_profit/3000)*100)}% 진행 중 (+{total_daily_profit:,}원)"
             goal_color = "blue"
         else:
-            goal_text = f"🎯 하루 1만 원 수익 목표: 기회 엿보기 ({total_daily_profit:,}원)"
+            goal_text = f"🎯 10만원으로 3000원 벌기: 기회 엿보기 ({total_daily_profit:,}원)"
             goal_color = "red"
         self.lbl_goal.config(text=goal_text, foreground=goal_color)
 

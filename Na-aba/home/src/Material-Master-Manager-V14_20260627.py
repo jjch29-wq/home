@@ -9720,11 +9720,14 @@ class MaterialManager:
             if method in ["RT", "UT", "PT"]:
                 try:
                     self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
+                    self.ndt_calc_frame.lift()
                     self.root.after(50, self._ensure_canvas_scroll_region)
                 except Exception as ex:
                     print(f"Error in grid: {ex}")
                 if method == "RT":
                     self.rtk_grid.grid() # [NEW] Show RTK
+                    self.rtk_grid.lift() # [FIX] Prevent overlay click-blocking
+                    self.master_form_panel.update_idletasks()
                     self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
                     self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"])
                 elif method == "UT":

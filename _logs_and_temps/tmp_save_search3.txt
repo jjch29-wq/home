@@ -1,0 +1,10 @@
+2038: self.vehicle_inspections = {} # [NEW] Track active inspection widgets
+2106: self.vehicle_inspections = {} # key -> widget
+8229: for key, widget_instance in self.vehicle_inspections.items():
+8296: if key in self.vehicle_inspections:
+8297: widget_to_remove = self.vehicle_inspections[key]
+8300: del self.vehicle_inspections[key]
+8939: self.vehicle_inspections[key] = widget
+13933: for key in list(getattr(self, 'vehicle_inspections', {}).keys()):
+17964: if key in getattr(self, 'vehicle_inspections', {}):
+17965: current_geometries[key]['vehicle_data'] = self.vehicle_inspections[key].get_data()

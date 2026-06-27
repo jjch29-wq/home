@@ -1,6 +1,9 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 import os
+from datetime import datetime
 
 # Styles
 bold_font = Font(bold=True)
@@ -26,7 +29,7 @@ def extract_disaster_type(text):
     if "붕괴" in text: return "붕괴"
     return "기타"
 
-def create_excel(process_name, output_filename, data):
+def create_excel(process_name, output_filename, data, params):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "위험성 평가서"
@@ -38,13 +41,20 @@ def create_excel(process_name, output_filename, data):
 
     # --- Header Section (Rows 1 to 4) ---
     ws['A1'] = "현 장 명"
-    ws.merge_cells('B1:D1'); ws['B1'] = "가산~가평 천연가스 공급시설 건설공사"
+    ws.merge_cells('B1:D1'); ws['B1'] = params['site_name']
 
     ws.merge_cells('E1:M2'); ws['E1'] = "위험성 평가서"
     ws['E1'].font = title_font
     ws['E1'].alignment = center_align
 
-    ws.merge_cells('E3:M3'); ws['E3'] = "[ ■ 최초평가   □ 수시평가   □ 정기평가 ]"
+    eval_type = params['eval_type']
+    ws.merge_cells('E3:M3')
+    if eval_type == "최초평가":
+        ws['E3'] = "[ ■ 최초평가   □ 수시평가   □ 정기평가 ]"
+    elif eval_type == "수시평가":
+        ws['E3'] = "[ □ 최초평가   ■ 수시평가   □ 정기평가 ]"
+    else:
+        ws['E3'] = "[ □ 최초평가   □ 수시평가   ■ 정기평가 ]"
     ws['E3'].font = bold_font
     ws['E3'].alignment = center_align
 
@@ -54,7 +64,7 @@ def create_excel(process_name, output_filename, data):
     ws.merge_cells('X1:Y1'); ws['X1'] = "승 인 자"
 
     ws['A2'] = "작성일자"
-    ws.merge_cells('B2:D2'); ws['B2'] = "2026년 06월 15일"
+    ws.merge_cells('B2:D2'); ws['B2'] = params['write_date']
 
     ws.merge_cells('N2:O2'); ws['N2'] = "담당자"
     ws.merge_cells('P2:Q2'); ws['P2'] = "공사담당자"
@@ -64,7 +74,7 @@ def create_excel(process_name, output_filename, data):
     ws.merge_cells('X2:Y2'); ws['X2'] = "소 장"
 
     ws['A3'] = "협력업체"
-    ws.merge_cells('B3:D3'); ws['B3'] = "서울검사(주)"
+    ws.merge_cells('B3:D3'); ws['B3'] = params['company_name']
 
     ws.merge_cells('N3:O3'); ws['N3'] = "(서명)"
     ws.merge_cells('P3:Q3'); ws['P3'] = "(서명)"
@@ -77,10 +87,10 @@ def create_excel(process_name, output_filename, data):
     ws.merge_cells('B4:C4'); ws['B4'] = process_name
 
     ws.merge_cells('D4:E4'); ws['D4'] = "관리기간"
-    ws.merge_cells('F4:K4'); ws['F4'] = "2026년 06월 16일 ~ 2026년 06월 30일"
+    ws.merge_cells('F4:K4'); ws['F4'] = f"{params['start_date']} ~ {params['end_date']}"
 
     ws.merge_cells('L4:O4'); ws['L4'] = "현장소장\n승인의견"
-    ws.merge_cells('P4:Y4'); ws['P4'] = '"안전을 최우선으로"'
+    ws.merge_cells('P4:Y4'); ws['P4'] = f'"{params["director_comment"]}"'
 
     for r in range(1, 5):
         ws.row_dimensions[r].height = 25
@@ -135,6 +145,9 @@ def create_excel(process_name, output_filename, data):
     for item in data:
         cat = item[0]
         groups[cat] = groups.get(cat, 0) + 1
+        
+    s_date_short = params['start_date'].replace("년 ", ".").replace("월 ", ".").replace("일", "")
+    e_date_short = params['end_date'].replace("년 ", ".").replace("월 ", ".").replace("일", "")
 
     for item in data:
         freq = item[3]
@@ -164,10 +177,10 @@ def create_excel(process_name, output_filename, data):
         ws.cell(row=current_row, column=9, value=f"{item[6]}").alignment = left_align
         
         ws.merge_cells(f'P{current_row}:Q{current_row}')
-        ws.cell(row=current_row, column=16, value="2026.06.16 -\n2026.06.30\n\n10명").alignment = center_align
+        ws.cell(row=current_row, column=16, value=f"{s_date_short} -\n{e_date_short}\n\n{params['worker_count']}명").alignment = center_align
         
         ws.merge_cells(f'R{current_row}:S{current_row}')
-        ws.cell(row=current_row, column=18, value="2026.06.16 -\n\n관리감독자").alignment = center_align
+        ws.cell(row=current_row, column=18, value=f"{s_date_short} -\n\n관리감독자").alignment = center_align
         
         ws.merge_cells(f'T{current_row}:V{current_row}')
         ws.merge_cells(f'W{current_row}:Y{current_row}')
@@ -186,14 +199,11 @@ def create_excel(process_name, output_filename, data):
 
     try:
         wb.save(output_filename)
-        print(f"[{process_name}] Excel file created at: {output_filename}")
+        return True, f"[{process_name}] 저장 완료: {os.path.basename(output_filename)}"
     except Exception as e:
-        print(f"Error saving {output_filename}: {e}")
+        return False, f"Error saving {output_filename}: {e}"
 
-# ==========================================
 # Data Definitions
-# ==========================================
-
 data_rt = [
     ["이동", "이동 중 지면 단차, 돌출물, 자재 등에 걸려 넘어짐 (전도) 위험", "안전모, 안전화 착용 / 정리정돈", 2, 2, "IV", "1. 가설계단 및 이동통로 내 자재 정리정돈 철저\n2. 조도(밝기) 확보 및 보행 중 스마트폰 사용 금지 전파"],
     ["이동", "이동용 사다리를 이용한 고소 이동 중 사다리 전도 및 추락", "안전모 착용 / 작업 전 TBM 전파", 3, 3, "V", "1. 사다리 상단 고정 및 아웃트리거 전개 확인\n2. 사다리 이용 시 반드시 2인 1조 작업"],
@@ -249,10 +259,154 @@ data_container = [
     ["유지 및 운영", "환기 불량 상태에서 난방기기 사용 중 일산화탄소 중독", "작업 전 TBM 전파", 1, 3, "V", "1. 주기적인 환기(일 2회 이상) 실시\n2. 내부 화기 취급 금지 및 필요시 가스 감지기 설치"]
 ]
 
-# Run the generators
-create_excel("방사선투과검사", "4.4.1_위험성평가표(RT_표준양식).xlsx", data_rt)
-create_excel("초음파탐상검사", "4.4.1_위험성평가표(UT_표준양식).xlsx", data_ut)
-create_excel("침투탐상검사", "4.4.1_위험성평가표(PT_표준양식).xlsx", data_pt)
-create_excel("가설컨테이너 설치 및 운영", "4.4.1_위험성평가표(컨테이너_표준양식).xlsx", data_container)
+class RiskAssessmentApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("위험성 평가표 자동 생성기")
+        self.root.geometry("450x600")
+        self.root.resizable(False, False)
+        
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        main_frame = ttk.Frame(self.root, padding=20)
+        main_frame.pack(fill='both', expand=True)
+        
+        # Title
+        ttk.Label(main_frame, text="위험성 평가표 자동 생성기", font=('Malgun Gothic', 16, 'bold')).pack(pady=(0, 20))
+        
+        # Form Frame
+        form_frame = ttk.LabelFrame(main_frame, text="기본 정보 설정", padding=15)
+        form_frame.pack(fill='x', pady=5)
+        
+        # 1. 현장명
+        ttk.Label(form_frame, text="현 장 명:").grid(row=0, column=0, sticky='e', padx=5, pady=5)
+        self.ent_site = ttk.Entry(form_frame, width=30)
+        self.ent_site.insert(0, "가산~가평 천연가스 공급시설 건설공사")
+        self.ent_site.grid(row=0, column=1, sticky='w', padx=5, pady=5)
+        
+        # 2. 협력업체
+        ttk.Label(form_frame, text="협력업체:").grid(row=1, column=0, sticky='e', padx=5, pady=5)
+        self.ent_company = ttk.Entry(form_frame, width=30)
+        self.ent_company.insert(0, "서울검사(주)")
+        self.ent_company.grid(row=1, column=1, sticky='w', padx=5, pady=5)
+        
+        # 3. 작성일자
+        ttk.Label(form_frame, text="작성일자:").grid(row=2, column=0, sticky='e', padx=5, pady=5)
+        self.ent_write_date = ttk.Entry(form_frame, width=30)
+        self.ent_write_date.insert(0, datetime.now().strftime("%Y년 %m월 %d일"))
+        self.ent_write_date.grid(row=2, column=1, sticky='w', padx=5, pady=5)
+        
+        # 4. 관리기간
+        ttk.Label(form_frame, text="시작일자:").grid(row=3, column=0, sticky='e', padx=5, pady=5)
+        self.ent_start_date = ttk.Entry(form_frame, width=30)
+        self.ent_start_date.insert(0, "2026년 06월 16일")
+        self.ent_start_date.grid(row=3, column=1, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(form_frame, text="종료일자:").grid(row=4, column=0, sticky='e', padx=5, pady=5)
+        self.ent_end_date = ttk.Entry(form_frame, width=30)
+        self.ent_end_date.insert(0, "2026년 06월 30일")
+        self.ent_end_date.grid(row=4, column=1, sticky='w', padx=5, pady=5)
+        
+        # 5. 작업인원
+        ttk.Label(form_frame, text="작업인원:").grid(row=5, column=0, sticky='e', padx=5, pady=5)
+        self.ent_worker_count = ttk.Entry(form_frame, width=30)
+        self.ent_worker_count.insert(0, "10")
+        self.ent_worker_count.grid(row=5, column=1, sticky='w', padx=5, pady=5)
+        
+        # 6. 평가구분
+        ttk.Label(form_frame, text="평가구분:").grid(row=6, column=0, sticky='e', padx=5, pady=5)
+        self.cb_eval_type = ttk.Combobox(form_frame, values=["최초평가", "수시평가", "정기평가"], state='readonly', width=27)
+        self.cb_eval_type.set("최초평가")
+        self.cb_eval_type.grid(row=6, column=1, sticky='w', padx=5, pady=5)
+        
+        # 7. 소장 의견
+        ttk.Label(form_frame, text="소장의견:").grid(row=7, column=0, sticky='e', padx=5, pady=5)
+        self.ent_comment = ttk.Entry(form_frame, width=30)
+        self.ent_comment.insert(0, "안전을 최우선으로")
+        self.ent_comment.grid(row=7, column=1, sticky='w', padx=5, pady=5)
+        
+        # Checkbox Frame for selections
+        chk_frame = ttk.LabelFrame(main_frame, text="생성 대상 선택", padding=15)
+        chk_frame.pack(fill='x', pady=10)
+        
+        self.var_rt = tk.BooleanVar(value=True)
+        self.var_ut = tk.BooleanVar(value=True)
+        self.var_pt = tk.BooleanVar(value=True)
+        self.var_container = tk.BooleanVar(value=True)
+        
+        ttk.Checkbutton(chk_frame, text="RT", variable=self.var_rt).grid(row=0, column=0, padx=10, pady=5, sticky='w')
+        ttk.Checkbutton(chk_frame, text="UT", variable=self.var_ut).grid(row=0, column=1, padx=10, pady=5, sticky='w')
+        ttk.Checkbutton(chk_frame, text="PT", variable=self.var_pt).grid(row=0, column=2, padx=10, pady=5, sticky='w')
+        ttk.Checkbutton(chk_frame, text="컨테이너", variable=self.var_container).grid(row=0, column=3, padx=10, pady=5, sticky='w')
+        
+        # Generate Button
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill='x', pady=10)
+        
+        self.btn_generate = ttk.Button(btn_frame, text="선택한 위험성 평가표 일괄 생성", command=self.generate_files, width=35)
+        self.btn_generate.pack(pady=5)
+        
+        self.lbl_status = ttk.Label(main_frame, text="대기 중...", foreground="gray")
+        self.lbl_status.pack()
 
-print("\n[완료] RT, UT, PT 및 컨테이너 총 4종 위험성평가표 엑셀 파일 생성이 완료되었습니다!")
+    def generate_files(self):
+        params = {
+            'site_name': self.ent_site.get().strip(),
+            'company_name': self.ent_company.get().strip(),
+            'write_date': self.ent_write_date.get().strip(),
+            'start_date': self.ent_start_date.get().strip(),
+            'end_date': self.ent_end_date.get().strip(),
+            'worker_count': self.ent_worker_count.get().strip(),
+            'eval_type': self.cb_eval_type.get(),
+            'director_comment': self.ent_comment.get().strip()
+        }
+        
+        output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=os.path.dirname(os.path.abspath(__file__)))
+        if not output_dir:
+            return
+            
+        self.btn_generate.config(state='disabled')
+        self.lbl_status.config(text="생성 중...", foreground="blue")
+        self.root.update()
+        
+        results = []
+        
+        try:
+            if self.var_rt.get():
+                fname = os.path.join(output_dir, "4.4.1_위험성평가표(RT_표준양식).xlsx")
+                res, msg = create_excel("방사선투과검사", fname, data_rt, params)
+                if res: results.append(msg)
+                
+            if self.var_ut.get():
+                fname = os.path.join(output_dir, "4.4.1_위험성평가표(UT_표준양식).xlsx")
+                res, msg = create_excel("초음파탐상검사", fname, data_ut, params)
+                if res: results.append(msg)
+                
+            if self.var_pt.get():
+                fname = os.path.join(output_dir, "4.4.1_위험성평가표(PT_표준양식).xlsx")
+                res, msg = create_excel("침투탐상검사", fname, data_pt, params)
+                if res: results.append(msg)
+                
+            if self.var_container.get():
+                fname = os.path.join(output_dir, "4.4.1_위험성평가표(컨테이너_표준양식).xlsx")
+                res, msg = create_excel("가설컨테이너 설치 및 운영", fname, data_container, params)
+                if res: results.append(msg)
+                
+            if results:
+                messagebox.showinfo("생성 완료", "\n".join(results))
+                self.lbl_status.config(text="생성 완료!", foreground="green")
+            else:
+                messagebox.showwarning("경고", "생성할 항목을 최소 하나 이상 선택해주세요.")
+                self.lbl_status.config(text="항목 미선택", foreground="red")
+                
+        except Exception as e:
+            messagebox.showerror("오류", f"엑셀 생성 중 오류가 발생했습니다:\n{str(e)}")
+            self.lbl_status.config(text="오류 발생", foreground="red")
+        finally:
+            self.btn_generate.config(state='normal')
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = RiskAssessmentApp(root)
+    root.mainloop()

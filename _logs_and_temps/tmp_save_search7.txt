@@ -1,0 +1,39 @@
+2036: self.equipments = [] # Initialize equipment list
+4564: # Combine custom equipments, history, and the filtered equipment list
+4565: combined_equip = list(set([str(e).strip() for e in self.equipments + history_equip + equip_only_vals if pd.notna(e) and str(e).strip()]))
+4653: if hasattr(self, 'equipments'):
+4654: for e in getattr(self, 'equipments', []):
+7898: 'equipments': ('장비 목록 관리', getattr(self, 'equipments', [])),
+8155: 'equipments': self.equipments,
+8217: elif config_key == 'equipments' or config_key == 'materials':
+8252: elif config_key == 'equipments' and any(x in lbl_text for x in ['장비', 'equip']):
+8253: m_key = 'equipments'
+8254: container._manage_list_key = 'equipments'
+9441: command=lambda: self.open_list_management_dialog('equipments', target_cb=self.ent_daily_equip))
+9974: command=lambda: self.open_list_management_dialog('equipments', target_cb=self.cb_daily_filter_equipment)).pack(side='left', padx=(0, 5))
+12656: if new_equip and not any(e.strip() == new_equip for e in self.equipments):
+12657: self.equipments.append(new_equip)
+12658: self.refresh_ui_for_list_change('equipments')
+13043: for eq in sorted(self.equipments):
+13108: if display_name and display_name not in self.equipments:
+13109: self.equipments.append(display_name)
+13122: if name not in self.equipments:
+13123: self.equipments.append(name)
+13162: if name in self.equipments:
+13163: self.equipments.remove(name)
+13181: if old_name in self.equipments:
+13182: idx = self.equipments.index(old_name)
+13183: self.equipments[idx] = new_name
+13321: if query not in self.equipments:
+13322: self.equipments.append(query)
+13323: self.refresh_ui_for_list_change('equipments')
+16282: cb_equip = ttk.Combobox(basic_frame, width=20, values=self.equipments)
+17841: 'equipments': getattr(self, 'equipments', []),
+17917: self.tab_config['equipments'] = self.equipments
+18099: # Restore vehicles, equipments, and preferred materials
+18101: self.equipments[:] = config.get('equipments', [])
+18201: self.equipments[:] = config.get('equipments', [])
+18202: if not self.equipments and not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
+18203: self.equipments = sorted(self.daily_usage_df['장비명'].dropna().unique().tolist())
+18204: self.equipments = [str(e).strip() for e in self.equipments if str(e).strip()]
+18581: for l_key in ['users', 'sites', 'equipments', 'warehouses', 'worktimes']:
