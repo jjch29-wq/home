@@ -72,3 +72,5 @@ Na-aba/home/data/~$*.xlsx
 
 # Python backup files
 *.py.bak
+_logs_and_temps/
+_archive_reports/
