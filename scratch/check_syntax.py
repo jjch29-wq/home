@@ -1,17 +1,16 @@
-import sys
 import traceback
+import sys
 
-filename = r'home/src/Material-Master-Manager-V13.py'
 try:
-    with open(filename, 'r', encoding='utf-8') as f:
+    with open('Material-Master-Manager-V14.py', 'r', encoding='utf-8') as f:
         source = f.read()
-    compile(source, filename, 'exec')
-    print("No syntax errors found.")
+    compile(source, 'Material-Master-Manager-V14.py', 'exec')
+    print("Syntax OK")
 except SyntaxError as e:
-    print(f"Syntax Error: {e}")
+    print(f"SyntaxError: {e.msg}")
+    print(f"File: {e.filename}")
     print(f"Line: {e.lineno}")
     print(f"Offset: {e.offset}")
     print(f"Text: {e.text}")
 except Exception as e:
-    print(f"An error occurred: {e}")
     traceback.print_exc()
