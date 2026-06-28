@@ -91,20 +91,20 @@
         }
     },
     "TREE_WIDTHS": {
-        "date": 163,
-        "loc": 236,
-        "type": 76,
-        "time": 104,
-        "mat": 172,
-        "qty": 91,
-        "unit": 80,
-        "corr": 127,
-        "adj_qty": 121,
-        "mat_cost": 134,
-        "lab_cost": 136,
-        "overhead": 123,
-        "tech": 120,
-        "total_amt": 153
+        "date": 169,
+        "loc": 242,
+        "type": 82,
+        "time": 110,
+        "mat": 178,
+        "qty": 97,
+        "unit": 86,
+        "corr": 133,
+        "adj_qty": 126,
+        "mat_cost": 140,
+        "lab_cost": 142,
+        "overhead": 130,
+        "tech": 127,
+        "total_amt": 159
     },
-    "SASH_POS": 326
+    "SASH_POS": 316
 }

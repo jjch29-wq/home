@@ -479,28 +479,34 @@ class WorkerDataGroup(ttk.Frame):
         
         # 1. Name selection (WorkerCompositeWidget now handles only name)
         self.composite = WorkerCompositeWidget(
-            self, width=12, values=users_list, 
+            self, width=10, values=users_list, 
             enable_autocomplete=enable_autocomplete, 
             user_list=users_list
         )
-        self.composite.pack(side='left', padx=(0, 2))
+        self.composite.pack(side='left', padx=(0, 2), fill='x', expand=True)
         self.cb_name = self.composite.cb_name
         
         # 2. Shift selection (Moved here from WorkerCompositeWidget)
-        self.cb_shift = ttk.Combobox(self, values=["주간", "야간", "휴일", "주야간"], width=6, state="readonly")
+        self.cb_shift = ttk.Combobox(self, values=["주간", "야간", "휴일", "주야간"], width=5, state="readonly")
         self.cb_shift.pack(side='left', padx=(1, 2))
         self.cb_shift.set("") # Default empty
         
         # 3. Work Time (Changed to Combobox for mouse selection)
         ttk.Label(self, text="시간:").pack(side='left', padx=(1, 0))
-        self.ent_worktime = ttk.Combobox(self, width=16, values=time_list or [])
-        self.ent_worktime.pack(side='left', padx=(0, 2))
+        self.ent_worktime = ttk.Combobox(self, width=12, values=time_list or [])
+        self.ent_worktime.pack(side='left', padx=(0, 2), fill='x', expand=True)
         self.ent_worktime.set("") # Default empty
         
         # 4. OT
         ttk.Label(self, text="OT:").pack(side='left', padx=(1, 0))
-        self.ent_ot = ttk.Entry(self, width=18)
-        self.ent_ot.pack(side='left')
+        self.ent_ot = ttk.Entry(self, width=10)
+        self.ent_ot.pack(side='left', fill='x', expand=True)
+        
+        # 5. 일비 (Meal/Per Diem)
+        ttk.Label(self, text="일비:").pack(side='left', padx=(5, 0))
+        self.ent_meal = ttk.Entry(self, width=10)
+        self.ent_meal.pack(side='left', fill='x', expand=True)
+
 
     def get_worker(self): return self.composite.get()
     def set_worker(self, val): self.composite.set(val)
@@ -535,6 +541,11 @@ class WorkerDataGroup(ttk.Frame):
         self.ent_ot.delete(0, tk.END)
         self.ent_ot.insert(0, val)
 
+    def get_meal(self): return self.ent_meal.get()
+    def set_meal(self, val):
+        self.ent_meal.delete(0, tk.END)
+        self.ent_meal.insert(0, val)
+
     def bind_name(self, seq, func): self.cb_name.bind(seq, func)
     def bind_time(self, seq, func): 
         self.ent_worktime.bind(seq, func)
@@ -559,11 +570,10 @@ class VehicleInspectionWidget(ttk.Frame):
         super().__init__(parent, padding=0)
         
         # Create Canvas and Scrollbar for internal scrolling
-        # [REFINEMENT] Increased width and height to accommodate the 2x4 table
-        self.canvas = tk.Canvas(self, highlightthickness=0, bg=theme_bg, width=680, height=350)
-        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas = tk.Canvas(self, highlightthickness=0, bg=theme_bg)
+        self.scrollbar_y = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.scrollbar_x = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
         self.scrollable_frame = ttk.Frame(self.canvas)
-
 
         self.scrollable_frame.bind(
             "<Configure>",
@@ -571,28 +581,30 @@ class VehicleInspectionWidget(ttk.Frame):
         )
 
         self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.configure(yscrollcommand=self.scrollbar_y.set, xscrollcommand=self.scrollbar_x.set)
 
+        self.scrollbar_x.pack(side="bottom", fill="x")
         self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        self.scrollbar_y.pack(side="right", fill="y")
         
         # Scroll binding is handled globally in MaterialManager.__init__
 
         def _on_canvas_configure(event):
-            # Update width of inner frame to match canvas
-            self.canvas.itemconfig(self.canvas_window, width=event.width)
+            # Allow inner frame to be at least its required width, enabling horizontal scroll if needed
+            target_w = max(event.width, self.scrollable_frame.winfo_reqwidth())
+            self.canvas.itemconfig(self.canvas_window, width=target_w)
         self.canvas.bind("<Configure>", _on_canvas_configure)
 
         # 1. Inspection Items (2x4 Table based on user request)
         chk_frame = ttk.LabelFrame(self.scrollable_frame, text="차량관리 및 안전관리 점검")
-        chk_frame.pack(fill='x', padx=5, pady=2)
+        chk_frame.pack(fill='x', padx=2, pady=2)
         
-        # Headers (Table Column Labels)
-        headers = ["구분", "차량 외부상태", "차량내부 청결상태", "차량내부 청소여부", "이동함 시건장치"]
+        # Headers (Table Column Labels) - Shortened to prevent cutoff
+        headers = ["구분", "외부상태", "내부청결", "내부청소", "이동함 시건"]
         for i, h in enumerate(headers):
             colspan = 1 if i == 0 else 2
             col_idx = 0 if i == 0 else 1 + (i-1)*2
-            tk.Label(chk_frame, text=h, font=('Malgun Gothic', 8, 'bold'), background=theme_bg).grid(row=0, column=col_idx, columnspan=colspan, padx=2, pady=2)
+            tk.Label(chk_frame, text=h, font=('Malgun Gothic', 8, 'bold'), background=theme_bg).grid(row=0, column=col_idx, columnspan=colspan, padx=1, pady=1)
 
         self.vars = {}
         # Define Categories and Options
@@ -605,7 +617,7 @@ class VehicleInspectionWidget(ttk.Frame):
         ]
 
         for r_idx, (r_label, r_key) in enumerate(rows, 1):
-            tk.Label(chk_frame, text=r_label, font=('Malgun Gothic', 8), background=theme_bg).grid(row=r_idx, column=0, padx=5, pady=2)
+            tk.Label(chk_frame, text=r_label, font=('Malgun Gothic', 8), background=theme_bg).grid(row=r_idx, column=0, padx=2, pady=1)
             for c_idx, (c_key, options) in enumerate(categories):
                 var = tk.StringVar(value="")
                 self.vars[f"{r_key}_{c_key}"] = var
@@ -616,26 +628,32 @@ class VehicleInspectionWidget(ttk.Frame):
                     cb = ttk.Checkbutton(chk_frame, text=opt, variable=var, 
                                        onvalue=opt, offvalue="", 
                                        command=lambda v=var, o=opt: self._ensure_exclusive(v, o))
-                    cb.grid(row=r_idx, column=start_col + o_idx, padx=2, pady=2, sticky='w')
+                    cb.grid(row=r_idx, column=start_col + o_idx, padx=1, pady=1, sticky='w')
 
         # 2. Input Fields
+        # 2. Input Fields
         input_frame = ttk.Frame(self.scrollable_frame)
-        input_frame.pack(fill='x', padx=5, pady=2)
+        input_frame.pack(fill='x', padx=2, pady=0)
         
-        ttk.Label(input_frame, text="차량정보:").grid(row=0, column=0, padx=2, pady=2, sticky='e')
+        ttk.Label(input_frame, text="차량정보:").grid(row=0, column=0, padx=2, pady=1, sticky='e')
         self.cb_vehicle_info = ttk.Combobox(input_frame, width=15)
-        self.cb_vehicle_info.grid(row=0, column=1, padx=2, pady=2, sticky='w')
+        self.cb_vehicle_info.grid(row=0, column=1, padx=2, pady=1, sticky='w')
         if vehicle_list is not None:
             self.update_vehicle_list(vehicle_list)
             
+        ttk.Label(input_frame, text="주행거리 (km):").grid(row=1, column=0, padx=2, pady=1, sticky='e')
+        self.ent_mileage = ttk.Entry(input_frame, width=15)
+        self.ent_mileage.grid(row=1, column=1, padx=2, pady=1, sticky='w')
+        
+        ttk.Label(input_frame, text="비고:").grid(row=2, column=0, padx=2, pady=1, sticky='e')
+        self.ent_remarks = ttk.Entry(input_frame)
+        self.ent_remarks.grid(row=2, column=1, padx=2, pady=1, sticky='ew')
+        input_frame.grid_columnconfigure(1, weight=1)
+
         # Focus transitions
         def move_to_mileage(e): self.ent_mileage.focus_set()
         self.cb_vehicle_info.bind('<<ComboboxSelected>>', move_to_mileage)
         self.cb_vehicle_info.bind('<Return>', move_to_mileage)
-
-        ttk.Label(input_frame, text="주행거리 (km):").grid(row=1, column=0, padx=2, pady=2, sticky='e')
-        self.ent_mileage = ttk.Entry(input_frame, width=15)
-        self.ent_mileage.grid(row=1, column=1, padx=2, pady=2, sticky='w')
         
         def on_mileage_return(e):
             self.format_mileage()
@@ -643,11 +661,6 @@ class VehicleInspectionWidget(ttk.Frame):
             
         self.ent_mileage.bind('<Return>', on_mileage_return)
         self.ent_mileage.bind('<FocusOut>', lambda e: self.format_mileage())
-
-        ttk.Label(input_frame, text="비고:").grid(row=2, column=0, padx=2, pady=2, sticky='e')
-        self.ent_remarks = ttk.Entry(input_frame)
-        self.ent_remarks.grid(row=2, column=1, padx=2, pady=2, sticky='ew')
-        input_frame.grid_columnconfigure(1, weight=1)
 
         # [NEW] Add Standalone Save Button
         self.on_save_callback = kwargs.get('on_save')
@@ -2150,50 +2163,24 @@ class MaterialManager:
         """Update canvas scroll region based on content height and width (ensures full visibility)"""
         try:
             if hasattr(self, 'entry_canvas') and self.entry_canvas:
-                self.entry_canvas.update_idletasks()
+                # Remove update_idletasks() to prevent infinite <Configure> loops 
+                # Instead, use an after() callback to defer the bbox calculation if needed, or just calculate as-is
                 
-                # Get max Y and X from all core elements
-                max_y = 0
-                max_x = 1100 # Default minimum width
+                def _do_update():
+                    if not self.entry_canvas.winfo_exists(): return
+                    bbox = self.entry_canvas.bbox("all")
+                    if bbox:
+                        canvas_h = self.entry_canvas.winfo_height()
+                        canvas_w = self.entry_canvas.winfo_width()
+                        bottom = max(bbox[3], canvas_h)
+                        right = max(bbox[2], canvas_w, 1100)
+                        self.entry_canvas.configure(scrollregion=(0, 0, right, bottom))
+                        
+                # Debounce the update to prevent recursive looping
+                if hasattr(self, '_scroll_update_id'):
+                    self.entry_canvas.after_cancel(self._scroll_update_id)
+                self._scroll_update_id = self.entry_canvas.after(50, _do_update)
                 
-                # 1. Use the bounding box of master_form_panel which contains form, NDT, RTK, and Workers
-                if hasattr(self, 'master_form_panel'):
-                    self.master_form_panel.update_idletasks()
-                    panel_y = self.master_form_panel.winfo_y()
-                    panel_h = self.master_form_panel.winfo_height()
-                    panel_x = self.master_form_panel.winfo_x()
-                    panel_w = self.master_form_panel.winfo_width()
-                    max_y = max(max_y, panel_y + panel_h)
-                    max_x = max(max_x, panel_x + panel_w)
-                
-                # 2. Specifically check RTK bottom if requested by user
-                if hasattr(self, 'rtk_grid'):
-                    # rtk_grid is inside master_form_panel, so calculate relative to master_form_panel master
-                    self.rtk_grid.update_idletasks()
-                    rtk_bottom = self.rtk_grid.winfo_y() + self.rtk_grid.winfo_height()
-                    # Add master_form_panel offset
-                    if hasattr(self, 'master_form_panel'):
-                        rtk_bottom += self.master_form_panel.winfo_y()
-                    max_y = max(max_y, rtk_bottom)
-                
-                # 3. Handle draggable items (Memos, Checklists, etc.)
-                for key, widget in self.draggable_items.items():
-                    try:
-                        if widget.winfo_manager() == 'place':
-                            info = widget.place_info()
-                            x = int(float(info.get('x', 0)))
-                            y = int(float(info.get('y', 0)))
-                            w = int(float(info.get('width', widget.winfo_width())))
-                            h = int(float(info.get('height', widget.winfo_height())))
-                            max_y = max(max_y, y + h)
-                            max_x = max(max_x, x + w)
-                    except: pass
-
-                # Final scroll height and width with minimal buffer
-                scroll_h = max_y + 10
-                scroll_w = max(max_x, self.entry_inner_frame.winfo_width())
-                
-                self.entry_canvas.configure(scrollregion=(0, 0, scroll_w, scroll_h))
         except Exception as e:
             print(f"DEBUG: Scroll region update error: {e}")
 
@@ -2208,7 +2195,7 @@ class MaterialManager:
                 self.daily_usage_paned.update_idletasks()
                 total_h = self.daily_usage_paned.winfo_height()
                 if total_h > 0:
-                    sash_pos = self.daily_usage_paned.sashpos(0)
+                    sash_pos = 500
                     ratio = sash_pos / total_h
                     
                     if not hasattr(self, 'tab_config'):
@@ -3354,6 +3341,11 @@ class MaterialManager:
         self.notebook.add(self.tab_daily_usage, text='현장별 일일 사용량 기입')
         self.setup_daily_usage_tab()
         
+        # Tab 7: Daily Usage Query
+        self.tab_daily_usage_query = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_daily_usage_query, text='현장 일일기록 조회 및 관리')
+        self.setup_daily_usage_query_tab()
+        
 
         # Tab 8: Project Execution Budget (New)
         self.tab_budget = ttk.Frame(self.notebook)
@@ -3413,6 +3405,10 @@ class MaterialManager:
         
         btn_select_all = ttk.Button(action_row, text="전체 선택", command=self.select_all_stock)
         btn_select_all.pack(side='left', padx=5)
+        
+        # [NEW] Popout Button
+        btn_popout_stock = ttk.Button(action_row, text="🔍 팝업창으로 열기", command=self.open_detached_stock_view)
+        btn_popout_stock.pack(side='right', padx=5)
         
         # Row 2: Search and Filter Frame
         filter_row = ttk.Frame(control_frame)
@@ -3512,7 +3508,7 @@ class MaterialManager:
         vsb = ttk.Scrollbar(tree_frame, orient="vertical")
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
         
-        columns = ('No.', '회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', '품목군코드', '공급업체', '제조사', '제조국', '가격', '원가', '관리단위', '수량', '재고하한', '상태/위치')
+        columns = ('No.', '회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', '품목군코드', '공급업체', '제조사', '제조국', '가격', '원가', '관리단위', '입고수량', '사용수량', '재고수량', '재고하한', '상태/위치')
         self.stock_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', 
                                       yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
@@ -3520,7 +3516,7 @@ class MaterialManager:
         hsb.config(command=self.stock_tree.xview)
         
         # Column configuration
-        col_widths = [60, 80, 100, 180, 90, 90, 120, 120, 90, 120, 120, 80, 80, 80, 80, 80, 80, 130]
+        col_widths = [60, 80, 100, 180, 90, 90, 120, 120, 90, 120, 120, 80, 80, 80, 80, 80, 80, 80, 80, 130]
         for col, width in zip(columns, col_widths):
             self.stock_tree.heading(col, text=col, command=lambda _col=col: self.treeview_sort_column(self.stock_tree, _col, False))
             # Change stretch=True to stretch=False to allow fixed user-defined widths
@@ -3834,9 +3830,21 @@ class MaterialManager:
         return stored_qty + net_trans_qty
 
     def update_stock_view(self):
-        # Clear current view
-        for item in self.stock_tree.get_children():
-            self.stock_tree.delete(item)
+        active_trees = []
+        if hasattr(self, 'stock_tree') and self.stock_tree.winfo_exists():
+            active_trees.append(self.stock_tree)
+        if hasattr(self, 'detached_windows') and 'stock' in self.detached_windows:
+            dt = self.detached_windows['stock'].get('tree')
+            if dt and dt.winfo_exists():
+                active_trees.append(dt)
+                
+        if not active_trees:
+            return
+            
+        # Clear current views
+        for tree in active_trees:
+            for item in tree.get_children():
+                tree.delete(item)
         
         search_term = self.search_var.get().lower() if hasattr(self, 'search_var') else ''
         
@@ -3857,15 +3865,21 @@ class MaterialManager:
                 return 0.0
         
         # [OPTIMIZATION] Pre-calculate stock lookup to avoid O(N*M) performance hit
-        stock_lookup = {}
+        stock_in_lookup = {}
+        stock_out_lookup = {}
         if not self.transactions_df.empty:
             temp_trans = self.transactions_df.copy()
             # Use standardized normalization
             temp_trans['NormID'] = temp_trans['MaterialID'].apply(self.normalize_id)
             # [CRITICAL] Exclude "자동 차감" (Automatic Deduction) to avoid double-counting with Daily Usage sheet
             mask = ~temp_trans['Note'].astype(str).str.contains('자동 차감', na=False)
+            
+            in_mask = mask & (temp_trans['Type'] == 'IN')
+            out_mask = mask & (temp_trans['Type'] == 'OUT')
+            
             # Group by normalized ID and sum quantities
-            stock_lookup = temp_trans[mask].groupby('NormID')['Quantity'].sum().to_dict()
+            stock_in_lookup = temp_trans[in_mask].groupby('NormID')['Quantity'].sum().to_dict()
+            stock_out_lookup = temp_trans[out_mask].groupby('NormID')['Quantity'].sum().to_dict()
 
         # [NEW] Pre-calculate Daily Usage subtraction
         daily_usage_lookup = {}
@@ -3977,7 +3991,8 @@ class MaterialManager:
             str_mat_id = self.normalize_id(mat_id)
             
             # Use optimized lookup
-            net_trans_qty = stock_lookup.get(str_mat_id, 0.0)
+            in_qty = stock_in_lookup.get(str_mat_id, 0.0)
+            out_qty = abs(stock_out_lookup.get(str_mat_id, 0.0))
             daily_qty = daily_usage_lookup.get(str_mat_id, 0.0)
             
             mat_name_str = str(mat.get('품목명', mat.get('ǰ', ''))).strip()
@@ -4011,12 +4026,14 @@ class MaterialManager:
                         daily_qty = 0.0 
                         break
             
-            current_stock = stored_qty + net_trans_qty - daily_qty - ndt_usage
+            total_incoming = stored_qty + in_qty
+            total_used = out_qty + daily_qty + ndt_usage
+            current_stock = total_incoming - total_used
             
             # Debug for specific items the user is watching (Films and NDT drugs)
             if any(k in combined_name.upper() for k in ['세척제', '침투제', '현상제', '백색', '흑색', '자분', 'CARESTREAM', 'MX125']):
                 raw_val = mat.get('수량', 'MISSING')
-                print(f"DEBUG: Stock Calc for '{mat_name_raw} ({model_name_raw})': RawQty='{raw_val}', Master={stored_qty}, InOut={net_trans_qty}, Daily={daily_qty}, NDT={ndt_usage}, Final={current_stock}")
+                print(f"DEBUG: Stock Calc for '{mat_name_raw} ({model_name_raw})': RawQty='{raw_val}', Master={stored_qty}, In={in_qty}, Out={out_qty}, Daily={daily_qty}, NDT={ndt_usage}, Final={current_stock}")
             
             # --- Dynamic Location/Status Tracking ---
             status_location = "관내 (창고)"
@@ -4054,6 +4071,8 @@ class MaterialManager:
                     f"{to_f(mat.get('가격', 0)):,.0f}",
                     f"{to_f(mat.get('원가', 0)):,.0f}",
                     safe_get(mat.get('관리단위', 'EA'), 'EA'),
+                    f"{to_f(total_incoming):g}",
+                    f"{to_f(total_used):g}",
                     f"{to_f(current_stock):g}",
                     f"{to_f(mat.get('재고하한', 0)):g}",
                     status_location,
@@ -4097,8 +4116,71 @@ class MaterialManager:
             final_row = list(row)
             final_row[0] = str(final_row_idx)
             
-            self.stock_tree.insert('', tk.END, values=final_row, tags=(row_obj['tag'],))
+            for tree in active_trees:
+                tree.insert('', tk.END, values=final_row, tags=(row_obj['tag'],))
             final_row_idx += 1
+
+    def open_detached_stock_view(self):
+        """현재 재고 현황을 별도의 팝업창(모니터링 창)으로 엽니다."""
+        if hasattr(self, 'detached_windows') and 'stock' in self.detached_windows and self.detached_windows['stock']['window'].winfo_exists():
+            self.detached_windows['stock']['window'].lift()
+            return
+            
+        if not hasattr(self, 'detached_windows'):
+            self.detached_windows = {}
+            
+        popup = tk.Toplevel(self.root)
+        popup.title("📦 현재 재고 모니터링 (팝업)")
+        popup.geometry("1400x800")
+        
+        self.detached_windows['stock'] = {'window': popup}
+        
+        main_frame = ttk.Frame(popup, padding=10)
+        main_frame.pack(expand=True, fill='both')
+        
+        info_frame = ttk.Frame(main_frame)
+        info_frame.pack(fill='x', pady=(0, 5))
+        ttk.Label(info_frame, text="💡 메인 창의 필터 및 검색어 설정이 이 팝업창에도 실시간으로 반영됩니다.", font=('Malgun Gothic', 10, 'bold'), foreground='#00529B').pack(side='left')
+        ttk.Button(info_frame, text="🔄 새로고침", command=self.update_stock_view).pack(side='right')
+        
+        tree_frame = ttk.Frame(main_frame)
+        tree_frame.pack(expand=True, fill='both')
+        
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical")
+        hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
+        
+        columns = ('No.', '회사코드', '분류', '제조사', '품목명', '모델명', 'S/N', '관리단위', '수량(현장)', '단위(현장)', '현재재고', '단가', '재고하한', '재고금액', '상태/위치', '관리품번')
+        tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        
+        self.detached_windows['stock']['tree'] = tree
+        
+        vsb.config(command=tree.yview)
+        hsb.config(command=tree.xview)
+        
+        col_widths = {
+            'No.': 40, '회사코드': 80, '분류': 100, '제조사': 100, '품목명': 150, 
+            '모델명': 150, 'S/N': 100, '관리단위': 70, 
+            '수량(현장)': 80, '단위(현장)': 70, '현재재고': 80,
+            '단가': 90, '재고하한': 80, '재고금액': 120, '상태/위치': 100, '관리품번': 120
+        }
+        for col in columns:
+            tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(tree, c, False))
+            tree.column(col, width=col_widths.get(col, 100), anchor='center', stretch=False)
+            
+        tree.grid(row=0, column=0, sticky='nsew')
+        vsb.grid(row=0, column=1, sticky='ns')
+        hsb.grid(row=1, column=0, sticky='ew')
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+        
+        self.enable_tree_column_drag(tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, tree))
+        
+        # UI 스타일
+        tree.tag_configure('deployed', background='#FFF9C4')
+        tree.tag_configure('in_stock', background='')
+        
+        # 첫 데이터 로딩
+        self.update_stock_view()
         
     def treeview_sort_column(self, tv, col, reverse):
         """Standard sorting function for Treeview columns"""
@@ -7269,6 +7351,11 @@ class MaterialManager:
         site_agg_dict = {
             '검사비': 'sum',
             '출장비': 'sum',
+            '제경비': 'sum',
+            '기술료': 'sum',
+            '환산물량': 'sum',
+            '재료비': 'sum',
+            '인건비': 'sum',
             'Usage': 'sum',
             '검사량': 'sum'
         }
@@ -7354,8 +7441,13 @@ class MaterialManager:
             rtk_sum = r_center + r_density + r_marking + r_film + r_careless + r_customer + r_other
             
             # Track which columns are active using robust threshold
-            if is_active(row['검사비']): active_cols.add('검사비')
-            if is_active(row['출장비']): active_cols.add('출장비')
+            if is_active(row.get('검사비', 0.0)): active_cols.add('검사비')
+            if is_active(row.get('출장비', 0.0)): active_cols.add('출장비')
+            if is_active(row.get('제경비', 0.0)): active_cols.add('제경비')
+            if is_active(row.get('기술료', 0.0)): active_cols.add('기술료')
+            if is_active(row.get('환산물량', 0.0)): active_cols.add('환산물량')
+            if is_active(row.get('재료비', 0.0)): active_cols.add('재료비')
+            if is_active(row.get('인건비', 0.0)): active_cols.add('인건비')
             if is_active(row.get('NDT_형광자분', 0.0)): active_cols.add('형광자분')
             if is_active(black_mag): active_cols.add('흑색자분')
             if is_active(white_paint): active_cols.add('백색페인트')
@@ -7399,8 +7491,13 @@ class MaterialManager:
                 row['검사방법'],
                 mat_name,
                 f"{row.get('검사량', 0.0):.1f}" if is_active(row.get('검사량', 0.0)) else '',
-                f"{row['검사비']:,.0f}" if is_active(row['검사비']) else '',
-                f"{row['출장비']:,.0f}" if is_active(row['출장비']) else '',
+                f"{row.get('검사비', 0.0):,.0f}" if is_active(row.get('검사비', 0.0)) else '',
+                f"{row.get('출장비', 0.0):,.0f}" if is_active(row.get('출장비', 0.0)) else '',
+                f"{row.get('제경비', 0.0):,.0f}" if is_active(row.get('제경비', 0.0)) else '',
+                f"{row.get('기술료', 0.0):,.0f}" if is_active(row.get('기술료', 0.0)) else '',
+                f"{row.get('환산물량', 0.0):.1f}" if is_active(row.get('환산물량', 0.0)) else '',
+                f"{row.get('재료비', 0.0):,.0f}" if is_active(row.get('재료비', 0.0)) else '',
+                f"{row.get('인건비', 0.0):,.0f}" if is_active(row.get('인건비', 0.0)) else '',
                 f"{row.get('NDT_형광자분', 0.0):.1f}" if is_active(row.get('NDT_형광자분', 0.0)) else '',
                 f"{black_mag:.1f}" if is_active(black_mag) else '',
                 f"{white_paint:.1f}" if is_active(white_paint) else '',
@@ -8600,15 +8697,9 @@ class MaterialManager:
             if hasattr(self, 'entry_inner_frame'):
                 self.entry_inner_frame.pack_propagate(True)
                 self.entry_inner_frame.grid_propagate(True)
-                self.entry_inner_frame.config(height=0, width=0) # Let it auto-size for reset
                 
                 # Perform a layout update pass
                 self.root.update_idletasks()
-                
-                # Re-apply stability locks
-                self._adjust_parent_height(self.entry_inner_frame, force=True)
-                self.entry_inner_frame.pack_propagate(False)
-                self.entry_inner_frame.grid_propagate(False)
                 
                 # Refresh scrollregion if in canvas
                 if hasattr(self, 'entry_canvas'):
@@ -8618,7 +8709,7 @@ class MaterialManager:
             try:
                 if hasattr(self, 'daily_usage_paned'):
                     # Give more space to the entry form by default (500px)
-                    self.daily_usage_paned.sashpos(0, 500) 
+                    getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, 500) 
                 if hasattr(self, 'daily_history_paned'):
                     total_w = self.daily_history_paned.winfo_width()
                     if total_w > 100:
@@ -9293,25 +9384,14 @@ class MaterialManager:
         # Actually, we keep the entry_frame as the parent but use grid for initial layout
         # The user can then move them out of grid into place
         
-        # Create PanedWindow for resizable frames
-        self.daily_usage_paned = ttk.Panedwindow(self.tab_daily_usage, orient='vertical')
+        # Main Frame (No longer PanedWindow since we separated tabs)
+        self.daily_usage_paned = ttk.Frame(self.tab_daily_usage)
         self.daily_usage_paned.pack(fill='both', expand=True, padx=5, pady=5)  # Reduced padding
         
-        # Save sash position on adjustment and lock it
-        self.daily_usage_paned.bind("<ButtonRelease-1>", self._on_daily_usage_sash_changed)
-        self.daily_usage_paned.bind("<Configure>", self._on_daily_usage_resize)
-        # [FIX] Respect loaded config if available, otherwise default to False
         self.daily_usage_sash_locked = getattr(self, 'daily_usage_sash_locked', False)
         
-        # Set initial sash position to ensure visibility (30% for top frame, 70% for bottom)
-        self.daily_usage_paned.after(200, self._ensure_daily_usage_sash_visibility)
-        self.daily_usage_paned.after(500, self._ensure_daily_usage_sash_visibility)
-        self.daily_usage_paned.after(1000, self._ensure_daily_usage_sash_visibility)
-        self.daily_usage_paned.after(1200, self._ensure_canvas_scroll_region)
-
-        
         entry_frame = ttk.LabelFrame(self.daily_usage_paned, text="현장별 일일 사용량 기입")
-        self.daily_usage_paned.add(entry_frame, weight=1) # Changed from weight=3 to weight=1
+        entry_frame.pack(fill='both', expand=True) # Changed from add to pack
         
         # Header area with two rows to prevent buttons from being hidden on small screens
         header_container = ttk.Frame(entry_frame)
@@ -9340,8 +9420,9 @@ class MaterialManager:
         btn_report_map = ttk.Button(row1, text="⚙️ 출력 설정", command=self.open_report_mapping_dialog)
         btn_report_map.pack(side='left', padx=5)
 
-        self.btn_sash_lock = ttk.Button(row1, text="🔒 경계 고정됨" if self.daily_usage_sash_locked else "🔓 경계 고정", command=self.toggle_sash_lock)
-        self.btn_sash_lock.pack(side='right', padx=5)
+        # Sash lock button disabled since UI is separated
+        # self.btn_sash_lock = ttk.Button(row1, text="🔒 경계 고정됨" if self.daily_usage_sash_locked else "🔓 경계 고정", command=self.toggle_sash_lock)
+        # self.btn_sash_lock.pack(side='right', padx=5)
 
         # Row 2: Secondary / Tool Actions
         btn_save_sess = ttk.Button(row2, text="💾 세션 저장", command=self.save_form_session, width=12)
@@ -9350,14 +9431,11 @@ class MaterialManager:
         btn_load_sess = ttk.Button(row2, text="📂 세션 불러오기", command=self.load_form_session, width=15)
         btn_load_sess.pack(side='left', padx=5)
         
-        btn_add_vehicle = ttk.Button(row2, text="🚗 차량점검", command=self.add_vehicle_inspection_box)
-        btn_add_vehicle.pack(side='right', padx=2)
-
-        btn_add_checklist = ttk.Button(row2, text="☑️ 목록 추가", command=self.add_new_checklist)
-        btn_add_checklist.pack(side='right', padx=2)
-
-        btn_add_memo = ttk.Button(row2, text="➕ 메모 추가", command=self.add_new_memo)
-        btn_add_memo.pack(side='right', padx=2)
+        btn_load_prev = ttk.Button(row2, text="⏮️ 전일 데이터 불러오기", command=self.load_previous_day_data, width=20)
+        btn_load_prev.pack(side='left', padx=5)
+        
+        # [UI REVISION] Removed dynamic add buttons (Vehicle, Checklist, Memo) 
+        # as they are now permanently embedded at the bottom of the entry tab.
         if self.daily_usage_sash_locked:
             try:
                 self.style.configure("SashLock.TButton", foreground="red")
@@ -9383,7 +9461,14 @@ class MaterialManager:
             # Update canvas window width: use canvas width but ensure a minimum of 1100 
             # to fit both form (550) and workers (550+) without clipping.
             target_w = max(1100, e.width)
-            self.entry_canvas.itemconfig(self.entry_canvas_window, width=target_w)
+            
+            # Use a fixed minimum comfortable height (750px) instead of winfo_reqheight().
+            # winfo_reqheight() can return absurdly large values due to complex internal 
+            # nested canvases and paned windows, causing massive empty scrollable voids.
+            # 750px safely fits the master form (350px) and bottom dashboard minimums (400px).
+            target_h = max(750, e.height)
+            
+            self.entry_canvas.itemconfig(self.entry_canvas_window, width=target_w, height=target_h)
             self._ensure_canvas_scroll_region()
         
         self.entry_inner_frame.bind("<Configure>", lambda e: self._ensure_canvas_scroll_region())
@@ -9810,14 +9895,7 @@ class MaterialManager:
         self.rtk_entries["총계"].config(state='readonly')
         # Removed draggable container logic
 
-        # [LAYOUT FIX] Ensure enough baseline row heights
-        try:
-            self.entry_inner_frame.grid_rowconfigure(0, minsize=170)
-            self.entry_inner_frame.grid_rowconfigure(1, minsize=120)
-            self.entry_inner_frame.grid_rowconfigure(2, minsize=130)
-            # Row 3 (Extra spacer) removed to minimize whitespace
-        except Exception:
-            pass
+        # [LAYOUT FIX] Removed obsolete minsize row configurations
 
 
         # [MIGRATION] Convert existing times to "익일" format and sort
@@ -9934,15 +10012,228 @@ class MaterialManager:
             ent.bind('<Return>', on_return)
         
         self.update_material_combo()
-        self._adjust_parent_height(self.entry_inner_frame, force=True)
         
+        # --- Bottom Dashboard (Recent Entries + Fixed Panels) ---
+        self.bottom_dashboard = ttk.PanedWindow(self.entry_inner_frame, orient=tk.HORIZONTAL)
+        self.bottom_dashboard.grid(row=1, column=0, sticky='nsew', padx=5, pady=(10, 5))
+        self.entry_inner_frame.grid_rowconfigure(1, weight=1)
+
+        # 1. Left: Recent Entries Mini-table
+        self.recent_frame = ttk.LabelFrame(self.bottom_dashboard, text="오늘의 입력 내역 (최근 기록)")
+        self.bottom_dashboard.add(self.recent_frame, weight=9)
         
-        display_frame = ttk.LabelFrame(self.daily_usage_paned, text="일일 사용량 기록 조회")
-        self.daily_usage_paned.add(display_frame, weight=1) # Less weight for the list
+        # Create Treeview for recent entries
+        columns = ("id", "date", "site", "method", "inspection_item", "material", "qty", "worker")
+        self.tv_recent = ttk.Treeview(self.recent_frame, columns=columns, show='headings', height=9)
+        self.tv_recent['displaycolumns'] = ("date", "site", "method", "inspection_item", "material", "qty", "worker")
+        
+        self.tv_recent.heading("date", text="날짜")
+        self.tv_recent.heading("site", text="현장명")
+        self.tv_recent.heading("method", text="검사방법")
+        self.tv_recent.heading("inspection_item", text="검사품명")
+        self.tv_recent.heading("material", text="품목명")
+        self.tv_recent.heading("qty", text="수량")
+        self.tv_recent.heading("worker", text="작업자(첫번째)")
+        
+        self.tv_recent.column("date", width=80, anchor='center')
+        self.tv_recent.column("site", width=100, anchor='center')
+        self.tv_recent.column("method", width=60, anchor='center')
+        self.tv_recent.column("inspection_item", width=80, anchor='center')
+        self.tv_recent.column("material", width=120, anchor='center')
+        self.tv_recent.column("qty", width=50, anchor='center')
+        self.tv_recent.column("worker", width=80, anchor='center')
+        
+        # Bind click to load record and delete
+        self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
+        self.tv_recent.bind('<Delete>', self.delete_recent_entry)
+        
+        # Right-click menu for deletion
+        self.recent_menu = tk.Menu(self.tv_recent, tearoff=0)
+        self.recent_menu.add_command(label="삭제", command=self.delete_recent_entry)
+        
+        def show_recent_menu(event):
+            item = self.tv_recent.identify_row(event.y)
+            if item:
+                self.tv_recent.selection_set(item)
+                self.recent_menu.tk_popup(event.x_root, event.y_root)
+                
+        self.tv_recent.bind("<Button-3>", show_recent_menu)
+        
+        self.tv_recent.pack(side='left', fill='both', expand=True, padx=2, pady=2)
+        
+        recent_vsb = ttk.Scrollbar(self.recent_frame, orient="vertical", command=self.tv_recent.yview)
+        recent_vsb.pack(side='right', fill='y')
+        self.tv_recent.configure(yscrollcommand=recent_vsb.set)
+        
+        # 2. Middle: Vehicle Inspection (Fixed)
+        self.fixed_vehicle_frame = ttk.LabelFrame(self.bottom_dashboard, text="차량점검 (상시 패널)")
+        self.bottom_dashboard.add(self.fixed_vehicle_frame, weight=9)
+        
+        self.fixed_vehicle_widget = VehicleInspectionWidget(self.fixed_vehicle_frame, theme_bg=self.theme_bg, vehicle_list=getattr(self, 'equipments', []))
+        self.fixed_vehicle_widget.pack(fill='both', expand=True, padx=2, pady=2)
+        # Register the vehicle widget to be saved along with standard entry
+        self.vehicle_widget = self.fixed_vehicle_widget
+
+        # 3. Right: Memo (Fixed)
+        self.fixed_memo_frame = ttk.LabelFrame(self.bottom_dashboard, text="메모 (상시 패널)")
+        self.bottom_dashboard.add(self.fixed_memo_frame, weight=2)
+        self.fixed_memo_text = tk.Text(self.fixed_memo_frame, wrap='word', height=5, width=10, font=('Arial', 10), bg=self.theme_bg, highlightthickness=0)
+        self.fixed_memo_text.pack(fill='both', expand=True, padx=2, pady=2)
+        # Store for data retrieval
+        self.main_memo_text = self.fixed_memo_text
+        # Store for data retrieval
+        self.main_memo_text = self.fixed_memo_text
+
+        # No longer clamp entry_inner_frame height
+        pass
+
+    def on_recent_record_click(self, event):
+        """최근 기록 테이블의 항목을 클릭했을 때 상단 입력 폼에 해당 데이터를 로드"""
+        selection = self.tv_recent.selection()
+        if not selection: return
+        item = self.tv_recent.item(selection[0])
+        values = item.get('values')
+        if not values: return
+        
+        record_id = values[0]
+        
+        if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
+            try:
+                record_idx = int(record_id)
+                if record_idx in self.daily_usage_df.index:
+                    record = self.daily_usage_df.loc[record_idx].to_dict()
+                    # Use existing method to populate the form
+                    self.load_daily_usage_to_form(record)
+                    print(f"DEBUG: Loaded recent record {record_idx} to form.")
+            except Exception as e:
+                print(f"DEBUG: Error loading recent record: {e}")
+
+    def delete_recent_entry(self, event=None):
+        """최근 기록 테이블에서 선택한 항목을 삭제"""
+        selection = self.tv_recent.selection()
+        if not selection:
+            return
+            
+        import tkinter.messagebox as messagebox
+        result = messagebox.askyesno("삭제 확인", "선택한 최근 기록을 삭제하시겠습니까?\n(삭제 시 차감되었던 재고도 자동으로 환원됩니다.)")
+        if not result:
+            return
+            
+        indices_to_delete = []
+        for item in selection:
+            values = self.tv_recent.item(item, 'values')
+            if values:
+                try:
+                    df_idx = int(values[0])
+                    indices_to_delete.append(df_idx)
+                except ValueError:
+                    continue
+                    
+        if not indices_to_delete:
+            return
+            
+        try:
+            valid_indices_to_delete = []
+            for idx in indices_to_delete:
+                if idx not in self.daily_usage_df.index:
+                    continue
+                
+                valid_indices_to_delete.append(idx)
+                entry = self.daily_usage_df.loc[idx]
+                site = entry.get('Site', '')
+                usage_date = pd.to_datetime(entry.get('Date'))
+                
+                if not self.transactions_df.empty:
+                    trans_mask = (
+                        (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
+                        (self.transactions_df['Site'].astype(str) == str(site)) &
+                        (self.transactions_df['Type'] == 'OUT') &
+                        (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False))
+                    )
+                    self.transactions_df = self.transactions_df[~trans_mask]
+                    
+            if valid_indices_to_delete:
+                self.daily_usage_df = self.daily_usage_df.drop(valid_indices_to_delete)
+                self.daily_usage_df = self.daily_usage_df.reset_index(drop=True)
+            
+            if self.save_data():
+                # messagebox.showinfo("삭제 완료", "기록이 성공적으로 삭제되었습니다.")
+                self.update_daily_usage_view()
+                self.update_recent_entries_view() # Ensure the mini table is updated!
+                self.update_stock_view()
+                self.update_transaction_view()
+                self.refresh_inquiry_filters()
+        except Exception as e:
+            messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
+
+    def update_recent_entries_view(self):
+        """오늘 입력된 내역을 미니 테이블에 업데이트"""
+        if not hasattr(self, 'tv_recent') or getattr(self, 'daily_usage_df', None) is None or self.daily_usage_df.empty:
+            return
+            
+        for item in self.tv_recent.get_children():
+            self.tv_recent.delete(item)
+            
+        try:
+            # Filter for today's entries
+            today = datetime.datetime.now().date()
+            recent_df = self.daily_usage_df[pd.to_datetime(self.daily_usage_df['Date']).dt.date == today]
+            
+            # Or get the last 15 entries
+            if recent_df.empty:
+                recent_df = self.daily_usage_df.tail(15)
+            else:
+                recent_df = recent_df.tail(30)
+                
+            for idx, row in recent_df.iterrows():
+                # Extract first worker
+                first_worker = str(row.get('User', '')).strip()
+                if first_worker.lower() == 'nan':
+                    first_worker = ''
+                elif first_worker:
+                    import re
+                    # Remove shift markers like (주간), (야간) if present
+                    match = re.match(r"\((주간|야간|휴일|주야간)\)\s*(.*)", first_worker)
+                    if match:
+                        first_worker = match.group(2).strip()
+                        
+                date_str = str(row.get('Date', '')).split(' ')[0]
+                mat_id = row.get('MaterialID', '')
+                mat_name = self.get_material_display_name(mat_id) if hasattr(self, 'get_material_display_name') else mat_id
+                
+                values = (
+                    idx,
+                    date_str,
+                    row.get('Site', ''),
+                    row.get('검사방법', ''),
+                    row.get('검사품명', ''),
+                    mat_name,
+                    row.get('Usage', ''),
+                    first_worker
+                )
+                self.tv_recent.insert('', 'end', values=values)
+                
+            # Scroll to bottom
+            if self.tv_recent.get_children():
+                last_item = self.tv_recent.get_children()[-1]
+                self.tv_recent.see(last_item)
+        except Exception as e:
+            print(f"DEBUG: Error updating recent entries view: {e}")
+
+    def setup_daily_usage_query_tab(self):
+        """Setup the daily usage query tab"""
+        display_frame = ttk.Frame(self.tab_daily_usage_query)
+        display_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # KPI Summary Frame
+        self.kpi_frame = ttk.LabelFrame(display_frame, text="조회 기간 요약 (KPI)")
+        self.kpi_frame.pack(fill='x', padx=5, pady=(0, 5))
+        self.lbl_kpi_summary = ttk.Label(self.kpi_frame, text="데이터를 불러오는 중...", font=('Malgun Gothic', 10, 'bold'), foreground='#00529B')
+        self.lbl_kpi_summary.pack(side='left', padx=10, pady=5)
         
         # Filter controls
         filter_frame = ttk.Frame(display_frame)
-        filter_frame.pack(fill='x', padx=5, pady=5)
+        filter_frame.pack(fill='x', padx=5, pady=0)
         
         # --- Row 1: Date Filters ---
         date_row = ttk.Frame(filter_frame)
@@ -10184,6 +10475,7 @@ class MaterialManager:
         # Apply optimization after a short delay
         self.root.after(500, optimize_treeview_scroll_region)
 
+
     def _on_daily_usage_select(self, event):
         """[NEW] Update Note Detail Area and load record to form when a row is selected in Site tab"""
         if not hasattr(self, 'daily_usage_tree'): return
@@ -10290,9 +10582,33 @@ class MaterialManager:
             messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다: {e}")
 
     def setup_ndt_billing_tab(self):
+        # [NEW] Popout Control Frame
+        ctrl_frame = ttk.Frame(self.tab_ndt_billing)
+        ctrl_frame.pack(fill='x', padx=5, pady=5)
+        ttk.Label(ctrl_frame, text="💡 이 탭을 별도의 창으로 분리하여 듀얼 모니터에서 작업할 수 있습니다.", foreground='#00529B').pack(side='left')
+        ttk.Button(ctrl_frame, text="🔍 팝업창으로 열기", command=self.open_detached_ndt_billing_view).pack(side='right')
+        
         # Embed the NDT Calculator as a frame inside this tab
         self.ndt_calculator = NDTCalculatorTab(self.tab_ndt_billing, main_app=self)
         self.ndt_calculator.pack(fill='both', expand=True)
+
+    def open_detached_ndt_billing_view(self):
+        """기성 정산(NDT) 탭을 별도의 팝업창으로 엽니다."""
+        if hasattr(self, 'detached_windows') and 'ndt_billing' in self.detached_windows and self.detached_windows['ndt_billing']['window'].winfo_exists():
+            self.detached_windows['ndt_billing']['window'].lift()
+            return
+            
+        if not hasattr(self, 'detached_windows'):
+            self.detached_windows = {}
+            
+        popup = tk.Toplevel(self.root)
+        popup.title("💰 기성 정산 (NDT) (팝업)")
+        popup.geometry("1600x900")
+        
+        self.detached_windows['ndt_billing'] = {'window': popup}
+        
+        popup_calc = NDTCalculatorTab(popup, main_app=self)
+        popup_calc.pack(fill='both', expand=True, padx=5, pady=5)
 
     def setup_budget_tab(self):
         """Setup the project execution budget management tab with detailed labor cost breakdown"""
@@ -12185,7 +12501,7 @@ class MaterialManager:
                     target_pos = int(self.tab_config['daily_usage_sash_pos'])
                     # Ensure within bounds
                     if 50 < target_pos < total_h - 50:
-                        self.daily_usage_paned.sashpos(0, target_pos)
+                        getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, target_pos)
                         print(f"Restored locked absolute position: {target_pos}")
                         return
 
@@ -12208,10 +12524,10 @@ class MaterialManager:
                 target_pos = max_pos
             
             # Set sash position
-            self.daily_usage_paned.sashpos(0, target_pos)
+            getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, target_pos)
             
             # Verify position was set correctly
-            actual_pos = self.daily_usage_paned.sashpos(0)
+            actual_pos = 500
             actual_ratio = actual_pos / total_h if total_h > 0 else target_ratio
             
             # Update config
@@ -12250,7 +12566,7 @@ class MaterialManager:
                     
                     # Get current sash position and ratio
                     try:
-                        sash_pos = self.daily_usage_paned.sashpos(0)
+                        sash_pos = 500
                         ratio = (sash_pos / pane_height * 100) if pane_height > 0 else 0
                         resolution_text = f"창: {window_width}x{window_height} | 화면: {screen_width}x{screen_height} | 패널: {pane_width}x{pane_height} | 경계: {ratio:.1f}%"
                     except:
@@ -12282,14 +12598,14 @@ class MaterialManager:
                     pos = int(self.tab_config['daily_usage_sash_pos'])
                     # Only apply if it doesn't hide the bottom area completely
                     if 50 < pos < total_h - 50:
-                        self.daily_usage_paned.sashpos(0, pos)
+                        getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, pos)
                         return
                 
                 # Fallback to ratio
                 if 'daily_usage_sash_ratio' in self.tab_config:
                     ratio = self.tab_config['daily_usage_sash_ratio']
                     locked_pos = int(total_h * ratio)
-                    self.daily_usage_paned.sashpos(0, locked_pos)
+                    getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, locked_pos)
         except Exception as e:
             print(f"Error restoring locked position: {e}")
     
@@ -12313,7 +12629,7 @@ class MaterialManager:
                     min_pos, max_pos = 50, total_h - 50
                     new_pos = max(min_pos, min(new_pos, max_pos))
                     
-                self.daily_usage_paned.sashpos(0, new_pos)
+                getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, new_pos)
         except Exception as e:
             print(f"Error handling resize: {e}")
             # Fallback if something went wrong during resize
@@ -12327,7 +12643,7 @@ class MaterialManager:
                 self.root.update_idletasks()
                 
                 total_height = self.daily_usage_paned.winfo_height()
-                sash_pos = self.daily_usage_paned.sashpos(0)
+                sash_pos = 500
                 
                 if not hasattr(self, 'tab_config'):
                     self.tab_config = {}
@@ -12568,19 +12884,23 @@ class MaterialManager:
             u_key = 'User' if i == 1 else f'User{i}'
             wt_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
             ot_key = 'OT' if i == 1 else f'OT{i}'
+            m_key = 'Meal' if i == 1 else f'Meal{i}'
             
             if group:
                 name = group.get_worker().strip()
                 wt = group.get_time().strip()
                 ot = group.get_ot().strip()
+                meal = group.get_meal().strip()
                 worker_data_map[u_key] = name
                 worker_data_map[wt_key] = wt
                 worker_data_map[ot_key] = ot
+                worker_data_map[m_key] = meal
                 if name: workers_list.append(name)
             else:
                 worker_data_map[u_key] = ""
                 worker_data_map[wt_key] = ""
                 worker_data_map[ot_key] = ""
+                worker_data_map[m_key] = ""
         
         all_workers = ", ".join(workers_list)
 
@@ -12664,8 +12984,11 @@ class MaterialManager:
             self.sites.append(new_site)
             self.refresh_ui_for_list_change('sites')
 
+        total_meal_worker = sum(to_f(worker_data_map.get(f'Meal{i}' if i > 1 else 'Meal', 0)) for i in range(1, 11))
+        global_meal = to_f(self.ent_daily_meal_cost)
+        
         common_data.update({
-            '일식': to_f(self.ent_daily_meal_cost),
+            '일식': total_meal_worker if total_meal_worker > 0 else global_meal,
             '검사비': to_f(self.ent_daily_test_fee),
             'FilmCount': 0.0,
             'Note': self._get_merged_memo_and_note(),
@@ -12857,10 +13180,11 @@ class MaterialManager:
             master_group = self.worker_group1
             wt1 = master_group.ent_worktime.get().strip()
             ot1 = master_group.ent_ot.get().strip()
+            meal1 = master_group.get_meal().strip()
             shift1 = master_group.cb_shift.get()
             
-            if not wt1 and not ot1:
-                messagebox.showwarning("입력 필요", "작업자 1의 작업시간이나 OT를 입력해주세요.")
+            if not wt1 and not ot1 and not meal1:
+                messagebox.showwarning("입력 필요", "작업자 1의 작업시간이나 OT, 또는 일비를 입력해주세요.")
                 return
 
             for i in range(2, 11):
@@ -12885,11 +13209,21 @@ class MaterialManager:
                 
                 # Sync OT
                 target_group.set_ot(ot1)
+                
+                # Sync Meal
+                target_group.set_meal(meal1)
             
-            messagebox.showinfo("완료", "작업자 1의 설정(주야/시간/OT)이 성명이 입력된 모든 작업자에게 적용되었습니다.")
+            messagebox.showinfo("완료", "작업자 1의 설정(주야/시간/OT/일비)이 성명이 입력된 모든 작업자에게 적용되었습니다.")
+            
+            # [FIX] Prevent RTK grid from being click-blocked after bulk apply & auto-focus
+            if hasattr(self, 'rtk_grid') and self.rtk_grid.winfo_ismapped():
+                self.rtk_grid.lift()
+                if getattr(self, 'cb_daily_test_method', None) and self.cb_daily_test_method.get().strip() == 'RT':
+                    if hasattr(self, 'rtk_entries') and "센터미스" in self.rtk_entries:
+                        self.rtk_entries["센터미스"].focus_set()
+                        
         except Exception as e:
             messagebox.showerror("오류", f"동기화 중 오류가 발생했습니다: {e}")
-
     def _load_ndt_product_map(self):
         """config 에서 NDT 약품 → 실제 DB 품목명 매핑 불러오기"""
         try:
@@ -13697,6 +14031,7 @@ class MaterialManager:
                 u_key = 'User' if i == 1 else f'User{i}'
                 wt_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
                 ot_key = 'OT' if i == 1 else f'OT{i}'
+                m_key = 'Meal' if i == 1 else f'Meal{i}'
                 
                 group.cb_name.set(self.clean_nan(record.get(u_key, '')))
                 # [FIX] Use set_time to properly parse (Shift) Time string and populate both shift and time widgets
@@ -13704,6 +14039,9 @@ class MaterialManager:
                 
                 group.ent_ot.delete(0, tk.END)
                 group.ent_ot.insert(0, self.clean_nan(record.get(ot_key, '')))
+                
+                group.ent_meal.delete(0, tk.END)
+                group.ent_meal.insert(0, self.clean_nan(record.get(m_key, '')))
 
             # 5. RTK
 
@@ -13838,6 +14176,41 @@ class MaterialManager:
                 messagebox.showwarning("입력 오류", "현장명을 입력해주세요.")
                 return
 
+            # [NEW VALIDATION START]
+            # 1-1. 차량 운행 유효성 검사
+            if hasattr(self, 'vehicle_widget'):
+                veh_data = self.vehicle_widget.get_data()
+                if veh_data.get('vehicle_info'):
+                    if not veh_data.get('mileage'):
+                        if not messagebox.askyesno("입력 확인", "차량 정보는 선택되었으나 주행거리가 입력되지 않았습니다.\n이대로 저장하시겠습니까?"):
+                            return
+
+            # 1-2. 투입 인원 대비 검사 물량 검사
+            has_workers = False
+            if hasattr(self, 'worker_groups'):
+                for wg in self.worker_groups:
+                    if wg.get_worker() and wg.get_time():
+                        has_workers = True
+                        break
+            
+            has_ndt_qty = False
+            if hasattr(self, 'ndt_company_entries'):
+                for comp_dict in self.ndt_company_entries:
+                    for mat, entry_widget in comp_dict.items():
+                        if mat == '_company': continue
+                        try:
+                            qty = float(entry_widget.get().strip() or 0)
+                            if qty > 0:
+                                has_ndt_qty = True
+                                break
+                        except: pass
+                    if has_ndt_qty: break
+
+            if has_workers and not has_ndt_qty:
+                if not messagebox.askyesno("입력 확인", "투입된 인원(작업시간)은 있으나 검사 물량(NDT 수량)이 모두 0입니다.\n결측치일 가능성이 있습니다. 이대로 저장하시겠습니까?"):
+                    return
+            # [NEW VALIDATION END]
+
             # 2. 품목 ID 확인 (디스플레이 명칭 기반 매칭)
             mat_display = self.cb_daily_material.get().strip()
             mat_id = ""
@@ -13948,6 +14321,7 @@ class MaterialManager:
                     self.remove_box(key)
 
                 self.update_daily_usage_view()
+                self.update_recent_entries_view()
                 self.refresh_inquiry_filters()
                 self.update_stock_view()
                 
@@ -14961,6 +15335,56 @@ class MaterialManager:
         except Exception as e:
             messagebox.showerror("오류", f"전체 세션 저장 중 오류 발생: {e}")
 
+    def load_previous_day_data(self):
+        """선택된 현장의 가장 최근 기록(전일 데이터)을 불러와 폼을 채웁니다."""
+        site = self.cb_daily_site.get().strip()
+        if not site:
+            messagebox.showwarning("입력 오류", "먼저 현장명을 선택하거나 입력해주세요.")
+            return
+            
+        if self.daily_usage_df.empty:
+            messagebox.showinfo("알림", "저장된 기록이 없습니다.")
+            return
+            
+        df_site = self.daily_usage_df[self.daily_usage_df['Site'] == site].copy()
+        if df_site.empty:
+            messagebox.showinfo("알림", f"'{site}' 현장의 이전 기록이 없습니다.")
+            return
+            
+        # 가장 최근 날짜 찾기
+        df_site['Date'] = pd.to_datetime(df_site['Date'])
+        recent_date = df_site['Date'].max()
+        df_recent = df_site[df_site['Date'] == recent_date]
+        
+        date_str = recent_date.strftime('%Y-%m-%d')
+        if not messagebox.askyesno("전일 데이터 불러오기", f"'{site}' 현장의 가장 최근 기록({date_str})을 불러오시겠습니까?\n(기존 입력된 작업자/차량 정보는 덮어쓰기 됩니다.)"):
+            return
+            
+        try:
+            # 1. 작업자 정보 복원 (최초 레코드 기준)
+            first_record = df_recent.iloc[0]
+            if hasattr(self, 'worker_groups'):
+                for i, group in enumerate(self.worker_groups):
+                    u_col = 'User' if i == 0 else f'User{i+1}'
+                    t_col = 'WorkTime' if i == 0 else f'WorkTime{i+1}'
+                    o_col = 'OT' if i == 0 else f'OT{i+1}'
+                    
+                    worker = first_record.get(u_col, '')
+                    worktime = first_record.get(t_col, '')
+                    ot = first_record.get(o_col, '')
+                    
+                    group.set_worker(self.clean_nan(worker))
+                    group.set_time(self.clean_nan(worktime))
+                    group.set_ot(self.clean_nan(ot))
+                
+            # 2. 차량 정보 복원
+            if hasattr(self, 'vehicle_widget'):
+                self.vehicle_widget.cb_vehicle_info.set(self.clean_nan(first_record.get('VehicleNo', '')))
+                
+            messagebox.showinfo("완료", f"{date_str}의 작업자 및 차량 정보가 성공적으로 불러와졌습니다.\n(검사 물량 및 자재 소모량은 오늘 기준에 맞게 새로 입력해주세요.)")
+        except Exception as e:
+            messagebox.showerror("오류", f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+
     def load_form_session(self):
         """Orchestrate loading session data back to all entry tabs from a JSON file"""
         try:
@@ -15465,6 +15889,7 @@ class MaterialManager:
         total_rtk = [0.0] * len(rtk_categories)
         total_ndt = [0.0] * 7
         total_test_amount = 0.0
+        method_totals = {}
         total_unit_price = 0.0
         total_travel_cost = 0.0
         total_meal_cost = 0.0
@@ -15591,6 +16016,9 @@ class MaterialManager:
             # Sum totals (Guarded by duplicate check to prevent double-counting)
             if not is_duplicate_split:
                 total_test_amount += q_val
+                method = str(entry.get('검사방법', '')).strip().upper()
+                if method:
+                    method_totals[method] = method_totals.get(method, 0.0) + q_val
                 total_unit_price += p_val
                 total_travel_cost += t_val_cost
                 total_meal_cost += m_val_cost
@@ -15951,7 +16379,10 @@ class MaterialManager:
             # --- BUILD FINAL VISIBILITY (MERGED LOGIC) ---
             all_cols = list(self.daily_usage_tree['columns'])
             # manual_set: columns user explicitly hid via column manager (empty = no exclusions)
-            manual_hidden = set(all_cols) - set(getattr(self, 'manual_visible_cols', all_cols))
+            manual_visible_list = getattr(self, 'manual_visible_cols', [])
+            if not manual_visible_list:
+                manual_visible_list = all_cols
+            manual_hidden = set(all_cols) - set(manual_visible_list)
             
             # [SAFETY] Core columns that should almost never be hidden unless user is very specific
             # [REFINED] Minimal mandatory columns to allow smarter auto-hiding of empty fields
@@ -16026,6 +16457,29 @@ class MaterialManager:
                         try:
                             self.daily_usage_tree.column(col, width=int(saved_widths[col]), stretch=False)
                         except: pass
+
+        # KPI Update [NEW]
+        # KPI Update [NEW]
+        if hasattr(self, 'lbl_kpi_summary'):
+            if filtered_df.empty:
+                self.lbl_kpi_summary.config(text="조회된 데이터가 없습니다.")
+            else:
+                method_strs = []
+                # Sort methods for consistent display (RT, UT, MT, PT, etc.)
+                for m in sorted(method_totals.keys()):
+                    q = method_totals[m]
+                    if q > 0:
+                        method_strs.append(f"{m} 합계: {q:,.1f}")
+                method_text = "  |  ".join(method_strs) if method_strs else "검사물량 없음"
+                
+                kpi_text = (f"총 레코드 수: {len(filtered_df):,.0f}건  |  "
+                            f"총 작업시간: {total_work_hours:,.1f} 시간  |  "
+                            f"총 OT 시간: {total_ot_hours:,.1f} 시간  |  "
+                            f"{method_text}  |  "
+                            f"총 주행거리: {total_mileage:,.0f} km")
+                self.lbl_kpi_summary.config(text=kpi_text)
+
+        self.update_recent_entries_view()
 
     def reset_daily_usage_filters(self):
         """Reset all daily usage history filters to default values"""
@@ -16143,14 +16597,12 @@ class MaterialManager:
 
         deleted_count = 0
         try:
-            # Sort indices in descending order to avoid index shift issues during deletion
-            # But wait, we are using boolean masking or actual indices in the original dataframe
-            # Since we will drop them at once or one by one from the original, it's better to collect all indices.
-            
+            valid_indices_to_delete = []
             for idx in indices_to_delete:
                 if idx not in self.daily_usage_df.index:
                     continue
                 
+                valid_indices_to_delete.append(idx)
                 entry = self.daily_usage_df.loc[idx]
                 
                 # --- [FIX] 재고 환원 로직 (자동 차감된 트랜잭션만 선택적으로 환원) ---
@@ -16168,8 +16620,9 @@ class MaterialManager:
                     self.transactions_df = self.transactions_df[~trans_mask]
                     deleted_count += 1
 
-            # 기록 삭제
-            self.daily_usage_df = self.daily_usage_df.drop(indices_to_delete)
+            if valid_indices_to_delete:
+                # 기록 삭제
+                self.daily_usage_df = self.daily_usage_df.drop(valid_indices_to_delete)
             
             # 인덱스 초기화는 하지 않음 (태그 매칭을 위해 원본 인덱스 유지 권장하나, 
             # drop 후에는 뷰 업데이트 시 어차피 다시 생성되므로 안전하게 reset_index 가능)
@@ -16178,6 +16631,7 @@ class MaterialManager:
             if self.save_data():
                 messagebox.showinfo("삭제 완료", f"{len(indices_to_delete)}개의 기록이 삭제되고 재고가 환원되었습니다.")
                 self.update_daily_usage_view()
+                self.update_recent_entries_view() # Ensure the mini table is updated!
                 self.update_stock_view()
                 self.update_transaction_view()
                 self.refresh_inquiry_filters()
@@ -17817,12 +18271,18 @@ class MaterialManager:
 
             daily_usage_sash_pos = None
             if hasattr(self, 'daily_usage_paned'):
-                try: daily_usage_sash_pos = self.daily_usage_paned.sashpos(0)
+                try: daily_usage_sash_pos = 500
                 except: pass
 
             daily_history_sash_pos = None
             if hasattr(self, 'daily_history_paned'):
                 try: daily_history_sash_pos = self.daily_history_paned.sashpos(0)
+                except: pass
+
+            bottom_dashboard_sashes = []
+            if hasattr(self, 'bottom_dashboard') and isinstance(self.bottom_dashboard, ttk.PanedWindow):
+                try:
+                    bottom_dashboard_sashes = [self.bottom_dashboard.sashpos(0), self.bottom_dashboard.sashpos(1)]
                 except: pass
 
             entry_inner_frame_height = None
@@ -17862,6 +18322,7 @@ class MaterialManager:
                 'daily_usage_sash_locked': getattr(self, 'daily_usage_sash_locked', False),
                 'daily_usage_sash_pos': daily_usage_sash_pos,
                 'daily_history_sash_pos': daily_history_sash_pos,
+                'bottom_dashboard_sashes': bottom_dashboard_sashes,
                 'entry_inner_frame_height': entry_inner_frame_height,
                 'history_visible_cols': getattr(self, 'manual_visible_cols', []),
                 'monthly_visible_cols': getattr(self, 'monthly_visible_cols', []),
@@ -18353,21 +18814,7 @@ class MaterialManager:
                 
                 draggable_geos = config.get('draggable_geometries', {})
                 for key, geo in draggable_geos.items():
-                    if key.startswith('memo_'):
-                        self._loading_memos.append(key)
-                        self.add_new_memo(
-                            initial_text=geo.get('text', ""), 
-                            initial_title=geo.get('memo_title', "메모"), 
-                            key=key
-                        )
-                    elif key.startswith('checklist_'):
-                        self._loading_memos.append(key)
-                        self.add_new_checklist(
-                            initial_data=geo.get('checklist_items', []),
-                            initial_title=geo.get('checklist_title', "체크리스트"),
-                            key=key
-                        )
-                    elif key.startswith('clone_'):
+                    if key.startswith('clone_'):
                         self._loading_memos.append(key)
                         cls_name = geo.get('widget_class_name', 'Entry')
                         cls = class_map.get(cls_name, ttk.Entry)
@@ -18375,10 +18822,8 @@ class MaterialManager:
                         kwargs = geo.get('widget_kwargs', {})
                         m_list_key = geo.get('manage_list_key')
                         cont, w = self.create_draggable_container(self.entry_inner_frame, label, cls, key, manage_list_key=m_list_key, **kwargs)
-                    elif key.startswith('vehicle_inspection_'):
-                        self._loading_memos.append(key)
-                        data = geo.get('vehicle_data', {})
-                        self.add_vehicle_inspection_box(initial_data=data, key=key)
+                    # [UI REVISION] Legacy floating boxes (memo, checklist, vehicle) are no longer recreated 
+                    # because they are now permanently embedded in the bottom dashboard.
 
                 # 2. DELAYED RESTORATION: Restore complex states after UI mapped
                 def delayed_restore():
@@ -18561,14 +19006,35 @@ class MaterialManager:
                                         safe_pos = min_pos
                                     if safe_pos > max_pos:
                                         safe_pos = max_pos
-                                    self.daily_usage_paned.sashpos(0, safe_pos)
+                                    getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, safe_pos)
                                 else:
-                                    self.daily_usage_paned.sashpos(0, int(daily_sash))
+                                    getattr(self.daily_usage_paned, "sashpos", lambda *args: 500)(0, int(daily_sash))
                             
                             # History sash
                             history_sash = config.get('daily_history_sash_pos')
                             if history_sash is not None and hasattr(self, 'daily_history_paned'):
                                 self.daily_history_paned.sashpos(0, int(history_sash))
+                                
+                            # Bottom dashboard sashes
+                            bottom_sashes = config.get('bottom_dashboard_sashes', [])
+                            if bottom_sashes and len(bottom_sashes) >= 2 and hasattr(self, 'bottom_dashboard') and isinstance(self.bottom_dashboard, ttk.PanedWindow):
+                                try:
+                                    # Ensure widget is fully drawn before setting sashes
+                                    self.bottom_dashboard.update_idletasks()
+                                    total_w = self.bottom_dashboard.winfo_width()
+                                    
+                                    if total_w > 300: # Make sure window is mapped and has a reasonable width
+                                        # Clamp sash 1: at least 100px from left, at most 200px from right edge
+                                        s1 = max(100, min(int(bottom_sashes[0]), total_w - 200))
+                                        # Clamp sash 2: at least 100px from sash 1, at most 50px from right edge
+                                        s2 = max(s1 + 100, min(int(bottom_sashes[1]), total_w - 50))
+                                        
+                                        self.bottom_dashboard.sashpos(0, s1)
+                                        self.bottom_dashboard.sashpos(1, s2)
+                                    else:
+                                        self.bottom_dashboard.sashpos(0, int(bottom_sashes[0]))
+                                        self.bottom_dashboard.sashpos(1, int(bottom_sashes[1]))
+                                except: pass
                                 
                             # If sash lock is active (check config heavily)
                             config_locked = config.get('daily_usage_sash_locked', False)
@@ -18585,10 +19051,8 @@ class MaterialManager:
                     self.root.after(100, apply_sashes)
                     self.root.after(800, apply_sashes)
 
-                    # 5. [FIX] Recalculate entry_inner_frame height instead of using potentially stale config
+                    # 5. Refresh canvas scroll region
                     if hasattr(self, 'entry_inner_frame'):
-                        self._adjust_parent_height(self.entry_inner_frame, force=True)
-                        # Also refresh canvas
                         self._ensure_canvas_scroll_region()
                     
                     # 6. Final UI refresh
@@ -19058,6 +19522,8 @@ class MaterialManager:
         p_cb_mat.bind("<<ComboboxSelected>>", sync_and_refresh)
 
         ttk.Button(filter_row, text="조회", width=6, command=sync_and_refresh).pack(side='left', padx=5)
+        
+        ttk.Button(filter_row, text="🔄 새로고침", command=sync_and_refresh).pack(side='right', padx=5)
         
         paned = ttk.PanedWindow(main_frame, orient="vertical")
         paned.pack(expand=True, fill='both')
