@@ -4,10 +4,31 @@ import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 import os
 from datetime import datetime
+import json
+
+CONFIG_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "위험성평가_설정.json")
+
+def load_config():
+    if os.path.exists(CONFIG_FILE_PATH):
+        try:
+            with open(CONFIG_FILE_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_config(config):
+    os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
+    try:
+        with open(CONFIG_FILE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+    except:
+        pass
 
 # Styles
-bold_font = Font(bold=True)
-title_font = Font(bold=True, size=20)
+bold_font = Font(name='맑은 고딕', size=13, bold=True)
+title_font = Font(name='맑은 고딕', size=20, bold=True)
+data_font = Font(name='맑은 고딕', size=14) # 커진 셀 높이에 어울리도록 기본 글씨 크기 확대
 center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
 left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
 thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
@@ -33,9 +54,21 @@ def create_excel(process_name, output_filename, data, params):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "위험성 평가서"
+    
+    # 인쇄 방향(가로) 및 자동 맞춤 설정
+    ws.page_setup.orientation = 'landscape'
+    ws.sheet_view.zoomScale = 75 # 화면 배율
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_title_rows = '5:6' # 5~6행 인쇄 제목으로 반복
 
     # Columns width setup (25 columns: A to Y)
-    widths = [11, 11, 30, 9, 5, 5, 6] + [6] * 18
+    widths = [12.5, 12, 33, 9, 5, 5, 9] # A:G (A열 너비 아주 조금 더 확대)
+    widths += [7]                     # H
+    widths += [8.2] * 7               # I~O (글자 잘림 방지만 위해 아주 조금만 확대)
+    widths += [7] * 4                 # P~S
+    widths += [13.5] * 6              # T~Y (원래 비율에 가깝게 복구)
     for i, width in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = width
 
@@ -128,7 +161,7 @@ def create_excel(process_name, output_filename, data, params):
     ws.merge_cells('W6:Y6'); ws['W6'] = "안전관리자\n보건관리자"
 
     for r in range(5, 7):
-        ws.row_dimensions[r].height = 25
+        ws.row_dimensions[r].height = 35
         for c in range(1, 26):
             cell = ws.cell(row=r, column=c)
             cell.alignment = center_align
@@ -185,17 +218,41 @@ def create_excel(process_name, output_filename, data, params):
         ws.merge_cells(f'T{current_row}:V{current_row}')
         ws.merge_cells(f'W{current_row}:Y{current_row}')
         
-        ws.row_dimensions[current_row].height = 65
+        ws.row_dimensions[current_row].height = 105
         current_row += 1
 
+    # 중복공정(중공종, 작업위치) 세로 병합 시 페이지 경계(16행, 26행 등)에서 분리하여 하단 테두리 누락 방지
     r = 7
     for cat, count in groups.items():
         if count > 1:
-            ws.merge_cells(f'A{r}:A{r+count-1}')
-            ws.merge_cells(f'B{r}:B{r+count-1}')
+            current_start = r
+            current_end = r + count - 1
+            
+            # 모든 파일(RT, PT, UT, 컨테이너) 동일하게 1페이지 병합 기준을 15행으로 통일
+            first_page_break = 15
+            
+            while current_start <= current_end:
+                if current_start <= first_page_break:
+                    page_end = first_page_break
+                else:
+                    page_idx = (current_start - (first_page_break + 1)) // 8
+                    page_end = first_page_break + (page_idx + 1) * 8
+                
+                merge_end = min(current_end, page_end)
+                
+                if current_start < merge_end:
+                    ws.merge_cells(f'A{current_start}:A{merge_end}')
+                    ws.merge_cells(f'B{current_start}:B{merge_end}')
+                
+                current_start = merge_end + 1
         r += count
 
     set_border(ws, 1, 7, 25, current_row - 1)
+    
+    # 커진 셀 높이(105)에 맞춰 7행 이하 데이터 셀들의 글자 크기를 14pt로 확대
+    for row in ws.iter_rows(min_row=7, max_row=current_row - 1, min_col=1, max_col=25):
+        for cell in row:
+            cell.font = data_font
 
     try:
         wb.save(output_filename)
@@ -259,11 +316,74 @@ data_container = [
     ["유지 및 운영", "환기 불량 상태에서 난방기기 사용 중 일산화탄소 중독", "작업 전 TBM 전파", 1, 3, "V", "1. 주기적인 환기(일 2회 이상) 실시\n2. 내부 화기 취급 금지 및 필요시 가스 감지기 설치"]
 ]
 
+DATA_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "위험성평가_기본데이터.xlsx")
+
+def init_data_file():
+    if os.path.exists(DATA_FILE_PATH):
+        return
+    
+    os.makedirs(os.path.dirname(DATA_FILE_PATH), exist_ok=True)
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    
+    default_data = {
+        "RT": data_rt,
+        "UT": data_ut,
+        "PT": data_pt,
+        "컨테이너": data_container
+    }
+    
+    headers = ["중공종", "위험요인(위험성평가)", "기존대책(미사용)", "빈도", "강도", "기존등급(미사용)", "위험성평가 개선대책"]
+    
+    for sheet_name, data in default_data.items():
+        ws = wb.create_sheet(sheet_name)
+        ws.append(headers)
+        for c in range(1, 8):
+            ws.cell(row=1, column=c).font = Font(bold=True)
+            ws.cell(row=1, column=c).fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
+            
+        for row in data:
+            ws.append(row)
+            
+        ws.column_dimensions['A'].width = 15
+        ws.column_dimensions['B'].width = 60
+        ws.column_dimensions['C'].width = 30
+        ws.column_dimensions['D'].width = 10
+        ws.column_dimensions['E'].width = 10
+        ws.column_dimensions['F'].width = 15
+        ws.column_dimensions['G'].width = 80
+            
+    wb.save(DATA_FILE_PATH)
+
+def load_data(sheet_name):
+    init_data_file()
+    wb = openpyxl.load_workbook(DATA_FILE_PATH, data_only=True)
+    if sheet_name not in wb.sheetnames:
+        return []
+        
+    ws = wb[sheet_name]
+    data = []
+    for i, row in enumerate(ws.iter_rows(values_only=True)):
+        if i == 0: continue
+        if not row[0] and not row[1]: continue
+        
+        item = [
+            row[0] or "",
+            row[1] or "",
+            row[2] or "",
+            row[3] if row[3] is not None else 1,
+            row[4] if row[4] is not None else 1,
+            row[5] or "",
+            row[6] or ""
+        ]
+        data.append(item)
+    return data
+
 class RiskAssessmentApp:
     def __init__(self, root):
         self.root = root
         self.root.title("위험성 평가표 자동 생성기")
-        self.root.geometry("450x600")
+        self.root.geometry("450x640")
         self.root.resizable(False, False)
         
         style = ttk.Style()
@@ -344,11 +464,21 @@ class RiskAssessmentApp:
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill='x', pady=10)
         
+        self.btn_edit_data = ttk.Button(btn_frame, text="기본 데이터 수정하기 (엑셀 연동)", command=self.open_data_file, width=35)
+        self.btn_edit_data.pack(pady=(0, 5))
+        
         self.btn_generate = ttk.Button(btn_frame, text="선택한 위험성 평가표 일괄 생성", command=self.generate_files, width=35)
         self.btn_generate.pack(pady=5)
         
         self.lbl_status = ttk.Label(main_frame, text="대기 중...", foreground="gray")
         self.lbl_status.pack()
+
+    def open_data_file(self):
+        init_data_file()
+        try:
+            os.startfile(DATA_FILE_PATH)
+        except Exception as e:
+            messagebox.showerror("오류", f"엑셀 파일을 여는 중 오류가 발생했습니다:\n{e}")
 
     def generate_files(self):
         params = {
@@ -361,10 +491,17 @@ class RiskAssessmentApp:
             'eval_type': self.cb_eval_type.get(),
             'director_comment': self.ent_comment.get().strip()
         }
-        
-        output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=os.path.dirname(os.path.abspath(__file__)))
+        config = load_config()
+        initial_dir = config.get("last_output_dir", os.path.dirname(os.path.abspath(__file__)))
+        if not os.path.exists(initial_dir):
+            initial_dir = os.path.dirname(os.path.abspath(__file__))
+            
+        output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=initial_dir)
         if not output_dir:
             return
+            
+        config["last_output_dir"] = output_dir
+        save_config(config)
             
         self.btn_generate.config(state='disabled')
         self.lbl_status.config(text="생성 중...", foreground="blue")
@@ -375,22 +512,22 @@ class RiskAssessmentApp:
         try:
             if self.var_rt.get():
                 fname = os.path.join(output_dir, "4.4.1_위험성평가표(RT_표준양식).xlsx")
-                res, msg = create_excel("방사선투과검사", fname, data_rt, params)
+                res, msg = create_excel("방사선투과검사", fname, load_data("RT"), params)
                 if res: results.append(msg)
                 
             if self.var_ut.get():
                 fname = os.path.join(output_dir, "4.4.1_위험성평가표(UT_표준양식).xlsx")
-                res, msg = create_excel("초음파탐상검사", fname, data_ut, params)
+                res, msg = create_excel("초음파탐상검사", fname, load_data("UT"), params)
                 if res: results.append(msg)
                 
             if self.var_pt.get():
                 fname = os.path.join(output_dir, "4.4.1_위험성평가표(PT_표준양식).xlsx")
-                res, msg = create_excel("침투탐상검사", fname, data_pt, params)
+                res, msg = create_excel("침투탐상검사", fname, load_data("PT"), params)
                 if res: results.append(msg)
                 
             if self.var_container.get():
                 fname = os.path.join(output_dir, "4.4.1_위험성평가표(컨테이너_표준양식).xlsx")
-                res, msg = create_excel("가설컨테이너 설치 및 운영", fname, data_container, params)
+                res, msg = create_excel("가설컨테이너 설치 및 운영", fname, load_data("컨테이너"), params)
                 if res: results.append(msg)
                 
             if results:
