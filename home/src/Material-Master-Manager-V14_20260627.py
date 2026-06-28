@@ -3357,6 +3357,9 @@ class MaterialManager:
         self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
         self.setup_ndt_billing_tab()
         
+        # Select default tab instantly to prevent flicker
+        self.notebook.select(self.tab_daily_usage)
+        
         # Initial view update (Move here to ensure all tabs are ready before refresh)
         self.refresh_inquiry_filters()
         self.update_daily_usage_view()
@@ -18528,8 +18531,9 @@ class MaterialManager:
                                 self.notebook.insert(i, tab, text=tab_text)
                 
                 # Restore selected tab
-                selected_idx = config.get('selected_tab', 0)
-                selected_text = config.get('selected_tab_text', "")
+                # [USER REQUEST] Always start at Daily Usage tab
+                selected_idx = 4
+                selected_text = "현장별 일일 사용량 기입"
                 
                 tab_restored = False
                 if selected_text:
