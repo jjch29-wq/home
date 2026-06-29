@@ -1,8 +1,8 @@
 {
     "MATERIAL_COST": {
-        "RT (B필름: 3⅓\"x17\")": 3379,
-        "RT (A필름: 3⅓\"x12\")": 2540,
-        "RT (A/2필름: 3⅓\"x6\")": 1515,
+        "RT (B필름: 3⅓\"x17\")": 8864,
+        "RT (A필름: 3⅓\"x12\")": 8024,
+        "RT (A/2필름: 3⅓\"x6\")": 6999,
         "UT": 1115,
         "PT": 3971
     },
@@ -91,20 +91,20 @@
         }
     },
     "TREE_WIDTHS": {
-        "date": 169,
-        "loc": 242,
-        "type": 82,
-        "time": 110,
-        "mat": 178,
-        "qty": 97,
-        "unit": 86,
-        "corr": 133,
-        "adj_qty": 126,
-        "mat_cost": 140,
-        "lab_cost": 142,
-        "overhead": 130,
-        "tech": 127,
-        "total_amt": 159
+        "date": 182,
+        "loc": 255,
+        "type": 95,
+        "time": 123,
+        "mat": 191,
+        "qty": 110,
+        "unit": 99,
+        "corr": 146,
+        "adj_qty": 139,
+        "mat_cost": 153,
+        "lab_cost": 156,
+        "overhead": 144,
+        "tech": 141,
+        "total_amt": 172
     },
-    "SASH_POS": 332
+    "SASH_POS": 130
 }

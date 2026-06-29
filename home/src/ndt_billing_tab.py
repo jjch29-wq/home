@@ -382,6 +382,7 @@ class NDTCalculatorTab(ttk.Frame):
                     
                     c_var = tk.StringVar(value="0")
                     p_var = tk.StringVar(value="0")
+                    c_price_var = tk.StringVar(value="0")
                     
                     unit_cost = 0
                     try:
@@ -433,7 +434,7 @@ class NDTCalculatorTab(ttk.Frame):
                     lbl_rem = ttk.Label(contract_inner_frame, textvariable=rem_qty, width=8, anchor="e", font=("Arial", 9, "bold"))
                     lbl_rem.grid(row=row_idx, column=7, padx=1, pady=1)
                     
-                    ttk.Label(contract_inner_frame, text=f"{unit_cost:,}").grid(row=row_idx, column=8, sticky="e", padx=2, pady=1)
+                    ttk.Label(contract_inner_frame, textvariable=c_price_var, anchor="e", width=12).grid(row=row_idx, column=8, padx=2, pady=1)
                     ttk.Entry(contract_inner_frame, textvariable=c_var, width=12).grid(row=row_idx, column=9, padx=1, pady=1)
                     ttk.Entry(contract_inner_frame, textvariable=p_var, width=12).grid(row=row_idx, column=10, padx=1, pady=1)
                     
@@ -442,7 +443,7 @@ class NDTCalculatorTab(ttk.Frame):
                     
                     self.contract_vars[full_key] = {
                         "c_qty": c_qty, "p_qty": p_qty, "curr_qty": curr_qty, "rem_qty": rem_qty, "lbl_rem": lbl_rem,
-                        "c_price": unit_cost, "contract": c_var, "prev": p_var
+                        "c_price": unit_cost, "c_price_var": c_price_var, "contract": c_var, "prev": p_var
                     }
                     row_idx += 1
                     
@@ -1107,7 +1108,15 @@ class NDTCalculatorTab(ttk.Frame):
             messagebox.showerror("오류", f"저장 중 오류가 발생했습니다: {e}")
 
     def auto_load_contract_qty(self):
+        global CONFIG, MATERIAL_COST, LABOR_COST
+        CONFIG = load_config()
+        MATERIAL_COST = CONFIG["MATERIAL_COST"]
+        LABOR_COST = CONFIG["LABOR_COST"]
         contract_qtys = CONFIG.get("CONTRACT_QTY", {})
+        
+        debug_msg = []
+        updated_count = 0
+        
         for loc in contract_qtys:
             for t_time in contract_qtys[loc]:
                 if isinstance(contract_qtys[loc][t_time], dict):
@@ -1116,6 +1125,9 @@ class NDTCalculatorTab(ttk.Frame):
                         if key in self.contract_vars:
                             formatted = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
                             self.contract_vars[key]["c_qty"].set(formatted)
+                            updated_count += 1
+                            if updated_count <= 3:
+                                debug_msg.append(f"{key}: {formatted}")
                             
                             # Recalculate unit cost dynamically based on latest config and UI rates
                             try:
@@ -1130,8 +1142,10 @@ class NDTCalculatorTab(ttk.Frame):
                                 tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
                                 unit_cost = mat_unit + lab_unit + oh + tech
                                 self.contract_vars[key]["c_price"] = unit_cost
+                                self.contract_vars[key]["c_price_var"].set(f"{int(unit_cost):,}")
                             except Exception as e:
                                 unit_cost = self.contract_vars[key].get("c_price", 0)
+                                self.contract_vars[key].get("c_price_var", tk.StringVar()).set(f"{int(unit_cost):,}")
                                 
                             amt = float(val) * unit_cost
                             self.contract_vars[key]["contract"].set(f"{int(amt):,}")
@@ -1161,7 +1175,8 @@ class NDTCalculatorTab(ttk.Frame):
                         amt = float(val) * unit_cost
                         self.contract_vars[key]["contract"].set(f"{int(amt):,}")
                     
-        messagebox.showinfo("불러오기 완료", "산출명세서(6-1. RT 등)의 세부 물량이 주간/야간/휴일별로 자동 기입되었습니다.")
+        msg = f"총 {updated_count}개의 항목이 업데이트 되었습니다.\n\n[업데이트 샘플]\n" + "\n".join(debug_msg)
+        messagebox.showinfo("불러오기 완료", msg)
 
     def load_project(self):
         try:
