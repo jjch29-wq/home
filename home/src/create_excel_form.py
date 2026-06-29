@@ -159,11 +159,11 @@ def generate_excel(data, output_path):
             ws.row_dimensions[row].height = 35
 
     current_row = start_row + len(table_data) + 1
-    ws.row_dimensions[current_row-1].height = 30
+    ws.row_dimensions[current_row-1].height = 15
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=1, value="2. 위험성평가 실시 현황").font = font_subtitle
     ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center')
-    ws.row_dimensions[current_row].height = 40
+    ws.row_dimensions[current_row].height = 35
     current_row += 1
 
     headers = ["구분", "실시여부(O,X)", "작성 날짜", "비고"]
@@ -172,7 +172,7 @@ def generate_excel(data, output_path):
         ws.cell(row=current_row, column=col, value=h).font = font_bold
         ws.cell(row=current_row, column=col).alignment = align_center
         ws.cell(row=current_row, column=col).fill = fill_header
-    ws.row_dimensions[current_row].height = 40
+    ws.row_dimensions[current_row].height = 35
     current_row += 1
 
     risk_data = [
@@ -193,7 +193,7 @@ def generate_excel(data, output_path):
                 ws.cell(row=current_row, column=col).font = font_bold
             elif col == 4:
                 ws.cell(row=current_row, column=col).alignment = align_left
-        ws.row_dimensions[current_row].height = 40
+        ws.row_dimensions[current_row].height = 35
         current_row += 1
 
     # 빠진 부분 추가: 위험성평가서 별첨 및 변동 없음 체크
@@ -201,7 +201,7 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=1, value="  ☐ 위험성평가서 별첨          ☐ 정기평가와 변동 없음(아래 1항~5항 해당없을시 생략가능)").font = font_normal
     ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='center', vertical='center')
-    ws.row_dimensions[current_row].height = 30
+    ws.row_dimensions[current_row].height = 25
     current_row += 1
 
     # 빠진 부분 추가: 안내 문구 라인
@@ -215,7 +215,7 @@ def generate_excel(data, output_path):
     )
     ws.cell(row=current_row, column=1, value=info_text).font = Font(name='맑은 고딕', size=9)
     ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-    ws.row_dimensions[current_row].height = 65
+    ws.row_dimensions[current_row].height = 50
     current_row += 1
 
     # 25행 뒤에 페이지 나누기를 추가하여 2페이지를 여기서 마감
@@ -237,7 +237,7 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=2, value=data.get("관리주관부서", "")).font = font_normal
     ws.cell(row=current_row, column=2).alignment = align_left
-    ws.row_dimensions[current_row].height = 45
+    ws.row_dimensions[current_row].height = 40
     current_row += 1
     
     ws.cell(row=current_row, column=1, value="장소").font = font_bold
@@ -246,7 +246,7 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=2, value=data.get("장소", "")).font = font_normal
     ws.cell(row=current_row, column=2).alignment = align_left
-    ws.row_dimensions[current_row].height = 45
+    ws.row_dimensions[current_row].height = 40
     current_row += 1
 
     apply_border(f'A{current_row}:D{current_row}')
@@ -256,7 +256,7 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=2, value=data.get("위험성평가_중점관리항목", "")).font = font_normal
     ws.cell(row=current_row, column=2).alignment = align_left
-    ws.row_dimensions[current_row].height = 140
+    ws.row_dimensions[current_row].height = 120
     current_row += 1
 
     apply_border(f'A{current_row}:D{current_row}')
@@ -278,7 +278,7 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=3, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=3, value=" ".join(check_texts)).font = font_normal
     ws.cell(row=current_row, column=3).alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
-    ws.row_dimensions[current_row].height = 45
+    ws.row_dimensions[current_row].height = 40
     current_row += 1
 
     apply_border(f'A{current_row}:D{current_row}')
@@ -288,7 +288,7 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=2, value=data.get("개선조치_이행사항", "")).font = font_normal
     ws.cell(row=current_row, column=2).alignment = align_left
-    ws.row_dimensions[current_row].height = 140
+    ws.row_dimensions[current_row].height = 120
     current_row += 1
 
     # Photos for Section 3
@@ -301,14 +301,14 @@ def generate_excel(data, output_path):
     ws.cell(row=current_row, column=3, value="조치 후 사진").font = font_bold
     ws.cell(row=current_row, column=3).alignment = align_center
     ws.cell(row=current_row, column=3).fill = fill_header
-    ws.row_dimensions[current_row].height = 40
+    ws.row_dimensions[current_row].height = 35
     current_row += 1
 
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=2)
     ws.merge_cells(start_row=current_row, start_column=3, end_row=current_row, end_column=4)
-    ws.row_dimensions[current_row].height = 360
-    insert_image_to_excel(ws, data.get("조치사진_경로", ""), f"A{current_row}", 470, 384)
-    insert_image_to_excel(ws, data.get("개선후사진_경로", ""), f"C{current_row}", 470, 384)
+    ws.row_dimensions[current_row].height = 300
+    insert_image_to_excel(ws, data.get("조치사진_경로", ""), f"A{current_row}", 400, 384)
+    insert_image_to_excel(ws, data.get("개선후사진_경로", ""), f"C{current_row}", 400, 384)
     current_row += 1
 
     # 3페이지 마감 (Section 3 끝)
@@ -340,9 +340,9 @@ def generate_excel(data, output_path):
         ws.cell(row=current_row, column=2, value=val).font = font_normal
         ws.cell(row=current_row, column=2).alignment = align_left
         if '\n' in label or '\n' in val:
-            ws.row_dimensions[current_row].height = 70
+            ws.row_dimensions[current_row].height = 65
         else:
-            ws.row_dimensions[current_row].height = 45
+            ws.row_dimensions[current_row].height = 40
         current_row += 1
 
     apply_border(f'A{current_row}:D{current_row+1}')
@@ -350,14 +350,14 @@ def generate_excel(data, output_path):
     ws.cell(row=current_row, column=1, value="사진대지").font = font_bold
     ws.cell(row=current_row, column=1).alignment = align_center
     ws.cell(row=current_row, column=1).fill = fill_header
-    ws.row_dimensions[current_row].height = 40
+    ws.row_dimensions[current_row].height = 35
     current_row += 1
 
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=2)
     ws.merge_cells(start_row=current_row, start_column=3, end_row=current_row, end_column=4)
-    ws.row_dimensions[current_row].height = 380
-    insert_image_to_excel(ws, data.get("아차사고_조치전사진", ""), f"A{current_row}", 490, 384)
-    insert_image_to_excel(ws, data.get("아차사고_조치후사진", ""), f"C{current_row}", 490, 384)
+    ws.row_dimensions[current_row].height = 345
+    insert_image_to_excel(ws, data.get("아차사고_조치전사진", ""), f"A{current_row}", 460, 384)
+    insert_image_to_excel(ws, data.get("아차사고_조치후사진", ""), f"C{current_row}", 460, 384)
     current_row += 1
 
     # 4페이지 마감 (Section 4 끝)
@@ -368,7 +368,7 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=1, value="5. 안전·보건관련 건의 및 제의사항").font = font_subtitle
     ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='left', vertical='center')
-    ws.row_dimensions[current_row].height = 50
+    ws.row_dimensions[current_row].height = 40
     current_row += 1
 
     align_top_left = Alignment(horizontal='left', vertical='top', wrap_text=True)
@@ -377,13 +377,13 @@ def generate_excel(data, output_path):
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=1, value=f"\n  󰏚 개진사항\n    ❍ {data.get('건의_개진사항', '')}").font = font_normal
     ws.cell(row=current_row, column=1).alignment = align_top_left
-    ws.row_dimensions[current_row].height = 390
+    ws.row_dimensions[current_row].height = 355
     current_row += 1
 
     ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=4)
     ws.cell(row=current_row, column=1, value=f"\n  󰏚 제안사유\n    ❍ {data.get('건의_제안사유', '')}").font = font_normal
     ws.cell(row=current_row, column=1).alignment = align_top_left
-    ws.row_dimensions[current_row].height = 390
+    ws.row_dimensions[current_row].height = 355
     current_row += 1
 
     # 인쇄 영역 및 페이지 설정 (너비는 1페이지 맞춤, 길이는 자동)
@@ -393,6 +393,12 @@ def generate_excel(data, output_path):
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
+    ws.page_margins.left = 0.5
+    ws.page_margins.right = 0.5
+    ws.page_margins.top = 0.6
+    ws.page_margins.bottom = 0.6
+    ws.page_margins.header = 0.3
+    ws.page_margins.footer = 0.3
 
     # 세 번째 시트: 교육이수관리대장
     generate_edu_sheet(wb, data)

@@ -446,6 +446,19 @@ class NDTCalculatorTab(ttk.Frame):
                     }
                     row_idx += 1
                     
+        # Total Contract Amount Label
+        self.total_contract_amt_var = tk.StringVar(value="총 계약금액: 0 원")
+        ttk.Label(contract_frame, textvariable=self.total_contract_amt_var, font=("Arial", 11, "bold"), foreground="blue").pack(side=tk.BOTTOM, pady=10, anchor="e")
+        
+        def update_total_contract_amt(*args):
+            total = 0
+            for k, v in self.contract_vars.items():
+                total += self.get_int(v["contract"])
+            self.total_contract_amt_var.set(f"총 계약금액 (부가세 별도): {total:,} 원")
+            
+        for k, v in self.contract_vars.items():
+            v["contract"].trace_add("write", update_total_contract_amt)
+            
         def _on_contract_mousewheel(event):
             try:
                 if str(event.widget).startswith(str(contract_frame)):
@@ -1104,8 +1117,22 @@ class NDTCalculatorTab(ttk.Frame):
                             formatted = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
                             self.contract_vars[key]["c_qty"].set(formatted)
                             
-                            # Also set the contract amount based on full unit price
-                            unit_cost = self.contract_vars[key].get("c_price", 0)
+                            # Recalculate unit cost dynamically based on latest config and UI rates
+                            try:
+                                base_mat = mat.split('_')[0]
+                                lab_unit = LABOR_COST[loc][t_time][base_mat]
+                                mat_map = {
+                                    "RT_B": 'RT (B필름: 3⅓"x17")', "RT_A": 'RT (A필름: 3⅓"x12")', "RT_A2": 'RT (A/2필름: 3⅓"x6")',
+                                    "UT": "UT", "PT": "PT"
+                                }
+                                mat_unit = MATERIAL_COST.get(mat_map.get(mat, mat), 0)
+                                oh = int(lab_unit * float(self.overhead_rate_var.get()) / 100.0)
+                                tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
+                                unit_cost = mat_unit + lab_unit + oh + tech
+                                self.contract_vars[key]["c_price"] = unit_cost
+                            except Exception as e:
+                                unit_cost = self.contract_vars[key].get("c_price", 0)
+                                
                             amt = float(val) * unit_cost
                             self.contract_vars[key]["contract"].set(f"{int(amt):,}")
                 else:
@@ -1116,7 +1143,21 @@ class NDTCalculatorTab(ttk.Frame):
                     if key in self.contract_vars:
                         formatted = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
                         self.contract_vars[key]["c_qty"].set(formatted)
-                        unit_cost = self.contract_vars[key].get("c_price", 0)
+                        try:
+                            base_mat = mat.split('_')[0]
+                            lab_unit = LABOR_COST[loc]["일반"][base_mat]
+                            mat_map = {
+                                "RT_B": 'RT (B필름: 3⅓"x17")', "RT_A": 'RT (A필름: 3⅓"x12")', "RT_A2": 'RT (A/2필름: 3⅓"x6")',
+                                "UT": "UT", "PT": "PT"
+                            }
+                            mat_unit = MATERIAL_COST.get(mat_map.get(mat, mat), 0)
+                            oh = int(lab_unit * float(self.overhead_rate_var.get()) / 100.0)
+                            tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
+                            unit_cost = mat_unit + lab_unit + oh + tech
+                            self.contract_vars[key]["c_price"] = unit_cost
+                        except Exception:
+                            unit_cost = self.contract_vars[key].get("c_price", 0)
+                            
                         amt = float(val) * unit_cost
                         self.contract_vars[key]["contract"].set(f"{int(amt):,}")
                     

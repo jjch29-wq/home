@@ -4,6 +4,15 @@ import json
 import os
 import sys
 
+def get_desktop_path():
+    onedrive_kr = os.path.join(os.path.expanduser("~"), "OneDrive", "바탕 화면")
+    onedrive_en = os.path.join(os.path.expanduser("~"), "OneDrive", "Desktop")
+    if os.path.exists(onedrive_kr):
+        return onedrive_kr
+    elif os.path.exists(onedrive_en):
+        return onedrive_en
+    return os.path.join(os.path.expanduser("~"), "Desktop")
+
 # 상위 폴더(부모 디렉토리)에 있는 모듈을 불러오기 위해 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,7 +24,7 @@ CONFIG_FILE = os.path.join(os.path.dirname(__file__), "form_config.json")
 
 # 기본 데이터 템플릿
 DEFAULT_DATA = {
-    "템플릿_경로": os.path.join(os.path.expanduser("~"), "Desktop", "1. 안전보건협의체 수급업체 회의자료(서식).hwp"),
+    "템플릿_경로": os.path.join(get_desktop_path(), "1. 안전보건협의체 수급업체 회의자료(서식).hwp"),
     "제출년월": "2026년 7월",
     "실적년월": "2026년 6월",
     "계획년월": "2026년 7월",
@@ -666,7 +675,7 @@ class FormGeneratorApp:
     def do_generate_excel(self):
         self.save_config()
         data = self.get_current_data()
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        desktop_path = get_desktop_path()
         base_name = f"{data['제출년월'].replace(' ', '_')}_안전보건협의체_회의자료"
 
         # 파일이 이미 열려있는 경우 _2, _3 ... 으로 자동 대체
@@ -706,7 +715,7 @@ class FormGeneratorApp:
         self.save_config()
         data = self.get_current_data()
         out_name = f"{data['제출년월'].replace(' ', '_')}_안전보건협의체_회의자료_작성본.hwp"
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        desktop_path = get_desktop_path()
         output_path = os.path.join(desktop_path, out_name)
         
         template_hwp = self.entries["템플릿_경로"].get()
