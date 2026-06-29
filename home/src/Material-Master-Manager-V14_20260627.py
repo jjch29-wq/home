@@ -9700,13 +9700,13 @@ class MaterialManager:
                 mat_unit_cost = 0
                 if ndt_type == "RT":
                     if "b" in mat_type or "17" in mat_type:
-                        mat_unit_cost = MATERIAL_COST.get('RT (B필름: 3⅓"x17")', 3379)
+                        mat_unit_cost = MATERIAL_COST.get('RT (B필름: 3⅓"x17")', 8864)
                     elif "a/2" in mat_type or 'a/2' in mat_type or "6" in mat_type:
-                        mat_unit_cost = MATERIAL_COST.get('RT (A/2필름: 3⅓"x6")', 1515)
+                        mat_unit_cost = MATERIAL_COST.get('RT (A/2필름: 3⅓"x6")', 6999)
                     elif "a" in mat_type or "12" in mat_type:
-                        mat_unit_cost = MATERIAL_COST.get('RT (A필름: 3⅓"x12")', 2540)
+                        mat_unit_cost = MATERIAL_COST.get('RT (A필름: 3⅓"x12")', 8024)
                     else:
-                        mat_unit_cost = MATERIAL_COST.get('RT (B필름: 3⅓"x17")', 3379)
+                        mat_unit_cost = MATERIAL_COST.get('RT (B필름: 3⅓"x17")', 8864)
                 elif ndt_type == "UT":
                     mat_unit_cost = MATERIAL_COST.get('UT', 1115)
                 elif ndt_type == "PT":

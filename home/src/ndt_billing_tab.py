@@ -11,9 +11,9 @@ CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
 DEFAULT_CONFIG = {
     "MATERIAL_COST": {
-        'RT (B필름: 3⅓"x17")': 3379,
-        'RT (A필름: 3⅓"x12")': 2540,
-        'RT (A/2필름: 3⅓"x6")': 1515,
+        'RT (B필름: 3⅓"x17")': 8864,
+        'RT (A필름: 3⅓"x12")': 8024,
+        'RT (A/2필름: 3⅓"x6")': 6999,
         "UT": 1115,
         "PT": 3971
     },
