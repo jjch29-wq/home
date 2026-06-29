@@ -1077,7 +1077,7 @@ def generate_review_sheet(wb, data):
     ws.page_setup.orientation = "portrait"
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0 # Allow multiple pages
+    ws.page_setup.fitToHeight = 3 # Fit to exactly 3 pages
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
     ws.page_margins.left = 0.5
