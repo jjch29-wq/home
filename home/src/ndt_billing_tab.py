@@ -620,18 +620,39 @@ class NDTCalculatorTab(ttk.Frame):
         self.tree.bind('<BackSpace>', self.delete_selected_records)
         
         # 저장된 탭 영역(Sash) 너비 복원
-        def restore_sash(event=None):
+        # 저장된 탭 영역(Sash) 너비 복원 (안정화 후 적용을 위한 타이머 방식)
+        self._sash_timer = None
+        def on_configure(event):
             if getattr(self, "_sash_restored", False):
                 return
-            try:
-                sash_pos = int(CONFIG.get("SASH_POS", 450))
-                self.work_pane.sash_place(0, sash_pos, 0)
-                self._sash_restored = True
-            except:
-                pass
                 
-        # tk.PanedWindow는 Configure 시 사이즈가 확정된 후 복원
-        self.work_pane.bind("<Configure>", restore_sash)
+            if self._sash_timer:
+                self.after_cancel(self._sash_timer)
+                
+            def do_restore():
+                try:
+                    sash_pos = int(CONFIG.get("SASH_POS", 450))
+                    # 창이 완전히 렌더링 된 이후에 복원
+                    self.work_pane.sash_place(0, sash_pos, 0)
+                    self._sash_restored = True
+                except:
+                    pass
+                    
+            # 화면 크기 변경(Configure) 이벤트가 멈추고 200ms 뒤에 한 번만 실행
+            self._sash_timer = self.after(200, do_restore)
+                
+        self.work_pane.bind("<Configure>", on_configure)
+        
+        # 마우스로 드래그해서 놓을 때 즉시 저장
+        def save_sash_on_release(event):
+            try:
+                sash_x, _ = self.work_pane.sash_coord(0)
+                CONFIG["SASH_POS"] = int(sash_x)
+                save_config(CONFIG)
+                print(f"[DEBUG] save_sash_on_release SUCCESS! Saved at {sash_x}")
+            except Exception as e:
+                print(f"[DEBUG] save_sash_on_release ERROR: {e}")
+        self.work_pane.bind("<ButtonRelease-1>", save_sash_on_release)
                 
         self.update_dynamic_ui()
 
