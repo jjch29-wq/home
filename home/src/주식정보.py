@@ -95,6 +95,18 @@ class EconomicDashboard:
             self.tv_market.column(col, anchor='center', width=100)
         self.tv_market.pack(expand=True, fill='both')
         
+        # 1-1-B. 섹터별 등락률 추적 섹션 (왼쪽 중간)
+        sector_frame = ttk.LabelFrame(left_frame, text=" 📊 테마/섹터별 당일 등락률 추적 ", padding=5)
+        sector_frame.pack(side='top', expand=False, fill='x', pady=(10, 0))
+        
+        cols_sector = ('섹터/테마명', '평균 전일비(%)', '주도 종목')
+        self.tv_sector = ttk.Treeview(sector_frame, columns=cols_sector, show='headings', height=4)
+        for col in cols_sector:
+            self.tv_sector.heading(col, text=col)
+            w = 120 if col == '섹터/테마명' else (100 if col == '평균 전일비(%)' else 180)
+            self.tv_sector.column(col, anchor='center', width=w, stretch=False)
+        self.tv_sector.pack(expand=True, fill='both')
+        
         # 1-2. 나의 보유 주식 섹션 (왼쪽 아래)
         my_port_frame = ttk.LabelFrame(left_frame, text=" 💼 나의 실제 보유 주식 현황 ", padding=5)
         my_port_frame.pack(side='bottom', expand=True, fill='both', pady=(10, 0))
@@ -125,11 +137,28 @@ class EconomicDashboard:
         my_scroll_y.pack(side='right', fill='y')
         self.tv_my.pack(expand=True, fill='both')
         
-        # 1-5. 추천 포트폴리오 섹션 (오른쪽)
-        port_frame = ttk.LabelFrame(self.top_content_frame, text=" 💡 100만 원 초보자 맞춤 포트폴리오 (실시간) ", padding=5)
-        self.top_content_frame.add(port_frame, weight=3)
+        # 1-5. 추천 포트폴리오 및 AI 매수 추천 섹션 (오른쪽)
+        right_frame = ttk.Frame(self.top_content_frame)
+        self.top_content_frame.add(right_frame, weight=3)
         
-        cols_port = ('추천 종목', '보유', '현재가(원/$)', '전일비(%)', '예상 저점(지지선)', '예상 고점(저항선)', '목표 매수가', '부분 매도가', '투자 성향', 'AI 매매 시그널')
+        # AI 매수 추천 섹션
+        buy_rec_frame = ttk.LabelFrame(right_frame, text=" 🔥 오늘의 AI 강력 매수 추천 TOP 3 ", padding=5)
+        buy_rec_frame.pack(side='top', expand=False, fill='x', pady=(0, 10))
+        
+        cols_rec = ('순위', '추천 종목', '현재가', '기대 수익률(%)', '시그널')
+        self.tv_rec = ttk.Treeview(buy_rec_frame, columns=cols_rec, show='headings', height=3)
+        for col in cols_rec:
+            self.tv_rec.heading(col, text=col)
+            w = 50 if col == '순위' else (180 if col == '추천 종목' else 100)
+            if col == '시그널': w = 180
+            self.tv_rec.column(col, anchor='center', width=w, stretch=False)
+        self.tv_rec.pack(expand=True, fill='both')
+        
+        # 추천 포트폴리오 섹션
+        port_frame = ttk.LabelFrame(right_frame, text=" 💡 100만 원 초보자 맞춤 포트폴리오 (실시간) ", padding=5)
+        port_frame.pack(side='bottom', expand=True, fill='both')
+        
+        cols_port = ('추천 종목', '보유', '현재가(원/$)', '전일비(%)', '거래량 증감(%)', '예상 저점(지지선)', '예상 고점(저항선)', '목표 매수가', '부분 매도가', '투자 성향', 'AI 매매 시그널')
         self.tv_port = ttk.Treeview(port_frame, columns=cols_port, show='headings', height=15)
         for col in cols_port:
             self.tv_port.heading(col, text=col)
@@ -556,6 +585,10 @@ class EconomicDashboard:
         for item in self.tv_my.get_children(): self.tv_my.delete(item)
         for item in self.tv_port.get_children(): self.tv_port.delete(item)
         for item in self.tv_news.get_children(): self.tv_news.delete(item)
+        try:
+            for item in self.tv_sector.get_children(): self.tv_sector.delete(item)
+            for item in self.tv_rec.get_children(): self.tv_rec.delete(item)
+        except: pass
         
         # 백그라운드 스레드에서 데이터 수집 (UI 멈춤 방지)
         thread = threading.Thread(target=self._fetch_data_thread)
@@ -578,11 +611,19 @@ class EconomicDashboard:
             titles_list = news_df['기사 제목'].tolist() if not news_df.empty else []
             trend_df = analyzer.get_hot_trends(titles_list)
             
+            # 신규 기능 추가 (섹터 성과 및 매수 추천)
+            sector_df = analyzer.get_sector_performance(portfolio_df)
+            buy_rec_df = analyzer.get_buy_recommendations(portfolio_df)
+            
             with pd.ExcelWriter(filename, engine='openpyxl') as writer:
                 market_df.to_excel(writer, sheet_name='시장지표', index=False)
                 portfolio_df.to_excel(writer, sheet_name='추천포트폴리오', index=False)
                 news_df.to_excel(writer, sheet_name='주요뉴스', index=False)
                 trend_df.to_excel(writer, sheet_name='핫트렌드예측', index=False)
+                if not sector_df.empty:
+                    sector_df.to_excel(writer, sheet_name='섹터별수익률', index=False)
+                if not buy_rec_df.empty:
+                    buy_rec_df.to_excel(writer, sheet_name='AI매수추천', index=False)
                 
             # 텔레그램으로 브리핑 전송
             pos_news = len(news_df[news_df['시장 심리(분석)'] == '긍정적 (호재)']) if not news_df.empty and '시장 심리(분석)' in news_df.columns else 0
@@ -590,13 +631,13 @@ class EconomicDashboard:
             analyzer.send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend_df)
                 
             # 메인 스레드(UI)로 결과 전달
-            self.root.after(0, self._update_ui, market_df, portfolio_df, news_df, filename, trend_df)
+            self.root.after(0, self._update_ui, market_df, portfolio_df, news_df, filename, trend_df, sector_df, buy_rec_df)
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("오류", f"데이터 수집 실패:\n{e}"))
             self.root.after(0, lambda: self.lbl_status.config(text="수집 실패", foreground="red"))
             self.root.after(0, lambda: self.btn_refresh.config(state='normal'))
             
-    def _update_ui(self, market_df, portfolio_df, news_df, filename, trend_df=None):
+    def _update_ui(self, market_df, portfolio_df, news_df, filename, trend_df=None, sector_df=None, buy_rec_df=None):
         self.latest_portfolio_df = portfolio_df
         self.latest_trend_df = trend_df if trend_df is not None else pd.DataFrame()
         # 1. 시장 지표 업데이트
@@ -654,6 +695,7 @@ class EconomicDashboard:
                 row.get('보유', '-'),
                 row['현재가(원/$)'], 
                 pct_str, 
+                row.get('거래량 증감(%)', '-'),
                 row.get('예상 저점(지지선)', '-'),
                 row.get('예상 고점(저항선)', ''),
                 row.get('목표 매수가', ''),
@@ -677,6 +719,29 @@ class EconomicDashboard:
                     pct_str
                 ), tags=(tag,))
                 
+        # 섹터 트래킹 업데이트
+        if sector_df is not None and not sector_df.empty:
+            for _, row in sector_df.iterrows():
+                tag = 'up' if row['평균 전일비(%)'] > 0 else ('down' if row['평균 전일비(%)'] < 0 else '')
+                self.tv_sector.insert('', 'end', values=(
+                    row['섹터/테마명'],
+                    f"{'+' if row['평균 전일비(%)'] > 0 else ''}{row['평균 전일비(%)']}%",
+                    row['주도 종목']
+                ), tags=(tag,))
+                
+        # 추천 종목 업데이트
+        if buy_rec_df is not None and not buy_rec_df.empty:
+            for i, row in buy_rec_df.iterrows():
+                self.tv_rec.insert('', 'end', values=(
+                    f"{i+1}위",
+                    row['추천 종목'],
+                    row['현재가'],
+                    f"{row['기대 수익률(%)']}%",
+                    row['시그널']
+                ), tags=('value',))
+        else:
+            self.tv_rec.insert('', 'end', values=("-", "현재 매수 추천 조건에 부합하는 종목이 없습니다.", "-", "-", "관망 추천"), tags=('down',))
+
         # 트렌드 라벨 업데이트
         if trend_df is not None and not trend_df.empty:
             top_trend = trend_df.iloc[0]

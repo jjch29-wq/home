@@ -1238,7 +1238,7 @@ class NDTCalculatorTab(ttk.Frame):
             self.exp_vars["equip"]["prev"].set(f"{ex.get('equip_prev', 0):,}")
             self.exp_vars["equip"]["curr"].set(ex.get("equip", 0))
             
-            self.exp_vars["safety"]["budget"].set(f"{ex.get('safety_budget', 28507304):,}")
+            self.exp_vars["safety"]["budget"].set(f"{ex.get('safety_budget', 28507303):,}")
             self.exp_vars["safety"]["prev"].set(f"{ex.get('safety_prev', 0):,}")
             self.exp_vars["safety"]["curr"].set(ex.get("safety", 0))
             
@@ -1308,21 +1308,22 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Button(top, text="단가 저장하기", command=save_and_close).pack(pady=20, ipady=5, fill=tk.X)
 
     def export_to_excel(self):
+        target_records = []
         if not self.records:
-            messagebox.showwarning("기록 없음", "출력할 작업 기록이 없습니다.")
-            return
-            
-        selected_items = self.tree.selection()
-        if selected_items:
-            if not messagebox.askyesno("부분 출력", f"선택된 {len(selected_items)}개의 기록만 기성 청구 내역서로 출력하시겠습니까?"):
+            if not messagebox.askyesno("기록 없음", "출력할 작업 기록(금회 기성)이 없습니다. 계약 내역만 출력하시겠습니까?"):
                 return
-            indices = [self.tree.index(item) for item in selected_items]
-            target_records = [self.records[i] for i in indices]
         else:
-            if not messagebox.askyesno("전체 출력", "선택된 항목이 없습니다. 전체 기록을 기성 청구 내역서로 출력하시겠습니까?"):
-                return
-            target_records = self.records
-            
+            selected_items = self.tree.selection()
+            if selected_items:
+                if not messagebox.askyesno("부분 출력", f"선택된 {len(selected_items)}개의 기록만 기성 청구 내역서로 출력하시겠습니까?"):
+                    return
+                indices = [self.tree.index(item) for item in selected_items]
+                target_records = [self.records[i] for i in indices]
+            else:
+                if not messagebox.askyesno("전체 출력", "선택된 항목이 없습니다. 전체 기록을 기성 청구 내역서로 출력하시겠습니까?"):
+                    return
+                target_records = self.records
+                
         dates_all = sorted([r["date"] for r in target_records])
         if dates_all:
             start_date = dates_all[0].replace("-", ".")
@@ -1408,8 +1409,13 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Range(ws.Cells(6, 1), ws.Cells(6 + len(categories) + 1, 15)).Borders.LineStyle = 1
             
             row = 8
+            data_rows = []
+            extra_rows = []
+            subtotal_row = 0
+            liability_row = 0
+            total_row = 0
+            
             for cat in categories:
-                is_empty = False
                 c_qty, p_qty, cur_qty, tot_qty, rem_qty = "", "", "", "", ""
                 c_amt, p_amt, cur_amt, tot_amt, rem_amt = 0, 0, 0, 0, 0
                 
@@ -1417,15 +1423,15 @@ class NDTCalculatorTab(ttk.Frame):
                     c_amt = self.get_int(self.total_contract_var)
                     p_amt = self.get_int(self.total_prev_var)
                     cur_amt = sum(r["subtotal"] for r in target_records) + extra_items_total
-                    tot_amt = p_amt + cur_amt
-                    rem_amt = c_amt - tot_amt
+                    total_row = row
                 elif cat == "기타실비 소계":
                     c_amt = sum(self.get_int(self.exp_vars[k]["budget"]) for k in ["equip", "safety", "travel", "print"])
                     p_amt = sum(self.get_int(self.exp_vars[k]["prev"]) for k in ["equip", "safety", "travel", "print"])
                     cur_amt = sum(self.exp_vars[k]["curr"].get() for k in ["equip", "safety", "travel", "print"])
-                    tot_amt = p_amt + cur_amt
-                    rem_amt = c_amt - tot_amt
+                    subtotal_row = row
                 elif cat in ["장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
+                    if cat == "엔지니어링 손해배상공제료": liability_row = row
+                    else: extra_rows.append(row)
                     k = ""
                     if cat == "장비손료": k = "equip"
                     elif cat == "안전관리비": k = "safety"
@@ -1435,8 +1441,6 @@ class NDTCalculatorTab(ttk.Frame):
                     c_amt = self.get_int(self.exp_vars[k]["budget"])
                     p_amt = self.get_int(self.exp_vars[k]["prev"])
                     cur_amt = self.exp_vars[k]["curr"].get()
-                    tot_amt = p_amt + cur_amt
-                    rem_amt = c_amt - tot_amt
                 else:
                     c_qty = self.get_float(self.contract_vars[cat]["c_qty"])
                     p_qty = self.get_float(self.contract_vars[cat]["p_qty"])
@@ -1455,19 +1459,14 @@ class NDTCalculatorTab(ttk.Frame):
                             elif "6" in r["material_type"]: mat = "RT_A2"
                         else:
                             mat = r["ndt_type"]
-                            
                         key = f"{loc}_{t_time}_{mat}"
                         if key == cat:
                             cur_qty += r.get("adjusted_qty", r["qty"])
                             cur_amt += r["subtotal"]
                             
                     if c_qty == 0.0 and p_qty == 0.0 and cur_qty == 0.0:
-                        continue # Skip empty items entirely
-                        
-                    tot_qty = p_qty + cur_qty
-                    rem_qty = c_qty - tot_qty
-                    tot_amt = p_amt + cur_amt
-                    rem_amt = c_amt - tot_amt
+                        continue
+                    data_rows.append(row)
                 
                 if cat in ["총 계", "기타실비 소계", "장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
                     ws.Cells(row, 1).Value = cat
@@ -1482,48 +1481,94 @@ class NDTCalculatorTab(ttk.Frame):
                     t_time = parts[1]
                     m_key = '_'.join(parts[2:])
                     unit = "매" if m_key.startswith("RT") else "M"
-                    
                     ws.Cells(row, 1).Value = loc
                     ws.Cells(row, 2).Value = t_time
                     ws.Cells(row, 3).Value = m_key
                     ws.Cells(row, 4).Value = unit
-                    
-                    unit_price = 0
-                    if c_qty > 0:
-                        unit_price = c_amt / c_qty
-                    elif cur_qty > 0:
-                        unit_price = cur_amt / cur_qty
-                    elif p_qty > 0:
-                        unit_price = p_amt / p_qty
-                    
+                    unit_price = c_amt / c_qty if c_qty > 0 else (cur_amt / cur_qty if cur_qty > 0 else (p_amt / p_qty if p_qty > 0 else 0))
                     if unit_price > 0:
                         ws.Cells(row, 5).Value = int(unit_price)
                         ws.Cells(row, 5).NumberFormat = "#,##0"
                     else:
-                        ws.Cells(row, 5).Value = "-"
-                        
+                        ws.Cells(row, 5).Value = 0
+                        ws.Cells(row, 5).NumberFormat = '#,##0;-#,##0;"-"'
                     ws.Range(ws.Cells(row, 1), ws.Cells(row, 5)).HorizontalAlignment = -4108
                 
-                vals = [c_qty, c_amt, p_qty, p_amt, cur_qty, cur_amt, tot_qty, tot_amt, rem_qty, rem_amt]
-                for col_idx, val in enumerate(vals, start=6):
-                    v_cell = ws.Cells(row, col_idx)
-                    if val == "" or val == 0 or val == 0.0:
-                        v_cell.Value = "-"
-                        v_cell.HorizontalAlignment = -4108
-                    else:
-                        v_cell.Value = val
-                        try:
-                            if isinstance(val, (int, float)):
-                                if val == int(val):
-                                    v_cell.NumberFormat = "#,##0"
-                                else:
-                                    v_cell.NumberFormat = "#,##0.00"
-                        except:
-                            pass
-                        
-                    if cat == "총 계":
-                        v_cell.Font.Bold = True
+                num_fmt = '#,##0;-#,##0;"-"'
+                float_fmt = '#,##0.00;-#,##0.00;"-"'
                 
+                if cat == "총 계":
+                    ws.Cells(row, 7).Value = c_amt
+                    ws.Cells(row, 7).NumberFormat = num_fmt
+                    ws.Cells(row, 7).Font.Bold = True
+                    
+                    for col, l in zip([9, 11], ['I', 'K']):
+                        f1 = f"SUM({l}{data_rows[0]}:{l}{data_rows[-1]})" if data_rows else "0"
+                        f2 = f"{l}{subtotal_row}" if subtotal_row else "0"
+                        f3 = f"{l}{liability_row}" if liability_row else "0"
+                        ws.Cells(row, col).Formula = f"={f1}+{f2}+{f3}"
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                        ws.Cells(row, col).Font.Bold = True
+                        
+                    ws.Cells(row, 13).Formula = f"=I{row}+K{row}"
+                    ws.Cells(row, 13).NumberFormat = num_fmt
+                    ws.Cells(row, 13).Font.Bold = True
+                    
+                    ws.Cells(row, 15).Formula = f"=G{row}-M{row}"
+                    ws.Cells(row, 15).NumberFormat = num_fmt
+                    ws.Cells(row, 15).Font.Bold = True
+                    
+                    for col in [6, 8, 10, 12, 14]:
+                        ws.Cells(row, col).Value = 0
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                elif cat == "기타실비 소계":
+                    if extra_rows:
+                        for col, l in zip([7, 9, 11, 13, 15], ['G', 'I', 'K', 'M', 'O']):
+                            ws.Cells(row, col).Formula = f"=SUM({l}{extra_rows[0]}:{l}{extra_rows[-1]})"
+                            ws.Cells(row, col).NumberFormat = num_fmt
+                            ws.Cells(row, col).Font.Bold = True
+                    else:
+                        for col in [7, 9, 11, 13, 15]:
+                            ws.Cells(row, col).Value = 0
+                            ws.Cells(row, col).NumberFormat = num_fmt
+                    for col in [6, 8, 10, 12, 14]:
+                        ws.Cells(row, col).Value = 0
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                        
+                elif cat in ["장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
+                    ws.Cells(row, 7).Value = c_amt
+                    ws.Cells(row, 9).Value = p_amt
+                    ws.Cells(row, 11).Value = cur_amt
+                    ws.Cells(row, 13).Formula = f"=I{row}+K{row}"
+                    ws.Cells(row, 15).Formula = f"=G{row}-M{row}"
+                    for col in [7, 9, 11, 13, 15]:
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                    for col in [6, 8, 10, 12, 14]:
+                        ws.Cells(row, col).Value = 0
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                        
+                else:
+                    is_float = (unit == "M")
+                    fmt_qty = float_fmt if is_float else num_fmt
+                    
+                    ws.Cells(row, 6).Value = round(float(c_qty), 2) if c_qty else 0
+                    ws.Cells(row, 7).Formula = f"=TRUNC(F{row}*E{row})"
+                    
+                    ws.Cells(row, 8).Value = round(float(p_qty), 2) if p_qty else 0
+                    ws.Cells(row, 9).Formula = f"=TRUNC(H{row}*E{row})"
+                    
+                    ws.Cells(row, 10).Value = round(float(cur_qty), 2) if cur_qty else 0
+                    ws.Cells(row, 11).Formula = f"=TRUNC(J{row}*E{row})"
+                    
+                    ws.Cells(row, 12).Formula = f"=H{row}+J{row}"
+                    ws.Cells(row, 13).Formula = f"=I{row}+K{row}"
+                    
+                    ws.Cells(row, 14).Formula = f"=F{row}-L{row}"
+                    ws.Cells(row, 15).Formula = f"=G{row}-M{row}"
+                    
+                    for col in [6, 8, 10, 12, 14]: ws.Cells(row, col).NumberFormat = fmt_qty
+                    for col in [7, 9, 11, 13, 15]: ws.Cells(row, col).NumberFormat = num_fmt
+                    
                 row += 1
 
             # --- 세부 내역 테이블 ---
@@ -1613,19 +1658,27 @@ class NDTCalculatorTab(ttk.Frame):
                     ws.Cells(current_row, 7).Value = data["qty"]
                     ws.Cells(current_row, 8).Value = key[4]
                     ws.Cells(current_row, 9).Value = key[5]
-                    ws.Cells(current_row, 10).Value = data["adjusted_qty"]
+                    ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
                     ws.Cells(current_row, 11).Value = data["mat_cost"]
                     ws.Cells(current_row, 12).Value = data["lab_cost"]
                     ws.Cells(current_row, 13).Value = data["overhead"]
                     ws.Cells(current_row, 14).Value = data["tech"]
                     ws.Cells(current_row, 15).Value = data["subtotal"]
                     
+                    unit_str = key[4]
                     for c in range(1, 16):
                         cell = ws.Cells(current_row, c)
                         cell.Borders.LineStyle = 1
                         if c <= 4 or c == 6 or c == 8: cell.HorizontalAlignment = -4108
                         elif c == 5 or c == 3: cell.HorizontalAlignment = -4131
-                        else: cell.NumberFormat = "#,##0" if c >= 11 else "0.00"
+                        elif c == 7: 
+                            cell.NumberFormat = '#,##0.000;-#,##0.000;"-"' if unit_str == "M" else '#,##0;-#,##0;"-"'
+                        elif c == 9: 
+                            cell.NumberFormat = "0.0"
+                        elif c == 10: 
+                            cell.NumberFormat = '#,##0.00;-#,##0.00;"-"' if unit_str == "M" else '#,##0;-#,##0;"-"'
+                        elif c >= 11: 
+                            cell.NumberFormat = "#,##0"
                     
                     sub_mat += data["mat_cost"]; sub_lab += data["lab_cost"]
                     sub_ovr += data["overhead"]; sub_tech += data["tech"]
@@ -1675,46 +1728,61 @@ class NDTCalculatorTab(ttk.Frame):
                     
             # --- 실비 정산 추가 ---
             current_row += 1
-            extra_items = [
-                ("장비손료", self.equip_cost_var.get()),
-                ("안전관리비", self.safety_cost_var.get()),
-                ("주재비 및 출장여비", self.travel_cost_var.get()),
-                ("도서인쇄비", self.print_cost_var.get()),
-                ("엔지니어링 손해배상공제료", self.liability_cost_var.get())
-            ]
             
-            total_extra = 0
-            for name, val in extra_items:
-                if val > 0:
-                    ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
-                    ws.Cells(current_row, 1).Value = f"+ {name}"
-                    ws.Cells(current_row, 1).HorizontalAlignment = -4152
-                    ws.Cells(current_row, 15).Value = val
-                    ws.Cells(current_row, 15).NumberFormat = "#,##0"
-                    for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
-                    total_extra += val
-                    current_row += 1
+            extra_items_map = []
+            if len(extra_rows) >= 4:
+                extra_items_map = [
+                    ("장비손료", extra_rows[0]),
+                    ("안전관리비", extra_rows[1]),
+                    ("주재비 및 출장여비", extra_rows[2]),
+                    ("도서인쇄비", extra_rows[3]),
+                    ("엔지니어링 손해배상공제료", liability_row)
+                ]
+            else:
+                extra_items_map = [
+                    ("장비손료", self.equip_cost_var.get()),
+                    ("안전관리비", self.safety_cost_var.get()),
+                    ("주재비 및 출장여비", self.travel_cost_var.get()),
+                    ("도서인쇄비", self.print_cost_var.get()),
+                    ("엔지니어링 손해배상공제료", self.liability_cost_var.get())
+                ]
+            
+            for item in extra_items_map:
+                name = item[0]
+                val_or_row = item[1]
+                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+                ws.Cells(current_row, 1).Value = f"'+ {name}"
+                ws.Cells(current_row, 1).HorizontalAlignment = -4152
+                
+                if val_or_row > 0 and val_or_row < 1000:
+                    ws.Cells(current_row, 15).Formula = f"=K{val_or_row}"
+                else:
+                    ws.Cells(current_row, 15).Value = val_or_row if val_or_row > 0 else 0
+                    
+                ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
+                for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+                current_row += 1
             
             # --- 총 공급가액 (검사합계 + 실비) ---
-            grand_subtotal = total_sub + total_extra
-            
             ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
             ws.Cells(current_row, 1).Value = "공급가액 총액"
             ws.Cells(current_row, 1).HorizontalAlignment = -4152
             ws.Cells(current_row, 1).Font.Bold = True
-            ws.Cells(current_row, 15).Value = grand_subtotal
-            ws.Cells(current_row, 15).NumberFormat = "#,##0"
+            if total_row > 0:
+                ws.Cells(current_row, 15).Formula = f"=K{total_row}"
+            else:
+                ws.Cells(current_row, 15).Value = 0
+            ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
             ws.Cells(current_row, 15).Font.Bold = True
             for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
             
             # --- 부가세 및 최종 청구액 ---
             current_row += 1
             ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
-            ws.Cells(current_row, 1).Value = "+ 부가가치세 (10%)"
+            ws.Cells(current_row, 1).Value = "'+ 부가가치세 (10%)"
             ws.Cells(current_row, 1).HorizontalAlignment = -4152
-            vat_val = int(grand_subtotal * 0.1)
-            ws.Cells(current_row, 15).Value = vat_val
-            ws.Cells(current_row, 15).NumberFormat = "#,##0"
+            ws.Cells(current_row, 15).Formula = f"=TRUNC(O{current_row-1}*0.1)"
+            ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
             for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
             
             current_row += 1
@@ -1724,9 +1792,8 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Cells(current_row, 1).Font.Bold = True
             ws.Cells(current_row, 1).Font.Size = 12
             
-            total_final = grand_subtotal + vat_val
-            ws.Cells(current_row, 15).Value = total_final
-            ws.Cells(current_row, 15).NumberFormat = "#,##0"
+            ws.Cells(current_row, 15).Formula = f"=O{current_row-2}+O{current_row-1}"
+            ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
             ws.Cells(current_row, 15).Font.Bold = True
             ws.Cells(current_row, 15).Font.Size = 12
             

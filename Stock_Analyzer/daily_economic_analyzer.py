@@ -419,8 +419,20 @@ def get_portfolio_data():
                 
                 is_value_stock = (pbr_value < 1.0) and (div_yield_value >= 0.04) and (current_rsi <= 40)
                 
+                # 거래량 증감 계산 (20일 평균 대비)
+                try:
+                    current_vol = hist['Volume'].iloc[-1]
+                    avg_vol_20d = hist['Volume'].rolling(window=20).mean().iloc[-2]
+                    vol_surge = (current_vol / avg_vol_20d) * 100 if avg_vol_20d > 0 else 0
+                    vol_surge_str = f"{int(vol_surge)}%" if vol_surge > 0 else "-"
+                except:
+                    vol_surge = 0
+                    vol_surge_str = "-"
+                
                 # AI 매수/매도 타이밍 신호 생성 (모든 경우의 수 반영)
-                if is_value_stock:
+                if vol_surge >= 200 and change_pct > 0:
+                    trade_signal = "🚀 거래량 급증 (수급 폭발)"
+                elif is_value_stock:
                     trade_signal = "👑 숨은 진주 (초저평가 매수)"
                 elif pd.isna(current_rsi):
                     trade_signal = "데이터 부족"
@@ -476,6 +488,7 @@ def get_portfolio_data():
                     '일간 변동금액': daily_change_krw,
                     '현재가(원/$)': price_str,
                     '전일비(%)': round(change_pct, 2),
+                    '거래량 증감(%)': vol_surge_str,
                     '예상 저점(지지선)': support_price,
                     '예상 고점(저항선)': resistance_price,
                     '목표 매수가': target_buy,
@@ -487,6 +500,79 @@ def get_portfolio_data():
             pass
             
     return pd.DataFrame(data_list)
+
+def get_sector_performance(portfolio_df):
+    """투자 성향(섹터/테마)별 평균 등락률과 주도 종목을 계산합니다."""
+    if portfolio_df.empty:
+        return pd.DataFrame()
+        
+    results = []
+    grouped = portfolio_df.groupby('투자 성향')
+    
+    for sector, group in grouped:
+        avg_change = group['전일비(%)'].mean()
+        
+        # 해당 섹터에서 등락률이 가장 높은 종목 찾기
+        top_stock_idx = group['전일비(%)'].idxmax()
+        top_stock = group.loc[top_stock_idx, '추천 종목'].split('(')[0].strip()
+        top_stock_change = group.loc[top_stock_idx, '전일비(%)']
+        
+        top_stock_str = f"{top_stock} ({'+' if top_stock_change > 0 else ''}{top_stock_change}%)"
+        
+        results.append({
+            '섹터/테마명': sector,
+            '평균 전일비(%)': round(avg_change, 2),
+            '주도 종목': top_stock_str
+        })
+        
+    res_df = pd.DataFrame(results)
+    res_df = res_df.sort_values('평균 전일비(%)', ascending=False).reset_index(drop=True)
+    return res_df
+
+def get_buy_recommendations(portfolio_df):
+    """매수 추천 조건에 부합하는 상위 3개 종목을 추출합니다."""
+    if portfolio_df.empty:
+        return pd.DataFrame()
+        
+    # 우선순위: 1. 거래량 급증, 2. 숨은 진주, 3. 적극 매수, 4. 좋은 기회, 5. 보유/분할매수
+    priority = {
+        '🚀 거래량 급증 (수급 폭발)': 1,
+        '👑 숨은 진주 (초저평가 매수)': 2,
+        '🔥 적극 매수 (대중의 공포=최적기)': 3,
+        '🔥 적극 매수 (RSI 바닥)': 4,
+        '👍 좋은 기회 (20일선 아래)': 5,
+        '✅ 보유 및 분할 매수': 6
+    }
+    
+    recs = []
+    for _, row in portfolio_df.iterrows():
+        signal = row.get('AI 매매 시그널', '')
+        if signal in priority:
+            # 수익률(%) = (예상 고점 - 현재가) / 현재가 * 100
+            try:
+                curr = float(str(row['현재가(원/$)']).replace(',','').replace('원','').replace('$',''))
+                res = float(str(row['예상 고점(저항선)']).replace(',','').replace('원','').replace('$',''))
+                expected_profit_pct = ((res * 0.95) - curr) / curr * 100 if curr > 0 else 0
+            except:
+                expected_profit_pct = 0
+                
+            if expected_profit_pct > 0:
+                recs.append({
+                    '추천 종목': row['추천 종목'].split('(')[0].strip(),
+                    '현재가': row['현재가(원/$)'],
+                    '예상 저점': row['예상 저점(지지선)'],
+                    '기대 수익률(%)': round(expected_profit_pct, 1),
+                    '시그널': signal,
+                    '우선순위': priority[signal]
+                })
+                
+    if not recs:
+        return pd.DataFrame()
+        
+    rec_df = pd.DataFrame(recs)
+    # 1. 시그널 우선순위 높은순, 2. 기대 수익률 높은순 정렬
+    rec_df = rec_df.sort_values(['우선순위', '기대 수익률(%)'], ascending=[True, False]).head(3)
+    return rec_df
 
 def analyze_sentiment(text):
     """뉴스 제목을 기반으로 간단한 긍정/부정 심리를 분석합니다."""
