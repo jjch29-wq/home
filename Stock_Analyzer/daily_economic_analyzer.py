@@ -185,7 +185,11 @@ PORTFOLIO = {
     '삼성SDI (프리미엄/전고체 배터리)': '006400.KS',
     '에코프로비엠 (국내 양극재 1위)': '247540.KQ',
     'KODEX 미국달러선물 (환율/안전)': '261240.KS',
-    'TIGER 미국채10년선물 (안전자산/금리인하)': '305080.KS'
+    'TIGER 미국채10년선물 (안전자산/금리인하)': '305080.KS',
+    '맥쿼리인프라 (국내 인프라/고배당)': '088980.KS',
+    '기업은행 (국내 국책은행/고배당)': '024110.KS',
+    'KT&G (국내 담배/경기방어/고배당)': '033780.KS',
+    'SK텔레콤 (국내 통신/고배당)': '017670.KS'
 }
 
 # --- 실제 보유 주식 ---
@@ -426,6 +430,25 @@ def delete_custom_stock(stock_name):
     with open(CUSTOM_PORT_FILE, 'w', encoding='utf-8') as f:
         json.dump(custom, f, ensure_ascii=False, indent=2)
 
+def get_naver_realtime_price(ticker):
+    """네이버 증권에서 실시간 현재가를 스크래핑합니다 (bs4 의존성 제거)."""
+    try:
+        import requests
+        import re
+        code = ticker.split('.')[0]
+        url = f"https://finance.naver.com/item/main.naver?code={code}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        # 타임아웃을 짧게 주어 UI 멈춤 현상 최소화
+        res = requests.get(url, headers=headers, timeout=2.0)
+        
+        # 정규식으로 <p class="no_today"> 안의 맹인용 텍스트(현재가) 추출
+        match = re.search(r'<p class="no_today"[^>]*>.*?<span class="blind">([\d,]+)</span>', res.text, re.DOTALL)
+        if match:
+            return float(match.group(1).replace(',', ''))
+    except Exception as e:
+        pass
+    return None
+
 def get_portfolio_data():
     """100만 원 초보자 맞춤형 포트폴리오의 실시간 데이터를 수집합니다."""
     print("초보자 추천 포트폴리오 데이터를 수집 중입니다...")
@@ -485,10 +508,18 @@ def get_portfolio_data():
             if len(hist) >= 20:
                 current_price = hist['Close'].iloc[-1]
                 prev_price = hist['Close'].iloc[-2]
+                
+                is_korea = '.KS' in ticker or '.KQ' in ticker
+                
+                # 한국 주식일 경우 네이버 실시간 현재가 우선 적용
+                if is_korea:
+                    realtime_price = get_naver_realtime_price(ticker)
+                    if realtime_price is not None:
+                        current_price = realtime_price
+                        
                 change_pct = ((current_price - prev_price) / prev_price) * 100
                 
                 # 티커에 따라 달러/원화 포맷팅 구분
-                is_korea = '.KS' in ticker or '.KQ' in ticker
                 price_str = f"{int(current_price):,}원" if is_korea else f"${current_price:.2f}"
                 
                 # 20일 이동평균선 (20MA) 계산
