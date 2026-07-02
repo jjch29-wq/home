@@ -280,10 +280,10 @@ class EconomicDashboard:
             stock_name = widget.item(item[0], 'values')[0]
             
         pred_win = tk.Toplevel(self.root)
-        pred_win.title(f"{stock_name} - 향후 5일 가격 예측 시뮬레이션")
-        pred_win.geometry("600x350")
+        pred_win.title(f"{stock_name} - 종합 진단 및 5일 가격 예측")
+        pred_win.geometry("900x700")
         
-        ttk.Label(pred_win, text="데이터 분석 중... 잠시만 기다려주세요.", font=('Malgun Gothic', 12)).pack(pady=50)
+        ttk.Label(pred_win, text="데이터 분석 및 차트 생성 중... 잠시만 기다려주세요.", font=('Malgun Gothic', 12)).pack(pady=50)
         
         thread = threading.Thread(target=self._run_simulation, args=(pred_win, stock_name))
         thread.daemon = True
@@ -329,14 +329,64 @@ class EconomicDashboard:
                 for widget in window.winfo_children():
                     widget.destroy()
                     
-                ttk.Label(window, text=f"📊 {stock_name} 5영업일 시뮬레이션", font=('Malgun Gothic', 14, 'bold')).pack(pady=10)
+                import matplotlib.pyplot as plt
+                from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+                
+                main_frame = ttk.Frame(window)
+                main_frame.pack(expand=True, fill='both', padx=10, pady=10)
+                
+                ttk.Label(main_frame, text=f"📊 {stock_name} 종합 진단 및 예측", font=('Malgun Gothic', 14, 'bold')).pack(pady=5)
+                
+                mid_frame = ttk.Frame(main_frame)
+                mid_frame.pack(expand=True, fill='both', pady=5)
+                
+                chart_frame = ttk.Frame(mid_frame)
+                chart_frame.pack(side='left', expand=True, fill='both')
+                
+                desc_frame = ttk.LabelFrame(mid_frame, text=" 💡 종목 분석 ", padding=10)
+                desc_frame.pack(side='right', fill='y', padx=(10, 0))
+                
+                plt.rcParams['font.family'] = 'Malgun Gothic'
+                plt.rcParams['axes.unicode_minus'] = False
+                
+                fig, ax = plt.subplots(figsize=(5, 3))
+                ax.plot(hist.index, hist['Close'], label='종가', color='#1f77b4', linewidth=2)
+                ax.plot(hist.index, hist['Close'].rolling(20).mean(), label='20일선', color='#d62728', linestyle='--')
+                ax.plot(hist.index, hist['Close'].rolling(60).mean(), label='60일선', color='#2ca02c', linestyle='-.')
+                ax.legend()
+                ax.grid(True, linestyle='--', alpha=0.6)
+                fig.tight_layout()
+                
+                canvas = FigureCanvasTkAgg(fig, master=chart_frame)
+                canvas.draw()
+                canvas.get_tk_widget().pack(fill='both', expand=True)
+                
+                ma20 = hist['Close'].rolling(20).mean().iloc[-1]
+                high_price = hist['High'].max()
+                low_price = hist['Low'].min()
+                
+                msg = f"📌 현재가: {int(current_price):,}원\n\n" if is_korea else f"📌 현재가: ${current_price:.2f}\n\n"
+                msg += f"• 1년 최고: {int(high_price):,}원\n" if is_korea else f"• 1년 최고: ${high_price:.2f}\n"
+                msg += f"• 1년 최저: {int(low_price):,}원\n\n" if is_korea else f"• 1년 최저: ${low_price:.2f}\n\n"
+                
+                msg += "📈 추세 진단:\n"
+                if current_price > ma20:
+                    msg += "현재 20일 이동평균선 위에 위치하여\n단기 상승 추세가 유지되고 있습니다.\n\n"
+                else:
+                    msg += "현재 20일 이동평균선 아래에 위치해\n단기적으로 조정을 받고 있습니다.\n\n"
+                    
+                lbl_desc = ttk.Label(desc_frame, text=msg, font=('Malgun Gothic', 11), justify='left')
+                lbl_desc.pack(anchor='nw')
+                
+                bot_frame = ttk.LabelFrame(main_frame, text=" 📊 향후 5영업일 몬테카를로 가격 예측 시뮬레이션 ", padding=5)
+                bot_frame.pack(fill='x', pady=5)
                 
                 cols = ('날짜', '비관적 (하락)', '중립 (추세)', '낙관적 (상승)')
-                tv = ttk.Treeview(window, columns=cols, show='headings', height=5)
+                tv = ttk.Treeview(bot_frame, columns=cols, show='headings', height=5)
                 for col in cols:
                     tv.heading(col, text=col)
-                    tv.column(col, anchor='center', width=130)
-                tv.pack(fill='both', expand=True, padx=10, pady=10)
+                    tv.column(col, anchor='center')
+                tv.pack(fill='x', padx=5, pady=5)
                 
                 curr_date = datetime.now()
                 
@@ -377,7 +427,7 @@ class EconomicDashboard:
                         fmt(p_opt)
                     ))
                     
-                ttk.Label(window, text="※ 본 데이터는 과거 1년 변동성을 기반으로 한 통계적 예측으로 실제와 다를 수 있습니다.", 
+                ttk.Label(main_frame, text="※ 본 데이터는 과거 1년 변동성을 기반으로 한 통계적 예측으로 실제와 다를 수 있습니다.", 
                          font=('Malgun Gothic', 9), foreground='gray').pack(pady=5)
                          
             self.root.after(0, update_ui)
@@ -748,19 +798,20 @@ class EconomicDashboard:
                 elif '매도' in signal:
                     tag = 'sell'
                 
-            self.tv_port.insert('', 'end', values=(
-                stock_name, 
-                row.get('보유', '-'),
-                row['현재가(원/$)'], 
-                pct_str, 
-                row.get('거래량 증감(%)', '-'),
-                row.get('예상 저점(지지선)', '-'),
-                row.get('예상 고점(저항선)', ''),
-                row.get('목표 매수가', ''),
-                row.get('부분 매도가', ''),
-                row.get('투자 성향', ''), 
-                signal
-            ), tags=(tag,))
+            if "(사용자 추가)" not in row['추천 종목']:
+                self.tv_port.insert('', 'end', values=(
+                    stock_name, 
+                    row.get('보유', '-'),
+                    row['현재가(원/$)'], 
+                    pct_str, 
+                    row.get('거래량 증감(%)', '-'),
+                    row.get('예상 저점(지지선)', '-'),
+                    row.get('예상 고점(저항선)', ''),
+                    row.get('목표 매수가', ''),
+                    row.get('부분 매도가', ''),
+                    row.get('투자 성향', ''), 
+                    signal
+                ), tags=(tag,))
             
             # 내 보유 주식 갱신
             qty_str = str(row.get('보유', '-'))
