@@ -278,7 +278,16 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
                 
                 pos_pct = (curr - support) / (resistance - support) * 100 if resistance > support else 50
                 
-                msg += f"• {name} ({qty})\n"
+                avg_price = float(row.get('매수 단가', 0))
+                is_kor = '원' in str(row['현재가(원/$)'])
+                fmt2 = lambda x: f"{int(x):,}원" if is_kor else f"${x:.2f}"
+                
+                if avg_price > 0:
+                    roi = ((curr - avg_price) / avg_price) * 100
+                    sign = "+" if roi > 0 else ""
+                    msg += f"• {name} ({qty}) - 현재가: {fmt2(curr)} (매수단가: {fmt2(avg_price)} / 수익률: {sign}{roi:.2f}%)\n"
+                else:
+                    msg += f"• {name} ({qty}) - 현재가: {fmt2(curr)}\n"
                 if pos_pct <= 20:
                     msg += f"  👉 [바닥권] 강력 보유 & 추가 매수 권장\n"
                 elif pos_pct <= 40:
@@ -350,9 +359,9 @@ def load_custom_stocks():
             pass
     return {}
 
-def save_custom_stock(name, ticker, qty=0):
+def save_custom_stock(name, ticker, qty=0, avg_price=0):
     custom = load_custom_stocks()
-    custom[name] = {"ticker": ticker, "qty": qty}
+    custom[name] = {"ticker": ticker, "qty": qty, "avg_price": avg_price}
     with open(CUSTOM_PORT_FILE, 'w', encoding='utf-8') as f:
         json.dump(custom, f, ensure_ascii=False, indent=2)
 
@@ -390,6 +399,7 @@ def get_portfolio_data():
     
     current_portfolio = PORTFOLIO.copy()
     current_owned = OWNED_STOCKS.copy()
+    current_avg_price = {}
     
     custom_stocks = load_custom_stocks()
     for name, info in custom_stocks.items():
@@ -401,17 +411,21 @@ def get_portfolio_data():
                 break
                 
         if existing_name:
-            # 이미 있는 종목이면 수량만 업데이트
+            # 이미 있는 종목이면 수량 및 매수 단가 업데이트
             if info.get('qty', 0) >= 0:
                 current_owned[existing_name] = info['qty']
-                # 내부 로직용 OWNED_STOCKS 딕셔너리도 동기화
                 current_owned[PORTFOLIO[existing_name]] = info['qty'] 
+                if info.get('avg_price', 0) > 0:
+                    current_avg_price[existing_name] = info['avg_price']
+                    current_avg_price[PORTFOLIO[existing_name]] = info['avg_price']
         else:
             # 새로운 종목이면 (사용자 추가) 꼬리표 달고 새로 등록
             display_name = f"{name} (사용자 추가)"
             current_portfolio[display_name] = info['ticker']
             if info.get('qty', 0) > 0:
                 current_owned[display_name] = info['qty']
+            if info.get('avg_price', 0) > 0:
+                current_avg_price[display_name] = info['avg_price']
             
     try:
         vix = yf.Ticker("^VIX").history(period="1d")['Close'].iloc[-1]
@@ -526,6 +540,7 @@ def get_portfolio_data():
                 
                 qty = current_owned.get(name, OWNED_STOCKS.get(ticker, 0))
                 qty_str = f"{qty}주" if qty > 0 else "-"
+                avg_price = current_avg_price.get(name, 0)
                 
                 change_amt = current_price - prev_price
                 if is_korea:
@@ -536,6 +551,7 @@ def get_portfolio_data():
                 data_list.append({
                     '추천 종목': name,
                     '보유': qty_str,
+                    '매수 단가': avg_price,
                     '일간 변동금액': daily_change_krw,
                     '현재가(원/$)': price_str,
                     '전일비(%)': round(change_pct, 2),

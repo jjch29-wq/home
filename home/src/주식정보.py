@@ -111,11 +111,11 @@ class EconomicDashboard:
         my_port_frame = ttk.LabelFrame(left_frame, text=" 💼 나의 실제 보유 주식 현황 ", padding=5)
         my_port_frame.pack(side='bottom', expand=True, fill='both', pady=(10, 0))
         
-        cols_my = ('종목명', '보유', '현재가', '일간 변동금액', '전일비(%)')
+        cols_my = ('종목명', '보유', '매수 단가', '현재가', '수익률(%)', '일간 변동금액')
         self.tv_my = ttk.Treeview(my_port_frame, columns=cols_my, show='headings', height=6)
         for col in cols_my:
             self.tv_my.heading(col, text=col)
-            w = 140 if col == '종목명' else (100 if col == '일간 변동금액' else 80)
+            w = 120 if col == '종목명' else (50 if col == '보유' else (75 if col == '수익률(%)' else 85))
             self.tv_my.column(col, anchor='center', width=w, stretch=False)
         
         # 버튼 및 주도주 표시 프레임
@@ -554,7 +554,7 @@ class EconomicDashboard:
     def open_add_stock_window(self):
         win = tk.Toplevel(self.root)
         win.title("➕ 관심/보유 주식 추가")
-        win.geometry("380x280")
+        win.geometry("380x320")
         
         ttk.Label(win, text="나만의 주식을 포트폴리오에 추가하세요!", font=('Malgun Gothic', 12, 'bold')).pack(pady=10)
         
@@ -600,6 +600,11 @@ class EconomicDashboard:
         ent_qty.insert(0, "0")
         ent_qty.grid(row=3, column=1, pady=5)
         
+        ttk.Label(frame, text="매수 단가 (선택, 평단가):").grid(row=4, column=0, sticky='w', pady=5)
+        ent_price = ttk.Entry(frame, width=20)
+        ent_price.insert(0, "0")
+        ent_price.grid(row=4, column=1, pady=5)
+        
         def save_and_close():
             name = ent_name.get().strip()
             ticker = ent_ticker.get().strip().upper()
@@ -607,19 +612,23 @@ class EconomicDashboard:
                 qty = int(ent_qty.get().strip())
             except:
                 qty = 0
+            try:
+                avg_price = float(ent_price.get().strip().replace(',', ''))
+            except:
+                avg_price = 0
                 
             if not name or not ticker:
                 from tkinter import messagebox
                 messagebox.showwarning("입력 오류", "종목명과 종목코드를 모두 입력해주세요.", parent=win)
                 return
                 
-            analyzer.save_custom_stock(name, ticker, qty)
+            analyzer.save_custom_stock(name, ticker, qty, avg_price)
             from tkinter import messagebox
             messagebox.showinfo("추가 완료", f"'{name}' 종목이 추가되었습니다.\n데이터를 다시 불러오기 위해 [갱신]을 진행합니다.", parent=win)
             win.destroy()
             self.refresh_data()
             
-        ttk.Button(frame, text="저장 및 적용하기", command=save_and_close).grid(row=4, column=0, columnspan=2, pady=15)
+        ttk.Button(frame, text="저장 및 적용하기", command=save_and_close).grid(row=5, column=0, columnspan=2, pady=15)
             
     def refresh_data(self):
         # 수동 클릭 시 기존 자동 갱신 타이머 초기화 (중복 방지)
@@ -760,12 +769,25 @@ class EconomicDashboard:
                 sign_my = "+" if daily_change > 0 else ""
                 change_str = f"{sign_my}{int(daily_change):,}원"
                 
+                avg_price = float(row.get('매수 단가', 0))
+                roi_str = "-"
+                avg_price_str = "-"
+                is_kor = '원' in str(row['현재가(원/$)'])
+                
+                if avg_price > 0:
+                    curr = float(str(row['현재가(원/$)']).replace(',','').replace('원','').replace('$',''))
+                    roi = ((curr - avg_price) / avg_price) * 100
+                    roi_sign = "+" if roi > 0 else ""
+                    roi_str = f"{roi_sign}{roi:.2f}%"
+                    avg_price_str = f"{int(avg_price):,}원" if is_kor else f"${avg_price:.2f}"
+                
                 self.tv_my.insert('', 'end', values=(
                     row['추천 종목'].split('(')[0].strip(),
                     qty_str,
+                    avg_price_str,
                     row['현재가(원/$)'],
-                    change_str,
-                    pct_str
+                    roi_str,
+                    change_str
                 ), tags=(tag,))
                 
         # 섹터 트래킹 업데이트
