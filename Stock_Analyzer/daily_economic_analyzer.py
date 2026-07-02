@@ -300,6 +300,14 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
                 # 5일 예측 계산
                 clean_name = row['추천 종목'].replace('🔥 ', '').replace(' (사용자 추가)', '').split('(')[0].strip()
                 ticker = PORTFOLIO.get(clean_name)
+                
+                # 티커 부분 일치 검색
+                if not ticker:
+                    for full_name, t in PORTFOLIO.items():
+                        if full_name.split('(')[0].strip() == clean_name:
+                            ticker = t
+                            break
+                            
                 if not ticker:
                     custom = load_custom_stocks()
                     if clean_name in custom:
@@ -311,11 +319,36 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
                         returns = hist['Close'].pct_change().dropna()
                         mu = returns.mean()
                         sigma = returns.std()
-                        p_pes = curr * ((1 + mu - sigma) ** 5)
-                        p_opt = curr * ((1 + mu + sigma) ** 5)
+                        
+                        import numpy as np
+                        from datetime import datetime, timedelta
+                        
+                        num_sims = 10000
+                        days = 5
+                        daily_returns = np.random.normal(mu, sigma, (days, num_sims))
+                        price_paths = np.zeros((days + 1, num_sims))
+                        price_paths[0] = curr
+                        
+                        for t in range(1, days + 1):
+                            price_paths[t] = price_paths[t-1] * (1 + daily_returns[t-1])
+                            
                         is_kor = '원' in str(row['현재가(원/$)'])
-                        fmt2 = lambda x: f"{int(x):,}원" if is_kor else f"${x:.2f}"
-                        msg += f"  📈 [5일 시뮬레이션] {fmt2(p_pes)} ~ {fmt2(p_opt)}\n"
+                        fmt2 = lambda x: f"{int(x):,}" if is_kor else f"{x:.2f}"
+                        unit = "원" if is_kor else "$"
+                        
+                        msg += f"  📈 [향후 5일 시뮬레이션(단위:{unit})]\n"
+                        curr_date = datetime.now()
+                        for i in range(1, 6):
+                            curr_date += timedelta(days=1)
+                            while curr_date.weekday() > 4:
+                                curr_date += timedelta(days=1)
+                                
+                            p_pes = np.percentile(price_paths[i], 10)
+                            p_neu = np.percentile(price_paths[i], 50)
+                            p_opt = np.percentile(price_paths[i], 90)
+                            
+                            d_str = curr_date.strftime('%m/%d')
+                            msg += f"    • {d_str} ➡️ 하락 {fmt2(p_pes)} / 중립 {fmt2(p_neu)} / 상승 {fmt2(p_opt)}\n"
             except: pass
             
     if not has_holdings:
