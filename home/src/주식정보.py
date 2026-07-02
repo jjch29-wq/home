@@ -338,17 +338,34 @@ class EconomicDashboard:
                     tv.column(col, anchor='center', width=130)
                 tv.pack(fill='both', expand=True, padx=10, pady=10)
                 
-                p_neu, p_pes, p_opt = current_price, current_price, current_price
                 curr_date = datetime.now()
+                
+                # 몬테카를로 시뮬레이션 (10,000번의 무작위 주가 흐름 시나리오 생성)
+                num_simulations = 10000
+                days = 5
+                
+                # mu(평균)와 sigma(표준편차)를 기반으로 5일치 난수 생성
+                daily_returns = np.random.normal(mu, sigma, (days, num_simulations))
+                
+                # 주가 경로 계산 배열 초기화
+                price_paths = np.zeros((days + 1, num_simulations))
+                price_paths[0] = current_price
+                
+                for t in range(1, days + 1):
+                    price_paths[t] = price_paths[t-1] * (1 + daily_returns[t-1])
                 
                 for i in range(1, 6):
                     curr_date += timedelta(days=1)
                     while curr_date.weekday() > 4:
                         curr_date += timedelta(days=1)
                         
-                    p_neu = p_neu * (1 + mu)
-                    p_pes = p_pes * (1 + mu - sigma)
-                    p_opt = p_opt * (1 + mu + sigma)
+                    # 10,000번의 시나리오 중 확률 분포에 따른 값 추출
+                    # 비관적: 하위 10% (발생 확률 10% 미만의 최악 시나리오 기준)
+                    # 중립적: 중간값 50% (가장 확률이 높은 평균치)
+                    # 낙관적: 상위 90% (발생 확률 10% 미만의 최고 시나리오 기준)
+                    p_pes = np.percentile(price_paths[i], 10)
+                    p_neu = np.percentile(price_paths[i], 50)
+                    p_opt = np.percentile(price_paths[i], 90)
                     
                     def fmt(val):
                         return f"{int(val):,}원" if is_korea else f"${val:.2f}"
