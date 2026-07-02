@@ -356,6 +356,34 @@ def save_custom_stock(name, ticker, qty=0):
     with open(CUSTOM_PORT_FILE, 'w', encoding='utf-8') as f:
         json.dump(custom, f, ensure_ascii=False, indent=2)
 
+def delete_custom_stock(stock_name):
+    custom = load_custom_stocks()
+    
+    # 기본 포트폴리오 종목인지 확인
+    is_default = False
+    default_ticker = None
+    for full_name, ticker in PORTFOLIO.items():
+        clean_name = full_name.split('(')[0].strip()
+        if clean_name == stock_name:
+            is_default = True
+            default_ticker = ticker
+            break
+            
+    if is_default:
+        # 기본 종목이면 수량을 0으로 덮어씀
+        custom[stock_name] = {"ticker": default_ticker, "qty": 0}
+    else:
+        # 순수 사용자 추가 종목이면 완전 삭제 (키가 다를 수도 있으므로 이름 부분 매치)
+        keys_to_delete = []
+        for k in custom.keys():
+            if stock_name in k:
+                keys_to_delete.append(k)
+        for k in keys_to_delete:
+            del custom[k]
+            
+    with open(CUSTOM_PORT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(custom, f, ensure_ascii=False, indent=2)
+
 def get_portfolio_data():
     """100만 원 초보자 맞춤형 포트폴리오의 실시간 데이터를 수집합니다."""
     print("초보자 추천 포트폴리오 데이터를 수집 중입니다...")
@@ -365,10 +393,25 @@ def get_portfolio_data():
     
     custom_stocks = load_custom_stocks()
     for name, info in custom_stocks.items():
-        display_name = f"{name} (사용자 추가)"
-        current_portfolio[display_name] = info['ticker']
-        if info.get('qty', 0) > 0:
-            current_owned[display_name] = info['qty']
+        # 기존 포트폴리오에 동일한 종목코드(티커)가 있는지 확인
+        existing_name = None
+        for p_name, p_ticker in PORTFOLIO.items():
+            if p_ticker.split('.')[0] == info['ticker'].split('.')[0]:
+                existing_name = p_name
+                break
+                
+        if existing_name:
+            # 이미 있는 종목이면 수량만 업데이트
+            if info.get('qty', 0) >= 0:
+                current_owned[existing_name] = info['qty']
+                # 내부 로직용 OWNED_STOCKS 딕셔너리도 동기화
+                current_owned[PORTFOLIO[existing_name]] = info['qty'] 
+        else:
+            # 새로운 종목이면 (사용자 추가) 꼬리표 달고 새로 등록
+            display_name = f"{name} (사용자 추가)"
+            current_portfolio[display_name] = info['ticker']
+            if info.get('qty', 0) > 0:
+                current_owned[display_name] = info['qty']
             
     try:
         vix = yf.Ticker("^VIX").history(period="1d")['Close'].iloc[-1]
@@ -384,6 +427,14 @@ def get_portfolio_data():
         try:
             stock = yf.Ticker(ticker)
             hist = stock.history(period="3mo") # 이평선 및 RSI 계산을 위해 3개월치 데이터 가져오기
+            
+            # 사용자 추가 시 코스피(.KS)/코스닥(.KQ) 혼동에 대한 자동 대비 (데이터 미존재 시 상호 변환 재시도)
+            if len(hist) < 20 and (ticker.endswith('.KS') or ticker.endswith('.KQ')):
+                fallback_ticker = ticker.replace('.KS', '.KQ') if ticker.endswith('.KS') else ticker.replace('.KQ', '.KS')
+                stock = yf.Ticker(fallback_ticker)
+                hist = stock.history(period="3mo")
+                ticker = fallback_ticker # 이후 변수들에서 정상 동작하도록 업데이트
+                
             if len(hist) >= 20:
                 current_price = hist['Close'].iloc[-1]
                 prev_price = hist['Close'].iloc[-2]
@@ -544,6 +595,7 @@ def get_buy_recommendations(portfolio_df):
         '✅ 보유 및 분할 매수': 6
     }
     
+    seen_stocks = set()
     recs = []
     for _, row in portfolio_df.iterrows():
         signal = row.get('AI 매매 시그널', '')
@@ -557,14 +609,17 @@ def get_buy_recommendations(portfolio_df):
                 expected_profit_pct = 0
                 
             if expected_profit_pct > 0:
-                recs.append({
-                    '추천 종목': row['추천 종목'].split('(')[0].strip(),
-                    '현재가': row['현재가(원/$)'],
-                    '예상 저점': row['예상 저점(지지선)'],
-                    '기대 수익률(%)': round(expected_profit_pct, 1),
-                    '시그널': signal,
-                    '우선순위': priority[signal]
-                })
+                stock_name = row['추천 종목'].split('(')[0].strip()
+                if stock_name not in seen_stocks:
+                    seen_stocks.add(stock_name)
+                    recs.append({
+                        '추천 종목': stock_name,
+                        '현재가': row['현재가(원/$)'],
+                        '예상 저점': row['예상 저점(지지선)'],
+                        '기대 수익률(%)': round(expected_profit_pct, 1),
+                        '시그널': signal,
+                        '우선순위': priority[signal]
+                    })
                 
     if not recs:
         return pd.DataFrame()

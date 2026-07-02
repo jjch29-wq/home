@@ -127,6 +127,10 @@ class EconomicDashboard:
         
         btn_my_advice = ttk.Button(btn_frame, text="💡 AI 보유 주식 정밀 진단 및 대책", command=self.open_my_advice_window)
         btn_my_advice.pack(side='right')
+        
+        btn_del_stock = ttk.Button(btn_frame, text="🗑️ 선택 주식 삭제", command=self.delete_selected_stock)
+        btn_del_stock.pack(side='right', padx=5)
+
 
         # 스크롤바 추가
         my_scroll_y = ttk.Scrollbar(my_port_frame, orient='vertical', command=self.tv_my.yview)
@@ -203,6 +207,8 @@ class EconomicDashboard:
         # 더블클릭 이벤트 (기사 읽기 및 포트폴리오 예측)
         self.tv_news.bind("<Double-1>", self.open_link)
         self.tv_port.bind("<Double-1>", self.open_prediction_window)
+        self.tv_rec.bind("<Double-1>", self.open_prediction_window)
+        self.tv_my.bind("<Double-1>", self.open_prediction_window)
         
         # 색상 태그 설정 (상승=빨강, 하락=파랑)
         self.tv_news.tag_configure('pos', foreground='red')
@@ -263,10 +269,16 @@ class EconomicDashboard:
             webbrowser.open(link)
             
     def open_prediction_window(self, event):
-        item = self.tv_port.selection()
+        widget = event.widget
+        item = widget.selection()
         if not item: return
-        stock_name = self.tv_port.item(item[0], 'values')[0]
         
+        # 클릭된 위젯이 추천 매수(tv_rec)인 경우 종목명이 인덱스 1, 포트폴리오(tv_port)인 경우 인덱스 0
+        if widget == getattr(self, 'tv_rec', None):
+            stock_name = widget.item(item[0], 'values')[1]
+        else:
+            stock_name = widget.item(item[0], 'values')[0]
+            
         pred_win = tk.Toplevel(self.root)
         pred_win.title(f"{stock_name} - 향후 5일 가격 예측 시뮬레이션")
         pred_win.geometry("600x350")
@@ -286,6 +298,12 @@ class EconomicDashboard:
         clean_name = stock_name.replace('🔥 ', '').replace(' (사용자 추가)', '').strip()
         
         ticker = analyzer.PORTFOLIO.get(clean_name)
+        if not ticker:
+            for full_name, t in analyzer.PORTFOLIO.items():
+                if full_name.split('(')[0].strip() == clean_name:
+                    ticker = t
+                    break
+                    
         if not ticker:
             custom = analyzer.load_custom_stocks()
             if clean_name in custom:
@@ -428,7 +446,7 @@ class EconomicDashboard:
         
         has_holdings = False
         for _, row in self.latest_portfolio_df.iterrows():
-            qty_str = str(row.get('보유 수량', '-'))
+            qty_str = str(row.get('보유', '-'))
             if '주' in qty_str:
                 has_holdings = True
                 name = row['추천 종목'].split('(')[0].strip()
@@ -502,6 +520,20 @@ class EconomicDashboard:
         text_widget.insert('1.0', msg)
         text_widget.config(state='disabled')
         
+    def delete_selected_stock(self):
+        item = self.tv_my.selection()
+        if not item:
+            messagebox.showwarning("선택 안 됨", "삭제할 종목을 목록에서 클릭하여 선택해주세요.")
+            return
+            
+        stock_name = self.tv_my.item(item[0], 'values')[0]
+        
+        if messagebox.askyesno("종목 삭제", f"정말로 '{stock_name}' 종목을 보유 목록에서 삭제하시겠습니까?"):
+            analyzer.delete_custom_stock(stock_name)
+            messagebox.showinfo("삭제 완료", f"'{stock_name}' 종목이 삭제되었습니다.\n데이터를 다시 불러오기 위해 [갱신]을 진행합니다.")
+            self.refresh_data()
+
+
     def open_add_stock_window(self):
         win = tk.Toplevel(self.root)
         win.title("➕ 관심/보유 주식 추가")
