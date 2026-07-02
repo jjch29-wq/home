@@ -1,0 +1,30 @@
+﻿    3. 재료비 산출근거                                                    Unnamed: 1          Unnamed: 2   Unnamed: 3     Unnamed: 4        Unnamed: 5            Unnamed: 6
+0           NaN                                                 1. 방사선투과검사RT)                 NaN          NaN            NaN               NaN                   NaN
+1           NaN                                                    가. 필름별 재료비                 NaN          NaN            NaN               NaN                   NaN
+2           NaN                                    물가자료 '26. 3월 상권 P1392-1393                 NaN          NaN            NaN               NaN                   NaN
+3           NaN                                                          품  명                 NaN          규 격             산식               NaN             단 가 (원/매)
+4           NaN                                                            필름                 NaN   3⅓"×17"(B)         264000      원/조 ÷ 100매/조                  2640
+5           NaN                                                           NaN                 NaN   3⅓"×12"(A)         186000     원/조 ÷ 100매/조                   1860
+6           NaN                                                           NaN                 NaN  3⅓"×6"(A/2)          93000      원/조 ÷ 100매/조                   930
+7           NaN                                                           현상액                 NaN          10L          24000  원/10L * 0.102L/매                 244.8
+8           NaN                                                           정착액                 NaN          10L          24000  원/10L * 0.102L/매                 244.8
+9           NaN                                           연중감지\n(LEAD SCREEN)                 NaN            B          16200     원/조 * 0.01조/매                   162
+10          NaN                                                           NaN                 NaN            A          12000     원/조 * 0.01조/매                   120
+11          NaN                                                           NaN                 NaN          A/2           6000     원/조 * 0.01조/매                    60
+12          NaN                                                         필름카셋트                 NaN            B           6000     원/개 * 0.01개/매                    60
+13          NaN                                                           NaN                 NaN            A           4600     원/개 * 0.01개/매                    46
+14          NaN                                                           NaN                 NaN          A/2           2300     원/개 * 0.01개/매                    23
+15          NaN                                                          필름박스                 NaN            B           2800     원/개 * 0.01개/매                    28
+16          NaN                                                           NaN                 NaN            A           2500     원/개 * 0.01개/매                    25
+17          NaN                                                           NaN                 NaN          A/2           1250     원/개 * 0.01개/매                  12.5
+18          NaN                                                             계                 NaN            B  1매 촬영당 소요 재료비     1매 촬영당 소요 재료비                  3379
+19          NaN                                                           NaN                 NaN            A  1매 촬영당 소요 재료비     1매 촬영당 소요 재료비                  2540
+20          NaN                                                           NaN                 NaN          A/2  1매 촬영당 소요 재료비     1매 촬영당 소요 재료비                  1515
+21          NaN                              * A/2 사이즈 필름 및 연증감지는 A사이즈 1/2 적용                 NaN          NaN            NaN               NaN                   NaN
+22          NaN  * 필름박스 : 전년도 계약단가 적용, A/2필름은 A필름 재단하여 사용(책정금액 : A필름 금액의 50%)                 NaN          NaN            NaN               NaN                   NaN
+23          NaN                                                           NaN                 NaN          NaN            NaN               NaN                   NaN
+24          NaN                                                    나. 방사성동위원소                 NaN          NaN            NaN               NaN                   NaN
+25          NaN                                                             ㅇ   동위원소 Ir-192 사용시 :          NaN       0.000667                 개  75일 사용 기준(1일 20매 촬영)
+26          NaN                                                           NaN               -산출방법          NaN            NaN               NaN                   NaN
+27          NaN                                                           NaN             . 촬영매수:          NaN         4907.2            4907.2                   NaN
+28          NaN                                                           NaN   .사용일 산정(20매/1일기준)          NaN         245.36            245.36                   NaN

@@ -17610,7 +17610,7 @@ class MaterialManager:
                     for r in group_records:
                         ws.Cells(current_row, 1).Value = item_idx
                         ws.Cells(current_row, 2).Value = r["date"]
-                        ws.Cells(current_row, 3).Value = r["loc"]
+                        ws.Cells(current_row, 3).Value = r["loc"].split()[0] if isinstance(r["loc"], str) and r["loc"] else r["loc"]
                         ws.Cells(current_row, 4).Value = r["ndt_type"]
                         ws.Cells(current_row, 5).Value = r["material_type"]
                         ws.Cells(current_row, 6).Value = r["work_time"]

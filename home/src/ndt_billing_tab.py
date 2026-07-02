@@ -299,6 +299,7 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Label(round_frame, text="회", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
         
         ttk.Button(round_frame, text="다음 회차로 이월하기 (전회 누적 & 금회 초기화)", command=self.carry_over_round).pack(side=tk.RIGHT)
+        ttk.Button(round_frame, text="이전 백업 불러오기 (.ndt)", command=self.load_project).pack(side=tk.RIGHT, padx=10)
         
         content_frame = ttk.Frame(billing_container)
         content_frame.pack(fill=tk.BOTH, expand=True)
@@ -455,6 +456,14 @@ class NDTCalculatorTab(ttk.Frame):
             total = 0
             for k, v in self.contract_vars.items():
                 total += self.get_int(v["contract"])
+                
+            # 기타 경비 및 실비 정산 예산 합산
+            if hasattr(self, 'exp_vars'):
+                for k, v in self.exp_vars.items():
+                    total += self.get_int(v["budget"])
+            else:
+                total += 86944000 # exp_vars 초기화 전 기본 실비 합계
+                
             self.total_contract_amt_var.set(f"총 계약금액 (부가세 별도): {total:,} 원")
             
         for k, v in self.contract_vars.items():
@@ -926,7 +935,7 @@ class NDTCalculatorTab(ttk.Frame):
                 key = f"{loc}_{t_time}_{mat}"
                 if key in self.contract_vars:
                     cur_val = self.get_float(self.contract_vars[key]["curr_qty"])
-                    new_val = cur_val + rec["qty"]
+                    new_val = cur_val + rec.get("adjusted_qty", rec["qty"])
                     self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
 
     def add_to_record(self, auto_save=True):
@@ -1672,7 +1681,7 @@ class NDTCalculatorTab(ttk.Frame):
                     
                     ws.Cells(current_row, 1).Value = idx
                     ws.Cells(current_row, 2).Value = date_str
-                    ws.Cells(current_row, 3).Value = key[0]
+                    ws.Cells(current_row, 3).Value = key[0].split()[0] if isinstance(key[0], str) and key[0] else key[0]
                     ws.Cells(current_row, 4).Value = key[1]
                     ws.Cells(current_row, 5).Value = key[2]
                     ws.Cells(current_row, 6).Value = key[3]
