@@ -23,6 +23,7 @@ class PAUTRenameApp:
         df.pack(fill="x", padx=10, pady=5)
         tk.Entry(df, textvariable=self.dir_var, state="readonly").pack(side="left", fill="x", expand=True, padx=5, pady=5)
         tk.Button(df, text="폴더 열기", command=self.browse_dir).pack(side="right", padx=5, pady=5)
+        tk.Button(df, text="🔄 새로고침", command=self.update_preview).pack(side="right", padx=5, pady=5)
         
         # 2. Find and Replace
         rf = tk.LabelFrame(self.root, text="2. 이름 변경 규칙")

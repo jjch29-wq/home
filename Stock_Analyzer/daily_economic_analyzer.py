@@ -217,6 +217,92 @@ def send_telegram_message(text):
     except Exception as e:
         print(f"텔레그램 전송 실패: {e}")
 
+def send_telegram_photo(photo_path, caption=None):
+    """텔레그램으로 사진을 전송합니다."""
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+    try:
+        with open(photo_path, 'rb') as photo:
+            files = {'photo': photo}
+            data = {'chat_id': TELEGRAM_CHAT_ID}
+            if caption:
+                data['caption'] = caption
+            requests.post(url, data=data, files=files, timeout=10)
+    except Exception as e:
+        print(f"텔레그램 사진 전송 실패: {e}")
+
+def generate_holdings_graph(portfolio_df):
+    """보유 주식의 최근 3개월 수익률 추이 그래프를 생성합니다."""
+    import matplotlib.pyplot as plt
+    
+    # 한글 폰트 설정
+    plt.rcParams['font.family'] = 'Malgun Gothic'
+    plt.rcParams['axes.unicode_minus'] = False
+    
+    holdings = []
+    for _, row in portfolio_df.iterrows():
+        qty = str(row.get('보유', '-'))
+        if '주' in qty:
+            name = row['추천 종목'].split('(')[0].strip()
+            clean_name = name.replace('🔥 ', '').replace(' (사용자 추가)', '').strip()
+            
+            ticker = PORTFOLIO.get(clean_name)
+            if not ticker:
+                for full_name, t in PORTFOLIO.items():
+                    if full_name.split('(')[0].strip() == clean_name:
+                        ticker = t
+                        break
+            if not ticker:
+                custom = load_custom_stocks()
+                if clean_name in custom:
+                    ticker = custom[clean_name]['ticker']
+                    
+            if ticker:
+                holdings.append((name, ticker))
+                
+    if not holdings:
+        return None
+        
+    plt.figure(figsize=(10, 6))
+    has_data = False
+    
+    for name, ticker in holdings:
+        try:
+            hist = yf.Ticker(ticker).history(period='3mo')
+            if not hist.empty and len(hist) > 0:
+                base_price = hist['Close'].iloc[0]
+                normalized = (hist['Close'] / base_price - 1) * 100
+                plt.plot(hist.index, normalized, label=name)
+                has_data = True
+        except Exception as e:
+            pass
+            
+    if not has_data:
+        plt.close()
+        return None
+        
+    plt.title("내 보유 주식 최근 3개월 수익률 추이 (%)", fontsize=15, fontweight='bold')
+    plt.xlabel("날짜", fontsize=12)
+    plt.ylabel("수익률 (%)", fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.axhline(y=0, color='r', linestyle='-', alpha=0.3)
+    
+    # x축 레이블이 겹치지 않게 회전
+    plt.xticks(rotation=45)
+    
+    plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    plt.tight_layout()
+    
+    import os
+    from datetime import datetime
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    filename = os.path.join(current_dir, f"holdings_graph_{datetime.now().strftime('%Y%m%d%H%M%S')}.png")
+    plt.savefig(filename, dpi=100)
+    plt.close()
+    
+    return filename
+
 def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend_df=None):
     """데이터프레임을 요약하여 텔레그램으로 전송합니다."""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
@@ -267,7 +353,7 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
         
     if 'trend_df' in globals() or True: # trend_df는 ui에서 넘겨받지 않고 그냥 내부 변수로 사용불가하니 인자로 추가해야함.
         pass # UI 단에서 넘기도록 수정해야 함
-    msg += "\n💼 [나의 보유 주식 AI 진단]\n"
+    msg_holdings = "💼 [나의 보유 주식 상세 진단 및 시뮬레이션]\n"
     has_holdings = False
     for _, row in portfolio_df.iterrows():
         qty = str(row.get('보유', '-'))
@@ -289,17 +375,17 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
                 if avg_price > 0:
                     roi = ((curr - avg_price) / avg_price) * 100
                     sign = "+" if roi > 0 else ""
-                    msg += f"• {name} ({qty}) - 현재가: {fmt2(curr)} (매수단가: {fmt2(avg_price)} / 수익률: {sign}{roi:.2f}%)\n"
+                    msg_holdings += f"• {name} ({qty}) - 현재가: {fmt2(curr)} (매수단가: {fmt2(avg_price)} / 수익률: {sign}{roi:.2f}%)\n"
                 else:
-                    msg += f"• {name} ({qty}) - 현재가: {fmt2(curr)}\n"
+                    msg_holdings += f"• {name} ({qty}) - 현재가: {fmt2(curr)}\n"
                 if pos_pct <= 20:
-                    msg += f"  👉 [바닥권] 강력 보유 & 추가 매수 권장\n"
+                    msg_holdings += f"  👉 [바닥권] 강력 보유 & 추가 매수 권장\n"
                 elif pos_pct <= 40:
-                    msg += f"  👉 [반등중] 보유 유지\n"
+                    msg_holdings += f"  👉 [반등중] 보유 유지\n"
                 elif pos_pct <= 70:
-                    msg += f"  👉 [상승중] 매도 타이밍 주시\n"
+                    msg_holdings += f"  👉 [상승중] 매도 타이밍 주시\n"
                 else:
-                    msg += f"  👉 [고점권] 이익 실현(매도) 추천\n"
+                    msg_holdings += f"  👉 [고점권] 이익 실현(매도) 추천\n"
                     
                 # 5일 예측 계산
                 clean_name = row['추천 종목'].replace('🔥 ', '').replace(' (사용자 추가)', '').split('(')[0].strip()
@@ -340,7 +426,7 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
                         fmt2 = lambda x: f"{int(x):,}" if is_kor else f"{x:.2f}"
                         unit = "원" if is_kor else "$"
                         
-                        msg += f"  📈 [향후 5일 시뮬레이션(단위:{unit})]\n"
+                        msg_holdings += f"  📈 [향후 5일 시뮬레이션(단위:{unit})]\n"
                         curr_date = datetime.now()
                         for i in range(1, 6):
                             curr_date += timedelta(days=1)
@@ -352,11 +438,11 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
                             p_opt = np.percentile(price_paths[i], 90)
                             
                             d_str = curr_date.strftime('%m/%d')
-                            msg += f"    • {d_str} ➡️ 하락 {fmt2(p_pes)} / 중립 {fmt2(p_neu)} / 상승 {fmt2(p_opt)}\n"
+                            msg_holdings += f"    • {d_str} ➡️ 하락 {fmt2(p_pes)} / 중립 {fmt2(p_neu)} / 상승 {fmt2(p_opt)}\n"
             except: pass
             
     if not has_holdings:
-        msg += "• 현재 보유 중인 주식이 없습니다.\n"
+        msg_holdings += "• 현재 보유 중인 주식이 없습니다.\n"
         
     if trend_df is not None and not trend_df.empty:
         msg += "\n🔥 [AI 유행 예측 및 수혜주 발굴]\n"
@@ -382,6 +468,24 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
     msg += f"\n📰 [오늘의 시장 심리]\n긍정 뉴스 {pos_news}개 / 부정 뉴스 {neg_news}개\n"
     
     send_telegram_message(msg)
+    
+    # 보유 주식 그래프 생성 및 전송
+    try:
+        graph_path = generate_holdings_graph(portfolio_df)
+        if graph_path:
+            caption = "📈 [나의 보유 주식 최근 3개월 수익률 추이]"
+            send_telegram_photo(graph_path, caption)
+            import os
+            try:
+                os.remove(graph_path)
+            except:
+                pass
+    except Exception as e:
+        print(f"그래프 전송 오류: {e}")
+        
+    # 상세 설명(진단 내용)을 그래프 바로 밑에 전송
+    if msg_holdings:
+        send_telegram_message(msg_holdings)
 
 import json
 
