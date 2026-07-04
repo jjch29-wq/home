@@ -1,11 +1,11 @@
 {
-    "img_folder": "C:/Users/-/OneDrive/바탕 화면/captuer",
-    "out_file": "C:/Users/-/OneDrive/바탕 화면/NDT_Photo_Log_Final.xlsx",
+    "img_folder": "C:/Users/jjch2/Desktop/images",
+    "out_file": "C:/Users/jjch2/Desktop/NDT_Photo_Log_Final.xlsx",
     "client": "서울에너지공사",
     "report_no": "SIT/GI-SE-PAUT-TNTFJPWJ001",
     "date": "2024년 10월 24일",
-    "img_w": 380,
-    "img_h": 185,
-    "offset_x": 16,
-    "offset_y": 15
+    "img_w": 338,
+    "img_h": 116,
+    "offset_x": 0,
+    "offset_y": 13
 }

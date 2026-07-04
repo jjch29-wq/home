@@ -111,6 +111,11 @@ else:
 
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "logo_settings_unified.json")
 
+
+
+# Embedded Logo Fallback
+DEFAULT_SITCO_LOGO_B64 = "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"
+
 class PMIReportApp:
     def __init__(self, root):
         self.root = root
@@ -302,6 +307,7 @@ class PMIReportApp:
         _def_logo = os.path.join(RESOURCE_DIR, "logo.png")
         self.photo_logo_path = tk.StringVar(value=_def_logo if os.path.exists(_def_logo) else "")
         self.photo_logo_width_var = tk.StringVar(value="80")
+        self.photo_logo_height_var = tk.StringVar(value="") # [NEW] Custom Logo Height
         self.photo_logo_x_var = tk.StringVar(value="2")
         self.photo_logo_y_var = tk.StringVar(value="0")
         self.photo_cell_width_var = tk.StringVar(value="53.0")
@@ -313,12 +319,15 @@ class PMIReportApp:
         self.photo_print_scale_var = tk.StringVar(value="100")
         self.photo_desc_height_var = tk.StringVar(value="20.0")
         self.photo_align_var = tk.StringVar(value="중앙 정렬")
-        self.photo_fit_width_var = tk.BooleanVar(value=True)
+        self.photo_fit_width_var = tk.BooleanVar(value=False)
+        self.photo_auto_fit_page_var = tk.BooleanVar(value=True) # [NEW] Auto-fit to A4 page
         self.photo_auto_rotate_var = tk.BooleanVar(value=False)
         self.photo_width_pct_var = tk.StringVar(value="100.0")
         self.photo_width_pixel_adj_var = tk.StringVar(value="0")
+        self.photo_height_pixel_adj_var = tk.StringVar(value="10") # [NEW] Height padding inside cell
         self.photo_shift_x_var = tk.StringVar(value="0")
         self.photo_shift_y_var = tk.StringVar(value="0")
+        self.photo_dpi_var = tk.StringVar(value="96") # [NEW] User Configurable DPI
         self.photo_selected_files = [] 
         
         self.load_settings()
@@ -434,16 +443,16 @@ class PMIReportApp:
                         'report_no': self.photo_report_no,
                         'cols_per_row': self.photo_cols_per_row, 'keep_aspect': self.photo_keep_aspect,
                         'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
-                        'logo_width': self.photo_logo_width_var,
+                        'logo_width': self.photo_logo_width_var, 'logo_height': self.photo_logo_height_var,
                         'logo_x': self.photo_logo_x_var, 'logo_y': self.photo_logo_y_var,
                         'cell_width': self.photo_cell_width_var, 'cell_height': self.photo_cell_height_var,
                         'm_top': self.photo_margin_top_var, 'm_bottom': self.photo_margin_bottom_var,
                         'm_left': self.photo_margin_left_var, 'm_right': self.photo_margin_right_var,
                         'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
-                        'photo_align': self.photo_align_var, 'fit_width': self.photo_fit_width_var,
+                        'photo_align': self.photo_align_var, 'auto_fit_page': self.photo_auto_fit_page_var, 'fit_width': self.photo_fit_width_var,
                         'auto_rotate': self.photo_auto_rotate_var, 'width_pct': self.photo_width_pct_var,
                         'pixel_adj': self.photo_width_pixel_adj_var, 'shift_x': self.photo_shift_x_var,
-                        'shift_y': self.photo_shift_y_var
+                        'shift_y': self.photo_shift_y_var, 'dpi': self.photo_dpi_var
                     }
                     if 'PHOTO_LOG_SETTINGS' in saved_data:
                         plist = saved_data['PHOTO_LOG_SETTINGS']
@@ -564,16 +573,16 @@ class PMIReportApp:
                     'report_no': self.photo_report_no.get(),
                     'cols_per_row': self.photo_cols_per_row.get(), 'keep_aspect': self.photo_keep_aspect.get(),
                     'output_name': self.photo_output_name.get(), 'logo_path': self.photo_logo_path.get(),
-                    'logo_width': self.photo_logo_width_var.get(),
+                    'logo_width': self.photo_logo_width_var.get(), 'logo_height': self.photo_logo_height_var.get(),
                     'logo_x': self.photo_logo_x_var.get(), 'logo_y': self.photo_logo_y_var.get(),
                     'cell_width': self.photo_cell_width_var.get(), 'cell_height': self.photo_cell_height_var.get(),
                     'm_top': self.photo_margin_top_var.get(), 'm_bottom': self.photo_margin_bottom_var.get(),
                     'm_left': self.photo_margin_left_var.get(), 'm_right': self.photo_margin_right_var.get(),
                     'print_scale': self.photo_print_scale_var.get(), 'desc_height': self.photo_desc_height_var.get(),
-                    'photo_align': self.photo_align_var.get(), 'fit_width': self.photo_fit_width_var.get(),
+                    'photo_align': self.photo_align_var.get(), 'auto_fit_page': self.photo_auto_fit_page_var.get(), 'fit_width': self.photo_fit_width_var.get(),
                     'auto_rotate': self.photo_auto_rotate_var.get(), 'width_pct': self.photo_width_pct_var.get(),
                     'pixel_adj': self.photo_width_pixel_adj_var.get(), 'shift_x': self.photo_shift_x_var.get(),
-                    'shift_y': self.photo_shift_y_var.get(),
+                    'shift_y': self.photo_shift_y_var.get(), 'dpi': self.photo_dpi_var.get(),
                     'selected_files': self.photo_selected_files,
                     'last_save_dir': getattr(self, 'last_photo_save_dir', "")
                 }
@@ -617,16 +626,16 @@ class PMIReportApp:
                 'report_no': self.photo_report_no,
                 'cols_per_row': self.photo_cols_per_row, 'keep_aspect': self.photo_keep_aspect,
                 'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
-                'logo_width': self.photo_logo_width_var,
+                'logo_width': self.photo_logo_width_var, 'logo_height': self.photo_logo_height_var,
                 'logo_x': self.photo_logo_x_var, 'logo_y': self.photo_logo_y_var,
                 'cell_width': self.photo_cell_width_var, 'cell_height': self.photo_cell_height_var,
                 'm_top': self.photo_margin_top_var, 'm_bottom': self.photo_margin_bottom_var,
                 'm_left': self.photo_margin_left_var, 'm_right': self.photo_margin_right_var,
                 'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
-                'photo_align': self.photo_align_var, 'fit_width': self.photo_fit_width_var,
+                'photo_align': self.photo_align_var, 'auto_fit_page': self.photo_auto_fit_page_var, 'fit_width': self.photo_fit_width_var,
                 'auto_rotate': self.photo_auto_rotate_var, 'width_pct': self.photo_width_pct_var,
                 'pixel_adj': self.photo_width_pixel_adj_var, 'shift_x': self.photo_shift_x_var,
-                'shift_y': self.photo_shift_y_var
+                'shift_y': self.photo_shift_y_var, 'dpi': self.photo_dpi_var
             }
             for pk, pvar in photo_vars.items():
                 if pk in plist:
@@ -8366,33 +8375,45 @@ class PMIReportApp:
         ttk.Entry(layout_frame, textvariable=self.photo_desc_height_var, width=10).grid(row=3, column=1, sticky='w', padx=5, pady=2)
         
         tk.Label(layout_frame, text="인쇄 배율:").grid(row=4, column=0, sticky='w', pady=2)
-        ttk.Entry(layout_frame, textvariable=self.photo_print_scale_var, width=10).grid(row=4, column=1, sticky='w', padx=5, pady=2)
+        r4_f = tk.Frame(layout_frame)
+        r4_f.grid(row=4, column=1, columnspan=2, sticky='w')
+        ttk.Entry(r4_f, textvariable=self.photo_print_scale_var, width=6).pack(side='left', padx=2)
+        tk.Label(r4_f, text="출력 해상도(DPI):").pack(side='left', padx=(5, 2))
+        ttk.Entry(r4_f, textvariable=self.photo_dpi_var, width=4).pack(side='left', padx=2)
+        tk.Label(r4_f, text="(기본: 96)", font=('', 9), foreground='gray').pack(side='left')
 
         tk.Label(layout_frame, text="배치 설정:").grid(row=5, column=0, sticky='w', pady=2)
         b_f = tk.Frame(layout_frame)
         b_f.grid(row=5, column=1, columnspan=2, sticky='w')
         ttk.Combobox(b_f, textvariable=self.photo_align_var, values=["좌측 정렬", "중앙 정렬"], state="readonly", width=10).pack(side='left', padx=2)
         ttk.Checkbutton(b_f, text="가로 폭 맞춤 (Fit to Width)", variable=self.photo_fit_width_var).pack(side='left', padx=5)
+        ttk.Checkbutton(b_f, text="A4 인쇄영역 자동맞춤", variable=self.photo_auto_fit_page_var).pack(side='left', padx=5)
         ttk.Checkbutton(b_f, text="세로 사진 자동 회전", variable=self.photo_auto_rotate_var).pack(side='left', padx=5)
         
         tk.Label(layout_frame, text="너비비율(%):").grid(row=6, column=0, sticky='w')
         wf_f = tk.Frame(layout_frame)
         wf_f.grid(row=6, column=1, columnspan=2, sticky='w')
         ttk.Entry(wf_f, textvariable=self.photo_width_pct_var, width=7).pack(side='left', padx=2)
-        tk.Label(wf_f, text="너비추가(px):").pack(side='left', padx=(10, 0))
-        ttk.Entry(wf_f, textvariable=self.photo_width_pixel_adj_var, width=4).pack(side='left', padx=2)
+        tk.Label(wf_f, text="너비여백(px):").pack(side='left', padx=(10, 0))
+        ttk.Spinbox(wf_f, textvariable=self.photo_width_pixel_adj_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
+        tk.Label(wf_f, text="상하여백(px):").pack(side='left', padx=(10, 0))
+        ttk.Spinbox(wf_f, textvariable=self.photo_height_pixel_adj_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
         tk.Label(wf_f, text="좌우(px):").pack(side='left', padx=(10, 0))
-        ttk.Entry(wf_f, textvariable=self.photo_shift_x_var, width=4).pack(side='left', padx=2)
+        ttk.Spinbox(wf_f, textvariable=self.photo_shift_x_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
         tk.Label(wf_f, text="상하(px):").pack(side='left', padx=(10, 0))
-        ttk.Entry(wf_f, textvariable=self.photo_shift_y_var, width=4).pack(side='left', padx=2)
+        ttk.Spinbox(wf_f, textvariable=self.photo_shift_y_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
         tk.Label(wf_f, text="(100% 기준 미세조정)", font=('', 9), foreground='gray').pack(side='left', padx=5)
 
         # 3. Logo Options
         logo_frame = ttk.LabelFrame(left_pane, text=" 로고 및 출력 설정 ", padding=10)
         logo_frame.pack(fill='x', padx=10, pady=5)
 
-        tk.Label(logo_frame, text="로고 너비:").grid(row=0, column=0, sticky='w', pady=2)
-        ttk.Entry(logo_frame, textvariable=self.photo_logo_width_var, width=10).grid(row=0, column=1, sticky='w', padx=5, pady=2)
+        tk.Label(logo_frame, text="로고 너비/높이:").grid(row=0, column=0, sticky='w', pady=2)
+        wh_f = tk.Frame(logo_frame)
+        wh_f.grid(row=0, column=1, sticky='w')
+        ttk.Entry(wh_f, textvariable=self.photo_logo_width_var, width=5).pack(side='left', padx=2)
+        ttk.Entry(wh_f, textvariable=self.photo_logo_height_var, width=5).pack(side='left', padx=2)
+        tk.Label(wh_f, text="(높이 공란 시 비율유지)", font=('', 8), fg='gray').pack(side='left')
         
         tk.Label(logo_frame, text="로고 X/Y:").grid(row=1, column=0, sticky='w', pady=2)
         xy_f = tk.Frame(logo_frame)
@@ -8403,17 +8424,11 @@ class PMIReportApp:
         # [NEW] Photo Log Layout Save Button
         btn_f = tk.Frame(logo_frame, background="#ffffff")
         btn_f.grid(row=2, column=0, columnspan=2, sticky='ew', pady=5)
-        ttk.Button(btn_f, text="💾 사진대장 레이아웃 설정 저장", command=self.save_photo_log_config).pack(side='left', padx=5)
-        tk.Label(btn_f, text="* 로고위치, 여백 등이 photolog_config.json에 저장됩니다.", font=("Malgun Gothic", 8), fg="gray", background="#ffffff").pack(side='left')
+        ttk.Button(btn_f, text="💾 설정 저장", command=self.save_photo_log_config).pack(side='left', padx=5)
+        tk.Label(btn_f, text="* 여백, 로고위치 등 저장", font=("Malgun Gothic", 8), fg="gray", background="#ffffff").pack(side='left')
         
-        # [NEW] Save Photo Log Config Button
-        btn_f = tk.Frame(logo_frame, background="#ffffff")
-        btn_f.grid(row=2, column=0, columnspan=2, sticky='ew', pady=5)
-        ttk.Button(btn_f, text="💾 사진대장 레이아웃 설정 저장", command=self.save_photo_log_config).pack(side='left', padx=5)
-        tk.Label(btn_f, text="* 여백, 로고위치, 너비비율 등이 저장됩니다.", font=("Malgun Gothic", 8), fg="gray", background="#ffffff").pack(side='left')
-        
-        tk.Label(logo_frame, text="출력 파일명:").grid(row=2, column=0, sticky='w', pady=2)
-        ttk.Entry(logo_frame, textvariable=self.photo_output_name, width=1).grid(row=2, column=1, sticky='ew', padx=5, pady=2)
+        tk.Label(logo_frame, text="출력 파일명:").grid(row=3, column=0, sticky='w', pady=2)
+        ttk.Entry(logo_frame, textvariable=self.photo_output_name, width=1).grid(row=3, column=1, sticky='ew', padx=5, pady=2)
         logo_frame.columnconfigure(1, weight=1)
 
         # Action Buttons at bottom of sidebar
@@ -8429,6 +8444,13 @@ class PMIReportApp:
         right_container = tk.Frame(self.photo_paned, background="#ffffff")
         self.photo_paned.add(right_container)
 
+        # [NEW] Live Preview Canvas
+        preview_frame = tk.Frame(right_container, background="#e2e8f0", padx=10, pady=10)
+        preview_frame.pack(fill='x')
+        tk.Label(preview_frame, text="👁️ 실시간 레이아웃 미리보기 (선택된 사진 기준)", font=("Malgun Gothic", 10, "bold"), background="#e2e8f0", foreground="#1e293b").pack(anchor='w')
+        self.photo_preview_canvas = tk.Canvas(preview_frame, bg="#ffffff", height=300, highlightthickness=1, highlightbackground="#cbd5e1")
+        self.photo_preview_canvas.pack(fill='x', pady=5)
+        
         # File List Header
         list_header = tk.Frame(right_container, background="#f8fafc", padx=15, pady=10)
         list_header.pack(fill='x')
@@ -8462,8 +8484,23 @@ class PMIReportApp:
             for f in self.photo_selected_files:
                 self.photo_listbox.insert(tk.END, f)
                 
+        # [NEW] Bindings for Live Preview Update
+        self.photo_listbox.bind("<<ListboxSelect>>", self._update_photo_preview)
+        self.photo_listbox.bind("<ButtonRelease-1>", self._update_photo_preview)
+        self.photo_listbox.bind("<KeyRelease>", self._update_photo_preview)
+        for var in (self.photo_width_pct_var, self.photo_width_pixel_adj_var, self.photo_height_pixel_adj_var, self.photo_shift_x_var, 
+                    self.photo_shift_y_var, self.photo_cell_width_var, self.photo_cell_height_var,
+                    self.photo_cols_per_row):
+            var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
+        self.photo_keep_aspect.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
+        self.photo_fit_width_var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
+        self.photo_auto_rotate_var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
+                
         self._apply_sash_ratio("PHOTO")
         self.root.after(500, lambda: self._on_photo_paned_configure(None))
+        
+        # [NEW] 화면을 처음 켰을 때, 선택된 게 없더라도 초기 화면/안내 문구가 뜨도록 강제 1회 실행
+        self.root.after(800, self._update_photo_preview)
 
     def _update_photo_ratio(self):
         try:
@@ -8526,6 +8563,163 @@ class PMIReportApp:
         self.photo_selected_files.clear()
         self.photo_listbox.delete(0, tk.END)
         self.log("[PhotoLog] 리스트 초기화 완료")
+        self._update_photo_preview()
+
+    def _update_photo_preview(self, *args):
+        def safe_float(val, default=0.0):
+            try: return float(val.strip())
+            except: return default
+        if not hasattr(self, 'photo_preview_canvas') or not self.photo_preview_canvas.winfo_exists():
+            return
+            
+        self.photo_preview_canvas.delete("all")
+        
+        selected_idxs = self.photo_listbox.curselection()
+        if selected_idxs:
+            img_path = self.photo_listbox.get(selected_idxs[0])
+        elif self.photo_listbox.size() > 0:
+            img_path = self.photo_listbox.get(0)
+        else:
+            self.photo_preview_canvas.create_text(250, 100, text="리스트에서 사진을 선택하면 미리보기가 나타납니다.", fill="gray", font=("Malgun Gothic", 10))
+            return
+            
+        if not os.path.exists(img_path):
+            self.photo_preview_canvas.create_text(250, 100, text="⚠️ 선택한 사진 파일이 컴퓨터에 존재하지 않습니다.\n(파일이 삭제되었거나 이동되었을 수 있습니다.)", fill="red", font=("Malgun Gothic", 10, "bold"), justify="center")
+            return
+            
+        try:
+
+            GRID_COLS = 6
+            unit_per_grid = (float(self.photo_cell_width_var.get()) * 2) / GRID_COLS
+            CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
+            
+            # [NEW] A4 Auto-Fit Logic
+            if self.photo_auto_fit_page_var.get():
+                m_t = safe_float(self.photo_margin_top_var.get(), 0.5)
+                m_b = safe_float(self.photo_margin_bottom_var.get(), 0.5)
+                desc_h = safe_float(self.photo_desc_height_var.get(), 15.0)
+                avail_h = 842.0 - ((m_t + m_b) * 72.0) - 110.0 # A4 - Margins - Header
+                CELL_ROW_HEIGHT = (avail_h - (4 * desc_h)) / 4.0 - 1.0 # 4 rows per page
+                
+            WIDTH_PCT = safe_float(self.photo_width_pct_var.get(), 100.0) / 100.0
+            PIXEL_ADJ = safe_float(self.photo_width_pixel_adj_var.get(), 0.0)
+            SHIFT_X = safe_float(self.photo_shift_x_var.get(), 0.0)
+            SHIFT_Y = safe_float(self.photo_shift_y_var.get(), 0.0)
+            INTERNAL_FACTOR = 8.0 # Korean Excel Font Hotfix
+            num_cols = int(self.photo_cols_per_row.get())
+            
+            unit_per_px = int((unit_per_grid * INTERNAL_FACTOR) + 5)
+            if self.photo_auto_fit_page_var.get():
+                m_l = safe_float(self.photo_margin_left_var.get(), 0.5)
+                m_r = safe_float(self.photo_margin_right_var.get(), 0.5)
+                unit_per_px = int(((595.0 - (m_l + m_r) * 72.0) * 1.33333) / GRID_COLS)
+            
+            if num_cols == 1: CELL_WIDTH_PX = unit_per_px * 6
+            elif num_cols == 2: CELL_WIDTH_PX = unit_per_px * 3
+            else: CELL_WIDTH_PX = unit_per_px * 2
+            
+            SAFE_WIDTH = CELL_WIDTH_PX * WIDTH_PCT + PIXEL_ADJ
+            ROW_PT_TO_PX = 1.33333
+            CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
+
+            from PIL import Image as PILImage, ImageOps, ImageTk
+            with PILImage.open(img_path) as img:
+                img = ImageOps.exif_transpose(img)
+                img_w, img_h = img.size
+                
+                if self.photo_auto_rotate_var.get() and img_h > img_w:
+                    img = img.rotate(90, expand=True)
+                    img_w, img_h = img.size
+                
+                HEIGHT_ADJ = safe_float(self.photo_height_pixel_adj_var.get(), 10.0)
+                if self.photo_auto_fit_page_var.get():
+                    scale = min(SAFE_WIDTH / img_w, CELL_HEIGHT_PX / img_h)
+                    x_scale = y_scale = scale
+                    final_row_h_px = CELL_ROW_HEIGHT * ROW_PT_TO_PX
+                elif self.photo_fit_width_var.get():
+                    x_scale = y_scale = SAFE_WIDTH / img_w
+                    req_h_px = (img_h * y_scale) + HEIGHT_ADJ
+                    final_row_h_px = (req_h_px / ROW_PT_TO_PX) * ROW_PT_TO_PX
+                elif not self.photo_keep_aspect.get():
+                    x_scale = SAFE_WIDTH / img_w
+                    y_scale = CELL_HEIGHT_PX / img_h
+                    final_row_h_px = (CELL_ROW_HEIGHT * ROW_PT_TO_PX) + HEIGHT_ADJ
+                else:
+                    scale = min(SAFE_WIDTH / img_w, CELL_HEIGHT_PX / img_h)
+                    x_scale = y_scale = scale
+                    final_row_h_px = (CELL_ROW_HEIGHT * ROW_PT_TO_PX) + HEIGHT_ADJ
+                
+                x_off = round(((CELL_WIDTH_PX - (img_w * x_scale)) / 2) + SHIFT_X)
+                y_off = round(((final_row_h_px - (img_h * y_scale)) / 2) + SHIFT_Y)
+                
+                preview_w = self.photo_preview_canvas.winfo_width()
+                preview_h = self.photo_preview_canvas.winfo_height()
+                if preview_w < 10: preview_w = 600
+                if preview_h < 10: preview_h = 300
+                
+                # [NEW] 화면에서 더 크게 보일 수 있도록 1.25배 확대하되, 캔버스 높이를 넘어가면 자동 축소(줌아웃)
+                VISUAL_ZOOM = 1.25
+                if (final_row_h_px * VISUAL_ZOOM) > (preview_h - 20):
+                    VISUAL_ZOOM = (preview_h - 20) / final_row_h_px
+                
+                center_x = preview_w / 2
+                center_y = preview_h / 2
+                
+                draw_cell_w = CELL_WIDTH_PX * VISUAL_ZOOM
+                draw_cell_h = final_row_h_px * VISUAL_ZOOM
+                
+                cell_left = center_x - (draw_cell_w / 2)
+                cell_top = center_y - (draw_cell_h / 2)
+                
+                # [NEW] Overflow Check (1px tolerance for floating point math)
+                actual_w = img_w * x_scale
+                actual_h = img_h * y_scale
+                is_overflow = False
+                if x_off < -1 or y_off < -1 or (x_off + actual_w) > CELL_WIDTH_PX + 1 or (y_off + actual_h) > final_row_h_px + 1:
+                    is_overflow = True
+                
+                box_color = "red" if is_overflow else "green"
+                box_width = 3 if is_overflow else 2
+                box_dash = () if is_overflow else (4, 4)
+                
+                status_msg = "⚠️ 경고: 사진이 박스를 벗어났습니다! (엑셀 레이아웃이 깨집니다)" if is_overflow else "✅ 정상: 사진이 박스 안에 안전하게 들어갑니다."
+                status_color = "red" if is_overflow else "#16a34a" # Green
+                
+                # Calculate image rendering
+                render_w = int(img_w * x_scale * VISUAL_ZOOM)
+                render_h = int(img_h * y_scale * VISUAL_ZOOM)
+                
+                draw_x_off = x_off * VISUAL_ZOOM
+                draw_y_off = y_off * VISUAL_ZOOM
+                
+                # 1. Draw Image First (so it stays in background if it overflows)
+                if render_w > 0 and render_h > 0:
+                    render_img = img.resize((render_w, render_h), PILImage.Resampling.LANCZOS)
+                    self._preview_photo_img = ImageTk.PhotoImage(render_img)
+                    self.photo_preview_canvas.create_image(
+                        cell_left + draw_x_off, cell_top + draw_y_off,
+                        image=self._preview_photo_img, anchor="nw"
+                    )
+                
+                # 2. Draw Excel Cell Boundary On Top
+                self.photo_preview_canvas.create_rectangle(
+                    cell_left, cell_top, cell_left + draw_cell_w, cell_top + draw_cell_h,
+                    outline=box_color, width=box_width, dash=box_dash
+                )
+                
+                # 3. Draw Status Message On Top
+                self.photo_preview_canvas.create_text(
+                    cell_left, cell_top - 15, 
+                    text=status_msg, 
+                    fill=status_color, anchor="w", font=("Malgun Gothic", 10, "bold")
+                )
+                self.photo_preview_canvas.create_text(
+                    cell_left, cell_top + draw_cell_h + 10, 
+                    text=f"현재 테두리: 엑셀 셀 실제 영역 (미리보기 {VISUAL_ZOOM}배 확대 렌더링 중)", 
+                    fill="gray", anchor="w", font=("Malgun Gothic", 8)
+                )
+        except Exception as e:
+            self.photo_preview_canvas.create_text(250, 100, text=f"미리보기 렌더링 오류: {e}", fill="red")
 
     def start_photo_generation(self):
         if not self.photo_selected_files:
@@ -8535,6 +8729,9 @@ class PMIReportApp:
         threading.Thread(target=self.generate_photo_report, daemon=True).start()
 
     def generate_photo_report(self):
+        def safe_float(val, default=0.0):
+            try: return float(val.strip())
+            except: return default
         try:
             if not self.photo_selected_files: return
             
@@ -8591,7 +8788,8 @@ class PMIReportApp:
             num_cols = int(self.photo_cols_per_row.get())
             photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
             total_pages = math.ceil(len(self.photo_selected_files) / photos_per_page)
-            worksheet.fit_to_pages(1, total_pages)
+            if not self.photo_auto_fit_page_var.get():
+                worksheet.fit_to_pages(1, total_pages)
 
             # Formats
             title_format = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'shrink': True})
@@ -8603,34 +8801,39 @@ class PMIReportApp:
             # Fixed 6-column Grid System
             GRID_COLS = 6
             unit_per_grid = (float(self.photo_cell_width_var.get()) * 2) / GRID_COLS
-            worksheet.set_column(0, GRID_COLS - 1, unit_per_grid)
+            
+            # [HOTFIX] 한국어 엑셀(맑은 고딕) 렌더링 배율 보정 (8.0)
+            INTERNAL_FACTOR = 8.0
+            
+            # 엑셀의 가변적인 문자 단위 너비 대신, 파이썬이 계산한 '정확한 픽셀 너비'로 엑셀 셀을 강제 고정합니다.
+            unit_per_px = int((unit_per_grid * INTERNAL_FACTOR) + 5)
+            if self.photo_auto_fit_page_var.get():
+                m_l = safe_float(self.photo_margin_left_var.get(), 0.5)
+                m_r = safe_float(self.photo_margin_right_var.get(), 0.5)
+                unit_per_px = int(((595.0 - (m_l + m_r) * 72.0) * 1.33333) / GRID_COLS)
+            worksheet.set_column_pixels(0, GRID_COLS - 1, unit_per_px)
 
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
             
             # [REFINED] Percentage-Based Precision Scaling
-            try:
-                WIDTH_PCT = float(self.photo_width_pct_var.get().strip()) / 100.0
-                PIXEL_ADJ = float(self.photo_width_pixel_adj_var.get().strip())
-                SHIFT_X = float(self.photo_shift_x_var.get().strip())
-                SHIFT_Y = float(self.photo_shift_y_var.get().strip())
-            except:
-                WIDTH_PCT, PIXEL_ADJ, SHIFT_X, SHIFT_Y = 1.0, 0.0, 0.0, 0.0
                 
-            # Fixed internal factor for stability
-            INTERNAL_FACTOR = 7.142
+            WIDTH_PCT = safe_float(self.photo_width_pct_var.get(), 100.0) / 100.0
+            PIXEL_ADJ = safe_float(self.photo_width_pixel_adj_var.get(), 0.0)
+            SHIFT_X = safe_float(self.photo_shift_x_var.get(), 0.0)
+            SHIFT_Y = safe_float(self.photo_shift_y_var.get(), 0.0)
                 
             if num_cols == 1:
                 photo_col_spans = [(0, GRID_COLS - 1)]
-                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 6), 1)
+                CELL_WIDTH_PX = unit_per_px * 6
             elif num_cols == 2:
                 photo_col_spans = [(0, 2), (3, 5)]
-                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 3), 1)
+                CELL_WIDTH_PX = unit_per_px * 3
             else: # 3 Columns
                 photo_col_spans = [(0, 1), (2, 3), (4, 5)]
-                CELL_WIDTH_PX = round(((unit_per_grid * INTERNAL_FACTOR + 5) * 2), 1)
+                CELL_WIDTH_PX = unit_per_px * 2
             
-            # Target width based on percentage and padding
-            SAFE_WIDTH = (CELL_WIDTH_PX - 10) * WIDTH_PCT + PIXEL_ADJ
+            # Target width based on percentage and padding (removed hardcoded 10px margin for edge-to-edge fit)
+            SAFE_WIDTH = CELL_WIDTH_PX * WIDTH_PCT + PIXEL_ADJ
             
             # Detailed Logging for user calibration
             self.log(f"[PhotoLog] 설정: 너비비율={WIDTH_PCT*100:.1f}%, 보정={PIXEL_ADJ}px")
@@ -8643,27 +8846,58 @@ class PMIReportApp:
             company_text = "서   울   檢   査   株   式   會   社\nSEOUL INSPECTION & TESTING Co., Ltd.\nTEL : (02) 552-1112   FAX : (02) 2058-0720"
             worksheet.merge_range(1, 0, 3, 2, company_text, company_format)
 
-            # Logo Insertion with Smart Fallback
-            logo_f = self.photo_logo_path.get()
-            if not logo_f or not os.path.exists(logo_f):
-                logo_f = self.find_image_smart("SITCO")
-                if not logo_f: logo_f = self.find_image_smart("서울검사")
+            # Logo Insertion
+            logo_f = self.photo_logo_path.get().strip()
+            
+            total_header_h = 45 # 15 * 3 rows
+            for r in range(1, 4): worksheet.set_row(r, 15) 
             
             if logo_f and os.path.exists(logo_f):
                 try:
-                    total_header_h = 45 # 15 * 3 rows
-                    for r in range(1, 4): worksheet.set_row(r, 15) 
                     with PILImage.open(logo_f) as img:
                         w, h = img.size
                         max_w_logo = float(self.photo_logo_width_var.get())
                         mx = float(self.photo_logo_x_var.get())
                         my = float(self.photo_logo_y_var.get())
-                        scale = min(max_w_logo/w, 42/h) * 0.95
-                        logo_h = h * scale
-                        y_offset = (total_header_h - logo_h) / 2 + my
-                        worksheet.insert_image('A2', logo_f, {'x_scale': scale, 'y_scale': scale, 'x_offset': mx, 'y_offset': y_offset, 'object_position': 1})
+                        
+                        scale_x = max_w_logo / w
+                        try:
+                            # [FIX] Apply independent height scale if user provided it
+                            max_h_logo = float(self.photo_logo_height_var.get().strip())
+                            scale_y = max_h_logo / h
+                        except:
+                            scale_y = scale_x
+                        
+                        # [FIX] Anchor at A1 with 40px base offset (row 0 height) to allow free negative movement
+                        y_offset = 40 + int(my)
+                        worksheet.insert_image('A1', logo_f, {'x_scale': scale_x, 'y_scale': scale_y, 'x_offset': int(mx), 'y_offset': y_offset, 'object_position': 1})
                 except Exception as e:
                     self.log(f"[PhotoLog] 로고 삽입 중 오류: {e}")
+            else:
+                # [NEW] Use Embedded Base64 Logo if no file is provided
+                try:
+                    import base64
+                    import io
+                    logo_data = base64.b64decode(DEFAULT_SITCO_LOGO_B64)
+                    logo_buffer = io.BytesIO(logo_data)
+                    with PILImage.open(logo_buffer) as img:
+                        w, h = img.size
+                        max_w_logo = float(self.photo_logo_width_var.get())
+                        mx = float(self.photo_logo_x_var.get())
+                        my = float(self.photo_logo_y_var.get())
+                        
+                        scale_x = max_w_logo / w
+                        try:
+                            max_h_logo = float(self.photo_logo_height_var.get().strip())
+                            scale_y = max_h_logo / h
+                        except:
+                            scale_y = scale_x
+                        
+                        # [FIX] Anchor at A1 with 40px base offset (row 0 height) to allow free negative movement
+                        y_offset = 40 + int(my)
+                        worksheet.insert_image('A1', 'sitco_logo.png', {'image_data': logo_buffer, 'x_scale': scale_x, 'y_scale': scale_y, 'x_offset': int(mx), 'y_offset': y_offset, 'object_position': 1})
+                except Exception as e:
+                    self.log(f"[PhotoLog] 내장 로고 삽입 실패: {e}")
 
             worksheet.merge_range(1, 3, 1, 5, f"발주처: {self.photo_orderer.get()}", center_border)
             worksheet.merge_range(2, 3, 2, 5, f"REPORT NO: {self.photo_report_no.get()}", center_border)
@@ -8677,17 +8911,23 @@ class PMIReportApp:
             page_breaks = []
             photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
             DESC_ROW_HEIGHT = float(self.photo_desc_height_var.get())
-            CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
+
+            CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
+            if self.photo_auto_fit_page_var.get():
+                m_t = safe_float(self.photo_margin_top_var.get(), 0.5)
+                m_b = safe_float(self.photo_margin_bottom_var.get(), 0.5)
+                avail_h = 842.0 - ((m_t + m_b) * 72.0) - 110.0
+                CELL_ROW_HEIGHT = (avail_h - (4 * DESC_ROW_HEIGHT)) / 4.0 - 1.0
             
             total = len(image_files)
-            # Keep track of the maximum height needed for the current row
             current_row_max_h_pt = CELL_ROW_HEIGHT
+            CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
             ROW_PT_TO_PX = 1.33333
 
             for i, img_path in enumerate(image_files):
                 # Reset max height for a new row of photos
                 if col_ptr == 0:
-                    current_row_max_h_pt = CELL_ROW_HEIGHT
+                    current_row_max_h_pt = 0 if self.photo_fit_width_var.get() else CELL_ROW_HEIGHT
                 
                 try:
                     with PILImage.open(img_path) as img:
@@ -8700,32 +8940,44 @@ class PMIReportApp:
                             img_w, img_h = img.size
                             self.log(f"[PhotoLog] 자동 회전 적용: {os.path.basename(img_path)}")
                         
-                        # [FIX] Prepare image data to preserve rotation in Excel
+                        # [FIX] Prepare image data to preserve rotation and apply User DPI for Excel
                         img_buffer = io.BytesIO()
-                        img.save(img_buffer, format='PNG')
+                        try:
+                            user_dpi = int(self.photo_dpi_var.get().strip())
+                            if user_dpi <= 0: user_dpi = 96
+                        except:
+                            user_dpi = 96
+                        img.save(img_buffer, format='PNG', dpi=(user_dpi, user_dpi))
                         img_buffer.seek(0)
                         
                         c_start, c_end = photo_col_spans[col_ptr]
                         if c_start != c_end: worksheet.merge_range(row, c_start, row, c_end, "", center_border)
                         
                         # [REFINED] Scaling Logic with 'Fit to Width' support
-                        TOTAL_BUFFER = 10 # Aggressive Safety Margin
-                        if self.photo_fit_width_var.get():
+                        HEIGHT_ADJ = safe_float(self.photo_height_pixel_adj_var.get(), 10.0)
+                        if self.photo_auto_fit_page_var.get():
+                            scale = min(SAFE_WIDTH / img_w, CELL_HEIGHT_PX / img_h)
+                            x_scale = y_scale = scale
+                            current_row_max_h_pt = CELL_ROW_HEIGHT
+                        elif self.photo_fit_width_var.get():
                             x_scale = SAFE_WIDTH / img_w
                             y_scale = x_scale
-                            # Calculate required height for this photo
-                            req_h_px = (img_h * y_scale) + 10 # Buffer
+                            req_h_px = (img_h * y_scale) + HEIGHT_ADJ # Customizable Buffer
                             req_h_pt = req_h_px / ROW_PT_TO_PX
                             current_row_max_h_pt = max(current_row_max_h_pt, req_h_pt)
                         elif not self.photo_keep_aspect.get():
                             x_scale = SAFE_WIDTH / img_w
-                            y_scale = (CELL_HEIGHT_PX - 10) / img_h
+                            y_scale = CELL_HEIGHT_PX / img_h
+                            current_row_max_h_pt = CELL_ROW_HEIGHT + (HEIGHT_ADJ / ROW_PT_TO_PX)
                         else:
-                            scale = min(SAFE_WIDTH / img_w, (CELL_HEIGHT_PX - 10) / img_h)
+                            scale = min(SAFE_WIDTH / img_w, CELL_HEIGHT_PX / img_h)
                             x_scale = y_scale = scale
+                            current_row_max_h_pt = CELL_ROW_HEIGHT + (HEIGHT_ADJ / ROW_PT_TO_PX)
                         
                         # Apply the potentially updated row height
                         worksheet.set_row(row, current_row_max_h_pt)
+                        
+
                         
                         # Re-calculate Y offset based on the final row height
                         final_row_h_px = current_row_max_h_pt * ROW_PT_TO_PX

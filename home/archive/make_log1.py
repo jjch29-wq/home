@@ -56,12 +56,8 @@ class PhotoLogApp:
         self.offset_x_var = tk.IntVar(value=offset_x)
         self.offset_y_var = tk.IntVar(value=offset_y)
         
-        # 슬라이더/스핀박스/투명 자로 값이 바뀌면 즉시 config에 저장합니다.
-        def _auto_save(*_): self.save_config()
-        self.img_w_var.trace_add('write', _auto_save)
-        self.img_h_var.trace_add('write', _auto_save)
-        self.offset_x_var.trace_add('write', _auto_save)
-        self.offset_y_var.trace_add('write', _auto_save)
+        # 스핀박스 직접 입력 시 숫자가 튕기는 버그를 방지하기 위해 실시간 자동 저장을 뺍니다.
+        # 설정은 변환을 실행할 때만 저장됩니다.
         
     def save_config(self):
         config = {
@@ -113,35 +109,45 @@ class PhotoLogApp:
         
         # 사진 가로 크기
         tk.Label(size_frame, text="사진 가로폭 (기본 280):").grid(row=0, column=0, sticky="e", pady=2)
-        w_scale = tk.Scale(size_frame, variable=self.img_w_var, from_=200, to=400, orient="horizontal", length=200, resolution=1, showvalue=False)
+        w_scale = tk.Scale(size_frame, variable=self.img_w_var, from_=100, to=800, orient="horizontal", length=400, resolution=1, showvalue=False)
         w_scale.grid(row=0, column=1, sticky="w", padx=(5, 5))
-        w_spin = ttk.Spinbox(size_frame, textvariable=self.img_w_var, from_=200, to=400, width=5)
+        w_spin = ttk.Spinbox(size_frame, textvariable=self.img_w_var, from_=100, to=800, width=5)
         w_spin.grid(row=0, column=2, sticky="w")
         
         # 좌우 위치 조절
         tk.Label(size_frame, text="좌우 위치 조절 (왼쪽 여백):").grid(row=1, column=0, sticky="e", pady=2)
-        x_scale = tk.Scale(size_frame, variable=self.offset_x_var, from_=0, to=100, orient="horizontal", length=200, resolution=1, showvalue=False)
+        x_scale = tk.Scale(size_frame, variable=self.offset_x_var, from_=-50, to=300, orient="horizontal", length=400, resolution=1, showvalue=False)
         x_scale.grid(row=1, column=1, sticky="w", padx=(5, 5))
-        x_spin = ttk.Spinbox(size_frame, textvariable=self.offset_x_var, from_=0, to=100, width=5)
+        x_spin = ttk.Spinbox(size_frame, textvariable=self.offset_x_var, from_=-50, to=300, width=5)
         x_spin.grid(row=1, column=2, sticky="w")
         
         # 사진 세로 크기
         tk.Label(size_frame, text="사진 높이 (기본 150):").grid(row=2, column=0, sticky="e", pady=2)
-        h_scale = tk.Scale(size_frame, variable=self.img_h_var, from_=100, to=300, orient="horizontal", length=200, resolution=1, showvalue=False)
+        h_scale = tk.Scale(size_frame, variable=self.img_h_var, from_=50, to=600, orient="horizontal", length=200, resolution=1, showvalue=False)
         h_scale.grid(row=2, column=1, sticky="w", padx=(5, 5))
-        h_spin = ttk.Spinbox(size_frame, textvariable=self.img_h_var, from_=100, to=300, width=5)
+        h_spin = ttk.Spinbox(size_frame, textvariable=self.img_h_var, from_=50, to=600, width=5)
         h_spin.grid(row=2, column=2, sticky="w")
         
         # 상하 위치 조절
         tk.Label(size_frame, text="상하 위치 조절 (위쪽 여백):").grid(row=3, column=0, sticky="e", pady=2)
-        y_scale = tk.Scale(size_frame, variable=self.offset_y_var, from_=0, to=100, orient="horizontal", length=200, resolution=1, showvalue=False)
+        y_scale = tk.Scale(size_frame, variable=self.offset_y_var, from_=-50, to=300, orient="horizontal", length=400, resolution=1, showvalue=False)
         y_scale.grid(row=3, column=1, sticky="w", padx=(5, 5))
-        y_spin = ttk.Spinbox(size_frame, textvariable=self.offset_y_var, from_=0, to=100, width=5)
+        y_spin = ttk.Spinbox(size_frame, textvariable=self.offset_y_var, from_=-50, to=300, width=5)
         y_spin.grid(row=3, column=2, sticky="w")
         
-        # 투명 눈금자 버튼
-        measure_btn = tk.Button(size_frame, text="📏 투명 자 띄우기\n(엑셀에 겹쳐서\n크기 직접 재기)", bg="lightyellow", font=("Arial", 9, "bold"), command=self.open_measurer)
-        measure_btn.grid(row=0, column=3, rowspan=4, sticky="nsew", padx=(15, 0), pady=2)
+        # 투명 눈금자 & 자동 맞춤 버튼
+        btn_frame = tk.Frame(size_frame)
+        btn_frame.grid(row=0, column=3, rowspan=4, sticky="nsew", padx=(15, 0))
+        
+        measure_btn = tk.Button(btn_frame, text="📏 투명 자 띄우기\n(직접 재기)", bg="lightyellow", font=("Arial", 9), command=self.open_measurer)
+        measure_btn.pack(side="top", fill="both", expand=True, pady=(2, 2))
+        
+        def auto_fit():
+            self.img_w_var.set(381)
+            self.offset_x_var.set(0)
+            
+        auto_btn = tk.Button(btn_frame, text="✨ 엑셀 셀 크기에\n완벽하게 자동 맞춤", bg="#FFD0D0", font=("Arial", 9, "bold"), command=auto_fit)
+        auto_btn.pack(side="top", fill="both", expand=True, pady=(2, 2))
         
         # 4. Execution
         exec_frame = tk.Frame(self.root)
@@ -157,9 +163,18 @@ class PhotoLogApp:
         m.attributes('-topmost', True)
         m.configure(bg='red')   # 빨간 바깥 테두리 역할
 
+        try:
+            import ctypes
+            dpi = ctypes.windll.user32.GetDpiForSystem()
+            self.scale_factor = dpi / 96.0
+        except Exception:
+            self.scale_factor = 1.0
+
         W0 = self.img_w_var.get()
         H0 = self.img_h_var.get()
-        m.geometry(f"{W0+6}x{H0+6}+200+150")
+        screen_W = int(W0 * self.scale_factor)
+        screen_H = int(H0 * self.scale_factor)
+        m.geometry(f"{screen_W+6}x{screen_H+6}+200+150")
 
         # 안쪽 초록 영역 (= 실제 사진이 들어갈 크기)
         inner = tk.Frame(m, bg='#00AA44')
@@ -204,9 +219,15 @@ class PhotoLogApp:
         def rs_drag(e):
             nw = max(90,  _rs['w'] + e.x_root - _rs['x'])
             nh = max(60,  _rs['h'] + e.y_root - _rs['y'])
-            inner_w = int(nw) - 6
-            inner_h = int(nh) - 6
             m.geometry(f"{int(nw)}x{int(nh)}")
+            
+            # 투명 자의 물리적 픽셀 크기를 다시 원래 배율로 나눠서 UI 숫자에 반영합니다.
+            inner_screen_w = int(nw) - 6
+            inner_screen_h = int(nh) - 6
+            
+            inner_w = int(inner_screen_w / self.scale_factor)
+            inner_h = int(inner_screen_h / self.scale_factor)
+            
             self.img_w_var.set(inner_w)
             self.img_h_var.set(inner_h)
             size_lbl.config(text=f"{inner_w} x {inner_h} px")
@@ -342,8 +363,11 @@ class PhotoLogApp:
             offset_x = self.offset_x_var.get()
             offset_y = self.offset_y_var.get()
 
-            # 셀 너비 고정: A4 용지 인쇄 영역의 절반 크기(약 386픽셀)로 셀 폭을 고정합니다.
-            worksheet.set_column_pixels('A:B', 386)
+            # 셀 너비 동적 랩핑: A4 절반 사이즈(386)를 최소한으로 보장하여 레이아웃 축소를 막고,
+            # 사용자가 사진을 386 이상으로 키울 경우 사진이 셀 테두리를 넘어 엑셀 버그가 발생하는 것을 막기 위해
+            # 사진 크기에 맞춰 셀 너비가 자동으로 함께 늘어나도록 방어 코드를 추가합니다. (+5px 안전여백)
+            safe_cell_width = max(386, target_w + (offset_x * 2) + 5)
+            worksheet.set_column_pixels('A:B', safe_cell_width)
 
             DESC_ROW_HEIGHT = 25
             h_breaks = []
@@ -354,19 +378,23 @@ class PhotoLogApp:
                 worksheet.write(row, col, "", image_cell_format)
                 try:
                     with Image.open(image_path) as img:
-                        img_w, img_h = img.size
-                        # 원본 이미지의 DPI를 읽어옵니다. (없으면 기본값 96)
-                        dpi_x, dpi_y = img.info.get('dpi', (96, 96))
+                        if img.mode not in ('RGB', 'RGBA'):
+                            img = img.convert('RGB')
+                            
+                        # 엑셀의 줌 배율 및 숨은 DPI 메타데이터 버그를 원천 차단하기 위해
+                        # 파이썬에서 이미지를 지정된 픽셀로 아예 "물리적 리사이징" 해버립니다.
+                        resample_filter = getattr(Image, 'Resampling', Image).LANCZOS
+                        resized_img = img.resize((target_w, target_h), resample_filter)
                         
-                    # xlsxwriter는 이미지를 삽입할 때 원본 DPI를 96 DPI 기준으로 자동 축소/확대합니다.
-                    # 예를 들어 111 DPI 이미지면 (96/111) 배율로 작게 만듭니다.
-                    # 이를 완벽히 무력화(역산)하여 사용자가 입력한 target_w 픽셀이 정확히 나오도록 scale을 계산합니다.
-                    x_scale = (target_w * dpi_x) / (img_w * 96)
-                    y_scale = (target_h * dpi_y) / (img_h * 96)
-                    
-                    worksheet.insert_image(row, col, image_path, {
-                        'x_scale': x_scale,
-                        'y_scale': y_scale,
+                        img_byte_arr = io.BytesIO()
+                        # 모든 원본 메타데이터(DPI 등)를 날리고 순수 96 DPI로 저장
+                        resized_img.save(img_byte_arr, format='PNG', dpi=(96, 96))
+                        img_byte_arr.seek(0)
+                        
+                    worksheet.insert_image(row, col, f"img_{row}_{col}.png", {
+                        'image_data': img_byte_arr,
+                        'x_scale': 1.0,
+                        'y_scale': 1.0,
                         'x_offset': offset_x,
                         'y_offset': offset_y,
                         'object_position': 3
