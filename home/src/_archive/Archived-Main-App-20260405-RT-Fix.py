@@ -8354,7 +8354,7 @@ class PMIReportApp:
         layout_frame.pack(fill='x', padx=10, pady=5)
 
         tk.Label(layout_frame, text="한 줄당 사진:").grid(row=0, column=0, sticky='w', pady=2)
-        ttk.Combobox(layout_frame, textvariable=self.photo_cols_per_row, values=["1", "2", "3"], state="readonly", width=5).grid(row=0, column=1, sticky='w', padx=5, pady=2)
+        ttk.Combobox(layout_frame, textvariable=self.photo_cols_per_row, values=["1", "2", "3", "4"], state="readonly", width=5).grid(row=0, column=1, sticky='w', padx=5, pady=2)
         ttk.Checkbutton(layout_frame, text="비율 유지", variable=self.photo_keep_aspect).grid(row=0, column=2, sticky='w')
 
         tk.Label(layout_frame, text="칸 너비/높이:").grid(row=1, column=0, sticky='w', pady=2)
@@ -8589,7 +8589,7 @@ class PMIReportApp:
             
         try:
 
-            GRID_COLS = 6
+            GRID_COLS = 12
             unit_per_grid = (float(self.photo_cell_width_var.get()) * 2) / GRID_COLS
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
             
@@ -8614,9 +8614,10 @@ class PMIReportApp:
                 m_r = safe_float(self.photo_margin_right_var.get(), 0.5)
                 unit_per_px = int(((595.0 - (m_l + m_r) * 72.0) * 1.33333) / GRID_COLS)
             
-            if num_cols == 1: CELL_WIDTH_PX = unit_per_px * 6
-            elif num_cols == 2: CELL_WIDTH_PX = unit_per_px * 3
-            else: CELL_WIDTH_PX = unit_per_px * 2
+            if num_cols == 1: CELL_WIDTH_PX = unit_per_px * 12
+            elif num_cols == 2: CELL_WIDTH_PX = unit_per_px * 6
+            elif num_cols == 3: CELL_WIDTH_PX = unit_per_px * 4
+            else: CELL_WIDTH_PX = unit_per_px * 3
             
             SAFE_WIDTH = CELL_WIDTH_PX * WIDTH_PCT + PIXEL_ADJ
             ROW_PT_TO_PX = 1.33333
@@ -8786,7 +8787,7 @@ class PMIReportApp:
 
             # Layout Calculation
             num_cols = int(self.photo_cols_per_row.get())
-            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
+            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else (12 if num_cols == 3 else 16))
             total_pages = math.ceil(len(self.photo_selected_files) / photos_per_page)
             if not self.photo_auto_fit_page_var.get():
                 worksheet.fit_to_pages(1, total_pages)
@@ -8799,7 +8800,7 @@ class PMIReportApp:
             desc_format = workbook.add_format({'align': 'left', 'valign': 'vcenter', 'border': 1, 'font_size': 10, 'shrink': True, 'text_wrap': False, 'indent': 1})
 
             # Fixed 6-column Grid System
-            GRID_COLS = 6
+            GRID_COLS = 12
             unit_per_grid = (float(self.photo_cell_width_var.get()) * 2) / GRID_COLS
             
             # [HOTFIX] 한국어 엑셀(맑은 고딕) 렌더링 배율 보정 (8.0)
@@ -8824,13 +8825,16 @@ class PMIReportApp:
                 
             if num_cols == 1:
                 photo_col_spans = [(0, GRID_COLS - 1)]
-                CELL_WIDTH_PX = unit_per_px * 6
+                CELL_WIDTH_PX = unit_per_px * 12
             elif num_cols == 2:
-                photo_col_spans = [(0, 2), (3, 5)]
+                photo_col_spans = [(0, 5), (6, 11)]
+                CELL_WIDTH_PX = unit_per_px * 6
+            elif num_cols == 3:
+                photo_col_spans = [(0, 3), (4, 7), (8, 11)]
+                CELL_WIDTH_PX = unit_per_px * 4
+            else: # 4 Columns
+                photo_col_spans = [(0, 2), (3, 5), (6, 8), (9, 11)]
                 CELL_WIDTH_PX = unit_per_px * 3
-            else: # 3 Columns
-                photo_col_spans = [(0, 1), (2, 3), (4, 5)]
-                CELL_WIDTH_PX = unit_per_px * 2
             
             # Target width based on percentage and padding (removed hardcoded 10px margin for edge-to-edge fit)
             SAFE_WIDTH = CELL_WIDTH_PX * WIDTH_PCT + PIXEL_ADJ
@@ -8844,7 +8848,7 @@ class PMIReportApp:
             worksheet.merge_range(0, 0, 0, GRID_COLS-1, self.photo_report_title.get(), title_format)
             
             company_text = "서   울   檢   査   株   式   會   社\nSEOUL INSPECTION & TESTING Co., Ltd.\nTEL : (02) 552-1112   FAX : (02) 2058-0720"
-            worksheet.merge_range(1, 0, 3, 2, company_text, company_format)
+            worksheet.merge_range(1, 0, 3, 5, company_text, company_format)
 
             # Logo Insertion
             logo_f = self.photo_logo_path.get().strip()
@@ -8899,9 +8903,9 @@ class PMIReportApp:
                 except Exception as e:
                     self.log(f"[PhotoLog] 내장 로고 삽입 실패: {e}")
 
-            worksheet.merge_range(1, 3, 1, 5, f"발주처: {self.photo_orderer.get()}", center_border)
-            worksheet.merge_range(2, 3, 2, 5, f"REPORT NO: {self.photo_report_no.get()}", center_border)
-            worksheet.merge_range(3, 3, 3, 5, f"검사일자: {self.photo_inspect_date.get()}", center_border)
+            worksheet.merge_range(1, 6, 1, 11, f"발주처: {self.photo_orderer.get()}", center_border)
+            worksheet.merge_range(2, 6, 2, 11, f"REPORT NO: {self.photo_report_no.get()}", center_border)
+            worksheet.merge_range(3, 6, 3, 11, f"검사일자: {self.photo_inspect_date.get()}", center_border)
             
             worksheet.set_row(4, 25)
             worksheet.merge_range(4, 0, 4, GRID_COLS-1, "PHOTO LOG (사진 대장)", bold_format)
@@ -8909,7 +8913,7 @@ class PMIReportApp:
             row = 5
             col_ptr = 0
             page_breaks = []
-            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else 12)
+            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else (12 if num_cols == 3 else 16))
             DESC_ROW_HEIGHT = float(self.photo_desc_height_var.get())
 
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
