@@ -3583,7 +3583,7 @@ class IntegratedSmartManager:
         
         # Treeview
         tree_frame = tk.Frame(container); tree_frame.pack(fill='both', expand=True)
-        cols = ["V", "No", "Date", "Dwg No", "Joint No", "Loc", "Ni", "Cr", "Mo", "Grade"] if mode=="PMI" else ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Result", "Welder", "Remarks"]
+        cols = ["V", "No", "Date", "Dwg No", "Joint No", "Loc", "Ni", "Cr", "Mo", "Grade"] if mode=="PMI" else ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Size", "Result", "Welder", "Remarks"]
         tree = ttk.Treeview(tree_frame, columns=cols, show='headings', selectmode='extended')
         for c in cols: tree.heading(c, text=c); tree.column(c, width=80, anchor='center')
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview); tree.configure(yscrollcommand=vsb.set)
@@ -3936,7 +3936,7 @@ class IntegratedSmartManager:
             for key, var in self.setting_vars.items():
                 val = var.get()
                 try:
-                    if "AREA" in key or "ROWS" in key:
+                    if "AREA" in key or "ROWS" in key or "_NAME" in key or ("_COL_" in key and "WIDTH" not in key):
                         self.config[key] = str(val).strip()
                     elif any(x in key for x in ['_X', '_Y', '_W', '_H', 'MARGIN', 'HEIGHT', 'WIDTH']):
                         self.config[key] = float(val)

@@ -195,10 +195,16 @@ class PMIReportApp:
             
         # --- PAUT State Variables ---
         self.paut_target_file_path = tk.StringVar(value=self.config.get('PAUT_TARGET_PATH', ""))
-        self.paut_template_file_path = tk.StringVar(value=self.config.get('PAUT_TEMPLATE_PATH', ""))
+        
+        default_paut_path = r"C:\Users\jjch2\Desktop\지역난방 PAUT.xlsx"
+        saved_paut_path = self.config.get('PAUT_TEMPLATE_PATH', "")
+        if not saved_paut_path and os.path.exists(default_paut_path):
+            saved_paut_path = default_paut_path
+            
+        self.paut_template_file_path = tk.StringVar(value=saved_paut_path)
         self.paut_manual_vars = {
             't': tk.StringVar(), 'h': tk.StringVar(), 'l': tk.StringVar(), 'd': tk.StringVar(),
-            'nature': tk.StringVar(value="Slag"), 'loc': tk.StringVar(value="-"),
+            'nature': tk.StringVar(value=""), 'loc': tk.StringVar(value="-"),
             'db': tk.StringVar(value="6"), 'peak': tk.StringVar(value="80"), 
             'z1': tk.StringVar(), 'z2': tk.StringVar(), 
             'L1': tk.StringVar(), 'L2': tk.StringVar(),
@@ -225,7 +231,7 @@ class PMIReportApp:
         self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
-        self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Loc", "T", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
+        self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Size", "Loc", "T", "Acc", "Rej", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
         
         # --- PT State Variables ---
         self.pt_target_file_path = tk.StringVar(value=self.config.get('PT_TARGET_PATH', ""))
@@ -242,7 +248,7 @@ class PMIReportApp:
         self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
-        self.paut_column_keys = ["selected", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks"]
+        self.paut_column_keys = ["selected", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
         
         self.date_listbox = None
     
@@ -331,6 +337,22 @@ class PMIReportApp:
         self.photo_selected_files = [] 
         
         self.load_settings()
+        
+        # [MIGRATION] Add missing keys from loaded config
+        if "Size" not in self.paut_column_keys:
+            try:
+                idx = self.paut_column_keys.index("Joint No.")
+                self.paut_column_keys.insert(idx + 1, "Size")
+            except:
+                self.paut_column_keys.append("Size")
+        if "Acc" not in self.paut_column_keys:
+            try:
+                idx = self.paut_column_keys.index("Th'k(mm)")
+                self.paut_column_keys.insert(idx + 1, "Acc")
+                self.paut_column_keys.insert(idx + 2, "Rej")
+            except:
+                self.paut_column_keys.extend(["Acc", "Rej"])
+                
         self.last_photo_save_dir = self.config.get('PHOTO_LOG_SETTINGS', {}).get('last_save_dir', "")
 
         self.create_widgets()
@@ -479,7 +501,17 @@ class PMIReportApp:
                     if 'pt_column_keys' in saved_data and isinstance(saved_data['pt_column_keys'], list):
                         self.pt_column_keys = list(saved_data['pt_column_keys'])
                     if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
-                        self.paut_column_keys = list(saved_data['paut_column_keys'])
+                        loaded_paut_keys = list(saved_data['paut_column_keys'])
+                        # [FIX] Ensure new columns are added even if loading from old config
+                        default_paut_keys = ["selected", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
+                        for dk in default_paut_keys:
+                            if dk not in loaded_paut_keys:
+                                insert_idx = default_paut_keys.index(dk)
+                                if insert_idx <= len(loaded_paut_keys):
+                                    loaded_paut_keys.insert(insert_idx, dk)
+                                else:
+                                    loaded_paut_keys.append(dk)
+                        self.paut_column_keys = loaded_paut_keys
                     self.config.update(saved_data)
                     
                     # Restore Path StringVars in UI
@@ -807,7 +839,7 @@ class PMIReportApp:
                     val = var.get()
                     try:
                         # [FIX] Handle various key types correctly for persistence
-                        if "AREA" in key or "_PATH" in key:
+                        if "AREA" in key or "_PATH" in key or "_NAME" in key or ("_COL_" in key and "WIDTH" not in key):
                             self.config[key] = str(val).strip()
                         elif any(key.endswith(x) for x in ['_X', '_Y', '_W', '_H']) or any(x in key for x in ['MARGIN', 'HEIGHT', 'WIDTH']):
                             try: self.config[key] = float(val) if str(val).strip() else 0.0
@@ -931,7 +963,13 @@ class PMIReportApp:
             if any(x in nature_str for x in unacceptable_types):
                 return f"Reject ({flaw_nature})", loc
         
-        if l_val <= 0 or h_val <= 0 or t_val <= 0:
+        if t_val <= 0:
+            return "Error (Zero/Negative Th'k)", "-"
+            
+        if l_val <= 0 and h_val <= 0:
+            return "Accept", "-"
+            
+        if l_val <= 0 or h_val <= 0:
             return "Error (Zero/Negative Value)", loc
 
         # 1.1 Special Rules for 6mm <= t < 13mm
@@ -2068,9 +2106,13 @@ class PMIReportApp:
         
         paut_items = [
             ("순번(No):", "PAUT_COL_NO", 1, "PAUT_COL_NO_NAME", "No", "No"),
+            ("촬영일자(Date):", "PAUT_COL_DATE", 0, "PAUT_NAME_DATE", "Date", "Date"),
             ("Line No.:", "PAUT_COL_LINE", 2, "PAUT_NAME_LINE", "Line No.", "Line No."),
             ("Joint No.:", "PAUT_COL_JOINT", 3, "PAUT_NAME_JOINT", "Joint No.", "Joint No."),
+            ("크기(Size):", "PAUT_COL_SIZE", 0, "PAUT_NAME_SIZE", "Size", "Size"),
             ("두께(Th'k):", "PAUT_COL_THK", 4, "PAUT_NAME_THK", "Th'k(mm)", "Th'k(mm)"),
+            ("합격(Acc):", "PAUT_COL_ACC", 0, "PAUT_NAME_ACC", "Acc", "Acc"),
+            ("불합격(Rej):", "PAUT_COL_REJ", 0, "PAUT_NAME_REJ", "Rej", "Rej"),
             ("결함높이(H):", "PAUT_COL_H", 5, "PAUT_NAME_H", "Height(mm)", "Height(mm)"),
             ("결함길이(L):", "PAUT_COL_L", 6, "PAUT_NAME_L", "Length(mm)", "Length(mm)"),
             ("결함깊이(D):", "PAUT_COL_UP", 7, "PAUT_NAME_UP", "Upper", "Upper"),
@@ -2080,6 +2122,8 @@ class PMIReportApp:
             ("a/l 비:", "PAUT_COL_AL", 0, "PAUT_NAME_AL", "a/l", "a/l"),
             ("a/t 비:", "PAUT_COL_AT", 0, "PAUT_NAME_AT", "a/t", "a/t"),
             ("결함종류:", "PAUT_COL_NAT", 8, "PAUT_NAME_NAT", "Type of Flaw", "Type of Flaw"),
+            ("용접사(Welder):", "PAUT_COL_WELDER", 0, "PAUT_NAME_WELDER", "Welder", "Welder"),
+            ("검사길이:", "PAUT_COL_TESTED_LEN", 0, "PAUT_NAME_TESTED_LEN", "Tested Length", "Tested Length"),
             ("판정(Eval):", "PAUT_COL_EVAL", 9, "PAUT_NAME_EVAL", "Evaluation", "Evaluation"),
             ("비고(Rem):", "PAUT_COL_REM", 10, "PAUT_NAME_REM", "Remarks", "Remarks")
         ]
@@ -2165,6 +2209,10 @@ class PMIReportApp:
         ttk.Button(paut_btn_row, text=" ✨ 일괄 판정 ", command=self._run_batch_paut_eval).pack(side='left', fill='x', expand=True, padx=(0, 5))
         ttk.Button(paut_btn_row, text=" 📄 성적서 생성 ", command=self._generate_paut_report).pack(side='left', fill='x', expand=True)
 
+        paut_photo_btn_row = tk.Frame(left_pane, background="#f9fafb")
+        paut_photo_btn_row.pack(fill='x', pady=(0, 2))
+        ttk.Button(paut_photo_btn_row, text=" 📸 사진대장 목록에서 PAUT 추출 (자동파싱) ", command=self._extract_paut_from_photos).pack(side='left', fill='x', expand=True)
+
         paut_session_row = tk.Frame(left_pane, background="#f9fafb")
         paut_session_row.pack(fill='x', pady=(0, 10))
         ttk.Button(paut_session_row, text=" 💾 세션 저장 ", command=self._export_paut_session).pack(side='left', fill='x', expand=True, padx=(0, 5))
@@ -2199,15 +2247,14 @@ class PMIReportApp:
                  foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
 
         tree_frame = tk.Frame(container, background="#f9fafb")
-        tree_frame.pack(fill='both', expand=True)
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
         
-        cols = ("V", "No", "Line No.", "Joint No.", "Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Evaluation", "Remarks")
+        cols = ("V", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks")
         self.paut_preview_tree = ttk.Treeview(tree_frame, columns=cols, show='headings', height=10, selectmode='extended')
         
         saved_widths = self.config.get("PAUT_COL_WIDTHS", {})
-        default_widths = {"V": 40, "No": 50, "Line No.": 250, "Joint No.": 120, "Th'k(mm)": 60, "Start": 60, "End": 60, "Length(mm)": 80, "Upper": 60, "Lower": 60, "Height(mm)": 80, "Type of Flaw": 100, "a/l": 60, "a/t": 60, "Evaluation": 80, "Remarks": 150}
+        default_widths = {"V": 40, "No": 50, "Line No.": 250, "Joint No.": 120, "Size": 80, "Th'k(mm)": 60, "Acc": 50, "Rej": 50, "Start": 60, "End": 60, "Length(mm)": 80, "Upper": 60, "Lower": 60, "Height(mm)": 80, "Type of Flaw": 100, "a/l": 60, "a/t": 60, "Welder": 80, "Tested Length": 100, "Evaluation": 80, "Remarks": 150}
         
         for col in self.paut_preview_tree["columns"]:
             # Use dynamic names from config for headings
@@ -2216,7 +2263,10 @@ class PMIReportApp:
             if col == "No": name_key = "PAUT_COL_NO_NAME"
             elif col == "Line No.": name_key = "PAUT_NAME_LINE"
             elif col == "Joint No.": name_key = "PAUT_NAME_JOINT"
+            elif col == "Size": name_key = "PAUT_NAME_SIZE"
             elif col == "Th'k(mm)": name_key = "PAUT_NAME_THK"
+            elif col == "Acc": name_key = "PAUT_NAME_ACC"
+            elif col == "Rej": name_key = "PAUT_NAME_REJ"
             elif col == "Height(mm)": name_key = "PAUT_NAME_H"
             elif col == "Length(mm)": name_key = "PAUT_NAME_L"
             elif col == "Upper": name_key = "PAUT_NAME_UP"
@@ -2246,6 +2296,7 @@ class PMIReportApp:
         paut_hsb.grid(row=1, column=0, sticky='ew')
 
         self._setup_preview_sidebar(self.paut_preview_tree, container, mode="PAUT")
+        tree_frame.pack(side='left', fill='both', expand=True)
 
 
         # Adaptive Resizing Bindings
@@ -2362,8 +2413,8 @@ class PMIReportApp:
             eval_mode = self.paut_eval_mode.get()
             res, loc = self.evaluate_paut_flaw(t, h, l, d, nat, mode=eval_mode)
             
-            al = f"{h/l:.3f}" if l > 0 else ""
-            at = f"{h/t:.3f}" if t > 0 else ""
+            al = f"{h/l:.3f}" if l > 0 and h > 0 else ""
+            at = f"{h/t:.3f}" if t > 0 and h > 0 else ""
 
             mode_info = self._get_mode_info("PAUT")
             if not mode_info: return
@@ -2413,6 +2464,72 @@ class PMIReportApp:
         except Exception as e:
             messagebox.showerror("입력 오류", f"입력값을 확인해주세요: {e}")
 
+    def _extract_paut_from_photos(self):
+        try:
+            if not hasattr(self, 'photo_listbox') or self.photo_listbox.size() == 0:
+                messagebox.showwarning("경고", "사진대장 탭에 로드된 사진이 없습니다.")
+                return
+            
+            photo_list = self.photo_listbox.get(0, tk.END)
+            self.paut_extracted_data = []
+            
+            for i, photo_path in enumerate(photo_list):
+                filename = os.path.basename(photo_path)
+                name_without_ext = os.path.splitext(filename)[0]
+                
+                # parsing logic: DT2024-016-101-0-1-600A_R04
+                line_no = ""
+                size = ""
+                joint_no = ""
+                
+                if "_" in name_without_ext:
+                    parts = name_without_ext.rsplit("_", 1)
+                    line_no = parts[0] # DT2024-016-101-0-1-600A
+                    joint_no = parts[1] # R04
+                    
+                    if "-" in line_no:
+                        size = line_no.rsplit("-", 1)[1] # 600A
+                else:
+                    line_no = name_without_ext
+                    
+                if i == 0:
+                    messagebox.showinfo("첫번째 사진 파싱 확인", f"원본 파일명: {filename}\n추출된 Line No: {line_no}\n추출된 Size: {size}\n추출된 Joint No: {joint_no}")
+
+                    
+                item = {
+                    'selected': True,
+                    'Line No.': line_no,
+                    'Joint No.': joint_no,
+                    'Size': size,
+                    'Th\'k(mm)': "",
+                    'Acc': "",
+                    'Rej': "",
+                    'Start': "",
+                    'End': "",
+                    'Length(mm)': "",
+                    'Upper': "",
+                    'Lower': "",
+                    'Height(mm)': "",
+                    'Type of Flaw': "",
+                    'a/l': "", 'a/t': "",
+                    'Evaluation': "",
+                    'Remarks': ""
+                }
+                
+                item_full = dict(item)
+                for k in self.paut_column_keys:
+                    if k not in item_full and k != "selected":
+                        item_full[k] = ""
+                self.paut_extracted_data.append(item_full)
+                
+            self.log(f"✅ 사진 목록에서 PAUT 데이터 생성 완료: {len(self.paut_extracted_data)} 건")
+            self.populate_preview(self.paut_extracted_data, mode="PAUT")
+            self.update_date_listbox("PAUT")
+            
+        except Exception as e:
+            self.log(f"❌ 사진에서 PAUT 데이터 추출 중 오류: {e}")
+            messagebox.showerror("오류", f"오류가 발생했습니다:\n{e}")
+
     def _extract_paut_data(self):
         file_path = self.paut_target_file_path.get()
         if not file_path:
@@ -2427,9 +2544,11 @@ class PMIReportApp:
             cols = df.columns.tolist()
             
             mapping = {
+                "date": next((c for c in cols if any(x in str(c).upper() for x in ["DATE", "일자", "날짜"])), None),
                 "t": next((c for c in cols if any(x in c.upper() for x in ["THK", "두께", "TH'K", "THICKNESS"])), None),
                 "h": next((c for c in cols if any(x in str(c).upper() for x in ["HEIGHT", "높이", "FLAW_HEIGHT"]) or str(c).strip().upper() == "H"), None),
-                "l": next((c for c in cols if any(x in str(c).upper() for x in ["LENGTH", "길이", "FLAW_LENGTH", "LENTH"]) or str(c).strip().upper() == "L"), None),
+                # [FIX] Prevent 'l' from matching '검사길이' or 'PAUT길이' (Tested Length)
+                "l": next((c for c in cols if (any(x in str(c).upper() for x in ["LENGTH", "길이", "FLAW_LENGTH", "LENTH"]) or str(c).strip().upper() == "L") and not any(exclude in str(c).upper() for exclude in ["검사", "PAUT"])), None),
                 "d": next((c for c in cols if any(x in str(c).upper() for x in ["DEPTH", "깊이", "FLAW_DEPTH"]) or str(c).strip().upper() == "D"), None),
                 "nature": next((c for c in cols if any(x in str(c).upper() for x in ["NAT", "종류", "FLAW_NATURE", "TYPE"])), None),
                 "line": next((c for c in cols if any(x in c.upper() for x in ["LINE", "ISO", "DWG", "DRAWING"])), None),
@@ -2438,28 +2557,94 @@ class PMIReportApp:
                 "end": next((c for c in cols if any(x in c.upper() for x in ["END", "L2"])), None),
                 "upper": next((c for c in cols if any(x in c.upper() for x in ["UPPER", "UP", "DEPTH"])), None),
                 "lower": next((c for c in cols if any(x in c.upper() for x in ["LOWER", "LOW"])), None),
+                "acc": next((c for c in cols if any(x in str(c).upper() for x in ["ACC", "합격"])), None),
+                "rej": next((c for c in cols if any(x in str(c).upper() for x in ["REJ", "불합격"])), None),
+                "eval": next((c for c in cols if any(x in str(c).upper() for x in ["합부", "EVAL", "판정"])), None),
+                "welder": next((c for c in cols if any(x in str(c).upper() for x in ["용접사", "WELDER"])), None),
+                "tested_len": next((c for c in cols if any(x in str(c).upper() for x in ["검사길이", "PAUT길이", "TESTED", "TEST LEN"])), None),
+                "size": next((c for c in cols if any(x in str(c).upper() for x in ["SIZE", "크기", "관경"])), None),
                 "remarks": next((c for c in cols if any(x in c.upper() for x in ["REMARK", "REMAKER", "비고"])), None)
             }
             
             if not all([mapping["t"], mapping["h"], mapping["l"], mapping["d"]]):
-                self.log("⚠️ 필수 컬럼을 모두 찾을 수 없어 자동 매핑에 실패했습니다.")
+                self.log("⚠️ 필수 컬럼을 모두 찾을 수 없어 자동 매핑에 일부 실패했습니다.")
                 
             self.paut_extracted_data = []
             for _, row in df.iterrows():
+                acc_raw = str(row.get(mapping["acc"], "")) if mapping["acc"] else ""
+                rej_raw = str(row.get(mapping["rej"], "")) if mapping["rej"] else ""
+                eval_raw = str(row.get(mapping["eval"], "")) if mapping["eval"] else ""
+                
+                # Derive ACC/REJ from '합부' if explicit ACC/REJ columns are missing
+                if not acc_raw and not rej_raw and eval_raw:
+                    if "합격" in eval_raw and "불합격" not in eval_raw:
+                        acc_raw = "√"
+                    elif "불합격" in eval_raw or "REJ" in eval_raw.upper() or "NG" in eval_raw.upper():
+                        rej_raw = "√"
+                    elif "ACC" in eval_raw.upper() or "OK" in eval_raw.upper():
+                        acc_raw = "√"
+
+                line_val = str(row.get(mapping["line"], "")) if mapping["line"] else ""
+                if line_val.lower() == "nan" or not line_val.strip():
+                    continue
+
+                # [NEW] Format Date cleanly (remove time)
+                raw_date = row.get(mapping["date"], "") if mapping["date"] else ""
+                date_str = ""
+                if pd.notna(raw_date) and raw_date:
+                    try:
+                        date_str = pd.to_datetime(raw_date).strftime('%Y-%m-%d')
+                    except:
+                        date_str = str(raw_date).split(' ')[0]
+
+                # [NEW] Format Size (Append 'A' if missing)
+                size_val = str(row.get(mapping["size"], "")) if mapping["size"] else ""
+                size_val = str(size_val).replace('.0', '').strip() if pd.notna(size_val) else ""
+                
+                # [NEW] Auto-map Thickness based on Size if Th'k is missing
+                thk_val = str(row.get(mapping["t"], "")) if mapping["t"] else ""
+                if not thk_val or str(thk_val).lower() == "nan":
+                    # Official GS Power Standard
+                    thk_mapping = {
+                        "1100": "11.1", "1000": "11.1",
+                        "900": "10.3", "850": "10.3",
+                        "800": "9.5",
+                        "750": "8.7", "700": "8.7", "650": "8.7",
+                        "600": "9.5", "550": "9.5",
+                        "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4"
+                    }
+                    lookup_key = size_val.replace("A", "").strip()
+                    thk_val = thk_mapping.get(lookup_key, "")
+                
+                if size_val and size_val[-1].isdigit():
+                    size_val += "A"
+
+                # [NEW] Format Joint No (Pad single digits to 2 digits, handling suffixes like R3-1 -> R03-1)
+                import re
+                joint_val = str(row.get(mapping["joint"], "")) if mapping["joint"] else ""
+                joint_val = joint_val.replace('.0', '').strip() if pd.notna(joint_val) else ""
+                joint_val = re.sub(r'^([A-Za-z]*)(\d)(?!\d)', r'\g<1>0\2', joint_val)
+
                 item = {
                     'selected': True,
-                    'Line No.': str(row.get(mapping["line"], "")) if mapping["line"] else "",
-                    'Joint No.': str(row.get(mapping["joint"], "")) if mapping["joint"] else "",
-                    'Th\'k(mm)': row.get(mapping["t"], 0),
-                    'Start': row.get(mapping["start"], ""),
-                    'End': row.get(mapping["end"], ""),
-                    'Length(mm)': row.get(mapping["l"], 0),
-                    'Upper': row.get(mapping["upper"], ""),
-                    'Lower': row.get(mapping["lower"], ""),
-                    'Height(mm)': row.get(mapping["h"], 0),
-                    'Type of Flaw': str(row.get(mapping["nature"], "Slag")) if mapping["nature"] else "Slag",
+                    'Date': date_str,
+                    'Line No.': line_val,
+                    'Joint No.': joint_val,
+                    'Size': size_val,
+                    'Th\'k(mm)': thk_val,
+                    'Acc': acc_raw,
+                    'Rej': rej_raw,
+                    'Start': str(row.get(mapping["start"], "")) if mapping["start"] else "",
+                    'End': str(row.get(mapping["end"], "")) if mapping["end"] else "",
+                    'Length(mm)': str(row.get(mapping["l"], "")) if mapping["l"] else "",
+                    'Upper': str(row.get(mapping["upper"], "")) if mapping["upper"] else "",
+                    'Lower': str(row.get(mapping["lower"], "")) if mapping["lower"] else "",
+                    'Height(mm)': str(row.get(mapping["h"], "")) if mapping["h"] else "",
+                    'Type of Flaw': "" if acc_raw == "√" else (str(row.get(mapping["nature"], "Slag")) if mapping["nature"] else "Slag"),
                     'a/l': "", 'a/t': "",
-                    'Evaluation': "",
+                    'Welder': str(row.get(mapping["welder"], "")) if mapping["welder"] else "",
+                    'Tested Length': str(row.get(mapping["tested_len"], "")) if mapping["tested_len"] else "",
+                    'Evaluation': eval_raw,
                     'Remarks': str(row.get(mapping["remarks"], "")) if mapping["remarks"] else ""
                 }
                 # [NEW] 원본 엑셀의 모든 컬럼 데이터를 유지하여 '컬럼 관리'에서 활용 가능하게 함
@@ -2473,6 +2658,7 @@ class PMIReportApp:
             
             self.progress['value'] = 100
             self.sort_by_column("ISO/DWG", mode="PAUT") # Auto sort for PAUT
+            self.update_date_listbox("PAUT") # [FIX] Populate date filter
             self.log(f"✅ PAUT 데이터 추출 완료: {len(self.paut_extracted_data)} 건")
             
         except Exception as e:
@@ -2497,11 +2683,19 @@ class PMIReportApp:
             res, loc = self.evaluate_paut_flaw(t, h, l, d, nat, mode=eval_mode)
             item['Evaluation'] = f"{res} ({loc})"
             # a/l, a/t calculation
-            if l > 0: item['a/l'] = f"{h/l:.3f}"
-            if t > 0: item['a/t'] = f"{h/t:.3f}"
+            if l > 0 and h > 0: item['a/l'] = f"{h/l:.3f}"
+            else: item['a/l'] = ""
+            if t > 0 and h > 0: item['a/t'] = f"{h/t:.3f}"
+            else: item['a/t'] = ""
             
-            if res == "Accept": count_ok += 1
-            else: count_ng += 1
+            if res == "Accept": 
+                count_ok += 1
+                # [NEW] 합격 시 결함 정보 지우기
+                item['Type of Flaw'] = ""
+                item['a/l'] = ""
+                item['a/t'] = ""
+            else: 
+                count_ng += 1
             
         self.populate_preview(self.paut_extracted_data, mode="PAUT")
         self.log(f"✅ 판정 완료: 총 {len(self.paut_extracted_data)} 건 (합격: {count_ok}, 불합격: {count_ng})")
@@ -2513,7 +2707,7 @@ class PMIReportApp:
             messagebox.showwarning("파일 미선택", "PAUT 성적서 양식 파일을 선택해주세요.")
             return
 
-        final_list = [d for d in self.paut_extracted_data if d.get('selected', True)]
+        final_list = [d for d in self.paut_extracted_data if d.get('selected', True) and d.get('date_filtered', True)]
         if not final_list:
             messagebox.showwarning("항목 미선택", "선택된 데이터가 없습니다.")
             return
@@ -2523,10 +2717,20 @@ class PMIReportApp:
         
         try:
             wb = openpyxl.load_workbook(template_path)
-            ws = wb.worksheets[0]
+            
+            # [NEW] Find "을" sheet for data entry
+            target_ws = None
+            for sheet in wb.worksheets:
+                if "을" in sheet.title:
+                    target_ws = sheet
+                    break
+                    
+            if not target_ws:
+                target_ws = wb.worksheets[0]
+                
+            ws = target_ws
             ws.title = f"PAUT_Report_001"
             
-            self.add_logos_to_sheet(ws, is_cover=False)
             self.force_print_settings(ws, context="DATA")
             
             start_row = int(self.config.get('PAUT_START_ROW', 11))
@@ -2540,22 +2744,33 @@ class PMIReportApp:
                     ws = self.prepare_next_paut_sheet(wb, ws.title, i//(end_row-start_row+1))
                     curr_row = start_row
                 
+                def _get_col(key, default):
+                    val = str(self.config.get(key, '')).strip()
+                    return val if val and val not in ['0', '0.0'] else default
+
+                # [NEW] Combine ACC and REJ to prevent overwriting if they map to the same column
+                acc_val = 'ACC' if item.get('Acc', '') in ['√', 'ACC'] else ''
+                rej_val = 'REJ' if item.get('Rej', '') in ['√', 'REJ'] else ''
+                acc_rej_combined = acc_val if acc_val else rej_val
+
+                # [NEW] Respect user's UI column configuration while providing standard defaults
                 mapping = {
-                    self.config.get('PAUT_COL_NO', '1'): item.get('No', i+1), 
-                    self.config.get('PAUT_COL_LINE', '2'): item.get('Line No.', ''), 
-                    self.config.get('PAUT_COL_JOINT', '3'): item.get('Joint No.', ''),
-                    self.config.get('PAUT_COL_THK', '4'): item.get('Th\'k(mm)', ''), 
-                    self.config.get('PAUT_COL_H', '5'): item.get('Height(mm)', ''), 
-                    self.config.get('PAUT_COL_L', '6'): item.get('Length(mm)', ''),
-                    self.config.get('PAUT_COL_UP', '7'): item.get('Upper', ''), 
-                    self.config.get('PAUT_COL_LOW', '0'): item.get('Lower', ''),
-                    self.config.get('PAUT_COL_START', '0'): item.get('Start', ''),
-                    self.config.get('PAUT_COL_END', '0'): item.get('End', ''),
-                    self.config.get('PAUT_COL_AL', '0'): item.get('a/l', ''),
-                    self.config.get('PAUT_COL_AT', '0'): item.get('a/t', ''),
-                    self.config.get('PAUT_COL_NAT', '8'): item.get('Type of Flaw', ''), 
-                    self.config.get('PAUT_COL_EVAL', '9'): item.get('Evaluation', ''),
-                    self.config.get('PAUT_COL_REM', '10'): item.get('Remarks', '')
+                    _get_col('PAUT_COL_NO', 'A'): i+1, 
+                    _get_col('PAUT_COL_LINE', 'B'): item.get('Line No.', ''), 
+                    _get_col('PAUT_COL_JOINT', 'C'): item.get('Joint No.', ''),
+                    _get_col('PAUT_COL_SIZE', 'D'): item.get('Size', ''),
+                    _get_col('PAUT_COL_THK', 'E'): item.get('Th\'k(mm)', ''), 
+                    _get_col('PAUT_COL_ACC', 'F'): acc_rej_combined,
+                    _get_col('PAUT_COL_START', 'G'): item.get('Start', ''),
+                    _get_col('PAUT_COL_END', 'H'): item.get('End', ''),
+                    _get_col('PAUT_COL_L', 'I'): item.get('Length(mm)', ''),
+                    _get_col('PAUT_COL_UP', 'J'): item.get('Upper', ''), 
+                    _get_col('PAUT_COL_H', 'K'): item.get('Height(mm)', ''), 
+                    _get_col('PAUT_COL_WELDER', 'M'): item.get('Welder', ''),
+                    _get_col('PAUT_COL_TESTED_LEN', 'N'): item.get('Tested Length', ''),
+                    _get_col('PAUT_COL_NAT', 'O'): item.get('Type of Flaw', ''), 
+                    _get_col('PAUT_COL_EVAL', '0'): item.get('Evaluation', ''),
+                    _get_col('PAUT_COL_REM', '0'): item.get('Remarks', '')
                 }
                 
                 for col_key, val in mapping.items():
@@ -2640,7 +2855,7 @@ class PMIReportApp:
         for k in ['h', 'l', 'd', 'z1', 'z2', 'L1', 'L2', 'D_Upper', 'D_Lower']:
             if k in self.paut_manual_vars:
                 self.paut_manual_vars[k].set("")
-        self.paut_manual_vars['nature'].set("Slag")
+        self.paut_manual_vars['nature'].set("")
         self.paut_manual_vars['loc'].set("-")
         self.paut_res_label.config(text="결과 대기", fg="black", bg="#f3f4f6")
 
@@ -2652,9 +2867,12 @@ class PMIReportApp:
         start_row = int(self.config.get('PAUT_START_ROW', 11))
         end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
         for r in range(start_row, end_row + 1):
-            for c in range(1, 11): new_sheet.cell(row=r, column=c).value = None
+            for c in range(1, 51): 
+                try:
+                    new_sheet.cell(row=r, column=c).value = None
+                except Exception:
+                    pass
         
-        self.add_logos_to_sheet(new_sheet, is_cover=False)
         return new_sheet
 
     def col_to_num(self, col_str):
@@ -3108,6 +3326,9 @@ class PMIReportApp:
             ent_idx.bind("<Return>", lambda e: self.root.focus_set())
             self.setting_vars[key_idx] = v_idx
             
+            # [NEW] Trace to update config in real-time so changes are active immediately
+            v_idx.trace_add("write", lambda *args, var=v_idx, k=key_idx: self.config.update({k: var.get()}))
+            
             # 3. Display Name
             v_name = tk.StringVar(value=str(self.config.get(key_name, def_name)))
             ent_name = ttk.Entry(container, textvariable=v_name, width=12)
@@ -3118,7 +3339,12 @@ class PMIReportApp:
             # Trace to update config and preview tree heading in real-time
             v_name.trace_add("write", lambda *args, tid=internal_id, m=mode, var=v_name, kn=key_name: self._update_mode_heading(m, tid, var, kn))
 
-        ttk.Label(container, text="* 엑셀열: 알파벳(A, B...) 또는 숫자(1, 2...) 입력 (0=제외)", foreground="gray", font=("Malgun Gothic", 8)).grid(row=last_row+1, column=0, columnspan=6, pady=10)
+        ttk.Label(container, text="* 엑셀열: 알파벳(A, B...) 또는 숫자(1, 2...) 입력 (0=제외)", foreground="gray", font=("Malgun Gothic", 8)).grid(row=last_row+1, column=0, columnspan=6, pady=(10, 2))
+        
+        # [NEW] Save Button
+        btn_frame = ttk.Frame(container)
+        btn_frame.grid(row=last_row+2, column=0, columnspan=6, pady=5)
+        ttk.Button(btn_frame, text="💾 현재 컬럼 설정 저장", command=self.manual_save_settings).pack()
 
     def _create_kogas_separated_column_mapping_ui(self, parent):
         """[NEW] 가스공사(KOGAS) 모드 전용 의뢰서(읽기) 및 보고서(쓰기) 분리 컬럼 설정 UI"""
@@ -3522,15 +3748,17 @@ class PMIReportApp:
                                  self.populate_preview(data_list, switch_tab=False, mode=m)
                                  return "break"
                     
-                    # RT/KOGAS Specific specialized toggle
-                    if m in ["RT", "KOGAS"] and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Acc", "Rej"])):
+                    # RT/KOGAS/PAUT Specific specialized toggle
+                    if m in ["RT", "KOGAS", "PAUT"] and ((key.startswith("D") and key[1:].isdigit()) or (key in ["Acc", "Rej"])):
                         view_idx = t.index(item_id)
                         if 0 <= view_idx < len(idx_map):
                             actual_idx = idx_map[view_idx]
                             old_v = data_list[actual_idx].get(key, "")
+                            
                             new_v = "√" if old_v == "" else ""
+                                
                             data_list[actual_idx][key] = new_v
-                            if key in ["Acc", "Rej"] and new_v == "√":
+                            if key in ["Acc", "Rej"] and new_v != "":
                                 other = "Rej" if key == "Acc" else "Acc"
                                 data_list[actual_idx][other] = ""
                             self.populate_preview(data_list, switch_tab=False, mode=m)
@@ -3632,6 +3860,21 @@ class PMIReportApp:
                 lb.selection_clear(0, tk.END)
         
         listbox.bind("<ButtonRelease-1>", _toggle_date)
+        
+        # [NEW] Batch Select/Deselect Buttons
+        date_btn_frame = tk.Frame(sticky_top_frame, background="#f1f5f9")
+        date_btn_frame.pack(fill='x', pady=(0, 2))
+        
+        def _set_all_dates(state, lb=listbox):
+            for i in range(lb.size()):
+                val = lb.get(i).replace("[v] ", "").replace("[ ] ", "")
+                prefix = "[v] " if state else "[ ] "
+                lb.delete(i)
+                lb.insert(i, prefix + val)
+            _apply_date_filter(m=mode, lb=listbox)
+
+        ttk.Button(date_btn_frame, text="전체 선택 (Select All)", command=lambda: _set_all_dates(True)).pack(side='top', fill='x', pady=1)
+        ttk.Button(date_btn_frame, text="전체 해제 (Clear All)", command=lambda: _set_all_dates(False)).pack(side='top', fill='x', pady=1)
         
         def _apply_date_filter(m=mode, lb=listbox):
             sel_dates = [lb.get(i).replace("[v] ", "").replace("[ ] ", "") for i in range(lb.size()) if lb.get(i).startswith("[v]")]
@@ -3894,8 +4137,16 @@ class PMIReportApp:
                 
                 res, _ = self.evaluate_paut_flaw(t, h, l, d, nat, mode=eval_mode)
                 data_list[actual_idx]['Evaluation'] = res
-                if l > 0: data_list[actual_idx]['a/l'] = f"{h/l:.3f}"
-                if t > 0: data_list[actual_idx]['a/t'] = f"{h/t:.3f}"
+                if l > 0 and h > 0: data_list[actual_idx]['a/l'] = f"{h/l:.3f}"
+                else: data_list[actual_idx]['a/l'] = ""
+                if t > 0 and h > 0: data_list[actual_idx]['a/t'] = f"{h/t:.3f}"
+                else: data_list[actual_idx]['a/t'] = ""
+                
+                # [NEW] 합격 시 결함 정보 지우기 (단, 수동으로 결함 종류를 입력하는 중이면 유지)
+                if "Accept" in res and key != "Type of Flaw":
+                    data_list[actual_idx]['Type of Flaw'] = ""
+                    data_list[actual_idx]['a/l'] = ""
+                    data_list[actual_idx]['a/t'] = ""
             else:
                 data_list[actual_idx][key] = new_val
 
@@ -4274,6 +4525,9 @@ class PMIReportApp:
         elif mode == "PT":
             listbox = self.pt_date_listbox
             data = self.pt_extracted_data
+        elif mode == "PAUT":
+            listbox = self.paut_date_listbox
+            data = self.paut_extracted_data
         else:
             listbox = self.date_listbox
             data = self.extracted_data
@@ -5272,7 +5526,8 @@ class PMIReportApp:
             elif mode == "PAUT":
                 # PAUT use paut_column_keys
                 for k in self.paut_column_keys:
-                    if k == "No": row_vals.append(len(idx_map))
+                    if k == "selected": row_vals.append(v_mark)
+                    elif k == "No": row_vals.append(len(idx_map))
                     else: 
                         val = str(item.get(k, "")).strip()
                         if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
@@ -5859,7 +6114,10 @@ class PMIReportApp:
                     key = f"{mode}_PRINT_END_ROW" if mode != "PMI" else "PRINT_END_ROW"
                     end_r = int(self.config.get(key, 47))
                     if end_r > 0:
-                        ws.print_area = f'A1:M{end_r}'
+                        if mode == "PAUT":
+                            ws.print_area = f'A1:AH{end_r}'
+                        else:
+                            ws.print_area = f'A1:M{end_r}'
             
             # [FIX] Clear any manual page breaks that might cause mid-page splitting
             try:
@@ -5878,8 +6136,15 @@ class PMIReportApp:
             scale_val = (_cfg_str(f'PRINT_SCALE_{full_context}') or
                          _cfg_str(f'PRINT_SCALE_{context}') or
                          str(default_scale))
-            ws.page_setup.scale = int(float(scale_val))
             ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
+            
+            # [NEW] PAUT '을지(DATA)' 가로 너비 잘림 방지 (fitToWidth)
+            if mode == "PAUT" and context == "DATA":
+                ws.sheet_properties.pageSetUpPr.fitToPage = True
+                ws.page_setup.fitToWidth = 1
+                ws.page_setup.fitToHeight = 0
+            else:
+                ws.page_setup.scale = int(float(scale_val))
             
             def _margin(name, default):
                 return float(
