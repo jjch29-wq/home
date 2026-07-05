@@ -598,11 +598,19 @@ class PMIReportApp:
                 self.config['KOGAS_TARGET_PATH'] = self.kogas_target_file_path.get()
                 self.config['KOGAS_TEMPLATE_PATH'] = self.kogas_template_file_path.get()
                 
+                if hasattr(self, 'paut_equip_vars'):
+                    for k, var in self.paut_equip_vars.items():
+                        self.config[f'PAUT_EQUIP_{k.upper()}'] = var.get()
+                
+                if hasattr(self, 'paut_photo_pages_var'):
+                    self.config['PAUT_PHOTO_PAGES'] = str(self.paut_photo_pages_var.get())
                 # 5. Photo Log Settings Capture
                 self.config['PHOTO_LOG_SETTINGS'] = {
                     'orderer': self.photo_orderer.get(), 'inspect_date': self.photo_inspect_date.get(),
                     'inspect_type': self.photo_inspect_type.get(), 'report_title': self.photo_report_title.get(),
                     'report_no': self.photo_report_no.get(),
+                    'start_page': getattr(self, 'photo_start_page', tk.StringVar()).get(),
+                    'total_pages': getattr(self, 'photo_total_pages', tk.StringVar()).get(),
                     'cols_per_row': self.photo_cols_per_row.get(), 'keep_aspect': self.photo_keep_aspect.get(),
                     'output_name': self.photo_output_name.get(), 'logo_path': self.photo_logo_path.get(),
                     'logo_width': self.photo_logo_width_var.get(), 'logo_height': self.photo_logo_height_var.get(),
@@ -656,6 +664,8 @@ class PMIReportApp:
                 'orderer': self.photo_orderer, 'inspect_date': self.photo_inspect_date,
                 'inspect_type': self.photo_inspect_type, 'report_title': self.photo_report_title,
                 'report_no': self.photo_report_no,
+                'start_page': getattr(self, 'photo_start_page', None),
+                'total_pages': getattr(self, 'photo_total_pages', None),
                 'cols_per_row': self.photo_cols_per_row, 'keep_aspect': self.photo_keep_aspect,
                 'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
                 'logo_width': self.photo_logo_width_var, 'logo_height': self.photo_logo_height_var,
@@ -2094,6 +2104,102 @@ class PMIReportApp:
         self.paut_tab_notebook.add(tab_data, text="을지")
         self.paut_tab_notebook.add(tab_rows, text="행 설정")
         self.paut_tab_notebook.add(tab_cols, text="컬럼 설정")
+        
+        # [NEW] PAUT Equipment Settings
+        tab_equip_outer = ttk.Frame(self.paut_tab_notebook, padding=0)
+        self.paut_tab_notebook.add(tab_equip_outer, text="장비/설정")
+        
+        equip_canvas = tk.Canvas(tab_equip_outer, background="#f9fafb", highlightthickness=0)
+        equip_scrollbar = ttk.Scrollbar(tab_equip_outer, orient="vertical", command=equip_canvas.yview)
+        tab_equip = ttk.Frame(equip_canvas, padding=5)
+        
+        tab_equip.bind("<Configure>", lambda e: equip_canvas.configure(scrollregion=equip_canvas.bbox("all")))
+        
+        # We don't force canvas width to avoid squeezing the Entry fields to 0 width.
+        equip_canvas.create_window((0, 0), window=tab_equip, anchor="nw")
+        
+        # Use existing mousewheel binding if available
+        if hasattr(self, '_bind_mousewheel_recursive'):
+            self._bind_mousewheel_recursive(tab_equip)
+            
+        equip_canvas.configure(yscrollcommand=equip_scrollbar.set)
+        equip_canvas.pack(side="left", fill="both", expand=True)
+        equip_scrollbar.pack(side="right", fill="y")
+        
+        for col_idx in [1, 3]: # 2 columns layout
+            tab_equip.columnconfigure(col_idx, weight=1)
+        
+        self.paut_equip_vars = {}
+        self.paut_equip_map = {
+            'equip': ('검사장비', 'A12', 'OmniScan MX2'),
+            'module': ('검사모듈', 'H12', '32-128PR'),
+            'probe': ('탐촉자', 'O12', '5L64-A2'),
+            'wedge': ('웻지', 'V12', 'SA2-N55S-IHC'),
+            'program': ('판독프로그램', 'AC12', 'Tomoview, Omni PC'),
+            'method': ('검사기법', 'A15', 'PA/Sectoria'),
+            'wave': ('파형', 'H15', '횡파'),
+            'velocity': ('음속', 'O15', '3246.8m/s'),
+            'filter': ('Band-Pass Filter', 'V15', 'Band-Pass 5MHz'),
+            'medium': ('접촉 매질', 'AC15', '물 & 글리세린'),
+            'voltage': ('Voltage', 'A17', '80V'),
+            'gain': ('Gain', 'H17', '13 + 6dB'),
+            'mode': ('Mode', 'O17', 'PE(Pulse-Echo)'),
+            'offset': ('Index Offset', 'V17', '±18 mm'),
+            'ref_block': ('Ref Block', 'AC17', 'Test Level A Block(Φ2.5)'),
+            
+            'tcg1_p1': ('TCG1 Pos 1', 'H19', '5.95mm'),
+            'tcg1_g1': ('TCG1 Gain 1', 'O19', '8.8dB'),
+            'tcg1_p2': ('TCG1 Pos 2', 'H20', '12.48mm'),
+            'tcg1_g2': ('TCG1 Gain 2', 'O20', '12.6dB'),
+            'tcg1_p3': ('TCG1 Pos 3', 'H21', '21.07mm'),
+            'tcg1_g3': ('TCG1 Gain 3', 'O21', '13.8dB'),
+            'tcg1_p4': ('TCG1 Pos 4', 'H22', '29.67mm'),
+            'tcg1_g4': ('TCG1 Gain 4', 'O22', '19.8dB'),
+            
+            'tcg2_p1': ('TCG2 Pos 1', 'AA19', '5.95mm'),
+            'tcg2_g1': ('TCG2 Gain 1', 'AG19', '8.8dB'),
+            'tcg2_p2': ('TCG2 Pos 2', 'AA20', '12.48mm'),
+            'tcg2_g2': ('TCG2 Gain 2', 'AG20', '12.06dB'),
+            'tcg2_p3': ('TCG2 Pos 3', 'AA21', '21.07mm'),
+            'tcg2_g3': ('TCG2 Gain 3', 'AG21', '13.8dB'),
+            'tcg2_p4': ('TCG2 Pos 4', 'AA22', '29.67mm'),
+            'tcg2_g4': ('TCG2 Gain 4', 'AG22', '19.08dB'),
+            
+            'set1_qty': ('Gr.1 Used Elem', 'A25', '32'),
+            'set1_first': ('Gr.1 First Elem', 'H25', '33'),
+            'set1_last': ('Gr.1 Last Elem', 'O25', '64'),
+            'set1_scan': ('Gr.1 Scan Res', 'V25', '1'),
+            'set1_focal': ('Gr.1 Focal', 'AC25', '10'),
+            'set1_start': ('Gr.1 Start Ang', 'A27', '45°'),
+            'set1_stop': ('Gr.1 Stop Ang', 'H27', '75°'),
+            'set1_ang_res': ('Gr.1 Ang Res', 'O27', '1°'),
+            'set1_law': ('Gr.1 Law Config', 'V27', 'Sectorial'),
+            
+            'set2_qty': ('Gr.2 Used Elem', 'A30', '32'),
+            'set2_first': ('Gr.2 First Elem', 'H30', '33'),
+            'set2_last': ('Gr.2 Last Elem', 'O30', '64'),
+            'set2_scan': ('Gr.2 Scan Res', 'V30', '1'),
+            'set2_focal': ('Gr.2 Focal', 'AC30', '10'),
+            'set2_start': ('Gr.2 Start Ang', 'A32', '45°'),
+            'set2_stop': ('Gr.2 Stop Ang', 'H32', '75°'),
+            'set2_ang_res': ('Gr.2 Ang Res', 'O32', '1°'),
+            'set2_law': ('Gr.2 Law Config', 'V32', 'Sectorial')
+        }
+        
+        equip_r, equip_c = 0, 0
+        for k, (label, cell, default_val) in self.paut_equip_map.items():
+            config_val = self.config.get(f'PAUT_EQUIP_{k.upper()}')
+            if config_val is None or str(config_val).strip() == '':
+                config_val = default_val
+            var = tk.StringVar(value=config_val)
+            self.paut_equip_vars[k] = var
+            ttk.Label(tab_equip, text=label).grid(row=equip_r, column=equip_c*2, sticky='e', padx=5, pady=5)
+            ttk.Entry(tab_equip, textvariable=var, width=16).grid(row=equip_r, column=equip_c*2+1, sticky='ew', padx=5, pady=5)
+            
+            equip_c += 1
+            if equip_c > 1: # 2 columns layout
+                equip_c = 0
+                equip_r += 1
 
         # [NEW] Populate Settings
         self._create_gapji_meta_ui(tab_cover, use_pack=False)
@@ -2127,7 +2233,22 @@ class PMIReportApp:
             ("판정(Eval):", "PAUT_COL_EVAL", 9, "PAUT_NAME_EVAL", "Evaluation", "Evaluation"),
             ("비고(Rem):", "PAUT_COL_REM", 10, "PAUT_NAME_REM", "Remarks", "Remarks")
         ]
-        self._create_column_mapping_ui(tab_cols, "PAUT", paut_items)
+        # [NEW] PAUT Column Settings Notebook for different templates
+        self.paut_col_nb = ttk.Notebook(tab_cols)
+        self.paut_col_nb.pack(fill='both', expand=True, padx=2, pady=2)
+        
+        for template_name in ["지역난방", "ASME", "KS", "AWS"]:
+            frame = ttk.Frame(self.paut_col_nb)
+            self.paut_col_nb.add(frame, text=template_name)
+            
+            # Localize the keys
+            localized_items = []
+            for item in paut_items:
+                col_key = item[1].replace("PAUT_", f"PAUT_{template_name}_")
+                name_key = item[3].replace("PAUT_", f"PAUT_{template_name}_")
+                localized_items.append((item[0], col_key, item[2], name_key, item[4], item[5]))
+                
+            self._create_column_mapping_ui(frame, f"PAUT_{template_name}", localized_items)
 
         # --- 3. Manual Evaluation Content (Inside tab_eval) ---
         manual_container = tk.Frame(tab_eval, background="#f9fafb")
@@ -2203,8 +2324,15 @@ class PMIReportApp:
         self.paut_res_label.pack(fill='x', pady=(5, 0))
 
         # Bottom Actions
+        # [NEW] Photo Log Pages Input
+        photo_pages_frame = tk.Frame(left_pane, background="#f9fafb")
+        photo_pages_frame.pack(fill='x', pady=(5, 2))
+        ttk.Label(photo_pages_frame, text="첨부할 사진대장 장수:", font=("Malgun Gothic", 9)).pack(side='left', padx=2)
+        self.paut_photo_pages_var = tk.StringVar(value=str(self.config.get("PAUT_PHOTO_PAGES", "0")))
+        ttk.Entry(photo_pages_frame, textvariable=self.paut_photo_pages_var, width=5).pack(side='left', padx=2)
+        
         paut_btn_row = tk.Frame(left_pane, background="#f9fafb")
-        paut_btn_row.pack(fill='x', pady=(5, 2))
+        paut_btn_row.pack(fill='x', pady=2)
         ttk.Button(paut_btn_row, text=" 📝 추출 ", command=self._extract_paut_data).pack(side='left', fill='x', expand=True, padx=(0, 5))
         ttk.Button(paut_btn_row, text=" ✨ 일괄 판정 ", command=self._run_batch_paut_eval).pack(side='left', fill='x', expand=True, padx=(0, 5))
         ttk.Button(paut_btn_row, text=" 📄 성적서 생성 ", command=self._generate_paut_report).pack(side='left', fill='x', expand=True)
@@ -2561,7 +2689,7 @@ class PMIReportApp:
                 "rej": next((c for c in cols if any(x in str(c).upper() for x in ["REJ", "불합격"])), None),
                 "eval": next((c for c in cols if any(x in str(c).upper() for x in ["합부", "EVAL", "판정"])), None),
                 "welder": next((c for c in cols if any(x in str(c).upper() for x in ["용접사", "WELDER"])), None),
-                "tested_len": next((c for c in cols if any(x in str(c).upper() for x in ["검사길이", "PAUT길이", "TESTED", "TEST LEN"])), None),
+                "tested_len": next((c for c in cols if any(x in str(c).upper().replace('\n', '').replace(' ', '') for x in ["검사길이", "PAUT길이", "TESTED", "TESTLEN"])), None),
                 "size": next((c for c in cols if any(x in str(c).upper() for x in ["SIZE", "크기", "관경"])), None),
                 "remarks": next((c for c in cols if any(x in c.upper() for x in ["REMARK", "REMAKER", "비고"])), None)
             }
@@ -2731,6 +2859,11 @@ class PMIReportApp:
             ws = target_ws
             ws.title = f"PAUT_Report_001"
             
+            # [NEW] Write Cover (Gapji) metadata if there is a cover sheet
+            if len(wb.worksheets) > 1:
+                first_item = final_list[0] if final_list else None
+                self._write_gapji_metadata(wb.worksheets[0], mode="PAUT", first_item=first_item)
+            
             self.force_print_settings(ws, context="DATA")
             
             start_row = int(self.config.get('PAUT_START_ROW', 11))
@@ -2739,19 +2872,31 @@ class PMIReportApp:
             curr_row = start_row
             data_font = Font(size=9)
             
+            try:
+                active_tab_id = self.paut_col_nb.select()
+                active_template = self.paut_col_nb.tab(active_tab_id, "text")
+            except:
+                active_template = "지역난방"
+
             for i, item in enumerate(final_list):
                 if curr_row > end_row:
                     ws = self.prepare_next_paut_sheet(wb, ws.title, i//(end_row-start_row+1))
                     curr_row = start_row
                 
                 def _get_col(key, default):
-                    val = str(self.config.get(key, '')).strip()
+                    localized_key = key.replace("PAUT_", f"PAUT_{active_template}_")
+                    val = str(self.config.get(localized_key, '')).strip()
+                    if not val:
+                        val = str(self.config.get(key, '')).strip()
                     return val if val and val not in ['0', '0.0'] else default
 
                 # [NEW] Combine ACC and REJ to prevent overwriting if they map to the same column
                 acc_val = 'ACC' if item.get('Acc', '') in ['√', 'ACC'] else ''
                 rej_val = 'REJ' if item.get('Rej', '') in ['√', 'REJ'] else ''
                 acc_rej_combined = acc_val if acc_val else rej_val
+
+                # [NEW] Check if there is no defect
+                is_no_defect = not str(item.get('Type of Flaw', '')).strip() and not str(item.get('Height(mm)', '')).strip()
 
                 # [NEW] Respect user's UI column configuration while providing standard defaults
                 mapping = {
@@ -2773,6 +2918,10 @@ class PMIReportApp:
                     _get_col('PAUT_COL_REM', '0'): item.get('Remarks', '')
                 }
                 
+                # [NEW] Explicitly write "NO RECORDABLE INDICATION" to column N if there is no defect
+                if is_no_defect:
+                    mapping[self.col_to_num('N')] = "NO RECORDABLE INDICATION"
+                
                 for col_key, val in mapping.items():
                     try:
                         col_idx = self.col_to_num(col_key)
@@ -2786,7 +2935,120 @@ class PMIReportApp:
                 
                 curr_row += 1
                 self.progress['value'] = (i+1) / len(final_list) * 100
+                
+            # [NEW] Add Tested Length Summary at the end
+            total_org_m = 0.0
+            total_rep_m = 0.0
+            processed_joints = set()
             
+            import re
+            for item in final_list:
+                try:
+                    joint_no = str(item.get('Joint No.', '')).strip().upper()
+                    if not joint_no or joint_no in processed_joints:
+                        continue
+                    
+                    val_str = str(item.get('Tested Length', '0')).replace(',', '').strip()
+                    num_match = re.search(r"[\d\.]+", val_str)
+                    if num_match:
+                        val = float(num_match.group())
+                        processed_joints.add(joint_no) # Mark as processed only if we successfully parsed length
+                        
+                        acc_val = 'ACC' if item.get('Acc', '') in ['√', 'ACC'] else ''
+                        rej_val = 'REJ' if item.get('Rej', '') in ['√', 'REJ'] else ''
+                        acc_rej_combined = acc_val if acc_val else rej_val
+                        
+                        # Use ACC/REJ to distinguish Original vs Repair
+                        if acc_rej_combined == 'REJ' or '불합격' in str(item.get('Rej', '')):
+                            total_rep_m += val
+                        else:
+                            total_org_m += val
+                except:
+                    pass
+            
+            total_m = total_org_m + total_rep_m
+
+            org_val = f"{total_org_m:.4f} M" if total_org_m > 0 else " M"
+            rep_val = f"{total_rep_m:.4f} M" if total_rep_m > 0 else " M"
+            tot_val = f"{total_m:.4f} M" if total_m > 0 else " M"
+
+            from openpyxl.styles import Border, Side
+            thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+            summary_data = [
+                ("Original", org_val),
+                ("Repair", rep_val),
+                ("Total", tot_val)
+            ]
+            
+            aa_col = self.col_to_num('AA')
+            ae_col = self.col_to_num('AE')
+            
+            # [NEW] Check if there is enough space for the 3-row summary.
+            # If not, create a new sheet for the summary to prevent overwriting footers.
+            if curr_row + 2 > end_row:
+                ws = self.prepare_next_paut_sheet(wb, ws.title, len(final_list)//(end_row-start_row+1) + 1)
+                curr_row = start_row
+
+            for r_idx, (label, val) in enumerate(summary_data):
+                r = curr_row + r_idx
+                
+                c_label = ws.cell(row=r, column=aa_col, value=label)
+                c_label.border = thin_border
+                c_label.font = data_font
+                c_label.alignment = Alignment(horizontal='center', vertical='center')
+                
+                c_val = ws.cell(row=r, column=ae_col, value=val)
+                c_val.border = thin_border
+                c_val.font = data_font
+                c_val.alignment = Alignment(horizontal='center', vertical='center')
+            
+            # [NEW] PAUT Page Numbering Logic (Gapji: AE3, Eulji: AF3)
+            photo_pages = 0
+            try:
+                if hasattr(self, 'paut_photo_pages_var'):
+                    photo_pages = int(self.paut_photo_pages_var.get())
+            except:
+                pass
+            
+            total_p = len(wb.worksheets) + photo_pages
+            for p_idx, s in enumerate(wb.worksheets):
+                page_num = p_idx + 1
+                p_text = f"Page    {page_num}    of    {total_p}"
+                
+                # If there are multiple sheets, the first one is the Cover (Gapji)
+                if p_idx == 0 and len(wb.worksheets) > 1:
+                    self.safe_set_value(s, 'AC3', p_text)
+                    try: 
+                        if s['AC3'].font: s['AC3'].font = s['AC3'].font.copy(name='바탕', size=9, bold=False)
+                        else: s['AC3'].font = Font(name='바탕', size=9, bold=False)
+                    except: pass
+                    
+                    # [NEW] Inject Equipment Settings to Gapji
+                    if hasattr(self, 'paut_equip_vars'):
+                        for k, (lbl, cell, default_val) in self.paut_equip_map.items():
+                            val = self.paut_equip_vars[k].get()
+                            self.safe_set_value(s, cell, val)
+                else:
+                    self.safe_set_value(s, 'AA3', p_text)
+                    try: 
+                        if s['AA3'].font: s['AA3'].font = s['AA3'].font.copy(name='바탕', size=9, bold=False)
+                        else: s['AA3'].font = Font(name='바탕', size=9, bold=False)
+                    except: pass
+
+                # Fix right border for AJ4:AJ45 (Draw solid thin line)
+                try:
+                    from openpyxl.styles import Border, Side
+                    thin_side = Side(style='thin', color='000000')
+                    for row_idx in range(4, 46):
+                        cell = s[f'AJ{row_idx}']
+                        if cell.border:
+                            cell.border = Border(left=cell.border.left, right=thin_side, top=cell.border.top, bottom=cell.border.bottom)
+                        else:
+                            cell.border = Border(right=thin_side)
+                except Exception as e:
+                    self.log(f"AJ border error: {e}")
+
             out_name = f"PAUT_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             out_path = os.path.join(BASE_DIR, "output", out_name) if os.path.exists(os.path.join(BASE_DIR, "output")) else os.path.join(BASE_DIR, out_name)
             
@@ -2836,15 +3098,22 @@ class PMIReportApp:
             
             # Simple normalization (handle NaNs from CSV)
             normalized_data = []
-            for d in new_data:
+            for i, d in enumerate(new_data):
                 clean_dict = {}
                 for k, v in d.items():
                     if pd.isna(v): clean_dict[k] = ""
                     else: clean_dict[k] = v
+                
+                # [FIX] Ensure mandatory attributes for UI filtering
+                if 'date_filtered' not in clean_dict: clean_dict['date_filtered'] = True
+                if 'selected' not in clean_dict: clean_dict['selected'] = True
+                if 'order_index' not in clean_dict: clean_dict['order_index'] = i
+                
                 normalized_data.append(clean_dict)
             
             self.paut_extracted_data = normalized_data
             self.file_info_vars['PAUT'].set(f"📂 로드됨: {os.path.basename(path)} (총 {len(normalized_data)}건)")
+            self.update_date_listbox("PAUT")
             self.populate_preview(self.paut_extracted_data, mode="PAUT")
             self.log(f"📂 PAUT 세션 불러오기 완료: {os.path.basename(path)} ({len(normalized_data)}건)")
         except Exception as e:
@@ -2863,6 +3132,29 @@ class PMIReportApp:
         source_sheet = wb[prev_title]
         new_sheet = wb.copy_worksheet(source_sheet)
         new_sheet.title = f"PAUT_Report_{page_num+1:03d}"
+        
+        # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them to preserve Logos.
+        try:
+            import io
+            import copy
+            from openpyxl.drawing.image import Image as OpenpyxlImage
+            for idx, img in enumerate(source_sheet._images):
+                try:
+                    img_bytes = img._data()
+                    
+                    # Fix original image (since _data() closes its file pointer)
+                    fixed_orig = OpenpyxlImage(io.BytesIO(img_bytes))
+                    if hasattr(img, 'anchor'): fixed_orig.anchor = copy.copy(img.anchor)
+                    source_sheet._images[idx] = fixed_orig
+                    
+                    # Add to new sheet
+                    new_img = OpenpyxlImage(io.BytesIO(img_bytes))
+                    if hasattr(img, 'anchor'): new_img.anchor = copy.copy(img.anchor)
+                    new_sheet.add_image(new_img)
+                except Exception as inner_e:
+                    self.log(f"개별 로고 복사 오류: {inner_e}")
+        except Exception as e:
+            self.log(f"PAUT 로고 복사 오류: {e}")
         
         start_row = int(self.config.get('PAUT_START_ROW', 11))
         end_row = int(self.config.get('PAUT_DATA_END_ROW', 40))
@@ -3039,7 +3331,7 @@ class PMIReportApp:
         info = [
             ("PROJECT:", self.gapji_project.get(), y_start),
             ("CUSTOMER:", self.gapji_customer.get(), y_start + 12),
-            ("ITEM:", self.gapji_item.get(), y_start + 24),
+            ("AREA:", self.gapji_item.get(), y_start + 24),
             ("MATERIAL:", self.gapji_material.get(), y_start + 36),
             ("DATE:", self.gapji_exam_date.get(), y_start + 48),
             ("REPORT NO:", self.gapji_report_no.get(), y_start + 60),
@@ -6280,12 +6572,23 @@ class PMIReportApp:
         # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them for RT to preserve Shooting Sketches.
         if getattr(self, 'current_mode', "") == "RT":
             try:
+                import io
                 import copy
-                for img in source_sheet._images:
-                    new_img = copy.copy(img)
-                    if hasattr(img, 'anchor'):
-                        new_img.anchor = copy.copy(img.anchor)
-                    new_sheet.add_image(new_img)
+                from openpyxl.drawing.image import Image as OpenpyxlImage
+                for idx, img in enumerate(source_sheet._images):
+                    try:
+                        img_bytes = img._data()
+                        
+                        # Fix original image
+                        fixed_orig = OpenpyxlImage(io.BytesIO(img_bytes))
+                        if hasattr(img, 'anchor'): fixed_orig.anchor = copy.copy(img.anchor)
+                        source_sheet._images[idx] = fixed_orig
+                        
+                        # Add to new sheet
+                        new_img = OpenpyxlImage(io.BytesIO(img_bytes))
+                        if hasattr(img, 'anchor'): new_img.anchor = copy.copy(img.anchor)
+                        new_sheet.add_image(new_img)
+                    except: pass
             except: pass
             
         base_title = source_sheet.title.split('_')[0]; new_sheet.title = f"{base_title[:20]}_{page_num:03d}"
@@ -7695,22 +7998,48 @@ class PMIReportApp:
         else:
             self._run_pmi_process(final_list, template_path)
 
-    def _write_gapji_metadata(self, ws):
+    def _write_gapji_metadata(self, ws, mode="PMI", first_item=None):
         """Write common report metadata to the cover sheet."""
-        # Default mapping: Project: B5, Customer: B6, Item: B7, Material: B8, Date: B9, Report No: B10
-        mapping = [
-            ('GAPJI_PROJECT', 'B5'),
-            ('GAPJI_CUSTOMER', 'B6'),
-            ('GAPJI_ITEM', 'B7'),
-            ('GAPJI_MATERIAL', 'B8'),
-            ('GAPJI_EXAM_DATE', 'B9'),
-            ('GAPJI_REPORT_NO', 'B10')
-        ]
-        
-        for cfg_key, coord in mapping:
-            val = self.config.get(cfg_key, "")
-            if val:
-                self.safe_set_value(ws, coord, val)
+        if mode == "PAUT":
+            mapping = [
+                ('GAPJI_PROJECT', 'G8'),
+                ('GAPJI_CUSTOMER', 'AA4'),
+                ('GAPJI_EXAM_DATE', 'AA6'),
+                ('GAPJI_REPORT_NO', 'AA5'),
+                ('GAPJI_ITEM', 'M35') # 품목(Item) 칸을 '지역'으로 매핑
+            ]
+            for key, default_cell in mapping:
+                val = self.config.get(key, "")
+                if val:
+                    self.safe_set_value(ws, default_cell, val)
+                
+            if first_item:
+                line_no = first_item.get('Line No.', '')
+                if line_no:
+                    self.safe_set_value(ws, 'Y35', line_no)
+                
+                size_val = first_item.get('Size', '')
+                if size_val:
+                    self.safe_set_value(ws, 'J35', size_val)
+                    
+                thk_val = first_item.get('Th\'k(mm)', '')
+                if thk_val:
+                    self.safe_set_value(ws, 'G35', thk_val)
+        else:
+            # Default mapping: Project: B5, Customer: B6, Item: B7, Material: B8, Date: B9, Report No: B10
+            mapping = [
+                ('GAPJI_PROJECT', 'B5'),
+                ('GAPJI_CUSTOMER', 'B6'),
+                ('GAPJI_ITEM', 'B7'),
+                ('GAPJI_MATERIAL', 'B8'),
+                ('GAPJI_EXAM_DATE', 'B9'),
+                ('GAPJI_REPORT_NO', 'B10')
+            ]
+            
+            for cfg_key, coord in mapping:
+                val = self.config.get(cfg_key, "")
+                if val:
+                    self.safe_set_value(ws, self.config.get(f"{cfg_key}_CELL", coord), val)
 
     def _run_pmi_process(self, final_list, template_path):
         self.save_settings() # Ensure UI -> config sync
@@ -8612,6 +8941,15 @@ class PMIReportApp:
             if f: self.photo_logo_path.set(f)
         ttk.Button(logo_f, text="...", width=3, command=browse_logo).pack(side='right')
         
+        # [NEW] Page Numbering Inputs
+        tk.Label(info_frame, text="시작 페이지:").grid(row=6, column=0, sticky='w', pady=2)
+        self.photo_start_page = tk.StringVar(value=str(self.config.get("PHOTO_START_PAGE", "")))
+        ttk.Entry(info_frame, textvariable=self.photo_start_page, width=1).grid(row=6, column=1, sticky='ew', padx=5, pady=2)
+
+        tk.Label(info_frame, text="전체 페이지:").grid(row=7, column=0, sticky='w', pady=2)
+        self.photo_total_pages = tk.StringVar(value=str(self.config.get("PHOTO_TOTAL_PAGES", "")))
+        ttk.Entry(info_frame, textvariable=self.photo_total_pages, width=1).grid(row=7, column=1, sticky='ew', padx=5, pady=2)
+        
         info_frame.columnconfigure(1, weight=1)
 
         # 2. Layout Settings Group
@@ -9047,7 +9385,26 @@ class PMIReportApp:
             except:
                 worksheet.set_margins(left=0.4, right=0.4, top=0.5, bottom=0.5)
             
-            worksheet.set_footer('&C&P / &N')
+            s_page = self.photo_start_page.get().strip()
+            t_pages = self.photo_total_pages.get().strip()
+            
+            # [NEW] Use Center Header (&C) with leading spaces to push text to the right.
+            # Right Header (&R) strips trailing spaces, so it stays stuck to the right margin.
+            # 130 leading spaces pushes it slightly left from the previous 180 setting.
+            # [NEW] Use Right Header (&R) with Non-Breaking Spaces (\xa0) to push left.
+            # Normal spaces are stripped by Excel, but NBSP are kept, allowing precise offset from the right margin.
+            # \xa0 * 7 reduces the leftward push, moving it slightly to the right compared to 15.
+            base_header = '&"바탕"&09Page        &P        of        &N'
+            header_text = '&R&05 \n' + base_header + ('\xa0' * 7)
+            
+            if s_page.isdigit():
+                worksheet.set_start_page(int(s_page))
+            if t_pages.isdigit():
+                base_header = f'&"바탕"&09Page        &P        of        {t_pages}'
+                header_text = '&R&05 \n' + base_header + ('\xa0' * 7)
+                
+            worksheet.set_header(header_text)
+            worksheet.set_footer('')
             worksheet.repeat_rows(0, 4) 
 
             # Layout Calculation
