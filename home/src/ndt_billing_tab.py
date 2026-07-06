@@ -462,7 +462,7 @@ class NDTCalculatorTab(ttk.Frame):
                 for k, v in self.exp_vars.items():
                     total += self.get_int(v["budget"])
             else:
-                total += 86944000 # exp_vars 초기화 전 기본 실비 합계
+                total += 86943999 # exp_vars 초기화 전 기본 실비 합계 (단수조정 -1원 반영)
                 
             self.total_contract_amt_var.set(f"총 계약금액 (부가세 별도): {total:,} 원")
             
@@ -511,7 +511,7 @@ class NDTCalculatorTab(ttk.Frame):
         self.exp_vars = {}
         items = [
             ("equip", "장비손료", 41000000),
-            ("safety", "안전관리비", 28507304),
+            ("safety", "안전관리비", 28507303), # 단수조정 -1원 반영 (원래 28507304)
             ("travel", "주재비/출장비", 2226096),
             ("print", "도서인쇄비", 481600),
             ("liability", "손해배상공제료", 14729000)
@@ -935,7 +935,7 @@ class NDTCalculatorTab(ttk.Frame):
                 key = f"{loc}_{t_time}_{mat}"
                 if key in self.contract_vars:
                     cur_val = self.get_float(self.contract_vars[key]["curr_qty"])
-                    new_val = cur_val + rec.get("adjusted_qty", rec["qty"])
+                    new_val = cur_val + rec["qty"]
                     self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
 
     def add_to_record(self, auto_save=True):
@@ -1491,7 +1491,7 @@ class NDTCalculatorTab(ttk.Frame):
                             mat = r["ndt_type"]
                         key = f"{loc}_{t_time}_{mat}"
                         if key == cat:
-                            cur_qty += r.get("adjusted_qty", r["qty"])
+                            cur_qty += r["qty"]
                             cur_amt += r["subtotal"]
                             
                     if c_qty == 0.0 and p_qty == 0.0 and cur_qty == 0.0:
