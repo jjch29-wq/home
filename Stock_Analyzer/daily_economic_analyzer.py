@@ -379,13 +379,17 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
                 else:
                     msg_holdings += f"• {name} ({qty}) - 현재가: {fmt2(curr)}\n"
                 if pos_pct <= 20:
-                    msg_holdings += f"  👉 [바닥권] 강력 보유 & 추가 매수 권장\n"
+                    msg_holdings += f"  • 현재 상태: [완전한 바닥권 (하위 {int(pos_pct)}%)]\n"
+                    msg_holdings += f"  • 대책 방안: 절대 매도 금지! 지금 팔면 최하점입니다. {fmt2(support)} 부근 추가 매수 고려\n"
                 elif pos_pct <= 40:
-                    msg_holdings += f"  👉 [반등중] 보유 유지\n"
+                    msg_holdings += f"  • 현재 상태: [바닥 다지기 및 반등 시작 (하위 {int(pos_pct)}%)]\n"
+                    msg_holdings += f"  • 대책 방안: 상승 추세 전환 가능성. 보유 유지하며 목표가 {fmt2(resistance)} 대기\n"
                 elif pos_pct <= 70:
-                    msg_holdings += f"  👉 [상승중] 매도 타이밍 주시\n"
+                    msg_holdings += f"  • 현재 상태: [중간 상승 구간 (상위 {100-int(pos_pct)}%)]\n"
+                    msg_holdings += f"  • 대책 방안: 수익 확대 중. 저항선({fmt2(resistance)}) 근접 시 매도 준비\n"
                 else:
-                    msg_holdings += f"  👉 [고점권] 이익 실현(매도) 추천\n"
+                    msg_holdings += f"  • 현재 상태: [고점 도달 (상위 {100-int(pos_pct)}%)]\n"
+                    msg_holdings += f"  • 대책 방안: 목표가({fmt2(resistance)}) 근접! 욕심을 줄이고 수익 실현(매도) 타이밍\n"
                     
                 # 5일 예측 계산
                 clean_name = row['추천 종목'].replace('🔥 ', '').replace(' (사용자 추가)', '').split('(')[0].strip()
@@ -553,13 +557,28 @@ def get_naver_realtime_price(ticker):
         pass
     return None
 
-def get_portfolio_data():
+def get_portfolio_data(market_df=None):
     """100만 원 초보자 맞춤형 포트폴리오의 실시간 데이터를 수집합니다."""
     print("초보자 추천 포트폴리오 데이터를 수집 중입니다...")
     
     current_portfolio = PORTFOLIO.copy()
     current_owned = OWNED_STOCKS.copy()
     current_avg_price = {}
+    
+    # KOSPI 및 NASDAQ 전일비 변동률(%) 파싱
+    kospi_change = 0
+    nasdaq_change = 0
+    if market_df is not None and not market_df.empty:
+        try:
+            k_row = market_df[market_df['지표명'] == 'KOSPI']
+            if not k_row.empty:
+                kospi_change = k_row['전일비 변동률(%)'].iloc[0]
+                
+            n_row = market_df[market_df['지표명'] == 'NASDAQ']
+            if not n_row.empty:
+                nasdaq_change = n_row['전일비 변동률(%)'].iloc[0]
+        except Exception:
+            pass
     
     custom_stocks = load_custom_stocks()
     for name, info in custom_stocks.items():
@@ -662,6 +681,16 @@ def get_portfolio_data():
                     vol_surge = 0
                     vol_surge_str = "-"
                 
+                # 시장 폭락/급등 여부 확인 (지수 1.5% 이상 변동 시)
+                market_crash = False
+                market_boom = False
+                if is_korea:
+                    if kospi_change <= -1.5: market_crash = True
+                    elif kospi_change >= 1.5: market_boom = True
+                else:
+                    if nasdaq_change <= -1.5: market_crash = True
+                    elif nasdaq_change >= 1.5: market_boom = True
+
                 # AI 매수/매도 타이밍 신호 생성 (모든 경우의 수 반영)
                 if vol_surge >= 200 and change_pct > 0:
                     trade_signal = "🚀 거래량 급증 (수급 폭발)"
@@ -682,14 +711,24 @@ def get_portfolio_data():
                     else:
                         trade_signal = "⚠️ 단기 고점 (매도 준비/관망)"
                 elif current_rsi <= 35:
-                    if market_sentiment in ["fear", "extreme_fear"]:
+                    if market_sentiment in ["fear", "extreme_fear"] or market_crash:
                         trade_signal = "🔥 적극 매수 (대중의 공포=최적기)"
                     else:
                         trade_signal = "🔥 적극 매수 (RSI 바닥)"
                 elif current_price < ma20:
-                    trade_signal = "👍 좋은 기회 (20일선 아래)"
+                    if market_crash:
+                        trade_signal = "🛡️ 보수적 접근 (시장 하락, 관망)"
+                    elif market_boom:
+                        trade_signal = "🚀 시장 상승 편승 (매수 기회)"
+                    else:
+                        trade_signal = "👍 좋은 기회 (20일선 아래)"
                 else:
-                    trade_signal = "✅ 보유 및 분할 매수"
+                    if market_crash:
+                        trade_signal = "🛡️ 관망 (시장 변동성 확대)"
+                    elif market_boom:
+                        trade_signal = "✅ 보유 (시장 상승세)"
+                    else:
+                        trade_signal = "✅ 보유 및 분할 매수"
                 
                 # 투자 성향 분류
                 if 'S&P500' in name: style = "코어(필수)"

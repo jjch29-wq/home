@@ -111,11 +111,11 @@ class EconomicDashboard:
         my_port_frame = ttk.LabelFrame(left_frame, text=" 💼 나의 실제 보유 주식 현황 ", padding=5)
         my_port_frame.pack(side='bottom', expand=True, fill='both', pady=(10, 0))
         
-        cols_my = ('종목명', '보유', '매수 단가', '현재가', '수익률(%)', '일간 변동금액')
+        cols_my = ('종목명', '보유', '매수 단가', '현재가', '수익률(%)', '일간 변동금액', 'AI 시그널')
         self.tv_my = ttk.Treeview(my_port_frame, columns=cols_my, show='headings', height=6)
         for col in cols_my:
             self.tv_my.heading(col, text=col)
-            w = 120 if col == '종목명' else (50 if col == '보유' else (75 if col == '수익률(%)' else 85))
+            w = 120 if col == '종목명' else (50 if col == '보유' else (75 if col == '수익률(%)' else (130 if col == 'AI 시그널' else 85)))
             self.tv_my.column(col, anchor='center', width=w, stretch=False)
         
         # 버튼 및 주도주 표시 프레임
@@ -219,6 +219,12 @@ class EconomicDashboard:
         self.tv_port.tag_configure('down', foreground='blue')
         self.tv_port.tag_configure('sell', foreground='purple')  # 매도 시그널용 색상
         self.tv_port.tag_configure('value', foreground='darkorange') # 숨은 진주용 색상
+        
+        # 내 보유 주식도 동일한 색상 적용
+        self.tv_my.tag_configure('up', foreground='red')
+        self.tv_my.tag_configure('down', foreground='blue')
+        self.tv_my.tag_configure('sell', foreground='purple')
+        self.tv_my.tag_configure('value', foreground='darkorange')
         
         # 자동 갱신 타이머 설정 (5분 = 300,000ms)
         self.refresh_interval = 300000
@@ -707,7 +713,7 @@ class EconomicDashboard:
         try:
             # 이전에 만든 모듈의 함수 재사용
             market_df = analyzer.get_market_data()
-            portfolio_df = analyzer.get_portfolio_data()
+            portfolio_df = analyzer.get_portfolio_data(market_df)
             news_df = analyzer.get_economic_news()
             
             # 엑셀 파일 저장
@@ -838,7 +844,8 @@ class EconomicDashboard:
                     avg_price_str,
                     row['현재가(원/$)'],
                     roi_str,
-                    change_str
+                    change_str,
+                    signal
                 ), tags=(tag,))
                 
         # 섹터 트래킹 업데이트

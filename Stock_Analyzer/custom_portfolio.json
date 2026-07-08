@@ -31,5 +31,25 @@
     "ticker": "247540.KS",
     "qty": 1,
     "avg_price": 120000.0
+  },
+  "SK하이닉스": {
+    "ticker": "000660.KS",
+    "qty": 1,
+    "avg_price": 0
+  },
+  "삼성전자": {
+    "ticker": "005930.KS",
+    "qty": 1,
+    "avg_price": 0
+  },
+  "HD현대일렉트릭": {
+    "ticker": "267260.KS",
+    "qty": 1,
+    "avg_price": 0
+  },
+  "삼성SDI": {
+    "ticker": "006400.KS",
+    "qty": 1,
+    "avg_price": 0
   }
 }
