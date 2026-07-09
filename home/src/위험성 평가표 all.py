@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.drawing.image import Image
 import os
 from datetime import datetime
 import json
@@ -30,7 +31,9 @@ bold_font = Font(name='맑은 고딕', size=13, bold=True)
 title_font = Font(name='맑은 고딕', size=20, bold=True)
 data_font = Font(name='맑은 고딕', size=14) # 커진 셀 높이에 어울리도록 기본 글씨 크기 확대
 center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+center_nowrap_align = Alignment(horizontal="center", vertical="center", wrap_text=False)
 left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
+right_align = Alignment(horizontal="right", vertical="center", wrap_text=False)
 thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
                      top=Side(style='thin'), bottom=Side(style='thin'))
 
@@ -38,6 +41,14 @@ def set_border(ws, min_col, min_row, max_col, max_row):
     for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
         for cell in row:
             cell.border = thin_border
+
+def get_risk_category(text):
+    if any(w in text for w in ["약품", "누출", "화학", "가스", "질식"]): return "화학(물질)적 요인"
+    if any(w in text for w in ["방사능", "방사선", "피폭", "소음", "진동", "조도", "폭염"]): return "물리적 요인"
+    if any(w in text for w in ["자세", "근골격계", "중량물", "무리한"]): return "작업특성 요인"
+    if any(w in text for w in ["우천", "날씨", "법면", "강풍", "태풍", "야외"]): return "작업환경 요인"
+    if any(w in text for w in ["감염", "세균", "바이러스", "질병"]): return "생물학적 요인"
+    return "기계적(설비)적 요인"
 
 def extract_disaster_type(text):
     if "추락" in text: return "추락"
@@ -61,123 +72,228 @@ def create_excel(process_name, output_filename, data, params):
     ws.page_setup.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
-    ws.print_title_rows = '5:6' # 5~6행 인쇄 제목으로 반복
+    ws.page_margins.left = 0.3
+    ws.page_margins.right = 0.3
+    ws.page_margins.top = 0.3
+    ws.page_margins.bottom = 0.3
+    ws.page_margins.header = 0.2
+    ws.page_margins.footer = 0.2
+    
+    # 인쇄 시 페이지 가로 정가운데 맞춤 (좌우 여백 동일하게)
+    ws.print_options.horizontalCentered = True
+    
+    ws.print_title_rows = '7:8' # 7~8행 인쇄 제목으로 반복
 
     # Columns width setup (25 columns: A to Y)
-    widths = [12.5, 12, 33, 9, 5, 5, 9] # A:G (A열 너비 아주 조금 더 확대)
+    # 총 너비를 기존보다 아주 살짝 더 넓게(약 261) 설정하여 엑셀 자동 배율이 안전하게 축소되도록 유도 (16행 밀림 방지)
+    widths = [12.5, 12, 66, 9, 5, 5, 9] # A:G
     widths += [7]                     # H
-    widths += [8.2] * 7               # I~O (글자 잘림 방지만 위해 아주 조금만 확대)
-    widths += [7] * 4                 # P~S
-    widths += [13.5] * 6              # T~Y (원래 비율에 가깝게 복구)
+    widths += [8.2] * 7               # I~O
+    widths += [7]                     # P
+    
+    # 우측 '재평가' 블록(Q~Y)
+    widths += [7]                     # Q
+    widths += [8.2, 8.2, 12, 8.2, 8.2, 8.2, 8.2] # R~X (T열은 담당부서 글자 길이 때문에 12로 확대)
+    widths += [7]                     # Y (원래 비율에 가깝게 복구)
     for i, width in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = width
 
-    # --- Header Section (Rows 1 to 4) ---
-    ws['A1'] = "현 장 명"
-    ws.merge_cells('B1:D1'); ws['B1'] = params['site_name']
-
-    ws.merge_cells('E1:M2'); ws['E1'] = "위험성 평가서"
-    ws['E1'].font = title_font
-    ws['E1'].alignment = center_align
-
+    # --- Header Section (Rows 1 to 6) ---
+    ws.merge_cells('A1:Y1')
     eval_type = params['eval_type']
-    ws.merge_cells('E3:M3')
     if eval_type == "최초평가":
-        ws['E3'] = "[ ■ 최초평가   □ 수시평가   □ 정기평가 ]"
-    elif eval_type == "수시평가":
-        ws['E3'] = "[ □ 최초평가   ■ 수시평가   □ 정기평가 ]"
+        ws['A1'] = "위험성평가표 [ ■최초, □정기, □수시 ]"
+    elif eval_type == "정기평가":
+        ws['A1'] = "위험성평가표 [ □최초, ■정기, □수시 ]"
     else:
-        ws['E3'] = "[ □ 최초평가   □ 수시평가   ■ 정기평가 ]"
-    ws['E3'].font = bold_font
-    ws['E3'].alignment = center_align
+        ws['A1'] = "위험성평가표 [ □최초, □정기, ■수시 ]"
+    ws['A1'].font = Font(name='맑은 고딕', size=18, bold=True)
+    ws['A1'].alignment = center_align
+    ws.row_dimensions[1].height = 35
 
-    ws.merge_cells('N1:O1'); ws['N1'] = "작 성 자"
-    ws.merge_cells('P1:Q1'); ws['P1'] = "작성검토자"
-    ws.merge_cells('R1:W1'); ws['R1'] = "검 토 자"
-    ws.merge_cells('X1:Y1'); ws['X1'] = "승 인 자"
+    # Left Block
+    ws.merge_cells('A2:B3'); ws['A2'] = "작 업 명"
+    ws.merge_cells('C2:G3'); ws['C2'] = f"{params['site_name']}\n{process_name} 기술용역"
+    ws.merge_cells('A4:B4'); ws['A4'] = "회 사 명"
+    ws.merge_cells('C4:G4'); ws['C4'] = params['company_name']
+    ws.merge_cells('A5:B5'); ws['A5'] = "작업공종"
+    ws.merge_cells('C5:G5'); ws['C5'] = process_name
+    ws.merge_cells('A6:B6'); ws['A6'] = "작업기간"
+    ws.merge_cells('C6:G6'); ws['C6'] = f"{params['start_date']} ~ {params['end_date']}"
 
-    ws['A2'] = "작성일자"
-    ws.merge_cells('B2:D2'); ws['B2'] = params['write_date']
+    # Middle Block
+    ws.merge_cells('H2:I2'); ws['H2'] = "평가기간"
+    ws.merge_cells('J2:P2'); ws['J2'] = params['write_date']
+    ws.merge_cells('H3:H6'); ws['H3'] = "작업전"
+    
+    ws.merge_cells('I3:I4'); ws['I3'] = "수급인"
+    ws.merge_cells('J3:K3'); ws['J3'] = "근 로 자"
+    ws.merge_cells('L3:M3'); ws['L3'] = "작 성 자"
+    ws.merge_cells('N3:P3'); ws['N3'] = "승 인 자"
+    ws.merge_cells('J4:K4'); ws['J4'] = params.get('worker_name', '(서명)')
+    ws.merge_cells('L4:M4'); ws['L4'] = params.get('writer_name', '(서명)')
+    ws.merge_cells('N4:P4'); ws['N4'] = params.get('approver_name', '(서명)')
+    
+    ws.merge_cells('I5:I6'); ws['I5'] = "도급인"
+    ws.merge_cells('J5:K5'); ws['J5'] = "검토자(감독)"
+    ws.merge_cells('L5:M5'); ws['L5'] = "검토자(안전)"
+    ws.merge_cells('N5:P5'); ws['N5'] = "승 인 자"
+    ws.merge_cells('J6:K6'); ws['J6'] = "(서명)"
+    ws.merge_cells('L6:M6'); ws['L6'] = "(서명)"
+    ws.merge_cells('N6:P6'); ws['N6'] = "(서명)"
 
-    ws.merge_cells('N2:O2'); ws['N2'] = "담당자"
-    ws.merge_cells('P2:Q2'); ws['P2'] = "공사담당자"
-    ws.merge_cells('R2:S2'); ws['R2'] = "보건관리자"
-    ws.merge_cells('T2:U2'); ws['T2'] = "안전관리자"
-    ws.merge_cells('V2:W2'); ws['V2'] = "안전관리팀장"
-    ws.merge_cells('X2:Y2'); ws['X2'] = "소 장"
+    # Right Block
+    ws.merge_cells('Q2:R2'); ws['Q2'] = "재평가일"
+    ws.merge_cells('S2:Y2'); ws['S2'] = ""
+    ws.merge_cells('Q3:Q6'); ws['Q3'] = "재평가"
+    
+    ws.merge_cells('R3:R4'); ws['R3'] = "수급인"
+    ws.merge_cells('S3:T3'); ws['S3'] = "근 로 자"
+    ws.merge_cells('U3:V3'); ws['U3'] = "작 성 자"
+    ws.merge_cells('W3:Y3'); ws['W3'] = "승 인 자"
+    ws.merge_cells('S4:T4'); ws['S4'] = "(서명)"
+    ws.merge_cells('U4:V4'); ws['U4'] = "(서명)"
+    ws.merge_cells('W4:Y4'); ws['W4'] = "(서명)"
+    
+    ws.merge_cells('R5:R6'); ws['R5'] = "도급인"
+    ws.merge_cells('S5:T5'); ws['S5'] = "검토자(감독)"
+    ws.merge_cells('U5:V5'); ws['U5'] = "검토자(안전)"
+    ws.merge_cells('W5:Y5'); ws['W5'] = "승 인 자"
+    ws.merge_cells('S6:T6'); ws['S6'] = "(서명)"
+    ws.merge_cells('U6:V6'); ws['U6'] = "(서명)"
+    ws.merge_cells('W6:Y6'); ws['W6'] = "(서명)"
 
-    ws['A3'] = "협력업체"
-    ws.merge_cells('B3:D3'); ws['B3'] = params['company_name']
-
-    ws.merge_cells('N3:O3'); ws['N3'] = "(서명)"
-    ws.merge_cells('P3:Q3'); ws['P3'] = "(서명)"
-    ws.merge_cells('R3:S3'); ws['R3'] = "(서명)"
-    ws.merge_cells('T3:U3'); ws['T3'] = "(서명)"
-    ws.merge_cells('V3:W3'); ws['V3'] = "(서명)"
-    ws.merge_cells('X3:Y3'); ws['X3'] = "(서명)"
-
-    ws['A4'] = "대 공 종"
-    ws.merge_cells('B4:C4'); ws['B4'] = process_name
-
-    ws.merge_cells('D4:E4'); ws['D4'] = "관리기간"
-    ws.merge_cells('F4:K4'); ws['F4'] = f"{params['start_date']} ~ {params['end_date']}"
-
-    ws.merge_cells('L4:O4'); ws['L4'] = "현장소장\n승인의견"
-    ws.merge_cells('P4:Y4'); ws['P4'] = f'"{params["director_comment"]}"'
-
-    for r in range(1, 5):
-        ws.row_dimensions[r].height = 25
+    for r in range(2, 7):
+        if r in [4, 6]:
+            ws.row_dimensions[r].height = 35
+        else:
+            ws.row_dimensions[r].height = 25
         for c in range(1, 26):
             cell = ws.cell(row=r, column=c)
             cell.alignment = center_align
             cell.font = bold_font
+            
+    # 특정 셀 줄바꿈 방지 (작업전, 재평가 및 수급인/도급인 통일)
+    ws['H3'].alignment = center_nowrap_align
+    ws['Q3'].alignment = center_nowrap_align
+    ws['I3'].alignment = center_nowrap_align
+    ws['I5'].alignment = center_nowrap_align
+    ws['R3'].alignment = center_nowrap_align
+    ws['R5'].alignment = center_nowrap_align
+    
+    # 서명(이름) 칸 세부 정렬 설정 및 도장 이미지 자동 삽입
+    # 승인자 칸(N~P열)처럼 셀이 넓은 경우 양쪽 끝으로 밀어버리면 간격이 너무 벌어지므로,
+    # 고정된 간격(스페이스 6개)을 주고 통째로 가운데 정렬하여 하나의 도장처럼 보이게 합니다.
+    for cell_ref in ['J4', 'L4', 'N4', 'J6', 'L6', 'N6', 'S4', 'U4', 'W4', 'S6', 'U6', 'W6']:
+        cell_val = ws[cell_ref].value
+        if cell_val:
+            name = str(cell_val).replace(" (서명)", "").strip()
+            
+            # 도장 이미지 확인
+            stamp_path = None
+            if name in ["유상훈", "주진철", "강신태"]:
+                ext = "_padded.png"
+                temp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "signs", f"{name}{ext}")
+                if os.path.exists(temp_path):
+                    stamp_path = temp_path
 
-    ws.row_dimensions[3].height = 40 
-    ws.row_dimensions[4].height = 30
-    set_border(ws, 1, 1, 25, 4)
+            if not name or name == "(서명)":
+                ws[cell_ref].value = "(서명)"
+                ws[cell_ref].alignment = right_align
+            else:
+                if stamp_path:
+                    # 도장이 삽입될 때 이름과 도장 간의 간격을 정밀하게 조절합니다.
+                    # 좁은 셀(J, L 등)은 가운데 정렬 시 텍스트가 밀려 도장과 겹치므로 공백을 4칸 주어 적당한 간격을 만듭니다.
+                    # 넓은 셀(N, W 등)은 도장이 P열에 고정되므로, 공백을 2칸으로 줄여 이름이 도장에 더 가까워지도록 합니다.
+                    if cell_ref.startswith('N') or cell_ref.startswith('W'):
+                        ws[cell_ref].value = f"{name}  "
+                    else:
+                        ws[cell_ref].value = f"{name}      "
+                    ws[cell_ref].alignment = center_nowrap_align
+                    
+                    # 도장 이미지 삽입
+                    img = Image(stamp_path)
+                    img.width = 85 if name == "강신태" else 55
+                    img.height = 40
+                    
+                    # 이미지 삽입 위치 (강신태는 너무 멀지 않게 P대신 O열, Y대신 X열을 기준으로 당김)
+                    if cell_ref.startswith('J'): target_col = 'K'
+                    elif cell_ref.startswith('L'): target_col = 'M'
+                    elif cell_ref.startswith('N'): target_col = 'O'
+                    elif cell_ref.startswith('S'): target_col = 'T'
+                    elif cell_ref.startswith('U'): target_col = 'V'
+                    elif cell_ref.startswith('W'): target_col = 'X'
+                    else: target_col = chr(ord(cell_ref[0]) + 1)
+                    
+                    target_ref = f"{target_col}{cell_ref[1:]}"
+                    ws.add_image(img, target_ref)
+                else:
+                    # 도장이 없는 경우 기존처럼 텍스트로 (서명) 삽입
+                    if cell_ref.startswith('N') or cell_ref.startswith('W'):
+                        ws[cell_ref].value = f"{name}      (서명)"
+                    else:
+                        ws[cell_ref].value = f"{name}  (서명)"
+                    ws[cell_ref].alignment = center_nowrap_align
 
-    # --- Table Headers (Rows 5 & 6) ---
-    ws.merge_cells('A5:A6'); ws['A5'] = "중공종"
-    ws.merge_cells('B5:B6'); ws['B5'] = "작업위치"
-    ws.merge_cells('C5:C6'); ws['C5'] = "위험성평가"
-    ws.merge_cells('D5:D6'); ws['D5'] = "재해\n형태"
+    set_border(ws, 1, 2, 25, 6)
 
-    ws.merge_cells('E5:G5'); ws['E5'] = "위험도"
-    ws['E6'] = "빈도"
-    ws['F6'] = "강도"
-    ws['G6'] = "등급\n(A,B,C)"
+    # --- Table Headers (Rows 7 & 8) ---
+    ws.merge_cells('A7:A8'); ws['A7'] = "세부작업"
+    ws.merge_cells('B7:B8'); ws['B7'] = "위험분류"
+    
+    ws.merge_cells('C7:F7'); ws['C7'] = "유해 위험 요인 파악"
+    ws.merge_cells('C8:F8'); ws['C8'] = "위험 발생 상황 및 결과"
+    
+    ws.merge_cells('G7:I8'); ws['G7'] = "현재의 안전 보건 조치"
+    
+    ws.merge_cells('J7:L7'); ws['J7'] = "위험성 결정"
+    ws['J8'] = "가능성\n(빈도)"
+    ws['K8'] = "중대성\n(강도)"
+    ws['L8'] = "위험성\n(등급)"
+    
+    ws.merge_cells('M7:Q8'); ws['M7'] = "위험성 감소 대책"
+    
+    ws.merge_cells('R7:U7'); ws['R7'] = "재평가"
+    ws.merge_cells('V7:Y7'); ws['V7'] = "개선 후 위험성 (재평가)"
+    
+    ws.merge_cells('R8:S8'); ws['R8'] = "개선예정일"
+    ws['T8'] = "담당자\n(담당부서)"
+    ws['U8'] = "완료일"
+    ws['V8'] = "가능성\n(빈도)"
+    ws['W8'] = "중대성\n(강도)"
+    ws.merge_cells('X8:Y8'); ws['X8'] = "위험성\n(등급)"
 
-    ws.merge_cells('H5:H6'); ws['H5'] = "중점\n등록\n(O)"
-    ws.merge_cells('I5:O6'); ws['I5'] = "위험성평가 개선대책"
-
-    ws.merge_cells('P5:Q5'); ws['P5'] = "작업일정"
-    ws.merge_cells('P6:Q6'); ws['P6'] = "작업인원"
-
-    ws.merge_cells('R5:S5'); ws['R5'] = "개선일정"
-    ws.merge_cells('R6:S6'); ws['R6'] = "개선책임자"
-
-    ws.merge_cells('T5:Y5'); ws['T5'] = "검토의견"
-    ws.merge_cells('T6:V6'); ws['T6'] = "공사담당\n공사팀장"
-    ws.merge_cells('W6:Y6'); ws['W6'] = "안전관리자\n보건관리자"
-
-    for r in range(5, 7):
+    for r in range(7, 9):
         ws.row_dimensions[r].height = 35
         for c in range(1, 26):
             cell = ws.cell(row=r, column=c)
             cell.alignment = center_align
             cell.font = bold_font
             cell.fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
+            
+    # 특정 셀(현재의 안전 보건 조치) 줄바꿈 방지
+    ws['G7'].alignment = center_nowrap_align
 
-    set_border(ws, 1, 5, 25, 6)
+    set_border(ws, 1, 7, 25, 8)
 
     # --- Data Definition ---
-    start_row = 7
-    current_row = 7
+    start_row = 9
+    current_row = 9
 
-    groups = {}
+    a_groups = []
+    current_a = None
+    current_a_count = 0
     for item in data:
         cat = item[0]
-        groups[cat] = groups.get(cat, 0) + 1
+        if current_a == cat:
+            current_a_count += 1
+        else:
+            if current_a is not None:
+                a_groups.append((current_a, current_a_count))
+            current_a = cat
+            current_a_count = 1
+    if current_a is not None:
+        a_groups.append((current_a, current_a_count))
         
     s_date_short = params['start_date'].replace("년 ", ".").replace("월 ", ".").replace("일", "")
     e_date_short = params['end_date'].replace("년 ", ".").replace("월 ", ".").replace("일", "")
@@ -185,74 +301,159 @@ def create_excel(process_name, output_filename, data, params):
     for item in data:
         freq = item[3]
         sev = item[4]
-        score = freq * sev
         
-        if score >= 6:
-            grade = "A"
-            priority = "O"
-        elif score >= 3:
-            grade = "B"
-            priority = "O"
-        else:
-            grade = "C"
-            priority = ""
+        # 위험성이 과도하게 높게 나오지 않도록 8점 초과(9점 이상)인 경우만 깎아서 최대 8점을 허용함
+        try:
+            f_val = int(freq)
+            s_val = int(sev)
+            while f_val * s_val > 8:
+                if f_val >= s_val:
+                    f_val -= 1
+                else:
+                    s_val -= 1
+            freq = f_val
+            sev = s_val
+            
+            # 조정된 점수에 맞춰 등급 자동 재계산 (예상되는 KOGAS 등급표 기준)
+            score = freq * sev
+            if score >= 9:
+                grade = "VI"
+            elif score >= 5:
+                grade = "V"
+            elif score == 4:
+                grade = "IV"
+            else:
+                grade = "III"
+                
+        except (ValueError, TypeError):
+            grade = item[5] if len(item) > 5 else ""
             
         ws.cell(row=current_row, column=1, value=item[0]).alignment = center_align
-        ws.cell(row=current_row, column=2, value="비파괴검사 구역\n및 야적장").alignment = center_align
+        ws.cell(row=current_row, column=2, value=get_risk_category(item[1])).alignment = center_align
+        
+        ws.merge_cells(f'C{current_row}:F{current_row}')
         ws.cell(row=current_row, column=3, value=item[1]).alignment = left_align
-        ws.cell(row=current_row, column=4, value=extract_disaster_type(item[1])).alignment = center_align
-        ws.cell(row=current_row, column=5, value=freq).alignment = center_align
-        ws.cell(row=current_row, column=6, value=sev).alignment = center_align
-        ws.cell(row=current_row, column=7, value=grade).alignment = center_align
-        ws.cell(row=current_row, column=8, value=priority).alignment = center_align
         
-        ws.merge_cells(f'I{current_row}:O{current_row}')
-        ws.cell(row=current_row, column=9, value=f"{item[6]}").alignment = left_align
+        ws.merge_cells(f'G{current_row}:I{current_row}')
+        ws.cell(row=current_row, column=7, value=item[2] if len(item) > 2 else "").alignment = left_align
         
-        ws.merge_cells(f'P{current_row}:Q{current_row}')
-        ws.cell(row=current_row, column=16, value=f"{s_date_short} -\n{e_date_short}\n\n{params['worker_count']}명").alignment = center_align
+        ws.cell(row=current_row, column=10, value=freq).alignment = center_align
+        ws.cell(row=current_row, column=11, value=sev).alignment = center_align
+        ws.cell(row=current_row, column=12, value=grade).alignment = center_align
+        
+        # 8점 미만(7점 이하)일 경우 위험성 대책을 아예 빈칸으로 지워버림
+        try:
+            score_val = int(freq) * int(sev)
+        except:
+            score_val = 0
+            
+        if score_val >= 8:
+            countermeasure = item[6] if len(item) > 6 else ""
+        else:
+            countermeasure = ""
+            
+        ws.merge_cells(f'M{current_row}:Q{current_row}')
+        ws.cell(row=current_row, column=13, value=countermeasure).alignment = left_align
         
         ws.merge_cells(f'R{current_row}:S{current_row}')
-        ws.cell(row=current_row, column=18, value=f"{s_date_short} -\n\n관리감독자").alignment = center_align
+        ws.cell(row=current_row, column=18, value="").alignment = center_align
+        ws.cell(row=current_row, column=20, value="").alignment = center_align
+        ws.cell(row=current_row, column=21, value="").alignment = center_align
+        ws.cell(row=current_row, column=22, value="").alignment = center_align
+        ws.cell(row=current_row, column=23, value="").alignment = center_align
         
-        ws.merge_cells(f'T{current_row}:V{current_row}')
-        ws.merge_cells(f'W{current_row}:Y{current_row}')
+        ws.merge_cells(f'X{current_row}:Y{current_row}')
+        ws.cell(row=current_row, column=24, value="").alignment = center_align
         
         ws.row_dimensions[current_row].height = 105
         current_row += 1
 
-    # 중복공정(중공종, 작업위치) 세로 병합 시 페이지 경계(16행, 26행 등)에서 분리하여 하단 테두리 누락 방지
-    r = 7
-    for cat, count in groups.items():
+    # 세부작업, 위험분류 세로 병합 (데이터 값 기준으로 병합 그룹핑 변경)
+    r = start_row
+    # item[0] (세부작업)과 item[1] 기반 위험분류가 같으면 같이 병합되도록 묶기
+    b_groups = []
+    current_b = None
+    current_b_count = 0
+    for item in data:
+        cat_a = item[0]
+        cat_b = get_risk_category(item[1])
+        pair = (cat_a, cat_b)
+        
+        if current_b == pair:
+            current_b_count += 1
+        else:
+            if current_b is not None:
+                b_groups.append((current_b, current_b_count))
+            current_b = pair
+            current_b_count = 1
+    if current_b is not None:
+        b_groups.append((current_b, current_b_count))
+
+    # A열(세부작업) 병합
+    a_r = start_row
+    for cat, count in a_groups:
         if count > 1:
-            current_start = r
-            current_end = r + count - 1
-            
-            # 모든 파일(RT, PT, UT, 컨테이너) 동일하게 1페이지 병합 기준을 15행으로 통일
-            first_page_break = 15
-            
+            current_start = a_r
+            current_end = a_r + count - 1
+            first_page_break = 17 # 늘어난 여백/배율로 인해 첫 페이지가 17행까지 인쇄됨
             while current_start <= current_end:
                 if current_start <= first_page_break:
                     page_end = first_page_break
                 else:
-                    page_idx = (current_start - (first_page_break + 1)) // 8
-                    page_end = first_page_break + (page_idx + 1) * 8
-                
+                    page_idx = (current_start - (first_page_break + 1)) // 9
+                    page_end = first_page_break + (page_idx + 1) * 9
                 merge_end = min(current_end, page_end)
-                
                 if current_start < merge_end:
                     ws.merge_cells(f'A{current_start}:A{merge_end}')
-                    ws.merge_cells(f'B{current_start}:B{merge_end}')
-                
                 current_start = merge_end + 1
-        r += count
+        a_r += count
+        
+    # B열(위험분류) 병합
+    b_r = start_row
+    for pair, count in b_groups:
+        if count > 1:
+            current_start = b_r
+            current_end = b_r + count - 1
+            first_page_break = 17
+            while current_start <= current_end:
+                if current_start <= first_page_break:
+                    page_end = first_page_break
+                else:
+                    page_idx = (current_start - (first_page_break + 1)) // 9
+                    page_end = first_page_break + (page_idx + 1) * 9
+                merge_end = min(current_end, page_end)
+                if current_start < merge_end:
+                    ws.merge_cells(f'B{current_start}:B{merge_end}')
+                current_start = merge_end + 1
+        b_r += count
 
     set_border(ws, 1, 7, 25, current_row - 1)
     
-    # 커진 셀 높이(105)에 맞춰 7행 이하 데이터 셀들의 글자 크기를 14pt로 확대
-    for row in ws.iter_rows(min_row=7, max_row=current_row - 1, min_col=1, max_col=25):
+    # 커진 셀 높이(105)에 맞춰 9행 이하 데이터 셀들의 글자 크기를 최대 16pt로 설정
+    for row in ws.iter_rows(min_row=9, max_row=current_row - 1, min_col=1, max_col=25):
         for cell in row:
-            cell.font = data_font
+            current_font_size = 16 # 기본 글자 크기를 16pt로 대폭 확대
+            if cell.value and isinstance(cell.value, str):
+                lines = cell.value.split('\n')
+                
+                # 열 너비에 따라 한 줄에 들어가는 글자 수가 다르므로 각각 다르게 계산
+                col_idx = cell.column
+                if col_idx in [3, 4, 5, 6]: # C~F열 (유해 위험 요인 파악 - 너비 85)
+                    estimated_lines = sum((len(line) // 40) + 1 for line in lines)
+                elif col_idx in [13, 14, 15, 16, 17]: # M~Q열 (위험성 감소 대책 - 너비 약 38)
+                    estimated_lines = sum((len(line) // 22) + 1 for line in lines)
+                else:
+                    estimated_lines = len(lines)
+                
+                # 105 높이에서 글자가 잘리지 않도록 줄 수에 따라 크기 대폭 축소 (특히 21행 M~Q열 등)
+                if estimated_lines >= 7:
+                    current_font_size = 11
+                elif estimated_lines >= 6:
+                    current_font_size = 12 # 21행 등 내용이 많은 곳은 12pt로 고정
+                elif estimated_lines >= 5:
+                    current_font_size = 14
+                    
+            cell.font = Font(name='맑은 고딕', size=current_font_size)
 
     try:
         wb.save(output_filename)
@@ -363,13 +564,24 @@ def load_data(sheet_name):
         
     ws = wb[sheet_name]
     data = []
+    last_cat = ""
+    last_risk = ""
+    
     for i, row in enumerate(ws.iter_rows(values_only=True)):
         if i == 0: continue
-        if not row[0] and not row[1]: continue
+        
+        # 원본 데이터 엑셀에 셀 병합이 되어 있어서 아래쪽 행이 빈칸(None)으로 읽히는 현상 방지
+        current_cat = row[0] if row[0] else last_cat
+        current_risk = row[1] if row[1] else last_risk
+        
+        if not current_cat and not current_risk: continue
+        
+        last_cat = current_cat
+        last_risk = current_risk
         
         item = [
-            row[0] or "",
-            row[1] or "",
+            current_cat,
+            current_risk,
             row[2] or "",
             row[3] if row[3] is not None else 1,
             row[4] if row[4] is not None else 1,
@@ -383,8 +595,8 @@ class RiskAssessmentApp:
     def __init__(self, root):
         self.root = root
         self.root.title("위험성 평가표 자동 생성기")
-        self.root.geometry("450x640")
-        self.root.resizable(False, False)
+        self.root.geometry("500x900")
+        self.root.resizable(True, True)
         
         style = ttk.Style()
         style.theme_use('clam')
@@ -446,6 +658,22 @@ class RiskAssessmentApp:
         self.ent_comment.insert(0, "안전을 최우선으로")
         self.ent_comment.grid(row=7, column=1, sticky='w', padx=5, pady=5)
         
+        # 8. 결재자 이름 설정
+        ttk.Label(form_frame, text="수급인 근로자:").grid(row=8, column=0, sticky='e', padx=5, pady=5)
+        self.ent_worker_name = ttk.Entry(form_frame, width=30)
+        self.ent_worker_name.insert(0, "유상훈")
+        self.ent_worker_name.grid(row=8, column=1, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(form_frame, text="수급인 작성자:").grid(row=9, column=0, sticky='e', padx=5, pady=5)
+        self.ent_writer_name = ttk.Entry(form_frame, width=30)
+        self.ent_writer_name.insert(0, "주진철")
+        self.ent_writer_name.grid(row=9, column=1, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(form_frame, text="수급인 승인자:").grid(row=10, column=0, sticky='e', padx=5, pady=5)
+        self.ent_approver_name = ttk.Entry(form_frame, width=30)
+        self.ent_approver_name.insert(0, "강신태")
+        self.ent_approver_name.grid(row=10, column=1, sticky='w', padx=5, pady=5)
+        
         # Checkbox Frame for selections
         chk_frame = ttk.LabelFrame(main_frame, text="생성 대상 선택", padding=15)
         chk_frame.pack(fill='x', pady=10)
@@ -489,7 +717,10 @@ class RiskAssessmentApp:
             'end_date': self.ent_end_date.get().strip(),
             'worker_count': self.ent_worker_count.get().strip(),
             'eval_type': self.cb_eval_type.get(),
-            'director_comment': self.ent_comment.get().strip()
+            'director_comment': self.ent_comment.get().strip(),
+            'worker_name': self.ent_worker_name.get().strip(),
+            'writer_name': self.ent_writer_name.get().strip(),
+            'approver_name': self.ent_approver_name.get().strip()
         }
         config = load_config()
         initial_dir = config.get("last_output_dir", os.path.dirname(os.path.abspath(__file__)))
