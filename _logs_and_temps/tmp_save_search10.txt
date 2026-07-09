@@ -1,5 +1,0 @@
-9566: ttk.Label(row2, text="  제경비율(%):").pack(side='left', padx=(2,0))
-9568: ttk.Label(row2, text=" 기술료율(%):").pack(side='left')
-13671: if '제경비율' in record: self.ndt_overhead_var.set(float(record['제경비율']) if record['제경비율'] else 80.0)
-13672: if '기술료율' in record: self.ndt_tech_var.set(float(record['기술료율']) if record['기술료율'] else 5.86)
-18161: '제경비율': '제경비', '기술료율': '기술료',

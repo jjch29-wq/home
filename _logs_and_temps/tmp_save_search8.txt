@@ -1,1 +1,0 @@
-10170: def _on_daily_usage_select(self, event):

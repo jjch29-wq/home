@@ -1,3 +1,0 @@
-641: btn_save = ttk.Button(self.scrollable_frame, text="🚗 차량 정보만 개별 저장",
-3730: btn_save = ttk.Button(main_frame, text="변경사항 저장", command=on_save)
-13821: def add_daily_usage_entry(self):

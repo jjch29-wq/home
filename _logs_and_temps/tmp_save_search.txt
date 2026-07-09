@@ -1,4 +1,0 @@
-9331: btn_save_sess = ttk.Button(row2, text="💾 세션 저장", command=self.save_form_session, width=12)
-10015: self.btn_daily_save_list = ttk.Button(btn_row, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
-10307: ttk.Button(top_btn_frame, text="저장/수정", command=self.save_budget_entry).pack(side='left', padx=5)
-16690: def save_daily_usage_edits(self, df_idx, new_data):
