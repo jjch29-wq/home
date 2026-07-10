@@ -73,21 +73,12 @@ class TBMFormTab(ttk.Frame):
         self.var_wn_ut = tk.BooleanVar()
         self.var_wn_pt = tk.BooleanVar()
         
-        def update_work_name():
-            names = []
-            if self.var_wn_rt.get(): names.append("방사선투과검사")
-            if self.var_wn_ut.get(): names.append("초음파탐상검사")
-            if self.var_wn_pt.get(): names.append("침투탐상검사")
-            self.ent_work_name.delete(0, tk.END)
-            self.ent_work_name.insert(0, ", ".join(names))
-            
-        ttk.Checkbutton(f_work_name, text="RT", variable=self.var_wn_rt, command=update_work_name).pack(side=tk.LEFT, padx=(0,5))
-        ttk.Checkbutton(f_work_name, text="UT", variable=self.var_wn_ut, command=update_work_name).pack(side=tk.LEFT, padx=5)
-        ttk.Checkbutton(f_work_name, text="PT", variable=self.var_wn_pt, command=update_work_name).pack(side=tk.LEFT, padx=(5,10))
+        ttk.Checkbutton(f_work_name, text="RT", variable=self.var_wn_rt, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,5))
+        ttk.Checkbutton(f_work_name, text="UT", variable=self.var_wn_ut, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=5)
+        ttk.Checkbutton(f_work_name, text="PT", variable=self.var_wn_pt, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(5,10))
         
         self.ent_work_name = ttk.Entry(f_work_name, width=40)
         self.ent_work_name.pack(side=tk.LEFT)
-        update_work_name()
         
         ttk.Label(f_basic, text="작업내용:").grid(row=2, column=0, sticky=tk.W, pady=2)
         self.ent_work_content = ttk.Entry(f_basic, width=50)
@@ -110,35 +101,19 @@ class TBMFormTab(ttk.Frame):
         ttk.Label(f_risk, text="대책", font=("", 9, "bold")).grid(row=0, column=1, sticky=tk.W)
         
         self.hazards = []
-        default_hazards = [
-            "(방사선 피폭) 방사선 투과검사 중 피폭",
-            "(추락) 지상 2m 이상 배관 위 검사",
-            "(질식) 배관 내부 진입 시 산소 결핍"
-        ]
-        default_counters = [
-            "콜리메이터 사용, 통제구역 설정/감시자 배치",
-            "고소작업 시 2인 1조 필수, 안전대 체결",
-            "배관내부 인원 진입 금지 (크롤러 대체)"
-        ]
-        
         for i in range(3):
             ent_h = ttk.Entry(f_risk, width=40)
-            ent_h.insert(0, default_hazards[i])
             ent_c = ttk.Entry(f_risk, width=40)
-            ent_c.insert(0, default_counters[i])
-            
             ent_h.grid(row=i+1, column=0, pady=2, padx=2)
             ent_c.grid(row=i+1, column=1, pady=2, padx=2)
             self.hazards.append((ent_h, ent_c))
 
         ttk.Label(f_risk, text="중점위험요인 선정:").grid(row=4, column=0, sticky=tk.W, pady=(10,2))
         self.ent_key_hazard = ttk.Entry(f_risk, width=40)
-        self.ent_key_hazard.insert(0, "(방사선 피폭) 방사선 투과검사 중 피폭")
         self.ent_key_hazard.grid(row=5, column=0, sticky=tk.W, padx=2)
 
         ttk.Label(f_risk, text="중점위험 대책:").grid(row=4, column=1, sticky=tk.W, pady=(10,2))
         self.ent_key_counter = ttk.Entry(f_risk, width=40)
-        self.ent_key_counter.insert(0, "콜리메이터 사용, 통제구역 설정 및 감시자 배치")
         self.ent_key_counter.grid(row=5, column=1, sticky=tk.W, padx=2)
         
         # 3. 리더 및 점검
@@ -182,6 +157,66 @@ class TBMFormTab(ttk.Frame):
         
         btn_export = ttk.Button(f_btn, text="엑셀 양식 출력하기", command=self.export_excel)
         btn_export.pack(ipady=5, ipadx=20)
+        
+        # Initialize
+        self.update_work_and_hazards()
+
+    def update_work_and_hazards(self):
+        names = []
+        selected_methods = []
+        if self.var_wn_rt.get(): 
+            names.append("방사선투과검사")
+            selected_methods.append('RT')
+        if self.var_wn_ut.get(): 
+            names.append("초음파탐상검사")
+            selected_methods.append('UT')
+        if self.var_wn_pt.get(): 
+            names.append("침투탐상검사")
+            selected_methods.append('PT')
+            
+        self.ent_work_name.delete(0, tk.END)
+        self.ent_work_name.insert(0, ", ".join(names))
+        
+        rt_haz = [("(방사선 피폭) 방사선 투과검사 중 피폭", "콜리메이터 사용, 통제구역 설정/감시자 배치"), 
+                  ("(추락) 지상 2m 이상 배관 위 검사", "고소작업 시 2인 1조 필수, 안전대 체결"),
+                  ("(질식) 배관 내부 진입 시 산소 결핍", "배관내부 인원 진입 금지 (크롤러 대체)")]
+                  
+        ut_haz = [("(추락/전도) 검사 부위 접근 중 미끄러짐", "안전 통로 확보 및 작업장 정리정돈"),
+                  ("(충돌) 좁은 공간 내 타 공정 장비 충돌", "안전감독관 사전 조율 후 작업 통제"),
+                  ("(근골격계) 불안정한 자세로 장시간 검사", "작업 전후 스트레칭 및 휴식시간 부여")]
+                  
+        pt_haz = [("(화학물질) PT 용제 취급 시 흡입/피부접촉", "MSDS 비치 및 방독마스크, 장갑 착용"),
+                  ("(화재) 가연성 세척액 사용으로 인한 화재", "화기 구역 분리, 소화기 비치"),
+                  ("(충돌) 좁은 공간 내 타 공정 장비 충돌", "안전감독관 사전 조율 후 작업 통제")]
+                  
+        final_hazards = []
+        if len(selected_methods) == 0:
+            pass
+        elif len(selected_methods) == 1:
+            if 'RT' in selected_methods: final_hazards = rt_haz[:3]
+            if 'UT' in selected_methods: final_hazards = ut_haz[:3]
+            if 'PT' in selected_methods: final_hazards = pt_haz[:3]
+        elif len(selected_methods) == 2:
+            m1, m2 = selected_methods[0], selected_methods[1]
+            list1 = rt_haz if m1 == 'RT' else (ut_haz if m1 == 'UT' else pt_haz)
+            list2 = rt_haz if m2 == 'RT' else (ut_haz if m2 == 'UT' else pt_haz)
+            final_hazards = [list1[0], list2[0], list1[1]]
+        elif len(selected_methods) == 3:
+            final_hazards = [rt_haz[0], ut_haz[0], pt_haz[0]]
+            
+        for i in range(3):
+            self.hazards[i][0].delete(0, tk.END)
+            self.hazards[i][1].delete(0, tk.END)
+            if i < len(final_hazards):
+                self.hazards[i][0].insert(0, final_hazards[i][0])
+                self.hazards[i][1].insert(0, final_hazards[i][1])
+                
+        self.ent_key_hazard.delete(0, tk.END)
+        self.ent_key_counter.delete(0, tk.END)
+        if final_hazards:
+            self.ent_key_hazard.insert(0, final_hazards[0][0])
+            # Remove '☐' or checkbox marks if any, and extract just the text for key hazard
+            self.ent_key_counter.insert(0, final_hazards[0][1])
 
     def export_excel(self):
         try:
