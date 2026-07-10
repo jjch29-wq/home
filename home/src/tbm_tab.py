@@ -119,9 +119,10 @@ class TBMFormTab(ttk.Frame):
         f_leader_sub.pack(fill=tk.X, pady=2)
         ttk.Label(f_leader_sub, text="[TBM 리더]  소속:").pack(side=tk.LEFT)
         self.ent_leader_dept = ttk.Entry(f_leader_sub, width=15)
+        self.ent_leader_dept.insert(0, "서울검사(주)")
         self.ent_leader_dept.pack(side=tk.LEFT, padx=5)
         ttk.Label(f_leader_sub, text="직책:").pack(side=tk.LEFT)
-        self.ent_leader_title = ttk.Entry(f_leader_sub, width=10)
+        self.ent_leader_title = ttk.Combobox(f_leader_sub, width=10, values=["현장소장", "부장", "차장", "과장", "대리", "계장", "주임"])
         self.ent_leader_title.pack(side=tk.LEFT, padx=5)
         ttk.Label(f_leader_sub, text="성명:").pack(side=tk.LEFT)
         self.ent_leader_name = ttk.Entry(f_leader_sub, width=15)
@@ -564,7 +565,7 @@ class TBMFormTab(ttk.Frame):
         set_ent(self.ent_key_hazard, data.get('key_hazard', ''))
         set_ent(self.ent_key_counter, data.get('key_counter', ''))
         
-        set_ent(self.ent_leader_dept, data.get('leader_dept', ''))
+        set_ent(self.ent_leader_dept, data.get('leader_dept', '서울검사(주)'))
         set_ent(self.ent_leader_title, data.get('leader_title', ''))
         set_ent(self.ent_leader_name, data.get('leader_name', ''))
         
