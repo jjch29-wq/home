@@ -111,7 +111,7 @@ class WorkApprovalApp:
         row_idx += 1
 
         # 4. 기타 진행 현황 (자동 계산)
-        lbl_sec3 = ttk.Label(form_frame, text="3. 진행 현황 (목표량: RT 19,125매, UT 319.02M, PT 319.01M)", font=('Malgun Gothic', 10, 'bold'))
+        lbl_sec3 = ttk.Label(form_frame, text="3. 진행 현황 (목표량: RT 24,536매, UT 319.02M, PT 338.63M)", font=('Malgun Gothic', 10, 'bold'))
         lbl_sec3.grid(row=row_idx, column=0, columnspan=2, sticky='w', pady=(10, 5))
         row_idx += 1
         
@@ -378,9 +378,9 @@ class WorkApprovalApp:
 
     def generate_files(self):
         # Targets
-        TARGET_RT = 19125
+        TARGET_RT = 24536
         TARGET_UT = 319.02
-        TARGET_PT = 319.01
+        TARGET_PT = 338.63
         
         rt_prev = self.parse_float(self.ent_rt_prev.get())
         rt_today = self.parse_float(self.ent_rt_today.get())
