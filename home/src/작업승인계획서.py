@@ -16,8 +16,21 @@ class WorkApprovalApp:
         style = ttk.Style()
         style.theme_use('clam')
         
-        main_frame = ttk.Frame(self.root, padding=15)
-        main_frame.pack(fill='both', expand=True)
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill='both', expand=True, padx=5, pady=5)
+        
+        main_frame = ttk.Frame(self.notebook, padding=15)
+        self.notebook.add(main_frame, text="작업승인계획서")
+        
+        # Add TBM Form Tab
+        try:
+            from tbm_tab import TBMFormTab
+            self.tab_tbm = ttk.Frame(self.notebook)
+            self.notebook.add(self.tab_tbm, text='TBM 회의록')
+            self.tbm_manager = TBMFormTab(self.tab_tbm, main_app=self)
+            self.tbm_manager.pack(fill='both', expand=True)
+        except Exception as e:
+            print(f"TBM 모듈 로드 실패: {e}")
         
         # Title
         ttk.Label(main_frame, text="[서식 3] 작업승인계획서 생성기", font=('Malgun Gothic', 16, 'bold')).pack(pady=(0, 15))

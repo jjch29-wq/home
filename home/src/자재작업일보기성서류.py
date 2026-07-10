@@ -3357,6 +3357,16 @@ class MaterialManager:
         self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
         self.setup_ndt_billing_tab()
         
+        # Tab 10: TBM Form Generator
+        self.tab_tbm = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_tbm, text='TBM 회의록')
+        try:
+            from tbm_tab import TBMFormTab
+            self.tbm_manager = TBMFormTab(self.tab_tbm, main_app=self)
+            self.tbm_manager.pack(fill='both', expand=True)
+        except Exception as e:
+            ttk.Label(self.tab_tbm, text=f"TBM 모듈 로드 실패: {e}").pack(pady=20)
+        
         # Select default tab instantly to prevent flicker
         self.notebook.select(self.tab_daily_usage)
         
