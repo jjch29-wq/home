@@ -595,7 +595,7 @@ class RiskAssessmentApp:
     def __init__(self, root):
         self.root = root
         self.root.title("위험성 평가표 자동 생성기")
-        self.root.geometry("500x900")
+        self.root.geometry("500x720")
         self.root.resizable(True, True)
         
         style = ttk.Style()
@@ -613,64 +613,54 @@ class RiskAssessmentApp:
         
         # 1. 현장명
         ttk.Label(form_frame, text="현 장 명:").grid(row=0, column=0, sticky='e', padx=5, pady=5)
-        self.ent_site = ttk.Entry(form_frame, width=30)
+        self.ent_site = ttk.Entry(form_frame, width=45)
         self.ent_site.insert(0, "가산~가평 천연가스 공급시설 건설공사")
         self.ent_site.grid(row=0, column=1, sticky='w', padx=5, pady=5)
         
         # 2. 협력업체
         ttk.Label(form_frame, text="협력업체:").grid(row=1, column=0, sticky='e', padx=5, pady=5)
-        self.ent_company = ttk.Entry(form_frame, width=30)
+        self.ent_company = ttk.Entry(form_frame, width=45)
         self.ent_company.insert(0, "서울검사(주)")
         self.ent_company.grid(row=1, column=1, sticky='w', padx=5, pady=5)
         
         # 3. 작성일자
         ttk.Label(form_frame, text="작성일자:").grid(row=2, column=0, sticky='e', padx=5, pady=5)
-        self.ent_write_date = ttk.Entry(form_frame, width=30)
+        self.ent_write_date = ttk.Entry(form_frame, width=45)
         self.ent_write_date.insert(0, datetime.now().strftime("%Y년 %m월 %d일"))
         self.ent_write_date.grid(row=2, column=1, sticky='w', padx=5, pady=5)
         
         # 4. 관리기간
         ttk.Label(form_frame, text="시작일자:").grid(row=3, column=0, sticky='e', padx=5, pady=5)
-        self.ent_start_date = ttk.Entry(form_frame, width=30)
+        self.ent_start_date = ttk.Entry(form_frame, width=45)
         self.ent_start_date.insert(0, "2026년 06월 16일")
         self.ent_start_date.grid(row=3, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="종료일자:").grid(row=4, column=0, sticky='e', padx=5, pady=5)
-        self.ent_end_date = ttk.Entry(form_frame, width=30)
+        self.ent_end_date = ttk.Entry(form_frame, width=45)
         self.ent_end_date.insert(0, "2026년 06월 30일")
         self.ent_end_date.grid(row=4, column=1, sticky='w', padx=5, pady=5)
         
-        # 5. 작업인원
-        ttk.Label(form_frame, text="작업인원:").grid(row=5, column=0, sticky='e', padx=5, pady=5)
-        self.ent_worker_count = ttk.Entry(form_frame, width=30)
-        self.ent_worker_count.insert(0, "10")
-        self.ent_worker_count.grid(row=5, column=1, sticky='w', padx=5, pady=5)
         
         # 6. 평가구분
         ttk.Label(form_frame, text="평가구분:").grid(row=6, column=0, sticky='e', padx=5, pady=5)
-        self.cb_eval_type = ttk.Combobox(form_frame, values=["최초평가", "수시평가", "정기평가"], state='readonly', width=27)
+        self.cb_eval_type = ttk.Combobox(form_frame, values=["최초평가", "수시평가", "정기평가"], state='readonly', width=42)
         self.cb_eval_type.set("최초평가")
         self.cb_eval_type.grid(row=6, column=1, sticky='w', padx=5, pady=5)
         
-        # 7. 소장 의견
-        ttk.Label(form_frame, text="소장의견:").grid(row=7, column=0, sticky='e', padx=5, pady=5)
-        self.ent_comment = ttk.Entry(form_frame, width=30)
-        self.ent_comment.insert(0, "안전을 최우선으로")
-        self.ent_comment.grid(row=7, column=1, sticky='w', padx=5, pady=5)
         
         # 8. 결재자 이름 설정
         ttk.Label(form_frame, text="수급인 근로자:").grid(row=8, column=0, sticky='e', padx=5, pady=5)
-        self.ent_worker_name = ttk.Entry(form_frame, width=30)
+        self.ent_worker_name = ttk.Entry(form_frame, width=45)
         self.ent_worker_name.insert(0, "유상훈")
         self.ent_worker_name.grid(row=8, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="수급인 작성자:").grid(row=9, column=0, sticky='e', padx=5, pady=5)
-        self.ent_writer_name = ttk.Entry(form_frame, width=30)
+        self.ent_writer_name = ttk.Entry(form_frame, width=45)
         self.ent_writer_name.insert(0, "주진철")
         self.ent_writer_name.grid(row=9, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="수급인 승인자:").grid(row=10, column=0, sticky='e', padx=5, pady=5)
-        self.ent_approver_name = ttk.Entry(form_frame, width=30)
+        self.ent_approver_name = ttk.Entry(form_frame, width=45)
         self.ent_approver_name.insert(0, "강신태")
         self.ent_approver_name.grid(row=10, column=1, sticky='w', padx=5, pady=5)
         
@@ -715,9 +705,7 @@ class RiskAssessmentApp:
             'write_date': self.ent_write_date.get().strip(),
             'start_date': self.ent_start_date.get().strip(),
             'end_date': self.ent_end_date.get().strip(),
-            'worker_count': self.ent_worker_count.get().strip(),
             'eval_type': self.cb_eval_type.get(),
-            'director_comment': self.ent_comment.get().strip(),
             'worker_name': self.ent_worker_name.get().strip(),
             'writer_name': self.ent_writer_name.get().strip(),
             'approver_name': self.ent_approver_name.get().strip()
