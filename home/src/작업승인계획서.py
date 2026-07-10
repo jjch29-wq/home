@@ -209,6 +209,7 @@ class WorkApprovalApp:
         
         # Load saved config
         self.load_config()
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def get_history_path(self):
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work_approval_history.json')
@@ -334,16 +335,34 @@ class WorkApprovalApp:
                 cur_pt_total = cur_pt_total + p(next_data.get('pt_today', '0'))
                 
         self.save_history_data(history)
-        self.ent_date['values'] = sorted(list(history.keys()), reverse=True)
+        
+        dates = [k for k in history.keys() if not k.startswith('_')]
+        self.ent_date['values'] = sorted(dates, reverse=True)
+
+    def on_close(self):
+        history = self.load_history_data()
+        history['_window_geometry'] = self.root.geometry()
+        self.save_history_data(history)
+        self.root.destroy()
 
     def load_config(self):
         history = self.load_history_data()
         if not history:
             return
+
+        if '_window_geometry' in history:
+            try:
+                self.root.geometry(history['_window_geometry'])
+            except:
+                pass
+
+        dates = [k for k in history.keys() if not k.startswith('_')]
+        if not dates:
+            return
             
-        sorted_dates = sorted(list(history.keys()), reverse=True)
+        sorted_dates = sorted(dates, reverse=True)
         self.ent_date['values'] = sorted_dates
-        
+
         most_recent_date = sorted_dates[0]
         self.ent_date.delete(0, tk.END)
         self.ent_date.insert(0, most_recent_date)
