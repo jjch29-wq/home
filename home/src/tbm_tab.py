@@ -65,8 +65,29 @@ class TBMFormTab(ttk.Frame):
         ttk.Radiobutton(f_basic, text="아니오", variable=self.var_same_date, value="아니오").grid(row=0, column=8)
         
         ttk.Label(f_basic, text="작 업 명:").grid(row=1, column=0, sticky=tk.W, pady=2)
-        self.ent_work_name = ttk.Entry(f_basic, width=50)
-        self.ent_work_name.grid(row=1, column=1, columnspan=5, sticky=tk.W, pady=2)
+        
+        f_work_name = ttk.Frame(f_basic)
+        f_work_name.grid(row=1, column=1, columnspan=7, sticky=tk.W, pady=2)
+        
+        self.var_wn_rt = tk.BooleanVar(value=True)
+        self.var_wn_ut = tk.BooleanVar()
+        self.var_wn_pt = tk.BooleanVar()
+        
+        def update_work_name():
+            names = []
+            if self.var_wn_rt.get(): names.append("방사선투과검사")
+            if self.var_wn_ut.get(): names.append("초음파탐상검사")
+            if self.var_wn_pt.get(): names.append("침투탐상검사")
+            self.ent_work_name.delete(0, tk.END)
+            self.ent_work_name.insert(0, ", ".join(names))
+            
+        ttk.Checkbutton(f_work_name, text="RT", variable=self.var_wn_rt, command=update_work_name).pack(side=tk.LEFT, padx=(0,5))
+        ttk.Checkbutton(f_work_name, text="UT", variable=self.var_wn_ut, command=update_work_name).pack(side=tk.LEFT, padx=5)
+        ttk.Checkbutton(f_work_name, text="PT", variable=self.var_wn_pt, command=update_work_name).pack(side=tk.LEFT, padx=(5,10))
+        
+        self.ent_work_name = ttk.Entry(f_work_name, width=40)
+        self.ent_work_name.pack(side=tk.LEFT)
+        update_work_name()
         
         ttk.Label(f_basic, text="작업내용:").grid(row=2, column=0, sticky=tk.W, pady=2)
         self.ent_work_content = ttk.Entry(f_basic, width=50)
