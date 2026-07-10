@@ -31,6 +31,24 @@ class WorkApprovalApp:
             self.tbm_manager.pack(fill='both', expand=True)
         except Exception as e:
             print(f"TBM 모듈 로드 실패: {e}")
+            
+        # Add Risk Assessment Tab
+        try:
+            import importlib.util
+            import sys
+            
+            # 위험성 평가표 all.py 파일이 띄어쓰기가 있어 importlib 사용
+            module_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "위험성 평가표 all.py")
+            spec = importlib.util.spec_from_file_location("risk_module", module_path)
+            risk_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(risk_module)
+            
+            self.tab_risk = ttk.Frame(self.notebook)
+            self.notebook.add(self.tab_risk, text='위험성 평가표')
+            # The RiskAssessmentApp doesn't have a pack method for itself, it packs into root
+            self.risk_manager = risk_module.RiskAssessmentApp(self.tab_risk)
+        except Exception as e:
+            print(f"위험성 평가표 모듈 로드 실패: {e}")
         
         # Title
         ttk.Label(main_frame, text="[서식 3] 작업승인계획서 생성기", font=('Malgun Gothic', 16, 'bold')).pack(pady=(0, 15))

@@ -594,9 +594,12 @@ def load_data(sheet_name):
 class RiskAssessmentApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("위험성 평가표 자동 생성기")
-        self.root.geometry("500x720")
-        self.root.resizable(True, True)
+        try:
+            self.root.title("위험성 평가표 자동 생성기")
+            self.root.geometry("500x720")
+            self.root.resizable(True, True)
+        except AttributeError:
+            pass
         
         style = ttk.Style()
         style.theme_use('clam')
