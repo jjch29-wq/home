@@ -3,51 +3,46 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import datetime
 import win32com.client as win32
-try:
-    from tkcalendar import DateEntry
-except ImportError:
-    DateEntry = None
+import json
 
 class TBMFormTab(ttk.Frame):
     def __init__(self, parent, main_app=None):
         super().__init__(parent)
         self.main_app = main_app
         self.create_widgets()
-        
+
     def create_widgets(self):
         canvas = tk.Canvas(self)
         scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
         scroll_frame = ttk.Frame(canvas)
-        
+
         scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-        
+
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-        
+
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
-        
+
         self.build_ui(scroll_frame)
 
     def build_ui(self, parent):
         lbl_title = tk.Label(parent, text="작업 전 안전점검회의(TBM) 회의록 입력", font=("맑은 고딕", 16, "bold"))
         lbl_title.pack(pady=10)
-        
+
         # 1. 기본 정보
         f_basic = ttk.LabelFrame(parent, text="1. 기본 정보", padding=10)
         f_basic.pack(fill=tk.X, padx=10, pady=5)
-        
+
         ttk.Label(f_basic, text="TBM 일자:").grid(row=0, column=0, sticky=tk.W, pady=2)
-        if DateEntry:
-            self.ent_date = DateEntry(f_basic, width=12, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
-            self.ent_date.grid(row=0, column=1, sticky=tk.W, pady=2)
-        else:
-            self.ent_date = ttk.Entry(f_basic, width=15)
-            self.ent_date.insert(0, datetime.datetime.now().strftime("%Y-%m-%d"))
-            self.ent_date.grid(row=0, column=1, sticky=tk.W, pady=2)
+        
+        self.ent_date = ttk.Combobox(f_basic, width=15)
+        self.ent_date.insert(0, datetime.datetime.now().strftime("%Y-%m-%d"))
+        self.ent_date.grid(row=0, column=1, sticky=tk.W, pady=2)
+        self.ent_date.bind('<<ComboboxSelected>>', self.on_date_select)
             
         ttk.Label(f_basic, text="시작 시간:").grid(row=0, column=2, sticky=tk.W, padx=(10,0))
         self.ent_start_time = ttk.Entry(f_basic, width=10)
@@ -160,6 +155,7 @@ class TBMFormTab(ttk.Frame):
         
         # Initialize
         self.update_work_and_hazards()
+        self.load_config()
 
     def update_work_and_hazards(self):
         names = []
@@ -441,6 +437,7 @@ class TBMFormTab(ttk.Frame):
             
             if filepath:
                 filepath = filepath.replace("/", "\\")
+                self.save_config()
                 wb.SaveAs(filepath)
                 wb.Close()
                 excel.Quit()
@@ -454,3 +451,123 @@ class TBMFormTab(ttk.Frame):
             messagebox.showerror("오류", f"엑셀 생성 중 오류가 발생했습니다.\n{e}")
             try: excel.Quit()
             except: pass
+
+    def get_history_path(self):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tbm_history.json')
+
+    def load_history_data(self):
+        path = self.get_history_path()
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except:
+                pass
+        return {}
+
+    def save_history_data(self, history):
+        try:
+            with open(self.get_history_path(), 'w', encoding='utf-8') as f:
+                json.dump(history, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"Failed to save TBM history: {e}")
+
+    def on_date_select(self, event=None):
+        date_str = self.ent_date.get()
+        history = self.load_history_data()
+        if date_str in history:
+            self.populate_ui(history[date_str], date_str)
+
+    def save_config(self):
+        history = self.load_history_data()
+        current_date = self.ent_date.get()
+        
+        data = {
+            'start_time': self.ent_start_time.get(),
+            'end_time': self.ent_end_time.get(),
+            'same_date': self.var_same_date.get(),
+            'wn_rt': self.var_wn_rt.get(),
+            'wn_ut': self.var_wn_ut.get(),
+            'wn_pt': self.var_wn_pt.get(),
+            'work_content': self.ent_work_content.get(),
+            'location': self.ent_location.get(),
+            'risk_eval': self.var_risk_eval.get(),
+            'hazards': [(h.get(), c.get()) for h, c in self.hazards],
+            'key_hazard': self.ent_key_hazard.get(),
+            'key_counter': self.ent_key_counter.get(),
+            'leader_dept': self.ent_leader_dept.get(),
+            'leader_title': self.ent_leader_title.get(),
+            'leader_name': self.ent_leader_name.get(),
+            'daily_check': self.ent_daily_check.get("1.0", tk.END).strip(),
+            'end_meeting': self.ent_end_meeting.get("1.0", tk.END).strip(),
+            'attendees': self.ent_attendees.get()
+        }
+        
+        history[current_date] = data
+        self.save_history_data(history)
+        self.ent_date['values'] = sorted(list(history.keys()), reverse=True)
+
+    def load_config(self):
+        history = self.load_history_data()
+        if not history:
+            return
+            
+        sorted_dates = sorted(list(history.keys()), reverse=True)
+        self.ent_date['values'] = sorted_dates
+        
+        most_recent_date = sorted_dates[0]
+        self.ent_date.delete(0, tk.END)
+        self.ent_date.insert(0, most_recent_date)
+        
+        self.populate_ui(history[most_recent_date], most_recent_date)
+
+    def populate_ui(self, data, date_str=None):
+        def set_ent(ent, val):
+            if val is not None:
+                ent.delete(0, tk.END)
+                ent.insert(0, str(val))
+                
+        def set_txt(txt, val):
+            if val is not None:
+                txt.delete('1.0', tk.END)
+                txt.insert('1.0', str(val))
+        
+        if date_str:
+            set_ent(self.ent_date, date_str)
+            
+        set_ent(self.ent_start_time, data.get('start_time', '08:00'))
+        set_ent(self.ent_end_time, data.get('end_time', '08:15'))
+        self.var_same_date.set(data.get('same_date', '예'))
+        
+        self.var_wn_rt.set(data.get('wn_rt', True))
+        self.var_wn_ut.set(data.get('wn_ut', False))
+        self.var_wn_pt.set(data.get('wn_pt', False))
+        names = []
+        if self.var_wn_rt.get(): names.append("방사선투과검사")
+        if self.var_wn_ut.get(): names.append("초음파탐상검사")
+        if self.var_wn_pt.get(): names.append("침투탐상검사")
+        set_ent(self.ent_work_name, ", ".join(names))
+        
+        set_ent(self.ent_work_content, data.get('work_content', ''))
+        set_ent(self.ent_location, data.get('location', ''))
+        self.var_risk_eval.set(data.get('risk_eval', '예'))
+        
+        saved_hazards = data.get('hazards', [])
+        for i in range(3):
+            if i < len(saved_hazards):
+                set_ent(self.hazards[i][0], saved_hazards[i][0])
+                set_ent(self.hazards[i][1], saved_hazards[i][1])
+            else:
+                set_ent(self.hazards[i][0], '')
+                set_ent(self.hazards[i][1], '')
+                
+        set_ent(self.ent_key_hazard, data.get('key_hazard', ''))
+        set_ent(self.ent_key_counter, data.get('key_counter', ''))
+        
+        set_ent(self.ent_leader_dept, data.get('leader_dept', ''))
+        set_ent(self.ent_leader_title, data.get('leader_title', ''))
+        set_ent(self.ent_leader_name, data.get('leader_name', ''))
+        
+        set_txt(self.ent_daily_check, data.get('daily_check', '특이사항 없음.'))
+        set_txt(self.ent_end_meeting, data.get('end_meeting', '안전하게 작업 종료함.'))
+        set_ent(self.ent_attendees, data.get('attendees', ''))
