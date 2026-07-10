@@ -89,19 +89,35 @@ class TBMFormTab(ttk.Frame):
         ttk.Label(f_risk, text="대책", font=("", 9, "bold")).grid(row=0, column=1, sticky=tk.W)
         
         self.hazards = []
+        default_hazards = [
+            "(방사선 피폭) 방사선 투과검사 중 피폭",
+            "(추락) 지상 2m 이상 배관 위 검사",
+            "(질식) 배관 내부 진입 시 산소 결핍"
+        ]
+        default_counters = [
+            "콜리메이터 사용, 통제구역 설정/감시자 배치",
+            "고소작업 시 2인 1조 필수, 안전대 체결",
+            "배관내부 인원 진입 금지 (크롤러 대체)"
+        ]
+        
         for i in range(3):
             ent_h = ttk.Entry(f_risk, width=40)
+            ent_h.insert(0, default_hazards[i])
             ent_c = ttk.Entry(f_risk, width=40)
+            ent_c.insert(0, default_counters[i])
+            
             ent_h.grid(row=i+1, column=0, pady=2, padx=2)
             ent_c.grid(row=i+1, column=1, pady=2, padx=2)
             self.hazards.append((ent_h, ent_c))
-            
+
         ttk.Label(f_risk, text="중점위험요인 선정:").grid(row=4, column=0, sticky=tk.W, pady=(10,2))
         self.ent_key_hazard = ttk.Entry(f_risk, width=40)
+        self.ent_key_hazard.insert(0, "(방사선 피폭) 방사선 투과검사 중 피폭")
         self.ent_key_hazard.grid(row=5, column=0, sticky=tk.W, padx=2)
-        
+
         ttk.Label(f_risk, text="중점위험 대책:").grid(row=4, column=1, sticky=tk.W, pady=(10,2))
         self.ent_key_counter = ttk.Entry(f_risk, width=40)
+        self.ent_key_counter.insert(0, "콜리메이터 사용, 통제구역 설정 및 감시자 배치")
         self.ent_key_counter.grid(row=5, column=1, sticky=tk.W, padx=2)
         
         # 3. 리더 및 점검
