@@ -78,15 +78,15 @@ def create_excel(process_name, output_filename, data, params):
     ws.page_margins.bottom = 0.3
     ws.page_margins.header = 0.2
     ws.page_margins.footer = 0.2
-    
-    # 인쇄 시 페이지 가로 정가운데 맞춤 (좌우 여백 동일하게)
+    # 인쇄 시 페이지 정가운데 맞춤 (좌우, 상하 여백 동일하게)
     ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = True
     
     ws.print_title_rows = '7:8' # 7~8행 인쇄 제목으로 반복
 
     # Columns width setup (25 columns: A to Y)
     # 총 너비를 기존보다 아주 살짝 더 넓게(약 261) 설정하여 엑셀 자동 배율이 안전하게 축소되도록 유도 (16행 밀림 방지)
-    widths = [12.5, 12, 66, 9, 5, 5, 9] # A:G
+    widths = [12.5, 12, 51, 9, 5, 5, 24] # A:G (C 감소, G 증가)
     widths += [7]                     # H
     widths += [8.2] * 7               # I~O
     widths += [7]                     # P
@@ -109,7 +109,7 @@ def create_excel(process_name, output_filename, data, params):
         ws['A1'] = "위험성평가표 [ □최초, □정기, ■수시 ]"
     ws['A1'].font = Font(name='맑은 고딕', size=18, bold=True)
     ws['A1'].alignment = center_align
-    ws.row_dimensions[1].height = 35
+    ws.row_dimensions[1].height = 40
 
     # Left Block
     ws.merge_cells('A2:B3'); ws['A2'] = "작 업 명"
@@ -165,9 +165,9 @@ def create_excel(process_name, output_filename, data, params):
 
     for r in range(2, 7):
         if r in [4, 6]:
-            ws.row_dimensions[r].height = 35
+            ws.row_dimensions[r].height = 40
         else:
-            ws.row_dimensions[r].height = 25
+            ws.row_dimensions[r].height = 30
         for c in range(1, 26):
             cell = ws.cell(row=r, column=c)
             cell.alignment = center_align
@@ -368,6 +368,23 @@ def create_excel(process_name, output_filename, data, params):
         ws.row_dimensions[current_row].height = 105
         current_row += 1
 
+    # 마지막 페이지 빈 공간을 빈 행으로 채워서 높이를 꽉 채움 (위쪽 정렬 효과)
+    last_data_row = current_row - 1
+    if last_data_row <= 17:
+        target_row = 17
+    else:
+        page_idx = (last_data_row - 18) // 11
+        target_row = 17 + (page_idx + 1) * 11
+
+    while current_row <= target_row:
+        ws.row_dimensions[current_row].height = 105
+        ws.merge_cells(f'C{current_row}:F{current_row}')
+        ws.merge_cells(f'G{current_row}:I{current_row}')
+        ws.merge_cells(f'M{current_row}:Q{current_row}')
+        ws.merge_cells(f'R{current_row}:S{current_row}')
+        ws.merge_cells(f'X{current_row}:Y{current_row}')
+        current_row += 1
+
     # 세부작업, 위험분류 세로 병합 (데이터 값 기준으로 병합 그룹핑 변경)
     r = start_row
     # item[0] (세부작업)과 item[1] 기반 위험분류가 같으면 같이 병합되도록 묶기
@@ -395,14 +412,19 @@ def create_excel(process_name, output_filename, data, params):
         if count > 1:
             current_start = a_r
             current_end = a_r + count - 1
-            first_page_break = 17 # 늘어난 여백/배율로 인해 첫 페이지가 17행까지 인쇄됨
+            first_page_break = 17 # 원래대로 17행까지 1페이지
             while current_start <= current_end:
                 if current_start <= first_page_break:
                     page_end = first_page_break
                 else:
-                    page_idx = (current_start - (first_page_break + 1)) // 9
-                    page_end = first_page_break + (page_idx + 1) * 9
+                    page_idx = (current_start - (first_page_break + 1)) // 11
+                    page_end = first_page_break + (page_idx + 1) * 11
                 merge_end = min(current_end, page_end)
+                
+                # 인쇄 페이지가 넘어가서 병합이 끊어지는 경우, 다음 페이지 첫 셀에 내용 다시 입력
+                if current_start > a_r:
+                    ws.cell(row=current_start, column=1, value=cat).alignment = center_align
+                
                 if current_start < merge_end:
                     ws.merge_cells(f'A{current_start}:A{merge_end}')
                 current_start = merge_end + 1
@@ -411,6 +433,7 @@ def create_excel(process_name, output_filename, data, params):
     # B열(위험분류) 병합
     b_r = start_row
     for pair, count in b_groups:
+        cat_b = pair[1]
         if count > 1:
             current_start = b_r
             current_end = b_r + count - 1
@@ -419,9 +442,14 @@ def create_excel(process_name, output_filename, data, params):
                 if current_start <= first_page_break:
                     page_end = first_page_break
                 else:
-                    page_idx = (current_start - (first_page_break + 1)) // 9
-                    page_end = first_page_break + (page_idx + 1) * 9
+                    page_idx = (current_start - (first_page_break + 1)) // 11
+                    page_end = first_page_break + (page_idx + 1) * 11
                 merge_end = min(current_end, page_end)
+                
+                # 인쇄 페이지가 넘어가서 병합이 끊어지는 경우, 다음 페이지 첫 셀에 내용 다시 입력
+                if current_start > b_r:
+                    ws.cell(row=current_start, column=2, value=cat_b).alignment = center_align
+                
                 if current_start < merge_end:
                     ws.merge_cells(f'B{current_start}:B{merge_end}')
                 current_start = merge_end + 1
@@ -570,9 +598,12 @@ def load_data(sheet_name):
     for i, row in enumerate(ws.iter_rows(values_only=True)):
         if i == 0: continue
         
-        # 원본 데이터 엑셀에 셀 병합이 되어 있어서 아래쪽 행이 빈칸(None)으로 읽히는 현상 방지
-        current_cat = row[0] if row[0] else last_cat
-        current_risk = row[1] if row[1] else last_risk
+        # 원본 데이터 엑셀에 셀 병합이 되어 있거나 공백이 포함된 경우를 처리
+        raw_cat = str(row[0]).strip() if row[0] is not None else ""
+        raw_risk = str(row[1]).strip() if row[1] is not None else ""
+        
+        current_cat = raw_cat if raw_cat != "" else last_cat
+        current_risk = raw_risk if raw_risk != "" else last_risk
         
         if not current_cat and not current_risk: continue
         
@@ -589,6 +620,21 @@ def load_data(sheet_name):
             row[6] or ""
         ]
         data.append(item)
+        
+    # 세부작업(item[0]) 기준으로 논리적 순서에 맞게 정렬 (같은 작업끼리 묶이도록)
+    order_map = {
+        "이동": 1,
+        "반입 및 설치": 2,
+        "사전준비": 3,
+        "비파괴검사": 4,
+        "초음파탐상검사": 4,
+        "침투탐상검사": 4,
+        "전기설비": 5,
+        "유지 및 운영": 6,
+        "작업 후 정리": 7
+    }
+    data.sort(key=lambda x: (order_map.get(str(x[0]).strip(), 99), str(x[0])))
+    
     return data
 
 class RiskAssessmentApp:
@@ -701,7 +747,7 @@ class RiskAssessmentApp:
         except Exception as e:
             messagebox.showerror("오류", f"엑셀 파일을 여는 중 오류가 발생했습니다:\n{e}")
 
-    def generate_files(self):
+    def generate_files(self, silent_dir=None, date_str=""):
         params = {
             'site_name': self.ent_site.get().strip(),
             'company_name': self.ent_company.get().strip(),
@@ -713,44 +759,60 @@ class RiskAssessmentApp:
             'writer_name': self.ent_writer_name.get().strip(),
             'approver_name': self.ent_approver_name.get().strip()
         }
-        config = load_config()
-        initial_dir = config.get("last_output_dir", os.path.dirname(os.path.abspath(__file__)))
-        if not os.path.exists(initial_dir):
-            initial_dir = os.path.dirname(os.path.abspath(__file__))
-            
-        output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=initial_dir)
-        if not output_dir:
-            return
-            
-        config["last_output_dir"] = output_dir
-        save_config(config)
+        
+        if silent_dir:
+            output_dir = silent_dir
+        else:
+            config = load_config()
+            initial_dir = config.get("last_output_dir", os.path.dirname(os.path.abspath(__file__)))
+            if not os.path.exists(initial_dir):
+                initial_dir = os.path.dirname(os.path.abspath(__file__))
+                
+            output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=initial_dir)
+            if not output_dir:
+                return
+                
+            config["last_output_dir"] = output_dir
+            save_config(config)
             
         self.btn_generate.config(state='disabled')
         self.lbl_status.config(text="생성 중...", foreground="blue")
         self.root.update()
         
         results = []
+        temp_files = []
         
         try:
             if self.var_rt.get():
-                fname = os.path.join(output_dir, "4.4.1_위험성평가표(RT_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_rt_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(RT_표준양식).xlsx")
                 res, msg = create_excel("방사선투과검사", fname, load_data("RT"), params)
-                if res: results.append(msg)
+                if res: 
+                    results.append(msg)
+                    temp_files.append(fname)
                 
             if self.var_ut.get():
-                fname = os.path.join(output_dir, "4.4.1_위험성평가표(UT_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_ut_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(UT_표준양식).xlsx")
                 res, msg = create_excel("초음파탐상검사", fname, load_data("UT"), params)
-                if res: results.append(msg)
+                if res: 
+                    results.append(msg)
+                    temp_files.append(fname)
                 
             if self.var_pt.get():
-                fname = os.path.join(output_dir, "4.4.1_위험성평가표(PT_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_pt_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(PT_표준양식).xlsx")
                 res, msg = create_excel("침투탐상검사", fname, load_data("PT"), params)
-                if res: results.append(msg)
+                if res: 
+                    results.append(msg)
+                    temp_files.append(fname)
                 
             if self.var_container.get():
-                fname = os.path.join(output_dir, "4.4.1_위험성평가표(컨테이너_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_ct_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(컨테이너_표준양식).xlsx")
                 res, msg = create_excel("가설컨테이너 설치 및 운영", fname, load_data("컨테이너"), params)
-                if res: results.append(msg)
+                if res: 
+                    results.append(msg)
+                    temp_files.append(fname)
+                
+            if silent_dir:
+                return temp_files
                 
             if results:
                 messagebox.showinfo("생성 완료", "\n".join(results))
@@ -760,10 +822,14 @@ class RiskAssessmentApp:
                 self.lbl_status.config(text="항목 미선택", foreground="red")
                 
         except Exception as e:
-            messagebox.showerror("오류", f"엑셀 생성 중 오류가 발생했습니다:\n{str(e)}")
+            if not silent_dir:
+                messagebox.showerror("오류", f"엑셀 생성 중 오류가 발생했습니다:\n{str(e)}")
             self.lbl_status.config(text="오류 발생", foreground="red")
         finally:
             self.btn_generate.config(state='normal')
+            
+        if silent_dir:
+            return temp_files
 
 if __name__ == "__main__":
     root = tk.Tk()

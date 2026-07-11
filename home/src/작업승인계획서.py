@@ -10,7 +10,7 @@ class WorkApprovalApp:
     def __init__(self, root):
         self.root = root
         self.root.title("작업승인계획서 자동 생성기")
-        self.root.geometry("650x850")
+        self.root.geometry("650x950")
         self.root.resizable(True, True)
         
         style = ttk.Style()
@@ -73,6 +73,15 @@ class WorkApprovalApp:
         btn_calc_date = ttk.Button(date_frame, text="[이전 날짜에서 누계 불러오기]", command=self.load_previous_totals)
         btn_calc_date.pack(side='left', padx=10)
         
+        self.btn_generate = ttk.Button(date_frame, text="엑셀 생성 (승인계획서)", command=self.generate_files)
+        self.btn_generate.pack(side='right', padx=2)
+        
+        self.btn_unified = ttk.Button(date_frame, text="🔥 일일 안전서류 통합 엑셀 생성", command=self.generate_unified_excel)
+        self.btn_unified.pack(side='right', padx=10)
+        
+        self.lbl_status = ttk.Label(date_frame, text="대기 중...", foreground="gray")
+        self.lbl_status.pack(side='left', padx=5)
+        
         row_idx += 1
         
         ttk.Label(form_frame, text="수급업체:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=5)
@@ -125,20 +134,63 @@ class WorkApprovalApp:
         
         self.team_a_active = tk.BooleanVar(value=True)
         self.team_b_active = tk.BooleanVar(value=True)
+        self.team_a_rt = tk.BooleanVar(value=True)
+        self.team_a_ut = tk.BooleanVar(value=False)
+        self.team_a_pt = tk.BooleanVar(value=False)
+        self.team_b_rt = tk.BooleanVar(value=False)
+        self.team_b_ut = tk.BooleanVar(value=True)
+        self.team_b_pt = tk.BooleanVar(value=True)
+        
         ttk.Checkbutton(sec2_frame, text="A팀 작업 진행", variable=self.team_a_active, command=self.toggle_team_mode).pack(side='left', padx=5)
         ttk.Checkbutton(sec2_frame, text="B팀 작업 진행", variable=self.team_b_active, command=self.toggle_team_mode).pack(side='left', padx=5)
         row_idx += 1
         
-        ttk.Label(form_frame, text="A팀 작업내용:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
-        self.txt_team_a = tk.Text(form_frame, width=50, height=5, font=('Malgun Gothic', 9))
+        # A팀
+        lbl_a = ttk.Label(form_frame, text="A팀 개소/내용:")
+        lbl_a.grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
+        
+        container_a = ttk.Frame(form_frame)
+        container_a.grid(row=row_idx, column=1, sticky='w', padx=5, pady=0)
+        
+        frame_a = ttk.Frame(container_a)
+        frame_a.pack(anchor='w', pady=(0, 2))
+        ttk.Label(frame_a, text="작업개소:").pack(side='left')
+        self.ent_team_a_loc = ttk.Entry(frame_a, width=8)
+        self.ent_team_a_loc.insert(0, "00")
+        self.ent_team_a_loc.pack(side='left', padx=2)
+        ttk.Label(frame_a, text="개소").pack(side='left', padx=(0, 15))
+        
+        ttk.Checkbutton(frame_a, text="RT", variable=self.team_a_rt).pack(side='left', padx=2)
+        ttk.Checkbutton(frame_a, text="UT", variable=self.team_a_ut).pack(side='left', padx=2)
+        ttk.Checkbutton(frame_a, text="PT", variable=self.team_a_pt).pack(side='left', padx=2)
+        
+        self.txt_team_a = tk.Text(container_a, width=50, height=4, font=('Malgun Gothic', 9))
         self.txt_team_a.insert('1.0', "[구간: OO천 ~ OOO천]\n(내용) 30\" 주배관 맞대기 용접부 방사선투과검사(RT)\n※ 작업시간: (08:00~17:00)\n\n[투입 현황]\n인원: 00명\n장비: 조사기 1, 크롤러 1, 차폐막 2")
-        self.txt_team_a.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        self.txt_team_a.pack(anchor='w')
         row_idx += 1
         
-        ttk.Label(form_frame, text="B팀 작업내용:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
-        self.txt_team_b = tk.Text(form_frame, width=50, height=5, font=('Malgun Gothic', 9))
+        # B팀
+        lbl_b = ttk.Label(form_frame, text="B팀 개소/내용:")
+        lbl_b.grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
+        
+        container_b = ttk.Frame(form_frame)
+        container_b.grid(row=row_idx, column=1, sticky='w', padx=5, pady=0)
+        
+        frame_b = ttk.Frame(container_b)
+        frame_b.pack(anchor='w', pady=(0, 2))
+        ttk.Label(frame_b, text="작업개소:").pack(side='left')
+        self.ent_team_b_loc = ttk.Entry(frame_b, width=8)
+        self.ent_team_b_loc.insert(0, "00")
+        self.ent_team_b_loc.pack(side='left', padx=2)
+        ttk.Label(frame_b, text="개소").pack(side='left', padx=(0, 15))
+        
+        ttk.Checkbutton(frame_b, text="RT", variable=self.team_b_rt).pack(side='left', padx=2)
+        ttk.Checkbutton(frame_b, text="UT", variable=self.team_b_ut).pack(side='left', padx=2)
+        ttk.Checkbutton(frame_b, text="PT", variable=self.team_b_pt).pack(side='left', padx=2)
+        
+        self.txt_team_b = tk.Text(container_b, width=50, height=4, font=('Malgun Gothic', 9))
         self.txt_team_b.insert('1.0', "[구간: OO관리소 내부]\n(내용) Tie-in 필릿 용접부 초음파(UT) 및 침투(PT)\n※ 작업시간: (08:00~17:00)\n\n[투입 현황]\n인원: 00명\n장비: UT 1, PT 1")
-        self.txt_team_b.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        self.txt_team_b.pack(anchor='w')
         row_idx += 1
 
         # 4. 기타 진행 현황 (자동 계산)
@@ -197,15 +249,7 @@ class WorkApprovalApp:
         self.txt_req.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
         row_idx += 1
         
-        # Generate Button
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(fill='x', pady=20)
-        
-        self.btn_generate = ttk.Button(btn_frame, text="작업승인계획서 엑셀 생성", command=self.generate_files, width=35)
-        self.btn_generate.pack(pady=5)
-        
-        self.lbl_status = ttk.Label(main_frame, text="대기 중...", foreground="gray")
-        self.lbl_status.pack()
+        # Generate Button moved to the top date_frame
         
         # Load saved config
         self.load_config()
@@ -297,8 +341,16 @@ class WorkApprovalApp:
             'etc': self.ent_etc.get(),
             'team_a': self.txt_team_a.get('1.0', tk.END).strip(),
             'team_b': self.txt_team_b.get('1.0', tk.END).strip(),
+            'team_a_loc': self.ent_team_a_loc.get().strip(),
+            'team_b_loc': self.ent_team_b_loc.get().strip(),
             'team_a_active': self.team_a_active.get(),
             'team_b_active': self.team_b_active.get(),
+            'team_a_rt': self.team_a_rt.get(),
+            'team_a_ut': self.team_a_ut.get(),
+            'team_a_pt': self.team_a_pt.get(),
+            'team_b_rt': self.team_b_rt.get(),
+            'team_b_ut': self.team_b_ut.get(),
+            'team_b_pt': self.team_b_pt.get(),
             'rt_prev': self.ent_rt_prev.get(),
             'rt_today': self.ent_rt_today.get(),
             'ut_prev': self.ent_ut_prev.get(),
@@ -311,7 +363,8 @@ class WorkApprovalApp:
         history[current_date] = data
         
         # Cascading update for future dates
-        sorted_dates = sorted(list(history.keys()))
+        dates = [k for k in history.keys() if not k.startswith('_')]
+        sorted_dates = sorted(dates)
         if current_date in sorted_dates:
             idx = sorted_dates.index(current_date)
             
@@ -352,7 +405,25 @@ class WorkApprovalApp:
 
         if '_window_geometry' in history:
             try:
-                self.root.geometry(history['_window_geometry'])
+                geom = history['_window_geometry']
+                if 'x' in geom:
+                    w, rest = geom.split('x', 1)
+                    if '+' in rest:
+                        h_str, pos = rest.split('+', 1)
+                        pos = '+' + pos
+                    elif '-' in rest:
+                        h_str, pos = rest.split('-', 1)
+                        pos = '-' + pos
+                    else:
+                        h_str = rest
+                        pos = ''
+                    
+                    h = int(h_str)
+                    if h < 950:
+                        h = 950
+                    self.root.geometry(f"{w}x{h}{pos}")
+                else:
+                    self.root.geometry(geom)
             except:
                 pass
 
@@ -393,10 +464,23 @@ class WorkApprovalApp:
         set_txt(self.txt_team_a, data.get('team_a'))
         set_txt(self.txt_team_b, data.get('team_b'))
         
+        if hasattr(self, 'ent_team_a_loc'):
+            set_ent(self.ent_team_a_loc, data.get('team_a_loc', '00'))
+        if hasattr(self, 'ent_team_b_loc'):
+            set_ent(self.ent_team_b_loc, data.get('team_b_loc', '00'))
+        
         if 'team_a_active' in data:
             self.team_a_active.set(data['team_a_active'])
         if 'team_b_active' in data:
             self.team_b_active.set(data['team_b_active'])
+            
+        if 'team_a_rt' in data: self.team_a_rt.set(data['team_a_rt'])
+        if 'team_a_ut' in data: self.team_a_ut.set(data['team_a_ut'])
+        if 'team_a_pt' in data: self.team_a_pt.set(data['team_a_pt'])
+        
+        if 'team_b_rt' in data: self.team_b_rt.set(data['team_b_rt'])
+        if 'team_b_ut' in data: self.team_b_ut.set(data['team_b_ut'])
+        if 'team_b_pt' in data: self.team_b_pt.set(data['team_b_pt'])
             
         self.toggle_team_mode()
         
@@ -426,7 +510,7 @@ class WorkApprovalApp:
         except ValueError:
             return 0.0
 
-    def generate_files(self):
+    def generate_files(self, silent_path=None):
         # Targets
         TARGET_RT = 24536
         TARGET_UT = 319.02
@@ -463,20 +547,30 @@ class WorkApprovalApp:
             'etc': self.ent_etc.get().strip(),
             'team_a': self.txt_team_a.get('1.0', tk.END).strip(),
             'team_b': self.txt_team_b.get('1.0', tk.END).strip(),
+            'team_a_loc': self.ent_team_a_loc.get().strip(),
+            'team_b_loc': self.ent_team_b_loc.get().strip(),
             'team_a_active': self.team_a_active.get(),
             'team_b_active': self.team_b_active.get(),
+            'team_a_rt': self.team_a_rt.get(),
+            'team_a_ut': self.team_a_ut.get(),
+            'team_a_pt': self.team_a_pt.get(),
+            'team_b_rt': self.team_b_rt.get(),
+            'team_b_ut': self.team_b_ut.get(),
+            'team_b_pt': self.team_b_pt.get(),
             'prev': str_prev,
             'today': str_today,
             'prog': str_prog,
             'req': self.txt_req.get('1.0', tk.END).strip(),
         }
         
-        initial_dir = os.path.dirname(os.path.abspath(__file__))
-        output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=initial_dir)
-        if not output_dir:
-            return
-            
-        output_path = os.path.join(output_dir, "작업승인계획서_NDT전용.xlsx")
+        if silent_path:
+            output_path = silent_path
+        else:
+            initial_dir = os.path.dirname(os.path.abspath(__file__))
+            output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=initial_dir)
+            if not output_dir:
+                return
+            output_path = os.path.join(output_dir, "작업승인계획서_NDT전용.xlsx")
         
         self.save_config()
         self.btn_generate.config(state='disabled')
@@ -485,13 +579,122 @@ class WorkApprovalApp:
         
         try:
             self.create_excel(output_path, params)
-            messagebox.showinfo("생성 완료", f"작업승인계획서가 성공적으로 생성되었습니다!\n\n저장 위치:\n{output_path}")
-            self.lbl_status.config(text="완료!", foreground="green")
+            if not silent_path:
+                messagebox.showinfo("생성 완료", f"작업승인계획서가 성공적으로 생성되었습니다!\n\n저장 위치:\n{output_path}")
+                self.lbl_status.config(text="완료!", foreground="green")
+            else:
+                self.lbl_status.config(text="임시 파일 생성 완료!", foreground="green")
         except Exception as e:
-            messagebox.showerror("오류", f"엑셀 파일 생성 중 오류가 발생했습니다:\n{e}")
+            if not silent_path:
+                messagebox.showerror("오류", f"엑셀 파일 생성 중 오류가 발생했습니다:\n{e}")
             self.lbl_status.config(text="오류 발생", foreground="red")
         finally:
             self.btn_generate.config(state='normal')
+
+    def generate_unified_excel(self):
+        initial_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = filedialog.askdirectory(title="일일 안전서류 통합 엑셀 저장 폴더를 선택하세요", initialdir=initial_dir)
+        if not output_dir: return
+        
+        date_str = self.ent_date.get().replace("-", "")
+        final_path = os.path.join(output_dir, f"일일_안전서류_통합_{date_str}.xlsx").replace("/", "\\")
+        
+        self.lbl_status.config(text="통합 엑셀 생성 중...", foreground="blue")
+        self.btn_generate.config(state='disabled')
+        self.btn_unified.config(state='disabled')
+        self.root.update()
+        
+        temp_approval = os.path.join(output_dir, f"temp_approval_{date_str}.xlsx").replace("/", "\\")
+        temp_tbm = os.path.join(output_dir, f"temp_tbm_{date_str}.xlsx").replace("/", "\\")
+        
+        excel = None
+        try:
+            # 0. 날짜 및 UI 동기화 (메인 탭 기준)
+            main_date = self.ent_date.get().strip()
+            
+            if hasattr(self, 'tbm_manager'):
+                self.tbm_manager.ent_date.delete(0, tk.END)
+                self.tbm_manager.ent_date.insert(0, main_date)
+                self.tbm_manager.update_work_and_hazards()
+                
+            if hasattr(self, 'risk_manager'):
+                try:
+                    import datetime
+                    dt = datetime.datetime.strptime(main_date, "%Y-%m-%d")
+                    risk_date = dt.strftime("%Y년 %m월 %d일")
+                    self.risk_manager.ent_write_date.delete(0, tk.END)
+                    self.risk_manager.ent_write_date.insert(0, risk_date)
+                except:
+                    pass
+
+            # 1. 작업승인계획서 생성
+            self.generate_files(silent_path=temp_approval)
+            
+            # 2. TBM 생성
+            if hasattr(self, 'tbm_manager'):
+                self.tbm_manager.export_excel(silent_path=temp_tbm)
+                
+            # 3. 위험성평가표 생성
+            temp_risks = []
+            if hasattr(self, 'risk_manager'):
+                temp_risks = self.risk_manager.generate_files(silent_dir=output_dir, date_str=date_str) or []
+                
+            # 합치기
+            import win32com.client as win32
+            excel = win32.Dispatch("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            
+            # 새 통합 워크북 생성
+            wb_master = excel.Workbooks.Add()
+            default_sheet = wb_master.Sheets(1)
+            
+            # 작업승인계획서 복사 (Before=default_sheet)
+            if os.path.exists(temp_approval):
+                wb1 = excel.Workbooks.Open(temp_approval)
+                wb1.Sheets(1).Copy(wb_master.Sheets(1))
+                wb1.Close(False)
+                try: os.remove(temp_approval)
+                except: pass
+                
+            # TBM 복사 (After=첫번째 시트)
+            if os.path.exists(temp_tbm):
+                wb2 = excel.Workbooks.Open(temp_tbm)
+                wb2.Sheets(1).Copy(None, wb_master.Sheets(1))
+                wb2.Close(False)
+                try: os.remove(temp_tbm)
+                except: pass
+                
+            # 위험성평가표 복사 (After=마지막 시트)
+            for temp_risk in temp_risks:
+                if os.path.exists(temp_risk):
+                    last_sheet = wb_master.Sheets(wb_master.Sheets.Count)
+                    wb3 = excel.Workbooks.Open(temp_risk)
+                    wb3.Sheets(1).Copy(None, last_sheet)
+                    wb3.Close(False)
+                    try: os.remove(temp_risk)
+                    except: pass
+                    
+            # 기본 Sheet1 삭제
+            default_sheet.Delete()
+            
+            wb_master.SaveAs(final_path)
+            wb_master.Close(False)
+            excel.Quit()
+            
+            messagebox.showinfo("통합 완료", f"일일 안전서류 통합 엑셀이 성공적으로 생성되었습니다!\n\n저장 위치:\n{final_path}")
+            self.lbl_status.config(text="통합 완료!", foreground="green")
+            os.startfile(final_path)
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"통합 엑셀 생성 중 오류가 발생했습니다:\n{e}")
+            self.lbl_status.config(text="통합 오류", foreground="red")
+            try:
+                if excel: excel.Quit()
+            except: pass
+        finally:
+            self.btn_generate.config(state='normal')
+            self.btn_unified.config(state='normal')
 
     def create_excel(self, output_path, params):
         wb = openpyxl.Workbook()
@@ -570,20 +773,76 @@ class WorkApprovalApp:
             cell.fill = header_fill
 
         active_teams = []
+        
+        import hashlib
+        
+        rt_haz = [
+            ("(방사선 피폭) 방사선 투과검사 중 피폭", "콜리메이터 사용, 통제구역 설정/감시자 배치"), 
+            ("(추락) 지상 2m 이상 배관 위 검사", "고소작업 시 2인 1조 필수, 안전대 체결"),
+            ("(질식) 배관 내부 진입 시 산소 결핍", "산소농도 측정 및 환기 실시, 밀폐공간 진입 통제"),
+            ("(협착) 크롤러 등 장비 이동 중 끼임", "장비 이동 시 주변 확인, 작업 지휘자 배치"),
+            ("(근골격계) 무거운 납 차폐체/장비 운반", "스트레칭 실시, 중량물 2인 이상 운반")
+        ]
+        ut_haz = [
+            ("(추락) 고소 배관 용접부 UT 탐상", "안전대 체결, 비계 발판 상태 사전 점검"),
+            ("(충돌) 좁은 공간 내 타 공정 장비 충돌", "안전감독관 사전 조율 후 작업 통제"),
+            ("(근골격계) 부자연스러운 자세로 장시간 탐상", "주기적인 휴식 및 스트레칭 실시"),
+            ("(전도) 현장 내 자재/공구에 걸려 넘어짐", "작업장 주변 정리정돈 철저, 조도 확보")
+        ]
+        pt_haz = [
+            ("(화학물질) PT 용제 취급 시 흡입/피부접촉", "MSDS 비치 및 방독마스크, 장갑 착용"),
+            ("(화재) 가연성 세척액 사용으로 인한 화재", "화기 구역 분리, 소화기 비치"),
+            ("(밀폐공간) 환기 불량 구역 PT 검사 시 질식", "국소배기장치 가동, 작업 중 주기적 환기"),
+            ("(근골격계) 바닥면 배관 쪼그려 앉아 검사", "적절한 휴식시간 부여, 스트레칭 유도")
+        ]
+
+        def build_team_hazards(date_str, is_rt, is_ut, is_pt):
+            hash_val = int(hashlib.md5(date_str.encode('utf-8')).hexdigest(), 16)
+            def pick_hazard(hz_list, offset=0):
+                return hz_list[(hash_val + offset) % len(hz_list)]
+                
+            selected_methods = []
+            if is_rt: selected_methods.append('RT')
+            if is_ut: selected_methods.append('UT')
+            if is_pt: selected_methods.append('PT')
+            
+            picked = []
+            if len(selected_methods) == 0:
+                picked = [pick_hazard(rt_haz, 0), pick_hazard(rt_haz, 1), pick_hazard(rt_haz, 2)]
+            elif len(selected_methods) == 1:
+                m1 = selected_methods[0]
+                list1 = rt_haz if m1 == 'RT' else (ut_haz if m1 == 'UT' else pt_haz)
+                picked = [pick_hazard(list1, 0), pick_hazard(list1, 1), pick_hazard(list1, 2)]
+            elif len(selected_methods) == 2:
+                m1, m2 = selected_methods[0], selected_methods[1]
+                list1 = rt_haz if m1 == 'RT' else (ut_haz if m1 == 'UT' else pt_haz)
+                list2 = rt_haz if m2 == 'RT' else (ut_haz if m2 == 'UT' else pt_haz)
+                picked = [pick_hazard(list1, 0), pick_hazard(list2, 0), pick_hazard(list1, 1)]
+            elif len(selected_methods) >= 3:
+                picked = [pick_hazard(rt_haz, 0), pick_hazard(ut_haz, 0), pick_hazard(pt_haz, 0)]
+                
+            c_text = "\n".join([f"{idx+1}. {item[0]}" for idx, item in enumerate(picked)])
+            d_text = "\n".join([f"{idx+1}. {item[1]}" for idx, item in enumerate(picked)])
+            return c_text, d_text
+
         if params.get('team_a_active'):
+            loc_a = params.get('team_a_loc', '00')
+            c_a, d_a = build_team_hazards(params['date'], params.get('team_a_rt'), params.get('team_a_ut'), params.get('team_a_pt'))
             active_teams.append({
-                'A': "비파괴 A팀 (본관)\n\n(작업개소: 00개소)",
+                'A': f"비파괴 A팀 (본관)\n\n(작업개소: {loc_a}개소)",
                 'B': params['team_a'],
-                'C': "1. (방사선 피폭) 방사선 투과검사 중 피폭\n2. (추락) 지상 2m 이상 배관 위 검사\n3. (질식) 배관 내부 진입 시 산소 결핍",
-                'D': "1. 콜리메이터 사용, 통제구역 설정/감시자 배치\n2. 고소작업 시 2인 1조 필수, 안전대 체결\n3. 배관내부 인원 진입 금지 (크롤러 대체)",
+                'C': c_a,
+                'D': d_a,
                 'E': "(서명)"
             })
         if params.get('team_b_active'):
+            loc_b = params.get('team_b_loc', '00')
+            c_b, d_b = build_team_hazards(params['date'], params.get('team_b_rt'), params.get('team_b_ut'), params.get('team_b_pt'))
             active_teams.append({
-                'A': "비파괴 B팀 (관리소)\n\n(작업개소: 00개소)",
+                'A': f"비파괴 B팀 (관리소)\n\n(작업개소: {loc_b}개소)",
                 'B': params['team_b'],
-                'C': "1. (화학물질) PT 용제 취급 시 흡입 위험\n2. (충돌) 좁은 공간 내 타 공정 장비 충돌\n3. (화재) 가연성 가스로 인한 화재",
-                'D': "1. MSDS 비치 및 방독마스크, 장갑 착용\n2. 안전감독관 사전 조율 후 작업 통제\n3. 화기 구역 분리, 소화기 비치",
+                'C': c_b,
+                'D': d_b,
                 'E': "(서명)"
             })
         if len(active_teams) == 1:

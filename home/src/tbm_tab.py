@@ -12,26 +12,20 @@ class TBMFormTab(ttk.Frame):
         self.create_widgets()
 
     def create_widgets(self):
-        canvas = tk.Canvas(self)
-        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
-        scroll_frame = ttk.Frame(canvas)
-
-        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        self.build_ui(scroll_frame)
+        # 캔버스와 스크롤바를 모두 없애고 전체 창을 하나의 프레임으로 사용합니다.
+        main_container = ttk.Frame(self)
+        main_container.pack(fill="both", expand=True)
+        self.build_ui(main_container)
 
     def build_ui(self, parent):
-        lbl_title = tk.Label(parent, text="작업 전 안전점검회의(TBM) 회의록 입력", font=("맑은 고딕", 16, "bold"))
-        lbl_title.pack(pady=10)
+        title_frame = ttk.Frame(parent)
+        title_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        lbl_title = ttk.Label(title_frame, text="작업 전 안전점검회의(TBM) 회의록 입력", font=("맑은 고딕", 16, "bold"))
+        lbl_title.pack(side=tk.LEFT)
+        
+        btn_export = ttk.Button(title_frame, text="엑셀 생성 (TBM 회의록)", command=self.export_excel)
+        btn_export.pack(side=tk.RIGHT)
 
         # 1. 기본 정보
         f_basic = ttk.LabelFrame(parent, text="1. 기본 정보", padding=10)
@@ -147,12 +141,7 @@ class TBMFormTab(ttk.Frame):
         self.ent_attendees.pack(anchor=tk.W, pady=5)
         self.ent_attendees.insert(0, "홍길동, 김철수, 이영희")
         
-        # 5. 출력 버튼
-        f_btn = ttk.Frame(parent)
-        f_btn.pack(fill=tk.X, padx=10, pady=20)
-        
-        btn_export = ttk.Button(f_btn, text="엑셀 양식 출력하기", command=self.export_excel)
-        btn_export.pack(ipady=5, ipadx=20)
+        # 5. 출력 버튼 (Moved to the top title_frame)
         
         # Initialize
         self.update_work_and_hazards()
@@ -174,32 +163,49 @@ class TBMFormTab(ttk.Frame):
         self.ent_work_name.delete(0, tk.END)
         self.ent_work_name.insert(0, ", ".join(names))
         
-        rt_haz = [("(방사선 피폭) 방사선 투과검사 중 피폭", "콜리메이터 사용, 통제구역 설정/감시자 배치"), 
-                  ("(추락) 지상 2m 이상 배관 위 검사", "고소작업 시 2인 1조 필수, 안전대 체결"),
-                  ("(질식) 배관 내부 진입 시 산소 결핍", "배관내부 인원 진입 금지 (크롤러 대체)")]
-                  
-        ut_haz = [("(추락/전도) 검사 부위 접근 중 미끄러짐", "안전 통로 확보 및 작업장 정리정돈"),
-                  ("(충돌) 좁은 공간 내 타 공정 장비 충돌", "안전감독관 사전 조율 후 작업 통제"),
-                  ("(근골격계) 불안정한 자세로 장시간 검사", "작업 전후 스트레칭 및 휴식시간 부여")]
-                  
-        pt_haz = [("(화학물질) PT 용제 취급 시 흡입/피부접촉", "MSDS 비치 및 방독마스크, 장갑 착용"),
-                  ("(화재) 가연성 세척액 사용으로 인한 화재", "화기 구역 분리, 소화기 비치"),
-                  ("(충돌) 좁은 공간 내 타 공정 장비 충돌", "안전감독관 사전 조율 후 작업 통제")]
-                  
+        rt_haz = [
+            ("(방사선 피폭) 방사선 투과검사 중 피폭", "콜리메이터 사용, 통제구역 설정/감시자 배치"), 
+            ("(추락) 지상 2m 이상 배관 위 검사", "고소작업 시 2인 1조 필수, 안전대 체결"),
+            ("(질식) 배관 내부 진입 시 산소 결핍", "산소농도 측정 및 환기 실시, 밀폐공간 진입 통제"),
+            ("(협착) 크롤러 등 장비 이동 중 끼임", "장비 이동 시 주변 확인, 작업 지휘자 배치"),
+            ("(근골격계) 무거운 납 차폐체/장비 운반", "스트레칭 실시, 중량물 2인 이상 운반")
+        ]
+        ut_haz = [
+            ("(추락) 고소 배관 용접부 UT 탐상", "안전대 체결, 비계 발판 상태 사전 점검"),
+            ("(충돌) 좁은 공간 내 타 공정 장비 충돌", "안전감독관 사전 조율 후 작업 통제"),
+            ("(근골격계) 부자연스러운 자세로 장시간 탐상", "주기적인 휴식 및 스트레칭 실시"),
+            ("(전도) 현장 내 자재/공구에 걸려 넘어짐", "작업장 주변 정리정돈 철저, 조도 확보")
+        ]
+        pt_haz = [
+            ("(화학물질) PT 용제 취급 시 흡입/피부접촉", "MSDS 비치 및 방독마스크, 장갑 착용"),
+            ("(화재) 가연성 세척액 사용으로 인한 화재", "화기 구역 분리, 소화기 비치"),
+            ("(밀폐공간) 환기 불량 구역 PT 검사 시 질식", "국소배기장치 가동, 작업 중 주기적 환기"),
+            ("(근골격계) 바닥면 배관 쪼그려 앉아 검사", "적절한 휴식시간 부여, 스트레칭 유도")
+        ]
+        
+        import hashlib
+        date_str = ""
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'ent_date'):
+            date_str = self.main_app.ent_date.get()
+        hash_val = int(hashlib.md5(date_str.encode('utf-8')).hexdigest(), 16)
+        
+        def pick_hazard(hz_list, offset=0):
+            return hz_list[(hash_val + offset) % len(hz_list)]
+
         final_hazards = []
         if len(selected_methods) == 0:
             pass
         elif len(selected_methods) == 1:
-            if 'RT' in selected_methods: final_hazards = rt_haz[:3]
-            if 'UT' in selected_methods: final_hazards = ut_haz[:3]
-            if 'PT' in selected_methods: final_hazards = pt_haz[:3]
+            m1 = selected_methods[0]
+            list1 = rt_haz if m1 == 'RT' else (ut_haz if m1 == 'UT' else pt_haz)
+            final_hazards = [pick_hazard(list1, 0), pick_hazard(list1, 1), pick_hazard(list1, 2)]
         elif len(selected_methods) == 2:
             m1, m2 = selected_methods[0], selected_methods[1]
             list1 = rt_haz if m1 == 'RT' else (ut_haz if m1 == 'UT' else pt_haz)
             list2 = rt_haz if m2 == 'RT' else (ut_haz if m2 == 'UT' else pt_haz)
-            final_hazards = [list1[0], list2[0], list1[1]]
+            final_hazards = [pick_hazard(list1, 0), pick_hazard(list2, 0), pick_hazard(list1, 1)]
         elif len(selected_methods) == 3:
-            final_hazards = [rt_haz[0], ut_haz[0], pt_haz[0]]
+            final_hazards = [pick_hazard(rt_haz, 0), pick_hazard(ut_haz, 0), pick_hazard(pt_haz, 0)]
             
         for i in range(3):
             self.hazards[i][0].delete(0, tk.END)
@@ -215,7 +221,7 @@ class TBMFormTab(ttk.Frame):
             # Remove '☐' or checkbox marks if any, and extract just the text for key hazard
             self.ent_key_counter.insert(0, final_hazards[0][1])
 
-    def export_excel(self):
+    def export_excel(self, silent_path=None):
         try:
             excel = win32.Dispatch("Excel.Application")
             excel.Visible = False
@@ -433,8 +439,11 @@ class TBMFormTab(ttk.Frame):
             ws.Cells(row, 14).Value = "A4(210X297)"
             ws.Cells(row, 14).HorizontalAlignment = -4152 # Right
             
-            default_name = f"TBM회의록_{datetime.datetime.now().strftime('%Y%m%d')}.xlsx"
-            filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="TBM 엑셀 저장")
+            if silent_path:
+                filepath = silent_path
+            else:
+                default_name = f"TBM회의록_{datetime.datetime.now().strftime('%Y%m%d')}.xlsx"
+                filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="TBM 엑셀 저장")
             
             if filepath:
                 filepath = filepath.replace("/", "\\")
@@ -442,8 +451,9 @@ class TBMFormTab(ttk.Frame):
                 wb.SaveAs(filepath)
                 wb.Close()
                 excel.Quit()
-                messagebox.showinfo("저장 완료", f"TBM 회의록이 성공적으로 생성되었습니다.\n{filepath}")
-                os.startfile(filepath)
+                if not silent_path:
+                    messagebox.showinfo("저장 완료", f"TBM 회의록이 성공적으로 생성되었습니다.\n{filepath}")
+                    os.startfile(filepath)
             else:
                 wb.Close(False)
                 excel.Quit()
