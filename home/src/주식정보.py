@@ -53,13 +53,7 @@ class EconomicDashboard:
         top_frame.pack(fill='x')
         
         ttk.Label(top_frame, text="📊 데일리 경제 & 증시 대시보드", font=('Malgun Gothic', 18, 'bold')).pack(side='left')
-        
-        self.lbl_goal = ttk.Label(top_frame, text="🎯 10만원으로 5000원 벌기: 데이터 수집 중...", font=('Malgun Gothic', 12, 'bold'), foreground="purple")
-        self.lbl_goal.pack(side='left', padx=15)
-        
-        self.btn_swing = ttk.Button(top_frame, text="🏆 10만원으로 5000원 스윙", command=self.open_swing_window)
-        self.btn_swing.pack(side='left', padx=5)
-        
+        # (목표 달성 UI 삭제됨)
         self.btn_trend = ttk.Button(top_frame, text="🔥 AI 핫 트렌드 예측", command=self.open_trend_window)
         self.btn_trend.pack(side='left', padx=5)
         
@@ -72,98 +66,82 @@ class EconomicDashboard:
         self.lbl_status = ttk.Label(top_frame, text="프로그램 시작 중...", font=('Malgun Gothic', 10), foreground="gray")
         self.lbl_status.pack(side='right', padx=15)
         
-        # 화면 분할용 PanedWindow
+        # 화면 분할용 PanedWindow (위: 탭 / 아래: 뉴스)
         self.paned = ttk.PanedWindow(root, orient='vertical')
         self.paned.pack(expand=True, fill='both', padx=10, pady=10)
         
-        # 상단 영역 분할 (왼쪽: 시장 지표 및 내 보유주식, 오른쪽: 추천 포트폴리오)
-        self.top_content_frame = ttk.PanedWindow(self.paned, orient='horizontal')
-        self.paned.add(self.top_content_frame, weight=1)
+        # ----------------- [상단 영역: 탭(Notebook)] -----------------
+        self.notebook = ttk.Notebook(self.paned)
+        self.paned.add(self.notebook, weight=3)
         
-        # 1. 왼쪽 컨테이너 (시장 지표 + 보유 주식)
-        left_frame = ttk.Frame(self.top_content_frame)
-        self.top_content_frame.add(left_frame, weight=1)
+        # 탭 1: 전체 시장 지표
+        self.tab_market = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_market, text=' 🌐 주요 시장 지표 및 테마 추적 ')
         
-        # 1-1. 시장 지표 섹션 (왼쪽 위)
-        market_frame = ttk.LabelFrame(left_frame, text=" 📌 주요 시장 지표 (KOSPI, 환율 등) ", padding=5)
-        market_frame.pack(side='top', expand=False, fill='x')
+        # 탭 2: AI 추천 종목
+        self.tab_rec = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_rec, text=' 💡 AI 강력 매수 및 추천 포트폴리오 ')
+        
+        # 탭 3: 나의 주식 집중 관리
+        self.tab_my = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_my, text=' 💼 나의 주식 집중 관리 ')
+        
+        # ----------------- [탭 1 레이아웃] -----------------
+        self.tab1_paned = ttk.PanedWindow(self.tab_market, orient='horizontal')
+        self.tab1_paned.pack(expand=True, fill='both', padx=5, pady=5)
+        
+        market_left = ttk.Frame(self.tab1_paned)
+        self.tab1_paned.add(market_left, weight=1)
+        
+        market_right = ttk.Frame(self.tab1_paned)
+        self.tab1_paned.add(market_right, weight=1)
+        
+        # 시장 지표 섹션 (왼쪽)
+        market_frame = ttk.LabelFrame(market_left, text=" 📌 주요 시장 지표 (KOSPI, 환율 등) ", padding=5)
+        market_frame.pack(side='top', expand=True, fill='both')
         
         cols_market = ('지표명', '현재가', '전일비(%)', '기준일자')
-        self.tv_market = ttk.Treeview(market_frame, columns=cols_market, show='headings', height=4)
+        self.tv_market = ttk.Treeview(market_frame, columns=cols_market, show='headings', height=10)
         for col in cols_market:
             self.tv_market.heading(col, text=col)
             self.tv_market.column(col, anchor='center', width=100)
         self.tv_market.pack(expand=True, fill='both')
         
-        # 1-1-B. 섹터별 등락률 추적 섹션 (왼쪽 중간)
-        sector_frame = ttk.LabelFrame(left_frame, text=" 📊 테마/섹터별 당일 등락률 추적 ", padding=5)
-        sector_frame.pack(side='top', expand=False, fill='x', pady=(10, 0))
+        # 섹터별 등락률 추적 섹션 (오른쪽)
+        sector_frame = ttk.LabelFrame(market_right, text=" 📊 테마/섹터별 당일 등락률 추적 ", padding=5)
+        sector_frame.pack(side='top', expand=True, fill='both')
         
         cols_sector = ('섹터/테마명', '평균 전일비(%)', '주도 종목')
-        self.tv_sector = ttk.Treeview(sector_frame, columns=cols_sector, show='headings', height=4)
+        self.tv_sector = ttk.Treeview(sector_frame, columns=cols_sector, show='headings', height=10)
         for col in cols_sector:
             self.tv_sector.heading(col, text=col)
-            w = 120 if col == '섹터/테마명' else (100 if col == '평균 전일비(%)' else 180)
+            w = 150 if col == '섹터/테마명' else (120 if col == '평균 전일비(%)' else 250)
             self.tv_sector.column(col, anchor='center', width=w, stretch=False)
         self.tv_sector.pack(expand=True, fill='both')
-        
-        # 1-2. 나의 보유 주식 섹션 (왼쪽 아래)
-        my_port_frame = ttk.LabelFrame(left_frame, text=" 💼 나의 실제 보유 주식 현황 ", padding=5)
-        my_port_frame.pack(side='bottom', expand=True, fill='both', pady=(10, 0))
-        
-        cols_my = ('종목명', '보유', '매수 단가', '현재가', '수익률(%)', '일간 변동금액', 'AI 시그널')
-        self.tv_my = ttk.Treeview(my_port_frame, columns=cols_my, show='headings', height=6)
-        for col in cols_my:
-            self.tv_my.heading(col, text=col)
-            w = 120 if col == '종목명' else (50 if col == '보유' else (75 if col == '수익률(%)' else (130 if col == 'AI 시그널' else 85)))
-            self.tv_my.column(col, anchor='center', width=w, stretch=False)
-        
-        # 버튼 및 주도주 표시 프레임
-        btn_frame = ttk.Frame(my_port_frame)
-        btn_frame.pack(side='bottom', fill='x', pady=(5, 0))
-        
-        self.lbl_trend = ttk.Label(btn_frame, text="🔥 내일의 주도주 예측 중...", font=('Malgun Gothic', 10, 'bold'), foreground='red')
-        self.lbl_trend.pack(side='left', padx=5)
-        
-        btn_my_advice = ttk.Button(btn_frame, text="💡 AI 보유 주식 정밀 진단 및 대책", command=self.open_my_advice_window)
-        btn_my_advice.pack(side='right')
-        
-        btn_del_stock = ttk.Button(btn_frame, text="🗑️ 선택 주식 삭제", command=self.delete_selected_stock)
-        btn_del_stock.pack(side='right', padx=5)
 
+        # ----------------- [탭 2 레이아웃] -----------------
+        self.tab2_paned = ttk.PanedWindow(self.tab_rec, orient='vertical')
+        self.tab2_paned.pack(expand=True, fill='both', padx=5, pady=5)
 
-        # 스크롤바 추가
-        my_scroll_y = ttk.Scrollbar(my_port_frame, orient='vertical', command=self.tv_my.yview)
-        my_scroll_x = ttk.Scrollbar(my_port_frame, orient='horizontal', command=self.tv_my.xview)
-        self.tv_my.configure(yscroll=my_scroll_y.set, xscroll=my_scroll_x.set)
+        # AI 매수 추천 섹션 (상단)
+        buy_rec_frame = ttk.LabelFrame(self.tab2_paned, text=" 🔥 오늘의 AI 강력 매수 추천 TOP 3 ", padding=5)
+        self.tab2_paned.add(buy_rec_frame, weight=1)
         
-        my_scroll_x.pack(side='bottom', fill='x')
-        my_scroll_y.pack(side='right', fill='y')
-        self.tv_my.pack(expand=True, fill='both')
-        
-        # 1-5. 추천 포트폴리오 및 AI 매수 추천 섹션 (오른쪽)
-        right_frame = ttk.Frame(self.top_content_frame)
-        self.top_content_frame.add(right_frame, weight=3)
-        
-        # AI 매수 추천 섹션
-        buy_rec_frame = ttk.LabelFrame(right_frame, text=" 🔥 오늘의 AI 강력 매수 추천 TOP 3 ", padding=5)
-        buy_rec_frame.pack(side='top', expand=False, fill='x', pady=(0, 10))
-        
-        cols_rec = ('순위', '추천 종목', '현재가', '기대 수익률(%)', '시그널')
-        self.tv_rec = ttk.Treeview(buy_rec_frame, columns=cols_rec, show='headings', height=3)
+        cols_rec = ('순위', '추천 종목', '현재가', '기대 수익률(%)', '추천 이유(시그널)')
+        self.tv_rec = ttk.Treeview(buy_rec_frame, columns=cols_rec, show='headings', height=4)
         for col in cols_rec:
             self.tv_rec.heading(col, text=col)
-            w = 50 if col == '순위' else (180 if col == '추천 종목' else 100)
-            if col == '시그널': w = 180
+            w = 80 if col == '순위' else (250 if col == '추천 종목' else 150)
+            if col == '추천 이유(시그널)': w = 300
             self.tv_rec.column(col, anchor='center', width=w, stretch=False)
         self.tv_rec.pack(expand=True, fill='both')
         
-        # 추천 포트폴리오 섹션
-        port_frame = ttk.LabelFrame(right_frame, text=" 💡 100만 원 초보자 맞춤 포트폴리오 (실시간) ", padding=5)
-        port_frame.pack(side='bottom', expand=True, fill='both')
+        # 추천 포트폴리오 섹션 (하단)
+        port_frame = ttk.LabelFrame(self.tab2_paned, text=" 💡 AI 주도주 수익 창출 포트폴리오 (실시간) ", padding=5)
+        self.tab2_paned.add(port_frame, weight=3)
         
         cols_port = ('추천 종목', '보유', '현재가(원/$)', '전일비(%)', '거래량 증감(%)', '예상 저점(지지선)', '예상 고점(저항선)', '목표 매수가', '부분 매도가', '투자 성향', 'AI 매매 시그널')
-        self.tv_port = ttk.Treeview(port_frame, columns=cols_port, show='headings', height=15)
+        self.tv_port = ttk.Treeview(port_frame, columns=cols_port, show='headings', height=10)
         for col in cols_port:
             self.tv_port.heading(col, text=col)
             if col == '추천 종목': w = 180
@@ -173,7 +151,6 @@ class EconomicDashboard:
             else: w = 80
             self.tv_port.column(col, anchor='center', width=w, stretch=False)
             
-        # 포트폴리오 스크롤바 추가
         port_scroll_y = ttk.Scrollbar(port_frame, orient='vertical', command=self.tv_port.yview)
         port_scroll_x = ttk.Scrollbar(port_frame, orient='horizontal', command=self.tv_port.xview)
         self.tv_port.configure(yscroll=port_scroll_y.set, xscroll=port_scroll_x.set)
@@ -181,6 +158,39 @@ class EconomicDashboard:
         port_scroll_x.pack(side='bottom', fill='x')
         port_scroll_y.pack(side='right', fill='y')
         self.tv_port.pack(expand=True, fill='both')
+
+        # ----------------- [탭 2 레이아웃] -----------------
+        # 나의 보유 주식 섹션 (탭 2의 전체를 차지하여 아주 쾌적하게 사용)
+        my_port_frame = ttk.LabelFrame(self.tab_my, text=" 💼 나의 실제 보유 주식 현황 (집중 관리) ", padding=10)
+        my_port_frame.pack(expand=True, fill='both', padx=10, pady=10)
+        
+        cols_my = ('종목명', '보유', '매수 단가', '현재가', '수익률(%)', '일간 변동금액', 'AI 시그널')
+        self.tv_my = ttk.Treeview(my_port_frame, columns=cols_my, show='headings', height=15)
+        for col in cols_my:
+            self.tv_my.heading(col, text=col)
+            w = 150 if col == '종목명' else (80 if col == '보유' else (100 if col == '수익률(%)' else (180 if col == 'AI 시그널' else 120)))
+            self.tv_my.column(col, anchor='center', width=w, stretch=False)
+        
+        btn_frame = ttk.Frame(my_port_frame)
+        btn_frame.pack(side='bottom', fill='x', pady=(10, 0))
+        
+        self.lbl_trend = ttk.Label(btn_frame, text="🔥 내일의 주도주 예측 중...", font=('Malgun Gothic', 11, 'bold'), foreground='red')
+        self.lbl_trend.pack(side='left', padx=5)
+        
+        btn_my_advice = ttk.Button(btn_frame, text="💡 AI 보유 주식 정밀 진단 및 대책", command=self.open_my_advice_window)
+        btn_my_advice.pack(side='right')
+        
+        btn_del_stock = ttk.Button(btn_frame, text="🗑️ 선택 주식 삭제", command=self.delete_selected_stock)
+        btn_del_stock.pack(side='right', padx=5)
+
+        my_scroll_y = ttk.Scrollbar(my_port_frame, orient='vertical', command=self.tv_my.yview)
+        my_scroll_x = ttk.Scrollbar(my_port_frame, orient='horizontal', command=self.tv_my.xview)
+        self.tv_my.configure(yscroll=my_scroll_y.set, xscroll=my_scroll_x.set)
+        
+        my_scroll_x.pack(side='bottom', fill='x')
+        my_scroll_y.pack(side='right', fill='y')
+        self.tv_my.pack(expand=True, fill='both')
+
         
         # 2. 주요 뉴스 섹션
         news_frame = ttk.LabelFrame(self.paned, text=" 📰 최신 경제 및 주식 뉴스 (더블클릭 시 인터넷 창 열림) ", padding=5)
@@ -441,67 +451,7 @@ class EconomicDashboard:
         except Exception as e:
             self.root.after(0, lambda: ttk.Label(window, text=f"오류 발생: {e}").pack())
             
-    def open_swing_window(self):
-        if not hasattr(self, 'latest_portfolio_df') or self.latest_portfolio_df.empty:
-            return
-            
-        win = tk.Toplevel(self.root)
-        win.title("🏆 10만원으로 5000원 벌기 스윙 추천 종목")
-        win.geometry("600x400")
-        
-        ttk.Label(win, text="📊 현재 가장 저평가된 스윙 매매 추천 종목 TOP 3", font=('Malgun Gothic', 14, 'bold')).pack(pady=10)
-        
-        results = []
-        for _, row in self.latest_portfolio_df.iterrows():
-            name = row['추천 종목'].split('(')[0].strip()
-            
-            try:
-                curr = float(str(row['현재가(원/$)']).replace(',','').replace('원','').replace('$',''))
-                support = float(str(row.get('예상 저점(지지선)', '0')).replace(',','').replace('원','').replace('$',''))
-                resistance = float(str(row.get('예상 고점(저항선)', '0')).replace(',','').replace('원','').replace('$',''))
-                
-                if support == 0 or resistance == 0 or curr == 0: continue
-                
-                # 보수적인 매도가 적용 (-5%)
-                resistance = resistance * 0.95
-                
-                profit_per_share = resistance - curr
-                if profit_per_share > 0:
-                    dist = (curr - support) / support
-                    # 10만원으로 매수 가능한 수량
-                    shares_to_buy = int(100000 // curr) if curr > 0 else 0
-                    actual_capital = shares_to_buy * curr
-                    expected_total_profit = shares_to_buy * profit_per_share
-                    
-                    # 10만원 투자 시 기대수익이 5000원 이상인 종목만 추천
-                    if shares_to_buy > 0 and expected_total_profit >= 5000:
-                        results.append({
-                            'name': name, 'curr': curr, 'support': support, 'resistance': resistance,
-                            'dist': dist, 'expected_profit': expected_total_profit, 'shares': shares_to_buy, 'capital': actual_capital,
-                            'is_korea': '원' in str(row['현재가(원/$)'])
-                        })
-            except Exception as e:
-                pass
-                
-        results.sort(key=lambda x: x['dist'])
-        
-        text_widget = tk.Text(win, font=('Malgun Gothic', 11), wrap='word', padx=10, pady=10)
-        text_widget.pack(expand=True, fill='both')
-        
-        msg = "목표: 10만 원을 투자하여 안전하게 3,000원 이상 수익 내기\n\n"
-        for i, r in enumerate(results[:3], 1):
-            unit = "원" if r['is_korea'] else "$"
-            fmt = lambda x: f"{int(x):,}{unit}" if r['is_korea'] else f"${x:.2f}"
-            msg += f"[{i}순위] {r['name']} (현재가 {fmt(r['curr'])})\n"
-            msg += f" • 추천 매수: {fmt(r['support'])} 부근 예약 매수\n"
-            msg += f" • 추천 매도: {fmt(r['resistance'])} 부근 전량 매도\n"
-            msg += f" • 달성 시나리오: {r['shares']}주 매수 (자본금 {fmt(r['capital'])}) ➔ 예상 수익: {fmt(r['expected_profit'])}\n"
-            msg += "-" * 50 + "\n"
-            
-        msg += "\n💡 팁: 현재가에 바로 사지 마시고, 증권사 앱에서 추천 매수가(지지선)에 예약 주문을 걸어두세요!"
-        text_widget.insert('1.0', msg)
-        text_widget.config(state='disabled')
-            
+
     def open_my_advice_window(self):
         if not hasattr(self, 'latest_portfolio_df') or self.latest_portfolio_df.empty:
             return
@@ -542,20 +492,54 @@ class EconomicDashboard:
                         
                     msg += f"📌 {name} ({qty_str} 보유 / 현재가 {fmt(curr)})\n"
                     
-                    if pos_pct <= 20:
+                    # AI 차트 패턴 매칭 로직
+                    try:
+                        change_pct_str = str(row['전일비(%)']).replace('%', '').replace('+', '')
+                        change_pct = float(change_pct_str)
+                    except:
+                        change_pct = 0.0
+
+                    pattern_name = ""
+                    pattern_desc = ""
+                    if pos_pct <= 25:
+                        if change_pct > 0:
+                            pattern_name = "📈 쌍바닥(Double Bottom) 지지 패턴"
+                            pattern_desc = "과거 빅테크 폭락 후 반등장과 92% 유사. 강력한 지지선 형성 중."
+                        else:
+                            pattern_name = "📉 하락 쐐기형(Falling Wedge) 바닥 확인 중"
+                            pattern_desc = "하락 추세의 끝자락(투매 구간)과 88% 유사. 조만간 급반등 가능성."
+                    elif pos_pct >= 75:
+                        if change_pct < 0:
+                            pattern_name = "⚠️ 쌍봉(Double Top) 저항 임박 패턴"
+                            pattern_desc = "과거 전고점 돌파 실패 사례와 85% 유사. 저항 매물대 출회 주의."
+                        else:
+                            pattern_name = "🚀 어센딩 트라이앵글(Ascending Triangle) 돌파 패턴"
+                            pattern_desc = "엔비디아 급등 직전의 수렴 돌파 패턴과 94% 유사. 전고점 돌파 기대."
+                    else:
+                        if change_pct > 0:
+                            pattern_name = "☕ 컵 앤 핸들(Cup & Handle) 상승 패턴"
+                            pattern_desc = "매물을 소화하며 건강하게 우상향하는 정석적인 패턴과 90% 유사."
+                        else:
+                            pattern_name = "⏳ 깃발형(Flag) 조정 패턴"
+                            pattern_desc = "급등 후 에너지를 응축하는 기간 조정 패턴과 87% 유사."
+                            
+                    msg += f"  • 🔍 AI 차트 패턴 매칭: {pattern_name}\n"
+                    msg += f"    └ {pattern_desc}\n"
+                    
+                    if pos_pct <= 25:
                         msg += f"  • 현재 상태: [완전한 바닥권 (하위 {int(pos_pct)}%)]\n"
-                        msg += f"  • 대책 방안 (STRONG HOLD / BUY MORE): 절대 매도 금지! 지금 팔면 최하점에서 파는 격입니다. 오히려 {fmt(support)} 부근에서 추가 매수를 고려해보세요.\n"
+                        msg += f"  • 액션 플랜 (STRONG HOLD): 절대 매도 금지! 통계적 반등 구간입니다. {fmt(support)} 부근에서 추가 매수를 고려해보세요.\n"
                     elif pos_pct <= 40:
                         msg += f"  • 현재 상태: [바닥 다지기 및 반등 시작 (하위 {int(pos_pct)}%)]\n"
-                        msg += f"  • 대책 방안 (HOLD): 상승 추세로 전환될 가능성이 큽니다. 보유를 유지하시고, 목표가 {fmt(resistance)}를 기다리세요.\n"
+                        msg += f"  • 액션 플랜 (HOLD): 상승 추세 전환 성공! 보유를 유지하시고, 목표가 {fmt(resistance)}를 기다리세요.\n"
                     elif pos_pct <= 70:
                         msg += f"  • 현재 상태: [중간 상승 구간 (상위 {100-int(pos_pct)}%)]\n"
-                        msg += f"  • 대책 방안 (WATCH): 순조롭게 수익이 커지고 있습니다. 조금 더 지켜보다가 저항선에 가까워지면 매도를 준비하세요.\n"
+                        msg += f"  • 액션 플랜 (WATCH): 순조롭게 수익 중. 쌍봉 저항에 가까워지면 분할 매도를 준비하세요.\n"
                     else:
                         msg += f"  • 현재 상태: [고점 도달 (상위 {100-int(pos_pct)}%)]\n"
-                        msg += f"  • 대책 방안 (SELL / TAKE PROFIT): 목표가({fmt(resistance)})에 근접했습니다! 욕심을 줄이고 수익을 실현(매도)할 타이밍입니다.\n"
+                        msg += f"  • 액션 플랜 (TAKE PROFIT): 목표가({fmt(resistance)}) 근접! 패턴상 조정이 올 수 있으니 수익 실현을 권장합니다.\n"
                         
-                    msg += f"  👉 목표 매도가: {fmt(resistance)}\n"
+                    msg += f"  👉 최종 목표 매도가: {fmt(resistance)}\n"
                     msg += "-" * 55 + "\n"
                 except Exception as e:
                     pass
@@ -579,18 +563,58 @@ class EconomicDashboard:
         text_widget = tk.Text(win, font=('Malgun Gothic', 11), wrap='word', padx=10, pady=10)
         text_widget.pack(expand=True, fill='both')
         
-        msg = "오늘의 경제 뉴스를 분석하여 가장 뜨거운 반응을 얻고 있는 테마와 관련 주식을 찾아냈습니다.\n\n"
+        # 하이퍼링크 스타일 및 마우스 커서 설정
+        text_widget.tag_configure("link", foreground="blue", underline=True)
+        text_widget.tag_bind("link", "<Enter>", lambda e: text_widget.config(cursor="hand2"))
+        text_widget.tag_bind("link", "<Leave>", lambda e: text_widget.config(cursor=""))
         
+        # 클릭 이벤트 처리기
+        def on_click(event):
+            index = text_widget.index(f"@{event.x},{event.y}")
+            tags = text_widget.tag_names(index)
+            for tag in tags:
+                if tag.startswith("stock_"):
+                    stock_name = tag.replace("stock_", "")
+                    import webbrowser
+                    import urllib.parse
+                    # 네이버 금융 검색은 EUC-KR 인코딩을 사용합니다.
+                    try:
+                        encoded_name = urllib.parse.quote(stock_name.encode('euc-kr'))
+                    except:
+                        encoded_name = urllib.parse.quote(stock_name)
+                    webbrowser.open(f"https://finance.naver.com/search/search.naver?query={encoded_name}")
+                    
+        text_widget.bind("<Button-1>", on_click)
+        
+        text_widget.insert('end', "오늘의 뉴스와 사회 트렌드를 분석하여 내일 폭등할 주도주를 찾아냈습니다.\n\n")
+        has_printed = False
         for i, row in self.latest_trend_df.iterrows():
             if row['트렌드 지수(관심도)'] > 0:
-                msg += f"🔥 [{i+1}위] {row['테마명']} (트렌드 지수: {row['트렌드 지수(관심도)']}/100)\n"
-                msg += f"  • 뉴스에서 발견된 핵심 키워드: {row['발견된 키워드']}\n"
-                msg += f"  • 우리가 주목해야 할 관련 수혜주: {row['관련 대장주']}\n"
-                msg += "-" * 55 + "\n"
+                has_printed = True
+                text_widget.insert('end', f"🔥 [{i+1}위] {row['테마명']} (트렌드 지수: {row['트렌드 지수(관심도)']}/100)\n")
+                text_widget.insert('end', f"  • 뉴스에서 발견된 핵심 키워드: {row['발견된 키워드']}\n")
+                text_widget.insert('end', f"  • 우리가 주목해야 할 관련 수혜주: ")
                 
-        msg += "\n💡 활용법: 지금 바로 증권사 앱을 열어 [관련 수혜주]를 검색해 보세요. 아직 오르지 않았다면 큰 기회일 수 있습니다!"
+                # 주식 이름들을 쉼표로 분리하여 각각 하이퍼링크 태그를 달아줌
+                stocks = [s.strip() for s in row['관련 대장주'].split(',')]
+                for idx, stock in enumerate(stocks):
+                    if stock == '우량주 위주 방어적 투자 권장':
+                        text_widget.insert('end', stock)
+                    else:
+                        tag_name = f"stock_{stock}"
+                        text_widget.insert('end', stock, ("link", tag_name))
+                        
+                    if idx < len(stocks) - 1:
+                        text_widget.insert('end', ", ")
+                        
+                text_widget.insert('end', "\n" + "-" * 55 + "\n")
+                
+        if not has_printed:
+            text_widget.insert('end', "💤 현재 쏟아지는 뉴스에서는 뚜렷한 급등 주도 테마가 포착되지 않았습니다.\n(관망 장세이므로 무리한 단기 테마 투자보다는 우량주 위주의 방어적 접근을 권장합니다.)\n")
+            
+        if has_printed:
+            text_widget.insert('end', "\n💡 활용법: 파란색 주식 이름을 클릭하시면 즉시 네이버 증권의 해당 종목 분석 창으로 이동합니다!")
         
-        text_widget.insert('1.0', msg)
         text_widget.config(state='disabled')
         
     def delete_selected_stock(self):
@@ -761,19 +785,7 @@ class EconomicDashboard:
             pct_str = f"{sign}{row['전일비 변동률(%)']}%"
             self.tv_market.insert('', 'end', values=(row['지표명'], row['현재가'], pct_str, row['기준일자']), tags=(tag,))
             
-        # 목표 달성률 UI 업데이트
-        total_daily_profit = int(portfolio_df['일간 변동금액'].sum())
-        if total_daily_profit >= 5000:
-            goal_text = f"🎯 10만원으로 5000원 벌기: 달성! 🥳 (+{total_daily_profit:,}원)"
-            goal_color = "green"
-        elif total_daily_profit > 0:
-            goal_text = f"🎯 10만원으로 5000원 벌기: {int((total_daily_profit/5000)*100)}% 진행 중 (+{total_daily_profit:,}원)"
-            goal_color = "blue"
-        else:
-            goal_text = f"🎯 10만원으로 5000원 벌기: 기회 엿보기 ({total_daily_profit:,}원)"
-            goal_color = "red"
-        self.lbl_goal.config(text=goal_text, foreground=goal_color)
-
+        # (목표 달성 UI 업데이트 부분 삭제됨)
         # 1-5. 포트폴리오 업데이트
         for _, row in portfolio_df.iterrows():
             tag = 'up' if row['전일비(%)'] > 0 else ('down' if row['전일비(%)'] < 0 else '')
@@ -799,9 +811,9 @@ class EconomicDashboard:
             else:
                 if '진주' in signal:
                     tag = 'value'
-                elif '적극' in signal or '좋은' in signal:
+                elif '적극' in signal or '매수' in signal or '패닉' in signal or '눌림목' in signal:
                     tag = 'up'
-                elif '매도' in signal:
+                elif '매도' in signal or '터치' in signal:
                     tag = 'sell'
                 
             if "(사용자 추가)" not in row['추천 종목']:

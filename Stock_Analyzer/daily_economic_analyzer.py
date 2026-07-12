@@ -189,7 +189,15 @@ PORTFOLIO = {
     '맥쿼리인프라 (국내 인프라/고배당)': '088980.KS',
     '기업은행 (국내 국책은행/고배당)': '024110.KS',
     'KT&G (국내 담배/경기방어/고배당)': '033780.KS',
-    'SK텔레콤 (국내 통신/고배당)': '017670.KS'
+    'SK텔레콤 (국내 통신/고배당)': '017670.KS',
+    
+    # --- 수익 극대화 고성장/주도주 (추가) ---
+    '한미반도체 (AI/반도체 장비)': '042700.KS',
+    '삼양식품 (K-푸드/수출 대장)': '003230.KS',
+    '알테오젠 (바이오/신약 기술)': '196170.KQ',
+    'HD현대일렉트릭 (전력기기/슈퍼사이클)': '267260.KS',
+    '실리콘투 (K-뷰티/수출 대장)': '257720.KQ',
+    'LS일렉트릭 (전력/스마트그리드)': '010120.KS'
 }
 
 # --- 실제 보유 주식 ---
@@ -234,6 +242,8 @@ def send_telegram_photo(photo_path, caption=None):
 
 def generate_holdings_graph(portfolio_df):
     """보유 주식의 최근 3개월 수익률 추이 그래프를 생성합니다."""
+    import matplotlib
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     
     # 한글 폰트 설정
@@ -558,8 +568,8 @@ def get_naver_realtime_price(ticker):
     return None
 
 def get_portfolio_data(market_df=None):
-    """100만 원 초보자 맞춤형 포트폴리오의 실시간 데이터를 수집합니다."""
-    print("초보자 추천 포트폴리오 데이터를 수집 중입니다...")
+    """AI 주도주 수익 창출 포트폴리오의 실시간 데이터를 수집합니다."""
+    print("수익 창출 포트폴리오 데이터를 수집 중입니다...")
     
     current_portfolio = PORTFOLIO.copy()
     current_owned = OWNED_STOCKS.copy()
@@ -660,6 +670,7 @@ def get_portfolio_data(market_df=None):
                 high_20d = hist['Close'].rolling(window=20).max().iloc[-1]
                 low_20d = hist['Close'].rolling(window=20).min().iloc[-1]
                 drawdown_from_high = ((current_price - high_20d) / high_20d) * 100
+                rise_from_low = ((current_price - low_20d) / low_20d) * 100 if low_20d > 0 else 0
                 
                 # PBR 및 배당수익률 가져오기 (가치주 필터링용)
                 info = stock.info
@@ -691,44 +702,39 @@ def get_portfolio_data(market_df=None):
                     if nasdaq_change <= -1.5: market_crash = True
                     elif nasdaq_change >= 1.5: market_boom = True
 
-                # AI 매수/매도 타이밍 신호 생성 (모든 경우의 수 반영)
+                # AI 매수/매도 타이밍 신호 생성 (스윙/평균회귀 전략 중심)
                 if vol_surge >= 200 and change_pct > 0:
                     trade_signal = "🚀 거래량 급증 (수급 폭발)"
                 elif is_value_stock:
                     trade_signal = "👑 숨은 진주 (초저평가 매수)"
                 elif pd.isna(current_rsi):
                     trade_signal = "데이터 부족"
-                elif current_rsi >= 75 and current_price < ma20:
-                    if market_sentiment == "extreme_greed":
-                        trade_signal = "🚨 강력 매도 (대중의 극단적 탐욕구간)"
-                    else:
-                        trade_signal = "🚨 강력 매도 (과열 후 이탈)"
-                elif drawdown_from_high <= -5.0 and current_price < ma20:
-                    trade_signal = "✂️ 부분 매도 (고점대비 5%하락)"
-                elif current_rsi >= 70:
-                    if market_sentiment == "extreme_greed":
-                        trade_signal = "⚠️ 단기 고점 (탐욕장 주의/매도 준비)"
-                    else:
-                        trade_signal = "⚠️ 단기 고점 (매도 준비/관망)"
+                elif drawdown_from_high <= -15.0 and current_rsi <= 35:
+                    trade_signal = "🔥 패닉 셀링 (과대 낙폭/적극 매수)"
+                elif drawdown_from_high <= -8.0 and current_price < ma20:
+                    trade_signal = "👍 눌림목 매수 (스윙 타점 진입)"
+                elif current_price >= high_20d * 0.98:
+                    trade_signal = "🚨 전고점 터치 (전량 매도 권장)"
+                elif rise_from_low >= 10.0 and current_price > ma20 and current_rsi >= 70:
+                    trade_signal = "⚠️ 과열 구간 (분할 매도 준비)"
+                elif current_rsi >= 75:
+                    trade_signal = "🚨 단기 과매수 (이익 실현)"
                 elif current_rsi <= 35:
-                    if market_sentiment in ["fear", "extreme_fear"] or market_crash:
-                        trade_signal = "🔥 적극 매수 (대중의 공포=최적기)"
-                    else:
-                        trade_signal = "🔥 적극 매수 (RSI 바닥)"
+                    trade_signal = "🔥 적극 매수 (RSI 바닥)"
                 elif current_price < ma20:
                     if market_crash:
                         trade_signal = "🛡️ 보수적 접근 (시장 하락, 관망)"
                     elif market_boom:
                         trade_signal = "🚀 시장 상승 편승 (매수 기회)"
                     else:
-                        trade_signal = "👍 좋은 기회 (20일선 아래)"
+                        trade_signal = "⏳ 지지선 대기 (조정 중)"
                 else:
                     if market_crash:
                         trade_signal = "🛡️ 관망 (시장 변동성 확대)"
                     elif market_boom:
                         trade_signal = "✅ 보유 (시장 상승세)"
                     else:
-                        trade_signal = "✅ 보유 및 분할 매수"
+                        trade_signal = "✅ 보유 및 추세 관망"
                 
                 # 투자 성향 분류
                 if 'S&P500' in name: style = "코어(필수)"
@@ -808,14 +814,14 @@ def get_buy_recommendations(portfolio_df):
     if portfolio_df.empty:
         return pd.DataFrame()
         
-    # 우선순위: 1. 거래량 급증, 2. 숨은 진주, 3. 적극 매수, 4. 좋은 기회, 5. 보유/분할매수
+    # 우선순위: 1. 패닉 셀링, 2. 눌림목 매수, 3. 거래량 급증, 4. 숨은 진주, 5. RSI 바닥, 6. 지지선 대기
     priority = {
-        '🚀 거래량 급증 (수급 폭발)': 1,
-        '👑 숨은 진주 (초저평가 매수)': 2,
-        '🔥 적극 매수 (대중의 공포=최적기)': 3,
-        '🔥 적극 매수 (RSI 바닥)': 4,
-        '👍 좋은 기회 (20일선 아래)': 5,
-        '✅ 보유 및 분할 매수': 6
+        '🔥 패닉 셀링 (과대 낙폭/적극 매수)': 1,
+        '👍 눌림목 매수 (스윙 타점 진입)': 2,
+        '🚀 거래량 급증 (수급 폭발)': 3,
+        '👑 숨은 진주 (초저평가 매수)': 4,
+        '🔥 적극 매수 (RSI 바닥)': 5,
+        '⏳ 지지선 대기 (조정 중)': 6
     }
     
     seen_stocks = set()
@@ -870,13 +876,13 @@ def analyze_sentiment(text):
 def get_economic_news():
     """구글 뉴스 RSS를 통해 최신 경제/주식 뉴스를 수집합니다."""
     print("[2/3] 최신 경제 및 주식 뉴스를 수집 중입니다...")
-    # 구글 뉴스 RSS (한국어, 경제/주식/금리 관련 검색)
-    rss_url = "https://news.google.com/rss/search?q=경제+OR+증시+OR+금리+OR+주식&hl=ko&gl=KR&ceid=KR:ko"
+    # 구글 뉴스 RSS (경제, 주식 뿐만 아니라 문화, 트렌드, 사회 분야 종합 검색)
+    rss_url = "https://news.google.com/rss/search?q=경제+OR+증시+OR+주식+OR+문화+OR+트렌드+OR+테크&hl=ko&gl=KR&ceid=KR:ko"
     feed = feedparser.parse(rss_url)
     
     news_list = []
-    # 상위 20개 기사만 추출
-    for entry in feed.entries[:20]:
+    # 상위 30개 기사 추출 (더 폭넓은 트렌드 반영을 위해 개수 증가)
+    for entry in feed.entries[:30]:
         # 제목에서 언론사명 분리 (보통 "제목 - 언론사" 형태)
         title_parts = entry.title.rsplit(' - ', 1)
         title = title_parts[0]
