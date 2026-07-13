@@ -28,7 +28,8 @@ class DocxEditorApp:
         
         self.file_path_var = tk.StringVar()
         ttk.Entry(file_frame, textvariable=self.file_path_var, width=50).pack(side="left", padx=10, pady=10, expand=True, fill="x")
-        ttk.Button(file_frame, text="파일 찾기", command=self.browse_file).pack(side="right", padx=10, pady=10)
+        ttk.Button(file_frame, text="파일 찾기", command=self.browse_file).pack(side="right", padx=5, pady=10)
+        ttk.Button(file_frame, text="미리보기(Text)", command=self.preview_file).pack(side="right", padx=5, pady=10)
         
         # 2. 변경할 단어 목록
         list_frame = ttk.LabelFrame(self.root, text="2. 변경할 코드 및 문구 목록 (찾을 내용 -> 바꿀 내용)")
@@ -54,8 +55,11 @@ class DocxEditorApp:
         self.entry_replace = ttk.Entry(input_frame, width=20)
         self.entry_replace.grid(row=0, column=3, padx=5, pady=5)
         
-        ttk.Button(input_frame, text="목록에 추가", command=self.add_item).grid(row=0, column=4, padx=10)
-        ttk.Button(input_frame, text="선택 삭제", command=self.delete_item).grid(row=0, column=5, padx=5)
+        ttk.Button(input_frame, text="목록에 추가", command=self.add_item).grid(row=0, column=4, padx=5)
+        ttk.Button(input_frame, text="목록 수정", command=self.update_item).grid(row=0, column=5, padx=5)
+        ttk.Button(input_frame, text="선택 삭제", command=self.delete_item).grid(row=0, column=6, padx=5)
+        
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
         
         # 기본 예시 추가
         self.tree.insert("", "end", values=("ASME Sec.V", "ISO 10863"))
@@ -85,11 +89,66 @@ class DocxEditorApp:
         else:
             messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
             
+    def update_item(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "수정할 항목을 위 목록에서 선택해주세요.")
+            return
+        f_text = self.entry_find.get().strip()
+        r_text = self.entry_replace.get().strip()
+        if f_text:
+            self.tree.item(selected[0], values=(f_text, r_text))
+        else:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            
+    def on_tree_select(self, event):
+        selected = self.tree.selection()
+        if selected:
+            item = self.tree.item(selected[0])
+            val = item['values']
+            self.entry_find.delete(0, tk.END)
+            self.entry_find.insert(0, val[0])
+            self.entry_replace.delete(0, tk.END)
+            self.entry_replace.insert(0, val[1])
+
     def delete_item(self):
         selected = self.tree.selection()
         if selected:
             for item in selected:
                 self.tree.delete(item)
+                
+    def preview_file(self):
+        filepath = self.file_path_var.get()
+        if not filepath or not os.path.exists(filepath):
+            messagebox.showwarning("선택 오류", "먼저 유효한 파일을 선택해주세요.")
+            return
+            
+        try:
+            doc = docx.Document(filepath)
+            content = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+            
+            if not content.strip():
+                content = "(추출된 텍스트가 없습니다. 문서가 비어있거나 스캔 이미지 형태일 수 있습니다.)"
+                
+            top = tk.Toplevel(self.root)
+            top.title(f"텍스트 미리보기 - {os.path.basename(filepath)}")
+            top.geometry("600x600")
+            
+            top_frame = ttk.Frame(top)
+            top_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            txt_widget = tk.Text(top_frame, wrap="word", font=("맑은 고딕", 10))
+            
+            scrollbar = ttk.Scrollbar(top_frame, orient="vertical", command=txt_widget.yview)
+            scrollbar.pack(side="right", fill="y")
+            txt_widget.pack(side="left", fill="both", expand=True)
+            txt_widget.config(yscrollcommand=scrollbar.set)
+            
+            txt_widget.insert("1.0", content)
+            txt_widget.config(state="disabled")
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"미리보기를 불러오는 중 오류가 발생했습니다:\n{e}")
                 
     def replace_text_in_paragraph(self, paragraph, find_text, replace_text):
         if find_text in paragraph.text:

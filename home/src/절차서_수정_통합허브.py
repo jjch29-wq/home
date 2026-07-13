@@ -45,6 +45,7 @@ class ProcedureHubApp:
         btn_frame.pack(side="right", padx=10, pady=10)
         ttk.Button(btn_frame, text="파일 추가", command=self.add_files).pack(fill="x", pady=2)
         ttk.Button(btn_frame, text="선택 삭제", command=self.remove_file).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="미리보기(Text)", command=self.preview_file).pack(fill="x", pady=2)
         
         # 2. 직접 열어서 편집하기 프레임
         direct_edit_frame = ttk.LabelFrame(self.tab1, text="2. 단일 문서 직접 편집하기 (위 목록에서 선택한 첫 번째 파일이 열립니다)")
@@ -90,7 +91,10 @@ class ProcedureHubApp:
         self.entry_find.bind("<Return>", lambda e: self.entry_replace.focus())
         
         ttk.Button(input_frame, text="추가", command=self.add_item, width=8).grid(row=0, column=4, padx=5)
-        ttk.Button(input_frame, text="삭제", command=self.delete_item, width=8).grid(row=0, column=5, padx=5)
+        ttk.Button(input_frame, text="수정", command=self.update_item, width=8).grid(row=0, column=5, padx=5)
+        ttk.Button(input_frame, text="삭제", command=self.delete_item, width=8).grid(row=0, column=6, padx=5)
+        
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
         
         run_frame = ttk.Frame(list_frame)
         run_frame.pack(fill="x", padx=10, pady=10)
@@ -176,11 +180,85 @@ class ProcedureHubApp:
         else:
             messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
             
+    def update_item(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "수정할 항목을 위 목록에서 선택해주세요.")
+            return
+        f_text = self.entry_find.get().strip()
+        r_text = self.entry_replace.get().strip()
+        if f_text:
+            self.tree.item(selected[0], values=(f_text, r_text))
+        else:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            
+    def on_tree_select(self, event):
+        selected = self.tree.selection()
+        if selected:
+            item = self.tree.item(selected[0])
+            val = item['values']
+            self.entry_find.delete(0, tk.END)
+            self.entry_find.insert(0, val[0])
+            self.entry_replace.delete(0, tk.END)
+            self.entry_replace.insert(0, val[1])
+
     def delete_item(self):
         selected = self.tree.selection()
         if selected:
             for item in selected:
                 self.tree.delete(item)
+                
+    def preview_file(self):
+        selected = self.file_listbox.curselection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "미리보기할 파일을 위 목록에서 먼저 선택해주세요.")
+            return
+            
+        filepath = self.file_listbox.get(selected[0])
+        ext = os.path.splitext(filepath)[1].lower()
+        
+        content = ""
+        try:
+            if ext == '.docx':
+                import docx
+                doc = docx.Document(filepath)
+                # 문단 텍스트만 추출
+                content = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+            elif ext == '.txt':
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                except:
+                    with open(filepath, 'r', encoding='euc-kr') as f:
+                        content = f.read()
+            else:
+                messagebox.showinfo("안내", f"{ext} 파일은 텍스트 미리보기를 지원하지 않습니다.\n[선택한 문서 열어서 직접 수정하기] 버튼을 이용해주세요.")
+                return
+                
+            # 텍스트가 비어있는 경우
+            if not content.strip():
+                content = "(추출된 텍스트가 없습니다. 문서가 비어있거나 스캔 이미지 형태일 수 있습니다.)"
+                
+            # 팝업 띄우기
+            top = tk.Toplevel(self.root)
+            top.title(f"텍스트 미리보기 - {os.path.basename(filepath)}")
+            top.geometry("600x600")
+            
+            top_frame = ttk.Frame(top)
+            top_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            txt_widget = tk.Text(top_frame, wrap="word", font=("맑은 고딕", 10))
+            
+            scrollbar = ttk.Scrollbar(top_frame, orient="vertical", command=txt_widget.yview)
+            scrollbar.pack(side="right", fill="y")
+            txt_widget.pack(side="left", fill="both", expand=True)
+            txt_widget.config(yscrollcommand=scrollbar.set)
+            
+            txt_widget.insert("1.0", content)
+            txt_widget.config(state="disabled") # 읽기 전용
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"미리보기를 불러오는 중 오류가 발생했습니다:\n{e}")
 
     # 프리셋 저장/불러오기 기능
     def save_preset(self):
