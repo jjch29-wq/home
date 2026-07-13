@@ -112,5 +112,41 @@
         "find": "KS 비행시간회절법(TOFD)",
         "replace": "KS B 0535",
         "details": "[비행시간회절법(TOFD)]\n▶ 합부 판정 기준 ◀\n- TOFD B-Scan 이미지에서 결함 상/하단의 회절파(Tip diffraction) 시간을 측정하여 결함의 관통 깊이(Through-wall height) 산출.\n- 측정된 높이 및 길이가 허용 규격을 초과하면 불합격."
+    },
+    {
+        "category": "ASME 규격",
+        "find": "ASME B 31.3",
+        "replace": "",
+        "details": "[규격 명칭]\n1.3 Ultrasonic examination shall be performed in accordance with a written procedure, which shall, as a minimum, contain the requirments ASME Sec .V Art.4 (초음파 탐상검사는 최소한 ASME Sec .V Art.4 및 ASME B 31.3 Chapter VI 요구사항을 포함하는 서면 절차서에 따라 수행해야 한다.)\n\n[문서 내 검색된 사용 예시]\n- ...rt.4 (초음파 탐상검사는 최소한 ASME Sec .V Art.4 및 ASME B 31.3 Chapter VI 요구사항을 포함하는 서면 절차서에 따라 수행해야 한...\n- ...ASME B 31.3(’22Ed.)...\n- ...8.1 Acceptance Standards (ASME B 31.3 Chapter VI 344.6.2)(a) Indications char...\n"
+    },
+    {
+        "category": "ASME 규격",
+        "find": "ASME Sec. V Article 4",
+        "replace": "",
+        "details": "[규격 명칭]\nASME Sec. V Article 4 (’23Ed.) : Nondestructive Examination\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec. V Article 4 (’23Ed.) : Nondestructive Examination...\n- ...n to the calibration block required per ASME Sec. V Article 4, unless the scannerblock also has all t...\n- ...캐너 시험편이그림1&2에 따라 요구된 모든 참조 반사체를 갖지 않는다면 ASME Sec. V Article 4에 따른교정시험편에 추가된다. 블록은 APPENDIX. Ⅲ Referen...\n"
+    },
+    {
+        "category": "ASME 규격",
+        "find": "ASME Sec. V Art.23 SE-2491",
+        "replace": "",
+        "details": "[규격 명칭]\nASME Sec. V Art.23 SE-2491 : Standard Guide for Evaluating Performance Characteristics\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec. V Art.23 SE-2491 : Standard Guide for Evaluating Perform...\n"
+    },
+    {
+        "category": "ASME 규격",
+        "find": "ASME Sec. V Art.23 SE-2700",
+        "replace": "",
+        "details": "[규격 명칭]\nASME Sec. V Art.23 SE-2700 : Standard Practice For Contact Ultrasonic Testing of\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec. V Art.23 SE-2700 : Standard Practice For Contact Ultraso...\n"
+    },
+    {
+        "category": "ASNT 규격",
+        "find": "ASNT SNT-TC-1A (2020 Ed.)",
+        "replace": "",
+        "details": "[규격 명칭]\nASNT SNT-TC-1A (2020 Ed.) : Recommended Practice for Nondestructive Testing\n\n[문서 내 검색된 사용 예시]\n- ...ASNT SNT-TC-1A (2020 Ed.) : Recommended Practice for Nondestructi...\n"
+    },
+    {
+        "category": "ASME 규격",
+        "find": "ASME Sec.V Art.1",
+        "replace": "",
+        "details": "[규격 명칭]\nASME Sec.V Art.1 Mandatory Appendix Ⅱ : Supplemental Personnel Qualification\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec.V Art.1 Mandatory Appendix Ⅱ : Supplemental Per...\n- ...rsonnel refer to an inspector who meets ASME Sec.V Art.1 App.II(자격을 갖춘 PAUT 검사원은 ASME Sec.V Art....\n"
     }
 ]

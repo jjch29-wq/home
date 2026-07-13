@@ -29,7 +29,7 @@ DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "codebook_db.
 class CodebookApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("코드집 사전 (Codebook Manager)")
+        self.root.title("🔥 통합 절차서 규격 관리 및 일괄 개정 허브 🔥")
         self.root.geometry("850x650")
         
         style = ttk.Style()
@@ -42,20 +42,24 @@ class CodebookApp:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True)
         
-        self.tab_code = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_code, text="코드 관리")
-        
         self.tab_viewer = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_viewer, text="절차서 뷰어 (웹/HTML)")
+        self.notebook.add(self.tab_viewer, text="📖 절차서 뷰어 및 추출")
         
+        self.tab_code = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_code, text="📚 규격(코드) 관리 DB")
+        
+        self.tab_batch = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_batch, text="✍️ 다중 일괄 변환 (프리셋)")
         # PDF 뷰어 관련 상태 변수
         self.pdf_doc = None
         self.current_page = 0
         self.pdf_image_id = None
         self.pdf_photo = None
         
-        self.create_widgets()
         self.create_viewer_widgets()
+        self.create_widgets()
+        self.create_batch_widgets()
+
         self.refresh_list()
         
     def load_data(self):
@@ -375,6 +379,9 @@ class CodebookApp:
         self.btn_edit_doc = ttk.Button(ctrl_frame, text="📝 원본 워드로 열어서 직접 수정하기", command=self.open_current_document, state="disabled")
         self.btn_edit_doc.pack(side="left", padx=10)
         
+        self.btn_apply_db = ttk.Button(ctrl_frame, text="⚡ 현재 문서에 코드 DB 일괄 적용", command=self.apply_db_to_current, state="disabled")
+        self.btn_apply_db.pack(side="left", padx=10)
+        
         if HtmlFrame is None or mammoth is None:
             ttk.Label(ctrl_frame, text="⚠️ tkinterweb 또는 mammoth 라이브러리가 필요합니다.", foreground="red").pack(side="right", padx=10)
             
@@ -416,13 +423,12 @@ class CodebookApp:
             title="절차서 문서 열기 (Word)",
             filetypes=[("워드 파일", "*.docx"), ("모든 파일", "*.*")]
         )
-        
-        if not filepath:
-            return
-            
+        if filepath:
+            self._load_document_by_path(filepath)
+
+    def _load_document_by_path(self, filepath):
         if filepath.lower().endswith('.docx'):
             try:
-                # HTML 변환 및 텍스트 데이터 보관
                 with open(filepath, "rb") as docx_file:
                     result = mammoth.convert_to_html(docx_file)
                     html = result.value
@@ -431,7 +437,6 @@ class CodebookApp:
                     text_result = mammoth.extract_raw_text(docx_file)
                     self.current_doc_text = text_result.value
                     
-                # 깔끔한 렌더링을 위한 스타일 추가
                 styled_html = f"""
                 <html>
                 <head>
@@ -451,14 +456,39 @@ class CodebookApp:
                 self.html_viewer.load_html(styled_html)
                 self.notebook.update()
                 
-                # 원본 열기 버튼 활성화 및 경로 저장
                 self.current_filepath = filepath
                 self.btn_edit_doc.config(state="normal")
-                
+                self.btn_apply_db.config(state="normal")
             except Exception as e:
-                messagebox.showerror("오류", f"문서를 여는 중 오류가 발생했습니다:\n{e}")
+                messagebox.showerror("오류", f"문서를 여는 중 오류가 발생했습니다:\\n{e}")
         else:
             messagebox.showinfo("안내", "현재 HTML 뷰어는 워드(.docx) 파일만 지원합니다.")
+
+    def apply_db_to_current(self):
+        if not hasattr(self, 'current_filepath') or not self.current_filepath:
+            messagebox.showwarning("경고", "먼저 문서를 열어주세요.")
+            return
+            
+        rules = [(d["find"], d["replace"]) for d in self.data if d.get("find") and d.get("replace")]
+        if not rules:
+            messagebox.showwarning("경고", "코드 DB에 바꿀 내용(Replace)이 설정된 규격이 하나도 없습니다.")
+            return
+            
+        if not messagebox.askyesno("일괄 적용 확인", f"현재 열려있는 문서에 코드 DB의 변환 규칙 {len(rules)}개를 모두 적용하시겠습니까?\\n(원본 파일은 '_수정본' 이라는 이름으로 같은 폴더에 안전하게 저장됩니다.)"):
+            return
+            
+        try:
+            dir_name = os.path.dirname(self.current_filepath)
+            base_name = os.path.basename(self.current_filepath)
+            name, ext = os.path.splitext(base_name)
+            output_filepath = os.path.join(dir_name, f"{name}_수정본{ext}")
+            
+            self.process_docx(self.current_filepath, output_filepath, rules)
+            
+            self._load_document_by_path(output_filepath)
+            messagebox.showinfo("적용 완료", f"현재 문서에 {len(rules)}개의 변환 규칙을 적용하고 뷰어를 새로고침했습니다!\\n\\n저장 경로: {output_filepath}")
+        except Exception as e:
+            messagebox.showerror("오류", f"문서 일괄 변환 중 오류가 발생했습니다:\\n{e}")
 
     def open_current_document(self):
         if hasattr(self, 'current_filepath') and self.current_filepath:
@@ -557,9 +587,14 @@ class CodebookApp:
                     for u in usages[:5]:
                         details += f"- ...{u}...\n"
                         
-                # 중복 체크 후 추가
-                exists = any(code_name_norm.lower() in d.get("find", "").lower() for d in self.data)
-                if not exists:
+                # 기존에 등록된 규격인지 확인
+                existing_item = None
+                for d in self.data:
+                    if code_name_norm.lower() in d.get("find", "").lower():
+                        existing_item = d
+                        break
+                        
+                if not existing_item:
                     # 규격 접두사를 기반으로 분류(Category) 자동 지정
                     prefix = code_name_norm.split()[0].upper()
                     if prefix in ["ASME", "API", "AWS", "ISO", "KS", "ASTM", "EN", "KEPIC", "ASNT"]:
@@ -574,17 +609,93 @@ class CodebookApp:
                         "details": details
                     })
                     extracted_count += 1
+                else:
+                    # 이미 존재하는 코드면, 새로운 용례(usages)만 상세설명에 중복 없이 병합
+                    old_details = existing_item.get("details", "")
+                    new_usages = [u for u in usages[:5] if u not in old_details]
+                    
+                    if new_usages:
+                        if "[문서 내 검색된 사용 예시]" not in old_details:
+                            old_details += "\n\n[문서 내 검색된 추가 사용 예시]\n"
+                        for u in new_usages:
+                            old_details += f"- ...{u}...\n"
+                        existing_item["details"] = old_details
+                        extracted_count += 1
                     
         if extracted_count > 0:
             self.save_data()
             self.refresh_list()
-            messagebox.showinfo("추출 완료", f"성공적으로 {extracted_count}개의 새로운 규격을 추출했습니다!\n문서 내 사용 예시도 함께 상세내용에 등록되었습니다.")
+            messagebox.showinfo("추출 완료", f"성공적으로 {extracted_count}개의 규격을 신규 등록(또는 사용예시 업데이트)했습니다!\n문서 내 사용 예시도 함께 상세내용에 반영되었습니다.")
             self.notebook.select(self.tab_code) # 결과 확인을 위해 코드 관리 탭으로 자동 이동
         else:
             if found_codes:
                 messagebox.showinfo("추출 완료", f"문서에서 {len(found_codes)}개의 규격을 찾았으나, 모두 이미 등록되어 있는 코드입니다.")
             else:
                 messagebox.showinfo("추출 실패", "문서에서 규격 코드(ASME, KS, ISO 등)를 찾지 못했습니다.\n본문 텍스트가 추출되지 않았을 수 있습니다.")
+
+    def create_batch_widgets(self):
+        # 1. 파일 다중 선택 프레임
+        file_frame = ttk.LabelFrame(self.tab_batch, text="1. 원본 절차서 파일 선택 (여러 파일 동시 선택 가능)")
+        file_frame.pack(fill="x", padx=15, pady=10)
+        
+        self.file_listbox = tk.Listbox(file_frame, height=4, selectmode=tk.EXTENDED)
+        self.file_listbox.pack(side="left", padx=10, pady=10, expand=True, fill="both")
+        
+        # 리스트박스 스크롤바
+        scrollbar = ttk.Scrollbar(self.file_listbox, orient="vertical")
+        scrollbar.config(command=self.file_listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.file_listbox.config(yscrollcommand=scrollbar.set)
+        
+        btn_frame = ttk.Frame(file_frame)
+        btn_frame.pack(side="right", padx=10, pady=10)
+        ttk.Button(btn_frame, text="파일 추가", command=self.add_files).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="선택 삭제", command=self.remove_file).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="미리보기(Text)", command=self.preview_file).pack(fill="x", pady=2)
+        
+        # 2. 단어 일괄 변환 프레임 (프리셋 기능 포함)
+        list_frame = ttk.LabelFrame(self.tab_batch, text="2. 단어/코드 일괄 자동 변환 (다중 파일 동시 적용 가능)")
+        list_frame.pack(fill="both", expand=True, padx=15, pady=5)
+        
+        preset_frame = ttk.Frame(list_frame)
+        preset_frame.pack(fill="x", padx=10, pady=5)
+        ttk.Label(preset_frame, text="자주 쓰는 단어 세트를 저장하고 불러올 수 있습니다.").pack(side="left")
+        ttk.Button(preset_frame, text="💾 현재 목록 저장", command=self.save_preset).pack(side="right", padx=2)
+        ttk.Button(preset_frame, text="📂 목록 불러오기", command=self.load_preset).pack(side="right", padx=2)
+        ttk.Button(preset_frame, text="📚 코드 DB에서 최신 규격 끌어오기", command=self.load_from_code_db).pack(side="right", padx=10)
+        
+        columns = ("find", "replace")
+        self.batch_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=6)
+        self.batch_tree.heading("find", text="찾을 내용 (기존 코드/문구)")
+        self.batch_tree.heading("replace", text="바꿀 내용 (새로운 코드/문구)")
+        self.batch_tree.column("find", width=300)
+        self.batch_tree.column("replace", width=300)
+        self.batch_tree.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        input_frame = ttk.Frame(list_frame)
+        input_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(input_frame, text="찾을 내용:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.batch_entry_find = ttk.Entry(input_frame, width=20)
+        self.batch_entry_find.grid(row=0, column=1, padx=5, pady=5)
+        
+        ttk.Label(input_frame, text="바꿀 내용:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.batch_entry_replace = ttk.Entry(input_frame, width=20)
+        self.batch_entry_replace.grid(row=0, column=3, padx=5, pady=5)
+        
+        self.batch_entry_replace.bind("<Return>", lambda e: self.add_item())
+        self.batch_entry_find.bind("<Return>", lambda e: self.batch_entry_replace.focus())
+        
+        ttk.Button(input_frame, text="추가", command=self.batch_add_item, width=8).grid(row=0, column=4, padx=5)
+        ttk.Button(input_frame, text="수정", command=self.batch_update_item, width=8).grid(row=0, column=5, padx=5)
+        ttk.Button(input_frame, text="삭제", command=self.batch_delete_item, width=8).grid(row=0, column=6, padx=5)
+        
+        self.batch_tree.bind("<<TreeviewSelect>>", self.batch_on_tree_select)
+        
+        run_frame = ttk.Frame(list_frame)
+        run_frame.pack(fill="x", padx=10, pady=10)
+        
+        ttk.Button(run_frame, text="위 목록대로 1번에 등록된 모든 파일을 일괄 변환하여 폴더에 자동 저장", command=self.process_files).pack(fill="x", ipady=10)
 
 if __name__ == "__main__":
     root = tk.Tk()

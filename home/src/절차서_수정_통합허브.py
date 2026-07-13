@@ -7,7 +7,7 @@ class ProcedureHubApp:
     def __init__(self, root):
         self.root = root
         self.root.title("절차서 수정 통합 허브 (비교 + 다중 파일 일괄 변환 + 프리셋)")
-        self.root.geometry("800x850")
+        self.root.geometry("750x650")
         
         style = ttk.Style()
         style.theme_use('clam')
