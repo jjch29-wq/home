@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import json
 import os
+import re
 
 try:
     import fitz  # PyMuPDF
@@ -26,46 +27,19 @@ except ImportError:
 
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "codebook_db.json")
 
-class CodebookApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("🔥 통합 절차서 규격 관리 및 일괄 개정 허브 🔥")
-        self.root.geometry("850x650")
-        
-        style = ttk.Style()
-        style.theme_use('clam')
-        
+# =========================================================
+# 1. DatabaseManager: DB 로딩, 저장, 내보내기, 규격 추가 등
+# =========================================================
+class DatabaseManager:
+    def __init__(self, db_path):
+        self.db_path = db_path
         self.data = []
         self.load_data()
-        
-        # 탭(Notebook) 구성
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill="both", expand=True)
-        
-        self.tab_viewer = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_viewer, text="📖 절차서 뷰어 및 추출")
-        
-        self.tab_code = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_code, text="📚 규격(코드) 관리 DB")
-        
-        self.tab_batch = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_batch, text="✍️ 다중 일괄 변환 (프리셋)")
-        # PDF 뷰어 관련 상태 변수
-        self.pdf_doc = None
-        self.current_page = 0
-        self.pdf_image_id = None
-        self.pdf_photo = None
-        
-        self.create_viewer_widgets()
-        self.create_widgets()
-        self.create_batch_widgets()
 
-        self.refresh_list()
-        
     def load_data(self):
-        if os.path.exists(DB_FILE):
+        if os.path.exists(self.db_path):
             try:
-                with open(DB_FILE, 'r', encoding='utf-8') as f:
+                with open(self.db_path, 'r', encoding='utf-8') as f:
                     self.data = json.load(f)
             except Exception as e:
                 messagebox.showerror("로딩 오류", f"DB 파일을 불러오지 못했습니다:\n{e}")
@@ -79,11 +53,216 @@ class CodebookApp:
 
     def save_data(self):
         try:
-            with open(DB_FILE, 'w', encoding='utf-8') as f:
+            with open(self.db_path, 'w', encoding='utf-8') as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=4)
         except Exception as e:
             messagebox.showerror("저장 오류", f"DB 파일을 저장하지 못했습니다:\n{e}")
 
+# =========================================================
+# 2. DocumentProcessor: 문서 파일 변환 엔진
+# =========================================================
+class DocumentProcessor:
+    @staticmethod
+    def replace_text_in_paragraph(paragraph, find_text, replace_text):
+        if find_text in paragraph.text:
+            for run in paragraph.runs:
+                if find_text in run.text:
+                    run.text = run.text.replace(find_text, replace_text)
+                    return
+            inline = paragraph.runs
+            if not inline: return
+            text = paragraph.text.replace(find_text, replace_text)
+            for i in range(len(inline)): inline[i].text = ''
+            inline[0].text = text
+
+    @staticmethod
+    def process_docx(input_file, output_file, replacements):
+        try:
+            import docx
+            doc = docx.Document(input_file)
+            for paragraph in doc.paragraphs:
+                for f_text, r_text in replacements:
+                    DocumentProcessor.replace_text_in_paragraph(paragraph, f_text, r_text)
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            for f_text, r_text in replacements:
+                                DocumentProcessor.replace_text_in_paragraph(paragraph, f_text, r_text)
+            doc.save(output_file)
+        except Exception as e:
+            raise Exception(f"docx 처리 실패: {e}")
+
+    @staticmethod
+    def process_xlsx(input_file, output_file, replacements):
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(input_file)
+            for sheet in wb.worksheets:
+                for row in sheet.iter_rows():
+                    for cell in row:
+                        if cell.value and isinstance(cell.value, str):
+                            new_val = cell.value
+                            for f_text, r_text in replacements:
+                                new_val = new_val.replace(f_text, r_text)
+                            if new_val != cell.value:
+                                cell.value = new_val
+            wb.save(output_file)
+        except Exception as e:
+            raise Exception(f"xlsx 처리 실패: {e}")
+
+    @staticmethod
+    def process_hwp(input_file, output_file, replacements):
+        try:
+            import win32com.client as win32
+            hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
+            hwp.RegisterModule("FilePathCheckDLL", "SecurityModule")
+            hwp.XHwpWindows.Item(0).Visible = False
+            
+            if not hwp.Open(input_file):
+                hwp.Quit()
+                raise Exception("HWP 파일을 여는데 실패했습니다.")
+                
+            hwp.HAction.GetDefault("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
+            hwp.HParameterSet.HFindReplace.IgnoreMessage = 1
+            
+            for f_text, r_text in replacements:
+                hwp.HParameterSet.HFindReplace.FindString = f_text
+                hwp.HParameterSet.HFindReplace.ReplaceString = r_text
+                hwp.HParameterSet.HFindReplace.Direction = hwp.FindDir("AllDoc")
+                hwp.HAction.Execute("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
+                
+            hwp.SaveAs(output_file)
+            hwp.Quit()
+        except Exception as e:
+            raise Exception(f"hwp 처리 실패: {e}")
+
+    @staticmethod
+    def process_txt(input_file, output_file, replacements):
+        try:
+            with open(input_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            enc = 'utf-8'
+        except:
+            with open(input_file, 'r', encoding='euc-kr') as f:
+                content = f.read()
+            enc = 'euc-kr'
+            
+        for f_text, r_text in replacements:
+            content = content.replace(f_text, r_text)
+            
+        with open(output_file, 'w', encoding=enc) as f:
+            f.write(content)
+
+    @staticmethod
+    def process_single_document(input_file, output_file, rules):
+        ext_lower = os.path.splitext(input_file)[1].lower()
+        if ext_lower == '.docx':
+            DocumentProcessor.process_docx(input_file, output_file, rules)
+        elif ext_lower == '.xlsx':
+            DocumentProcessor.process_xlsx(input_file, output_file, rules)
+        elif ext_lower in ['.hwp', '.hwpx']:
+            DocumentProcessor.process_hwp(input_file, output_file, rules)
+        elif ext_lower == '.txt':
+            DocumentProcessor.process_txt(input_file, output_file, rules)
+        else:
+            raise ValueError(f"지원하지 않는 파일 형식입니다: {ext_lower}")
+
+
+# =========================================================
+# 3. MacroController: 운영체제 및 외부 프로그램 제어
+# =========================================================
+class MacroController:
+    @staticmethod
+    def sync_search_to_external_app(root, filepath, search_query=""):
+        import os, time, threading
+        import win32gui, win32con
+        
+        base_name = os.path.basename(filepath)
+        name_without_ext = os.path.splitext(base_name)[0]
+        
+        def _macro_thread():
+            for _ in range(10):
+                time.sleep(0.5)
+                found_hwnd = [0]
+                def callback(hwnd, _):
+                    if win32gui.IsWindowVisible(hwnd):
+                        title = win32gui.GetWindowText(hwnd)
+                        if base_name in title or name_without_ext in title:
+                            found_hwnd[0] = hwnd
+                win32gui.EnumWindows(callback, None)
+                
+                if found_hwnd[0] != 0:
+                    hwnd = found_hwnd[0]
+                    screen_width = root.winfo_screenwidth()
+                    screen_height = root.winfo_screenheight()
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    win32gui.MoveWindow(hwnd, screen_width//2, 0, screen_width//2, screen_height-40, True)
+                    
+                    if search_query:
+                        try: win32gui.SetForegroundWindow(hwnd)
+                        except: pass
+                        time.sleep(0.3)
+                        try:
+                            import win32com.client
+                            shell = win32com.client.Dispatch("WScript.Shell")
+                            shell.SendKeys("^f")
+                            time.sleep(0.3)
+                            shell.SendKeys("^v")
+                            time.sleep(0.2)
+                            shell.SendKeys("{ENTER}")
+                        except Exception as e:
+                            print("매크로 전송 오류:", e)
+                    break
+                    
+        if search_query:
+            root.clipboard_clear()
+            root.clipboard_append(search_query)
+            root.update()
+        threading.Thread(target=_macro_thread, daemon=True).start()
+
+
+# =========================================================
+# 4. CodebookApp: 메인 UI 컨트롤러 (View 담당)
+# =========================================================
+class CodebookApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("🔥 통합 절차서 규격 관리 및 일괄 개정 허브 🔥")
+        self.root.geometry("850x650")
+        
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # 1. 의존성 생성 (Managers & Controllers)
+        self.db_manager = DatabaseManager(DB_FILE)
+        
+        # 2. 탭(Notebook) 구성
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True)
+        
+        self.tab_viewer = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_viewer, text="📖 절차서 뷰어 및 추출")
+        
+        self.tab_code = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_code, text="📚 규격(코드) 관리 DB")
+        
+        self.tab_batch = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_batch, text="✍️ 다중 일괄 변환 (프리셋)")
+        
+        # 3. 상태 관리 변수
+        self.current_doc_text = ""
+        self.current_filepath = ""
+        self.current_search_index = 0
+        self.last_search_query = ""
+        
+        # 4. UI 생성 및 초기화
+        self.create_viewer_widgets()
+        self.create_widgets()
+        self.create_batch_widgets()
+
+        self.refresh_list()
+        
     def create_widgets(self):
         # 상단 검색 및 필터 프레임
         search_frame = ttk.LabelFrame(self.tab_code, text="🔍 검색 및 필터")
@@ -103,11 +282,9 @@ class CodebookApp:
         # 메인 리스트 및 상세 보기 팬(PanedWindow)
         paned = ttk.PanedWindow(self.tab_code, orient=tk.HORIZONTAL)
         
-        # 왼쪽 리스트 프레임
         list_frame = ttk.Frame(paned)
         paned.add(list_frame, weight=5)
         
-        # 오른쪽 상세 보기 프레임
         detail_frame = ttk.LabelFrame(paned, text="📖 상세 내용 보기")
         paned.add(detail_frame, weight=3)
         
@@ -136,15 +313,13 @@ class CodebookApp:
         
         self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
         
-        # 버튼 프레임 (가운데)
+        # 버튼 프레임
         btn_frame = ttk.Frame(self.tab_code)
-        
         ttk.Button(btn_frame, text="📋 찾을 내용 복사", command=lambda: self.copy_to_clipboard("find")).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="📋 바꿀 내용 복사", command=lambda: self.copy_to_clipboard("replace")).pack(side="left", padx=5)
-        
         ttk.Button(btn_frame, text="📤 현재 목록을 통합 허브용(JSON)으로 내보내기", command=self.export_preset).pack(side="right", padx=5)
 
-        # 하단 입력 및 수정 프레임
+        # 하단 입력 프레임
         input_frame = ttk.LabelFrame(self.tab_code, text="✍️ 코드 추가 및 수정")
         
         ttk.Label(input_frame, text="카테고리:").grid(row=0, column=0, padx=5, pady=10, sticky="e")
@@ -170,42 +345,37 @@ class CodebookApp:
         ttk.Button(action_frame, text="💾 수정", command=self.update_code, width=15).pack(side="left", padx=10)
         ttk.Button(action_frame, text="🗑️ 삭제", command=self.delete_code, width=15).pack(side="left", padx=10)
 
-        # === 레이아웃 배치 (화면 잘림 방지) ===
+        # 화면 배치
         search_frame.pack(side="top", fill="x", padx=10, pady=10)
         input_frame.pack(side="bottom", fill="x", padx=10, pady=10)
         btn_frame.pack(side="bottom", fill="x", padx=10, pady=5)
         paned.pack(side="top", fill="both", expand=True, padx=10, pady=5)
 
     def update_categories(self):
-        cats = sorted(list(set([d.get("category", "") for d in self.data if d.get("category", "")])))
+        cats = sorted(list(set([d.get("category", "") for d in self.db_manager.data if d.get("category", "")])))
         self.combo_cat['values'] = cats
         self.combo_filter_cat['values'] = ["전체"] + cats
-        
-        # 필터창에 선택된 값이 더 이상 존재하지 않으면 '전체'로 초기화
         if self.combo_filter_cat.get() not in ["전체"] + cats:
             self.combo_filter_cat.set("전체")
 
     def refresh_list(self):
         self.update_categories()
-        
         for item in self.tree.get_children():
             self.tree.delete(item)
             
         filter_cat = self.combo_filter_cat.get()
         search_kw = self.entry_search.get().lower()
         
-        for idx, row in enumerate(self.data):
+        for idx, row in enumerate(self.db_manager.data):
             cat = row.get("category", "")
             f_txt = row.get("find", "")
             r_txt = row.get("replace", "")
             
             if filter_cat and filter_cat != "전체" and cat != filter_cat:
                 continue
-                
             if search_kw:
                 if search_kw not in cat.lower() and search_kw not in f_txt.lower() and search_kw not in r_txt.lower():
                     continue
-                    
             self.tree.insert("", "end", iid=str(idx), values=(cat, f_txt, r_txt))
 
     def reset_filter(self):
@@ -217,9 +387,8 @@ class CodebookApp:
         selected = self.tree.selection()
         if selected:
             idx = int(selected[0])
-            row = self.data[idx]
+            row = self.db_manager.data[idx]
             
-            # 하단 입력창 업데이트
             self.combo_cat.set(row.get("category", ""))
             self.entry_find.delete(0, tk.END)
             self.entry_find.insert(0, row.get("find", ""))
@@ -229,7 +398,6 @@ class CodebookApp:
             self.text_details_input.delete("1.0", tk.END)
             self.text_details_input.insert("1.0", row.get("details", ""))
             
-            # 우측 상세 보기 업데이트
             cat_text = row.get("category", "")
             f_text = row.get("find", "")
             r_text = row.get("replace", "")
@@ -255,16 +423,15 @@ class CodebookApp:
             messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
             return
             
-        self.data.append({
+        self.db_manager.data.append({
             "category": cat,
             "find": f_txt,
             "replace": r_txt,
             "details": d_txt
         })
-        self.save_data()
+        self.db_manager.save_data()
         self.refresh_list()
         
-        # 입력창 및 미리보기 초기화
         self.combo_cat.set("")
         self.entry_find.delete(0, tk.END)
         self.entry_replace.delete(0, tk.END)
@@ -292,13 +459,13 @@ class CodebookApp:
             messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
             return
             
-        self.data[idx] = {
+        self.db_manager.data[idx] = {
             "category": cat,
             "find": f_txt,
             "replace": r_txt,
             "details": d_txt
         }
-        self.save_data()
+        self.db_manager.save_data()
         self.refresh_list()
         
     def delete_code(self):
@@ -308,12 +475,11 @@ class CodebookApp:
             return
             
         if messagebox.askyesno("삭제 확인", "선택한 코드를 정말 삭제하시겠습니까?"):
-            # 다중 선택을 지원할 경우 뒤에서부터 삭제해야 인덱스가 안 꼬임
             idxs = sorted([int(s) for s in selected], reverse=True)
             for idx in idxs:
-                del self.data[idx]
+                del self.db_manager.data[idx]
                 
-            self.save_data()
+            self.db_manager.save_data()
             self.refresh_list()
             
             self.combo_cat.set("")
@@ -330,14 +496,11 @@ class CodebookApp:
         if not selected:
             messagebox.showinfo("안내", "복사할 항목을 먼저 선택해주세요.")
             return
-            
         idx = int(selected[0])
-        text = self.data[idx].get(field, "")
-        
+        text = self.db_manager.data[idx].get(field, "")
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.root.update()
-        
         messagebox.showinfo("복사 완료", f"클립보드에 복사되었습니다:\n\n{text}")
 
     def export_preset(self):
@@ -362,7 +525,7 @@ class CodebookApp:
             try:
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(preset_data, f, ensure_ascii=False, indent=4)
-                messagebox.showinfo("내보내기 완료", f"성공적으로 내보냈습니다!\n절차서 수정 헬퍼의 [목록 불러오기]에서 사용하세요.\n\n저장 경로: {filepath}")
+                messagebox.showinfo("내보내기 완료", f"성공적으로 내보냈습니다!\n\n저장 경로: {filepath}")
             except Exception as e:
                 messagebox.showerror("오류", f"저장 중 오류 발생:\n{e}")
 
@@ -370,38 +533,40 @@ class CodebookApp:
         ctrl_frame = ttk.Frame(self.tab_viewer)
         ctrl_frame.pack(side="top", fill="x", padx=10, pady=5)
         
-        ttk.Button(ctrl_frame, text="📂 워드 문서 열기 (.docx)", command=self.load_document).pack(side="left", padx=5)
-        
-        # Reference 추출 버튼
+        ttk.Button(ctrl_frame, text="📂 문서 열기 (Word, Excel, HWP, TXT)", command=self.load_document).pack(side="left", padx=5)
         ttk.Button(ctrl_frame, text="✨ 2.0 Reference 추출", command=self.extract_references).pack(side="left", padx=10)
         
-        # 원본 열기 (수정용) 버튼
-        self.btn_edit_doc = ttk.Button(ctrl_frame, text="📝 원본 워드로 열어서 직접 수정하기", command=self.open_current_document, state="disabled")
+        self.btn_edit_doc = ttk.Button(ctrl_frame, text="📝 원본 프로그램으로 열어서 직접 수정하기", command=self.open_current_document, state="disabled")
         self.btn_edit_doc.pack(side="left", padx=10)
         
         self.btn_apply_db = ttk.Button(ctrl_frame, text="⚡ 현재 문서에 코드 DB 일괄 적용", command=self.apply_db_to_current, state="disabled")
         self.btn_apply_db.pack(side="left", padx=10)
         
         if HtmlFrame is None or mammoth is None:
-            ttk.Label(ctrl_frame, text="⚠️ tkinterweb 또는 mammoth 라이브러리가 필요합니다.", foreground="red").pack(side="right", padx=10)
+            ttk.Label(ctrl_frame, text="⚠️ 필수 모듈(tkinterweb, mammoth)이 부족합니다.", foreground="red").pack(side="right", padx=10)
             
-        # 뷰어 내 검색용 프레임
         search_frame = ttk.Frame(self.tab_viewer)
         search_frame.pack(side="top", fill="x", padx=10, pady=0)
         
-        ttk.Label(search_frame, text="🔍 뷰어 내 텍스트 검색:").pack(side="left", padx=5)
-        self.entry_viewer_search = ttk.Entry(search_frame, width=30)
+        ttk.Label(search_frame, text="🔍 찾을 단어:").pack(side="left", padx=5)
+        self.entry_viewer_search = ttk.Entry(search_frame, width=20)
         self.entry_viewer_search.pack(side="left", padx=5)
         self.entry_viewer_search.bind("<Return>", lambda e: self.search_in_viewer())
         
-        ttk.Button(search_frame, text="검색 (다음)", command=self.search_in_viewer).pack(side="left", padx=2)
+        ttk.Button(search_frame, text="검색", command=self.search_in_viewer).pack(side="left", padx=2)
         ttk.Button(search_frame, text="초기화", command=self.reset_viewer_search).pack(side="left", padx=2)
         
         self.lbl_viewer_search_result = ttk.Label(search_frame, text="")
-        self.lbl_viewer_search_result.pack(side="left", padx=10)
+        self.lbl_viewer_search_result.pack(side="left", padx=5)
         
-        self.current_search_index = 0
-        self.last_search_query = ""
+        ttk.Label(search_frame, text=" | ").pack(side="left", padx=2)
+        
+        ttk.Label(search_frame, text="➡ 바꿀 단어:").pack(side="left", padx=5)
+        self.entry_viewer_replace = ttk.Entry(search_frame, width=20)
+        self.entry_viewer_replace.pack(side="left", padx=5)
+        
+        self.btn_quick_replace = ttk.Button(search_frame, text="✨ 즉시 고치기", command=self.quick_replace_viewer_text, state="disabled")
+        self.btn_quick_replace.pack(side="left", padx=5)
         
         viewer_frame = ttk.Frame(self.tab_viewer)
         viewer_frame.pack(side="top", fill="both", expand=True, padx=10, pady=5)
@@ -411,8 +576,6 @@ class CodebookApp:
             self.html_viewer.pack(fill="both", expand=True)
         else:
             self.html_viewer = None
-            
-        self.current_doc_text = ""
 
     def load_document(self):
         if self.html_viewer is None or mammoth is None:
@@ -420,19 +583,26 @@ class CodebookApp:
             return
             
         filepath = filedialog.askopenfilename(
-            title="절차서 문서 열기 (Word)",
-            filetypes=[("워드 파일", "*.docx"), ("모든 파일", "*.*")]
+            title="절차서 문서 열기",
+            filetypes=[
+                ("모든 지원 파일", "*.docx *.xlsx *.hwp *.hwpx *.txt"),
+                ("워드 파일", "*.docx"),
+                ("엑셀 파일", "*.xlsx"),
+                ("한글 파일", "*.hwp *.hwpx"),
+                ("텍스트 파일", "*.txt"),
+                ("모든 파일", "*.*")
+            ]
         )
         if filepath:
             self._load_document_by_path(filepath)
 
     def _load_document_by_path(self, filepath):
-        if filepath.lower().endswith('.docx'):
-            try:
+        ext = filepath.lower().split('.')[-1]
+        try:
+            if ext == 'docx':
                 with open(filepath, "rb") as docx_file:
                     result = mammoth.convert_to_html(docx_file)
                     html = result.value
-                    
                     docx_file.seek(0)
                     text_result = mammoth.extract_raw_text(docx_file)
                     self.current_doc_text = text_result.value
@@ -448,56 +618,146 @@ class CodebookApp:
                     img {{ max-width: 100%; height: auto; }}
                 </style>
                 </head>
-                <body>
-                {html}
+                <body>{html}</body>
+                </html>
+                """
+                self.html_viewer.load_html(styled_html)
+                
+            elif ext == 'txt':
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        text_content = f.read()
+                except:
+                    with open(filepath, 'r', encoding='euc-kr') as f:
+                        text_content = f.read()
+                self.current_doc_text = text_content
+                html_content = text_content.replace('\n', '<br>')
+                styled_html = f"<html><body style=\"font-family: 'Malgun Gothic', sans-serif; padding: 20px; line-height: 1.6;\">{html_content}</body></html>"
+                self.html_viewer.load_html(styled_html)
+                
+            elif ext in ['xlsx', 'hwp', 'hwpx']:
+                self.current_doc_text = ""
+                styled_html = f"""
+                <html>
+                <body style="font-family: 'Malgun Gothic', sans-serif; padding: 40px; text-align: center; color: #555; line-height: 1.8;">
+                    <h2>{ext.upper()} 파일이 로드되었습니다.</h2>
+                    <p>현재 뷰어 화면의 미리보기는 워드(.docx) 및 텍스트(.txt) 문서만 지원합니다.</p>
                 </body>
                 </html>
                 """
                 self.html_viewer.load_html(styled_html)
-                self.notebook.update()
-                
-                self.current_filepath = filepath
-                self.btn_edit_doc.config(state="normal")
-                self.btn_apply_db.config(state="normal")
-            except Exception as e:
-                messagebox.showerror("오류", f"문서를 여는 중 오류가 발생했습니다:\\n{e}")
-        else:
-            messagebox.showinfo("안내", "현재 HTML 뷰어는 워드(.docx) 파일만 지원합니다.")
+            else:
+                messagebox.showinfo("안내", "지원하지 않는 파일 형식입니다.")
+                return
+
+            self.notebook.update()
+            self.current_filepath = filepath
+            self.btn_edit_doc.config(state="normal")
+            self.btn_apply_db.config(state="normal")
+            if hasattr(self, 'btn_quick_replace'):
+                self.btn_quick_replace.config(state="normal")
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"문서를 여는 중 오류가 발생했습니다:\\n{e}")
 
     def apply_db_to_current(self):
-        if not hasattr(self, 'current_filepath') or not self.current_filepath:
+        if not self.current_filepath:
             messagebox.showwarning("경고", "먼저 문서를 열어주세요.")
             return
             
-        rules = [(d["find"], d["replace"]) for d in self.data if d.get("find") and d.get("replace")]
+        rules = [(d["find"], d["replace"]) for d in self.db_manager.data if d.get("find") and d.get("replace")]
         if not rules:
             messagebox.showwarning("경고", "코드 DB에 바꿀 내용(Replace)이 설정된 규격이 하나도 없습니다.")
             return
             
-        if not messagebox.askyesno("일괄 적용 확인", f"현재 열려있는 문서에 코드 DB의 변환 규칙 {len(rules)}개를 모두 적용하시겠습니까?\\n(원본 파일은 '_수정본' 이라는 이름으로 같은 폴더에 안전하게 저장됩니다.)"):
+        if not messagebox.askyesno("일괄 적용 확인", f"현재 문서에 DB의 변환 규칙 {len(rules)}개를 모두 적용하시겠습니까?"):
             return
             
         try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
             dir_name = os.path.dirname(self.current_filepath)
             base_name = os.path.basename(self.current_filepath)
             name, ext = os.path.splitext(base_name)
             output_filepath = os.path.join(dir_name, f"{name}_수정본{ext}")
             
-            self.process_docx(self.current_filepath, output_filepath, rules)
+            try:
+                DocumentProcessor.process_single_document(self.current_filepath, output_filepath, rules)
+            except Exception as fe:
+                self.root.config(cursor="")
+                messagebox.showinfo("안내", str(fe))
+                return
             
             self._load_document_by_path(output_filepath)
-            messagebox.showinfo("적용 완료", f"현재 문서에 {len(rules)}개의 변환 규칙을 적용하고 뷰어를 새로고침했습니다!\\n\\n저장 경로: {output_filepath}")
+            self.root.config(cursor="")
+            messagebox.showinfo("적용 완료", f"적용 완료! 저장 경로: {output_filepath}")
         except Exception as e:
-            messagebox.showerror("오류", f"문서 일괄 변환 중 오류가 발생했습니다:\\n{e}")
+            self.root.config(cursor="")
+            messagebox.showerror("오류", f"문서 변환 중 오류가 발생했습니다:\\n{e}")
+
+    def quick_replace_viewer_text(self):
+        if not self.current_filepath:
+            return
+            
+        find_txt = self.entry_viewer_search.get().strip()
+        replace_txt = self.entry_viewer_replace.get().strip()
+        if not find_txt:
+            messagebox.showwarning("입력 오류", "찾을 단어를 입력해주세요.")
+            return
+            
+        if not messagebox.askyesno("빠른 치환 확인", f"'{find_txt}' 단어를 '{replace_txt}'(으)로 즉시 변경하시겠습니까?"):
+            return
+            
+        try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
+            rules = [(find_txt, replace_txt)]
+            import os, shutil
+            dir_name = os.path.dirname(self.current_filepath)
+            base_name = os.path.basename(self.current_filepath)
+            name, ext = os.path.splitext(base_name)
+            temp_filepath = os.path.join(dir_name, f"{name}_temp_replace{ext}")
+            
+            try:
+                DocumentProcessor.process_single_document(self.current_filepath, temp_filepath, rules)
+            except Exception as fe:
+                self.root.config(cursor="")
+                messagebox.showinfo("안내", str(fe))
+                return
+                
+            try:
+                os.remove(self.current_filepath)
+                shutil.move(temp_filepath, self.current_filepath)
+                final_path = self.current_filepath
+            except Exception:
+                final_path = os.path.join(dir_name, f"{name}_즉시수정본{ext}")
+                shutil.move(temp_filepath, final_path)
+                messagebox.showwarning("저장 안내", "원본 파일이 열려 있어 덮어쓰지 못했습니다.\\n대신 '_즉시수정본'으로 저장되었습니다.")
+                
+            self._load_document_by_path(final_path)
+            self.root.config(cursor="")
+            messagebox.showinfo("수정 완료", "성공적으로 수정되었습니다!")
+        except Exception as e:
+            self.root.config(cursor="")
+            messagebox.showerror("오류", f"문서 수정 중 오류:\\n{e}")
 
     def open_current_document(self):
-        if hasattr(self, 'current_filepath') and self.current_filepath:
+        if self.current_filepath:
             try:
-                import os
+                if self.root.state() == 'zoomed':
+                    self.root.state('normal')
+                self.root.update_idletasks()
+                screen_width = self.root.winfo_screenwidth()
+                screen_height = self.root.winfo_screenheight()
+                self.root.geometry(f"{screen_width//2}x{screen_height-80}+0+0")
+                
                 os.startfile(self.current_filepath)
-                messagebox.showinfo("안내", "워드(Word) 프로그램으로 원본 문서를 열었습니다.\n워드에서 직접 표, 서식, 글자 등을 수정한 뒤 [저장] 하시면 됩니다.")
+                search_term = self.entry_viewer_search.get().strip()
+                MacroController.sync_search_to_external_app(self.root, self.current_filepath, search_term)
             except Exception as e:
-                messagebox.showerror("오류", f"워드를 실행하는 중 오류가 발생했습니다:\n{e}")
+                messagebox.showerror("오류", f"실행 오류:\\n{e}")
 
     def search_in_viewer(self):
         if not self.html_viewer: return
@@ -506,9 +766,7 @@ class CodebookApp:
             self.reset_viewer_search()
             return
             
-        import re
         safe_query = re.escape(query)
-        
         if query != self.last_search_query:
             self.last_search_query = query
             self.current_search_index = 1
@@ -517,17 +775,18 @@ class CodebookApp:
             
         try:
             matches_count = self.html_viewer.find_text(safe_query, select=self.current_search_index, ignore_case=True, highlight_all=True)
-            
             if matches_count == 0:
                 self.lbl_viewer_search_result.config(text="결과 없음", foreground="red")
             else:
                 if self.current_search_index > matches_count:
                     self.current_search_index = 1
                     self.html_viewer.find_text(safe_query, select=self.current_search_index, ignore_case=True, highlight_all=True)
-                
                 self.lbl_viewer_search_result.config(text=f"{self.current_search_index} / {matches_count} 개", foreground="blue")
         except Exception:
             self.lbl_viewer_search_result.config(text="검색 오류", foreground="red")
+            
+        if self.current_filepath:
+            MacroController.sync_search_to_external_app(self.root, self.current_filepath, query)
 
     def reset_viewer_search(self):
         self.entry_viewer_search.delete(0, tk.END)
@@ -538,14 +797,11 @@ class CodebookApp:
             self.html_viewer.find_text("")
 
     def extract_references(self):
-        if not hasattr(self, 'current_doc_text') or not self.current_doc_text:
+        if not self.current_doc_text:
             messagebox.showwarning("경고", "먼저 문서를 열어주세요.")
             return
             
-        import re
         full_text = self.current_doc_text
-        
-        # 문서 전체를 줄 단위로 스캔하여 규격을 찾습니다. (목차에 의한 잘림 현상 방지)
         lines = full_text.split('\n')
         extracted_count = 0
         found_codes = set()
@@ -554,55 +810,46 @@ class CodebookApp:
             line = line.strip()
             if not line or len(line) < 4: continue
             
-            # 보다 정교한 규격 패턴 매칭 (ASME PAUT 등 복잡한 규격명 완벽 지원 및 부분 단어 오탐지 방지)
             pattern = r'\b(ASME\s+(?:Sec(?:tion|\.)?\s*[IVX]+(?:\s*Art(?:icle|\.)?\s*\d+(?:\s*(?:SE|SA|SB)-[\w\d\-]+)?)?(?:\s*Mandatory\s*Appendix\s*[IVX]+)?|B\s*\d+(?:\.\d+)?)|API\s*(?:Std|Spec)?\s*\d+[A-Z]?|AWS\s*[A-Z]\d+(?:\.\d+)?|ISO\s*\d+(?:-\d+)?|KS\s*[A-Z]\s*\d+(?:-\d+)?|ASTM\s*[A-Z]\s*\d+|EN\s*\d+(?:-\d+)?|ASNT\s*SNT-TC-1A(?:(?:\s*\(\d{4}\s*Ed\.\))?)|KEPIC\s*[A-Z\d]+)'
             match = re.search(pattern, line, re.IGNORECASE)
             
             if match:
                 code_name = match.group(1).strip()
-                # 불필요한 공백 제거로 정규화 (예: ASME Sec. V -> ASME Sec.V)
                 code_name_norm = " ".join(code_name.split())
                 
                 if code_name_norm.lower() in found_codes:
                     continue
                 found_codes.add(code_name_norm.lower())
                 
-                # 규격 원문 내용 (보통 해당 줄이 제목임)
                 details = f"[규격 명칭]\n{line}"
                 if i + 1 < len(lines) and lines[i+1].strip() and not re.search(r'^\d+\.', lines[i+1]):
                     details += " " + lines[i+1].strip()
                     
-                # 문서 내에서 이 코드가 사용된 부분 검색 (상세내용에 추가)
                 usages = []
-                # 문서 본문 전체에서 검색 (Reference 목차 제외를 위해 ref_blocks[0] 등 활용 가능하나 단순 정규식 사용)
                 for usage_match in re.finditer(r'.{0,40}' + re.escape(code_name) + r'.{0,40}', full_text, re.IGNORECASE):
                     usage_text = usage_match.group(0).replace('\n', ' ').strip()
-                    # 너무 중복되지 않도록 필터링
                     if usage_text not in usages and "Reference" not in usage_text:
                         usages.append(usage_text)
                 
                 if usages:
                     details += "\n\n[문서 내 검색된 사용 예시]\n"
-                    # 최대 5개의 사용처만 추가
                     for u in usages[:5]:
                         details += f"- ...{u}...\n"
                         
-                # 기존에 등록된 규격인지 확인
                 existing_item = None
-                for d in self.data:
+                for d in self.db_manager.data:
                     if code_name_norm.lower() in d.get("find", "").lower():
                         existing_item = d
                         break
                         
                 if not existing_item:
-                    # 규격 접두사를 기반으로 분류(Category) 자동 지정
                     prefix = code_name_norm.split()[0].upper()
                     if prefix in ["ASME", "API", "AWS", "ISO", "KS", "ASTM", "EN", "KEPIC", "ASNT"]:
                         category_name = f"{prefix} 규격"
                     else:
                         category_name = "규격 (자동추출)"
                         
-                    self.data.append({
+                    self.db_manager.data.append({
                         "category": category_name,
                         "find": code_name_norm,
                         "replace": "",
@@ -610,10 +857,8 @@ class CodebookApp:
                     })
                     extracted_count += 1
                 else:
-                    # 이미 존재하는 코드면, 새로운 용례(usages)만 상세설명에 중복 없이 병합
                     old_details = existing_item.get("details", "")
                     new_usages = [u for u in usages[:5] if u not in old_details]
-                    
                     if new_usages:
                         if "[문서 내 검색된 사용 예시]" not in old_details:
                             old_details += "\n\n[문서 내 검색된 추가 사용 예시]\n"
@@ -623,25 +868,23 @@ class CodebookApp:
                         extracted_count += 1
                     
         if extracted_count > 0:
-            self.save_data()
+            self.db_manager.save_data()
             self.refresh_list()
-            messagebox.showinfo("추출 완료", f"성공적으로 {extracted_count}개의 규격을 신규 등록(또는 사용예시 업데이트)했습니다!\n문서 내 사용 예시도 함께 상세내용에 반영되었습니다.")
-            self.notebook.select(self.tab_code) # 결과 확인을 위해 코드 관리 탭으로 자동 이동
+            messagebox.showinfo("추출 완료", f"성공적으로 {extracted_count}개의 규격을 신규 등록/업데이트했습니다!")
+            self.notebook.select(self.tab_code)
         else:
             if found_codes:
-                messagebox.showinfo("추출 완료", f"문서에서 {len(found_codes)}개의 규격을 찾았으나, 모두 이미 등록되어 있는 코드입니다.")
+                messagebox.showinfo("추출 완료", f"문서에서 {len(found_codes)}개의 규격을 찾았으나, 모두 이미 등록되어 있습니다.")
             else:
-                messagebox.showinfo("추출 실패", "문서에서 규격 코드(ASME, KS, ISO 등)를 찾지 못했습니다.\n본문 텍스트가 추출되지 않았을 수 있습니다.")
+                messagebox.showinfo("추출 실패", "문서에서 규격 코드를 찾지 못했습니다.")
 
     def create_batch_widgets(self):
-        # 1. 파일 다중 선택 프레임
         file_frame = ttk.LabelFrame(self.tab_batch, text="1. 원본 절차서 파일 선택 (여러 파일 동시 선택 가능)")
         file_frame.pack(fill="x", padx=15, pady=10)
         
         self.file_listbox = tk.Listbox(file_frame, height=4, selectmode=tk.EXTENDED)
         self.file_listbox.pack(side="left", padx=10, pady=10, expand=True, fill="both")
         
-        # 리스트박스 스크롤바
         scrollbar = ttk.Scrollbar(self.file_listbox, orient="vertical")
         scrollbar.config(command=self.file_listbox.yview)
         scrollbar.pack(side="right", fill="y")
@@ -653,7 +896,6 @@ class CodebookApp:
         ttk.Button(btn_frame, text="선택 삭제", command=self.remove_file).pack(fill="x", pady=2)
         ttk.Button(btn_frame, text="미리보기(Text)", command=self.preview_file).pack(fill="x", pady=2)
         
-        # 2. 단어 일괄 변환 프레임 (프리셋 기능 포함)
         list_frame = ttk.LabelFrame(self.tab_batch, text="2. 단어/코드 일괄 자동 변환 (다중 파일 동시 적용 가능)")
         list_frame.pack(fill="both", expand=True, padx=15, pady=5)
         
@@ -683,7 +925,7 @@ class CodebookApp:
         self.batch_entry_replace = ttk.Entry(input_frame, width=20)
         self.batch_entry_replace.grid(row=0, column=3, padx=5, pady=5)
         
-        self.batch_entry_replace.bind("<Return>", lambda e: self.add_item())
+        self.batch_entry_replace.bind("<Return>", lambda e: self.batch_add_item())
         self.batch_entry_find.bind("<Return>", lambda e: self.batch_entry_replace.focus())
         
         ttk.Button(input_frame, text="추가", command=self.batch_add_item, width=8).grid(row=0, column=4, padx=5)
@@ -694,8 +936,212 @@ class CodebookApp:
         
         run_frame = ttk.Frame(list_frame)
         run_frame.pack(fill="x", padx=10, pady=10)
-        
         ttk.Button(run_frame, text="위 목록대로 1번에 등록된 모든 파일을 일괄 변환하여 폴더에 자동 저장", command=self.process_files).pack(fill="x", ipady=10)
+
+    def add_files(self):
+        filepaths = filedialog.askopenfilenames(
+            title="절차서 파일 선택 (여러 개 선택 가능)",
+            filetypes=[
+                ("모든 지원 파일", "*.docx *.xlsx *.hwp *.hwpx *.txt"),
+                ("모든 파일", "*.*")
+            ]
+        )
+        for path in filepaths:
+            if path not in self.file_listbox.get(0, tk.END):
+                self.file_listbox.insert(tk.END, path)
+
+    def remove_file(self):
+        selected = self.file_listbox.curselection()
+        for index in reversed(selected):
+            self.file_listbox.delete(index)
+
+    def preview_file(self):
+        selected = self.file_listbox.curselection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "미리보기할 파일을 위 목록에서 먼저 선택해주세요.")
+            return
+            
+        filepath = self.file_listbox.get(selected[0])
+        ext = os.path.splitext(filepath)[1].lower()
+        content = ""
+        try:
+            if ext == '.docx':
+                try:
+                    import docx
+                    doc = docx.Document(filepath)
+                    content = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+                except ImportError:
+                    content = "(docx 모듈이 설치되어 있지 않습니다.)"
+            elif ext == '.txt':
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                except:
+                    with open(filepath, 'r', encoding='euc-kr') as f:
+                        content = f.read()
+            else:
+                messagebox.showinfo("안내", f"{ext} 파일은 텍스트 미리보기를 지원하지 않습니다.")
+                return
+                
+            if not content.strip():
+                content = "(추출된 텍스트가 없습니다. 문서가 비어있거나 스캔 이미지 형태일 수 있습니다.)"
+                
+            top = tk.Toplevel(self.root)
+            top.title(f"텍스트 미리보기 - {os.path.basename(filepath)}")
+            top.geometry("600x600")
+            
+            top_frame = ttk.Frame(top)
+            top_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            txt_widget = tk.Text(top_frame, wrap="word", font=("맑은 고딕", 10))
+            scrollbar = ttk.Scrollbar(top_frame, orient="vertical", command=txt_widget.yview)
+            scrollbar.pack(side="right", fill="y")
+            txt_widget.pack(side="left", fill="both", expand=True)
+            txt_widget.config(yscrollcommand=scrollbar.set)
+            
+            txt_widget.insert("1.0", content)
+            txt_widget.config(state="disabled")
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"미리보기를 불러오는 중 오류가 발생했습니다:\\n{e}")
+
+    def save_preset(self):
+        items = self.batch_tree.get_children()
+        if not items:
+            messagebox.showwarning("경고", "저장할 단어 목록이 없습니다.")
+            return
+        preset_data = []
+        for item in items:
+            val = self.batch_tree.item(item, 'values')
+            preset_data.append({"find": val[0], "replace": val[1]})
+            
+        filepath = filedialog.asksaveasfilename(
+            title="단어 목록 저장",
+            defaultextension=".json",
+            filetypes=[("JSON 파일", "*.json")],
+            initialfile="자주쓰는단어.json"
+        )
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(preset_data, f, ensure_ascii=False, indent=4)
+                messagebox.showinfo("저장 완료", "단어 목록이 성공적으로 저장되었습니다.")
+            except Exception as e:
+                messagebox.showerror("오류", f"저장 중 오류 발생:\\n{e}")
+
+    def load_preset(self):
+        filepath = filedialog.askopenfilename(
+            title="단어 목록 불러오기",
+            filetypes=[("JSON 파일", "*.json")]
+        )
+        if filepath:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    preset_data = json.load(f)
+                for item in self.batch_tree.get_children():
+                    self.batch_tree.delete(item)
+                for entry in preset_data:
+                    self.batch_tree.insert("", "end", values=(entry.get("find", ""), entry.get("replace", "")))
+                messagebox.showinfo("불러오기 완료", "단어 목록을 성공적으로 불러왔습니다.")
+            except Exception as e:
+                messagebox.showerror("오류", f"불러오기 중 오류 발생:\\n{e}")
+
+    def load_from_code_db(self):
+        rules = [(d["find"], d["replace"]) for d in self.db_manager.data if d.get("find") and d.get("replace")]
+        if not rules:
+            messagebox.showwarning("경고", "코드 관리 DB에 '바꿀 내용'이 설정된 규격이 없습니다.")
+            return
+            
+        if messagebox.askyesno("불러오기 확인", f"코드 DB에 저장된 {len(rules)}개의 변환 규칙을 목록에 가져오시겠습니까?"):
+            for item in self.batch_tree.get_children():
+                self.batch_tree.delete(item)
+            for f_text, r_text in rules:
+                self.batch_tree.insert("", "end", values=(f_text, r_text))
+            messagebox.showinfo("불러오기 완료", "성공적으로 코드 DB에서 규칙을 불러왔습니다!")
+
+    def batch_add_item(self):
+        f_text = self.batch_entry_find.get().strip()
+        r_text = self.batch_entry_replace.get().strip()
+        if f_text:
+            self.batch_tree.insert("", "end", values=(f_text, r_text))
+            self.batch_entry_find.delete(0, tk.END)
+            self.batch_entry_replace.delete(0, tk.END)
+            self.batch_entry_find.focus()
+        else:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            
+    def batch_update_item(self):
+        selected = self.batch_tree.selection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "수정할 항목을 위 목록에서 선택해주세요.")
+            return
+        f_text = self.batch_entry_find.get().strip()
+        r_text = self.batch_entry_replace.get().strip()
+        if f_text:
+            self.batch_tree.item(selected[0], values=(f_text, r_text))
+        else:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            
+    def batch_on_tree_select(self, event):
+        selected = self.batch_tree.selection()
+        if selected:
+            item = self.batch_tree.item(selected[0])
+            val = item['values']
+            self.batch_entry_find.delete(0, tk.END)
+            self.batch_entry_find.insert(0, val[0])
+            self.batch_entry_replace.delete(0, tk.END)
+            self.batch_entry_replace.insert(0, val[1])
+
+    def batch_delete_item(self):
+        selected = self.batch_tree.selection()
+        if selected:
+            for item in selected:
+                self.batch_tree.delete(item)
+
+    def process_files(self):
+        files = self.file_listbox.get(0, tk.END)
+        if not files:
+            messagebox.showerror("오류", "변환할 파일을 먼저 추가해주세요.")
+            return
+            
+        items = self.batch_tree.get_children()
+        if not items:
+            messagebox.showwarning("경고", "변경할 단어 목록이 비어있습니다.")
+            return
+            
+        replacements = []
+        for item in items:
+            val = self.batch_tree.item(item, 'values')
+            replacements.append((val[0], val[1]))
+            
+        output_dir = filedialog.askdirectory(title="변환된 새 파일들을 저장할 폴더 선택")
+        if not output_dir:
+            return
+            
+        try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
+            success_count = 0
+            for input_file in files:
+                if not os.path.exists(input_file): continue
+                filename = os.path.basename(input_file)
+                output_file = os.path.join(output_dir, f"일괄변환_{filename}")
+                
+                try:
+                    DocumentProcessor.process_single_document(input_file, output_file, replacements)
+                    success_count += 1
+                except Exception as e:
+                    print(f"파일 변환 실패: {filename}, {e}")
+                    continue
+                    
+            self.root.config(cursor="")
+            messagebox.showinfo("완료", f"총 {success_count}개의 파일이 성공적으로 일괄 변환 및 저장되었습니다!\n\n저장 폴더: {output_dir}")
+            os.startfile(output_dir)
+            
+        except Exception as e:
+            self.root.config(cursor="")
+            messagebox.showerror("실행 오류", f"파일을 자동 변환하는 중 오류가 발생했습니다:\n{e}")
 
 if __name__ == "__main__":
     root = tk.Tk()

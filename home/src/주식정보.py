@@ -654,16 +654,32 @@ class EconomicDashboard:
             try:
                 import requests
                 import re
+                import urllib.parse
+                
+                # 1. 네이버 금융 자동완성 API를 우선 사용 (가장 정확함)
+                try:
+                    url_api = f"https://ac.finance.naver.com/ac?q={urllib.parse.quote(name)}&q_enc=utf-8&st=111&frm=stock&r_format=json&r_enc=utf-8&r_unicode=0&t_koreng=1&req=1"
+                    res_api = requests.get(url_api, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3).json()
+                    items = res_api.get('items', [[]])[0]
+                    if items:
+                        code = items[0][0]
+                        ent_ticker.delete(0, 'end')
+                        ent_ticker.insert(0, f"{code}.KS")
+                        return
+                except:
+                    pass
+                    
+                # 2. 백업: 네이버 통합 검색 (대동 등 예외 처리를 위해 정규식 조건 완화)
                 url = f"https://search.naver.com/search.naver?query={name}+주가"
-                res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-                match = re.search(r'item/main.naver\?code=(\d{6})', res.text)
+                res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=3)
+                match = re.search(r'code=(\d{6})', res.text)
                 if match:
                     code = match.group(1)
                     ent_ticker.delete(0, 'end')
                     ent_ticker.insert(0, f"{code}.KS")
                 else:
                     from tkinter import messagebox
-                    messagebox.showinfo("검색 실패", f"'{name}'에 대한 종목 코드를 찾을 수 없습니다.\n미국 주식은 티커(예: TSLA)를 직접 입력해주세요.", parent=win)
+                    messagebox.showinfo("검색 실패", f"'{name}'에 대한 종목 코드를 찾을 수 없습니다.\n종목 번호를 직접 입력해주세요. (예: 대동 -> 000490.KS)", parent=win)
             except Exception as e:
                 pass
                 
