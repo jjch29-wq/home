@@ -27,6 +27,21 @@ class HouseholdDB:
                     note TEXT
                 )
             ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS recurring_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    amount INTEGER NOT NULL,
+                    note TEXT
+                )
+            ''')
             conn.commit()
 
     def add_transaction(self, date, t_type, category, amount, note):
@@ -57,6 +72,19 @@ class HouseholdDB:
                 WHERE date LIKE ? 
                 ORDER BY date DESC, id DESC
             ''', (search_pattern,))
+            return cursor.fetchall()
+
+    def search_transactions(self, keyword):
+        """통합 검색 기능"""
+        search_pattern = f"%{keyword}%"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, date, type, category, amount, note 
+                FROM transactions 
+                WHERE note LIKE ? OR category LIKE ?
+                ORDER BY date DESC, id DESC
+            ''', (search_pattern, search_pattern))
             return cursor.fetchall()
             
     def get_all_transactions(self):
@@ -101,6 +129,33 @@ class HouseholdDB:
             'expense_by_category': expense_by_category
         }
 
+    def get_annual_summary(self, year):
+        """연간 월별 수입/지출 통계 조회"""
+        search_pattern = f"{year}-%"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT substr(date, 6, 2) as month, SUM(amount) 
+                FROM transactions 
+                WHERE type="수입" AND date LIKE ?
+                GROUP BY month
+            ''', (search_pattern,))
+            income_rows = cursor.fetchall()
+            
+            cursor.execute('''
+                SELECT substr(date, 6, 2) as month, SUM(amount) 
+                FROM transactions 
+                WHERE type="지출" AND date LIKE ?
+                GROUP BY month
+            ''', (search_pattern,))
+            expense_rows = cursor.fetchall()
+            
+            return {
+                'income': dict(income_rows),
+                'expense': dict(expense_rows)
+            }
+
     def get_unique_categories(self, t_type):
         """특정 유형(수입/지출)에 대해 사용자가 입력했던 모든 고유 카테고리 조회"""
         with self.get_connection() as conn:
@@ -125,3 +180,38 @@ class HouseholdDB:
             except Exception as e:
                 return str(e)
         return None
+
+    # --- 추가: 설정(예산) 및 고정 항목 관리 ---
+    def get_setting(self, key, default=None):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT value FROM settings WHERE key=?', (key,))
+            row = cursor.fetchone()
+            return row[0] if row else default
+
+    def set_setting(self, key, value):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, str(value)))
+            conn.commit()
+
+    def add_recurring_template(self, t_type, category, amount, note):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO recurring_templates (type, category, amount, note)
+                VALUES (?, ?, ?, ?)
+            ''', (t_type, category, amount, note))
+            conn.commit()
+
+    def get_recurring_templates(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, type, category, amount, note FROM recurring_templates')
+            return cursor.fetchall()
+            
+    def delete_recurring_template(self, t_id):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM recurring_templates WHERE id=?', (t_id,))
+            conn.commit()
