@@ -1,6 +1,9 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, simpledialog, filedialog
 import datetime
+import threading
+import base64
+import json
 from 가계부_DB import HouseholdDB
 import matplotlib
 import matplotlib.pyplot as plt
@@ -144,6 +147,10 @@ class HouseholdApp:
         self.notebook = ttk.Notebook(right_frame)
         self.notebook.pack(expand=True, fill='both')
         
+        tab_daily = ttk.Frame(self.notebook, padding=10)
+        self.notebook.add(tab_daily, text=" 📅 일간 요약 ")
+        self._build_daily_tab(tab_daily)
+
         tab_month = ttk.Frame(self.notebook, padding=10)
         self.notebook.add(tab_month, text=" 📊 월간 요약 ")
         self._build_dashboard_tab(tab_month)
@@ -200,6 +207,13 @@ class HouseholdApp:
         self.canvas_line = FigureCanvasTkAgg(self.fig_line, master=parent)
         self.canvas_line.get_tk_widget().pack(expand=True, fill='both')
 
+    def _build_daily_tab(self, parent):
+        self.fig_daily = plt.Figure(figsize=(5, 4), dpi=100)
+        self.ax_daily = self.fig_daily.add_subplot(111)
+        self.canvas_daily = FigureCanvasTkAgg(self.fig_daily, master=parent)
+        self.canvas_daily.get_tk_widget().pack(expand=True, fill='both')
+        self.canvas_daily.mpl_connect('button_press_event', self.on_daily_chart_click)
+
     def _build_input_form(self, parent):
         ttk.Label(parent, text="날짜:").grid(row=0, column=0, padx=5, pady=5, sticky='w')
         try:
@@ -230,7 +244,10 @@ class HouseholdApp:
         self.ent_note = ttk.Entry(parent, width=30)
         self.ent_note.grid(row=1, column=3, columnspan=3, padx=5, pady=5, sticky='we')
         
-        ttk.Button(parent, text="저장하기", command=self.add_record).grid(row=1, column=6, padx=10, pady=5)
+        btn_frame = ttk.Frame(parent)
+        btn_frame.grid(row=1, column=6, padx=10, pady=5, sticky='we')
+        ttk.Button(btn_frame, text="저장하기", command=self.add_record).pack(side='left', padx=2)
+        ttk.Button(btn_frame, text="📸 영수증 인식", command=self.open_receipt_ocr).pack(side='left', padx=2)
 
     def _build_list_view(self, parent):
         search_frame = ttk.Frame(parent)
@@ -252,8 +269,11 @@ class HouseholdApp:
         self.tv.heading('날짜', text='날짜'); self.tv.column('날짜', width=100, anchor='center')
         self.tv.heading('유형', text='유형'); self.tv.column('유형', width=60, anchor='center')
         self.tv.heading('카테고리', text='카테고리'); self.tv.column('카테고리', width=100, anchor='center')
-        self.tv.heading('금액', text='금액(원)'); self.tv.column('금액', width=120, anchor='e')
+        self.tv.heading('금액', text='금액(원)'); self.tv.column('금액', width=120, anchor='center')
         self.tv.heading('메모', text='메모'); self.tv.column('메모', width=200, anchor='w')
+        
+        for col in cols:
+            self.tv.heading(col, command=lambda c=col: self._treeview_sort_column(c, False))
         
         scroll = ttk.Scrollbar(parent, orient='vertical', command=self.tv.yview)
         self.tv.configure(yscroll=scroll.set)
@@ -264,10 +284,82 @@ class HouseholdApp:
         
         self.tv.tag_configure('수입', foreground='blue')
         self.tv.tag_configure('지출', foreground='red')
+        self.tv.tag_configure('summary', background='#eaeaea', font=('Malgun Gothic', 9, 'bold'))
+        self.tv.bind('<<TreeviewSelect>>', self.on_treeview_select)
+
+    def _treeview_sort_column(self, col, reverse):
+        children = self.tv.get_children('')
+        items = []
+        summary_items = []
+        for k in children:
+            tags = self.tv.item(k, "tags")
+            if tags and 'summary' in tags:
+                summary_items.append(k)
+            else:
+                items.append((self.tv.set(k, col), k))
+        
+        try:
+            if col == '금액':
+                items.sort(key=lambda t: int(t[0].replace(',', '').replace('원', '')), reverse=reverse)
+            elif col == 'ID':
+                items.sort(key=lambda t: int(t[0]), reverse=reverse)
+            else:
+                items.sort(reverse=reverse)
+        except Exception:
+            items.sort(reverse=reverse)
+
+        for index, (val, k) in enumerate(items):
+            self.tv.move(k, '', index)
+            
+        for k in summary_items:
+            self.tv.move(k, '', 'end')
+
+        self.tv.heading(col, command=lambda: self._treeview_sort_column(col, not reverse))
 
     # ----------------------------------------------------
     # 데이터 처리 및 이벤트 핸들러
     # ----------------------------------------------------
+    def on_treeview_select(self, event):
+        selected = self.tv.selection()
+        if not selected:
+            return
+            
+        item_id = selected[0]
+        values = self.tv.item(item_id, 'values')
+        
+        # 요약(총합계) 줄이거나 빈 값이면 무시
+        if not values or not str(values[0]).isdigit():
+            return
+            
+        date_val, t_type, cat, amount_str, note = values[1], values[2], values[3], values[4], values[5]
+        
+        # 날짜
+        if hasattr(self.ent_date, 'set_date'):
+            try:
+                dt = datetime.datetime.strptime(date_val, "%Y-%m-%d").date()
+                self.ent_date.set_date(dt)
+            except:
+                pass
+        else:
+            self.ent_date.delete(0, 'end')
+            self.ent_date.insert(0, date_val)
+            
+        # 유형
+        self.var_type.set(t_type)
+        self.update_category_list()
+        
+        # 카테고리
+        self.cb_category.set(cat)
+            
+        # 금액
+        clean_amt = amount_str.replace(',', '').replace('원', '').strip()
+        self.ent_amount.delete(0, 'end')
+        self.ent_amount.insert(0, f"{int(clean_amt):,}" if clean_amt.isdigit() else clean_amt)
+        
+        # 메모
+        self.ent_note.delete(0, 'end')
+        self.ent_note.insert(0, note)
+
     def update_category_list(self, event=None):
         t_type = self.var_type.get()
         default_cats = self.income_categories if t_type == "수입" else self.expense_categories
@@ -313,6 +405,15 @@ class HouseholdApp:
         self.ent_search.delete(0, 'end')
         self.refresh_data()
 
+    def _add_summary_row(self, records):
+        if not records: return
+        t_in = sum(r[4] for r in records if r[2] == "수입")
+        t_out = sum(r[4] for r in records if r[2] == "지출")
+        
+        summary_val = f"{t_in - t_out:,}원"
+        memo_str = f"(수입: {t_in:,} / 지출: {t_out:,})"
+        self.tv.insert('', 'end', values=('', '[총 합계]', '-', '-', summary_val, memo_str), tags=('summary',))
+
     def search_data(self):
         keyword = self.ent_search.get().strip()
         if not keyword:
@@ -324,6 +425,7 @@ class HouseholdApp:
         for r in records:
             self.tv.insert('', 'end', values=(r[0], r[1], r[2], r[3], f"{r[4]:,}원", r[5]), tags=(r[2],))
             
+        self._add_summary_row(records)
         self.lbl_month.config(text=f"검색결과: '{keyword}'")
 
     def refresh_data(self):
@@ -335,6 +437,8 @@ class HouseholdApp:
         records = self.db.get_transactions_by_month(self.current_year, self.current_month)
         for r in records:
             self.tv.insert('', 'end', values=(r[0], r[1], r[2], r[3], f"{r[4]:,}원", r[5]), tags=(r[2],))
+            
+        self._add_summary_row(records)
             
         # 2. 요약 및 예산 갱신
         summary = self.db.get_monthly_summary(self.current_year, self.current_month)
@@ -361,6 +465,7 @@ class HouseholdApp:
         # 3. 차트 갱신
         self.update_pie_chart(summary['expense_by_category'])
         self.update_line_chart()
+        self.update_daily_chart()
 
     def update_pie_chart(self, exp_dict):
         self.ax_pie.clear()
@@ -393,9 +498,70 @@ class HouseholdApp:
         self.ax_line.ticklabel_format(style='plain', axis='y')
         self.canvas_line.draw()
 
+    def update_daily_chart(self):
+        self.ax_daily.clear()
+        daily_cat_data = self.db.get_daily_summary(self.current_year, self.current_month)
+        
+        if not daily_cat_data:
+            self.ax_daily.text(0.5, 0.5, '지출 내역이 없습니다.', ha='center', va='center', fontsize=12, color='gray')
+            self.ax_daily.axis('off')
+            self.current_chart_days = []
+        else:
+            days = sorted(daily_cat_data.keys())
+            self.current_chart_days = days
+            
+            # 모든 날짜에 쓰인 카테고리 종류 수집
+            all_cats = set()
+            for day_cats in daily_cat_data.values():
+                all_cats.update(day_cats.keys())
+            all_cats = sorted(list(all_cats))
+            
+            bottoms = [0] * len(days)
+            
+            for cat in all_cats:
+                amounts = [daily_cat_data[d].get(cat, 0) for d in days]
+                self.ax_daily.bar(days, amounts, bottom=bottoms, label=cat)
+                bottoms = [b + a for b, a in zip(bottoms, amounts)]
+            
+            self.ax_daily.set_title(f"{self.current_month}월 일간 카테고리별 지출", fontsize=12)
+            self.ax_daily.ticklabel_format(style='plain', axis='y')
+            self.ax_daily.tick_params(axis='x', rotation=45)
+            self.ax_daily.grid(True, axis='y', linestyle='--', alpha=0.6)
+            
+            # 막대 위에 총 지출액 표시
+            for i, day in enumerate(days):
+                total_val = bottoms[i]
+                if total_val > 0:
+                    self.ax_daily.text(i, total_val, f'{int(total_val):,}', va='bottom', ha='center', fontsize=8)
+            
+            # 범례 표시
+            if all_cats:
+                self.ax_daily.legend(bbox_to_anchor=(1.01, 1), loc='upper left', fontsize=8)
+                self.fig_daily.tight_layout()
+                
+        self.canvas_daily.draw()
+
     def on_tab_changed(self, event):
         self.canvas_pie.draw()
         self.canvas_line.draw()
+        self.canvas_daily.draw()
+
+    def on_daily_chart_click(self, event):
+        if event.inaxes != self.ax_daily or event.xdata is None:
+            return
+        
+        import math
+        idx = math.floor(event.xdata + 0.5)
+        
+        if hasattr(self, 'current_chart_days') and 0 <= idx < len(self.current_chart_days):
+            clicked_day = self.current_chart_days[idx]
+            keyword = f"{self.current_year}-{self.current_month:02d}-{clicked_day}"
+            
+            self.ent_search.delete(0, 'end')
+            self.ent_search.insert(0, keyword)
+            self.search_data()
+            
+            messagebox.showinfo("필터링 완료", f"그래프를 클릭하여 {keyword}의 내역을 검색했습니다.\n좌측 '상세 내역' 표를 확인해 주세요!")
 
     # ----------------------------------------------------
     # 버튼 액션 모음
@@ -463,6 +629,126 @@ class HouseholdApp:
             messagebox.showinfo("저장 완료", f"엑셀 파일이 저장되었습니다.\n{filepath}")
         else:
             messagebox.showinfo("알림", "저장할 내역이 없습니다.")
+
+    def open_receipt_ocr(self):
+        try:
+            import requests
+            import mimetypes
+        except ImportError:
+            messagebox.showerror("오류", "requests 라이브러리가 필요합니다.\n터미널에서 'pip install requests'를 실행해주세요.")
+            return
+
+        api_key = self.db.get_setting("gemini_api_key", "")
+        if not api_key:
+            api_key = simpledialog.askstring("API 키 설정", "Google Gemini API 키를 입력하세요 (AIza...):", show='*', parent=self.root)
+            if not api_key:
+                return
+            self.db.set_setting("gemini_api_key", api_key)
+
+        file_path = filedialog.askopenfilename(
+            title="영수증 사진 선택",
+            filetypes=[("Image files", "*.jpg *.jpeg *.png")],
+            parent=self.root
+        )
+        if not file_path:
+            return
+
+        wait_win = tk.Toplevel(self.root)
+        wait_win.title("분석 중")
+        wait_win.geometry("300x120")
+        wait_win.transient(self.root)
+        wait_win.grab_set()
+        ttk.Label(wait_win, text="AI가 영수증을 분석하고 있습니다...\n할인 내역까지 꼼꼼히 계산 중입니다! 🕒", justify='center').pack(expand=True)
+
+        def process_image():
+            try:
+                with open(file_path, "rb") as f:
+                    img_data = base64.b64encode(f.read()).decode('utf-8')
+                    
+                mime_type, _ = mimetypes.guess_type(file_path)
+                if not mime_type:
+                    mime_type = "image/jpeg"
+
+                prompt = """
+영수증 사진을 분석해서 가계부 내역(지출)으로 정리해주세요.
+응답은 반드시 아래 JSON 배열 형식으로만 반환해주세요. (다른 설명 텍스트 없이 JSON만 반환)
+[
+  {
+    "category": "식비",
+    "amount": 4480,
+    "note": "서울우유 후레쉬밀크"
+  },
+  {
+    "category": "식비",
+    "amount": 3180,
+    "note": "농심 안성탕면"
+  }
+]
+- 카테고리는 다음 중에서만 선택하세요: 식비, 교통/차량, 문화/생활, 주거/통신, 건강/의료, 쇼핑, 기타지출
+- 절대 품목을 뭉뚱그려 합치지 마세요. 영수증에 적힌 **모든 개별 상품(내역)을 하나하나 각각의 항목으로 분리해서 전부 작성**해주세요.
+- 행사 할인이나 쿠폰 할인이 적용된 상품이 있다면, 해당 상품의 원래 가격에서 할인된 금액을 뺀 '실제 결제 금액(할인가)'을 amount에 적어주세요.
+- amount는 쉼표 없는 순수 숫자만 적어주세요.
+"""
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+                payload = {
+                    "contents": [{
+                        "parts": [
+                            {"text": prompt},
+                            {"inline_data": {"mime_type": mime_type, "data": img_data}}
+                        ]
+                    }]
+                }
+                
+                resp = requests.post(url, json=payload, timeout=60)
+                
+                if resp.status_code != 200:
+                    if resp.status_code == 400 and "API key" in resp.text:
+                        raise Exception("api_key")
+                    elif resp.status_code == 503:
+                        raise Exception("503_unavailable")
+                    else:
+                        raise Exception(f"API 에러: {resp.status_code} {resp.text}")
+
+                data = resp.json()
+                result_text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+                
+                if result_text.startswith("```json"):
+                    result_text = result_text.replace("```json", "").replace("```", "").strip()
+                elif result_text.startswith("```"):
+                    result_text = result_text.replace("```", "").strip()
+
+                parsed_data = json.loads(result_text)
+                self.root.after(0, lambda: self._on_ocr_success(wait_win, parsed_data))
+            except Exception as e:
+                err_msg = str(e)
+                self.root.after(0, lambda msg=err_msg: self._on_ocr_fail(wait_win, msg))
+
+        threading.Thread(target=process_image, daemon=True).start()
+
+    def _on_ocr_success(self, wait_win, data):
+        wait_win.destroy()
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        count = 0
+        for item in data:
+            cat = item.get("category", "기타지출")
+            if cat not in self.expense_categories:
+                cat = "기타지출"
+            self.db.add_transaction(today, "지출", cat, int(item.get("amount", 0)), item.get("note", "영수증 인식"))
+            count += 1
+            
+        self.refresh_data()
+        messagebox.showinfo("완료", f"{count}건의 내역이 영수증에서 자동 추출되어 추가되었습니다!")
+
+    def _on_ocr_fail(self, wait_win, err_msg):
+        wait_win.destroy()
+        if err_msg == "api_key":
+            messagebox.showerror("오류", "유효하지 않은 API 키입니다.\n설정을 초기화합니다. 다시 시도해주세요.")
+            self.db.set_setting("gemini_api_key", "")
+        elif err_msg == "503_unavailable":
+            messagebox.showwarning("서버 혼잡", "현재 구글 AI 서버에 사용자가 몰려 처리가 지연되고 있습니다.\n잠시 후 다시 시도해주세요.")
+        else:
+            messagebox.showerror("분석 실패", f"영수증 분석 중 오류가 발생했습니다.\n{err_msg}")
+
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -75,16 +75,25 @@ class HouseholdDB:
             return cursor.fetchall()
 
     def search_transactions(self, keyword):
-        """통합 검색 기능"""
-        search_pattern = f"%{keyword}%"
+        """통합 검색 기능 (띄어쓰기로 다중 키워드 교집합 검색 지원)"""
+        keywords = keyword.strip().split()
+        if not keywords:
+            return []
+            
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                SELECT id, date, type, category, amount, note 
-                FROM transactions 
-                WHERE note LIKE ? OR category LIKE ?
-                ORDER BY date DESC, id DESC
-            ''', (search_pattern, search_pattern))
+            
+            base_query = "SELECT id, date, type, category, amount, note FROM transactions WHERE "
+            conditions = []
+            params = []
+            
+            for kw in keywords:
+                conditions.append("(note LIKE ? OR category LIKE ? OR date LIKE ?)")
+                search_pattern = f"%{kw}%"
+                params.extend([search_pattern, search_pattern, search_pattern])
+                
+            query = base_query + " AND ".join(conditions) + " ORDER BY date DESC, id DESC"
+            cursor.execute(query, params)
             return cursor.fetchall()
             
     def get_all_transactions(self):
@@ -128,6 +137,27 @@ class HouseholdDB:
             'balance': total_income - total_expense,
             'expense_by_category': expense_by_category
         }
+
+    def get_daily_summary(self, year, month):
+        """특정 연/월의 날짜 및 카테고리별 지출 통계 조회"""
+        search_pattern = f"{year}-{month:02d}-%"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT substr(date, 9, 2) as day, category, SUM(amount) 
+                FROM transactions 
+                WHERE type="지출" AND date LIKE ?
+                GROUP BY day, category
+                ORDER BY day, category
+            ''', (search_pattern,))
+            rows = cursor.fetchall()
+            
+            result = {}
+            for day, cat, amount in rows:
+                if day not in result:
+                    result[day] = {}
+                result[day][cat] = amount
+            return result
 
     def get_annual_summary(self, year):
         """연간 월별 수입/지출 통계 조회"""
