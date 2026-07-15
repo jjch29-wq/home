@@ -2936,6 +2936,16 @@ class PMIReportApp:
                 curr_row += 1
                 self.progress['value'] = (i+1) / len(final_list) * 100
                 
+            # [NEW] Add "- 이 하 여 백 -" at the row following the last data row
+            if curr_row <= end_row:
+                try:
+                    ws.merge_cells(start_row=curr_row, start_column=14, end_row=curr_row, end_column=24)
+                    blank_cell = ws.cell(row=curr_row, column=14, value="- 이 하 여 백 -")
+                    blank_cell.font = Font(name='맑은 고딕', size=10, bold=True)
+                    blank_cell.alignment = Alignment(horizontal='center', vertical='center')
+                except Exception as e:
+                    self.log(f"이하 여백 삽입 오류: {e}")
+                
             # [NEW] Add Tested Length Summary at the end
             total_org_m = 0.0
             total_rep_m = 0.0
@@ -3048,6 +3058,12 @@ class PMIReportApp:
                             cell.border = Border(right=thin_side)
                 except Exception as e:
                     self.log(f"AJ border error: {e}")
+
+            # [NEW] 최종 저장 직전 사용자의 행/열 커스텀 설정을 모든 시트에 적용
+            for p_idx, s in enumerate(wb.worksheets):
+                ctx = "COVER" if p_idx == 0 else "DATA"
+                self.apply_custom_dimensions(s, ctx)
+                self.force_print_settings(s, ctx)
 
             out_name = f"PAUT_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             out_path = os.path.join(BASE_DIR, "output", out_name) if os.path.exists(os.path.join(BASE_DIR, "output")) else os.path.join(BASE_DIR, out_name)
@@ -6399,6 +6415,8 @@ class PMIReportApp:
                     # [FIX] 사용자의 요청에 따라 RT 갑지의 인쇄 영역을 A1:P49로 강제 최적화
                     if mode == "RT":
                         ws.print_area = 'A1:P49'
+                    elif mode == "PAUT" and end_r > 0:
+                        ws.print_area = f'A1:AJ{end_r}'
                     elif end_r > 0:
                         ws.print_area = f'A1:T{end_r}'
                 else:
@@ -6430,13 +6448,9 @@ class PMIReportApp:
                          str(default_scale))
             ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
             
-            # [NEW] PAUT '을지(DATA)' 가로 너비 잘림 방지 (fitToWidth)
-            if mode == "PAUT" and context == "DATA":
-                ws.sheet_properties.pageSetUpPr.fitToPage = True
-                ws.page_setup.fitToWidth = 1
-                ws.page_setup.fitToHeight = 0
-            else:
-                ws.page_setup.scale = int(float(scale_val))
+            # [FIX] PAUT '을지(DATA)' 자동 맞춤이 내용을 너무 축소시키는 문제 해결
+            # 기존의 강제 fitToWidth 로직을 제거하고, 표지처럼 사용자가 지정한 배율(scale)을 따르도록 변경
+            ws.page_setup.scale = int(float(scale_val))
             
             def _margin(name, default):
                 return float(
@@ -6472,10 +6486,14 @@ class PMIReportApp:
             row_range_str = (self.config.get(f"CUSTOM_ROWS_{full_context}", "") or 
                              self.config.get(f"CUSTOM_ROWS_{context}", "")).strip()
             
+            self.log(f"!!! [SPY-ENTRY] Sheet: {ws.title}, mode={mode}, ctx={context}, full={full_context}, rows='{row_range_str}'")
+            
             if row_range_str:
                 height_val = (self.config.get(f"CUSTOM_ROW_HEIGHT_{full_context}") or 
                               self.config.get(f"CUSTOM_ROW_HEIGHT_{context}", 16.5))
                 height = float(height_val)
+                self.log(f"!!! [SPY-HEIGHT] Sheet: {ws.title}, rows='{row_range_str}', h={height}")
+                self.log(f"[DEBUG] Applying row height {height} to rows {row_range_str} for context {full_context}")
                 for part in row_range_str.split(','):
                     part = part.strip()
                     if not part: continue
@@ -7923,6 +7941,8 @@ class PMIReportApp:
         self.log(f"📅 날짜 필터 적용 완료: {len(selected_dates)}개 날짜 선택됨")
 
     def run_process(self):
+        self.save_settings() # [FIX] Ensure UI settings are saved to config before generating
+        
         # [NEW] Ensure config values are correct types for comparison (prevent str vs int errors)
         for k in list(self.config.keys()):
             if k.endswith(('_ROW', '_IDX', '_SIZE')) or any(x in k for x in ['START', 'END', 'PAGE']):

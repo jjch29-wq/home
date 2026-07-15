@@ -449,7 +449,8 @@ class EconomicDashboard:
             self.root.after(0, update_ui)
             
         except Exception as e:
-            self.root.after(0, lambda: ttk.Label(window, text=f"오류 발생: {e}").pack())
+            error_msg = str(e)
+            self.root.after(0, lambda msg=error_msg: ttk.Label(window, text=f"오류 발생: {msg}").pack())
             
 
     def open_my_advice_window(self):
@@ -787,7 +788,8 @@ class EconomicDashboard:
             # 메인 스레드(UI)로 결과 전달
             self.root.after(0, self._update_ui, market_df, portfolio_df, news_df, filename, trend_df, sector_df, buy_rec_df)
         except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("오류", f"데이터 수집 실패:\n{e}"))
+            error_msg = str(e)
+            self.root.after(0, lambda msg=error_msg: messagebox.showerror("오류", f"데이터 수집 실패:\n{msg}"))
             self.root.after(0, lambda: self.lbl_status.config(text="수집 실패", foreground="red"))
             self.root.after(0, lambda: self.btn_refresh.config(state='normal'))
             

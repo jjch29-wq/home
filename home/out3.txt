@@ -1,0 +1,2 @@
+2338: ttk.Button(paut_btn_row, text=" 📄 성적서 생성 ", command=self._generate_paut_report).pack(side='left', fill='x', expand=True)
+2831: def _generate_paut_report(self):
