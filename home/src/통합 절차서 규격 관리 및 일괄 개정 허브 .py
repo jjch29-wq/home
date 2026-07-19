@@ -46,9 +46,12 @@ class DatabaseManager:
                 self.data = []
         else:
             self.data = [
-                {"category": "예시(NDT 규격)", "find": "ASME Sec.V", "replace": "ISO 10863"},
-                {"category": "예시(프로젝트명)", "find": "기존프로젝트명", "replace": "가산~가평 천연가스 공급시설"},
-                {"category": "예시(현장용어)", "find": "차폐복", "replace": "차폐체"}
+                {"category": "Article 2 (RT - 방사선투과)", "find": "ASME Sec.V Art.2", "replace": "ISO 17636-1", "details": "RT 절차서 관련 규격 예시"},
+                {"category": "Article 4 (UT/PAUT - 초음파탐상)", "find": "ASME Sec.V Art.4", "replace": "ISO 11666", "details": "UT 절차서 관련 규격 예시"},
+                {"category": "Article 7 (MT - 자분탐상)", "find": "ASME Sec.V Art.7", "replace": "ISO 17638", "details": "MT 절차서 관련 규격 예시"},
+                {"category": "Article 6 (PT - 침투탐상)", "find": "ASME Sec.V Art.6", "replace": "ISO 3452-1", "details": "PT 절차서 관련 규격 예시"},
+                {"category": "PMI (재질분석 - API/ASTM 등)", "find": "API RP 578", "replace": "ASTM E1476", "details": "PMI 절차서 관련 규격 예시"},
+                {"category": "공통 (프로젝트/용어/기타)", "find": "기존프로젝트명", "replace": "가산~가평 천연가스 공급시설", "details": "문서 내 일괄 수정될 프로젝트명"}
             ]
 
     def save_data(self):
@@ -335,8 +338,12 @@ class CodebookApp:
         self.entry_replace.grid(row=0, column=5, padx=5, pady=10, sticky="w")
         
         ttk.Label(input_frame, text="코드 내용\n(상세 설명):").grid(row=1, column=0, padx=5, pady=5, sticky="e")
-        self.text_details_input = tk.Text(input_frame, width=75, height=4, font=("맑은 고딕", 10))
-        self.text_details_input.grid(row=1, column=1, columnspan=5, padx=5, pady=5, sticky="w")
+        self.text_details_input = tk.Text(input_frame, width=32, height=4, font=("맑은 고딕", 10))
+        self.text_details_input.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="w")
+        
+        ttk.Label(input_frame, text="개정 내역\n(변경 사유):").grid(row=1, column=3, padx=5, pady=5, sticky="e")
+        self.text_revision_input = tk.Text(input_frame, width=32, height=4, font=("맑은 고딕", 10))
+        self.text_revision_input.grid(row=1, column=4, columnspan=2, padx=5, pady=5, sticky="w")
         
         action_frame = ttk.Frame(input_frame)
         action_frame.grid(row=2, column=0, columnspan=6, pady=10)
@@ -398,14 +405,19 @@ class CodebookApp:
             self.text_details_input.delete("1.0", tk.END)
             self.text_details_input.insert("1.0", row.get("details", ""))
             
+            self.text_revision_input.delete("1.0", tk.END)
+            self.text_revision_input.insert("1.0", row.get("revision_note", ""))
+            
             cat_text = row.get("category", "")
             f_text = row.get("find", "")
             r_text = row.get("replace", "")
             d_text = row.get("details", "")
+            rev_text = row.get("revision_note", "")
             
             detail_content = f"■ 분류 (카테고리)\n{cat_text}\n\n"
             detail_content += f"■ 찾을 내용 (설명/기존문구)\n{f_text}\n\n"
             detail_content += f"■ 바꿀 내용 (적용할 규격/코드)\n{r_text}\n\n"
+            detail_content += f"■ 개정 내역 및 변경 사유\n{rev_text if rev_text else '(등록된 개정 내역이 없습니다.)'}\n\n"
             detail_content += f"■ 실제 코드 내용 (상세 설명)\n{d_text if d_text else '(등록된 상세 내용이 없습니다.)'}"
             
             self.detail_text.config(state="normal")
@@ -418,17 +430,44 @@ class CodebookApp:
         f_txt = self.entry_find.get().strip()
         r_txt = self.entry_replace.get().strip()
         d_txt = self.text_details_input.get("1.0", tk.END).strip()
+        rev_txt = self.text_revision_input.get("1.0", tk.END).strip()
         
         if not f_txt:
             messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
             return
             
-        self.db_manager.data.append({
-            "category": cat,
-            "find": f_txt,
-            "replace": r_txt,
-            "details": d_txt
-        })
+        # Check for duplicates to merge
+        merged = False
+        for item in self.db_manager.data:
+            if item.get("category") == cat and item.get("find") == f_txt:
+                # Merge details if different and not empty
+                if d_txt and d_txt not in item.get("details", ""):
+                    if item.get("details"):
+                        item["details"] += f"\n\n[추가 내용]\n{d_txt}"
+                    else:
+                        item["details"] = d_txt
+                
+                # Merge revision_note if different and not empty
+                if rev_txt and rev_txt not in item.get("revision_note", ""):
+                    if item.get("revision_note"):
+                        item["revision_note"] += f"\n\n[추가 개정내역]\n{rev_txt}"
+                    else:
+                        item["revision_note"] = rev_txt
+                
+                if r_txt:
+                    item["replace"] = r_txt
+                
+                merged = True
+                break
+
+        if not merged:
+            self.db_manager.data.append({
+                "category": cat,
+                "find": f_txt,
+                "replace": r_txt,
+                "details": d_txt,
+                "revision_note": rev_txt
+            })
         self.db_manager.save_data()
         self.refresh_list()
         
@@ -436,6 +475,7 @@ class CodebookApp:
         self.entry_find.delete(0, tk.END)
         self.entry_replace.delete(0, tk.END)
         self.text_details_input.delete("1.0", tk.END)
+        self.text_revision_input.delete("1.0", tk.END)
         
         self.detail_text.config(state="normal")
         self.detail_text.delete("1.0", tk.END)
@@ -454,6 +494,7 @@ class CodebookApp:
         f_txt = self.entry_find.get().strip()
         r_txt = self.entry_replace.get().strip()
         d_txt = self.text_details_input.get("1.0", tk.END).strip()
+        rev_txt = self.text_revision_input.get("1.0", tk.END).strip()
         
         if not f_txt:
             messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
@@ -463,7 +504,8 @@ class CodebookApp:
             "category": cat,
             "find": f_txt,
             "replace": r_txt,
-            "details": d_txt
+            "details": d_txt,
+            "revision_note": rev_txt
         }
         self.db_manager.save_data()
         self.refresh_list()
@@ -486,6 +528,7 @@ class CodebookApp:
             self.entry_find.delete(0, tk.END)
             self.entry_replace.delete(0, tk.END)
             self.text_details_input.delete("1.0", tk.END)
+            self.text_revision_input.delete("1.0", tk.END)
             
             self.detail_text.config(state="normal")
             self.detail_text.delete("1.0", tk.END)
@@ -551,9 +594,10 @@ class CodebookApp:
         ttk.Label(search_frame, text="🔍 찾을 단어:").pack(side="left", padx=5)
         self.entry_viewer_search = ttk.Entry(search_frame, width=20)
         self.entry_viewer_search.pack(side="left", padx=5)
-        self.entry_viewer_search.bind("<Return>", lambda e: self.search_in_viewer())
+        self.entry_viewer_search.bind("<Return>", lambda e: self.search_in_viewer(direction=1))
         
-        ttk.Button(search_frame, text="검색", command=self.search_in_viewer).pack(side="left", padx=2)
+        ttk.Button(search_frame, text="◀ 이전", command=lambda: self.search_in_viewer(direction=-1)).pack(side="left", padx=2)
+        ttk.Button(search_frame, text="다음 ▶", command=lambda: self.search_in_viewer(direction=1)).pack(side="left", padx=2)
         ttk.Button(search_frame, text="초기화", command=self.reset_viewer_search).pack(side="left", padx=2)
         
         self.lbl_viewer_search_result = ttk.Label(search_frame, text="")
@@ -759,7 +803,7 @@ class CodebookApp:
             except Exception as e:
                 messagebox.showerror("오류", f"실행 오류:\\n{e}")
 
-    def search_in_viewer(self):
+    def search_in_viewer(self, direction=1):
         if not self.html_viewer: return
         query = self.entry_viewer_search.get().strip()
         if not query:
@@ -767,21 +811,32 @@ class CodebookApp:
             return
             
         safe_query = re.escape(query)
+        
+        # Check total matches first without selecting
+        try:
+            matches_count = self.html_viewer.find_text(safe_query, select=0, ignore_case=True, highlight_all=True)
+        except Exception:
+            self.lbl_viewer_search_result.config(text="검색 오류", foreground="red")
+            return
+            
+        if matches_count == 0:
+            self.lbl_viewer_search_result.config(text="결과 없음", foreground="red")
+            self.last_search_query = query
+            return
+            
         if query != self.last_search_query:
             self.last_search_query = query
-            self.current_search_index = 1
+            self.current_search_index = 1 if direction == 1 else matches_count
         else:
-            self.current_search_index += 1
-            
+            self.current_search_index += direction
+            if self.current_search_index > matches_count:
+                self.current_search_index = 1
+            elif self.current_search_index < 1:
+                self.current_search_index = matches_count
+                
         try:
-            matches_count = self.html_viewer.find_text(safe_query, select=self.current_search_index, ignore_case=True, highlight_all=True)
-            if matches_count == 0:
-                self.lbl_viewer_search_result.config(text="결과 없음", foreground="red")
-            else:
-                if self.current_search_index > matches_count:
-                    self.current_search_index = 1
-                    self.html_viewer.find_text(safe_query, select=self.current_search_index, ignore_case=True, highlight_all=True)
-                self.lbl_viewer_search_result.config(text=f"{self.current_search_index} / {matches_count} 개", foreground="blue")
+            self.html_viewer.find_text(safe_query, select=self.current_search_index, ignore_case=True, highlight_all=True)
+            self.lbl_viewer_search_result.config(text=f"{self.current_search_index} / {matches_count} 개", foreground="blue")
         except Exception:
             self.lbl_viewer_search_result.config(text="검색 오류", foreground="red")
             
@@ -806,11 +861,29 @@ class CodebookApp:
         extracted_count = 0
         found_codes = set()
         
+        # 문서 제목 및 앞부분 텍스트로 절차서 종류(RT, UT 등) 자동 판별
+        head_text = ""
+        if self.current_filepath:
+            head_text += os.path.basename(self.current_filepath).lower() + " "
+        head_text += "\n".join(lines[:50]).lower()
+        
+        doc_type_category = None
+        if "paut" in head_text or "phased array" in head_text or "위상배열" in head_text or "ut" in head_text.split() or "초음파" in head_text or "ultrasonic" in head_text:
+            doc_type_category = "Article 4 (UT/PAUT - 용접부 초음파)"
+        elif "rt" in head_text.split() or "방사선" in head_text or "radiographic" in head_text:
+            doc_type_category = "Article 2 (RT - 방사선투과)"
+        elif "mt" in head_text.split() or "자분" in head_text or "magnetic" in head_text:
+            doc_type_category = "Article 7 (MT - 자분탐상)"
+        elif "pt" in head_text.split() or "침투" in head_text or "penetrant" in head_text:
+            doc_type_category = "Article 6 (PT - 침투탐상)"
+        elif "pmi" in head_text.split() or "재질분석" in head_text or "positive material" in head_text:
+            doc_type_category = "PMI (재질분석 - API/ASTM 등)"
+        
         for i, line in enumerate(lines):
             line = line.strip()
             if not line or len(line) < 4: continue
             
-            pattern = r'\b(ASME\s+(?:Sec(?:tion|\.)?\s*[IVX]+(?:\s*Art(?:icle|\.)?\s*\d+(?:\s*(?:SE|SA|SB)-[\w\d\-]+)?)?(?:\s*Mandatory\s*Appendix\s*[IVX]+)?|B\s*\d+(?:\.\d+)?)|API\s*(?:Std|Spec)?\s*\d+[A-Z]?|AWS\s*[A-Z]\d+(?:\.\d+)?|ISO\s*\d+(?:-\d+)?|KS\s*[A-Z]\s*\d+(?:-\d+)?|ASTM\s*[A-Z]\s*\d+|EN\s*\d+(?:-\d+)?|ASNT\s*SNT-TC-1A(?:(?:\s*\(\d{4}\s*Ed\.\))?)|KEPIC\s*[A-Z\d]+)'
+            pattern = r'\b(ASME\s+(?:Sec(?:tion|\.)?\s*[IVX]+(?:\s*Art(?:icle|\.)?\s*\d+(?:\s*(?:SE|SA|SB)-[\w\d\-]+)?)?(?:\s*Mandatory\s*Appendix\s*[IVX]+)?|B\s*\d+(?:\.\d+)?)|(?:ASME\s*)?BPV[C]?\s*Code\s*\d{2,4}(?:\s*Ed\.?)?|API\s*(?:Std|Spec)?\s*\d+[A-Z]?|AWS\s*[A-Z]\d+(?:\.\d+)?|ISO\s*\d+(?:-\d+)?|KS\s*[A-Z]\s*\d+(?:-\d+)?|ASTM\s*[A-Z]\s*\d+|EN\s*\d+(?:-\d+)?|ASNT\s*SNT-TC-1A(?:(?:\s*\(\d{4}\s*Ed\.?\))?)|KEPIC\s*[A-Z\d]+)'
             match = re.search(pattern, line, re.IGNORECASE)
             
             if match:
@@ -844,7 +917,9 @@ class CodebookApp:
                         
                 if not existing_item:
                     prefix = code_name_norm.split()[0].upper()
-                    if prefix in ["ASME", "API", "AWS", "ISO", "KS", "ASTM", "EN", "KEPIC", "ASNT"]:
+                    if doc_type_category:
+                        category_name = doc_type_category
+                    elif prefix in ["ASME", "API", "AWS", "ISO", "KS", "ASTM", "EN", "KEPIC", "ASNT", "BPV", "BPVC"]:
                         category_name = f"{prefix} 규격"
                     else:
                         category_name = "규격 (자동추출)"

@@ -1,152 +1,268 @@
 [
     {
-        "category": "ASME 규격",
-        "find": "ASME 방사선투과검사(RT)",
-        "replace": "ASME Sec.V Art.2",
-        "details": "[ASME BPVC Sec.V Art.2 (RT 절차)]\n▶ 핵심 검사 요건 ◀\n- 투과도계(IQI) 선정: 모재 두께 및 재질에 따라 필수 선 구멍/선 지름 식별 필수.\n- 필름 농도(Density): 단일 필름 뷰잉 시 1.5 ~ 4.0 유지.\n\n▶ 일반 합부 판정 (ASME Sec.VIII 등) ◀\n- 균열(Crack), 용입/융합 불량: 100% 불합격.\n- 슬래그: 길이 > 1/3 t (용접부 두께) 초과 시 불합격."
+        "category": "AWS 규격 (철골/교량)",
+        "find": "AWS 강구조물 용접 규격",
+        "replace": "AWS D1.1",
+        "details": "[AWS D1.1 Structural Welding Code - Steel]\n강구조물(빌딩, 일반 철골) 용접에 대한 미국 용접협회 규격.\n▶ 시각/PT/MT 허용 기준 (Table 6.1, 정하중) ◀\n- 균열(Crack): 크기 무관 100% 불합격\n- 언더컷(Undercut): 최대 1mm 이하 허용\n- 선상 지시: 균열 제외 1.6mm 초과 시 불합격\n▶ RT/UT: 두께/하중 방향에 따른 'Reject Curve' 표(Figure) 적용 필수."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME 초음파탐상검사(UT)",
-        "replace": "ASME Sec.V Art.4",
-        "details": "[ASME BPVC Sec.V Art.4 (UT 절차)]\n▶ 핵심 검사 요건 ◀\n- 기기 교정(Calibration): 교정 시험편을 이용한 DAC 곡선 작성.\n- 스캐닝 감도: DAC 곡선의 20% 초과 지시 기록.\n\n▶ 일반 합부 판정 (ASME Sec.VIII App.12 기준) ◀\n- 균열, 융합/용입 불량: 100% 불합격.\n- 선형 결함 길이 허용치 (t = 모재 두께):\n  1) t <= 19mm: 길이 6mm 초과 시 불합격\n  2) 19mm < t <= 57mm: 길이 1/3 t 초과 시 불합격\n  3) t > 57mm: 길이 19mm 초과 시 불합격"
+        "category": "AWS 규격 (철골/교량)",
+        "find": "AWS 교량 용접 규격",
+        "replace": "AWS D1.5",
+        "details": "[AWS D1.5 Bridge Welding Code]\n교량 및 고하중 동적 철골 구조물에 대한 규격.\n▶ 합부 판정 기준 ◀\n- 교량의 피로 하중(Fatigue)을 고려하여 D1.1보다 훨씬 엄격함.\n- 미세 기공을 제외한 선상 결함(균열, 융합불량)은 피로 파괴 방지를 위해 100% 불합격."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME 액체침투탐상검사(PT)",
-        "replace": "ASME Sec.V Art.6",
-        "details": "[ASME BPVC Sec.V Art.6 (PT 절차)]\n▶ 핵심 검사 요건 ◀\n- 침투액 유지 시간(Dwell time) 최소 10~20분.\n- 조명 밝기: 백색광 1,000 lux (100 fc) 이상 필수.\n\n▶ 합격/불합격 수치 기준 (ASME Sec.VIII) ◀\n- 선상 지시 (L > 3W): 길이가 1.6mm (1/16 inch) 초과 시 불합격\n- 둥근 지시 (L <= 3W): 지름이 4.8mm (3/16 inch) 초과 시 불합격\n- 결함군: 4개 이상 지시가 1.5mm 간격 이내로 선을 이룰 시 불합격"
+        "category": "Article 1 (General - 공통 요건)",
+        "find": "ASME Sec.V 2021",
+        "replace": "ASME Sec.V 2023 Edition (자격 요건)",
+        "details": "ASME Sec.V 2023년판 Article 1 (T-120) 개정에 따른 NDE 요원 자격 요건 변경\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n",
+        "revision_note": "1. 비파괴 요원 자격(SNT-TC-1A 및 CP-189) 예외 사항 수정\n2. 기존 Mandatory Appendix III, IV 삭제\n3. NDE 절차 시연(Demonstration) 필수 요건 명확화 (T-150)"
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME 자분탐상검사(MT)",
-        "replace": "ASME Sec.V Art.7",
-        "details": "[ASME BPVC Sec.V Art.7 (MT 절차)]\n▶ 핵심 검사 요건 ◀\n- 자화력 검증: Yoke 장비 교류(AC) 4.5kg, 직류(DC) 18.1kg 이상 들림 확인.\n\n▶ 합격/불합격 수치 기준 (ASME Sec.VIII) ◀\n- 선상 지시 (L > 3W): 길이가 1.6mm 초과 시 불합격\n- 둥근 지시 (L <= 3W): 지름이 4.8mm 초과 시 불합격\n- 결함군: 4개 이상 지시가 1.5mm 간격 이내로 인접 시 불합격"
+        "category": "Article 1 (General - 공통 요건)",
+        "find": "비파괴검사원 자격 요건 (ISO)",
+        "replace": "ISO 9712",
+        "details": "[ISO 9712 비파괴검사원 자격 및 인증]\n국제표준화기구(ISO)에서 규정하는 NDT 인원 자격 요건.\n- Level 1: 절차서에 따라 검사 수행 가능. 판정 불가.\n- Level 2: 검사 세팅, 수행 및 규격에 따른 합부 판정 가능 (실무 핵심).\n- Level 3: 절차서 작성, 승인 및 NDT 기법 총괄 책임."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME 공정배관(Process Piping) 기준",
-        "replace": "ASME B31.3",
-        "details": "[ASME B31.3 Process Piping 종합 규격]\n배관 유체 조건 및 비파괴검사(NDT) 방법론에 따른 합부 판정 기준 (Table 341.3.2 참조)\n\n▶ 1. 방사선투과검사 (RT) ◀\n- 균열 / 융합불량 / 용입불량: 크기 무관 100% 불합격.\n- 슬래그 개재물 (Normal 유체): 두께(Tw)의 1/3 이하 허용 (최대 38mm).\n- 슬래그 개재물 (Severe Cyclic): 허용 기준 엄격 (Tw 1/3 이하이되 최대 6.4mm(1/4인치)까지만 허용).\n- 기공(Porosity): ASME B31.3 부록 참조 (면적 기준).\n\n▶ 2. 초음파탐상검사 (UT) ◀\n- 균열 / 융합불량 / 용입불량: 100% 불합격.\n- 기타 선형 지시: 결함 길이가 모재 두께별 허용 수치 초과 시 불합격.\n\n▶ 3. 자분/침투탐상검사 (MT / PT) ◀\n- 전 등급(Normal, Severe) 공통 적용.\n- 선상 지시 (L > 3W): 지시 길이 1.6mm(1/16인치) 초과 시 불합격.\n- 둥근 지시 (L <= 3W): 지름 4.8mm(3/16인치) 초과 시 불합격.\n- 결함군: 4개 이상 지시가 1.5mm 간격 이내 밀집 시 불합격.\n\n▶ 4. 육안검사 (VT) ◀\n- 언더컷 (Normal 유체): 깊이 1.5mm 이하 또는 Tw의 1/4 중 작은 값 허용.\n- 언더컷 (Severe Cyclic): 결함 형태 언더컷 100% 불합격 (평탄하게 그라인딩 필수)."
+        "category": "Article 2 (RT - 방사선투과)",
+        "find": "ASME Sec.V Art.2",
+        "replace": "ISO 17636-1",
+        "details": "방사선투과검사(RT, X-ray/Gamma-ray) 수행 시 지켜야 할 ASME의 핵심 필수 바이블(법전).\n[주요 규제 요건]\n1. 필름 농도(Density) 제한 (X선 1.8 이상, 감마선 2.0 이상, 최대 4.0)\n2. 투과도계(IQI) 필수 사용 (사진의 감도 및 선명도 증명)\n3. 기하학적 불선명도(Ug) 통제 및 산란방사선(Backscatter) 차단 등\n\n\n[규격 연혁 및 에디션(Edition) 관리]\n- 최초 제정: ASME Section V는 1971년에 최초 발행되었으며, 이때 Article 2(RT)의 기본 골격이 완성되었습니다.\n- 개정 주기: 현재 2년 주기(홀수 연도)로 개정판이 발행됩니다. (예: 2019, 2021, 2023 Edition)\n- 최신 반영: 현재 글로벌 표준으로 현장에 반영되는 가장 최신판은 **2023 Edition** (2023년 7월 발행)입니다.\n\n\n[ISO 17636 (RT 절차) & ISO 10675 (판정) 상세 기준]\n▶ Level 2 (일반 합격선) 상세 판정 기준 (ISO 10675-1) ◀\n※ t = 모재 두께(Nominal thickness). (괄호 안은 t=10mm일 때의 예시)\n\n1. 균열 / 융합불량\n- 기준: 크기 무관 100% 불합격 (발견 즉시 리페어)\n\n2. 슬래그 개재물 (Slag Inclusions)\n- 폭(w): w <= 0.3t (단, 최대 3mm 제한)\n  (예: 10t면 폭 3mm까지. 20t라도 최대 3mm 제한으로 3mm까지만 허용)\n- 길이 합산: 100mm 구간 내 길이 합산 <= t (단, 최대 50mm 제한)\n  (예: 10t 모재 용접선 100mm 내 슬래그들 길이를 다 더했을 때 10mm 이하여야 합격)\n\n3. 단일 기공 (Porosity)\n- 지름(d): d <= 0.3t (단, 최대 4mm 제한)\n  (예: 10t면 지름 3mm 기공까지 허용. 20t라도 최대 4mm 제한으로 4mm 기공까지만 허용)\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 UW-51 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 크기 무관 100% 불합격\n2. 길쭉한 지시(슬래그 등 선상 결함):\n   - 모재 두께(t) 19mm 이하: 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 길이 (t/3) 초과 시 불합격\n3. 둥근 지시(기공 등): ASME 부록의 허용 기준 차트(Porosity Charts)와 비교하여 초과 시 불합격.",
+        "revision_note": "1. 발주처(또는 프로젝트) 요구사항에 따른 국제 표준(ISO) 규격 전환\n2. 필름 시스템 클래스 및 노출 조건의 ISO 체계 적용\n3. 투과도계(IQI) 종류 및 판독 기준을 ISO 규격에 맞게 재정립"
     },
     {
-        "category": "ISO 규격",
-        "find": "ISO 용접부 방사선투과검사(RT)",
-        "replace": "ISO 17636",
-        "details": "[ISO 17636 (RT 절차) & ISO 10675 (판정)]\n▶ Level 2 (일반 합격선) 상세 판정 기준 (ISO 10675-1) ◀\n※ t = 모재 두께(Nominal thickness). (괄호 안은 t=10mm일 때의 예시)\n\n1. 균열 / 융합불량\n- 기준: 크기 무관 100% 불합격 (발견 즉시 리페어)\n\n2. 슬래그 개재물 (Slag Inclusions)\n- 폭(w): w <= 0.3t (단, 최대 3mm 제한)\n  (예: 10t면 폭 3mm까지. 20t라도 최대 3mm 제한으로 3mm까지만 허용)\n- 길이 합산: 100mm 구간 내 길이 합산 <= t (단, 최대 50mm 제한)\n  (예: 10t 모재 용접선 100mm 내 슬래그들 길이를 다 더했을 때 10mm 이하여야 합격)\n\n3. 단일 기공 (Porosity)\n- 지름(d): d <= 0.3t (단, 최대 4mm 제한)\n  (예: 10t면 지름 3mm 기공까지 허용. 20t라도 최대 4mm 제한으로 4mm 기공까지만 허용)"
+        "category": "Article 2 (RT - 방사선투과)",
+        "find": "ASME Sec.V Art.2 App.IX",
+        "replace": "ASME Sec.V Art.2 Mandatory App. IX (DDA)",
+        "details": "디지털 디텍터 어레이(DDA, Digital Detector Arrays)를 활용한 디지털 방사선투과검사(DR) 필수 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 UW-51 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 크기 무관 100% 불합격\n2. 길쭉한 지시(슬래그 등 선상 결함):\n   - 모재 두께(t) 19mm 이하: 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 길이 (t/3) 초과 시 불합격\n3. 둥근 지시(기공 등): ASME 부록의 허용 기준 차트(Porosity Charts)와 비교하여 초과 시 불합격.",
+        "revision_note": "1. 디지털 패널(DDA)의 이미지 노이즈(SNR), 대조도 감도(CNR) 등 디지털 품질 평가 지표(Image Quality) 기준 대폭 개정\n2. 기하학적 불선명도(Ug) 및 배율 계산 방식 정교화"
     },
     {
-        "category": "ISO 규격",
-        "find": "ISO 용접부 초음파탐상검사(UT)",
-        "replace": "ISO 17640",
-        "details": "[ISO 17640 (UT 방법) & ISO 11666 (판정)]\n▶ 합부 판정 기준 ◀\n- 에코 진폭이 평가 레벨을 초과하는 결함 대상, 지시 길이가 두께별 허용 곡선(AL2, AL3 곡선)을 초과하면 불합격 처리."
+        "category": "Article 2 (RT - 방사선투과)",
+        "find": "ASME Sec.V Art.2 App.VIII",
+        "replace": "ASME Sec.V Art.2 Mandatory App. VIII (CR)",
+        "details": "컴퓨터 방사선투과검사(CR, Computed Radiography) 기법 필수 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 UW-51 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 크기 무관 100% 불합격\n2. 길쭉한 지시(슬래그 등 선상 결함):\n   - 모재 두께(t) 19mm 이하: 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 길이 (t/3) 초과 시 불합격\n3. 둥근 지시(기공 등): ASME 부록의 허용 기준 차트(Porosity Charts)와 비교하여 초과 시 불합격.",
+        "revision_note": "1. 2021/2023 Edition 개정: 기존 필름 RT를 대체하는 CR 기법의 스캐너 해상도(SRb) 및 픽셀 강도(Pixel Intensity) 요건 강화\n2. 형광체 이미징 플레이트(Phosphor Imaging Plate) 성능 평가 주기 구체화"
     },
     {
-        "category": "ISO 규격",
-        "find": "ISO 위상배열 초음파탐상검사(PAUT)",
-        "replace": "ISO 13588",
-        "details": "[ISO 13588 (PAUT 방법) & ISO 19285 (판정)]\n▶ 합부 판정 기준 ◀\n- 허용 수준 2, 3등급 기준치(Acceptance Levels) 초과 시 불합격."
+        "category": "Article 4 (UT/PAUT - 용접부 초음파)",
+        "find": "ASME Sec.V 2021 Art.4",
+        "replace": "ASME Sec.V 2023 Art.4 (TOFD)",
+        "details": "2023 Edition 기준 TOFD(Time of Flight Diffraction) 기법 적용 조건 개정\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.12 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 지시 길이에 상관없이 100% 불합격\n2. 그 외 결함(기준 에코 레벨 초과 시):\n   - 모재 두께(t) 19mm 이하: 지시 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 지시 길이 (t/3) 초과 시 불합격\n   - t > 57mm: 지시 길이 19mm 초과 시 불합격",
+        "revision_note": "1. 근표면(Near-surface)에 대한 추가 스캔 없이 TOFD 기법을 독립적으로 사용할 수 있도록 요건 완화"
+    },
+    {
+        "category": "Article 4 (UT/PAUT - 용접부 초음파)",
+        "find": "ASME Sec.V Art.4",
+        "replace": "ISO 11666",
+        "details": "[UT 규격 글로벌 표준화]\n기존 ASME Sec.V Article 4에서 용접부 초음파탐상 합격 기준인 ISO 11666으로 변경 적용.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n- ISO 11666: 기존 유럽 규격(EN 1712)을 통합하여 2010년 최초 발행, 2018년 최신 개정판 발행.\n\n\n[ISO 17640 (UT 방법) & ISO 11666 (판정) 상세 기준]\n▶ 합부 판정 기준 ◀\n- 에코 진폭이 평가 레벨을 초과하는 결함 대상, 지시 길이가 두께별 허용 곡선(AL2, AL3 곡선)을 초과하면 불합격 처리.",
+        "revision_note": "1. 초음파탐상 검사 기준의 국제 표준화 반영\n2. 결함의 길이에 따른 합격/불합격 판정(Acceptance levels) 기준을 ISO 11666 등급(Level 2, 3 등)으로 전환\n3. 탐촉자 주파수 및 빔 각도 설정의 세부 규정 최신화"
+    },
+    {
+        "category": "Article 4 (UT/PAUT - 용접부 초음파)",
+        "find": "ASME Sec.V Art.4 App.III",
+        "replace": "ASME Sec.V Art.4 Mandatory App. III",
+        "details": "비행시간회절법(TOFD, Time of Flight Diffraction) 초음파탐상 필수 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.12 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 지시 길이에 상관없이 100% 불합격\n2. 그 외 결함(기준 에코 레벨 초과 시):\n   - 모재 두께(t) 19mm 이하: 지시 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 지시 길이 (t/3) 초과 시 불합격\n   - t > 57mm: 지시 길이 19mm 초과 시 불합격",
+        "revision_note": "1. 2023 Edition 개정: 근표면(Near-surface) 결함 탐상을 위한 추가 스캔(보완 탐상) 요건 완화 (특정 조건 하에 TOFD 단독 사용 허용)"
+    },
+    {
+        "category": "Article 4 (UT/PAUT - 용접부 초음파)",
+        "find": "ASME Sec.V Art.4 App.IV",
+        "replace": "ASME Sec.V Art.4 Mandatory App. IV",
+        "details": "위상배열 초음파(PAUT) 수동 스캔(Manual Rastering) 기법 필수 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.12 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 지시 길이에 상관없이 100% 불합격\n2. 그 외 결함(기준 에코 레벨 초과 시):\n   - 모재 두께(t) 19mm 이하: 지시 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 지시 길이 (t/3) 초과 시 불합격\n   - t > 57mm: 지시 길이 19mm 초과 시 불합격",
+        "revision_note": "1. 인코더(Encoder) 미사용 시 수동 스캔의 겹침(Overlap) 요건 구체화\n2. 수동 프로브 이동 속도 제한 규정 최신화 (결함 탐지능 보장)"
+    },
+    {
+        "category": "Article 4 (UT/PAUT - 용접부 초음파)",
+        "find": "ASME Sec.V Art.4 App.V",
+        "replace": "ASME Sec.V Art.4 Mandatory App. V",
+        "details": "위상배열 초음파(PAUT) 인코더 기반 선형 스캔(E-scan & S-scan) 필수 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.12 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 지시 길이에 상관없이 100% 불합격\n2. 그 외 결함(기준 에코 레벨 초과 시):\n   - 모재 두께(t) 19mm 이하: 지시 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 지시 길이 (t/3) 초과 시 불합격\n   - t > 57mm: 지시 길이 19mm 초과 시 불합격",
+        "revision_note": "1. 스캔 플랜(Scan plan) 필수 요소(Coverage, Beam Angle 등) 작성 기준 강화\n2. 인코더 사용 의무화에 따른 위치 데이터 저장 및 교정 주기 요건 강화 (2021/2023 개정 반영)"
+    },
+    {
+        "category": "Article 4 (UT/PAUT - 용접부 초음파)",
+        "find": "ASME Sec.V Art.4 App.X",
+        "replace": "ASME Sec.V Art.4 Mandatory App. X (HDPE)",
+        "details": "고밀도 폴리에틸렌(HDPE) 플라스틱 배관 융착 용접부의 PAUT/TOFD 초음파탐상 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.12 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 지시 길이에 상관없이 100% 불합격\n2. 그 외 결함(기준 에코 레벨 초과 시):\n   - 모재 두께(t) 19mm 이하: 지시 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 지시 길이 (t/3) 초과 시 불합격\n   - t > 57mm: 지시 길이 19mm 초과 시 불합격",
+        "revision_note": "1. 2015 Edition 최초 신설 (플라스틱 배관 수요 증가 대응)\n2. 초음파 감쇠가 심한 플라스틱 특성에 맞춘 저주파수 프로브 및 전용 교정 블록(Calibration Block) 사용 규정 강제"
+    },
+    {
+        "category": "Article 4 (UT/PAUT - 용접부 초음파)",
+        "find": "ASME Sec.V Art.4 App.XI",
+        "replace": "ASME Sec.V Art.4 Mandatory App. XI",
+        "details": "전매트릭스포착(FMC, Full Matrix Capture) 기반 초음파탐상(TFM 등) 필수 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.12 기준) ◀\n1. 균열(Crack), 융합불량(LOF), 용입부족(LOP): 지시 길이에 상관없이 100% 불합격\n2. 그 외 결함(기준 에코 레벨 초과 시):\n   - 모재 두께(t) 19mm 이하: 지시 길이 6mm 초과 시 불합격\n   - 19mm < t <= 57mm: 지시 길이 (t/3) 초과 시 불합격\n   - t > 57mm: 지시 길이 19mm 초과 시 불합격",
+        "revision_note": "1. 2019 Edition 최초 신설 및 2021 Edition 고도화\n2. 기존 Code Case 2897의 내용을 ASME 본문 부록으로 정식 통합 편입\n3. 격자 해상도(Grid Resolution) 및 진폭 적정성 검증 규정 신설"
+    },
+    {
+        "category": "Article 6 (PT - 침투탐상)",
+        "find": "ASME Sec.V Art.6",
+        "replace": "ISO 3452-1",
+        "details": "[PT 규격 글로벌 표준화]\n기존 침투탐상검사 규격을 ASME에서 ISO 3452-1로 변경 적용.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n- ISO 3452-1: 기존 유럽 규격(EN 571-1)을 통합 개정, 2013년 및 2021년 최신 개정판 발행.\n\n\n[ISO 3452 (PT 방법) & ISO 23277 (판정) 상세 기준]\n▶ Level 2 (일반 합격선) 수치 기준 ◀\n- 갈라짐(균열): 무조건 불합격 (허용치 0)\n- 선상 지시(Linear): 길이(L) 3mm 이하 허용 (L > 3mm 불합격)\n- 원형 지시(Rounded): 지름(d) 6mm 이하 허용 (d > 6mm 불합격)\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.8 기준) ◀\n1. 선상 지시 (Linear, 길이 > 폭의 3배): 발견되는 즉시 100% 불합격 (허용치 0)\n2. 원형 지시 (Rounded, 길이 <= 폭의 3배): 지름 5mm 초과 시 불합격\n3. 지시의 밀집: 1.5mm 이하의 간격으로 4개 이상의 원형 지시가 일렬로 나열될 경우 불합격.",
+        "revision_note": "1. 침투탐상 시스템(침투제, 세척제, 현상제) 분류를 ISO 기준으로 통합\n2. 온도 조건 및 현상 시간 기준 변경 적용\n3. 환경 및 안전(친환경/저독성) 요구사항 강화에 따른 규격 갱신"
+    },
+    {
+        "category": "Article 6 (PT - 침투탐상)",
+        "find": "ASME Sec.V Art.6 (온도/조도)",
+        "replace": "ASME Sec.V Art.6 (Dwell Time & Light)",
+        "details": "침투탐상검사(PT)의 필수 온도 조건 및 조명(Lux) 강도 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.8 기준) ◀\n1. 선상 지시 (Linear, 길이 > 폭의 3배): 발견되는 즉시 100% 불합격 (허용치 0)\n2. 원형 지시 (Rounded, 길이 <= 폭의 3배): 지름 5mm 초과 시 불합격\n3. 지시의 밀집: 1.5mm 이하의 간격으로 4개 이상의 원형 지시가 일렬로 나열될 경우 불합격.",
+        "revision_note": "1. 침투/현상 온도 범위(5°C~52°C) 외 특수 온도 적용 시의 절차서 검증(Qualification) 절차 개정\n2. 형광(Fluorescent) PT 시 암실의 자외선(UV-A) 강도 및 주변 가시광선 최대 허용치(Lux) 기준 최신화"
+    },
+    {
+        "category": "Article 7 (MT - 자분탐상)",
+        "find": "ASME Sec.V Art.7",
+        "replace": "ISO 17638",
+        "details": "[MT 규격 글로벌 표준화]\n기존 자분탐상검사 규격을 ASME에서 ISO 17638로 변경 적용.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n- ISO 17638: 기존 유럽 규격(EN 1290)을 통합하여 2003년 최초 발행, 2016년 최신 개정판 발행.\n\n\n[ISO 17638 (MT 방법) & ISO 23278 (판정) 상세 기준]\n▶ Level 2 (일반 합격선) 수치 기준 ◀\n- 갈라짐(균열): 무조건 불합격\n- 선상 지시: 길이(L) 3mm 이하 허용\n- 원형 지시: 지름(d) 6mm 이하 허용\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.6 기준) ◀\n1. 선상 지시 (Linear, 길이 > 폭의 3배): 발견되는 즉시 100% 불합격 (허용치 0)\n2. 원형 지시 (Rounded, 길이 <= 폭의 3배): 지름 5mm 초과 시 불합격\n3. 지시의 밀집: 1.5mm 이하의 간격으로 4개 이상의 원형 지시가 일렬로 나열될 경우 불합격.",
+        "revision_note": "1. 표면 결함 탐상 관련 국제 표준(ISO) 채택\n2. 자화 방식 및 자분액 적용 기준을 ISO 표준에 맞추어 명확화\n3. 자화 전류 강도 계산 및 확인 방법(Flux indicator 등) 규정 상세화"
+    },
+    {
+        "category": "Article 7 (MT - 자분탐상)",
+        "find": "ASME Sec.V Art.7 App.I",
+        "replace": "ASME Sec.V Art.7 Mandatory App. I (Coated)",
+        "details": "비자성 코팅(페인트 등)이 적용된 자성체 표면에 대한 교류(AC) 요크(Yoke) 자분탐상 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n\n\n[ASME 주요 합부 판정 기준 (Acceptance Criteria)]\n※ 주의: ASME Sec.V는 검사 '방법'만 규정하며, 합격/불합격 판정은 시공 코드(Sec.VIII, B31.3 등)를 따릅니다.\n▶ 주요 시공 코드 판정 기준 (Sec.VIII Div.1 App.6 기준) ◀\n1. 선상 지시 (Linear, 길이 > 폭의 3배): 발견되는 즉시 100% 불합격 (허용치 0)\n2. 원형 지시 (Rounded, 길이 <= 폭의 3배): 지름 5mm 초과 시 불합격\n3. 지시의 밀집: 1.5mm 이하의 간격으로 4개 이상의 원형 지시가 일렬로 나열될 경우 불합격.",
+        "revision_note": "1. 코팅 두께 측정 및 보정 요건 강화\n2. 코팅된 표면에서의 자화력(Lifting Power) 검증 및 교정 주기(Calibration) 요건 최신화 (페인트 제거 없이 검사 가능 조건 명시)"
+    },
+    {
+        "category": "Article 9 (VT - 육안검사)",
+        "find": "ASME Sec.V 2021 Art.9",
+        "replace": "ASME Sec.V 2023 Art.9 (UAV 적용)",
+        "details": "2023 Edition 기준 육안검사 원격 장비 수용 (T-953)\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ASME Sec.V: 1971년 최초 발행. 2년 주기(홀수 연도) 개정. (최신 적용: 2023 Edition)\n",
+        "revision_note": "1. 무인 항공기(드론, UAV) 및 기타 원격 검사 장비를 사용한 육안검사(VT)를 정식으로 수용하도록 코드 개정"
     },
     {
         "category": "ISO 규격",
         "find": "ISO 액체침투탐상검사(PT)",
         "replace": "ISO 3452",
-        "details": "[ISO 3452 (PT 방법) & ISO 23277 (판정)]\n\n▶ Level 2 (일반 합격선) 수치 기준 ◀\n- 갈라짐(균열): 무조건 불합격 (허용치 0)\n- 선상 지시(Linear): 길이(L) 3mm 이하 허용 (L > 3mm 불합격)\n- 원형 지시(Rounded): 지름(d) 6mm 이하 허용 (d > 6mm 불합격)"
+        "details": "[ISO 3452 (PT 방법) & ISO 23277 (판정)]\n\n▶ Level 2 (일반 합격선) 수치 기준 ◀\n- 갈라짐(균열): 무조건 불합격 (허용치 0)\n- 선상 지시(Linear): 길이(L) 3mm 이하 허용 (L > 3mm 불합격)\n- 원형 지시(Rounded): 지름(d) 6mm 이하 허용 (d > 6mm 불합격)\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ISO 3452 시리즈: 기존 유럽 규격(EN 571) 통합, 최근 2021년 등 지속 개정판 반영."
+    },
+    {
+        "category": "ISO 규격",
+        "find": "ISO 용접부 방사선투과검사(RT)",
+        "replace": "ISO 17636",
+        "details": "[ISO 17636 (RT 절차) & ISO 10675 (판정)]\n▶ Level 2 (일반 합격선) 상세 판정 기준 (ISO 10675-1) ◀\n※ t = 모재 두께(Nominal thickness). (괄호 안은 t=10mm일 때의 예시)\n\n1. 균열 / 융합불량\n- 기준: 크기 무관 100% 불합격 (발견 즉시 리페어)\n\n2. 슬래그 개재물 (Slag Inclusions)\n- 폭(w): w <= 0.3t (단, 최대 3mm 제한)\n  (예: 10t면 폭 3mm까지. 20t라도 최대 3mm 제한으로 3mm까지만 허용)\n- 길이 합산: 100mm 구간 내 길이 합산 <= t (단, 최대 50mm 제한)\n  (예: 10t 모재 용접선 100mm 내 슬래그들 길이를 다 더했을 때 10mm 이하여야 합격)\n\n3. 단일 기공 (Porosity)\n- 지름(d): d <= 0.3t (단, 최대 4mm 제한)\n  (예: 10t면 지름 3mm 기공까지 허용. 20t라도 최대 4mm 제한으로 4mm 기공까지만 허용)\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ISO 17636 시리즈: 기존 유럽 규격(EN 1435) 통합, 최근 2022년 등 지속 개정판 반영."
+    },
+    {
+        "category": "ISO 규격",
+        "find": "ISO 용접부 초음파탐상검사(UT)",
+        "replace": "ISO 17640",
+        "details": "[ISO 17640 (UT 방법) & ISO 11666 (판정)]\n▶ 합부 판정 기준 ◀\n- 에코 진폭이 평가 레벨을 초과하는 결함 대상, 지시 길이가 두께별 허용 곡선(AL2, AL3 곡선)을 초과하면 불합격 처리.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ISO 17640: 기존 유럽 규격(EN 1712 등) 통합, 2018년 최신 개정판 발행."
+    },
+    {
+        "category": "ISO 규격",
+        "find": "ISO 위상배열 초음파탐상검사(PAUT)",
+        "replace": "ISO 13588",
+        "details": "[ISO 13588 (PAUT 방법) & ISO 19285 (판정)]\n▶ 합부 판정 기준 ◀\n- 허용 수준 2, 3등급 기준치(Acceptance Levels) 초과 시 불합격.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ISO 13588 (PAUT): 2012년 최초 발행 후 2019년 최신 개정판 발행.\n"
     },
     {
         "category": "ISO 규격",
         "find": "ISO 자분탐상검사(MT)",
         "replace": "ISO 17638",
-        "details": "[ISO 17638 (MT 방법) & ISO 23278 (판정)]\n\n▶ Level 2 (일반 합격선) 수치 기준 ◀\n- 갈라짐(균열): 무조건 불합격\n- 선상 지시: 길이(L) 3mm 이하 허용\n- 원형 지시: 지름(d) 6mm 이하 허용"
+        "details": "[ISO 17638 (MT 방법) & ISO 23278 (판정)]\n\n▶ Level 2 (일반 합격선) 수치 기준 ◀\n- 갈라짐(균열): 무조건 불합격\n- 선상 지시: 길이(L) 3mm 이하 허용\n- 원형 지시: 지름(d) 6mm 이하 허용\n\n[규격 연혁 및 에디션(Edition) 관리]\n- ISO 17638: 기존 유럽 규격(EN 1290)을 통합하여 2003년 최초 발행, 2016년 최신 개정판 발행.\n"
     },
     {
-        "category": "AWS 규격",
-        "find": "AWS 강구조물 용접 규격 (Structural)",
-        "replace": "AWS D1.1",
-        "details": "[AWS D1.1 Structural Welding Code]\n\n▶ 시각/PT/MT 허용 기준 (Table 6.1, 정하중) ◀\n- 균열(Crack): 크기 무관 100% 불합격\n- 언더컷(Undercut): 최대 1mm 이하 허용\n- 선상 지시: 균열 제외 1.6mm 초과 시 불합격\n\n▶ RT/UT: 두께/하중 방향에 따른 'Reject Curve' 표(Figure) 적용 필수."
+        "category": "PMI (재질분석 - API/ASTM 등)",
+        "find": "API RP 578",
+        "replace": "ASTM E1476",
+        "details": "[PMI 규격 고도화]\n재질분석(PMI) 수행 기준을 배관 위주의 API RP 578에서 보다 포괄적인 금속 분류 표준인 ASTM E1476으로 변경 적용.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- API RP 578: 1999년 1st Edition 발행, 현재 2023년 4th Edition 적용.\n",
+        "revision_note": "1. PMI 적용 범위를 일반 배관에서 모든 금속 소재 및 용접부로 확장\n2. XRF(X-선 형광분석) 및 OES(발광분광분석) 장비의 교정 및 운영 절차 고도화\n3. 합금 성분 오차 허용 범위(Tolerance)에 대한 ASTM 기준 적용"
     },
     {
-        "category": "AWS 규격",
-        "find": "AWS 교량 용접 규격 (Bridge)",
-        "replace": "AWS D1.5",
-        "details": "[AWS D1.5 Bridge Welding Code]\n▶ 합부 판정 기준 ◀\n- 교량의 피로 하중을 고려하여 D1.1보다 훨씬 엄격함.\n- 미세 기공을 제외한 선상 결함(균열, 융합불량)은 피로 파괴 방지를 위해 100% 불합격."
+        "category": "PMI (재질분석 - API/ASTM 등)",
+        "find": "API RP 578 / ASTM E1476",
+        "replace": "API RP 578 (Material Verification)",
+        "details": "신규 및 기존 설비의 재질 검증 프로그램(MVP) 수립 및 PMI 수행 요건\n\n[규격 연혁 및 에디션(Edition) 관리]\n- API RP 578: 1999년 1st Edition 발행, 현재 2023년 4th Edition 적용.\n",
+        "revision_note": "1. 최신 Edition 개정: 탄소강의 잔류원소(Tramp elements, CE 등) 분석 시 OES(발광분광분석) 사용 의무화 및 XRF 한계 명확화\n2. 로터리 파일 등을 이용한 표면 스케일 제거 등 전처리(Surface Prep) 절차 상세화"
     },
     {
-        "category": "KS 규격 (공통)",
-        "find": "KS 배관 용접부 비파괴시험 방법",
-        "replace": "KS B 0888",
-        "details": "[배관 용접부의 비파괴시험 방법]\n절차적 공통 규격으로, 실제 합부 판정은 적용되는 검사법(RT: KS B 0845, UT: KS B 0896 등)의 등급 분류 기준을 적용합니다."
-    },
-    {
-        "category": "KS 규격 (공통)",
+        "category": "공통 (프로젝트/용어/기타)",
         "find": "KS 강 용접부 방사선투과시험(RT)",
         "replace": "KS B 0845",
-        "details": "[강 용접부 방사선투과시험(RT)]\n▶ 결함 종류 분류 ◀\n- 1종 결함 (둥근상): 기공 등 (점수로 평가)\n- 2종 결함 (가느다란상): 슬래그 등 (길이 평가)\n- 3종 결함: 균열, 용입/융합불량 (엄격)\n- 4종 결함: 텅스텐 개재물\n\n▶ 제1종(둥근상) 결함 점수표 ◀\n- 1.0mm 이하: 1점\n- 1.0~2.0mm: 2점\n- 2.0~3.0mm: 3점\n- 3.0~4.0mm: 6점\n- 4.0~6.0mm: 10점\n\n▶ 2급 판정 기준 (허용 점수) ◀\n- 두께(t) 10mm 이하: 3점 이하\n- 10 < t <= 25mm: 6점 이하\n- 25 < t <= 50mm: 12점 이하\n- 50 < t <= 100mm: 24점 이하\n※ 3종 결함(균열 등)은 무조건 불합격."
+        "details": "강재 용접 이음부에 대한 방사선투과검사(RT) 국내 기본 KS 표준.\n\n[주요 규제 요건 및 기술 내용]\n1. 결함 등급 분류 체계: 검출된 결함의 크기 및 종류에 따라 용접부 품질을 1급(가장 양호), 2급, 3급, 4급(불량)으로 엄격히 분류하여 판정.\n2. 상질 관리 도구 의무화:\n   - 투과도계(Penetrameter): 방사선 사진의 선명도와 결함 검출 감도를 입증하기 위해 필수 사용.\n   - 계조계(Contrastmeter): 사진의 대비(Contrast)를 평가하여 적정 투과력을 지녔는지 검증하는 KS 특유의 관리 항목.\n3. 필름 농도(Density) 규제: 결함을 명확히 판독하기 위해 방사선원 및 필름 종류에 따른 적정 농도 범위 엄수.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- KS B 0845: 1976년 최초 제정 이후 지속 개정.\n- 현재 2021년 개정판이 최신 규격으로 적용 중이며, 2021년 개정을 통해 명칭이 '시험 방법'에서 '검사'로 현대화됨.\n\n[강 용접부 방사선투과시험(RT) 상세 판정 기준]\n▶ 결함 종류 분류 ◀\n- 1종 결함 (둥근상): 기공 등 (점수로 평가)\n- 2종 결함 (가느다란상): 슬래그 등 (길이 평가)\n- 3종 결함: 균열, 용입/융합불량 (엄격)\n- 4종 결함: 텅스텐 개재물\n\n▶ 제1종(둥근상) 결함 점수표 ◀\n- 1.0mm 이하: 1점\n- 1.0~2.0mm: 2점\n- 2.0~3.0mm: 3점\n- 3.0~4.0mm: 6점\n- 4.0~6.0mm: 10점\n\n▶ 2급 판정 기준 (허용 점수) ◀\n- 두께(t) 10mm 이하: 3점 이하\n- 10 < t <= 25mm: 6점 이하\n- 25 < t <= 50mm: 12점 이하\n- 50 < t <= 100mm: 24점 이하\n※ 3종 결함(균열 등)은 무조건 불합격.",
+        "revision_note": "1. 최초 제정: 1976년\n2. 최신 개정판: 2021년 3월 개정본 적용\n3. 주요 변경 사유: 표준명칭 변경(시험 방법 ➔ 검사) 및 KS 표준 서식/용어 최신화 반영"
     },
     {
-        "category": "KS 규격 (공통)",
+        "category": "공통 (프로젝트/용어/기타)",
         "find": "KS 강 용접부 초음파탐상시험(UT)",
         "replace": "KS B 0896",
-        "details": "[강 용접부 초음파탐상시험(UT)]\n▶ 결함 평가 방식 ◀\n- 에코 높이(L선, M선, H선)를 구분하여 평가.\n- 판정 대상: M선(제1평가점)을 초과하는 에코 지시의 '길이'로 판정.\n\n▶ 등급별 허용 결함 지시 길이 (M선 기준) ◀\n[1급 판정 (가장 엄격)]\n- 모재 두께(t) 6mm 이상 ~ 18mm 이하: 6mm 이하\n- 18 < t <= 60mm: 두께(t)의 1/3 이하\n\n[2급 판정 (일반 합격선)]\n- 모재 두께(t) 6mm 이상 ~ 18mm 이하: 9mm 이하\n- 18 < t <= 60mm: 두께(t)의 1/2 이하\n※ M선을 넘지 않는 에코는 결함으로 치지 않음 (합격)."
+        "details": "최신 KS B 0896 규격 명칭(페라이트계 강 용접 이음부에 대한 초음파탐상검사) 적용\n\n[규격 연혁 및 에디션(Edition) 관리]\n- KS B 0896: 국내 산업 환경을 반영하여 지속 개정, 최근 2025년 확인/갱신 절차 진행.\n\n\n[강 용접부 초음파탐상시험(UT) 상세 판정 기준]\n▶ 결함 평가 방식 ◀\n- 에코 높이(L선, M선, H선)를 구분하여 평가.\n- 판정 대상: M선(제1평가점)을 초과하는 에코 지시의 '길이'로 판정.\n\n▶ 등급별 허용 결함 지시 길이 (M선 기준) ◀\n[1급 판정 (가장 엄격)]\n- 모재 두께(t) 6mm 이상 ~ 18mm 이하: 6mm 이하\n- 18 < t <= 60mm: 두께(t)의 1/3 이하\n\n[2급 판정 (일반 합격선)]\n- 모재 두께(t) 6mm 이상 ~ 18mm 이하: 9mm 이하\n- 18 < t <= 60mm: 두께(t)의 1/2 이하\n※ M선을 넘지 않는 에코는 결함으로 치지 않음 (합격).",
+        "revision_note": "1. 표준명 변경: 적용 범위를 페라이트계 강으로 명확화\n2. 기술 요구사항 변경: 탐촉자 진동자 크기 등 현장 현실에 맞게 완화\n3. 인용 표준 및 용어 통일화"
     },
     {
-        "category": "KS 규격 (공통)",
-        "find": "KS 액체침투탐상시험(PT)",
-        "replace": "KS B 0816",
-        "details": "[침투탐상시험(PT)]\n▶ 결함 지시 분류 ◀\n- 갈라짐: 선상 결함 중 찢어진 형태.\n- 선상 지시: 길이 > 나비의 3배.\n- 원형 지시: 길이 < 나비의 3배.\n\n▶ 등급별 허용 지시 길이(크기) ◀\n- 1급(엄격): 선상(1mm 이하), 원형(2mm 이하)\n- 2급(일반): 선상(4mm 이하), 원형(8mm 이하)\n- 3급(완화): 선상(8mm 이하), 원형(16mm 이하)\n※ 갈라짐(균열)은 모든 등급에서 크기 상관없이 100% 불합격."
+        "category": "공통 (프로젝트/용어/기타)",
+        "find": "KS 배관 용접부 비파괴시험 방법",
+        "replace": "KS B 0888",
+        "details": "[배관 용접부의 비파괴시험 방법]\n절차적 공통 규격으로, 실제 합부 판정은 적용되는 검사법(RT: KS B 0845, UT: KS B 0896 등)의 등급 분류 기준을 적용합니다.\n\n[배관 용접부의 비파괴시험 방법]\n절차적 공통 규격으로, 실제 합부 판정은 적용되는 검사법(RT: KS B 0845, UT: KS B 0896 등)의 등급 분류 기준을 적용합니다.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- KS B 0888: 배관 용접 이음부에 대한 종합 비파괴검사 표준.\n- 최신 개정: 2020년 11월 대대적 개정 완료, 현재 2025년 '확인' 고시(최신 유효 상태).\n- 주요 개정 사유(2020년판): \n  1) 기존 70도로 제한되었던 UT 굴절각 규정을 현장에 맞게 완화(모든 경사각 탐촉자 허용).\n  2) 불필요한 바늘형 투과도계 조항 삭제 및 최신 규격과 용어 통일화."
     },
     {
-        "category": "KS 규격 (공통)",
-        "find": "KS 철강 재료 자분탐상시험(MT)",
-        "replace": "KS D 0213",
-        "details": "[철강 재료 자분탐상시험(MT)]\n▶ 결함 지시 분류 ◀\n- 갈라짐 자분모양: 찢어진 균열 형태.\n- 선상 자분모양: 길이 > 나비의 3배.\n- 원형 자분모양: 길이 < 나비의 3배.\n\n▶ 등급별 허용 자분모양 길이 ◀\n- 1급: 선상(2mm 이하), 원형(4mm 이하)\n- 2급: 선상(4mm 이하), 원형(8mm 이하)\n- 3급: 선상(8mm 이하), 원형(16mm 이하)\n※ 갈라짐은 크기 무관 100% 불합격."
-    },
-    {
-        "category": "KS 규격 (공통)",
-        "find": "KS 위상배열 초음파탐상검사(PAUT)",
-        "replace": "KS B 0534",
-        "details": "[위상배열 초음파탐상검사(PAUT)]\n▶ 합부 판정 기준 ◀\n- 영상화된 C-Scan, S-Scan 데이터를 통해 결함의 높이(Height)와 길이(Length)를 정량 측정.\n- 결함 크기가 발주처 시방서 또는 관련 제품 규격(ASME, KS)의 허용치를 초과할 경우 불합격."
-    },
-    {
-        "category": "KS 규격 (공통)",
+        "category": "공통 (프로젝트/용어/기타)",
         "find": "KS 비행시간회절법(TOFD)",
         "replace": "KS B 0535",
-        "details": "[비행시간회절법(TOFD)]\n▶ 합부 판정 기준 ◀\n- TOFD B-Scan 이미지에서 결함 상/하단의 회절파(Tip diffraction) 시간을 측정하여 결함의 관통 깊이(Through-wall height) 산출.\n- 측정된 높이 및 길이가 허용 규격을 초과하면 불합격."
+        "details": "[비행시간회절법(TOFD)]\n▶ 합부 판정 기준 ◀\n- TOFD B-Scan 이미지에서 결함 상/하단의 회절파(Tip diffraction) 시간을 측정하여 결함의 관통 깊이(Through-wall height) 산출.\n- 측정된 높이 및 길이가 허용 규격을 초과하면 불합격.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- KS B 0535: 2005년 제정 후 지속 개정. 현재 TOFD 기법의 국내 최신 표준으로 적용."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME B 31.3",
-        "replace": "",
-        "details": "[규격 명칭]\n1.3 Ultrasonic examination shall be performed in accordance with a written procedure, which shall, as a minimum, contain the requirments ASME Sec .V Art.4 (초음파 탐상검사는 최소한 ASME Sec .V Art.4 및 ASME B 31.3 Chapter VI 요구사항을 포함하는 서면 절차서에 따라 수행해야 한다.)\n\n[문서 내 검색된 사용 예시]\n- ...rt.4 (초음파 탐상검사는 최소한 ASME Sec .V Art.4 및 ASME B 31.3 Chapter VI 요구사항을 포함하는 서면 절차서에 따라 수행해야 한...\n- ...ASME B 31.3(’22Ed.)...\n- ...8.1 Acceptance Standards (ASME B 31.3 Chapter VI 344.6.2)(a) Indications char...\n"
+        "category": "공통 (프로젝트/용어/기타)",
+        "find": "KS 액체침투탐상시험(PT)",
+        "replace": "KS B 0816",
+        "details": "[침투탐상시험(PT)]\n▶ 결함 지시 분류 ◀\n- 갈라짐: 선상 결함 중 찢어진 형태.\n- 선상 지시: 길이 > 나비의 3배.\n- 원형 지시: 길이 < 나비의 3배.\n\n▶ 등급별 허용 지시 길이(크기) ◀\n- 1급(엄격): 선상(1mm 이하), 원형(2mm 이하)\n- 2급(일반): 선상(4mm 이하), 원형(8mm 이하)\n- 3급(완화): 선상(8mm 이하), 원형(16mm 이하)\n※ 갈라짐(균열)은 모든 등급에서 크기 상관없이 100% 불합격.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- KS B 0816: 국내 침투탐상(PT)의 뿌리 규격으로 1970년대 제정 후 최근 용어 정비 및 개정(2020년 등) 완료."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME Sec. V Article 4",
-        "replace": "",
-        "details": "[규격 명칭]\nASME Sec. V Article 4 (’23Ed.) : Nondestructive Examination\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec. V Article 4 (’23Ed.) : Nondestructive Examination...\n- ...n to the calibration block required per ASME Sec. V Article 4, unless the scannerblock also has all t...\n- ...캐너 시험편이그림1&2에 따라 요구된 모든 참조 반사체를 갖지 않는다면 ASME Sec. V Article 4에 따른교정시험편에 추가된다. 블록은 APPENDIX. Ⅲ Referen...\n"
+        "category": "공통 (프로젝트/용어/기타)",
+        "find": "KS 위상배열 초음파탐상검사(PAUT)",
+        "replace": "KS B 0534",
+        "details": "[위상배열 초음파탐상검사(PAUT)]\n▶ 합부 판정 기준 ◀\n- 영상화된 C-Scan, S-Scan 데이터를 통해 결함의 높이(Height)와 길이(Length)를 정량 측정.\n- 결함 크기가 발주처 시방서 또는 관련 제품 규격(ASME, KS)의 허용치를 초과할 경우 불합격.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- KS B 0534: 위상배열 초음파(PAUT) 기법 도입에 따라 제정, 지속적인 장비 및 기법 현대화 반영."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME Sec. V Art.23 SE-2491",
-        "replace": "",
-        "details": "[규격 명칭]\nASME Sec. V Art.23 SE-2491 : Standard Guide for Evaluating Performance Characteristics\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec. V Art.23 SE-2491 : Standard Guide for Evaluating Perform...\n"
+        "category": "공통 (프로젝트/용어/기타)",
+        "find": "KS 철강 재료 자분탐상시험(MT)",
+        "replace": "KS D 0213",
+        "details": "[철강 재료 자분탐상시험(MT)]\n▶ 결함 지시 분류 ◀\n- 갈라짐 자분모양: 찢어진 균열 형태.\n- 선상 자분모양: 길이 > 나비의 3배.\n- 원형 자분모양: 길이 < 나비의 3배.\n\n▶ 등급별 허용 자분모양 길이 ◀\n- 1급: 선상(2mm 이하), 원형(4mm 이하)\n- 2급: 선상(4mm 이하), 원형(8mm 이하)\n- 3급: 선상(8mm 이하), 원형(16mm 이하)\n※ 갈라짐은 크기 무관 100% 불합격.\n\n[철강 재료 자분탐상시험(MT) 상세 판정 기준]\n▶ 결함 지시 분류 ◀\n- 갈라짐 자분모양: 찢어진 균열 형태.\n- 선상 자분모양: 길이 > 나비의 3배.\n- 원형 자분모양: 길이 < 나비의 3배.\n\n▶ 등급별 허용 자분모양 길이 ◀\n- 1급: 선상(2mm 이하), 원형(4mm 이하)\n- 2급: 선상(4mm 이하), 원형(8mm 이하)\n- 3급: 선상(8mm 이하), 원형(16mm 이하)\n※ 갈라짐은 크기 무관 100% 불합격.\n\n[규격 연혁 및 에디션(Edition) 관리]\n- KS D 0213: 자분탐상(MT) 국내 기본 규격. 현행 기준 지속 유효 상태 확인."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME Sec. V Art.23 SE-2700",
-        "replace": "",
-        "details": "[규격 명칭]\nASME Sec. V Art.23 SE-2700 : Standard Practice For Contact Ultrasonic Testing of\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec. V Art.23 SE-2700 : Standard Practice For Contact Ultraso...\n"
+        "category": "공통 (프로젝트/용어/기타)",
+        "find": "공정 배관 판정 기준",
+        "replace": "ASME B31.3",
+        "details": "[ASME B31.3 Process Piping]\n석유화학, 정유공장 등 공정 배관 시공 시 필수 적용되는 판정 기준.\n- RT/UT: 유체 서비스 등급(Normal, Severe Cyclic 등)에 따라 결함 허용치가 엄격하게 나뉨.\n- 균열 및 융합불량은 모든 등급에서 100% 불합격."
     },
     {
-        "category": "ASNT 규격",
-        "find": "ASNT SNT-TC-1A (2020 Ed.)",
-        "replace": "",
-        "details": "[규격 명칭]\nASNT SNT-TC-1A (2020 Ed.) : Recommended Practice for Nondestructive Testing\n\n[문서 내 검색된 사용 예시]\n- ...ASNT SNT-TC-1A (2020 Ed.) : Recommended Practice for Nondestructi...\n"
+        "category": "장비 및 자재 규격 (ASTM 등)",
+        "find": "PAUT 장비 검증 (ISO)",
+        "replace": "ISO 18563",
+        "details": "[ISO 18563 PAUT 장비/탐촉자/시스템 검증]\n국제표준화기구(ISO)의 PAUT 장비 종합 검증 표준 시리즈.\n- Part 1: 기기 (Instruments)\n- Part 2: 탐촉자 (Probes - 배열 진동자 특성)\n- Part 3: 결합 시스템 (Combined systems)\n※ 해외 프로젝트(ISO 기반) 진행 시 PAUT 장비의 스펙 시트(Q/A) 증빙용으로 반드시 요구되는 규격입니다."
     },
     {
-        "category": "ASME 규격",
-        "find": "ASME Sec.V Art.1",
-        "replace": "",
-        "details": "[규격 명칭]\nASME Sec.V Art.1 Mandatory Appendix Ⅱ : Supplemental Personnel Qualification\n\n[문서 내 검색된 사용 예시]\n- ...ASME Sec.V Art.1 Mandatory Appendix Ⅱ : Supplemental Per...\n- ...rsonnel refer to an inspector who meets ASME Sec.V Art.1 App.II(자격을 갖춘 PAUT 검사원은 ASME Sec.V Art....\n"
+        "category": "장비 및 자재 규격 (ASTM 등)",
+        "find": "PAUT 장비 성능 평가 (ASTM)",
+        "replace": "ASTM E2491",
+        "details": "[ASTM E2491 PAUT 장비 및 시스템 성능 평가]\n위상배열 초음파(PAUT) 기기 및 시스템의 성능 특성(빔 조향, 포커싱, 분해능 등)을 평가하기 위한 표준 가이드.\n- 장비의 빔 프로파일(Beam Profile) 및 채널별 활성 상태(Dead element check) 등 신뢰성 검증의 핵심 근거로 절차서에 인용됨."
+    },
+    {
+        "category": "장비 및 자재 규격 (ASTM 등)",
+        "find": "PAUT 탐상 표준 및 교정블록",
+        "replace": "ASTM E2700",
+        "details": "[ASTM E2700 PAUT 접촉 탐상 실무 표준]\n용접부의 PAUT 접촉 탐상에 대한 절차적 요건과 교정(Calibration) 방법을 규정하는 표준.\n- PAUT 검사를 위한 TCG(시간-거리 보상), 엔코더(Encoder) 교정 및 대비시험편(PAC Block, NAVSHIPS 등) 세팅 요건을 명시.\n- ASME Sec.V Art.4의 부록(App. IV, V)과 함께 PAUT 절차서 작성의 양대 산맥으로 쓰임."
+    },
+    {
+        "category": "장비 및 자재 규격 (ASTM 등)",
+        "find": "RT 산업용 필름 분류",
+        "replace": "ASTM E1815",
+        "details": "[ASTM E1815 RT 필름 시스템 분류]\n산업용 방사선투과검사(RT)에 사용되는 필름 시스템의 분류 표준.\n- 필름의 입자 크기, 속도, 감도 등에 따라 Special, I, II, III 등급으로 분류.\n- 절차서 작성 시 '우리는 ASTM E1815 Class I 필름(예: Agfa D4, Kodak T)을 사용한다'는 명확한 자재 스펙 근거로 활용됨.\n\n\n[실무 제품 매칭 가이드 (브랜드별 필름 등급)]\n▶ Special Class (초고화질/가장 느림)\n- Fuji: IX25\n- Agfa: D2\n- Carestream(Kodak): DR50\n\n▶ Class I (고화질/느림 - 정유, 원자력 등 엄격한 기준 적용 시)\n- Fuji: IX50, IX80\n- Agfa: D4, D5\n- Carestream(Kodak): MX125, T200\n\n▶ Class II (일반 화질/보통 - 일반 배관, 철골 등 가장 범용적)\n- Fuji: IX100\n- Agfa: D7\n- Carestream(Kodak): AA400\n\n▶ Class III (저화질/빠름)\n- Fuji: IX150\n- Agfa: D8\n- Carestream(Kodak): HS800\n\n※ 절차서 작성 팁: 고객사 시방서에 'Class I' 요구 시, 절차서 자재 항목에 Agfa D4 또는 Fuji IX50을 명시하면 완벽히 부합함."
+    },
+    {
+        "category": "장비 및 자재 규격 (ASTM 등)",
+        "find": "UT 접촉 탐상 및 대비시험편",
+        "replace": "ASTM E164",
+        "details": "[ASTM E164 UT 접촉 탐상 표준 (Calibration Block 포함)]\n초음파탐상검사(UT) 시 접촉 탐상법 및 교정(Calibration)을 위한 대비시험편(Reference Block) 요건을 규정한 표준.\n- 거리 교정, 감도 설정 및 탐촉자 특성 평가를 위한 IIW 블록 등 표준 시험편의 치수와 재질 요건을 포함함."
+    },
+    {
+        "category": "장비 및 자재 규격 (ASTM 등)",
+        "find": "선형 투과도계 (Wire IQI)",
+        "replace": "ASTM E747",
+        "details": "[ASTM E747 선형 투과도계 (Wire IQI)]\n방사선투과검사(RT) 사진의 상질(선명도 및 해상도)을 검증하기 위해 필수적으로 사용되는 선형 투과도계의 설계, 제조 및 재질 그룹 분류에 대한 표준.\n- ASME Sec.V Art.2 및 각종 국제 코드에서 RT 검사 시 상질 증빙용으로 인용됨."
+    },
+    {
+        "category": "장비 및 자재 규격 (ASTM 등)",
+        "find": "유공형 투과도계 (Hole IQI)",
+        "replace": "ASTM E1025",
+        "details": "[ASTM E1025 유공형 투과도계 (Hole-Type IQI)]\n방사선투과검사(RT)용 유공형(구멍 뚫린 판 형태) 투과도계의 설계, 제조 및 재질 그룹 분류에 대한 표준.\n- 1T, 2T, 4T 구멍을 통해 등급(2-2T 등)을 식별하여 사진의 감도(Sensitivity)를 평가함."
     }
 ]
