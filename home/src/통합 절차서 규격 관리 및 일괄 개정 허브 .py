@@ -83,15 +83,29 @@ class DocumentProcessor:
         try:
             import docx
             doc = docx.Document(input_file)
-            for paragraph in doc.paragraphs:
-                for f_text, r_text in replacements:
-                    DocumentProcessor.replace_text_in_paragraph(paragraph, f_text, r_text)
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        for paragraph in cell.paragraphs:
-                            for f_text, r_text in replacements:
-                                DocumentProcessor.replace_text_in_paragraph(paragraph, f_text, r_text)
+            
+            def process_paragraphs(paragraphs):
+                for paragraph in paragraphs:
+                    for f_text, r_text in replacements:
+                        DocumentProcessor.replace_text_in_paragraph(paragraph, f_text, r_text)
+                        
+            def process_tables(tables):
+                for table in tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            process_paragraphs(cell.paragraphs)
+            
+            # 본문 처리
+            process_paragraphs(doc.paragraphs)
+            process_tables(doc.tables)
+            
+            # 머릿글 및 바닥글 처리
+            for section in doc.sections:
+                process_paragraphs(section.header.paragraphs)
+                process_tables(section.header.tables)
+                process_paragraphs(section.footer.paragraphs)
+                process_tables(section.footer.tables)
+                
             doc.save(output_file)
         except Exception as e:
             raise Exception(f"docx 처리 실패: {e}")
@@ -170,9 +184,13 @@ class DocumentProcessor:
             
             doc = word.Documents.Open(abs_input)
             
-            # 본문 찾기 및 바꾸기 (Replace=2 는 모두 바꾸기)
+            # 모든 영역(본문, 머릿글, 바닥글 등) 순회하며 찾기 및 바꾸기 (Replace=2 는 모두 바꾸기)
             for f_text, r_text in replacements:
-                doc.Content.Find.Execute(FindText=f_text, ReplaceWith=r_text, Replace=2)
+                for story in doc.StoryRanges:
+                    story.Find.Execute(FindText=f_text, ReplaceWith=r_text, Replace=2)
+                    while story.NextStoryRange:
+                        story = story.NextStoryRange
+                        story.Find.Execute(FindText=f_text, ReplaceWith=r_text, Replace=2)
                 
             doc.SaveAs(abs_output)
             doc.Close()
