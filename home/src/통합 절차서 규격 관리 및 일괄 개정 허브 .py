@@ -207,6 +207,35 @@ class DocumentProcessor:
             raise Exception(f"doc 처리 오류: {e}")
 
     @staticmethod
+    def process_xls(input_file, output_file, replacements):
+        import os
+        try:
+            import win32com.client as win32
+            excel = win32.gencache.EnsureDispatch("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            
+            abs_input = os.path.abspath(input_file)
+            abs_output = os.path.abspath(output_file)
+            
+            wb = excel.Workbooks.Open(abs_input)
+            
+            for sheet in wb.Worksheets:
+                for f_text, r_text in replacements:
+                    # LookAt=2 (xlPart: 부분 일치)
+                    sheet.Cells.Replace(What=f_text, Replacement=r_text, LookAt=2, SearchOrder=1, MatchCase=False)
+                    
+            wb.SaveAs(abs_output)
+            wb.Close(SaveChanges=False)
+            excel.Quit()
+        except Exception as e:
+            try:
+                excel.Quit()
+            except:
+                pass
+            raise Exception(f"xls 처리 오류: {e}")
+
+    @staticmethod
     def process_single_document(input_file, output_file, rules):
         ext_lower = os.path.splitext(input_file)[1].lower()
         if ext_lower == '.docx':
@@ -215,6 +244,8 @@ class DocumentProcessor:
             DocumentProcessor.process_doc(input_file, output_file, rules)
         elif ext_lower == '.xlsx':
             DocumentProcessor.process_xlsx(input_file, output_file, rules)
+        elif ext_lower == '.xls':
+            DocumentProcessor.process_xls(input_file, output_file, rules)
         elif ext_lower in ['.hwp', '.hwpx']:
             DocumentProcessor.process_hwp(input_file, output_file, rules)
         elif ext_lower == '.txt':
@@ -799,9 +830,9 @@ class CodebookApp:
         filepath = filedialog.askopenfilename(
             title="절차서 문서 열기",
             filetypes=[
-                ("모든 지원 파일", "*.docx *.xlsx *.hwp *.hwpx *.txt *.doc *.pdf"),
+                ("모든 지원 파일", "*.docx *.xlsx *.xls *.hwp *.hwpx *.txt *.doc *.pdf"),
                 ("워드 파일", "*.docx *.doc"),
-                ("엑셀 파일", "*.xlsx"),
+                ("엑셀 파일", "*.xlsx *.xls"),
                 ("한글 파일", "*.hwp *.hwpx"),
                 ("텍스트 파일", "*.txt"),
                 ("PDF 파일", "*.pdf"),
@@ -850,7 +881,7 @@ class CodebookApp:
                 styled_html = f"<html><body style=\"font-family: 'Malgun Gothic', sans-serif; padding: 20px; line-height: 1.6;\">{html_content}</body></html>"
                 self.html_viewer.load_html(styled_html)
                 
-            elif ext in ['xlsx', 'hwp', 'hwpx', 'doc', 'pdf']:
+            elif ext in ['xlsx', 'xls', 'hwp', 'hwpx', 'doc', 'pdf']:
                 self.current_doc_text = ""
                 styled_html = f"""
                 <html>
