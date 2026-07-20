@@ -158,10 +158,39 @@ class DocumentProcessor:
             f.write(content)
 
     @staticmethod
+    def process_doc(input_file, output_file, replacements):
+        import os
+        try:
+            import win32com.client as win32
+            word = win32.gencache.EnsureDispatch("Word.Application")
+            word.Visible = False
+            
+            abs_input = os.path.abspath(input_file)
+            abs_output = os.path.abspath(output_file)
+            
+            doc = word.Documents.Open(abs_input)
+            
+            # 본문 찾기 및 바꾸기 (Replace=2 는 모두 바꾸기)
+            for f_text, r_text in replacements:
+                doc.Content.Find.Execute(FindText=f_text, ReplaceWith=r_text, Replace=2)
+                
+            doc.SaveAs(abs_output)
+            doc.Close()
+            word.Quit()
+        except Exception as e:
+            try:
+                word.Quit()
+            except:
+                pass
+            raise Exception(f"doc 처리 오류: {e}")
+
+    @staticmethod
     def process_single_document(input_file, output_file, rules):
         ext_lower = os.path.splitext(input_file)[1].lower()
         if ext_lower == '.docx':
             DocumentProcessor.process_docx(input_file, output_file, rules)
+        elif ext_lower == '.doc':
+            DocumentProcessor.process_doc(input_file, output_file, rules)
         elif ext_lower == '.xlsx':
             DocumentProcessor.process_xlsx(input_file, output_file, rules)
         elif ext_lower in ['.hwp', '.hwpx']:
