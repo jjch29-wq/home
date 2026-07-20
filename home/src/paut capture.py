@@ -291,14 +291,18 @@ class AutoCaptureApp:
                 self.log(f"[{idx}/{len(all_files)}] {target_file.name} 처리 중...")
                 
                 try:
+                    # OmniPC 프로그램 화면을 가리지 않도록 캡처 어플 창을 미리 최소화 (숨김)
+                    self.root.after(0, self.root.iconify)
+                    time.sleep(0.5)
+
                     # 1. 프로그램 실행 (경로에 공백이 있어도 안전하게 실행되도록 start 명령어 사용)
                     os.system(f'start "" "{shortcut_path}" "{target_file}"')
                     
-                    # 2. 대기 (카운트다운 로그 표시)
+                    # 2. 대기 (카운트다운 로그 표시 - 창은 내려가 있음)
                     for i in range(delay, 0, -1):
                         self.log(f"  -> 화면 로딩 대기 중... {i}초 남음")
                         time.sleep(1)
-                        
+
                     # 3. 자동 클릭 수행 (체크된 경우이고 .opd 파일일 때만)
                     is_opd = target_file.suffix.lower() == '.opd'
                     
@@ -349,6 +353,9 @@ class AutoCaptureApp:
                     self.log(f"  -> ❌ 에러 발생: {e}")
                     
                 finally:
+                    # 캡처 완료(또는 에러) 후 창 다시 복원
+                    self.root.after(0, self.root.deiconify)
+                    
                     # 5. 프로그램 강제 종료
                     subprocess.run(['taskkill', '/F', '/IM', 'OmniPC.exe'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     self.log("  -> 다음 파일을 위해 프로그램을 닫습니다.\n")
