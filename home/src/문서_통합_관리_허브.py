@@ -336,16 +336,22 @@ class CodebookApp:
         self.tab_batch = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_batch, text="✍️ 다중 일괄 변환 (프리셋)")
         
+        self.tab_report = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_report, text="📈 월간보고서 자동 생성기")
+        
         # 3. 상태 관리 변수
         self.current_doc_text = ""
         self.current_filepath = ""
         self.current_search_index = 0
         self.last_search_query = ""
+        self.report_template_path = ""
+        self.report_rawdata_path = ""
         
         # 4. UI 생성 및 초기화
         self.create_viewer_widgets()
         self.create_widgets()
         self.create_batch_widgets()
+        self.create_report_widgets()
 
         self.refresh_list()
         
@@ -1426,9 +1432,128 @@ class CodebookApp:
             os.startfile(output_dir)
             
         except Exception as e:
-            self.root.config(cursor="")
             messagebox.showerror("실행 오류", f"파일을 자동 변환하는 중 오류가 발생했습니다:\n{e}")
 
+    # =========================================================
+    # 5. 월간보고서 자동생성기 기능
+    # =========================================================
+    def create_report_widgets(self):
+        main_frame = ttk.Frame(self.tab_report, padding=20)
+        main_frame.pack(fill="both", expand=True)
+        
+        lbl_title = ttk.Label(main_frame, text="📈 가산~가평 월간 용역보고서 자동 생성기", font=("맑은 고딕", 16, "bold"))
+        lbl_title.pack(pady=(0, 20))
+        
+        # 입력 폼
+        form_frame = ttk.LabelFrame(main_frame, text="설정 및 파일 선택", padding=15)
+        form_frame.pack(fill="x", padx=10, pady=10)
+        
+        # 1. 템플릿
+        ttk.Label(form_frame, text="마스터 템플릿:").grid(row=0, column=0, sticky="e", pady=5)
+        self.lbl_template_path = ttk.Label(form_frame, text="(선택 안 됨)", foreground="gray")
+        self.lbl_template_path.grid(row=0, column=1, sticky="w", padx=10, pady=5)
+        ttk.Button(form_frame, text="찾아보기...", command=self.select_report_template).grid(row=0, column=2, padx=5, pady=5)
+        
+        # 2. Raw Data
+        ttk.Label(form_frame, text="당월 현장 대장 (Raw Data):").grid(row=1, column=0, sticky="e", pady=5)
+        self.lbl_rawdata_path = ttk.Label(form_frame, text="(선택 안 됨)", foreground="gray")
+        self.lbl_rawdata_path.grid(row=1, column=1, sticky="w", padx=10, pady=5)
+        ttk.Button(form_frame, text="찾아보기...", command=self.select_report_rawdata).grid(row=1, column=2, padx=5, pady=5)
+        
+        # 3. 월 선택
+        ttk.Label(form_frame, text="보고 연월:").grid(row=2, column=0, sticky="e", pady=5)
+        self.entry_report_month = ttk.Entry(form_frame, width=15)
+        self.entry_report_month.insert(0, "2026년 8월")
+        self.entry_report_month.grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        
+        # 실행 버튼
+        btn_generate = ttk.Button(main_frame, text="✨ 보고서 자동 생성하기", command=self.generate_monthly_report, style="Accent.TButton")
+        btn_generate.pack(pady=20, ipadx=20, ipady=10)
+        
+        # 안내 문구
+        ttk.Label(main_frame, text="* 템플릿 파일과 일일 대장 엑셀을 선택한 후 버튼을 누르면\n* 가산~가평 프로젝트명으로 일괄 치환되고, 세부 물량이 자동 집계되어 저장됩니다.", foreground="gray", justify="center").pack()
+
+    def select_report_template(self):
+        filepath = filedialog.askopenfilename(title="마스터 템플릿 엑셀 선택", filetypes=[("Excel 파일", "*.xlsx")])
+        if filepath:
+            self.report_template_path = filepath
+            self.lbl_template_path.config(text=os.path.basename(filepath), foreground="blue")
+            
+    def select_report_rawdata(self):
+        filepath = filedialog.askopenfilename(title="현장 일일대장 엑셀 선택", filetypes=[("Excel 파일", "*.xlsx")])
+        if filepath:
+            self.report_rawdata_path = filepath
+            self.lbl_rawdata_path.config(text=os.path.basename(filepath), foreground="blue")
+
+    def generate_monthly_report(self):
+        if not self.report_template_path or not self.report_rawdata_path:
+            messagebox.showwarning("입력 오류", "템플릿과 현장 대장 파일을 모두 선택해주세요.")
+            return
+            
+        month_text = self.entry_report_month.get().strip()
+        if not month_text:
+            messagebox.showwarning("입력 오류", "보고 연월을 입력해주세요.")
+            return
+            
+        try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
+            import openpyxl
+            
+            dir_name = os.path.dirname(self.report_template_path)
+            output_filename = f"가산~가평_주배관_{month_text.replace(' ', '')}_용역진도보고서.xlsx"
+            output_path = os.path.join(dir_name, output_filename)
+            
+            # 1. 템플릿 열기
+            wb_temp = openpyxl.load_workbook(self.report_template_path)
+            
+            # 2. 표지 및 1.용역개요 치환 (DB의 '가산~가평' 관련 규칙 적용)
+            rules = [(d["find"], d["replace"]) for d in self.db_manager.data if d.get("find") and d.get("replace")]
+            # 필수 치환 규칙 추가
+            rules.append(("[보고연월]", month_text))
+            
+            for sheet_name in wb_temp.sheetnames:
+                sheet = wb_temp[sheet_name]
+                # 36개 시트의 수만 줄의 데이터를 모두 검사하면 느리므로, 
+                # 프로젝트명과 날짜가 위치하는 상단 30행까지만 텍스트 치환을 수행하여 1초 만에 끝나게 최적화합니다.
+                for row in sheet.iter_rows(max_row=30):
+                    for cell in row:
+                        if cell.value and isinstance(cell.value, str):
+                            new_val = cell.value
+                            for f_text, r_text in rules:
+                                new_val = new_val.replace(f_text, r_text)
+                            if new_val != cell.value:
+                                cell.value = new_val
+                                
+            # 3. Raw Data에서 물량 세부내역 복사
+            wb_raw = openpyxl.load_workbook(self.report_rawdata_path, data_only=True)
+            ws_raw = wb_raw.active
+            
+            target_sheet = None
+            for name in wb_temp.sheetnames:
+                if "물량세부내역" in name:
+                    target_sheet = wb_temp[name]
+                    break
+                    
+            if target_sheet:
+                # Raw Data의 2행부터(헤더 제외) 복사하여 템플릿 끝에 추가
+                for i, row in enumerate(ws_raw.iter_rows(min_row=2, values_only=True), start=1):
+                    if not any(row): continue  # 완전히 빈 행은 무시
+                    target_sheet.append(row)
+            else:
+                messagebox.showwarning("경고", "템플릿에서 '물량세부내역' 시트를 찾지 못해 세부 데이터는 복사되지 않았습니다.")
+                
+            # 4. 저장 및 완료
+            wb_temp.save(output_path)
+            self.root.config(cursor="")
+            
+            messagebox.showinfo("생성 완료", f"월간 보고서가 성공적으로 생성되었습니다!\n\n저장 경로: {output_path}")
+            os.startfile(dir_name)
+            
+        except Exception as e:
+            self.root.config(cursor="")
+            messagebox.showerror("오류 발생", f"보고서 생성 중 문제가 발생했습니다:\n{str(e)}")
 if __name__ == "__main__":
     root = tk.Tk()
     app = CodebookApp(root)
