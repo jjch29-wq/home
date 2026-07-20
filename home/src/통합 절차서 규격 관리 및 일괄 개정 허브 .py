@@ -872,6 +872,13 @@ class CodebookApp:
             return
             
         try:
+            with open(self.current_filepath, 'a'):
+                pass
+        except PermissionError:
+            messagebox.showwarning("문서 사용 중", "현재 이 문서가 Word, Excel, HWP 등 다른 프로그램에서 열려 있습니다!\n\n수정된 내용을 덮어쓰려면 열려 있는 원본 프로그램을 완전히 닫은 후 다시 [즉시 고치기]를 눌러주세요.\n(또는 열려있는 창에서 직접 찾기/바꾸기 단축키를 이용하세요.)")
+            return
+            
+        try:
             self.root.config(cursor="wait")
             self.root.update()
             
