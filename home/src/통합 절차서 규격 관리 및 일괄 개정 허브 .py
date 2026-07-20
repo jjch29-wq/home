@@ -748,11 +748,12 @@ class CodebookApp:
         filepath = filedialog.askopenfilename(
             title="절차서 문서 열기",
             filetypes=[
-                ("모든 지원 파일", "*.docx *.xlsx *.hwp *.hwpx *.txt"),
-                ("워드 파일", "*.docx"),
+                ("모든 지원 파일", "*.docx *.xlsx *.hwp *.hwpx *.txt *.doc *.pdf"),
+                ("워드 파일", "*.docx *.doc"),
                 ("엑셀 파일", "*.xlsx"),
                 ("한글 파일", "*.hwp *.hwpx"),
                 ("텍스트 파일", "*.txt"),
+                ("PDF 파일", "*.pdf"),
                 ("모든 파일", "*.*")
             ]
         )
@@ -798,13 +799,15 @@ class CodebookApp:
                 styled_html = f"<html><body style=\"font-family: 'Malgun Gothic', sans-serif; padding: 20px; line-height: 1.6;\">{html_content}</body></html>"
                 self.html_viewer.load_html(styled_html)
                 
-            elif ext in ['xlsx', 'hwp', 'hwpx']:
+            elif ext in ['xlsx', 'hwp', 'hwpx', 'doc', 'pdf']:
                 self.current_doc_text = ""
                 styled_html = f"""
                 <html>
                 <body style="font-family: 'Malgun Gothic', sans-serif; padding: 40px; text-align: center; color: #555; line-height: 1.8;">
                     <h2>{ext.upper()} 파일이 로드되었습니다.</h2>
-                    <p>현재 뷰어 화면의 미리보기는 워드(.docx) 및 텍스트(.txt) 문서만 지원합니다.</p>
+                    <p>현재 뷰어 화면의 미리보기는 최신 워드(.docx) 및 텍스트(.txt) 문서만 지원합니다.</p>
+                    <p>하지만 상단의 <b>[📝 원본 프로그램으로 열어서 직접 수정하기]</b> 버튼을 누르시면<br>
+                    정상적으로 해당 문서를 여실 수 있습니다.</p>
                 </body>
                 </html>
                 """
