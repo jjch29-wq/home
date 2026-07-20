@@ -55,9 +55,10 @@ search_out_expense.json
 
 # Local settings
 logo_settings.json
-logo_settings_unified.json
+# logo_settings_unified.json (Git 동기화를 위해 주석 처리)
 Material_Manager_Config.json
 pmi_database.db
 
 # Config directory (API keys, etc.)
-config/
+config/*
+!config/logo_settings_unified.json
