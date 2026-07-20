@@ -17,6 +17,7 @@ import xlsxwriter
 import datetime
 from PIL import Image as PILImage, ImageChops, ImageOps
 import io
+import base64
 import time
 
 # DPI Awareness for Windows
@@ -308,6 +309,7 @@ class PMIReportApp:
         self.photo_inspect_type = tk.StringVar(value="PAUT")
         self.photo_report_title = tk.StringVar(value=self.photo_header_map["PAUT"])
         self.photo_cols_per_row = tk.StringVar(value="2")
+        self.photo_rows_per_page = tk.StringVar(value="4")
         self.photo_keep_aspect = tk.BooleanVar(value=True)
         self.photo_output_name = tk.StringVar(value="NDT_Photo_Log_Final.xlsx")
         _def_logo = os.path.join(RESOURCE_DIR, "logo.png")
@@ -463,7 +465,7 @@ class PMIReportApp:
                         'orderer': self.photo_orderer, 'inspect_date': self.photo_inspect_date,
                         'inspect_type': self.photo_inspect_type, 'report_title': self.photo_report_title,
                         'report_no': self.photo_report_no,
-                        'cols_per_row': self.photo_cols_per_row, 'keep_aspect': self.photo_keep_aspect,
+                        'cols_per_row': self.photo_cols_per_row, 'rows_per_page': self.photo_rows_per_page, 'keep_aspect': self.photo_keep_aspect,
                         'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
                         'logo_width': self.photo_logo_width_var, 'logo_height': self.photo_logo_height_var,
                         'logo_x': self.photo_logo_x_var, 'logo_y': self.photo_logo_y_var,
@@ -611,7 +613,7 @@ class PMIReportApp:
                     'report_no': self.photo_report_no.get(),
                     'start_page': getattr(self, 'photo_start_page', tk.StringVar()).get(),
                     'total_pages': getattr(self, 'photo_total_pages', tk.StringVar()).get(),
-                    'cols_per_row': self.photo_cols_per_row.get(), 'keep_aspect': self.photo_keep_aspect.get(),
+                    'cols_per_row': self.photo_cols_per_row.get(), 'rows_per_page': self.photo_rows_per_page.get(), 'keep_aspect': self.photo_keep_aspect.get(),
                     'output_name': self.photo_output_name.get(), 'logo_path': self.photo_logo_path.get(),
                     'logo_width': self.photo_logo_width_var.get(), 'logo_height': self.photo_logo_height_var.get(),
                     'logo_x': self.photo_logo_x_var.get(), 'logo_y': self.photo_logo_y_var.get(),
@@ -666,7 +668,7 @@ class PMIReportApp:
                 'report_no': self.photo_report_no,
                 'start_page': getattr(self, 'photo_start_page', None),
                 'total_pages': getattr(self, 'photo_total_pages', None),
-                'cols_per_row': self.photo_cols_per_row, 'keep_aspect': self.photo_keep_aspect,
+                'cols_per_row': self.photo_cols_per_row, 'rows_per_page': self.photo_rows_per_page, 'keep_aspect': self.photo_keep_aspect,
                 'output_name': self.photo_output_name, 'logo_path': self.photo_logo_path,
                 'logo_width': self.photo_logo_width_var, 'logo_height': self.photo_logo_height_var,
                 'logo_x': self.photo_logo_x_var, 'logo_y': self.photo_logo_y_var,
@@ -2194,7 +2196,10 @@ class PMIReportApp:
             var = tk.StringVar(value=config_val)
             self.paut_equip_vars[k] = var
             ttk.Label(tab_equip, text=label).grid(row=equip_r, column=equip_c*2, sticky='e', padx=5, pady=5)
-            ttk.Entry(tab_equip, textvariable=var, width=16).grid(row=equip_r, column=equip_c*2+1, sticky='ew', padx=5, pady=5)
+            ent = ttk.Entry(tab_equip, textvariable=var, width=16)
+            ent.grid(row=equip_r, column=equip_c*2+1, sticky='ew', padx=5, pady=5)
+            ent.bind("<FocusOut>", lambda e: self.save_settings())
+            ent.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
             
             equip_c += 1
             if equip_c > 1: # 2 columns layout
@@ -2862,7 +2867,16 @@ class PMIReportApp:
             # [NEW] Write Cover (Gapji) metadata if there is a cover sheet
             if len(wb.worksheets) > 1:
                 first_item = final_list[0] if final_list else None
-                self._write_gapji_metadata(wb.worksheets[0], mode="PAUT", first_item=first_item)
+                ws0 = wb.worksheets[0]
+                self._write_gapji_metadata(ws0, mode="PAUT", first_item=first_item)
+                
+                # 갑지의 AA4, AA5, AA6 내용을 을지의 Y4, Y5, Y6에 복사
+                try:
+                    self.safe_set_value(ws, 'Y4', ws0['AA4'].value)
+                    self.safe_set_value(ws, 'Y5', ws0['AA5'].value)
+                    self.safe_set_value(ws, 'Y6', ws0['AA6'].value)
+                except Exception as e:
+                    self.log(f"[WARNING] 갑지 데이터 복사 실패: {e}")
             
             self.force_print_settings(ws, context="DATA")
             
@@ -3426,7 +3440,10 @@ class PMIReportApp:
         
         for lbl, var, r, c in fields:
             tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
-            ttk.Entry(block, textvariable=var, width=15).grid(row=r, column=c+1, sticky='ew', padx=2, pady=2)
+            ent = ttk.Entry(block, textvariable=var, width=15)
+            ent.grid(row=r, column=c+1, sticky='ew', padx=2, pady=2)
+            ent.bind("<FocusOut>", lambda e: self.save_settings())
+            ent.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
             # Add to setting_vars for auto-save
             cfg_key = f"GAPJI_{lbl.replace(':', '').upper()}"
             if "공사명" in lbl: cfg_key = "GAPJI_PROJECT"
@@ -3576,7 +3593,8 @@ class PMIReportApp:
             v = tk.StringVar(value=str(self.config.get(key, defaultv)))
             ent = ttk.Entry(sub, textvariable=v, width=1)
             ent.grid(row=0, column=i*2+1, sticky='ew', padx=1)
-            ent.bind("<Return>", lambda e: self.root.focus_set())
+            ent.bind("<FocusOut>", lambda e: self.save_settings())
+            ent.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
             self.setting_vars[key] = v
 
     def _create_column_mapping_ui(self, parent, mode, mapping_items):
@@ -3631,7 +3649,8 @@ class PMIReportApp:
             v_idx = tk.StringVar(value=str(self.config.get(key_idx, def_idx)))
             ent_idx = ttk.Entry(container, textvariable=v_idx, width=4)
             ent_idx.grid(row=row, column=col_offset+1, sticky='w', padx=2, pady=2)
-            ent_idx.bind("<Return>", lambda e: self.root.focus_set())
+            ent_idx.bind("<FocusOut>", lambda e: self.save_settings())
+            ent_idx.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
             self.setting_vars[key_idx] = v_idx
             
             # [NEW] Trace to update config in real-time so changes are active immediately
@@ -3641,7 +3660,8 @@ class PMIReportApp:
             v_name = tk.StringVar(value=str(self.config.get(key_name, def_name)))
             ent_name = ttk.Entry(container, textvariable=v_name, width=12)
             ent_name.grid(row=row, column=col_offset+2, sticky='ew', padx=2, pady=2)
-            ent_name.bind("<Return>", lambda e: self.root.focus_set())
+            ent_name.bind("<FocusOut>", lambda e: self.save_settings())
+            ent_name.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
             self.setting_vars[key_name] = v_name
             
             # Trace to update config and preview tree heading in real-time
@@ -8977,8 +8997,12 @@ class PMIReportApp:
         layout_frame.pack(fill='x', padx=10, pady=5)
 
         tk.Label(layout_frame, text="한 줄당 사진:").grid(row=0, column=0, sticky='w', pady=2)
-        ttk.Combobox(layout_frame, textvariable=self.photo_cols_per_row, values=["1", "2", "3", "4"], state="readonly", width=5).grid(row=0, column=1, sticky='w', padx=5, pady=2)
-        ttk.Checkbutton(layout_frame, text="비율 유지", variable=self.photo_keep_aspect).grid(row=0, column=2, sticky='w')
+        r0_f = tk.Frame(layout_frame)
+        r0_f.grid(row=0, column=1, columnspan=4, sticky='w')
+        ttk.Combobox(r0_f, textvariable=self.photo_cols_per_row, values=["1", "2", "3", "4"], state="readonly", width=5).pack(side='left', padx=2)
+        tk.Label(r0_f, text="페이지당 줄 수:").pack(side='left', padx=(10, 2))
+        ttk.Combobox(r0_f, textvariable=self.photo_rows_per_page, values=["2", "3", "4", "5", "6", "8"], state="readonly", width=5).pack(side='left', padx=2)
+        ttk.Checkbutton(r0_f, text="비율 유지", variable=self.photo_keep_aspect).pack(side='left', padx=(10, 2))
 
         tk.Label(layout_frame, text="칸 너비/높이:").grid(row=1, column=0, sticky='w', pady=2)
         wh_f = tk.Frame(layout_frame)
@@ -9023,7 +9047,6 @@ class PMIReportApp:
         ttk.Spinbox(wf_f, textvariable=self.photo_height_pixel_adj_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
         tk.Label(wf_f, text="좌우(px):").pack(side='left', padx=(10, 0))
         ttk.Spinbox(wf_f, textvariable=self.photo_shift_x_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
-        tk.Label(wf_f, text="상하(px):").pack(side='left', padx=(10, 0))
         ttk.Spinbox(wf_f, textvariable=self.photo_shift_y_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
         tk.Label(wf_f, text="(100% 기준 미세조정)", font=('', 9), foreground='gray').pack(side='left', padx=5)
 
@@ -9092,7 +9115,7 @@ class PMIReportApp:
         list_frame = tk.Frame(right_container, background="#ffffff")
         list_frame.pack(fill='both', expand=True, padx=10, pady=5)
         
-        self.photo_listbox = tk.Listbox(list_frame, font=("Consolas", 9), selectmode="extended", borderwidth=1, relief='flat', highlightthickness=1, highlightcolor="#3b82f6")
+        self.photo_listbox = tk.Listbox(list_frame, font=("Consolas", 9), selectmode="extended", borderwidth=1, relief='flat', highlightthickness=1, highlightcolor="#3b82f6", exportselection=False)
         self.photo_listbox.pack(side='left', fill='both', expand=True)
         
         list_vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.photo_listbox.yview)
@@ -9109,11 +9132,9 @@ class PMIReportApp:
                 
         # [NEW] Bindings for Live Preview Update
         self.photo_listbox.bind("<<ListboxSelect>>", self._update_photo_preview)
-        self.photo_listbox.bind("<ButtonRelease-1>", self._update_photo_preview)
-        self.photo_listbox.bind("<KeyRelease>", self._update_photo_preview)
         for var in (self.photo_width_pct_var, self.photo_width_pixel_adj_var, self.photo_height_pixel_adj_var, self.photo_shift_x_var, 
                     self.photo_shift_y_var, self.photo_cell_width_var, self.photo_cell_height_var,
-                    self.photo_cols_per_row):
+                    self.photo_cols_per_row, self.photo_rows_per_page):
             var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
         self.photo_keep_aspect.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
         self.photo_fit_width_var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
@@ -9349,17 +9370,27 @@ class PMIReportApp:
         if not self.photo_selected_files:
             messagebox.showwarning("경고", "리포트에 포함할 이미지를 먼저 선택해주세요.")
             return
+            
+        selected_idxs = self.photo_listbox.curselection()
+        if selected_idxs:
+            target_files = [self.photo_listbox.get(i) for i in selected_idxs]
+        else:
+            target_files = sorted(self.photo_selected_files)
+            
         self.save_settings() # Auto-save before generation
-        threading.Thread(target=self.generate_photo_report, daemon=True).start()
+        threading.Thread(target=self.generate_photo_report, args=(target_files,), daemon=True).start()
 
-    def generate_photo_report(self):
+    def generate_photo_report(self, target_files=None):
         def safe_float(val, default=0.0):
             try: return float(val.strip())
             except: return default
         try:
-            if not self.photo_selected_files: return
-            
-            image_files = sorted(self.photo_selected_files)
+            if target_files is None:
+                if not self.photo_selected_files: return
+                image_files = sorted(self.photo_selected_files)
+            else:
+                if not target_files: return
+                image_files = target_files
             
             # [REMEMBER] Load last save dir from class variable
             initial_folder = self.last_photo_save_dir if self.last_photo_save_dir and os.path.exists(self.last_photo_save_dir) else os.path.dirname(image_files[0])
@@ -9414,14 +9445,15 @@ class PMIReportApp:
             # [NEW] Use Right Header (&R) with Non-Breaking Spaces (\xa0) to push left.
             # Normal spaces are stripped by Excel, but NBSP are kept, allowing precise offset from the right margin.
             # \xa0 * 7 reduces the leftward push, moving it slightly to the right compared to 15.
-            base_header = '&"바탕"&09Page        &P        of        &N'
-            header_text = '&R&05 \n' + base_header + ('\xa0' * 7)
+            base_header = '&"바탕"&09Page   &P   of   &N'
+            # 엔터(\n)를 두 줄 넣어서 페이지 번호를 표(본문) 바로 위까지 확 내립니다.
+            header_text = '&R&10 \n\n' + base_header + ('\xa0' * 7)
             
             if s_page.isdigit():
                 worksheet.set_start_page(int(s_page))
             if t_pages.isdigit():
-                base_header = f'&"바탕"&09Page        &P        of        {t_pages}'
-                header_text = '&R&05 \n' + base_header + ('\xa0' * 7)
+                base_header = f'&"바탕"&09Page   &P   of   {t_pages}'
+                header_text = '&R&10 \n\n' + base_header + ('\xa0' * 7)
                 
             worksheet.set_header(header_text)
             worksheet.set_footer('')
@@ -9429,10 +9461,12 @@ class PMIReportApp:
 
             # Layout Calculation
             num_cols = int(self.photo_cols_per_row.get())
-            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else (12 if num_cols == 3 else 16))
-            total_pages = math.ceil(len(self.photo_selected_files) / photos_per_page)
-            if not self.photo_auto_fit_page_var.get():
-                worksheet.fit_to_pages(1, total_pages)
+            num_rows = int(self.photo_rows_per_page.get())
+            photos_per_page = num_cols * num_rows
+            total_pages = math.ceil(len(image_files) / photos_per_page)
+            # 가로(너비)는 무조건 1페이지에 맞추고, 세로(높이)는 자동(0)으로 두어 
+            # 사진이 옆 페이지로 밀려나는 현상을 완벽히 방지합니다.
+            worksheet.fit_to_pages(1, 0)
 
             # Formats
             title_format = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter', 'border': 1, 'shrink': True})
@@ -9522,8 +9556,6 @@ class PMIReportApp:
             else:
                 # [NEW] Use Embedded Base64 Logo if no file is provided
                 try:
-                    import base64
-                    import io
                     logo_data = base64.b64decode(DEFAULT_SITCO_LOGO_B64)
                     logo_buffer = io.BytesIO(logo_data)
                     with PILImage.open(logo_buffer) as img:
@@ -9555,15 +9587,17 @@ class PMIReportApp:
             row = 5
             col_ptr = 0
             page_breaks = []
-            photos_per_page = 4 if num_cols == 1 else (8 if num_cols == 2 else (12 if num_cols == 3 else 16))
+            num_rows = int(self.photo_rows_per_page.get())
+            photos_per_page = num_cols * num_rows
             DESC_ROW_HEIGHT = float(self.photo_desc_height_var.get())
 
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
             if self.photo_auto_fit_page_var.get():
                 m_t = safe_float(self.photo_margin_top_var.get(), 0.5)
                 m_b = safe_float(self.photo_margin_bottom_var.get(), 0.5)
-                avail_h = 842.0 - ((m_t + m_b) * 72.0) - 110.0
-                CELL_ROW_HEIGHT = (avail_h - (4 * DESC_ROW_HEIGHT)) / 4.0 - 1.0
+                # 하단 여백이 넓게 남는 것을 방지하기 위해 95.0 -> 65.0으로 수정하여 사진 높이를 최대로 키움
+                avail_h = 842.0 - ((m_t + m_b) * 72.0) - 65.0
+                CELL_ROW_HEIGHT = (avail_h - (num_rows * DESC_ROW_HEIGHT)) / float(num_rows)
             
             total = len(image_files)
             current_row_max_h_pt = CELL_ROW_HEIGHT
@@ -9649,7 +9683,7 @@ class PMIReportApp:
                 except Exception as e:
                     self.log(f"[Error] {os.path.basename(img_path)}: {e}")
 
-                name = os.path.splitext(os.path.basename(img_path))[0]
+                name = os.path.splitext(os.path.basename(img_path))[0].replace("_capture", "")
                 worksheet.set_row(row + 1, DESC_ROW_HEIGHT)
                 c_start, c_end = photo_col_spans[col_ptr]
                 worksheet.merge_range(row+1, c_start, row+1, c_end, f"사진 설명: {name}", desc_format)
