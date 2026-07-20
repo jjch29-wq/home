@@ -99,12 +99,16 @@ class DocumentProcessor:
             process_paragraphs(doc.paragraphs)
             process_tables(doc.tables)
             
-            # 머릿글 및 바닥글 처리
+            # 머릿글 및 바닥글 처리 (첫 페이지, 짝수 페이지 등 모든 옵션 포함)
             for section in doc.sections:
-                process_paragraphs(section.header.paragraphs)
-                process_tables(section.header.tables)
-                process_paragraphs(section.footer.paragraphs)
-                process_tables(section.footer.tables)
+                for header in [section.header, section.first_page_header, section.even_page_header]:
+                    if header:
+                        process_paragraphs(header.paragraphs)
+                        process_tables(header.tables)
+                for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+                    if footer:
+                        process_paragraphs(footer.paragraphs)
+                        process_tables(footer.tables)
                 
             doc.save(output_file)
         except Exception as e:
