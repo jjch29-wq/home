@@ -715,7 +715,7 @@ class CodebookApp:
         """뷰어에서 즉시 DB를 검색/수정할 수 있는 팝업창 열기"""
         popup = tk.Toplevel(self.root)
         popup.title("규격 DB 빠른 검색 및 수정")
-        popup.geometry("900x600")
+        popup.geometry("950x650")
         popup.attributes('-topmost', True)
         
         # 1. Search Frame
@@ -757,8 +757,8 @@ class CodebookApp:
         e_rep = ttk.Entry(edit_f, width=25)
         e_rep.grid(row=0, column=5, padx=2, pady=5, sticky='w')
         
-        ttk.Label(edit_f, text="비고:").grid(row=1, column=0, padx=2, pady=5, sticky='e')
-        e_note = ttk.Entry(edit_f, width=70)
+        ttk.Label(edit_f, text="상세내용:").grid(row=1, column=0, padx=2, pady=5, sticky='ne')
+        e_note = tk.Text(edit_f, width=95, height=5, font=("Malgun Gothic", 9))
         e_note.grid(row=1, column=1, columnspan=5, sticky='w', padx=2, pady=5)
         
         # Functions
@@ -784,11 +784,11 @@ class CodebookApp:
             c_cat.set(item.get('category', ''))
             e_find.delete(0, tk.END); e_find.insert(0, item.get('find', ''))
             e_rep.delete(0, tk.END); e_rep.insert(0, item.get('replace', ''))
-            e_note.delete(0, tk.END); e_note.insert(0, item.get('details', ''))
+            e_note.delete("1.0", tk.END); e_note.insert("1.0", item.get('details', ''))
             
         def do_add():
             if not e_find.get(): return messagebox.showwarning("경고", "찾을 값을 입력하세요.", parent=popup)
-            self.db_manager.data.append({"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get()})
+            self.db_manager.data.append({"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get("1.0", "end-1c")})
             self.db_manager.save_data()
             refresh_popup(); self.refresh_list(); self.update_categories()
             messagebox.showinfo("추가", "추가되었습니다.", parent=popup)
@@ -796,7 +796,7 @@ class CodebookApp:
         def do_edit():
             sel = tree.selection()
             if not sel: return messagebox.showwarning("경고", "수정할 항목을 선택하세요.", parent=popup)
-            self.db_manager.data[int(sel[0])] = {"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get()}
+            self.db_manager.data[int(sel[0])] = {"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get("1.0", "end-1c")}
             self.db_manager.save_data()
             refresh_popup(); self.refresh_list(); self.update_categories()
             messagebox.showinfo("수정", "수정되었습니다.", parent=popup)
