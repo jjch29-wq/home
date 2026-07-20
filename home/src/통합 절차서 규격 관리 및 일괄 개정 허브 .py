@@ -582,8 +582,11 @@ class CodebookApp:
         self.btn_edit_doc = ttk.Button(ctrl_frame, text="📝 원본 프로그램으로 열어서 직접 수정하기", command=self.open_current_document, state="disabled")
         self.btn_edit_doc.pack(side="left", padx=10)
         
-        self.btn_apply_db = ttk.Button(ctrl_frame, text="⚡ 현재 문서에 코드 DB 일괄 적용", command=self.apply_db_to_current, state="disabled")
+        self.btn_apply_db = ttk.Button(ctrl_frame, text="✨ 전체 규격 코드 DB 일괄 적용", command=self.apply_db_to_current, state="disabled")
         self.btn_apply_db.pack(side="left", padx=10)
+        
+        self.btn_popup_db = ttk.Button(ctrl_frame, text="🔍 DB 검색/수정 (팝업)", command=self.open_db_popup)
+        self.btn_popup_db.pack(side="right", padx=10)
         
         if HtmlFrame is None or mammoth is None:
             ttk.Label(ctrl_frame, text="⚠️ 필수 모듈(tkinterweb, mammoth)이 부족합니다.", foreground="red").pack(side="right", padx=10)
@@ -620,6 +623,121 @@ class CodebookApp:
             self.html_viewer.pack(fill="both", expand=True)
         else:
             self.html_viewer = None
+
+        # Status label
+        self.lbl_viewer_status = ttk.Label(self.tab_viewer, text="준비됨", foreground="gray")
+        self.lbl_viewer_status.pack(side="bottom", fill="x", padx=10, pady=5)
+
+    def open_db_popup(self):
+        """뷰어에서 즉시 DB를 검색/수정할 수 있는 팝업창 열기"""
+        popup = tk.Toplevel(self.root)
+        popup.title("규격 DB 빠른 검색 및 수정")
+        popup.geometry("900x600")
+        popup.attributes('-topmost', True)
+        
+        # 1. Search Frame
+        search_f = ttk.Frame(popup, padding=10)
+        search_f.pack(fill='x')
+        ttk.Label(search_f, text="검색 (카테고리, 찾을값 등):").pack(side='left', padx=5)
+        ent_search = ttk.Entry(search_f, width=40)
+        ent_search.pack(side='left', padx=5)
+        
+        # 2. Treeview
+        tree_f = ttk.Frame(popup, padding=10)
+        tree_f.pack(fill='both', expand=True)
+        columns = ("ID", "Category", "Find", "Replace", "Details")
+        tree = ttk.Treeview(tree_f, columns=columns, show="headings", height=12)
+        for col in columns: tree.heading(col, text=col)
+        tree.column("ID", width=40, anchor="center")
+        tree.column("Category", width=120)
+        tree.column("Find", width=250)
+        tree.column("Replace", width=250)
+        tree.column("Details", width=180)
+        scroll = ttk.Scrollbar(tree_f, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side='left', fill='both', expand=True)
+        scroll.pack(side='right', fill='y')
+        
+        # 3. Edit Frame
+        edit_f = ttk.LabelFrame(popup, text="항목 편집", padding=10)
+        edit_f.pack(fill='x', padx=10, pady=10)
+        
+        ttk.Label(edit_f, text="카테고리:").grid(row=0, column=0, padx=2, pady=5, sticky='e')
+        c_cat = ttk.Combobox(edit_f, width=15)
+        c_cat.grid(row=0, column=1, padx=2, pady=5, sticky='w')
+        
+        ttk.Label(edit_f, text="찾을 값:").grid(row=0, column=2, padx=2, pady=5, sticky='e')
+        e_find = ttk.Entry(edit_f, width=25)
+        e_find.grid(row=0, column=3, padx=2, pady=5, sticky='w')
+        
+        ttk.Label(edit_f, text="바꿀 값:").grid(row=0, column=4, padx=2, pady=5, sticky='e')
+        e_rep = ttk.Entry(edit_f, width=25)
+        e_rep.grid(row=0, column=5, padx=2, pady=5, sticky='w')
+        
+        ttk.Label(edit_f, text="비고:").grid(row=1, column=0, padx=2, pady=5, sticky='e')
+        e_note = ttk.Entry(edit_f, width=70)
+        e_note.grid(row=1, column=1, columnspan=5, sticky='w', padx=2, pady=5)
+        
+        # Functions
+        def refresh_popup(e=None):
+            for i in tree.get_children(): tree.delete(i)
+            q = ent_search.get().lower()
+            cats = set()
+            for idx, item in enumerate(self.db_manager.data):
+                cat = item.get('category', '')
+                f = item.get('find', '')
+                r = item.get('replace', '')
+                d = item.get('details', '')
+                cats.add(cat)
+                if q in cat.lower() or q in f.lower() or q in r.lower() or q in d.lower():
+                    tree.insert("", "end", iid=str(idx), values=(idx, cat, f, r, d))
+            c_cat['values'] = sorted(list(cats))
+            
+        def on_select(e):
+            sel = tree.selection()
+            if not sel: return
+            idx = int(sel[0])
+            item = self.db_manager.data[idx]
+            c_cat.set(item.get('category', ''))
+            e_find.delete(0, tk.END); e_find.insert(0, item.get('find', ''))
+            e_rep.delete(0, tk.END); e_rep.insert(0, item.get('replace', ''))
+            e_note.delete(0, tk.END); e_note.insert(0, item.get('details', ''))
+            
+        def do_add():
+            if not e_find.get(): return messagebox.showwarning("경고", "찾을 값을 입력하세요.", parent=popup)
+            self.db_manager.data.append({"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get()})
+            self.db_manager.save_data()
+            refresh_popup(); self.refresh_list(); self.update_categories()
+            messagebox.showinfo("추가", "추가되었습니다.", parent=popup)
+            
+        def do_edit():
+            sel = tree.selection()
+            if not sel: return messagebox.showwarning("경고", "수정할 항목을 선택하세요.", parent=popup)
+            self.db_manager.data[int(sel[0])] = {"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get()}
+            self.db_manager.save_data()
+            refresh_popup(); self.refresh_list(); self.update_categories()
+            messagebox.showinfo("수정", "수정되었습니다.", parent=popup)
+            
+        def do_del():
+            sel = tree.selection()
+            if not sel: return messagebox.showwarning("경고", "삭제할 항목을 선택하세요.", parent=popup)
+            if messagebox.askyesno("삭제", "정말 삭제하시겠습니까?", parent=popup):
+                del self.db_manager.data[int(sel[0])]
+                self.db_manager.save_data()
+                refresh_popup(); self.refresh_list(); self.update_categories()
+                
+        # Bindings & Buttons
+        ent_search.bind("<KeyRelease>", refresh_popup)
+        tree.bind("<<TreeviewSelect>>", on_select)
+        
+        btn_f = ttk.Frame(popup, padding=10)
+        btn_f.pack(fill='x')
+        ttk.Button(btn_f, text="➕ 새 항목 추가", command=do_add).pack(side='left', padx=5)
+        ttk.Button(btn_f, text="✏️ 선택 항목 수정", command=do_edit).pack(side='left', padx=5)
+        ttk.Button(btn_f, text="🗑️ 선택 항목 삭제", command=do_del).pack(side='left', padx=5)
+        ttk.Button(btn_f, text="닫기", command=popup.destroy).pack(side='right', padx=5)
+        
+        refresh_popup()
 
     def load_document(self):
         if self.html_viewer is None or mammoth is None:
