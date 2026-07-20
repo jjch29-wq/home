@@ -191,7 +191,8 @@ class MacroController:
                 def callback(hwnd, _):
                     if win32gui.IsWindowVisible(hwnd):
                         title = win32gui.GetWindowText(hwnd)
-                        if base_name in title or name_without_ext in title:
+                        # 엄격한 매칭: PAUT절차서가 PAUT절차서_rev를 잡지 않도록 함
+                        if title.startswith(base_name) or title.startswith(name_without_ext + " -") or title.startswith(name_without_ext + " [") or title == name_without_ext:
                             found_hwnd[0] = hwnd
                 win32gui.EnumWindows(callback, None)
                 
