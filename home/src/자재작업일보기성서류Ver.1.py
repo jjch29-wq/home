@@ -9664,7 +9664,7 @@ class MaterialManager:
 
         row0 = ttk.Frame(self.ndt_calc_frame)
         row0.pack(fill='x', pady=2)
-        ttk.Label(row0, text="구간:").pack(side='left')
+        ttk.Label(row0, text="구분:").pack(side='left')
         ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["수송배관(주배관)", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
 
         row1 = ttk.Frame(self.ndt_calc_frame)
@@ -10069,25 +10069,35 @@ class MaterialManager:
         self.bottom_dashboard.add(self.recent_frame, weight=9)
         
         # Create Treeview for recent entries
-        columns = ("id", "date", "site", "method", "inspection_item", "material", "qty", "worker")
+        columns = ("id", "date", "site", "loc_type", "method", "inspection_item", "material", "qty", "worker", "insp_type", "joint_count", "rej_count", "pipe_size")
         self.tv_recent = ttk.Treeview(self.recent_frame, columns=columns, show='headings', height=9)
-        self.tv_recent['displaycolumns'] = ("date", "site", "method", "inspection_item", "material", "qty", "worker")
+        self.tv_recent['displaycolumns'] = ("date", "site", "loc_type", "method", "inspection_item", "material", "qty", "worker", "insp_type", "joint_count", "rej_count", "pipe_size")
         
         self.tv_recent.heading("date", text="날짜")
         self.tv_recent.heading("site", text="현장명")
+        self.tv_recent.heading("loc_type", text="구분")
         self.tv_recent.heading("method", text="검사방법")
         self.tv_recent.heading("inspection_item", text="검사품명")
         self.tv_recent.heading("material", text="품목명")
         self.tv_recent.heading("qty", text="수량")
         self.tv_recent.heading("worker", text="작업자(첫번째)")
+        self.tv_recent.heading("insp_type", text="검사구분")
+        self.tv_recent.heading("joint_count", text="조인트수")
+        self.tv_recent.heading("rej_count", text="불량수")
+        self.tv_recent.heading("pipe_size", text="관경(Inch)")
         
-        self.tv_recent.column("date", width=80, anchor='center')
-        self.tv_recent.column("site", width=100, anchor='center')
-        self.tv_recent.column("method", width=60, anchor='center')
-        self.tv_recent.column("inspection_item", width=80, anchor='center')
-        self.tv_recent.column("material", width=120, anchor='center')
-        self.tv_recent.column("qty", width=50, anchor='center')
-        self.tv_recent.column("worker", width=80, anchor='center')
+        self.tv_recent.column("date", width=80, minwidth=80, stretch=False, anchor='center')
+        self.tv_recent.column("site", width=100, minwidth=100, stretch=False, anchor='center')
+        self.tv_recent.column("loc_type", width=100, minwidth=100, stretch=False, anchor='center')
+        self.tv_recent.column("method", width=60, minwidth=60, stretch=False, anchor='center')
+        self.tv_recent.column("inspection_item", width=80, minwidth=80, stretch=False, anchor='center')
+        self.tv_recent.column("material", width=120, minwidth=120, stretch=False, anchor='center')
+        self.tv_recent.column("qty", width=50, minwidth=50, stretch=False, anchor='center')
+        self.tv_recent.column("worker", width=80, minwidth=80, stretch=False, anchor='center')
+        self.tv_recent.column("insp_type", width=60, minwidth=60, stretch=False, anchor='center')
+        self.tv_recent.column("joint_count", width=60, minwidth=60, stretch=False, anchor='center')
+        self.tv_recent.column("rej_count", width=60, minwidth=60, stretch=False, anchor='center')
+        self.tv_recent.column("pipe_size", width=80, minwidth=80, stretch=False, anchor='center')
         
         # Bind click to load record and delete
         self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
@@ -10105,11 +10115,14 @@ class MaterialManager:
                 
         self.tv_recent.bind("<Button-3>", show_recent_menu)
         
+        recent_hsb = ttk.Scrollbar(self.recent_frame, orient="horizontal", command=self.tv_recent.xview)
+        recent_hsb.pack(side='bottom', fill='x')
+        
         self.tv_recent.pack(side='left', fill='both', expand=True, padx=2, pady=2)
         
         recent_vsb = ttk.Scrollbar(self.recent_frame, orient="vertical", command=self.tv_recent.yview)
         recent_vsb.pack(side='right', fill='y')
-        self.tv_recent.configure(yscrollcommand=recent_vsb.set)
+        self.tv_recent.configure(yscrollcommand=recent_vsb.set, xscrollcommand=recent_hsb.set)
         
         # 2. Middle: Vehicle Inspection (Fixed)
         self.fixed_vehicle_frame = ttk.LabelFrame(self.bottom_dashboard, text="차량점검 (상시 패널)")
@@ -10258,15 +10271,29 @@ class MaterialManager:
                 mat_id = row.get('MaterialID', '')
                 mat_name = self.get_material_display_name(mat_id) if hasattr(self, 'get_material_display_name') else mat_id
                 
+                loc_type = str(row.get('구분', '')).strip()
+                if not loc_type or loc_type.lower() == 'nan':
+                    site = str(row.get('Site', '')).strip()
+                    item = str(row.get('검사품명', '')).strip().upper()
+                    if '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item:
+                        loc_type = '플랜트(관리소)'
+                    else:
+                        loc_type = '수송배관(주배관)'
+                
                 values = (
                     idx,
                     date_str,
                     row.get('Site', ''),
+                    loc_type,
                     row.get('검사방법', ''),
                     row.get('검사품명', ''),
                     mat_name,
                     row.get('Usage', ''),
-                    first_worker
+                    first_worker,
+                    row.get('검사구분', ''),
+                    row.get('조인트수', ''),
+                    row.get('불량수', ''),
+                    row.get('관경(Inch)', '')
                 )
                 self.tv_recent.insert('', 'end', values=values)
                 
@@ -10378,6 +10405,9 @@ class MaterialManager:
         btn_col_manage = ttk.Button(btn_row, text="컬럼 관리", command=self.show_column_visibility_dialog)
         btn_col_manage.pack(side='left', padx=10)
 
+        btn_ndt_report = ttk.Button(btn_row, text="📊 진도보고서 출력", command=self.export_monthly_ndt_report)
+        btn_ndt_report.pack(side='left', padx=5)
+
         # Dedicated Save Button for the List View
         self.btn_daily_save_list = ttk.Button(btn_row, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
         self.btn_daily_save_list.pack(side='left', padx=10)
@@ -10426,7 +10456,7 @@ class MaterialManager:
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
-        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수']
+        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)']
         c_list = list(columns)
         for nc in new_cols:
             if nc not in c_list:
@@ -13023,8 +13053,8 @@ class MaterialManager:
             '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0.0,
             '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
             '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
             '검사구분': "ORI",
+            '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else "",
             '조인트수': "",
             '불량수': "",
             '관경(Inch)': getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip(),
@@ -13095,6 +13125,7 @@ class MaterialManager:
                     
                     base_note = self._get_merged_memo_and_note()
                     rej_count = getattr(self, 'ndt_rej_joint_var', tk.StringVar(value="")).get().strip()
+                    r_common_data['불량수'] = rej_count if rej_count else "0"
                     if rej_count and rej_count != "0":
                         base_note = (base_note + f" [당일 불량(REJ) {rej_count}개 발생]").strip()
                     r_common_data['Note'] = base_note
@@ -13111,6 +13142,7 @@ class MaterialManager:
                     r_common_data['일식'] = 0.0
                     r_common_data['검사비'] = 0.0 
             else:
+                r_common_data['검사구분'] = ""
                 r_common_data['Note'] = self._get_merged_memo_and_note()
 
             for i in range(max_rows):
@@ -14066,6 +14098,8 @@ class MaterialManager:
                 self.cb_daily_company.set(str(record['업체명']).split(' [')[0])
             if 'Site' in record:
                 self.cb_daily_site.set(str(record['Site']))
+            if '구분' in record:
+                self.ndt_loc_type_var.set(str(record['구분']))
             if '적용코드' in record:
                 self.ent_daily_applied_code.delete(0, tk.END)
                 self.ent_daily_applied_code.insert(0, str(record['적용코드']))
@@ -16342,7 +16376,7 @@ class MaterialManager:
             while len(v_list) < len(tree_cols): v_list.append("")
             
             for c_idx, c_name in enumerate(tree_cols):
-                if c_name in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비']:
+                if c_name in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)']:
                     val = entry.get(c_name, '')
                     if c_name in ['보정계수', '환산물량'] and val:
                         try: 
@@ -17529,6 +17563,387 @@ class MaterialManager:
                 self.update_daily_usage_view()
             elif tree == self.inout_tree:
                 self.update_transaction_view()
+
+    def export_monthly_ndt_report(self):
+        """일일 사용 데이터를 월용역진도보고서 '3. 비파괴검사 현황' 시트에 자동 채움"""
+        import copy
+        
+        if self.daily_usage_df.empty:
+            messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
+            return
+
+        # --- 0. 설정 다이얼로그 ---
+        top = tk.Toplevel(self.root)
+        top.title("월간 진도보고서 - 비파괴검사 현황 내보내기")
+        top.geometry("550x500")
+        top.transient(self.root)
+        top.grab_set()
+        
+        ttk.Label(top, text="📊 월간 진도보고서 비파괴검사 현황 자동 입력", 
+                  font=('Arial', 12, 'bold')).pack(pady=10)
+        
+        # 대상 기간 선택
+        period_frame = ttk.LabelFrame(top, text="1. 대상 기간 (당월)")
+        period_frame.pack(fill='x', padx=15, pady=5)
+        
+        now = datetime.datetime.now()
+        ttk.Label(period_frame, text="연도:").pack(side='left', padx=5)
+        year_var = tk.IntVar(value=now.year)
+        ttk.Spinbox(period_frame, from_=2024, to=2030, textvariable=year_var, width=6).pack(side='left')
+        ttk.Label(period_frame, text="  월:").pack(side='left', padx=5)
+        month_var = tk.IntVar(value=now.month)
+        ttk.Spinbox(period_frame, from_=1, to=12, textvariable=month_var, width=4).pack(side='left')
+        
+        # 현장 → 주배관/관리소 매핑
+        map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (주배관 / 관리소 구분)")
+        map_frame.pack(fill='x', padx=15, pady=5)
+        
+        # 현재 데이터에 존재하는 현장명(Site) 목록 추출
+        site_list = sorted(self.daily_usage_df['Site'].dropna().unique().tolist()) if 'Site' in self.daily_usage_df.columns else []
+        
+        ttk.Label(map_frame, text="주배관 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+        main_var = tk.StringVar(value="")
+        ttk.Entry(map_frame, textvariable=main_var, width=60).pack(padx=5, pady=2)
+        
+        ttk.Label(map_frame, text="관리소 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+        mgmt_var = tk.StringVar(value="")
+        ttk.Entry(map_frame, textvariable=mgmt_var, width=60).pack(padx=5, pady=2)
+        
+        ttk.Label(map_frame, text=f"💡 현재 등록된 현장: {', '.join(site_list) if site_list else '(없음)'}", 
+                  foreground='blue', wraplength=500).pack(padx=5, pady=5)
+        
+        # 파일 선택
+        file_frame = ttk.LabelFrame(top, text="3. 대상 엑셀 파일")
+        file_frame.pack(fill='x', padx=15, pady=5)
+        
+        file_var = tk.StringVar(value=r"C:\Users\jjch2\Desktop\월용역진도보고서.xlsx")
+        ttk.Entry(file_frame, textvariable=file_var, width=55).pack(side='left', padx=5, pady=5)
+        def browse_file():
+            fp = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")], title="월용역진도보고서 선택")
+            if fp: file_var.set(fp)
+        ttk.Button(file_frame, text="찾기", command=browse_file).pack(side='left', padx=5)
+        
+        # 진행
+        log_text = tk.Text(top, height=8, state='disabled', wrap='word')
+        log_text.pack(fill='both', expand=True, padx=15, pady=5)
+        
+        def log(msg):
+            log_text.config(state='normal')
+            log_text.insert(tk.END, msg + "\n")
+            log_text.see(tk.END)
+            log_text.config(state='disabled')
+            top.update()
+        
+        def do_export():
+            try:
+                year = year_var.get()
+                month = month_var.get()
+                filepath = file_var.get().strip()
+                
+                main_sites = [s.strip() for s in main_var.get().split(',') if s.strip()]
+                mgmt_sites = [s.strip() for s in mgmt_var.get().split(',') if s.strip()]
+                
+                if not main_sites and not mgmt_sites:
+                    messagebox.showwarning("입력 오류", "주배관 또는 관리소에 해당하는 현장명을 최소 1개 입력해주세요.")
+                    return
+                if not filepath:
+                    messagebox.showwarning("입력 오류", "대상 엑셀 파일을 선택해주세요.")
+                    return
+                
+                log(f"▶ 기간: {year}년 {month}월")
+                log(f"▶ 주배관 현장: {main_sites}")
+                log(f"▶ 관리소 현장: {mgmt_sites}")
+                
+                # --- 1. 데이터 필터링 ---
+                df = self.daily_usage_df.copy()
+                df['_date'] = pd.to_datetime(df['Date'], errors='coerce')
+                df = df[(df['_date'].dt.year == year) & (df['_date'].dt.month == month)]
+                log(f"▶ {year}년 {month}월 데이터: {len(df)}건")
+                
+                if df.empty:
+                    messagebox.showinfo("결과", f"{year}년 {month}월 데이터가 없습니다.")
+                    return
+                
+                # --- 2. 관경 → 필름규격 매핑 ---
+                def get_film_type(inch_val):
+                    """관경(Inch)에서 RT 필름 규격 결정"""
+                    try:
+                        v = str(inch_val).replace('"', '').replace("'", '').strip()
+                        if '/' in v and len(v) <= 5:  # 3/4 등 분수
+                            parts = v.split('/')
+                            num = float(parts[0]) / float(parts[1])
+                        else:
+                            num = float(v)
+                        
+                        if num >= 20:
+                            return 'B'   # B-TYPE (3⅓"×17")
+                        elif num >= 6:
+                            return 'A'   # A-TYPE (3⅓"×12")
+                        else:
+                            return 'A/2' # A/2-TYPE (3⅓"×6")
+                    except:
+                        return 'A'  # 기본값
+                
+                # --- 3. 집계 함수 ---
+                def aggregate_site(site_df):
+                    """한 현장(주배관 or 관리소)의 데이터를 집계"""
+                    result = {
+                        'RT': {'B': {}, 'A': {}, 'A/2': {}},
+                        'UT': {'data': {}},
+                        'PT': {'data': {}}
+                    }
+                    # 각 셀의 키: (shift, insp_type)
+                    # shift: '주간' or '야간/휴일'
+                    # insp_type: 'ORI' or 'REP'
+                    
+                    for _, row in site_df.iterrows():
+                        method = str(row.get('검사방법', '')).strip().upper()
+                        if method not in ['RT', 'UT', 'PT']:
+                            continue
+                        
+                        work_type = str(row.get('작업형태', '주간')).strip()
+                        if work_type in ['야간', '휴일', '야간/휴일']:
+                            shift = '야간/휴일'
+                        else:
+                            shift = '주간'
+                        
+                        insp_type = str(row.get('검사구분', 'ORI')).strip().upper()
+                        if insp_type not in ['ORI', 'REP']:
+                            insp_type = 'ORI'
+                        
+                        try:
+                            qty = float(str(row.get('검사량', row.get('Usage', 0))).replace(',', '') or 0)
+                        except:
+                            qty = 0.0
+                        
+                        try:
+                            joints = float(str(row.get('조인트수', 0)).replace(',', '') or 0)
+                        except:
+                            joints = 0.0
+                        
+                        try:
+                            corr_factor = float(str(row.get('보정계수', 1)).replace(',', '') or 1)
+                        except:
+                            corr_factor = 1.0
+                        
+                        try:
+                            adj_qty = float(str(row.get('환산물량', 0)).replace(',', '') or 0)
+                        except:
+                            adj_qty = qty * corr_factor
+                        
+                        key = (shift, insp_type)
+                        
+                        if method == 'RT':
+                            film_type = get_film_type(row.get('관경(Inch)', ''))
+                            bucket = result['RT'][film_type]
+                            if key not in bucket:
+                                bucket[key] = {'qty': 0, 'joints': 0}
+                            bucket[key]['qty'] += qty
+                            bucket[key]['joints'] += joints
+                        
+                        elif method == 'UT':
+                            bucket = result['UT']['data']
+                            if key not in bucket:
+                                bucket[key] = {'qty': 0, 'joints': 0, 'adj_qty': 0}
+                            bucket[key]['qty'] += qty
+                            bucket[key]['joints'] += joints
+                            bucket[key]['adj_qty'] += adj_qty
+                        
+                        elif method == 'PT':
+                            bucket = result['PT']['data']
+                            if key not in bucket:
+                                bucket[key] = {'qty': 0, 'joints': 0, 'adj_qty': 0}
+                            bucket[key]['qty'] += qty
+                            bucket[key]['joints'] += joints
+                            bucket[key]['adj_qty'] += adj_qty
+                    
+                    return result
+                
+                # --- 4. 주배관 / 관리소 각각 집계 ---
+                main_df = df[df['Site'].isin(main_sites)] if main_sites else pd.DataFrame()
+                mgmt_df = df[df['Site'].isin(mgmt_sites)] if mgmt_sites else pd.DataFrame()
+                
+                log(f"▶ 주배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")
+                
+                main_agg = aggregate_site(main_df) if not main_df.empty else None
+                mgmt_agg = aggregate_site(mgmt_df) if not mgmt_df.empty else None
+                
+                # --- 5. 엑셀 기입 ---
+                import openpyxl
+                wb = openpyxl.load_workbook(filepath)
+                
+                def write_ndt_sheet(ws, agg):
+                    """비파괴검사 현황 시트에 집계 데이터 기입"""
+                    if agg is None:
+                        return
+                    
+                    def get_val(bucket, shift, insp_type, field='qty'):
+                        key = (shift, insp_type)
+                        return bucket.get(key, {}).get(field, 0)
+                    
+                    def safe_set(row, col, val):
+                        """값이 0이 아닐 때만 기입 (기존 수식 보호)"""
+                        if val and val != 0:
+                            ws.cell(row=row, column=col, value=round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val)
+                    
+                    # RT: 행8=B-TYPE, 행9=A-TYPE, 행10=A/2-TYPE, 행11=합계
+                    rt_types = {'B': 8, 'A': 9, 'A/2': 10}
+                    rt_total = {'주간_joints': 0, '주간_ORI': 0, '주간_REP': 0,
+                                '야간_joints': 0, '야간_ORI': 0, '야간_REP': 0}
+                    
+                    for film_key, row_num in rt_types.items():
+                        bucket = agg['RT'][film_key]
+                        
+                        # 일반검사 (주간)
+                        j_day = get_val(bucket, '주간', 'ORI', 'joints') + get_val(bucket, '주간', 'REP', 'joints')
+                        ori_day = get_val(bucket, '주간', 'ORI', 'qty')
+                        rep_day = get_val(bucket, '주간', 'REP', 'qty')
+                        sum_day = ori_day + rep_day
+                        
+                        # 휴일/야간검사
+                        j_night = get_val(bucket, '야간/휴일', 'ORI', 'joints') + get_val(bucket, '야간/휴일', 'REP', 'joints')
+                        ori_night = get_val(bucket, '야간/휴일', 'ORI', 'qty')
+                        rep_night = get_val(bucket, '야간/휴일', 'REP', 'qty')
+                        sum_night = ori_night + rep_night
+                        
+                        # 합계
+                        j_total = j_day + j_night
+                        ori_total = ori_day + ori_night
+                        rep_total = rep_day + rep_night
+                        sum_total = ori_total + rep_total
+                        
+                        # 셀 기입
+                        safe_set(row_num, 3, j_day)       # C: 일반 용접개소
+                        safe_set(row_num, 4, ori_day)      # D: 일반 ORI
+                        safe_set(row_num, 5, rep_day)      # E: 일반 REP
+                        safe_set(row_num, 6, sum_day)      # F: 일반 합계
+                        safe_set(row_num, 7, j_night)      # G: 야간 용접개소
+                        safe_set(row_num, 8, ori_night)    # H: 야간 ORI
+                        safe_set(row_num, 9, rep_night)    # I: 야간 REP
+                        safe_set(row_num, 10, sum_night)   # J: 야간 합계
+                        safe_set(row_num, 11, j_total)     # K: 합계 용접개소
+                        safe_set(row_num, 12, ori_total)   # L: 합계 ORI
+                        safe_set(row_num, 13, rep_total)   # M: 합계 REP
+                        safe_set(row_num, 14, sum_total)   # N: 합계 합계
+                        
+                        # 누적 합계용
+                        rt_total['주간_joints'] += j_day
+                        rt_total['주간_ORI'] += ori_day
+                        rt_total['주간_REP'] += rep_day
+                        rt_total['야간_joints'] += j_night
+                        rt_total['야간_ORI'] += ori_night
+                        rt_total['야간_REP'] += rep_night
+                    
+                    # RT 합계행 (행11)
+                    safe_set(11, 3, rt_total['주간_joints'])
+                    safe_set(11, 4, rt_total['주간_ORI'])
+                    safe_set(11, 5, rt_total['주간_REP'])
+                    safe_set(11, 6, rt_total['주간_ORI'] + rt_total['주간_REP'])
+                    safe_set(11, 7, rt_total['야간_joints'])
+                    safe_set(11, 8, rt_total['야간_ORI'])
+                    safe_set(11, 9, rt_total['야간_REP'])
+                    safe_set(11, 10, rt_total['야간_ORI'] + rt_total['야간_REP'])
+                    safe_set(11, 11, rt_total['주간_joints'] + rt_total['야간_joints'])
+                    safe_set(11, 12, rt_total['주간_ORI'] + rt_total['야간_ORI'])
+                    safe_set(11, 13, rt_total['주간_REP'] + rt_total['야간_REP'])
+                    safe_set(11, 14, rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP'])
+                    
+                    # UT (행12=실검사길이, 행13=검사보정길이)
+                    ut = agg['UT']['data']
+                    ut_day_j = get_val(ut, '주간', 'ORI', 'joints') + get_val(ut, '주간', 'REP', 'joints')
+                    ut_day_ori = get_val(ut, '주간', 'ORI', 'qty')
+                    ut_day_rep = get_val(ut, '주간', 'REP', 'qty')
+                    ut_night_j = get_val(ut, '야간/휴일', 'ORI', 'joints') + get_val(ut, '야간/휴일', 'REP', 'joints')
+                    ut_night_ori = get_val(ut, '야간/휴일', 'ORI', 'qty')
+                    ut_night_rep = get_val(ut, '야간/휴일', 'REP', 'qty')
+                    
+                    safe_set(12, 3, ut_day_j)
+                    safe_set(12, 4, ut_day_ori + ut_day_rep)   # UT는 ORI+REP 합산 (실검사길이)
+                    safe_set(12, 6, ut_day_ori + ut_day_rep)
+                    safe_set(12, 7, ut_night_j)
+                    safe_set(12, 8, ut_night_ori + ut_night_rep)
+                    safe_set(12, 10, ut_night_ori + ut_night_rep)
+                    safe_set(12, 11, ut_day_j + ut_night_j)
+                    safe_set(12, 12, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+                    safe_set(12, 14, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+                    
+                    # UT 검사보정길이 (행13)
+                    ut_day_adj = get_val(ut, '주간', 'ORI', 'adj_qty') + get_val(ut, '주간', 'REP', 'adj_qty')
+                    ut_night_adj = get_val(ut, '야간/휴일', 'ORI', 'adj_qty') + get_val(ut, '야간/휴일', 'REP', 'adj_qty')
+                    safe_set(13, 4, ut_day_adj)
+                    safe_set(13, 6, ut_day_adj)
+                    safe_set(13, 8, ut_night_adj)
+                    safe_set(13, 10, ut_night_adj)
+                    safe_set(13, 12, ut_day_adj + ut_night_adj)
+                    safe_set(13, 14, ut_day_adj + ut_night_adj)
+                    
+                    # PT (행14=실검사길이, 행15=검사보정길이)
+                    pt = agg['PT']['data']
+                    pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')
+                    pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')
+                    pt_day_rep = get_val(pt, '주간', 'REP', 'qty')
+                    pt_night_j = get_val(pt, '야간/휴일', 'ORI', 'joints') + get_val(pt, '야간/휴일', 'REP', 'joints')
+                    pt_night_ori = get_val(pt, '야간/휴일', 'ORI', 'qty')
+                    pt_night_rep = get_val(pt, '야간/휴일', 'REP', 'qty')
+                    
+                    safe_set(14, 3, pt_day_j)
+                    safe_set(14, 4, pt_day_ori + pt_day_rep)
+                    safe_set(14, 6, pt_day_ori + pt_day_rep)
+                    safe_set(14, 7, pt_night_j)
+                    safe_set(14, 8, pt_night_ori + pt_night_rep)
+                    safe_set(14, 10, pt_night_ori + pt_night_rep)
+                    safe_set(14, 11, pt_day_j + pt_night_j)
+                    safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+                    safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+                    
+                    # PT 검사보정길이 (행15)
+                    pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')
+                    pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')
+                    safe_set(15, 4, pt_day_adj)
+                    safe_set(15, 6, pt_day_adj)
+                    safe_set(15, 8, pt_night_adj)
+                    safe_set(15, 10, pt_night_adj)
+                    safe_set(15, 12, pt_day_adj + pt_night_adj)
+                    safe_set(15, 14, pt_day_adj + pt_night_adj)
+                    
+                    # 전산화 (행16=필름매수, 행17=보고서)
+                    total_film = rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP']
+                    safe_set(16, 11, 0)  # 전산화 필름(매) - 집계 후 별도
+                    safe_set(16, 12, total_film)
+                
+                # 시트별 기입
+                if main_agg:
+                    sheet_name = '3. 비파괴검사 현황 (주배관)'
+                    if sheet_name in wb.sheetnames:
+                        write_ndt_sheet(wb[sheet_name], main_agg)
+                        log(f"✅ '{sheet_name}' 시트 기입 완료")
+                    else:
+                        log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+                
+                if mgmt_agg:
+                    sheet_name = '3. 비파괴검사 현황 (관리소)'
+                    if sheet_name in wb.sheetnames:
+                        write_ndt_sheet(wb[sheet_name], mgmt_agg)
+                        log(f"✅ '{sheet_name}' 시트 기입 완료")
+                    else:
+                        log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+                
+                # 저장
+                wb.save(filepath)
+                wb.close()
+                log(f"\n🎉 저장 완료: {filepath}")
+                messagebox.showinfo("완료", f"월간 진도보고서 비파괴검사 현황이 업데이트되었습니다.\n{filepath}")
+                
+            except Exception as e:
+                log(f"❌ 오류 발생: {e}")
+                import traceback
+                log(traceback.format_exc())
+                messagebox.showerror("오류", f"내보내기 중 오류: {e}")
+        
+        btn_frame = ttk.Frame(top)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="📊 내보내기 실행", command=do_export, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton').pack(side='left', padx=10)
+        ttk.Button(btn_frame, text="취소", command=top.destroy).pack(side='left', padx=10)
 
     def export_all_daily_usage(self):
         """Export all daily usage records to Excel"""

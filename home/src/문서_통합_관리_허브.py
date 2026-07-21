@@ -1649,60 +1649,107 @@ class CodebookApp:
                     
                     def inject_ndt_status(ws, loc_filter):
                         if 'Site' not in raw_df.columns: return
-                        df_loc = raw_df[raw_df['Site'].astype(str).str.contains(loc_filter, na=False)]
-                        if df_loc.empty:
-                            # DB의 현장명에 '주배관'이나 '관리소'라는 단어가 명시되어 있지 않은 경우, 
-                            # 필터링으로 인해 데이터가 증발하는 것을 막기 위한 안전장치
-                            df_loc = raw_df
+                        
+                        def is_match(row, target):
+                            site = str(row.get('Site', '')).strip()
+                            item = str(row.get('검사품명', '')).strip().upper()
+                            
+                            is_station = '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item
+                            if target == '관리소':
+                                return is_station
+                            else: # 주배관
+                                return not is_station
+                                
+                        df_loc = raw_df[raw_df.apply(lambda r: is_match(r, loc_filter), axis=1)]
+                        # REMOVED: if df_loc.empty: df_loc = raw_df (Prevent data leak to empty sheets)
                         
                         def get_ndt_sums(method, insp_type, time_filter, pipe_filter=None):
                             if '검사방법' not in df_loc.columns or '검사구분' not in df_loc.columns:
-                                return 0, 0
+                                return 0, 0, 0
                             
                             df_filtered = df_loc[(df_loc['검사방법'] == method) & (df_loc['검사구분'] == insp_type)]
                             
                             if time_filter == "일반":
-                                df_filtered = df_filtered[df_filtered.get('작업형태', '') == "일반"]
+                                df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["일반", "주간"])]
                             elif time_filter == "휴일/야간":
-                                df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["야간", "휴일"])]
+                                df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["야간", "휴일", "야간/휴일"])]
                                 
                             if pipe_filter and '관경(Inch)' in df_loc.columns:
-                                df_filtered = df_filtered[df_filtered['관경(Inch)'].astype(str).str.contains(pipe_filter, na=False)]
+                                def check_pipe(v):
+                                    try:
+                                        val = str(v).replace('"', '').replace("'", '').strip()
+                                        if '/' in val and len(val) <= 5:
+                                            parts = val.split('/')
+                                            num = float(parts[0]) / float(parts[1])
+                                        else:
+                                            num = float(val)
+                                            
+                                        if pipe_filter == 'B': return num >= 20
+                                        elif pipe_filter == 'A': return 6 <= num < 20
+                                        elif pipe_filter == 'A/2': return num <= 4
+                                        return False
+                                    except:
+                                        return pipe_filter == 'A'
+                                        
+                                df_filtered = df_filtered[df_filtered['관경(Inch)'].apply(check_pipe)]
                                 
                             joints = pd.to_numeric(df_filtered.get('조인트수', pd.Series(dtype=float)), errors='coerce').sum()
-                            qty = pd.to_numeric(df_filtered.get('수량', pd.Series(dtype=float)), errors='coerce').sum()
-                            return joints, qty
-
-                        def write_ndt_row(row_idx, method, pipe_filter=None):
-                            # 일반 검사 (C, D, E)
-                            ori_j_day, ori_q_day = get_ndt_sums(method, 'ORI', "일반", pipe_filter)
-                            rep_j_day, rep_q_day = get_ndt_sums(method, 'REP', "일반", pipe_filter)
                             
-                            ws[f'C{row_idx}'] = (ori_j_day + rep_j_day) if (ori_j_day + rep_j_day) else '-'
-                            ws[f'D{row_idx}'] = ori_q_day if ori_q_day else '-'
-                            ws[f'E{row_idx}'] = rep_q_day if rep_q_day else '-'
+                            # 실제 수량은 '검사량' (또는 'Usage')에 기록됨
+                            qty_col = df_filtered.get('검사량', df_filtered.get('Usage', pd.Series(dtype=float)))
+                            qty = pd.to_numeric(qty_col, errors='coerce').sum()
+                            
+                            # 환산물량 (UT, PT 보정길이용)
+                            adj_qty = pd.to_numeric(df_filtered.get('환산물량', pd.Series(dtype=float)), errors='coerce').sum()
+                            
+                            return joints, qty, adj_qty
+
+                        def write_ndt_row(row_idx, method, pipe_filter=None, is_adj_row=False):
+                            # 일반 검사 (C, D, E)
+                            ori_j_day, ori_q_day, ori_adj_day = get_ndt_sums(method, 'ORI', "일반", pipe_filter)
+                            rep_j_day, rep_q_day, rep_adj_day = get_ndt_sums(method, 'REP', "일반", pipe_filter)
+                            
+                            val_ori_day = ori_adj_day if is_adj_row else ori_q_day
+                            val_rep_day = rep_adj_day if is_adj_row else rep_q_day
+                            
+                            # 보정길이(환산물량) 행인 경우 조인트수는 기입하지 않음 (이전 행과 중복되므로)
+                            if not is_adj_row:
+                                ws[f'C{row_idx}'] = (ori_j_day + rep_j_day) if (ori_j_day + rep_j_day) else '-'
+                            ws[f'D{row_idx}'] = val_ori_day if val_ori_day else '-'
+                            ws[f'E{row_idx}'] = val_rep_day if val_rep_day else '-'
                             ws[f'F{row_idx}'] = f"=SUM(D{row_idx}:E{row_idx})"
                             
                             # 휴일/야간 검사 (G, H, I)
-                            ori_j_night, ori_q_night = get_ndt_sums(method, 'ORI', "휴일/야간", pipe_filter)
-                            rep_j_night, rep_q_night = get_ndt_sums(method, 'REP', "휴일/야간", pipe_filter)
+                            ori_j_night, ori_q_night, ori_adj_night = get_ndt_sums(method, 'ORI', "휴일/야간", pipe_filter)
+                            rep_j_night, rep_q_night, rep_adj_night = get_ndt_sums(method, 'REP', "휴일/야간", pipe_filter)
                             
-                            ws[f'G{row_idx}'] = (ori_j_night + rep_j_night) if (ori_j_night + rep_j_night) else '-'
-                            ws[f'H{row_idx}'] = ori_q_night if ori_q_night else '-'
-                            ws[f'I{row_idx}'] = rep_q_night if rep_q_night else '-'
+                            val_ori_night = ori_adj_night if is_adj_row else ori_q_night
+                            val_rep_night = rep_adj_night if is_adj_row else rep_q_night
+                            
+                            if not is_adj_row:
+                                ws[f'G{row_idx}'] = (ori_j_night + rep_j_night) if (ori_j_night + rep_j_night) else '-'
+                            ws[f'H{row_idx}'] = val_ori_night if val_ori_night else '-'
+                            ws[f'I{row_idx}'] = val_rep_night if val_rep_night else '-'
                             ws[f'J{row_idx}'] = f"=SUM(H{row_idx}:I{row_idx})"
                             
                             # 합계 (K, L, M, N)
-                            ws[f'K{row_idx}'] = f"=SUM(C{row_idx},G{row_idx})"
+                            if not is_adj_row:
+                                ws[f'K{row_idx}'] = f"=SUM(C{row_idx},G{row_idx})"
                             ws[f'L{row_idx}'] = f"=SUM(D{row_idx},H{row_idx})"
                             ws[f'M{row_idx}'] = f"=SUM(E{row_idx},I{row_idx})"
                             ws[f'N{row_idx}'] = f"=SUM(F{row_idx},J{row_idx})"
 
-                        write_ndt_row(8, 'RT', '17')
-                        write_ndt_row(9, 'RT', '12')
-                        write_ndt_row(10, 'RT', '6')
+                        write_ndt_row(8, 'RT', 'B')
+                        write_ndt_row(9, 'RT', 'A')
+                        write_ndt_row(10, 'RT', 'A/2')
+                        
+                        # UT 실검사길이 (12행), 검사보정길이(환산물량, 13행)
                         write_ndt_row(12, 'UT')
+                        write_ndt_row(13, 'UT', is_adj_row=True)
+                        
+                        # PT 실검사길이 (14행), 검사보정길이(환산물량, 15행)
                         write_ndt_row(14, 'PT')
+                        write_ndt_row(15, 'PT', is_adj_row=True)
                         
                         # RT 합계 행 (row 11) 수식 주입
                         for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N']:
@@ -1718,31 +1765,132 @@ class CodebookApp:
                 except Exception as e:
                     print(f"NDT 현황 데이터 연동 중 오류 발생: {e}")
 
-                # 3.2 물량 세부내역 복사
-                target_sheet = None
-                for name in wb_temp.sheetnames:
-                    if "물량세부내역" in name:
-                        target_sheet = wb_temp[name]
-                        break
+                # 3.2 물량 세부내역(주배관/관리소) 주입
+                def inject_detailed_ndt_status(ws, loc_filter):
+                    if 'Site' not in raw_df.columns: return
+                    
+                    mat_df = None
+                    try:
+                        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Material_Inventory.xlsx')
+                        mat_df = pd.read_excel(db_path, sheet_name='Materials')
+                    except Exception:
+                        pass
+                    
+                    def is_match(row, target):
+                        site = str(row.get('Site', '')).strip()
+                        item = str(row.get('검사품명', '')).strip().upper()
+                        is_station = '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item
+                        return is_station if target == '관리소' else not is_station
                         
-                if target_sheet:
-                    # 헤더를 제외한 순수 데이터를 템플릿 끝에 추가
-                    for row in raw_df.itertuples(index=False, name=None):
-                        # 빈 행이나 전부 NaT/NaN인 경우 건너뛰기
-                        if not any(pd.notna(x) and str(x).strip() != '' for x in row):
-                            continue
-                        # datetime 등 엑셀에 안맞는 타입 보정
-                        clean_row = []
-                        for item in row:
-                            if pd.isna(item):
-                                clean_row.append("")
-                            elif isinstance(item, pd.Timestamp):
-                                clean_row.append(item.strftime('%Y-%m-%d %H:%M:%S'))
-                            else:
-                                clean_row.append(item)
-                        target_sheet.append(clean_row)
-                else:
-                    messagebox.showwarning("경고", "템플릿에서 '물량세부내역' 시트를 찾지 못해 세부 데이터는 복사되지 않았습니다.")
+                    df_loc = raw_df[raw_df.apply(lambda r: is_match(r, loc_filter), axis=1)]
+                    
+                    def get_sums(method, insp_type, time_val, pipe_val):
+                        if '검사방법' not in df_loc.columns or '검사구분' not in df_loc.columns:
+                            return 0, 0, 0
+                            
+                        df_filtered = df_loc[(df_loc['검사방법'] == method) & (df_loc['검사구분'] == insp_type)]
+                        
+                        time_str = str(time_val).replace(' ', '')
+                        if time_str == "주간" or time_str == "일반":
+                            df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["일반", "주간"])]
+                        elif time_str == "휴일/야간" or time_str == "야간" or time_str == "휴일":
+                            df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["야간", "휴일", "야간/휴일"])]
+                            
+                        if pipe_val and '관경(Inch)' in df_loc.columns:
+                            def check_pipe(v):
+                                db_v = str(v).replace('"', '').replace("'", '').replace(' ', '').lower()
+                                sh_v = str(pipe_val).replace('"', '').replace("'", '').replace(' ', '').lower()
+                                if db_v.endswith('.0'): db_v = db_v[:-2]
+                                if sh_v.endswith('.0'): sh_v = sh_v[:-2]
+                                return db_v == sh_v
+                            df_filtered = df_filtered[df_filtered['관경(Inch)'].apply(check_pipe)]
+                            
+                        joints = pd.to_numeric(df_filtered.get('조인트수', pd.Series(dtype=float)), errors='coerce').sum()
+                        qty_col = df_filtered.get('검사량', df_filtered.get('Usage', pd.Series(dtype=float)))
+                        qty = pd.to_numeric(qty_col, errors='coerce').sum()
+                        adj_qty = pd.to_numeric(df_filtered.get('환산물량', pd.Series(dtype=float)), errors='coerce').sum()
+                        
+                        mat_name = ""
+                        if not df_filtered.empty and 'MaterialID' in df_filtered.columns and mat_df is not None:
+                            mat_ids = df_filtered['MaterialID'].dropna().unique()
+                            if len(mat_ids) > 0:
+                                m_df = mat_df[mat_df['MaterialID'] == mat_ids[0]]
+                                if not m_df.empty:
+                                    mat_name = str(m_df.iloc[0].get('품목명', '')).strip()
+                                    
+                        return joints, qty, adj_qty, mat_name
+
+                    current_method = 'RT'
+                    for r in range(1, ws.max_row + 1):
+                        val_a = str(ws[f'A{r}'].value or '').strip()
+                        if '초음파' in val_a:
+                            current_method = 'UT'
+                        elif '침투' in val_a:
+                            current_method = 'PT'
+                            
+                        if val_a in ['주간', '일반', '휴일/야간', '야간', '휴일']:
+                            val_b = str(ws[f'B{r}'].value or '').strip()
+                            if not val_b: continue
+                            
+                            ori_j, ori_q, ori_adj, ori_mat = get_sums(current_method, 'ORI', val_a, val_b)
+                            rep_j, rep_q, rep_adj, _ = get_sums(current_method, 'REP', val_a, val_b)
+                            
+                            if current_method == 'RT':
+                                # Calculate film per joint
+                                if ori_j > 0:
+                                    ws[f'C{r}'] = round(ori_q / ori_j, 1)
+                                elif rep_j > 0:
+                                    ws[f'C{r}'] = round(rep_q / rep_j, 1)
+                                    
+                                ws[f'D{r}'] = (ori_j + rep_j) if (ori_j + rep_j) > 0 else '-'
+                                ws[f'E{r}'] = ori_q if ori_q > 0 else '-'
+                                ws[f'F{r}'] = rep_q if rep_q > 0 else '-'
+                                ws[f'G{r}'] = f"=SUM(E{r}:F{r})"
+                                
+                                # 필름 규격 (B, A, A/2)
+                                film_size = ""
+                                try:
+                                    clean_val = str(val_b).replace('"', '').replace("'", '').strip()
+                                    if '/' in clean_val and len(clean_val) <= 5:
+                                        parts = clean_val.split('/')
+                                        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                                            f_val = float(parts[0]) / float(parts[1])
+                                        else:
+                                            f_val = 0.0
+                                    else:
+                                        import re
+                                        m = re.match(r'^([\d\.]+)', clean_val)
+                                        f_val = float(m.group(1)) if m else 0.0
+                                        
+                                    if f_val >= 14: film_size = 'B-TYPE'
+                                    elif f_val > 4: film_size = 'A-TYPE'
+                                    else: film_size = 'A/2-TYPE'
+                                except Exception:
+                                    pass
+                                    
+                                if film_size:
+                                    ws[f'H{r}'] = film_size
+                                    
+                            elif current_method in ['UT', 'PT']:
+                                ws[f'D{r}'] = (ori_j + rep_j) if (ori_j + rep_j) > 0 else '-'
+                                ws[f'E{r}'] = ori_q if ori_q > 0 else '-'
+                                ws[f'G{r}'] = ori_adj if ori_adj > 0 else '-'
+                            
+                            # Fix borders for the row and header
+                            from openpyxl.styles import Border, Side
+                            thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+                            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
+                                ws[f'{col}{r}'].border = thin_border
+                                if r == 6: # Apply to header row 5 as well when we process the first data row
+                                    ws[f'{col}5'].border = thin_border
+
+                for s_name in wb_temp.sheetnames:
+                    if "세부 내역" in s_name or "세부내역" in s_name:
+                        ws_detail = wb_temp[s_name]
+                        if "(주배관)" in s_name:
+                            inject_detailed_ndt_status(ws_detail, "주배관")
+                        elif "(관리소)" in s_name:
+                            inject_detailed_ndt_status(ws_detail, "관리소")
                 
             # 4. 저장 및 완료
             wb_temp.save(output_path)
