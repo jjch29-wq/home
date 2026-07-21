@@ -1,0 +1,80 @@
+688: ttk.Button(btn_photo_f, text="🗑️ 사진 삭제", command=self.clear_photo).pack(side='left', expand=True, fill='x', padx=2)
+1595: ("현상용 탑차(5년간 보험비 포함)", "현장별 차량기입시 탑차 구분 기입", 5, 1, 0, 16667),
+1596: ("스타렉스(5년간 보험비 포함)", "현장별 차량기입시 스타렉스 구분 기입", 5, 1, 0, 16667)
+3341: self.notebook.add(self.tab_daily_usage, text='현장별 일일 사용량 기입')
+3400: btn_delete = ttk.Button(action_row, text="품목 삭제", command=self.delete_selected_material)
+3401: btn_delete.pack(side='left', padx=5)
+3575: def delete_selected_material(self):
+3576: """선택된 자재 항목들을 재고에서 삭제"""
+3580: messagebox.showwarning("선택 오류", "삭제할 품목을 선택해주세요.")
+3584: confirm = messagebox.askyesno("삭제 확인", f"선택한 {len(selected_items)}개의 품목을 재고에서 영구히 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")
+3623: messagebox.showinfo("완료", f"{removed_count}개의 품목이 삭제되었습니다.")
+3625: messagebox.showwarning("실패", "데이터프레임에서 항목을 삭제하지 못했습니다.")
+4425: btn_del_trans = ttk.Button(filter_row1, text="선택 항목 삭제", command=self.delete_transaction_entry)
+5530: def delete_transaction_entry(self):
+5534: messagebox.showwarning("선택 오류", "삭제할 기록을 선택해주세요.")
+5537: if not messagebox.askyesno("삭제 확인", "선택한 기록을 삭제하시겠습니까?\n(삭제 시 재고 계산에 즉시 반영됩니다.)"):
+5558: messagebox.showinfo("완료", "거래 기록이 삭제되었습니다.")
+6443: display_frame = ttk.LabelFrame(self.tab_monthly_usage, text="월별 사용량 집계 (현장별 데이터 자동 집계)")
+6550: site_frame = ttk.LabelFrame(self.monthly_paned, text="현장별 누계")
+7908: write_sheet(site_df, "현장별_누계")
+7911: messagebox.showinfo("완료", "월별 집계 내역(종합)이 저장되었습니다.\n(내역, 현장별, 작업자별 3개 시트 포함)")
+8128: def delete_item():
+8133: if messagebox.askyesno("삭제 확인", f"'{val}'을 목록에서 삭제하시겠습니까?"):
+8158: ttk.Button(btn_frame, text="삭제", command=delete_item).pack(side='left', padx=5, expand=True)
+9077: def delete_this_item():
+9396: entry_frame = ttk.LabelFrame(self.daily_usage_paned, text="현장별 일일 사용량 기입")
+9896: ttk.Button(btn_frame, text="- 마지막 회사 삭제", command=self.remove_last_ndt_company, width=15).pack(side='left', padx=2)
+10086: self.recent_menu.add_command(label="삭제", command=self.delete_recent_entry)
+10145: def delete_recent_entry(self, event=None):
+10146: """최근 기록 테이블에서 선택한 항목을 삭제"""
+10152: result = messagebox.askyesno("삭제 확인", "선택한 최근 기록을 삭제하시겠습니까?\n(삭제 시 차감되었던 재고도 자동으로 환원됩니다.)")
+10194: # messagebox.showinfo("삭제 완료", "기록이 성공적으로 삭제되었습니다.")
+10201: messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
+10340: btn_delete = ttk.Button(btn_row, text="선택 항목 삭제", command=self.delete_daily_usage_entry)
+10341: btn_delete.pack(side='left', padx=10)
+10677: ttk.Button(top_btn_frame, text="삭제", command=self.delete_budget_entry).pack(side='left', padx=5)
+10826: # --- 하단: 현장별 일일사용량 조회 프레임 ---
+10835: ttk.Label(bottom_filter, text="현장별 실적 조회", font=('Malgun Gothic', 10, 'bold')).pack(side='left', padx=(0, 15))
+10919: # ── ESC: 현장별 탭 내 모든 입력 위젯에서 포커스 해제 ──────────────
+11088: def delete_budget_view_custom_column(self, col_key):
+11094: if not messagebox.askyesno("컬럼 삭제", f"'{target.get('name', col_key)}' 컬럼을 삭제하시겠습니까?", parent=self.root):
+11116: dialog = ColumnSelectionDialog(self.root, dialog_cols, title="현장별 실적 표시 컬럼 관리")
+11135: """공사탭 현장별 실적 Treeview 헤더 우클릭 메뉴"""
+11160: menu.add_command(label=f"🗑️ '{col_text}' 사용자 컬럼 삭제", command=lambda: self.delete_budget_view_custom_column(col_key))
+11162: menu.add_command(label="⚙️ 컬럼 관리(추가/삭제)...", command=self.show_budget_view_column_dialog)
+11169: """현장별 일일사용량 데이터를 하단 Treeview에 표시하고 KPI를 갱신한다."""
+11765: messagebox.showwarning("현장 미선택", "하단 '현장별 실적 조회' 영역에서 현장을 먼저 선택해주세요.")
+12460: def delete_budget_entry(self):
+12464: messagebox.showwarning("삭제 오류", "삭제할 현장명을 입력해주세요.")
+12467: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+12470: messagebox.showinfo("성공", "삭제되었습니다.")
+12473: # [NEW] 삭제 후 현장 목록 갱신
+12827: def delete_selected_site(self):
+12831: messagebox.showwarning("선택 오류", "삭제할 현장명을 선택해주세요.")
+12835: if messagebox.askyesno("삭제 확인", f"'{site}' 현장명을 목록에서 삭제하시겠습니까?\n(기존 기록은 삭제되지 않습니다.)"):
+12840: messagebox.showinfo("완료", "현장명이 삭제되었습니다.")
+13244: """마지막 회사 섹션 삭제"""
+13568: def delete_equip():
+13571: messagebox.showwarning("선택 오류", "삭제할 항목을 선택해주세요.")
+13575: if messagebox.askyesno("삭제 확인", f"선택한 {count}개의 장비를 목록에서 삭제하시겠습니까?"):
+13633: ttk.Button(btn_frame, text="❌ 삭제", command=delete_equip).pack(side='left', padx=5, expand=True, fill='x')
+14189: """현장별 일일 사용량 입력 폼의 모든 필드를 초기화합니다."""
+14256: """현장별 일일 사용량 단일 등록 (리팩토링 버전)"""
+14401: # [NEW] 현장별 저장 시 차량, 목록, 메모 레이블창 자동 닫기 (User request)
+15639: # (삭제 후 목록에서 즉시 사라지게 하기 위해 daily_usage_df 현장은 제외)
+16656: def delete_daily_usage_entry(self):
+16657: """선택된 일일 사용량 기록 삭제 (인덱스 기반으로 정확하게 삭제 및 재고 환원)"""
+16661: messagebox.showwarning("선택 오류", "삭제할 항목을 선택해주세요.")
+16665: result = messagebox.askyesno("삭제 확인", f"{len(selected_items)}개의 기록을 삭제하시겠습니까?\n(삭제 시 차감되었던 재고도 자동으로 환원됩니다.)")
+16681: messagebox.showwarning("삭제 실패", "삭제할 항목의 데이터 정보를 찾을 수 없습니다.")
+16699: # 해당 현장/날짜의 "(자동 차감)" 트랜잭션을 찾아 삭제
+16710: # 기록 삭제
+16718: messagebox.showinfo("삭제 완료", f"{len(indices_to_delete)}개의 기록이 삭제되고 재고가 환원되었습니다.")
+16725: messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
+18001: tab_text == '현장별 일일 사용량 기입':
+18619: selected_text = "현장별 일일 사용량 기입"
+19650: # 2. 현장별 요약 (중단 - 메인 UI는 3단 수직 분할)
+19651: site_frame = ttk.LabelFrame(paned, text="현장별 누계")
+19905: "현재 저장된 '자동 차감' 기록 중 장비류(PAUT, Yoke 등)에 해당하는 내역만 골라 삭제하시겠습니까?\n\n"
+19933: messagebox.showinfo("클린업 완료", f"장비류(PAUT, Yoke 등)의 자동 차감 내역 {removed_count}건을 삭제했습니다.")

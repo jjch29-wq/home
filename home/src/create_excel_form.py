@@ -391,6 +391,7 @@ def generate_excel(data, output_path):
     ws.page_setup.paperSize = 9  # A4 사이즈
     ws.page_setup.orientation = 'portrait'
     ws.page_setup.fitToPage = True
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
     ws.page_margins.left = 0.5
@@ -497,6 +498,7 @@ def generate_cover_sheet(ws, data):
     ws.page_setup.paperSize   = 9
     ws.page_setup.orientation = 'portrait'
     ws.page_setup.fitToPage   = True
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth  = 1
     ws.page_setup.fitToHeight = 1
 
@@ -707,10 +709,10 @@ def generate_edu_sheet(wb, data):
         rec = records[i] if i < len(records) else {}
 
         t = rec.get("type", "")
-        chk_wkr   = "✔" if "근로" in t or t in ("근로자",) else ""
-        chk_mgr_s = "✔" if "관리" in t and "상용" in t else (
-                    "✔" if t in ("관리감독자", "관리") else "")
-        chk_mgr_i = "✔" if "관리" in t and "임용" in t else ""
+        chk_mgr   = "✔" if "관리" in t else ""
+        chk_wkr_s = "✔" if "근로" in t and "상용" in t else (
+                    "✔" if t in ("근로자", "근로", "작업자") else "")
+        chk_wkr_i = "✔" if "일용" in t else ""
 
         # NO (2행 병합)
         mg(ra,1,rb,1); bc(ra,1, i+1, font=ft_normal, align=ac)
@@ -718,7 +720,7 @@ def generate_edu_sheet(wb, data):
         bc(ra,2, rec.get("name",""),  font=ft_normal, align=ac)
         bc(rb,2, rec.get("birth",""), font=ft_small,  align=ac)
         # 업무형태 체크 (2행 병합)
-        for c_, v_, f_ in [(3,chk_wkr,fill_hdr),(4,chk_mgr_s,fill_hdr),(5,chk_mgr_i,fill_hdr)]:
+        for c_, v_, f_ in [(3,chk_mgr,fill_hdr),(4,chk_wkr_s,fill_hdr),(5,chk_wkr_i,fill_hdr)]:
             mg(ra,c_,rb,c_); bc(ra,c_, v_, font=ft_bold, fill=f_, align=ac)
         # 채용일자 (2행 병합)
         mg(ra,6,rb,6); bc(ra,6, rec.get("hired",""), font=ft_small, align=ac)
@@ -763,6 +765,7 @@ def generate_edu_sheet(wb, data):
     ws.print_area = "A1:AD{}".format(last_note)
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToPage   = True
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth  = 1
     ws.page_setup.fitToHeight = 1
     ws.print_options.horizontalCentered = True
@@ -1076,6 +1079,7 @@ def generate_review_sheet(wb, data):
     ws.page_setup.paperSize = 9
     ws.page_setup.orientation = "portrait"
     ws.page_setup.fitToPage = True
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 3 # Fit to exactly 3 pages
     ws.print_options.horizontalCentered = True

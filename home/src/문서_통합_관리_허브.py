@@ -1454,16 +1454,12 @@ class CodebookApp:
         self.lbl_template_path.grid(row=0, column=1, sticky="w", padx=10, pady=5)
         ttk.Button(form_frame, text="찾아보기...", command=self.select_report_template).grid(row=0, column=2, padx=5, pady=5)
         
-        # 2. Raw Data
-        ttk.Label(form_frame, text="당월 현장 대장 (Raw Data):").grid(row=1, column=0, sticky="e", pady=5)
-        self.lbl_rawdata_path = ttk.Label(form_frame, text="(선택 안 됨)", foreground="gray")
-        self.lbl_rawdata_path.grid(row=1, column=1, sticky="w", padx=10, pady=5)
-        ttk.Button(form_frame, text="찾아보기...", command=self.select_report_rawdata).grid(row=1, column=2, padx=5, pady=5)
+        # (삭제됨) Raw Data 선택 UI는 자동화되어 더 이상 필요하지 않습니다.
         
-        # 3. 월 선택
+        # 2. 월 선택
         ttk.Label(form_frame, text="보고 연월:").grid(row=2, column=0, sticky="e", pady=5)
         self.entry_report_month = ttk.Entry(form_frame, width=15)
-        self.entry_report_month.insert(0, "2026년 8월")
+        self.entry_report_month.insert(0, "2026년 7월")
         self.entry_report_month.grid(row=2, column=1, sticky="w", padx=10, pady=5)
         
         # 실행 버튼
@@ -1471,23 +1467,17 @@ class CodebookApp:
         btn_generate.pack(pady=20, ipadx=20, ipady=10)
         
         # 안내 문구
-        ttk.Label(main_frame, text="* 템플릿 파일과 일일 대장 엑셀을 선택한 후 버튼을 누르면\n* 가산~가평 프로젝트명으로 일괄 치환되고, 세부 물량이 자동 집계되어 저장됩니다.", foreground="gray", justify="center").pack()
+        ttk.Label(main_frame, text="* 템플릿 파일 선택 후 '보고 연월'을 입력하고 버튼을 누르면\n* 일일작업일보 DB에서 해당 월의 데이터를 자동 조회하여 물량이 세팅됩니다.", foreground="gray", justify="center").pack()
 
     def select_report_template(self):
         filepath = filedialog.askopenfilename(title="마스터 템플릿 엑셀 선택", filetypes=[("Excel 파일", "*.xlsx")])
         if filepath:
             self.report_template_path = filepath
             self.lbl_template_path.config(text=os.path.basename(filepath), foreground="blue")
-            
-    def select_report_rawdata(self):
-        filepath = filedialog.askopenfilename(title="현장 일일대장 엑셀 선택", filetypes=[("Excel 파일", "*.xlsx")])
-        if filepath:
-            self.report_rawdata_path = filepath
-            self.lbl_rawdata_path.config(text=os.path.basename(filepath), foreground="blue")
 
     def generate_monthly_report(self):
-        if not self.report_template_path or not self.report_rawdata_path:
-            messagebox.showwarning("입력 오류", "템플릿과 현장 대장 파일을 모두 선택해주세요.")
+        if not getattr(self, 'report_template_path', None):
+            messagebox.showwarning("입력 오류", "템플릿 엑셀 파일을 선택해주세요.")
             return
             
         month_text = self.entry_report_month.get().strip()
@@ -1526,23 +1516,233 @@ class CodebookApp:
                             if new_val != cell.value:
                                 cell.value = new_val
                                 
-            # 3. Raw Data에서 물량 세부내역 복사
-            wb_raw = openpyxl.load_workbook(self.report_rawdata_path, data_only=True)
-            ws_raw = wb_raw.active
-            
-            target_sheet = None
-            for name in wb_temp.sheetnames:
-                if "물량세부내역" in name:
-                    target_sheet = wb_temp[name]
-                    break
+            # 2.5 기성정산 연동 데이터 입력
+            try:
+                import json
+                billing_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'billing_export.json')
+                if os.path.exists(billing_json_path):
+                    with open(billing_json_path, 'r', encoding='utf-8') as f:
+                        b_data = json.load(f)
                     
-            if target_sheet:
-                # Raw Data의 2행부터(헤더 제외) 복사하여 템플릿 끝에 추가
-                for i, row in enumerate(ws_raw.iter_rows(min_row=2, values_only=True), start=1):
-                    if not any(row): continue  # 완전히 빈 행은 무시
-                    target_sheet.append(row)
-            else:
-                messagebox.showwarning("경고", "템플릿에서 '물량세부내역' 시트를 찾지 못해 세부 데이터는 복사되지 않았습니다.")
+                    def inject_billing_data(ws, loc_filter=None):
+                        def get_vals(t_time, mat):
+                            cq = pq = curq = 0.0
+                            for k, v in b_data.items():
+                                parts = k.split('_')
+                                if len(parts) >= 3:
+                                    k_loc = parts[0]
+                                    k_time = parts[1]
+                                    k_mat = '_'.join(parts[2:])
+                                    
+                                    if (loc_filter is None or loc_filter in k_loc) and k_time == t_time:
+                                        if (mat == "RT" and k_mat.startswith("RT")) or mat == k_mat:
+                                            cq += v.get("contract_qty", 0.0)
+                                            pq += v.get("prev_qty", 0.0)
+                                            curq += v.get("current_qty", 0.0)
+                            return cq, pq, curq
+                            
+                        def write_row(row, t_time, mat):
+                            cq1, pq1, curq1 = get_vals(t_time, mat)
+                            if t_time == "야간":
+                                cq2, pq2, curq2 = get_vals("휴일", mat)
+                                cq1 += cq2; pq1 += pq2; curq1 += curq2
+                            
+                            ws[f'C{row}'] = cq1 if cq1 else 0
+                            ws[f'D{row}'] = pq1 if pq1 else 0
+                            if not ws[f'E{row}'].value: ws[f'E{row}'] = 0
+                            ws[f'F{row}'] = f"=SUM(D{row}:E{row})"
+                            
+                            ws[f'G{row}'] = curq1 if curq1 else 0
+                            if not ws[f'H{row}'].value: ws[f'H{row}'] = 0
+                            ws[f'I{row}'] = f"=SUM(G{row}:H{row})"
+                            
+                            ws[f'J{row}'] = f"=D{row}+G{row}"
+                            ws[f'K{row}'] = f"=E{row}+H{row}"
+                            ws[f'L{row}'] = f"=SUM(J{row}:K{row})"
+                            
+                            ws[f'M{row}'] = f"=IF(C{row}=0, 0, I{row}/C{row})"
+                            ws[f'N{row}'] = f"=IF(C{row}=0, 0, L{row}/C{row})"
+
+                        write_row(9, "일반", "RT")
+                        write_row(10, "야간", "RT")
+                        write_row(12, "일반", "UT")
+                        write_row(13, "야간", "UT")
+                        write_row(15, "일반", "PT")
+                        write_row(16, "야간", "PT")
+                        
+                        def write_film(row, mat):
+                            cq, pq, curq = 0.0, 0.0, 0.0
+                            for t_time in ["일반", "야간", "휴일"]:
+                                c, p, cu = get_vals(t_time, mat)
+                                cq += c; pq += p; curq += cu
+                            ws[f'C{row}'] = cq if cq else 0
+                            ws[f'D{row}'] = pq if pq else 0
+                            if not ws[f'E{row}'].value: ws[f'E{row}'] = 0
+                            ws[f'F{row}'] = f"=SUM(D{row}:E{row})"
+                            
+                            ws[f'G{row}'] = curq if curq else 0
+                            if not ws[f'H{row}'].value: ws[f'H{row}'] = 0
+                            ws[f'I{row}'] = f"=SUM(G{row}:H{row})"
+                            
+                            ws[f'J{row}'] = f"=D{row}+G{row}"
+                            ws[f'K{row}'] = f"=E{row}+H{row}"
+                            ws[f'L{row}'] = f"=SUM(J{row}:K{row})"
+                            
+                            ws[f'M{row}'] = f"=IF(C{row}=0, 0, I{row}/C{row})"
+                            ws[f'N{row}'] = f"=IF(C{row}=0, 0, L{row}/C{row})"
+                            
+                        write_film(22, "RT_B")
+                        write_film(23, "RT_A")
+                        write_film(24, "RT_A2")
+                        
+                        # 합계 수식 주입
+                        def write_sum(sum_row, start_row, end_row):
+                            for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
+                                ws[f'{col}{sum_row}'] = f"=SUM({col}{start_row}:{col}{end_row})"
+                            ws[f'M{sum_row}'] = f"=IF(C{sum_row}=0, 0, I{sum_row}/C{sum_row})"
+                            ws[f'N{sum_row}'] = f"=IF(C{sum_row}=0, 0, L{sum_row}/C{sum_row})"
+                            
+                        write_sum(11, 9, 10)
+                        write_sum(14, 12, 13)
+                        write_sum(17, 15, 16)
+                        write_sum(25, 22, 24)
+                        
+                    for s_name in wb_temp.sheetnames:
+                        if "2. 공정율" in s_name:
+                            ws = wb_temp[s_name]
+                            if "(전체)" in s_name:
+                                inject_billing_data(ws, None)
+                            elif "(주배관)" in s_name:
+                                inject_billing_data(ws, "주배관")
+                            elif "(관리소)" in s_name:
+                                inject_billing_data(ws, "관리소")
+            except Exception as e:
+                print(f"기성정산 데이터 연동 중 오류 발생: {e}")
+                                
+            # 3. 일일작업일보 DB에서 물량 세부내역 복사 및 NDT 현황 집계
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Material_Inventory.xlsx')
+            if os.path.exists(db_path):
+                # 3.1 NDT 현황(조인트 수 및 물량) 집계
+                try:
+                    import pandas as pd
+                    import re
+                    
+                    try:
+                        raw_df = pd.read_excel(db_path, sheet_name='DailyUsage')
+                    except Exception as e:
+                        self.root.config(cursor="")
+                        messagebox.showwarning("오류", f"일일작업일보 DB(DailyUsage)를 읽어올 수 없습니다:\n{e}")
+                        return
+                        
+                    # 날짜 필터링 ("2026년 7월" -> "2026-07")
+                    match = re.search(r'(\d{4})년\s*(\d{1,2})월', month_text)
+                    if match:
+                        year_str = match.group(1)
+                        month_str = f"{int(match.group(2)):02d}"
+                        target_month = f"{year_str}-{month_str}"
+                        if 'Date' in raw_df.columns:
+                            raw_df = raw_df[raw_df['Date'].astype(str).str.startswith(target_month)]
+                            
+                    if raw_df.empty:
+                        messagebox.showwarning("데이터 없음", f"일일작업일보 DB에 '{month_text}'({target_month})에 해당하는 데이터가 하나도 없습니다!\n\n(참고: '현장 일일 사용량 기입' 탭에서 입력한 날짜와 보고 연월이 일치하는지 확인해주세요.)")
+                        # 멈추지 않고 계속 진행하여 빈 양식이라도 생성하도록 둠.
+                    
+                    def inject_ndt_status(ws, loc_filter):
+                        if 'Site' not in raw_df.columns: return
+                        df_loc = raw_df[raw_df['Site'].astype(str).str.contains(loc_filter, na=False)]
+                        if df_loc.empty:
+                            # DB의 현장명에 '주배관'이나 '관리소'라는 단어가 명시되어 있지 않은 경우, 
+                            # 필터링으로 인해 데이터가 증발하는 것을 막기 위한 안전장치
+                            df_loc = raw_df
+                        
+                        def get_ndt_sums(method, insp_type, time_filter, pipe_filter=None):
+                            if '검사방법' not in df_loc.columns or '검사구분' not in df_loc.columns:
+                                return 0, 0
+                            
+                            df_filtered = df_loc[(df_loc['검사방법'] == method) & (df_loc['검사구분'] == insp_type)]
+                            
+                            if time_filter == "일반":
+                                df_filtered = df_filtered[df_filtered.get('작업형태', '') == "일반"]
+                            elif time_filter == "휴일/야간":
+                                df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["야간", "휴일"])]
+                                
+                            if pipe_filter and '관경(Inch)' in df_loc.columns:
+                                df_filtered = df_filtered[df_filtered['관경(Inch)'].astype(str).str.contains(pipe_filter, na=False)]
+                                
+                            joints = pd.to_numeric(df_filtered.get('조인트수', pd.Series(dtype=float)), errors='coerce').sum()
+                            qty = pd.to_numeric(df_filtered.get('수량', pd.Series(dtype=float)), errors='coerce').sum()
+                            return joints, qty
+
+                        def write_ndt_row(row_idx, method, pipe_filter=None):
+                            # 일반 검사 (C, D, E)
+                            ori_j_day, ori_q_day = get_ndt_sums(method, 'ORI', "일반", pipe_filter)
+                            rep_j_day, rep_q_day = get_ndt_sums(method, 'REP', "일반", pipe_filter)
+                            
+                            ws[f'C{row_idx}'] = (ori_j_day + rep_j_day) if (ori_j_day + rep_j_day) else '-'
+                            ws[f'D{row_idx}'] = ori_q_day if ori_q_day else '-'
+                            ws[f'E{row_idx}'] = rep_q_day if rep_q_day else '-'
+                            ws[f'F{row_idx}'] = f"=SUM(D{row_idx}:E{row_idx})"
+                            
+                            # 휴일/야간 검사 (G, H, I)
+                            ori_j_night, ori_q_night = get_ndt_sums(method, 'ORI', "휴일/야간", pipe_filter)
+                            rep_j_night, rep_q_night = get_ndt_sums(method, 'REP', "휴일/야간", pipe_filter)
+                            
+                            ws[f'G{row_idx}'] = (ori_j_night + rep_j_night) if (ori_j_night + rep_j_night) else '-'
+                            ws[f'H{row_idx}'] = ori_q_night if ori_q_night else '-'
+                            ws[f'I{row_idx}'] = rep_q_night if rep_q_night else '-'
+                            ws[f'J{row_idx}'] = f"=SUM(H{row_idx}:I{row_idx})"
+                            
+                            # 합계 (K, L, M, N)
+                            ws[f'K{row_idx}'] = f"=SUM(C{row_idx},G{row_idx})"
+                            ws[f'L{row_idx}'] = f"=SUM(D{row_idx},H{row_idx})"
+                            ws[f'M{row_idx}'] = f"=SUM(E{row_idx},I{row_idx})"
+                            ws[f'N{row_idx}'] = f"=SUM(F{row_idx},J{row_idx})"
+
+                        write_ndt_row(8, 'RT', '17')
+                        write_ndt_row(9, 'RT', '12')
+                        write_ndt_row(10, 'RT', '6')
+                        write_ndt_row(12, 'UT')
+                        write_ndt_row(14, 'PT')
+                        
+                        # RT 합계 행 (row 11) 수식 주입
+                        for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N']:
+                            ws[f'{col}11'] = f"=SUM({col}8:{col}10)"
+
+                    for s_name in wb_temp.sheetnames:
+                        if "3. 비파괴검사 현황" in s_name:
+                            ws_ndt = wb_temp[s_name]
+                            if "(주배관)" in s_name:
+                                inject_ndt_status(ws_ndt, "주배관")
+                            elif "(관리소)" in s_name:
+                                inject_ndt_status(ws_ndt, "관리소")
+                except Exception as e:
+                    print(f"NDT 현황 데이터 연동 중 오류 발생: {e}")
+
+                # 3.2 물량 세부내역 복사
+                target_sheet = None
+                for name in wb_temp.sheetnames:
+                    if "물량세부내역" in name:
+                        target_sheet = wb_temp[name]
+                        break
+                        
+                if target_sheet:
+                    # 헤더를 제외한 순수 데이터를 템플릿 끝에 추가
+                    for row in raw_df.itertuples(index=False, name=None):
+                        # 빈 행이나 전부 NaT/NaN인 경우 건너뛰기
+                        if not any(pd.notna(x) and str(x).strip() != '' for x in row):
+                            continue
+                        # datetime 등 엑셀에 안맞는 타입 보정
+                        clean_row = []
+                        for item in row:
+                            if pd.isna(item):
+                                clean_row.append("")
+                            elif isinstance(item, pd.Timestamp):
+                                clean_row.append(item.strftime('%Y-%m-%d %H:%M:%S'))
+                            else:
+                                clean_row.append(item)
+                        target_sheet.append(clean_row)
+                else:
+                    messagebox.showwarning("경고", "템플릿에서 '물량세부내역' 시트를 찾지 못해 세부 데이터는 복사되지 않았습니다.")
                 
             # 4. 저장 및 완료
             wb_temp.save(output_path)

@@ -337,6 +337,7 @@ class NDTCalculatorTab(ttk.Frame):
         
         ttk.Button(round_frame, text="다음 회차로 이월하기 (전회 누적 & 금회 초기화)", command=self.carry_over_round).pack(side=tk.RIGHT)
         ttk.Button(round_frame, text="이전 백업 불러오기 (.ndt)", command=self.load_project).pack(side=tk.RIGHT, padx=10)
+        ttk.Button(round_frame, text="✨ 엑셀 보고서 생성기 열기", command=self.open_report_hub).pack(side=tk.RIGHT, padx=5)
         
         content_frame = ttk.Frame(billing_container)
         content_frame.pack(fill=tk.BOTH, expand=True)
@@ -1072,6 +1073,31 @@ class NDTCalculatorTab(ttk.Frame):
                     cur_val = self.get_float(self.contract_vars[key]["curr_qty"])
                     new_val = cur_val + rec["qty"]
                     self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
+                    
+        self.export_billing_data()
+
+    def export_billing_data(self):
+        try:
+            import json
+            import os
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+            os.makedirs(data_dir, exist_ok=True)
+            export_path = os.path.join(data_dir, 'billing_export.json')
+            
+            export_data = {}
+            for key, var_dict in self.contract_vars.items():
+                c_qty = self.get_float(var_dict["c_qty"])
+                p_qty = self.get_float(var_dict["p_qty"])
+                cur_qty = self.get_float(var_dict["curr_qty"])
+                export_data[key] = {
+                    "contract_qty": c_qty,
+                    "prev_qty": p_qty,
+                    "current_qty": cur_qty
+                }
+            with open(export_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            print(f"Failed to export billing data: {e}")
 
     def add_to_record(self, auto_save=True):
         res = self.calculate()
@@ -1361,6 +1387,7 @@ class NDTCalculatorTab(ttk.Frame):
                         self.contract_vars[key]["contract"].set(f"{int(amt):,}")
                     
         msg = f"총 {updated_count}개의 항목이 업데이트 되었습니다.\n\n[업데이트 샘플]\n" + "\n".join(debug_msg)
+        self.export_billing_data()
         messagebox.showinfo("불러오기 완료", msg)
 
     def load_project(self):
@@ -1447,6 +1474,16 @@ class NDTCalculatorTab(ttk.Frame):
             messagebox.showinfo("불러오기 완료", msg)
         except Exception as e:
             messagebox.showerror("오류", f"불러오기 중 오류가 발생했습니다: {e}")
+
+    def open_report_hub(self):
+        import subprocess
+        import sys
+        import os
+        hub_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "문서_통합_관리_허브.py")
+        if os.path.exists(hub_path):
+            subprocess.Popen([sys.executable, hub_path])
+        else:
+            messagebox.showerror("오류", "문서_통합_관리_허브.py 파일을 찾을 수 없습니다.")
 
     def open_settings(self):
         top = tk.Toplevel(self)

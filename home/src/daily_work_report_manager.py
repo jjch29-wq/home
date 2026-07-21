@@ -499,8 +499,8 @@ class DailyWorkReportManager:
         sheet.row_breaks.append(Break(id=51 + total_offset))
         sheet.page_setup.orientation = sheet.ORIENTATION_PORTRAIT
         sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
-        sheet.page_setup.fitToHeight = None; sheet.page_setup.fitToWidth = None
-        sheet.sheet_properties.pageSetUpPr.fitToPage = False
+        sheet.page_setup.fitToWidth = 1; sheet.page_setup.fitToHeight = 1
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
 
         veh_list = data.get('vehicles', []); v = veh_list[0] if veh_list else {}
         veh_row = 27 + method_offset; safe_write(f"B{veh_row}", "") 
@@ -549,9 +549,10 @@ class DailyWorkReportManager:
             try: sheet.row_dimensions[r].height = compact_height
             except: pass
             
-        # 8. Final Print Setup - FIXED SCALE 95%
-        sheet.sheet_properties.pageSetUpPr.fitToPage = False
-        sheet.page_setup.scale = 95
+        # 8. Final Print Setup
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.page_setup.fitToWidth = 1
+        sheet.page_setup.fitToHeight = 1
         sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
         sheet.page_setup.horizontalCentered = True
         sheet.page_setup.verticalCentered = False

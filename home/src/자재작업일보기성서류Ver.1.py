@@ -2300,7 +2300,7 @@ class MaterialManager:
                 'User8', 'WorkTime8', 'OT8',
                 'User9', 'WorkTime9', 'OT9',
                 'User10', 'WorkTime10', 'OT10',
-                '차량번호', '주행거리', '차량점검', '차량비고'
+                '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수', '관경(Inch)'
             ],
             'Budget': [
                 'Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 
@@ -2654,7 +2654,7 @@ class MaterialManager:
                                                         'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크',
                                                         'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', 'User', '장비명', '검사량',
                                                         '단가', '출장비', '일식', '검사비',
-                                                        '차량번호', '주행거리', '차량점검', '차량비고'])
+                                                        '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수', '관경(Inch)'])
                 
                 # 5. Migrate vehicle data from daily_usage_df to transactions_df
                 if hasattr(self, 'daily_usage_df') and hasattr(self, 'transactions_df'):
@@ -2785,7 +2785,7 @@ class MaterialManager:
                                                 'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크',
                                                 'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', '장비명', '검사량', '회사코드',
                                                 '업체명', '단가', '출장비', '일식', '검사비', 'FilmCount',
-                                                '차량번호', '주행거리', '차량점검', '차량비고'])
+                                                '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수'])
             self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail'])
 
         
@@ -5555,6 +5555,18 @@ class MaterialManager:
         self.save_data()
         self.update_transaction_view()
         self.update_stock_view()
+        
+        # [FIX] Automatically refresh the Site tab and Query tab
+        if hasattr(self, 'budget_view_tree'):
+            self.update_budget_site_view()
+        if hasattr(self, 'query_tree') and hasattr(self, 'cb_filter_year'):
+            try:
+                y = int(self.cb_filter_year.get().replace('년', ''))
+                m = int(self.cb_filter_month.get().replace('월', ''))
+                self.update_monthly_usage_view(y, m)
+            except:
+                pass
+                
         messagebox.showinfo("완료", "거래 기록이 삭제되었습니다.")
 
     def on_material_selected(self, event=None):
@@ -9643,6 +9655,12 @@ class MaterialManager:
         self.ndt_pipe_var = tk.StringVar(value="250mm 초과 [10인치 이상] (1.0)")
         self.ndt_overhead_var = tk.DoubleVar(value=80.0)
         self.ndt_tech_var = tk.DoubleVar(value=5.86)
+        self.ndt_ori_joint_var = tk.StringVar(value="")
+        self.ndt_ori_qty_var = tk.StringVar(value="")
+        self.ndt_rep_joint_var = tk.StringVar(value="")
+        self.ndt_rep_qty_var = tk.StringVar(value="")
+        self.ndt_rej_joint_var = tk.StringVar(value="")
+        self.ndt_report_pipe_var = tk.StringVar(value="")
 
         row0 = ttk.Frame(self.ndt_calc_frame)
         row0.pack(fill='x', pady=2)
@@ -9665,10 +9683,29 @@ class MaterialManager:
         self.cb_ndt_cond2 = ttk.Combobox(row2, textvariable=self.ndt_thickness_var, width=22, state='readonly')
         self.cb_ndt_cond2.pack(side='left', padx=2)
 
+        ttk.Label(row2, text="  보고서용 관경(Inch):").pack(side='left', padx=(5,0))
+        self.cb_ndt_report_pipe = ttk.Combobox(row2, textvariable=self.ndt_report_pipe_var, width=10)
+        self.cb_ndt_report_pipe.pack(side='left', padx=2)
+
         ttk.Label(row2, text="  제경비율(%):").pack(side='left', padx=(2,0))
         ttk.Entry(row2, textvariable=self.ndt_overhead_var, width=5).pack(side='left')
         ttk.Label(row2, text=" 기술료율(%):").pack(side='left')
         ttk.Entry(row2, textvariable=self.ndt_tech_var, width=5).pack(side='left')
+        
+        row3 = ttk.Frame(self.ndt_calc_frame)
+        row3.pack(fill='x', pady=2)
+        ttk.Label(row3, text="[ORI] 조인트:").pack(side='left', padx=(0,0))
+        ttk.Entry(row3, textvariable=self.ndt_ori_joint_var, width=5).pack(side='left', padx=2)
+        ttk.Label(row3, text=" 물량:").pack(side='left', padx=(0,0))
+        ttk.Entry(row3, textvariable=self.ndt_ori_qty_var, width=5).pack(side='left', padx=2)
+        
+        ttk.Label(row3, text="  [REP] 조인트:").pack(side='left', padx=(5,0))
+        ttk.Entry(row3, textvariable=self.ndt_rep_joint_var, width=5).pack(side='left', padx=2)
+        ttk.Label(row3, text=" 물량:").pack(side='left', padx=(0,0))
+        ttk.Entry(row3, textvariable=self.ndt_rep_qty_var, width=5).pack(side='left', padx=2)
+        
+        ttk.Label(row3, text="  당일 불량(REJ)수:").pack(side='left', padx=(5,0))
+        ttk.Entry(row3, textvariable=self.ndt_rej_joint_var, width=5).pack(side='left', padx=2)
 
         def _calculate_ndt_fee():
             try:
@@ -9839,6 +9876,12 @@ class MaterialManager:
         self._bind_combobox_word_suggest(self.cb_daily_equip, lambda: self._get_equipment_candidates(include_all=False))
         self._bind_combobox_word_suggest(self.ent_daily_inspection_item, lambda: self._get_inspection_item_candidates())
         self._bind_combobox_word_suggest(self.ent_daily_applied_code, lambda: self._get_applied_code_candidates())
+        
+        def _get_pipe_candidates():
+            if not hasattr(self, 'daily_usage_df') or self.daily_usage_df.empty: return []
+            if '관경(Inch)' not in self.daily_usage_df.columns: return []
+            return sorted(list(set(str(x) for x in self.daily_usage_df['관경(Inch)'].dropna() if str(x).strip())))
+        self._bind_combobox_word_suggest(self.cb_ndt_report_pipe, _get_pipe_candidates)
 
         # Category definitions for focus flow and loops
         ndt_materials = self.ndt_materials_all
@@ -10124,10 +10167,10 @@ class MaterialManager:
             
         indices_to_delete = []
         for item in selection:
-            values = self.tv_recent.item(item, 'values')
-            if values:
+            tags = self.tv_recent.item(item, 'tags')
+            if tags:
                 try:
-                    df_idx = int(values[0])
+                    df_idx = int(tags[0])
                     indices_to_delete.append(df_idx)
                 except ValueError:
                     continue
@@ -10166,6 +10209,17 @@ class MaterialManager:
                 self.update_stock_view()
                 self.update_transaction_view()
                 self.refresh_inquiry_filters()
+                
+                # [FIX] Automatically refresh the Site tab and Query tab
+                if hasattr(self, 'budget_view_tree'):
+                    self.update_budget_site_view()
+                if hasattr(self, 'query_tree') and hasattr(self, 'cb_filter_year'):
+                    try:
+                        y = int(self.cb_filter_year.get().replace('년', ''))
+                        m = int(self.cb_filter_month.get().replace('월', ''))
+                        self.update_monthly_usage_view(y, m)
+                    except:
+                        pass
         except Exception as e:
             messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
 
@@ -10372,7 +10426,7 @@ class MaterialManager:
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
-        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비']
+        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수']
         c_list = list(columns)
         for nc in new_cols:
             if nc not in c_list:
@@ -12969,6 +13023,11 @@ class MaterialManager:
             '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0.0,
             '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
             '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
+            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
+            '검사구분': "ORI",
+            '조인트수': "",
+            '불량수': "",
+            '관경(Inch)': getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip(),
         }
 
         # [NEW] Auto-save new unit, equipment, and site (with improved duplicate check)
@@ -12990,92 +13049,133 @@ class MaterialManager:
         total_meal_worker = sum(to_f(worker_data_map.get(f'Meal{i}' if i > 1 else 'Meal', 0)) for i in range(1, 11))
         global_meal = to_f(self.ent_daily_meal_cost)
         
+        # [NEW] Append REP defect trace to Note if applicable (Option A)
+        base_note = self._get_merged_memo_and_note()
+        rep_count = getattr(self, 'ndt_rep_joint_count_var', tk.StringVar(value="")).get().strip()
+        insp_type = getattr(self, 'ndt_inspection_type_var', tk.StringVar(value="ORI")).get().strip()
+        if insp_type == "ORI" and rep_count and rep_count != "0":
+            base_note = (base_note + f" [불량(REP) {rep_count}개 발생]").strip()
+        
         common_data.update({
             '일식': total_meal_worker if total_meal_worker > 0 else global_meal,
             '검사비': to_f(self.ent_daily_test_fee),
             'FilmCount': 0.0,
-            'Note': self._get_merged_memo_and_note(),
             'EntryTime': datetime.datetime.now(),
             '회사코드': "",
             **worker_data_map
         })
 
-        # 6. 레코드 생성 (업체 수 vs 차량 수 중 큰 값만큼 생성)
+        is_ndt = self.cb_daily_test_method.get().strip() in ['RT','UT','PT']
+        record_types = []
+        if is_ndt:
+            ori_j = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
+            rep_j = getattr(self, 'ndt_rep_joint_var', tk.StringVar(value="")).get().strip()
+            if ori_j or not rep_j:
+                record_types.append('ORI')
+            if rep_j:
+                record_types.append('REP')
+        else:
+            record_types.append('DEFAULT')
+
         records_to_save = []
         max_rows = max(len(company_data_list), len(living_boxes))
         
-        for i in range(max_rows):
-            row_record = common_data.copy()
+        for r_type in record_types:
+            r_common_data = common_data.copy()
             
-            # --- 업체/수량 데이터 배분 ---
-            if i < len(company_data_list):
-                cd = company_data_list[i]
-                row_record['회사코드'] = cd['회사코드']
-                
-                # [FIX] Multi-counting Prevention: Only the primary row keeps quantitative data
-                if not cd['is_primary']:
-                    # Zero out usage/amounts/costs for secondary rows
-                    for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']:
-                        row_record[k] = 0.0
-                    # Zero out redundant worker quantitative data (WorkTime, OT)
-                    # We keep the NAMES (User, User2...) for identification but clear the times
-                    for j in range(1, 11):
-                        wt_k = 'WorkTime' if j == 1 else f'WorkTime{j}'
-                        ot_k = 'OT' if j == 1 else f'OT{j}'
-                        row_record[wt_k] = ""
-                        row_record[ot_k] = ""
-                    # Zero out RTK data
-                    for k in rtk_data: row_record[k] = 0.0
-                else:
-                    # Primary row: keep everything including RTK
-                    for k, v in rtk_data.items(): row_record[k] = v
-
-                # Apply NDT data (always row-specific)
-                for k, v in cd['ndt_data'].items():
-                    row_record[f'NDT_{k}'] = v
+            if is_ndt:
+                r_common_data['검사구분'] = r_type
+                if r_type == 'ORI':
+                    r_common_data['조인트수'] = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
+                    qty_str = getattr(self, 'ndt_ori_qty_var', tk.StringVar(value="")).get().strip()
+                    if qty_str:
+                        r_qty = float(qty_str)
+                        r_common_data['Usage'] = r_qty
+                        r_common_data['검사량'] = r_qty
+                    
+                    base_note = self._get_merged_memo_and_note()
+                    rej_count = getattr(self, 'ndt_rej_joint_var', tk.StringVar(value="")).get().strip()
+                    if rej_count and rej_count != "0":
+                        base_note = (base_note + f" [당일 불량(REJ) {rej_count}개 발생]").strip()
+                    r_common_data['Note'] = base_note
+                elif r_type == 'REP':
+                    r_common_data['조인트수'] = getattr(self, 'ndt_rep_joint_var', tk.StringVar(value="")).get().strip()
+                    qty_str = getattr(self, 'ndt_rep_qty_var', tk.StringVar(value="")).get().strip()
+                    if qty_str:
+                        r_qty = float(qty_str)
+                        r_common_data['Usage'] = r_qty
+                        r_common_data['검사량'] = r_qty
+                    
+                    r_common_data['Note'] = "(재검사 기록) " + self._get_merged_memo_and_note()
+                    r_common_data['출장비'] = 0.0
+                    r_common_data['일식'] = 0.0
+                    r_common_data['검사비'] = 0.0 
             else:
-                # Vehicle-only secondary row: Zero out all quantities/costs/times
-                for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']: row_record[k] = 0.0
-                for k in rtk_data: row_record[k] = 0.0
-                for j in range(1, 11):
-                    row_record['WorkTime' if j==1 else f'WorkTime{j}'] = ""
-                    row_record['OT' if j==1 else f'OT{j}'] = ""
-                for name in self.ndt_materials_all:
-                    row_record[f'NDT_{name}'] = 0.0
-                row_record['Note'] = "(차량 추가 기록)"
+                r_common_data['Note'] = self._get_merged_memo_and_note()
 
-            # --- 차량 데이터 배분 ---
-            if i < len(living_boxes):
-                v_widget = living_boxes[i]
-                v_data = v_widget.get_data()
-                v_no = str(v_data.get('vehicle_info', '')).strip()
-                v_mileage = str(v_data.get('mileage', '')).strip()
+            for i in range(max_rows):
+                row_record = r_common_data.copy()
                 
-                # [SAFEGUARD] Only apply if vehicle number or mileage is present
-                if v_no or v_mileage:
-                    row_record['차량번호'] = v_no
-                    row_record['주행거리'] = v_mileage
-                    reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
-                    # [NEW] Store as category:value|category2:value2 for easier parsing
-                    checks_list = []
-                    for k, v in v_data.items():
-                        if k not in reserved and v:
-                            checks_list.append(f"{k}:{v}")
-                    row_record['차량점검'] = "|".join(checks_list)
-                    row_record['차량비고'] = str(v_data.get('remarks', '')).strip()
+                # --- 업체/수량 데이터 배분 ---
+                if i < len(company_data_list):
+                    cd = company_data_list[i]
+                    row_record['회사코드'] = cd['회사코드']
+                    
+                    if not cd['is_primary'] or r_type == 'REP':
+                        for j in range(1, 11):
+                            wt_k = 'WorkTime' if j == 1 else f'WorkTime{j}'
+                            ot_k = 'OT' if j == 1 else f'OT{j}'
+                            row_record[wt_k] = ""
+                            row_record[ot_k] = ""
+                        for k in rtk_data: row_record[k] = 0.0
+                    else:
+                        for k, v in rtk_data.items(): row_record[k] = v
 
+                    if not cd['is_primary']:
+                        for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']:
+                            row_record[k] = 0.0
+
+                    for k, v in cd['ndt_data'].items():
+                        row_record[f'NDT_{k}'] = v if r_type != 'REP' else 0.0
+                else:
+                    for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']: row_record[k] = 0.0
+                    for k in rtk_data: row_record[k] = 0.0
+                    for j in range(1, 11):
+                        row_record['WorkTime' if j==1 else f'WorkTime{j}'] = ""
+                        row_record['OT' if j==1 else f'OT{j}'] = ""
+                    for name in self.ndt_materials_all:
+                        row_record[f'NDT_{name}'] = 0.0
+                    row_record['Note'] = "(차량 추가 기록)"
+
+                # --- 차량 데이터 배분 ---
+                if i < len(living_boxes):
+                    v_widget = living_boxes[i]
+                    v_data = v_widget.get_data()
+                    v_no = str(v_data.get('vehicle_info', '')).strip()
+                    v_mileage = str(v_data.get('mileage', '')).strip()
+                    
+                    if (v_no or v_mileage) and r_type != 'REP':
+                        row_record['차량번호'] = v_no
+                        row_record['주행거리'] = v_mileage
+                        reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
+                        checks_list = []
+                        for k, v in v_data.items():
+                            if k not in reserved and v:
+                                checks_list.append(f"{k}:{v}")
+                        row_record['차량점검'] = "|".join(checks_list)
+                        row_record['차량비고'] = str(v_data.get('remarks', '')).strip()
+                    else:
+                        row_record['차량번호'] = ""
+                        row_record['주행거리'] = ""
+                        row_record['차량점검'] = ""
+                        row_record['차량비고'] = ""
                 else:
                     row_record['차량번호'] = ""
                     row_record['주행거리'] = ""
                     row_record['차량점검'] = ""
                     row_record['차량비고'] = ""
-            else:
-                row_record['차량번호'] = ""
-                row_record['주행거리'] = ""
-                row_record['차량점검'] = ""
-                row_record['차량비고'] = ""
-            
-            records_to_save.append(row_record)
+                
+                records_to_save.append(row_record)
 
         # 7. 재고 트랜잭션 처리 (원본 로직 유지 - 출고는 실제 물량만큼 한 번만 발생)
         # [NEW] PAUT 및 장비류는 재고 차감에서 제외 (사용자 요청)
@@ -14137,6 +14237,12 @@ class MaterialManager:
         self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
         self.ndt_overhead_var.set(80.0)
         self.ndt_tech_var.set(5.86)
+        self.ndt_ori_joint_var.set("")
+        self.ndt_ori_qty_var.set("")
+        self.ndt_rep_joint_var.set("")
+        self.ndt_rep_qty_var.set("")
+        self.ndt_rej_joint_var.set("")
+        self.ndt_report_pipe_var.set("")
         self.ndt_calc_frame.grid_remove()
         self.rtk_grid.grid_remove() # [NEW] Hide RTK on clear
         self.ndt_frame.grid_remove() # [NEW] Hide NDT frame on clear
@@ -16638,6 +16744,17 @@ class MaterialManager:
                 self.update_stock_view()
                 self.update_transaction_view()
                 self.refresh_inquiry_filters()
+                
+                # [FIX] Automatically refresh the Site tab and Query tab
+                if hasattr(self, 'budget_view_tree'):
+                    self.update_budget_site_view()
+                if hasattr(self, 'query_tree') and hasattr(self, 'cb_filter_year'):
+                    try:
+                        y = int(self.cb_filter_year.get().replace('년', ''))
+                        m = int(self.cb_filter_month.get().replace('월', ''))
+                        self.update_monthly_usage_view(y, m)
+                    except:
+                        pass
         except Exception as e:
             messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
 
