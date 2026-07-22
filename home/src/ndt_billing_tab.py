@@ -341,9 +341,12 @@ class NDTCalculatorTab(ttk.Frame):
         
         content_frame = ttk.Frame(billing_container)
         content_frame.pack(fill=tk.BOTH, expand=True)
+        content_frame.columnconfigure(0, weight=2)  # Left frame takes 2/3
+        content_frame.columnconfigure(1, weight=1)  # Right frame takes 1/3
+        content_frame.rowconfigure(0, weight=1)
         
         contract_frame = ttk.LabelFrame(content_frame, text="항목별 계약 및 전회 기성 (세액 미포함)", padding=10)
-        contract_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        contract_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
         
         ttk.Button(contract_frame, text="프로젝트 총 계약수량 자동입력", command=self.auto_load_contract_qty).pack(fill=tk.X, pady=(0, 10))
         
@@ -547,7 +550,7 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Label(f, text="원").grid(row=1, column=3)
         
         exp_frame = ttk.LabelFrame(content_frame, text="기타 경비 및 실비 정산 (월간)", padding=10)
-        exp_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        exp_frame.grid(row=0, column=1, sticky='nsew')
         
         hf = ttk.Frame(exp_frame)
         hf.pack(fill=tk.X, pady=2)

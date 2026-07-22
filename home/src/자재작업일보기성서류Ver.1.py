@@ -6509,7 +6509,7 @@ class MaterialManager:
         
         # Treeview with columns including worker, work time, and OT fields
         # Added '(Full작업자)' for full list backup during Excel export
-        columns = ('연도', '월', '현장', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
+        columns = ('연도', '월', '현장', '구분', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
                    '수량', '단가', '출장비', '일식', '검사비', '제경비', '기술료', '환산물량', '재료비', '인건비', '품목명', '센터미스', '농도', '마킹미스', '필름마크', 
                    '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
         self.monthly_usage_tree = ttk.Treeview(tree_frame, columns=columns, show='headings',
@@ -6523,7 +6523,7 @@ class MaterialManager:
         
         # Column configuration with added OT columns
         col_widths = {
-            '연도': 90, '월': 70, '현장': 140, '작업자': 100, '작업시간': 100,
+            '연도': 90, '월': 70, '현장': 140, '구분': 100, '작업자': 100, '작업시간': 100,
             'OT시간': 100, 'OT금액': 110,
             'OT1': 100, 'OT2': 100, 'OT3': 100, 'OT4': 100, 'OT5': 100,
             'OT6': 100, 'OT7': 100, 'OT8': 100, 'OT9': 100, 'OT10': 100,
@@ -7116,6 +7116,7 @@ class MaterialManager:
                 int(entry['Year']),
                 int(entry['Month']),
                 entry.get('Site', ''),
+                entry.get('구분', ''),
                 worker_str,
                 worktime_str,
                 f"{ot_hours:.1f}" if ot_hours > 0 else '',
@@ -7171,6 +7172,7 @@ class MaterialManager:
                 '',
                 '',
                 '--- 전체 누계 ---',
+                '',  # 구분
                 '',  # 작업자
                 f"{total_worker_count:.1f}" if total_worker_count > 0 else '', # 작업시간 (총 공수)
                 f"{total_ot_hours:.1f}" if total_ot_hours > 0 else '',
@@ -9504,7 +9506,7 @@ class MaterialManager:
         
         # Configure columns inside the master panel (Reduced minsize)
         self.master_form_panel.columnconfigure(0, weight=0, minsize=350)
-        self.master_form_panel.columnconfigure(1, weight=1)
+        self.master_form_panel.columnconfigure(1, weight=1, minsize=550)
         
                 # Inner content for the basic form
         form_content = ttk.Frame(self.master_form_panel, padding=10)
@@ -9666,30 +9668,27 @@ class MaterialManager:
         row0.pack(fill='x', pady=2)
         ttk.Label(row0, text="구분:").pack(side='left')
         ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["수송배관(주배관)", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
+        ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
+        for t in ["일반", "야간", "휴일"]:
+            ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
 
         row1 = ttk.Frame(self.ndt_calc_frame)
         row1.pack(fill='x', pady=2)
-        ttk.Label(row1, text="작업형태:").pack(side='left')
-        for t in ["일반", "야간", "휴일"]:
-            ttk.Radiobutton(row1, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
-        
-        ttk.Label(row1, text="  조건1:").pack(side='left', padx=(5,0))
+        ttk.Label(row1, text="조건1:").pack(side='left', padx=(0,0))
         self.cb_ndt_cond1 = ttk.Combobox(row1, textvariable=self.ndt_source_var, width=22, state='readonly')
         self.cb_ndt_cond1.pack(side='left', padx=2)
+        ttk.Label(row1, text="  조건2:").pack(side='left', padx=(5,0))
+        self.cb_ndt_cond2 = ttk.Combobox(row1, textvariable=self.ndt_thickness_var, width=22, state='readonly')
+        self.cb_ndt_cond2.pack(side='left', padx=2)
 
         row2 = ttk.Frame(self.ndt_calc_frame)
         row2.pack(fill='x', pady=2)
-        ttk.Label(row2, text="조건2:").pack(side='left', padx=(0,0))
-        self.cb_ndt_cond2 = ttk.Combobox(row2, textvariable=self.ndt_thickness_var, width=22, state='readonly')
-        self.cb_ndt_cond2.pack(side='left', padx=2)
-
-        ttk.Label(row2, text="  보고서용 관경(Inch):").pack(side='left', padx=(5,0))
+        ttk.Label(row2, text="보고서용 관경(Inch):").pack(side='left', padx=(0,0))
         self.cb_ndt_report_pipe = ttk.Combobox(row2, textvariable=self.ndt_report_pipe_var, width=10)
         self.cb_ndt_report_pipe.pack(side='left', padx=2)
-
-        ttk.Label(row2, text="  제경비율(%):").pack(side='left', padx=(2,0))
+        ttk.Label(row2, text="  제경비율(%):").pack(side='left', padx=(5,0))
         ttk.Entry(row2, textvariable=self.ndt_overhead_var, width=5).pack(side='left')
-        ttk.Label(row2, text=" 기술료율(%):").pack(side='left')
+        ttk.Label(row2, text=" 기술료율(%):").pack(side='left', padx=(5,0))
         ttk.Entry(row2, textvariable=self.ndt_tech_var, width=5).pack(side='left')
         
         row3 = ttk.Frame(self.ndt_calc_frame)
@@ -9698,14 +9697,15 @@ class MaterialManager:
         ttk.Entry(row3, textvariable=self.ndt_ori_joint_var, width=5).pack(side='left', padx=2)
         ttk.Label(row3, text=" 물량:").pack(side='left', padx=(0,0))
         ttk.Entry(row3, textvariable=self.ndt_ori_qty_var, width=5).pack(side='left', padx=2)
-        
         ttk.Label(row3, text="  [REP] 조인트:").pack(side='left', padx=(5,0))
         ttk.Entry(row3, textvariable=self.ndt_rep_joint_var, width=5).pack(side='left', padx=2)
         ttk.Label(row3, text=" 물량:").pack(side='left', padx=(0,0))
         ttk.Entry(row3, textvariable=self.ndt_rep_qty_var, width=5).pack(side='left', padx=2)
         
-        ttk.Label(row3, text="  당일 불량(REJ)수:").pack(side='left', padx=(5,0))
-        ttk.Entry(row3, textvariable=self.ndt_rej_joint_var, width=5).pack(side='left', padx=2)
+        row4 = ttk.Frame(self.ndt_calc_frame)
+        row4.pack(fill='x', pady=2)
+        ttk.Label(row4, text="당일 불량(REJ)수:").pack(side='left', padx=(0,0))
+        ttk.Entry(row4, textvariable=self.ndt_rej_joint_var, width=5).pack(side='left', padx=2)
 
         def _calculate_ndt_fee():
             try:
@@ -10102,6 +10102,7 @@ class MaterialManager:
         # Bind click to load record and delete
         self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
         self.tv_recent.bind('<Delete>', self.delete_recent_entry)
+        self.tv_recent.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
         
         # Right-click menu for deletion
         self.recent_menu = tk.Menu(self.tv_recent, tearoff=0)
@@ -10207,7 +10208,7 @@ class MaterialManager:
                         (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
                         (self.transactions_df['Site'].astype(str) == str(site)) &
                         (self.transactions_df['Type'] == 'OUT') &
-                        (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False))
+                        (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False, regex=False))
                     )
                     self.transactions_df = self.transactions_df[~trans_mask]
                     
@@ -10295,7 +10296,7 @@ class MaterialManager:
                     row.get('불량수', ''),
                     row.get('관경(Inch)', '')
                 )
-                self.tv_recent.insert('', 'end', values=values)
+                self.tv_recent.insert('', 'end', values=values, tags=(str(idx),))
                 
             # Scroll to bottom
             if self.tv_recent.get_children():
@@ -10446,13 +10447,13 @@ class MaterialManager:
         # Note: Workers 1-10 columns are kept in the 'columns' tuple for data storage,
         # but we will only show a consolidated '작업자' in 'displaycolumns'.
         # Added '(Full작업자)' for Excel export backup.
-        columns = ('날짜', '업체명', '적용코드', '현장', '검사품명', '성적서번호', '작업자', '작업시간', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', '장비명', '검사방법', '회사코드', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '품목명', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', '(Full작업자)')
+        columns = ('날짜', '업체명', '적용코드', '현장', '구분', '검사품명', '성적서번호', '작업자', '작업시간', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', '장비명', '검사방법', '회사코드', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '품목명', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', '(Full작업자)')
         self.daily_usage_tree = ttk.Treeview(list_frame, columns=columns, show='headings',
                                               yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
         # Define display columns - hidden (Full작업자) and individual OT columns by default
         # [NEW] Also hide 'OT시간' and '필름매수' by default per user request
-        visible_defaults = ['날짜', '업체명', '적용코드', '현장', '검사품명', '성적서번호', '작업자', '작업시간', '장비명', '검사방법', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT금액', '품목명', 'RTK총계', '비고']
+        visible_defaults = ['날짜', '업체명', '적용코드', '현장', '구분', '검사품명', '성적서번호', '작업자', '작업시간', '장비명', '검사방법', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT금액', '품목명', 'RTK총계', '비고']
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
@@ -16342,6 +16343,7 @@ class MaterialManager:
                 entry.get('업체명', ''),
                 entry.get('적용코드', ''),
                 entry.get('Site', ''),
+                entry.get('구분', ''),
                 entry.get('검사품명', ''),
                 entry.get('성적서번호', ''),
                 consolidated_workers, # Header: '작업자' (Index 6)
@@ -16758,7 +16760,7 @@ class MaterialManager:
                         (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
                         (self.transactions_df['Site'].astype(str) == str(site)) &
                         (self.transactions_df['Type'] == 'OUT') &
-                        (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False))
+                        (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False, regex=False))
                     )
                     self.transactions_df = self.transactions_df[~trans_mask]
                     deleted_count += 1
@@ -18881,6 +18883,12 @@ class MaterialManager:
                 for col in self.inout_tree['columns']:
                     self.tab_config['inout_col_widths'][col] = self.inout_tree.column(col, 'width')
 
+            # Save recent entries column widths
+            self.tab_config['tv_recent_col_widths'] = {}
+            if hasattr(self, 'tv_recent'):
+                for col in self.tv_recent['columns']:
+                    self.tab_config['tv_recent_col_widths'][col] = self.tv_recent.column(col, 'width')
+
             # Save daily usage column widths
             self.tab_config['daily_usage_col_widths'] = {}
             if hasattr(self, 'daily_usage_tree'):
@@ -19250,6 +19258,17 @@ class MaterialManager:
                         except:
                             pass
                 
+                # Restore recent entries column widths
+                tv_recent_col_widths = config.get('tv_recent_col_widths', {})
+                if tv_recent_col_widths and hasattr(self, 'tv_recent'):
+                    for col, width in tv_recent_col_widths.items():
+                        try:
+                            w = int(width)
+                            if w > 10:
+                                self.tv_recent.column(col, width=w, minwidth=20, stretch=False)
+                        except:
+                            pass
+
                 # Restore daily usage column widths
                 daily_usage_col_widths = config.get('daily_usage_col_widths', {})
                 if daily_usage_col_widths and hasattr(self, 'daily_usage_tree'):
@@ -20071,7 +20090,7 @@ class MaterialManager:
         vsb = ttk.Scrollbar(tree_frame, orient="vertical")
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
         
-        columns = ('연도', '월', '현장', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
+        columns = ('연도', '월', '현장', '구분', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
                    '수량', '단가', '출장비', '일식', '검사비', '품목명', '센터미스', '농도', '마킹미스', '필름마크', 
                    '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
         
@@ -20080,7 +20099,7 @@ class MaterialManager:
         
         vsb.config(command=tree.yview); hsb.config(command=tree.xview)
         
-        col_widths = {'연도': 90, '월': 70, '현장': 140, '작업자': 100, '작업시간': 100, 'OT시간': 100, 'OT금액': 110, '품목명': 200, '비고': 220}
+        col_widths = {'연도': 90, '월': 70, '현장': 140, '구분': 100, '작업자': 100, '작업시간': 100, 'OT시간': 100, 'OT금액': 110, '품목명': 200, '비고': 220}
         for col in columns:
             tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(tree, c, False))
             tree.column(col, width=col_widths.get(col, 100), anchor='center', stretch=False)
