@@ -201,11 +201,7 @@ PORTFOLIO = {
 }
 
 # --- 실제 보유 주식 ---
-OWNED_STOCKS = {
-    '000270.KS': 1, # 기아
-    '105560.KS': 1, # KB금융
-    'MOO': 1        # MOO
-}
+OWNED_STOCKS = {}
 
 # --- 텔레그램 봇 설정 ---
 TELEGRAM_TOKEN = "7830526088:AAEqyb5l6utOJAre-nngJ-529XHG8K-sdSQ"
@@ -753,6 +749,7 @@ def get_portfolio_data(market_df=None):
                 
                 qty = current_owned.get(name, OWNED_STOCKS.get(ticker, 0))
                 qty_str = f"{qty}주" if qty > 0 else "-"
+                
                 avg_price = current_avg_price.get(name, 0)
                 
                 change_amt = current_price - prev_price

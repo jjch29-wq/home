@@ -48,5 +48,15 @@
     "ticker": "196170.KQ",
     "qty": 1,
     "avg_price": 0
+  },
+  "대동": {
+    "ticker": "000490.KS",
+    "qty": 10,
+    "avg_price": 6570.0
+  },
+  "SK텔레콤": {
+    "ticker": "017670.KS",
+    "qty": 1,
+    "avg_price": 81000.0
   }
 }

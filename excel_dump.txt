@@ -1,0 +1,81 @@
+=== SHEET: 1. 용역비총괄표 ===
+        Unnamed: 0 1. 용역비 총괄표    Unnamed: 2         Unnamed: 3        Unnamed: 4 Unnamed: 5  Unnamed: 6    Unnamed: 7
+0              NaN        NaN           NaN                NaN               NaN        NaN         NaN           NaN
+1              구 분        NaN           NaN           원 계 약(A)              비  고        NaN         NaN           NaN
+2              NaN        NaN           NaN                NaN               NaN        NaN         NaN           NaN
+3              NaN        재료비            RT          212229000               NaN        NaN         NaN           NaN
+4              NaN        NaN            UT             355000               NaN        NaN         NaN           NaN
+5              NaN        NaN            PT            1344000               NaN        NaN         NaN           NaN
+6              NaN        NaN            소계          213928000               NaN        NaN         NaN           NaN
+7              NaN      직접인건비         직접인건비         1221644000               NaN        NaN         NaN           NaN
+8              NaN        NaN            소계         1221644000               NaN        NaN         NaN           NaN
+9              NaN       경  비          기계경비           41000000     실검사일수 적용하여 계상        NaN         NaN           NaN
+10             NaN        NaN  방사선투과검사안전관리비           22325000          한도내 실적정산        NaN         NaN  2.541759e+09
+11             NaN        NaN         가설사무실            6183000     실사용일수 적용하여 계상        NaN         NaN  8.472529e+07
+12             NaN        NaN    주재비 및 출장여비            2226000  정산분(계약금액 내 실적정산)       현장상주         NaN           NaN
+13             NaN        NaN         도서인쇄비             481000  정산분(계약금액 내 실적정산)        NaN         NaN           NaN
+14             NaN        NaN            소계           72215000               NaN        NaN         NaN           NaN
+15             NaN        제경비           NaN          977315200               0.8    110~120         NaN  8.000000e-01
+16             NaN        기술료           NaN   128871618.181818          0.058606      20~40         NaN  5.860573e-02
+17             NaN        소 계           NaN  2613973818.181818               NaN        NaN         NaN           NaN
+18  엔지니어링 손해배상 공제료        NaN           NaN           14729000               NaN        NaN         NaN           NaN
+19            공급가액        NaN           NaN  2628702818.181818               NaN        NaN         NaN           NaN
+20           부가가치세        NaN           NaN   262870281.818182               NaN        NaN         NaN           NaN
+21     합 계(VAT 포함)        NaN           NaN         2891573100               NaN        NaN         NaN           NaN
+22             NaN        NaN           NaN                NaN               NaN        NaN         NaN           NaN
+23             NaN        NaN           NaN                NaN               NaN        NaN         NaN           NaN
+24             NaN        NaN           NaN                NaN               NaN        NaN         NaN           NaN
+25             NaN        NaN           NaN                NaN               NaN        NaN         NaN           NaN
+26             NaN        NaN           NaN                NaN               NaN        NaN         NaN           NaN
+27             NaN        NaN           NaN  2628702818.181818                 0        NaN         NaN           NaN
+28             NaN        NaN           NaN   262870281.818182               NaN        NaN         NaN           NaN
+29             NaN        NaN           NaN         2891573100               NaN        NaN         NaN           NaN
+
+=== SHEET: 기계경비 산출내역  ===
+           기계경비 산출내역                                                                    Unnamed: 1                               Unnamed: 2                                         Unnamed: 3 Unnamed: 4 Unnamed: 5 Unnamed: 6  Unnamed: 7 Unnamed: 8                                                          Unnamed: 9
+0                NaN                                                                           NaN                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+1           구      분                                                                           NaN                                   품    목                                           규      격        단위          설계        NaN         NaN        NaN                                                                비  고
+2                 번호                                                                            비목                                      NaN                                                NaN        NaN      수   량       단  가         NaN    금     액                                                                 NaN
+3                NaN                                                                           NaN                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+4       1. 기계경비 산출내역                                                                           NaN                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+5                NaN                     가. RT(GAMMA-RAY) 장비 손료 : 880 DELTA*손료계수*10^-7*1개월*20일*2hr                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN  준공시 실제 장비 투입기간에 \n대하여 정산함\n(하루당 2시간 사용으로 가정한다.)\n산출식 : 계*장비투입일수/20
+6                NaN                                                                     880 DELTA                                 45750000                    물가자료 '26.3월 상권 P1392 비파괴검사기기(1)        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+7                NaN                                                                          손료계수                                     2166            ㅇGSD-0102 『비파괴검사 기술표준』 첨부24.비파괴검사 표준설계서        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+8                NaN                                                                            단가                                 장비손료/20일                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+9                NaN                                                                            손료              45,750,000*0.0002166*1*20*2                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+10               NaN                                                                             계                                 396378.0                                                NaN        NaN        NaN        NaN         NaN   11653000                                                                 NaN
+11               NaN                                                                           NaN                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+12               NaN                                                                           NaN                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+13               NaN                                  나. UT 장비 손료 : SS-500S*손료계수*10^-7*1개월*20일*2hr                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN  준공시 실제 장비 투입기간에 \n대하여 정산함\n(하루당 2시간 사용으로 가정한다.)\n산출식 : 계*장비투입일수/20
+14               NaN                                                                        SS-150                                 15500000                    물가자료 '26.3월 상권 P1393 비파괴검사기기(2)        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+15               NaN                                                                          손료계수                                     3545            ㅇGSD-0102 『비파괴검사 기술표준』 첨부24.비파괴검사 표준설계서        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+16               NaN                                                                            계수                                 장비손료/20일                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+17               NaN                                                                            손료              15,500,000*0.0003545*1*20*2                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+18               NaN                                                                             계                                   219790                                                NaN        NaN        NaN        NaN         NaN     329000                                                                 NaN
+19               NaN                                                                           NaN                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+20               NaN  다. 인소스 크롤러 장비 손료 : Crawler*10^-7*1개월*20일*(당해년도 가동손료계수*2hr + 당해년도 관리손료계수*6hr)                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN  준공시 실제 장비 투입기간에 \n대하여 정산함\n(하루당 2시간 사용으로 가정한다.)\n산출식 : 계*장비투입일수/20
+21               NaN                                                                       Crawler                                 81000000                    물가자료 '26. 3월 상권 P1392 비파괴검사기(1)        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+22               NaN                                                                   손료계수\n(가동시)                                     2840  품질관리부-2153(2018.10.04.)\n"비파괴검사 기술용역 표준설계서 개정 알림"        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+23               NaN                                                                   손료계수\n(관리시)                                      640                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+24               NaN                                                                            계수                                 장비손료/20일                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+25               NaN                                                                            손료  81,000,000*1*20*(0.000284*2+0.000064*6)                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+26               NaN                                                                             계                                  1542240                                                NaN        NaN        NaN        NaN         NaN   29018000                                                                 NaN
+27               NaN                                                                           NaN                                      NaN                                                NaN        NaN        NaN        NaN         NaN        NaN                                                                 NaN
+28               NaN                                                                           NaN                                      NaN                                                NaN         합계        NaN        NaN         NaN   41000000                                                                 NaN
+
+=== SHEET: 10. 노임단가 ===
+          10. 노임단가 Unnamed: 1                                                 Unnamed: 2          Unnamed: 3
+0              NaN        NaN                                                        NaN                 NaN
+1               구분       노임단가                                                         출처                  적용
+2     중급기술자(원자력부문)     363751  2025년도 엔지니어링업체 임금실태조사 보고서\n(적용일 : 2026.1.1.)\n(한국엔지니어링협회)    4. 직접인건비 RT검사 관련
+3     초급기술자(원자력부문)     297437                                                        NaN                 NaN
+4   중급숙련기술자(원자력부문)     350319                                                        NaN                 NaN
+5   초급숙련기술자(원자력부문)     226251                                                        NaN                 NaN
+6      중급기술자(기타부문)     261545                                                        NaN    4. 직접인건비 기타검사 관련
+7      초급기술자(기타부문)     229278                                                        NaN                 NaN
+8    중급숙련기술자(기타부문)     226344                                                        NaN                 NaN
+9    초급숙련기술자(기타부문)     194317                                                        NaN                 NaN
+10             비계공     281939   2026년 상반기 적용 건설업 임금실태조사 보고서\n(적용일 : 2026.1.1.)\n(대한건설협회)  5. 경비산출근거 가설사무실 관련
+11            특별인부     226122                                                        NaN                 NaN
+12         건설기계운전사     283297                                                        NaN                 NaN
+

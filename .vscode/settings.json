@@ -4,6 +4,11 @@
             "path": "Na-aba/home/src/주식정보.py",
             "envManager": "ms-python.python:venv",
             "packageManager": "ms-python.python:pip"
+        },
+        {
+            "path": "home/src/자재작업일보기성서류Ver.1.py",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
         }
     ]
 }

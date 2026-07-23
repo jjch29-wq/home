@@ -1,0 +1,623 @@
+27: subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--break-system-packages"])
+48: from ndt_billing_tab import NDTCalculatorTab
+60: # [FIX] Patch tkcalendar for stability in ko_KR locale / Python 3.14.
+598: # 1. Inspection Items (2x4 Table based on user request)
+602: # Headers (Table Column Labels) - Shortened to prevent cutoff
+953: # Rankings for Table 1
+955: # Shift types for Table 2
+958: # Base Salaries for Reference (Table 3) - Dynamically loaded from master
+1005: # Right Side (Reference Table)
+1012: table1_frame = ttk.Frame(calc_frame)
+1013: table1_frame.pack(fill='x')
+1017: lbl = ttk.Label(table1_frame, text=h, style="LaborHeader.TLabel", padding=5, anchor='center')
+1019: table1_frame.grid_columnconfigure(j, weight=1)
+1020: enable_column_resize(table1_frame, len(headers1))
+1022: merge_lbl = ttk.Label(table1_frame, text="정시근무\n(240일/년)", relief='solid', anchor='center', padding=10)
+1027: ttk.Label(table1_frame, text=rank, relief='solid', anchor='center', padding=5).grid(row=row, column=1, sticky='nsew')
+1030: ent_personnel = ttk.Entry(table1_frame, width=10, justify='center')
+1035: ent_days = ttk.Entry(table1_frame, width=10, justify='center')
+1040: ent_price = ttk.Entry(table1_frame, width=15, justify='right')
+1050: lbl_subtotal = ttk.Label(table1_frame, text="0", relief='solid', anchor='e', padding=5)
+1054: # Table 1 Subtotal Row
+1056: ttk.Label(table1_frame, text="소계", style="LaborHeader.TLabel", anchor='center', padding=5).grid(row=row_t1_sum, column=0, columnspan=2, sticky='nsew')
+1057: self.lbl_t1_personnel_sum = ttk.Label(table1_frame, text="0 명", style="LaborHeader.TLabel", anchor='center')
+1059: self.lbl_t1_days_sum = ttk.Label(table1_frame, text="0 일", style="LaborHeader.TLabel", anchor='center')
+1061: ttk.Label(table1_frame, text="", style="LaborHeader.TLabel").grid(row=row_t1_sum, column=4, sticky='nsew')
+1062: self.lbl_t1_cost_sum = ttk.Label(table1_frame, text="0", style="LaborHeader.TLabel", anchor='e', padding=5)
+1068: table2_frame = ttk.Frame(calc_frame)
+1069: table2_frame.pack(fill='x')
+1073: lbl = ttk.Label(table2_frame, text=h, style="LaborHeader.TLabel", padding=5, anchor='center')
+1075: table2_frame.grid_columnconfigure(j, weight=1)
+1076: enable_column_resize(table2_frame, len(headers2))
+1078: merge_lbl2 = ttk.Label(table2_frame, text="특별근무", relief='solid', anchor='center', padding=10)
+1083: ttk.Label(table2_frame, text=stype, relief='solid', anchor='center', padding=5).grid(row=row, column=1, sticky='nsew')
+1086: ent_personnel = ttk.Entry(table2_frame, width=10, justify='center')
+1091: ent_hours = ttk.Entry(table2_frame, width=10, justify='center')
+1096: ent_price = ttk.Entry(table2_frame, width=15, justify='right')
+1106: lbl_subtotal = ttk.Label(table2_frame, text="0", relief='solid', anchor='e', padding=5)
+1110: # Table 2 Subtotal Row
+1112: ttk.Label(table2_frame, text="소계", style="LaborHeader.TLabel", anchor='center', padding=5).grid(row=row_t2_sum, column=0, columnspan=2, sticky='nsew')
+1113: self.lbl_t2_personnel_sum = ttk.Label(table2_frame, text="0 명", style="LaborHeader.TLabel", anchor='center')
+1115: self.lbl_t2_hours_sum = ttk.Label(table2_frame, text="0 시간", style="LaborHeader.TLabel", anchor='center')
+1117: ttk.Label(table2_frame, text="", style="LaborHeader.TLabel").grid(row=row_t2_sum, column=4, sticky='nsew')
+1118: self.lbl_t2_cost_sum = ttk.Label(table2_frame, text="0", style="LaborHeader.TLabel", anchor='e', padding=5)
+1124: ref_table = ttk.Frame(ref_frame)
+1125: ref_table.pack(fill='x')
+1127: ttk.Label(ref_table, text="직급", style="LaborHeader.TLabel", padding=5, width=10, anchor='center').grid(row=0, column=0, sticky='nsew')
+1128: ttk.Label(ref_table, text="기준급여", style="LaborHeader.TLabel", padding=5, width=15, anchor='center').grid(row=0, column=1, sticky='nsew')
+1134: ttk.Label(ref_table, text=rank, relief='solid', padding=5, anchor='center').grid(row=row, column=0, sticky='nsew')
+1136: ttk.Label(ref_table, text=f"{salary:,.0f}", relief='solid', padding=5, anchor='e').grid(row=row, column=1, sticky='nsew')
+1183: # Table 1 Totals
+1199: # Table 2 Totals
+1305: # --- Section 1: Tables (Left) ---
+1308: table_frame = ttk.Frame(calc_frame)
+1309: table_frame.pack(fill='x')
+1314: lbl = ttk.Label(table_frame, text=h, style="MatHeader.TLabel", padding=5, anchor='center', width=w)
+1316: table_frame.grid_columnconfigure(j, weight=1 if j in [0, 5] else 0)
+1317: enable_column_resize(table_frame, len(headers))
+1322: ttk.Label(table_frame, text=item, relief='solid', padding=5, anchor='center').grid(row=row, column=0, sticky='nsew')
+1324: ttk.Label(table_frame, text=spec, relief='solid', padding=5, anchor='center').grid(row=row, column=1, sticky='nsew')
+1328: ent_qty = ttk.Entry(table_frame, width=10, justify='center')
+1334: ttk.Label(table_frame, text=unit, relief='solid', padding=5, anchor='center').grid(row=row, column=3, sticky='nsew')
+1337: ent_price = ttk.Entry(table_frame, width=15, justify='right')
+1344: lbl_amount = ttk.Label(table_frame, text="0", relief='solid', anchor='e', padding=5)
+1352: ttk.Label(table_frame, text="재료비 합계", style="MatTotal.TLabel", anchor='center', padding=5).grid(row=row_footer, column=0, columnspan=5, sticky='nsew')
+1353: self.lbl_mat_total = ttk.Label(table_frame, text="₩ 0", style="MatTotal.TLabel", anchor='e', padding=5)
+1358: ttk.Label(table_frame, text="부가세", relief='solid', anchor='center', padding=5).grid(row=row_vat, column=4, sticky='nsew')
+1359: self.lbl_mat_vat = ttk.Label(table_frame, text="0", relief='solid', anchor='e', padding=5)
+1363: ref_table = ttk.Frame(ref_frame)
+1364: ref_table.pack(fill='x')
+1382: ttk.Label(ref_table, text=title, width=10, anchor='center', style="MatRef.TLabel", padding=3).grid(row=row, column=0, sticky='nsew')
+1383: ttk.Label(ref_table, text=val, width=25, anchor='w', style="MatRef.TLabel", padding=3).grid(row=row, column=1, sticky='nsew')
+1488: self.s1_table = ttk.Frame(s1_frame)
+1489: self.s1_table.pack(fill='x')
+1494: ttk.Label(self.s1_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=w).grid(row=0, column=j, sticky='nsew')
+1495: self.s1_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
+1496: enable_column_resize(self.s1_table, len(headers))
+1517: self.s2_table = ttk.Frame(s2_frame)
+1518: self.s2_table.pack(fill='x')
+1522: ttk.Label(self.s2_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j]).grid(row=0, column=j, sticky='nsew')
+1523: self.s2_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
+1524: enable_column_resize(self.s2_table, len(headers2))
+1534: self.s3_table = ttk.Frame(s3_frame)
+1535: self.s3_table.pack(fill='x')
+1540: ttk.Label(self.s3_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths3[j]).grid(row=0, column=j, sticky='nsew')
+1541: self.s3_table.grid_columnconfigure(j, weight=1 if j in [1, 4] else 0)
+1542: enable_column_resize(self.s3_table, len(headers3))
+1561: insurance_table = ttk.Frame(self)
+1562: insurance_table.pack(fill='x')
+1565: ttk.Label(insurance_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j] if j < len(widths) else 20).grid(row=0, column=j, sticky='nsew')
+1566: insurance_table.grid_columnconfigure(j, weight=1 if j in [1, 4] else 0)
+1567: enable_column_resize(insurance_table, len(headers4))
+1569: ttk.Label(insurance_table, text="4대 보험료", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+1570: ttk.Label(insurance_table, text="산출인건비 X 요율(2024.7.1 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
+1571: self.lbl_insurance_base = ttk.Label(insurance_table, text="₩ 0", relief='solid', padding=5, anchor='e')
+1573: ttk.Label(insurance_table, text="10.6661%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
+1574: self.lbl_insurance_amount = ttk.Label(insurance_table, text="0", relief='solid', padding=5, anchor='e')
+1581: self.s5_table = ttk.Frame(s5_frame)
+1582: self.s5_table.pack(fill='x')
+1586: ttk.Label(self.s5_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j]).grid(row=0, column=j, sticky='nsew')
+1587: self.s5_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
+1588: enable_column_resize(self.s5_table, len(headers5))
+1623: indirect_table = ttk.Frame(summary_frame)
+1624: indirect_table.grid(row=4, column=0, columnspan=5, sticky='ew')
+1627: ttk.Label(indirect_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j] if j < len(widths) else 25).grid(row=0, column=j, sticky='nsew')
+1628: indirect_table.grid_columnconfigure(j, weight=1 if j in [1, 4] else 0)
+1629: enable_column_resize(indirect_table, len(headers_ind))
+1631: ttk.Label(indirect_table, text="간접비", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+1632: ttk.Label(indirect_table, text="산출직접비 x 간접비율(2024년 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
+1633: self.lbl_indirect_base = ttk.Label(indirect_table, text="₩ 0", relief='solid', padding=5, anchor='e')
+1635: ttk.Label(indirect_table, text="14%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
+1636: self.lbl_indirect_total = ttk.Label(indirect_table, text="₩ 0", font=('Malgun Gothic', 10, 'bold'), background='#00ffff', relief='solid', anchor='e', padding=5)
+1647: profit_table = ttk.Frame(summary_frame)
+1648: profit_table.grid(row=7, column=0, columnspan=5, sticky='ew')
+1652: ttk.Label(profit_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths_prof[j]).grid(row=0, column=j, sticky='nsew')
+1653: profit_table.grid_columnconfigure(j, weight=1 if j != 5 else 0)
+1654: enable_column_resize(profit_table, len(headers_prof))
+1657: ttk.Label(profit_table, text="사전(예산)", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+1658: self.lbl_prof_revenue = ttk.Label(profit_table, text="₩ 0", relief='solid', padding=5, anchor='e')
+1660: self.lbl_prof_total_cost = ttk.Label(profit_table, text="₩ 0", relief='solid', padding=5, anchor='e')
+1662: self.lbl_prof_op_profit = ttk.Label(profit_table, text="₩ 0", style="Margin.TLabel", padding=5, anchor='center')
+1664: self.lbl_prof_margin = ttk.Label(profit_table, text="0.00%", relief='solid', padding=5, anchor='center')
+1666: ttk.Label(profit_table, text="부가세 별도", relief='solid', padding=5, anchor='center').grid(row=1, column=5, sticky='nsew')
+1671: ent_cat = ttk.Entry(self.s1_table, width=15, justify='center'); ent_cat.insert(0, cat); ent_cat.grid(row=row, column=0, sticky='nsew')
+1672: ent_cont = ttk.Entry(self.s1_table, width=20); ent_cont.insert(0, cont); ent_cont.grid(row=row, column=1, sticky='nsew')
+1673: ent_ppl = ttk.Entry(self.s1_table, width=8, justify='center'); ent_ppl.insert(0, str(ppl)); ent_ppl.grid(row=row, column=2, sticky='nsew')
+1674: ent_qty = ttk.Entry(self.s1_table, width=8, justify='center'); ent_qty.insert(0, str(qty)); ent_qty.grid(row=row, column=3, sticky='nsew')
+1675: ent_unit = ttk.Entry(self.s1_table, width=8, justify='center'); ent_unit.insert(0, unit); ent_unit.grid(row=row, column=4, sticky='nsew')
+1676: ent_price = ttk.Entry(self.s1_table, width=15, justify='right'); ent_price.insert(0, f"{price:,.0f}"); ent_price.grid(row=row, column=5, sticky='nsew')
+1677: lbl_amt = ttk.Label(self.s1_table, text="0", relief='solid', anchor='e', padding=5); lbl_amt.grid(row=row, column=6, sticky='nsew')
+1686: e1 = ttk.Entry(self.s2_table, width=15, justify='center'); e1.insert(0, cat); e1.grid(row=row, column=0, sticky='nsew')
+1687: e2 = ttk.Entry(self.s2_table, width=20); e2.insert(0, spec); e2.grid(row=row, column=1, sticky='nsew')
+1688: e3 = ttk.Entry(self.s2_table, width=8, justify='center'); e3.insert(0, str(qty)); e3.grid(row=row, column=2, sticky='nsew')
+1689: e4 = ttk.Entry(self.s2_table, width=8, justify='center'); e4.insert(0, str(period)); e4.grid(row=row, column=3, sticky='nsew')
+1690: e5 = ttk.Entry(self.s2_table, width=8, justify='center'); e5.insert(0, unit); e5.grid(row=row, column=4, sticky='nsew')
+1691: e6 = ttk.Entry(self.s2_table, width=15, justify='right'); e6.insert(0, f"{price:,.0f}"); e6.grid(row=row, column=5, sticky='nsew')
+1692: lbl = ttk.Label(self.s2_table, text="0", relief='solid', anchor='e', padding=5); lbl.grid(row=row, column=6, sticky='nsew')
+1701: e1 = ttk.Entry(self.s3_table, width=15, justify='center'); e1.insert(0, cat); e1.grid(row=row, column=0, sticky='nsew')
+1702: e2 = ttk.Entry(self.s3_table, width=30); e2.insert(0, work); e2.grid(row=row, column=1, sticky='nsew')
+1703: e3 = ttk.Entry(self.s3_table, width=10, justify='center'); e3.insert(0, str(count)); e3.grid(row=row, column=2, sticky='nsew')
+1704: e4 = ttk.Entry(self.s3_table, width=15, justify='right'); e4.insert(0, f"{price:,.0f}"); e4.grid(row=row, column=3, sticky='nsew')
+1705: lbl = ttk.Label(self.s3_table, text="0", relief='solid', anchor='e', padding=5); lbl.grid(row=row, column=4, sticky='nsew')
+1714: e1 = ttk.Entry(self.s5_table, width=20); e1.insert(0, item); e1.grid(row=row, column=0, sticky='nsew')
+1715: e2 = ttk.Entry(self.s5_table, width=15); e2.insert(0, spec); e2.grid(row=row, column=1, sticky='nsew')
+1716: e3 = ttk.Entry(self.s5_table, width=8, justify='center'); e3.insert(0, str(life)); e3.grid(row=row, column=2, sticky='nsew')
+1717: e4 = ttk.Entry(self.s5_table, width=8, justify='center'); e4.insert(0, str(qty)); e4.grid(row=row, column=3, sticky='nsew')
+1718: e5 = ttk.Entry(self.s5_table, width=8, justify='center'); e5.insert(0, str(days)); e5.grid(row=row, column=4, sticky='nsew')
+1719: e6 = ttk.Entry(self.s5_table, width=15, justify='right'); e6.insert(0, f"{rate:,.0f}"); e6.grid(row=row, column=5, sticky='nsew')
+1720: lbl = ttk.Label(self.s5_table, text="0", relief='solid', anchor='e', padding=5); lbl.grid(row=row, column=6, sticky='nsew')
+2028: # Determine base directory and bundle directory for portability
+2030: # If running as an executable
+2031: self.app_dir = os.path.dirname(sys.executable)
+2201: if not hasattr(self, 'tab_config'):
+2202: self.tab_config = {}
+2204: self.tab_config['daily_usage_sash_ratio'] = ratio
+2205: self.tab_config['daily_usage_sash_pos'] = sash_pos
+2207: self.save_tab_config()
+2224: if not hasattr(self, 'tab_config'):
+2225: self.tab_config = {}
+2226: self.tab_config['resolution_locked'] = True
+2227: self.tab_config['locked_width'] = self.locked_width
+2228: self.tab_config['locked_height'] = self.locked_height
+2235: if not hasattr(self, 'tab_config'):
+2236: self.tab_config = {}
+2237: self.tab_config['resolution_locked'] = False
+2240: self.save_tab_config(force=True)
+2244: # Removed force_save_config - using save_tab_config(force=True) instead
+2359: # Check if database exists in app_dir. If not, try to restore from bundle_dir
+2425: # [STABILITY] Ensure MaterialID is consistently numeric
+2439: # This ensures existing records are correctly summarized in the Inventory Status tab.
+2814: # Global header cleanup: remove ALL internal and edge whitespace for permanent stability
+2948: # [STABILITY] Check if it was recently selected to avoid "sticky" dropdown
+2971: if event.keysym in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
+3022: if event.keysym not in ("Left", "Right", "Up", "Down", "Return", "Escape", "Tab", "Shift_L", "Shift_R", "Control_L", "Control_R"):
+3168: # [STABILITY] Ensure MaterialID is safely normalized (numeric where possible, otherwise original string)
+3188: # [STABILITY] Robust saving with Retry and Backup-on-Fail logic
+3314: # Notebook for Tabs
+3318: # Tab 1: Current Stock
+3319: self.tab_stock = ttk.Frame(self.notebook)
+3320: self.notebook.add(self.tab_stock, text='현재 재고 현황')
+3321: self.setup_stock_tab()
+3323: # Tab 2: Register/Transaction
+3324: self.tab_inout = ttk.Frame(self.notebook)
+3325: self.notebook.add(self.tab_inout, text='입출고 관리')
+3326: self.setup_inout_tab()
+3329: # Tab 4: Import/Export
+3330: self.tab_import = ttk.Frame(self.notebook)
+3331: self.notebook.add(self.tab_import, text='데이터 가져오기/내보내기')
+3332: self.setup_import_tab()
+3334: # Tab 5: Monthly Usage Entry
+3335: self.tab_monthly_usage = ttk.Frame(self.notebook)
+3336: self.notebook.add(self.tab_monthly_usage, text='월별 집계')
+3337: self.setup_monthly_usage_tab()
+3339: # Tab 6: Daily Usage Entry by Site
+3340: self.tab_daily_usage = ttk.Frame(self.notebook)
+3341: self.notebook.add(self.tab_daily_usage, text='현장별 일일 사용량 기입')
+3342: self.setup_daily_usage_tab()
+3344: # Tab 7: Daily Usage Query
+3345: self.tab_daily_usage_query = ttk.Frame(self.notebook)
+3346: self.notebook.add(self.tab_daily_usage_query, text='현장 일일기록 조회 및 관리')
+3347: self.setup_daily_usage_query_tab()
+3350: # Tab 8: Project Execution Budget (New)
+3351: self.tab_budget = ttk.Frame(self.notebook)
+3352: self.notebook.add(self.tab_budget, text='공사실행예산서')
+3353: self.setup_budget_tab()
+3355: # Tab 9: NDT Billing Calculator
+3356: self.tab_ndt_billing = ttk.Frame(self.notebook)
+3357: self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
+3358: self.setup_ndt_billing_tab()
+3360: # Select default tab instantly to prevent flicker
+3361: self.notebook.select(self.tab_daily_usage)
+3363: # Initial view update (Move here to ensure all tabs are ready before refresh)
+3367: # Bind tab events (Drag and drop reordering)
+3368: self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+3369: self.notebook.bind("<Button-1>", self.on_tab_drag_start)
+3370: self.notebook.bind("<B1-Motion>", self.on_tab_drag)
+3371: self.notebook.bind("<ButtonRelease-1>", self.on_tab_drag_end)
+3372: self.notebook.bind("<Button-3>", self.show_tab_context_menu)
+3378: self.root.after(100, self.load_tab_config)
+3383: # Save tab config on window close
+3385: def setup_stock_tab(self):
+3387: control_frame = ttk.Frame(self.tab_stock)
+3507: tree_frame = ttk.Frame(self.tab_stock)
+3532: self.stock_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+3749: """Save edited material data back to the database"""
+3916: # This ensures durable equipment (PAUT, MT-Yoke) reported in the site tab doesn't decrease stock
+4207: def setup_inout_tab(self):
+4209: self.inout_paned = ttk.Panedwindow(self.tab_inout, orient='vertical')
+4217: self.inout_paned.bind("<ButtonRelease-1>", lambda e: self.save_tab_config())
+4492: self.inout_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config(), add='+')
+4630: # Merge database items with centralized films list and historical materials, unique and sort
+4839: # [REVISION] Use 'Alt-Down' for more stable dropdown posting
+4842: # [STABILITY] Don't re-open if just selected
+4860: 'Left', 'Right', 'Tab', 'Up', 'Down', 'Return', 'Escape',
+4891: """Update registration comboboxes with unique values from database and centralized list"""
+4892: # 1. Update registration fields from database
+4992: # Add Carestream film options to 품목명 (Registration tab only)
+5187: self.save_tab_config()
+5192: self.save_tab_config()
+5450: # [STABILITY] Ensure all standard columns are visible and reset any previous hiding
+5454: if hasattr(self, 'tab_config') and 'inout_visible_cols' in self.tab_config:
+5455: self.inout_tree['displaycolumns'] = [c for c in self.tab_config['inout_visible_cols'] if c in all_inout_cols]
+5873: # Remove illegal XML control characters (ASCII < 32 except tab, LF, CR)
+5954: def setup_import_tab(self):
+5955: import_frame = ttk.LabelFrame(self.tab_import, text="데이터 관리")
+6440: def setup_monthly_usage_tab(self):
+6441: """Setup the monthly usage aggregation tab (auto-aggregated from daily usage)"""
+6443: display_frame = ttk.LabelFrame(self.tab_monthly_usage, text="월별 사용량 집계 (현장별 데이터 자동 집계)")
+6544: self.monthly_usage_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+6567: self.site_summary_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+6595: self.worker_summary_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+6803: # [NEW] Pre-aggregation Deduping to ensure parity with Site Tab
+6807: # Robust mapping for worker columns in Monthly Tab
+6827: # Use same parsing logic as Site Tab
+6879: # Database-level splitting already zeros them for valid splits.
+6939: # [ROBUST] Handle type mismatch in MaterialID lookup for Monthly Tab
+7206: # --- Dynamic Column Auto-Hide (same logic as Site tab) ---
+7801: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+7802: self.notebook.select(tab_idx)
+8110: self.save_tab_config()
+8125: self.save_tab_config()
+8143: self.save_tab_config()
+8183: # [STABILITY] Build index using (Name, Model) to allow parent items even if sub-items exist
+8352: self.save_tab_config()
+8419: # Clean from in-memory config to prevent resurrection on next save_tab_config call
+8420: if hasattr(self, 'tab_config') and 'draggable_geometries' in self.tab_config:
+8421: if key in self.tab_config['draggable_geometries']:
+8422: del self.tab_config['draggable_geometries'][key]
+8439: self.save_tab_config()
+8466: self.save_tab_config()
+8515: self.save_tab_config()
+8522: self.save_tab_config()
+8526: self.save_tab_config()
+8564: # [STABILITY FIX] Prevent hiding core widgets
+8695: self.tab_config = config
+8725: self.save_tab_config()
+8776: if not hasattr(self, 'tab_config'):
+8777: self.tab_config = {}
+8778: self.tab_config['layout_locked'] = self.layout_locked
+8788: self.save_tab_config(force=True)
+8804: self.save_tab_config()
+8808: """Create a new movable/editable/copyable memo box with editable title"""
+8821: # Editable Title Entry
+8825: title_entry.bind('<FocusOut>', lambda e: self.save_tab_config())
+8839: text_area.bind('<FocusOut>', lambda e: self.save_tab_config())
+8853: # Initial placement if not loaded from config (will be handled by load_tab_config if exists)
+8866: self.save_tab_config()
+8869: """Create a new movable/editable checklist box"""
+8881: # Editable Title Entry
+8885: title_entry.bind('<FocusOut>', lambda e: self.save_tab_config())
+8906: self.save_tab_config()
+9069: cb = ttk.Checkbutton(row_frame, variable=var, command=lambda: self.save_tab_config())
+9075: entry.bind('<FocusOut>', lambda e: self.save_tab_config())
+9079: self.save_tab_config()
+9105: self.save_tab_config()
+9258: # [STABILITY FIX] Skip if the 'other' widget's BOTTOM is ABOVE the dragged widget's TOP.
+9339: # [STABILITY FIX] Guard against collapse but allow growth
+9383: def setup_daily_usage_tab(self):
+9384: """Setup the daily usage entry tab"""
+9390: # Main Frame (No longer PanedWindow since we separated tabs)
+9391: self.daily_usage_paned = ttk.Frame(self.tab_daily_usage)
+9441: # as they are now permanently embedded at the bottom of the entry tab.
+9448: # [STABILITY FIX] Use a Canvas to hold the entry form for draggable support.
+9468: # Use a fixed minimum comfortable height (750px) instead of winfo_reqheight().
+9675: from ndt_billing_tab import MATERIAL_COST, LABOR_COST
+9890: elif cat != "총계": # From last editable RTK to save button container (approx)
+10024: # 1. Left: Recent Entries Mini-table
+10165: self.update_recent_entries_view() # Ensure the mini table is updated!
+10226: def setup_daily_usage_query_tab(self):
+10227: """Setup the daily usage query tab"""
+10228: display_frame = ttk.Frame(self.tab_daily_usage_query)
+10318: btn_export_invoice = ttk.Button(btn_row, text="기성청구서 출력", command=self.export_invoice_excel)
+10435: self.save_tab_config()
+10483: """[NEW] Update Note Detail Area and load record to form when a row is selected in Site tab"""
+10587: def setup_ndt_billing_tab(self):
+10589: ctrl_frame = ttk.Frame(self.tab_ndt_billing)
+10594: # Embed the NDT Calculator as a frame inside this tab
+10595: self.ndt_calculator = NDTCalculatorTab(self.tab_ndt_billing, main_app=self)
+10599: """기성 정산(NDT) 탭을 별도의 팝업창으로 엽니다."""
+10608: popup.title("💰 기성 정산 (NDT) (팝업)")
+10613: popup_calc = NDTCalculatorTab(popup, main_app=self)
+10616: def setup_budget_tab(self):
+10617: """Setup the project execution budget management tab with detailed labor cost breakdown"""
+10619: kpi_frame = tk.Frame(self.tab_budget, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
+10623: ("계약금액", "lbl_kpi_rev", "#374151"),
+10641: top_btn_frame = ttk.Frame(self.tab_budget)
+10654: main_paned = ttk.PanedWindow(self.tab_budget, orient='vertical')
+10686: ("계약금액 (Revenue):", "ent_budget_revenue"),
+10706: # [STABILITY] Make labor cost read-only if it's auto-calculated by the widget?
+10756: # [STABILITY] Update profit field if it exists
+10840: '총기성액', '청구인건비', '청구재료비', '제경비', '기술료',
+10851: '총기성액': 100, '청구인건비': 90, '청구재료비': 90, '제경비': 90, '기술료': 90,
+10860: '총기성액': '총기성액', '청구인건비': '인건비(청구)', '청구재료비': '재료비(청구)', '제경비': '제경비', '기술료': '기술료',
+10867: '총기성액', '청구인건비', '청구재료비', '제경비', '기술료',
+10885: self.budget_view_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+10908: self.root.after_idle(lambda: _bind_esc_recursive(self.tab_daily_usage))
+11012: self.save_tab_config()
+11041: self.save_tab_config()
+11055: self.save_tab_config()
+11072: self.save_tab_config()
+11101: self.save_tab_config()
+11413: '총기성액': f"{row_revenue:,.0f}" if row_revenue else '',
+11480: '총기성액': f"{sys_total_revenue:,.0f}" if sys_total_revenue else '',
+11629: # [STABILITY] Force UI refresh to make changes visible
+11675: # Re-sanitize and format to ensure float stability
+11727: # [STABILITY] Update KPI summary after load
+12257: # [STABILITY] Final KPI and Profit sync refresh
+12409: self.save_tab_config()
+12425: self.save_tab_config()
+12467: # [STABILITY] Reset KPI summary
+12484: # [STABILITY] Skip if we are still in the initial loading/restoration phase
+12485: # load_tab_config will handle the initial placement.
+12503: if hasattr(self, 'tab_config') and 'daily_usage_sash_pos' in self.tab_config:
+12504: target_pos = int(self.tab_config['daily_usage_sash_pos'])
+12514: if hasattr(self, 'tab_config') and 'daily_usage_sash_ratio' in self.tab_config:
+12515: target_ratio = self.tab_config['daily_usage_sash_ratio']
+12538: if not hasattr(self, 'tab_config'):
+12539: self.tab_config = {}
+12540: self.tab_config['daily_usage_sash_ratio'] = actual_ratio
+12541: self.tab_config['daily_usage_sash_pos'] = actual_pos
+12595: if hasattr(self, 'tab_config'):
+12600: if 'daily_usage_sash_pos' in self.tab_config:
+12601: pos = int(self.tab_config['daily_usage_sash_pos'])
+12608: if 'daily_usage_sash_ratio' in self.tab_config:
+12609: ratio = self.tab_config['daily_usage_sash_ratio']
+12626: if hasattr(self, 'tab_config') and 'daily_usage_sash_ratio' in self.tab_config:
+12627: ratio = self.tab_config['daily_usage_sash_ratio']
+12651: if not hasattr(self, 'tab_config'):
+12652: self.tab_config = {}
+12656: self.tab_config['daily_usage_sash_ratio'] = ratio
+12657: self.tab_config['daily_usage_sash_pos'] = sash_pos
+12658: self.tab_config['daily_usage_sash_locked'] = True
+12661: self.save_tab_config(force=True)
+12677: if hasattr(self, 'tab_config'):
+12678: self.tab_config['daily_usage_sash_locked'] = False
+12679: self.save_tab_config(force=True)
+12714: # Check if daily usage tab exists and has saved ratio
+12715: if hasattr(self, 'daily_usage_paned') and hasattr(self, 'tab_config') and 'daily_usage_sash_ratio' in self.tab_config:
+12718: # Check if inout tab exists and has saved ratio
+12719: if hasattr(self, 'inout_paned') and hasattr(self, 'tab_config') and 'inout_sash_ratio' in self.tab_config:
+12808: self.save_tab_config()
+13121: self.save_tab_config()
+13453: self.save_tab_config()
+13465: self.save_tab_config()
+13506: self.save_tab_config()
+13525: self.save_tab_config()
+13955: """[NEW] Load a database record back into the input form for editing or report generation"""
+14087: # [STABILITY] Clear first if multiple companies, but for now focus on the primary/first entry
+14432: # Tab 1: General & Header
+14433: tab1 = ttk.Frame(notebook, padding=10)
+14434: notebook.add(tab1, text="일반/상단")
+14442: tab1_data = mapping.get('general', {}).copy()
+14443: tab1_data['date_header'] = mapping.get('header', {}).get('date', 'F2')
+14444: tab1_entries = create_entry_grid(tab1, gen_fields, tab1_data)
+14446: # Tab 2: Methods (Row Numbers)
+14447: tab2 = ttk.Frame(notebook, padding=10)
+14448: notebook.add(tab2, text="검사공법(행)")
+14451: tab2_entries = create_entry_grid(tab2, method_fields, mapping.get('methods', {}))
+14453: # Tab 3: RTK Results
+14454: tab3 = ttk.Frame(notebook, padding=10)
+14455: notebook.add(tab3, text="불량율(RTK)")
+14462: tab3_entries = create_entry_grid(tab3, rtk_fields, mapping.get('rtk', {}))
+14464: # Tab 4: Materials (Row Numbers)
+14465: tab4 = ttk.Frame(notebook, padding=10)
+14466: notebook.add(tab4, text="자재(행)")
+14470: tab4_entries = create_entry_grid(tab4, mat_fields, mapping.get('materials', {}))
+14475: 'header': {'date': tab1_entries['date_header'].get().strip()},
+14476: 'general': {k: tab1_entries[k].get().strip() for k in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no']},
+14477: 'methods': {m: {'row': tab2_entries[m].get().strip()} for m in method_keys},
+14478: 'rtk': {k: tab3_entries[k].get().strip() for k in rtk_keys},
+14483: 'materials': {k: tab4_entries[k].get().strip() for k in mat_keys}
+15126: """Helper to collect Site tab entry data"""
+15173: """Helper to restore Site tab entry data"""
+15235: """Helper to collect In/Out tab entry data"""
+15267: """Helper to restore In/Out tab entry data"""
+15296: """Helper to collect Budget tab entry data"""
+15306: """Helper to restore Budget tab entry data"""
+15320: """Orchestrate saving session data from all entry tabs into one JSON"""
+15392: """Orchestrate loading session data back to all entry tabs from a JSON file"""
+15401: # Restore all tabs
+15588: # [NEW] Only update values if it's still a combobox (Site tab uses Entry now)
+15715: # (Dropdown population moved to refresh_inquiry_filters for stability)
+16416: # [STABILITY] Clear the Treeview's displayed columns
+16429: if hasattr(self, 'tab_config') and 'daily_usage_col_widths' in self.tab_config:
+16430: saved_widths = self.tab_config['daily_usage_col_widths']
+16456: if hasattr(self, 'tab_config') and 'daily_usage_col_widths' in self.tab_config:
+16457: saved_widths = self.tab_config['daily_usage_col_widths']
+16637: self.update_recent_entries_view() # Ensure the mini table is updated!
+17358: selectable_cols = [c for c in all_cols if c != '(Full작업자)']
+17372: dialog = ColumnSelectionDialog(self.root, selectable_cols, title="표시 컬럼 관리")
+17402: if not hasattr(self, 'tab_config'): self.tab_config = {}
+17403: self.tab_config['daily_usage_visible_cols'] = sorted_selection
+17405: if not hasattr(self, 'tab_config'): self.tab_config = {}
+17406: self.tab_config['inout_visible_cols'] = sorted_selection
+17408: self.save_tab_config()
+17468: """Export current filtered daily usage to official Invoice Excel (가산가평기성양식)"""
+17527: top.title("실비 정산 및 기성청구서 출력")
+17547: default_name = f"기성청구내역서_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+17548: filepath = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=default_name, filetypes=[("Excel File", "*.xlsx")], title="정식 기성청구 엑셀 양식으로 저장")
+17557: ws.Name = "기성청구내역서"
+17560: ws.Range("A1").Value = "비파괴검사기술용역 기성청구 내역서"
+17734: messagebox.showinfo("저장 완료", f"엑셀 기성청구 내역서가 성공적으로 생성되었습니다.\n{filepath}")
+17748: # Ctrl+Tab to switch between notebook tabs (forward)
+17749: self.root.bind('<Control-Tab>', self.next_tab)
+17750: # Ctrl+Shift+Tab to switch between notebook tabs (backward)
+17751: self.root.bind('<Control-Shift-Tab>', self.prev_tab)
+17753: # Alt+숫자 for direct tab access
+17761: # Right-click on notebook for tab reordering
+17762: # Tab interactions removed here, kept in create_widgets
+17764: def next_tab(self, event=None):
+17765: """Switch to next tab"""
+17768: next_tab = (current + 1) % total
+17769: self.notebook.select(next_tab)
+17772: def prev_tab(self, event=None):
+17773: """Switch to previous tab"""
+17776: prev_tab = (current - 1) % total
+17777: self.notebook.select(prev_tab)
+17780: def show_tab_context_menu(self, event):
+17781: """Show context menu for tab reordering"""
+17782: # Identify which tab was clicked
+17784: clicked_tab = self.notebook.index(f"@{event.x},{event.y}")
+17785: self.notebook.select(clicked_tab)
+17790: # Only show "Move Left" if not the first tab
+17791: if clicked_tab > 0:
+17793: command=lambda: self.move_tab_left(clicked_tab))
+17795: # Only show "Move Right" if not the last tab
+17796: if clicked_tab < self.notebook.index('end') - 1:
+17798: command=lambda: self.move_tab_right(clicked_tab))
+17805: def move_tab_left(self, tab_index):
+17806: """Move tab one position to the left"""
+17807: if tab_index > 0:
+17808: # Get tab info
+17809: tab = self.notebook.tabs()[tab_index]
+17810: text = self.notebook.tab(tab_index, "text")
+17813: self.notebook.insert(tab_index - 1, tab, text=text)
+17814: self.notebook.select(tab_index - 1)
+17817: self.save_tab_config()
+17819: def move_tab_right(self, tab_index):
+17820: """Move tab one position to the right"""
+17821: if tab_index < self.notebook.index('end') - 1:
+17822: # Get tab info
+17823: tab = self.notebook.tabs()[tab_index]
+17824: text = self.notebook.tab(tab_index, "text")
+17827: self.notebook.insert(tab_index + 2, tab, text=text)
+17828: self.notebook.select(tab_index + 1)
+17831: self.save_tab_config()
+17833: def on_tab_drag_start(self, event):
+17834: """Start tab dragging by identifying the tab under the cursor"""
+17836: # Check if click is on a tab tab
+17837: clicked_tab = self.notebook.identify(event.x, event.y)
+17838: if clicked_tab == "label":
+17847: def on_tab_drag(self, event):
+17848: """Handle visual swapping of tabs during drag"""
+17853: # Find the index of the tab currently under the cursor
+17857: # Get the widget of the tab we are dragging
+17858: tab_widget = self.notebook.tabs()[self._current_drag_index]
+17859: tab_text = self.notebook.tab(self._current_drag_index, "text")
+17861: # Use insert to move tab widget.
+17863: self.notebook.insert(target_index, tab_widget, text=tab_text)
+17883: def on_tab_drag_end(self, event):
+17884: """Finalize tab order and save configuration"""
+17887: print(f"Tab reordered: {self._drag_start_index} -> {self._current_drag_index}")
+17889: self.save_tab_config(force=True)
+17894: def on_tab_changed(self, event=None):
+17895: """Handle tab selection change event"""
+17897: # 1. Save configuration when tab changes (respects is_ready via save_tab_config)
+17898: self.save_tab_config()
+17904: # 2. Handle specific tab UI adjustments
+17905: current_tab = self.notebook.select()
+17906: if not current_tab:
+17911: current_tab_idx = self.notebook.index("current")
+17912: tab_text = self.notebook.tab(current_tab_idx, "text")
+17914: tab_text = ""
+17916: # Check for Daily Usage tab
+17917: if (hasattr(self, 'tab_daily_usage') and str(current_tab) == str(self.tab_daily_usage)) or \
+17918: tab_text == '현장별 일일 사용량 기입':
+17920: print("Daily usage tab selected - ensuring visibility")
+17921: # Force multiple updates when tab is selected
+17931: elif tab_text == '월별 집계':
+17932: print("Monthly usage tab selected - refreshing view")
+17935: elif tab_text == '공사실행예산서':
+17936: print("Construction budget tab selected - refreshing view")
+17938: elif tab_text == '입출고 관리':
+17939: print("In/Out Management tab selected - refreshing history")
+17942: print(f"Error in tab change handler: {e}")
+17956: self.save_tab_config()
+17977: self.save_tab_config()
+18077: self.save_tab_config()
+18242: def save_tab_config(self, force=False):
+18243: """Save current tab configuration to memory and disk"""
+18245: # [STABILITY] Skip saving if app is not fully ready (prevents overwriting saved tab index during init)
+18255: # Initialize or keep existing tab_config
+18256: if not hasattr(self, 'tab_config'):
+18257: self.tab_config = {}
+18260: current_tab_idx = 0
+18261: current_tab_text = ""
+18263: current_tab_widget = self.notebook.select()
+18264: current_tab_idx = self.notebook.index(current_tab_widget)
+18265: current_tab_text = self.notebook.tab(current_tab_widget, "text")
+18267: current_tab_idx = self.tab_config.get('selected_tab', 0)
+18268: current_tab_text = self.tab_config.get('selected_tab_text', "")
+18270: # Get current tab order
+18271: tab_order = []
+18272: for tab_id in self.notebook.tabs():
+18273: tab_order.append(self.notebook.tab(tab_id, "text"))
+18305: self.tab_config.update({
+18306: 'selected_tab': current_tab_idx,
+18307: 'selected_tab_text': current_tab_text,
+18308: 'tab_order': tab_order,
+18341: self.tab_config['stock_col_widths'] = {}
+18344: self.tab_config['stock_col_widths'][col] = self.stock_tree.column(col, 'width')
+18347: self.tab_config['inout_col_widths'] = {}
+18350: self.tab_config['inout_col_widths'][col] = self.inout_tree.column(col, 'width')
+18353: self.tab_config['daily_usage_col_widths'] = {}
+18356: self.tab_config['daily_usage_col_widths'][col] = self.daily_usage_tree.column(col, 'width')
+18359: self.tab_config['monthly_usage_col_widths'] = {}
+18362: self.tab_config['monthly_usage_col_widths'][col] = self.monthly_usage_tree.column(col, 'width')
+18364: # [NEW] Save summary table column widths
+18365: self.tab_config['site_summary_col_widths'] = {}
+18368: self.tab_config['site_summary_col_widths'][col] = self.site_summary_tree.column(col, 'width')
+18370: self.tab_config['worker_summary_col_widths'] = {}
+18373: self.tab_config['worker_summary_col_widths'][col] = self.worker_summary_tree.column(col, 'width')
+18376: self.tab_config['report_col_widths'] = {}
+18379: self.tab_config['report_col_widths'][col] = self.report_tree.column(col, 'width')
+18382: self.tab_config['budget_view_col_widths'] = {}
+18385: self.tab_config['budget_view_col_widths'][col] = self.budget_view_tree.column(col, 'width')
+18387: # Save tab order
+18388: self.tab_config['tab_order'] = []
+18389: for tab in self.notebook.tabs():
+18390: self.tab_config['tab_order'].append(self.notebook.tab(tab, "text"))
+18393: self.tab_config['equipments'] = self.equipments
+18444: if key in self.tab_config.get('draggable_geometries', {}):
+18467: # Apply other tab state updates
+18468: final_config.update(self.tab_config)
+18477: self.tab_config = final_config
+18479: print(f"Configuration saved. Locked: {self.tab_config.get('layout_locked')}, Tab: {self.tab_config.get('selected_tab')}")
+18481: print(f"Failed to save tab config: {e}")
+18484: def load_tab_config(self):
+18485: """Load and restore tab configuration"""
+18487: if not hasattr(self, 'tab_config'):
+18488: self.tab_config = {}
+18492: self.tab_config = json.load(f)
+18493: print(f"DEBUG: Loaded config raw: {self.tab_config}")
+18495: config = self.tab_config
+18512: # Get current tab order
+18514: for tab in self.notebook.tabs():
+18515: tab_index = self.notebook.index(tab)
+18516: tab_text = self.notebook.tab(tab_index, "text")
+18517: current_order.append((tab_text, tab))
+18519: # Create mapping from text to tab widget
+18520: tab_map = {text: tab for text, tab in current_order}
+18522: # Restore tab order if saved order exists
+18523: saved_order = config.get('tab_order', [])
+18525: # [ROBUST] Reorder tabs according to saved order (relaxed length check)
+18526: for i, tab_text in enumerate(saved_order):
+18527: if tab_text in tab_map:
+18528: tab = tab_map[tab_text]
+18529: current_pos = self.notebook.index(tab)
+18531: self.notebook.insert(i, tab, text=tab_text)
+18533: # Restore selected tab
+18534: # [USER REQUEST] Always start at Daily Usage tab
+18538: tab_restored = False
+18540: # [ROBUST] Find tab by name instead of index
+18542: if self.notebook.tab(i, "text") == selected_text:
+18545: tab_restored = True
+18549: if not tab_restored and 0 <= selected_idx < self.notebook.index('end'):
+18554: # Force update after selection so the tab is rendered and children computed
+18812: # Tab selection handled already at line 4531
+18873: # [STABILITY] If it's a core widget, ignore hidden status and reset it
+19086: # [NEW] Trigger column auto-hide on both tabs immediately after startup
+19092: # Removed hardcoded default tab selection so the user's saved tab is preserved
+19111: print(f"Failed to load tab config: {e}")
+19117: self.save_tab_config(force=True)
+19343: self.save_tab_config()
+19346: self.save_tab_config()
+19349: self.save_tab_config()
+19380: self.save_tab_config()
+19383: self.save_tab_config()
+19386: self.save_tab_config()
+19435: """Switch to Daily Usage tab and apply current filters from Sales tab"""
+19442: # 1. Switch Tab (index 5)
+19565: tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+19583: site_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+19600: worker_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())

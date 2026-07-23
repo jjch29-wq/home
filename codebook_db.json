@@ -1,0 +1,17 @@
+[
+    {
+        "category": "예시(NDT 규격)",
+        "find": "ASME Sec.V",
+        "replace": "ISO 10863"
+    },
+    {
+        "category": "예시(현장용어)",
+        "find": "차폐복",
+        "replace": "차폐체"
+    },
+    {
+        "category": "프로젝트명",
+        "find": "가산~가평 천연가스 공급시설",
+        "replace": ""
+    }
+]
