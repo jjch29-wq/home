@@ -404,28 +404,7 @@ class WorkApprovalApp:
             return
 
         if '_window_geometry' in history:
-            try:
-                geom = history['_window_geometry']
-                if 'x' in geom:
-                    w, rest = geom.split('x', 1)
-                    if '+' in rest:
-                        h_str, pos = rest.split('+', 1)
-                        pos = '+' + pos
-                    elif '-' in rest:
-                        h_str, pos = rest.split('-', 1)
-                        pos = '-' + pos
-                    else:
-                        h_str = rest
-                        pos = ''
-                    
-                    h = int(h_str)
-                    if h < 950:
-                        h = 950
-                    self.root.geometry(f"{w}x{h}{pos}")
-                else:
-                    self.root.geometry(geom)
-            except:
-                pass
+            pass # Removed logic that could cause off-screen window placement
 
         dates = [k for k in history.keys() if not k.startswith('_')]
         if not dates:
