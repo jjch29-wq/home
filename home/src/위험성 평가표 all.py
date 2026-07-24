@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.drawing.image import Image
+from openpyxl.worksheet.pagebreak import Break
 import os
 from datetime import datetime
 import json
@@ -369,19 +370,31 @@ def create_excel(process_name, output_filename, data, params):
         ws.merge_cells(f'X{current_row}:Y{current_row}')
         ws.cell(row=current_row, column=24, value="").alignment = center_align
         
-        ws.row_dimensions[current_row].height = 105
+        ws.row_dimensions[current_row].height = 93
         current_row += 1
 
     # 마지막 페이지 빈 공간을 빈 행으로 채워서 높이를 꽉 채움 (위쪽 정렬 효과)
     last_data_row = current_row - 1
-    if last_data_row <= 17:
-        target_row = 17
+    if last_data_row <= 16:
+        target_row = 16
+        total_pages = 1
     else:
-        page_idx = (last_data_row - 18) // 11
-        target_row = 17 + (page_idx + 1) * 11
+        page_idx = (last_data_row - 17) // 10
+        target_row = 16 + (page_idx + 1) * 10
+        total_pages = page_idx + 2
+        
+    # 인쇄 및 PDF 변환 시 엑셀이 멋대로 여백을 늘려 빈 페이지를 만들지 못하도록 
+    # 전체 페이지 수(세로 높이)를 정확한 숫자로 못박아 둡니다.
+    ws.page_setup.fitToHeight = 0
+
+    # 인쇄물에서 비율 차이로 인해 17행이 1페이지로 빨려들어가는 현상을 방지하기 위해
+    # 각 페이지가 끝나는 행에 '강제 페이지 나누기(Page Break)'를 삽입합니다.
+    for p_idx in range(total_pages - 1):
+        break_row = 16 + (p_idx * 10)
+        ws.row_breaks.append(Break(id=break_row))
 
     while current_row <= target_row:
-        ws.row_dimensions[current_row].height = 105
+        ws.row_dimensions[current_row].height = 93
         ws.merge_cells(f'C{current_row}:F{current_row}')
         ws.merge_cells(f'G{current_row}:I{current_row}')
         ws.merge_cells(f'M{current_row}:Q{current_row}')
@@ -416,13 +429,13 @@ def create_excel(process_name, output_filename, data, params):
         if count > 1:
             current_start = a_r
             current_end = a_r + count - 1
-            first_page_break = 17 # 원래대로 17행까지 1페이지
+            first_page_break = 16 # 16행까지 1페이지
             while current_start <= current_end:
                 if current_start <= first_page_break:
                     page_end = first_page_break
                 else:
-                    page_idx = (current_start - (first_page_break + 1)) // 11
-                    page_end = first_page_break + (page_idx + 1) * 11
+                    page_idx = (current_start - (first_page_break + 1)) // 10
+                    page_end = first_page_break + (page_idx + 1) * 10
                 merge_end = min(current_end, page_end)
                 
                 # 인쇄 페이지가 넘어가서 병합이 끊어지는 경우, 다음 페이지 첫 셀에 내용 다시 입력
@@ -441,13 +454,13 @@ def create_excel(process_name, output_filename, data, params):
         if count > 1:
             current_start = b_r
             current_end = b_r + count - 1
-            first_page_break = 17
+            first_page_break = 16
             while current_start <= current_end:
                 if current_start <= first_page_break:
                     page_end = first_page_break
                 else:
-                    page_idx = (current_start - (first_page_break + 1)) // 11
-                    page_end = first_page_break + (page_idx + 1) * 11
+                    page_idx = (current_start - (first_page_break + 1)) // 10
+                    page_end = first_page_break + (page_idx + 1) * 10
                 merge_end = min(current_end, page_end)
                 
                 # 인쇄 페이지가 넘어가서 병합이 끊어지는 경우, 다음 페이지 첫 셀에 내용 다시 입력
@@ -486,6 +499,9 @@ def create_excel(process_name, output_filename, data, params):
                     current_font_size = 14
                     
             cell.font = Font(name='맑은 고딕', size=current_font_size)
+
+    # 인쇄 영역을 정확하게 지정하여 불필요한 빈 페이지(4페이지 등)가 인쇄/PDF 변환되지 않도록 방지
+    ws.print_area = f'A1:Y{current_row - 1}'
 
     try:
         wb.save(output_filename)
@@ -670,57 +686,59 @@ class RiskAssessmentApp:
         form_frame = ttk.LabelFrame(main_frame, text="기본 정보 설정", padding=15)
         form_frame.pack(fill='x', pady=5)
         
+        config = load_config()
+        
         # 1. 현장명
         ttk.Label(form_frame, text="현 장 명:").grid(row=0, column=0, sticky='e', padx=5, pady=5)
         self.ent_site = ttk.Entry(form_frame, width=45)
-        self.ent_site.insert(0, "가산~가평 천연가스 공급시설 건설공사")
+        self.ent_site.insert(0, config.get("site_name", "가산~가평 천연가스 공급시설 건설공사"))
         self.ent_site.grid(row=0, column=1, sticky='w', padx=5, pady=5)
         
         # 2. 협력업체
         ttk.Label(form_frame, text="협력업체:").grid(row=1, column=0, sticky='e', padx=5, pady=5)
         self.ent_company = ttk.Entry(form_frame, width=45)
-        self.ent_company.insert(0, "서울검사(주)")
+        self.ent_company.insert(0, config.get("company_name", "서울검사(주)"))
         self.ent_company.grid(row=1, column=1, sticky='w', padx=5, pady=5)
         
         # 3. 작성일자
         ttk.Label(form_frame, text="작성일자:").grid(row=2, column=0, sticky='e', padx=5, pady=5)
         self.ent_write_date = ttk.Entry(form_frame, width=45)
-        self.ent_write_date.insert(0, datetime.now().strftime("%Y년 %m월 %d일"))
+        self.ent_write_date.insert(0, config.get("write_date", datetime.now().strftime("%Y년 %m월 %d일")))
         self.ent_write_date.grid(row=2, column=1, sticky='w', padx=5, pady=5)
         
         # 4. 관리기간
         ttk.Label(form_frame, text="시작일자:").grid(row=3, column=0, sticky='e', padx=5, pady=5)
         self.ent_start_date = ttk.Entry(form_frame, width=45)
-        self.ent_start_date.insert(0, "2026년 06월 16일")
+        self.ent_start_date.insert(0, config.get("start_date", "2026년 06월 16일"))
         self.ent_start_date.grid(row=3, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="종료일자:").grid(row=4, column=0, sticky='e', padx=5, pady=5)
         self.ent_end_date = ttk.Entry(form_frame, width=45)
-        self.ent_end_date.insert(0, "2026년 06월 30일")
+        self.ent_end_date.insert(0, config.get("end_date", "2026년 06월 30일"))
         self.ent_end_date.grid(row=4, column=1, sticky='w', padx=5, pady=5)
         
         
         # 6. 평가구분
         ttk.Label(form_frame, text="평가구분:").grid(row=6, column=0, sticky='e', padx=5, pady=5)
         self.cb_eval_type = ttk.Combobox(form_frame, values=["최초평가", "수시평가", "정기평가"], state='readonly', width=42)
-        self.cb_eval_type.set("최초평가")
+        self.cb_eval_type.set(config.get("eval_type", "최초평가"))
         self.cb_eval_type.grid(row=6, column=1, sticky='w', padx=5, pady=5)
         
         
         # 8. 결재자 이름 설정
         ttk.Label(form_frame, text="수급인 근로자:").grid(row=8, column=0, sticky='e', padx=5, pady=5)
         self.ent_worker_name = ttk.Entry(form_frame, width=45)
-        self.ent_worker_name.insert(0, "유상훈")
+        self.ent_worker_name.insert(0, config.get("worker_name", "유상훈"))
         self.ent_worker_name.grid(row=8, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="수급인 작성자:").grid(row=9, column=0, sticky='e', padx=5, pady=5)
         self.ent_writer_name = ttk.Entry(form_frame, width=45)
-        self.ent_writer_name.insert(0, "주진철")
+        self.ent_writer_name.insert(0, config.get("writer_name", "주진철"))
         self.ent_writer_name.grid(row=9, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="수급인 승인자:").grid(row=10, column=0, sticky='e', padx=5, pady=5)
         self.ent_approver_name = ttk.Entry(form_frame, width=45)
-        self.ent_approver_name.insert(0, "강신태")
+        self.ent_approver_name.insert(0, config.get("approver_name", "강신태"))
         self.ent_approver_name.grid(row=10, column=1, sticky='w', padx=5, pady=5)
         
         # Checkbox Frame for selections
@@ -770,10 +788,12 @@ class RiskAssessmentApp:
             'approver_name': self.ent_approver_name.get().strip()
         }
         
+        config = load_config()
+        config.update(params)
+        
         if silent_dir:
             output_dir = silent_dir
         else:
-            config = load_config()
             initial_dir = config.get("last_output_dir", os.path.dirname(os.path.abspath(__file__)))
             if not os.path.exists(initial_dir):
                 initial_dir = os.path.dirname(os.path.abspath(__file__))
@@ -783,7 +803,8 @@ class RiskAssessmentApp:
                 return
                 
             config["last_output_dir"] = output_dir
-            save_config(config)
+            
+        save_config(config)
             
         self.btn_generate.config(state='disabled')
         self.lbl_status.config(text="생성 중...", foreground="blue")
@@ -793,33 +814,38 @@ class RiskAssessmentApp:
         temp_files = []
         
         try:
+            prefix_idx = 1
             if self.var_rt.get():
-                fname = os.path.join(output_dir, f"temp_risk_rt_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(RT_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_rt_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, f"4.4.{prefix_idx}_위험성평가표(RT_표준양식).xlsx")
                 res, msg = create_excel("방사선투과검사", fname, load_data("RT"), params)
                 if res: 
                     results.append(msg)
                     temp_files.append(fname)
+                    prefix_idx += 1
                 
             if self.var_ut.get():
-                fname = os.path.join(output_dir, f"temp_risk_ut_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(UT_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_ut_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, f"4.4.{prefix_idx}_위험성평가표(UT_표준양식).xlsx")
                 res, msg = create_excel("초음파탐상검사", fname, load_data("UT"), params)
                 if res: 
                     results.append(msg)
                     temp_files.append(fname)
+                    prefix_idx += 1
                 
             if self.var_pt.get():
-                fname = os.path.join(output_dir, f"temp_risk_pt_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(PT_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_pt_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, f"4.4.{prefix_idx}_위험성평가표(PT_표준양식).xlsx")
                 res, msg = create_excel("침투탐상검사", fname, load_data("PT"), params)
                 if res: 
                     results.append(msg)
                     temp_files.append(fname)
+                    prefix_idx += 1
                 
             if self.var_container.get():
-                fname = os.path.join(output_dir, f"temp_risk_ct_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, "4.4.1_위험성평가표(컨테이너_표준양식).xlsx")
+                fname = os.path.join(output_dir, f"temp_risk_ct_{date_str}.xlsx") if silent_dir else os.path.join(output_dir, f"4.4.{prefix_idx}_위험성평가표(컨테이너_표준양식).xlsx")
                 res, msg = create_excel("가설컨테이너 설치 및 운영", fname, load_data("컨테이너"), params)
                 if res: 
                     results.append(msg)
                     temp_files.append(fname)
+                    prefix_idx += 1
                 
             if silent_dir:
                 return temp_files

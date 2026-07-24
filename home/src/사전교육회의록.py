@@ -5,7 +5,7 @@ from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config_meeting.json")
@@ -14,7 +14,7 @@ class PreTrainingApp:
     def __init__(self, root):
         self.root = root
         self.root.title("위험성평가 사전교육(회의) 자동 생성기")
-        self.root.geometry("550x700")
+        self.root.geometry("650x910")
         
         style = ttk.Style()
         style.theme_use('clam')
@@ -27,41 +27,57 @@ class PreTrainingApp:
         form_frame = ttk.LabelFrame(main_frame, text="입력 정보", padding=15)
         form_frame.pack(fill='x', pady=5)
         
-        ttk.Label(form_frame, text="일 시:").grid(row=0, column=0, sticky='e', padx=5, pady=5)
-        self.ent_date = ttk.Entry(form_frame, width=40)
-        # Default to today's date formatted nicely
+        ttk.Label(form_frame, text="사전교육 일시(붙임1):").grid(row=0, column=0, sticky='e', padx=5, pady=5)
+        self.ent_date = ttk.Entry(form_frame, width=55)
+        
         now = datetime.now()
-        self.ent_date.insert(0, now.strftime("%Y년 %m월 %d일 %H:%M"))
+        end_time = now + timedelta(hours=1)
+        default_time_str = f"{now.strftime('%Y년 %m월 %d일 %H:%M')} ~ {end_time.strftime('%H:%M')} (1시간)"
+        
+        self.ent_date.insert(0, default_time_str)
         self.ent_date.grid(row=0, column=1, sticky='w', padx=5, pady=5)
         
-        ttk.Label(form_frame, text="장 소:").grid(row=1, column=0, sticky='e', padx=5, pady=5)
-        self.ent_loc = ttk.Entry(form_frame, width=40)
-        self.ent_loc.insert(0, "현장 안전교육장")
-        self.ent_loc.grid(row=1, column=1, sticky='w', padx=5, pady=5)
+        ttk.Label(form_frame, text="전파교육 일시(붙임2):").grid(row=1, column=0, sticky='e', padx=5, pady=5)
+        self.ent_date2 = ttk.Entry(form_frame, width=55)
+        dissem_start = now + timedelta(hours=5)
+        dissem_end = dissem_start + timedelta(hours=1)
+        default_time_str2 = f"{dissem_start.strftime('%Y년 %m월 %d일 %H:%M')} ~ {dissem_end.strftime('%H:%M')} (1시간)"
+        self.ent_date2.insert(0, default_time_str2)
+        self.ent_date2.grid(row=1, column=1, sticky='w', padx=5, pady=5)
         
-        ttk.Label(form_frame, text="평가 리더:").grid(row=2, column=0, sticky='e', padx=5, pady=2)
-        self.ent_leader = ttk.Entry(form_frame, width=40)
+        ttk.Label(form_frame, text="사전교육 장소(붙임1):").grid(row=2, column=0, sticky='e', padx=5, pady=5)
+        self.ent_loc = ttk.Entry(form_frame, width=55)
+        self.ent_loc.insert(0, "인천사무실")
+        self.ent_loc.grid(row=2, column=1, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(form_frame, text="전파교육 장소(붙임2):").grid(row=3, column=0, sticky='e', padx=5, pady=5)
+        self.ent_loc2 = ttk.Entry(form_frame, width=55)
+        self.ent_loc2.insert(0, "가산~가평 현장 안전교육장")
+        self.ent_loc2.grid(row=3, column=1, sticky='w', padx=5, pady=5)
+        
+        ttk.Label(form_frame, text="평가 리더:").grid(row=4, column=0, sticky='e', padx=5, pady=2)
+        self.ent_leader = ttk.Entry(form_frame, width=55)
         self.ent_leader.insert(0, "곽재운 이사(현장소장)")
-        self.ent_leader.grid(row=2, column=1, sticky='w', padx=5, pady=2)
+        self.ent_leader.grid(row=4, column=1, sticky='w', padx=5, pady=2)
         
-        ttk.Label(form_frame, text="관리감독자:").grid(row=3, column=0, sticky='e', padx=5, pady=2)
-        self.ent_super = ttk.Entry(form_frame, width=40)
+        ttk.Label(form_frame, text="관리감독자:").grid(row=5, column=0, sticky='e', padx=5, pady=2)
+        self.ent_super = ttk.Entry(form_frame, width=55)
         self.ent_super.insert(0, "주진철")
-        self.ent_super.grid(row=3, column=1, sticky='w', padx=5, pady=2)
+        self.ent_super.grid(row=5, column=1, sticky='w', padx=5, pady=2)
         
-        ttk.Label(form_frame, text="근로자대표:").grid(row=4, column=0, sticky='e', padx=5, pady=2)
-        self.ent_worker = ttk.Entry(form_frame, width=40)
+        ttk.Label(form_frame, text="근로자대표:").grid(row=6, column=0, sticky='e', padx=5, pady=2)
+        self.ent_worker = ttk.Entry(form_frame, width=55)
         self.ent_worker.insert(0, "유상훈")
-        self.ent_worker.grid(row=4, column=1, sticky='w', padx=5, pady=2)
+        self.ent_worker.grid(row=6, column=1, sticky='w', padx=5, pady=2)
 
-        ttk.Label(form_frame, text="참석자:").grid(row=5, column=0, sticky='e', padx=5, pady=5)
-        self.ent_attendees = ttk.Entry(form_frame, width=40)
-        self.ent_attendees.insert(0, "유상훈(서울검사/사원), 주진철(서울검사/팀장), 강신태(서울검사/소장)")
-        self.ent_attendees.grid(row=5, column=1, sticky='w', padx=5, pady=5)
-        ttk.Label(form_frame, text="(예시: 이름(소속/직책) 형식으로 쉼표 구분)", foreground="gray", font=("Malgun Gothic", 8)).grid(row=6, column=1, sticky='w', padx=5)
+        ttk.Label(form_frame, text="참석자:").grid(row=7, column=0, sticky='e', padx=5, pady=5)
+        self.txt_attendees = tk.Text(form_frame, width=60, height=3, font=('Malgun Gothic', 9))
+        self.txt_attendees.insert('1.0', "유상훈(서울검사/사원), 주진철(서울검사/팀장), 강신태(서울검사/소장)")
+        self.txt_attendees.grid(row=7, column=1, sticky='w', padx=5, pady=5)
+        ttk.Label(form_frame, text="(예시: 이름(소속/직책) 형식으로 쉼표/엔터 구분)", foreground="gray", font=("Malgun Gothic", 8)).grid(row=8, column=1, sticky='w', padx=5)
         
-        ttk.Label(form_frame, text="회의 내용:").grid(row=7, column=0, sticky='ne', padx=5, pady=5)
-        self.txt_content = tk.Text(form_frame, width=45, height=7, font=('Malgun Gothic', 9))
+        ttk.Label(form_frame, text="회의 내용:").grid(row=9, column=0, sticky='ne', padx=5, pady=5)
+        self.txt_content = tk.Text(form_frame, width=60, height=7, font=('Malgun Gothic', 9))
         default_content = (
             "1. 금회 위험성평가 실시 대상 공정\n"
             " - 방사선투과(RT), 초음파(UT), 침투(PT) 및 가설컨테이너 운영\n"
@@ -71,16 +87,37 @@ class PreTrainingApp:
             " - [전기] 우천/야간 작업 시 감전 예방 위해 누전차단기 부착 릴선 전용 사용"
         )
         self.txt_content.insert('1.0', default_content)
-        self.txt_content.grid(row=7, column=1, sticky='w', padx=5, pady=5)
+        self.txt_content.grid(row=9, column=1, sticky='w', padx=5, pady=5)
         
-        ttk.Label(form_frame, text="사 진:").grid(row=8, column=0, sticky='e', padx=5, pady=10)
-        photo_frame = ttk.Frame(form_frame)
-        photo_frame.grid(row=8, column=1, sticky='w', padx=5, pady=10)
+        ttk.Label(form_frame, text="전파교육 내용:").grid(row=10, column=0, sticky='ne', padx=5, pady=5)
+        self.txt_content2 = tk.Text(form_frame, width=60, height=6, font=('Malgun Gothic', 9))
+        default_content2 = (
+            "1. 「위험성평가」 결과 위험성 주지\n"
+            "2. 「위험성평가」 결과 감소대책 시행 방법 및 시기\n"
+            "3. 근로자 및 관리감독자 준수 사항\n"
+            "4. 위험성 감소대책 수립 및 실행의 절차와 기록유지 방법\n"
+            "5. [현장 주요 전파사항] 방사선 통제구역 출입금지, 노후 슬링벨트 사용금지, 누전차단기 전용 릴선 사용 준수"
+        )
+        self.txt_content2.insert('1.0', default_content2)
+        self.txt_content2.grid(row=10, column=1, sticky='w', padx=5, pady=5)
         
-        self.photo_path = None
-        self.lbl_photo = ttk.Label(photo_frame, text="선택된 사진 없음", foreground="gray", width=25)
-        self.lbl_photo.pack(side='left', padx=(0, 5))
-        ttk.Button(photo_frame, text="사진 찾기", command=self.select_photo).pack(side='left')
+        ttk.Label(form_frame, text="회의 사진(붙임1):").grid(row=11, column=0, sticky='e', padx=5, pady=5)
+        photo_frame1 = ttk.Frame(form_frame)
+        photo_frame1.grid(row=11, column=1, sticky='w', padx=5, pady=5)
+        
+        self.photo_path1 = None
+        self.lbl_photo1 = ttk.Label(photo_frame1, text="선택된 사진 없음", foreground="gray", width=25)
+        self.lbl_photo1.pack(side='left', padx=(0, 5))
+        ttk.Button(photo_frame1, text="사진 찾기", command=self.select_photo1).pack(side='left')
+        
+        ttk.Label(form_frame, text="전파교육 사진(붙임2):").grid(row=12, column=0, sticky='e', padx=5, pady=5)
+        photo_frame2 = ttk.Frame(form_frame)
+        photo_frame2.grid(row=12, column=1, sticky='w', padx=5, pady=5)
+        
+        self.photo_path2 = None
+        self.lbl_photo2 = ttk.Label(photo_frame2, text="선택된 사진 없음", foreground="gray", width=25)
+        self.lbl_photo2.pack(side='left', padx=(0, 5))
+        ttk.Button(photo_frame2, text="사진 찾기", command=self.select_photo2).pack(side='left')
         
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill='x', pady=20)
@@ -96,11 +133,16 @@ class PreTrainingApp:
 
     def save_config(self):
         config = {
+            "date": self.ent_date.get(),
+            "date2": self.ent_date2.get(),
+            "loc": self.ent_loc.get(),
+            "loc2": self.ent_loc2.get(),
             "leader": self.ent_leader.get(),
             "superv": self.ent_super.get(),
             "worker": self.ent_worker.get(),
-            "attendees": self.ent_attendees.get(),
-            "content": self.txt_content.get("1.0", tk.END).strip()
+            "attendees": self.txt_attendees.get("1.0", tk.END).strip(),
+            "content": self.txt_content.get("1.0", tk.END).strip(),
+            "content2": self.txt_content2.get("1.0", tk.END).strip()
         }
         try:
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -114,6 +156,18 @@ class PreTrainingApp:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     config = json.load(f)
                 
+                if "date" in config:
+                    self.ent_date.delete(0, tk.END)
+                    self.ent_date.insert(0, config["date"])
+                if "date2" in config:
+                    self.ent_date2.delete(0, tk.END)
+                    self.ent_date2.insert(0, config["date2"])
+                if "loc" in config:
+                    self.ent_loc.delete(0, tk.END)
+                    self.ent_loc.insert(0, config["loc"])
+                if "loc2" in config:
+                    self.ent_loc2.delete(0, tk.END)
+                    self.ent_loc2.insert(0, config["loc2"])
                 if "leader" in config:
                     self.ent_leader.delete(0, tk.END)
                     self.ent_leader.insert(0, config["leader"])
@@ -124,11 +178,14 @@ class PreTrainingApp:
                     self.ent_worker.delete(0, tk.END)
                     self.ent_worker.insert(0, config["worker"])
                 if "attendees" in config:
-                    self.ent_attendees.delete(0, tk.END)
-                    self.ent_attendees.insert(0, config["attendees"])
+                    self.txt_attendees.delete("1.0", tk.END)
+                    self.txt_attendees.insert("1.0", config["attendees"])
                 if "content" in config:
                     self.txt_content.delete("1.0", tk.END)
                     self.txt_content.insert("1.0", config["content"])
+                if "content2" in config:
+                    self.txt_content2.delete("1.0", tk.END)
+                    self.txt_content2.insert("1.0", config["content2"])
             except Exception as e:
                 print("설정 불러오기 실패:", e)
 
@@ -136,13 +193,22 @@ class PreTrainingApp:
         self.save_config()
         self.root.destroy()
 
-    def select_photo(self):
+    def select_photo1(self):
         path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
         if path:
-            self.photo_path = path
-            self.lbl_photo.config(text=os.path.basename(path), foreground="black")
+            self.photo_path1 = path
+            self.lbl_photo1.config(text=os.path.basename(path), foreground="black")
+
+    def select_photo2(self):
+        path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
+        if path:
+            self.photo_path2 = path
+            self.lbl_photo2.config(text=os.path.basename(path), foreground="black")
 
     def generate_excel(self):
+        # 엑셀 생성 시 현재 설정(참석자 등)을 자동 저장합니다.
+        self.save_config()
+        
         try:
             self.btn_generate.config(state='disabled')
             self.lbl_status.config(text="생성 중...", foreground="blue")
@@ -275,14 +341,14 @@ class PreTrainingApp:
             set_border(1, 8, 6, 8)
             ws.row_dimensions[8].height = 280
             
-            if self.photo_path and os.path.exists(self.photo_path):
+            if self.photo_path1 and os.path.exists(self.photo_path1):
                 try:
-                    img = XLImage(self.photo_path)
+                    img = XLImage(self.photo_path1)
                     # A4 가로폭에 맞게 사진 리사이즈
                     max_width = 620
                     max_height = 350
                     
-                    with PILImage.open(self.photo_path) as pil_img:
+                    with PILImage.open(self.photo_path1) as pil_img:
                         w, h = pil_img.size
                         ratio = min(max_width/w, max_height/h)
                         new_w = int(w * ratio)
@@ -314,7 +380,9 @@ class PreTrainingApp:
             
             # 입력받은 참석자 파싱 (이름과 괄호 안의 소속/직책 분리)
             import re
-            raw_attendees = self.ent_attendees.get().split(',')
+            # 줄바꿈으로 입력할 수도 있으므로 쉼표로 치환 후 파싱
+            raw_attendees_text = self.txt_attendees.get("1.0", tk.END).strip().replace('\n', ',')
+            raw_attendees = raw_attendees_text.split(',')
             attendees_parsed = []
             for raw in raw_attendees:
                 raw = raw.strip()
@@ -406,7 +474,7 @@ class PreTrainingApp:
             ws2['A4'].fill = fill_gray
             
             ws2.merge_cells('C4:F4')
-            ws2['C4'] = self.ent_date.get()
+            ws2['C4'] = self.ent_date2.get()
             ws2['C4'].font = normal_font
             ws2['C4'].alignment = center_align
             
@@ -417,7 +485,7 @@ class PreTrainingApp:
             ws2['A5'].fill = fill_gray
             
             ws2.merge_cells('C5:F5')
-            ws2['C5'] = self.ent_loc.get()
+            ws2['C5'] = self.ent_loc2.get()
             ws2['C5'].font = normal_font
             ws2['C5'].alignment = center_align
             
@@ -434,12 +502,7 @@ class PreTrainingApp:
             ws2['A6'].alignment = Alignment(horizontal='left', vertical='bottom')
             ws2.row_dimensions[6].height = 30
             
-            edu_content = (
-                " ● 「위험성평가」 결과 위험성 주지\n"
-                " ● 「위험성평가」 결과 감소대책 시행 방법 및 시기\n"
-                " ● 근로자 및 관리감독자 준수 사항\n"
-                " ● 위험성 감소대책 수립 및 실행의 절차와 기록유지 방법"
-            )
+            edu_content = self.txt_content2.get("1.0", tk.END).strip()
             ws2.merge_cells('A7:F7')
             ws2['A7'] = edu_content
             ws2['A7'].font = normal_font
@@ -447,19 +510,19 @@ class PreTrainingApp:
             set_border2(1, 7, 6, 7)
             for col in range(1, 7):
                 ws2.cell(row=7, column=col).border = Border(top=thick, left=thin, right=thin, bottom=thin)
-            ws2.row_dimensions[7].height = 100
+            ws2.row_dimensions[7].height = 150
             
-            # 6. 빈 공간 (사진 첨부부 - 시트 1과 동일한 사진)
+            # 6. 빈 공간 (사진 첨부부 - 전파교육용 사진)
             ws2.merge_cells('A8:F8')
             set_border2(1, 8, 6, 8)
             ws2.row_dimensions[8].height = 280
             
-            if self.photo_path and os.path.exists(self.photo_path):
+            if self.photo_path2 and os.path.exists(self.photo_path2):
                 try:
-                    img2 = XLImage(self.photo_path)
+                    img2 = XLImage(self.photo_path2)
                     max_width = 620
                     max_height = 350
-                    with PILImage.open(self.photo_path) as pil_img:
+                    with PILImage.open(self.photo_path2) as pil_img:
                         w, h = pil_img.size
                         ratio = min(max_width/w, max_height/h)
                     img2.width = int(w * ratio)

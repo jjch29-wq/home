@@ -8,7 +8,11 @@ class PDFEditor:
     def __init__(self, root):
         self.root = root
         self.root.title("PDF 페이지 편집기 (PRO)")
-        self.root.geometry("850x650")
+        self.root.geometry("1200x900")
+        try:
+            self.root.state('zoomed') # 윈도우 최대화
+        except:
+            pass
         
         # State variables
         self.pages = [] # List of dicts: {'doc': fitz.Document, 'page_num': int, 'label': str, 'rotation': int}
@@ -101,18 +105,20 @@ class PDFEditor:
             self.drag_start_idx = idx
             
     def open_pdf(self):
-        filepath = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
-        if not filepath: return
+        filepaths = filedialog.askopenfilenames(filetypes=[("PDF Files", "*.pdf")])
+        if not filepaths: return
         self.pages.clear()
         self.docs.clear()
         self.listbox.delete(0, tk.END)
         self.preview_label.config(image='', text="페이지를 선택하면 미리보기가 표시됩니다.")
-        self.add_document(filepath)
+        for filepath in filepaths:
+            self.add_document(filepath)
         
     def add_pdf(self):
-        filepath = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
-        if not filepath: return
-        self.add_document(filepath)
+        filepaths = filedialog.askopenfilenames(filetypes=[("PDF Files", "*.pdf")])
+        if not filepaths: return
+        for filepath in filepaths:
+            self.add_document(filepath)
         
     def add_document(self, filepath):
         try:
@@ -147,7 +153,7 @@ class PDFEditor:
             total_rot = (page.rotation + page_info['rotation']) % 360
             
             # High resolution for better preview
-            mat = fitz.Matrix(2.0, 2.0).prerotate(page_info['rotation'])
+            mat = fitz.Matrix(3.0, 3.0).prerotate(page_info['rotation'])
             pix = page.get_pixmap(matrix=mat)
             
             # Convert to PIL Image
@@ -155,7 +161,7 @@ class PDFEditor:
             img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
             
             # Resize for preview
-            img.thumbnail((500, 700), Image.Resampling.LANCZOS)
+            img.thumbnail((1200, 1600), Image.Resampling.LANCZOS)
             
             self.current_image = ImageTk.PhotoImage(img)
             self.preview_label.config(image=self.current_image, text="")

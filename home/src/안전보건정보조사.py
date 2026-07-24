@@ -288,10 +288,9 @@ class InfoSurveyApp:
             ws['A23'].alignment = Alignment(horizontal='left', vertical='top')
             ws.row_dimensions[23].height = 20
             
-            ws.merge_cells('A25:H25')
-            ws['A25'] = "15"
-            ws['A25'].font = normal_font
-            ws['A25'].alignment = Alignment(horizontal='center', vertical='bottom')
+            # 페이지 하단 중앙 바닥글에 15 설정
+            ws.oddFooter.center.text = "15"
+            ws.evenFooter.center.text = "15"
             
             save_path = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
