@@ -1,0 +1,92 @@
+
+
+========================================
+# Sheet: 인력투입계획서
+========================================
+ Unnamed: 0 기술인력 투입계획서 Unnamed: 2   Unnamed: 3 Unnamed: 4                                                                                         Unnamed: 5                                                    Unnamed: 6 Unnamed: 7
+        NaN        NaN        NaN          NaN        NaN                                                                                                NaN                                                           NaN        NaN
+        NaN          순         성명         담당업무  경력\n(취득후)                                                                                               자격사항                                                           취득일        비 고
+        NaN          1        이봉주        현장대리인    24년 3개월 RI일반면허                                                                             기사(RT), 기능사(MT)                  2000.06.12(RI) 1998.12.21(RT) 1999.06.14(MT)        NaN
+        NaN          2        진병학     방사선안전관리자     4년 4개월                                                                                         RI일반면허                                                    2011.06.27(RI)        NaN
+        NaN          3        김춘호       RT  팀장    12년 4개월                                                                                     기사(RT, MT, PT)                  2012.06.01(RT) 2012.11.23(MT) 2011.12.23(PT)        NaN
+        NaN          4        박원준       PAUT팀장     2년 5개월                          ISO 9712 PAUT Level 2          기사(RT, PT)                         기능사(MT) 2022.05.17(PAUT) 2021.10.06(RT) 2021.06.02(PT) 2012.11.02(MT)        NaN
+        NaN          5        박광복        PT 팀장     15년3개월                                                                                     기사(RT, MT, PT)                  2014.05.30(RT) 2009.06.01(MT) 2006.06.05(PT)        NaN
+        NaN          6        김성현 RT/MT/PT 검사자        14년                                                         산업기사(MT)                       기능사(RT, PT)                  2010.06.18(RT) 2010.10.02(MT) 2009.12.21(PT)        NaN
+        NaN          7        진병학     PAUT 검사원     4년 4개월                                                      ISO 9712 PAUT Level 2          기사(RT, MT, PT) 2020.05.27(PAUT) 2005.06.13(RT) 2006.11.06(MT) 2006.06.05(PT)        NaN
+        NaN          8        유상훈        MT 팀장    13년 5개월                                                                            기사(MT)\n기능사(RT, MT, PT)                  2011.04.29(RT) 2023.11.15(MT) 2010.04.09(PT)        NaN
+        NaN          9        우명광 RT/MT/PT 검사자     6년 4개월                                                         산업기사(PT)                       기능사(RT, MT)                  2017.06.09(RT) 2017.03.31(MT) 2018.05.28(PT)        NaN
+        NaN         10        현해룡 RT/MT/PT 검사자     4년 6개월                                                                                    기능사(RT, MT, PT)                  2020.04.24(RT) 2023.04.19(MT) 2013.10.04(PT)        NaN
+
+========================================
+# Sheet: 인력투입변경
+========================================
+ Unnamed: 0 기술인력 투입계획서 Unnamed: 2   Unnamed: 3 Unnamed: 4                                                                                         Unnamed: 5                                                    Unnamed: 6 Unnamed: 7
+        NaN        NaN        NaN          NaN        NaN                                                                                                NaN                                                           NaN        NaN
+        NaN          순         성명         담당업무  경력\n(취득후)                                                                                               자격사항                                                           취득일        비 고
+        NaN          1        이봉주        현장대리인    24년 3개월 RI일반면허                                                                             기사(RT), 기능사(MT)                  2000.06.12(RI) 1998.12.21(RT) 1999.06.14(MT)        NaN
+        NaN          2        주동기     방사선안전관리자    26년 6개월                                                                                         RI일반면허                                                    1999.07.02(RI)        NaN
+        NaN          3        김춘호       RT  팀장    12년 4개월                                                                                     기사(RT, MT, PT)                  2012.06.01(RT) 2012.11.23(MT) 2011.12.23(PT)        NaN
+        NaN          4        박원준       PAUT팀장     2년 5개월                          ISO 9712 PAUT Level 2          기사(RT, PT)                         기능사(MT) 2022.05.17(PAUT) 2021.10.06(RT) 2021.06.02(PT) 2012.11.02(MT)        NaN
+        NaN          5        박광복        PT 팀장     15년3개월                                                                                     기사(RT, MT, PT)                  2014.05.30(RT) 2009.06.01(MT) 2006.06.05(PT)        NaN
+        NaN          6        김성현 RT/MT/PT 검사자        14년                                                         산업기사(MT)                       기능사(RT, PT)                  2010.06.18(RT) 2010.10.02(MT) 2009.12.21(PT)        NaN
+        NaN          7        진병학     PAUT 검사원     4년 4개월                                                      ISO 9712 PAUT Level 2          기사(RT, MT, PT) 2020.05.27(PAUT) 2005.06.13(RT) 2006.11.06(MT) 2006.06.05(PT)        NaN
+        NaN          8        유상훈        MT 팀장    13년 5개월                                                                            기사(MT)\n기능사(RT, MT, PT)                  2011.04.29(RT) 2023.11.15(MT) 2010.04.09(PT)        NaN
+        NaN          9        우명광 RT/MT/PT 검사자     6년 4개월                                                         산업기사(PT)                       기능사(RT, MT)                  2017.06.09(RT) 2017.03.31(MT) 2018.05.28(PT)        NaN
+        NaN         10        현해룡 RT/MT/PT 검사자     4년 6개월                                                                                    기능사(RT, MT, PT)                  2020.04.24(RT) 2023.04.19(MT) 2013.10.04(PT)        NaN
+
+========================================
+# Sheet: 장비투입계획서
+========================================
+ Unnamed: 0        장비투입 계획서      Unnamed: 2         Unnamed: 3 Unnamed: 4          Unnamed: 5 Unnamed: 6
+        NaN             NaN             NaN                NaN        NaN                 NaN        NaN
+        NaN              구분            품  명               규  격         수량                투입시기       비  고
+        NaN              RT             조사기              Se-75          2 공정상황에       따라 적시투입        NaN
+        NaN             NaN    Densitometer            PDA-100          1                   "        NaN
+        NaN             NaN     Film Viewer      PICO-VIEW P35          1                   "        NaN
+        NaN 방사선\n안  전\n관  리    SURVEY METER       0～1,000mR/hr          2                   "        NaN
+        NaN             NaN ALARM DOSIMETER          CATCH-100          6                   "        NaN
+        NaN             NaN    WARNING LAMP               LA-2          8                   "        NaN
+        NaN            PAUT          초음파 장비        OmniScanMX2          2                   "        NaN
+        NaN             NaN        Software OmniPC / Tomo view          2                   "        NaN
+        NaN             NaN             스캐너    Compact Scanner          2                   "        NaN
+        NaN             NaN             탐촉자            5L64-A2          2                   "        NaN
+        NaN              MT            MT장비               YOKE          1                   "        NaN
+        NaN             NaN             시험편                 A1          1                   "        NaN
+        NaN              PT           표면온도계            TES1300          1                   "        NaN
+        NaN             NaN             조도계          TES/1330A          1                   "        NaN
+        NaN             NaN             시험편                 A형          1                   "        NaN
+
+========================================
+# Sheet: 조직도
+========================================
+ 현장 조직도  Unnamed: 1 Unnamed: 2  Unnamed: 3  Unnamed: 4  Unnamed: 5 Unnamed: 6 Unnamed: 7  Unnamed: 8  Unnamed: 9  Unnamed: 10  Unnamed: 11  Unnamed: 12 Unnamed: 13  Unnamed: 14  Unnamed: 15  Unnamed: 16  Unnamed: 17 Unnamed: 18
+    NaN         NaN        NaN         NaN         NaN         NaN    사업책임기술자        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN        NaN         NaN         NaN         NaN  이   봉   주        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN       안전관리자          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN    진   병  학          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN      RT 팀장         NaN         NaN         NaN        NaN    PAUT 팀장         NaN         NaN          NaN          NaN          NaN       MT 팀장          NaN          NaN          NaN          NaN       PT 팀장
+    NaN         NaN  김   춘   호         NaN         NaN         NaN        NaN  박   원   준         NaN         NaN          NaN          NaN          NaN   김   성   현          NaN          NaN          NaN          NaN   박   광   복
+    NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+    NaN         NaN     RT 검사자         NaN         NaN         NaN        NaN   PAUT 검사자         NaN         NaN          NaN          NaN          NaN    MT 참여기술자          NaN          NaN          NaN          NaN    PT 참여기술자
+    NaN         NaN  유   상   훈         NaN         NaN         NaN        NaN  진   병   학         NaN         NaN          NaN          NaN          NaN   우   명   광          NaN          NaN          NaN          NaN   현   해   룡
+
+========================================
+# Sheet: 조직도변경
+========================================
+  별첨2.  Unnamed: 1 Unnamed: 2  Unnamed: 3  Unnamed: 4  Unnamed: 5 Unnamed: 6 Unnamed: 7  Unnamed: 8  Unnamed: 9  Unnamed: 10  Unnamed: 11  Unnamed: 12 Unnamed: 13  Unnamed: 14  Unnamed: 15  Unnamed: 16  Unnamed: 17 Unnamed: 18
+현장 조직도         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN        NaN         NaN         NaN         NaN    사업책임기술자        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN        NaN         NaN         NaN         NaN  이   봉   주        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN       안전관리자          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN    주   동  기          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN      RT 팀장         NaN         NaN         NaN        NaN    PAUT 팀장         NaN         NaN          NaN          NaN          NaN       MT 팀장          NaN          NaN          NaN          NaN       PT 팀장
+   NaN         NaN  김   춘   호         NaN         NaN         NaN        NaN  박   원   준         NaN         NaN          NaN          NaN          NaN   김   성   현          NaN          NaN          NaN          NaN   박   광   복
+   NaN         NaN        NaN         NaN         NaN         NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN         NaN          NaN          NaN          NaN          NaN         NaN
+   NaN         NaN     RT 검사자         NaN         NaN         NaN        NaN   PAUT 검사자         NaN         NaN          NaN          NaN          NaN    MT 참여기술자          NaN          NaN          NaN          NaN    PT 참여기술자
+   NaN         NaN  유   상   훈         NaN         NaN         NaN        NaN  진   병   학         NaN         NaN          NaN          NaN          NaN   우   명   광          NaN          NaN          NaN          NaN   현   해   룡
