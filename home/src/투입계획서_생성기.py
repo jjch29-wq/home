@@ -1137,7 +1137,12 @@ class DeploymentApp:
                             row = start_row + idx
                             ws.cell(row=row, column=cat_col).value = eq["category"]
                             ws.cell(row=row, column=name_col).value = eq["name"]
-                            ws.cell(row=row, column=spec_col).value = eq["spec"]
+                            # 규격 텍스트가 애매하게 자동 줄바꿈되는 것을 막고, 쉼표나 슬래시를 기준으로 깔끔하게 두 줄로 나눔 (공백 유무 상관없이 완벽하게 분리)
+                            spec_text = eq["spec"]
+                            if spec_text:
+                                import re
+                                spec_text = re.sub(r'\s*[,/]\s*', '\n', spec_text)
+                            ws.cell(row=row, column=spec_col).value = spec_text
                             ws.cell(row=row, column=qty_col).value = str(eq["qty"])
                             
                             # 첫 줄은 전체 텍스트, 두 번째 줄부터는 '"' (상동) 표시

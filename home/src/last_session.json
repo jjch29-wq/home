@@ -75,7 +75,7 @@
       "qty": "1",
       "cat": "RT",
       "name": "Film Viewer",
-      "spec": "DF-2C15 Pico View-P35"
+      "spec": "DF-2C15 / Pico View-P35"
     },
     {
       "db": "[RT] 방사선측정기",
@@ -103,7 +103,7 @@
       "qty": "1",
       "cat": "PAUT",
       "name": "Software",
-      "spec": "OmniPC Tomo view"
+      "spec": "OmniPC/Tomo view"
     },
     {
       "db": "[PAUT] 스캐너",
