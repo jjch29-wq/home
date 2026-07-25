@@ -2,17 +2,17 @@
   "personnel": [
     {
       "name": "이봉주",
-      "qualifications": "RI일반면허 / 기사(RT), 기능사(MT)",
+      "qualifications": "RI일반면허 / 기사(RT) / 기능사(MT)",
       "date": "2000.06.12(RI) 1998.12.21(RT) 1999.06.14(MT)"
     },
     {
       "name": "주진철",
-      "qualifications": "기사(UT,RT) ISO9712 LEVEL II (UT-PA)",
+      "qualifications": "기사(UT) / 기사(RT) / ISO9712 LEVEL II (UT-PA)",
       "date": "2007.06.04(UT) 2008.12.15(RT) 2023.10.08(PA)"
     },
     {
       "name": "박광복",
-      "qualifications": "기사(RT, UT, MT, PT)",
+      "qualifications": "기사(RT) / 기사(UT) / 기사(MT) / 기사(PT)",
       "date": "2014.05.30(RT) 2012.06.01(UT) 2009.06.01(MT) 2006.06.05(PT)"
     },
     {
@@ -22,47 +22,47 @@
     },
     {
       "name": "진병학",
-      "qualifications": "ISO 9712 PAUT Level 2 / 기사(RT, UT, MT, PT) / RI일반면허(6659)",
+      "qualifications": "ISO 9712 PAUT Level 2 / 기사(RT) / 기사(UT) / 기사(MT) / 기사(PT) / RI일반면허(6659)",
       "date": "2020.05.27(PAUT) 2005.06.13(RT) 2004.12.13(UT) 2006.11.06(MT) 2006.06.05(PT) 2011.06.27(RI)"
     },
     {
       "name": "김춘호",
-      "qualifications": "기사(RT, UT, MT, PT) / RI일반면허(9281)",
+      "qualifications": "기사(RT) / 기사(UT) / 기사(MT) / 기사(PT) / RI일반면허(9281)",
       "date": "2017.05.26(UT) 2012.06.01(RT) 2012.11.23(MT) 2011.12.23(PT) 2019.06.20(RI)"
     },
     {
       "name": "권인경",
-      "qualifications": "기사(RT, UT, MT, PT)",
+      "qualifications": "기사(RT) / 기사(UT) / 기사(MT) / 기사(PT)",
       "date": "1998.12.21(RT) 2010.05.28(UT) 2013.05.31(MT) 2011.06.10(PT)"
     },
     {
       "name": "윤석현",
-      "qualifications": "기사(RT, UT, MT, PT)",
+      "qualifications": "기사(RT) / 기사(UT) / 기사(MT) / 기사(PT)",
       "date": "2020.09.11(RT) 2024.06.18(UT) 2021.11.26(MT) 2020.12.31(PT)"
     },
     {
       "name": "유상훈",
-      "qualifications": "기능사(RT, UT, MT, PT)",
+      "qualifications": "기능사(RT) / 기능사(UT) / 기능사(MT) / 기능사(PT)",
       "date": "2011.04.29(RT) 2013.10.04(UT) 2009.12.21(MT) 2010.04.09(PT)"
     },
     {
       "name": "박원준",
-      "qualifications": "ISO 9712 PAUT Level 2 / 기사(RT, PT) / 기능사(MT)",
+      "qualifications": "ISO 9712 PAUT Level 2 / 기사(RT) / 기사(PT) / 기능사(MT)",
       "date": "2022.05.17(PAUT) 2021.10.06(RT) 2021.06.02(PT) 2012.11.02(MT)"
     },
     {
       "name": "김성현",
-      "qualifications": "산업기사(MT) / 기능사(RT, UT, MT)",
+      "qualifications": "산업기사(MT) / 기능사(RT) / 기능사(UT) / 기능사(MT)",
       "date": "2010.06.18(RT) 2010.10.01(UT) 2010.10.02(MT) 2009.12.21(PT)"
     },
     {
       "name": "우명광",
-      "qualifications": "산업기사(PT) / 기능사(RT, UT, MT)",
+      "qualifications": "산업기사(PT) / 기능사(RT) / 기능사(UT) / 기능사(MT)",
       "date": "2017.06.09(RT) 2017.01.09(UT) 2017.03.31(MT) 2018.05.28(PT)"
     },
     {
       "name": "이준우",
-      "qualifications": "기사(RT) / 기능사(MT, PT) / RI일반면허(6659)",
+      "qualifications": "기사(RT) / 기능사(MT) / 기능사(PT) / RI일반면허(6659)",
       "date": "2024.12.11(RT) 2024.12.04(MT) 2024.12.04(PT) 2017.06.30(RI)"
     },
     {
@@ -77,8 +77,8 @@
     },
     {
       "name": "장승대",
-      "qualifications": "PT기능사, MT기능사",
-      "date": ""
+      "qualifications": "기능사(PT) / 기능사(MT) / 기능사(UT)",
+      "date": "2025.04.11(PT) 2025.04.11(MT) 2025.06.27(UT)"
     },
     {
       "name": "이경재",
@@ -92,8 +92,8 @@
     },
     {
       "name": "박상태",
-      "qualifications": "기능사(PT,MT),RI일반면허",
-      "date": "2025.09.26(PT,MT), RI 2026.04.29"
+      "qualifications": "기능사(PT) / 기능사(MT) / RI일반면허",
+      "date": "2025.09.26(PT) 2025.09.26(MT) 2026.04.29(RI)"
     }
   ],
   "equipment": [

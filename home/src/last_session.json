@@ -1,0 +1,172 @@
+{
+  "template": "양식_기본.xlsx",
+  "personnel": [
+    {
+      "name": "주진철",
+      "role": "현장대리인"
+    },
+    {
+      "name": "박상태",
+      "role": "방사선안전관리자"
+    },
+    {
+      "name": "주진철",
+      "role": "RT 팀장"
+    },
+    {
+      "name": "우명광",
+      "role": "RT 검사자"
+    },
+    {
+      "name": "권인경",
+      "role": "PT 팀장"
+    },
+    {
+      "name": "권인경",
+      "role": "MT 팀장"
+    },
+    {
+      "name": "우명광",
+      "role": "PAUT 검사보조"
+    },
+    {
+      "name": "주진철",
+      "role": "PAUT 팀장"
+    },
+    {
+      "name": "우명광",
+      "role": "PT 검사자"
+    },
+    {
+      "name": "우명광",
+      "role": "MT 검사자"
+    },
+    {
+      "name": "장승대",
+      "role": "PT 검사자"
+    },
+    {
+      "name": "장승대",
+      "role": "MT 검사자"
+    },
+    {
+      "name": "장승대",
+      "role": "PAUT 검사보조"
+    },
+    {
+      "name": "",
+      "role": ""
+    },
+    {
+      "name": "",
+      "role": ""
+    }
+  ],
+  "equipment": [
+    {
+      "db": "[RT] γ-ray",
+      "qty": "2",
+      "cat": "RT",
+      "name": "γ-ray",
+      "spec": "TEN660/880"
+    },
+    {
+      "db": "[RT] Film Viewer",
+      "qty": "1",
+      "cat": "RT",
+      "name": "Film Viewer",
+      "spec": "DF-2C15 Pico View-P35"
+    },
+    {
+      "db": "[RT] 방사선측정기",
+      "qty": "2",
+      "cat": "RT",
+      "name": "방사선측정기",
+      "spec": "Survey Meter"
+    },
+    {
+      "db": "[RT] 개인방호장비",
+      "qty": "13",
+      "cat": "RT",
+      "name": "개인방호장비",
+      "spec": "알람모니터, TLB"
+    },
+    {
+      "db": "[PAUT] 초음파 장비",
+      "qty": "1",
+      "cat": "PAUT",
+      "name": "초음파 장비",
+      "spec": "OmniScan MX2"
+    },
+    {
+      "db": "[PAUT] Software",
+      "qty": "1",
+      "cat": "PAUT",
+      "name": "Software",
+      "spec": "OmniPC Tomo view"
+    },
+    {
+      "db": "[PAUT] 스캐너",
+      "qty": "1",
+      "cat": "PAUT",
+      "name": "스캐너",
+      "spec": "Cobra Scanner"
+    },
+    {
+      "db": "[PAUT] 탐촉자",
+      "qty": "1",
+      "cat": "PAUT",
+      "name": "탐촉자",
+      "spec": "10CCVE-A15"
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "[MT] MT장비",
+      "qty": "1",
+      "cat": "MT",
+      "name": "MT장비",
+      "spec": "YOKE"
+    },
+    {
+      "db": "[MT] 시험편",
+      "qty": "1",
+      "cat": "MT",
+      "name": "시험편",
+      "spec": "A1"
+    },
+    {
+      "db": "[PT] 표면온도계",
+      "qty": "1",
+      "cat": "PT",
+      "name": "표면온도계",
+      "spec": "TES1300"
+    },
+    {
+      "db": "[PT] 조도계",
+      "qty": "1",
+      "cat": "PT",
+      "name": "조도계",
+      "spec": "TES/1330A"
+    },
+    {
+      "db": "[PT] 시험편",
+      "qty": "1",
+      "cat": "PT",
+      "name": "시험편",
+      "spec": "A형"
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    }
+  ]
+}
