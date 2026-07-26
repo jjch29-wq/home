@@ -7,6 +7,7 @@ from openpyxl.worksheet.pagebreak import Break
 import os
 from datetime import datetime
 import json
+from tkcalendar import DateEntry
 
 CONFIG_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "위험성평가_설정.json")
 
@@ -702,18 +703,23 @@ class RiskAssessmentApp:
         
         # 3. 작성일자
         ttk.Label(form_frame, text="작성일자:").grid(row=2, column=0, sticky='e', padx=5, pady=5)
-        self.ent_write_date = ttk.Entry(form_frame, width=45)
+        self.ent_write_date = DateEntry(form_frame, width=42, date_pattern='yyyy년 mm월 dd일')
+        # date pattern in DateEntry uses lowercase y, m, d
+        # but DateEntry might not parse existing values properly if they have text in them.
+        self.ent_write_date.delete(0, tk.END)
         self.ent_write_date.insert(0, config.get("write_date", datetime.now().strftime("%Y년 %m월 %d일")))
         self.ent_write_date.grid(row=2, column=1, sticky='w', padx=5, pady=5)
         
         # 4. 관리기간
         ttk.Label(form_frame, text="시작일자:").grid(row=3, column=0, sticky='e', padx=5, pady=5)
-        self.ent_start_date = ttk.Entry(form_frame, width=45)
+        self.ent_start_date = DateEntry(form_frame, width=42, date_pattern='yyyy년 mm월 dd일')
+        self.ent_start_date.delete(0, tk.END)
         self.ent_start_date.insert(0, config.get("start_date", "2026년 06월 16일"))
         self.ent_start_date.grid(row=3, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="종료일자:").grid(row=4, column=0, sticky='e', padx=5, pady=5)
-        self.ent_end_date = ttk.Entry(form_frame, width=45)
+        self.ent_end_date = DateEntry(form_frame, width=42, date_pattern='yyyy년 mm월 dd일')
+        self.ent_end_date.delete(0, tk.END)
         self.ent_end_date.insert(0, config.get("end_date", "2026년 06월 30일"))
         self.ent_end_date.grid(row=4, column=1, sticky='w', padx=5, pady=5)
         

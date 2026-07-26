@@ -10,7 +10,7 @@ class WorkApprovalApp:
     def __init__(self, root):
         self.root = root
         self.root.title("작업승인계획서 자동 생성기")
-        self.root.geometry("650x950")
+        self.root.geometry("700x950")
         self.root.resizable(True, True)
         
         style = ttk.Style()
@@ -45,7 +45,6 @@ class WorkApprovalApp:
             
             self.tab_risk = ttk.Frame(self.notebook)
             self.notebook.add(self.tab_risk, text='위험성 평가표')
-            # The RiskAssessmentApp doesn't have a pack method for itself, it packs into root
             self.risk_manager = risk_module.RiskAssessmentApp(self.tab_risk)
         except Exception as e:
             print(f"위험성 평가표 모듈 로드 실패: {e}")
@@ -53,210 +52,172 @@ class WorkApprovalApp:
         # Title
         ttk.Label(main_frame, text="[서식 3] 작업승인계획서 생성기", font=('Malgun Gothic', 16, 'bold')).pack(pady=(0, 15))
         
-        # Form Container
-        form_frame = ttk.Frame(main_frame)
-        form_frame.pack(fill='both', expand=True)
+        # Form Container using Canvas for scrolling
+        bg_color = style.lookup('TFrame', 'background')
+        canvas = tk.Canvas(main_frame, bg=bg_color, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        form_frame = ttk.Frame(canvas)
+
+        canvas_window = canvas.create_window((0, 0), window=form_frame, anchor="nw")
+
+        form_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+        
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+            
+        canvas.bind("<Configure>", on_canvas_configure)
+        
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
         
         row_idx = 0
         
-        # 1. Date & Company
-        ttk.Label(form_frame, text="일자:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=5)
-        
+        # 0. 날짜 및 기능
         date_frame = ttk.Frame(form_frame)
-        date_frame.grid(row=row_idx, column=1, sticky='w', padx=5, pady=5)
+        date_frame.grid(row=row_idx, column=0, columnspan=2, sticky='w', pady=(0, 10))
         
-        self.ent_date = ttk.Combobox(date_frame, width=30)
+        ttk.Label(date_frame, text="일자:").pack(side='left', padx=(5, 5))
+        self.ent_date = ttk.Combobox(date_frame, width=25)
         self.ent_date.insert(0, datetime.now().strftime("%Y년 %m월 %d일 O요일"))
         self.ent_date.pack(side='left')
         self.ent_date.bind('<<ComboboxSelected>>', self.on_date_select)
         
-        btn_calc_date = ttk.Button(date_frame, text="[이전 날짜에서 누계 불러오기]", command=self.load_previous_totals)
-        btn_calc_date.pack(side='left', padx=10)
+        self.btn_generate = ttk.Button(date_frame, text="엑셀 생성", command=self.generate_files)
+        self.btn_generate.pack(side='left', padx=(20, 5))
         
-        self.btn_generate = ttk.Button(date_frame, text="엑셀 생성 (승인계획서)", command=self.generate_files)
-        self.btn_generate.pack(side='right', padx=2)
-        
-        self.btn_unified = ttk.Button(date_frame, text="🔥 일일 안전서류 통합 엑셀 생성", command=self.generate_unified_excel)
-        self.btn_unified.pack(side='right', padx=10)
+        self.btn_unified = ttk.Button(date_frame, text="🔥 통합 엑셀", command=self.generate_unified_excel)
+        self.btn_unified.pack(side='left', padx=5)
         
         self.lbl_status = ttk.Label(date_frame, text="대기 중...", foreground="gray")
-        self.lbl_status.pack(side='left', padx=5)
+        self.lbl_status.pack(side='left', padx=10)
         
         row_idx += 1
         
-        ttk.Label(form_frame, text="수급업체:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=5)
-        self.ent_company = ttk.Entry(form_frame, width=50)
-        self.ent_company.insert(0, "서울검사(주)")
-        self.ent_company.grid(row=row_idx, column=1, sticky='w', padx=5, pady=5)
+        # 1. 작업 구분
+        ttk.Label(form_frame, text="작업 구분:", font=('Malgun Gothic', 10, 'bold')).grid(row=row_idx, column=0, sticky='e', padx=5, pady=5)
+        type_frame = ttk.Frame(form_frame)
+        type_frame.grid(row=row_idx, column=1, sticky='w')
+        self.var_work_type = tk.StringVar(value="위험")
+        ttk.Radiobutton(type_frame, text="위험", variable=self.var_work_type, value="위험").pack(side='left', padx=10)
+        ttk.Radiobutton(type_frame, text="일반", variable=self.var_work_type, value="일반").pack(side='left', padx=10)
         row_idx += 1
         
-        # 2. 총 투입 현황
-        lbl_sec1 = ttk.Label(form_frame, text="1. 총 투입 현황", font=('Malgun Gothic', 10, 'bold'))
-        lbl_sec1.grid(row=row_idx, column=0, columnspan=2, sticky='w', pady=(10, 5))
+        # 2. 위험작업종류 (체크박스)
+        ttk.Label(form_frame, text="위험작업종류:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=5)
+        risk_types_frame = ttk.Frame(form_frame)
+        risk_types_frame.grid(row=row_idx, column=1, sticky='w', pady=5)
+        
+        self.risk_vars = {}
+        risk_list = ["화기작업", "밀폐공간 작업", "고소작업", "전기통신 작업", "화학물질 취급작업", 
+                     "굴착작업", "중량물 취급작업", "지하공간 가스방출", "지붕위·철골작업", "기타 위험작업"]
+        
+        for i, r_type in enumerate(risk_list):
+            var = tk.BooleanVar(value=False)
+            self.risk_vars[r_type] = var
+            cb = ttk.Checkbutton(risk_types_frame, text=r_type, variable=var)
+            cb.grid(row=i//3, column=i%3, sticky='w', padx=5, pady=2)
+            
         row_idx += 1
-        
-        ttk.Label(form_frame, text="총 작업 개소:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        self.ent_locations = ttk.Entry(form_frame, width=50)
-        self.ent_locations.insert(0, "00 개소")
-        self.ent_locations.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
-        row_idx += 1
-        
-        ttk.Label(form_frame, text="총 인원 (계):").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        self.ent_personnel = ttk.Entry(form_frame, width=50)
-        self.ent_personnel.insert(0, "00 명")
-        self.ent_personnel.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
-        row_idx += 1
-        
-        ttk.Label(form_frame, text="총 장비 (계):").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        self.ent_equipment = ttk.Entry(form_frame, width=50)
-        self.ent_equipment.insert(0, "00 대")
-        self.ent_equipment.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
-        row_idx += 1
-        
-        ttk.Label(form_frame, text="RT / 크롤러 투입:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        self.ent_rt = ttk.Entry(form_frame, width=50)
-        self.ent_rt.insert(0, "RT조사기 0대, 크롤러 0대")
-        self.ent_rt.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
-        row_idx += 1
-        
-        ttk.Label(form_frame, text="기타 장비 현황:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        self.ent_etc = ttk.Entry(form_frame, width=50)
-        self.ent_etc.insert(0, "UT 0대, PT 0세트, 발전기 0대")
-        self.ent_etc.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
-        row_idx += 1
-        
-        # 3. 팀별 세부 작업
-        sec2_frame = ttk.Frame(form_frame)
-        sec2_frame.grid(row=row_idx, column=0, columnspan=2, sticky='w', pady=(10, 5))
-        
-        lbl_sec2 = ttk.Label(sec2_frame, text="2. 팀별 세부 작업 (금일 작업 내용 및 현황)", font=('Malgun Gothic', 10, 'bold'))
-        lbl_sec2.pack(side='left', padx=(0, 20))
-        
-        self.team_a_active = tk.BooleanVar(value=True)
-        self.team_b_active = tk.BooleanVar(value=True)
-        self.team_a_rt = tk.BooleanVar(value=True)
-        self.team_a_ut = tk.BooleanVar(value=False)
-        self.team_a_pt = tk.BooleanVar(value=False)
-        self.team_b_rt = tk.BooleanVar(value=False)
-        self.team_b_ut = tk.BooleanVar(value=True)
-        self.team_b_pt = tk.BooleanVar(value=True)
-        
-        ttk.Checkbutton(sec2_frame, text="A팀 작업 진행", variable=self.team_a_active, command=self.toggle_team_mode).pack(side='left', padx=5)
-        ttk.Checkbutton(sec2_frame, text="B팀 작업 진행", variable=self.team_b_active, command=self.toggle_team_mode).pack(side='left', padx=5)
-        row_idx += 1
-        
-        # A팀
-        lbl_a = ttk.Label(form_frame, text="A팀 개소/내용:")
-        lbl_a.grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
-        
-        container_a = ttk.Frame(form_frame)
-        container_a.grid(row=row_idx, column=1, sticky='w', padx=5, pady=0)
-        
-        frame_a = ttk.Frame(container_a)
-        frame_a.pack(anchor='w', pady=(0, 2))
-        ttk.Label(frame_a, text="작업개소:").pack(side='left')
-        self.ent_team_a_loc = ttk.Entry(frame_a, width=8)
-        self.ent_team_a_loc.insert(0, "00")
-        self.ent_team_a_loc.pack(side='left', padx=2)
-        ttk.Label(frame_a, text="개소").pack(side='left', padx=(0, 15))
-        
-        ttk.Checkbutton(frame_a, text="RT", variable=self.team_a_rt).pack(side='left', padx=2)
-        ttk.Checkbutton(frame_a, text="UT", variable=self.team_a_ut).pack(side='left', padx=2)
-        ttk.Checkbutton(frame_a, text="PT", variable=self.team_a_pt).pack(side='left', padx=2)
-        
-        self.txt_team_a = tk.Text(container_a, width=50, height=4, font=('Malgun Gothic', 9))
-        self.txt_team_a.insert('1.0', "[구간: OO천 ~ OOO천]\n(내용) 30\" 주배관 맞대기 용접부 방사선투과검사(RT)\n※ 작업시간: (08:00~17:00)\n\n[투입 현황]\n인원: 00명\n장비: 조사기 1, 크롤러 1, 차폐막 2")
-        self.txt_team_a.pack(anchor='w')
-        row_idx += 1
-        
-        # B팀
-        lbl_b = ttk.Label(form_frame, text="B팀 개소/내용:")
-        lbl_b.grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
-        
-        container_b = ttk.Frame(form_frame)
-        container_b.grid(row=row_idx, column=1, sticky='w', padx=5, pady=0)
-        
-        frame_b = ttk.Frame(container_b)
-        frame_b.pack(anchor='w', pady=(0, 2))
-        ttk.Label(frame_b, text="작업개소:").pack(side='left')
-        self.ent_team_b_loc = ttk.Entry(frame_b, width=8)
-        self.ent_team_b_loc.insert(0, "00")
-        self.ent_team_b_loc.pack(side='left', padx=2)
-        ttk.Label(frame_b, text="개소").pack(side='left', padx=(0, 15))
-        
-        ttk.Checkbutton(frame_b, text="RT", variable=self.team_b_rt).pack(side='left', padx=2)
-        ttk.Checkbutton(frame_b, text="UT", variable=self.team_b_ut).pack(side='left', padx=2)
-        ttk.Checkbutton(frame_b, text="PT", variable=self.team_b_pt).pack(side='left', padx=2)
-        
-        self.txt_team_b = tk.Text(container_b, width=50, height=4, font=('Malgun Gothic', 9))
-        self.txt_team_b.insert('1.0', "[구간: OO관리소 내부]\n(내용) Tie-in 필릿 용접부 초음파(UT) 및 침투(PT)\n※ 작업시간: (08:00~17:00)\n\n[투입 현황]\n인원: 00명\n장비: UT 1, PT 1")
-        self.txt_team_b.pack(anchor='w')
+        ttk.Separator(form_frame, orient='horizontal').grid(row=row_idx, column=0, columnspan=2, sticky='ew', pady=10)
         row_idx += 1
 
-        # 4. 기타 진행 현황 (자동 계산)
-        lbl_sec3 = ttk.Label(form_frame, text="3. 진행 현황 (목표량: RT 24,536매, UT 319.02M, PT 338.63M)", font=('Malgun Gothic', 10, 'bold'))
-        lbl_sec3.grid(row=row_idx, column=0, columnspan=2, sticky='w', pady=(10, 5))
+        # 3. 작업 기본 정보
+        ttk.Label(form_frame, text="작업명:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_work_name = ttk.Entry(form_frame, width=50)
+        self.ent_work_name.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
         row_idx += 1
         
-        # RT Input
-        frame_rt = ttk.Frame(form_frame)
-        frame_rt.grid(row=row_idx, column=1, sticky='w')
-        ttk.Label(form_frame, text="RT (매):").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        ttk.Label(frame_rt, text="전일누계").pack(side='left')
-        self.ent_rt_prev = ttk.Entry(frame_rt, width=15)
-        self.ent_rt_prev.insert(0, "0")
-        self.ent_rt_prev.pack(side='left', padx=(5, 15))
-        
-        ttk.Label(frame_rt, text="금일계획").pack(side='left')
-        self.ent_rt_today = ttk.Entry(frame_rt, width=15)
-        self.ent_rt_today.insert(0, "0")
-        self.ent_rt_today.pack(side='left', padx=5)
+        ttk.Label(form_frame, text="작업기간:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_work_period = ttk.Entry(form_frame, width=50)
+        self.ent_work_period.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
+
+        ttk.Label(form_frame, text="원도급 업체명:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_main_company = ttk.Entry(form_frame, width=50)
+        self.ent_main_company.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
         row_idx += 1
         
-        # UT Input
-        frame_ut = ttk.Frame(form_frame)
-        frame_ut.grid(row=row_idx, column=1, sticky='w')
-        ttk.Label(form_frame, text="UT (M):").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        ttk.Label(frame_ut, text="전일누계").pack(side='left')
-        self.ent_ut_prev = ttk.Entry(frame_ut, width=15)
-        self.ent_ut_prev.insert(0, "0")
-        self.ent_ut_prev.pack(side='left', padx=(5, 15))
-        
-        ttk.Label(frame_ut, text="금일계획").pack(side='left')
-        self.ent_ut_today = ttk.Entry(frame_ut, width=15)
-        self.ent_ut_today.insert(0, "0")
-        self.ent_ut_today.pack(side='left', padx=5)
+        ttk.Label(form_frame, text="원도급 작업책임자:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_main_manager = ttk.Entry(form_frame, width=50)
+        self.ent_main_manager.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
         row_idx += 1
         
-        # PT Input
-        frame_pt = ttk.Frame(form_frame)
-        frame_pt.grid(row=row_idx, column=1, sticky='w')
-        ttk.Label(form_frame, text="PT (M):").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
-        ttk.Label(frame_pt, text="전일누계").pack(side='left')
-        self.ent_pt_prev = ttk.Entry(frame_pt, width=15)
-        self.ent_pt_prev.insert(0, "0")
-        self.ent_pt_prev.pack(side='left', padx=(5, 15))
-        
-        ttk.Label(frame_pt, text="금일계획").pack(side='left')
-        self.ent_pt_today = ttk.Entry(frame_pt, width=15)
-        self.ent_pt_today.insert(0, "0")
-        self.ent_pt_today.pack(side='left', padx=5)
+        ttk.Label(form_frame, text="하도급 업체명:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_sub_company = ttk.Entry(form_frame, width=50)
+        self.ent_sub_company.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
         row_idx += 1
         
-        ttk.Label(form_frame, text="요청사항:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
-        self.txt_req = tk.Text(form_frame, width=50, height=3, font=('Malgun Gothic', 9))
-        self.txt_req.insert('1.0', "- 익일 야간 RT 작업 승인 별도 요청\n- 크롤러 전원 지원 요망")
-        self.txt_req.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        ttk.Label(form_frame, text="하도급 작업책임자:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_sub_manager = ttk.Entry(form_frame, width=50)
+        self.ent_sub_manager.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
         row_idx += 1
         
-        # Generate Button moved to the top date_frame
+        ttk.Separator(form_frame, orient='horizontal').grid(row=row_idx, column=0, columnspan=2, sticky='ew', pady=10)
+        row_idx += 1
+
+        # 4. 투입 현황
+        ttk.Label(form_frame, text="작업인원:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
+        self.txt_personnel = tk.Text(form_frame, width=50, height=3, font=('Malgun Gothic', 9))
+        self.txt_personnel.insert('1.0', "총원 명\n(직종별 인원 세부적으로 작성)")
+        self.txt_personnel.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
+        
+        ttk.Label(form_frame, text="사용장비:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_equip = ttk.Entry(form_frame, width=50)
+        self.ent_equip.insert(0, "(종류, 수량 기재)")
+        self.ent_equip.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
+        
+        ttk.Label(form_frame, text="개인보호장비:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_ppe = ttk.Entry(form_frame, width=50)
+        self.ent_ppe.insert(0, "(종류, 수량 기재)")
+        self.ent_ppe.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
+        
+        ttk.Label(form_frame, text="기타 안전장비:").grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+        self.ent_safety_equip = ttk.Entry(form_frame, width=50)
+        self.ent_safety_equip.insert(0, "(종류, 수량 기재)")
+        self.ent_safety_equip.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
+        
+        ttk.Separator(form_frame, orient='horizontal').grid(row=row_idx, column=0, columnspan=2, sticky='ew', pady=10)
+        row_idx += 1
+
+        # 5. 상세 내용
+        ttk.Label(form_frame, text="작업내용:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
+        self.txt_work_content = tk.Text(form_frame, width=50, height=5, font=('Malgun Gothic', 9))
+        self.txt_work_content.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
+
+        ttk.Label(form_frame, text="주요 위험요인:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
+        self.txt_risk_factors = tk.Text(form_frame, width=50, height=4, font=('Malgun Gothic', 9))
+        self.txt_risk_factors.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
+        
+        ttk.Label(form_frame, text="현장점검\n체크리스트:").grid(row=row_idx, column=0, sticky='ne', padx=5, pady=2)
+        self.txt_checklist = tk.Text(form_frame, width=50, height=3, font=('Malgun Gothic', 9))
+        self.txt_checklist.insert('1.0', "전기작업, 굴착작업, 화기작업, 밀폐공간 작업시 작업책임자가 현장에서 체크리스트 점검사항 직접 확인 후 기입")
+        self.txt_checklist.grid(row=row_idx, column=1, sticky='w', padx=5, pady=2)
+        row_idx += 1
         
         # Load saved config
         self.load_config()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def get_history_path(self):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work_approval_history.json')
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'work_approval_history_v2.json')
 
     def load_history_data(self):
         path = self.get_history_path()
@@ -281,112 +242,31 @@ class WorkApprovalApp:
         if date_str in history:
             self.populate_ui(history[date_str], date_str)
 
-    def load_previous_totals(self):
-        history = self.load_history_data()
-        if not history:
-            messagebox.showinfo("알림", "저장된 이전 기록이 없습니다.")
-            return
-            
-        current_date_str = self.ent_date.get()
-        dates = sorted(list(history.keys()))
-        
-        prev_date = None
-        for d in reversed(dates):
-            if d < current_date_str:
-                prev_date = d
-                break
-                
-        if prev_date is None:
-            prev_date = dates[-1]
-            
-        prev_data = history[prev_date]
-        
-        try:
-            rt_total = self.parse_float(prev_data.get('rt_prev', '0')) + self.parse_float(prev_data.get('rt_today', '0'))
-            ut_total = self.parse_float(prev_data.get('ut_prev', '0')) + self.parse_float(prev_data.get('ut_today', '0'))
-            pt_total = self.parse_float(prev_data.get('pt_prev', '0')) + self.parse_float(prev_data.get('pt_today', '0'))
-            
-            def fmt(v): return str(int(v)) if v.is_integer() else str(v)
-            
-            self.ent_rt_prev.delete(0, tk.END)
-            self.ent_rt_prev.insert(0, fmt(rt_total))
-            
-            self.ent_ut_prev.delete(0, tk.END)
-            self.ent_ut_prev.insert(0, fmt(ut_total))
-            
-            self.ent_pt_prev.delete(0, tk.END)
-            self.ent_pt_prev.insert(0, fmt(pt_total))
-            
-            self.ent_rt_today.delete(0, tk.END)
-            self.ent_rt_today.insert(0, "0")
-            self.ent_ut_today.delete(0, tk.END)
-            self.ent_ut_today.insert(0, "0")
-            self.ent_pt_today.delete(0, tk.END)
-            self.ent_pt_today.insert(0, "0")
-            
-            messagebox.showinfo("성공", f"[{prev_date}] 의 누계 데이터를 불러왔습니다.\n(오늘 계획은 0으로 초기화됨)")
-        except Exception as e:
-            messagebox.showerror("오류", f"누계 불러오기 실패: {e}")
-
     def save_config(self):
         history = self.load_history_data()
         current_date = self.ent_date.get()
         
+        risk_selections = {k: v.get() for k, v in self.risk_vars.items()}
+        
         data = {
-            'company': self.ent_company.get(),
-            'locations': self.ent_locations.get(),
-            'personnel': self.ent_personnel.get(),
-            'equipment': self.ent_equipment.get(),
-            'rt': self.ent_rt.get(),
-            'etc': self.ent_etc.get(),
-            'team_a': self.txt_team_a.get('1.0', tk.END).strip(),
-            'team_b': self.txt_team_b.get('1.0', tk.END).strip(),
-            'team_a_loc': self.ent_team_a_loc.get().strip(),
-            'team_b_loc': self.ent_team_b_loc.get().strip(),
-            'team_a_active': self.team_a_active.get(),
-            'team_b_active': self.team_b_active.get(),
-            'team_a_rt': self.team_a_rt.get(),
-            'team_a_ut': self.team_a_ut.get(),
-            'team_a_pt': self.team_a_pt.get(),
-            'team_b_rt': self.team_b_rt.get(),
-            'team_b_ut': self.team_b_ut.get(),
-            'team_b_pt': self.team_b_pt.get(),
-            'rt_prev': self.ent_rt_prev.get(),
-            'rt_today': self.ent_rt_today.get(),
-            'ut_prev': self.ent_ut_prev.get(),
-            'ut_today': self.ent_ut_today.get(),
-            'pt_prev': self.ent_pt_prev.get(),
-            'pt_today': self.ent_pt_today.get(),
-            'req': self.txt_req.get('1.0', tk.END).strip(),
+            'work_type': self.var_work_type.get(),
+            'risks': risk_selections,
+            'work_name': self.ent_work_name.get(),
+            'work_period': self.ent_work_period.get(),
+            'main_company': self.ent_main_company.get(),
+            'main_manager': self.ent_main_manager.get(),
+            'sub_company': self.ent_sub_company.get(),
+            'sub_manager': self.ent_sub_manager.get(),
+            'personnel': self.txt_personnel.get('1.0', tk.END).strip(),
+            'equip': self.ent_equip.get(),
+            'ppe': self.ent_ppe.get(),
+            'safety_equip': self.ent_safety_equip.get(),
+            'work_content': self.txt_work_content.get('1.0', tk.END).strip(),
+            'risk_factors': self.txt_risk_factors.get('1.0', tk.END).strip(),
+            'checklist': self.txt_checklist.get('1.0', tk.END).strip()
         }
         
         history[current_date] = data
-        
-        # Cascading update for future dates
-        dates = [k for k in history.keys() if not k.startswith('_')]
-        sorted_dates = sorted(dates)
-        if current_date in sorted_dates:
-            idx = sorted_dates.index(current_date)
-            
-            def p(val): return self.parse_float(val)
-            def fmt(v): return str(int(v)) if v.is_integer() else str(v)
-            
-            cur_rt_total = p(data['rt_prev']) + p(data['rt_today'])
-            cur_ut_total = p(data['ut_prev']) + p(data['ut_today'])
-            cur_pt_total = p(data['pt_prev']) + p(data['pt_today'])
-            
-            for i in range(idx + 1, len(sorted_dates)):
-                next_date = sorted_dates[i]
-                next_data = history[next_date]
-                
-                next_data['rt_prev'] = fmt(cur_rt_total)
-                next_data['ut_prev'] = fmt(cur_ut_total)
-                next_data['pt_prev'] = fmt(cur_pt_total)
-                
-                cur_rt_total = cur_rt_total + p(next_data.get('rt_today', '0'))
-                cur_ut_total = cur_ut_total + p(next_data.get('ut_today', '0'))
-                cur_pt_total = cur_pt_total + p(next_data.get('pt_today', '0'))
-                
         self.save_history_data(history)
         
         dates = [k for k in history.keys() if not k.startswith('_')]
@@ -404,7 +284,7 @@ class WorkApprovalApp:
             return
 
         if '_window_geometry' in history:
-            pass # Removed logic that could cause off-screen window placement
+            pass # Keep logic clear of window geometry issues
 
         dates = [k for k in history.keys() if not k.startswith('_')]
         if not dates:
@@ -433,125 +313,45 @@ class WorkApprovalApp:
         if date_str:
             set_ent(self.ent_date, date_str)
             
-        set_ent(self.ent_company, data.get('company'))
-        set_ent(self.ent_locations, data.get('locations'))
-        set_ent(self.ent_personnel, data.get('personnel'))
-        set_ent(self.ent_equipment, data.get('equipment'))
-        set_ent(self.ent_rt, data.get('rt'))
-        set_ent(self.ent_etc, data.get('etc'))
-        
-        set_txt(self.txt_team_a, data.get('team_a'))
-        set_txt(self.txt_team_b, data.get('team_b'))
-        
-        if hasattr(self, 'ent_team_a_loc'):
-            set_ent(self.ent_team_a_loc, data.get('team_a_loc', '00'))
-        if hasattr(self, 'ent_team_b_loc'):
-            set_ent(self.ent_team_b_loc, data.get('team_b_loc', '00'))
-        
-        if 'team_a_active' in data:
-            self.team_a_active.set(data['team_a_active'])
-        if 'team_b_active' in data:
-            self.team_b_active.set(data['team_b_active'])
+        if 'work_type' in data:
+            self.var_work_type.set(data['work_type'])
             
-        if 'team_a_rt' in data: self.team_a_rt.set(data['team_a_rt'])
-        if 'team_a_ut' in data: self.team_a_ut.set(data['team_a_ut'])
-        if 'team_a_pt' in data: self.team_a_pt.set(data['team_a_pt'])
-        
-        if 'team_b_rt' in data: self.team_b_rt.set(data['team_b_rt'])
-        if 'team_b_ut' in data: self.team_b_ut.set(data['team_b_ut'])
-        if 'team_b_pt' in data: self.team_b_pt.set(data['team_b_pt'])
-            
-        self.toggle_team_mode()
-        
-        set_ent(self.ent_rt_prev, data.get('rt_prev'))
-        set_ent(self.ent_rt_today, data.get('rt_today'))
-        set_ent(self.ent_ut_prev, data.get('ut_prev'))
-        set_ent(self.ent_ut_today, data.get('ut_today'))
-        set_ent(self.ent_pt_prev, data.get('pt_prev'))
-        set_ent(self.ent_pt_today, data.get('pt_today'))
-        
-        set_txt(self.txt_req, data.get('req'))
-
-    def toggle_team_mode(self):
-        if self.team_a_active.get():
-            self.txt_team_a.config(state='normal', background='white')
-        else:
-            self.txt_team_a.config(state='disabled', background='#f0f0f0')
-            
-        if self.team_b_active.get():
-            self.txt_team_b.config(state='normal', background='white')
-        else:
-            self.txt_team_b.config(state='disabled', background='#f0f0f0')
-
-    def parse_float(self, val_str):
-        try:
-            return float(val_str.replace(',', '').strip())
-        except ValueError:
-            return 0.0
+        if 'risks' in data:
+            for k, v in data['risks'].items():
+                if k in self.risk_vars:
+                    self.risk_vars[k].set(v)
+                    
+        set_ent(self.ent_work_name, data.get('work_name'))
+        set_ent(self.ent_work_period, data.get('work_period'))
+        set_ent(self.ent_main_company, data.get('main_company'))
+        set_ent(self.ent_main_manager, data.get('main_manager'))
+        set_ent(self.ent_sub_company, data.get('sub_company'))
+        set_ent(self.ent_sub_manager, data.get('sub_manager'))
+        set_txt(self.txt_personnel, data.get('personnel'))
+        set_ent(self.ent_equip, data.get('equip'))
+        set_ent(self.ent_ppe, data.get('ppe'))
+        set_ent(self.ent_safety_equip, data.get('safety_equip'))
+        set_txt(self.txt_work_content, data.get('work_content'))
+        set_txt(self.txt_risk_factors, data.get('risk_factors'))
+        set_txt(self.txt_checklist, data.get('checklist'))
 
     def generate_files(self, silent_path=None):
-        # Targets
-        TARGET_RT = 24536
-        TARGET_UT = 319.02
-        TARGET_PT = 338.63
-        
-        rt_prev = self.parse_float(self.ent_rt_prev.get())
-        rt_today = self.parse_float(self.ent_rt_today.get())
-        ut_prev = self.parse_float(self.ent_ut_prev.get())
-        ut_today = self.parse_float(self.ent_ut_today.get())
-        pt_prev = self.parse_float(self.ent_pt_prev.get())
-        pt_today = self.parse_float(self.ent_pt_today.get())
-        
-        rt_prog = ((rt_prev + rt_today) / TARGET_RT) * 100 if TARGET_RT > 0 else 0
-        ut_prog = ((ut_prev + ut_today) / TARGET_UT) * 100 if TARGET_UT > 0 else 0
-        pt_prog = ((pt_prev + pt_today) / TARGET_PT) * 100 if TARGET_PT > 0 else 0
-        
-        def fmt(val, unit, is_int=False):
-            if is_int:
-                return f"{int(val):,} {unit}"
-            else:
-                return f"{val:,.2f} {unit}"
-                
-        str_prev = f"RT: {fmt(rt_prev, '매', True)}\nUT: {fmt(ut_prev, 'M')}\nPT: {fmt(pt_prev, 'M')}"
-        str_today = f"RT: {fmt(rt_today, '매', True)}\nUT: {fmt(ut_today, 'M')}\nPT: {fmt(pt_today, 'M')}"
-        str_prog = f"RT: {rt_prog:.1f}% / {fmt(TARGET_RT, '매', True)}\nUT: {ut_prog:.1f}% / {fmt(TARGET_UT, 'M')}\nPT: {pt_prog:.1f}% / {fmt(TARGET_PT, 'M')}"
-
-        params = {
-            'date': self.ent_date.get().strip(),
-            'company': self.ent_company.get().strip(),
-            'locations': self.ent_locations.get().strip(),
-            'personnel': self.ent_personnel.get().strip(),
-            'equipment': self.ent_equipment.get().strip(),
-            'rt': self.ent_rt.get().strip(),
-            'etc': self.ent_etc.get().strip(),
-            'team_a': self.txt_team_a.get('1.0', tk.END).strip(),
-            'team_b': self.txt_team_b.get('1.0', tk.END).strip(),
-            'team_a_loc': self.ent_team_a_loc.get().strip(),
-            'team_b_loc': self.ent_team_b_loc.get().strip(),
-            'team_a_active': self.team_a_active.get(),
-            'team_b_active': self.team_b_active.get(),
-            'team_a_rt': self.team_a_rt.get(),
-            'team_a_ut': self.team_a_ut.get(),
-            'team_a_pt': self.team_a_pt.get(),
-            'team_b_rt': self.team_b_rt.get(),
-            'team_b_ut': self.team_b_ut.get(),
-            'team_b_pt': self.team_b_pt.get(),
-            'prev': str_prev,
-            'today': str_today,
-            'prog': str_prog,
-            'req': self.txt_req.get('1.0', tk.END).strip(),
-        }
+        self.save_config()
+        current_date = self.ent_date.get()
+        history = self.load_history_data()
+        params = history.get(current_date, {})
         
         if silent_path:
             output_path = silent_path
         else:
-            initial_dir = os.path.dirname(os.path.abspath(__file__))
+            initial_dir = history.get('_last_save_dir', os.path.dirname(os.path.abspath(__file__)))
             output_dir = filedialog.askdirectory(title="저장할 폴더를 선택하세요", initialdir=initial_dir)
             if not output_dir:
                 return
-            output_path = os.path.join(output_dir, "작업승인계획서_NDT전용.xlsx")
+            history['_last_save_dir'] = output_dir
+            self.save_history_data(history)
+            output_path = os.path.join(output_dir, "작업승인계획서.xlsx")
         
-        self.save_config()
         self.btn_generate.config(state='disabled')
         self.lbl_status.config(text="엑셀 파일 생성 중...", foreground="blue")
         self.root.update()
@@ -571,9 +371,14 @@ class WorkApprovalApp:
             self.btn_generate.config(state='normal')
 
     def generate_unified_excel(self):
-        initial_dir = os.path.dirname(os.path.abspath(__file__))
+        history = self.load_history_data()
+        initial_dir = history.get('_last_save_dir', os.path.dirname(os.path.abspath(__file__)))
+        
         output_dir = filedialog.askdirectory(title="일일 안전서류 통합 엑셀 저장 폴더를 선택하세요", initialdir=initial_dir)
         if not output_dir: return
+        
+        history['_last_save_dir'] = output_dir
+        self.save_history_data(history)
         
         date_str = self.ent_date.get().replace("-", "")
         final_path = os.path.join(output_dir, f"일일_안전서류_통합_{date_str}.xlsx").replace("/", "\\")
@@ -680,11 +485,16 @@ class WorkApprovalApp:
         ws = wb.active
         ws.title = "작업승인계획서"
 
-        bold_font = Font(bold=True)
-        title_font = Font(bold=True, size=16)
+        # Fonts & Styles
+        title_font = Font(name='맑은 고딕', bold=True, size=16)
+        subtitle_font = Font(name='맑은 고딕', bold=True, size=12)
+        bold_font = Font(name='맑은 고딕', bold=True, size=10)
+        normal_font = Font(name='맑은 고딕', size=10)
+        small_font = Font(name='맑은 고딕', size=9, bold=True, color='0000FF')
+        
         center_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
         left_align = Alignment(horizontal="left", vertical="center", wrap_text=True)
-        header_fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
+        
         thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
                              top=Side(style='thin'), bottom=Side(style='thin'))
 
@@ -692,210 +502,223 @@ class WorkApprovalApp:
             for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
                 for cell in row:
                     cell.border = thin_border
+                    
+        def write_cell(c, r, val, font=normal_font, align=center_align):
+            cell = ws.cell(row=r, column=c, value=val)
+            cell.font = font
+            cell.alignment = align
+            return cell
 
-        ws.column_dimensions['A'].width = 20
-        ws.column_dimensions['B'].width = 50
-        ws.column_dimensions['C'].width = 40
-        ws.column_dimensions['D'].width = 40
-        ws.column_dimensions['E'].width = 25
+        # Column widths
+        cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']
+        widths = [5, 10, 10, 12, 10, 12, 10, 10, 12, 12, 12]
+        for c, w in zip(cols, widths):
+            ws.column_dimensions[c].width = w
 
+        # Header Section
         ws.merge_cells('A1:E1')
-        ws['A1'] = f"[서울안전건설사무소] {params['company']} 비파괴검사 주요 일일작업"
-        ws['A1'].font = title_font
-        ws['A1'].alignment = center_align
-        ws.row_dimensions[1].height = 45
-
-        ws.merge_cells('A3:C3')
-        ws['A3'] = f"일자: {params['date']}"
-        ws['A3'].font = bold_font
-
-        ws['D2'] = "수급업체"
-        ws['E2'] = "KOGAS"
-        ws['D3'] = "(인)"
-        ws['E3'] = "(인)"
-
-        for r in range(2, 4):
-            for c in range(4, 6):
-                ws.cell(row=r, column=c).alignment = center_align
-                ws.cell(row=r, column=c).border = thin_border
-                ws.cell(row=r, column=c).font = bold_font
-        ws['D2'].fill = header_fill
-        ws['E2'].fill = header_fill
-
-        ws.merge_cells('A5:E5')
-        ws['A5'] = "1. 총 투입 현황"
-        ws['A5'].font = bold_font
-
-        headers_sec1 = ["총 작업 개소", "인원 (계)", "장비 (계)", "RT / 크롤러 투입", "UT / PT / 기타 장비"]
-        for col, val in enumerate(headers_sec1, start=1):
-            cell = ws.cell(row=6, column=col, value=val)
-            cell.font = bold_font
-            cell.alignment = center_align
-            cell.fill = header_fill
-
-        values_sec1 = [params['locations'], params['personnel'], params['equipment'], params['rt'], params['etc']]
-        for col, val in enumerate(values_sec1, start=1):
-            cell = ws.cell(row=7, column=col, value=val)
-            cell.alignment = center_align
-
-        set_border(ws, 1, 6, 5, 7)
-
-        ws.merge_cells('A9:E9')
-        ws['A9'] = "2. 팀별 세부 작업 및 안전관리 계획"
-        ws['A9'].font = bold_font
-
-        headers_sec2 = ["구 분", "금 일 작 업 (내용 및 시간)", "주요 위험 요소 (위험성 평가)", "안전관리 중점사항 (대책)", "시공자\n(관리감독자)"]
-        for col, val in enumerate(headers_sec2, start=1):
-            cell = ws.cell(row=10, column=col, value=val)
-            cell.font = bold_font
-            cell.alignment = center_align
-            cell.fill = header_fill
-
-        active_teams = []
+        ws['A1'] = "[서식 3] 작업승인계획서"
+        ws['A1'].font = bold_font
+        ws['A1'].alignment = left_align
         
-        import hashlib
+        ws.merge_cells('C2:H3')
+        write_cell(3, 2, "작업승인계획서", title_font)
         
-        rt_haz = [
-            ("(방사선 피폭) 방사선 투과검사 중 피폭", "콜리메이터 사용, 통제구역 설정/감시자 배치"), 
-            ("(추락) 지상 2m 이상 배관 위 검사", "고소작업 시 2인 1조 필수, 안전대 체결"),
-            ("(질식) 배관 내부 진입 시 산소 결핍", "산소농도 측정 및 환기 실시, 밀폐공간 진입 통제"),
-            ("(협착) 크롤러 등 장비 이동 중 끼임", "장비 이동 시 주변 확인, 작업 지휘자 배치"),
-            ("(근골격계) 무거운 납 차폐체/장비 운반", "스트레칭 실시, 중량물 2인 이상 운반")
-        ]
-        ut_haz = [
-            ("(추락) 고소 배관 용접부 UT 탐상", "안전대 체결, 비계 발판 상태 사전 점검"),
-            ("(충돌) 좁은 공간 내 타 공정 장비 충돌", "안전감독관 사전 조율 후 작업 통제"),
-            ("(근골격계) 부자연스러운 자세로 장시간 탐상", "주기적인 휴식 및 스트레칭 실시"),
-            ("(전도) 현장 내 자재/공구에 걸려 넘어짐", "작업장 주변 정리정돈 철저, 조도 확보")
-        ]
-        pt_haz = [
-            ("(화학물질) PT 용제 취급 시 흡입/피부접촉", "MSDS 비치 및 방독마스크, 장갑 착용"),
-            ("(화재) 가연성 세척액 사용으로 인한 화재", "화기 구역 분리, 소화기 비치"),
-            ("(밀폐공간) 환기 불량 구역 PT 검사 시 질식", "국소배기장치 가동, 작업 중 주기적 환기"),
-            ("(근골격계) 바닥면 배관 쪼그려 앉아 검사", "적절한 휴식시간 부여, 스트레칭 유도")
-        ]
+        w_type = params.get('work_type', '위험')
+        r_mark = "■" if w_type == "위험" else "□"
+        n_mark = "■" if w_type == "일반" else "□"
+        type_str = f"( {r_mark} 위험   {n_mark} 일반 )"
+        ws.merge_cells('C4:H4')
+        write_cell(3, 4, type_str, subtitle_font)
 
-        def build_team_hazards(date_str, is_rt, is_ut, is_pt):
-            hash_val = int(hashlib.md5(date_str.encode('utf-8')).hexdigest(), 16)
-            def pick_hazard(hz_list, offset=0):
-                return hz_list[(hash_val + offset) % len(hz_list)]
-                
-            selected_methods = []
-            if is_rt: selected_methods.append('RT')
-            if is_ut: selected_methods.append('UT')
-            if is_pt: selected_methods.append('PT')
+        # Signature Block
+        ws.merge_cells('F5:G6')
+        write_cell(6, 5, "수급업체\n현장대리인", bold_font)
+        ws.merge_cells('H5:I6')
+        write_cell(8, 5, "시공감독\n(KOGAS)", bold_font)
+        ws.merge_cells('J5:K6')
+        write_cell(10, 5, "소장\n(KOGAS)", bold_font)
+        
+        ws.merge_cells('F7:G9')
+        ws.merge_cells('H7:I9')
+        ws.merge_cells('J7:K9')
+        
+        write_cell(6, 7, "")
+        write_cell(8, 7, "전자결재\n(안전달인)")
+        write_cell(10, 7, "전자결재\n(안전달인)")
+        
+        ws.merge_cells('F10:G11')
+        write_cell(6, 10, "KOGAS 안전감독\n(위험작업시)", bold_font)
+        ws.merge_cells('H10:K11')
+        write_cell(8, 10, "전자결재 (안전달인)")
+        
+        set_border(ws, 6, 5, 11, 11)
+
+        # Risk Types Block
+        ws.merge_cells('A5:C5')
+        write_cell(1, 5, "※ 위험작업종류", small_font, left_align)
+        
+        risks = params.get('risks', {})
+        def g_risk(key): return "■" if risks.get(key, False) else "□"
+        
+        risk_map = [
+            [f"{g_risk('화기작업')}화기작업", f"{g_risk('밀폐공간 작업')}밀폐공간 작업", f"{g_risk('고소작업')}고소작업"],
+            [f"{g_risk('전기통신 작업')}전기통신 작업", f"{g_risk('화학물질 취급작업')}화학물질 취급작업", f"{g_risk('굴착작업')}굴착작업"],
+            [f"{g_risk('중량물 취급작업')}중량물 취급작업", f"{g_risk('지하공간 가스방출')}지하공간 가스방출", f"{g_risk('지붕위·철골작업')}지붕위·철골작업"],
+            [f"{g_risk('기타 위험작업')}기타 위험작업", "", ""]
+        ]
+        
+        for r_idx, r_list in enumerate(risk_map):
+            row = 6 + r_idx
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
+            write_cell(1, row, r_list[0], small_font, left_align)
             
-            picked = []
-            if len(selected_methods) == 0:
-                picked = [pick_hazard(rt_haz, 0), pick_hazard(rt_haz, 1), pick_hazard(rt_haz, 2)]
-            elif len(selected_methods) == 1:
-                m1 = selected_methods[0]
-                list1 = rt_haz if m1 == 'RT' else (ut_haz if m1 == 'UT' else pt_haz)
-                picked = [pick_hazard(list1, 0), pick_hazard(list1, 1), pick_hazard(list1, 2)]
-            elif len(selected_methods) == 2:
-                m1, m2 = selected_methods[0], selected_methods[1]
-                list1 = rt_haz if m1 == 'RT' else (ut_haz if m1 == 'UT' else pt_haz)
-                list2 = rt_haz if m2 == 'RT' else (ut_haz if m2 == 'UT' else pt_haz)
-                picked = [pick_hazard(list1, 0), pick_hazard(list2, 0), pick_hazard(list1, 1)]
-            elif len(selected_methods) >= 3:
-                picked = [pick_hazard(rt_haz, 0), pick_hazard(ut_haz, 0), pick_hazard(pt_haz, 0)]
-                
-            c_text = "\n".join([f"{idx+1}. {item[0]}" for idx, item in enumerate(picked)])
-            d_text = "\n".join([f"{idx+1}. {item[1]}" for idx, item in enumerate(picked)])
-            return c_text, d_text
+            ws.merge_cells(start_row=row, start_column=3, end_row=row, end_column=4)
+            write_cell(3, row, r_list[1], small_font, left_align)
+            
+            write_cell(5, row, r_list[2], small_font, left_align)
+            
+        ws.row_dimensions[1].height = 20
+        ws.row_dimensions[2].height = 25
+        ws.row_dimensions[3].height = 25
+        ws.row_dimensions[4].height = 20
+        for i in range(5, 12):
+            ws.row_dimensions[i].height = 20
+            
+        # Form Body
+        r = 13
+        # 작업명, 기간
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "작업명", bold_font)
+        ws.merge_cells(f'C{r}:F{r}')
+        write_cell(3, r, params.get('work_name', ''), align=left_align)
+        
+        ws.merge_cells(f'G{r}:H{r}')
+        write_cell(7, r, "작업기간", bold_font)
+        ws.merge_cells(f'I{r}:K{r}')
+        write_cell(9, r, params.get('work_period', '          ~          '))
+        ws.row_dimensions[r].height = 30
+        set_border(ws, 1, r, 11, r)
+        r += 1
 
-        if params.get('team_a_active'):
-            loc_a = params.get('team_a_loc', '00')
-            c_a, d_a = build_team_hazards(params['date'], params.get('team_a_rt'), params.get('team_a_ut'), params.get('team_a_pt'))
-            active_teams.append({
-                'A': f"비파괴 A팀 (본관)\n\n(작업개소: {loc_a}개소)",
-                'B': params['team_a'],
-                'C': c_a,
-                'D': d_a,
-                'E': "(서명)"
-            })
-        if params.get('team_b_active'):
-            loc_b = params.get('team_b_loc', '00')
-            c_b, d_b = build_team_hazards(params['date'], params.get('team_b_rt'), params.get('team_b_ut'), params.get('team_b_pt'))
-            active_teams.append({
-                'A': f"비파괴 B팀 (관리소)\n\n(작업개소: {loc_b}개소)",
-                'B': params['team_b'],
-                'C': c_b,
-                'D': d_b,
-                'E': "(서명)"
-            })
-        if len(active_teams) == 1:
-            active_teams[0]['A'] = active_teams[0]['A'].replace('B팀', 'A팀')
+        # 작업수행부서
+        ws.merge_cells(f'A{r}:B{r+1}')
+        write_cell(1, r, "작업수행부서", bold_font)
+        
+        ws.merge_cells(f'C{r}:D{r}')
+        write_cell(3, r, "원도급 업체명")
+        ws.merge_cells(f'E{r}:F{r}')
+        write_cell(5, r, params.get('main_company', ''), align=left_align)
+        ws.merge_cells(f'G{r}:H{r}')
+        write_cell(7, r, "작업책임자")
+        ws.merge_cells(f'I{r}:K{r}')
+        write_cell(9, r, params.get('main_manager', ''))
+        
+        ws.merge_cells(f'C{r+1}:D{r+1}')
+        write_cell(3, r+1, "하도급 업체명")
+        ws.merge_cells(f'E{r+1}:F{r+1}')
+        write_cell(5, r+1, params.get('sub_company', ''), align=left_align)
+        ws.merge_cells(f'G{r+1}:H{r+1}')
+        write_cell(7, r+1, "작업책임자")
+        ws.merge_cells(f'I{r+1}:K{r+1}')
+        write_cell(9, r+1, params.get('sub_manager', ''))
+        
+        ws.row_dimensions[r].height = 30
+        ws.row_dimensions[r+1].height = 30
+        set_border(ws, 1, r, 11, r+1)
+        r += 2
 
-        for i in range(2):
-            row_num = 11 + i
-            if i < len(active_teams):
-                team = active_teams[i]
-                ws[f'A{row_num}'] = team['A']
-                ws[f'B{row_num}'] = team['B']
-                ws[f'C{row_num}'] = team['C']
-                ws[f'D{row_num}'] = team['D']
-                ws[f'E{row_num}'] = team['E']
-                
-                ws[f'A{row_num}'].alignment = center_align
-                ws[f'B{row_num}'].alignment = left_align
-                ws[f'C{row_num}'].alignment = left_align
-                ws[f'D{row_num}'].alignment = left_align
-                ws[f'E{row_num}'].alignment = center_align
-            else:
-                ws[f'A{row_num}'] = ""
-                ws[f'B{row_num}'] = ""
-                ws[f'C{row_num}'] = "내용 없음"
-                ws[f'D{row_num}'] = ""
-                ws[f'E{row_num}'] = ""
-                
-                ws[f'A{row_num}'].alignment = center_align
-                ws[f'B{row_num}'].alignment = left_align
-                ws[f'C{row_num}'].alignment = center_align
-                ws[f'D{row_num}'].alignment = left_align
-                ws[f'E{row_num}'].alignment = center_align
+        # 투입현황
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "작업인원", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, params.get('personnel', '총원    명 (직종별 인원 세부적으로 작성)'), align=left_align)
+        ws.row_dimensions[r].height = 40
+        set_border(ws, 1, r, 11, r)
+        r += 1
+        
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "사용장비", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, params.get('equip', '(종류, 수량 기재)'), align=left_align)
+        ws.row_dimensions[r].height = 30
+        set_border(ws, 1, r, 11, r)
+        r += 1
+        
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "개인보호장비", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, params.get('ppe', '(종류, 수량 기재)'), align=left_align)
+        ws.row_dimensions[r].height = 30
+        set_border(ws, 1, r, 11, r)
+        r += 1
+        
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "기타 안전장비", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, params.get('safety_equip', '(종류, 수량 기재)'), align=left_align)
+        ws.row_dimensions[r].height = 30
+        set_border(ws, 1, r, 11, r)
+        r += 1
 
-        ws.row_dimensions[11].height = 130
-        ws.row_dimensions[12].height = 120
-        ws.row_dimensions[10].height = 30
+        # 작업내용
+        ws.merge_cells(f'A{r}:K{r}')
+        write_cell(1, r, "작업내용 (일일 수행 모든 작업사항을 세부적으로 작성)", bold_font, left_align)
+        ws.row_dimensions[r].height = 20
+        set_border(ws, 1, r, 11, r)
+        r += 1
+        
+        ws.merge_cells(f'A{r}:K{r}')
+        write_cell(1, r, params.get('work_content', ''), align=Alignment(horizontal="left", vertical="top", wrap_text=True))
+        ws.row_dimensions[r].height = 250
+        set_border(ws, 1, r, 11, r)
+        r += 1
 
-        set_border(ws, 1, 10, 5, 12)
+        # 주요 위험요인
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "주요 위험요인", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, params.get('risk_factors', ''), align=Alignment(horizontal="left", vertical="top", wrap_text=True))
+        ws.row_dimensions[r].height = 150
+        set_border(ws, 1, r, 11, r)
+        r += 1
 
-        ws.merge_cells('A14:E14')
-        ws['A14'] = "3. 기타 진행 현황 및 요청사항"
-        ws['A14'].font = bold_font
+        # 안전부서 검토의견
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "안전부서\n검토의견", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, "(위험작업 시 안전부 검토)", Font(name='맑은 고딕', size=10, italic=True, color='808080'))
+        ws.row_dimensions[r].height = 100
+        set_border(ws, 1, r, 11, r)
+        r += 1
 
-        headers_sec3 = ["작업 구간", "전일 누계", "금일 계획", "전체 진행률", "기타 작업 현황 및 요청사항"]
-        for col, val in enumerate(headers_sec3, start=1):
-            cell = ws.cell(row=15, column=col, value=val)
-            cell.font = bold_font
-            cell.alignment = center_align
-            cell.fill = header_fill
+        # 첨부
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "첨부", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, "위험성평가 결과, 도면, 시방서 등 작업관련 자료 첨부", align=left_align)
+        ws.row_dimensions[r].height = 30
+        set_border(ws, 1, r, 11, r)
+        r += 1
 
-        values_sec3 = ["전체 공구", params['prev'], params['today'], params['prog'], params['req']]
-        for col, val in enumerate(values_sec3, start=1):
-            cell = ws.cell(row=16, column=col, value=val)
-            if col == 5:
-                cell.alignment = left_align
-            else:
-                cell.alignment = center_align
+        # 현장점검 체크리스트
+        ws.merge_cells(f'A{r}:B{r}')
+        write_cell(1, r, "현장점검\n체크리스트", bold_font)
+        ws.merge_cells(f'C{r}:K{r}')
+        write_cell(3, r, params.get('checklist', '전기작업, 굴착작업, 화기작업, 밀폐공간 작업시 작업책임자가 현장에서 체크리스트 점검사항 직접 확인 후 기입'), align=left_align)
+        ws.row_dimensions[r].height = 80
+        set_border(ws, 1, r, 11, r)
 
-        # Set row height to 75 to fit 3 lines of text comfortably
-        ws.row_dimensions[16].height = 75
-        set_border(ws, 1, 15, 5, 16)
-
-        ws.merge_cells('A18:E18')
-        ws['A18'] = "※ 참고: 비파괴검사는 '위험작업'에 속하므로 본 계획서와 함께 [위험성평가표]를 첨부하여 작업 1일 전(D-1)까지 승인을 득해야 합니다."
-        ws['A18'].font = Font(bold=True, color="FF0000")
-
-        # 가로 방향 인쇄(Landscape) 및 한 페이지에 모두 맞춤 설정
-        ws.set_printer_settings(paper_size=9, orientation='landscape')
-        ws.print_options.horizontalCentered = True
-        ws.print_options.verticalCentered = True
-        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        # Print settings
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_margins.left = 0.5
+        ws.page_margins.right = 0.5
+        ws.page_margins.top = 0.75
+        ws.page_margins.bottom = 0.75
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 1
+        ws.print_options.horizontalCentered = True
 
         wb.save(output_path)
 

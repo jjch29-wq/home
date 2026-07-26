@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import datetime
 import win32com.client as win32
 import json
+from tkcalendar import DateEntry
 
 class TBMFormTab(ttk.Frame):
     def __init__(self, parent, main_app=None):
@@ -33,10 +34,11 @@ class TBMFormTab(ttk.Frame):
 
         ttk.Label(f_basic, text="TBM 일자:").grid(row=0, column=0, sticky=tk.W, pady=2)
         
-        self.ent_date = ttk.Combobox(f_basic, width=15)
-        self.ent_date.insert(0, datetime.datetime.now().strftime("%Y-%m-%d"))
+        self.ent_date = DateEntry(f_basic, width=15, date_pattern='yyyy-mm-dd')
+        # self.ent_date.insert is not typically used for DateEntry in the same way, but it sets today by default
         self.ent_date.grid(row=0, column=1, sticky=tk.W, pady=2)
-        self.ent_date.bind('<<ComboboxSelected>>', self.on_date_select)
+        self.ent_date.bind('<<DateEntrySelected>>', lambda e: [self.on_date_select(), self.sync_date_to_main()])
+        self.ent_date.bind('<KeyRelease>', lambda e: [self.on_date_select(), self.sync_date_to_main()])
             
         ttk.Label(f_basic, text="시작 시간:").grid(row=0, column=2, sticky=tk.W, padx=(10,0))
         self.ent_start_time = ttk.Entry(f_basic, width=10)
@@ -62,25 +64,96 @@ class TBMFormTab(ttk.Frame):
         self.var_wn_ut = tk.BooleanVar()
         self.var_wn_pt = tk.BooleanVar()
         
-        ttk.Checkbutton(f_work_name, text="RT", variable=self.var_wn_rt, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,5))
-        ttk.Checkbutton(f_work_name, text="UT", variable=self.var_wn_ut, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=5)
-        ttk.Checkbutton(f_work_name, text="PT", variable=self.var_wn_pt, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(5,10))
+        ttk.Checkbutton(f_work_name, text="RT", variable=self.var_wn_rt, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,2))
+        ttk.Label(f_work_name, text="수량:").pack(side=tk.LEFT)
+        self.ent_rt_qty = ttk.Entry(f_work_name, width=3)
+        self.ent_rt_qty.insert(0, "1")
+        self.ent_rt_qty.pack(side=tk.LEFT, padx=(0,10))
+        self.ent_rt_qty.bind('<KeyRelease>', self.update_equipment_in_main)
+
+        ttk.Checkbutton(f_work_name, text="UT", variable=self.var_wn_ut, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,2))
+        ttk.Label(f_work_name, text="수량:").pack(side=tk.LEFT)
+        self.ent_ut_qty = ttk.Entry(f_work_name, width=3)
+        self.ent_ut_qty.insert(0, "1")
+        self.ent_ut_qty.pack(side=tk.LEFT, padx=(0,10))
+        self.ent_ut_qty.bind('<KeyRelease>', self.update_equipment_in_main)
+
+        ttk.Checkbutton(f_work_name, text="PT", variable=self.var_wn_pt, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,2))
+        ttk.Label(f_work_name, text="(세척").pack(side=tk.LEFT)
+        self.ent_pt_qty_clean = ttk.Entry(f_work_name, width=2)
+        self.ent_pt_qty_clean.insert(0, "1")
+        self.ent_pt_qty_clean.pack(side=tk.LEFT)
+        self.ent_pt_qty_clean.bind('<KeyRelease>', self.update_equipment_in_main)
+
+        ttk.Label(f_work_name, text="침투").pack(side=tk.LEFT)
+        self.ent_pt_qty_pen = ttk.Entry(f_work_name, width=2)
+        self.ent_pt_qty_pen.insert(0, "1")
+        self.ent_pt_qty_pen.pack(side=tk.LEFT)
+        self.ent_pt_qty_pen.bind('<KeyRelease>', self.update_equipment_in_main)
+
+        ttk.Label(f_work_name, text="현상").pack(side=tk.LEFT)
+        self.ent_pt_qty_dev = ttk.Entry(f_work_name, width=2)
+        self.ent_pt_qty_dev.insert(0, "1")
+        self.ent_pt_qty_dev.pack(side=tk.LEFT)
+        self.ent_pt_qty_dev.bind('<KeyRelease>', self.update_equipment_in_main)
+        ttk.Label(f_work_name, text=")").pack(side=tk.LEFT, padx=(0,5))
         
-        self.ent_work_name = ttk.Entry(f_work_name, width=40)
+        self.ent_work_name = ttk.Entry(f_work_name, width=20)
         self.ent_work_name.pack(side=tk.LEFT)
         
-        ttk.Label(f_basic, text="작업내용:").grid(row=2, column=0, sticky=tk.W, pady=2)
-        self.ent_work_content = ttk.Entry(f_basic, width=50)
-        self.ent_work_content.grid(row=2, column=1, columnspan=5, sticky=tk.W, pady=2)
+        ttk.Label(f_basic, text="RT 부가장비:").grid(row=2, column=0, sticky=tk.W, pady=2)
+        f_rt_extras = ttk.Frame(f_basic)
+        f_rt_extras.grid(row=2, column=1, columnspan=7, sticky=tk.W, pady=2)
         
-        ttk.Label(f_basic, text="TBM 장소:").grid(row=3, column=0, sticky=tk.W, pady=2)
+        ttk.Label(f_rt_extras, text="Survey meter").pack(side=tk.LEFT)
+        self.ent_rt_survey_qty = ttk.Entry(f_rt_extras, width=3)
+        self.ent_rt_survey_qty.insert(0, "1")
+        self.ent_rt_survey_qty.pack(side=tk.LEFT, padx=(2,10))
+        self.ent_rt_survey_qty.bind('<KeyRelease>', self.update_equipment_in_main)
+
+        ttk.Label(f_rt_extras, text="ADR/TLD").pack(side=tk.LEFT)
+        self.ent_rt_adr_qty = ttk.Entry(f_rt_extras, width=3)
+        self.ent_rt_adr_qty.insert(0, "2")
+        self.ent_rt_adr_qty.pack(side=tk.LEFT, padx=(2,10))
+        self.ent_rt_adr_qty.bind('<KeyRelease>', self.update_equipment_in_main)
+
+        ttk.Label(f_rt_extras, text="표지판").pack(side=tk.LEFT)
+        self.ent_rt_sign_qty = ttk.Entry(f_rt_extras, width=3)
+        self.ent_rt_sign_qty.insert(0, "4")
+        self.ent_rt_sign_qty.pack(side=tk.LEFT, padx=(2,10))
+        self.ent_rt_sign_qty.bind('<KeyRelease>', self.update_equipment_in_main)
+        
+        ttk.Label(f_rt_extras, text="경고등").pack(side=tk.LEFT)
+        self.ent_rt_light_qty = ttk.Entry(f_rt_extras, width=3)
+        self.ent_rt_light_qty.insert(0, "4")
+        self.ent_rt_light_qty.pack(side=tk.LEFT, padx=(2,10))
+        self.ent_rt_light_qty.bind('<KeyRelease>', self.update_equipment_in_main)
+
+        ttk.Label(f_basic, text="UT 환경요인:").grid(row=3, column=0, sticky=tk.W, pady=2)
+        f_ut_extras = ttk.Frame(f_basic)
+        f_ut_extras.grid(row=3, column=1, columnspan=7, sticky=tk.W, pady=2)
+        
+        self.var_ut_height = tk.BooleanVar()
+        self.var_ut_confined = tk.BooleanVar()
+        self.var_ut_excavation = tk.BooleanVar()
+        
+        ttk.Checkbutton(f_ut_extras, text="고소작업", variable=self.var_ut_height, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,10))
+        ttk.Checkbutton(f_ut_extras, text="밀폐공간 작업", variable=self.var_ut_confined, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,10))
+        ttk.Checkbutton(f_ut_extras, text="굴착작업", variable=self.var_ut_excavation, command=self.update_work_and_hazards).pack(side=tk.LEFT, padx=(0,10))
+
+        ttk.Label(f_basic, text="작업내용:").grid(row=4, column=0, sticky=tk.W, pady=2)
+        self.ent_work_content = ttk.Entry(f_basic, width=50)
+        self.ent_work_content.grid(row=4, column=1, columnspan=5, sticky=tk.W, pady=2)
+        self.ent_work_content.bind('<KeyRelease>', self.sync_work_content_to_main)
+        
+        ttk.Label(f_basic, text="TBM 장소:").grid(row=5, column=0, sticky=tk.W, pady=2)
         self.ent_location = ttk.Entry(f_basic, width=50)
-        self.ent_location.grid(row=3, column=1, columnspan=3, sticky=tk.W, pady=2)
+        self.ent_location.grid(row=5, column=1, columnspan=3, sticky=tk.W, pady=2)
         
         self.var_risk_eval = tk.StringVar(value="예")
-        ttk.Label(f_basic, text="위험성평가 실시여부:").grid(row=3, column=4, columnspan=2, sticky=tk.W, padx=(10,0))
-        ttk.Radiobutton(f_basic, text="예", variable=self.var_risk_eval, value="예").grid(row=3, column=6)
-        ttk.Radiobutton(f_basic, text="아니오", variable=self.var_risk_eval, value="아니오").grid(row=3, column=7)
+        ttk.Label(f_basic, text="위험성평가 실시여부:").grid(row=5, column=4, columnspan=2, sticky=tk.W, padx=(10,0))
+        ttk.Radiobutton(f_basic, text="예", variable=self.var_risk_eval, value="예").grid(row=5, column=6)
+        ttk.Radiobutton(f_basic, text="아니오", variable=self.var_risk_eval, value="아니오").grid(row=5, column=7)
         
         # 2. 위험 요인
         f_risk = ttk.LabelFrame(parent, text="2. 잠재/중점 위험요인 및 대책", padding=10)
@@ -140,6 +213,7 @@ class TBMFormTab(ttk.Frame):
         self.ent_attendees = ttk.Entry(f_attend, width=80)
         self.ent_attendees.pack(anchor=tk.W, pady=5)
         self.ent_attendees.insert(0, "홍길동, 김철수, 이영희")
+        self.ent_attendees.bind('<KeyRelease>', self.update_personnel_in_main)
         
         # 5. 출력 버튼 (Moved to the top title_frame)
         
@@ -160,9 +234,37 @@ class TBMFormTab(ttk.Frame):
             names.append("침투탐상검사")
             selected_methods.append('PT')
             
+        work_name = ", ".join(names)
         self.ent_work_name.delete(0, tk.END)
-        self.ent_work_name.insert(0, ", ".join(names))
+        self.ent_work_name.insert(0, work_name)
         
+        # Update Work Name in main app
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'ent_work_name'):
+            self.main_app.ent_work_name.delete(0, tk.END)
+            self.main_app.ent_work_name.insert(0, work_name)
+
+        # Update Risk Checkboxes in main app
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'risk_vars'):
+            if self.var_wn_pt.get():
+                self.main_app.risk_vars["화학물질 취급작업"].set(True)
+            else:
+                self.main_app.risk_vars["화학물질 취급작업"].set(False)
+                
+            if self.var_wn_rt.get():
+                self.main_app.risk_vars["기타 위험작업"].set(True)
+            else:
+                self.main_app.risk_vars["기타 위험작업"].set(False)
+
+            if self.var_ut_height.get(): self.main_app.risk_vars["고소작업"].set(True)
+            else: self.main_app.risk_vars["고소작업"].set(False)
+            
+            if self.var_ut_confined.get(): self.main_app.risk_vars["밀폐공간 작업"].set(True)
+            else: self.main_app.risk_vars["밀폐공간 작업"].set(False)
+            
+            if self.var_ut_excavation.get(): self.main_app.risk_vars["굴착작업"].set(True)
+            else: self.main_app.risk_vars["굴착작업"].set(False)
+
+        # Update Risk Factors in main app
         rt_haz = [
             ("(방사선 피폭) 방사선 투과검사 중 피폭", "콜리메이터 사용, 통제구역 설정/감시자 배치"), 
             ("(추락) 지상 2m 이상 배관 위 검사", "고소작업 시 2인 1조 필수, 안전대 체결"),
@@ -221,6 +323,169 @@ class TBMFormTab(ttk.Frame):
             # Remove '☐' or checkbox marks if any, and extract just the text for key hazard
             self.ent_key_counter.insert(0, final_hazards[0][1])
 
+        # Share risk factors with main Work Approval Tab
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'txt_risk_factors'):
+            risk_text = ""
+            for i, haz in enumerate(final_hazards):
+                risk_text += f"{i+1}. {haz[0]}\n   - 대책: {haz[1]}\n"
+            
+            self.main_app.txt_risk_factors.delete('1.0', tk.END)
+            self.main_app.txt_risk_factors.insert('1.0', risk_text.strip())
+
+        # Also trigger personnel and equipment distribution update since work methods changed
+        self.update_personnel_in_main()
+        self.update_equipment_in_main()
+
+    def update_equipment_in_main(self, event=None):
+        if hasattr(self, 'main_app'):
+            # 1. Update Equipment
+            if hasattr(self.main_app, 'ent_equip'):
+                equips = []
+                
+                rt_qty = self.ent_rt_qty.get().strip() or "1"
+                ut_qty = self.ent_ut_qty.get().strip() or "1"
+                pt_clean = self.ent_pt_qty_clean.get().strip() or "1"
+                pt_pen = self.ent_pt_qty_pen.get().strip() or "1"
+                pt_dev = self.ent_pt_qty_dev.get().strip() or "1"
+                
+                if self.var_wn_rt.get():
+                    survey_qty = self.ent_rt_survey_qty.get().strip() or "1"
+                    equips.append(f"γ-ray(Se-75) {rt_qty}대, Survey meter {survey_qty}대")
+                if self.var_wn_ut.get(): equips.append(f"초음파탐상장비 {ut_qty}대")
+                if self.var_wn_pt.get(): equips.append(f"PT약품(세척제 {pt_clean}캔, 침투제 {pt_pen}캔, 현상제 {pt_dev}캔)")
+                
+                if equips:
+                    equip_str = ", ".join(equips)
+                else:
+                    equip_str = "(종류, 수량 기재)"
+                    
+                self.main_app.ent_equip.delete(0, tk.END)
+                self.main_app.ent_equip.insert(0, equip_str)
+
+            # 2. Update PPE
+            if hasattr(self.main_app, 'ent_ppe'):
+                ppes = []
+                if self.var_wn_rt.get():
+                    adr_qty = self.ent_rt_adr_qty.get().strip() or "2"
+                    ppes.append(f"방사선 측정 ADR {adr_qty}개, TLD {adr_qty}개")
+                
+                if ppes:
+                    ppe_str = ", ".join(ppes)
+                else:
+                    ppe_str = "(종류, 수량 기재)"
+                    
+                self.main_app.ent_ppe.delete(0, tk.END)
+                self.main_app.ent_ppe.insert(0, ppe_str)
+
+            # 3. Update Safety Equip
+            if hasattr(self.main_app, 'ent_safety_equip'):
+                safeties = []
+                if self.var_wn_rt.get():
+                    sign_qty = self.ent_rt_sign_qty.get().strip() or "4"
+                    light_qty = self.ent_rt_light_qty.get().strip() or "4"
+                    safeties.append(f"방사선표지판 {sign_qty}개, 경고등 {light_qty}개")
+                
+                if safeties:
+                    safety_str = ", ".join(safeties)
+                else:
+                    safety_str = "(종류, 수량 기재)"
+                    
+                self.main_app.ent_safety_equip.delete(0, tk.END)
+                self.main_app.ent_safety_equip.insert(0, safety_str)
+
+    def update_personnel_in_main(self, event=None):
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'txt_personnel'):
+            attendees_text = self.ent_attendees.get()
+            names = [name.strip() for name in attendees_text.split(',') if name.strip()]
+            count = len(names)
+            
+            selected_methods = []
+            if self.var_wn_rt.get(): selected_methods.append('RT')
+            if self.var_wn_ut.get(): selected_methods.append('UT')
+            if self.var_wn_pt.get(): selected_methods.append('PT')
+            
+            if not selected_methods:
+                selected_methods = ['비파괴']
+                
+            if count > 0:
+                result = f"총원 {count}명\n"
+                
+                import re
+                role_dict = {}
+                unassigned = []
+                
+                for name in names:
+                    match = re.search(r'\((.*?)\)', name)
+                    if match:
+                        role = match.group(1).upper()
+                        clean_name = re.sub(r'\(.*?\)', '', name).strip()
+                        if role not in role_dict:
+                            role_dict[role] = []
+                        role_dict[role].append(clean_name)
+                    else:
+                        unassigned.append(name)
+                
+                # If explicit roles are used
+                if role_dict:
+                    for role, role_names in role_dict.items():
+                        names_str = ", ".join(role_names)
+                        result += f"({role}검사원: {names_str})\n"
+                    
+                    if unassigned:
+                        names_str = ", ".join(unassigned)
+                        result += f"(기타 인원: {names_str})\n"
+                else:
+                    # Fallback to evenly distributing
+                    method_count = len(selected_methods)
+                    base_chunk = count // method_count
+                    remainder = count % method_count
+                    
+                    idx = 0
+                    for i, method in enumerate(selected_methods):
+                        chunk_size = base_chunk + (1 if i < remainder else 0)
+                        chunk_names = names[idx:idx+chunk_size]
+                        if chunk_names:
+                            names_str = ", ".join(chunk_names)
+                            result += f"({method}검사원: {names_str})\n"
+                        idx += chunk_size
+                    
+                result = result.strip()
+            else:
+                result = "총원 0명\n(직종별 인원 세부적으로 작성)"
+            
+            self.main_app.txt_personnel.delete('1.0', tk.END)
+            self.main_app.txt_personnel.insert('1.0', result)
+
+    def sync_date_to_main(self, event=None):
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'ent_date'):
+            tbm_date_str = self.ent_date.get()
+            try:
+                import datetime
+                tbm_date = datetime.datetime.strptime(tbm_date_str, "%Y-%m-%d")
+                prev_date = tbm_date - datetime.timedelta(days=1)
+                
+                weekdays = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
+                weekday_str = weekdays[prev_date.weekday()]
+                
+                formatted_date = prev_date.strftime(f"%Y년 %m월 %d일 {weekday_str}")
+                
+                # Update main app date combo box
+                self.main_app.ent_date.delete(0, tk.END)
+                self.main_app.ent_date.insert(0, formatted_date)
+                
+                # Update work period in main app
+                if hasattr(self.main_app, 'ent_work_period'):
+                    self.main_app.ent_work_period.delete(0, tk.END)
+                    self.main_app.ent_work_period.insert(0, f"{tbm_date_str} (1일)")
+            except ValueError:
+                pass
+
+    def sync_work_content_to_main(self, event=None):
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'txt_work_content'):
+            content = self.ent_work_content.get()
+            self.main_app.txt_work_content.delete('1.0', tk.END)
+            self.main_app.txt_work_content.insert('1.0', content)
+
     def export_excel(self, silent_path=None):
         try:
             excel = win32.Dispatch("Excel.Application")
@@ -266,10 +531,16 @@ class TBMFormTab(ttk.Frame):
             ws.Range(f"B{row}:C{row}").Merge()
             ws.Cells(row, 2).Value = "TBM 일시"
             
-            d_val = self.ent_date.get().replace("-", "")
-            y = d_val[:4] if len(d_val)>=4 else "202 "
-            m = d_val[4:6] if len(d_val)>=6 else "  "
-            d = d_val[6:8] if len(d_val)>=8 else "  "
+            d_val = self.ent_date.get()
+            import re
+            nums = re.findall(r'\d+', d_val)
+            if len(nums) >= 3:
+                y = nums[0]
+                if len(y) == 2: y = "20" + y
+                m = nums[1].zfill(2)
+                d = nums[2].zfill(2)
+            else:
+                y, m, d = "202 ", "  ", "  "
             
             ws.Range(f"D{row}:J{row}").Merge()
             ws.Cells(row, 4).Value = f"{y} 년  {m} 월  {d} 일   {self.ent_start_time.get()} ~ {self.ent_end_time.get()}"
@@ -488,6 +759,7 @@ class TBMFormTab(ttk.Frame):
         history = self.load_history_data()
         if date_str in history:
             self.populate_ui(history[date_str], date_str)
+        self.sync_date_to_main()
 
     def save_config(self):
         history = self.load_history_data()
@@ -500,6 +772,18 @@ class TBMFormTab(ttk.Frame):
             'wn_rt': self.var_wn_rt.get(),
             'wn_ut': self.var_wn_ut.get(),
             'wn_pt': self.var_wn_pt.get(),
+            'rt_qty': self.ent_rt_qty.get(),
+            'ut_qty': self.ent_ut_qty.get(),
+            'pt_qty_clean': self.ent_pt_qty_clean.get(),
+            'pt_qty_pen': self.ent_pt_qty_pen.get(),
+            'pt_qty_dev': self.ent_pt_qty_dev.get(),
+            'ut_height': self.var_ut_height.get(),
+            'ut_confined': self.var_ut_confined.get(),
+            'ut_excavation': self.var_ut_excavation.get(),
+            'rt_survey_qty': self.ent_rt_survey_qty.get(),
+            'rt_adr_qty': self.ent_rt_adr_qty.get(),
+            'rt_sign_qty': self.ent_rt_sign_qty.get(),
+            'rt_light_qty': self.ent_rt_light_qty.get(),
             'work_content': self.ent_work_content.get(),
             'location': self.ent_location.get(),
             'risk_eval': self.var_risk_eval.get(),
@@ -516,7 +800,6 @@ class TBMFormTab(ttk.Frame):
         
         history[current_date] = data
         self.save_history_data(history)
-        self.ent_date['values'] = sorted(list(history.keys()), reverse=True)
 
     def load_config(self):
         history = self.load_history_data()
@@ -524,7 +807,6 @@ class TBMFormTab(ttk.Frame):
             return
             
         sorted_dates = sorted(list(history.keys()), reverse=True)
-        self.ent_date['values'] = sorted_dates
         
         most_recent_date = sorted_dates[0]
         self.ent_date.delete(0, tk.END)
@@ -553,6 +835,22 @@ class TBMFormTab(ttk.Frame):
         self.var_wn_rt.set(data.get('wn_rt', True))
         self.var_wn_ut.set(data.get('wn_ut', False))
         self.var_wn_pt.set(data.get('wn_pt', False))
+        
+        self.var_ut_height.set(data.get('ut_height', False))
+        self.var_ut_confined.set(data.get('ut_confined', False))
+        self.var_ut_excavation.set(data.get('ut_excavation', False))
+        
+        set_ent(self.ent_rt_qty, data.get('rt_qty', '1'))
+        set_ent(self.ent_ut_qty, data.get('ut_qty', '1'))
+        set_ent(self.ent_pt_qty_clean, data.get('pt_qty_clean', '1'))
+        set_ent(self.ent_pt_qty_pen, data.get('pt_qty_pen', '1'))
+        set_ent(self.ent_pt_qty_dev, data.get('pt_qty_dev', '1'))
+        
+        set_ent(self.ent_rt_survey_qty, data.get('rt_survey_qty', '1'))
+        set_ent(self.ent_rt_adr_qty, data.get('rt_adr_qty', '2'))
+        set_ent(self.ent_rt_sign_qty, data.get('rt_sign_qty', '4'))
+        set_ent(self.ent_rt_light_qty, data.get('rt_light_qty', '4'))
+        
         names = []
         if self.var_wn_rt.get(): names.append("방사선투과검사")
         if self.var_wn_ut.get(): names.append("초음파탐상검사")
@@ -582,3 +880,6 @@ class TBMFormTab(ttk.Frame):
         set_txt(self.ent_daily_check, data.get('daily_check', '특이사항 없음.'))
         set_txt(self.ent_end_meeting, data.get('end_meeting', '안전하게 작업 종료함.'))
         set_ent(self.ent_attendees, data.get('attendees', ''))
+        self.update_personnel_in_main()
+        self.sync_date_to_main()
+        self.sync_work_content_to_main()

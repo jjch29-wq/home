@@ -96,14 +96,14 @@
       "qty": "1",
       "cat": "PAUT",
       "name": "초음파 장비",
-      "spec": "OmniScan MX2"
+      "spec": "OmniScan MX2 / MX3"
     },
     {
-      "db": "[PAUT] Software",
+      "db": "[PAUT] Software - OmniPC / Tomo view",
       "qty": "1",
       "cat": "PAUT",
       "name": "Software",
-      "spec": "OmniPC/Tomo view"
+      "spec": "OmniPC / Tomo view"
     },
     {
       "db": "[PAUT] 스캐너",
@@ -113,11 +113,11 @@
       "spec": "Cobra Scanner"
     },
     {
-      "db": "[PAUT] 탐촉자 - 5L64-A2",
+      "db": "[PAUT] 스캐너 - Jireh Microbe-2Probe Weld Scanner",
       "qty": "1",
       "cat": "PAUT",
-      "name": "탐촉자",
-      "spec": "5L64-A2"
+      "name": "스캐너",
+      "spec": "Jireh Microbe-2Probe Weld Scanner"
     },
     {
       "db": "[PAUT] 탐촉자 - 7.5CCEV35-A15",

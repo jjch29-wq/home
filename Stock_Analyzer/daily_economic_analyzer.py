@@ -330,32 +330,38 @@ def send_briefing_to_telegram(market_df, portfolio_df, pos_news, neg_news, trend
         sign = "+" if row['전일비 변동률(%)'] > 0 else ""
         msg += f"• {row['지표명']}: {row['현재가']} ({sign}{row['전일비 변동률(%)']}%)\n"
         
-    msg += "\n🎯 [5천 원 스윙 추천 TOP 3]\n"
+    msg += "\n🎯 [VIP 15% 수익 스윙 추천 TOP 3]\n"
     swing_results = []
     for _, row in portfolio_df.iterrows():
         name = row['추천 종목'].split('(')[0].strip()
         try:
             curr = float(str(row['현재가(원/$)']).replace(',','').replace('원','').replace('$',''))
-            support = float(str(row.get('예상 저점(지지선)', '0')).replace(',','').replace('원','').replace('$',''))
-            resistance = float(str(row.get('예상 고점(저항선)', '0')).replace(',','').replace('원','').replace('$',''))
-            if support == 0 or resistance == 0 or curr == 0: continue
+            support = float(str(row.get('목표 매수가', '0')).replace(',','').replace('원','').replace('$',''))
+            target_sell = float(str(row.get('부분 매도가', '0')).replace(',','').replace('원','').replace('$',''))
             
-            resistance = resistance * 0.95
-            profit = resistance - curr
-            if profit > 0:
-                dist = (curr - support) / support
-                shares = int(5000 / profit) + 1
-                capital = shares * curr
-                is_korea = '원' in str(row['현재가(원/$)'])
-                swing_results.append({'name': name, 'support': support, 'resistance': resistance, 'dist': dist, 'shares': shares, 'capital': capital, 'is_korea': is_korea})
+            if support == 0 or target_sell == 0 or curr == 0: continue
+            
+            is_korea = '원' in str(row['현재가(원/$)'])
+            is_vip = (is_korea and curr >= 80000) or (not is_korea and curr >= 60)
+            
+            if is_vip:
+                profit = target_sell - curr
+                if profit > 0:
+                    dist = (curr - support) / support
+                    shares = max(1, int(1000000 / curr)) if is_korea else max(1, int(1000 / curr))
+                    capital = shares * curr
+                    swing_results.append({'name': name, 'support': support, 'target_sell': target_sell, 'dist': dist, 'shares': shares, 'capital': capital, 'is_korea': is_korea})
         except: pass
         
-    swing_results.sort(key=lambda x: x['dist'])
-    for i, r in enumerate(swing_results[:3], 1):
-        unit = "원" if r['is_korea'] else "$"
-        fmt = lambda x: f"{int(x):,}{unit}" if r['is_korea'] else f"${x:.2f}"
-        msg += f"{i}. {r['name']} ({r['shares']}주 / {fmt(r['capital'])})\n"
-        msg += f"  👉 {fmt(r['support'])} 매수 ➡️ {fmt(r['resistance'])} 매도\n"
+    swing_results.sort(key=lambda x: abs(x['dist']))
+    if not swing_results:
+        msg += "• 현재 조건(8만원 이상 우량주 중 스윙 매수)에 부합하는 종목이 없습니다.\n"
+    else:
+        for i, r in enumerate(swing_results[:3], 1):
+            unit = "원" if r['is_korea'] else "$"
+            fmt = lambda x: f"{int(x):,}{unit}" if r['is_korea'] else f"${x:.2f}"
+            msg += f"{i}. {r['name']} ({r['shares']}주 / {fmt(r['capital'])})\n"
+            msg += f"  👉 {fmt(r['support'])} 매수 ➡️ {fmt(r['target_sell'])} 매도 (+15% 목표)\n"
         
     if 'trend_df' in globals() or True: # trend_df는 ui에서 넘겨받지 않고 그냥 내부 변수로 사용불가하니 인자로 추가해야함.
         pass # UI 단에서 넘기도록 수정해야 함
@@ -698,6 +704,8 @@ def get_portfolio_data(market_df=None):
                     if nasdaq_change <= -1.5: market_crash = True
                     elif nasdaq_change >= 1.5: market_boom = True
 
+                is_vip_stock = (is_korea and current_price >= 80000) or (not is_korea and current_price >= 60)
+                
                 # AI 매수/매도 타이밍 신호 생성 (스윙/평균회귀 전략 중심)
                 if vol_surge >= 200 and change_pct > 0:
                     trade_signal = "🚀 거래량 급증 (수급 폭발)"
@@ -707,6 +715,8 @@ def get_portfolio_data(market_df=None):
                     trade_signal = "데이터 부족"
                 elif drawdown_from_high <= -15.0 and current_rsi <= 35:
                     trade_signal = "🔥 패닉 셀링 (과대 낙폭/적극 매수)"
+                elif is_vip_stock and current_price < ma20:
+                    trade_signal = "🎯 VIP 15% 스윙 매수"
                 elif drawdown_from_high <= -8.0 and current_price < ma20:
                     trade_signal = "👍 눌림목 매수 (스윙 타점 진입)"
                 elif current_price >= high_20d * 0.98:
@@ -742,10 +752,16 @@ def get_portfolio_data(market_df=None):
                 elif '달러' in name or '골드' in name or '미국채' in name: style = "헷징/안전자산"
                 else: style = "국내 우량주"
                 
+                target_buy_val = ma20
+                if is_vip_stock:
+                    target_sell_val = target_buy_val * 1.15
+                else:
+                    target_sell_val = high_20d * 0.95
+
                 support_price = f"{int(low_20d):,}원" if is_korea else f"${low_20d:.2f}"
                 resistance_price = f"{int(high_20d):,}원" if is_korea else f"${high_20d:.2f}"
-                target_buy = f"{int(ma20):,}원" if is_korea else f"${ma20:.2f}"
-                target_sell = f"{int(high_20d * 0.95):,}원" if is_korea else f"${high_20d * 0.95:.2f}"
+                target_buy = f"{int(target_buy_val):,}원" if is_korea else f"${target_buy_val:.2f}"
+                target_sell = f"{int(target_sell_val):,}원" if is_korea else f"${target_sell_val:.2f}"
                 
                 qty = current_owned.get(name, OWNED_STOCKS.get(ticker, 0))
                 qty_str = f"{qty}주" if qty > 0 else "-"
@@ -811,14 +827,15 @@ def get_buy_recommendations(portfolio_df):
     if portfolio_df.empty:
         return pd.DataFrame()
         
-    # 우선순위: 1. 패닉 셀링, 2. 눌림목 매수, 3. 거래량 급증, 4. 숨은 진주, 5. RSI 바닥, 6. 지지선 대기
+    # 우선순위: 1. 패닉 셀링, 2. VIP 15% 수익, 3. 눌림목 매수, 4. 거래량 급증, 5. 숨은 진주, 6. RSI 바닥, 7. 지지선 대기
     priority = {
         '🔥 패닉 셀링 (과대 낙폭/적극 매수)': 1,
-        '👍 눌림목 매수 (스윙 타점 진입)': 2,
-        '🚀 거래량 급증 (수급 폭발)': 3,
-        '👑 숨은 진주 (초저평가 매수)': 4,
-        '🔥 적극 매수 (RSI 바닥)': 5,
-        '⏳ 지지선 대기 (조정 중)': 6
+        '🎯 VIP 15% 스윙 매수': 2,
+        '👍 눌림목 매수 (스윙 타점 진입)': 3,
+        '🚀 거래량 급증 (수급 폭발)': 4,
+        '👑 숨은 진주 (초저평가 매수)': 5,
+        '🔥 적극 매수 (RSI 바닥)': 6,
+        '⏳ 지지선 대기 (조정 중)': 7
     }
     
     seen_stocks = set()
@@ -826,11 +843,11 @@ def get_buy_recommendations(portfolio_df):
     for _, row in portfolio_df.iterrows():
         signal = row.get('AI 매매 시그널', '')
         if signal in priority:
-            # 수익률(%) = (예상 고점 - 현재가) / 현재가 * 100
+            # 수익률(%) = (부분 매도가 - 현재가) / 현재가 * 100
             try:
                 curr = float(str(row['현재가(원/$)']).replace(',','').replace('원','').replace('$',''))
-                res = float(str(row['예상 고점(저항선)']).replace(',','').replace('원','').replace('$',''))
-                expected_profit_pct = ((res * 0.95) - curr) / curr * 100 if curr > 0 else 0
+                res = float(str(row['부분 매도가']).replace(',','').replace('원','').replace('$',''))
+                expected_profit_pct = (res - curr) / curr * 100 if curr > 0 else 0
             except:
                 expected_profit_pct = 0
                 
