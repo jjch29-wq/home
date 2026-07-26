@@ -113,18 +113,18 @@
       "spec": "Cobra Scanner"
     },
     {
-      "db": "[PAUT] 탐촉자",
+      "db": "[PAUT] 탐촉자 - 5L64-A2",
       "qty": "1",
       "cat": "PAUT",
       "name": "탐촉자",
-      "spec": "10CCVE-A15"
+      "spec": "5L64-A2"
     },
     {
-      "db": "",
-      "qty": "",
-      "cat": "",
-      "name": "",
-      "spec": ""
+      "db": "[PAUT] 탐촉자 - 7.5CCEV35-A15",
+      "qty": "1",
+      "cat": "PAUT",
+      "name": "탐촉자",
+      "spec": "7.5CCEV35-A15"
     },
     {
       "db": "[MT] MT장비",
@@ -160,6 +160,111 @@
       "cat": "PT",
       "name": "시험편",
       "spec": "A형"
+    },
+    {
+      "db": "[PAUT] 탐촉자 - 5L16-A10",
+      "qty": "1",
+      "cat": "PAUT",
+      "name": "탐촉자",
+      "spec": "5L16-A10"
+    },
+    {
+      "db": "[PAUT] 스캐너 - Jireh Microbe-2Probe Weld Scanner",
+      "qty": "1",
+      "cat": "PAUT",
+      "name": "스캐너",
+      "spec": "Jireh Microbe-2Probe Weld Scanner"
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
+    },
+    {
+      "db": "",
+      "qty": "",
+      "cat": "",
+      "name": "",
+      "spec": ""
     },
     {
       "db": "",

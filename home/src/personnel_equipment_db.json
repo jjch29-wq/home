@@ -141,8 +141,32 @@
     },
     {
       "category": "PAUT",
+      "name": "스캐너",
+      "spec": "Jireh Microbe-2Probe Weld Scanner",
+      "qty": "1"
+    },
+    {
+      "category": "PAUT",
       "name": "탐촉자",
       "spec": "10CCVE-A15",
+      "qty": "1"
+    },
+    {
+      "category": "PAUT",
+      "name": "탐촉자",
+      "spec": "5L16-A10",
+      "qty": "1"
+    },
+    {
+      "category": "PAUT",
+      "name": "탐촉자",
+      "spec": "7.5CCEV-A15",
+      "qty": "1"
+    },
+    {
+      "category": "PAUT",
+      "name": "탐촉자",
+      "spec": "5L64-A2",
       "qty": "1"
     },
     {

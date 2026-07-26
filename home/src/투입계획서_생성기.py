@@ -147,14 +147,14 @@ class DeploymentApp:
         
         # Build equipment map for combobox
         eq_list = self.db.get("equipment", [])
-        self.eq_map = {f"[{eq.get('category', '')}] {eq.get('name', '')}": eq for eq in eq_list}
+        self.eq_map = {f"[{eq.get('category', '')}] {eq.get('name', '')} - {eq.get('spec', '')}": eq for eq in eq_list}
         eq_options = ["[비우기]"] + list(self.eq_map.keys())
         
-        for i in range(15):
+        for i in range(30):
             ttk.Label(scrollable_frame, text=str(i+1)).grid(row=i+1, column=0, padx=15, pady=2)
             
             db_var = tk.StringVar()
-            cb_db = ttk.Combobox(scrollable_frame, textvariable=db_var, state='readonly', values=eq_options, width=20)
+            cb_db = ttk.Combobox(scrollable_frame, textvariable=db_var, state='readonly', values=eq_options, width=45)
             cb_db.grid(row=i+1, column=1, padx=5, pady=2)
             
             qty_var = tk.StringVar()
@@ -663,15 +663,37 @@ class DeploymentApp:
                         # 3. 인력 탭 인쇄 시 좌우 여백 틀어짐 방지 (가로 가운데 맞춤, 인쇄 영역 고정 및 좌우 여백 대칭 맞춤)
                         try:
                             from openpyxl.utils import get_column_letter
+                            if ws.sheet_properties.pageSetUpPr is None:
+                                ws.sheet_properties.pageSetUpPr = openpyxl.worksheet.properties.PageSetupProperties()
+                            ws.sheet_properties.pageSetUpPr.fitToPage = True
+                            ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+                            ws.page_setup.fitToWidth = 1
+                            ws.page_setup.fitToHeight = 0
+                            
                             ws.page_margins.left = 0.5
                             ws.page_margins.right = 0.5
                             ws.print_options.horizontalCentered = True
                             
-                            # 비고 열까지만 인쇄 영역 설정 (취득년월일 옆 1~2칸)
-                            end_c = date_col if date_col != -1 else (qual_col if qual_col != -1 else name_col+2)
-                            last_col_letter = get_column_letter(end_c + 1)
-                            # 표 끝부분(table_end)까지만 인쇄되도록 설정 (하드코딩 35로 인해 빈 페이지 2페이지가 추가되는 것 방지)
-                            ws.print_area = f"A1:{last_col_letter}{table_end if table_end > start_row else ws.max_row}"
+                            # 실제 표의 시작 열과 끝 열을 탐색하여 인쇄 영역을 정확히 맞춤
+                            first_col = 1
+                            for c in range(1, name_col + 1):
+                                val = ws.cell(row=start_row - 1, column=c).value
+                                if val and ("순" in str(val) or "연번" in str(val) or "No" in str(val) or "순번" in str(val)):
+                                    first_col = c
+                                    break
+                                    
+                            last_col = name_col + 3
+                            for c in range(name_col, ws.max_column + 1):
+                                val = ws.cell(row=start_row - 1, column=c).value
+                                if val and "비고" in str(val).replace(" ", ""):
+                                    last_col = c
+                                    break
+                            
+                            first_col_letter = get_column_letter(first_col)
+                            last_col_letter = get_column_letter(last_col)
+                            
+                            # 표 끝부분(table_end)까지만 인쇄되도록 설정
+                            ws.print_area = f"{first_col_letter}1:{last_col_letter}{table_end if table_end > start_row else ws.max_row}"
                         except Exception:
                             pass
                                 
@@ -908,6 +930,10 @@ class DeploymentApp:
                         ws.page_setup.fitToHeight = 1
                         ws.print_options.horizontalCentered = True
                         ws.print_options.verticalCentered = True
+                        
+                        # 엑셀 자체 페이지 여백을 강제로 동일하게 고정하여 완벽한 대칭 확보
+                        ws.page_margins.left = 0.5
+                        ws.page_margins.right = 0.5
                                         
                 # Fill eq org chart
                 elif "장비조직도" in sheet_name:
@@ -937,10 +963,13 @@ class DeploymentApp:
                     for eq in equip_data:
                         cat = eq["category"].strip()
                         if not cat: cat = "기타"
-                        eq_groups.setdefault(cat, []).append(eq)
+                        name = eq["name"].strip()
+                        if cat not in eq_groups: eq_groups[cat] = {}
+                        if name not in eq_groups[cat]: eq_groups[cat][name] = []
+                        eq_groups[cat][name].append(eq)
                         
-                    def draw_eq_box(start_row, start_col, title, items, width=4):
-                        if not items: return start_row
+                    def draw_eq_box(start_row, start_col, title, name_dict, width=4):
+                        if not name_dict: return start_row
                         ws.merge_cells(start_row=start_row, start_column=start_col, end_row=start_row, end_column=start_col+width-1)
                         header = ws.cell(row=start_row, column=start_col)
                         header.value = title
@@ -955,28 +984,46 @@ class DeploymentApp:
                             )
                         
                         curr_row = start_row + 1
-                        for idx, eq in enumerate(items):
-                            ws.merge_cells(start_row=curr_row, start_column=start_col, end_row=curr_row+2, end_column=start_col+width-1)
-                            n_cell = ws.cell(row=curr_row, column=start_col)
+                        names = list(name_dict.keys())
+                        for idx, name in enumerate(names):
+                            specs = name_dict[name]
                             
-                            rt_elements = [
-                                TextBlock(InlineFont(rFont='맑은 고딕', b=True, sz=11), f"{eq['name']}\n"),
-                                TextBlock(InlineFont(rFont='맑은 고딕', sz=9, color=openpyxl.styles.colors.Color(rgb='FF595959')), f"({eq['spec']})\n"),
-                                TextBlock(InlineFont(rFont='맑은 고딕', b=True, color=openpyxl.styles.colors.Color(rgb='FF0000FF')), f"{eq['qty']}개")
-                            ]
-                            n_cell.value = CellRichText(rt_elements)
-                            n_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                            
-                            is_last = (idx == len(items) - 1)
-                            for r_idx in range(3):
-                                r = curr_row + r_idx
+                            lines = [(name, 'name')]
+                            for spec_item in specs:
+                                lines.append((f"({spec_item['spec']})", 'spec'))
+                                lines.append((f"{spec_item['qty']}개", 'qty'))
+                                
+                            for line_idx, (text, l_type) in enumerate(lines):
+                                ws.merge_cells(start_row=curr_row, start_column=start_col, end_row=curr_row, end_column=start_col+width-1)
+                                n_cell = ws.cell(row=curr_row, column=start_col)
+                                n_cell.value = text
+                                n_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                                
+                                if l_type == 'name':
+                                    n_cell.font = Font(name='맑은 고딕', bold=True, size=11)
+                                elif l_type == 'spec':
+                                    n_cell.font = Font(name='맑은 고딕', size=9, color='595959')
+                                elif l_type == 'qty':
+                                    n_cell.font = Font(name='맑은 고딕', bold=True, color='0000FF')
+                                
+                                is_last_name = (idx == len(names) - 1)
+                                is_last_line = (line_idx == len(lines) - 1)
+                                
                                 for c in range(start_col, start_col+width):
-                                    set_border(r, c,
+                                    set_border(curr_row, c,
                                         left=openpyxl.styles.Side(style='medium') if c == start_col else None,
                                         right=openpyxl.styles.Side(style='medium') if c == start_col+width-1 else None,
-                                        bottom=openpyxl.styles.Side(style='medium') if (is_last and r_idx == 2) else openpyxl.styles.Side(style='dotted') if r_idx == 2 else None
+                                        bottom=openpyxl.styles.Side(style='medium') if (is_last_name and is_last_line) else openpyxl.styles.Side(style='dotted') if is_last_line else None
                                     )
-                            curr_row += 3
+                                    
+                                # 글자 수에 따른 동적 높이 계산 (잘림 방지)
+                                text_len = len(text)
+                                estimated_lines = 1
+                                if text_len > 18:
+                                    estimated_lines = (text_len // 18) + 1
+                                
+                                ws.row_dimensions[curr_row].height = (15 * estimated_lines) + 5
+                                curr_row += 1
                         return curr_row - 1
                         
                     def draw_vline(r1, r2, col):
@@ -990,10 +1037,16 @@ class DeploymentApp:
                     BLOCK_WIDTH = 6
                     SPACING = 2
                     
-                    cats = list(eq_groups.keys())
+                    # 원하는 순서대로 장비 정렬 (RT, PAUT, UT, PT, MT 등)
+                    custom_sort = {"RT": 1, "PAUT": 2, "UT": 3, "PT": 4, "MT": 5}
+                    cats = sorted(list(eq_groups.keys()), key=lambda x: custom_sort.get(x.strip().upper(), 99))
+                    
                     if cats:
-                        # Calculate centers first to perfect align the root box
-                        curr_col = 2
+                        # 모든 행 높이 초기화 (위쪽 여백 제거 및 짤림 방지)
+                        for r in range(1, 200):
+                            ws.row_dimensions[r].height = 16.5
+
+                        curr_col = 1  # 양쪽 여백을 동일하게 맞추기 위해 1열부터 꽉 채워서 시작
                         centers = []
                         for _ in cats:
                             centers.append(curr_col + (BLOCK_WIDTH // 2))
@@ -1004,9 +1057,10 @@ class DeploymentApp:
                         else:
                             mid_boundary = centers[0]
                             
-                        root_col = max(2, mid_boundary - (BLOCK_WIDTH // 2))
+                        root_col = max(1, mid_boundary - (BLOCK_WIDTH // 2))
                         root_center = root_col + (BLOCK_WIDTH // 2)
-                        root_row = 2
+                        
+                        root_row = 1  # 위쪽 여백 최소화를 위해 1행부터 시작
                         
                         ws.merge_cells(start_row=root_row, start_column=root_col, end_row=root_row+1, end_column=root_col+BLOCK_WIDTH-1)
                         title_cell = ws.cell(row=root_row, column=root_col)
@@ -1026,7 +1080,7 @@ class DeploymentApp:
                         branch_row = root_row + 4
                         max_bottom = branch_row
                         
-                        temp_col = 2
+                        temp_col = 1
                         for cat in cats:
                             b = draw_eq_box(branch_row, temp_col, f"[{cat}] 장비", eq_groups[cat], width=BLOCK_WIDTH)
                             if b > max_bottom: max_bottom = b
@@ -1039,21 +1093,27 @@ class DeploymentApp:
                         for c in centers:
                             draw_vline(branch_row - 1, branch_row - 1, c)
                                 
+                        # 여백 없이 양끝을 꽉 채워서 완벽한 대칭을 맞춤
                         target_max_col = temp_col - SPACING - 1
                         if target_max_col < 10: target_max_col = 10
                         if ws.max_column > target_max_col:
                             ws.delete_cols(target_max_col + 1, ws.max_column - target_max_col + 5)
                             
-                        # Set uniform column widths and fit to 1 page landscape
                         if ws.sheet_properties.pageSetUpPr is None:
                             ws.sheet_properties.pageSetUpPr = openpyxl.worksheet.properties.PageSetupProperties()
                         ws.sheet_properties.pageSetUpPr.fitToPage = True
                         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
                         ws.page_setup.fitToWidth = 1
-                        ws.page_setup.fitToHeight = 1
+                        ws.page_setup.fitToHeight = 0
+                        ws.print_options.horizontalCentered = True
+                        
+                        # 엑셀 자체 페이지 여백을 강제로 동일하게 고정
+                        ws.page_margins.left = 0.5
+                        ws.page_margins.right = 0.5
+                        
                         for i in range(1, target_max_col + 1):
                             col_letter = openpyxl.utils.get_column_letter(i)
-                            ws.column_dimensions[col_letter].width = 3.5
+                            ws.column_dimensions[col_letter].width = 4.0
                             
                         ws.print_area = f"A1:{openpyxl.utils.get_column_letter(target_max_col)}{max_bottom + 1}"
 
@@ -1075,6 +1135,10 @@ class DeploymentApp:
                                 })
                         except ValueError:
                             pass
+                            
+                    # 장비 카테고리 순서대로 정렬 (PAUT가 분리되는 현상 방지)
+                    custom_sort = {"RT": 1, "PAUT": 2, "UT": 3, "PT": 4, "MT": 5}
+                    equip_data.sort(key=lambda x: (custom_sort.get(x["category"].strip().upper(), 99), x["category"], x["name"]))
                             
                     start_row = -1
                     name_col = -1
@@ -1185,7 +1249,10 @@ class DeploymentApp:
                             ws.page_margins.right = 0.5
                             ws.print_options.horizontalCentered = True
                             last_col_letter = get_column_letter(time_col + 1)
-                            ws.print_area = f"A1:{last_col_letter}{table_end if table_end > start_row else ws.max_row}"
+                            
+                            # 인쇄 영역이 새로 추가된 데이터(table_end 밖)까지 완벽히 포함하도록 확장
+                            actual_end = max(table_end, start_row + len(equip_data) - 1) if equip_data else table_end
+                            ws.print_area = f"A1:{last_col_letter}{actual_end}"
                         except Exception:
                             pass
                                         
