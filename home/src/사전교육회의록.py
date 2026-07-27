@@ -14,7 +14,7 @@ class PreTrainingApp:
     def __init__(self, root):
         self.root = root
         self.root.title("위험성평가 사전교육(회의) 자동 생성기")
-        self.root.geometry("650x910")
+        self.root.geometry("650x1000")
         
         style = ttk.Style()
         style.theme_use('clam')
@@ -77,11 +77,15 @@ class PreTrainingApp:
         ttk.Label(form_frame, text="(예시: 이름(소속/직책) 형식으로 쉼표/엔터 구분)", foreground="gray", font=("Malgun Gothic", 8)).grid(row=8, column=1, sticky='w', padx=5)
         
         ttk.Label(form_frame, text="회의 내용:").grid(row=9, column=0, sticky='ne', padx=5, pady=5)
-        self.txt_content = tk.Text(form_frame, width=60, height=7, font=('Malgun Gothic', 9))
+        self.txt_content = tk.Text(form_frame, width=60, height=9, font=('Malgun Gothic', 9))
         default_content = (
-            "1. 금회 위험성평가 실시 대상 공정\n"
+            "1. 위험성평가의 목적 및 방법, 시기 및 절차\n"
+            "[2. 평가담당자 및 책임자의 역할 - 생성 시 자동 삽입]\n"
+            "3. 근로자에 대한 참여·공유방법 및 유의사항\n"
+            "4. 위험성평가 결과의 기록·보존 방법\n"
+            "5. 금회 위험성평가 실시 대상 공정\n"
             " - 방사선투과(RT), 초음파(UT), 침투(PT) 및 가설컨테이너 운영\n"
-            "2. 중점 관리(논의) 사항\n"
+            "6. 중점 관리(논의) 사항\n"
             " - [방사선] 야간 RT 검사 시 타 공정 근로자 출입 통제구역(10μSv/hr) 확보\n"
             " - [낙하] 슬링벨트 훼손품 즉시 폐기 및 소형장비 가방 운반 원칙\n"
             " - [전기] 우천/야간 작업 시 감전 예방 위해 누전차단기 부착 릴선 전용 사용"
@@ -90,13 +94,12 @@ class PreTrainingApp:
         self.txt_content.grid(row=9, column=1, sticky='w', padx=5, pady=5)
         
         ttk.Label(form_frame, text="전파교육 내용:").grid(row=10, column=0, sticky='ne', padx=5, pady=5)
-        self.txt_content2 = tk.Text(form_frame, width=60, height=6, font=('Malgun Gothic', 9))
+        self.txt_content2 = tk.Text(form_frame, width=60, height=5, font=('Malgun Gothic', 9))
         default_content2 = (
-            "1. 「위험성평가」 결과 위험성 주지\n"
-            "2. 「위험성평가」 결과 감소대책 시행 방법 및 시기\n"
-            "3. 근로자 및 관리감독자 준수 사항\n"
-            "4. 위험성 감소대책 수립 및 실행의 절차와 기록유지 방법\n"
-            "5. [현장 주요 전파사항] 방사선 통제구역 출입금지, 노후 슬링벨트 사용금지, 누전차단기 전용 릴선 사용 준수"
+            "1. 해당 작업과 관련된 유해·위험요인 및 위험성 결정 결과 주지\n"
+            "2. 유해·위험요인에 대한 위험성 감소대책과 실행 계획\n"
+            "3. 위험성 감소대책에 따라 근로자가 준수하거나 주의하여야 할 사항\n"
+            "4. [현장 주요 전파사항] 방사선 통제구역 출입금지, 노후 슬링벨트 사용금지, 누전차단기 전용 릴선 사용 준수"
         )
         self.txt_content2.insert('1.0', default_content2)
         self.txt_content2.grid(row=10, column=1, sticky='w', padx=5, pady=5)
@@ -318,34 +321,40 @@ class PreTrainingApp:
             superv = self.ent_super.get()
             worker = self.ent_worker.get()
             
-            roles_text = f"2. 평가팀 역할 분담 결의\n - 평가 리더: {leader} / 관리감독자: {superv} / 근로자 대표: {worker}\n"
+            roles_text = f"2. 평가담당자 및 책임자의 역할\n - 평가 리더: {leader} / 관리감독자: {superv} / 근로자 대표: {worker}"
             
             raw_content = self.txt_content.get("1.0", tk.END).strip()
-            # 텍스트 박스 내용 중 "2. 중점 관리(논의) 사항" 앞에 역할 분담 내용 삽입
-            content_text = ""
-            for line in raw_content.split('\n'):
-                if line.startswith("2."):
-                    content_text += roles_text
-                    content_text += line.replace("2.", "3.") + "\n" # 번호 밀기
-                else:
-                    content_text += line + "\n"
-                    
+            # 텍스트 박스 내용 중 "[2. 평가담당자 및 책임자의 역할 - 생성 시 자동 삽입]" 부분을 치환
+            if "[2. 평가담당자 및 책임자의 역할 - 생성 시 자동 삽입]" in raw_content:
+                content_text = raw_content.replace("[2. 평가담당자 및 책임자의 역할 - 생성 시 자동 삽입]", roles_text)
+            else:
+                # 이전 버전의 내용이 저장된 경우에 대한 호환성 유지
+                content_text = ""
+                inserted = False
+                for line in raw_content.split('\n'):
+                    if not inserted and line.startswith("2."):
+                        content_text += roles_text + "\n"
+                        content_text += line.replace("2.", "3.") + "\n"
+                        inserted = True
+                    else:
+                        content_text += line + "\n"
+                        
             content_text = content_text.strip()
             
             ws.merge_cells('A7:F7')
             ws['A7'] = content_text
             ws['A7'].font = normal_font
-            ws['A7'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            ws['A7'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
             set_border(1, 7, 6, 7)
             # 상단 굵은선
             for col in range(1, 7):
                 ws.cell(row=7, column=col).border = Border(top=thick, left=thin, right=thin, bottom=thin)
-            ws.row_dimensions[7].height = 150
+            ws.row_dimensions[7].height = 200
             
             # --- 7. 빈 공간 (사진 첨부부) ---
             ws.merge_cells('A8:F8')
             set_border(1, 8, 6, 8)
-            ws.row_dimensions[8].height = 280
+            ws.row_dimensions[8].height = 230
             
             if self.photo_path1:
                 self._insert_photos(ws, self.photo_path1, 'A8')
@@ -494,16 +503,16 @@ class PreTrainingApp:
             ws2.merge_cells('A7:F7')
             ws2['A7'] = edu_content
             ws2['A7'].font = normal_font
-            ws2['A7'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            ws2['A7'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
             set_border2(1, 7, 6, 7)
             for col in range(1, 7):
                 ws2.cell(row=7, column=col).border = Border(top=thick, left=thin, right=thin, bottom=thin)
-            ws2.row_dimensions[7].height = 150
+            ws2.row_dimensions[7].height = 200
             
             # 6. 빈 공간 (사진 첨부부 - 전파교육용 사진)
             ws2.merge_cells('A8:F8')
             set_border2(1, 8, 6, 8)
-            ws2.row_dimensions[8].height = 280
+            ws2.row_dimensions[8].height = 230
             
             if self.photo_path2:
                 self._insert_photos(ws2, self.photo_path2, 'A8')
