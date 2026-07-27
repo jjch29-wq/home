@@ -194,16 +194,22 @@ class PreTrainingApp:
         self.root.destroy()
 
     def select_photo1(self):
-        path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
-        if path:
-            self.photo_path1 = path
-            self.lbl_photo1.config(text=os.path.basename(path), foreground="black")
+        paths = filedialog.askopenfilenames(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
+        if paths:
+            self.photo_path1 = paths
+            if len(paths) == 1:
+                self.lbl_photo1.config(text=os.path.basename(paths[0]), foreground="black")
+            else:
+                self.lbl_photo1.config(text=f"{len(paths)}장 선택됨", foreground="black")
 
     def select_photo2(self):
-        path = filedialog.askopenfilename(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
-        if path:
-            self.photo_path2 = path
-            self.lbl_photo2.config(text=os.path.basename(path), foreground="black")
+        paths = filedialog.askopenfilenames(filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")])
+        if paths:
+            self.photo_path2 = paths
+            if len(paths) == 1:
+                self.lbl_photo2.config(text=os.path.basename(paths[0]), foreground="black")
+            else:
+                self.lbl_photo2.config(text=f"{len(paths)}장 선택됨", foreground="black")
 
     def generate_excel(self):
         # 엑셀 생성 시 현재 설정(참석자 등)을 자동 저장합니다.
@@ -341,26 +347,8 @@ class PreTrainingApp:
             set_border(1, 8, 6, 8)
             ws.row_dimensions[8].height = 280
             
-            if self.photo_path1 and os.path.exists(self.photo_path1):
-                try:
-                    img = XLImage(self.photo_path1)
-                    # A4 가로폭에 맞게 사진 리사이즈
-                    max_width = 620
-                    max_height = 350
-                    
-                    with PILImage.open(self.photo_path1) as pil_img:
-                        w, h = pil_img.size
-                        ratio = min(max_width/w, max_height/h)
-                        new_w = int(w * ratio)
-                        new_h = int(h * ratio)
-                    
-                    img.width = new_w
-                    img.height = new_h
-                    
-                    # A8셀 상단 왼쪽 즈음에 사진 삽입 (조금 띄우고 싶다면 B8등 활용, 여기서는 A8에 바로 넣음)
-                    ws.add_image(img, 'A8')
-                except Exception as ex:
-                    print("사진 삽입 실패:", ex)
+            if self.photo_path1:
+                self._insert_photos(ws, self.photo_path1, 'A8')
             
             # --- 8. 참석자 명단 테이블 ---
             ws.merge_cells('A9:F9')
@@ -517,19 +505,8 @@ class PreTrainingApp:
             set_border2(1, 8, 6, 8)
             ws2.row_dimensions[8].height = 280
             
-            if self.photo_path2 and os.path.exists(self.photo_path2):
-                try:
-                    img2 = XLImage(self.photo_path2)
-                    max_width = 620
-                    max_height = 350
-                    with PILImage.open(self.photo_path2) as pil_img:
-                        w, h = pil_img.size
-                        ratio = min(max_width/w, max_height/h)
-                    img2.width = int(w * ratio)
-                    img2.height = int(h * ratio)
-                    ws2.add_image(img2, 'A8')
-                except Exception as ex:
-                    print("사진 삽입 실패(시트2):", ex)
+            if self.photo_path2:
+                self._insert_photos(ws2, self.photo_path2, 'A8')
                     
             # 7. 참석자 명단 테이블
             ws2.merge_cells('A9:F9')
@@ -587,6 +564,77 @@ class PreTrainingApp:
             self.lbl_status.config(text="오류 발생", foreground="red")
         finally:
             self.btn_generate.config(state='normal')
+
+    def _insert_photos(self, ws, paths, cell):
+        if not paths: return
+        if isinstance(paths, str): paths = [paths]
+        valid_paths = [p for p in paths if os.path.exists(p)]
+        if not valid_paths: return
+        
+        import math, io
+        canvas_width, canvas_height = 692, 373
+        margin = 6
+        inner_width = canvas_width - margin * 2
+        inner_height = canvas_height - margin * 2
+        num_images = len(valid_paths)
+        
+        canvas = PILImage.new('RGBA', (canvas_width, canvas_height), (255, 255, 255, 0))
+        
+        if num_images == 1:
+            try:
+                with PILImage.open(valid_paths[0]) as img:
+                    img = img.convert("RGBA")
+                    w, h = img.size
+                    ratio = min(inner_width/w, inner_height/h)
+                    new_w, new_h = int(w * ratio), int(h * ratio)
+                    img_resized = img.resize((new_w, new_h), PILImage.Resampling.LANCZOS)
+                    
+                    # 상하좌우 중앙 정렬 (마진 포함한 캔버스 기준)
+                    x = (canvas_width - new_w) // 2
+                    y = (canvas_height - new_h) // 2
+                    canvas.paste(img_resized, (x, y), img_resized)
+            except Exception as ex:
+                print("사진 삽입 실패:", ex)
+        else:
+            try:
+                cols = math.ceil(math.sqrt(num_images))
+                rows = math.ceil(num_images / cols)
+                if num_images in (2, 3):
+                    cols, rows = num_images, 1
+                    
+                box_w, box_h = inner_width // cols, inner_height // rows
+                
+                for i, path in enumerate(valid_paths):
+                    row_idx, col_idx = i // cols, i % cols
+                    try:
+                        with PILImage.open(path) as img:
+                            img = img.convert("RGBA")
+                            w, h = img.size
+                            gap = 10
+                            avail_w, avail_h = box_w - gap, box_h - gap
+                            
+                            # 원본 비율을 유지하며 축소
+                            ratio = min(avail_w/w, avail_h/h)
+                            new_w, new_h = int(w * ratio), int(h * ratio)
+                            img_resized = img.resize((new_w, new_h), PILImage.Resampling.LANCZOS)
+                            
+                            # 각 영역의 상하좌우 중앙 정렬 (마진 오프셋 추가)
+                            x = margin + col_idx * box_w + (box_w - new_w) // 2
+                            y = margin + row_idx * box_h + (box_h - new_h) // 2
+                            canvas.paste(img_resized, (x, y), img_resized)
+                    except Exception as e:
+                        print(f"이미지 처리 실패 {path}: {e}")
+            except Exception as ex:
+                print("사진 그리드 삽입 실패:", ex)
+                
+        try:
+            img_byte_arr = io.BytesIO()
+            canvas.save(img_byte_arr, format='PNG')
+            img_byte_arr.seek(0)
+            xl_img = XLImage(img_byte_arr)
+            ws.add_image(xl_img, cell)
+        except Exception as ex:
+            print("사진 엑셀 삽입 실패:", ex)
 
     def insert_signature(self, ws, name, row, col_letter):
         if not name: return
