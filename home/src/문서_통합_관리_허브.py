@@ -68,15 +68,19 @@ class DocumentProcessor:
     @staticmethod
     def replace_text_in_paragraph(paragraph, find_text, replace_text):
         if find_text in paragraph.text:
-            for run in paragraph.runs:
-                if find_text in run.text:
-                    run.text = run.text.replace(find_text, replace_text)
-                    return
-            inline = paragraph.runs
-            if not inline: return
-            text = paragraph.text.replace(find_text, replace_text)
-            for i in range(len(inline)): inline[i].text = ''
-            inline[0].text = text
+            count_in_para = paragraph.text.count(find_text)
+            count_in_runs = sum(run.text.count(find_text) for run in paragraph.runs)
+            
+            if count_in_runs == count_in_para:
+                for run in paragraph.runs:
+                    if find_text in run.text:
+                        run.text = run.text.replace(find_text, replace_text)
+            else:
+                inline = paragraph.runs
+                if not inline: return
+                text = paragraph.text.replace(find_text, replace_text)
+                for i in range(len(inline)): inline[i].text = ''
+                inline[0].text = text
 
     @staticmethod
     def process_docx(input_file, output_file, replacements):
@@ -134,29 +138,67 @@ class DocumentProcessor:
 
     @staticmethod
     def process_hwp(input_file, output_file, replacements):
+        import tempfile
+        import shutil
+        import os
+        temp_input = None
         try:
             import win32com.client as win32
             hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
             hwp.RegisterModule("FilePathCheckDLL", "SecurityModule")
             hwp.XHwpWindows.Item(0).Visible = False
             
-            if not hwp.Open(input_file):
-                hwp.Quit()
-                raise Exception("HWP 파일을 여는데 실패했습니다.")
-                
-            hwp.HAction.GetDefault("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
-            hwp.HParameterSet.HFindReplace.IgnoreMessage = 1
+            # Copy to local temp path to avoid Google Drive network/lock issues
+            temp_dir = tempfile.gettempdir()
+            temp_input = os.path.join(temp_dir, f"temp_hwp_{os.path.basename(input_file)}")
+            shutil.copy2(input_file, temp_input)
             
-            for f_text, r_text in replacements:
-                hwp.HParameterSet.HFindReplace.FindString = f_text
-                hwp.HParameterSet.HFindReplace.ReplaceString = r_text
-                hwp.HParameterSet.HFindReplace.Direction = hwp.FindDir("AllDoc")
-                hwp.HAction.Execute("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
+            abs_input = os.path.abspath(temp_input)
+            abs_output = os.path.abspath(output_file)
+            
+            if not hwp.Open(abs_input, "HWP", "forceopen:true;versionwarning:false"):
+                hwp.Quit()
+                raise Exception(f"HWP 파일을 여는데 실패했습니다. (경로: {abs_input})")
                 
-            hwp.SaveAs(output_file)
+            def execute_replace():
+                for f_text, r_text in replacements:
+                    hwp.HAction.GetDefault("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
+                    hwp.HParameterSet.HFindReplace.IgnoreMessage = 1
+                    hwp.HParameterSet.HFindReplace.FindString = f_text
+                    hwp.HParameterSet.HFindReplace.ReplaceString = r_text
+                    hwp.HParameterSet.HFindReplace.Direction = hwp.FindDir("AllDoc")
+                    hwp.HParameterSet.HFindReplace.MatchCase = 0
+                    hwp.HParameterSet.HFindReplace.WholeWordOnly = 0
+                    hwp.HParameterSet.HFindReplace.UseWildCards = 0
+                    hwp.HParameterSet.HFindReplace.SeveralWords = 0
+                    hwp.HParameterSet.HFindReplace.AllWordForms = 0
+                    hwp.HAction.Execute("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
+
+            # 본문 변환
+            hwp.Run("MoveDocBegin")
+            execute_replace()
+            
+            # 모든 컨트롤(표, 글상자 등) 순회하며 변환
+            ctrl = hwp.HeadCtrl
+            while ctrl:
+                if ctrl.CtrlID in ["tbl", "gso", "eqed"]:
+                    hwp.SetPosBySet(ctrl.GetAnchorPos(0))
+                    hwp.FindCtrl()
+                    hwp.Run("ShapeObjTableSelCell")
+                    hwp.Run("Cancel") # 블록 지정을 해제해야 표 전체를 검색함!
+                    execute_replace()
+                ctrl = ctrl.Next
+                
+            hwp.SaveAs(abs_output)
             hwp.Quit()
         except Exception as e:
             raise Exception(f"hwp 처리 실패: {e}")
+        finally:
+            if temp_input and os.path.exists(temp_input):
+                try:
+                    os.remove(temp_input)
+                except:
+                    pass
 
     @staticmethod
     def process_txt(input_file, output_file, replacements):
@@ -1415,6 +1457,7 @@ class CodebookApp:
             self.root.update()
             
             success_count = 0
+            failed_files = []
             for input_file in files:
                 if not os.path.exists(input_file): continue
                 filename = os.path.basename(input_file)
@@ -1425,10 +1468,17 @@ class CodebookApp:
                     success_count += 1
                 except Exception as e:
                     print(f"파일 변환 실패: {filename}, {e}")
+                    failed_files.append(f"{filename} ({e})")
                     continue
                     
             self.root.config(cursor="")
-            messagebox.showinfo("완료", f"총 {success_count}개의 파일이 성공적으로 일괄 변환 및 저장되었습니다!\n\n저장 폴더: {output_dir}")
+            
+            if failed_files:
+                error_msg = "\n".join(failed_files)
+                messagebox.showwarning("변환 완료 (일부 실패)", f"총 {success_count}개의 파일이 변환되었으나, 다음 파일들은 에러가 발생했습니다:\n\n{error_msg}\n\n저장 폴더: {output_dir}")
+            else:
+                messagebox.showinfo("완료", f"총 {success_count}개의 파일이 성공적으로 일괄 변환 및 저장되었습니다!\n\n저장 폴더: {output_dir}")
+                
             os.startfile(output_dir)
             
         except Exception as e:

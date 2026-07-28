@@ -581,7 +581,7 @@ class PreTrainingApp:
         if not valid_paths: return
         
         import math, io
-        canvas_width, canvas_height = 692, 373
+        canvas_width, canvas_height = 692, 305
         margin = 6
         inner_width = canvas_width - margin * 2
         inner_height = canvas_height - margin * 2
