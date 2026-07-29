@@ -144,7 +144,15 @@ class DocumentProcessor:
         temp_input = None
         try:
             import win32com.client as win32
-            hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
+            try:
+                hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
+            except AttributeError:
+                # win32com gen_py 캐시 오류 발생 시 캐시 폴더 삭제 후 재시도
+                import shutil
+                gen_py_path = win32.gencache.GetGeneratePath()
+                if os.path.exists(gen_py_path):
+                    shutil.rmtree(gen_py_path, ignore_errors=True)
+                hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
             hwp.RegisterModule("FilePathCheckDLL", "SecurityModule")
             hwp.XHwpWindows.Item(0).Visible = False
             

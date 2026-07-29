@@ -53,6 +53,8 @@ class PDFEditor:
         
         ctrl_frame = ttk.Frame(left_frame)
         ctrl_frame.pack(fill=tk.X, pady=5)
+        ttk.Button(ctrl_frame, text="▲", width=3, command=lambda: self.move_selected(-1)).pack(side=tk.LEFT, padx=1)
+        ttk.Button(ctrl_frame, text="▼", width=3, command=lambda: self.move_selected(1)).pack(side=tk.LEFT, padx=1)
         ttk.Button(ctrl_frame, text="선택 삭제", command=self.delete_selected).pack(side=tk.LEFT, padx=2, expand=True, fill=tk.X)
         
         ttk.Button(left_frame, text="저장하기", command=self.save_pdf).pack(fill=tk.X, pady=5)
@@ -66,11 +68,31 @@ class PDFEditor:
         ttk.Button(rot_frame, text="↺ 왼쪽으로 회전", command=lambda: self.rotate_selected(-90)).pack(side=tk.LEFT, padx=5)
         ttk.Button(rot_frame, text="↻ 오른쪽으로 회전", command=lambda: self.rotate_selected(90)).pack(side=tk.LEFT, padx=5)
         
-        self.preview_label = ttk.Label(right_frame, text="페이지를 선택하면 미리보기가 표시됩니다.")
-        self.preview_label.pack(expand=True)
+        # Scrollable Canvas for preview
+        self.preview_canvas = tk.Canvas(right_frame, bg='lightgray')
+        v_scroll = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=self.preview_canvas.yview)
+        h_scroll = ttk.Scrollbar(right_frame, orient=tk.HORIZONTAL, command=self.preview_canvas.xview)
+        self.preview_canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+        
+        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        self.preview_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        self.preview_image_id = self.preview_canvas.create_image(0, 0, anchor=tk.NW)
+        self.preview_text_id = self.preview_canvas.create_text(300, 300, text="페이지를 선택하면 미리보기가 표시됩니다.", font=("Arial", 12))
         
         self.current_image = None
         
+    def _update_preview_canvas(self, img, text):
+        if img:
+            self.preview_canvas.itemconfig(self.preview_image_id, image=img)
+            self.preview_canvas.itemconfig(self.preview_text_id, text="")
+            self.preview_canvas.config(scrollregion=self.preview_canvas.bbox(self.preview_image_id))
+        else:
+            self.preview_canvas.itemconfig(self.preview_image_id, image="")
+            self.preview_canvas.itemconfig(self.preview_text_id, text=text)
+            self.preview_canvas.config(scrollregion=(0, 0, 600, 600))
+            
     def batch_select(self, mode):
         self.listbox.selection_clear(0, tk.END)
         for i in range(len(self.pages)):
@@ -110,17 +132,25 @@ class PDFEditor:
         self.pages.clear()
         self.docs.clear()
         self.listbox.delete(0, tk.END)
-        self.preview_label.config(image='', text="페이지를 선택하면 미리보기가 표시됩니다.")
+        self._update_preview_canvas(None, "페이지를 선택하면 미리보기가 표시됩니다.")
         for filepath in filepaths:
             self.add_document(filepath)
         
     def add_pdf(self):
         filepaths = filedialog.askopenfilenames(filetypes=[("PDF Files", "*.pdf")])
         if not filepaths: return
-        for filepath in filepaths:
-            self.add_document(filepath)
         
-    def add_document(self, filepath):
+        # 선택된 항목이 있으면 그 바로 아래에, 없으면 맨 끝에 추가
+        selection = self.listbox.curselection()
+        insert_idx = selection[-1] + 1 if selection else len(self.pages)
+        
+        for filepath in filepaths:
+            insert_idx = self.add_document(filepath, insert_idx)
+        
+    def add_document(self, filepath, insert_idx=None):
+        if insert_idx is None:
+            insert_idx = len(self.pages)
+            
         try:
             # Memory load to release file lock immediately
             with open(filepath, "rb") as f:
@@ -131,15 +161,18 @@ class PDFEditor:
             filename = os.path.basename(filepath)
             for i in range(len(doc)):
                 label = f"{filename} - {i+1}쪽"
-                self.pages.append({'doc': doc, 'page_num': i, 'label': label, 'rotation': 0})
-                self.listbox.insert(tk.END, label)
+                self.pages.insert(insert_idx, {'doc': doc, 'page_num': i, 'label': label, 'rotation': 0})
+                self.listbox.insert(insert_idx, label)
+                insert_idx += 1
+                
+            return insert_idx
         except Exception as e:
             messagebox.showerror("오류", f"PDF를 열 수 없습니다:\n{e}")
             
     def update_preview(self):
         selection = self.listbox.curselection()
         if not selection: 
-            self.preview_label.config(image='', text="페이지를 선택하면 미리보기가 표시됩니다.")
+            self._update_preview_canvas(None, "페이지를 선택하면 미리보기가 표시됩니다.")
             return
         idx = selection[0]
         page_info = self.pages[idx]
@@ -164,9 +197,9 @@ class PDFEditor:
             img.thumbnail((1200, 1600), Image.Resampling.LANCZOS)
             
             self.current_image = ImageTk.PhotoImage(img)
-            self.preview_label.config(image=self.current_image, text="")
+            self._update_preview_canvas(self.current_image, "")
         except Exception as e:
-            self.preview_label.config(image='', text=f"미리보기 오류: {e}")
+            self._update_preview_canvas(None, f"미리보기 오류: {e}")
             
     def on_select(self, event):
         self.update_preview()
@@ -176,6 +209,30 @@ class PDFEditor:
         if not selection: return
         for idx in selection:
             self.pages[idx]['rotation'] = (self.pages[idx]['rotation'] + angle) % 360
+        self.update_preview()
+            
+    def move_selected(self, direction):
+        selection = list(self.listbox.curselection())
+        if not selection: return
+        
+        if direction == -1: # Move Up
+            if selection[0] == 0: return
+            selection.sort()
+            for idx in selection:
+                text = self.listbox.get(idx)
+                self.listbox.delete(idx)
+                self.listbox.insert(idx - 1, text)
+                self.pages.insert(idx - 1, self.pages.pop(idx))
+                self.listbox.selection_set(idx - 1)
+        elif direction == 1: # Move Down
+            if selection[-1] == len(self.pages) - 1: return
+            selection.sort(reverse=True)
+            for idx in selection:
+                text = self.listbox.get(idx)
+                self.listbox.delete(idx)
+                self.listbox.insert(idx + 1, text)
+                self.pages.insert(idx + 1, self.pages.pop(idx))
+                self.listbox.selection_set(idx + 1)
         self.update_preview()
             
     def delete_selected(self):
