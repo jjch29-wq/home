@@ -518,7 +518,34 @@ def load_custom_stocks():
 
 def save_custom_stock(name, ticker, qty=0, avg_price=0):
     custom = load_custom_stocks()
-    custom[name] = {"ticker": ticker, "qty": qty, "avg_price": avg_price}
+    
+    try:
+        qty = float(qty)
+        avg_price = float(avg_price)
+    except:
+        qty = 0
+        avg_price = 0
+        
+    if name in custom:
+        try:
+            existing_qty = float(custom[name].get("qty", 0))
+            existing_avg = float(custom[name].get("avg_price", 0))
+        except:
+            existing_qty = 0
+            existing_avg = 0
+            
+        new_qty = existing_qty + qty
+        if new_qty > 0:
+            new_avg = ((existing_qty * existing_avg) + (qty * avg_price)) / new_qty
+        else:
+            new_avg = 0
+            
+        custom[name]["qty"] = new_qty
+        custom[name]["avg_price"] = new_avg
+        custom[name]["ticker"] = ticker
+    else:
+        custom[name] = {"ticker": ticker, "qty": qty, "avg_price": avg_price}
+        
     with open(CUSTOM_PORT_FILE, 'w', encoding='utf-8') as f:
         json.dump(custom, f, ensure_ascii=False, indent=2)
 
