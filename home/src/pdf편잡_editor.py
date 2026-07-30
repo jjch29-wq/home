@@ -74,24 +74,64 @@ class PDFEditor:
         h_scroll = ttk.Scrollbar(right_frame, orient=tk.HORIZONTAL, command=self.preview_canvas.xview)
         self.preview_canvas.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
         
+        # 확대/축소 마우스 휠 바인딩
+        self.preview_canvas.bind('<MouseWheel>', self.on_mouse_wheel)
+        self.preview_canvas.bind('<Control-MouseWheel>', self.on_mouse_wheel)
+        self.preview_canvas.bind('<Button-4>', self.on_mouse_wheel) # Linux
+        self.preview_canvas.bind('<Button-5>', self.on_mouse_wheel) # Linux
+        self.preview_canvas.bind('<Control-Button-4>', self.on_mouse_wheel)
+        self.preview_canvas.bind('<Control-Button-5>', self.on_mouse_wheel)
+        
+        # 마우스가 캔버스 위로 올라갈 때 포커스를 주어 휠 이벤트가 작동하도록 함
+        self.preview_canvas.bind('<Enter>', lambda e: self.preview_canvas.focus_set())
+        
+        self.zoom_factor = 1.0
+        
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
         self.preview_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        self.preview_image_id = self.preview_canvas.create_image(0, 0, anchor=tk.NW)
-        self.preview_text_id = self.preview_canvas.create_text(300, 300, text="페이지를 선택하면 미리보기가 표시됩니다.", font=("Arial", 12))
+        # 캔버스 크기 변경 시 중앙 정렬 유지를 위한 이벤트 바인딩
+        self.preview_canvas.bind('<Configure>', self.on_canvas_configure)
+        
+        self.preview_image_id = self.preview_canvas.create_image(0, 0, anchor=tk.CENTER)
+        self.preview_text_id = self.preview_canvas.create_text(300, 300, text="페이지를 선택하면 미리보기가 표시됩니다.", font=("Arial", 12), anchor=tk.CENTER)
         
         self.current_image = None
         
     def _update_preview_canvas(self, img, text):
+        canvas_w = self.preview_canvas.winfo_width()
+        canvas_h = self.preview_canvas.winfo_height()
+        
+        # 처음 렌더링 전에는 1을 반환하므로 기본값 설정
+        if canvas_w < 10: canvas_w = 800
+        if canvas_h < 10: canvas_h = 600
+        
         if img:
+            img_w = img.width()
+            img_h = img.height()
+            
+            # 스크롤 영역은 캔버스 크기와 이미지 크기 중 큰 값
+            scroll_w = max(canvas_w, img_w)
+            scroll_h = max(canvas_h, img_h)
+            
+            x, y = scroll_w / 2, scroll_h / 2
+            
+            self.preview_canvas.coords(self.preview_image_id, x, y)
             self.preview_canvas.itemconfig(self.preview_image_id, image=img)
             self.preview_canvas.itemconfig(self.preview_text_id, text="")
-            self.preview_canvas.config(scrollregion=self.preview_canvas.bbox(self.preview_image_id))
+            self.preview_canvas.config(scrollregion=(0, 0, scroll_w, scroll_h))
         else:
+            x, y = canvas_w / 2, canvas_h / 2
+            
             self.preview_canvas.itemconfig(self.preview_image_id, image="")
+            self.preview_canvas.coords(self.preview_text_id, x, y)
             self.preview_canvas.itemconfig(self.preview_text_id, text=text)
-            self.preview_canvas.config(scrollregion=(0, 0, 600, 600))
+            self.preview_canvas.config(scrollregion=(0, 0, canvas_w, canvas_h))
+
+    def on_canvas_configure(self, event):
+        # 윈도우 크기가 변경될 때 중앙 정렬을 다시 계산
+        self._update_preview_canvas(self.current_image, "페이지를 선택하면 미리보기가 표시됩니다." if not getattr(self, 'current_image', None) else "")
             
     def batch_select(self, mode):
         self.listbox.selection_clear(0, tk.END)
@@ -169,7 +209,10 @@ class PDFEditor:
         except Exception as e:
             messagebox.showerror("오류", f"PDF를 열 수 없습니다:\n{e}")
             
-    def update_preview(self):
+    def update_preview(self, reset_zoom=False):
+        if reset_zoom:
+            self.zoom_factor = 1.0
+            
         selection = self.listbox.curselection()
         if not selection: 
             self._update_preview_canvas(None, "페이지를 선택하면 미리보기가 표시됩니다.")
@@ -185,16 +228,14 @@ class PDFEditor:
             # Apply user-defined rotation on top of original rotation
             total_rot = (page.rotation + page_info['rotation']) % 360
             
-            # High resolution for better preview
-            mat = fitz.Matrix(3.0, 3.0).prerotate(page_info['rotation'])
+            # 줌 팩터 적용 (기본 크기를 1.0으로 설정하고 zoom_factor 곱함)
+            scale = 1.0 * getattr(self, 'zoom_factor', 1.0)
+            mat = fitz.Matrix(scale, scale).prerotate(page_info['rotation'])
             pix = page.get_pixmap(matrix=mat)
             
             # Convert to PIL Image
             mode = "RGBA" if pix.alpha else "RGB"
             img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-            
-            # Resize for preview
-            img.thumbnail((1200, 1600), Image.Resampling.LANCZOS)
             
             self.current_image = ImageTk.PhotoImage(img)
             self._update_preview_canvas(self.current_image, "")
@@ -202,6 +243,20 @@ class PDFEditor:
             self._update_preview_canvas(None, f"미리보기 오류: {e}")
             
     def on_select(self, event):
+        self.update_preview()
+        
+    def on_mouse_wheel(self, event):
+        if not self.pages or not self.listbox.curselection():
+            return
+            
+        # 확대/축소 비율 계산
+        if getattr(event, 'num', 0) == 4 or getattr(event, 'delta', 0) > 0:
+            self.zoom_factor *= 1.2  # 20% 확대
+        elif getattr(event, 'num', 0) == 5 or getattr(event, 'delta', 0) < 0:
+            self.zoom_factor /= 1.2  # 20% 축소
+            
+        # 줌 제한 (너무 작아지거나 커지지 않게)
+        self.zoom_factor = max(0.1, min(self.zoom_factor, 10.0))
         self.update_preview()
         
     def rotate_selected(self, angle):
