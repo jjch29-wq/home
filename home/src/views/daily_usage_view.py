@@ -47,6 +47,9 @@ def setup_daily_usage_tab_impl(self):
     btn_sync = ttk.Button(row1, text="🔄 작업자 일괄 적용", command=self.sync_worker_times, width=20)
     btn_sync.pack(side='left', padx=5)
 
+    btn_add_vehicle = ttk.Button(row1, text="🚙 추가 차량 점검", command=self.add_vehicle_inspection_box, width=15)
+    btn_add_vehicle.pack(side='left', padx=5)
+
     self.btn_daily_report = ttk.Button(row1, text="📄 작업일보 출력", command=self.export_daily_work_report, width=15)
     self.btn_daily_report.pack(side='left', padx=5)
 
@@ -91,15 +94,13 @@ def setup_daily_usage_tab_impl(self):
     self.entry_canvas_window = self.entry_canvas.create_window((0, 0), window=self.entry_inner_frame, anchor='nw')
     
     def _on_entry_config(e):
-        # Update canvas window width: use canvas width but ensure a minimum of 1100 
-        # to fit both form (550) and workers (550+) without clipping.
+        # Update canvas window width
         target_w = max(1100, e.width)
         
-        # Use a fixed minimum comfortable height (750px) instead of winfo_reqheight().
-        # winfo_reqheight() can return absurdly large values due to complex internal 
-        # nested canvases and paned windows, causing massive empty scrollable voids.
-        # 750px safely fits the master form (350px) and bottom dashboard minimums (400px).
-        target_h = max(750, e.height)
+        # Use winfo_reqheight() so the frame can naturally expand when new widgets (like NDT) appear.
+        # If it's forced to a fixed height, bottom elements like the treeview will be hidden.
+        req_h = self.entry_inner_frame.winfo_reqheight()
+        target_h = max(e.height, req_h)
         
         self.entry_canvas.itemconfig(self.entry_canvas_window, width=target_w, height=target_h)
         self._ensure_canvas_scroll_region()
@@ -126,7 +127,7 @@ def setup_daily_usage_tab_impl(self):
     
             # Inner content for the basic form
     form_content = ttk.Frame(self.master_form_panel, padding=10)
-    form_content.grid(row=0, column=0, sticky='w')
+    form_content.grid(row=0, column=0, rowspan=10, sticky='nw')
     
     for c in range(4): form_content.columnconfigure(c, weight=0)
 
@@ -134,7 +135,7 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(form_content, text="업체명:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
     co_container = ttk.Frame(form_content)
     co_container.grid(row=0, column=1, padx=(2, 10), pady=1, sticky='w')
-    self.cb_daily_company = ttk.Combobox(co_container, width=12, values=self.companies)
+    self.cb_daily_company = ttk.Combobox(co_container, width=25, values=self.companies)
     self.cb_daily_company.pack(side='left')
     btn_company_mgr = tk.Button(co_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                command=lambda: self.open_list_management_dialog('companies', target_cb=self.cb_daily_company))
@@ -143,7 +144,7 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(form_content, text="현장명:").grid(row=0, column=2, padx=(5, 0), pady=1, sticky='e')
     site_container = ttk.Frame(form_content)
     site_container.grid(row=0, column=3, padx=(2, 5), pady=1, sticky='w')
-    self.cb_daily_site = ttk.Combobox(site_container, width=12, values=self.sites)
+    self.cb_daily_site = ttk.Combobox(site_container, width=25, values=self.sites)
     self.cb_daily_site.pack(side='left')
     btn_site_mgr = tk.Button(site_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                             command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_site))
@@ -236,7 +237,7 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(form_content, text="적용코드:").grid(row=6, column=0, padx=(5, 0), pady=1, sticky='e')
     app_container = ttk.Frame(form_content)
     app_container.grid(row=6, column=1, padx=(2, 10), pady=1, sticky='w')
-    self.ent_daily_applied_code = ttk.Entry(app_container, width=12)
+    self.ent_daily_applied_code = ttk.Entry(app_container, width=20)
     self.ent_daily_applied_code.pack(side='left')
     
     btn_app_code_mgr = tk.Button(app_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
@@ -267,12 +268,12 @@ def setup_daily_usage_tab_impl(self):
     self.ndt_calc_frame.grid_remove() # 기본 숨김
 
     self.ndt_work_time_var = tk.StringVar(value="일반")
-    self.ndt_loc_type_var = tk.StringVar(value="수송배관(주배관)")
-    self.ndt_source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
-    self.ndt_thickness_var = tk.StringVar(value="15mm 이하 (1.0)")
+    self.ndt_loc_type_var = tk.StringVar(value="열배관")
+    self.ndt_source_var = tk.StringVar(value="Se-75 (1.0)")
+    self.ndt_thickness_var = tk.StringVar(value="조건없음 (1.0)")
     self.ndt_pipe_var = tk.StringVar(value="250mm 초과 [10인치 이상] (1.0)")
-    self.ndt_overhead_var = tk.DoubleVar(value=80.0)
-    self.ndt_tech_var = tk.DoubleVar(value=5.86)
+    self.ndt_overhead_var = tk.DoubleVar(value=110.0)
+    self.ndt_tech_var = tk.DoubleVar(value=20.0)
     self.ndt_ori_joint_var = tk.StringVar(value="")
     self.ndt_ori_qty_var = tk.StringVar(value="")
     self.ndt_rep_joint_var = tk.StringVar(value="")
@@ -283,7 +284,7 @@ def setup_daily_usage_tab_impl(self):
     row0 = ttk.Frame(self.ndt_calc_frame)
     row0.pack(fill='x', pady=2)
     ttk.Label(row0, text="구분:").pack(side='left')
-    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["수송배관(주배관)", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
+    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열배관", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
     ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
     for t in ["일반", "야간", "휴일"]:
         ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
@@ -364,15 +365,29 @@ def setup_daily_usage_tab_impl(self):
                 mat_unit_cost = MATERIAL_COST.get('UT', 1112)
             elif ndt_type == "PT":
                 mat_unit_cost = MATERIAL_COST.get('PT', 3974)
+            elif ndt_type == "PAUT":
+                # Cond1 for PAUT is like "300A 이상 (1.0)". We need the string before the "(" to match the key
+                # The key in MATERIAL_COST is "PAUT_300A 이상"
+                paut_cond = self.ndt_pipe_var.get().split('(')[0].strip()
+                mat_key = f"PAUT_{paut_cond}"
+                mat_unit_cost = MATERIAL_COST.get(mat_key, 0)
             
             total_mat = int(qty * mat_unit_cost)
             
             loc_type_val = self.ndt_loc_type_var.get().strip()
             
             if loc_type_val in LABOR_COST:
-                lab_unit = LABOR_COST[loc_type_val].get(work_time, {}).get(ndt_type, 0)
+                if ndt_type == "PAUT":
+                    lab_key = f"PAUT_{self.ndt_pipe_var.get().split('(')[0].strip()}"
+                    lab_unit = LABOR_COST[loc_type_val].get(work_time, {}).get(lab_key, 0)
+                else:
+                    lab_unit = LABOR_COST[loc_type_val].get(work_time, {}).get(ndt_type, 0)
             else:
-                lab_unit = LABOR_COST.get(work_time, {}).get(ndt_type, 0)
+                if ndt_type == "PAUT":
+                    lab_key = f"PAUT_{self.ndt_pipe_var.get().split('(')[0].strip()}"
+                    lab_unit = LABOR_COST.get(work_time, {}).get(lab_key, 0)
+                else:
+                    lab_unit = LABOR_COST.get(work_time, {}).get(ndt_type, 0)
                 
             total_lab = int(adj_qty * lab_unit)
             
@@ -419,11 +434,11 @@ def setup_daily_usage_tab_impl(self):
     self.ent_daily_test_amount.bind('<Return>', lambda e: self.cb_daily_unit.focus_set())
     self.cb_daily_unit.set('매')
     self.ndt_work_time_var.set("일반")
-    self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-    self.ndt_thickness_var.set("15mm 이하 (1.0)")
+    self.ndt_source_var.set("Se-75 (1.0)")
+    self.ndt_thickness_var.set("조건없음 (1.0)")
     self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-    self.ndt_overhead_var.set(80.0)
-    self.ndt_tech_var.set(5.86)
+    self.ndt_overhead_var.set(110.0)
+    self.ndt_tech_var.set(20.0)
     self.ndt_calc_frame.grid_remove()
     self.cb_daily_unit.bind('<Return>', lambda e: self.ent_daily_unit_price.focus_set())
     self.cb_daily_unit.bind('<<ComboboxSelected>>', lambda e: self.ent_daily_unit_price.focus_set())
@@ -449,6 +464,7 @@ def setup_daily_usage_tab_impl(self):
         if method in ["MT", "PT"]:
             try:
                 self.ndt_frame.grid()
+                self.empty_guide_frame.grid_remove() # Hide guide
             except:
                 pass
         else:
@@ -458,7 +474,7 @@ def setup_daily_usage_tab_impl(self):
                 pass
 
         
-        if method in ["RT", "UT", "PT"]:
+        if method in ["RT", "UT", "PT", "PAUT", "MT"]:
             try:
                 self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
                 self.ndt_calc_frame.lift()
@@ -467,21 +483,31 @@ def setup_daily_usage_tab_impl(self):
                 print(f"Error in grid: {ex}")
             if method == "RT":
                 self.rtk_grid.grid() # [NEW] Show RTK
+                self.empty_guide_frame.grid_remove() # Hide guide
                 self.rtk_grid.lift() # [FIX] Prevent overlay click-blocking
                 self.master_form_panel.update_idletasks()
-                self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
-                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"])
+                self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Se-75 (1.0)", "Ir-192 (1.0)"])
+                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
             elif method == "UT":
                 self.rtk_grid.grid_remove() # [NEW] Hide RTK
+                self.empty_guide_frame.grid() # Show guide
                 self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"])
-                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"])
-            elif method == "PT":
+                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
+            elif method in ["PT", "MT"]:
                 self.rtk_grid.grid_remove() # [NEW] Hide RTK
-                self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["150mm 초과 [6인치 이상] (1.2)", "150mm 이하 [4인치 이하] (1.4)"])
-                self.cb_ndt_cond2.config(values=[])
+                # guide already hidden above
+                self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["조건없음 (1.0)"])
+                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
+            elif method == "PAUT":
+                self.rtk_grid.grid_remove() # [NEW] Hide RTK
+                self.empty_guide_frame.grid() # Show guide
+                self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["300A 이상 (1.0)", "250A (1.0)", "200A (1.0)", "150A-125A (1.0)", "100A 이하 (1.0)"])
+                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
         else:
             self.ndt_calc_frame.grid_remove()
             self.rtk_grid.grid_remove() # [NEW] Hide RTK
+            try: self.empty_guide_frame.grid_remove() 
+            except: pass
         return "break" 
     self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit_logic, add='+')
     self.cb_daily_test_method.bind('<KeyRelease>', on_method_change_auto_unit_logic, add='+')
@@ -506,8 +532,14 @@ def setup_daily_usage_tab_impl(self):
 
 
     # Row 1: NDT with Multi-Company Support
-    self.ndt_frame = ttk.LabelFrame(self.master_form_panel, text="NDT 자재 소모량 (회사별)")
-    self.ndt_frame.grid(row=1, column=0, padx=5, pady=2, sticky='ew')
+    # NDT 자재 소모량 프레임 (버튼을 타이틀 위치로 이동)
+    lbl_frame = ttk.Frame(self.master_form_panel)
+    ttk.Label(lbl_frame, text="NDT 자재 소모량 (회사별)", font=('Arial', 9, 'bold')).pack(side='left', padx=(0, 10))
+    ttk.Button(lbl_frame, text="+ 회사 추가", command=self.add_ndt_company_section, width=12).pack(side='left', padx=2)
+    ttk.Button(lbl_frame, text="- 마지막 회사 삭제", command=self.remove_last_ndt_company, width=15).pack(side='left', padx=2)
+    
+    self.ndt_frame = ttk.LabelFrame(self.master_form_panel, labelwidget=lbl_frame)
+    self.ndt_frame.grid(row=1, column=1, padx=5, pady=2, sticky='new')
     self.ndt_frame.grid_remove() # [NEW] Hide NDT frame by default
     
     # Container for company-specific NDT sections
@@ -517,11 +549,7 @@ def setup_daily_usage_tab_impl(self):
     # Store NDT entries by company index: {0: {mat: entry, ...}, 1: {...}}
     self.ndt_company_entries = []
     
-    # Button frame for adding companies
-    btn_frame = ttk.Frame(self.ndt_frame)
-    btn_frame.pack(fill='x', padx=5, pady=2)
-    ttk.Button(btn_frame, text="+ 회사 추가", command=self.add_ndt_company_section, width=12).pack(side='left', padx=2)
-    ttk.Button(btn_frame, text="- 마지막 회사 삭제", command=self.remove_last_ndt_company, width=15).pack(side='left', padx=2)
+    # Buttons are now placed inline inside add_ndt_company_section
     
     # Add default first company section
     self.add_ndt_company_section()
@@ -530,7 +558,7 @@ def setup_daily_usage_tab_impl(self):
 
     # Row 2: RTK
     self.rtk_grid = ttk.LabelFrame(self.master_form_panel, text="RTK 분류")
-    self.rtk_grid.grid(row=2, column=0, padx=5, pady=2, sticky='ew')
+    self.rtk_grid.grid(row=1, column=1, padx=5, pady=2, sticky='new')
     self.rtk_grid.grid_remove() # [NEW] Hide RTK by default
     
     for c in range(6): self.rtk_grid.columnconfigure(c, weight=1, uniform="ndt_rtk")
@@ -557,6 +585,14 @@ def setup_daily_usage_tab_impl(self):
     self.rtk_entries["총계"].config(state='readonly')
     # Removed draggable container logic
 
+    # [NEW] PAUT/UT 빈 공간 채우기용 통합 안내 패널
+    self.empty_guide_frame = ttk.LabelFrame(self.master_form_panel, text="PAUT / UT 검사 안내")
+    self.empty_guide_frame.grid(row=1, column=1, padx=5, pady=2, sticky='new')
+    self.empty_guide_frame.grid_remove() # Hide by default
+    
+    guide_lbl = ttk.Label(self.empty_guide_frame, text="💡 PAUT 및 UT 검사는 NDT 자재 및 RTK 입력이 필요하지 않습니다.\n(특이사항은 하단의 메모를 활용해 주세요.)", justify='center', padding=10)
+    guide_lbl.pack(fill='both', expand=True)
+
     # [LAYOUT FIX] Removed obsolete minsize row configurations
 
 
@@ -565,7 +601,7 @@ def setup_daily_usage_tab_impl(self):
     
     # Create a single container for all workers inside the master panel summerly
     workers_box_frame = ttk.Frame(self.master_form_panel)
-    workers_box_frame.grid(row=0, column=1, rowspan=3, sticky='nsew', padx=5, pady=5)
+    workers_box_frame.grid(row=0, column=1, rowspan=1, sticky='nsew', padx=5, pady=5)
     workers_box_frame.columnconfigure(0, weight=1)
     workers_box_frame.rowconfigure(1, weight=1)
     
@@ -745,7 +781,15 @@ def setup_daily_usage_tab_impl(self):
     self.fixed_vehicle_frame = ttk.LabelFrame(self.bottom_dashboard, text="차량점검 (상시 패널)")
     self.bottom_dashboard.add(self.fixed_vehicle_frame, weight=9)
     
-    self.fixed_vehicle_widget = VehicleInspectionWidget(self.fixed_vehicle_frame, theme_bg=self.theme_bg, vehicle_list=getattr(self, 'equipments', []))
+    header_f = ttk.Frame(self.fixed_vehicle_frame)
+    header_f.pack(fill='x', padx=2, pady=(2, 0))
+    
+    # [NEW] Add Manage Button safely using pack instead of place
+    btn_manage = ttk.Button(header_f, text="⚙️ 차량 목록 설정", cursor='hand2')
+    btn_manage.pack(side='right')
+    btn_manage.config(command=lambda: self.open_list_management_dialog('차량 목록 관리', getattr(self, 'vehicles', []), 'vehicles'))
+
+    self.fixed_vehicle_widget = VehicleInspectionWidget(self.fixed_vehicle_frame, theme_bg=self.theme_bg, vehicle_list=getattr(self, 'vehicles', []))
     self.fixed_vehicle_widget.pack(fill='both', expand=True, padx=2, pady=2)
     # Register the vehicle widget to be saved along with standard entry
     self.vehicle_widget = self.fixed_vehicle_widget
@@ -1363,8 +1407,9 @@ def update_daily_usage_view_impl(self):
             '', # 업체명 (1)
             '', # 적용코드 (2)
             '', # 현장 (3)
-            '', # 검사품명 (4)
-            '', # 성적서번호 (5)
+            '', # 구분 (4)
+            '', # 검사품명 (5)
+            '', # 성적서번호 (6)
             '', # 작업자 (6)
             f"{total_work_hours:.1f} Hrs" if total_work_hours > 0.001 else "", # 작업시간 (7)
             # Individual OT Totals (Simplified: Amount only)

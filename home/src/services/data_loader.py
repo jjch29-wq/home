@@ -194,7 +194,8 @@ def load_data_impl(self):
                 # Explicitly set dtypes for vehicle and note columns to avoid float inference for empty cells
                 self.daily_usage_df = pd.read_excel(self.db_path, sheet_name='DailyUsage', 
                                                     dtype={'Site': str, 'Note': str, 'User': str,
-                                                           '차량번호': str, '주행거리': str, '차량점검': str, '차량비고': str})
+                                                           '차량번호': str, '주행거리': str, '차량점검': str, '차량비고': str,
+                                                           'MaterialID': object})  # [FIX] Keep text MaterialIDs (e.g. 'JIREH Scanner') as-is, prevent NaN coercion
                 print(f"DEBUG: Loaded {len(self.daily_usage_df)} records from DailyUsage sheet.")
                 self.daily_usage_df = normalize_cols(self.daily_usage_df)
                 
@@ -244,7 +245,7 @@ def load_data_impl(self):
                     self.daily_usage_df['EntryTime'] = pd.to_datetime(self.daily_usage_df['EntryTime'])
                     
                     # Fill NaNs and clean numeric artifacts in string columns
-                    string_columns = ['Site', 'Note', '장비명', '검사방법', '업체명', '차량번호', '주행거리', '차량점검', '차량비고']
+                    string_columns = ['Site', 'Note', '장비명', '검사방법', '업체명', '차량번호', '주행거리', '차량점검', '차량비고', '검사품명', '적용코드', '성적서번호']
                     # Add all users, worktimes and OT columns
                     for i in range(1, 11):
                         u_col = 'User' if i == 1 else f'User{i}'

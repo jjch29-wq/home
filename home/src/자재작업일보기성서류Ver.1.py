@@ -9651,12 +9651,12 @@ class MaterialManager:
         self.ndt_calc_frame.grid_remove() # 기본 숨김
 
         self.ndt_work_time_var = tk.StringVar(value="일반")
-        self.ndt_loc_type_var = tk.StringVar(value="수송배관(주배관)")
-        self.ndt_source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
-        self.ndt_thickness_var = tk.StringVar(value="15mm 이하 (1.0)")
+        self.ndt_loc_type_var = tk.StringVar(value="열배관")
+        self.ndt_source_var = tk.StringVar(value="Se-75 (1.0)")
+        self.ndt_thickness_var = tk.StringVar(value="조건없음 (1.0)")
         self.ndt_pipe_var = tk.StringVar(value="250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var = tk.DoubleVar(value=80.0)
-        self.ndt_tech_var = tk.DoubleVar(value=5.86)
+        self.ndt_overhead_var = tk.DoubleVar(value=110.0)
+        self.ndt_tech_var = tk.DoubleVar(value=20.0)
         self.ndt_ori_joint_var = tk.StringVar(value="")
         self.ndt_ori_qty_var = tk.StringVar(value="")
         self.ndt_rep_joint_var = tk.StringVar(value="")
@@ -9667,7 +9667,7 @@ class MaterialManager:
         row0 = ttk.Frame(self.ndt_calc_frame)
         row0.pack(fill='x', pady=2)
         ttk.Label(row0, text="구분:").pack(side='left')
-        ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["수송배관(주배관)", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
+        ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열배관", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
         ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
         for t in ["일반", "야간", "휴일"]:
             ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
@@ -9803,11 +9803,11 @@ class MaterialManager:
         self.ent_daily_test_amount.bind('<Return>', lambda e: self.cb_daily_unit.focus_set())
         self.cb_daily_unit.set('매')
         self.ndt_work_time_var.set("일반")
-        self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-        self.ndt_thickness_var.set("15mm 이하 (1.0)")
+        self.ndt_source_var.set("Se-75 (1.0)")
+        self.ndt_thickness_var.set("조건없음 (1.0)")
         self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var.set(80.0)
-        self.ndt_tech_var.set(5.86)
+        self.ndt_overhead_var.set(110.0)
+        self.ndt_tech_var.set(20.0)
         self.ndt_calc_frame.grid_remove()
         self.cb_daily_unit.bind('<Return>', lambda e: self.ent_daily_unit_price.focus_set())
         self.cb_daily_unit.bind('<<ComboboxSelected>>', lambda e: self.ent_daily_unit_price.focus_set())
@@ -9853,12 +9853,12 @@ class MaterialManager:
                     self.rtk_grid.grid() # [NEW] Show RTK
                     self.rtk_grid.lift() # [FIX] Prevent overlay click-blocking
                     self.master_form_panel.update_idletasks()
-                    self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
-                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"])
+                    self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Se-75 (1.0)", "Ir-192 (1.0)"])
+                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
                 elif method == "UT":
                     self.rtk_grid.grid_remove() # [NEW] Hide RTK
                     self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"])
-                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"])
+                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
                 elif method == "PT":
                     self.rtk_grid.grid_remove() # [NEW] Hide RTK
                     self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["150mm 초과 [6인치 이상] (1.2)", "150mm 이하 [4인치 이하] (1.4)"])
@@ -10279,7 +10279,7 @@ class MaterialManager:
                     if '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item:
                         loc_type = '플랜트(관리소)'
                     else:
-                        loc_type = '수송배관(주배관)'
+                        loc_type = '열배관'
                 
                 values = (
                     idx,
@@ -13045,17 +13045,17 @@ class MaterialManager:
             '출장비': to_f(self.ent_daily_travel_cost),
             '업체명': self.cb_daily_company.get().strip(),
             'Unit': self.cb_daily_unit.get().strip(),
-            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else "",
-            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT'] else ""),
+            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
+            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT','PAUT'] else ""),
             '조건2': self.ndt_thickness_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT'] else "",
-            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 1.0,
-            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0.0,
-            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
+            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 1.0,
+            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0.0,
+            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
             '검사구분': "ORI",
-            '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else "",
+            '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
             '조인트수': "",
             '불량수': "",
             '관경(Inch)': getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip(),
@@ -13096,7 +13096,7 @@ class MaterialManager:
             **worker_data_map
         })
 
-        is_ndt = self.cb_daily_test_method.get().strip() in ['RT','UT','PT']
+        is_ndt = self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT']
         record_types = []
         if is_ndt:
             ori_j = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
@@ -14148,8 +14148,8 @@ class MaterialManager:
                         except: pass
                 return default_val
             
-            self.ndt_overhead_var.set(get_valid_rate('제경비율', 80.0))
-            self.ndt_tech_var.set(get_valid_rate('기술료율', 5.86))
+            self.ndt_overhead_var.set(get_valid_rate('제경비율', 110.0))
+            self.ndt_tech_var.set(get_valid_rate('기술료율', 20.0))
 
             
             # 3. Material
@@ -14267,11 +14267,11 @@ class MaterialManager:
         # 기본값 복구
         self.cb_daily_unit.set('매')
         self.ndt_work_time_var.set("일반")
-        self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-        self.ndt_thickness_var.set("15mm 이하 (1.0)")
+        self.ndt_source_var.set("Se-75 (1.0)")
+        self.ndt_thickness_var.set("조건없음 (1.0)")
         self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var.set(80.0)
-        self.ndt_tech_var.set(5.86)
+        self.ndt_overhead_var.set(110.0)
+        self.ndt_tech_var.set(20.0)
         self.ndt_ori_joint_var.set("")
         self.ndt_ori_qty_var.set("")
         self.ndt_rep_joint_var.set("")
@@ -17596,14 +17596,14 @@ class MaterialManager:
         month_var = tk.IntVar(value=now.month)
         ttk.Spinbox(period_frame, from_=1, to=12, textvariable=month_var, width=4).pack(side='left')
         
-        # 현장 → 주배관/관리소 매핑
-        map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (주배관 / 관리소 구분)")
+        # 현장 → 열배관/관리소 매핑
+        map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (열배관 / 관리소 구분)")
         map_frame.pack(fill='x', padx=15, pady=5)
         
         # 현재 데이터에 존재하는 현장명(Site) 목록 추출
         site_list = sorted(self.daily_usage_df['Site'].dropna().unique().tolist()) if 'Site' in self.daily_usage_df.columns else []
         
-        ttk.Label(map_frame, text="주배관 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+        ttk.Label(map_frame, text="열배관 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
         main_var = tk.StringVar(value="")
         ttk.Entry(map_frame, textvariable=main_var, width=60).pack(padx=5, pady=2)
         
@@ -17646,14 +17646,14 @@ class MaterialManager:
                 mgmt_sites = [s.strip() for s in mgmt_var.get().split(',') if s.strip()]
                 
                 if not main_sites and not mgmt_sites:
-                    messagebox.showwarning("입력 오류", "주배관 또는 관리소에 해당하는 현장명을 최소 1개 입력해주세요.")
+                    messagebox.showwarning("입력 오류", "열배관 또는 관리소에 해당하는 현장명을 최소 1개 입력해주세요.")
                     return
                 if not filepath:
                     messagebox.showwarning("입력 오류", "대상 엑셀 파일을 선택해주세요.")
                     return
                 
                 log(f"▶ 기간: {year}년 {month}월")
-                log(f"▶ 주배관 현장: {main_sites}")
+                log(f"▶ 열배관 현장: {main_sites}")
                 log(f"▶ 관리소 현장: {mgmt_sites}")
                 
                 # --- 1. 데이터 필터링 ---
@@ -17688,7 +17688,7 @@ class MaterialManager:
                 
                 # --- 3. 집계 함수 ---
                 def aggregate_site(site_df):
-                    """한 현장(주배관 or 관리소)의 데이터를 집계"""
+                    """한 현장(열배관 or 관리소)의 데이터를 집계"""
                     result = {
                         'RT': {'B': {}, 'A': {}, 'A/2': {}},
                         'UT': {'data': {}},
@@ -17700,7 +17700,7 @@ class MaterialManager:
                     
                     for _, row in site_df.iterrows():
                         method = str(row.get('검사방법', '')).strip().upper()
-                        if method not in ['RT', 'UT', 'PT']:
+                        if method not in ['RT', 'UT', 'PT', 'PAUT']:
                             continue
                         
                         work_type = str(row.get('작업형태', '주간')).strip()
@@ -17761,11 +17761,11 @@ class MaterialManager:
                     
                     return result
                 
-                # --- 4. 주배관 / 관리소 각각 집계 ---
+                # --- 4. 열배관 / 관리소 각각 집계 ---
                 main_df = df[df['Site'].isin(main_sites)] if main_sites else pd.DataFrame()
                 mgmt_df = df[df['Site'].isin(mgmt_sites)] if mgmt_sites else pd.DataFrame()
                 
-                log(f"▶ 주배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")
+                log(f"▶ 열배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")
                 
                 main_agg = aggregate_site(main_df) if not main_df.empty else None
                 mgmt_agg = aggregate_site(mgmt_df) if not mgmt_df.empty else None
@@ -17915,7 +17915,7 @@ class MaterialManager:
                 
                 # 시트별 기입
                 if main_agg:
-                    sheet_name = '3. 비파괴검사 현황 (주배관)'
+                    sheet_name = '3. 비파괴검사 현황 (열배관)'
                     if sheet_name in wb.sheetnames:
                         write_ndt_sheet(wb[sheet_name], main_agg)
                         log(f"✅ '{sheet_name}' 시트 기입 완료")

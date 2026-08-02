@@ -11,11 +11,12 @@ from utils.helpers import normalize_id
 import json
 import sys
 import subprocess
+from daily_work_report_manager import DailyWorkReportManager
 
 def export_daily_work_report_impl(self):
     """작업일보를 엑셀 템플릿에 출력합니다."""
     try:
-        template_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'Template_DailyWorkReport.xlsx')
+        template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'resources', 'Template_DailyWorkReport.xlsx')
         if not os.path.exists(template_path):
             template_path = r'c:\Users\jjch2\Desktop\보고서Project PROVIDENCE\Request\PMI\Na-aba\home\resources\Template_DailyWorkReport.xlsx'
         
@@ -114,6 +115,18 @@ def export_daily_work_report_impl(self):
                 v_str = str(v).strip()
                 if v_str and v_str not in all_vehicles: all_vehicles.append(v_str)
         data['car_no'] = ", ".join(all_vehicles)
+
+        note_texts = []
+        # [FIX] A18:S25 메모 영역에는 '비고'가 아닌 '상시 패널(메모)' 내용만 입력되도록 수정
+        if hasattr(self, 'main_memo_text'):
+            try:
+                import tkinter as tk
+                ui_memo = self.main_memo_text.get('1.0', tk.END).strip()
+                if ui_memo:
+                    note_texts.append(ui_memo)
+            except: pass
+                
+        data['note'] = "\n".join(note_texts)
 
         # [NEW] 공사 수행현황 (Section 1) - DB site_records에 있는 모든 방식 집계
         method_col = '검사방법' if '검사방법' in site_records.columns else 'TestMethod' if 'TestMethod' in site_records.columns else ''
@@ -261,9 +274,55 @@ def export_daily_work_report_impl(self):
         # 2.5 차량 및 안전 점검 수집 (섹션 3)
 
         data['vehicles'] = []
-        if hasattr(self, 'vehicle_boxes'):
-            for box in self.vehicle_boxes:
-                data['vehicles'].append(box.get_data())
+        seen_vehicles = set()
+        if not site_records.empty and '차량번호' in site_records.columns:
+            for _, row in site_records.iterrows():
+                v_no = str(row.get('차량번호', '')).strip()
+                if not v_no or v_no == 'nan': continue
+                
+                if v_no in seen_vehicles: continue
+                seen_vehicles.add(v_no)
+                
+                v_insp_raw = str(row.get('차량점검', '')).strip()
+                v_mileage = str(row.get('주행거리', '')).strip()
+                v_remarks = str(row.get('차량비고', '')).strip()
+                
+                v_parsed = {
+                    'vehicle_info': v_no, 
+                    'mileage': v_mileage if v_mileage != 'nan' else '', 
+                    'remarks': v_remarks if v_remarks != 'nan' else ''
+                }
+                
+                if ':' in v_insp_raw:
+                    for pair in v_insp_raw.split('|'):
+                        if ':' in pair:
+                            k, v = pair.split(':', 1)
+                            v_parsed[k] = v
+                elif ',' in v_insp_raw or v_insp_raw:
+                    for k in v_insp_raw.split(','):
+                        k_clean = k.strip()
+                        if k_clean:
+                            if 'locking' in k_clean: v_parsed[k_clean] = '잠금'
+                            elif 'cleaning' in k_clean: v_parsed[k_clean] = '함'
+                            else: v_parsed[k_clean] = '양호'
+                data['vehicles'].append(v_parsed)
+                
+        # 폼에 아직 저장되지 않은 내용이 있을 경우 대비
+        if not data['vehicles']:
+            if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
+                for box in self.vehicle_boxes:
+                    data['vehicles'].append(box.get_data())
+            elif hasattr(self, 'vehicle_widget'):
+                data['vehicles'].append(self.vehicle_widget.get_data())
+                
+        # [NEW] N9 셀(car_no)에 들어갈 차량번호만 추출
+        car_no_list = []
+        for v in data['vehicles']:
+            v_no = v.get('vehicle_info', '').strip()
+            if v_no:
+                car_no_list.append(v_no)
+        if car_no_list:
+            data['car_no'] = ", ".join(car_no_list)
 
         # 자재 정보 수집 (NDT 섹션)
         data['selected_material'] = self.cb_daily_material.get().strip()
@@ -612,7 +671,7 @@ def export_daily_work_report_impl(self):
                 
         data['rtk_total'] = rtk_total
 
-        default_filename = f"작업일보_{site}_{date_val.strftime('%Y%m%d')}.xlsx"
+        default_filename = f"한국지역난방 중앙지사_{date_val.strftime('%Y%m%d')}.xlsx"
         save_path = filedialog.asksaveasfilename(
             title="작업일보 저장",
             initialfile=default_filename,

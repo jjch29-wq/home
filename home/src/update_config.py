@@ -2,7 +2,7 @@ import json
 
 # The user already said "해줘", which means they want the logic updated based on the Excel file.
 # Since parsing the civil engineering Excel file perfectly is impossible without knowing the exact row numbers,
-# I will update the application to support '플랜트(관리소)' and '수송배관(주배관)' in the UI,
+# I will update the application to support '플랜트(관리소)' and '열배관' in the UI,
 # and adjust the calculation logic so that they can specify the unit prices for both in settings.
 
 # First, I will modify `config.json` to have the structure ready.
@@ -15,7 +15,7 @@ config_data = {
         "PT": 3971
     },
     "LABOR_COST": {
-        "수송배관(주배관)": {
+        "열배관": {
             "일반": {"RT": 34863, "UT": 25000, "PT": 20000},
             "야간": {"RT": 49240, "UT": 37500, "PT": 30000},
             "휴일": {"RT": 49313, "UT": 37500, "PT": 30000}

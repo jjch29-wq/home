@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
         "PT": 3971
     },
     "LABOR_COST": {
-        "수송배관(주배관)": {
+        "열배관": {
             "일반": {"RT": 45126, "UT": 43734, "PT": 38466},
             "야간": {"RT": 67689, "UT": 65601, "PT": 53457},
             "휴일": {"RT": 67689, "UT": 65601, "PT": 53429}
@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {
         }
     },
     "CONTRACT_QTY": {
-        "수송배관(주배관)": {
+        "열배관": {
             "RT_B": 19125,
             "RT_A": 0,
             "RT_A2": 0,
@@ -156,14 +156,14 @@ class NDTCalculator(tk.Tk):
             
         ttk.Label(left_frame, text="2. 작업 구분 (구간 및 시간대)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
         
-        self.loc_type_var = tk.StringVar(value="수송배관(주배관)")
+        self.loc_type_var = tk.StringVar(value="열배관")
         self.work_time_var = tk.StringVar(value="일반")
         
         type_time_frame = ttk.Frame(left_frame)
         type_time_frame.pack(fill=tk.X, pady=5)
         
         ttk.Label(type_time_frame, text="구간:").pack(side=tk.LEFT)
-        for t in ["수송배관(주배관)", "플랜트(관리소)"]:
+        for t in ["열배관", "플랜트(관리소)"]:
             ttk.Radiobutton(type_time_frame, text=t, value=t, variable=self.loc_type_var).pack(side=tk.LEFT, padx=5)
             
         ttk.Label(type_time_frame, text="  |  시간:").pack(side=tk.LEFT)
@@ -181,7 +181,7 @@ class NDTCalculator(tk.Tk):
         
         self.source_frame = ttk.Frame(self.dynamic_frame)
         ttk.Label(self.source_frame, text="• 방사선원 :", width=15).pack(side=tk.LEFT)
-        self.source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
+        self.source_var = tk.StringVar(value="Se-75 (1.0)")
         self.source_combo = ttk.Combobox(self.source_frame, textvariable=self.source_var, state="readonly", width=35)
         self.source_combo['values'] = ["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"]
         self.source_combo.pack(side=tk.LEFT)
@@ -207,11 +207,11 @@ class NDTCalculator(tk.Tk):
         ttk.Label(rate_frame, text="6. 적용 요율 (%)", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=(0, 20))
         
         ttk.Label(rate_frame, text="제경비율:").pack(side=tk.LEFT)
-        self.overhead_rate_var = tk.DoubleVar(value=80.0)
+        self.overhead_rate_var = tk.DoubleVar(value=110.0)
         ttk.Entry(rate_frame, textvariable=self.overhead_rate_var, width=8).pack(side=tk.LEFT, padx=5)
         
         ttk.Label(rate_frame, text="기술료율:").pack(side=tk.LEFT, padx=(15, 0))
-        self.tech_fee_rate_var = tk.DoubleVar(value=5.86)
+        self.tech_fee_rate_var = tk.DoubleVar(value=20.0)
         ttk.Entry(rate_frame, textvariable=self.tech_fee_rate_var, width=8).pack(side=tk.LEFT, padx=5)
         
         btn_frame = ttk.Frame(left_frame)
@@ -546,15 +546,15 @@ class NDTCalculator(tk.Tk):
         if ndt_type == "RT":
             self.source_frame.pack(fill=tk.X, pady=2)
             self.thickness_frame.pack(fill=tk.X, pady=2)
-            self.thickness_combo['values'] = ["15mm 이하 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"]
-            self.thickness_var.set("15mm 이하 (1.0)")
+            self.thickness_combo['values'] = ["조건없음 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"]
+            self.thickness_var.set("조건없음 (1.0)")
         elif ndt_type == "UT":
             self.pipe_frame.pack(fill=tk.X, pady=2)
             self.thickness_frame.pack(fill=tk.X, pady=2)
             self.pipe_combo['values'] = ["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"]
             self.pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-            self.thickness_combo['values'] = ["15mm 이하 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"]
-            self.thickness_var.set("15mm 이하 (1.0)")
+            self.thickness_combo['values'] = ["조건없음 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"]
+            self.thickness_var.set("조건없음 (1.0)")
         elif ndt_type == "PT":
             self.pipe_frame.pack(fill=tk.X, pady=2)
             self.pipe_combo['values'] = ["150mm 초과 [6인치 이상] (1.2)", "150mm 이하 [4인치 이하] (1.4)"]
@@ -599,7 +599,7 @@ class NDTCalculator(tk.Tk):
         total_mat_cost = int(qty * mat_unit_cost)
         
         loc_type = getattr(self, "loc_type_var", None)
-        loc_type_val = loc_type.get() if loc_type else "수송배관(주배관)"
+        loc_type_val = loc_type.get() if loc_type else "열배관"
         
         if loc_type_val in LABOR_COST:
             lab_unit_cost = LABOR_COST[loc_type_val][work_time][ndt_type]
@@ -643,7 +643,7 @@ class NDTCalculator(tk.Tk):
             
             mat_unit = MATERIAL_COST.get(res['material_type'], 0)
             loc_type = getattr(self, "loc_type_var", None)
-            loc_type_val = loc_type.get() if loc_type else "수송배관(주배관)"
+            loc_type_val = loc_type.get() if loc_type else "열배관"
             if loc_type_val in LABOR_COST:
                 lab_unit = LABOR_COST[loc_type_val][res['work_time']][res['ndt_type']]
             else:
@@ -678,7 +678,7 @@ class NDTCalculator(tk.Tk):
         if "[플랜트(관리소)]" in res['loc']:
             loc_type_val = "플랜트(관리소)"
         else:
-            loc_type_val = "수송배관(주배관)"
+            loc_type_val = "열배관"
             
         if loc_type_val in LABOR_COST:
             lab_unit = LABOR_COST[loc_type_val].get(res['work_time'], {}).get(res['ndt_type'], 0)
@@ -889,7 +889,7 @@ class NDTCalculator(tk.Tk):
             messagebox.showerror("오류", f"저장 중 오류가 발생했습니다: {e}")
 
     def auto_load_contract_qty(self):
-        pipe = CONTRACT_QTY.get("수송배관(주배관)", {})
+        pipe = CONTRACT_QTY.get("열배관", {})
         plant = CONTRACT_QTY.get("플랜트(관리소)", {})
         
         rt_b = pipe.get("RT_B", 0) + plant.get("RT_B", 0)
@@ -1421,7 +1421,7 @@ class NDTCalculator(tk.Tk):
         
         tree = ttk.Treeview(main_frame, columns=("Type", "Pipeline", "Plant", "Total"), show="headings", height=8)
         tree.heading("Type", text="검사 종류")
-        tree.heading("Pipeline", text="수송배관 (주배관)")
+        tree.heading("Pipeline", text="수송배관 (열배관)")
         tree.heading("Plant", text="플랜트 (관리소)")
         tree.heading("Total", text="총계")
         
@@ -1430,7 +1430,7 @@ class NDTCalculator(tk.Tk):
         tree.column("Plant", width=100, anchor=tk.E)
         tree.column("Total", width=100, anchor=tk.E)
         
-        pipe = CONTRACT_QTY.get("수송배관(주배관)", {})
+        pipe = CONTRACT_QTY.get("열배관", {})
         plant = CONTRACT_QTY.get("플랜트(관리소)", {})
         
         items = [

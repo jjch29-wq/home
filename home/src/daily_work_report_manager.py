@@ -87,7 +87,7 @@ class DailyWorkReportManager:
             if font: cell.font = font
             if align: cell.alignment = align
 
-        def safe_write(cell_coord, value, is_currency=False, is_bold=False):
+        def safe_write(cell_coord, value, is_currency=False, is_bold=False, shrink_to_fit=False):
             if not cell_coord: return
             try:
                 cell = sheet[cell_coord]
@@ -98,8 +98,12 @@ class DailyWorkReportManager:
                             break
                 cell.value = value
                 cell.font = Font(name='맑은 고딕', size=9, bold=is_bold)
-                # [FIX] shrinkToFit and wrapText are mutually exclusive in Excel - use wrapText only
-                cell.alignment = Alignment(wrapText=True, vertical='center', horizontal='center')
+                
+                if shrink_to_fit:
+                    cell.alignment = Alignment(shrink_to_fit=True, vertical='center', horizontal='center')
+                else:
+                    cell.alignment = Alignment(wrapText=True, vertical='center', horizontal='center')
+                    
                 if is_currency:
                     cell.number_format = '#,##0 "원"'
             except: pass
@@ -109,6 +113,9 @@ class DailyWorkReportManager:
         weekdays = ["월", "화", "수", "목", "금", "토", "일"]
         date_str = f"{d.year}년 {d.month}월 {d.day}일 ({weekdays[d.weekday()]})"
         safe_write(mapping.get('header', {}).get('date', 'F2'), date_str)
+        
+        # 담당 결재란 서명 삽입
+        # safe_write('L3', '주진철', is_bold=True)
 
         gen_map = mapping.get('general', {})
         for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no', 'inspector_n8']:
@@ -284,8 +291,8 @@ class DailyWorkReportManager:
             if isinstance(h_val, float):
                 total_ot_hours += h_val
             
-            safe_write(f"B{r}", worker_name_display)
-            safe_write(f"F{r}", ot.get('company', ''))
+            safe_write(f"B{r}", worker_name_display, shrink_to_fit=True)
+            safe_write(f"F{r}", ot.get('company', ''), shrink_to_fit=True)
             safe_write(f"I{r}", ot.get('method', ''))
             safe_write(f"K{r}", h_val)
             safe_write(f"N{r}", ot_amount, is_currency=True)
@@ -405,15 +412,36 @@ class DailyWorkReportManager:
         
         for r in range(note_range_start, note_range_end + 1):
             sheet.row_dimensions[r].height = dynamic_height; sheet.row_dimensions[r].custom_height = True
-            for c in range(1, 20):
-                cell = sheet.cell(row=r, column=c)
-                if not isinstance(cell, MergedCell):
-                    cell.value = None; cell.alignment = no_wrap; cell.font = tiny_font
         
         merges_to_kill = [m for m in list(sheet.merged_cells.ranges) if m.min_row >= note_range_start and m.max_row <= note_range_end]
         for m in merges_to_kill:
             try: sheet.unmerge_cells(str(m))
             except: pass
+
+        for r in range(note_range_start, note_range_end + 1):
+            for c in range(1, 20):
+                cell = sheet.cell(row=r, column=c)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
+
+        note_text = data.get('note', '')
+        if note_text:
+            start_cell = sheet.cell(row=note_range_start, column=2)
+            start_cell.value = note_text
+            
+            # [DYNAMIC FONT SIZE]
+            # Reduce font size if the buffer area is squeezed, or if the text is very long
+            font_size = 10
+            if total_buffer < 120.0:
+                font_size = max(6, int(10 * (total_buffer / 120.0)))
+                
+            est_lines = note_text.count('\n') + 1 + (len(note_text) // 40)
+            if est_lines > (total_buffer / 15.0):
+                ratio = (total_buffer / 15.0) / est_lines
+                font_size = min(font_size, max(5, int(10 * ratio)))
+                
+            start_cell.font = Font(name='맑은 고딕', size=font_size)
+            start_cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
             
         for r in range(13, 18 + method_offset):
             sheet.row_dimensions[r].height = 15.0; sheet.row_dimensions[r].custom_height = True
@@ -503,36 +531,44 @@ class DailyWorkReportManager:
         sheet.sheet_properties.pageSetUpPr.fitToPage = True
 
         veh_list = data.get('vehicles', []); v = veh_list[0] if veh_list else {}
-        veh_row = 27 + method_offset; safe_write(f"B{veh_row}", "") 
+        veh_row = 27 + method_offset
+        # [REMOVED] 차량번호/주행거리는 N9 셀(car_no)에만 표시하므로 B27/H27에는 출력하지 않음
         chk_rows = {'out': 29 + total_offset, 'in': 30 + total_offset}
         for rs in range(25+total_offset, 35+total_offset):
             val = sheet.cell(row=rs, column=2).value
             if val == "출차시": chk_rows['out'] = rs
             if val == "입차시": chk_rows['in'] = rs
-        
-        chk_map = {'exterior':'E','cleanliness':'H','cleaning':'K','locking':'N'}
-        WHITE_SQ, BLACK_SQ = "\u25a1", "\u25a0"
+        # Range of columns for each category to handle different templates and merged/unmerged cells
+        chk_map_ranges = {
+            'exterior': range(3, 7),     # C to F
+            'cleanliness': range(7, 11), # G to J
+            'cleaning': range(11, 15),   # K to N
+            'locking': range(15, 20)     # O to S
+        }
         import re
         for rk, row_idx in chk_rows.items():
-            for ck, col_let in chk_map.items():
+            for ck, col_range in chk_map_ranges.items():
                 val = v.get(f"{rk}_{ck}")
                 if val:
-                    coord = f"{col_let}{row_idx}"; cell = sheet[coord]
-                    if isinstance(cell, MergedCell):
-                        for mr in sheet.merged_cells.ranges:
-                            if coord in mr: cell = sheet.cell(row=mr.min_row, column=mr.min_col); break
-                    if cell.value and isinstance(cell.value, str):
-                        pattern = f"({WHITE_SQ})(\\s*){re.escape(val)}"
-                        if re.search(pattern, cell.value):
-                            cell.value = re.sub(pattern, f"{BLACK_SQ}\\2{val}", cell.value)
+                    pattern = r"([\u25a1\u2610\u3141]|\[\s*\]|\(\s*\))(\s*)" + re.escape(val)
+                    for c in col_range:
+                        cell = sheet.cell(row=row_idx, column=c)
+                        if isinstance(cell, MergedCell) or cell.value is None:
+                            for mr in sheet.merged_cells.ranges:
+                                if cell.coordinate in mr:
+                                    cell = sheet.cell(row=mr.min_row, column=mr.min_col)
+                                    break
+                        
+                        if cell.value and isinstance(cell.value, str):
+                            if re.search(pattern, cell.value):
+                                cell.value = re.sub(pattern, f"\u25a0\\2{val}", cell.value)
+                                break # Found and checked!
 
         sheet.page_setup.horizontalCentered = True; sheet.page_setup.verticalCentered = False 
-        if v.get('remarks'):
-            rem_cell = f"B{31 + method_offset}"
-            safe_write(rem_cell, f"비고: {v.get('remarks')}")
-            if sheet[rem_cell].value:
-                sheet[rem_cell].alignment = Alignment(horizontal='left', vertical='center', indent=1)
-                sheet[rem_cell].font = Font(name='맑은 고딕', size=9)
+        
+        # [REMOVED] B31 내용 비우기 (사용자 요청)
+        rem_cell = f"B{31 + method_offset}"
+        safe_write(rem_cell, "")
 
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
         sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
@@ -609,9 +645,9 @@ class DailyWorkReportManager:
             if s2_start <= m_range.min_row and m_range.max_row <= s2_end:
                 try: sheet.unmerge_cells(m_range.coord)
                 except: pass
-        for r_idx in range(s2_start, s2_end + 1):
-            try: sheet.merge_cells(start_row=r_idx, start_column=2, end_row=r_idx, end_column=19)
-            except: pass
+        
+        try: sheet.merge_cells(start_row=s2_start, start_column=2, end_row=s2_end, end_column=19)
+        except: pass
         apply_section_style(sheet, s2_start, 2, s2_end, 19, 'thin', inner_style=None)
         apply_section_style(sheet, 12, 2, 16 + method_offset, 19, 'thin')
         apply_section_style(sheet, 6, 2, 9, 19, 'thin')

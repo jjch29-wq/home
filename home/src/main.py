@@ -21,16 +21,38 @@ import subprocess
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from utils.helpers import install_and_import, normalize_id
 from utils.helpers import NAN_PATTERN, DOT_ZERO_PATTERN, MARKER_PATTERN
+# [FIX] Bypass slow pytz timezone loading on network drives (Google Drive)
+import builtins
+import inspect
 
+_orig_open = builtins.open
+class _PytzDummyFile:
+    def close(self): pass
 
-# Pre-import critical libraries
-pd = install_and_import('pandas')
-np = install_and_import('numpy')
-install_and_import('openpyxl')
-install_and_import('tkcalendar')
-install_and_import('xlsxwriter')
-install_and_import('pillow', 'PIL')
-from PIL import Image, ImageTk
+def _fast_open(file, mode='r', *args, **kwargs):
+    if isinstance(file, str) and 'pytz' in file and 'zoneinfo' in file and mode == 'rb':
+        try:
+            frame = inspect.currentframe()
+            if frame and frame.f_back and frame.f_back.f_code.co_name == 'open_resource':
+                if frame.f_back.f_back and frame.f_back.f_back.f_code.co_name == 'resource_exists':
+                    return _PytzDummyFile()
+        except Exception:
+            pass
+    return _orig_open(file, mode, *args, **kwargs)
+
+builtins.open = _fast_open
+
+try:
+    # Pre-import critical libraries
+    pd = install_and_import('pandas')
+    np = install_and_import('numpy')
+    install_and_import('openpyxl')
+    install_and_import('tkcalendar')
+    install_and_import('xlsxwriter')
+    install_and_import('pillow', 'PIL')
+    from PIL import Image, ImageTk
+finally:
+    builtins.open = _orig_open
 
 from daily_work_report_manager import DailyWorkReportManager
 from ndt_billing_tab import NDTCalculatorTab
@@ -535,6 +557,14 @@ class MaterialManager:
                 
                 def _do_update():
                     if not self.entry_canvas.winfo_exists(): return
+                    
+                    # Dynamically adjust the canvas window height to accommodate new/removed widgets
+                    if hasattr(self, 'entry_inner_frame') and hasattr(self, 'entry_canvas_window'):
+                        req_h = self.entry_inner_frame.winfo_reqheight()
+                        canvas_h = self.entry_canvas.winfo_height()
+                        target_h = max(req_h, canvas_h)
+                        self.entry_canvas.itemconfig(self.entry_canvas_window, height=target_h)
+                        
                     bbox = self.entry_canvas.bbox("all")
                     if bbox:
                         canvas_h = self.entry_canvas.winfo_height()
@@ -1739,18 +1769,27 @@ class MaterialManager:
         """Get formatted material name as '품목명 (SN: SN번호) - 규격'"""
         # [FIX] Handle NaN IDs gracefully to prevent "NAN" display
         if pd.isna(mat_id) or str(mat_id).lower().strip() == 'nan':
-            return "미지정 품목"
+            return ""
             
         if self.materials_df.empty:
             return f"ID: {mat_id}"
             
-        mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
+        try:
+            mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
+        except (TypeError, ValueError):
+            mat_row = pd.DataFrame()  # Comparison failed (e.g. dtype mismatch) → treat as not found
+            
         if mat_row.empty:
             # [NEW] Handle non-numeric IDs (raw names for PAUT) and orphans gracefully
             return str(mat_id)
             
         mat = mat_row.iloc[0]
         name = mat['품목명']
+        
+        # [SAFETY] If 품목명 is NaN/empty, fall back to str(mat_id)
+        if pd.isna(name) or str(name).strip() == '':
+            return str(mat_id)
+        
         sn = mat.get('SN', '')
         spec = mat.get('규격', '')
         
@@ -1768,6 +1807,7 @@ class MaterialManager:
             display = f"{display} [{str(spec).strip()}]"
             
         return display
+
 
     def get_material_name_only(self, mat_id):
         """Get only the 품목명 for a material"""
@@ -4584,11 +4624,22 @@ class MaterialManager:
         elif config_key == 'warehouses':
             if hasattr(self, 'cb_warehouse'): self.cb_warehouse['values'] = sorted_vals
         elif config_key == 'vehicles':
+            # 1. Update fixed panel
+            if hasattr(self, 'fixed_vehicle_widget'):
+                self.fixed_vehicle_widget.update_vehicle_list(sorted_vals)
+            # 2. Update floating panels
+            if hasattr(self, 'draggable_items'):
+                for key, cont in self.draggable_items.items():
+                    w = getattr(cont, '_widget', None)
+                    if w and type(w).__name__ == 'VehicleInspectionWidget':
+                        w.update_vehicle_list(sorted_vals)
+            # (Legacy compatibility)
             if hasattr(self, 'vehicle_boxes'):
-                for box in self.vehicle_boxes:
+                for box in getattr(self, 'vehicle_boxes', []):
                     box.update_vehicle_list(sorted_vals)
-            for key, widget_instance in self.vehicle_inspections.items():
-                widget_instance.update_vehicle_list(sorted_vals)
+            if hasattr(self, 'vehicle_inspections'):
+                for key, widget_instance in getattr(self, 'vehicle_inspections', {}).items():
+                    widget_instance.update_vehicle_list(sorted_vals)
         elif config_key == 'co_code' or config_key == '회사코드':
             # [NEW] Update company code combobox in daily usage
             if hasattr(self, 'cb_daily_co_code'): self.cb_daily_co_code['values'] = sorted_vals
@@ -4738,23 +4789,27 @@ class MaterialManager:
             # Copy value from original widget
             if hasattr(orig, '_widget'):
                 try:
-                    current_val = str(orig._widget.get()) # Ensure string
-                    
-                    # Try generic Entry-like setting (works for Entry and Combobox text area)
-                    if hasattr(w, 'delete') and hasattr(w, 'insert'):
-                        try:
-                            w.delete(0, 'end')
-                            w.insert(0, current_val)
-                        except:
-                            # Readonly comboboxes might fail delete/insert
-                            pass
-                            
-                    # Try specific set method (Combobox, Scale, etc)
-                    if hasattr(w, 'set'):
-                        w.set(current_val)
+                    if hasattr(orig._widget, 'get'):
+                        current_val = str(orig._widget.get()) # Ensure string
                         
+                        # Try generic Entry-like setting (works for Entry and Combobox text area)
+                        if hasattr(w, 'delete') and hasattr(w, 'insert'):
+                            try:
+                                w.delete(0, 'end')
+                                w.insert(0, current_val)
+                            except:
+                                # Readonly comboboxes might fail delete/insert
+                                pass
+                                
+                        # Try specific set method (Combobox, Scale, etc)
+                        if hasattr(w, 'set'):
+                            w.set(current_val)
+                    elif hasattr(orig._widget, 'get_data') and hasattr(w, 'set_data'):
+                        # For complex widgets like VehicleInspectionWidget
+                        w.set_data(orig._widget.get_data())
                 except Exception as e:
                     print(f"Failed to copy value: {e}")
+
             
             cont.place(x=50, y=50) # Start position
             self.save_tab_config()
@@ -5267,9 +5322,9 @@ class MaterialManager:
 
     def add_vehicle_inspection_box(self, initial_data=None, key=None):
         """Create a new movable vehicle inspection box"""
-        import time
+        import datetime
         if key is None:
-            key = f"vehicle_inspection_{int(time.time() * 1000)}"
+            key = f"vehicle_inspection_{int(datetime.datetime.now().timestamp() * 1000)}"
             
         # Create draggable container
         container, widget = self.create_draggable_container(
@@ -5293,7 +5348,7 @@ class MaterialManager:
         if key not in getattr(self, '_loading_memos', []):
             container.place(x=1450, y=50)
             
-        return container
+        return widget
 
     def add_checklist_item(self, parent_frame, text, checked, checklist_key):
         """Add a single item row to the checklist"""
@@ -5639,11 +5694,14 @@ class MaterialManager:
 
     def update_recent_entries_view(self):
         """오늘 입력된 내역을 미니 테이블에 업데이트"""
-        if not hasattr(self, 'tv_recent') or getattr(self, 'daily_usage_df', None) is None or self.daily_usage_df.empty:
+        if not hasattr(self, 'tv_recent') or getattr(self, 'daily_usage_df', None) is None:
             return
             
         for item in self.tv_recent.get_children():
             self.tv_recent.delete(item)
+            
+        if self.daily_usage_df.empty:
+            return
             
         try:
             # Filter for today's entries
@@ -5672,6 +5730,12 @@ class MaterialManager:
                 mat_id = row.get('MaterialID', '')
                 mat_name = self.get_material_display_name(mat_id) if hasattr(self, 'get_material_display_name') else mat_id
                 
+                # [FIX] If Material is empty but Equipment is present, show Equipment in the TreeView
+                if not mat_name or str(mat_name).strip() == '':
+                    equip_name = str(row.get('장비명', '')).strip()
+                    if equip_name and equip_name.lower() != 'nan':
+                        mat_name = f"[장비] {equip_name}"
+                
                 loc_type = str(row.get('구분', '')).strip()
                 if not loc_type or loc_type.lower() == 'nan':
                     site = str(row.get('Site', '')).strip()
@@ -5679,7 +5743,7 @@ class MaterialManager:
                     if '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item:
                         loc_type = '플랜트(관리소)'
                     else:
-                        loc_type = '수송배관(주배관)'
+                        loc_type = '열배관'
                 
                 values = (
                     idx,
@@ -8317,19 +8381,20 @@ class MaterialManager:
         for cat, ent in self.rtk_entries.items():
             rtk_data[f'RTK_{cat}'] = to_f(ent)
 
-        # 3. 차량 데이터 수집 (내용이 있는 상자만 필터링)
-        living_boxes = []
+        # 3. 차량 데이터 수집 (하단 고정 패널 1개 + 추가 플로팅 창)
+        all_v_widgets = []
+        if hasattr(self, 'fixed_vehicle_widget') and self.fixed_vehicle_widget.winfo_exists():
+            all_v_widgets.append(self.fixed_vehicle_widget)
         if hasattr(self, 'vehicle_boxes'):
             for b in self.vehicle_boxes:
-                if hasattr(b, 'winfo_exists') and b.winfo_exists():
-                    v_data = b.get_data()
-                    v_no = v_data.get('vehicle_info', '').strip()
-                    v_mileage = v_data.get('_raw_mileage', '').strip()
-                    # 차량번호, 주행거리, 혹은 점검 항목이 하나라도 기입된 상자만 데이터로 인정
-                    has_check = any(v for k, v in v_data.items() if k not in ['vehicle_info', 'mileage', 'remarks', '_raw_mileage'])
-                    if v_no or v_mileage or has_check:
-                        living_boxes.append(b)
-
+                if b not in all_v_widgets:
+                    all_v_widgets.append(b)
+            
+        living_boxes = []
+        for b in all_v_widgets:
+            if hasattr(b, 'winfo_exists') and b.winfo_exists():
+                living_boxes.append(b)
+                
         # 4. 업체(Company) 데이터 수집
         company_data_list = []
         if hasattr(self, 'ndt_company_entries'):
@@ -8365,17 +8430,17 @@ class MaterialManager:
             '출장비': to_f(self.ent_daily_travel_cost),
             '업체명': self.cb_daily_company.get().strip(),
             'Unit': self.cb_daily_unit.get().strip(),
-            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else "",
-            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT'] else ""),
+            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
+            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT','PAUT'] else ""),
             '조건2': self.ndt_thickness_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT'] else "",
-            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 1.0,
-            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0.0,
-            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
+            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 1.0,
+            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0.0,
+            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
             '검사구분': "ORI",
-            '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else "",
+            '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
             '조인트수': "",
             '불량수': "",
             '관경(Inch)': getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip(),
@@ -8416,7 +8481,7 @@ class MaterialManager:
             **worker_data_map
         })
 
-        is_ndt = self.cb_daily_test_method.get().strip() in ['RT','UT','PT']
+        is_ndt = self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT']
         record_types = []
         if is_ndt:
             ori_j = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
@@ -8428,8 +8493,40 @@ class MaterialManager:
         else:
             record_types.append('DEFAULT')
 
+        # --- 차량 데이터 병합 (단일 행 저장용) ---
+        merged_v_no = []
+        merged_v_mileage = []
+        merged_v_check = []
+        merged_v_remarks = []
+
+        for v_widget in living_boxes:
+            v_data = v_widget.get_data()
+            v_no = str(v_data.get('vehicle_info', '')).strip()
+            v_mileage = str(v_data.get('_raw_mileage', '')).strip()  # Use raw mileage for safety
+            v_remarks = str(v_data.get('remarks', '')).strip()
+            
+            reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
+            checks_list = []
+            for k, v in v_data.items():
+                if k not in reserved and v:
+                    checks_list.append(f"{k}:{v}")
+            v_check_str = "|".join(checks_list)
+            
+            # 값이 하나라도 있으면 추가
+            if v_no or v_mileage or v_check_str or v_remarks:
+                merged_v_no.append(v_no)
+                merged_v_mileage.append(v_mileage)
+                merged_v_check.append(v_check_str)
+                merged_v_remarks.append(v_remarks)
+        
+        final_v_no = " || ".join(merged_v_no)
+        final_v_mileage = " || ".join(merged_v_mileage)
+        final_v_check = " || ".join(merged_v_check)
+        final_v_remarks = " || ".join(merged_v_remarks)
+
         records_to_save = []
-        max_rows = max(len(company_data_list), len(living_boxes))
+        # 차량 개수로 행이 늘어나지 않게 max_rows 고정
+        max_rows = max(len(company_data_list), 1)
         
         for r_type in record_types:
             r_common_data = common_data.copy()
@@ -8498,30 +8595,13 @@ class MaterialManager:
                         row_record['OT' if j==1 else f'OT{j}'] = ""
                     for name in self.ndt_materials_all:
                         row_record[f'NDT_{name}'] = 0.0
-                    row_record['Note'] = "(차량 추가 기록)"
 
                 # --- 차량 데이터 배분 ---
-                if i < len(living_boxes):
-                    v_widget = living_boxes[i]
-                    v_data = v_widget.get_data()
-                    v_no = str(v_data.get('vehicle_info', '')).strip()
-                    v_mileage = str(v_data.get('mileage', '')).strip()
-                    
-                    if (v_no or v_mileage) and r_type != 'REP':
-                        row_record['차량번호'] = v_no
-                        row_record['주행거리'] = v_mileage
-                        reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
-                        checks_list = []
-                        for k, v in v_data.items():
-                            if k not in reserved and v:
-                                checks_list.append(f"{k}:{v}")
-                        row_record['차량점검'] = "|".join(checks_list)
-                        row_record['차량비고'] = str(v_data.get('remarks', '')).strip()
-                    else:
-                        row_record['차량번호'] = ""
-                        row_record['주행거리'] = ""
-                        row_record['차량점검'] = ""
-                        row_record['차량비고'] = ""
+                if i == 0 and r_type != 'REP':
+                    row_record['차량번호'] = final_v_no
+                    row_record['주행거리'] = final_v_mileage
+                    row_record['차량점검'] = final_v_check
+                    row_record['차량비고'] = final_v_remarks
                 else:
                     row_record['차량번호'] = ""
                     row_record['주행거리'] = ""
@@ -8588,28 +8668,29 @@ class MaterialManager:
 
 
         
-        # Company frame
-        company_frame = ttk.LabelFrame(self.ndt_company_container, text=f"회사 #{company_idx + 1}")
+        # Company frame (Standard frame to save space, no title border)
+        company_frame = ttk.Frame(self.ndt_company_container)
         company_frame.pack(fill='x', padx=2, pady=2)
         
-        # Company code selector
-        header_frame = ttk.Frame(company_frame)
-        header_frame.pack(fill='x', padx=2, pady=2)
-        ttk.Label(header_frame, text="회사코드:", font=('Arial', 8, 'bold')).pack(side='left', padx=2)
-        cb_co = ttk.Combobox(header_frame, width=8, values=getattr(self, 'co_code_list', []))
-        cb_co.pack(side='left', padx=2)
-        cb_co.set('')  # Default empty
-        
-        # NDT entries grid
+        # Single Grid frame for everything to save vertical space
         grid_frame = ttk.Frame(company_frame)
-        for c in range(6): grid_frame.columnconfigure(c, weight=1, uniform="ndt_rtk")
+        for c in range(8): grid_frame.columnconfigure(c, weight=1, uniform="ndt_rtk")
         grid_frame.pack(fill='x', padx=2, pady=2)
         
+        # Company code selector (Index 0)
+        ttk.Label(grid_frame, text="회사코드:", font=('Arial', 8, 'bold')).grid(row=0, column=0, padx=1, pady=1, sticky='e')
+        cb_co = ttk.Combobox(grid_frame, width=8, values=getattr(self, 'co_code_list', []))
+        cb_co.grid(row=0, column=1, padx=1, pady=1, sticky='ew')
+        cb_co.set('')  # Default empty
+        
         entries = {'_company': cb_co}  # Store company combobox
+        
+        # NDT entries grid (Index 1 to 7)
         for i, mat in enumerate(ndt_materials):
-            r = i // 3
-            c = (i % 3) * 2
-            ttk.Label(grid_frame, text=f"{mat}:", font=('Arial', 8)).grid(row=r, column=c, padx=1, pady=1, sticky='w')
+            idx = i + 1
+            r = idx // 4
+            c = (idx % 4) * 2
+            ttk.Label(grid_frame, text=f"{mat}:", font=('Arial', 8)).grid(row=r, column=c, padx=1, pady=1, sticky='e')
             e = ttk.Entry(grid_frame, width=6)
             e.grid(row=r, column=c+1, padx=1, pady=1, sticky='ew')
             entries[mat] = e
@@ -9055,14 +9136,9 @@ class MaterialManager:
                 return
             
             # Use the query as the equipment name directly
-            self.cb_daily_equip.delete(0, tk.END)
-            self.cb_daily_equip.insert(0, query)
-            
-            # [SMART] Also add to managed equipment list if not already there
             if query not in self.equipments:
                 self.equipments.append(query)
                 self.refresh_ui_for_list_change('equipments')
-            
             dlg.destroy()
 
         search_var.trace_add("write", refresh_list)
@@ -9365,30 +9441,65 @@ class MaterialManager:
                 try: self.ent_daily_date.set_date(pd.to_datetime(record['Date']))
                 except: pass
             if '업체명' in record:
-                self.cb_daily_company.set(str(record['업체명']).split(' [')[0])
+                comp_val = self.clean_nan(record['업체명']).split(' [')[0]
+                self.cb_daily_company.set(comp_val)
             if 'Site' in record:
-                self.cb_daily_site.set(str(record['Site']))
+                self.cb_daily_site.set(self.clean_nan(record['Site']))
             if '구분' in record:
-                self.ndt_loc_type_var.set(str(record['구분']))
+                self.ndt_loc_type_var.set(self.clean_nan(record['구분']))
             if '적용코드' in record:
                 self.ent_daily_applied_code.delete(0, tk.END)
-                self.ent_daily_applied_code.insert(0, str(record['적용코드']))
+                self.ent_daily_applied_code.insert(0, self.clean_nan(record['적용코드']))
             if '장비명' in record:
                 self.cb_daily_equip.delete(0, tk.END)
-                self.cb_daily_equip.insert(0, str(record['장비명']))
+                self.cb_daily_equip.insert(0, self.clean_nan(record['장비명']))
             if '성적서번호' in record:
                 self.ent_daily_report_no.delete(0, tk.END)
-                self.ent_daily_report_no.insert(0, str(record['성적서번호']))
+                self.ent_daily_report_no.insert(0, self.clean_nan(record['성적서번호']))
             if '검사품명' in record:
                 self.ent_daily_inspection_item.delete(0, tk.END)
-                self.ent_daily_inspection_item.insert(0, str(record['검사품명']))
+                self.ent_daily_inspection_item.insert(0, self.clean_nan(record['검사품명']))
             if '검사방법' in record:
-                self.cb_daily_test_method.set(str(record['검사방법']))
+                method = self.clean_nan(record.get('검사방법', ''))
+                self.cb_daily_test_method.set(method)
+                
+                # [FIX] Explicitly show/hide NDT related frames to ensure they appear
+                if method in ["MT", "PT"]:
+                    if hasattr(self, 'ndt_frame'):
+                        try: self.ndt_frame.grid()
+                        except: pass
+                else:
+                    if hasattr(self, 'ndt_frame'):
+                        try: self.ndt_frame.grid_remove()
+                        except: pass
+                
+                if method in ["RT", "UT", "PT", "PAUT"]:
+                    if hasattr(self, 'ndt_calc_frame'):
+                        try:
+                            self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
+                            self.ndt_calc_frame.lift()
+                        except: pass
+                    if method == "RT":
+                        if hasattr(self, 'rtk_grid'):
+                            try: self.rtk_grid.grid()
+                            except: pass
+                    else:
+                        if hasattr(self, 'rtk_grid'):
+                            try: self.rtk_grid.grid_remove()
+                            except: pass
+                else:
+                    if hasattr(self, 'ndt_calc_frame'):
+                        try: self.ndt_calc_frame.grid_remove()
+                        except: pass
+                    if hasattr(self, 'rtk_grid'):
+                        try: self.rtk_grid.grid_remove()
+                        except: pass
+                        
                 self.cb_daily_test_method.event_generate('<<ComboboxSelected>>')
             if 'Unit' in record:
-                self.cb_daily_unit.set(str(record['Unit']))
+                self.cb_daily_unit.set(self.clean_nan(record['Unit']))
             elif '단위' in record:
-                self.cb_daily_unit.set(str(record['단위']))
+                self.cb_daily_unit.set(self.clean_nan(record['단위']))
             
             # 2. Quantities & Costs
             def set_val(ent, key):
@@ -9417,13 +9528,41 @@ class MaterialManager:
                         except: pass
                 return default_val
             
-            self.ndt_overhead_var.set(get_valid_rate('제경비율', 80.0))
-            self.ndt_tech_var.set(get_valid_rate('기술료율', 5.86))
+            self.ndt_overhead_var.set(get_valid_rate('제경비율', 110.0))
+            self.ndt_tech_var.set(get_valid_rate('기술료율', 20.0))
 
+            # NDT 상세 조건 필드 로딩
+            if '관경(Inch)' in record and pd.notna(record['관경(Inch)']):
+                self.ndt_report_pipe_var.set(str(record['관경(Inch)']).replace('.0', '') if str(record['관경(Inch)']).endswith('.0') else str(record['관경(Inch)']))
+            else:
+                self.ndt_report_pipe_var.set("")
+                
+            insp_type = self.clean_nan(record.get('검사구분', 'ORI')).upper()
+            if not insp_type: insp_type = 'ORI'
+            if insp_type == 'REP':
+                self.ndt_rep_joint_var.set(self.clean_nan(record.get('조인트수', '')))
+                self.ndt_rep_qty_var.set(self.clean_nan(record.get('Usage', '')))
+            else:
+                self.ndt_ori_joint_var.set(self.clean_nan(record.get('조인트수', '')))
+                self.ndt_ori_qty_var.set(self.clean_nan(record.get('Usage', '')))
+                
+            if '불량수' in record and pd.notna(record['불량수']):
+                self.ndt_rej_joint_var.set(str(record['불량수']))
+            else:
+                self.ndt_rej_joint_var.set("")
             
             # 3. Material
             if 'MaterialID' in record:
-                disp_name = self.get_material_display_name(record['MaterialID'])
+                mat_id_val = record['MaterialID']
+                disp_name = self.get_material_display_name(mat_id_val)
+                # [FIX] If display name is empty but MaterialID is a non-NaN string (e.g. 'JIREH Scanner'),
+                # show the raw MaterialID string as a fallback
+                if not disp_name:
+                    try:
+                        if not pd.isna(mat_id_val) and str(mat_id_val).strip().lower() not in ('nan', ''):
+                            disp_name = str(mat_id_val).strip()
+                    except: pass
+                print(f"[DEBUG] load_to_form: MaterialID={repr(mat_id_val)}, disp={repr(disp_name)}")
                 if isinstance(self.cb_daily_material, ttk.Combobox):
                     self.cb_daily_material.set(disp_name)
                 else:
@@ -9461,30 +9600,59 @@ class MaterialManager:
 
 
             # 6. Vehicle
-            v_no = self.clean_nan(record.get('차량번호', ''))
-            if v_no:
-                if not hasattr(self, 'vehicle_boxes') or not self.vehicle_boxes:
-                    self.add_vehicle_inspection_box()
+            v_no_raw = self.clean_nan(record.get('차량번호', ''))
+            v_insp_raw = self.clean_nan(record.get('차량점검', ''))
+            v_mileage_raw = self.clean_nan(record.get('주행거리', ''))
+            v_remarks_raw = self.clean_nan(record.get('차량비고', ''))
+
+            v_no_list = [x.strip() for x in str(v_no_raw).split('||')] if v_no_raw else []
+            v_insp_list = [x.strip() for x in str(v_insp_raw).split('||')] if v_insp_raw else []
+            v_mileage_list = [x.strip() for x in str(v_mileage_raw).split('||')] if v_mileage_raw else []
+            v_remarks_list = [x.strip() for x in str(v_remarks_raw).split('||')] if v_remarks_raw else []
+            
+            max_v_count = max(len(v_no_list), len(v_insp_list), len(v_mileage_list), len(v_remarks_list))
+            
+            # 기존 플로팅 창 닫기 및 고정 패널 비우기
+            if hasattr(self, 'draggable_items'):
+                for key, cont in list(self.draggable_items.items()):
+                    w = getattr(cont, '_widget', None)
+                    if not w: continue
+                    if type(w).__name__ == 'VehicleInspectionWidget':
+                        self.remove_box(key)
+            if hasattr(self, 'fixed_vehicle_widget'):
+                self.fixed_vehicle_widget.reset_fields()
+
+            for i in range(max_v_count):
+                cur_no = v_no_list[i] if i < len(v_no_list) else ""
+                cur_insp = v_insp_list[i] if i < len(v_insp_list) else ""
+                cur_mileage = v_mileage_list[i] if i < len(v_mileage_list) else ""
+                cur_remarks = v_remarks_list[i] if i < len(v_remarks_list) else ""
                 
-                v_widget = self.vehicle_boxes[0]
-                v_insp_raw = str(record.get('차량점검', ''))
-                v_parsed = {'vehicle_info': v_no, 'mileage': self.clean_nan(record.get('주행거리', '')), 'remarks': self.clean_nan(record.get('차량비고', ''))}
-                if ':' in v_insp_raw:
-                    # New format
-                    for pair in v_insp_raw.split('|'):
+                if not (cur_no or cur_insp or cur_mileage or cur_remarks):
+                    continue
+
+                v_parsed = {'vehicle_info': cur_no, 'mileage': cur_mileage, 'remarks': cur_remarks}
+                if ':' in cur_insp:
+                    for pair in cur_insp.split('|'):
                         if ':' in pair:
-                            k, v = pair.split(':', 1)
-                            v_parsed[k] = v
-                elif ',' in v_insp_raw or v_insp_raw:
-                    # Old format (keys only)
-                    for k in v_insp_raw.split(','):
+                            k, v_val = pair.split(':', 1)
+                            v_parsed[k.strip()] = v_val.strip()
+                elif cur_insp and cur_insp != 'nan':
+                    for k in cur_insp.split(','):
                         k_clean = k.strip()
                         if k_clean:
-                            # Map legacy True to a default "positive" value (since only checked items were saved)
                             if 'locking' in k_clean: v_parsed[k_clean] = '잠금'
                             elif 'cleaning' in k_clean: v_parsed[k_clean] = '함'
                             else: v_parsed[k_clean] = '양호'
-                v_widget.set_data(v_parsed)
+                
+                if i == 0 and hasattr(self, 'fixed_vehicle_widget'):
+                    v_widget = self.fixed_vehicle_widget
+                    v_widget.set_data(v_parsed)
+                else:
+                    if hasattr(self, 'add_vehicle_inspection_box'):
+                        v_widget = self.add_vehicle_inspection_box()
+                        if hasattr(v_widget, 'set_data'):
+                            v_widget.set_data(v_parsed)
             
             # 7. NDT Chemicals
             if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
@@ -9502,12 +9670,12 @@ class MaterialManager:
                 
                 # Also load company if available
                 if '회사코드' in record:
-                    first['_company'].set(str(record['회사코드']))
+                    first['_company'].set(self.clean_nan(record.get('회사코드')))
 
             # 8. Note
             if 'Note' in record:
                 self.ent_daily_note.delete(0, tk.END)
-                self.ent_daily_note.insert(0, str(record['Note']))
+                self.ent_daily_note.insert(0, self.clean_nan(record.get('Note')))
 
         except Exception as e:
             print(f"Error loading record to form: {e}")
@@ -9536,11 +9704,11 @@ class MaterialManager:
         # 기본값 복구
         self.cb_daily_unit.set('매')
         self.ndt_work_time_var.set("일반")
-        self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-        self.ndt_thickness_var.set("15mm 이하 (1.0)")
+        self.ndt_source_var.set("Se-75 (1.0)")
+        self.ndt_thickness_var.set("조건없음 (1.0)")
         self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var.set(80.0)
-        self.ndt_tech_var.set(5.86)
+        self.ndt_overhead_var.set(110.0)
+        self.ndt_tech_var.set(20.0)
         self.ndt_ori_joint_var.set("")
         self.ndt_ori_qty_var.set("")
         self.ndt_rep_joint_var.set("")
@@ -9564,11 +9732,22 @@ class MaterialManager:
                 if ent == self.rtk_entries.get("총계"): 
                     ent.config(state='readonly')
         
-        # 5. 차량 점검 섹션 초기화
-        if hasattr(self, 'vehicle_boxes'):
-            for box in self.vehicle_boxes:
-                if box.winfo_exists() and hasattr(box, 'reset_fields'):
-                    box.reset_fields()
+        # 5. 차량 점검 섹션 초기화 (중복 방지 및 고정 패널 사용)
+        if hasattr(self, 'draggable_items'):
+            for key, cont in list(self.draggable_items.items()):
+                w = getattr(cont, '_widget', None)
+                if not w: continue
+                lbl_text = ""
+                if hasattr(cont, '_label_widget'):
+                    lbl_text = cont._label_widget.cget('text')
+                is_vehicle = (type(w).__name__ == 'VehicleInspectionWidget') or ('차량' in lbl_text and '점검' in lbl_text) or ('상시' in lbl_text and '차량' in lbl_text)
+                if is_vehicle:
+                    print(f"[DEBUG] Removing legacy floating vehicle box: {lbl_text}")
+                    self.remove_box(key)
+
+        if hasattr(self, 'fixed_vehicle_widget'):
+            if hasattr(self.fixed_vehicle_widget, 'reset_fields'):
+                self.fixed_vehicle_widget.reset_fields()
                     
         # 6. 작업자 섹션 초기화
         for i in range(1, 11):
@@ -9668,6 +9847,16 @@ class MaterialManager:
                             return
                 except Exception as e:
                     print(f"DEBUG: Duplicate check failed: {e}")
+
+            # [DEBUG] Trace what is being saved
+            print(f"[DEBUG SAVE] mat_display={repr(mat_display)}, mat_id={repr(mat_id)}")
+            print(f"[DEBUG SAVE] cb_daily_material.get()={repr(self.cb_daily_material.get())}")
+            print(f"[DEBUG SAVE] cb_daily_equip.get()={repr(self.cb_daily_equip.get())}")
+            if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
+                vd = self.vehicle_boxes[0].get_data()
+                print(f"[DEBUG SAVE] vehicle[0]: no={repr(vd.get('vehicle_info',''))}, km={repr(vd.get('mileage',''))}")
+            else:
+                print(f"[DEBUG SAVE] vehicle_boxes: none/empty")
 
             # 4. 핵심 로직 실행 (단건 저장)
             saved_count = self._add_single_usage_record_logic(mat_id, date_val, site, auto_save=True)
@@ -10155,23 +10344,72 @@ class MaterialManager:
         try:
             # 1. 작업자 정보 복원 (최초 레코드 기준)
             first_record = df_recent.iloc[0]
-            if hasattr(self, 'worker_groups'):
-                for i, group in enumerate(self.worker_groups):
-                    u_col = 'User' if i == 0 else f'User{i+1}'
-                    t_col = 'WorkTime' if i == 0 else f'WorkTime{i+1}'
-                    o_col = 'OT' if i == 0 else f'OT{i+1}'
+            # 0. 일반 정보 복원 (업체명, 장비명 등)
+            def _set_val(widget, val):
+                if hasattr(widget, 'set'): widget.set(val)
+                else:
+                    widget.delete(0, 'end')
+                    widget.insert(0, val)
+
+            _set_val(self.cb_daily_company, self.clean_nan(first_record.get('업체명', '')))
+            _set_val(self.cb_daily_equip, self.clean_nan(first_record.get('장비명', '')))
+            
+            self.ent_daily_applied_code.delete(0, 'end')
+            self.ent_daily_applied_code.insert(0, self.clean_nan(first_record.get('적용코드', '')))
+            
+            self.ent_daily_inspection_item.delete(0, 'end')
+            self.ent_daily_inspection_item.insert(0, self.clean_nan(first_record.get('검사품명', '')))
+            
+            _set_val(self.cb_daily_test_method, self.clean_nan(first_record.get('검사방법', '')))
+            _set_val(self.cb_daily_unit, self.clean_nan(first_record.get('Unit', first_record.get('단위', ''))))
+            
+            self.ent_daily_unit_price.delete(0, 'end')
+            unit_price = self.clean_nan(first_record.get('단가', ''))
+            if str(unit_price) in ["0", "0.0"]: unit_price = ""
+            self.ent_daily_unit_price.insert(0, unit_price)
+
+            self.ent_daily_report_no.delete(0, 'end')
+            self.ent_daily_report_no.insert(0, self.clean_nan(first_record.get('성적서번호', '')))
+            
+            self.ent_daily_note.delete(0, 'end')
+            self.ent_daily_note.insert(0, self.clean_nan(first_record.get('Note', first_record.get('비고', ''))))
+
+            for i in range(1, 11):
+                group = getattr(self, f'worker_group{i}', None)
+                if group:
+                    u_col = 'User' if i == 1 else f'User{i}'
+                    t_col = 'WorkTime' if i == 1 else f'WorkTime{i}'
+                    o_col = 'OT' if i == 1 else f'OT{i}'
+                    m_col = 'Meal' if i == 1 else f'Meal{i}'
                     
-                    worker = first_record.get(u_col, '')
-                    worktime = first_record.get(t_col, '')
-                    ot = first_record.get(o_col, '')
+                    worker = first_record.get(u_col, first_record.get('작업자' if i == 1 else f'작업자{i}', ''))
+                    worktime = first_record.get(t_col, first_record.get('작업시간' if i == 1 else f'작업시간{i}', ''))
+                    ot = first_record.get(o_col, first_record.get('OT시간' if i == 1 else f'OT시간{i}', ''))
+                    meal = first_record.get(m_col, first_record.get('일비' if i == 1 else f'일비{i}', ''))
                     
                     group.set_worker(self.clean_nan(worker))
                     group.set_time(self.clean_nan(worktime))
                     group.set_ot(self.clean_nan(ot))
+                    if hasattr(group, 'set_meal'):
+                        group.set_meal(self.clean_nan(meal))
                 
             # 2. 차량 정보 복원
-            if hasattr(self, 'vehicle_widget'):
-                self.vehicle_widget.cb_vehicle_info.set(self.clean_nan(first_record.get('VehicleNo', '')))
+            if hasattr(self, 'fixed_vehicle_widget'):
+                v_no_str = self.clean_nan(first_record.get('VehicleNo', first_record.get('차량번호', '')))
+                v_nos = [x.strip() for x in v_no_str.split("||")] if "||" in v_no_str else [v_no_str]
+                
+                if v_nos and v_nos[0]:
+                    self.fixed_vehicle_widget.cb_vehicle_info.set(v_nos[0])
+                    
+                if len(v_nos) > 1:
+                    existing_boxes = getattr(self, 'vehicle_boxes', [])
+                    for idx, extra_v in enumerate(v_nos[1:]):
+                        if not extra_v: continue
+                        if idx < len(existing_boxes):
+                            existing_boxes[idx].cb_vehicle_info.set(extra_v)
+                        elif hasattr(self, 'add_vehicle_inspection_box'):
+                            new_box = self.add_vehicle_inspection_box()
+                            if new_box: new_box.cb_vehicle_info.set(extra_v)
                 
             messagebox.showinfo("완료", f"{date_str}의 작업자 및 차량 정보가 성공적으로 불러와졌습니다.\n(검사 물량 및 자재 소모량은 오늘 기준에 맞게 새로 입력해주세요.)")
         except Exception as e:
@@ -10729,6 +10967,11 @@ class MaterialManager:
         curr_mat_id = entry_data.get('MaterialID')
         curr_mat_display = self.get_material_display_name(curr_mat_id)
         
+        # [FIX] Use raw MaterialID string if not found in master data (e.g. JIREH Scanner)
+        if not curr_mat_display and curr_mat_id and not pd.isna(curr_mat_id):
+            if str(curr_mat_id).strip().lower() not in ('nan', ''):
+                curr_mat_display = str(curr_mat_id).strip()
+        
         cb_mat.set(curr_mat_display)
         cb_mat.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky='w')
         fields['Material'] = cb_mat
@@ -10812,7 +11055,27 @@ class MaterialManager:
 
             fields[f'NDT_{m_key}'] = ent
             
-        # 4. Vehicle Info
+        # 4. NDT 상세 조건
+        ndt_cond_frame = ttk.LabelFrame(scrollable_frame, text="NDT 상세 조건", padding=10)
+        ndt_cond_frame.pack(fill='x', pady=5)
+        
+        cond_configs = [
+            ('작업형태', '작업형태'), ('조건1', '조건1'), ('조건2', '조건2'),
+            ('제경비율(%)', '제경비율'), ('기술료율(%)', '기술료율'), ('보정계수', '보정계수'),
+            ('환산물량', '환산물량'), ('제경비', '제경비'), ('기술료', '기술료')
+        ]
+        for c_i, (c_lbl, c_key) in enumerate(cond_configs):
+            c_row = c_i // 3
+            c_col = (c_i % 3) * 2
+            ttk.Label(ndt_cond_frame, text=f"{c_lbl}:").grid(row=c_row, column=c_col, padx=5, pady=2, sticky='w')
+            c_ent = ttk.Entry(ndt_cond_frame, width=15)
+            c_val = entry_data.get(c_key, '')
+            if pd.isna(c_val): c_val = ''
+            c_ent.insert(0, self.clean_nan(c_val))
+            c_ent.grid(row=c_row, column=c_col+1, padx=5, pady=2, sticky='w')
+            fields[c_key] = c_ent
+
+        # 5. Vehicle Info
         vehicle_frame = ttk.LabelFrame(scrollable_frame, text="차량 점검 정보", padding=10)
         vehicle_frame.pack(fill='x', pady=5)
         
@@ -10965,8 +11228,18 @@ class MaterialManager:
                 try: new_data[f'NDT_{m_key}'] = float(fields[f'NDT_{m_key}'].get())
                 except: new_data[f'NDT_{m_key}'] = 0.0
                 
-            for key in ['차량번호', '주행거리', '차량점검', '차량비고']:
-                new_data[key] = fields[key].get().strip()
+            # String fields
+            for key in ['차량번호', '주행거리', '차량점검', '차량비고', '작업형태', '조건1', '조건2']:
+                if key in fields:
+                    new_data[key] = fields[key].get().strip()
+            
+            # Additional numeric fields
+            for key in ['제경비율', '기술료율', '보정계수', '환산물량', '제경비', '기술료']:
+                if key in fields:
+                    try:
+                        v_str = fields[key].get().strip().replace(',', '')
+                        new_data[key] = float(v_str) if v_str else 0.0
+                    except: new_data[key] = 0.0
                 
             for i in range(1, 11):
                 name_key = 'User' if i == 1 else f'User{i}'
@@ -11343,14 +11616,14 @@ class MaterialManager:
         month_var = tk.IntVar(value=now.month)
         ttk.Spinbox(period_frame, from_=1, to=12, textvariable=month_var, width=4).pack(side='left')
         
-        # 현장 → 주배관/관리소 매핑
-        map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (주배관 / 관리소 구분)")
+        # 현장 → 열배관/관리소 매핑
+        map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (열배관 / 관리소 구분)")
         map_frame.pack(fill='x', padx=15, pady=5)
         
         # 현재 데이터에 존재하는 현장명(Site) 목록 추출
         site_list = sorted(self.daily_usage_df['Site'].dropna().unique().tolist()) if 'Site' in self.daily_usage_df.columns else []
         
-        ttk.Label(map_frame, text="주배관 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+        ttk.Label(map_frame, text="열배관 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
         main_var = tk.StringVar(value="")
         ttk.Entry(map_frame, textvariable=main_var, width=60).pack(padx=5, pady=2)
         
@@ -11393,14 +11666,14 @@ class MaterialManager:
                 mgmt_sites = [s.strip() for s in mgmt_var.get().split(',') if s.strip()]
                 
                 if not main_sites and not mgmt_sites:
-                    messagebox.showwarning("입력 오류", "주배관 또는 관리소에 해당하는 현장명을 최소 1개 입력해주세요.")
+                    messagebox.showwarning("입력 오류", "열배관 또는 관리소에 해당하는 현장명을 최소 1개 입력해주세요.")
                     return
                 if not filepath:
                     messagebox.showwarning("입력 오류", "대상 엑셀 파일을 선택해주세요.")
                     return
                 
                 log(f"▶ 기간: {year}년 {month}월")
-                log(f"▶ 주배관 현장: {main_sites}")
+                log(f"▶ 열배관 현장: {main_sites}")
                 log(f"▶ 관리소 현장: {mgmt_sites}")
                 
                 # --- 1. 데이터 필터링 ---
@@ -11435,7 +11708,7 @@ class MaterialManager:
                 
                 # --- 3. 집계 함수 ---
                 def aggregate_site(site_df):
-                    """한 현장(주배관 or 관리소)의 데이터를 집계"""
+                    """한 현장(열배관 or 관리소)의 데이터를 집계"""
                     result = {
                         'RT': {'B': {}, 'A': {}, 'A/2': {}},
                         'UT': {'data': {}},
@@ -11447,7 +11720,7 @@ class MaterialManager:
                     
                     for _, row in site_df.iterrows():
                         method = str(row.get('검사방법', '')).strip().upper()
-                        if method not in ['RT', 'UT', 'PT']:
+                        if method not in ['RT', 'UT', 'PT', 'PAUT']:
                             continue
                         
                         work_type = str(row.get('작업형태', '주간')).strip()
@@ -11508,11 +11781,11 @@ class MaterialManager:
                     
                     return result
                 
-                # --- 4. 주배관 / 관리소 각각 집계 ---
+                # --- 4. 열배관 / 관리소 각각 집계 ---
                 main_df = df[df['Site'].isin(main_sites)] if main_sites else pd.DataFrame()
                 mgmt_df = df[df['Site'].isin(mgmt_sites)] if mgmt_sites else pd.DataFrame()
                 
-                log(f"▶ 주배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")
+                log(f"▶ 열배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")
                 
                 main_agg = aggregate_site(main_df) if not main_df.empty else None
                 mgmt_agg = aggregate_site(mgmt_df) if not mgmt_df.empty else None
@@ -11662,7 +11935,7 @@ class MaterialManager:
                 
                 # 시트별 기입
                 if main_agg:
-                    sheet_name = '3. 비파괴검사 현황 (주배관)'
+                    sheet_name = '3. 비파괴검사 현황 (열배관)'
                     if sheet_name in wb.sheetnames:
                         write_ndt_sheet(wb[sheet_name], main_agg)
                         log(f"✅ '{sheet_name}' 시트 기입 완료")
@@ -12493,6 +12766,9 @@ class MaterialManager:
                             current_geometries[key]['widget_class_name'] = widget._widget_class.__name__
                             saved_kwargs = widget._widget_kwargs.copy()
                             if 'values' in saved_kwargs: del saved_kwargs['values']
+                            # Remove un-serializable callable objects (like on_save callbacks)
+                            keys_to_del = [k for k, v in saved_kwargs.items() if callable(v)]
+                            for k in keys_to_del: del saved_kwargs[k]
                             current_geometries[key]['widget_kwargs'] = saved_kwargs
                         if key.startswith('memo_'):
                             current_geometries[key]['text'] = self.memos[key]['text_widget'].get('1.0', 'end-1c')
@@ -12765,6 +13041,17 @@ class MaterialManager:
                 # Update users combo boxes
                 if hasattr(self, 'ent_user'): 
                     self.ent_user['values'] = sorted(self.users)
+                # Update vehicles for VehicleInspectionWidgets
+                if hasattr(self, 'fixed_vehicle_widget'):
+                    self.fixed_vehicle_widget.update_vehicle_list(sorted(self.vehicles))
+                if hasattr(self, 'vehicle_boxes'):
+                    for w in self.vehicle_boxes:
+                        if hasattr(w, 'update_vehicle_list'):
+                            w.update_vehicle_list(sorted(self.vehicles))
+                if hasattr(self, 'vehicle_inspections'):
+                    for w in self.vehicle_inspections.values():
+                        if hasattr(w, 'update_vehicle_list'):
+                            w.update_vehicle_list(sorted(self.vehicles))
                 
                 # Restore stock column widths
                 stock_col_widths = config.get('stock_col_widths', {})
@@ -12895,7 +13182,8 @@ class MaterialManager:
                 # Recreate Memos and Clones first (these must exist before they can be placed)
                 self._loading_memos = []
                 # Map class names to actual classes for recreation
-                class_map = {'Entry': ttk.Entry, 'Combobox': ttk.Combobox}
+                from views.components import VehicleInspectionWidget
+                class_map = {'Entry': ttk.Entry, 'Combobox': ttk.Combobox, 'VehicleInspectionWidget': VehicleInspectionWidget}
                 
                 draggable_geos = config.get('draggable_geometries', {})
                 for key, geo in draggable_geos.items():

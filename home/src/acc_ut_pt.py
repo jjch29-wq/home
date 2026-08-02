@@ -9,9 +9,9 @@ if files:
     wb = openpyxl.load_workbook(filepath, data_only=True)
     
     sums = {
-        "UT": {"수송배관(주배관)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
+        "UT": {"열배관": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
                "플랜트(관리소)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0}},
-        "PT": {"수송배관(주배관)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
+        "PT": {"열배관": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
                "플랜트(관리소)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0}}
     }
     
@@ -28,7 +28,7 @@ if files:
                 elif '휴일' in row_str: current_shift = "휴일"
                 
                 val_col5 = str(ws.cell(row=r, column=5).value) if ws.cell(row=r, column=5).value else ""
-                cat = "수송배관(주배관)" if '주배관' in val_col5 else ("플랜트(관리소)" if '관리소' in val_col5 else None)
+                cat = "열배관" if '열배관' in val_col5 else ("플랜트(관리소)" if '관리소' in val_col5 else None)
                 
                 if cat:
                     val = 0

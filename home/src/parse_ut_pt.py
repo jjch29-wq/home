@@ -12,7 +12,7 @@ def parse_sheet(wb, sheet_name):
     current_shift = "일반"
     
     sums = {
-        "수송배관(주배관)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
+        "열배관": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
         "플랜트(관리소)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0}
     }
     
@@ -26,12 +26,12 @@ def parse_sheet(wb, sheet_name):
         elif '휴일' in row_str:
             current_shift = "휴일"
             
-        # Check if row is 주배관 or 관리소
-        is_main = '주배관' in row_str
+        # Check if row is 열배관 or 관리소
+        is_main = '열배관' in row_str
         is_station = '관리소' in row_str
         
         # We need to find the value under "가산~가평" corresponding to the "수량(M)"
-        # Let's just print rows that have 주배관 or 관리소 and their columns to see where the data is
+        # Let's just print rows that have 열배관 or 관리소 and their columns to see where the data is
         if is_main or is_station:
             cols = []
             for c in range(1, 25):
@@ -42,7 +42,7 @@ def parse_sheet(wb, sheet_name):
             non_empty = [(i+1, v) for i, v in enumerate(cols) if v]
             if len(non_empty) > 3:
                 # The total quantity is usually the last numeric value in the row
-                print(f"Shift: {current_shift} | Type: {'주배관' if is_main else '관리소'} | Cols: {non_empty}")
+                print(f"Shift: {current_shift} | Type: {'열배관' if is_main else '관리소'} | Cols: {non_empty}")
                 
 if files:
     filepath = os.path.join(desktop, files[0])

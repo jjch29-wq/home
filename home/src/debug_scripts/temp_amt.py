@@ -8,7 +8,7 @@ try:
     df = pd.read_excel(filepath, sheet_name='2. 산출명세서', header=None)
     
     # Let's search for the titles and print the rows around them
-    # "가. 방사선 투과검사(RT) - 주배관"
+    # "가. 방사선 투과검사(RT) - 열배관"
     
     for idx, row in df.iterrows():
         text = str(row.values).replace('\n', '')

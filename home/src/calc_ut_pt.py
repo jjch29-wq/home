@@ -14,7 +14,7 @@ def get_sums():
             ws = wb[sheet_name]
             
             sums = {
-                "수송배관(주배관)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
+                "열배관": {"일반": 0.0, "야간": 0.0, "휴일": 0.0},
                 "플랜트(관리소)": {"일반": 0.0, "야간": 0.0, "휴일": 0.0}
             }
             
@@ -26,12 +26,12 @@ def get_sums():
                 elif '야간' in row_str: current_shift = "야간"
                 elif '휴일' in row_str: current_shift = "휴일"
                 
-                # Check column 5 (1-based is 5) for "주배관" or "관리소"
+                # Check column 5 (1-based is 5) for "열배관" or "관리소"
                 val_col5 = str(ws.cell(row=r, column=5).value) if ws.cell(row=r, column=5).value else ""
                 
                 cat = None
-                if '주배관' in val_col5:
-                    cat = "수송배관(주배관)"
+                if '열배관' in val_col5:
+                    cat = "열배관"
                 elif '관리소' in val_col5:
                     cat = "플랜트(관리소)"
                     

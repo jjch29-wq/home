@@ -1,0 +1,280 @@
+1033: # Notebook for Tabs
+1034: self.notebook = ttk.Notebook(self.root)
+1035: self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
+1038: self.tab_stock = ttk.Frame(self.notebook)
+1039: self.notebook.add(self.tab_stock, text='현재 재고 현황')
+1043: self.tab_inout = ttk.Frame(self.notebook)
+1044: self.notebook.add(self.tab_inout, text='입출고 관리')
+1049: self.tab_import = ttk.Frame(self.notebook)
+1050: self.notebook.add(self.tab_import, text='데이터 가져오기/내보내기')
+1054: self.tab_monthly_usage = ttk.Frame(self.notebook)
+1055: self.notebook.add(self.tab_monthly_usage, text='월별 집계')
+1059: self.tab_daily_usage = ttk.Frame(self.notebook)
+1060: self.notebook.add(self.tab_daily_usage, text='현장별 일일 사용량 기입')
+1064: self.tab_daily_usage_query = ttk.Frame(self.notebook)
+1065: self.notebook.add(self.tab_daily_usage_query, text='현장 일일기록 조회 및 관리')
+1070: self.tab_budget = ttk.Frame(self.notebook)
+1071: self.notebook.add(self.tab_budget, text='공사실행예산서')
+1075: self.tab_ndt_billing = ttk.Frame(self.notebook)
+1076: self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
+1080: self.notebook.select(self.tab_daily_usage)
+1087: self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+1088: self.notebook.bind("<Button-1>", self.on_tab_drag_start)
+1089: self.notebook.bind("<B1-Motion>", self.on_tab_drag)
+1090: self.notebook.bind("<ButtonRelease-1>", self.on_tab_drag_end)
+1091: self.notebook.bind("<Button-3>", self.show_tab_context_menu)
+1646: self.ent_note = ttk.Entry(trans_frame, width=30)
+1647: self.ent_note.grid(row=3, column=3, padx=5, pady=2, sticky='ew')
+1648: self.ent_note.bind('<Return>', lambda e: btn_trans.focus_set())
+2291: # Note: In register_material, model_name is currently not an input field, but SN is.
+2368: note = self.ent_note.get().strip()
+2409: 'Note': note,
+2449: self.ent_note.delete(0, tk.END)
+2460: error_details = traceback.format_exc()
+2461: self.show_error_dialog("저장 오류", f"기록 저장 중 기술적인 오류가 발생했습니다:\n{e}\n\n상세 정보:\n{error_details}")
+2546: note = str(row.get('Note', ''))
+2547: if "(자동 차감)" in note:
+2561: 'Note': row.get('Note', ''),
+2576: # If everything is 0, we still might want to show it if there's a note or site info
+2592: # If mat_name is empty (manual entry), check method or keywords in Note if needed,
+2641: 'Note': row.get('Note', ''),
+2755: self.clean_nan(row.get('Note', '')),
+2766: error_details = traceback.format_exc()
+2767: print(f"Unified Transaction View Error: {e}\n{error_details}")
+2844: """Show a floating window (dropdown-style) with full record details for the clicked row"""
+2901: full_info.append(f"\n[비용 상세]")
+2912: full_info.append(f"\n[RT 결함 상세]")
+2928: note = entry.get('Note', '')
+2929: if note and str(note).strip(): full_info.append(f"\n• 비고: {note}")
+3381: """Export the detailed In/Out history to Excel summerly"""
+3620: def _populate_monthly_summary_trees(self, df, has_note=None):
+4018: if not hasattr(self, 'labor_detail_widget'):
+4057: # LaborCostDetailWidget 특별근무 섹션에 입력
+4058: ldw = self.labor_detail_widget
+4086: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+4087: self.notebook.select(tab_idx)
+4833: # Note: We use add=True to avoid overwriting existing bindings if possible,
+5097: def add_new_memo(self, initial_text="", initial_title="메모", key=None):
+5276: reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
+5295: '차량비고': v_data.get('remarks', ''),
+5666: (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False, regex=False))
+5911: # Note: Workers 1-10 columns are kept in the 'columns' tuple for data storage,
+5975: # [NEW] Bind worker details popup AND Quick Edit dialog to double-click
+5988: # [NEW] Note Detail Area for long descriptions
+5989: detail_frame = ttk.LabelFrame(display_frame, text="상세 비고 (선택된 항목)")
+5990: detail_frame.pack(fill='x', padx=5, pady=(0, 5))
+5992: self.txt_daily_note_detail = tk.Text(detail_frame, height=3, font=('Malgun Gothic', 10), wrap='word', bg='#F9F9F9')
+5993: self.txt_daily_note_detail.pack(fill='both', expand=True, padx=5, pady=5)
+5994: self.txt_daily_note_detail.config(state='disabled')
+5996: # Selection binding to update detail area
+6133: """Setup the project execution budget management tab with detailed labor cost breakdown"""
+6210: ("비고:", "ent_budget_note")
+6239: # 2. Detailed Labor Cost Widget
+6240: labor_detail_frame = ttk.LabelFrame(form_scrollable, text="인건비 상세 (Labor Cost Detail)", padding=10)
+6241: labor_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
+6248: self.labor_detail_widget = LaborCostDetailWidget(labor_detail_frame, on_change_callback=on_labor_change)
+6249: self.labor_detail_widget.pack(fill='x', expand=True)
+6251: # 3. Detailed Material Cost Widget
+6252: material_detail_frame = ttk.LabelFrame(form_scrollable, text="재료비 상세 (Material Cost Detail)", padding=10)
+6253: material_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
+6260: self.material_detail_widget = MaterialCostDetailWidget(material_detail_frame, on_change_callback=on_material_change)
+6261: self.material_detail_widget.pack(fill='x', expand=True)
+6263: # 4. Detailed Expense & Profit Widget
+6264: expense_detail_frame = ttk.LabelFrame(form_scrollable, text="경비 및 이익 상세 (Expense & Profit Detail)", padding=10)
+6265: expense_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
+6295: self.expense_detail_widget = ExpenseProfitDetailWidget(
+6296: expense_detail_frame,
+6302: self.expense_detail_widget.pack(fill='x', expand=True)
+6306: self.ent_budget_revenue.bind('<KeyRelease>', lambda e: self.expense_detail_widget.calculate_all())
+6829: # Based on Date + Site + EntryTime (best UID) or Date + Site + Note (as fallback)
+6833: e_note = str(row.get('Note', row.get('비고', ''))).strip()
+6834: e_uid = f"{e_date}|{e_site}|{e_time}|{e_note}"
+6919: '비고': _clean_str(row.get('비고', row.get('Note', ''))),
+6926: '차량비고': _first_text(row, ['차량비고', '차량 비고', 'remarks', 'vehicle_remarks', 'Remark']),
+7107: if hasattr(self, 'expense_detail_widget') and hasattr(self.expense_detail_widget, 'get_total_cost'):
+7112: raw_total_text = self.expense_detail_widget.lbl_grand_total_cost.cget('text')
+7180: ('ent_budget_note',      'Note')]:
+7187: display_val = "" if col == 'Note' else "0"
+7189: if col != 'Note' and col != 'Profit':
+7201: for json_col, widget_attr in [('LaborDetail',   'labor_detail_widget'),
+7202: ('MaterialDetail','material_detail_widget'),
+7203: ('ExpenseDetail', 'expense_detail_widget')]:
+7212: # [NEW] Clear data if no saved detail exists for this site
+7216: # 상세 항목 합계로 덮어씌워지는 문제 방지.
+7217: # 상세 위젯 로드 완료 후 저장된 원본 금액 값을 명시적으로 재설정한다.
+7309: # 상세 재료비 집계를 위한 맵
+7366: # STRATEGIC FIX: Remove 'Note' from UID because split-rows often have different notes like '(차량 추가 기록)'
+7385: # [NOTE] Specialist NDT columns are now handled in the consolidated block below to avoid double counting
+7522: # [FIX] 분류별 OT 상세 집계
+7658: # Update Special Unit Prices if LaborCostDetailWidget is available to compute correct revenue
+7660: if hasattr(self, 'labor_detail_widget'):
+7661: ot_revenue = sum(ot_data[t]['hours'] * _f(self.labor_detail_widget.entries[t]['unit_price'].get())
+7662: for t in special_types if t in self.labor_detail_widget.entries)
+7682: # 4. 인건비 상세 위젯 업데이트
+7683: if hasattr(self, 'labor_detail_widget'):
+7684: labor_data = self.labor_detail_widget.get_data()
+7711: self.labor_detail_widget.set_data(labor_data)
+7713: # 5. 재료비 상세 위젯 업데이트
+7714: if hasattr(self, 'material_detail_widget'):
+7715: current_mat_data = self.material_detail_widget.get_data()
+7733: self.material_detail_widget.set_data(current_mat_data)
+7738: # 6. 경비 상세 위젯 업데이트 (차량유지비, 소모품비, 복리후생비, Se-175 수량, 감가상각비 차량 사용일수 자동 할당)
+7739: if hasattr(self, 'expense_detail_widget'):
+7740: self.expense_detail_widget.calculate_all()
+7743: if hasattr(self, 'labor_detail_widget') and hasattr(self, 'ent_budget_labor'):
+7747: if hasattr(self.labor_detail_widget, 'get_total_cost'):
+7748: lab_total = self.labor_detail_widget.get_total_cost()
+7751: raw_text = self.labor_detail_widget.lbl_grand_total.cget('text')
+7759: if hasattr(self, 'expense_detail_widget') and hasattr(self, 'ent_budget_expense'):
+7762: if hasattr(self.expense_detail_widget, 'get_total_cost'):
+7763: exp_total = self.expense_detail_widget.get_total_cost()
+7765: raw_text = self.expense_detail_widget.lbl_exp_total.cget('text')
+7776: current_exp_data = self.expense_detail_widget.get_data()
+7813: self.expense_detail_widget.set_data(current_exp_data)
+7848: note = self.ent_budget_note.get().strip()
+7863: 'Note': note,
+7864: 'LaborDetail': json.dumps(self.labor_detail_widget.get_data()),
+7865: 'MaterialDetail': json.dumps(self.material_detail_widget.get_data()),
+7866: 'ExpenseDetail': json.dumps(self.expense_detail_widget.get_data())
+7884: # String columns (Note, Detail JSONs, Site)
+7975: self.ent_budget_note.delete(0, tk.END)
+7976: # [NEW] Reset detail widgets
+7977: if hasattr(self, 'labor_detail_widget'): self.labor_detail_widget.reset()
+7978: if hasattr(self, 'material_detail_widget'):
+7979: self.material_detail_widget.reset()
+7980: if hasattr(self, 'expense_detail_widget'):
+7981: self.expense_detail_widget.reset()
+7991: """No-op as details panel is removed"""
+8468: # [NEW] Append REP defect trace to Note if applicable (Option A)
+8469: base_note = self._get_merged_memo_and_note()
+8473: base_note = (base_note + f" [불량(REP) {rep_count}개 발생]").strip()
+8500: merged_v_remarks = []
+8506: v_remarks = str(v_data.get('remarks', '')).strip()
+8508: reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
+8516: if v_no or v_mileage or v_check_str or v_remarks:
+8520: merged_v_remarks.append(v_remarks)
+8525: final_v_remarks = " || ".join(merged_v_remarks)
+8544: base_note = self._get_merged_memo_and_note()
+8548: base_note = (base_note + f" [당일 불량(REJ) {rej_count}개 발생]").strip()
+8549: r_common_data['Note'] = base_note
+8558: r_common_data['Note'] = "(재검사 기록) " + self._get_merged_memo_and_note()
+8564: r_common_data['Note'] = self._get_merged_memo_and_note()
+8604: row_record['차량비고'] = final_v_remarks
+9410: def _get_merged_memo_and_note(self):
+9411: """[NEW] Collects user-entered note and all open memo contents for archiving"""
+9412: main_note = ""
+9413: if hasattr(self, 'ent_daily_note'):
+9414: main_note = self.ent_daily_note.get().strip()
+9427: return main_note
+9430: return f"{main_note} | {archive_text}" if main_note else archive_text
+9534: # NDT 상세 조건 필드 로딩
+9606: v_remarks_raw = self.clean_nan(record.get('차량비고', ''))
+9611: v_remarks_list = [x.strip() for x in str(v_remarks_raw).split('||')] if v_remarks_raw else []
+9613: max_v_count = max(len(v_no_list), len(v_insp_list), len(v_mileage_list), len(v_remarks_list))
+9629: cur_remarks = v_remarks_list[i] if i < len(v_remarks_list) else ""
+9631: if not (cur_no or cur_insp or cur_mileage or cur_remarks):
+9634: v_parsed = {'vehicle_info': cur_no, 'mileage': cur_mileage, 'remarks': cur_remarks}
+9675: # 8. Note
+9676: if 'Note' in record:
+9677: self.ent_daily_note.delete(0, tk.END)
+9678: self.ent_daily_note.insert(0, self.clean_nan(record.get('Note')))
+9701: self.ent_daily_meal_cost, self.ent_daily_test_fee, self.ent_daily_note]:
+9743: is_vehicle = (type(w).__name__ == 'VehicleInspectionWidget') or ('차량' in lbl_text and '점검' in lbl_text) or ('상시' in lbl_text and '차량' in lbl_text)
+9917: # [NEW] 현장별 저장 시 차량, 목록, 메모 레이블창 자동 닫기 (User request)
+10014: notebook = ttk.Notebook(main_frame)
+10015: notebook.pack(fill='both', expand=True)
+10032: tab1 = ttk.Frame(notebook, padding=10)
+10033: notebook.add(tab1, text="일반/상단")
+10046: tab2 = ttk.Frame(notebook, padding=10)
+10047: notebook.add(tab2, text="검사공법(행)")
+10053: tab3 = ttk.Frame(notebook, padding=10)
+10054: notebook.add(tab3, text="불량율(RTK)")
+10064: tab4 = ttk.Frame(notebook, padding=10)
+10065: notebook.add(tab4, text="자재(행)")
+10121: 'note': self.ent_daily_note.get().strip(),
+10177: self.ent_daily_note.delete(0, tk.END); self.ent_daily_note.insert(0, data.get('note', ''))
+10239: 'note': self.ent_note.get().strip()
+10271: self.ent_note.delete(0, tk.END); self.ent_note.insert(0, trans.get('note', ''))
+10277: 'labor_detail': self.labor_detail_widget.get_data(),
+10278: 'material_detail': self.material_detail_widget.get_data(),
+10279: 'expense_detail': self.expense_detail_widget.get_data()
+10292: self.labor_detail_widget.set_data(data.get('labor_detail', {}))
+10293: self.material_detail_widget.set_data(data.get('material_detail', {}))
+10294: self.expense_detail_widget.set_data(data.get('expense_detail', {}))
+10374: self.ent_daily_note.delete(0, 'end')
+10375: self.ent_daily_note.insert(0, self.clean_nan(first_record.get('Note', first_record.get('비고', ''))))
+10441: note_suffix = f" ({company_code})" if company_code else ""
+10442: note = f"{site} 현장 사용 (자동 차감){note_suffix}"
+10497: self._create_manual_stock_transaction(trans_date, mat_id, 'OUT', qty, site, workers, note)
+10499: def _create_manual_stock_transaction(self, date_val, mat_id, trans_type, qty, site, user, note):
+10548: 'Note': note
+10837: (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False, regex=False))
+11058: # 4. NDT 상세 조건
+11059: ndt_cond_frame = ttk.LabelFrame(scrollable_frame, text="NDT 상세 조건", padding=10)
+11096: # [NEW] 5.5 Remark (비고/메모)
+11097: remark_frame = ttk.Frame(scrollable_frame, padding=10)
+11098: remark_frame.pack(fill='x', pady=5)
+11099: ttk.Label(remark_frame, text="비고(메모):").pack(side='left', padx=5)
+11100: ent_remark = ttk.Entry(remark_frame, width=80)
+11101: curr_rem = entry_data.get('Note', entry_data.get('비고', ''))
+11103: ent_remark.insert(0, self.clean_nan(curr_rem))
+11104: ent_remark.pack(side='left', fill='x', expand=True, padx=5)
+11105: fields['Note'] = ent_remark
+11243: for key in ['차량번호', '주행거리', '차량점검', '차량비고', '작업형태', '조건1', '조건2', 'Note']:
+11355: (self.transactions_df['Note'].str.contains(f"{old_site} 현장 사용", na=False))
+11429: new_note_pattern = f'{new_site} 현장 사용 (자동 차감)'
+11440: self._create_manual_stock_transaction(new_date, new_mat_id, 'OUT', new_qty, new_site, all_workers, new_note_pattern)
+12004: # daily_usage_df columns: Date, Site, MaterialID, Usage, Note, etc. + RTK_..., NDT_...
+12313: # Ctrl+Tab to switch between notebook tabs (forward)
+12315: # Ctrl+Shift+Tab to switch between notebook tabs (backward)
+12319: self.root.bind('<Alt-Key-1>', lambda e: self.notebook.select(0))
+12320: self.root.bind('<Alt-Key-2>', lambda e: self.notebook.select(1))
+12321: self.root.bind('<Alt-Key-3>', lambda e: self.notebook.select(2))
+12322: self.root.bind('<Alt-Key-4>', lambda e: self.notebook.select(3))
+12323: self.root.bind('<Alt-Key-5>', lambda e: self.notebook.select(4))
+12324: self.root.bind('<Alt-Key-6>', lambda e: self.notebook.select(5))
+12326: # Right-click on notebook for tab reordering
+12331: current = self.notebook.index(self.notebook.select())
+12332: total = self.notebook.index('end')
+12334: self.notebook.select(next_tab)
+12339: current = self.notebook.index(self.notebook.select())
+12340: total = self.notebook.index('end')
+12342: self.notebook.select(prev_tab)
+12349: clicked_tab = self.notebook.index(f"@{event.x},{event.y}")
+12350: self.notebook.select(clicked_tab)
+12361: if clicked_tab < self.notebook.index('end') - 1:
+12374: tab = self.notebook.tabs()[tab_index]
+12375: text = self.notebook.tab(tab_index, "text")
+12378: self.notebook.insert(tab_index - 1, tab, text=text)
+12379: self.notebook.select(tab_index - 1)
+12386: if tab_index < self.notebook.index('end') - 1:
+12388: tab = self.notebook.tabs()[tab_index]
+12389: text = self.notebook.tab(tab_index, "text")
+12392: self.notebook.insert(tab_index + 2, tab, text=text)
+12393: self.notebook.select(tab_index + 1)
+12611: current_tab_widget = self.notebook.select()
+12612: current_tab_idx = self.notebook.index(current_tab_widget)
+12613: current_tab_text = self.notebook.tab(current_tab_widget, "text")
+12620: for tab_id in self.notebook.tabs():
+12621: tab_order.append(self.notebook.tab(tab_id, "text"))
+12743: for tab in self.notebook.tabs():
+12744: self.tab_config['tab_order'].append(self.notebook.tab(tab, "text"))
+12871: for tab in self.notebook.tabs():
+12872: tab_index = self.notebook.index(tab)
+12873: tab_text = self.notebook.tab(tab_index, "text")
+12886: current_pos = self.notebook.index(tab)
+12888: self.notebook.insert(i, tab, text=tab_text)
+12898: for i in range(self.notebook.index('end')):
+12899: if self.notebook.tab(i, "text") == selected_text:
+12901: self.notebook.select(i)
+12906: if not tab_restored and 0 <= selected_idx < self.notebook.index('end'):
+12908: self.notebook.select(selected_idx)
+12989: 'Equipment': '장비명', 'Method': '검사방법', 'Remark': '비고',
+12990: 'Note': '비고', 'EntryTime': '입력시간', 'MaterialName': '품목명',
+13810: def switch_to_daily_usage_details(self):
+13819: self.notebook.select(5)
+14100: columns = ('Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Margin', 'Note')
+14106: 'OutsourceCost': ('외주비', 120), 'Profit': ('기대이익', 120), 'Margin': ('이익률', 100), 'Note': ('비고', 200)
+14180: row.get('Note', '')
+14205: note = str(row.get('Note', ''))
+14208: is_auto = "(자동 차감)" in note or "(ڵ )" in note or "(\ucac0 \u0020)" in note or "(\u00e1\u00b6\u00bd\u0020)" in note

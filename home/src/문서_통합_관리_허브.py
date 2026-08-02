@@ -144,15 +144,7 @@ class DocumentProcessor:
         temp_input = None
         try:
             import win32com.client as win32
-            try:
-                hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
-            except AttributeError:
-                # win32com gen_py 캐시 오류 발생 시 캐시 폴더 삭제 후 재시도
-                import shutil
-                gen_py_path = win32.gencache.GetGeneratePath()
-                if os.path.exists(gen_py_path):
-                    shutil.rmtree(gen_py_path, ignore_errors=True)
-                hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
+            hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
             hwp.RegisterModule("FilePathCheckDLL", "SecurityModule")
             hwp.XHwpWindows.Item(0).Visible = False
             
@@ -1550,7 +1542,7 @@ class CodebookApp:
             import openpyxl
             
             dir_name = os.path.dirname(self.report_template_path)
-            output_filename = f"가산~가평_주배관_{month_text.replace(' ', '')}_용역진도보고서.xlsx"
+            output_filename = f"가산~가평_열배관_{month_text.replace(' ', '')}_용역진도보고서.xlsx"
             output_path = os.path.join(dir_name, output_filename)
             
             # 1. 템플릿 열기
@@ -1670,8 +1662,8 @@ class CodebookApp:
                             ws = wb_temp[s_name]
                             if "(전체)" in s_name:
                                 inject_billing_data(ws, None)
-                            elif "(주배관)" in s_name:
-                                inject_billing_data(ws, "주배관")
+                            elif "(열배관)" in s_name:
+                                inject_billing_data(ws, "열배관")
                             elif "(관리소)" in s_name:
                                 inject_billing_data(ws, "관리소")
             except Exception as e:
@@ -1715,7 +1707,7 @@ class CodebookApp:
                             is_station = '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item
                             if target == '관리소':
                                 return is_station
-                            else: # 주배관
+                            else: # 열배관
                                 return not is_station
                                 
                         df_loc = raw_df[raw_df.apply(lambda r: is_match(r, loc_filter), axis=1)]
@@ -1816,14 +1808,14 @@ class CodebookApp:
                     for s_name in wb_temp.sheetnames:
                         if "3. 비파괴검사 현황" in s_name:
                             ws_ndt = wb_temp[s_name]
-                            if "(주배관)" in s_name:
-                                inject_ndt_status(ws_ndt, "주배관")
+                            if "(열배관)" in s_name:
+                                inject_ndt_status(ws_ndt, "열배관")
                             elif "(관리소)" in s_name:
                                 inject_ndt_status(ws_ndt, "관리소")
                 except Exception as e:
                     print(f"NDT 현황 데이터 연동 중 오류 발생: {e}")
 
-                # 3.2 물량 세부내역(주배관/관리소) 주입
+                # 3.2 물량 세부내역(열배관/관리소) 주입
                 def inject_detailed_ndt_status(ws, loc_filter):
                     if 'Site' not in raw_df.columns: return
                     
@@ -1945,8 +1937,8 @@ class CodebookApp:
                 for s_name in wb_temp.sheetnames:
                     if "세부 내역" in s_name or "세부내역" in s_name:
                         ws_detail = wb_temp[s_name]
-                        if "(주배관)" in s_name:
-                            inject_detailed_ndt_status(ws_detail, "주배관")
+                        if "(열배관)" in s_name:
+                            inject_detailed_ndt_status(ws_detail, "열배관")
                         elif "(관리소)" in s_name:
                             inject_detailed_ndt_status(ws_detail, "관리소")
                 

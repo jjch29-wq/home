@@ -508,13 +508,24 @@ class VehicleInspectionWidget(ttk.Frame):
         """Clear all input fields for the next vehicle entry and set focus"""
         try:
             self.cb_vehicle_info.set('')
+        except Exception as e: print(f"Error clearing cb_vehicle_info: {e}")
+        
+        try:
             self.ent_mileage.delete(0, tk.END)
+        except Exception as e: print(f"Error clearing ent_mileage: {e}")
+        
+        try:
             self.ent_remarks.delete(0, tk.END)
-            for var in self.vars.values():
+        except Exception as e: print(f"Error clearing ent_remarks: {e}")
+        
+        for var in self.vars.values():
+            try:
                 var.set("") # Clear StringVar
+            except Exception as e: print(f"Error clearing var: {e}")
+            
+        try:
             self.cb_vehicle_info.focus_set()
-        except:
-            pass
+        except: pass
         
     def set_data(self, data):
         if not data: return

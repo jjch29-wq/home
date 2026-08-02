@@ -9527,11 +9527,11 @@ class MaterialManager:
         self.ndt_calc_frame.grid_remove() # 기본 숨김
 
         self.ndt_work_time_var = tk.StringVar(value="일반")
-        self.ndt_source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
-        self.ndt_thickness_var = tk.StringVar(value="15mm 이하 (1.0)")
+        self.ndt_source_var = tk.StringVar(value="Se-75 (1.0)")
+        self.ndt_thickness_var = tk.StringVar(value="조건없음 (1.0)")
         self.ndt_pipe_var = tk.StringVar(value="250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var = tk.DoubleVar(value=80.0)
-        self.ndt_tech_var = tk.DoubleVar(value=5.86)
+        self.ndt_overhead_var = tk.DoubleVar(value=110.0)
+        self.ndt_tech_var = tk.DoubleVar(value=20.0)
 
         row1 = ttk.Frame(self.ndt_calc_frame)
         row1.pack(fill='x', pady=2)
@@ -9638,11 +9638,11 @@ class MaterialManager:
         self.ent_daily_test_amount.bind('<Return>', lambda e: self.cb_daily_unit.focus_set())
         self.cb_daily_unit.set('매')
         self.ndt_work_time_var.set("일반")
-        self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-        self.ndt_thickness_var.set("15mm 이하 (1.0)")
+        self.ndt_source_var.set("Se-75 (1.0)")
+        self.ndt_thickness_var.set("조건없음 (1.0)")
         self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var.set(80.0)
-        self.ndt_tech_var.set(5.86)
+        self.ndt_overhead_var.set(110.0)
+        self.ndt_tech_var.set(20.0)
         self.ndt_calc_frame.grid_remove()
         self.cb_daily_unit.bind('<Return>', lambda e: self.ent_daily_unit_price.focus_set())
         self.cb_daily_unit.bind('<<ComboboxSelected>>', lambda e: self.ent_daily_unit_price.focus_set())
@@ -9685,12 +9685,12 @@ class MaterialManager:
                     print(f"Error in grid: {ex}")
                 if method == "RT":
                     self.rtk_grid.grid() # [NEW] Show RTK
-                    self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
-                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"])
+                    self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Se-75 (1.0)", "Ir-192 (1.0)"])
+                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
                 elif method == "UT":
                     self.rtk_grid.grid_remove() # [NEW] Hide RTK
                     self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"])
-                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"])
+                    self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
                 elif method == "PT":
                     self.rtk_grid.grid_remove() # [NEW] Hide RTK
                     self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["150mm 초과 [6인치 이상] (1.2)", "150mm 이하 [4인치 이하] (1.4)"])
@@ -12606,15 +12606,15 @@ class MaterialManager:
             '출장비': to_f(self.ent_daily_travel_cost),
             '업체명': self.cb_daily_company.get().strip(),
             'Unit': self.cb_daily_unit.get().strip(),
-            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else "",
-            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT'] else ""),
+            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
+            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT','PAUT'] else ""),
             '조건2': self.ndt_thickness_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT'] else "",
-            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 1.0,
-            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0.0,
-            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
-            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT'] else 0,
+            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 1.0,
+            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0.0,
+            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
         }
 
         # [NEW] Auto-save new unit, equipment, and site (with improved duplicate check)
@@ -13637,8 +13637,8 @@ class MaterialManager:
                 if record.get('검사방법') == 'RT': self.ndt_source_var.set(record['조건1'])
                 else: self.ndt_pipe_var.set(record['조건1'])
             if '조건2' in record and record['조건2']: self.ndt_thickness_var.set(record['조건2'])
-            if '제경비율' in record: self.ndt_overhead_var.set(float(record['제경비율']) if record['제경비율'] else 80.0)
-            if '기술료율' in record: self.ndt_tech_var.set(float(record['기술료율']) if record['기술료율'] else 5.86)
+            if '제경비율' in record: self.ndt_overhead_var.set(float(record['제경비율']) if record['제경비율'] else 110.0)
+            if '기술료율' in record: self.ndt_tech_var.set(float(record['기술료율']) if record['기술료율'] else 20.0)
 
             
             # 3. Material
@@ -13752,11 +13752,11 @@ class MaterialManager:
         # 기본값 복구
         self.cb_daily_unit.set('매')
         self.ndt_work_time_var.set("일반")
-        self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-        self.ndt_thickness_var.set("15mm 이하 (1.0)")
+        self.ndt_source_var.set("Se-75 (1.0)")
+        self.ndt_thickness_var.set("조건없음 (1.0)")
         self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var.set(80.0)
-        self.ndt_tech_var.set(5.86)
+        self.ndt_overhead_var.set(110.0)
+        self.ndt_tech_var.set(20.0)
         self.ndt_calc_frame.grid_remove()
         self.rtk_grid.grid_remove() # [NEW] Hide RTK on clear
         self.ndt_frame.grid_remove() # [NEW] Hide NDT frame on clear

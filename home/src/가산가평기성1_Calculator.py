@@ -129,7 +129,7 @@ class NDTCalculator(tk.Tk):
         
         self.source_frame = ttk.Frame(self.dynamic_frame)
         ttk.Label(self.source_frame, text="• 방사선원 :", width=15).pack(side=tk.LEFT)
-        self.source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
+        self.source_var = tk.StringVar(value="Se-75 (1.0)")
         self.source_combo = ttk.Combobox(self.source_frame, textvariable=self.source_var, state="readonly", width=35)
         self.source_combo['values'] = ["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"]
         self.source_combo.pack(side=tk.LEFT)
@@ -155,11 +155,11 @@ class NDTCalculator(tk.Tk):
         ttk.Label(rate_frame, text="6. 적용 요율 (%)", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=(0, 20))
         
         ttk.Label(rate_frame, text="제경비율:").pack(side=tk.LEFT)
-        self.overhead_rate_var = tk.DoubleVar(value=80.0)
+        self.overhead_rate_var = tk.DoubleVar(value=110.0)
         ttk.Entry(rate_frame, textvariable=self.overhead_rate_var, width=8).pack(side=tk.LEFT, padx=5)
         
         ttk.Label(rate_frame, text="기술료율:").pack(side=tk.LEFT, padx=(15, 0))
-        self.tech_fee_rate_var = tk.DoubleVar(value=5.86)
+        self.tech_fee_rate_var = tk.DoubleVar(value=20.0)
         ttk.Entry(rate_frame, textvariable=self.tech_fee_rate_var, width=8).pack(side=tk.LEFT, padx=5)
         
         btn_frame = ttk.Frame(left_frame)
@@ -255,15 +255,15 @@ class NDTCalculator(tk.Tk):
         if ndt_type == "RT":
             self.source_frame.pack(fill=tk.X, pady=2)
             self.thickness_frame.pack(fill=tk.X, pady=2)
-            self.thickness_combo['values'] = ["15mm 이하 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"]
-            self.thickness_var.set("15mm 이하 (1.0)")
+            self.thickness_combo['values'] = ["조건없음 (1.0)", "15mm 초과 ~ 25mm 이하 (1.4)", "25mm 초과 ~ 40mm 이하 (2.2)"]
+            self.thickness_var.set("조건없음 (1.0)")
         elif ndt_type == "UT":
             self.pipe_frame.pack(fill=tk.X, pady=2)
             self.thickness_frame.pack(fill=tk.X, pady=2)
             self.pipe_combo['values'] = ["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"]
             self.pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-            self.thickness_combo['values'] = ["15mm 이하 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"]
-            self.thickness_var.set("15mm 이하 (1.0)")
+            self.thickness_combo['values'] = ["조건없음 (1.0)", "15mm 초과 ~ 50mm 이하 (1.2)"]
+            self.thickness_var.set("조건없음 (1.0)")
         elif ndt_type == "PT":
             self.pipe_frame.pack(fill=tk.X, pady=2)
             self.pipe_combo['values'] = ["150mm 초과 [6인치 이상] (1.2)", "150mm 이하 [4인치 이하] (1.4)"]
