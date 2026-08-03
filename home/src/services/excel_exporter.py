@@ -120,8 +120,8 @@ def export_daily_work_report_impl(self):
         # [FIX] A18:S25 메모 영역에는 '비고'가 아닌 '상시 패널(메모)' 내용만 입력되도록 수정
         if hasattr(self, 'main_memo_text'):
             try:
-                import tkinter as tk
-                ui_memo = self.main_memo_text.get('1.0', tk.END).strip()
+                import tkinter as _tk
+                ui_memo = self.main_memo_text.get('1.0', _tk.END).strip()
                 if ui_memo:
                     note_texts.append(ui_memo)
             except: pass
@@ -771,3 +771,220 @@ def save_df_to_excel_autofit_impl(self, df, save_path, sheet_name='Sheet1'):
         worksheet.page_margins.bottom = 0.5
 
 
+
+
+
+def export_central_daily_work_report_impl(self):
+    """작업일보를 중앙지사 전용 v20 양식에 맞추어 엑셀로 출력합니다."""
+    try:
+        import pandas as pd
+        import openpyxl
+        from datetime import datetime
+        import tkinter as tk
+        from tkinter import messagebox, filedialog
+
+        template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'resources', 'Template_Central_DailyWorkReport.xlsx')
+        if not os.path.exists(template_path):
+            messagebox.showerror("오류", "중앙지사 전용 작업일보 템플릿(Template_Central_DailyWorkReport.xlsx)을 찾을 수 없습니다.")
+            return
+
+        def _clean_str(v, default=''):
+            if v is None: return default
+            s = str(v).strip()
+            if s.lower() in ('nan', 'none', ''): return default
+            return s
+            
+        def _clean_name(n):
+            if not n or str(n).lower() in ('nan', 'none', ''): return ''
+            text = str(n).strip()
+            titles = ['부장', '차장', '과장', '대리', '주임', '기사', '선임', '수석', '책임',
+                      '팀장', '이사', '본부장', '실장', '소장', '직장', '반장', '팀원', '계장']
+            for t in titles:
+                import re as _re
+                text = _re.sub(r'[\s/(\[]*' + t + r'[\s)\]]*$', '', text)
+                text = _re.sub(r'^[\s/(\[]*' + t + r'[\s)\]]*', '', text)
+            return text.strip()
+
+        date_val = self.ent_daily_date.get_date()
+        site = self.cb_daily_site.get().strip()
+
+        # DB 데이터 집합 
+        df_copy = pd.DataFrame()
+        if not self.daily_usage_df.empty:
+            df_copy = self.daily_usage_df.copy()
+            site_col = 'Site' if 'Site' in df_copy.columns else '현장' if '현장' in df_copy.columns else ''
+            date_col = 'Date' if 'Date' in df_copy.columns else '날짜' if '날짜' in df_copy.columns else ''
+            
+            if site_col and date_col:
+                df_copy['Date_norm'] = pd.to_datetime(df_copy[date_col], errors='coerce').dt.date
+                check_date = pd.to_datetime(date_val).date()
+                
+                # 금일 기록
+                today_records = df_copy[
+                    (df_copy['Date_norm'] == check_date) & 
+                    (df_copy[site_col].astype(str).str.strip().str.upper() == str(site).strip().upper())
+                ]
+                
+                # 전일 누계 기록 (과거 기록 모두 합산)
+                past_records = df_copy[
+                    (df_copy['Date_norm'] < check_date) & 
+                    (df_copy[site_col].astype(str).str.strip().str.upper() == str(site).strip().upper())
+                ]
+            else:
+                today_records = pd.DataFrame()
+                past_records = pd.DataFrame()
+        else:
+            today_records = pd.DataFrame()
+            past_records = pd.DataFrame()
+
+        # 물량 집계 로직
+        def calc_method_qty(records, method_key, base_method):
+            if records.empty: return 0
+            method_col = '검사방법' if '검사방법' in records.columns else 'TestMethod' if 'TestMethod' in records.columns else ''
+            if not method_col: return 0
+            
+            qty = 0
+            for _, row in records.iterrows():
+                m = str(row.get(method_col, '')).upper().strip()
+                if base_method in m:
+                    # 야간 확인
+                    is_night = '야간' in m or 'NIGHT' in m
+                    target_is_night = '_N' in method_key
+                    
+                    # 관경 확인 (PAUT, RT의 경우)
+                    size_match = True
+                    if '300A' in method_key and not ('300' in m or '400' in m or '500' in m): size_match = False
+                    if '250A' in method_key and not ('250' in m): size_match = False
+                    if '200A' in method_key and not ('200' in m): size_match = False
+                    if '150A' in method_key and not ('150' in m or '100' in m): size_match = False
+                    if '80A' in method_key and not ('80' in m or '65' in m or '50' in m or '40' in m): size_match = False
+                    
+                    if size_match and (is_night == target_is_night):
+                        qty += pd.to_numeric(row.get('Usage', 0), errors='coerce')
+            return float(qty) if pd.notna(qty) else 0
+
+        # 장비 수집
+        equips = []
+        if not today_records.empty and '장비명' in today_records.columns:
+            equips = [_clean_str(x) for x in today_records['장비명'].dropna().unique() if _clean_str(x)]
+        if not equips:
+            equips = [_clean_str(self.cb_daily_equip.get())]
+            
+        equip_str = ", ".join(filter(None, equips))
+
+        # 인원 수집
+        inspectors = []
+        managers = []
+        if not today_records.empty:
+            for _, row in today_records.iterrows():
+                for i in range(1, 11):
+                    u_key = 'User' if i == 1 else f'User{i}'
+                    name = str(row.get(u_key, '')).strip()
+                    if name and name != 'nan':
+                        clean_n = _clean_name(name)
+                        if '대리인' in name or '안전' in name or '관리' in name:
+                            if clean_n not in managers: managers.append(clean_n)
+                        else:
+                            if clean_n not in inspectors: inspectors.append(clean_n)
+                            
+        if not inspectors and not managers:
+            managers_raw = ""
+            managers = [_clean_name(x.strip()) for x in managers_raw.split(',') if x.strip()]
+            for i in range(1, 11):
+                group = getattr(self, f'worker_group{i}', None)
+                if group:
+                    w_name = _clean_name(group.get_worker().strip())
+                    if w_name and w_name not in inspectors: inspectors.append(w_name)
+
+        # 엑셀 오픈
+        wb = openpyxl.load_workbook(template_path)
+        ws = wb.active
+
+        # 상단 데이터 맵핑
+        ws['A4'] = f"검사일자 : {date_val.strftime('%Y년 %m월 %d일')}           날 씨 : "
+        
+        # 1. 작업 물량 및 누계 현황 맵핑 (PAUT: 행 7~11, RT: 13~16, MT: 18~19, PT: 20~21)
+        # [행번호, method_key, base_method]
+        mapping_rows = [
+            [7, 'PAUT_300A_D', 'PAUT'],
+            [8, 'PAUT_300A_N', 'PAUT'],
+            [9, 'PAUT_250A', 'PAUT'],
+            [10, 'PAUT_200A_D', 'PAUT'],
+            [11, 'PAUT_200A_N', 'PAUT'],
+            # 12 is PAUT 소계
+            [13, 'RT_150A_D', 'RT'],
+            [14, 'RT_150A_N', 'RT'],
+            [15, 'RT_80A_D', 'RT'],
+            [16, 'RT_80A_N', 'RT'],
+            # 17 is RT 소계
+            [18, 'MT_D', 'MT'],
+            [19, 'MT_N', 'MT'],
+            [20, 'PT_D', 'PT'],
+            [21, 'PT_N', 'PT']
+        ]
+
+        for r, m_key, base_m in mapping_rows:
+            today_qty = calc_method_qty(today_records, m_key, base_m)
+            past_qty = calc_method_qty(past_records, m_key, base_m)
+            total_qty = today_qty + past_qty
+            
+            # 예상량(C열) 가져오기
+            exp_val = ws.cell(row=r, column=3).value
+            try: exp_val = float(exp_val) if exp_val else 0
+            except: exp_val = 0
+            
+            # 전일 누계 (D열)
+            ws.cell(row=r, column=4).value = past_qty if past_qty > 0 else ''
+            # 금일 작업 (E열)
+            ws.cell(row=r, column=5).value = today_qty if today_qty > 0 else ''
+            # 총 누계 (F열)
+            ws.cell(row=r, column=6).value = total_qty if total_qty > 0 else ''
+            # 공정률 (G열)
+            if exp_val > 0 and total_qty > 0:
+                ws.cell(row=r, column=7).value = round((total_qty / exp_val) * 100, 1)
+            else:
+                ws.cell(row=r, column=7).value = ''
+
+        # 소계 엑셀 수식은 엑셀 자체에 없으므로 파이썬에서 계산하여 넣음
+        paut_past = sum([calc_method_qty(past_records, m, 'PAUT') for m in ['PAUT_300A_D', 'PAUT_300A_N', 'PAUT_250A', 'PAUT_200A_D', 'PAUT_200A_N']])
+        paut_today = sum([calc_method_qty(today_records, m, 'PAUT') for m in ['PAUT_300A_D', 'PAUT_300A_N', 'PAUT_250A', 'PAUT_200A_D', 'PAUT_200A_N']])
+        ws.cell(row=12, column=4).value = paut_past if paut_past > 0 else ''
+        ws.cell(row=12, column=5).value = paut_today if paut_today > 0 else ''
+        ws.cell(row=12, column=6).value = (paut_past + paut_today) if (paut_past + paut_today) > 0 else ''
+        
+        rt_past = sum([calc_method_qty(past_records, m, 'RT') for m in ['RT_150A_D', 'RT_150A_N', 'RT_80A_D', 'RT_80A_N']])
+        rt_today = sum([calc_method_qty(today_records, m, 'RT') for m in ['RT_150A_D', 'RT_150A_N', 'RT_80A_D', 'RT_80A_N']])
+        ws.cell(row=17, column=4).value = rt_past if rt_past > 0 else ''
+        ws.cell(row=17, column=5).value = rt_today if rt_today > 0 else ''
+        ws.cell(row=17, column=6).value = (rt_past + rt_today) if (rt_past + rt_today) > 0 else ''
+        
+        # 3. 장비 및 인원 맵핑 (v20 양식 구조 맞춤)
+        ws.cell(row=7, column=12).value = equip_str # L7 (L7:M7 병합)
+
+        ws['Q7'] = len(managers) if managers else ''
+        ws['Q8'] = ", ".join(managers) if managers else ''
+        
+        ws['R7'] = len(inspectors) if inspectors else ''
+        ws['R8'] = ", ".join(inspectors) if inspectors else ''
+
+        # 결과 저장
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        default_name = f"{site}_검사일보_{date_val.strftime('%y%m%d')}.xlsx"
+        
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".xlsx", 
+            initialfile=default_name, 
+            filetypes=[("Excel File", "*.xlsx")], 
+            title="중앙지사 검사일보 저장"
+        )
+        
+        if filepath:
+            wb.save(filepath)
+            wb.close()
+            messagebox.showinfo("완료", f"중앙지사 엑셀 작업일보 생성이 완료되었습니다.\n(2번 비파괴검사결과서는 엑셀에서 직접 기입해 주세요)\n\n{filepath}")
+            os.startfile(filepath)
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        messagebox.showerror("오류", f"엑셀 생성 중 오류가 발생했습니다: {str(e)}")

@@ -53,6 +53,9 @@ def setup_daily_usage_tab_impl(self):
     self.btn_daily_report = ttk.Button(row1, text="📄 작업일보 출력", command=self.export_daily_work_report, width=15)
     self.btn_daily_report.pack(side='left', padx=5)
 
+    self.btn_central_daily_report = ttk.Button(row1, text="📄 중앙지사 일보", command=self.export_central_daily_work_report, width=15)
+    self.btn_central_daily_report.pack(side='left', padx=5)
+
     btn_report_map = ttk.Button(row1, text="⚙️ 출력 설정", command=self.open_report_mapping_dialog)
     btn_report_map.pack(side='left', padx=5)
 
