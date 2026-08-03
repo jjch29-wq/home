@@ -1169,7 +1169,9 @@ class PMIReportApp:
         
         def _open_data_entry():
             try:
+                import importlib
                 import list_data_entry
+                importlib.reload(list_data_entry)
                 list_data_entry.open_data_entry_ui(self.root)
             except Exception as e:
                 messagebox.showerror("오류", f"입력기를 열 수 없습니다: {e}")

@@ -120,8 +120,7 @@ def export_daily_work_report_impl(self):
         # [FIX] A18:S25 메모 영역에는 '비고'가 아닌 '상시 패널(메모)' 내용만 입력되도록 수정
         if hasattr(self, 'main_memo_text'):
             try:
-                import tkinter as _tk
-                ui_memo = self.main_memo_text.get('1.0', _tk.END).strip()
+                ui_memo = self.main_memo_text.get('1.0', tk.END).strip()
                 if ui_memo:
                     note_texts.append(ui_memo)
             except: pass

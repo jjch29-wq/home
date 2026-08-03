@@ -304,7 +304,7 @@ def setup_daily_usage_tab_impl(self):
     row2 = ttk.Frame(self.ndt_calc_frame)
     row2.pack(fill='x', pady=2)
     ttk.Label(row2, text="보고서용 관경(Inch):").pack(side='left', padx=(0,0))
-    self.cb_ndt_report_pipe = ttk.Combobox(row2, textvariable=self.ndt_report_pipe_var, width=10)
+    self.cb_ndt_report_pipe = ttk.Combobox(row2, textvariable=self.ndt_report_pipe_var, width=10, values=list(getattr(self, 'SIZE_LENGTH', {}).keys()))
     self.cb_ndt_report_pipe.pack(side='left', padx=2)
     ttk.Label(row2, text="  제경비율(%):").pack(side='left', padx=(5,0))
     ttk.Entry(row2, textvariable=self.ndt_overhead_var, width=5).pack(side='left')
@@ -330,8 +330,42 @@ def setup_daily_usage_tab_impl(self):
     def _calculate_ndt_fee():
         try:
             from ndt_billing_tab import MATERIAL_COST, LABOR_COST
-            ndt_type = self.cb_daily_test_method.get().strip()
+            ndt_type = self.cb_daily_test_method.get().strip().upper()
             work_time = self.ndt_work_time_var.get()
+            
+            # --- 수량(Usage) 자동 산출 로직 추가 ---
+            if any(x in ndt_type for x in ['PAUT', 'PT', 'MT']):
+                pipe_val = getattr(self, 'ndt_report_pipe_var').get().strip().upper()
+                if pipe_val and pipe_val.isdigit():
+                    pipe_val += 'A'
+                
+                size_lookup = getattr(self, 'SIZE_LENGTH', {})
+                if pipe_val in size_lookup:
+                    length = size_lookup[pipe_val]
+                    total_joints = 0.0
+                    
+                    ori_str = getattr(self, 'ndt_ori_joint_var').get().strip().replace(',', '')
+                    if ori_str:
+                        try:
+                            j = float(ori_str)
+                            total_joints += j
+                            getattr(self, 'ndt_ori_qty_var').set(f"{j * length:.4f}")
+                        except ValueError: pass
+                        
+                    rep_str = getattr(self, 'ndt_rep_joint_var').get().strip().replace(',', '')
+                    if rep_str:
+                        try:
+                            j = float(rep_str)
+                            total_joints += j
+                            getattr(self, 'ndt_rep_qty_var').set(f"{j * length:.4f}")
+                        except ValueError: pass
+                        
+                    if total_joints > 0:
+                        calculated_qty = total_joints * length
+                        self.ent_daily_test_amount.delete(0, tk.END)
+                        self.ent_daily_test_amount.insert(0, f"{calculated_qty:.4f}")
+            # ---------------------------------------
+            
             qty_str = self.ent_daily_test_amount.get().replace(',','')
             if not qty_str: return
             qty = float(qty_str)
@@ -523,9 +557,21 @@ def setup_daily_usage_tab_impl(self):
     self._bind_combobox_word_suggest(self.ent_daily_applied_code, lambda: self._get_applied_code_candidates())
     
     def _get_pipe_candidates():
-        if not hasattr(self, 'daily_usage_df') or self.daily_usage_df.empty: return []
-        if '관경(Inch)' not in self.daily_usage_df.columns: return []
-        return sorted(list(set(str(x) for x in self.daily_usage_df['관경(Inch)'].dropna() if str(x).strip())))
+        base_candidates = list(getattr(self, 'SIZE_LENGTH', {}).keys())
+        if not hasattr(self, 'daily_usage_df') or self.daily_usage_df.empty: 
+            return base_candidates
+        
+        # '관경(Inch)' 컬럼명은 인코딩 문제 방지를 위해 안전하게 처리
+        pipe_col = None
+        for col in self.daily_usage_df.columns:
+            if 'Inch' in col or '관경' in col:
+                pipe_col = col
+                break
+                
+        if not pipe_col: return base_candidates
+        
+        df_candidates = [str(x).strip() for x in self.daily_usage_df[pipe_col].dropna() if str(x).strip()]
+        return sorted(list(set(base_candidates + df_candidates)))
     self._bind_combobox_word_suggest(self.cb_ndt_report_pipe, _get_pipe_candidates)
 
     # Category definitions for focus flow and loops
