@@ -342,6 +342,17 @@ if not hasattr(messagebox, 'showerror_orig'):
 class MaterialManager:
     def __init__(self, root):
         self.root = root
+
+        # 공정별 관경에 따른 검사길이 (m) 룩업 테이블
+        self.SIZE_LENGTH = {
+            '1100A': 3.511,  '1000A': 3.1919, '900A': 2.8727, '850A': 2.7131,
+            '800A':  2.5535, '750A':  2.3939, '700A': 2.2343, '650A': 2.0747,
+            '600A':  1.9151, '550A':  1.7555, '500A': 1.5959, '450A': 1.4363,
+            '400A':  1.2767, '350A':  1.1172, '300A': 1.0006, '250A': 0.8401,
+            '200A':  0.6795, '150A':  0.519,  '125A': 0.4392, '100A': 0.3591,
+            '80A':   0.2799, '65A':   0.2397, '50A':  0.1901, '40A':  0.1527,
+            '32A':   0.1341, '25A':   0.1068, '20A':  0.0855,
+        }
         
         # High DPI awareness
         try:
@@ -535,6 +546,69 @@ class MaterialManager:
         
         # Enable keyboard navigation
         self.setup_keyboard_shortcuts()
+
+        # NDT 변수 초기화 및 추적 바인딩 추가
+        self._init_ndt_vars_and_traces()
+
+    def _init_ndt_vars_and_traces(self):
+        """NDT 관련 변수(관경, 조인트수)를 생성하고 자동계산 이벤트를 바인딩합니다."""
+        # 동적 바인딩에 대비해 명시적으로 StringVar 초기화
+        for var_name in ['ndt_report_pipe_var', 'ndt_ori_joint_var', 'ndt_rep_joint_var', 'ndt_ori_qty_var', 'ndt_rep_qty_var', 'ndt_inspection_type_var']:
+            if not hasattr(self, var_name):
+                setattr(self, var_name, tk.StringVar(value=""))
+
+        # 콜백 함수: 관경과 조인트수가 변경되면 수량을 자동계산
+        def on_ndt_change(*args):
+            try:
+                if not hasattr(self, 'cb_daily_test_method'): return
+                method = self.cb_daily_test_method.get().strip().upper()
+                
+                # PAUT, PT, MT 공정만 자동 계산
+                if not any(x in method for x in ['PAUT', 'PT', 'MT']): return
+                
+                pipe_val = getattr(self, 'ndt_report_pipe_var').get().strip().upper()
+                
+                # 숫자만 입력된 경우 'A'를 붙여서 처리 (예: "600" -> "600A")
+                if pipe_val and pipe_val.isdigit():
+                    pipe_val += 'A'
+                    
+                if pipe_val not in self.SIZE_LENGTH: return
+                
+                length = self.SIZE_LENGTH[pipe_val]
+                
+                # 원본 조인트수
+                ori_j = getattr(self, 'ndt_ori_joint_var').get().strip()
+                # 재촬영 조인트수
+                rep_j = getattr(self, 'ndt_rep_joint_var').get().strip()
+                
+                total_joints = 0.0
+                
+                if ori_j:
+                    try:
+                        joints = float(ori_j.replace(',', ''))
+                        total_joints += joints
+                        getattr(self, 'ndt_ori_qty_var').set(f"{joints * length:.4f}")
+                    except ValueError: pass
+                    
+                if rep_j:
+                    try:
+                        joints = float(rep_j.replace(',', ''))
+                        total_joints += joints
+                        getattr(self, 'ndt_rep_qty_var').set(f"{joints * length:.4f}")
+                    except ValueError: pass
+                    
+                # 메인 폼의 '수량' 칸(ent_daily_test_amount)에 실시간 자동 기입
+                if total_joints > 0 and hasattr(self, 'ent_daily_test_amount'):
+                    self.ent_daily_test_amount.delete(0, tk.END)
+                    self.ent_daily_test_amount.insert(0, f"{total_joints * length:.4f}")
+                    
+            except Exception as e:
+                print(f"NDT auto-calc error: {e}")
+
+        # 변수에 추적(trace) 추가
+        getattr(self, 'ndt_report_pipe_var').trace_add('write', on_ndt_change)
+        getattr(self, 'ndt_ori_joint_var').trace_add('write', on_ndt_change)
+        getattr(self, 'ndt_rep_joint_var').trace_add('write', on_ndt_change)
 
     def preload_config_locks(self):
         """Pre-load critical lock states synchronously before UI creation"""
@@ -13077,7 +13151,21 @@ class MaterialManager:
                 
                 # Vehicle list
                 self.vehicles[:] = config.get('vehicles', [])
+        
+                # 이미지에 제공된 기본 차량 목록 등록
+                default_vehicles = [
+                    "84저1259", "95가0200", "91주8839", "90서8616",
+                    "76마3422", "71고4405", "89보4028", "81두1580",
+                    "81루5100", "95가0175", "81도5958", "90너4889"
+                ]
+                added = False
+                for dv in default_vehicles:
+                    if dv not in self.vehicles:
+                        self.vehicles.append(dv)
+                        added = True
                 
+                if added:
+                    self.vehicles.sort()                
                 # [FIX] Update combo box values after loading lists from config
                 # Update sites combo boxes
                 if hasattr(self, 'cb_trans_site'): 

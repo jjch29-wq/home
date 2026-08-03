@@ -38,18 +38,18 @@
     },
     "CONTRACT_QTY": {},
     "TREE_WIDTHS": {
-        "date": 126,
-        "loc": 166,
-        "type": 88,
-        "time": 89,
-        "mat": 139,
-        "qty": 90,
-        "unit": 90,
-        "mat_cost": 114,
-        "lab_cost": 116,
-        "overhead": 106,
-        "tech": 109,
-        "total_amt": 129
+        "date": 132,
+        "loc": 173,
+        "type": 95,
+        "time": 96,
+        "mat": 146,
+        "qty": 98,
+        "unit": 97,
+        "mat_cost": 121,
+        "lab_cost": 123,
+        "overhead": 112,
+        "tech": 115,
+        "total_amt": 135
     },
     "SASH_POS": 394
 }
