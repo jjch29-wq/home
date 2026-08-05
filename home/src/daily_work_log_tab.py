@@ -11,6 +11,16 @@ try:
 except ImportError:
     pass # Will be handled if run standalone
 
+SIZE_LENGTH = {
+    '1100A': 3.511,  '1000A': 3.1919, '900A': 2.8727, '850A': 2.7131,
+    '800A':  2.5535, '750A':  2.3939, '700A': 2.2343, '650A': 2.0747,
+    '600A':  1.9151, '550A':  1.7555, '500A': 1.5959, '450A': 1.4363,
+    '400A':  1.2767, '350A':  1.1172, '300A': 1.0006, '250A': 0.8401,
+    '200A':  0.6795, '150A':  0.519,  '125A': 0.4392, '100A': 0.3591,
+    '80A':   0.2799, '65A':   0.2397, '50A':  0.1901, '40A':  0.1527,
+    '32A':   0.1341, '25A':   0.1068, '20A':  0.0855,
+}
+
 class DailyWorkLogTab(ttk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
@@ -107,10 +117,23 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Label(mid_frame, text=method).grid(row=row_idx, column=0, padx=1, pady=2)
             ttk.Label(mid_frame, text=spec).grid(row=row_idx, column=1, padx=1, pady=2)
             
+            default_qty = {
+                ('PAUT', '300A이상'): '121', ('PAUT', '300A이상-야간'): '584', 
+                ('PAUT', '250A'): '4', ('PAUT', '200A'): '4', ('PAUT', '200A-야간'): '2', ('PAUT', '소계'): '715',
+                ('RT', '150A~100A'): '95', ('RT', '150A~100A-야간'): '14',
+                ('RT', '80A이하'): '34', ('RT', '80A이하-야간'): '16', ('RT', '소계'): '159',
+                ('MT', '전체(주간)'): '26', ('MT', '전체(야간)'): '0',
+                ('PT', '전체(주간)'): '26', ('PT', '전체(야간)'): '0'
+            }
+            
             row_dict = {}
             for col_idx, key in enumerate(['예상량', '전일누계', '금일작업', '총누계', '공정률', '불량', '불량률', '비고'], start=2):
                 ent = ttk.Entry(mid_frame, width=7)
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=2)
+                if key == '예상량':
+                    val = default_qty.get((method, spec), '')
+                    if val:
+                        ent.insert(0, val)
                 row_dict[key] = ent
             self.qty_entries[spec] = row_dict
             
@@ -188,11 +211,85 @@ class DailyWorkLogTab(ttk.Frame):
                 elif c in ('라인번호', 'Joint No.', '구간정보'): w = 12
                 else: w = 5
                 
-                ent = ttk.Entry(grid_frame, width=w)
-                # the row number label is in column 0, wait, it overlaps with '검사방법'.
-                # Let's put row number outside or just ignore it. I'll just use the Entry for column 0.
+                if c == '검사방법':
+                    ent = ttk.Combobox(grid_frame, width=w, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'])
+                elif c == '관경':
+                    ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(SIZE_LENGTH.keys()))
+                elif c == '결과':
+                    ent = ttk.Combobox(grid_frame, width=w, values=['', '합격', '불합격', '재촬영', '보류'])
+                else:
+                    ent = ttk.Entry(grid_frame, width=w)
+                    
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                 row_entries[c] = ent
+                
+            def on_ndt_change(event, r=row_entries):
+                method = r['검사방법'].get().strip().upper()
+                pipe = r['관경'].get().strip().upper()
+                if pipe and pipe.isdigit():
+                    pipe += 'A'
+                
+                if pipe in SIZE_LENGTH:
+                    length = SIZE_LENGTH[pipe]
+                    length_str = f"{length:.4f}"
+                    
+                    target_col = None
+                    if method == 'PAUT': target_col = 'PAUT_주간'
+                    elif method == 'RT': target_col = 'RT_OR'
+                    elif method == 'MT': target_col = 'MT_주간'
+                    elif method == 'PT': target_col = 'PT_주간'
+                    
+                    if target_col and not r[target_col].get().strip():
+                        # Clear other length columns if we are auto-filling
+                        for col in ['RT_OR', 'RT_RE', 'PAUT_주간', 'PAUT_야간', 'PAUT_재검', 'MT_주간', 'MT_야간', 'PT_주간', 'PT_야간']:
+                            r[col].delete(0, tk.END)
+                        r[target_col].insert(0, length_str)
+                        
+            row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
+            row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
+            row_entries['관경'].bind('<<ComboboxSelected>>', on_ndt_change)
+            row_entries['관경'].bind('<FocusOut>', on_ndt_change)
+            
+            def on_joint_enter(event, r_idx=row_idx-1, r=row_entries):
+                import re
+                if r_idx == 0:
+                    if len(self.ndt_grid_entries) > 1:
+                        self.ndt_grid_entries[1]['Joint No.'].focus_set()
+                    return 'break'
+                    
+                prev_row = self.ndt_grid_entries[r_idx - 1]
+                
+                # Auto-increment Joint No.
+                curr_joint = r['Joint No.'].get().strip()
+                if not curr_joint:
+                    prev_joint = prev_row['Joint No.'].get().strip()
+                    if prev_joint:
+                        match = re.search(r'(\d+)$', prev_joint)
+                        if match:
+                            num_str = match.group(1)
+                            prefix = prev_joint[:-len(num_str)]
+                            next_num = str(int(num_str) + 1).zfill(len(num_str))
+                            r['Joint No.'].insert(0, prefix + next_num)
+                
+                for col in ['검사방법', '구간', '라인번호', '관경', '용접사', '규격']:
+                    if not r[col].get().strip():
+                        prev_val = prev_row[col].get().strip()
+                        if prev_val:
+                            if isinstance(r[col], ttk.Combobox):
+                                r[col].set(prev_val)
+                            else:
+                                r[col].delete(0, tk.END)
+                                r[col].insert(0, prev_val)
+                
+                on_ndt_change(None, r)
+                
+                if r_idx + 1 < len(self.ndt_grid_entries):
+                    self.ndt_grid_entries[r_idx + 1]['Joint No.'].focus_set()
+                return 'break'
+                
+            for col_name, widget in row_entries.items():
+                widget.bind('<Return>', on_joint_enter)
+            
             self.ndt_grid_entries.append(row_entries)
             
     def export_excel(self):

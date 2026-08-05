@@ -386,8 +386,12 @@ class MaterialManager:
                 parent = widget
                 while parent:
                     if isinstance(parent, tk.Canvas):
-                        # Allow scrolling on all canvases
-                        parent.yview_scroll(int(-1 * (event.delta / 120)), "units")
+                        # Allow scrolling only if content is taller than the canvas
+                        bbox = parent.bbox("all")
+                        if bbox:
+                            content_height = bbox[3] - bbox[1]
+                            if content_height > parent.winfo_height():
+                                parent.yview_scroll(int(-1 * (event.delta / 120)), "units")
                         return "break" # [FIX] Prevent scroll from reaching Combobox/Entry under mouse
 
                     if hasattr(parent, 'master') and parent.master:
