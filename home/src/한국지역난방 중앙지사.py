@@ -56,6 +56,7 @@ finally:
 
 from daily_work_report_manager import DailyWorkReportManager
 from ndt_billing_tab import NDTCalculatorTab
+from daily_work_log_tab import DailyWorkLogTab
 import daily_work_report_manager
 print(f"DEBUG: daily_work_report_manager path: {daily_work_report_manager.__file__}")
 
@@ -1118,6 +1119,9 @@ class MaterialManager:
         self.notebook.add(self.tab_inout, text='입출고 관리')
         self.setup_inout_tab()
         
+        # Tab 3: Daily Work Log (New)
+        self.tab_daily_work_log = DailyWorkLogTab(self.notebook)
+        self.notebook.add(self.tab_daily_work_log, text='작업/감독일보')
 
         # Tab 4: Import/Export
         self.tab_import = ttk.Frame(self.notebook)
