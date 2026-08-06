@@ -190,7 +190,7 @@ class DailyWorkLogTab(ttk.Frame):
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
         self.ndt_cols = ('검사방법', '구간', '라인번호', 'Joint No.', '관경', '용접사', '구간정보', '결과', '규격', 
-                         'RT_OR', 'RT_RE', 'PAUT_주간', 'PAUT_야간', 'PAUT_재검', 'MT_주간', 'MT_야간', 'PT_주간', 'PT_야간')
+                         'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
         
         # Draw Headers
         for col_idx, c in enumerate(self.ndt_cols):
@@ -213,15 +213,51 @@ class DailyWorkLogTab(ttk.Frame):
                 
                 if c == '검사방법':
                     ent = ttk.Combobox(grid_frame, width=w, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'])
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    row_entries[c] = ent
+                elif c == '구간정보':
+                    frame = ttk.Frame(grid_frame)
+                    frame.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    entries = []
+                    for i in range(4):
+                        e = ttk.Entry(frame, width=3)
+                        e.pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
+                        entries.append(e)
+                    frame.entries = entries
+                    def get_val(ents=entries, r_dict=row_entries):
+                        method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
+                        if method in ['PAUT', 'PT', 'MT']:
+                            return ents[0].get()
+                        parts = [e.get().strip() for e in ents]
+                        return ','.join([p for p in parts if p])
+                    def set_val(val, ents=entries):
+                        for e in ents: e.delete(0, tk.END)
+                        ents[0].insert(0, val)
+                    def delete_val(first, last, ents=entries):
+                        for e in ents: e.delete(first, last)
+                    def insert_val(idx, val, ents=entries):
+                        ents[0].insert(idx, val)
+                    frame.get = get_val
+                    frame.set = set_val
+                    frame.delete = delete_val
+                    frame.insert = insert_val
+                    row_entries[c] = frame
                 elif c == '관경':
                     ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(SIZE_LENGTH.keys()))
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    row_entries[c] = ent
                 elif c == '결과':
                     ent = ttk.Combobox(grid_frame, width=w, values=['', '합격', '불합격', '재촬영', '보류'])
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    row_entries[c] = ent
+                elif c == '규격':
+                    ent = ttk.Combobox(grid_frame, width=w, values=[''])
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    row_entries[c] = ent
                 else:
                     ent = ttk.Entry(grid_frame, width=w)
-                    
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                row_entries[c] = ent
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    row_entries[c] = ent
                 
             def on_ndt_change(event, r=row_entries):
                 method = r['검사방법'].get().strip().upper()
@@ -233,17 +269,45 @@ class DailyWorkLogTab(ttk.Frame):
                     length = SIZE_LENGTH[pipe]
                     length_str = f"{length:.4f}"
                     
+                    if method == 'RT':
+                        try:
+                            size_val = int(''.join(filter(str.isdigit, pipe)))
+                            if size_val <= 150:
+                                length_str = "3"
+                            else:
+                                length_str = ""
+                        except ValueError:
+                            length_str = ""
+                            
                     target_col = None
-                    if method == 'PAUT': target_col = 'PAUT_주간'
+                    if method == 'PAUT': target_col = 'PAUT'
                     elif method == 'RT': target_col = 'RT_OR'
-                    elif method == 'MT': target_col = 'MT_주간'
-                    elif method == 'PT': target_col = 'PT_주간'
+                    elif method == 'MT': target_col = 'MT'
+                    elif method == 'PT': target_col = 'PT'
                     
                     if target_col and not r[target_col].get().strip():
                         # Clear other length columns if we are auto-filling
-                        for col in ['RT_OR', 'RT_RE', 'PAUT_주간', 'PAUT_야간', 'PAUT_재검', 'MT_주간', 'MT_야간', 'PT_주간', 'PT_야간']:
+                        for col in ['RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT']:
                             r[col].delete(0, tk.END)
                         r[target_col].insert(0, length_str)
+                        
+                # Update '구간정보' display based on method
+                if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
+                    if method in ['PAUT', 'PT', 'MT']:
+                        for i in range(1, 4):
+                            r['구간정보'].entries[i].pack_forget()
+                    else:
+                        for i in range(1, 4):
+                            r['구간정보'].entries[i].pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
+                            
+                # Update '규격' values based on method
+                if '규격' in r and hasattr(r['규격'], 'configure'):
+                    if method == 'RT':
+                        r['규격']['values'] = ['', '31/3 X12"주간', '31/3 X12"야간', '31/3 X6"주간', '31/3 X6"야간']
+                    elif method in ['PAUT', 'MT', 'PT']:
+                        r['규격']['values'] = ['', '주간', '야간', '재검']
+                    else:
+                        r['규격']['values'] = ['']
                         
             row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
             row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
@@ -288,7 +352,11 @@ class DailyWorkLogTab(ttk.Frame):
                 return 'break'
                 
             for col_name, widget in row_entries.items():
-                widget.bind('<Return>', on_joint_enter)
+                if hasattr(widget, 'entries'):
+                    for e in widget.entries:
+                        e.bind('<Return>', on_joint_enter)
+                else:
+                    widget.bind('<Return>', on_joint_enter)
             
             self.ndt_grid_entries.append(row_entries)
             

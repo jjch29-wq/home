@@ -264,14 +264,16 @@ class DataEntryUI(tk.Toplevel):
                 ttk.Entry(sub, textvariable=var, width=6).pack(side='left', padx=(1,6))
             self._pair_row(f, r, "RT 촬영매수:", self.rt_ori_var, self.rt_re_var); r+=1
 
-        elif proc == "PAUT":
-            self._pair_row(f, r, "PAUT 길이(m):", self.paut_ori_var, self.paut_re_var); r+=1
-
-        elif proc == "MT":
-            self._row(f, r, "MT 길이(m):", self.mt_len_var); r+=1
-
-        elif proc == "PT":
-            self._row(f, r, "PT 길이(m):", self.pt_len_var); r+=1
+        elif proc in ["PAUT", "MT", "PT"]:
+            # 촬영구간 1개 (통합)
+            self._row(f, r, "촬영구간(통합):", self.shoot1_var, width=28); r+=1
+            
+            if proc == "PAUT":
+                self._pair_row(f, r, "PAUT 길이(m):", self.paut_ori_var, self.paut_re_var); r+=1
+            elif proc == "MT":
+                self._row(f, r, "MT 길이(m):", self.mt_len_var); r+=1
+            elif proc == "PT":
+                self._row(f, r, "PT 길이(m):", self.pt_len_var); r+=1
 
         self._row(f, r, "비고:", self.remark_var, width=40); r+=1
 
@@ -328,11 +330,14 @@ class DataEntryUI(tk.Toplevel):
                 w('RT_ORI',  self.rt_ori_var.get())
                 w("RT_RE'",  self.rt_re_var.get())
             elif proc == "PAUT":
+                w('구간1',   self.shoot1_var.get())
                 w('PAUT_ORI',  self.paut_ori_var.get())
                 w("PAUT_RE'",  self.paut_re_var.get())
             elif proc == "MT":
+                w('구간1',   self.shoot1_var.get())
                 w('MT길이',  self.mt_len_var.get())
             elif proc == "PT":
+                w('구간1',   self.shoot1_var.get())
                 w('MT길이',  self.pt_len_var.get())  # PT길이 → MT길이 컬럼 공유(행이 겹치지 않음)
 
             # ── 서식 적용 (정렬 + 테두리) ──
