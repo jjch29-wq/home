@@ -1572,20 +1572,12 @@ class NDTCalculatorTab(ttk.Frame):
                     for r in target_records:
                         loc = "플랜트(관리소)" if "관리소" in r["loc"] or "플랜트" in r.get("loc_type", r["loc"]) else "열배관"
                         t_time = r.get("work_time", "일반")
-                        mat = ""
-                        if r["ndt_type"] == "RT":
-                            if "17" in r["material_type"]: mat = "RT_B"
-                            elif "12" in r["material_type"]: mat = "RT_A"
-                            elif "6" in r["material_type"]: mat = "RT_A2"
-                        else:
-                            mat = r["ndt_type"]
+                        mat = f"{r['ndt_type']}_{r['material_type']}"
                         key = f"{loc}_{t_time}_{mat}"
                         if key == cat:
                             cur_qty += r["qty"]
                             cur_amt += r["subtotal"]
                             
-                    if c_qty == 0.0 and p_qty == 0.0 and cur_qty == 0.0:
-                        continue
                     data_rows.append(row)
                 
                 if cat in ["총 계", "기타실비 소계", "장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
