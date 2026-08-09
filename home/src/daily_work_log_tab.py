@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from ndt_summary_exporter import NDTSummaryExporter
-from monthly_report_exporter import MonthlyReportExporter
+from services.monthly_report_manager import MonthlyReportManager
 from tkcalendar import DateEntry
 from datetime import datetime
 import os
@@ -505,10 +505,73 @@ class DailyWorkLogTab(ttk.Frame):
             messagebox.showerror("오류", f"NDT 누계 대장 생성 중 오류가 발생했습니다:\n{str(e)}")
 
     def export_monthly_report(self):
-        if hasattr(self, 'main_app') and hasattr(self.main_app, 'export_monthly_ndt_report'):
-            self.main_app.export_monthly_ndt_report()
-        else:
-            messagebox.showerror("오류", "메인 어플리케이션과 연결되지 않았습니다.")
+        # 1. 설정 다이얼로그
+        top = tk.Toplevel(self)
+        top.title("월간 진도보고서 엑셀 출력")
+        top.geometry("400x250")
+        top.transient(self)
+        top.grab_set()
+        
+        ttk.Label(top, text="📊 월간 진도보고서 자동 생성", font=('맑은 고딕', 12, 'bold')).pack(pady=10)
+        
+        # 년/월 선택
+        f_date = ttk.Frame(top)
+        f_date.pack(pady=10)
+        
+        now = datetime.now()
+        ttk.Label(f_date, text="조회 연도:").pack(side=tk.LEFT, padx=5)
+        year_var = tk.StringVar(value=str(now.year))
+        ttk.Spinbox(f_date, from_=2020, to=2030, textvariable=year_var, width=6).pack(side=tk.LEFT)
+        
+        ttk.Label(f_date, text="월:").pack(side=tk.LEFT, padx=5)
+        month_var = tk.StringVar(value=str(now.month).zfill(2))
+        ttk.Spinbox(f_date, from_=1, to=12, textvariable=month_var, width=4, format="%02.0f").pack(side=tk.LEFT)
+        
+        # 템플릿 파일 선택 (기본값)
+        f_tmpl = ttk.Frame(top)
+        f_tmpl.pack(pady=10, fill=tk.X, padx=10)
+        ttk.Label(f_tmpl, text="템플릿:").pack(side=tk.LEFT)
+        
+        tmpl_var = tk.StringVar(value=r"C:\Users\jjch2\Desktop\템플릿_최종완성본_V70.xlsx")
+        ttk.Entry(f_tmpl, textvariable=tmpl_var, width=35).pack(side=tk.LEFT, padx=5)
+        
+        def browse_tmpl():
+            path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")], title="템플릿 선택")
+            if path: tmpl_var.set(path)
+        ttk.Button(f_tmpl, text="...", width=3, command=browse_tmpl).pack(side=tk.LEFT)
+        
+        def do_generate():
+            ym = f"{year_var.get()}-{month_var.get().zfill(2)}"
+            tmpl_path = tmpl_var.get()
+            
+            if not os.path.exists(tmpl_path):
+                messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다.\n{tmpl_path}", parent=top)
+                return
+                
+            save_path = filedialog.asksaveasfilename(
+                defaultextension=".xlsx",
+                initialfile=f"월간진도보고서_{ym.replace('-', '')}.xlsx",
+                title="저장 위치 선택",
+                filetypes=[("Excel", "*.xlsx")]
+            )
+            if not save_path: return
+            
+            try:
+                # Assuming MonthlyReportManager is in the python path
+                manager = MonthlyReportManager(tmpl_path)
+                result_path = manager.generate_report(self.history_path, ym, save_path)
+                if result_path:
+                    messagebox.showinfo("성공", f"월간 진도보고서가 생성되었습니다.\n{result_path}", parent=top)
+                    os.startfile(result_path)
+                    top.destroy()
+                else:
+                    messagebox.showwarning("알림", f"{ym}에 해당하는 작업일보 데이터가 없습니다.", parent=top)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messagebox.showerror("오류", f"생성 중 오류 발생:\n{e}", parent=top)
+                
+        ttk.Button(top, text="보고서 생성", command=do_generate).pack(pady=15)
 
     def load_history(self):
         try:
