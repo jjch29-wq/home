@@ -1,0 +1,10 @@
+Col 2: 업체
+Col 3: 순번
+Col 4: Section
+Col 6: Line No.
+Col 10: 관경
+Col 12: 용접개소
+Col 14: 규격
+Col 16: 단위
+Col 17: PAUT 길이
+Col 22: 비고

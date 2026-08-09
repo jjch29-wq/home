@@ -1,0 +1,70 @@
+12451: 
+12452: sub_ori += row_data['ori']
+12453: sub_re += row_data['re']
+12454: sub_total += row_data['total']
+12455: 
+12456: tot_ori += row_data['ori']
+12457: tot_re += row_data['re']
+12458: tot_total += row_data['total']
+12459: 
+12460: prev_company = curr_company
+12461: start_row += 1
+12462: if not first_row:
+12463: pagination_state['available'] -= 1
+12464: first_row = False
+12465: 
+12466: # Last Subtotal
+12467: if prev_company is not None:
+12468: if pagination_state['available'] <= 0:
+12469: copy_rows_openpyxl(ws, 374, 379, start_row)
+12470: copy_rows_openpyxl(ws, orig_table_hdr_start, orig_table_hdr_start + 2, start_row + 6)
+12471: try: ws.row_breaks.append(openpyxl.worksheet.pagebreak.Break(id=start_row))
+12472: except Exception: pass
+12473: start_row += 9
+12474: pagination_state['available'] = 35
+12475: 
+12476: ws.insert_rows(start_row)
+12477: apply_format(start_row, is_total=True)
+12478: ws.merge_cells(start_row=start_row, start_column=2, end_row=start_row, end_column=16)
+12479: ws.merge_cells(start_row=start_row, start_column=18, end_row=start_row, end_column=19)
+12480: ws.merge_cells(start_row=start_row, start_column=20, end_row=start_row, end_column=21)
+12481: ws.merge_cells(start_row=start_row, start_column=22, end_row=start_row, end_column=23)
+12482: 
+12483: ws.cell(row=start_row, column=2, value=f"{prev_company} 소계")
+12484: ws.cell(row=start_row, column=17, value=round(sub_ori, 4) if sub_ori else '-')
+12485: ws.cell(row=start_row, column=18, value=round(sub_re, 4) if sub_re else '-')
+12486: ws.cell(row=start_row, column=20, value=round(sub_total, 4) if sub_total else '-')
+12487: 
+12488: start_row += 1
+12489: pagination_state['available'] -= 1
+12490: 
+12491: # Grand Total
+12492: # original TOTAL row is now exactly at start_row
+12493: ws.cell(row=start_row, column=2, value="전체 총계(TOTAL)")
+12494: ws.cell(row=start_row, column=17, value=round(tot_ori, 4) if tot_ori else '-')
+12495: ws.cell(row=start_row, column=18, value=round(tot_re, 4) if tot_re else '-')
+12496: ws.cell(row=start_row, column=20, value=round(tot_total, 4) if tot_total else '-')
+12497: 
+12498: except Exception as e:
+12499: log(f"❌ 오류 발생: {e}")
+12500: import traceback
+12501: log(traceback.format_exc())
+12502: messagebox.showerror("오류", f"내보내기 중 오류: {e}")
+12503: 
+12504: btn_frame = ttk.Frame(top)
+12505: btn_frame.pack(pady=10)
+12506: ttk.Button(btn_frame, text="📊 내보내기 실행", command=do_export, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton').pack(side='left', padx=10)
+12507: ttk.Button(btn_frame, text="취소", command=top.destroy).pack(side='left', padx=10)
+12508: 
+12509: def export_all_daily_usage(self):
+12510: """Export all daily usage records to Excel"""
+12511: try:
+12512: if self.daily_usage_df.empty:
+12513: messagebox.showinfo("알림", "기록된 데이터가 없습니다.")
+12514: return
+12515: 
+12516: # Export all columns from the tree structure
+12517: selected_cols = list(self.daily_usage_tree['columns'])
+12518: 
+12519: filename = f"전체사용기록_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+12520: save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=filename, filetypes=[("Excel files", "*.xlsx")])

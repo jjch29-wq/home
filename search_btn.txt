@@ -1,0 +1,2 @@
+5955: btn_ndt_report = ttk.Button(btn_row, text="📊 진도보고서 출력", command=self.export_monthly_ndt_report)
+11723: def export_monthly_ndt_report(self):

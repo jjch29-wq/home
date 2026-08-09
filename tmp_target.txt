@@ -1,0 +1,74 @@
+                def write_dynamic_ndt_table(ws, data, title_search):
+                    if not data:
+                        return
+                        
+                    start_row = None
+                    # 표 찾기
+                    for r in range(300, 1000):
+                        val1 = str(ws.cell(row=r, column=2).value or '')
+                        val2 = str(ws.cell(row=r, column=3).value or '')
+                        if title_search in val1 or title_search in val2:
+                            start_row = r + 3 # Header1, Header2 다음 행이 Data1
+                            break
+                            
+                    if not start_row:
+                        return
+                        
+                    # 데이터가 여러 줄일 경우 빈칸 삽입
+                    num_inserts = len(data) - 1
+                    if num_inserts > 0:
+                        for _ in range(num_inserts):
+                            ws.insert_rows(start_row + 1)
+                            # 서식 복사
+                            for col in range(2, 24):
+                                source_cell = ws.cell(row=start_row, column=col)
+                                target_cell = ws.cell(row=start_row + 1, column=col)
+                                if source_cell.has_style:
+                                    target_cell._style = source_cell._style
+                                target_cell.font = openpyxl.styles.Font(name=source_cell.font.name, size=source_cell.font.size, bold=source_cell.font.bold)
+                                target_cell.border = openpyxl.styles.Border(left=source_cell.border.left, right=source_cell.border.right, top=source_cell.border.top, bottom=source_cell.border.bottom)
+                                target_cell.fill = openpyxl.styles.PatternFill(fill_type=source_cell.fill.fill_type, start_color=source_cell.fill.start_color, end_color=source_cell.fill.end_color)
+                                target_cell.alignment = openpyxl.styles.Alignment(horizontal=source_cell.alignment.horizontal, vertical=source_cell.alignment.vertical)
+                            ws.row_dimensions[start_row + 1].height = ws.row_dimensions[start_row].height
+                            
+                        # 셀 병합 수동 처리
+                        for i in range(1, num_inserts + 1):
+                            curr_row = start_row + i
+                            ws.merge_cells(start_row=curr_row, start_column=3, end_row=curr_row, end_column=4)
+                            ws.merge_cells(start_row=curr_row, start_column=5, end_row=curr_row, end_column=9)
+                            ws.merge_cells(start_row=curr_row, start_column=10, end_row=curr_row, end_column=11)
+                            ws.merge_cells(start_row=curr_row, start_column=12, end_row=curr_row, end_column=13)
+                            ws.merge_cells(start_row=curr_row, start_column=14, end_row=curr_row, end_column=15)
+                            ws.merge_cells(start_row=curr_row, start_column=18, end_row=curr_row, end_column=19)
+                            ws.merge_cells(start_row=curr_row, start_column=20, end_row=curr_row, end_column=21)
+                            ws.merge_cells(start_row=curr_row, start_column=22, end_row=curr_row, end_column=23)
+
+                    # 데이터 기입
+                    tot_ori = 0
+                    tot_re = 0
+                    tot_total = 0
+                    
+                    for i, row_data in enumerate(data):
+                        curr_row = start_row + i
+                        ws.cell(row=curr_row, column=2, value=row_data['seq'])
+                        ws.cell(row=curr_row, column=3, value=row_data['section'])
+                        ws.cell(row=curr_row, column=5, value=row_data['line_no'])
+                        ws.cell(row=curr_row, column=10, value=row_data['inch'])
+                        ws.cell(row=curr_row, column=12, value=row_data['joints'])
+                        ws.cell(row=curr_row, column=14, value=row_data['spec'])
+                        ws.cell(row=curr_row, column=16, value=row_data['unit'])
+                        
+                        ws.cell(row=curr_row, column=17, value=round(row_data['ori'], 4) if row_data['ori'] else '-')
+                        ws.cell(row=curr_row, column=18, value=round(row_data['re'], 4) if row_data['re'] else '-')
+                        ws.cell(row=curr_row, column=20, value=round(row_data['total'], 4) if row_data['total'] else '-')
+                        ws.cell(row=curr_row, column=22, value=row_data['remark'])
+                        
+                        tot_ori += row_data['ori']
+                        tot_re += row_data['re']
+                        tot_total += row_data['total']
+                        
+                    # 합계 줄 수정
+                    total_row = start_row + len(data)
+                    ws.cell(row=total_row, column=17, value=round(tot_ori, 4) if tot_ori else '-')
+                    ws.cell(row=total_row, column=18, value=round(tot_re, 4) if tot_re else '-')
+                    ws.cell(row=total_row, column=20, value=round(tot_total, 4) if tot_total else '-')

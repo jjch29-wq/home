@@ -1,0 +1,75 @@
+11721: self.update_transaction_view()
+11722: 
+11723: def export_monthly_ndt_report(self):
+11724: """일일 사용 데이터를 월용역진도보고서 '3. 비파괴검사 현황' 시트에 자동 채움"""
+11725: import copy
+11726: 
+11727: if self.daily_usage_df.empty:
+11728: messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
+11729: return
+11730: 
+11731: # --- 0. 설정 다이얼로그 ---
+11732: top = tk.Toplevel(self.root)
+11733: top.title("월간 진도보고서 - 비파괴검사 현황 내보내기")
+11734: top.geometry("550x500")
+11735: top.transient(self.root)
+11736: top.grab_set()
+11737: 
+11738: ttk.Label(top, text="📊 월간 진도보고서 비파괴검사 현황 자동 입력",
+11739: font=('Arial', 12, 'bold')).pack(pady=10)
+11740: 
+11741: # 대상 기간 선택
+11742: period_frame = ttk.LabelFrame(top, text="1. 대상 기간 (당월)")
+11743: period_frame.pack(fill='x', padx=15, pady=5)
+11744: 
+11745: now = datetime.datetime.now()
+11746: ttk.Label(period_frame, text="연도:").pack(side='left', padx=5)
+11747: year_var = tk.IntVar(value=now.year)
+11748: ttk.Spinbox(period_frame, from_=2024, to=2030, textvariable=year_var, width=6).pack(side='left')
+11749: ttk.Label(period_frame, text="  월:").pack(side='left', padx=5)
+11750: month_var = tk.IntVar(value=now.month)
+11751: ttk.Spinbox(period_frame, from_=1, to=12, textvariable=month_var, width=4).pack(side='left')
+11752: 
+11753: # 현장 → 열배관/관리소 매핑
+11754: map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (열배관 / 관리소 구분)")
+11755: map_frame.pack(fill='x', padx=15, pady=5)
+11756: 
+11757: # 현재 데이터에 존재하는 현장명(Site) 목록 추출
+11758: site_list = sorted(self.daily_usage_df['Site'].dropna().unique().tolist()) if 'Site' in self.daily_usage_df.columns else []
+11759: 
+11760: ttk.Label(map_frame, text="열배관 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+11761: main_var = tk.StringVar(value="")
+11762: ttk.Entry(map_frame, textvariable=main_var, width=60).pack(padx=5, pady=2)
+11763: 
+11764: ttk.Label(map_frame, text="관리소 현장명 (쉼표 구분):").pack(anchor='w', padx=5, pady=2)
+11765: mgmt_var = tk.StringVar(value="")
+11766: ttk.Entry(map_frame, textvariable=mgmt_var, width=60).pack(padx=5, pady=2)
+11767: 
+11768: ttk.Label(map_frame, text=f"💡 현재 등록된 현장: {', '.join(site_list) if site_list else '(없음)'}",
+11769: foreground='blue', wraplength=500).pack(padx=5, pady=5)
+11770: 
+11771: # 파일 선택
+11772: file_frame = ttk.LabelFrame(top, text="3. 대상 엑셀 파일")
+11773: file_frame.pack(fill='x', padx=15, pady=5)
+11774: 
+11775: file_var = tk.StringVar(value=r"C:\Users\jjch2\Desktop\월용역진도보고서.xlsx")
+11776: ttk.Entry(file_frame, textvariable=file_var, width=55).pack(side='left', padx=5, pady=5)
+11777: def browse_file():
+11778: fp = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")], title="월용역진도보고서 선택")
+11779: if fp: file_var.set(fp)
+11780: ttk.Button(file_frame, text="찾기", command=browse_file).pack(side='left', padx=5)
+11781: 
+11782: # 진행
+11783: log_text = tk.Text(top, height=8, state='disabled', wrap='word')
+11784: log_text.pack(fill='both', expand=True, padx=15, pady=5)
+11785: 
+11786: def log(msg):
+11787: log_text.config(state='normal')
+11788: log_text.insert(tk.END, msg + "\n")
+11789: log_text.see(tk.END)
+11790: log_text.config(state='disabled')
+11791: top.update()
+11792: 
+11793: def do_export():
+11794: try:
+11795: year = year_var.get()

@@ -1,0 +1,27 @@
+12091: if main_agg:
+12092: sheet_name = '3. 비파괴검사 현황 (열배관)'
+12093: if sheet_name in wb.sheetnames:
+12094: write_ndt_sheet(wb[sheet_name], main_agg)
+12095: log(f"✅ '{sheet_name}' 시트 기입 완료")
+12096: else:
+12097: log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+12098: 
+12099: if mgmt_agg:
+12100: sheet_name = '3. 비파괴검사 현황 (관리소)'
+12101: if sheet_name in wb.sheetnames:
+12102: write_ndt_sheet(wb[sheet_name], mgmt_agg)
+12103: log(f"✅ '{sheet_name}' 시트 기입 완료")
+12104: else:
+12105: log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+12106: 
+12107: # 저장
+12108: wb.save(filepath)
+12109: wb.close()
+12110: log(f"\n🎉 저장 완료: {filepath}")
+File: Material_Inventory.xlsx
+Materials
+Transactions
+MonthlyUsage
+DailyUsage
+Budget
+Settings

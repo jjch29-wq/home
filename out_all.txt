@@ -1,0 +1,100 @@
+12051: safe_set(13, 8, ut_night_adj)
+12052: safe_set(13, 10, ut_night_adj)
+12053: safe_set(13, 12, ut_day_adj + ut_night_adj)
+12054: safe_set(13, 14, ut_day_adj + ut_night_adj)
+12055: 
+12056: # PT (행14=실검사길이, 행15=검사보정길이)
+12057: pt = agg['PT']['data']
+12058: pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')
+12059: pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')
+12060: pt_day_rep = get_val(pt, '주간', 'REP', 'qty')
+12061: pt_night_j = get_val(pt, '야간/휴일', 'ORI', 'joints') + get_val(pt, '야간/휴일', 'REP', 'joints')
+12062: pt_night_ori = get_val(pt, '야간/휴일', 'ORI', 'qty')
+12063: pt_night_rep = get_val(pt, '야간/휴일', 'REP', 'qty')
+12064: 
+12065: safe_set(14, 3, pt_day_j)
+12066: safe_set(14, 4, pt_day_ori + pt_day_rep)
+12067: safe_set(14, 6, pt_day_ori + pt_day_rep)
+12068: safe_set(14, 7, pt_night_j)
+12069: safe_set(14, 8, pt_night_ori + pt_night_rep)
+12070: safe_set(14, 10, pt_night_ori + pt_night_rep)
+12071: safe_set(14, 11, pt_day_j + pt_night_j)
+12072: safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+12073: safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+12074: 
+12075: # PT 검사보정길이 (행15)
+12076: pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')
+12077: pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')
+12078: safe_set(15, 4, pt_day_adj)
+12079: safe_set(15, 6, pt_day_adj)
+12080: safe_set(15, 8, pt_night_adj)
+12081: safe_set(15, 10, pt_night_adj)
+12082: safe_set(15, 12, pt_day_adj + pt_night_adj)
+12083: safe_set(15, 14, pt_day_adj + pt_night_adj)
+12084: 
+12085: # 전산화 (행16=필름매수, 행17=보고서)
+12086: total_film = rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP']
+12087: safe_set(16, 11, 0)  # 전산화 필름(매) - 집계 후 별도
+12088: safe_set(16, 12, total_film)
+12089: 
+12090: # 시트별 기입
+12091: if main_agg:
+12092: sheet_name = '3. 비파괴검사 현황 (열배관)'
+12093: if sheet_name in wb.sheetnames:
+12094: write_ndt_sheet(wb[sheet_name], main_agg)
+12095: log(f"✅ '{sheet_name}' 시트 기입 완료")
+12096: else:
+12097: log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+12098: 
+12099: if mgmt_agg:
+12100: sheet_name = '3. 비파괴검사 현황 (관리소)'
+12101: if sheet_name in wb.sheetnames:
+12102: write_ndt_sheet(wb[sheet_name], mgmt_agg)
+12103: log(f"✅ '{sheet_name}' 시트 기입 완료")
+12104: else:
+12105: log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+12106: 
+12107: # 저장
+12108: wb.save(filepath)
+12109: wb.close()
+12110: log(f"\n🎉 저장 완료: {filepath}")
+12111: messagebox.showinfo("완료", f"월간 진도보고서 비파괴검사 현황이 업데이트되었습니다.\n{filepath}")
+12112: 
+12113: except Exception as e:
+12114: log(f"❌ 오류 발생: {e}")
+12115: import traceback
+12116: log(traceback.format_exc())
+12117: messagebox.showerror("오류", f"내보내기 중 오류: {e}")
+12118: 
+12119: btn_frame = ttk.Frame(top)
+12120: btn_frame.pack(pady=10)
+12121: ttk.Button(btn_frame, text="📊 내보내기 실행", command=do_export, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton').pack(side='left', padx=10)
+12122: ttk.Button(btn_frame, text="취소", command=top.destroy).pack(side='left', padx=10)
+12123: 
+12124: def export_all_daily_usage(self):
+12125: """Export all daily usage records to Excel"""
+12126: try:
+12127: if self.daily_usage_df.empty:
+12128: messagebox.showinfo("알림", "기록된 데이터가 없습니다.")
+12129: return
+12130: 
+12131: # Export all columns from the tree structure
+12132: selected_cols = list(self.daily_usage_tree['columns'])
+12133: 
+12134: filename = f"전체사용기록_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+12135: save_path = filedialog.asksaveasfilename(defaultextension=".xlsx", initialfile=filename, filetypes=[("Excel files", "*.xlsx")])
+12136: 
+12137: if save_path:
+12138: # Ensure we only try to export columns that exist in the dataframe
+12139: valid_cols = [c for c in selected_cols if c in self.daily_usage_df.columns]
+12140: # If dataframe has extra columns not in tree (like raw data), include them?
+12141: # Better to stick to what the user sees/defines in tree interface + critical data
+12142: # Actually, export_all usually implies backing up the raw dataframe.
+12143: # But previous logic used tree columns. Let's stick to tree columns if they exist in DF.
+12144: 
+12145: # Fallback: if tree columns are not in DF (e.g. calculated columns), we might have issues.
+12146: # The daily_usage_df has raw data. The tree has formatted data.
+12147: # daily_usage_df columns: Date, Site, MaterialID, Usage, Note, etc. + RTK_..., NDT_...
+12148: # Tree columns: 날짜, 현장, 작업자... OT합계...
+12149: 
+12150: # If we want "All Daily Usage", we should probably export the RAW dataframe for backup purposes,

@@ -1,0 +1,40 @@
+11961: '                except Exception as e:\n'
+11962: '                    messagebox.showerror("오류", f"태그 변환 중 오류: {e}")\n'
+11963: '                    import traceback\n'
+11964: '                    log(traceback.format_exc())\n'
+11965: '                    return\n'
+11966: '\n'
+11967: '                # --- 5. 엑셀 기입 ---\r\n'
+11968: '                import openpyxl\r\n'
+11969: '                wb = openpyxl.load_workbook(save_path)\r\n'
+11970: '                \r\n'
+11971: '                def write_ndt_sheet(ws, agg):\r\n'
+11972: '                    """비파괴검사 현황 시트에 집계 데이터 기입"""\r\n'
+11973: '                    if agg is None:\r\n'
+11974: '                        return\r\n'
+11975: '                    \r\n'
+11976: "                    def get_val(bucket, shift, insp_type, field='qty'):\r\n"
+11977: '                        key = (shift, insp_type)\r\n'
+11978: '                        return bucket.get(key, {}).get(field, 0)\r\n'
+11979: '                    \r\n'
+11980: '                    def safe_set(row, col, val):\r\n'
+11981: '                        """값이 0이 아닐 때만 기입 (기존 수식 보호)"""\r\n'
+11982: '                        if val and val != 0:\r\n'
+11983: '                            ws.cell(row=row, column=col, value=round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val)\r\n'
+11984: '                    \r\n'
+11985: '                    # RT: 행8=B-TYPE, 행9=A-TYPE, 행10=A/2-TYPE, 행11=합계\r\n'
+11986: "                    rt_types = {'B': 8, 'A': 9, 'A/2': 10}\r\n"
+11987: "                    rt_total = {'주간_joints': 0, '주간_ORI': 0, '주간_REP': 0,\r\n"
+11988: "                                '야간_joints': 0, '야간_ORI': 0, '야간_REP': 0}\r\n"
+11989: '                    \r\n'
+11990: '                    for film_key, row_num in rt_types.items():\r\n'
+11991: "                        bucket = agg['RT'][film_key]\r\n"
+11992: '                        \r\n'
+11993: '                        # 일반검사 (주간)\r\n'
+11994: "                        j_day = get_val(bucket, '주간', 'ORI', 'joints') + get_val(bucket, '주간', 'REP', 'joints')\r\n"
+11995: "                        ori_day = get_val(bucket, '주간', 'ORI', 'qty')\r\n"
+11996: "                        rep_day = get_val(bucket, '주간', 'REP', 'qty')\r\n"
+11997: '                        sum_day = ori_day + rep_day\r\n'
+11998: '                        \r\n'
+11999: '                        # 휴일/야간검사\r\n'
+12000: "                        j_night = get_val(bucket, '야간/휴일', 'ORI', 'joints') + get_val(bucket, '야간/휴일', 'REP', 'joints')\r\n"

@@ -1,0 +1,20 @@
+11934: "                            bucket[key]['adj_qty'] += adj_qty\r\n"
+11935: '                    \r\n'
+11936: '                    return result\r\n'
+11937: '                \r\n'
+11938: '                # --- 4. 열배관 / 관리소 각각 집계 ---\r\n'
+11939: "                main_df = df[df['Site'].isin(main_sites)] if main_sites else pd.DataFrame()\r\n"
+11940: "                mgmt_df = df[df['Site'].isin(mgmt_sites)] if mgmt_sites else pd.DataFrame()\r\n"
+11941: '                \r\n'
+11942: '                log(f"▶ 열배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")\r\n'
+11943: '                \r\n'
+11944: '                main_agg = aggregate_site(main_df) if not main_df.empty else None\r\n'
+11945: '                mgmt_agg = aggregate_site(mgmt_df) if not mgmt_df.empty else None\r\n'
+11946: '                \r\n'
+11947: '                \n'
+11948: '                # --- 4.5 태그 변환 (MonthlyReportExporter) ---\n'
+11949: '                try:\n'
+11950: '                    from monthly_report_exporter import MonthlyReportExporter\n'
+11951: '                    import json, os\n'
+11952: '                    history = {}\n'
+11953: '                    history_path = os.path.join(self.data_dir if hasattr(self, \'data_dir\') else \'data\', "daily_work_history.json")\n'

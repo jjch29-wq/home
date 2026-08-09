@@ -1,0 +1,490 @@
+12011: 
+12012: def write_ndt_sheet(ws, agg):
+12013: """비파괴검사 현황 시트에 집계 데이터 기입"""
+12014: if agg is None:
+12015: return
+12016: 
+12017: def get_val(bucket, shift, insp_type, field='qty'):
+12018: key = (shift, insp_type)
+12019: return bucket.get(key, {}).get(field, 0)
+12020: 
+12021: def safe_set(row, col, val):
+12022: """값이 0이 아닐 때만 기입 (기존 수식 보호)"""
+12023: if val and val != 0:
+12024: ws.cell(row=row, column=col, value=round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val)
+12025: 
+12026: # RT: 행8=B-TYPE, 행9=A-TYPE, 행10=A/2-TYPE, 행11=합계
+12027: rt_types = {'B': 8, 'A': 9, 'A/2': 10}
+12028: rt_total = {'주간_joints': 0, '주간_ORI': 0, '주간_REP': 0,
+12029: '야간_joints': 0, '야간_ORI': 0, '야간_REP': 0}
+12030: 
+12031: for film_key, row_num in rt_types.items():
+12032: bucket = agg['RT'][film_key]
+12033: 
+12034: # 일반검사 (주간)
+12035: j_day = get_val(bucket, '주간', 'ORI', 'joints') + get_val(bucket, '주간', 'REP', 'joints')
+12036: ori_day = get_val(bucket, '주간', 'ORI', 'qty')
+12037: rep_day = get_val(bucket, '주간', 'REP', 'qty')
+12038: sum_day = ori_day + rep_day
+12039: 
+12040: # 휴일/야간검사
+12041: j_night = get_val(bucket, '야간/휴일', 'ORI', 'joints') + get_val(bucket, '야간/휴일', 'REP', 'joints')
+12042: ori_night = get_val(bucket, '야간/휴일', 'ORI', 'qty')
+12043: rep_night = get_val(bucket, '야간/휴일', 'REP', 'qty')
+12044: sum_night = ori_night + rep_night
+12045: 
+12046: # 합계
+12047: j_total = j_day + j_night
+12048: ori_total = ori_day + ori_night
+12049: rep_total = rep_day + rep_night
+12050: sum_total = ori_total + rep_total
+12051: 
+12052: # 셀 기입
+12053: safe_set(row_num, 3, j_day)       # C: 일반 용접개소
+12054: safe_set(row_num, 4, ori_day)      # D: 일반 ORI
+12055: safe_set(row_num, 5, rep_day)      # E: 일반 REP
+12056: safe_set(row_num, 6, sum_day)      # F: 일반 합계
+12057: safe_set(row_num, 7, j_night)      # G: 야간 용접개소
+12058: safe_set(row_num, 8, ori_night)    # H: 야간 ORI
+12059: safe_set(row_num, 9, rep_night)    # I: 야간 REP
+12060: safe_set(row_num, 10, sum_night)   # J: 야간 합계
+12061: safe_set(row_num, 11, j_total)     # K: 합계 용접개소
+12062: safe_set(row_num, 12, ori_total)   # L: 합계 ORI
+12063: safe_set(row_num, 13, rep_total)   # M: 합계 REP
+12064: safe_set(row_num, 14, sum_total)   # N: 합계 합계
+12065: 
+12066: # 누적 합계용
+12067: rt_total['주간_joints'] += j_day
+12068: rt_total['주간_ORI'] += ori_day
+12069: rt_total['주간_REP'] += rep_day
+12070: rt_total['야간_joints'] += j_night
+12071: rt_total['야간_ORI'] += ori_night
+12072: rt_total['야간_REP'] += rep_night
+12073: 
+12074: # RT 합계행 (행11)
+12075: safe_set(11, 3, rt_total['주간_joints'])
+12076: safe_set(11, 4, rt_total['주간_ORI'])
+12077: safe_set(11, 5, rt_total['주간_REP'])
+12078: safe_set(11, 6, rt_total['주간_ORI'] + rt_total['주간_REP'])
+12079: safe_set(11, 7, rt_total['야간_joints'])
+12080: safe_set(11, 8, rt_total['야간_ORI'])
+12081: safe_set(11, 9, rt_total['야간_REP'])
+12082: safe_set(11, 10, rt_total['야간_ORI'] + rt_total['야간_REP'])
+12083: safe_set(11, 11, rt_total['주간_joints'] + rt_total['야간_joints'])
+12084: safe_set(11, 12, rt_total['주간_ORI'] + rt_total['야간_ORI'])
+12085: safe_set(11, 13, rt_total['주간_REP'] + rt_total['야간_REP'])
+12086: safe_set(11, 14, rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP'])
+12087: 
+12088: # UT (행12=실검사길이, 행13=검사보정길이)
+12089: ut = agg['UT']['data']
+12090: ut_day_j = get_val(ut, '주간', 'ORI', 'joints') + get_val(ut, '주간', 'REP', 'joints')
+12091: ut_day_ori = get_val(ut, '주간', 'ORI', 'qty')
+12092: ut_day_rep = get_val(ut, '주간', 'REP', 'qty')
+12093: ut_night_j = get_val(ut, '야간/휴일', 'ORI', 'joints') + get_val(ut, '야간/휴일', 'REP', 'joints')
+12094: ut_night_ori = get_val(ut, '야간/휴일', 'ORI', 'qty')
+12095: ut_night_rep = get_val(ut, '야간/휴일', 'REP', 'qty')
+12096: 
+12097: safe_set(12, 3, ut_day_j)
+12098: safe_set(12, 4, ut_day_ori + ut_day_rep)   # UT는 ORI+REP 합산 (실검사길이)
+12099: safe_set(12, 6, ut_day_ori + ut_day_rep)
+12100: safe_set(12, 7, ut_night_j)
+12101: safe_set(12, 8, ut_night_ori + ut_night_rep)
+12102: safe_set(12, 10, ut_night_ori + ut_night_rep)
+12103: safe_set(12, 11, ut_day_j + ut_night_j)
+12104: safe_set(12, 12, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+12105: safe_set(12, 14, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+12106: 
+12107: # UT 검사보정길이 (행13)
+12108: ut_day_adj = get_val(ut, '주간', 'ORI', 'adj_qty') + get_val(ut, '주간', 'REP', 'adj_qty')
+12109: ut_night_adj = get_val(ut, '야간/휴일', 'ORI', 'adj_qty') + get_val(ut, '야간/휴일', 'REP', 'adj_qty')
+12110: safe_set(13, 4, ut_day_adj)
+12111: safe_set(13, 6, ut_day_adj)
+12112: safe_set(13, 8, ut_night_adj)
+12113: safe_set(13, 10, ut_night_adj)
+12114: safe_set(13, 12, ut_day_adj + ut_night_adj)
+12115: safe_set(13, 14, ut_day_adj + ut_night_adj)
+12116: 
+12117: # PT (행14=실검사길이, 행15=검사보정길이)
+12118: pt = agg['PT']['data']
+12119: pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')
+12120: pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')
+12121: pt_day_rep = get_val(pt, '주간', 'REP', 'qty')
+12122: pt_night_j = get_val(pt, '야간/휴일', 'ORI', 'joints') + get_val(pt, '야간/휴일', 'REP', 'joints')
+12123: pt_night_ori = get_val(pt, '야간/휴일', 'ORI', 'qty')
+12124: pt_night_rep = get_val(pt, '야간/휴일', 'REP', 'qty')
+12125: 
+12126: safe_set(14, 3, pt_day_j)
+12127: safe_set(14, 4, pt_day_ori + pt_day_rep)
+12128: safe_set(14, 6, pt_day_ori + pt_day_rep)
+12129: safe_set(14, 7, pt_night_j)
+12130: safe_set(14, 8, pt_night_ori + pt_night_rep)
+12131: safe_set(14, 10, pt_night_ori + pt_night_rep)
+12132: safe_set(14, 11, pt_day_j + pt_night_j)
+12133: safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+12134: safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+12135: 
+12136: # PT 검사보정길이 (행15)
+12137: pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')
+12138: pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')
+12139: safe_set(15, 4, pt_day_adj)
+12140: safe_set(15, 6, pt_day_adj)
+12141: safe_set(15, 8, pt_night_adj)
+12142: safe_set(15, 10, pt_night_adj)
+12143: safe_set(15, 12, pt_day_adj + pt_night_adj)
+12144: safe_set(15, 14, pt_day_adj + pt_night_adj)
+12145: 
+12146: # 전산화 (행16=필름매수, 행17=보고서)
+12147: total_film = rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP']
+12148: safe_set(16, 11, 0)  # 전산화 필름(매) - 집계 후 별도
+12149: safe_set(16, 12, total_film)
+12150: def write_new_ndt_table(ws, prev, curr):
+12151: # 1.1 비파괴검사 물량표 찾기
+12152: start_row = None
+12153: for r in range(1, 1000):
+12154: if ws.cell(row=r, column=2).value == '1.1 비파괴검사 물량표' or ws.cell(row=r, column=3).value == '1.1 비파괴검사 물량표':
+12155: start_row = r + 1
+12156: break
+12157: for c in range(1, 10):
+12158: if str(ws.cell(row=r, column=c).value).strip() == '1.1 비파괴검사 물량표':
+12159: start_row = r + 1
+12160: break
+12161: if start_row: break
+12162: 
+12163: if not start_row:
+12164: return # 표를 못 찾음
+12165: 
+12166: def set_data(offset, key):
+12167: row_idx = start_row + 1 + offset
+12168: p_val = prev.get(key, 0)
+12169: c_val = curr.get(key, 0)
+12170: t_val = p_val + c_val
+12171: 
+12172: if p_val > 0: ws.cell(row=row_idx, column=10, value=round(p_val, 2) if isinstance(p_val, float) and p_val != int(p_val) else int(p_val))
+12173: if c_val > 0: ws.cell(row=row_idx, column=12, value=round(c_val, 2) if isinstance(c_val, float) and c_val != int(c_val) else int(c_val))
+12174: if t_val > 0: ws.cell(row=row_idx, column=14, value=round(t_val, 2) if isinstance(t_val, float) and t_val != int(t_val) else int(t_val))
+12175: 
+12176: est = ws.cell(row=row_idx, column=8).value
+12177: try:
+12178: est_val = float(str(est).replace(',', ''))
+12179: if est_val > 0 and t_val > 0:
+12180: rate = (t_val / est_val) * 100
+12181: ws.cell(row=row_idx, column=16, value=round(rate, 1))
+12182: except:
+12183: pass
+12184: 
+12185: set_data(0, 'PAUT_300')
+12186: set_data(1, 'PAUT_300_N')
+12187: set_data(2, 'PAUT_250')
+12188: set_data(3, 'PAUT_200')
+12189: set_data(4, 'PAUT_200_N')
+12190: 
+12191: def set_subtotal(sub_offset, offsets, prefix):
+12192: p_sub = sum([prev.get(k, 0) for k in offsets])
+12193: c_sub = sum([curr.get(k, 0) for k in offsets])
+12194: t_sub = p_sub + c_sub
+12195: r_idx = start_row + 1 + sub_offset
+12196: if p_sub > 0: ws.cell(row=r_idx, column=10, value=round(p_sub, 2) if isinstance(p_sub, float) and p_sub != int(p_sub) else int(p_sub))
+12197: if c_sub > 0: ws.cell(row=r_idx, column=12, value=round(c_sub, 2) if isinstance(c_sub, float) and c_sub != int(c_sub) else int(c_sub))
+12198: if t_sub > 0: ws.cell(row=r_idx, column=14, value=round(t_sub, 2) if isinstance(t_sub, float) and t_sub != int(t_sub) else int(t_sub))
+12199: 
+12200: set_subtotal(5, ['PAUT_300', 'PAUT_300_N', 'PAUT_250', 'PAUT_200', 'PAUT_200_N'], 'PAUT')
+12201: 
+12202: set_data(6, 'RT_150_100')
+12203: set_data(7, 'RT_150_100_N')
+12204: set_data(8, 'RT_80')
+12205: set_data(9, 'RT_80_N')
+12206: set_subtotal(10, ['RT_150_100', 'RT_150_100_N', 'RT_80', 'RT_80_N'], 'RT')
+12207: 
+12208: set_data(11, 'MT_DAY')
+12209: set_data(12, 'MT_NIGHT')
+12210: set_data(13, 'PT_DAY')
+12211: set_data(14, 'PT_NIGHT')
+12212: 
+12213: # --- 4.2 동적 표 집계 및 기입 로직 (1.2.1, 1.2.2) ---
+12214: def aggregate_dynamic_ndt(site_df, method_filter):
+12215: """그룹화된 실적 데이터 생성 (PAUT, MT 등)"""
+12216: grouped = {}
+12217: for _, row in site_df.iterrows():
+12218: method = str(row.get('검사방법', '')).strip().upper()
+12219: if method != method_filter:
+12220: continue
+12221: 
+12222: company = str(row.get('업체명', '')).strip()
+12223: if not company:
+12224: company = str(row.get('시공사', '')).strip()
+12225: 
+12226: section = str(row.get('Section', '')).strip()
+12227: line_no = str(row.get('Line No.', '')).strip()
+12228: if not line_no and '도면번호' in row:
+12229: line_no = str(row.get('도면번호', '')).strip()
+12230: 
+12231: inch = str(row.get('관경(Inch)', '')).strip()
+12232: 
+12233: try:
+12234: joints = int(float(str(row.get('조인트수', 0)).replace(',', '') or 0))
+12235: except:
+12236: joints = 0
+12237: 
+12238: spec = str(row.get('규격', '')).strip()
+12239: if not spec:
+12240: spec = str(row.get('작업형태', '')).strip()
+12241: 
+12242: unit = str(row.get('단위', 'm')).strip()
+12243: if not unit or unit == 'nan':
+12244: unit = 'm'
+12245: 
+12246: insp_type = str(row.get('검사구분', 'ORI')).strip().upper()
+12247: 
+12248: try:
+12249: qty = float(str(row.get('검사량', row.get('Usage', 0))).replace(',', '') or 0)
+12250: except:
+12251: qty = 0.0
+12252: 
+12253: key = (company, section, line_no, inch, spec, unit)
+12254: 
+12255: if key not in grouped:
+12256: grouped[key] = {'joints': 0, 'ORI': 0.0, 'RE': 0.0, 'TOTAL': 0.0, 'remarks': set()}
+12257: 
+12258: grouped[key]['joints'] += joints
+12259: 
+12260: if insp_type == 'REP' or insp_type == 'RE':
+12261: grouped[key]['RE'] += qty
+12262: else:
+12263: grouped[key]['ORI'] += qty
+12264: 
+12265: grouped[key]['TOTAL'] += qty
+12266: 
+12267: note = str(row.get('비고', '')).strip()
+12268: if note and note != 'nan':
+12269: grouped[key]['remarks'].add(note)
+12270: 
+12271: results = []
+12272: for idx, (k, v) in enumerate(grouped.items(), 1):
+12273: results.append({
+12274: 'seq': idx,
+12275: 'company': k[0],
+12276: 'section': k[1],
+12277: 'line_no': k[2],
+12278: 'inch': k[3],
+12279: 'joints': v['joints'],
+12280: 'spec': k[4],
+12281: 'unit': k[5],
+12282: 'ori': v['ORI'],
+12283: 're': v['RE'],
+12284: 'total': v['TOTAL'],
+12285: 'remark': ', '.join(v['remarks'])
+12286: })
+12287: return results
+12288: 
+12289: def copy_rows_openpyxl(ws, src_start, src_end, tgt_start):
+12290: from copy import copy
+12291: import openpyxl
+12292: num_rows = src_end - src_start + 1
+12293: ws.insert_rows(tgt_start, amount=num_rows)
+12294: for i in range(num_rows):
+12295: s_row = src_start + i
+12296: if s_row >= tgt_start: s_row += num_rows
+12297: t_row = tgt_start + i
+12298: ws.row_dimensions[t_row].height = ws.row_dimensions[s_row].height
+12299: for col in range(1, 26):
+12300: s_cell = ws.cell(row=s_row, column=col)
+12301: t_cell = ws.cell(row=t_row, column=col)
+12302: t_cell.value = s_cell.value
+12303: if s_cell.has_style:
+12304: t_cell._style = copy(s_cell._style)
+12305: 
+12306: merges_to_add = []
+12307: for merged_cell in ws.merged_cells.ranges:
+12308: s_row_start = src_start
+12309: s_row_end = src_end
+12310: if src_start >= tgt_start:
+12311: s_row_start += num_rows
+12312: s_row_end += num_rows
+12313: if s_row_start <= merged_cell.min_row <= s_row_end:
+12314: shift = tgt_start - src_start
+12315: if src_start >= tgt_start:
+12316: shift = tgt_start - (src_start + num_rows)
+12317: new_range = openpyxl.worksheet.cell_range.CellRange(
+12318: min_col=merged_cell.min_col,
+12319: min_row=merged_cell.min_row + shift,
+12320: max_col=merged_cell.max_col,
+12321: max_row=merged_cell.max_row + shift
+12322: )
+12323: merges_to_add.append(new_range)
+12324: for m in merges_to_add:
+12325: try: ws.merged_cells.add(m.coord)
+12326: except Exception: pass
+12327: 
+12328: pagination_state = {'available': 8}
+12329: 
+12330: def write_dynamic_ndt_table(ws, data, title_search):
+12331: if not data:
+12332: return
+12333: 
+12334: # 1. Find the starting row of the table
+12335: start_row = None
+12336: for r in range(300, 10000):
+12337: val1 = str(ws.cell(row=r, column=2).value or '')
+12338: val2 = str(ws.cell(row=r, column=3).value or '')
+12339: if title_search in val1 or title_search in val2:
+12340: start_row = r + 3
+12341: break
+12342: 
+12343: if not start_row:
+12344: return
+12345: 
+12346: orig_table_hdr_start = start_row - 3
+12347: 
+12348: # Sort data by company
+12349: data = sorted(data, key=lambda x: x.get('company', ''))
+12350: 
+12351: import openpyxl
+12352: from copy import copy
+12353: 
+12354: # Capture formats BEFORE inserting rows
+12355: # start_row is dummy data row, start_row + 1 is TOTAL row
+12356: data_styles = {}
+12357: total_styles = {}
+12358: for col in range(2, 24):
+12359: d_cell = ws.cell(row=start_row, column=col)
+12360: t_cell = ws.cell(row=start_row + 1, column=col)
+12361: data_styles[col] = {
+12362: 'style': copy(d_cell._style) if d_cell.has_style else None,
+12363: 'font': copy(d_cell.font),
+12364: 'border': copy(d_cell.border),
+12365: 'fill': copy(d_cell.fill),
+12366: 'alignment': copy(d_cell.alignment)
+12367: }
+12368: total_styles[col] = {
+12369: 'style': copy(t_cell._style) if t_cell.has_style else None,
+12370: 'font': copy(t_cell.font),
+12371: 'border': copy(t_cell.border),
+12372: 'fill': copy(t_cell.fill),
+12373: 'alignment': copy(t_cell.alignment)
+12374: }
+12375: data_height = ws.row_dimensions[start_row].height
+12376: total_height = ws.row_dimensions[start_row + 1].height
+12377: 
+12378: def apply_format(r_idx, is_total):
+12379: styles = total_styles if is_total else data_styles
+12380: for col, s in styles.items():
+12381: cell = ws.cell(row=r_idx, column=col)
+12382: if s['style']: cell._style = copy(s['style'])
+12383: cell.font = copy(s['font'])
+12384: cell.border = copy(s['border'])
+12385: cell.fill = copy(s['fill'])
+12386: cell.alignment = copy(s['alignment'])
+12387: ws.row_dimensions[r_idx].height = total_height if is_total else data_height
+12388: 
+12389: tot_ori, tot_re, tot_total = 0, 0, 0
+12390: sub_ori, sub_re, sub_total = 0, 0, 0
+12391: prev_company = None
+12392: first_row = True
+12393: 
+12394: for i, row_data in enumerate(data):
+12395: curr_company = row_data.get('company', '')
+12396: 
+12397: # Pagination check
+12398: if pagination_state['available'] <= 0:
+12399: copy_rows_openpyxl(ws, 374, 379, start_row)
+12400: copy_rows_openpyxl(ws, orig_table_hdr_start, orig_table_hdr_start + 2, start_row + 6)
+12401: try: ws.row_breaks.append(openpyxl.worksheet.pagebreak.Break(id=start_row))
+12402: except Exception: pass
+12403: start_row += 9
+12404: pagination_state['available'] = 35
+12405: 
+12406: # Subtotal Logic
+12407: if prev_company is not None and curr_company != prev_company:
+12408: if not first_row: ws.insert_rows(start_row)
+12409: apply_format(start_row, is_total=True)
+12410: ws.merge_cells(start_row=start_row, start_column=2, end_row=start_row, end_column=16)
+12411: ws.merge_cells(start_row=start_row, start_column=18, end_row=start_row, end_column=19)
+12412: ws.merge_cells(start_row=start_row, start_column=20, end_row=start_row, end_column=21)
+12413: ws.merge_cells(start_row=start_row, start_column=22, end_row=start_row, end_column=23)
+12414: 
+12415: ws.cell(row=start_row, column=2, value=f"{prev_company} 소계")
+12416: ws.cell(row=start_row, column=17, value=round(sub_ori, 4) if sub_ori else '-')
+12417: ws.cell(row=start_row, column=18, value=round(sub_re, 4) if sub_re else '-')
+12418: ws.cell(row=start_row, column=20, value=round(sub_total, 4) if sub_total else '-')
+12419: 
+12420: start_row += 1
+12421: pagination_state['available'] -= 1
+12422: sub_ori, sub_re, sub_total = 0, 0, 0
+12423: 
+12424: # Data Row Logic
+12425: if not first_row:
+12426: ws.insert_rows(start_row)
+12427: apply_format(start_row, is_total=False)
+12428: 
+12429: ws.merge_cells(start_row=start_row, start_column=4, end_row=start_row, end_column=5)
+12430: ws.merge_cells(start_row=start_row, start_column=6, end_row=start_row, end_column=9)
+12431: ws.merge_cells(start_row=start_row, start_column=10, end_row=start_row, end_column=11)
+12432: ws.merge_cells(start_row=start_row, start_column=12, end_row=start_row, end_column=13)
+12433: ws.merge_cells(start_row=start_row, start_column=14, end_row=start_row, end_column=15)
+12434: ws.merge_cells(start_row=start_row, start_column=18, end_row=start_row, end_column=19)
+12435: ws.merge_cells(start_row=start_row, start_column=20, end_row=start_row, end_column=21)
+12436: ws.merge_cells(start_row=start_row, start_column=22, end_row=start_row, end_column=23)
+12437: 
+12438: ws.cell(row=start_row, column=2, value=curr_company)
+12439: ws.cell(row=start_row, column=3, value=row_data['seq'])
+12440: ws.cell(row=start_row, column=4, value=row_data['section'])
+12441: ws.cell(row=start_row, column=6, value=row_data['line_no'])
+12442: ws.cell(row=start_row, column=10, value=row_data['inch'])
+12443: ws.cell(row=start_row, column=12, value=row_data['joints'])
+12444: ws.cell(row=start_row, column=14, value=row_data['spec'])
+12445: ws.cell(row=start_row, column=16, value=row_data['unit'])
+12446: 
+12447: ws.cell(row=start_row, column=17, value=round(row_data['ori'], 4) if row_data['ori'] else '-')
+12448: ws.cell(row=start_row, column=18, value=round(row_data['re'], 4) if row_data['re'] else '-')
+12449: ws.cell(row=start_row, column=20, value=round(row_data['total'], 4) if row_data['total'] else '-')
+12450: ws.cell(row=start_row, column=22, value=row_data['remark'])
+12451: 
+12452: sub_ori += row_data['ori']
+12453: sub_re += row_data['re']
+12454: sub_total += row_data['total']
+12455: 
+12456: tot_ori += row_data['ori']
+12457: tot_re += row_data['re']
+12458: tot_total += row_data['total']
+12459: 
+12460: prev_company = curr_company
+12461: start_row += 1
+12462: if not first_row:
+12463: pagination_state['available'] -= 1
+12464: first_row = False
+12465: 
+12466: # Last Subtotal
+12467: if prev_company is not None:
+12468: if pagination_state['available'] <= 0:
+12469: copy_rows_openpyxl(ws, 374, 379, start_row)
+12470: copy_rows_openpyxl(ws, orig_table_hdr_start, orig_table_hdr_start + 2, start_row + 6)
+12471: try: ws.row_breaks.append(openpyxl.worksheet.pagebreak.Break(id=start_row))
+12472: except Exception: pass
+12473: start_row += 9
+12474: pagination_state['available'] = 35
+12475: 
+12476: ws.insert_rows(start_row)
+12477: apply_format(start_row, is_total=True)
+12478: ws.merge_cells(start_row=start_row, start_column=2, end_row=start_row, end_column=16)
+12479: ws.merge_cells(start_row=start_row, start_column=18, end_row=start_row, end_column=19)
+12480: ws.merge_cells(start_row=start_row, start_column=20, end_row=start_row, end_column=21)
+12481: ws.merge_cells(start_row=start_row, start_column=22, end_row=start_row, end_column=23)
+12482: 
+12483: ws.cell(row=start_row, column=2, value=f"{prev_company} 소계")
+12484: ws.cell(row=start_row, column=17, value=round(sub_ori, 4) if sub_ori else '-')
+12485: ws.cell(row=start_row, column=18, value=round(sub_re, 4) if sub_re else '-')
+12486: ws.cell(row=start_row, column=20, value=round(sub_total, 4) if sub_total else '-')
+12487: 
+12488: start_row += 1
+12489: pagination_state['available'] -= 1
+12490: 
+12491: # Grand Total
+12492: # original TOTAL row is now exactly at start_row
+12493: ws.cell(row=start_row, column=2, value="전체 총계(TOTAL)")
+12494: ws.cell(row=start_row, column=17, value=round(tot_ori, 4) if tot_ori else '-')
+12495: ws.cell(row=start_row, column=18, value=round(tot_re, 4) if tot_re else '-')
+12496: ws.cell(row=start_row, column=20, value=round(tot_total, 4) if tot_total else '-')
+12497: 
+12498: except Exception as e:
+12499: log(f"❌ 오류 발생: {e}")
+12500: import traceback

@@ -1,20 +1,14 @@
-import os
+import codecs
 
-file_path = r'c:\Users\jjch2\Desktop\PMI\home\src\자재작업일보기성서류Ver.1.py'
-with open(file_path, 'r', encoding='utf-8') as f:
-    content = f.read()
+file_path = r'c:\Users\jjch2\Desktop\PMI\home\src\한국지역난방 중앙지사.py'
+with codecs.open(file_path, 'r', 'utf-8') as f:
+    lines = f.readlines()
 
-content = content.replace(r"\'연도\'", "'연도'")
-content = content.replace(r"\'월\'", "'월'")
-content = content.replace(r"\'현장\'", "'현장'")
-content = content.replace(r"\'구분\'", "'구분'")
-content = content.replace(r"\'작업자\'", "'작업자'")
-content = content.replace(r"\'작업시간\'", "'작업시간'")
-content = content.replace(r"\'Site\'", "'Site'")
-content = content.replace(r"\'\'", "''")
-content = content.replace(r"\'--- 전체 누계 ---\'", "'--- 전체 누계 ---'")
+for i in range(11980, 11995):
+    if 'ws.Cells(row, col).Value =' in lines[i] and lines[i].endswith(')\r\n'):
+        lines[i] = lines[i][:-3] + '\r\n'
+    elif 'ws.Cells(row, col).Value =' in lines[i] and lines[i].endswith(')\n'):
+        lines[i] = lines[i][:-2] + '\n'
 
-with open(file_path, 'w', encoding='utf-8') as f:
-    f.write(content)
-
-print("Syntax errors fixed.")
+with codecs.open(file_path, 'w', 'utf-8') as f:
+    f.writelines(lines)

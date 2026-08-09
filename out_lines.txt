@@ -1,0 +1,65 @@
+12129:                         log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+12130:                 
+12131:                 # 저장
+12132: 
+12133:                 # 1.1 비파괴검사 물량표 작성 (PAUT)
+12134:                 paut_sheet_name = '1.1.2.1 위상배열초음파탐상검사'
+12135:                 if paut_sheet_name in sheet_names:
+12136:                     try:
+12137:                         paut_records = []
+12138:                         target_month_str = f"{year}-{month:02d}"
+12139:                         
+12140:                         for date_key, log_data in history.items():
+12141:                             if date_key.startswith(target_month_str):
+12142:                                 ndt_results = log_data.get('ndt_results', [])
+12143:                                 for r in ndt_results:
+12144:                                     if str(r.get('검사방법', '')).strip().upper() == 'PAUT':
+12145:                                         r['_date'] = date_key
+12146:                                         paut_records.append(r)
+12147:                                         
+12148:                         if paut_records:
+12149:                             # 날짜순 정렬
+12150:                             paut_records.sort(key=lambda x: x['_date'])
+12151:                             
+12152:                             groups = {}
+12153:                             for r in paut_records:
+12154:                                 key = (str(r.get('업체', '')), str(r.get('구간', '')), str(r.get('도면번호', '')), str(r.get('관경', '')), str(r.get('Joint No.', '')))
+12155:                                 
+12156:                                 paut_val = str(r.get('PAUT', '0')).strip()
+12157:                                 try:
+12158:                                     val = float(paut_val)
+12159:                                 except:
+12160:                                     val = 0.0
+12161:                                     
+12162:                                 if val == 0: continue
+12163:                                     
+12164:                                 shift = str(r.get('규격', '주간')).strip()
+12165:                                 
+12166:                                 if key not in groups:
+12167:                                     groups[key] = {'ORI': 0.0, 'RE': 0.0, 'shift': shift}
+12168:                                     
+12169:                                 if groups[key]['ORI'] == 0.0:
+12170:                                     groups[key]['ORI'] += val
+12171:                                 else:
+12172:                                     groups[key]['RE'] += val
+12173:                                     
+12174:                             ws_paut = wb.Sheets(paut_sheet_name)
+12175:                             # 기존 내용 지우기 (B405:M1000)
+12176:                             # ws_paut.Range("B405:M1000").ClearContents()
+12177:                             
+12178:                             # 데이터 개수에 맞춰 행 삽입 (TOTAL 행 밀어내기)
+12179:                             if len(groups) > 1:
+12180:                                 for _ in range(len(groups) - 1):
+12181:                                     ws_paut.Rows(406).Insert(Shift=-4121, CopyOrigin=0)
+12182:                                     
+12183:                             current_row = 405
+12184:                             for i, (key, data) in enumerate(groups.items()):
+12185:                                 업체, 구간, 도면번호, 관경, joint = key
+12186:                                 ws_paut.Cells(current_row, 2).Value = 업체
+12187:                                 ws_paut.Cells(current_row, 3).Value = i + 1
+12188:                                 ws_paut.Cells(current_row, 4).Value = 구간
+12189:                                 ws_paut.Cells(current_row, 5).Value = 도면번호
+12190:                                 ws_paut.Cells(current_row, 6).Value = 관경
+12191:                                 ws_paut.Cells(current_row, 7).Value = joint
+12192:                                 ws_paut.Cells(current_row, 8).Value = data['shift']
+12193:                                 ws_paut.Cells(current_row, 9).Value = 'M'

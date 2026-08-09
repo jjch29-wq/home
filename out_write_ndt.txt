@@ -1,0 +1,140 @@
+def write_ndt_sheet(ws, agg):
+                    """비파괴검사 현황 시트에 집계 데이터 기입"""
+                    if agg is None:
+                        return
+                    
+                    def get_val(bucket, shift, insp_type, field='qty'):
+                        key = (shift, insp_type)
+                        return bucket.get(key, {}).get(field, 0)
+                    
+                    def safe_set(row, col, val):
+                        """값이 0이 아닐 때만 기입 (기존 수식 보호)"""
+                        if val and val != 0:
+                            ws.Cells(row, col).Value = round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val
+                    
+                    # RT: 행8=B-TYPE, 행9=A-TYPE, 행10=A/2-TYPE, 행11=합계
+                    rt_types = {'B': 8, 'A': 9, 'A/2': 10}
+                    rt_total = {'주간_joints': 0, '주간_ORI': 0, '주간_REP': 0,
+                                '야간_joints': 0, '야간_ORI': 0, '야간_REP': 0}
+                    
+                    for film_key, row_num in rt_types.items():
+                        bucket = agg['RT'][film_key]
+                        
+                        # 일반검사 (주간)
+                        j_day = get_val(bucket, '주간', 'ORI', 'joints') + get_val(bucket, '주간', 'REP', 'joints')
+                        ori_day = get_val(bucket, '주간', 'ORI', 'qty')
+                        rep_day = get_val(bucket, '주간', 'REP', 'qty')
+                        sum_day = ori_day + rep_day
+                        
+                        # 휴일/야간검사
+                        j_night = get_val(bucket, '야간/휴일', 'ORI', 'joints') + get_val(bucket, '야간/휴일', 'REP', 'joints')
+                        ori_night = get_val(bucket, '야간/휴일', 'ORI', 'qty')
+                        rep_night = get_val(bucket, '야간/휴일', 'REP', 'qty')
+                        sum_night = ori_night + rep_night
+                        
+                        # 합계
+                        j_total = j_day + j_night
+                        ori_total = ori_day + ori_night
+                        rep_total = rep_day + rep_night
+                        sum_total = ori_total + rep_total
+                        
+                        # 셀 기입
+                        safe_set(row_num, 3, j_day)       # C: 일반 용접개소
+                        safe_set(row_num, 4, ori_day)      # D: 일반 ORI
+                        safe_set(row_num, 5, rep_day)      # E: 일반 REP
+                        safe_set(row_num, 6, sum_day)      # F: 일반 합계
+                        safe_set(row_num, 7, j_night)      # G: 야간 용접개소
+                        safe_set(row_num, 8, ori_night)    # H: 야간 ORI
+                        safe_set(row_num, 9, rep_night)    # I: 야간 REP
+                        safe_set(row_num, 10, sum_night)   # J: 야간 합계
+                        safe_set(row_num, 11, j_total)     # K: 합계 용접개소
+                        safe_set(row_num, 12, ori_total)   # L: 합계 ORI
+                        safe_set(row_num, 13, rep_total)   # M: 합계 REP
+                        safe_set(row_num, 14, sum_total)   # N: 합계 합계
+                        
+                        # 누적 합계용
+                        rt_total['주간_joints'] += j_day
+                        rt_total['주간_ORI'] += ori_day
+                        rt_total['주간_REP'] += rep_day
+                        rt_total['야간_joints'] += j_night
+                        rt_total['야간_ORI'] += ori_night
+                        rt_total['야간_REP'] += rep_night
+                    
+                    # RT 합계행 (행11)
+                    safe_set(11, 3, rt_total['주간_joints'])
+                    safe_set(11, 4, rt_total['주간_ORI'])
+                    safe_set(11, 5, rt_total['주간_REP'])
+                    safe_set(11, 6, rt_total['주간_ORI'] + rt_total['주간_REP'])
+                    safe_set(11, 7, rt_total['야간_joints'])
+                    safe_set(11, 8, rt_total['야간_ORI'])
+                    safe_set(11, 9, rt_total['야간_REP'])
+                    safe_set(11, 10, rt_total['야간_ORI'] + rt_total['야간_REP'])
+                    safe_set(11, 11, rt_total['주간_joints'] + rt_total['야간_joints'])
+                    safe_set(11, 12, rt_total['주간_ORI'] + rt_total['야간_ORI'])
+                    safe_set(11, 13, rt_total['주간_REP'] + rt_total['야간_REP'])
+                    safe_set(11, 14, rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP'])
+                    
+                    # UT (행12=실검사길이, 행13=검사보정길이)
+                    ut = agg['UT']['data']
+                    ut_day_j = get_val(ut, '주간', 'ORI', 'joints') + get_val(ut, '주간', 'REP', 'joints')
+                    ut_day_ori = get_val(ut, '주간', 'ORI', 'qty')
+                    ut_day_rep = get_val(ut, '주간', 'REP', 'qty')
+                    ut_night_j = get_val(ut, '야간/휴일', 'ORI', 'joints') + get_val(ut, '야간/휴일', 'REP', 'joints')
+                    ut_night_ori = get_val(ut, '야간/휴일', 'ORI', 'qty')
+                    ut_night_rep = get_val(ut, '야간/휴일', 'REP', 'qty')
+                    
+                    safe_set(12, 3, ut_day_j)
+                    safe_set(12, 4, ut_day_ori + ut_day_rep)   # UT는 ORI+REP 합산 (실검사길이)
+                    safe_set(12, 6, ut_day_ori + ut_day_rep)
+                    safe_set(12, 7, ut_night_j)
+                    safe_set(12, 8, ut_night_ori + ut_night_rep)
+                    safe_set(12, 10, ut_night_ori + ut_night_rep)
+                    safe_set(12, 11, ut_day_j + ut_night_j)
+                    safe_set(12, 12, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+                    safe_set(12, 14, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+                    
+                    # UT 검사보정길이 (행13)
+                    ut_day_adj = get_val(ut, '주간', 'ORI', 'adj_qty') + get_val(ut, '주간', 'REP', 'adj_qty')
+                    ut_night_adj = get_val(ut, '야간/휴일', 'ORI', 'adj_qty') + get_val(ut, '야간/휴일', 'REP', 'adj_qty')
+                    safe_set(13, 4, ut_day_adj)
+                    safe_set(13, 6, ut_day_adj)
+                    safe_set(13, 8, ut_night_adj)
+                    safe_set(13, 10, ut_night_adj)
+                    safe_set(13, 12, ut_day_adj + ut_night_adj)
+                    safe_set(13, 14, ut_day_adj + ut_night_adj)
+                    
+                    # PT (행14=실검사길이, 행15=검사보정길이)
+                    pt = agg['PT']['data']
+                    pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')
+                    pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')
+                    pt_day_rep = get_val(pt, '주간', 'REP', 'qty')
+                    pt_night_j = get_val(pt, '야간/휴일', 'ORI', 'joints') + get_val(pt, '야간/휴일', 'REP', 'joints')
+                    pt_night_ori = get_val(pt, '야간/휴일', 'ORI', 'qty')
+                    pt_night_rep = get_val(pt, '야간/휴일', 'REP', 'qty')
+                    
+                    safe_set(14, 3, pt_day_j)
+                    safe_set(14, 4, pt_day_ori + pt_day_rep)
+                    safe_set(14, 6, pt_day_ori + pt_day_rep)
+                    safe_set(14, 7, pt_night_j)
+                    safe_set(14, 8, pt_night_ori + pt_night_rep)
+                    safe_set(14, 10, pt_night_ori + pt_night_rep)
+                    safe_set(14, 11, pt_day_j + pt_night_j)
+                    safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+                    safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+                    
+                    # PT 검사보정길이 (행15)
+                    pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')
+                    pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')
+                    safe_set(15, 4, pt_day_adj)
+                    safe_set(15, 6, pt_day_adj)
+                    safe_set(15, 8, pt_night_adj)
+                    safe_set(15, 10, pt_night_adj)
+                    safe_set(15, 12, pt_day_adj + pt_night_adj)
+                    safe_set(15, 14, pt_day_adj + pt_night_adj)
+                    
+                    # 전산화 (행16=필름매수, 행17=보고서)
+                    total_film = rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP']
+                    safe_set(16, 11, 0)  # 전산화 필름(매) - 집계 후 별도
+                    safe_set(16, 12, total_film)
+                
+                # 시트별 기입

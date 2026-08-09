@@ -1125,6 +1125,7 @@ class MaterialManager:
         
         # Tab 3: Daily Work Log (New)
         self.tab_daily_work_log = DailyWorkLogTab(self.notebook)
+        self.tab_daily_work_log.main_app = self
         self.notebook.add(self.tab_daily_work_log, text='작업/감독일보')
 
         # Tab 4: Import/Export
@@ -11749,6 +11750,10 @@ class MaterialManager:
         month_var = tk.IntVar(value=now.month)
         ttk.Spinbox(period_frame, from_=1, to=12, textvariable=month_var, width=4).pack(side='left')
         
+        ttk.Label(period_frame, text="  문서번호:").pack(side='left', padx=5)
+        doc_num_var = tk.StringVar(value="01")
+        ttk.Entry(period_frame, textvariable=doc_num_var, width=5).pack(side='left')
+        
         # 현장 → 열배관/관리소 매핑
         map_frame = ttk.LabelFrame(top, text="2. 현장명 → 시트 매핑 (열배관 / 관리소 구분)")
         map_frame.pack(fill='x', padx=15, pady=5)
@@ -11793,6 +11798,7 @@ class MaterialManager:
             try:
                 year = year_var.get()
                 month = month_var.get()
+                doc_num = doc_num_var.get().strip() or "01"
                 filepath = file_var.get().strip()
                 
                 main_sites = [s.strip() for s in main_var.get().split(',') if s.strip()]
@@ -11923,73 +11929,64 @@ class MaterialManager:
                 main_agg = aggregate_site(main_df) if not main_df.empty else None
                 mgmt_agg = aggregate_site(mgmt_df) if not mgmt_df.empty else None
                 
-                # --- 5. 엑셀 기입 ---
+                                # --- 5. 엑셀 기입 (openpyxl로 변경) ---
                 import openpyxl
-                wb = openpyxl.load_workbook(filepath)
+                from openpyxl.utils import get_column_letter
+                import os
                 
-                def write_ndt_sheet(ws, agg):
-                    """비파괴검사 현황 시트에 집계 데이터 기입"""
-                    if agg is None:
-                        return
+                save_path = filepath
+                wb = openpyxl.load_workbook(save_path)
+                
+                def write_ndt_sheet_openpyxl(ws, agg):
+                    if agg is None: return
                     
                     def get_val(bucket, shift, insp_type, field='qty'):
                         key = (shift, insp_type)
                         return bucket.get(key, {}).get(field, 0)
                     
                     def safe_set(row, col, val):
-                        """값이 0이 아닐 때만 기입 (기존 수식 보호)"""
                         if val and val != 0:
-                            ws.cell(row=row, column=col, value=round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val)
-                    
-                    # RT: 행8=B-TYPE, 행9=A-TYPE, 행10=A/2-TYPE, 행11=합계
+                            ws.cell(row=row, column=col).value = round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val
+                            
                     rt_types = {'B': 8, 'A': 9, 'A/2': 10}
                     rt_total = {'주간_joints': 0, '주간_ORI': 0, '주간_REP': 0,
                                 '야간_joints': 0, '야간_ORI': 0, '야간_REP': 0}
                     
                     for film_key, row_num in rt_types.items():
                         bucket = agg['RT'][film_key]
-                        
-                        # 일반검사 (주간)
                         j_day = get_val(bucket, '주간', 'ORI', 'joints') + get_val(bucket, '주간', 'REP', 'joints')
                         ori_day = get_val(bucket, '주간', 'ORI', 'qty')
                         rep_day = get_val(bucket, '주간', 'REP', 'qty')
                         sum_day = ori_day + rep_day
-                        
-                        # 휴일/야간검사
                         j_night = get_val(bucket, '야간/휴일', 'ORI', 'joints') + get_val(bucket, '야간/휴일', 'REP', 'joints')
                         ori_night = get_val(bucket, '야간/휴일', 'ORI', 'qty')
                         rep_night = get_val(bucket, '야간/휴일', 'REP', 'qty')
                         sum_night = ori_night + rep_night
-                        
-                        # 합계
                         j_total = j_day + j_night
                         ori_total = ori_day + ori_night
                         rep_total = rep_day + rep_night
                         sum_total = ori_total + rep_total
                         
-                        # 셀 기입
-                        safe_set(row_num, 3, j_day)       # C: 일반 용접개소
-                        safe_set(row_num, 4, ori_day)      # D: 일반 ORI
-                        safe_set(row_num, 5, rep_day)      # E: 일반 REP
-                        safe_set(row_num, 6, sum_day)      # F: 일반 합계
-                        safe_set(row_num, 7, j_night)      # G: 야간 용접개소
-                        safe_set(row_num, 8, ori_night)    # H: 야간 ORI
-                        safe_set(row_num, 9, rep_night)    # I: 야간 REP
-                        safe_set(row_num, 10, sum_night)   # J: 야간 합계
-                        safe_set(row_num, 11, j_total)     # K: 합계 용접개소
-                        safe_set(row_num, 12, ori_total)   # L: 합계 ORI
-                        safe_set(row_num, 13, rep_total)   # M: 합계 REP
-                        safe_set(row_num, 14, sum_total)   # N: 합계 합계
+                        safe_set(row_num, 3, j_day)
+                        safe_set(row_num, 4, ori_day)
+                        safe_set(row_num, 5, rep_day)
+                        safe_set(row_num, 6, sum_day)
+                        safe_set(row_num, 7, j_night)
+                        safe_set(row_num, 8, ori_night)
+                        safe_set(row_num, 9, rep_night)
+                        safe_set(row_num, 10, sum_night)
+                        safe_set(row_num, 11, j_total)
+                        safe_set(row_num, 12, ori_total)
+                        safe_set(row_num, 13, rep_total)
+                        safe_set(row_num, 14, sum_total)
                         
-                        # 누적 합계용
                         rt_total['주간_joints'] += j_day
                         rt_total['주간_ORI'] += ori_day
                         rt_total['주간_REP'] += rep_day
                         rt_total['야간_joints'] += j_night
                         rt_total['야간_ORI'] += ori_night
                         rt_total['야간_REP'] += rep_night
-                    
-                    # RT 합계행 (행11)
+                        
                     safe_set(11, 3, rt_total['주간_joints'])
                     safe_set(11, 4, rt_total['주간_ORI'])
                     safe_set(11, 5, rt_total['주간_REP'])
@@ -12003,7 +12000,6 @@ class MaterialManager:
                     safe_set(11, 13, rt_total['주간_REP'] + rt_total['야간_REP'])
                     safe_set(11, 14, rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP'])
                     
-                    # UT (행12=실검사길이, 행13=검사보정길이)
                     ut = agg['UT']['data']
                     ut_day_j = get_val(ut, '주간', 'ORI', 'joints') + get_val(ut, '주간', 'REP', 'joints')
                     ut_day_ori = get_val(ut, '주간', 'ORI', 'qty')
@@ -12013,7 +12009,7 @@ class MaterialManager:
                     ut_night_rep = get_val(ut, '야간/휴일', 'REP', 'qty')
                     
                     safe_set(12, 3, ut_day_j)
-                    safe_set(12, 4, ut_day_ori + ut_day_rep)   # UT는 ORI+REP 합산 (실검사길이)
+                    safe_set(12, 4, ut_day_ori + ut_day_rep)
                     safe_set(12, 6, ut_day_ori + ut_day_rep)
                     safe_set(12, 7, ut_night_j)
                     safe_set(12, 8, ut_night_ori + ut_night_rep)
@@ -12022,7 +12018,6 @@ class MaterialManager:
                     safe_set(12, 12, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
                     safe_set(12, 14, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
                     
-                    # UT 검사보정길이 (행13)
                     ut_day_adj = get_val(ut, '주간', 'ORI', 'adj_qty') + get_val(ut, '주간', 'REP', 'adj_qty')
                     ut_night_adj = get_val(ut, '야간/휴일', 'ORI', 'adj_qty') + get_val(ut, '야간/휴일', 'REP', 'adj_qty')
                     safe_set(13, 4, ut_day_adj)
@@ -12032,7 +12027,6 @@ class MaterialManager:
                     safe_set(13, 12, ut_day_adj + ut_night_adj)
                     safe_set(13, 14, ut_day_adj + ut_night_adj)
                     
-                    # PT (행14=실검사길이, 행15=검사보정길이)
                     pt = agg['PT']['data']
                     pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')
                     pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')
@@ -12051,7 +12045,6 @@ class MaterialManager:
                     safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
                     safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
                     
-                    # PT 검사보정길이 (행15)
                     pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')
                     pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')
                     safe_set(15, 4, pt_day_adj)
@@ -12061,35 +12054,80 @@ class MaterialManager:
                     safe_set(15, 12, pt_day_adj + pt_night_adj)
                     safe_set(15, 14, pt_day_adj + pt_night_adj)
                     
-                    # 전산화 (행16=필름매수, 행17=보고서)
                     total_film = rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP']
-                    safe_set(16, 11, 0)  # 전산화 필름(매) - 집계 후 별도
+                    safe_set(16, 11, 0)
                     safe_set(16, 12, total_film)
-                
-                # 시트별 기입
+                    
+                sheet_names = wb.sheetnames
                 if main_agg:
                     sheet_name = '3. 비파괴검사 현황 (열배관)'
-                    if sheet_name in wb.sheetnames:
-                        write_ndt_sheet(wb[sheet_name], main_agg)
+                    if sheet_name in sheet_names:
+                        write_ndt_sheet_openpyxl(wb[sheet_name], main_agg)
                         log(f"✅ '{sheet_name}' 시트 기입 완료")
                     else:
                         log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
-                
+                        
                 if mgmt_agg:
                     sheet_name = '3. 비파괴검사 현황 (관리소)'
-                    if sheet_name in wb.sheetnames:
-                        write_ndt_sheet(wb[sheet_name], mgmt_agg)
+                    if sheet_name in sheet_names:
+                        write_ndt_sheet_openpyxl(wb[sheet_name], mgmt_agg)
                         log(f"✅ '{sheet_name}' 시트 기입 완료")
                     else:
                         log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
-                
-                # 저장
-                wb.save(filepath)
+                        
+                history = {}
+                import json, os
+                history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+                if os.path.exists(history_path):
+                    with open(history_path, 'r', encoding='utf-8') as f:
+                        history = json.load(f)
+                        
+                # (Old PAUT block removed in favor of tagged writer below)
+                wb.save(save_path)
                 wb.close()
-                log(f"\n🎉 저장 완료: {filepath}")
-                messagebox.showinfo("완료", f"월간 진도보고서 비파괴검사 현황이 업데이트되었습니다.\n{filepath}")
+                log(f"\n🎉 저장 완료: {save_path}")
+                messagebox.showinfo("완료", f"월간 진도보고서 비파괴검사 현황이 업데이트되었습니다.\n{save_path}")
+                import os
+                os.startfile(os.path.dirname(save_path))
                 
+            
+                # --- 4.5 NDT 결과서 섹션 태그 기반 자동 기입 ---
+                try:
+                    import sys as _sys
+                    import os as _os
+                    _src = _os.path.dirname(_os.path.abspath(__file__))
+                    if _src not in _sys.path:
+                        _sys.path.insert(0, _src)
+                    
+                    from tagged_ndt_writer import write_all_tagged_sections
+                    target_month_str = f"{year}-{month:02d}"
+                    
+                    # 저장된 파일을 다시 열어 NDT 기입
+                    import openpyxl as _opx
+                    wb2 = _opx.load_workbook(save_path)
+                    ws2 = wb2.worksheets[0]
+                    
+                    # 태그 기반 NDT 섹션 기입
+                    write_all_tagged_sections(ws2, history, target_month_str, log_func=log)
+                    
+                    wb2.save(save_path)
+                    wb2.close()
+                    log("✅ 태그 기반 NDT 결과서 전체 기입 완료")
+                    
+                    log("✅ NDT 결과서 전체 기입 완료")
+                    
+                    log("✅ NDT 결과서 전체 기입 완료")
+                    
+                except Exception as ex:
+                    log(f"⚠️ NDT 결과서 기입 오류 (무시됨): {ex}")
+                    import traceback
+                    log(traceback.format_exc())
+                    log("✅ 태그 변환 완료")
+                except Exception as ex:
+                    log(f"⚠️ 태그 변환 중 오류 (무시됨): {ex}")
+                    
             except Exception as e:
+
                 log(f"❌ 오류 발생: {e}")
                 import traceback
                 log(traceback.format_exc())

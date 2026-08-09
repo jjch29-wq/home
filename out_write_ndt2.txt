@@ -1,0 +1,90 @@
+12011: '                        # 셀 기입\r\n'
+12012: '                        safe_set(row_num, 3, j_day)       # C: 일반 용접개소\r\n'
+12013: '                        safe_set(row_num, 4, ori_day)      # D: 일반 ORI\r\n'
+12014: '                        safe_set(row_num, 5, rep_day)      # E: 일반 REP\r\n'
+12015: '                        safe_set(row_num, 6, sum_day)      # F: 일반 합계\r\n'
+12016: '                        safe_set(row_num, 7, j_night)      # G: 야간 용접개소\r\n'
+12017: '                        safe_set(row_num, 8, ori_night)    # H: 야간 ORI\r\n'
+12018: '                        safe_set(row_num, 9, rep_night)    # I: 야간 REP\r\n'
+12019: '                        safe_set(row_num, 10, sum_night)   # J: 야간 합계\r\n'
+12020: '                        safe_set(row_num, 11, j_total)     # K: 합계 용접개소\r\n'
+12021: '                        safe_set(row_num, 12, ori_total)   # L: 합계 ORI\r\n'
+12022: '                        safe_set(row_num, 13, rep_total)   # M: 합계 REP\r\n'
+12023: '                        safe_set(row_num, 14, sum_total)   # N: 합계 합계\r\n'
+12024: '                        \r\n'
+12025: '                        # 누적 합계용\r\n'
+12026: "                        rt_total['주간_joints'] += j_day\r\n"
+12027: "                        rt_total['주간_ORI'] += ori_day\r\n"
+12028: "                        rt_total['주간_REP'] += rep_day\r\n"
+12029: "                        rt_total['야간_joints'] += j_night\r\n"
+12030: "                        rt_total['야간_ORI'] += ori_night\r\n"
+12031: "                        rt_total['야간_REP'] += rep_night\r\n"
+12032: '                    \r\n'
+12033: '                    # RT 합계행 (행11)\r\n'
+12034: "                    safe_set(11, 3, rt_total['주간_joints'])\r\n"
+12035: "                    safe_set(11, 4, rt_total['주간_ORI'])\r\n"
+12036: "                    safe_set(11, 5, rt_total['주간_REP'])\r\n"
+12037: "                    safe_set(11, 6, rt_total['주간_ORI'] + rt_total['주간_REP'])\r\n"
+12038: "                    safe_set(11, 7, rt_total['야간_joints'])\r\n"
+12039: "                    safe_set(11, 8, rt_total['야간_ORI'])\r\n"
+12040: "                    safe_set(11, 9, rt_total['야간_REP'])\r\n"
+12041: "                    safe_set(11, 10, rt_total['야간_ORI'] + rt_total['야간_REP'])\r\n"
+12042: "                    safe_set(11, 11, rt_total['주간_joints'] + rt_total['야간_joints'])\r\n"
+12043: "                    safe_set(11, 12, rt_total['주간_ORI'] + rt_total['야간_ORI'])\r\n"
+12044: "                    safe_set(11, 13, rt_total['주간_REP'] + rt_total['야간_REP'])\r\n"
+12045: "                    safe_set(11, 14, rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP'])\r\n"
+12046: '                    \r\n'
+12047: '                    # UT (행12=실검사길이, 행13=검사보정길이)\r\n'
+12048: "                    ut = agg['UT']['data']\r\n"
+12049: "                    ut_day_j = get_val(ut, '주간', 'ORI', 'joints') + get_val(ut, '주간', 'REP', 'joints')\r\n"
+12050: "                    ut_day_ori = get_val(ut, '주간', 'ORI', 'qty')\r\n"
+12051: "                    ut_day_rep = get_val(ut, '주간', 'REP', 'qty')\r\n"
+12052: "                    ut_night_j = get_val(ut, '야간/휴일', 'ORI', 'joints') + get_val(ut, '야간/휴일', 'REP', 'joints')\r\n"
+12053: "                    ut_night_ori = get_val(ut, '야간/휴일', 'ORI', 'qty')\r\n"
+12054: "                    ut_night_rep = get_val(ut, '야간/휴일', 'REP', 'qty')\r\n"
+12055: '                    \r\n'
+12056: '                    safe_set(12, 3, ut_day_j)\r\n'
+12057: '                    safe_set(12, 4, ut_day_ori + ut_day_rep)   # UT는 ORI+REP 합산 (실검사길이)\r\n'
+12058: '                    safe_set(12, 6, ut_day_ori + ut_day_rep)\r\n'
+12059: '                    safe_set(12, 7, ut_night_j)\r\n'
+12060: '                    safe_set(12, 8, ut_night_ori + ut_night_rep)\r\n'
+12061: '                    safe_set(12, 10, ut_night_ori + ut_night_rep)\r\n'
+12062: '                    safe_set(12, 11, ut_day_j + ut_night_j)\r\n'
+12063: '                    safe_set(12, 12, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)\r\n'
+12064: '                    safe_set(12, 14, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)\r\n'
+12065: '                    \r\n'
+12066: '                    # UT 검사보정길이 (행13)\r\n'
+12067: "                    ut_day_adj = get_val(ut, '주간', 'ORI', 'adj_qty') + get_val(ut, '주간', 'REP', 'adj_qty')\r\n"
+12068: "                    ut_night_adj = get_val(ut, '야간/휴일', 'ORI', 'adj_qty') + get_val(ut, '야간/휴일', 'REP', 'adj_qty')\r\n"
+12069: '                    safe_set(13, 4, ut_day_adj)\r\n'
+12070: '                    safe_set(13, 6, ut_day_adj)\r\n'
+12071: '                    safe_set(13, 8, ut_night_adj)\r\n'
+12072: '                    safe_set(13, 10, ut_night_adj)\r\n'
+12073: '                    safe_set(13, 12, ut_day_adj + ut_night_adj)\r\n'
+12074: '                    safe_set(13, 14, ut_day_adj + ut_night_adj)\r\n'
+12075: '                    \r\n'
+12076: '                    # PT (행14=실검사길이, 행15=검사보정길이)\r\n'
+12077: "                    pt = agg['PT']['data']\r\n"
+12078: "                    pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')\r\n"
+12079: "                    pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')\r\n"
+12080: "                    pt_day_rep = get_val(pt, '주간', 'REP', 'qty')\r\n"
+12081: "                    pt_night_j = get_val(pt, '야간/휴일', 'ORI', 'joints') + get_val(pt, '야간/휴일', 'REP', 'joints')\r\n"
+12082: "                    pt_night_ori = get_val(pt, '야간/휴일', 'ORI', 'qty')\r\n"
+12083: "                    pt_night_rep = get_val(pt, '야간/휴일', 'REP', 'qty')\r\n"
+12084: '                    \r\n'
+12085: '                    safe_set(14, 3, pt_day_j)\r\n'
+12086: '                    safe_set(14, 4, pt_day_ori + pt_day_rep)\r\n'
+12087: '                    safe_set(14, 6, pt_day_ori + pt_day_rep)\r\n'
+12088: '                    safe_set(14, 7, pt_night_j)\r\n'
+12089: '                    safe_set(14, 8, pt_night_ori + pt_night_rep)\r\n'
+12090: '                    safe_set(14, 10, pt_night_ori + pt_night_rep)\r\n'
+12091: '                    safe_set(14, 11, pt_day_j + pt_night_j)\r\n'
+12092: '                    safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)\r\n'
+12093: '                    safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)\r\n'
+12094: '                    \r\n'
+12095: '                    # PT 검사보정길이 (행15)\r\n'
+12096: "                    pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')\r\n"
+12097: "                    pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')\r\n"
+12098: '                    safe_set(15, 4, pt_day_adj)\r\n'
+12099: '                    safe_set(15, 6, pt_day_adj)\r\n'
+12100: '                    safe_set(15, 8, pt_night_adj)\r\n'

@@ -1,0 +1,252 @@
+# --- 5. 엑셀 기입 ---
+                import win32com.client
+                import os
+                excel = win32com.client.Dispatch('Excel.Application')
+                try:
+                    excel.Visible = False
+                except Exception:
+                    pass
+                wb = excel.Workbooks.Open(os.path.abspath(save_path))
+                
+                def write_ndt_sheet(ws, agg):
+                    """비파괴검사 현황 시트에 집계 데이터 기입"""
+                    if agg is None:
+                        return
+                    
+                    def get_val(bucket, shift, insp_type, field='qty'):
+                        key = (shift, insp_type)
+                        return bucket.get(key, {}).get(field, 0)
+                    
+                    def safe_set(row, col, val):
+                        """값이 0이 아닐 때만 기입 (기존 수식 보호)"""
+                        if val and val != 0:
+                            ws.Cells(row, col).Value = round(val, 2) if isinstance(val, float) and val != int(val) else int(val) if isinstance(val, float) and val == int(val) else val
+                    
+                    # RT: 행8=B-TYPE, 행9=A-TYPE, 행10=A/2-TYPE, 행11=합계
+                    rt_types = {'B': 8, 'A': 9, 'A/2': 10}
+                    rt_total = {'주간_joints': 0, '주간_ORI': 0, '주간_REP': 0,
+                                '야간_joints': 0, '야간_ORI': 0, '야간_REP': 0}
+                    
+                    for film_key, row_num in rt_types.items():
+                        bucket = agg['RT'][film_key]
+                        
+                        # 일반검사 (주간)
+                        j_day = get_val(bucket, '주간', 'ORI', 'joints') + get_val(bucket, '주간', 'REP', 'joints')
+                        ori_day = get_val(bucket, '주간', 'ORI', 'qty')
+                        rep_day = get_val(bucket, '주간', 'REP', 'qty')
+                        sum_day = ori_day + rep_day
+                        
+                        # 휴일/야간검사
+                        j_night = get_val(bucket, '야간/휴일', 'ORI', 'joints') + get_val(bucket, '야간/휴일', 'REP', 'joints')
+                        ori_night = get_val(bucket, '야간/휴일', 'ORI', 'qty')
+                        rep_night = get_val(bucket, '야간/휴일', 'REP', 'qty')
+                        sum_night = ori_night + rep_night
+                        
+                        # 합계
+                        j_total = j_day + j_night
+                        ori_total = ori_day + ori_night
+                        rep_total = rep_day + rep_night
+                        sum_total = ori_total + rep_total
+                        
+                        # 셀 기입
+                        safe_set(row_num, 3, j_day)       # C: 일반 용접개소
+                        safe_set(row_num, 4, ori_day)      # D: 일반 ORI
+                        safe_set(row_num, 5, rep_day)      # E: 일반 REP
+                        safe_set(row_num, 6, sum_day)      # F: 일반 합계
+                        safe_set(row_num, 7, j_night)      # G: 야간 용접개소
+                        safe_set(row_num, 8, ori_night)    # H: 야간 ORI
+                        safe_set(row_num, 9, rep_night)    # I: 야간 REP
+                        safe_set(row_num, 10, sum_night)   # J: 야간 합계
+                        safe_set(row_num, 11, j_total)     # K: 합계 용접개소
+                        safe_set(row_num, 12, ori_total)   # L: 합계 ORI
+                        safe_set(row_num, 13, rep_total)   # M: 합계 REP
+                        safe_set(row_num, 14, sum_total)   # N: 합계 합계
+                        
+                        # 누적 합계용
+                        rt_total['주간_joints'] += j_day
+                        rt_total['주간_ORI'] += ori_day
+                        rt_total['주간_REP'] += rep_day
+                        rt_total['야간_joints'] += j_night
+                        rt_total['야간_ORI'] += ori_night
+                        rt_total['야간_REP'] += rep_night
+                    
+                    # RT 합계행 (행11)
+                    safe_set(11, 3, rt_total['주간_joints'])
+                    safe_set(11, 4, rt_total['주간_ORI'])
+                    safe_set(11, 5, rt_total['주간_REP'])
+                    safe_set(11, 6, rt_total['주간_ORI'] + rt_total['주간_REP'])
+                    safe_set(11, 7, rt_total['야간_joints'])
+                    safe_set(11, 8, rt_total['야간_ORI'])
+                    safe_set(11, 9, rt_total['야간_REP'])
+                    safe_set(11, 10, rt_total['야간_ORI'] + rt_total['야간_REP'])
+                    safe_set(11, 11, rt_total['주간_joints'] + rt_total['야간_joints'])
+                    safe_set(11, 12, rt_total['주간_ORI'] + rt_total['야간_ORI'])
+                    safe_set(11, 13, rt_total['주간_REP'] + rt_total['야간_REP'])
+                    safe_set(11, 14, rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP'])
+                    
+                    # UT (행12=실검사길이, 행13=검사보정길이)
+                    ut = agg['UT']['data']
+                    ut_day_j = get_val(ut, '주간', 'ORI', 'joints') + get_val(ut, '주간', 'REP', 'joints')
+                    ut_day_ori = get_val(ut, '주간', 'ORI', 'qty')
+                    ut_day_rep = get_val(ut, '주간', 'REP', 'qty')
+                    ut_night_j = get_val(ut, '야간/휴일', 'ORI', 'joints') + get_val(ut, '야간/휴일', 'REP', 'joints')
+                    ut_night_ori = get_val(ut, '야간/휴일', 'ORI', 'qty')
+                    ut_night_rep = get_val(ut, '야간/휴일', 'REP', 'qty')
+                    
+                    safe_set(12, 3, ut_day_j)
+                    safe_set(12, 4, ut_day_ori + ut_day_rep)   # UT는 ORI+REP 합산 (실검사길이)
+                    safe_set(12, 6, ut_day_ori + ut_day_rep)
+                    safe_set(12, 7, ut_night_j)
+                    safe_set(12, 8, ut_night_ori + ut_night_rep)
+                    safe_set(12, 10, ut_night_ori + ut_night_rep)
+                    safe_set(12, 11, ut_day_j + ut_night_j)
+                    safe_set(12, 12, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+                    safe_set(12, 14, ut_day_ori + ut_day_rep + ut_night_ori + ut_night_rep)
+                    
+                    # UT 검사보정길이 (행13)
+                    ut_day_adj = get_val(ut, '주간', 'ORI', 'adj_qty') + get_val(ut, '주간', 'REP', 'adj_qty')
+                    ut_night_adj = get_val(ut, '야간/휴일', 'ORI', 'adj_qty') + get_val(ut, '야간/휴일', 'REP', 'adj_qty')
+                    safe_set(13, 4, ut_day_adj)
+                    safe_set(13, 6, ut_day_adj)
+                    safe_set(13, 8, ut_night_adj)
+                    safe_set(13, 10, ut_night_adj)
+                    safe_set(13, 12, ut_day_adj + ut_night_adj)
+                    safe_set(13, 14, ut_day_adj + ut_night_adj)
+                    
+                    # PT (행14=실검사길이, 행15=검사보정길이)
+                    pt = agg['PT']['data']
+                    pt_day_j = get_val(pt, '주간', 'ORI', 'joints') + get_val(pt, '주간', 'REP', 'joints')
+                    pt_day_ori = get_val(pt, '주간', 'ORI', 'qty')
+                    pt_day_rep = get_val(pt, '주간', 'REP', 'qty')
+                    pt_night_j = get_val(pt, '야간/휴일', 'ORI', 'joints') + get_val(pt, '야간/휴일', 'REP', 'joints')
+                    pt_night_ori = get_val(pt, '야간/휴일', 'ORI', 'qty')
+                    pt_night_rep = get_val(pt, '야간/휴일', 'REP', 'qty')
+                    
+                    safe_set(14, 3, pt_day_j)
+                    safe_set(14, 4, pt_day_ori + pt_day_rep)
+                    safe_set(14, 6, pt_day_ori + pt_day_rep)
+                    safe_set(14, 7, pt_night_j)
+                    safe_set(14, 8, pt_night_ori + pt_night_rep)
+                    safe_set(14, 10, pt_night_ori + pt_night_rep)
+                    safe_set(14, 11, pt_day_j + pt_night_j)
+                    safe_set(14, 12, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+                    safe_set(14, 14, pt_day_ori + pt_day_rep + pt_night_ori + pt_night_rep)
+                    
+                    # PT 검사보정길이 (행15)
+                    pt_day_adj = get_val(pt, '주간', 'ORI', 'adj_qty') + get_val(pt, '주간', 'REP', 'adj_qty')
+                    pt_night_adj = get_val(pt, '야간/휴일', 'ORI', 'adj_qty') + get_val(pt, '야간/휴일', 'REP', 'adj_qty')
+                    safe_set(15, 4, pt_day_adj)
+                    safe_set(15, 6, pt_day_adj)
+                    safe_set(15, 8, pt_night_adj)
+                    safe_set(15, 10, pt_night_adj)
+                    safe_set(15, 12, pt_day_adj + pt_night_adj)
+                    safe_set(15, 14, pt_day_adj + pt_night_adj)
+                    
+                    # 전산화 (행16=필름매수, 행17=보고서)
+                    total_film = rt_total['주간_ORI'] + rt_total['주간_REP'] + rt_total['야간_ORI'] + rt_total['야간_REP']
+                    safe_set(16, 11, 0)  # 전산화 필름(매) - 집계 후 별도
+                    safe_set(16, 12, total_film)
+                
+                # 시트별 기입
+                sheet_names = [sheet.Name for sheet in wb.Sheets]
+                if main_agg:
+                    sheet_name = '3. 비파괴검사 현황 (열배관)'
+                    if sheet_name in sheet_names:
+                        write_ndt_sheet(wb.Sheets(sheet_name), main_agg)
+                        log(f"✅ '{sheet_name}' 시트 기입 완료")
+                    else:
+                        log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+                
+                if mgmt_agg:
+                    sheet_name = '3. 비파괴검사 현황 (관리소)'
+                    if sheet_name in sheet_names:
+                        write_ndt_sheet(wb.Sheets(sheet_name), mgmt_agg)
+                        log(f"✅ '{sheet_name}' 시트 기입 완료")
+                    else:
+                        log(f"⚠️ '{sheet_name}' 시트를 찾을 수 없습니다.")
+                
+                # 저장
+
+                # 1.1 비파괴검사 물량표 작성 (PAUT)
+                # 시트 이름이 약간 다를 수 있으므로 '위상배열'이 포함된 시트를 찾습니다.
+                # 1.1 비파괴검사 물량표 작성 (PAUT)
+                # 시트 이름은 '3. 비파괴검사 현황 (열배관)' 입니다.
+                messagebox.showinfo('디버그', 'PAUT 처리 시작!')
+                paut_sheet_name = '3. 비파괴검사 현황 (열배관)'
+                if paut_sheet_name in sheet_names:
+                    try:
+                        paut_records = []
+                        target_month_str = f"{year}-{month:02d}"
+                        
+                        for date_key, log_data in history.items():
+                            if date_key.startswith(target_month_str):
+                                ndt_results = log_data.get('ndt_results', [])
+                                for r in ndt_results:
+                                    if str(r.get('검사방법', '')).strip().upper() == 'PAUT':
+                                        r['_date'] = date_key
+                                        paut_records.append(r)
+                                        
+                        if paut_records:
+                            # 날짜순 정렬
+                            paut_records.sort(key=lambda x: x['_date'])
+                            
+                            groups = {}
+                            for r in paut_records:
+                                key = (str(r.get('업체', '')), str(r.get('구간', '')), str(r.get('라인번호', '')), str(r.get('관경', '')), str(r.get('Joint No.', '')))
+                                
+                                paut_val = str(r.get('PAUT', '0')).strip()
+                                try:
+                                    val = float(paut_val)
+                                except:
+                                    val = 0.0
+                                    
+                                if val == 0: continue
+                                    
+                                shift = str(r.get('규격', '주간')).strip()
+                                
+                                if key not in groups:
+                                    groups[key] = {'ORI': 0.0, 'RE': 0.0, 'shift': shift}
+                                    
+                                if groups[key]['ORI'] == 0.0:
+                                    groups[key]['ORI'] += val
+                                else:
+                                    groups[key]['RE'] += val
+                                    
+                            ws_paut = wb.Sheets(paut_sheet_name)
+                            # 기존 내용 지우기 (B405:M1000)
+                            # ws_paut.Range("B405:M1000").ClearContents()
+                            
+                            # 데이터 개수에 맞춰 행 삽입 (TOTAL 행 밀어내기)
+                            if len(groups) > 1:
+                                for _ in range(len(groups) - 1):
+                                    ws_paut.Rows(406).Insert(Shift=-4121, CopyOrigin=0)
+                                    
+                            current_row = 405
+                            for i, (key, data) in enumerate(groups.items()):
+                                업체, 구간, 라인번호, 관경, joint = key
+                                ws_paut.Cells(current_row, 2).Value = 업체
+                                ws_paut.Cells(current_row, 3).Value = i + 1
+                                ws_paut.Cells(current_row, 4).Value = 구간
+                                ws_paut.Cells(current_row, 5).Value = 라인번호
+                                ws_paut.Cells(current_row, 6).Value = 관경
+                                ws_paut.Cells(current_row, 7).Value = joint
+                                ws_paut.Cells(current_row, 8).Value = data['shift']
+                                ws_paut.Cells(current_row, 9).Value = 'M'
+                                
+                                ori = data['ORI']
+                                re_val = data['RE']
+                                tot = ori + re_val
+                                
+                                if ori > 0: ws_paut.Cells(current_row, 10).Value = round(ori, 4)
+                                if re_val > 0: ws_paut.Cells(current_row, 11).Value = round(re_val, 4)
+                                if tot > 0: ws_paut.Cells(current_row, 12).Value = round(tot, 4)
+                                
+                                current_row += 1
+                                
+                            log(f"▶ '{paut_sheet_name}' 시트 기입 완료 (총 {len(groups)}건)")
+                            messagebox.showinfo('PAUT 디버그', f'PAUT 데이터 {len(groups)}건 기입 완료!\npaut_records: {len(paut_records)}건')
+                    except Exception as e:
+                        log(f"⚠️ '{paut_sheet_name}' 작성 중 오류: {e}")
+                wb.Save()
+                wb.Close()
+                excel.Quit()

@@ -202,7 +202,7 @@ class NDTSummaryExporter:
                 key = col_map.get(h, '')
                 
                 if h == '순번':
-                    val = row_idx - 1
+                    val = row_idx - 2
                 else:
                     val = row_data.get(key, '')
                 

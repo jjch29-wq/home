@@ -1,7 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from ndt_summary_exporter import NDTSummaryExporter
+from monthly_report_exporter import MonthlyReportExporter
 from tkcalendar import DateEntry
 from datetime import datetime
 import os
@@ -204,6 +205,9 @@ class DailyWorkLogTab(ttk.Frame):
         
         btn_export_ndt = ttk.Button(title_frame, text="NDT 누계 대장 엑셀 출력", command=self.export_ndt_summary)
         btn_export_ndt.pack(side="left", padx=10)
+        
+        btn_export_monthly = ttk.Button(title_frame, text="월간진도보고서 출력", command=self.export_monthly_report)
+        btn_export_monthly.pack(side="left", padx=10)
         
         # Grid Container
         grid_frame = ttk.Frame(parent)
@@ -499,6 +503,12 @@ class DailyWorkLogTab(ttk.Frame):
             import traceback
             traceback.print_exc()
             messagebox.showerror("오류", f"NDT 누계 대장 생성 중 오류가 발생했습니다:\n{str(e)}")
+
+    def export_monthly_report(self):
+        if hasattr(self, 'main_app') and hasattr(self.main_app, 'export_monthly_ndt_report'):
+            self.main_app.export_monthly_ndt_report()
+        else:
+            messagebox.showerror("오류", "메인 어플리케이션과 연결되지 않았습니다.")
 
     def load_history(self):
         try:

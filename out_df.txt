@@ -1,0 +1,4 @@
+11939: "                main_df = df[df['Site'].isin(main_sites)] if main_sites else pd.DataFrame()\r\n"
+11940: "                mgmt_df = df[df['Site'].isin(mgmt_sites)] if mgmt_sites else pd.DataFrame()\r\n"
+11942: '                log(f"▶ 열배관 데이터: {len(main_df)}건, 관리소 데이터: {len(mgmt_df)}건")\r\n'
+11944: '                main_agg = aggregate_site(main_df) if not main_df.empty else None\r\n'

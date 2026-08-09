@@ -1,0 +1,30 @@
+11796: 
+11797: def do_export():
+11798: try:
+11799: year = year_var.get()
+11800: month = month_var.get()
+11801: doc_num = doc_num_var.get().strip()
+11802: filepath = file_var.get().strip()
+11803: 
+11804: main_sites = [s.strip() for s in main_var.get().split(',') if s.strip()]
+11805: mgmt_sites = [s.strip() for s in mgmt_var.get().split(',') if s.strip()]
+11806: 
+11807: if not main_sites and not mgmt_sites:
+11808: messagebox.showwarning("입력 오류", "열배관 또는 관리소에 해당하는 현장명을 최소 1개 입력해주세요.")
+11809: return
+11810: if not filepath:
+11811: messagebox.showwarning("입력 오류", "대상 엑셀 파일을 선택해주세요.")
+11812: return
+11813: 
+11814: log(f"▶ 기간: {year}년 {month}월")
+11815: log(f"▶ 열배관 현장: {main_sites}")
+11816: log(f"▶ 관리소 현장: {mgmt_sites}")
+11817: 
+11818: # --- 1. 데이터 필터링 ---
+11819: base_df = self.daily_usage_df.copy()
+11820: base_df['_date'] = pd.to_datetime(base_df['Date'], errors='coerce')
+11821: 
+11822: # 기존 로직용 당월 데이터
+11823: df = base_df[(base_df['_date'].dt.year == year) & (base_df['_date'].dt.month == month)]
+11824: 
+11825: # 새로운 1.1 표 로직용 전월/당월 데이터
