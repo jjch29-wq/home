@@ -1,5 +1,6 @@
 import openpyxl
 from openpyxl.worksheet.cell_range import CellRange
+from openpyxl.styles import Alignment
 
 def safe_write(ws, row, col, value):
     """병합 셀 충돌 없이 안전하게 값 쓰기 (앵커 셀에만 기입)"""
@@ -110,6 +111,29 @@ def write_tagged_records(ws, tag, records, col_map):
         ori = float(rec.get('ORI', 0) or 0)
         re_val = float(rec.get('RE', 0) or 0)
         tot = ori + re_val
+
+        ws.row_dimensions[current_row].height = 45 # Line No. 높이 조절
+        
+        # Line No. 줄바꿈 처리
+        if 'line_no' in col_map:
+            # 병합된 경우 앵커 셀에 적용
+            for merge in ws.merged_cells.ranges:
+                if merge.min_row <= current_row <= merge.max_row and merge.min_col <= col_map['line_no'] <= merge.max_col:
+                    ws.cell(merge.min_row, merge.min_col).alignment = Alignment(wrapText=True, horizontal='center', vertical='center')
+                    break
+            else:
+                ws.cell(current_row, col_map['line_no']).alignment = Alignment(wrapText=True, horizontal='center', vertical='center')
+
+        # PAUT 길이 밑칸(ORI, RE, TOTAL) 병합 안전하게 해제
+        target_cols = [col_map.get('ori'), col_map.get('re'), col_map.get('total')]
+        target_cols = [c for c in target_cols if c is not None]
+        
+        new_ranges = []
+        for merge in ws.merged_cells.ranges:
+            if merge.min_row <= current_row <= merge.max_row and any(merge.min_col <= c <= merge.max_col for c in target_cols):
+                continue # 제외 (병합 해제)
+            new_ranges.append(merge)
+        ws.merged_cells.ranges = new_ranges
 
         if 'ori' in col_map and ori > 0:
             safe_write(ws, current_row, col_map['ori'], round(ori, 4))

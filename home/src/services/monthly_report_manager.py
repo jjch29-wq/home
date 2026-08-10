@@ -1,5 +1,6 @@
 import openpyxl
 from openpyxl.styles import Alignment, Border, Side, Font
+from openpyxl.cell.cell import Cell
 import os
 import json
 import datetime
@@ -29,10 +30,13 @@ class MonthlyReportManager:
         thin = Side(style='thin')
         self.border_thin = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    def generate_report(self, history_path, year_month, output_path):
+    def generate_report(self, history_path, target_ym, output_path, doc_num="01", create_date=None):
+        if create_date is None:
+            from datetime import datetime
+            create_date = str(datetime.today().date())
         """
         history_path: daily_work_history.json 경로
-        year_month: "YYYY-MM" 형식 (예: "2026-08")
+        target_ym: "YYYY-MM" 형식 (예: "2026-08")
         """
         if not os.path.exists(self.template_path):
             raise FileNotFoundError(f"Template not found at {self.template_path}")
@@ -44,9 +48,9 @@ class MonthlyReportManager:
             history_data = json.load(f)
 
         # 1. 데이터 필터링 및 집계
-        target_dates = sorted([d for d in history_data.keys() if d.startswith(year_month)])
+        target_dates = sorted([d for d in history_data.keys() if d.startswith(target_ym)])
         if not target_dates:
-            print(f"No data found for {year_month}")
+            print(f"No data found for {target_ym}")
             return None
 
         # 집계 구조
@@ -132,6 +136,19 @@ class MonthlyReportManager:
 
         # 2. 엑셀 쓰기 준비
         wb = openpyxl.load_workbook(self.template_path)
+        
+        # 엑셀 열 때 '명명된 범위' 복구 창이 뜨는 것을 방지하기 위해 불필요한 이름 정의 삭제
+        if hasattr(wb, 'defined_names'):
+            try:
+                wb.defined_names.clear()
+            except:
+                pass
+                
+        # 외부 수식 참조(externalLink) 찌꺼기로 인한 복구 창 방지
+        if hasattr(wb, '_external_links'):
+            wb._external_links = []
+            
+        # [표지] 시트의 병합 셀이 openpyxl 저장 시 풀리는 버그 방지를 위한 백업
         ws = wb.active
 
         # 역순으로 채워야 행 삽입 시 위에 있는 인덱스(row number)가 변하지 않음
@@ -158,6 +175,35 @@ class MonthlyReportManager:
             # 데이터 삽입
             data_items = list(ndt_groups[method].items())
             num_items = len(data_items)
+            
+            def _write_safe(r, c, val):
+                cell = ws.cell(row=r, column=c)
+                if type(cell).__name__ == 'MergedCell':
+                    new_cell = Cell(ws, row=r, column=c)
+                    ws._cells[(r, c)] = new_cell
+                    cell = new_cell
+                cell.value = val
+
+            def safe_merge(sr, sc, er, ec):
+                from openpyxl.utils import get_column_letter
+                coord = f"{get_column_letter(sc)}{sr}:{get_column_letter(ec)}{er}"
+                overlaps = []
+                for m in list(ws.merged_cells.ranges):
+                    # Check for overlap
+                    if m.bounds[0] <= ec and m.bounds[2] >= sc and m.bounds[1] <= er and m.bounds[3] >= sr:
+                        if str(m) == coord:
+                            return # Already perfectly merged
+                        overlaps.append(m)
+                
+                # Unmerge any overlapping regions first to prevent Excel file corruption
+                for m in overlaps:
+                    try:
+                        ws.unmerge_cells(str(m))
+                    except:
+                        pass
+                
+                try: ws.merge_cells(coord)
+                except: pass
             
             # 기존에 2개의 빈 행이 있다고 가정하고(TOTAL 위에), 모자라면 삽입
             existing_empty_rows = total_row - start_row
@@ -187,24 +233,73 @@ class MonthlyReportManager:
                 ws.cell(row=current_row, column=12).value = count
                 ws.cell(row=current_row, column=14).value = spec
                 ws.cell(row=current_row, column=16).value = unit
-                ws.cell(row=current_row, column=17).value = f"{qty:.4f}" if qty % 1 != 0 else str(int(qty))
+                
+                ws.cell(row=current_row, column=16).value = unit
+
+                _write_safe(current_row, 17, f"{qty:.4f}" if qty % 1 != 0 else str(int(qty)))
+                if method == 'PAUT':
+                    _write_safe(current_row, 20, f"{qty:.4f}" if qty % 1 != 0 else str(int(qty)))
                 
                 # 병합 처리 (템플릿 양식에 맞춤)
-                ws.merge_cells(start_row=current_row, start_column=4, end_row=current_row, end_column=5) # Section
-                ws.merge_cells(start_row=current_row, start_column=6, end_row=current_row, end_column=9) # Line No.
-                ws.merge_cells(start_row=current_row, start_column=10, end_row=current_row, end_column=11) # 관경
-                ws.merge_cells(start_row=current_row, start_column=12, end_row=current_row, end_column=13) # 용접개소
-                ws.merge_cells(start_row=current_row, start_column=14, end_row=current_row, end_column=15) # 규격
-                ws.merge_cells(start_row=current_row, start_column=17, end_row=current_row, end_column=19) # 길이
+                safe_merge(current_row, 4, current_row, 5) # Section
+                safe_merge(current_row, 6, current_row, 9) # Line No.
+                safe_merge(current_row, 10, current_row, 11) # 관경
+                safe_merge(current_row, 12, current_row, 13) # 용접개소
+                safe_merge(current_row, 14, current_row, 15) # 규격
                 
-                # 모든 병합된/단일 셀에 스타일 적용 (2~19번 열)
-                for c_idx in range(2, 20):
-                    cell = ws.cell(row=current_row, column=c_idx)
-                    cell.font = self.font_normal
-                    cell.alignment = self.align_center
-                    cell.border = self.border_thin
+                if method == 'PAUT':
+                    safe_merge(current_row, 18, current_row, 19) # RE'
+                else:
+                    safe_merge(current_row, 17, current_row, 20) # 길이
+                    
+                # Line No. 글씨 다 보이도록 높이 조절
+                ws.row_dimensions[current_row].height = 45
+
+                # 폰트, 정렬 적용 (병합된 칸 전체에 정렬 속성을 먹여야 엑셀이 줄바꿈을 정상 인식함)
+                for c_idx in range(2, 21):
+                    c_cell = ws.cell(row=current_row, column=c_idx)
+                    c_cell.font = self.font_normal
+                    c_cell.alignment = self.align_center
+                    c_cell.border = self.border_thin
 
                 current_row += 1
+                
+            # 빈 행(데이터 없는 행)들 스타일 정리 및 PAUT 병합 처리 준비
+            for r in range(current_row, total_row):
+                # 빈 행도 기본적으로 다른 칸들도 병합을 유지해야 템플릿 양식이 안 깨짐
+                safe_merge(r, 4, r, 5)
+                safe_merge(r, 6, r, 9)
+                safe_merge(r, 10, r, 11)
+                safe_merge(r, 12, r, 13)
+                safe_merge(r, 14, r, 15)
+                
+                if method == 'PAUT':
+                    safe_merge(r, 18, r, 19)
+                else:
+                    safe_merge(r, 17, r, 20)
+                for c_idx in range(2, 21):
+                    cell = ws.cell(row=r, column=c_idx)
+                    cell.border = self.border_thin
+
+            # TOTAL 행 값 쓰기 및 스타일 보정
+            total_qty = sum(vals['qty'] for _, vals in data_items)
+            
+            # TOTAL 행의 17, 18, 19, 20 칸 배경색(파란색)을 동일하게 맞춤 (첫 번째 셀 서식 복사)
+            fill_style = ws.cell(row=total_row, column=2).fill
+            if method == 'PAUT':
+                import copy
+                for c_idx in range(17, 21):
+                    c = ws.cell(row=total_row, column=c_idx)
+                    if fill_style:
+                        c.fill = copy.copy(fill_style)
+
+            if total_qty > 0:
+                if method == 'PAUT':
+                    _write_safe(total_row, 17, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
+                    _write_safe(total_row, 20, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
+                else:
+                    _write_safe(total_row, 17, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
+
         # 마지막으로 맨 위의 1.1 물량표 처리
         qty_start_row = self.table_markers['qty'] + 1
         qty_mapping = {
@@ -239,7 +334,114 @@ class MonthlyReportManager:
                 ws.cell(row=r_idx, column=15).value = data['공정률']
                 ws.cell(row=r_idx, column=17).value = self._format_num(data['불량'])
                 ws.cell(row=r_idx, column=19).value = data['불량률']
+
+        # 사용자 요청: RE'(18, 19열 -> R, S열) 너비는 좁게, TOTAL(20열 -> T열) 너비는 넓게 교정
+        ws.column_dimensions['R'].width = 4.0
+        ws.column_dimensions['S'].width = 4.0
+        ws.column_dimensions['T'].width = 11.0
+
+        # 사용자 요청: 모든 표의 좌측(2열), 우측(21열) 외곽선을 굵은 실선으로 복원/강제 설정
+        medium = Side(style='medium')
+        def apply_outer_borders(start_r, end_r):
+            for r in range(start_r, end_r + 1):
+                lc = ws.cell(row=r, column=2)
+                lc.border = Border(left=medium, right=lc.border.right, top=lc.border.top, bottom=lc.border.bottom)
+                rc = ws.cell(row=r, column=21)
+                rc.border = Border(left=rc.border.left, right=medium, top=rc.border.top, bottom=rc.border.bottom)
                 
+        # 1. 상단 물량표 외곽선 교정
+        if self.table_markers['qty'] > 0:
+            apply_outer_borders(self.table_markers['qty'] + 1, self.table_markers['qty'] + 14)
+            
+        # 2. 하단 데이터 표 외곽선 교정 (헤더 제외, 데이터 행부터 TOTAL 전까지)
+        for section_key in ['paut_1', 'paut_2', 'rt_1', 'rt_2', 'mt_1', 'mt_2', 'pt_1', 'pt_2']:
+            if section_key not in self.table_markers: continue
+            
+            s_row = self.table_markers[section_key]
+            if s_row > 0:
+                e_row = s_row
+                while True:
+                    val = str(ws.cell(row=e_row, column=2).value).strip().upper()
+                    if 'TOTAL' in val or '계' == val or e_row > s_row + 200:
+                        break
+                    e_row += 1
+                apply_outer_borders(s_row, e_row - 1)
+
+        # 문자열 치환 (문서번호, 연월, 날짜, 지사명 등)
+        y, m = target_ym.split('-')
+        import datetime
+        replacements = {
+            '[[보고서_연월]]': f"{y}년 {int(m)}월",
+            '[[보고서_월]]': f"{int(m)}월",
+            '[[문서번호]]': doc_num,
+            '[[작성일자]]': create_date,
+            '[[계약명]]': "2026년 중앙지사 열수송관 비파괴검사용역 단가계약",
+            '[[지사명]]': "중앙지사",
+            '2025년 동탄지사 열수송관 비파괴검사용역 단가계약': "2026년 중앙지사 열수송관 비파괴검사용역 단가계약",
+            '2025년 동탄지사 열배관  비파괴검사용역 단가계약': "2026년 중앙지사 열수송관 비파괴검사용역 단가계약",
+            '2025년 동탄지사 열배관 비파괴검사용역 단가계약': "2026년 중앙지사 열수송관 비파괴검사용역 단가계약",
+            '동 탄 지 사': "중 앙 지 사",
+            '분 당 사 업 소': "중 앙 지 사"
+        }
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.value:
+                        val_str = str(cell.value)
+                        
+                        if isinstance(cell.value, str):
+                            for k, v in replacements.items():
+                                if k in val_str:
+                                    cell.value = val_str.replace(k, str(v))
+                                    val_str = str(cell.value)
+                                    
+                        # 타이틀 텍스트 무조건 포맷 강제 적용 (모든 페이지의 제목 칸 타겟)
+                        val_no_spaces = val_str.replace(' ', '').replace('\xa0', '').replace('\n', '')
+                        
+                        is_title = False
+                        if ('단가계약' in val_no_spaces or '계약명' in val_no_spaces) and ('월간용역' in val_no_spaces or '보고서' in val_no_spaces):
+                            is_title = True
+                        elif cell.column == 6 and isinstance(cell.value, str) and val_no_spaces.startswith('='):
+                            # 사용자가 3페이지 등에서 '=F41' 처럼 수식으로 제목을 끌고 오는 경우 대응
+                            import re
+                            match = re.search(r'F\$?(\d+)', val_no_spaces, re.IGNORECASE)
+                            if match:
+                                ref_row = int(match.group(1))
+                                # 41, 81, 121 등 40행 간격으로 제목이 위치하므로 이를 수식에서 참조하면 제목 칸으로 간주
+                                if ref_row % 40 == 1:
+                                    is_title = True
+                                    
+                        if is_title:
+                            contract_name = replacements.get('[[계약명]]', '2026년 중앙지사 열수송관 비파괴검사용역 단가계약')
+                            # 무조건 괄호와 줄바꿈이 포함된 포맷으로 강제 덮어쓰기 (수식도 문자열로 덮어씌움)
+                            cell.value = f"【 {contract_name} 】\n월 간 용 역 진 도 보 고 서"
+                            
+                            # 글자가 너무 길어서 "약"이 밑으로 떨어지는 것을 원천 차단하기 위해 폰트 크기를 11로 대폭 줄임
+                            from openpyxl.styles import Alignment, Font
+                            import copy
+                            
+                            title_font = Font(name='맑은 고딕', size=11, bold=True)
+                            title_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            
+                            # 1. 정식 타이틀 셀(좌상단)에 폰트와 정렬 강제 주입
+                            cell.font = title_font
+                            cell.alignment = title_align
+                            
+                            # 2. openpyxl 버그(insert_rows 시 병합 셀 정보 증발)를 우회하기 위한 궁극의 꼼수
+                            # 제목이 위치하는 4줄(cell.row ~ +3)의 모든 칸(1~30열)에 대해,
+                            # 기존 서식(좌측 로고, 우측 문서번호 등)은 100% 보존하면서 오직 '자동 줄바꿈(wrap_text)' 속성만 강제로 켬!
+                            # 엑셀은 병합된 칸들 중 하나라도 wrap_text=False면 전체 줄바꿈을 무시해버리므로 이를 방지함.
+                            for r_idx in range(cell.row, cell.row + 4):
+                                for c_idx in range(1, 30):
+                                    c = sheet.cell(row=r_idx, column=c_idx)
+                                    if c.alignment:
+                                        new_align = copy.copy(c.alignment)
+                                        new_align.wrap_text = True
+                                        c.alignment = new_align
+                                    else:
+                                        c.alignment = Alignment(wrap_text=True)
+
+        # [표지] 시트 병합 셀 강제 복구 (openpyxl 버그 방지)
         wb.save(output_path)
         return output_path
 

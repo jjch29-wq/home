@@ -527,6 +527,20 @@ class DailyWorkLogTab(ttk.Frame):
         month_var = tk.StringVar(value=str(now.month).zfill(2))
         ttk.Spinbox(f_date, from_=1, to=12, textvariable=month_var, width=4, format="%02.0f").pack(side=tk.LEFT)
         
+        # 문서번호 입력
+        f_doc = ttk.Frame(top)
+        f_doc.pack(pady=5)
+        ttk.Label(f_doc, text="문서번호:").pack(side=tk.LEFT, padx=5)
+        doc_var = tk.StringVar(value="01")
+        ttk.Entry(f_doc, textvariable=doc_var, width=10).pack(side=tk.LEFT)
+        
+        # 작성일자 입력
+        f_create_date = ttk.Frame(top)
+        f_create_date.pack(pady=5)
+        ttk.Label(f_create_date, text="작성일자:").pack(side=tk.LEFT, padx=5)
+        create_date_var = tk.StringVar(value=now.strftime("%Y. %m. %d."))
+        ttk.Entry(f_create_date, textvariable=create_date_var, width=15).pack(side=tk.LEFT)
+        
         # 템플릿 파일 선택 (기본값)
         f_tmpl = ttk.Frame(top)
         f_tmpl.pack(pady=10, fill=tk.X, padx=10)
@@ -545,7 +559,7 @@ class DailyWorkLogTab(ttk.Frame):
             tmpl_path = tmpl_var.get()
             
             if not os.path.exists(tmpl_path):
-                messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다.\n{tmpl_path}", parent=top)
+                messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다.\n{tmpl_path}")
                 return
                 
             save_path = filedialog.asksaveasfilename(
@@ -559,17 +573,17 @@ class DailyWorkLogTab(ttk.Frame):
             try:
                 # Assuming MonthlyReportManager is in the python path
                 manager = MonthlyReportManager(tmpl_path)
-                result_path = manager.generate_report(self.history_path, ym, save_path)
+                result_path = manager.generate_report(self.history_path, ym, save_path, doc_num=doc_var.get().strip(), create_date=create_date_var.get().strip())
                 if result_path:
-                    messagebox.showinfo("성공", f"월간 진도보고서가 생성되었습니다.\n{result_path}", parent=top)
+                    messagebox.showinfo("성공", f"월간 진도보고서가 생성되었습니다.\n{result_path}")
                     os.startfile(result_path)
                     top.destroy()
                 else:
-                    messagebox.showwarning("알림", f"{ym}에 해당하는 작업일보 데이터가 없습니다.", parent=top)
+                    messagebox.showwarning("알림", f"{ym}에 해당하는 작업일보 데이터가 없습니다.")
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-                messagebox.showerror("오류", f"생성 중 오류 발생:\n{e}", parent=top)
+                messagebox.showerror("오류", f"생성 중 오류 발생:\n{e}")
                 
         ttk.Button(top, text="보고서 생성", command=do_generate).pack(pady=15)
 
