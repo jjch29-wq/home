@@ -140,12 +140,16 @@ def write_records_to_section(ws, records, data_start, col_map):
             new_ranges.append(merge)
         ws.merged_cells.ranges = new_ranges
 
+        shrink_align = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
         if 'ori' in col_map and ori > 0:
             safe_write(ws, current_row, col_map['ori'], round(ori, 4))
+            ws.cell(row=current_row, column=col_map['ori']).alignment = shrink_align
         if 're' in col_map and re_val > 0:
             safe_write(ws, current_row, col_map['re'], round(re_val, 4))
+            ws.cell(row=current_row, column=col_map['re']).alignment = shrink_align
         if 'total' in col_map and tot > 0:
             safe_write(ws, current_row, col_map['total'], round(tot, 4))
+            ws.cell(row=current_row, column=col_map['total']).alignment = shrink_align
 
         current_row += 1
 

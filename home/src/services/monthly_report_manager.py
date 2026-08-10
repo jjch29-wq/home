@@ -294,11 +294,16 @@ class MonthlyReportManager:
                         c.fill = copy.copy(fill_style)
 
             if total_qty > 0:
+                from openpyxl.styles import Alignment as _Align
+                shrink_align = _Align(horizontal='center', vertical='center', shrink_to_fit=True)
                 if method == 'PAUT':
                     _write_safe(total_row, 17, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
+                    ws.cell(row=total_row, column=17).alignment = shrink_align
                     _write_safe(total_row, 20, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
+                    ws.cell(row=total_row, column=20).alignment = shrink_align
                 else:
                     _write_safe(total_row, 17, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
+                    ws.cell(row=total_row, column=17).alignment = shrink_align
 
         # 마지막으로 맨 위의 1.1 물량표 처리
         qty_start_row = self.table_markers['qty'] + 1
@@ -335,10 +340,22 @@ class MonthlyReportManager:
                 ws.cell(row=r_idx, column=17).value = self._format_num(data['불량'])
                 ws.cell(row=r_idx, column=19).value = data['불량률']
 
-        # 사용자 요청: RE'(18, 19열 -> R, S열) 너비는 좁게, TOTAL(20열 -> T열) 너비는 넓게 교정
-        ws.column_dimensions['R'].width = 4.0
-        ws.column_dimensions['S'].width = 4.0
-        ws.column_dimensions['T'].width = 11.0
+        # 사용자 요청: 관경/규격 축소, 단위/비고 확장
+        ws.column_dimensions['C'].width = 4.0   # 순번
+        ws.column_dimensions['J'].width = 5.0   # 관경 (8.0 → 5.0)
+        ws.column_dimensions['N'].width = 2.5   # 규격 (3.5 → 2.5)
+        ws.column_dimensions['O'].width = 8.0   # 단위 (5.6 → 8.0)
+        ws.column_dimensions['P'].width = 8.0   # 비고 (5.0 → 8.0)
+        # ORI(Q)=9, RE(R+S)=4.5+4.5=9, TOTAL(T+U)=4.5+4.5=9 → 동일 너비
+        ws.column_dimensions['Q'].width = 9.0
+        ws.column_dimensions['R'].width = 4.5
+        ws.column_dimensions['S'].width = 4.5
+        ws.column_dimensions['T'].width = 4.5
+        ws.column_dimensions['U'].width = 4.5
+        ws.column_dimensions['V'].width = 0.0   # 비고 우측 끝 숨김
+        ws.column_dimensions['V'].hidden = True
+        ws.column_dimensions['W'].width = 0.0   # 비고 우측 끝 숨김
+        ws.column_dimensions['W'].hidden = True
 
         # 사용자 요청: 모든 표의 좌측(2열), 우측(21열) 외곽선을 굵은 실선으로 복원/강제 설정
         medium = Side(style='medium')
@@ -414,23 +431,16 @@ class MonthlyReportManager:
                         if is_title:
                             contract_name = replacements.get('[[계약명]]', '2026년 중앙지사 열수송관 비파괴검사용역 단가계약')
                             # 무조건 괄호와 줄바꿈이 포함된 포맷으로 강제 덮어쓰기 (수식도 문자열로 덮어씌움)
-                            cell.value = f"【 {contract_name} 】\n월 간 용 역 진 도 보 고 서"
+                            cell.value = f"【{contract_name}】\n월 간 용 역 진 도 보 고 서"
                             
-                            # 글자가 너무 길어서 "약"이 밑으로 떨어지는 것을 원천 차단하기 위해 폰트 크기를 11로 대폭 줄임
                             from openpyxl.styles import Alignment, Font
                             import copy
                             
-                            title_font = Font(name='맑은 고딕', size=11, bold=True)
+                            title_font = Font(name='맑은 고딕', size=9, bold=True)
                             title_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-                            
-                            # 1. 정식 타이틀 셀(좌상단)에 폰트와 정렬 강제 주입
                             cell.font = title_font
                             cell.alignment = title_align
                             
-                            # 2. openpyxl 버그(insert_rows 시 병합 셀 정보 증발)를 우회하기 위한 궁극의 꼼수
-                            # 제목이 위치하는 4줄(cell.row ~ +3)의 모든 칸(1~30열)에 대해,
-                            # 기존 서식(좌측 로고, 우측 문서번호 등)은 100% 보존하면서 오직 '자동 줄바꿈(wrap_text)' 속성만 강제로 켬!
-                            # 엑셀은 병합된 칸들 중 하나라도 wrap_text=False면 전체 줄바꿈을 무시해버리므로 이를 방지함.
                             for r_idx in range(cell.row, cell.row + 4):
                                 for c_idx in range(1, 30):
                                     c = sheet.cell(row=r_idx, column=c_idx)
@@ -440,6 +450,7 @@ class MonthlyReportManager:
                                         c.alignment = new_align
                                     else:
                                         c.alignment = Alignment(wrap_text=True)
+
 
         # [표지] 시트 병합 셀 강제 복구 (openpyxl 버그 방지)
         wb.save(output_path)
