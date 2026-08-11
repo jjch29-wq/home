@@ -253,6 +253,88 @@ class MonthlyReportManager:
                 new_image.anchor.to.row += image_row_shift
             ws.add_image(new_image)
 
+    def _insert_table_continuation(self, ws, insert_row, document_header_row,
+                                   table_header_row):
+        """Start a continuation page with the document and table headers.
+
+        ``table_header_row`` is the first of the table's two column-header
+        rows; the subsection title is the row immediately above it.  The
+        resulting continuation block is ten rows high:
+
+        * seven rows of the repeated document header;
+        * one subsection-title row;
+        * two table-column-header rows.
+
+        Existing content at and below ``insert_row`` is moved down intact.
+        """
+        import copy
+
+        title_row = table_header_row - 1
+        source_rows = range(title_row, table_header_row + 2)
+        max_col = ws.max_column
+
+        cell_snapshot = []
+        for source_row in source_rows:
+            row_snapshot = []
+            for col in range(1, max_col + 1):
+                cell = ws.cell(row=source_row, column=col)
+                row_snapshot.append({
+                    'value': cell.value,
+                    'style': copy.copy(cell._style),
+                    'number_format': cell.number_format,
+                })
+            cell_snapshot.append(row_snapshot)
+
+        row_heights = [ws.row_dimensions[row].height for row in source_rows]
+        source_merges = []
+        for merged in list(ws.merged_cells.ranges):
+            if merged.min_row >= title_row and merged.max_row <= table_header_row + 1:
+                source_merges.append((
+                    merged.min_row - title_row, merged.min_col,
+                    merged.max_row - title_row, merged.max_col,
+                ))
+
+        self._insert_continuation_header(
+            ws, insert_row, document_header_row, row_count=7
+        )
+        table_insert_row = insert_row + 7
+        self._insert_rows_safely(ws, table_insert_row, 3)
+
+        # Keep images below the repeated document header aligned with the rows
+        # moved by the three-row subsection/table-header insertion.
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from') or anchor._from.row + 1 < table_insert_row:
+                continue
+            anchor._from.row += 3
+            if hasattr(anchor, 'to'):
+                anchor.to.row += 3
+
+        for offset, row_snapshot in enumerate(cell_snapshot):
+            target_row = table_insert_row + offset
+            ws.row_dimensions[target_row].height = row_heights[offset]
+            for col, saved in enumerate(row_snapshot, start=1):
+                cell = ws.cell(row=target_row, column=col)
+                cell.value = saved['value']
+                cell._style = copy.copy(saved['style'])
+                cell.number_format = saved['number_format']
+
+        for min_ro, min_col, max_ro, max_col in source_merges:
+            ws.merge_cells(
+                start_row=table_insert_row + min_ro, start_column=min_col,
+                end_row=table_insert_row + max_ro, end_column=max_col,
+            )
+
+        # Mark the copied subsection as a continuation without depending on
+        # a particular language or fixed title column.
+        for col in range(1, max_col + 1):
+            cell = ws.cell(row=table_insert_row, column=col)
+            if str(cell.value or '').strip():
+                cell.value = f"{cell.value} (계속)"
+                break
+
+        return 10
+
     def _first_print_overflow_row(self, ws, start_row, row_count):
         """Return the first data row that falls onto the next printed page."""
         break_ids = sorted(int(brk.id) for brk in ws.row_breaks.brk)
@@ -306,6 +388,21 @@ class MonthlyReportManager:
         if later_breaks:
             return later_breaks[0] + 1
         return None
+
+    def _renumber_ndt_status_pages(self, ws):
+        """Renumber every generated page belonging to section 3.0."""
+        header_rows = []
+        for row in range(1, ws.max_row + 1):
+            value = str(ws.cell(row=row, column=6).value or '')
+            compact = value.replace(' ', '').replace('\n', '')
+            if '3.0비파괴검사현황' in compact:
+                header_rows.append(row)
+
+        total_pages = len(header_rows)
+        for page_number, header_row in enumerate(header_rows, start=1):
+            ws.cell(row=header_row, column=16).value = (
+                f"  쪽  번 호 :      {page_number}     of     {total_pages}"
+            )
 
     def generate_report(self, history_path, target_ym, output_path, doc_num="01", create_date=None):
 
@@ -443,6 +540,18 @@ class MonthlyReportManager:
             
         # [표지] 시트의 병합 셀이 openpyxl 저장 시 풀리는 버그 방지를 위한 백업
         ws = wb.active
+
+        # The template already has the page 6/7 boundary at row 229. Insert
+        # the missing page 5/6 boundary at row 192 without replacing row 229
+        # or any later boundary (including the page 7/8 break at row 278).
+        from openpyxl.worksheet.pagebreak import Break
+        template_breaks = sorted(ws.row_breaks.brk, key=lambda brk: int(brk.id))
+        if not any(int(brk.id) == 192 for brk in template_breaks):
+            template_breaks.append(Break(id=192))
+        ws.row_breaks.brk = sorted(
+            template_breaks, key=lambda brk: int(brk.id)
+        )
+
         # Capture the template's compact body-row height before dynamic inserts
         # move row 466. Header rows keep their original heights.
         detail_body_row_height = (
@@ -705,29 +814,45 @@ class MonthlyReportManager:
                     _write_safe(total_row, 17, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
                     ws.cell(row=total_row, column=17).alignment = shrink_align
 
-            # Insert a continuation header only when the detail rows actually
-            # cross the printable page boundary (never by a fixed item count).
-            continuation_row = None
-            if is_detail and num_items:
+            # When either a 1.2 summary table or a 2.x detail table overflows,
+            # continue it on a real new page. Repeat both the seven-row document
+            # header and the subsection/table header.  Repeat as many times as
+            # necessary; following MT/RT/PT/4.0 content moves down as a block.
+            remaining_start = start_row
+            remaining_count = num_items
+            previous_section_breaks = sorted(
+                int(brk.id)
+                for brk in ws.row_breaks.brk
+                if int(brk.id) < header_row
+            )
+            document_header_row = (
+                previous_section_breaks[-1] + 1
+                if previous_section_breaks else 1
+            )
+            while remaining_count > 0:
                 continuation_row = self._first_print_overflow_row(
-                    ws, start_row, num_items
+                    ws, remaining_start, remaining_count
                 )
-            if continuation_row is not None:
-                actual_total_row = start_row + num_items
-                next_page_header_row = self._find_next_document_header(
-                    ws, actual_total_row
-                )
-                if next_page_header_row is None:
-                    next_page_header_row = 1
-                self._insert_continuation_header(
-                    ws, continuation_row, next_page_header_row, row_count=6
+                if continuation_row is None:
+                    break
+
+                rows_on_current_page = continuation_row - remaining_start
+                inserted_rows = self._insert_table_continuation(
+                    ws, continuation_row, document_header_row, header_row
                 )
                 from openpyxl.worksheet.pagebreak import Break
-                if not any(int(brk.id) == continuation_row - 1 for brk in ws.row_breaks.brk):
+                if not any(
+                    int(brk.id) == continuation_row - 1
+                    for brk in ws.row_breaks.brk
+                ):
                     ws.row_breaks.append(Break(id=continuation_row - 1))
+
                 for key, marker_row in self.table_markers.items():
                     if marker_row >= continuation_row:
-                        self.table_markers[key] += 6
+                        self.table_markers[key] += inserted_rows
+
+                remaining_count -= rows_on_current_page
+                remaining_start = continuation_row + inserted_rows
 
         # When the three method-detail tables on this page have no records,
         # distribute the unused vertical space between them instead of leaving
@@ -924,6 +1049,10 @@ class MonthlyReportManager:
 
 
         # [표지] 시트 병합 셀 강제 복구 (openpyxl 버그 방지)
+        # Dynamic continuation pages change the section total, so recalculate
+        # the 3.0 page labels after all row and page operations are complete.
+        self._renumber_ndt_status_pages(ws)
+
         # Preserve the visible right edge of merged template boxes and headers.
         for sheet in wb.worksheets:
             self._repair_merged_right_borders(sheet)
@@ -936,17 +1065,17 @@ class MonthlyReportManager:
         ws.page_setup.fitToHeight = 0
         ws.page_setup.scale = None
 
-        # Keep the requested 14/15 boundary at row 572. Hide the three trailing
-        # blank rows so they cannot form a separate short printed page.
+        # Hide the original trailing spacer rows only while they are still
+        # blank. Dynamic continuation pages may move real content into these
+        # coordinates, which must never be hidden.
         for blank_row in range(570, 573):
-            ws.row_dimensions[blank_row].height = 0
-            ws.row_dimensions[blank_row].hidden = True
-
-        # Preserve the fixed template boundaries through row 783.
-        ws.row_breaks.brk = [
-            brk for brk in ws.row_breaks.brk
-            if int(brk.id) <= 783
-        ]
+            is_blank = all(
+                not str(ws.cell(row=blank_row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if is_blank:
+                ws.row_dimensions[blank_row].height = 0
+                ws.row_dimensions[blank_row].hidden = True
 
         wb.save(output_path)
         return output_path
