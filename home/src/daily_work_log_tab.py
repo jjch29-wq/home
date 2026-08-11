@@ -508,7 +508,9 @@ class DailyWorkLogTab(ttk.Frame):
         # 1. 설정 다이얼로그
         top = tk.Toplevel(self)
         top.title("월간 진도보고서 엑셀 출력")
-        top.geometry("400x250")
+        # Allow enough vertical space for all fields and the generate button.
+        top.geometry("540x360")
+        top.minsize(540, 360)
         top.transient(self)
         top.grab_set()
         
@@ -585,7 +587,9 @@ class DailyWorkLogTab(ttk.Frame):
                 traceback.print_exc()
                 messagebox.showerror("오류", f"생성 중 오류 발생:\n{e}")
                 
-        ttk.Button(top, text="보고서 생성", command=do_generate).pack(pady=15)
+        ttk.Button(top, text="보고서 생성", command=do_generate).pack(
+            side=tk.BOTTOM, pady=18, ipadx=24, ipady=6
+        )
 
     def load_history(self):
         try:
