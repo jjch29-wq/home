@@ -8,6 +8,8 @@ from datetime import datetime
 import os
 import sys
 import json
+import shutil
+import uuid
 
 # Import the exporter
 try:
@@ -30,6 +32,11 @@ class DailyWorkLogTab(ttk.Frame):
         super().__init__(parent, *args, **kwargs)
         self.parent = parent
         self.history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+        self.photo_root = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'data', 'process_photos'
+        )
+        self.selected_ndt_row = None
         self.setup_ui()
         
     def setup_ui(self):
@@ -126,25 +133,26 @@ class DailyWorkLogTab(ttk.Frame):
         ]
         
         self.qty_entries = {}
+        self.default_qty = {
+            ('PAUT', '300A이상'): '121', ('PAUT', '300A이상-야간'): '584',
+            ('PAUT', '250A'): '4', ('PAUT', '200A'): '4',
+            ('PAUT', '200A-야간'): '2', ('PAUT', '소계'): '715',
+            ('RT', '150A~100A'): '293', ('RT', '150A~100A-야간'): '43',
+            ('RT', '80A이하'): '105', ('RT', '80A이하-야간'): '49',
+            ('RT', '소계'): '490', ('MT', '전체(주간)'): '26',
+            ('MT', '전체(야간)'): '0', ('PT', '전체(주간)'): '26',
+            ('PT', '전체(야간)'): '0',
+        }
         for row_idx, (method, spec) in enumerate(self.qty_rows, start=1):
             ttk.Label(mid_frame, text=method).grid(row=row_idx, column=0, padx=1, pady=2)
             ttk.Label(mid_frame, text=spec).grid(row=row_idx, column=1, padx=1, pady=2)
-            
-            default_qty = {
-                ('PAUT', '300A이상'): '121', ('PAUT', '300A이상-야간'): '584', 
-                ('PAUT', '250A'): '4', ('PAUT', '200A'): '4', ('PAUT', '200A-야간'): '2', ('PAUT', '소계'): '715',
-                ('RT', '150A~100A'): '293', ('RT', '150A~100A-야간'): '43',
-                ('RT', '80A이하'): '105', ('RT', '80A이하-야간'): '49', ('RT', '소계'): '490',
-                ('MT', '전체(주간)'): '26', ('MT', '전체(야간)'): '0',
-                ('PT', '전체(주간)'): '26', ('PT', '전체(야간)'): '0'
-            }
             
             row_dict = {}
             for col_idx, key in enumerate(['예상량', '전일누계', '금일작업', '총누계', '공정률', '불량', '불량률', '비고'], start=2):
                 ent = ttk.Entry(mid_frame, width=7)
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=2)
                 if key == '예상량':
-                    val = default_qty.get((method, spec), '')
+                    val = self.default_qty.get((method, spec), '')
                     if val:
                         ent.insert(0, val)
                 row_dict[key] = ent
@@ -206,7 +214,7 @@ class DailyWorkLogTab(ttk.Frame):
         btn_export_ndt = ttk.Button(title_frame, text="NDT 누계 대장 엑셀 출력", command=self.export_ndt_summary)
         btn_export_ndt.pack(side="left", padx=10)
         
-        btn_export_monthly = ttk.Button(title_frame, text="월간진도보고서 출력", command=self.export_monthly_report)
+        btn_export_monthly = ttk.Button(title_frame, text="누적진도보고서 출력", command=self.export_monthly_report)
         btn_export_monthly.pack(side="left", padx=10)
         
         # Grid Container
@@ -219,15 +227,18 @@ class DailyWorkLogTab(ttk.Frame):
         sections = set()
         lines = set()
         companies = set()
+        welders = {'W-2023-A-10', 'W-2023-A-13', 'W-2023-A-25'}
         for date_str, data in history.items():
             for r in data.get('ndt_results', []):
                 if r.get('구간'): sections.add(r['구간'].strip())
                 if r.get('라인번호'): lines.add(r['라인번호'].strip())
                 if r.get('업체'): companies.add(r['업체'].strip())
+                if r.get('용접사'): welders.add(r['용접사'].strip())
         
         self.history_sections = [''] + sorted(list(sections))
         self.history_lines = [''] + sorted(list(lines))
         self.history_companies = [''] + sorted(list(companies))
+        self.history_welders = [''] + sorted(welders)
 
         
         # Draw Headers
@@ -306,7 +317,10 @@ class DailyWorkLogTab(ttk.Frame):
                     ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     row_entries[c] = ent
                 elif c == '용접사':
-                    ent = ttk.Combobox(grid_frame, width=w, values=['', 'W-2023-A-10', 'W-2023-A-13', 'W-2023-A-25'], justify='center')
+                    ent = ttk.Combobox(
+                        grid_frame, width=w, values=self.history_welders,
+                        justify='center'
+                    )
                     ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     row_entries[c] = ent
                 elif c == '업체':
@@ -424,10 +438,176 @@ class DailyWorkLogTab(ttk.Frame):
                 if hasattr(widget, 'entries'):
                     for e in widget.entries:
                         e.bind('<Return>', on_joint_enter)
+                        e.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
+                        e.bind('<Escape>', self._clear_ndt_selection, add='+')
                 else:
                     widget.bind('<Return>', on_joint_enter)
+                    widget.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
+                    widget.bind('<Escape>', self._clear_ndt_selection, add='+')
             
             self.ndt_grid_entries.append(row_entries)
+
+        photo_bar = ttk.LabelFrame(parent, text="선택 행 공정사진")
+        photo_bar.pack(fill='x', padx=5, pady=(8, 5))
+        self.photo_selection_var = tk.StringVar(value="NDT 행을 선택하세요.")
+        ttk.Label(photo_bar, textvariable=self.photo_selection_var).pack(
+            side='left', padx=8, pady=6
+        )
+        ttk.Button(
+            photo_bar, text="사진 추가", command=self.add_process_photo
+        ).pack(side='left', padx=4)
+        ttk.Button(
+            photo_bar, text="사진 관리", command=self.manage_process_photos
+        ).pack(side='left', padx=4)
+
+    def _select_ndt_row(self, row_entries):
+        self.selected_ndt_row = row_entries
+        method = row_entries['검사방법'].get().strip() or '-'
+        section = row_entries['구간'].get().strip() or '-'
+        joint = row_entries['Joint No.'].get().strip() or '-'
+        welder = row_entries['용접사'].get().strip() or '-'
+        self.photo_selection_var.set(
+            f"선택: {method} / {section} / Joint {joint} / {welder}"
+        )
+
+    def _clear_ndt_selection(self, event=None):
+        self.selected_ndt_row = None
+        self.photo_selection_var.set("NDT 행을 선택하세요.")
+
+    def _default_photo_description(self, method):
+        return {
+            'PAUT': '위상배열 초음파탐상검사',
+            'RT': '방사선투과검사',
+            'MT': '자분탐상검사',
+            'PT': '침투탐상검사',
+        }.get(method, f'{method} 공정사진' if method else '공정사진')
+
+    def add_process_photo(self):
+        if self.selected_ndt_row is None:
+            messagebox.showwarning('알림', '먼저 비파괴검사결과서의 행을 선택하세요.')
+            return
+        row = self.selected_ndt_row
+        method = row['검사방법'].get().strip().upper()
+        joint = row['Joint No.'].get().strip()
+        if method not in {'PAUT', 'RT', 'MT', 'PT'}:
+            messagebox.showwarning(
+                '알림', '공정사진은 PAUT, RT, MT, PT 검사만 등록할 수 있습니다.'
+            )
+            return
+        if not method or not joint:
+            messagebox.showwarning('알림', '선택 행의 검사방법과 Joint No.를 입력하세요.')
+            return
+
+        files = filedialog.askopenfilenames(
+            title='공정사진 선택',
+            filetypes=[
+                ('이미지 파일', '*.jpg *.jpeg *.png *.bmp *.tif *.tiff'),
+                ('모든 파일', '*.*'),
+            ],
+        )
+        if not files:
+            return
+        description = simpledialog.askstring(
+            '사진 설명', '사진 설명:',
+            initialvalue=self._default_photo_description(method), parent=self
+        )
+        if description is None:
+            return
+
+        current_date = self.date_entry.get()
+        target_dir = os.path.join(self.photo_root, current_date)
+        os.makedirs(target_dir, exist_ok=True)
+        history = self.load_history()
+        day_data = history.setdefault(current_date, {})
+        photos = day_data.setdefault('process_photos', [])
+        for source_path in files:
+            photo_id = uuid.uuid4().hex
+            extension = os.path.splitext(source_path)[1].lower() or '.jpg'
+            filename = f'{method}_{photo_id}{extension}'
+            target_path = os.path.join(target_dir, filename)
+            shutil.copy2(source_path, target_path)
+            photos.append({
+                'id': photo_id,
+                'process': method,
+                'date': current_date,
+                'section': row['구간'].get().strip(),
+                'line_no': row['라인번호'].get().strip(),
+                'joint_no': joint,
+                'welder': row['용접사'].get().strip(),
+                'location': row['구간'].get().strip() or joint,
+                'description': description.strip(),
+                'file_path': os.path.relpath(target_path, os.path.dirname(self.history_path)),
+            })
+        self.save_history(history)
+        messagebox.showinfo('완료', f'공정사진 {len(files)}장을 등록했습니다.')
+
+    def manage_process_photos(self):
+        current_date = self.date_entry.get()
+        history = self.load_history()
+        photos = history.get(current_date, {}).get('process_photos', [])
+        if not photos:
+            messagebox.showinfo('공정사진', '현재 날짜에 등록된 공정사진이 없습니다.')
+            return
+
+        window = tk.Toplevel(self)
+        window.title(f'{current_date} 공정사진 관리')
+        window.geometry('760x330')
+        columns = ('공정', '위치', 'Joint', '용접사', '설명', '파일')
+        tree = ttk.Treeview(window, columns=columns, show='headings', selectmode='browse')
+        for column in columns:
+            tree.heading(column, text=column)
+            tree.column(column, width=90 if column != '설명' else 220)
+        tree.pack(fill='both', expand=True, padx=8, pady=8)
+        for index, photo in enumerate(photos):
+            tree.insert('', 'end', iid=str(index), values=(
+                photo.get('process', ''), photo.get('location', ''),
+                photo.get('joint_no', ''), photo.get('welder', ''),
+                photo.get('description', ''), os.path.basename(photo.get('file_path', '')),
+            ))
+
+        def selected_index():
+            selection = tree.selection()
+            return int(selection[0]) if selection else None
+
+        def open_photo():
+            index = selected_index()
+            if index is None:
+                return
+            path = os.path.abspath(os.path.join(
+                os.path.dirname(self.history_path), photos[index].get('file_path', '')
+            ))
+            if os.path.exists(path):
+                os.startfile(path)
+            else:
+                messagebox.showerror('오류', f'사진 파일을 찾을 수 없습니다.\n{path}')
+
+        def delete_photo():
+            index = selected_index()
+            if index is None or not messagebox.askyesno('삭제', '선택한 사진을 삭제할까요?', parent=window):
+                return
+            photo = photos.pop(index)
+            path = os.path.abspath(os.path.join(
+                os.path.dirname(self.history_path), photo.get('file_path', '')
+            ))
+            managed_root = os.path.abspath(self.photo_root)
+            try:
+                is_managed_photo = (
+                    os.path.commonpath([managed_root, path]) == managed_root
+                )
+            except ValueError:
+                is_managed_photo = False
+            if is_managed_photo and os.path.exists(path):
+                os.remove(path)
+            history[current_date]['process_photos'] = photos
+            self.save_history(history)
+            window.destroy()
+            self.manage_process_photos()
+
+        button_bar = ttk.Frame(window)
+        button_bar.pack(fill='x', padx=8, pady=(0, 8))
+        ttk.Button(button_bar, text='사진 열기', command=open_photo).pack(side='left', padx=4)
+        ttk.Button(button_bar, text='선택 삭제', command=delete_photo).pack(side='left', padx=4)
+        ttk.Button(button_bar, text='닫기', command=window.destroy).pack(side='right', padx=4)
             
     def export_excel(self):
         # Gather all data
@@ -507,26 +687,26 @@ class DailyWorkLogTab(ttk.Frame):
     def export_monthly_report(self):
         # 1. 설정 다이얼로그
         top = tk.Toplevel(self)
-        top.title("월간 진도보고서 엑셀 출력")
+        top.title("누적 진도보고서 엑셀 출력")
         # Allow enough vertical space for all fields and the generate button.
         top.geometry("540x360")
         top.minsize(540, 360)
         top.transient(self)
         top.grab_set()
         
-        ttk.Label(top, text="📊 월간 진도보고서 자동 생성", font=('맑은 고딕', 12, 'bold')).pack(pady=10)
+        ttk.Label(top, text="📊 누적 진도보고서 자동 생성", font=('맑은 고딕', 12, 'bold')).pack(pady=10)
         
         # 년/월 선택
         f_date = ttk.Frame(top)
         f_date.pack(pady=10)
         
         now = datetime.now()
-        ttk.Label(f_date, text="조회 연도:").pack(side=tk.LEFT, padx=5)
-        year_var = tk.StringVar(value=str(now.year))
+        ttk.Label(f_date, text="누적 종료 연도:").pack(side=tk.LEFT, padx=5)
+        year_var = tk.StringVar(value="2027")
         ttk.Spinbox(f_date, from_=2020, to=2030, textvariable=year_var, width=6).pack(side=tk.LEFT)
         
-        ttk.Label(f_date, text="월:").pack(side=tk.LEFT, padx=5)
-        month_var = tk.StringVar(value=str(now.month).zfill(2))
+        ttk.Label(f_date, text="종료 월:").pack(side=tk.LEFT, padx=5)
+        month_var = tk.StringVar(value="08")
         ttk.Spinbox(f_date, from_=1, to=12, textvariable=month_var, width=4, format="%02.0f").pack(side=tk.LEFT)
         
         # 문서번호 입력
@@ -548,7 +728,7 @@ class DailyWorkLogTab(ttk.Frame):
         f_tmpl.pack(pady=10, fill=tk.X, padx=10)
         ttk.Label(f_tmpl, text="템플릿:").pack(side=tk.LEFT)
         
-        tmpl_var = tk.StringVar(value=r"C:\Users\jjch2\Desktop\템플릿_최종완성본_V70.xlsx")
+        tmpl_var = tk.StringVar(value=r"C:\Users\-\OneDrive\바탕 화면\템플릿_최종완성본_V70.xlsx")
         ttk.Entry(f_tmpl, textvariable=tmpl_var, width=35).pack(side=tk.LEFT, padx=5)
         
         def browse_tmpl():
@@ -566,7 +746,7 @@ class DailyWorkLogTab(ttk.Frame):
                 
             save_path = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
-                initialfile=f"월간진도보고서_{ym.replace('-', '')}.xlsx",
+                initialfile=f"누적진도보고서_{ym.replace('-', '')}.xlsx",
                 title="저장 위치 선택",
                 filetypes=[("Excel", "*.xlsx")]
             )
@@ -577,11 +757,11 @@ class DailyWorkLogTab(ttk.Frame):
                 manager = MonthlyReportManager(tmpl_path)
                 result_path = manager.generate_report(self.history_path, ym, save_path, doc_num=doc_var.get().strip(), create_date=create_date_var.get().strip())
                 if result_path:
-                    messagebox.showinfo("성공", f"월간 진도보고서가 생성되었습니다.\n{result_path}")
+                    messagebox.showinfo("성공", f"누적 진도보고서가 생성되었습니다.\n{result_path}")
                     os.startfile(result_path)
                     top.destroy()
                 else:
-                    messagebox.showwarning("알림", f"{ym}에 해당하는 작업일보 데이터가 없습니다.")
+                    messagebox.showwarning("알림", f"{ym}까지의 작업일보 데이터가 없습니다.")
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -605,6 +785,7 @@ class DailyWorkLogTab(ttk.Frame):
     def save_current_history(self):
         history = self.load_history()
         current_date = self.date_entry.get()
+        existing_photos = history.get(current_date, {}).get('process_photos', [])
         
         data = {
             'weather': self.weather_entry.get(),
@@ -612,7 +793,8 @@ class DailyWorkLogTab(ttk.Frame):
             'equip_data': {},
             'personnel_data': {},
             'remarks': self.remarks_text.get("1.0", "end-1c"),
-            'ndt_results': []
+            'ndt_results': [],
+            'process_photos': existing_photos,
         }
         for comp_key, entries in self.qty_entries.items():
             data['qty_data'][comp_key] = {k: v.get() for k, v in entries.items()}
@@ -670,8 +852,20 @@ class DailyWorkLogTab(ttk.Frame):
             curr_qty = curr_data.get('qty_data', {}).get(comp_key, {})
             for field in ['예상량', '금일작업', '총누계', '공정률', '불량', '불량률', '비고']:
                 entries[field].delete(0, tk.END)
-                if field in curr_qty:
-                    val = load_format_val(comp_key, field, curr_qty[field])
+                current_value = curr_qty.get(field, '')
+                if field == '예상량' and not str(current_value).strip():
+                    previous_value = (
+                        prev_data.get('qty_data', {})
+                        .get(comp_key, {})
+                        .get('예상량', '')
+                    )
+                    if str(previous_value).strip():
+                        current_value = previous_value
+                    else:
+                        method, spec = comp_key.split('_', 1)
+                        current_value = self.default_qty.get((method, spec), '')
+                if str(current_value).strip():
+                    val = load_format_val(comp_key, field, current_value)
                     entries[field].insert(0, val)
                     
             # Always calculate 전일누계 from past

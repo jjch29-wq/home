@@ -8,6 +8,12 @@ from collections import defaultdict
 import re
 
 class MonthlyReportManager:
+    WELDER_NAMES = {
+        'W-2023-A-10': '이신희',
+        'W-2023-A-13': '선성문',
+        'W-2023-A-25': '이종근',
+    }
+
     def __init__(self, template_path):
         self.template_path = template_path
         # 템플릿의 각 표 시작 위치 (헤더 기준)
@@ -404,7 +410,816 @@ class MonthlyReportManager:
                 f"  쪽  번 호 :      {page_number}     of     {total_pages}"
             )
 
+    def _keep_iuc_euc_headers_single_line(self, ws):
+        """Keep the narrow IUC/EUC column headers on a single line."""
+        import copy
+
+        for row in ws.iter_rows():
+            for cell in row:
+                compact = ''.join(str(cell.value or '').split()).upper()
+                if compact not in {'IUC', 'EUC'}:
+                    continue
+
+                cell.value = compact
+                alignment = copy.copy(cell.alignment)
+                alignment.wrap_text = False
+                alignment.shrink_to_fit = True
+                cell.alignment = alignment
+
+    def _trim_trailing_blank_print_pages(self, ws):
+        """Stop printing at the end of the last page containing real content.
+
+        Dynamic row insertion expands the template print area and shifts every
+        manual row break.  That can leave a fully blank page after the last
+        report page.  Preserve the complete last content page by trimming at
+        its following page boundary, rather than at the last populated row.
+        """
+        from openpyxl.utils import get_column_letter
+
+        print_area_text = str(ws.print_area or '')
+        area_match = re.search(
+            r"\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)",
+            print_area_text.upper(),
+        )
+        if not area_match:
+            return
+
+        min_col_name, min_row_text, max_col_name, max_row_text = area_match.groups()
+        from openpyxl.utils.cell import column_index_from_string
+        min_col = column_index_from_string(min_col_name)
+        max_col = column_index_from_string(max_col_name)
+        min_row = int(min_row_text)
+        print_max_row = int(max_row_text)
+
+        last_content_row = min_row
+        for row in ws.iter_rows(
+            min_row=min_row,
+            max_row=min(print_max_row, ws.max_row),
+            min_col=min_col,
+            max_col=max_col,
+        ):
+            if any(cell.value not in (None, '') for cell in row):
+                last_content_row = row[0].row
+
+        # Images are printable content even though their cells have no value.
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            image_bottom = anchor._from.row + 1
+            if hasattr(anchor, 'to'):
+                image_bottom = max(image_bottom, anchor.to.row + 1)
+            last_content_row = max(last_content_row, image_bottom)
+
+        later_breaks = sorted(
+            int(brk.id)
+            for brk in ws.row_breaks.brk
+            if last_content_row <= int(brk.id) < print_max_row
+        )
+        if not later_breaks:
+            return
+
+        last_page_end = later_breaks[0]
+        ws.print_area = (
+            f"${get_column_letter(min_col)}${min_row}:"
+            f"${get_column_letter(max_col)}${last_page_end}"
+        )
+        ws.row_breaks.brk = [
+            brk for brk in ws.row_breaks.brk
+            if int(brk.id) < last_page_end
+        ]
+
+    def _rt_reject_defects(self, row):
+        """Return reject-grade RT defects encoded as ``grade/defect``."""
+        method = str(row.get('검사방법', '') or '').strip().upper()
+        if method != 'RT':
+            return []
+
+        defects = []
+        section_info = str(row.get('구간정보', '') or '')
+        for item in re.split(r'[,;\n]+', section_info):
+            match = re.match(r'^\s*([1-4])\s*/\s*([A-Z]+)\s*$', item.upper())
+            if not match:
+                continue
+            grade = int(match.group(1))
+            if grade >= 3:
+                defects.append(match.group(2))
+        return defects
+
+    def _rt_film_count(self, row):
+        """Count populated RT section-info slots (one slot equals one film)."""
+        if str(row.get('검사방법', '') or '').strip().upper() != 'RT':
+            return 0
+        section_info = str(row.get('구간정보', '') or '')
+        return sum(
+            1 for item in re.split(r'[,;\n]+', section_info)
+            if item.strip()
+        )
+
+    def _write_welder_defect_summary(
+        self, ws, defects_by_welder, retests_by_welder,
+        original_counts_by_welder, section_number, section_keywords,
+    ):
+        """Write welder defects and A/B quantities into a 4.0 summary table."""
+        import copy
+
+        if not defects_by_welder and not retests_by_welder and not original_counts_by_welder:
+            return
+
+        title_row = None
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').replace('\n', '').upper()
+            if (
+                section_number in row_text
+                and ('불량률' in row_text or '불량율' in row_text)
+                and any(keyword.upper() in row_text for keyword in section_keywords)
+            ):
+                title_row = row
+                break
+        if title_row is None:
+            return
+
+        header_row = None
+        id_col = None
+        name_col = None
+        header_cols = {}
+        for row in range(title_row + 1, min(title_row + 7, ws.max_row + 1)):
+            current_headers = {}
+            current_id_col = None
+            for col in range(1, ws.max_column + 1):
+                label = ''.join(str(ws.cell(row=row, column=col).value or '').split()).upper()
+                if label == 'ID':
+                    current_id_col = col
+                elif label:
+                    current_headers.setdefault(label, col)
+            if current_id_col is not None:
+                header_row = row
+                id_col = current_id_col
+                header_cols = current_headers
+                name_col = current_headers.get('성명')
+                break
+        if header_row is None:
+            return
+
+        retest_col = None
+        original_count_col = None
+        defect_rate_col = None
+        for row in range(title_row + 1, header_row + 1):
+            for col in range(1, ws.max_column + 1):
+                label = ''.join(str(ws.cell(row=row, column=col).value or '').split()).upper()
+                if '불합격부' in label and '재검사' in label and ('(A)' in label or label.endswith('A')):
+                    retest_col = col
+                if '당초' in label and '시공물량' in label and ('(B)' in label or label.endswith('B')):
+                    original_count_col = col
+                if '용접' in label and ('불량률' in label or '불량율' in label) and 'A/B' in label:
+                    defect_rate_col = col
+            if (
+                retest_col is not None
+                and original_count_col is not None
+                and defect_rate_col is not None
+            ):
+                break
+
+        total_row = None
+        for row in range(header_row + 1, min(header_row + 30, ws.max_row + 1)):
+            values = [
+                ''.join(str(ws.cell(row=row, column=col).value or '').split()).upper()
+                for col in range(1, ws.max_column + 1)
+            ]
+            if any(value in {'TOTAL', '총계'} for value in values):
+                total_row = row
+                break
+        if total_row is None:
+            return
+
+        data_start = header_row + 1
+        available_rows = total_row - data_start
+        welders = sorted(
+            set(defects_by_welder)
+            | set(retests_by_welder)
+            | set(original_counts_by_welder)
+        )
+        if len(welders) > available_rows:
+            extra_rows = len(welders) - available_rows
+            style_source_row = max(data_start, total_row - 1)
+            row_style = [
+                copy.copy(ws.cell(row=style_source_row, column=col)._style)
+                for col in range(1, ws.max_column + 1)
+            ]
+            row_height = ws.row_dimensions[style_source_row].height
+            self._insert_rows_safely(ws, total_row, extra_rows)
+            for row in range(total_row, total_row + extra_rows):
+                ws.row_dimensions[row].height = row_height
+                for col, style in enumerate(row_style, start=1):
+                    ws.cell(row=row, column=col)._style = copy.copy(style)
+            total_row += extra_rows
+
+        defect_columns = {
+            code: header_cols.get(code)
+            for code in {code for counts in defects_by_welder.values() for code in counts}
+            if header_cols.get(code) is not None
+        }
+        for offset, welder in enumerate(welders):
+            row = data_start + offset
+            id_cell = ws.cell(row=row, column=id_col)
+            id_cell.value = welder
+            id_alignment = copy.copy(id_cell.alignment)
+            id_alignment.wrap_text = False
+            id_alignment.shrink_to_fit = True
+            id_cell.alignment = id_alignment
+            if name_col is not None:
+                name_cell = ws.cell(row=row, column=name_col)
+                name_cell.value = self.WELDER_NAMES.get(welder.upper(), '')
+                name_alignment = copy.copy(name_cell.alignment)
+                name_alignment.wrap_text = False
+                name_alignment.shrink_to_fit = True
+                name_cell.alignment = name_alignment
+            for code, count in defects_by_welder.get(welder, {}).items():
+                col = defect_columns.get(code)
+                if col is not None:
+                    ws.cell(row=row, column=col).value = count
+            if retest_col is not None:
+                ws.cell(row=row, column=retest_col).value = retests_by_welder.get(welder, 0)
+            if original_count_col is not None:
+                ws.cell(row=row, column=original_count_col).value = (
+                    original_counts_by_welder.get(welder, 0)
+                )
+            if defect_rate_col is not None:
+                retest_qty = retests_by_welder.get(welder, 0)
+                original_qty = original_counts_by_welder.get(welder, 0)
+                rate_cell = ws.cell(row=row, column=defect_rate_col)
+                rate_cell.value = retest_qty / original_qty if original_qty else None
+                rate_cell.number_format = '0.00%'
+                rate_alignment = copy.copy(rate_cell.alignment)
+                rate_alignment.wrap_text = False
+                rate_alignment.shrink_to_fit = True
+                rate_cell.alignment = rate_alignment
+
+        # Recalculate each defect total without disturbing the other totals.
+        for col in set(defect_columns.values()):
+            total = sum(
+                self._safe_float(ws.cell(row=row, column=col).value)
+                for row in range(data_start, data_start + len(welders))
+            )
+            ws.cell(row=total_row, column=col).value = int(total)
+        if retest_col is not None:
+            ws.cell(row=total_row, column=retest_col).value = sum(
+                retests_by_welder.values()
+            )
+        if original_count_col is not None:
+            ws.cell(row=total_row, column=original_count_col).value = sum(
+                original_counts_by_welder.values()
+            )
+        if defect_rate_col is not None:
+            total_retest = sum(retests_by_welder.values())
+            total_original = sum(original_counts_by_welder.values())
+            total_rate_cell = ws.cell(row=total_row, column=defect_rate_col)
+            total_rate_cell.value = (
+                total_retest / total_original if total_original else None
+            )
+            total_rate_cell.number_format = '0.00%'
+            total_rate_alignment = copy.copy(total_rate_cell.alignment)
+            total_rate_alignment.wrap_text = False
+            total_rate_alignment.shrink_to_fit = True
+            total_rate_cell.alignment = total_rate_alignment
+
+    def _populate_process_photo_pages(self, ws, process_photos):
+        """Place registered process photos into the template's 7.0 pages."""
+        from openpyxl.drawing.image import Image as XLImage
+
+        base_dir = os.path.dirname(os.path.abspath(self._history_path))
+        valid_photos = []
+        for photo in process_photos:
+            process = str(photo.get('process', '')).strip().upper()
+            if process not in {'PAUT', 'MT', 'RT', 'PT'}:
+                continue
+            stored_path = str(photo.get('file_path', '') or '')
+            image_path = (
+                stored_path if os.path.isabs(stored_path)
+                else os.path.abspath(os.path.join(base_dir, stored_path))
+            )
+            if os.path.isfile(image_path):
+                saved_photo = dict(photo)
+                saved_photo['_resolved_path'] = image_path
+                valid_photos.append(saved_photo)
+        process_photos = valid_photos
+
+        original_photo_starts = []
+        for row in range(600, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').upper()
+            if 'SEC.16' in row_text and any(
+                keyword in row_text
+                for keyword in ('PAUT', '위상배열초음파탐상검사', '자분탐상검사', '방사선투과검사')
+            ):
+                original_photo_starts.append(row - 9)
+        photo_section_start = min(original_photo_starts) if original_photo_starts else None
+
+        pt_photos = [
+            photo for photo in process_photos
+            if str(photo.get('process', '')).upper() == 'PT'
+        ]
+        pt_title_row = self._ensure_pt_photo_page(ws) if pt_photos else None
+
+        processes_with_photos = {
+            str(photo.get('process', '')).upper()
+            for photo in process_photos
+            if str(photo.get('process', '')).strip()
+        }
+        self._remove_empty_process_photo_pages(ws, processes_with_photos)
+
+        page_layouts = {}
+        title_keywords = {
+            'PAUT': ('위상배열초음파탐상검사', 'PAUT'),
+            'MT': ('자분탐상검사',),
+            'RT': ('방사선투과검사',),
+        }
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').upper()
+            for process, keywords in title_keywords.items():
+                if process in page_layouts:
+                    continue
+                if (
+                    any(keyword.upper() in row_text for keyword in keywords)
+                    and 'SEC.16' in row_text
+                    and row > 600
+                ):
+                    page_layouts[process] = {
+                        'title_row': row,
+                        'image_row': row + 2,
+                        'caption_row': row + 42,
+                    }
+        # PT may have moved when empty PAUT/MT/RT pages were deleted, so locate
+        # every surviving page again instead of relying on its old row number.
+        if pt_title_row is not None:
+            for row in range(600, ws.max_row + 1):
+                row_text = ''.join(
+                    str(ws.cell(row=row, column=col).value or '')
+                    for col in range(1, ws.max_column + 1)
+                ).replace(' ', '').upper()
+                if '침투탐상검사' in row_text and 'SEC.16' in row_text:
+                    page_layouts['PT'] = {
+                        'title_row': row,
+                        'image_row': row + 2,
+                        'caption_row': row + 42,
+                    }
+                    break
+        descriptions = {
+            'PAUT': '위상배열초음파탐상검사',
+            'MT': '자분탐상검사',
+            'RT': '방사선투과검사',
+            'PT': '침투탐상검사',
+        }
+        # Add as many continuation pages as needed (four photos per page).
+        for process, layout in sorted(
+            page_layouts.items(), key=lambda item: item[1]['title_row'], reverse=True
+        ):
+            photo_count = sum(
+                1 for photo in process_photos
+                if str(photo.get('process', '')).upper() == process
+            )
+            extra_pages = max(0, (photo_count - 1) // 4)
+            source_title_row = layout['title_row']
+            for continuation_no in range(2, extra_pages + 2):
+                source_title_row = self._clone_process_photo_page(
+                    ws, source_title_row, continuation_no
+                )
+
+        # All lower pages may have moved. Rebuild a list of every surviving
+        # base/continuation page for each process.
+        layouts_by_process = {process: [] for process in descriptions}
+        scan_keywords = dict(title_keywords)
+        scan_keywords['PT'] = ('침투탐상검사',)
+        for row in range(600, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').upper()
+            if 'SEC.16' not in row_text:
+                continue
+            for process, keywords in scan_keywords.items():
+                if any(keyword.upper() in row_text for keyword in keywords):
+                    layouts_by_process[process].append({
+                        'title_row': row,
+                        'image_row': row + 2,
+                    })
+                    break
+
+        for process, process_layouts in layouts_by_process.items():
+            photos = sorted(
+                [
+                    photo for photo in process_photos
+                    if str(photo.get('process', '')).upper() == process
+                ],
+                key=lambda photo: (
+                    str(photo.get('date', '')), str(photo.get('joint_no', ''))
+                ),
+            )
+            for page_index, layout in enumerate(process_layouts):
+                page_photos = photos[page_index * 4:(page_index + 1) * 4]
+                if not page_photos:
+                    continue
+
+                photo_slots = (
+                    ('C', layout['image_row'], 3, layout['image_row'] + 18),
+                    ('M', layout['image_row'], 13, layout['image_row'] + 18),
+                    ('C', layout['image_row'] + 21, 3, layout['image_row'] + 39),
+                    ('M', layout['image_row'] + 21, 13, layout['image_row'] + 39),
+                )
+                for index, photo in enumerate(page_photos):
+                    image = XLImage(photo['_resolved_path'])
+                    max_width, max_height = 310, 180
+                    scale = min(
+                        max_width / image.width,
+                        max_height / image.height,
+                        1.0,
+                    )
+                    image.width *= scale
+                    image.height *= scale
+                    anchor_col, anchor_row, caption_col, caption_row = photo_slots[index]
+                    image.anchor = f"{anchor_col}{anchor_row}"
+                    ws.add_image(image)
+
+                    caption = ' / '.join(filter(None, [
+                        str(photo.get('date', '')),
+                        str(photo.get('location', '')),
+                        str(photo.get('joint_no', '')),
+                        str(photo.get('description', '')),
+                    ]))
+                    caption_end_col = 12 if caption_col == 3 else 23
+                    for merged in list(ws.merged_cells.ranges):
+                        if (
+                            merged.min_row <= caption_row <= merged.max_row
+                            and merged.min_col <= caption_end_col
+                            and merged.max_col >= caption_col
+                        ):
+                            ws.unmerge_cells(str(merged))
+                    ws.merge_cells(
+                        start_row=caption_row, start_column=caption_col,
+                        end_row=caption_row, end_column=caption_end_col,
+                    )
+                    caption_cell = ws.cell(row=caption_row, column=caption_col)
+                    caption_cell.value = caption
+                    caption_cell.alignment = Alignment(
+                        horizontal='center', vertical='center',
+                        wrap_text=True, shrink_to_fit=True,
+                    )
+
+        # The template contains additional legacy photo-log pages after the
+        # three SEC.16 pages.  Print only the generated process-photo pages;
+        # when no valid photo exists, stop at the preceding report page.
+        surviving_titles = [
+            layout['title_row']
+            for layouts in layouts_by_process.values()
+            for layout in layouts
+        ]
+        if photo_section_start is not None:
+            print_end_row = (
+                max(surviving_titles) + 44
+                if surviving_titles else photo_section_start - 1
+            )
+            self._set_print_area_end(ws, print_end_row)
+
+    def _set_print_area_end(self, ws, end_row):
+        """Set the vertical print limit and discard later manual breaks."""
+        from openpyxl.worksheet.cell_range import CellRange
+
+        if not ws.print_area:
+            return
+        try:
+            print_range = CellRange(str(ws.print_area).replace('$', ''))
+            print_range.max_row = max(print_range.min_row, int(end_row))
+            ws.print_area = str(print_range)
+            ws.row_breaks.brk = [
+                brk for brk in ws.row_breaks.brk
+                if int(brk.id) < print_range.max_row
+            ]
+        except Exception:
+            pass
+
+    def _remove_empty_process_photo_pages(self, ws, processes_with_photos):
+        """Delete complete template pages for processes without photos."""
+        from openpyxl.worksheet.cell_range import CellRange
+
+        keywords = {
+            'PAUT': ('위상배열초음파탐상검사', 'PAUT'),
+            'MT': ('자분탐상검사',),
+            'RT': ('방사선투과검사',),
+            'PT': ('침투탐상검사',),
+        }
+        pages_to_delete = []
+        for row in range(600, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').upper()
+            if 'SEC.16' not in row_text:
+                continue
+            for process, process_keywords in keywords.items():
+                if process in processes_with_photos:
+                    continue
+                if any(keyword.upper() in row_text for keyword in process_keywords):
+                    # Photo-page titles sit nine rows below the manual page
+                    # boundary (PAUT 676:729, MT 730:783, RT 784:837).
+                    pages_to_delete.append((row - 9, process))
+                    break
+
+        page_rows = 54
+        for page_start, _process in sorted(pages_to_delete, reverse=True):
+            page_end = page_start + page_rows - 1
+
+            # Remove drawings owned by the deleted page and shift every later
+            # logo/photo upward with the worksheet content.
+            kept_images = []
+            for image in list(ws._images):
+                anchor = getattr(image, 'anchor', None)
+                if not hasattr(anchor, '_from'):
+                    kept_images.append(image)
+                    continue
+                image_row = anchor._from.row + 1
+                if page_start <= image_row <= page_end:
+                    continue
+                if image_row > page_end:
+                    anchor._from.row -= page_rows
+                    if hasattr(anchor, 'to'):
+                        anchor.to.row -= page_rows
+                kept_images.append(image)
+            ws._images = kept_images
+
+            self._delete_rows_safely(ws, page_start, page_rows)
+
+            if ws.print_area:
+                try:
+                    print_range = CellRange(str(ws.print_area).replace('$', ''))
+                    if print_range.max_row > page_end:
+                        print_range.max_row -= page_rows
+                    elif print_range.max_row >= page_start:
+                        print_range.max_row = page_start - 1
+                    ws.print_area = str(print_range)
+                except Exception:
+                    pass
+
+    def _clone_process_photo_page(self, ws, source_title_row, continuation_no):
+        """Clone one 54-row photo page directly after its source page."""
+        import copy
+        from io import BytesIO
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.worksheet.pagebreak import Break
+
+        page_rows = 54
+        source_start = source_title_row - 9
+        source_end = source_start + page_rows - 1
+        insert_row = source_end + 1
+        max_col = ws.max_column
+        cell_snapshot = [
+            [
+                (
+                    ws.cell(row=row, column=col).value,
+                    copy.copy(ws.cell(row=row, column=col)._style),
+                    copy.copy(ws.cell(row=row, column=col).alignment),
+                    ws.cell(row=row, column=col).number_format,
+                )
+                for col in range(1, max_col + 1)
+            ]
+            for row in range(source_start, source_end + 1)
+        ]
+        row_snapshot = [
+            (ws.row_dimensions[row].height, ws.row_dimensions[row].hidden)
+            for row in range(source_start, source_end + 1)
+        ]
+        merge_snapshot = [
+            (
+                merged.min_row - source_start, merged.min_col,
+                merged.max_row - source_start, merged.max_col,
+            )
+            for merged in list(ws.merged_cells.ranges)
+            if merged.min_row >= source_start and merged.max_row <= source_end
+        ]
+        image_snapshot = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if hasattr(anchor, '_from') and source_start <= anchor._from.row + 1 <= source_end:
+                image_snapshot.append((image, copy.deepcopy(anchor)))
+
+        self._insert_rows_safely(ws, insert_row, page_rows)
+        for existing_image in list(ws._images):
+            anchor = getattr(existing_image, 'anchor', None)
+            if hasattr(anchor, '_from') and anchor._from.row + 1 >= insert_row:
+                anchor._from.row += page_rows
+                if hasattr(anchor, 'to'):
+                    anchor.to.row += page_rows
+
+        for offset, saved_row in enumerate(cell_snapshot):
+            target_row = insert_row + offset
+            height, hidden = row_snapshot[offset]
+            ws.row_dimensions[target_row].height = height
+            ws.row_dimensions[target_row].hidden = hidden
+            for col, (value, style, alignment, number_format) in enumerate(saved_row, 1):
+                cell = ws.cell(row=target_row, column=col)
+                cell.value = value
+                cell._style = copy.copy(style)
+                cell.alignment = copy.copy(alignment)
+                cell.number_format = number_format
+        for min_row, min_col, max_row, max_col in merge_snapshot:
+            ws.merge_cells(
+                start_row=insert_row + min_row, start_column=min_col,
+                end_row=insert_row + max_row, end_column=max_col,
+            )
+
+        row_shift = insert_row - source_start
+        for source_image, saved_anchor in image_snapshot:
+            buffer = BytesIO()
+            image_ref = source_image.ref
+            if hasattr(image_ref, 'copy') and hasattr(image_ref, 'save'):
+                image_ref.copy().save(
+                    buffer, format=getattr(image_ref, 'format', None) or 'PNG'
+                )
+            elif isinstance(image_ref, (str, os.PathLike)):
+                with open(image_ref, 'rb') as stream:
+                    buffer.write(stream.read())
+            else:
+                old_position = image_ref.tell() if hasattr(image_ref, 'tell') else None
+                if hasattr(image_ref, 'seek'):
+                    image_ref.seek(0)
+                buffer.write(image_ref.read())
+                if old_position is not None and hasattr(image_ref, 'seek'):
+                    image_ref.seek(old_position)
+            buffer.seek(0)
+            new_image = XLImage(buffer)
+            new_image.width = source_image.width
+            new_image.height = source_image.height
+            new_image._photo_continuation_stream = buffer
+            new_image.anchor = copy.deepcopy(saved_anchor)
+            new_image.anchor._from.row += row_shift
+            if hasattr(new_image.anchor, 'to'):
+                new_image.anchor.to.row += row_shift
+            ws.add_image(new_image)
+
+        new_title_row = insert_row + 9
+        title_cell = ws.cell(row=new_title_row, column=3)
+        base_title = re.sub(
+            r'\s*\(계속\s*\d+\)\s*$', '', str(title_cell.value or '').strip()
+        )
+        title_cell.value = f"{base_title} (계속 {continuation_no})"
+        page_end = insert_row + page_rows - 1
+        if not any(int(brk.id) == page_end for brk in ws.row_breaks.brk):
+            ws.row_breaks.append(Break(id=page_end))
+        return new_title_row
+
+    def _ensure_pt_photo_page(self, ws):
+        """Clone a template photo page after RT when PT photos exist."""
+        import copy
+        from io import BytesIO
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.worksheet.pagebreak import Break
+
+        # Reuse an existing generated/template PT page when present.
+        for row in range(600, ws.max_row + 1):
+            text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').upper()
+            if '침투탐상검사' in text and ('SEC.16' in text or 'PT' in text):
+                return row
+
+        source_title_row = None
+        rt_title_row = None
+        for row in range(600, ws.max_row + 1):
+            text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').upper()
+            if source_title_row is None and '자분탐상검사' in text and 'SEC.16' in text:
+                source_title_row = row
+            if rt_title_row is None and '방사선투과검사' in text and 'SEC.16' in text:
+                rt_title_row = row
+        if source_title_row is None or rt_title_row is None:
+            return None
+
+        page_rows = 54
+        source_start = source_title_row - 9
+        source_end = source_start + page_rows - 1
+        insert_row = rt_title_row - 9 + page_rows
+        max_col = ws.max_column
+
+        cells = []
+        for row in range(source_start, source_end + 1):
+            cells.append([
+                (
+                    ws.cell(row=row, column=col).value,
+                    copy.copy(ws.cell(row=row, column=col)._style),
+                    copy.copy(ws.cell(row=row, column=col).alignment),
+                    ws.cell(row=row, column=col).number_format,
+                )
+                for col in range(1, max_col + 1)
+            ])
+        row_dimensions = [
+            (
+                ws.row_dimensions[row].height,
+                ws.row_dimensions[row].hidden,
+            )
+            for row in range(source_start, source_end + 1)
+        ]
+        merges = [
+            (
+                merged.min_row - source_start, merged.min_col,
+                merged.max_row - source_start, merged.max_col,
+            )
+            for merged in list(ws.merged_cells.ranges)
+            if merged.min_row >= source_start and merged.max_row <= source_end
+        ]
+        source_images = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            image_row = anchor._from.row + 1
+            if source_start <= image_row <= source_end:
+                source_images.append((image, copy.deepcopy(anchor)))
+
+        self._insert_rows_safely(ws, insert_row, page_rows)
+        # openpyxl does not move drawings when rows are inserted.  Keep every
+        # existing logo/photo below the new PT page aligned with its content.
+        for existing_image in list(ws._images):
+            anchor = getattr(existing_image, 'anchor', None)
+            if not hasattr(anchor, '_from') or anchor._from.row + 1 < insert_row:
+                continue
+            anchor._from.row += page_rows
+            if hasattr(anchor, 'to'):
+                anchor.to.row += page_rows
+        for offset, row_cells in enumerate(cells):
+            target_row = insert_row + offset
+            height, hidden = row_dimensions[offset]
+            ws.row_dimensions[target_row].height = height
+            ws.row_dimensions[target_row].hidden = hidden
+            for col, (value, style, alignment, number_format) in enumerate(
+                row_cells, start=1
+            ):
+                cell = ws.cell(row=target_row, column=col)
+                cell.value = value
+                cell._style = copy.copy(style)
+                cell.alignment = copy.copy(alignment)
+                cell.number_format = number_format
+        for min_row, min_col, max_row, max_col in merges:
+            ws.merge_cells(
+                start_row=insert_row + min_row, start_column=min_col,
+                end_row=insert_row + max_row, end_column=max_col,
+            )
+
+        row_shift = insert_row - source_start
+        for source_image, saved_anchor in source_images:
+            image_buffer = BytesIO()
+            image_ref = source_image.ref
+            if hasattr(image_ref, 'copy') and hasattr(image_ref, 'save'):
+                image_ref.copy().save(
+                    image_buffer,
+                    format=getattr(image_ref, 'format', None) or 'PNG',
+                )
+            elif isinstance(image_ref, (str, os.PathLike)):
+                with open(image_ref, 'rb') as stream:
+                    image_buffer.write(stream.read())
+            else:
+                old_position = image_ref.tell() if hasattr(image_ref, 'tell') else None
+                if hasattr(image_ref, 'seek'):
+                    image_ref.seek(0)
+                image_buffer.write(image_ref.read())
+                if old_position is not None and hasattr(image_ref, 'seek'):
+                    image_ref.seek(old_position)
+            image_buffer.seek(0)
+            new_image = XLImage(image_buffer)
+            new_image.width = source_image.width
+            new_image.height = source_image.height
+            new_image._process_photo_page_stream = image_buffer
+            new_image.anchor = copy.deepcopy(saved_anchor)
+            new_image.anchor._from.row += row_shift
+            if hasattr(new_image.anchor, 'to'):
+                new_image.anchor.to.row += row_shift
+            ws.add_image(new_image)
+
+        # Keep RT and the generated PT page as separate printed pages.
+        rt_page_end = insert_row - 1
+        pt_page_end = insert_row + page_rows - 1
+        existing_breaks = {int(brk.id) for brk in ws.row_breaks.brk}
+        if rt_page_end not in existing_breaks:
+            ws.row_breaks.append(Break(id=rt_page_end))
+        if pt_page_end not in existing_breaks:
+            ws.row_breaks.append(Break(id=pt_page_end))
+
+        pt_title_row = insert_row + (source_title_row - source_start)
+        ws.cell(row=pt_title_row, column=3).value = '1.4 침투탐상검사(PT)(SEC.16)'
+        return pt_title_row
+
     def generate_report(self, history_path, target_ym, output_path, doc_num="01", create_date=None):
+
+        self._history_path = history_path
 
         if create_date is None:
             from datetime import datetime
@@ -423,9 +1238,16 @@ class MonthlyReportManager:
             history_data = json.load(f)
 
         # 1. 데이터 필터링 및 집계
-        target_dates = sorted([d for d in history_data.keys() if d.startswith(target_ym)])
+        # The selected year-month is the inclusive end of a cumulative report.
+        # Include every valid history date from the beginning through that
+        # month's final day (for example, 2027-08 includes through 2027-08-31).
+        target_dates = sorted(
+            d for d in history_data.keys()
+            if re.match(r'^\d{4}-\d{2}-\d{2}$', str(d))
+            and str(d)[:7] <= target_ym
+        )
         if not target_dates:
-            print(f"No data found for {target_ym}")
+            print(f"No data found through {target_ym}")
             return None
 
         # 집계 구조 (1.2 요약용: 업체+구간+라인+관경+규격별 그룹)
@@ -438,6 +1260,13 @@ class MonthlyReportManager:
         }
         # 세부 현황용 (2.x 전체 레코드 - 날짜순)
         ndt_details = {'PAUT': [], 'MT': [], 'RT': [], 'PT': []}
+        process_photos = []
+        # 4.0/1.1 RT 용접사별 불합격 결함 수
+        rt_defects_by_welder = defaultdict(lambda: defaultdict(int))
+        rt_retests_by_welder = defaultdict(int)
+        rt_original_counts_by_welder = defaultdict(int)
+        paut_retest_lengths_by_welder = defaultdict(float)
+        paut_original_lengths_by_welder = defaultdict(float)
 
         # 물량표(qty) 처리를 위해 시작일의 전일누계와 전체 금일작업 합산을 구함
         first_day_data = history_data[target_dates[0]]
@@ -457,6 +1286,7 @@ class MonthlyReportManager:
         # 날짜별 금일작업 누적
         for d in target_dates:
             day_data = history_data[d]
+            process_photos.extend(day_data.get('process_photos', []))
             for key, val in day_data.get('qty_data', {}).items():
                 if key not in qty_summary:
                     qty_summary[key] = {'예상량': val.get('예상량', ''), '전월누계': '0', '금월작업': 0.0, '총누계': '0', '공정률': '', '불량': 0, '불량률': ''}
@@ -479,6 +1309,27 @@ class MonthlyReportManager:
                 method = str(row.get('검사방법', '')).strip().upper()
                 if not method or method not in ndt_groups:
                     continue
+
+                if method == 'RT':
+                    welder = str(row.get('용접사', '') or '').strip()
+                    if welder:
+                        for defect_code in self._rt_reject_defects(row):
+                            rt_defects_by_welder[welder][defect_code] += 1
+                        joint_no = str(row.get('Joint No.', '') or '').strip().upper()
+                        film_count = self._rt_film_count(row)
+                        if joint_no.endswith('R1'):
+                            rt_retests_by_welder[welder] += film_count
+                        elif joint_no:
+                            rt_original_counts_by_welder[welder] += film_count
+                elif method == 'PAUT':
+                    welder = str(row.get('용접사', '') or '').strip()
+                    joint_no = str(row.get('Joint No.', '') or '').strip().upper()
+                    inspection_length = self._safe_float(row.get('PAUT'))
+                    if welder and inspection_length > 0:
+                        if joint_no.endswith('R1'):
+                            paut_retest_lengths_by_welder[welder] += inspection_length
+                        elif joint_no:
+                            paut_original_lengths_by_welder[welder] += inspection_length
                 
                 company = str(row.get('업체', '')).strip()
                 if not company: continue # 빈 행 무시
@@ -855,35 +1706,109 @@ class MonthlyReportManager:
                 remaining_start = continuation_row + inserted_rows
 
         # When the three method-detail tables on this page have no records,
-        # distribute the unused vertical space between them instead of leaving
-        # all tables crowded at the top.
+        # distribute all unused vertical space across MT->RT, RT->PT, and
+        # PT->page-bottom.  Including the final gap prevents the lower half of
+        # the page from remaining empty while the tables crowd the top.
         if all(section_item_counts.get(key, 0) == 0 for key in ('mt_2', 'rt_2', 'pt_2')):
-            for current_key, next_key in (('mt_2', 'rt_2'), ('rt_2', 'pt_2')):
+            method_keys = ('mt_2', 'rt_2', 'pt_2')
+            total_rows = []
+            for index, current_key in enumerate(method_keys):
                 current_marker = self.table_markers[current_key]
-                next_marker = self.table_markers[next_key]
+                search_end = (
+                    self.table_markers[method_keys[index + 1]]
+                    if index + 1 < len(method_keys)
+                    else ws.max_row + 1
+                )
                 current_total = None
-                for row in range(current_marker + 2, next_marker):
+                for row in range(current_marker + 2, search_end):
                     if 'TOTAL' in str(ws.cell(row=row, column=2).value or '').upper():
                         current_total = row
                         break
-                if current_total is None:
-                    continue
-                blank_spacer_rows = []
-                for spacer_row in range(current_total + 1, next_marker):
-                    is_blank = all(
-                        not str(ws.cell(row=spacer_row, column=col).value or '').strip()
-                        for col in range(1, 24)
+                total_rows.append(current_total)
+
+            later_breaks = sorted(
+                int(brk.id) for brk in ws.row_breaks.brk
+                if int(brk.id) >= self.table_markers['pt_2']
+            )
+            page_end = later_breaks[0] if later_breaks else None
+
+            if all(row is not None for row in total_rows) and page_end is not None:
+                gap_limits = (
+                    (total_rows[0] + 1, self.table_markers['rt_2']),
+                    (total_rows[1] + 1, self.table_markers['pt_2']),
+                    (total_rows[2] + 1, page_end + 1),
+                )
+                default_height = ws.sheet_format.defaultRowHeight or 15
+                gap_rows = []
+                for gap_start, gap_end in gap_limits:
+                    blank_spacer_rows = []
+                    for spacer_row in range(gap_start, gap_end):
+                        is_blank = all(
+                            not str(ws.cell(row=spacer_row, column=col).value or '').strip()
+                            for col in range(1, 24)
+                        )
+                        if is_blank:
+                            blank_spacer_rows.append(spacer_row)
+                    gap_rows.append(blank_spacer_rows)
+
+                # Equalize the number of spacer rows instead of assigning
+                # different row heights to each gap.  This keeps every visible
+                # grid cell the same height while preserving equal spacing.
+                total_spacers = sum(len(rows) for rows in gap_rows)
+                base_count, remainder = divmod(total_spacers, 3)
+                desired_counts = [
+                    base_count + (1 if index < remainder else 0)
+                    for index in range(3)
+                ]
+
+                first_delta = desired_counts[0] - len(gap_rows[0])
+                rt_marker = self.table_markers['rt_2']
+                rt_title_row = rt_marker - 1
+                if first_delta > 0:
+                    self._insert_rows_safely(ws, rt_title_row, first_delta)
+                elif first_delta < 0:
+                    self._delete_rows_safely(
+                        ws, rt_title_row + first_delta, -first_delta
                     )
-                    if is_blank:
-                        blank_spacer_rows.append(spacer_row)
-                if blank_spacer_rows:
-                    # Equal physical gap between method tables regardless of
-                    # how many blank template rows each gap contains.
-                    # Keep both gaps equal while ensuring rows 472:522 remain
-                    # within one printed page ending at the row-522 break.
-                    row_height = 48.0 / len(blank_spacer_rows)
-                    for spacer_row in blank_spacer_rows:
-                        ws.row_dimensions[spacer_row].height = row_height
+                if first_delta:
+                    self.table_markers['rt_2'] += first_delta
+                    self.table_markers['pt_2'] += first_delta
+                    total_rows[1] += first_delta
+                    total_rows[2] += first_delta
+                    page_end += first_delta
+
+                second_delta = desired_counts[1] - len(gap_rows[1])
+                pt_marker = self.table_markers['pt_2']
+                pt_title_row = pt_marker - 1
+                if second_delta > 0:
+                    self._insert_rows_safely(ws, pt_title_row, second_delta)
+                elif second_delta < 0:
+                    self._delete_rows_safely(
+                        ws, pt_title_row + second_delta, -second_delta
+                    )
+                if second_delta:
+                    self.table_markers['pt_2'] += second_delta
+                    total_rows[2] += second_delta
+                    page_end += second_delta
+
+                third_delta = desired_counts[2] - len(gap_rows[2])
+                if third_delta > 0:
+                    self._insert_rows_safely(ws, page_end, third_delta)
+                    page_end += third_delta
+                elif third_delta < 0:
+                    self._delete_rows_safely(
+                        ws, total_rows[2] + 1, -third_delta
+                    )
+                    page_end += third_delta
+
+                uniform_gaps = (
+                    (total_rows[0] + 1, self.table_markers['rt_2'] - 1),
+                    (total_rows[1] + 1, self.table_markers['pt_2'] - 1),
+                    (total_rows[2] + 1, page_end + 1),
+                )
+                for gap_start, gap_end in uniform_gaps:
+                    for spacer_row in range(gap_start, gap_end):
+                        ws.row_dimensions[spacer_row].height = default_height
 
         # 마지막으로 맨 위의 1.1 물량표 처리
         qty_start_row = self.table_markers['qty'] + 1
@@ -1051,7 +1976,18 @@ class MonthlyReportManager:
         # [표지] 시트 병합 셀 강제 복구 (openpyxl 버그 방지)
         # Dynamic continuation pages change the section total, so recalculate
         # the 3.0 page labels after all row and page operations are complete.
+        self._write_welder_defect_summary(
+            ws, rt_defects_by_welder, rt_retests_by_welder,
+            rt_original_counts_by_welder, '1.1', ('방사선투과검사', 'RT'),
+        )
+        self._write_welder_defect_summary(
+            ws, {}, paut_retest_lengths_by_welder,
+            paut_original_lengths_by_welder, '1.2',
+            ('위상배열초음파탐상검사', 'PAUT'),
+        )
+        self._populate_process_photo_pages(ws, process_photos)
         self._renumber_ndt_status_pages(ws)
+        self._keep_iuc_euc_headers_single_line(ws)
 
         # Preserve the visible right edge of merged template boxes and headers.
         for sheet in wb.worksheets:
@@ -1076,6 +2012,8 @@ class MonthlyReportManager:
             if is_blank:
                 ws.row_dimensions[blank_row].height = 0
                 ws.row_dimensions[blank_row].hidden = True
+
+        self._trim_trailing_blank_print_pages(ws)
 
         wb.save(output_path)
         return output_path
