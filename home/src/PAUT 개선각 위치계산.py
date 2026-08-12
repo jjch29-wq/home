@@ -44,6 +44,16 @@ class App(ctk.CTk):
         self.create_input_field("개선각 (편각) [°]:", "bevel_angle_deg", "37.5")
         self.create_input_field("시편 X축 길이 (스캔) [mm]:", "specimen_length", "320.0")
         self.create_input_field("시편 Y축 폭 (인덱스) [mm]:", "specimen_width", "610.0")
+        self.create_input_field("우측 모재 기울기 [°]:", "plate_tilt_angle_r", "0.0")
+        self.create_input_field("좌측 모재 기울기 [°]:", "plate_tilt_angle_l", "0.0")
+        
+        # 모재 경사 기준점 프레임
+        pivot_frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
+        pivot_frame.pack(fill="x", padx=20, pady=8)
+        ctk.CTkLabel(pivot_frame, text="경사 기준점 (Pivot):", width=150, anchor="w").pack(side="left")
+        self.pivot_var = ctk.StringVar(value="루트 하단 (Root Bottom)")
+        self.pivot_menu = ctk.CTkOptionMenu(pivot_frame, values=["루트 하단 (Root Bottom)", "시편 끝단 (Edge)"], variable=self.pivot_var, width=180, command=lambda e: self.update_plot())
+        self.pivot_menu.pack(side="right")
         
         # 계산/그리기 버튼
         self.calc_btn = ctk.CTkButton(self.input_frame, text="그래프 그리기 및 갱신", command=self.update_plot, height=40, font=ctk.CTkFont(weight="bold"))
@@ -188,7 +198,10 @@ class App(ctk.CTk):
                 "root_gap_half": float(self.entries["root_gap_half"].get()),
                 "bevel_angle_deg": float(self.entries["bevel_angle_deg"].get()),
                 "specimen_length": float(self.entries["specimen_length"].get()),
-                "specimen_width": float(self.entries["specimen_width"].get())
+                "specimen_width": float(self.entries["specimen_width"].get()),
+                "plate_tilt_angle_r": float(self.entries["plate_tilt_angle_r"].get()) if "plate_tilt_angle_r" in self.entries else 0.0,
+                "plate_tilt_angle_l": float(self.entries["plate_tilt_angle_l"].get()) if "plate_tilt_angle_l" in self.entries else 0.0,
+                "pivot_mode": self.pivot_var.get()
             }
         except ValueError:
             return None
@@ -225,6 +238,23 @@ class App(ctk.CTk):
         specimen_width = p["specimen_width"]
         half_width = specimen_width / 2.0
         
+        tilt_angle_r = p.get("plate_tilt_angle_r", 0.0)
+        # symlog 스케일에 의한 시각적 왜곡(약 7.5배 가파르게 보임)을 상쇄하기 위해 그리기용 각도 축소
+        visual_tilt_angle_r = tilt_angle_r / 7.5 if tilt_angle_r != 0 else 0.0
+        visual_tilt_rad_r = math.radians(visual_tilt_angle_r)
+        visual_tilt_tan_r = math.tan(visual_tilt_rad_r)
+        
+        tilt_angle_l = p.get("plate_tilt_angle_l", 0.0)
+        visual_tilt_angle_l = tilt_angle_l / 7.5 if tilt_angle_l != 0 else 0.0
+        visual_tilt_rad_l = math.radians(visual_tilt_angle_l)
+        visual_tilt_tan_l = math.tan(visual_tilt_rad_l)
+        
+        pivot_mode = p.get("pivot_mode", "루트 하단 (Root Bottom)")
+        pivot_abs = points["Root_Bottom"][0] if pivot_mode in ["개선면 (Bevel)", "루트 하단 (Root Bottom)"] else half_width
+
+        def apply_shear(x_phys, z_phys, tilt_tan):
+            return z_phys - tilt_tan * (abs(x_phys) - pivot_abs)
+        
         # == Side View (B-Scan) ==
         for ax in (self.ax_side, self.ax_side_back):
             is_back = (ax == self.ax_side_back)
@@ -234,22 +264,54 @@ class App(ctk.CTk):
             ax.axhline(0, color='gray', linestyle='--', linewidth=1)
             ax.axhline(t, color='gray', linestyle='--', linewidth=1)
             
-            x_right = [mult * points["Bevel_Top"][0], mult * points["Root_Top"][0], mult * points["Root_Bottom"][0]]
-            z_right = [points["Bevel_Top"][1], points["Root_Top"][1], points["Root_Bottom"][1]]
-            x_left = [-x for x in x_right]
+            # 1. 우측 모재 물리적 좌표 (X > 0)
+            r_phys_x = [calc_top_bevel_x, half_width, half_width, points["Root_Bottom"][0], points["Root_Top"][0]]
+            r_phys_z = [0, 0, t, t, z_root_top]
+            r_sheared_z = [apply_shear(x, z, visual_tilt_tan_r) for x, z in zip(r_phys_x, r_phys_z)]
+            r_plot_x = [x * mult for x in r_phys_x]
             
-            ax.plot(x_right, z_right, 'dodgerblue', linewidth=2, label='V-Groove Profile')
-            ax.plot(x_left, z_right, 'dodgerblue', linewidth=2)
-            ax.plot([x_left[-1], x_right[-1]], [z_bottom, z_bottom], 'dodgerblue', linewidth=2)
+            # 2. 좌측 모재 물리적 좌표 (X < 0)
+            l_phys_x = [-calc_top_bevel_x, -half_width, -half_width, -points["Root_Bottom"][0], -points["Root_Top"][0]]
+            l_phys_z = [0, 0, t, t, z_root_top]
+            l_sheared_z = [apply_shear(x, z, visual_tilt_tan_l) for x, z in zip(l_phys_x, l_phys_z)]
+            l_plot_x = [x * mult for x in l_phys_x]
             
-            bm_right = patches.Polygon([(mult * points["Bevel_Top"][0], 0), (mult * half_width, 0), 
-                                        (mult * half_width, t), (mult * points["Root_Bottom"][0], t), 
-                                        (mult * points["Root_Top"][0], z_root_top)], closed=True, color='pink', alpha=0.3)
-            bm_left = patches.Polygon([(-mult * points["Bevel_Top"][0], 0), (-mult * half_width, 0), 
-                                       (-mult * half_width, t), (-mult * points["Root_Bottom"][0], t), 
-                                       (-mult * points["Root_Top"][0], z_root_top)], closed=True, color='pink', alpha=0.3)
+            # V홈(파란선) 그리기
+            vg_r_x = [r_plot_x[0], r_plot_x[4], r_plot_x[3]]
+            vg_r_z = [r_sheared_z[0], r_sheared_z[4], r_sheared_z[3]]
+            ax.plot(vg_r_x, vg_r_z, 'dodgerblue', linewidth=2, label='V-Groove Profile' if mult==1 else "")
+            
+            vg_l_x = [l_plot_x[0], l_plot_x[4], l_plot_x[3]]
+            vg_l_z = [l_sheared_z[0], l_sheared_z[4], l_sheared_z[3]]
+            ax.plot(vg_l_x, vg_l_z, 'dodgerblue', linewidth=2)
+            
+            # 루트 바닥면 연결
+            ax.plot([vg_l_x[-1], vg_r_x[-1]], [vg_l_z[-1], vg_r_z[-1]], 'dodgerblue', linewidth=2)
+            
+            # 모재 폴리곤 그리기
+            bm_right = patches.Polygon(list(zip(r_plot_x, r_sheared_z)), closed=True, color='pink', alpha=0.3)
+            bm_left = patches.Polygon(list(zip(l_plot_x, l_sheared_z)), closed=True, color='pink', alpha=0.3)
             ax.add_patch(bm_right)
             ax.add_patch(bm_left)
+            
+            # 경사각 안내선 및 텍스트 그리기
+            if abs(tilt_angle_r) > 0.1:
+                # 상단, 하단 점선
+                ax.plot([r_plot_x[0], r_plot_x[1]], [r_sheared_z[0], r_sheared_z[1]], color='pink', linestyle='--', linewidth=1)
+                ax.plot([r_plot_x[3], r_plot_x[2]], [r_sheared_z[3], r_sheared_z[2]], color='pink', linestyle='--', linewidth=1)
+                
+                lbl_x_r = (r_plot_x[0] + r_plot_x[1]) / 2
+                lbl_z_r = (r_sheared_z[0] + r_sheared_z[1]) / 2
+                ax.text(lbl_x_r, lbl_z_r - 2, f"{tilt_angle_r}°", color='pink', fontsize=11, ha='center', va='bottom', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=0))
+            
+            if abs(tilt_angle_l) > 0.1:
+                # 상단, 하단 점선
+                ax.plot([l_plot_x[0], l_plot_x[1]], [l_sheared_z[0], l_sheared_z[1]], color='pink', linestyle='--', linewidth=1)
+                ax.plot([l_plot_x[3], l_plot_x[2]], [l_sheared_z[3], l_sheared_z[2]], color='pink', linestyle='--', linewidth=1)
+                
+                lbl_x_l = (l_plot_x[0] + l_plot_x[1]) / 2
+                lbl_z_l = (l_sheared_z[0] + l_sheared_z[1]) / 2
+                ax.text(lbl_x_l, lbl_z_l - 2, f"{tilt_angle_l}°", color='pink', fontsize=11, ha='center', va='bottom', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=0))
             
             for name, (x, z) in points.items():
                 # 하부 텍스트 삭제 및 빨간 점 완전 제거
@@ -784,6 +846,10 @@ class App(ctk.CTk):
         self.ax_top.set_yticks(yticks)
         
         self.fig.tight_layout(pad=2.0)
+        
+        for ax in (self.ax_side, self.ax_side_back, self.ax_top):
+            ax.set_aspect('auto')
+                
         self.canvas.draw()
         
         # 결과 요약 출력
