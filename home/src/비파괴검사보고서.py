@@ -1374,7 +1374,8 @@ class PMIReportApp:
         action_bar = tk.Frame(left_pane, background="#f9fafb")
         action_bar.pack(fill='x', pady=5)
         ttk.Button(action_bar, text=" ✨ 생성 시작 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
-        ttk.Button(action_bar, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x')
+        ttk.Button(action_bar, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x', pady=(0, 5))
+        ttk.Button(action_bar, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(fill='x')
 
         self._update_pmi_filter_ui()
 
@@ -1558,6 +1559,7 @@ class PMIReportApp:
         btn_r.pack(fill='x', pady=5)
         ttk.Button(btn_r, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
         ttk.Button(btn_r, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x', pady=(0, 5))
+        ttk.Button(btn_r, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(fill='x', pady=(0, 5))
         ttk.Button(btn_r, text=" 🔄 의뢰서에 결과 반영 ", command=self.sync_results_to_request).pack(fill='x')
 
         # [RIGHT] Multi-Preview (Sub-tabs)
@@ -1963,7 +1965,8 @@ class PMIReportApp:
         btn_row = tk.Frame(left_pane, background="#f9fafb")
         btn_row.pack(fill='x', pady=5)
         ttk.Button(btn_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
-        ttk.Button(btn_row, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x')
+        ttk.Button(btn_row, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x', pady=(0, 5))
+        ttk.Button(btn_row, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(fill='x')
 
         # [RIGHT] Multi-Preview Pane (Data & Gapji)
         right_container = tk.Frame(self.pt_paned, background="#f3f4f6")
@@ -2358,6 +2361,7 @@ class PMIReportApp:
         paut_btn_row = tk.Frame(left_pane, background="#f9fafb")
         paut_btn_row.pack(fill='x', pady=2)
         ttk.Button(paut_btn_row, text=" 📝 추출 ", command=self._extract_paut_data).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(paut_btn_row, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(side='left', fill='x', expand=True, padx=(0, 5))
         ttk.Button(paut_btn_row, text=" ✨ 일괄 판정 ", command=self._run_batch_paut_eval).pack(side='left', fill='x', expand=True, padx=(0, 5))
         ttk.Button(paut_btn_row, text=" 📄 성적서 생성 ", command=self._generate_paut_report).pack(side='left', fill='x', expand=True)
 
@@ -6991,6 +6995,114 @@ class PMIReportApp:
             if val <= 2.5: return 2
             return 1
         except: return 1
+
+    def load_daily_work_history(self):
+        """작업 감독일보에 저장된 NDT 누계 대장 데이터(daily_work_history.json)를 불러옵니다."""
+        try:
+            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            if not os.path.exists(history_path):
+                messagebox.showerror("오류", "daily_work_history.json 파일이 존재하지 않습니다.\n(중앙지사 어플에서 작업 감독일보를 저장했는지 확인하세요)")
+                return
+            with open(history_path, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+            
+            ndt_list = []
+            for date_str, data in history.items():
+                results = data.get("ndt_results", [])
+                for r in results:
+                    # 기본적으로 빈 값은 제거
+                    r_clean = {k: str(v).strip() for k, v in r.items() if str(v).strip()}
+                    r_clean["Date"] = date_str
+                    ndt_list.append(r_clean)
+            
+            if not ndt_list:
+                messagebox.showinfo("알림", "저장된 NDT 비파괴검사 결과 데이터가 없습니다.")
+                return
+                
+            try:
+                main_tab = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+                if "RT" in main_tab:
+                    sub_tab_text = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
+                    mode = "KOGAS" if "가스공사" in sub_tab_text else "RT"
+                elif "PT" in main_tab: mode = "PT"
+                elif "PAUT" in main_tab: mode = "PAUT"
+                else: mode = "PMI"
+            except: mode = "PMI"
+            
+            tree, idx_map, data, keys_attr = self._get_mode_info(mode)
+            
+            # Map NDT data to the tree columns
+            added_count = 0
+            for r in ndt_list:
+                # 업체, 검사방법 필터 (선택적)
+                if mode == "PT" and "PT" not in r.get("검사방법", ""): continue
+                if mode == "PAUT" and "PAUT" not in r.get("검사방법", ""): continue
+                if mode in ("RT", "KOGAS") and "RT" not in r.get("검사방법", ""): continue
+
+                new_row = {k: "" for k in keys_attr}
+                new_row["Date"] = r.get("Date", "")
+                
+                # 라인번호 / ISO / Dwg
+                dwg = r.get("라인번호", "")
+                if "ISO" in keys_attr: new_row["ISO"] = dwg
+                elif "Line No." in keys_attr: new_row["Line No."] = dwg
+                elif "Dwg" in keys_attr: new_row["Dwg"] = dwg
+                elif "Drawing No." in keys_attr: new_row["Drawing No."] = dwg
+                
+                # Joint No.
+                joint = r.get("Joint No.", "")
+                if "Joint" in keys_attr: new_row["Joint"] = joint
+                elif "Joint No." in keys_attr: new_row["Joint No."] = joint
+                
+                # 관경 / Size / T / Th'k
+                size = r.get("관경", "")
+                if "Size" in keys_attr: new_row["Size"] = size
+                if "T" in keys_attr and not new_row.get("T"): new_row["T"] = size
+                if "Th'k(mm)" in keys_attr: new_row["Th'k(mm)"] = size
+                
+                # 용접사 / Welder
+                welder = r.get("용접사", "")
+                if "Welder" in keys_attr: new_row["Welder"] = welder
+                
+                # 구간 / Loc
+                loc = r.get("구간", "")
+                if "Loc" in keys_attr: new_row["Loc"] = loc
+                elif "Location" in keys_attr: new_row["Location"] = loc
+                
+                # 결과 / Result / Acc / Rej
+                res = r.get("결과", "")
+                if "Result" in keys_attr:
+                    new_row["Result"] = res
+                if res == "합격":
+                    if "Acc" in keys_attr: new_row["Acc"] = "O"
+                    if "Evaluation" in keys_attr: new_row["Evaluation"] = "Acc"
+                elif res == "불합격":
+                    if "Rej" in keys_attr: new_row["Rej"] = "X"
+                    if "Evaluation" in keys_attr: new_row["Evaluation"] = "Rej"
+                
+                new_row["selected"] = True
+                new_row["_status"] = "new"
+                if "No" in keys_attr: new_row["No"] = str(len(data) + 1)
+                
+                data.append(new_row)
+                
+                row_vals = [new_row.get(k, "") for k in keys_attr]
+                row_tags = []
+                if new_row.get("Result") == "불합격" or new_row.get("Evaluation") == "Rej":
+                    row_tags.append("fail")
+                elif new_row.get("Result") == "합격" or new_row.get("Evaluation") == "Acc":
+                    row_tags.append("pass")
+                
+                tree.insert("", "end", values=tuple(row_vals), tags=tuple(row_tags))
+                idx_map.append(len(data) - 1)
+                added_count += 1
+                
+            messagebox.showinfo("완료", f"작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("오류", f"일보 불러오기 중 오류가 발생했습니다:\n{e}")
 
     def extract_only(self, show_msg=True):
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""

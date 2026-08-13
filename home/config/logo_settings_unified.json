@@ -2,7 +2,7 @@
     "PMI_SASH_RATIO": 0.24554039874081846,
     "RT_SASH_RATIO": 0.5,
     "PT_SASH_RATIO": 0.5,
-    "PAUT_SASH_RATIO": 0.43126967471143757,
+    "PAUT_SASH_RATIO": 0.3751311647429171,
     "PMI_COL_WIDTHS": {
         "ST": 40,
         "V": 40,
@@ -177,7 +177,7 @@
         "Welder": 100,
         "Remarks": 120
     },
-    "WINDOW_GEOMETRY": "1920x1009+-1949+16",
+    "WINDOW_GEOMETRY": "1920x991+-1949+16",
     "WINDOW_STATE": "zoomed",
     "ACTIVE_TAB": 3,
     "PMI_TARGET_PATH": "",
@@ -474,7 +474,7 @@
     "GAPJI_ITEM": "",
     "GAPJI_MATERIAL": "",
     "GAPJI_REPORT_NO": "",
-    "GAPJI_EXAM_DATE": "2026-08-03",
+    "GAPJI_EXAM_DATE": "2026-08-13",
     "SITCO_PMI_COVER_PATH": "",
     "SITCO_PMI_COVER_X": 0.0,
     "SITCO_PMI_COVER_Y": 0.0,

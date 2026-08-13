@@ -10100,6 +10100,10 @@ class MaterialManager:
             from services.data_loader import export_daily_work_report_impl
         return export_daily_work_report_impl(self, *args, **kwargs)
 
+    def export_central_daily_work_report(self, *args, **kwargs):
+        from services.excel_exporter import export_central_daily_work_report_impl
+        return export_central_daily_work_report_impl(self, *args, **kwargs)
+
     def _get_usage_session_data(self):
         """Helper to collect Site tab entry data"""
         data = {
