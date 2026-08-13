@@ -172,8 +172,14 @@ class App(ctk.CTk):
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
         self.canvas.mpl_connect('button_release_event', self.on_release)
         
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         # 초기 그래프 그리기 (결함 하나 추가하면서 자동 갱신됨)
         self.add_defect()
+        
+    def on_closing(self):
+        self.quit()
+        self.destroy()
     def create_input_field(self, label_text, key, default_val):
         frame = ctk.CTkFrame(self.input_frame, fg_color="transparent")
         frame.pack(fill="x", padx=20, pady=8)
@@ -313,20 +319,19 @@ class App(ctk.CTk):
                 lbl_z_l = (l_sheared_z[0] + l_sheared_z[1]) / 2
                 ax.text(lbl_x_l, lbl_z_l - 2, f"{tilt_angle_l}°", color='pink', fontsize=11, ha='center', va='bottom', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=0))
             
-            for name, (x, z) in points.items():
-                # 하부 텍스트 삭제 및 빨간 점 완전 제거
-                if "Root" in name: continue
-                
-                px = mult * x
-                
-                # 상부 텍스트(Bevel_Top)만 바깥쪽으로 밀어서 표기합니다 (빨간 점 없음)
-                offset_x = 3.0 if px >= 0 else -3.0
-                ha = 'left' if px >= 0 else 'right'
-                
-                offset_z = -2.0
-                va = 'bottom'
-                
-                ax.text(px + offset_x, z + offset_z, f"({px:.1f}, {z:.1f})", color='white', fontsize=9, ha=ha, va=va)
+            # 우측 모재 (물리적 X > 0) Bevel Top 좌표 텍스트
+            px_r = mult * calc_top_bevel_x
+            pz_r = apply_shear(calc_top_bevel_x, 0, visual_tilt_tan_r)
+            offset_x_r = 3.0 if px_r >= 0 else -3.0
+            ha_r = 'left' if px_r >= 0 else 'right'
+            ax.text(px_r + offset_x_r, pz_r - 2.0, f"({calc_top_bevel_x:.1f}, 0.0)", color='white', fontsize=9, ha=ha_r, va='bottom')
+            
+            # 좌측 모재 (물리적 X < 0) Bevel Top 좌표 텍스트
+            px_l = mult * (-calc_top_bevel_x)
+            pz_l = apply_shear(-calc_top_bevel_x, 0, visual_tilt_tan_l)
+            offset_x_l = 3.0 if px_l >= 0 else -3.0
+            ha_l = 'left' if px_l >= 0 else 'right'
+            ax.text(px_l + offset_x_l, pz_l - 2.0, f"({-calc_top_bevel_x:.1f}, 0.0)", color='white', fontsize=9, ha=ha_l, va='bottom')
             
         # == Top View (C-Scan) ==
         self.ax_top.axvline(0, color='gray', linestyle='-.', linewidth=1, label='Centerline')
@@ -455,11 +460,11 @@ class App(ctk.CTk):
                 is_front = (ax == self.ax_side)
                 mult = 1 if is_front else -1
                 
-                # Apply mult to all X coordinates for this ax
-                p_start_r_m = (mult * p_start_r[0], p_start_r[1])
-                p_end_r_m = (mult * p_end_r[0], p_end_r[1])
-                p_start_l_m = (mult * p_start_l[0], p_start_l[1])
-                p_end_l_m = (mult * p_end_l[0], p_end_l[1])
+                # Apply shear and mult
+                p_start_r_m = (mult * p_start_r[0], apply_shear(p_start_r[0], p_start_r[1], visual_tilt_tan_r))
+                p_end_r_m = (mult * p_end_r[0], apply_shear(p_end_r[0], p_end_r[1], visual_tilt_tan_r))
+                p_start_l_m = (mult * p_start_l[0], apply_shear(p_start_l[0], p_start_l[1], visual_tilt_tan_l))
+                p_end_l_m = (mult * p_end_l[0], apply_shear(p_end_l[0], p_end_l[1], visual_tilt_tan_l))
                 
                 scan_view = dfct.get("scan_view", "Front B-Scan")
                 if is_front and scan_view not in ["Front B-Scan", "양쪽 화면(Both)"]:
@@ -475,13 +480,18 @@ class App(ctk.CTk):
                         ax.plot([p_start_l_m[0], p_end_l_m[0]], [p_start_l_m[1], p_end_l_m[1]], color=color, linewidth=4)
                         if is_selected: draw_stars(ax, [p_start_l_m[0], p_end_l_m[0]], [p_start_l_m[1], p_end_l_m[1]], 'yellow')
                 elif shape in ["원형(Circle)", "타원형(Ellipse)"]:
+                    center_z_r_sheared = apply_shear(center_x_right, center_z, visual_tilt_tan_r)
+                    center_z_l_sheared = apply_shear(center_x_left, center_z, visual_tilt_tan_l)
+                    angle_r_final = (final_angle_deg if mult == 1 else -final_angle_deg) + (visual_tilt_angle_r if mult == 1 else -visual_tilt_angle_r)
+                    angle_l_final = (final_angle_deg_l if mult == 1 else -final_angle_deg_l) + (-visual_tilt_angle_l if mult == 1 else visual_tilt_angle_l)
+
                     if side in ["우측(Right)", "양측(Both)"]:
-                        ax.add_patch(patches.Ellipse((mult * center_x_right, center_z), width=length if shape == "타원형(Ellipse)" else defect_width, height=defect_width, angle=(final_angle_deg if mult == 1 else -final_angle_deg) if shape == "타원형(Ellipse)" else 0, edgecolor=edge_color, facecolor=color, alpha=0.7, linewidth=0.5))
+                        ax.add_patch(patches.Ellipse((mult * center_x_right, center_z_r_sheared), width=length if shape == "타원형(Ellipse)" else defect_width, height=defect_width, angle=angle_r_final if shape == "타원형(Ellipse)" else (visual_tilt_angle_r if mult == 1 else -visual_tilt_angle_r), edgecolor=edge_color, facecolor=color, alpha=0.7, linewidth=0.5))
                     if side in ["좌측(Left)", "양측(Both)"]:
-                        ax.add_patch(patches.Ellipse((mult * center_x_left, center_z), width=length if shape == "타원형(Ellipse)" else defect_width, height=defect_width, angle=(final_angle_deg_l if mult == 1 else -final_angle_deg_l) if shape == "타원형(Ellipse)" else 0, edgecolor=edge_color, facecolor=color, alpha=0.7, linewidth=0.5))
+                        ax.add_patch(patches.Ellipse((mult * center_x_left, center_z_l_sheared), width=length if shape == "타원형(Ellipse)" else defect_width, height=defect_width, angle=angle_l_final if shape == "타원형(Ellipse)" else (-visual_tilt_angle_l if mult == 1 else visual_tilt_angle_l), edgecolor=edge_color, facecolor=color, alpha=0.7, linewidth=0.5))
                 elif shape == "사각형(Rectangle)":
-                    poly_r_m = [(mult * px, pz) for (px, pz) in poly_r]
-                    poly_l_m = [(mult * px, pz) for (px, pz) in poly_l]
+                    poly_r_m = [(mult * px, apply_shear(px, pz, visual_tilt_tan_r)) for (px, pz) in poly_r]
+                    poly_l_m = [(mult * px, apply_shear(px, pz, visual_tilt_tan_l)) for (px, pz) in poly_l]
                     
                     if side in ["우측(Right)", "양측(Both)"]:
                         ax.add_patch(patches.Polygon(poly_r_m, closed=True, edgecolor=edge_color, facecolor=color, alpha=0.7, linewidth=0.5))
@@ -734,26 +744,26 @@ class App(ctk.CTk):
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
                     # Depth
-                    self.ax_side.plot([center_x_right, dim_x_z + 2], [0, 0], color='red', lw=0.5, linestyle='--')
-                    self.ax_side.plot([center_x_right, dim_x_z + 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
-                    self.ax_side.annotate('', xy=(dim_x_z, actual_top_z), xytext=(dim_x_z, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side.text(dim_x_z, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side.plot([center_x_right, dim_x_z + 2], [apply_shear(center_x_right, 0, visual_tilt_tan_r), apply_shear(dim_x_z + 2, 0, visual_tilt_tan_r)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side.plot([center_x_right, dim_x_z + 2], [apply_shear(center_x_right, actual_top_z, visual_tilt_tan_r), apply_shear(dim_x_z + 2, actual_top_z, visual_tilt_tan_r)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side.annotate('', xy=(dim_x_z, apply_shear(dim_x_z, actual_top_z, visual_tilt_tan_r)), xytext=(dim_x_z, apply_shear(dim_x_z, 0, visual_tilt_tan_r)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                    self.ax_side.text(dim_x_z, apply_shear(dim_x_z, depth_text_z, visual_tilt_tan_r), f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     # Height
                     if shape != "원형(Circle)":
-                        self.ax_side.plot([center_x_right, dim_x_h + 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
-                        self.ax_side.annotate('', xy=(dim_x_h, actual_top_z), xytext=(dim_x_h, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side.text(dim_x_h, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side.plot([center_x_right, dim_x_h + 2], [apply_shear(center_x_right, actual_bottom_z, visual_tilt_tan_r), apply_shear(dim_x_h + 2, actual_bottom_z, visual_tilt_tan_r)], color='red', lw=0.5, linestyle='--')
+                        self.ax_side.annotate('', xy=(dim_x_h, apply_shear(dim_x_h, actual_top_z, visual_tilt_tan_r)), xytext=(dim_x_h, apply_shear(dim_x_h, actual_bottom_z, visual_tilt_tan_r)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                        self.ax_side.text(dim_x_h, apply_shear(dim_x_h, center_z, visual_tilt_tan_r), f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
                     dim_x_z_m = -dim_x_z
                     dim_x_h_m = -dim_x_h
-                    self.ax_side_back.plot([-center_x_right, dim_x_z_m - 2], [0, 0], color='red', lw=0.5, linestyle='--')
-                    self.ax_side_back.plot([-center_x_right, dim_x_z_m - 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
-                    self.ax_side_back.annotate('', xy=(dim_x_z_m, actual_top_z), xytext=(dim_x_z_m, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side_back.text(dim_x_z_m, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side_back.plot([-center_x_right, dim_x_z_m - 2], [apply_shear(-center_x_right, 0, visual_tilt_tan_r), apply_shear(dim_x_z_m - 2, 0, visual_tilt_tan_r)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side_back.plot([-center_x_right, dim_x_z_m - 2], [apply_shear(-center_x_right, actual_top_z, visual_tilt_tan_r), apply_shear(dim_x_z_m - 2, actual_top_z, visual_tilt_tan_r)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side_back.annotate('', xy=(dim_x_z_m, apply_shear(dim_x_z_m, actual_top_z, visual_tilt_tan_r)), xytext=(dim_x_z_m, apply_shear(dim_x_z_m, 0, visual_tilt_tan_r)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                    self.ax_side_back.text(dim_x_z_m, apply_shear(dim_x_z_m, depth_text_z, visual_tilt_tan_r), f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     if shape != "원형(Circle)":
-                        self.ax_side_back.plot([-center_x_right, dim_x_h_m - 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
-                        self.ax_side_back.annotate('', xy=(dim_x_h_m, actual_top_z), xytext=(dim_x_h_m, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side_back.text(dim_x_h_m, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side_back.plot([-center_x_right, dim_x_h_m - 2], [apply_shear(-center_x_right, actual_bottom_z, visual_tilt_tan_r), apply_shear(dim_x_h_m - 2, actual_bottom_z, visual_tilt_tan_r)], color='red', lw=0.5, linestyle='--')
+                        self.ax_side_back.annotate('', xy=(dim_x_h_m, apply_shear(dim_x_h_m, actual_top_z, visual_tilt_tan_r)), xytext=(dim_x_h_m, apply_shear(dim_x_h_m, actual_bottom_z, visual_tilt_tan_r)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                        self.ax_side_back.text(dim_x_h_m, apply_shear(dim_x_h_m, center_z, visual_tilt_tan_r), f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 
             if side in ["좌측(Left)", "양측(Both)"] and not skip_text_l:
                 offset_idx_l = dim_counter_side_l
@@ -767,25 +777,25 @@ class App(ctk.CTk):
                 depth_text_z = actual_top_z / 2 if actual_top_z >= 2.0 else -2.5
                 
                 if scan_view in ["Front B-Scan", "양쪽 화면(Both)"]:
-                    self.ax_side.plot([center_x_left, dim_x_z_l - 2], [0, 0], color='red', lw=0.5, linestyle='--')
-                    self.ax_side.plot([center_x_left, dim_x_z_l - 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
-                    self.ax_side.annotate('', xy=(dim_x_z_l, actual_top_z), xytext=(dim_x_z_l, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side.text(dim_x_z_l, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side.plot([center_x_left, dim_x_z_l - 2], [apply_shear(center_x_left, 0, visual_tilt_tan_l), apply_shear(dim_x_z_l - 2, 0, visual_tilt_tan_l)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side.plot([center_x_left, dim_x_z_l - 2], [apply_shear(center_x_left, actual_top_z, visual_tilt_tan_l), apply_shear(dim_x_z_l - 2, actual_top_z, visual_tilt_tan_l)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side.annotate('', xy=(dim_x_z_l, apply_shear(dim_x_z_l, actual_top_z, visual_tilt_tan_l)), xytext=(dim_x_z_l, apply_shear(dim_x_z_l, 0, visual_tilt_tan_l)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                    self.ax_side.text(dim_x_z_l, apply_shear(dim_x_z_l, depth_text_z, visual_tilt_tan_l), f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     if shape != "원형(Circle)":
-                        self.ax_side.plot([center_x_left, dim_x_h_l - 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
-                        self.ax_side.annotate('', xy=(dim_x_h_l, actual_top_z), xytext=(dim_x_h_l, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side.text(dim_x_h_l, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side.plot([center_x_left, dim_x_h_l - 2], [apply_shear(center_x_left, actual_bottom_z, visual_tilt_tan_l), apply_shear(dim_x_h_l - 2, actual_bottom_z, visual_tilt_tan_l)], color='red', lw=0.5, linestyle='--')
+                        self.ax_side.annotate('', xy=(dim_x_h_l, apply_shear(dim_x_h_l, actual_top_z, visual_tilt_tan_l)), xytext=(dim_x_h_l, apply_shear(dim_x_h_l, actual_bottom_z, visual_tilt_tan_l)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                        self.ax_side.text(dim_x_h_l, apply_shear(dim_x_h_l, center_z, visual_tilt_tan_l), f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                 if scan_view in ["Back B-Scan", "양쪽 화면(Both)"]:
                     dim_x_z_l_m = -dim_x_z_l
                     dim_x_h_l_m = -dim_x_h_l
-                    self.ax_side_back.plot([-center_x_left, dim_x_z_l_m + 2], [0, 0], color='red', lw=0.5, linestyle='--')
-                    self.ax_side_back.plot([-center_x_left, dim_x_z_l_m + 2], [actual_top_z, actual_top_z], color='red', lw=0.5, linestyle='--')
-                    self.ax_side_back.annotate('', xy=(dim_x_z_l_m, actual_top_z), xytext=(dim_x_z_l_m, 0), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                    self.ax_side_back.text(dim_x_z_l_m, depth_text_z, f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                    self.ax_side_back.plot([-center_x_left, dim_x_z_l_m + 2], [apply_shear(-center_x_left, 0, visual_tilt_tan_l), apply_shear(dim_x_z_l_m + 2, 0, visual_tilt_tan_l)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side_back.plot([-center_x_left, dim_x_z_l_m + 2], [apply_shear(-center_x_left, actual_top_z, visual_tilt_tan_l), apply_shear(dim_x_z_l_m + 2, actual_top_z, visual_tilt_tan_l)], color='red', lw=0.5, linestyle='--')
+                    self.ax_side_back.annotate('', xy=(dim_x_z_l_m, apply_shear(dim_x_z_l_m, actual_top_z, visual_tilt_tan_l)), xytext=(dim_x_z_l_m, apply_shear(dim_x_z_l_m, 0, visual_tilt_tan_l)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                    self.ax_side_back.text(dim_x_z_l_m, apply_shear(dim_x_z_l_m, depth_text_z, visual_tilt_tan_l), f"{actual_top_z:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
                     if shape != "원형(Circle)":
-                        self.ax_side_back.plot([-center_x_left, dim_x_h_l_m + 2], [actual_bottom_z, actual_bottom_z], color='red', lw=0.5, linestyle='--')
-                        self.ax_side_back.annotate('', xy=(dim_x_h_l_m, actual_top_z), xytext=(dim_x_h_l_m, actual_bottom_z), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
-                        self.ax_side_back.text(dim_x_h_l_m, center_z, f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
+                        self.ax_side_back.plot([-center_x_left, dim_x_h_l_m + 2], [apply_shear(-center_x_left, actual_bottom_z, visual_tilt_tan_l), apply_shear(dim_x_h_l_m + 2, actual_bottom_z, visual_tilt_tan_l)], color='red', lw=0.5, linestyle='--')
+                        self.ax_side_back.annotate('', xy=(dim_x_h_l_m, apply_shear(dim_x_h_l_m, actual_top_z, visual_tilt_tan_l)), xytext=(dim_x_h_l_m, apply_shear(dim_x_h_l_m, actual_bottom_z, visual_tilt_tan_l)), arrowprops=dict(arrowstyle='|-|', color='red', lw=1, shrinkA=0, shrinkB=0))
+                        self.ax_side_back.text(dim_x_h_l_m, apply_shear(dim_x_h_l_m, center_z, visual_tilt_tan_l), f"H:{h_val:.1f}", color='red', fontsize=11, ha='center', va='center', zorder=4, bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=1))
 
         # Side View 설정
         for ax, title, invert_x in [(self.ax_side, 'Side View (Front B-Scan)', False), 
@@ -796,8 +806,12 @@ class App(ctk.CTk):
             if ax != self.ax_side:
                 # 우측 끝에 모재 두께(T) 표시
                 t_dim_x = half_width - 25
-                ax.annotate('', xy=(t_dim_x, t), xytext=(t_dim_x, 0), arrowprops=dict(arrowstyle='<|-|>', color='#00ffcc', lw=1.5, shrinkA=0, shrinkB=0))
-                ax.text(t_dim_x - 5, t / 2, f"T: {t:.2f}", color='#00ffcc', fontsize=12, fontweight='bold', ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=2))
+                # ax_side_back (mult=-1)에서 t_dim_x(양수)는 물리적 좌측 모재(음수 X)를 의미하므로 visual_tilt_tan_l 적용
+                t_z0 = apply_shear(-t_dim_x, 0, visual_tilt_tan_l)
+                t_z1 = apply_shear(-t_dim_x, t, visual_tilt_tan_l)
+                t_zt = apply_shear(-t_dim_x, t / 2, visual_tilt_tan_l)
+                ax.annotate('', xy=(t_dim_x, t_z1), xytext=(t_dim_x, t_z0), arrowprops=dict(arrowstyle='<|-|>', color='#00ffcc', lw=1.5, shrinkA=0, shrinkB=0))
+                ax.text(t_dim_x - 5, t_zt, f"T: {t:.2f}", color='#00ffcc', fontsize=12, fontweight='bold', ha='right', va='center', bbox=dict(facecolor='#2b2b2b', edgecolor='none', pad=2))
 
             ax.set_xlabel('Y Position (mm)', color='white')
             ax.set_ylabel('Z Depth (mm)', color='white')
@@ -865,13 +879,13 @@ class App(ctk.CTk):
     def show_defect_table(self):
         table_win = ctk.CTkToplevel(self)
         table_win.title("결함 정보 표")
-        table_win.geometry("1000x400")
+        table_win.geometry("1100x400")
         table_win.transient(self)
         
         frame = ctk.CTkFrame(table_win)
         frame.pack(fill="both", expand=True, padx=10, pady=10)
         
-        columns = ("No", "Shape", "Side", "View", "Z Start", "Z End", "Y Start", "Y End", "Width", "Angle", "X Pos", "Length", "Label")
+        columns = ("No", "Flaws", "Side", "View", "Z Start", "Z End", "Height", "Y Start", "Y End", "Width/Dia", "Angle", "X Pos", "Length", "Label")
         
         style = ttk.Style(table_win)
         style.theme_use("default")
@@ -893,14 +907,18 @@ class App(ctk.CTk):
         tree = ttk.Treeview(frame, columns=columns, show="headings", height=15)
         
         for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=65, anchor="center")
+            display_text = f"★ {col}" if col in ["Flaws", "Height", "Width/Dia", "Length"] else col
+            tree.heading(col, text=display_text)
+            tree.column(col, width=70, anchor="center") # 기본 넓이를 70으로 살짝 증가
             
         tree.column("No", width=40)
-        tree.column("Shape", width=110)
+        tree.column("Flaws", width=110)
         tree.column("Side", width=70)
         tree.column("View", width=90)
         tree.column("Label", width=80)
+        tree.column("Width/Dia", width=100)
+        tree.column("Height", width=85)
+        tree.column("Length", width=85)
         
         vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=vsb.set)
@@ -968,6 +986,7 @@ class App(ctk.CTk):
                 dfct.get("scan_view", ""),
                 f'{defect_start_z_input:.1f}',
                 f'{defect_end_z_input:.1f}',
+                f'{abs(defect_end_z_input - defect_start_z_input):.1f}',
                 y_s_str,
                 y_e_str,
                 f'{dfct.get("width", 0):.1f}',
@@ -1015,7 +1034,7 @@ class App(ctk.CTk):
             ax_table = fig_a4.add_axes([0.05, 0.05, 0.9, 0.22])
             ax_table.axis('off')
             
-            col_labels = ["No", "Shape", "Side", "View", "Z Start", "Z End", "Y Start", "Y End", "Width", "Angle", "X Pos", "Length", "Label"]
+            col_labels = ["No", "Flaws", "Side", "View", "Z Start", "Z End", "Height", "Y Start", "Y End", "Width/Dia", "Angle", "X Pos", "Length", "Label"]
             table_data = []
             
             p = self.get_params()
@@ -1078,6 +1097,7 @@ class App(ctk.CTk):
                     dfct.get("scan_view", "").replace(" B-Scan", ""),
                     f'{defect_start_z_input:.1f}',
                     f'{defect_end_z_input:.1f}',
+                    f'{abs(defect_end_z_input - defect_start_z_input):.1f}',
                     y_s_str,
                     y_e_str,
                     f'{dfct.get("width", 0):.1f}',
@@ -1091,14 +1111,24 @@ class App(ctk.CTk):
             if not table_data:
                 table_data = [["-" for _ in col_labels]]
                 
-            tbl = ax_table.table(cellText=table_data, colLabels=col_labels, loc='upper center', cellLoc='center')
+            col_widths = [0.04, 0.08, 0.06, 0.07, 0.07, 0.07, 0.07, 0.07, 0.07, 0.10, 0.06, 0.07, 0.08, 0.09]
+            tbl = ax_table.table(cellText=table_data, colLabels=col_labels, loc='upper center', cellLoc='center', colWidths=col_widths)
             tbl.auto_set_font_size(False)
             tbl.set_fontsize(8)
             tbl.scale(1, 1.8)
             
-            for i in range(len(col_labels)):
-                tbl[(0, i)].set_facecolor('#d3d3d3')
-                tbl[(0, i)].set_text_props(weight='bold')
+            highlight_cols = ["Flaws", "Height", "Width/Dia", "Length"]
+            
+            for i, col_name in enumerate(col_labels):
+                is_highlight = col_name in highlight_cols
+                tbl[(0, i)].set_facecolor('#ffcc99' if is_highlight else '#d3d3d3')
+                tbl[(0, i)].set_text_props(weight='bold', color='darkred' if is_highlight else 'black')
+                
+            for r in range(1, len(table_data) + 1):
+                for i, col_name in enumerate(col_labels):
+                    if col_name in highlight_cols:
+                        tbl[(r, i)].set_facecolor('#fffbe6')
+                        tbl[(r, i)].set_text_props(weight='bold', color='darkred')
                 
             fig_a4.savefig(file_path, format='pdf', bbox_inches='tight')
             plt.close(fig_a4)
