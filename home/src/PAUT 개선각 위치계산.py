@@ -3,6 +3,7 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import numpy as np
 import warnings
 import json
 from tkinter import filedialog, messagebox, ttk
@@ -41,6 +42,8 @@ class App(ctk.CTk):
         self.create_input_field("전체 두께 (T) [mm]:", "thickness", "15.88")
         self.create_input_field("루트면 높이 [mm]:", "root_face", "1.60")
         self.create_input_field("루트간격 절반 [mm]:", "root_gap_half", "1.50")
+        self.create_input_field("상단 덧살 높이 (Top Cap) [mm]:", "top_cap_height", "1.5")
+        self.create_input_field("하단 덧살 높이 (Root Cap) [mm]:", "root_cap_height", "1.5")
         self.create_input_field("개선각 (편각) [°]:", "bevel_angle_deg", "37.5")
         self.create_input_field("시편 X축 길이 (스캔) [mm]:", "specimen_length", "320.0")
         self.create_input_field("시편 Y축 폭 (인덱스) [mm]:", "specimen_width", "610.0")
@@ -207,6 +210,8 @@ class App(ctk.CTk):
                 "specimen_width": float(self.entries["specimen_width"].get()),
                 "plate_tilt_angle_r": float(self.entries["plate_tilt_angle_r"].get()) if "plate_tilt_angle_r" in self.entries else 0.0,
                 "plate_tilt_angle_l": float(self.entries["plate_tilt_angle_l"].get()) if "plate_tilt_angle_l" in self.entries else 0.0,
+                "top_cap_height": float(self.entries["top_cap_height"].get()) if "top_cap_height" in self.entries else 0.0,
+                "root_cap_height": float(self.entries["root_cap_height"].get()) if "root_cap_height" in self.entries else 0.0,
                 "pivot_mode": self.pivot_var.get()
             }
         except ValueError:
@@ -291,8 +296,40 @@ class App(ctk.CTk):
             vg_l_z = [l_sheared_z[0], l_sheared_z[4], l_sheared_z[3]]
             ax.plot(vg_l_x, vg_l_z, 'dodgerblue', linewidth=2)
             
-            # 루트 바닥면 연결
-            ax.plot([vg_l_x[-1], vg_r_x[-1]], [vg_l_z[-1], vg_r_z[-1]], 'dodgerblue', linewidth=2)
+            # 상단 덧살 (Top Cap)
+            top_cap_h = p.get("top_cap_height", 0.0)
+            if top_cap_h > 0:
+                margin = 1.5
+                r_top_x = r_phys_x[0] + margin
+                l_top_x = l_phys_x[0] - margin
+                
+                cap_x_vals = np.linspace(l_top_x, r_top_x, 30)
+                cap_z_vals = []
+                for cx in cap_x_vals:
+                    norm = (cx - l_top_x) / (r_top_x - l_top_x)
+                    z_bulge = -4 * top_cap_h * norm * (1 - norm)
+                    z_base = apply_shear(cx, 0, visual_tilt_tan_r) if cx >= 0 else apply_shear(cx, 0, visual_tilt_tan_l)
+                    cap_z_vals.append(z_base + z_bulge)
+                ax.plot([x * mult for x in cap_x_vals], cap_z_vals, 'dodgerblue', linewidth=2)
+
+            # 하단 루트 덧살 (Root Cap)
+            root_cap_h = p.get("root_cap_height", 0.0)
+            if root_cap_h > 0:
+                margin = 1.5
+                r_bot_x = r_phys_x[3] + margin
+                l_bot_x = l_phys_x[3] - margin
+                
+                cap_x_vals = np.linspace(l_bot_x, r_bot_x, 30)
+                cap_z_vals = []
+                for cx in cap_x_vals:
+                    norm = (cx - l_bot_x) / (r_bot_x - l_bot_x)
+                    z_bulge = 4 * root_cap_h * norm * (1 - norm)
+                    z_base = apply_shear(cx, t, visual_tilt_tan_r) if cx >= 0 else apply_shear(cx, t, visual_tilt_tan_l)
+                    cap_z_vals.append(z_base + z_bulge)
+                ax.plot([x * mult for x in cap_x_vals], cap_z_vals, 'dodgerblue', linewidth=2)
+            else:
+                # 루트 바닥면 연결
+                ax.plot([vg_l_x[-1], vg_r_x[-1]], [vg_l_z[-1], vg_r_z[-1]], 'dodgerblue', linewidth=2)
             
             # 모재 폴리곤 그리기
             bm_right = patches.Polygon(list(zip(r_plot_x, r_sheared_z)), closed=True, color='pink', alpha=0.3)
