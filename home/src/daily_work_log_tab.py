@@ -217,6 +217,9 @@ class DailyWorkLogTab(ttk.Frame):
         btn_export_monthly = ttk.Button(title_frame, text="누적진도보고서 출력", command=self.export_monthly_report)
         btn_export_monthly.pack(side="left", padx=10)
         
+        btn_weekly_report = ttk.Button(title_frame, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
+        btn_weekly_report.pack(side="left", padx=10)
+        
         # Grid Container
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
