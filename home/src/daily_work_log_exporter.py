@@ -28,8 +28,8 @@ class DailyWorkLogExporter:
 
         # 1. Set Column Widths (A to AA roughly)
         col_widths = {
-            'A': 5, 'B': 12, 'C': 8, 'D': 14, 'E': 21, 'F': 9, 'G': 8, 'H': 15, 'I': 7, 'J': 7, 'K': 7, 'L': 7,
-            'M': 7, 'N': 6, 'O': 10, 'P': 10, 'Q': 10, 'R': 7, 'S': 7, 'T': 4, 'U': 4, 'V': 4, 'W': 4, 'X': 4, 'Y': 4, 'Z': 4
+            'A': 5, 'B': 12, 'C': 8, 'D': 14, 'E': 21, 'F': 9, 'G': 8, 'H': 8, 'I': 15, 'J': 7, 'K': 7, 'L': 7,
+            'M': 7, 'N': 6, 'O': 10, 'P': 10, 'Q': 10, 'R': 7, 'S': 7, 'T': 7, 'U': 4, 'V': 4, 'W': 4, 'X': 4, 'Y': 4, 'Z': 4
         }
         for col, width in col_widths.items():
             ws.column_dimensions[col].width = width
@@ -215,25 +215,25 @@ class DailyWorkLogExporter:
         # Main Headers
         headers_ndt = [
             ('A26:A27', '순번'), ('B26:B27', '업체'), ('C26:C27', '검사방법'), ('D26:D27', '구간(Sec.No)'), ('E26:E27', '라인번호'),
-            ('F26:F27', 'Joint No.'), ('G26:G27', '관경'), ('H26:H27', '용접사'), 
-            ('M26:M27', '결과'), ('N26:N27', '규격')
+            ('F26:F27', 'Joint No.'), ('G26:G27', '관경'), ('H26:H27', '두께'), ('I26:I27', '용접사'), 
+            ('N26:N27', '결과'), ('O26:O27', '규격')
         ]
         for rng, text in headers_ndt:
             merge_and_set(rng, text, font=self.font_small, fill=self.fill_header, align=self.align_nowrap)
             
-        merge_and_set('I26:L26', '구간정보(Start/Length)', font=self.font_small, fill=self.fill_header)
-        set_cell('I27', '1', font=self.font_small, fill=self.fill_header)
-        set_cell('J27', '2', font=self.font_small, fill=self.fill_header)
-        set_cell('K27', '3', font=self.font_small, fill=self.fill_header)
-        set_cell('L27', '4', font=self.font_small, fill=self.fill_header)
+        merge_and_set('J26:M26', '구간정보(Start/Length)', font=self.font_small, fill=self.fill_header)
+        set_cell('J27', '1', font=self.font_small, fill=self.fill_header)
+        set_cell('K27', '2', font=self.font_small, fill=self.fill_header)
+        set_cell('L27', '3', font=self.font_small, fill=self.fill_header)
+        set_cell('M27', '4', font=self.font_small, fill=self.fill_header)
             
-        merge_and_set('O26:P26', 'RT매수', font=self.font_small, fill=self.fill_header)
-        set_cell('O27', 'OR', font=self.font_small, fill=self.fill_header)
-        set_cell('P27', 'RE', font=self.font_small, fill=self.fill_header)
+        merge_and_set('P26:Q26', 'RT매수', font=self.font_small, fill=self.fill_header)
+        set_cell('P27', 'OR', font=self.font_small, fill=self.fill_header)
+        set_cell('Q27', 'RE', font=self.font_small, fill=self.fill_header)
         
-        merge_and_set('Q26:Q27', 'PAUT(m)', font=self.font_small, fill=self.fill_header)
-        merge_and_set('R26:R27', 'MT(m)', font=self.font_small, fill=self.fill_header)
-        merge_and_set('S26:S27', 'PT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('R26:R27', 'PAUT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('S26:S27', 'MT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('T26:T27', 'PT(m)', font=self.font_small, fill=self.fill_header)
         
         # Populate NDT Results
         ndt_results = data.get('ndt_results', [])
@@ -249,27 +249,28 @@ class DailyWorkLogExporter:
             set_cell(f'E{row_idx}', res.get('라인번호', ''))
             set_cell(f'F{row_idx}', res.get('Joint No.', ''))
             set_cell(f'G{row_idx}', res.get('관경', ''))
-            set_cell(f'H{row_idx}', res.get('용접사', ''))
+            set_cell(f'H{row_idx}', res.get('두께', ''))
+            set_cell(f'I{row_idx}', res.get('용접사', ''))
             
             method = res.get('검사방법', '').upper().strip()
             
             sec_info = res.get('구간정보', '').split(',')
             sec_info += [''] * (4 - len(sec_info)) # Pad to 4
-            set_cell(f'I{row_idx}', sec_info[0])
-            set_cell(f'J{row_idx}', sec_info[1] if method not in ['PAUT', 'PT', 'MT'] else '')
-            set_cell(f'K{row_idx}', sec_info[2] if method not in ['PAUT', 'PT', 'MT'] else '')
-            set_cell(f'L{row_idx}', sec_info[3] if method not in ['PAUT', 'PT', 'MT'] else '')
+            set_cell(f'J{row_idx}', sec_info[0])
+            set_cell(f'K{row_idx}', sec_info[1] if method not in ['PAUT', 'PT', 'MT'] else '')
+            set_cell(f'L{row_idx}', sec_info[2] if method not in ['PAUT', 'PT', 'MT'] else '')
+            set_cell(f'M{row_idx}', sec_info[3] if method not in ['PAUT', 'PT', 'MT'] else '')
             
             if method in ['PAUT', 'PT', 'MT']:
-                ws.merge_cells(f'I{row_idx}:L{row_idx}')
+                ws.merge_cells(f'J{row_idx}:M{row_idx}')
             
-            set_cell(f'M{row_idx}', res.get('결과', ''))
-            set_cell(f'N{row_idx}', res.get('규격', ''))
-            set_cell(f'O{row_idx}', res.get('RT_OR', ''))
-            set_cell(f'P{row_idx}', res.get('RT_RE', ''))
-            set_cell(f'Q{row_idx}', res.get('PAUT', ''))
-            set_cell(f'R{row_idx}', res.get('MT', ''))
-            set_cell(f'S{row_idx}', res.get('PT', ''))
+            set_cell(f'N{row_idx}', res.get('결과', ''))
+            set_cell(f'O{row_idx}', res.get('규격', ''))
+            set_cell(f'P{row_idx}', res.get('RT_OR', ''))
+            set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
+            set_cell(f'R{row_idx}', res.get('PAUT', ''))
+            set_cell(f'S{row_idx}', res.get('MT', ''))
+            set_cell(f'T{row_idx}', res.get('PT', ''))
             
             ws.row_dimensions[row_idx].height = 20
 

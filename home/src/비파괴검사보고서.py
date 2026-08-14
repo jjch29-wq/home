@@ -6478,7 +6478,11 @@ class PMIReportApp:
                 ws.col_breaks = []
             except: pass
 
-            ws.page_setup.paperSize = 9; ws.page_setup.orientation = 'portrait'
+            ws.page_setup.paperSize = 9
+            if context == "DATA":
+                ws.page_setup.orientation = 'landscape'
+            else:
+                ws.page_setup.orientation = 'portrait'
             
             # [FIX] 모드별 설정 우선 읽기 (RT_COVER → COVER 순 폴백)
             default_scale = 95
@@ -6491,9 +6495,11 @@ class PMIReportApp:
                          str(default_scale))
             ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
             
-            # [FIX] PAUT '을지(DATA)' 자동 맞춤이 내용을 너무 축소시키는 문제 해결
-            # 기존의 강제 fitToWidth 로직을 제거하고, 표지처럼 사용자가 지정한 배율(scale)을 따르도록 변경
-            ws.page_setup.scale = int(float(scale_val))
+            # [FIX] Force fit to 1 page (width and height) to avoid vertical/horizontal splitting
+            # Removes scale-based scaling which causes unwanted page breaks
+            ws.sheet_properties.pageSetUpPr.fitToPage = True
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 1
             
             def _margin(name, default):
                 return float(
@@ -7056,13 +7062,30 @@ class PMIReportApp:
                 
                 # 관경 / Size / T / Th'k
                 size = r.get("관경", "")
+                thickness = r.get("두께", "")
                 if "Size" in keys_attr: new_row["Size"] = size
-                if "T" in keys_attr and not new_row.get("T"): new_row["T"] = size
-                if "Th'k(mm)" in keys_attr: new_row["Th'k(mm)"] = size
                 
+                # Auto-map Thickness based on Size if Th'k is missing
+                if not thickness and size:
+                    thk_mapping = {
+                        "1100": "11.1", "1000": "11.1", "900": "10.3", "850": "10.3", "800": "9.5",
+                        "750": "8.7", "700": "8.7", "650": "8.7", "600": "9.5", "550": "9.5",
+                        "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4", "150": "4.5", "100": "4.5", "80": "4.5"
+                    }
+                    lookup_key = str(size).replace("A", "").strip()
+                    thickness = thk_mapping.get(lookup_key, size)
+
+                if "T" in keys_attr and not new_row.get("T"): new_row["T"] = thickness if thickness else size
+                if "Th'k(mm)" in keys_attr: new_row["Th'k(mm)"] = thickness if thickness else size
                 # 용접사 / Welder
                 welder = r.get("용접사", "")
                 if "Welder" in keys_attr: new_row["Welder"] = welder
+                
+                # 검사길이 / Tested Length
+                test_len = r.get("검사길이", "")
+                if not test_len and mode in ["PAUT", "MT", "PT"]:
+                    test_len = r.get(mode, "")
+                if "Tested Length" in keys_attr: new_row["Tested Length"] = test_len
                 
                 # 구간 / Loc
                 loc = r.get("구간", "")
@@ -7074,7 +7097,7 @@ class PMIReportApp:
                 if "Result" in keys_attr:
                     new_row["Result"] = res
                 if res == "합격":
-                    if "Acc" in keys_attr: new_row["Acc"] = "O"
+                    if "Acc" in keys_attr: new_row["Acc"] = "√"
                     if "Evaluation" in keys_attr: new_row["Evaluation"] = "Acc"
                 elif res == "불합격":
                     if "Rej" in keys_attr: new_row["Rej"] = "X"
@@ -7097,6 +7120,7 @@ class PMIReportApp:
                 idx_map.append(len(data) - 1)
                 added_count += 1
                 
+            self.update_date_listbox(mode=mode)
             messagebox.showinfo("완료", f"작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
             
         except Exception as e:

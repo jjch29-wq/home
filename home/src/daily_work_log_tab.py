@@ -221,7 +221,7 @@ class DailyWorkLogTab(ttk.Frame):
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.ndt_cols = ('업체', '검사방법', '구간', '라인번호', 'Joint No.', '관경', '용접사', '구간정보', '결과', '규격', 
+        self.ndt_cols = ('업체', '검사방법', '구간', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', 
                          'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
         history = self.load_history()
         sections = set()
@@ -259,7 +259,7 @@ class DailyWorkLogTab(ttk.Frame):
             for col_idx, c in enumerate(self.ndt_cols):
                 # Adjust width for some columns
                 w = 8
-                if c in ('검사방법', '결과', '규격', '관경'): w = 6
+                if c in ('검사방법', '결과', '규격', '관경', '두께'): w = 6
                 elif c in ('구간', '업체'): w = 10
                 elif c == '용접사': w = 15
                 elif c == '라인번호': w = 25
@@ -418,7 +418,7 @@ class DailyWorkLogTab(ttk.Frame):
                             next_num = str(int(num_str) + 1).zfill(len(num_str))
                             r['Joint No.'].insert(0, prefix + next_num)
                 
-                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '용접사', '결과', '규격']:
+                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '결과', '규격']:
                     if not r[col].get().strip():
                         prev_val = prev_row[col].get().strip()
                         if prev_val:
