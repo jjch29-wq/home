@@ -5925,9 +5925,13 @@ class MaterialManager:
         self.cb_daily_filter_shift.pack(side='left', padx=2)
         self.cb_daily_filter_shift.set('전체')
         
-        # --- Row 3: Action Buttons ---
+        # --- Row 3: Action Buttons (Top) ---
         btn_row = ttk.Frame(filter_frame)
-        btn_row.pack(fill='x', pady=5)
+        btn_row.pack(fill='x', pady=2)
+        
+        # --- Row 4: Action Buttons (Bottom) ---
+        btn_row2 = ttk.Frame(filter_frame)
+        btn_row2.pack(fill='x', pady=2)
         
         btn_filter = ttk.Button(btn_row, text="조회", style='Action.TButton', command=self.update_daily_usage_view)
         btn_filter.pack(side='left', padx=5)
@@ -5941,23 +5945,27 @@ class MaterialManager:
         btn_edit = ttk.Button(btn_row, text="선택 항목 수정", command=self.open_edit_daily_usage_dialog)
         btn_edit.pack(side='left', padx=5)
         
-        btn_export = ttk.Button(btn_row, text="엑셀 내보내기", command=self.export_daily_usage_history)
+        # Move export/report related buttons to btn_row2 to avoid horizontal cutoff
+        btn_export = ttk.Button(btn_row2, text="엑셀 내보내기", command=self.export_daily_usage_history)
         btn_export.pack(side='left', padx=5)
         
-        btn_export_invoice = ttk.Button(btn_row, text="기성청구서 출력", command=self.export_invoice_excel)
+        btn_export_invoice = ttk.Button(btn_row2, text="기성청구서 출력", command=self.export_invoice_excel)
         btn_export_invoice.pack(side='left', padx=5)
         
-        btn_export_all = ttk.Button(btn_row, text="전체 기록 내보내기", command=self.export_all_daily_usage)
+        btn_export_all = ttk.Button(btn_row2, text="전체 기록 내보내기", command=self.export_all_daily_usage)
         btn_export_all.pack(side='left', padx=5)
         
-        btn_col_manage = ttk.Button(btn_row, text="컬럼 관리", command=self.show_column_visibility_dialog)
+        btn_col_manage = ttk.Button(btn_row2, text="컬럼 관리", command=self.show_column_visibility_dialog)
         btn_col_manage.pack(side='left', padx=10)
 
-        btn_ndt_report = ttk.Button(btn_row, text="📊 진도보고서 출력", command=self.export_monthly_ndt_report)
+        btn_ndt_report = ttk.Button(btn_row2, text="📊 진도보고서 출력", command=self.export_monthly_ndt_report)
         btn_ndt_report.pack(side='left', padx=5)
 
+        btn_weekly_report = ttk.Button(btn_row2, text="🗓️ 주간 업무보고 출력", command=self.export_weekly_report)
+        btn_weekly_report.pack(side='left', padx=5)
+
         # Dedicated Save Button for the List View
-        self.btn_daily_save_list = ttk.Button(btn_row, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
+        self.btn_daily_save_list = ttk.Button(btn_row2, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
         self.btn_daily_save_list.pack(side='left', padx=10)
 
         # Bindings
@@ -11719,6 +11727,241 @@ class MaterialManager:
                 self.update_daily_usage_view()
             elif tree == self.inout_tree:
                 self.update_transaction_view()
+
+    def export_weekly_report(self):
+        """주간 업무보고 엑셀(알아서 생성) 출력"""
+        import pandas as pd
+        import datetime
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        import os
+        
+        if getattr(self, 'daily_usage_df', None) is None or self.daily_usage_df.empty:
+            messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
+            return
+            
+        top = tk.Toplevel(self.root)
+        top.title("주간 업무보고서 출력")
+        top.geometry("400x350")
+        top.transient(self.root)
+        top.grab_set()
+        
+        ttk.Label(top, text="🗓️ 주간 업무보고서 자동 생성", font=('Arial', 12, 'bold')).pack(pady=10)
+        
+        now = datetime.datetime.now()
+        monday = now - datetime.timedelta(days=now.weekday())
+        sunday = monday + datetime.timedelta(days=6)
+        
+        frame1 = ttk.Frame(top)
+        frame1.pack(pady=10)
+        
+        from tkcalendar import DateEntry
+
+        ttk.Label(frame1, text="시작일 (월):").grid(row=0, column=0, padx=5, pady=5)
+        start_cal = DateEntry(frame1, width=12, background='darkblue',
+                              foreground='white', borderwidth=2,
+                              date_pattern='yyyy-mm-dd', year=monday.year, month=monday.month, day=monday.day)
+        start_cal.grid(row=0, column=1, padx=5)
+        
+        ttk.Label(frame1, text="종료일 (일):").grid(row=1, column=0, padx=5, pady=5)
+        end_cal = DateEntry(frame1, width=12, background='darkblue',
+                            foreground='white', borderwidth=2,
+                            date_pattern='yyyy-mm-dd', year=sunday.year, month=sunday.month, day=sunday.day)
+        end_cal.grid(row=1, column=1, padx=5)
+        
+        frame2 = ttk.Frame(top)
+        frame2.pack(pady=5, fill='both', expand=True, padx=10)
+        ttk.Label(frame2, text="다음 주 작업 예정 및 의견:").pack(anchor='w')
+        next_week_txt = tk.Text(frame2, height=4, width=40)
+        next_week_txt.pack(fill='both', expand=True, pady=5)
+        
+        def do_export():
+            s_date = start_cal.get().strip()
+            e_date = end_cal.get().strip()
+            next_plan = next_week_txt.get("1.0", "end-1c").strip()
+            try:
+                s_dt = pd.to_datetime(s_date).date()
+                e_dt = pd.to_datetime(e_date).date()
+            except Exception:
+                messagebox.showerror("오류", "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)")
+                return
+                
+            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            if not os.path.exists(history_path):
+                messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
+                return
+                
+            import json
+            with open(history_path, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+                
+            week_data = {}
+            for d_str, data in history.items():
+                try:
+                    d_obj = pd.to_datetime(d_str).date()
+                    if s_dt <= d_obj <= e_dt:
+                        week_data[d_str] = data
+                except: pass
+                
+            if not week_data:
+                messagebox.showinfo("알림", f"{s_date} ~ {e_date} 기간에 저장된 데이터가 없습니다.")
+                return
+                
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "주간업무보고"
+            
+            title_font = Font(name='맑은 고딕', size=16, bold=True)
+            head_font = Font(name='맑은 고딕', size=11, bold=True, color='FFFFFF')
+            norm_font = Font(name='맑은 고딕', size=10)
+            head_fill = PatternFill(start_color='4F81BD', end_color='4F81BD', fill_type='solid')
+            center_align = Alignment(horizontal='center', vertical='center')
+            thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+            
+            ws.merge_cells('A1:G1')
+            ws['A1'] = f"주간 업무보고서 ({s_date} ~ {e_date})"
+            ws['A1'].font = title_font
+            ws['A1'].alignment = center_align
+            
+            headers = ['일자', '현장명', '작업내용', '투입인원', '작업시간', '검사실적', '비고']
+            for col_num, head in enumerate(headers, 1):
+                cell = ws.cell(row=3, column=col_num)
+                cell.value = head
+                cell.font = head_font
+                cell.fill = head_fill
+                cell.alignment = center_align
+                cell.border = thin_border
+                
+            row_idx = 4
+            total_time = 0
+            total_ndt_methods = {}
+            center_align_wrap = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            
+            # Sort dates
+            sorted_dates = sorted(week_data.keys())
+            
+            for date_val in sorted_dates:
+                data = week_data[date_val]
+                
+                # NDT results
+                ndt_results = data.get('ndt_results', [])
+                daily_ndt_methods = {}
+                for r in ndt_results:
+                    method = str(r.get("검사방법", "")).strip().upper()
+                    if method:
+                        daily_ndt_methods[method] = daily_ndt_methods.get(method, 0) + 1
+                        total_ndt_methods[method] = total_ndt_methods.get(method, 0) + 1
+                
+                daily_ndt_texts = [f"{m} {c} POINT" for m, c in daily_ndt_methods.items()]
+                ndt_text = "\n".join(daily_ndt_texts) if daily_ndt_texts else "0 POINT"
+                
+                # Personnel data
+                p_data = data.get('personnel_data', {})
+                w_count = 0
+                
+                try:
+                    # 안전하게 딕셔너리의 .get()을 활용해 값을 가져오기 (문자열 공백 제거 포함)
+                    w_count_str = str(p_data.get('검사원_누계', '0')).strip()
+                    if w_count_str and w_count_str.isdigit() and w_count_str != '0':
+                        w_count = int(w_count_str)
+                    
+                    if w_count == 0:
+                        insp_w = str(p_data.get('검사원_인원', '0')).strip()
+                        insp_m = str(p_data.get('검사원_현장대리인', '0')).strip()
+                        w_count = (int(insp_w) if insp_w.isdigit() else 0) + (int(insp_m) if insp_m.isdigit() else 0)
+                except:
+                    pass
+                
+                if w_count == 0:
+                    w_count = 1
+                    
+                total_time += w_count * 8
+                
+                ws.cell(row=row_idx, column=1, value=str(date_val)).alignment = center_align
+                ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
+                ws.cell(row=row_idx, column=3, value=f"{w_count}명 작업 진행").alignment = center_align
+                ws.cell(row=row_idx, column=4, value=f"{w_count} 명").alignment = center_align
+                ws.cell(row=row_idx, column=5, value=f"{w_count * 8} 시간").alignment = center_align
+                ws.cell(row=row_idx, column=6, value=ndt_text).alignment = center_align_wrap
+                ws.cell(row=row_idx, column=7, value="").alignment = center_align
+                
+                for col_num in range(1, 8):
+                    ws.cell(row=row_idx, column=col_num).border = thin_border
+                    ws.cell(row=row_idx, column=col_num).font = norm_font
+                    
+                row_idx += 1
+                
+            ws.column_dimensions['A'].width = 15
+            ws.column_dimensions['B'].width = 25
+            ws.column_dimensions['C'].width = 25
+            ws.column_dimensions['D'].width = 12
+            ws.column_dimensions['E'].width = 12
+            ws.column_dimensions['F'].width = 22
+            ws.column_dimensions['G'].width = 20
+            
+            ws.merge_cells(f'A{row_idx}:C{row_idx}')
+            ws.cell(row=row_idx, column=1, value="주간 합계").alignment = center_align
+            ws.cell(row=row_idx, column=1).font = Font(name='맑은 고딕', size=11, bold=True)
+            for col_num in range(1, 4):
+                ws.cell(row=row_idx, column=col_num).border = thin_border
+                
+            ws.cell(row=row_idx, column=4, value=f"-").alignment = center_align
+            ws.cell(row=row_idx, column=5, value=f"{total_time} 시간").alignment = center_align
+            
+            total_ndt_texts = [f"{m} {c} POINT" for m, c in total_ndt_methods.items()]
+            total_ndt_text = "\n".join(total_ndt_texts) if total_ndt_texts else "0 POINT"
+            ws.cell(row=row_idx, column=6, value=total_ndt_text).alignment = center_align_wrap
+            ws.cell(row=row_idx, column=7, value="").alignment = center_align
+            
+            for col_num in range(4, 8):
+                ws.cell(row=row_idx, column=col_num).border = thin_border
+                ws.cell(row=row_idx, column=col_num).font = Font(name='맑은 고딕', size=11, bold=True)
+                
+            if next_plan:
+                row_idx += 2
+                ws.merge_cells(f'A{row_idx}:G{row_idx+2}')
+                cell = ws.cell(row=row_idx, column=1)
+                cell.value = f"■ 다음 주 작업 예정 및 의견\n{next_plan}"
+                cell.font = Font(name='맑은 고딕', size=11)
+                cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+                
+                # Draw borders for the merged cell block
+                for r in range(row_idx, row_idx+3):
+                    for c in range(1, 8):
+                        ws.cell(row=r, column=c).border = thin_border
+                        
+            out_name = f"주간업무보고_{s_date.replace('-','')}_{e_date.replace('-','')}.xlsx"
+            out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), out_name)
+            
+            try:
+                wb.save(out_path)
+                
+                msg_extra = ""
+                try:
+                    import win32com.client as win32
+                    import time
+                    excel = win32.gencache.EnsureDispatch('Excel.Application')
+                    excel.Visible = False
+                    excel.DisplayAlerts = False
+                    
+                    wb_com = excel.Workbooks.Open(out_path)
+                    ws_com = wb_com.Sheets(1)
+                    ws_com.UsedRange.CopyPicture(Format=2)
+                    time.sleep(0.5)
+                    wb_com.Close(False)
+                    excel.Quit()
+                    
+                    msg_extra = "\n\n💡 꿀팁: 카카오톡 전송을 위해 표가 '이미지'로 복사되었습니다!\n(카톡 창에서 Ctrl+V 를 누르시면 표가 그대로 붙여넣기 됩니다)"
+                except Exception as ex:
+                    msg_extra = f"\n(클립보드 이미지 복사 실패: {ex})"
+                    
+                messagebox.showinfo("완료", f"주간보고서가 생성되었습니다.\n{out_path}{msg_extra}")
+                os.startfile(out_path)
+                top.destroy()
+            except Exception as e:
+                messagebox.showerror("오류", f"파일 저장 실패: {e}")
+                
+        ttk.Button(top, text="보고서 생성 및 열기", command=do_export, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton').pack(pady=20)
 
     def export_monthly_ndt_report(self):
         """일일 사용 데이터를 월용역진도보고서 '3. 비파괴검사 현황' 시트에 자동 채움"""
