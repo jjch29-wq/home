@@ -1,14 +1,12 @@
-import codecs
+with open(r'c:\Users\jjch2\Desktop\PMI\home\src\비파괴검사보고서_recovered.py', 'r', encoding='utf-8') as f:
+    lines = f.read().split('\n')
 
-file_path = r'c:\Users\jjch2\Desktop\PMI\home\src\한국지역난방 중앙지사.py'
-with codecs.open(file_path, 'r', 'utf-8') as f:
-    lines = f.readlines()
+for i in range(len(lines)):
+    if 'self.status_log.insert(tk.END, f"[{datetime.datetime.now().strftime(' in lines[i]:
+        if i+1 < len(lines) and lines[i+1].strip() == '")':
+            lines[i] = lines[i] + '\\n")'
+            lines[i+1] = ''
 
-for i in range(11980, 11995):
-    if 'ws.Cells(row, col).Value =' in lines[i] and lines[i].endswith(')\r\n'):
-        lines[i] = lines[i][:-3] + '\r\n'
-    elif 'ws.Cells(row, col).Value =' in lines[i] and lines[i].endswith(')\n'):
-        lines[i] = lines[i][:-2] + '\n'
-
-with codecs.open(file_path, 'w', 'utf-8') as f:
-    f.writelines(lines)
+with open(r'c:\Users\jjch2\Desktop\PMI\home\src\비파괴검사보고서_recovered.py', 'w', encoding='utf-8') as f:
+    f.write('\n'.join(lines))
+print('Fixed line 386')

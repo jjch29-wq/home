@@ -114,8 +114,12 @@ class DailyWorkLogTab(ttk.Frame):
         btn_calc = ttk.Button(top_frame, text="자동 집계 및 저장", command=self.auto_calculate_and_save)
         btn_calc.grid(row=0, column=4, padx=5, pady=5)
         
+        # [NEW] 삭제 버튼 추가
+        btn_delete = ttk.Button(top_frame, text="🗑️ 데이터 삭제", command=self.delete_current_date_data)
+        btn_delete.grid(row=0, column=5, padx=5, pady=5)
+        
         btn_export = ttk.Button(top_frame, text="엑셀 출력 (일보 생성)", command=self.export_excel)
-        btn_export.grid(row=0, column=5, padx=10, pady=5)
+        btn_export.grid(row=0, column=6, padx=10, pady=5)
         
         # --- Middle Section: Work Quantities ---
         mid_frame = ttk.LabelFrame(parent, text="1. 작업 물량 및 누계 현황", padding=10)
@@ -346,6 +350,19 @@ class DailyWorkLogTab(ttk.Frame):
             def on_ndt_change(event, r=row_entries):
                 method = r['검사방법'].get().strip().upper()
                 pipe = r['관경'].get().strip().upper()
+                
+                # --- 관경 선택 시 두께 자동 입력 ---
+                thk_mapping = {
+                    "1100": "11.1", "1000": "11.1", "900": "10.3", "850": "10.3", "800": "9.5",
+                    "750": "8.7", "700": "8.7", "650": "8.7", "600": "9.5", "550": "9.5",
+                    "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4", "150": "4.5", "100": "4.5", "80": "4.5"
+                }
+                lookup_size = str(pipe).replace("A", "").strip()
+                if lookup_size in thk_mapping:
+                    r['두께'].delete(0, tk.END)
+                    r['두께'].insert(0, thk_mapping[lookup_size])
+                # -----------------------------------
+                
                 if pipe and pipe.isdigit():
                     pipe += 'A'
                 
@@ -543,6 +560,54 @@ class DailyWorkLogTab(ttk.Frame):
             })
         self.save_history(history)
         messagebox.showinfo('완료', f'공정사진 {len(files)}장을 등록했습니다.')
+
+    def save_current_history(self):
+        date_str = self.date_entry.get()
+        if not date_str: return
+        history = self.load_history()
+        history[date_str] = self.get_current_data()
+        self.save_history(history)
+        
+    def delete_current_date_data(self):
+        """현재 선택된 날짜의 데이터를 삭제하고 화면을 초기화합니다."""
+        date_str = self.date_entry.get()
+        if not date_str: return
+        
+        if not messagebox.askyesno("삭제 확인", f"정말로 {date_str}의 작업/감독일보 저장 내용을 모두 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)", parent=self):
+            return
+            
+        # 1. 파일에서 데이터 삭제
+        history = self.load_history()
+        if date_str in history:
+            del history[date_str]
+            self.save_history(history)
+            
+        # 2. 화면 UI 초기화 (Clear all fields)
+        self.weather_entry.delete(0, tk.END)
+        
+        for (m, t), ents in self.qty_entries.items():
+            for k in ['예상량', '전일누계', '금일작업', '총누계', '공정률', '불량', '불량률', '비고']:
+                if ents.get(k):
+                    ents[k].delete(0, tk.END)
+                    
+        for i in range(1, 9):
+            w_ent = getattr(self, f"worker_count_{i}", None)
+            if w_ent:
+                w_ent.delete(0, tk.END)
+        
+        for row in self.ndt_entries:
+            for k, ent in row.items():
+                if isinstance(ent, ttk.Combobox):
+                    ent.set('')
+                elif isinstance(ent, tk.Entry):
+                    ent.delete(0, tk.END)
+                    
+        for k, ent in self.photo_desc_entries.items():
+            ent.delete('1.0', tk.END)
+            
+        if hasattr(self, 'log'):
+            self.log(f"[{date_str}] 작업일보 데이터가 삭제되었습니다.")
+        messagebox.showinfo("삭제 완료", f"{date_str} 데이터가 완전히 삭제되었습니다.", parent=self)
 
     def manage_process_photos(self):
         current_date = self.date_entry.get()

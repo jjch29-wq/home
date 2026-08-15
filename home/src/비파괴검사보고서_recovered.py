@@ -233,7 +233,7 @@ class PMIReportApp:
         
         # --- Column Keys Initialization ---
         self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Result"]
-        self.rt_column_keys = ["selected", "No", "Date", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Size", "Loc", "T", "Acc", "Rej", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
@@ -250,7 +250,7 @@ class PMIReportApp:
         
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
-        self.rt_column_keys = ["selected", "No", "Date", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.rt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
@@ -284,9 +284,9 @@ class PMIReportApp:
         }
 
         # --- Gapji (Cover) Metadata Variables ---
-        self.gapji_project = tk.StringVar(value="2026년 중앙지사 열수송관 비파괴검사 단가계약")
-        self.gapji_customer = tk.StringVar(value="한국지역난방 중앙지사")
-        self.gapji_item = tk.StringVar(value="PIPE")
+        self.gapji_project = tk.StringVar(value=self.config.get('GAPJI_PROJECT', ""))
+        self.gapji_customer = tk.StringVar(value=self.config.get('GAPJI_CUSTOMER', ""))
+        self.gapji_item = tk.StringVar(value=self.config.get('GAPJI_ITEM', ""))
         self.gapji_material = tk.StringVar(value=self.config.get('GAPJI_MATERIAL', ""))
         self.gapji_report_no = tk.StringVar(value=self.config.get('GAPJI_REPORT_NO', ""))
         self.gapji_exam_date = tk.StringVar(value=self.config.get('GAPJI_EXAM_DATE', datetime.datetime.now().strftime("%Y-%m-%d")))
@@ -384,6 +384,7 @@ class PMIReportApp:
         if hasattr(self, 'status_log'):
             self.status_log.config(state='normal')
             self.status_log.insert(tk.END, f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {message}\n")
+
             self.status_log.see(tk.END)
             self.status_log.config(state='disabled')
             self.root.update_idletasks()
@@ -502,9 +503,6 @@ class PMIReportApp:
                         self.column_keys = list(saved_data['column_keys'])
                     if 'rt_column_keys' in saved_data and isinstance(saved_data['rt_column_keys'], list):
                         self.rt_column_keys = list(saved_data['rt_column_keys'])
-                        if "Sec" not in self.rt_column_keys:
-                            insert_at = self.rt_column_keys.index("Date") + 1 if "Date" in self.rt_column_keys else 3
-                            self.rt_column_keys.insert(insert_at, "Sec")
                     if 'kogas_column_keys' in saved_data and isinstance(saved_data['kogas_column_keys'], list):
                         self.kogas_column_keys = list(saved_data['kogas_column_keys'])
                     if 'pt_column_keys' in saved_data and isinstance(saved_data['pt_column_keys'], list):
@@ -1652,7 +1650,6 @@ class PMIReportApp:
         all_possible = {
             "No": ("No:", f"{mode}_COL_NO", 1, f"{mode}_NAME_NO", "No", "No"),
             "Date": ("Date:", f"{mode}_COL_DATE", 2, f"{mode}_NAME_DATE", "Date", "Date"),
-            "Sec": ("SEC:", f"{mode}_COL_SEC", 0, f"{mode}_NAME_SEC", "SEC", "Sec"),
             "Dwg": ("Dwg No.:", f"{mode}_COL_DWG", 3, f"{mode}_NAME_DWG", "Drawing No.", "Dwg"),
             "Joint": ("Film Ident. No.:", f"{mode}_COL_JOINT", 4, f"{mode}_NAME_JOINT", "Film Ident. No.", "Joint"),
             "Loc": ("Film Location:", f"{mode}_COL_LOC", 5, f"{mode}_NAME_LOC", "Film Location", "Loc"),
@@ -1797,7 +1794,7 @@ class PMIReportApp:
         
         # [NEW] 기본 표시 이름 맵핑
         default_names = {
-            "selected": "V", "No": "No", "Date": "Date", "Sec": "SEC", "Dwg": "Drawing No.", 
+            "selected": "V", "No": "No", "Date": "Date", "Dwg": "Drawing No.", 
             "Joint": "Film Ident. No.", "Loc": "Film Location", "T": "T", "Mat": "Mat",
             "Size": "구경",
             "Acc": "Acc", "Rej": "Rej", "Deg": "Deg", "Welder": "Welder No", "Remarks": "Remarks",
@@ -1809,7 +1806,7 @@ class PMIReportApp:
         
         saved_widths = self.config.get(f"{mode}_COL_WIDTHS", {})
         default_widths = {
-            "selected": 40, "No": 50, "Date": 90, "Sec": 90, "Dwg": 300, "Joint": 120, "Loc": 100, 
+            "selected": 40, "No": 50, "Date": 90, "Dwg": 300, "Joint": 120, "Loc": 100, 
             "Acc": 40, "Rej": 40, "Deg": 40, "Welder": 100, "Remarks": 120,
             "Dwg_Sub": 200, "Welder_Sub": 100, "Mat_Sub": 100
         }
@@ -3467,11 +3464,7 @@ class PMIReportApp:
         
         for lbl, var, r, c in fields:
             tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
-            fixed_field = lbl in ("공사명:", "발주처:", "품명:")
-            ent = ttk.Entry(
-                block, textvariable=var, width=15,
-                state="readonly" if fixed_field else "normal"
-            )
+            ent = ttk.Entry(block, textvariable=var, width=15)
             ent.grid(row=r, column=c+1, sticky='ew', padx=2, pady=2)
             ent.bind("<FocusOut>", lambda e: self.save_settings())
             ent.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
@@ -3485,9 +3478,34 @@ class PMIReportApp:
             elif "검사일자" in lbl: cfg_key = "GAPJI_EXAM_DATE"
             self.setting_vars[cfg_key] = var
             
+        # [NEW] 투과두께 자동계산 및 필름종류 선택 (RT 특화)
+        if not hasattr(self, 'gapji_auto_thk'): self.gapji_auto_thk = tk.BooleanVar(value=self.config.get('GAPJI_AUTO_THK', True))
+        if not hasattr(self, 'gapji_film_type'): self.gapji_film_type = tk.StringVar(value=self.config.get('GAPJI_FILM_TYPE', ''))
+        
+        self.setting_vars['GAPJI_AUTO_THK'] = self.gapji_auto_thk
+        self.setting_vars['GAPJI_FILM_TYPE'] = self.gapji_film_type
+
+        # 자재대장에서 필름 목록 가져오기
+        film_list = []
+        try:
+            import pandas as pd
+            inv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Material_Inventory.xlsx')
+            if os.path.exists(inv_path):
+                df = pd.read_excel(inv_path)
+                f_mask = df.iloc[:, 3].str.contains('Carestream|Fuji|Agfa|필름', na=False, case=False)
+                film_list = sorted(list(df[f_mask].iloc[:, 3].dropna().unique()))
+        except: pass
+
+        tk.Checkbutton(block, text="투과두께 자동계산 (T*2+1)", variable=self.gapji_auto_thk, background="#ffffff").grid(row=3, column=0, columnspan=2, sticky='w', padx=2, pady=2)
+        
+        tk.Label(block, text="필름종류:", background="#ffffff", font=("Malgun Gothic", 8)).grid(row=3, column=2, sticky='e', padx=2, pady=2)
+        film_cb = ttk.Combobox(block, textvariable=self.gapji_film_type, values=film_list, width=13)
+        film_cb.grid(row=3, column=3, sticky='ew', padx=2, pady=2)
+        film_cb.bind("<<ComboboxSelected>>", lambda e: self.save_settings())
+            
         # Add a refresh button for preview
         btn_f = tk.Frame(block, background="#ffffff")
-        btn_f.grid(row=3, column=0, columnspan=4, pady=5, sticky='ew')
+        btn_f.grid(row=4, column=0, columnspan=4, pady=5, sticky='ew')
         ttk.Button(btn_f, text="✨ 갑지 미리보기 업데이트", command=self._update_gapji_preview_current).pack(side='top', fill='x', padx=5)
 
     def _update_gapji_preview_current(self, event=None):
@@ -4661,7 +4679,7 @@ class PMIReportApp:
             label_map = {
                 "Dwg": "Drawing No.", "Joint": "Film Ident. No.", "Loc": "Film Location",
                 "Acc": "Acc", "Rej": "Rej", "Deg": "Deg", "Welder": "Welder No",
-                "T": "T", "Mat": "Mat", "No": "No", "Date": "Date", "Sec": "SEC", "Remarks": "Remarks",
+                "T": "T", "Mat": "Mat", "No": "No", "Date": "Date", "Remarks": "Remarks",
                 "Size": "구경",
                 "D1": "① Crack", "D2": "② IP", "D3": "③ LF", "D4": "④ Slag", "D5": "⑤ Por",
                 "D6": "⑥ U/C", "D7": "⑦ RUC", "D8": "⑧ BT", "D9": "⑨ TI", "D10": "⑩ CP",
@@ -5001,94 +5019,8 @@ class PMIReportApp:
             try: 
                 clipboard_val = self.root.clipboard_get()
                 if not clipboard_val: return
-                # 엑셀 형식(\t, \n) 파싱
-                paste_rows = [line.split("\t") for line in clipboard_val.strip().split("\n")]
-            except Exception as e:
-                self.log(f"⚠️ 클립보드 데이터를 가져올 수 없습니다: {e}")
-                return
-            
-            selected = list(tree.selection())
-            if not selected:
-                messagebox.showwarning("붙여넣기 오류", "붙여넣을 셀을 선택해주세요.")
-                return
-            selected.sort(key=lambda x: tree.index(x))
-            
-            # [SMART AREA] 드래그된 컬럼 범위를 계산
-            s_col = getattr(self, 'start_col', None)
-            e_col = getattr(self, 'end_col', None)
-            l_col = getattr(self, 'last_clicked_col', None)
-            
-            if not s_col or not e_col or s_col == e_col:
-                target_col = l_col or s_col or "#4"
-                try:
-                    s_idx = int(target_col.replace('#', '')) - 1
-                    col_start = s_idx
-                    # 단일 셀 선택 시 클립보드 너비만큼 자동 확장
-                    max_cols_in_paste = len(paste_rows[0]) if paste_rows else 1
-                    col_end = min(len(col_keys) - 1, col_start + max_cols_in_paste - 1)
-                except:
-                    col_start, col_end = 0, len(col_keys) - 1
-            else:
-                try:
-                    s_idx = int(s_col.replace('#', '')) - 1
-                    e_idx = int(e_col.replace('#', '')) - 1
-                    col_start, col_end = min(s_idx, e_idx), max(s_idx, e_idx)
-                except:
-                    col_start, col_end = 0, len(col_keys) - 1
-            
-            target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]
-            key_map = {f"#{i+1}": k for i, k in enumerate(col_keys)}
-            
-            # [EXCEL-LIKE REPLICATION]
-            # 한 행만 선택했는데 클립보드가 여러 행이면 -> 자동 드래그 (Fill Down)
-            all_children = tree.get_children('')
-            if len(selected) == 1 and len(paste_rows) > 1:
-                curr_idx = all_children.index(selected[0])
-                for i in range(1, len(paste_rows)):
-                    if curr_idx + i < len(all_children):
-                        selected.append(all_children[curr_idx + i])
-            
-            for r_idx, item_id in enumerate(selected):
-                view_idx = tree.index(item_id)
-                if not (0 <= view_idx < len(idx_map)): continue
-                actual_idx = idx_map[view_idx]
-                
-                # 행 복제(Replicate): 클립보드 행보다 선택된 행이 많으면 순환하며 붙여넣음
-                source_row = paste_rows[r_idx % len(paste_rows)]
-                
-                for c_idx, c_id in enumerate(target_col_ids):
-                    # 열 복제(Replicate): 클립보드 열보다 선택된 열이 많으면 순환하며 붙여넣음
-                    cell_val = source_row[c_idx % len(source_row)].strip()
-                    key = key_map.get(c_id)
-                    
-                    if key and key not in ["selected", "_status"]:
-                        if mode == "PMI" and key not in ["No", "Joint", "Loc", "Grade", "Date", "Dwg", "_status", "ST", "V", "selected", "order_index"]:
-                            f_val = self.to_float(cell_val)
-                            data_list[actual_idx][key] = f"{f_val:.2f}" if f_val > 0 else ""
-                        else:
-                            data_list[actual_idx][key] = cell_val
-            
-            self.populate_preview(data_list, switch_tab=False, mode=mode)
-            self.log(f"📋 {mode} 붙여넣기 완료: {len(selected)}행 x {len(target_col_ids)}열")
-        except Exception as e:
-            self.log(f"❌ 붙여넣기 오류: {e}")
-            messagebox.showerror("붙여넣기 실패", f"데이터를 붙여넣는 중 오류가 발생했습니다:\n{e}")
-
-    def merge_selected_iso(self, mode="PMI"):
-        """선택된 항목들의 ISO 번호를 첫 번째 항목의 것으로 통일 (병합 효과)"""
-        mode_info = self._get_mode_info(mode)
-        if not mode_info: return
-        tree, idx_map, data_list, _ = mode_info
-        
-        selected = tree.selection()
-        if len(selected) < 2:
-            messagebox.showinfo("알림", "병합할 항목을 2개 이상 선택해주세요.")
-            return
-        
-        selected = sorted(list(selected), key=lambda x: tree.index(x))
-        view_idx_0 = tree.index(selected[0])
-        actual_idx_0 = idx_map[view_idx_0] if 0 <= view_idx_0 < len(idx_map) else None
-        
+                # 엑셀 형식(\t, 
+) 파싱\n                paste_rows = [line.split("\t") for line in clipboard_val.strip().split("\n")]\n            except Exception as e:\n                self.log(f"⚠️ 클립보드 데이터를 가져올 수 없습니다: {e}")\n                return\n            \n            selected = list(tree.selection())\n            if not selected:\n                messagebox.showwarning("붙여넣기 오류", "붙여넣을 셀을 선택해주세요.")\n                return\n            selected.sort(key=lambda x: tree.index(x))\n            \n            # [SMART AREA] 드래그된 컬럼 범위를 계산\n            s_col = getattr(self, 'start_col', None)\n            e_col = getattr(self, 'end_col', None)\n            l_col = getattr(self, 'last_clicked_col', None)\n            \n            if not s_col or not e_col or s_col == e_col:\n                target_col = l_col or s_col or "#4"\n                try:\n                    s_idx = int(target_col.replace('#', '')) - 1\n                    col_start = s_idx\n                    # 단일 셀 선택 시 클립보드 너비만큼 자동 확장\n                    max_cols_in_paste = len(paste_rows[0]) if paste_rows else 1\n                    col_end = min(len(col_keys) - 1, col_start + max_cols_in_paste - 1)\n                except:\n                    col_start, col_end = 0, len(col_keys) - 1\n            else:\n                try:\n                    s_idx = int(s_col.replace('#', '')) - 1\n                    e_idx = int(e_col.replace('#', '')) - 1\n                    col_start, col_end = min(s_idx, e_idx), max(s_idx, e_idx)\n                except:\n                    col_start, col_end = 0, len(col_keys) - 1\n            \n            target_col_ids = [f"#{i+1}" for i in range(col_start, col_end + 1)]\n            key_map = {f"#{i+1}": k for i, k in enumerate(col_keys)}\n            \n            # [EXCEL-LIKE REPLICATION]\n            # 한 행만 선택했는데 클립보드가 여러 행이면 -> 자동 드래그 (Fill Down)\n            all_children = tree.get_children('')\n            if len(selected) == 1 and len(paste_rows) > 1:\n                curr_idx = all_children.index(selected[0])\n                for i in range(1, len(paste_rows)):\n                    if curr_idx + i < len(all_children):\n                        selected.append(all_children[curr_idx + i])\n            \n            for r_idx, item_id in enumerate(selected):\n                view_idx = tree.index(item_id)\n                if not (0 <= view_idx < len(idx_map)): continue\n                actual_idx = idx_map[view_idx]\n                \n                # 행 복제(Replicate): 클립보드 행보다 선택된 행이 많으면 순환하며 붙여넣음\n                source_row = paste_rows[r_idx % len(paste_rows)]\n                \n                for c_idx, c_id in enumerate(target_col_ids):\n                    # 열 복제(Replicate): 클립보드 열보다 선택된 열이 많으면 순환하며 붙여넣음\n                    cell_val = source_row[c_idx % len(source_row)].strip()\n                    key = key_map.get(c_id)\n                    \n                    if key and key not in ["selected", "_status"]:\n                        if mode == "PMI" and key not in ["No", "Joint", "Loc", "Grade", "Date", "Dwg", "_status", "ST", "V", "selected", "order_index"]:\n                            f_val = self.to_float(cell_val)\n                            data_list[actual_idx][key] = f"{f_val:.2f}" if f_val > 0 else ""\n                        else:\n                            data_list[actual_idx][key] = cell_val\n            \n            self.populate_preview(data_list, switch_tab=False, mode=mode)\n            self.log(f"📋 {mode} 붙여넣기 완료: {len(selected)}행 x {len(target_col_ids)}열")\n        except Exception as e:\n            self.log(f"❌ 붙여넣기 오류: {e}")\n            messagebox.showerror("붙여넣기 실패", f"데이터를 붙여넣는 중 오류가 발생했습니다:\n{e}")\n\n    def merge_selected_iso(self, mode="PMI"):\n        """선택된 항목들의 ISO 번호를 첫 번째 항목의 것으로 통일 (병합 효과)"""\n        mode_info = self._get_mode_info(mode)\n        if not mode_info: return\n        tree, idx_map, data_list, _ = mode_info\n        \n        selected = tree.selection()\n        if len(selected) < 2:\n            messagebox.showinfo("알림", "병합할 항목을 2개 이상 선택해주세요.")\n            return\n        \n        selected = sorted(list(selected), key=lambda x: tree.index(x))\n        view_idx_0 = tree.index(selected[0])\n        actual_idx_0 = idx_map[view_idx_0] if 0 <= view_idx_0 < len(idx_map) else None\n        
         k_iso = "ISO" if mode == "PAUT" else "Dwg"
         if actual_idx_0 is not None:
             first_iso = data_list[actual_idx_0].get(k_iso, '')
@@ -5463,7 +5395,8 @@ class PMIReportApp:
                 elif mode == "PAUT": data = self.paut_extracted_data
                 else: data = self.extracted_data
                 
-                if data and not messagebox.askyesno("확인", f"현재 작업 중인 {mode} 데이터가 있습니다. 불러온 데이터로 덮어쓰시겠습니까?\n(아니오를 선택하면 기존 데이터에 추가됩니다.)"):
+                if data and not messagebox.askyesno("확인", f"현재 작업 중인 {mode} 데이터가 있습니다. 불러온 데이터로 덮어쓰시겠습니까?
+(아니오를 선택하면 기존 데이터에 추가됩니다.)"):
                     data.extend(loaded_data)
                 else:
                     if mode == "RT": self.rt_extracted_data = loaded_data
@@ -5482,7 +5415,8 @@ class PMIReportApp:
                 self.update_date_listbox(mode)
                 self.populate_preview(data, mode=mode)
                 self.log(f"📂 {mode} 데이터 불러오기 완료: {os.path.basename(file_path)}")
-                messagebox.showinfo("완료", f"데이터를 성공적으로 불러왔습니다.\n(총 {len(data)} 건)")
+                messagebox.showinfo("완료", f"데이터를 성공적으로 불러왔습니다.
+(총 {len(data)} 건)")
             except Exception as e:
                 self.log(f"❌ {mode} 불러오기 오류: {e}")
                 messagebox.showerror("오류", f"파일을 불러오는 중 오류가 발생했습니다: {e}")
@@ -5617,7 +5551,8 @@ class PMIReportApp:
 
             wb.save(file_path)
             self.log(f"📊 {mode} 서식 포함 엑셀 내보내기 완료: {os.path.basename(file_path)}")
-            messagebox.showinfo("완료", f"화면 형식과 동일하게 엑셀 파일로 저장했습니다.\n(총 {len(export_rows)} 건)")
+            messagebox.showinfo("완료", f"화면 형식과 동일하게 엑셀 파일로 저장했습니다.
+(총 {len(export_rows)} 건)")
         except Exception as e:
             self.log(f"❌ {mode} 엑셀 내보내기 오류: {e}")
             messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다: {e}")
@@ -6436,17 +6371,20 @@ class PMIReportApp:
 
 
 
-    def force_print_settings(self, ws, context="DATA"):
+    def force_print_settings(self, ws, context="DATA", force_mode=None):
         try:
             # [ENHANCED] Use tracked current_mode
-            mode = getattr(self, 'current_mode', "PMI")
-            try:
-                tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
-                if "PMI" in tab_text: mode = "PMI"
-                elif "RT" in tab_text: mode = "RT"
-                elif "PT" in tab_text: mode = "PT"
-                elif "PAUT" in tab_text: mode = "PAUT"
-            except: pass
+            if force_mode:
+                mode = force_mode
+            else:
+                mode = getattr(self, 'current_mode', "PMI")
+                try:
+                    tab_text = self.mode_notebook.tab(self.mode_notebook.select(), "text")
+                    if "PMI" in tab_text: mode = "PMI"
+                    elif "RT" in tab_text: mode = "RT"
+                    elif "PT" in tab_text: mode = "PT"
+                    elif "PAUT" in tab_text: mode = "PAUT"
+                except: pass
             
             full_context = f"{mode}_{context}"
 
@@ -6455,12 +6393,7 @@ class PMIReportApp:
             if not manual_area:
                 manual_area = self.config.get(f'PRINT_AREA_{context}', "").strip()
                 
-            if mode == "RT":
-                if context == "COVER":
-                    ws.print_area = 'A1:V35'
-                else:
-                    ws.print_area = 'A1:V37'
-            elif manual_area:
+            if manual_area:
                 ws.print_area = manual_area
             else:
                 if context == "COVER":
@@ -6468,7 +6401,10 @@ class PMIReportApp:
                     key = f"{mode}_GAPJI_PRINT_END_ROW" if mode != "PMI" else "GAPJI_PRINT_END_ROW"
                     end_r = int(self.config.get(key, 51))
                     
-                    if mode == "PAUT" and end_r > 0:
+                    # [FIX] 사용자의 요청에 따라 RT 갑지의 인쇄 영역을 A1:V35로 설정
+                    if mode == "RT":
+                        ws.print_area = 'A1:V35'
+                    elif mode == "PAUT" and end_r > 0:
                         ws.print_area = f'A1:AJ{end_r}'
                     elif end_r > 0:
                         ws.print_area = f'A1:T{end_r}'
@@ -6479,6 +6415,8 @@ class PMIReportApp:
                     if end_r > 0:
                         if mode == "PAUT":
                             ws.print_area = f'A1:AH{end_r}'
+                        elif mode == "RT":
+                            ws.print_area = 'A1:V36'
                         else:
                             ws.print_area = f'A1:M{end_r}'
             
@@ -6489,10 +6427,13 @@ class PMIReportApp:
             except: pass
 
             ws.page_setup.paperSize = 9
-            if context == "DATA" or mode == "RT":
+            if context == "DATA":
                 ws.page_setup.orientation = 'landscape'
             else:
-                ws.page_setup.orientation = 'portrait'
+                if mode == "RT":
+                    ws.page_setup.orientation = 'landscape'
+                else:
+                    ws.page_setup.orientation = 'portrait'
             
             # [FIX] 모드별 설정 우선 읽기 (RT_COVER → COVER 순 폴백)
             default_scale = 95
@@ -6521,10 +6462,6 @@ class PMIReportApp:
             ws.page_margins.bottom = _margin('BOTTOM', 0.2)
             ws.page_margins.left   = _margin('LEFT',   0.5)
             ws.page_margins.right  = _margin('RIGHT',  0.3)
-            if mode == "RT":
-                # RT는 좌우·상하 여백을 동일하게 하여 표를 페이지 정중앙에 배치한다.
-                ws.page_margins.top = ws.page_margins.bottom = 0.25
-                ws.page_margins.left = ws.page_margins.right = 0.25
 
         except Exception as e:
             print(f"[WARNING] Print settings failed: {e}")
@@ -6732,7 +6669,7 @@ class PMIReportApp:
         new_sheet.column_dimensions['M'].width = 18.0
         return new_sheet
 
-    def inject_drawing_layer(self, template_path, target_path):
+    def inject_drawing_layer(self, template_path, target_path, mode=None):
         """
         [FINAL V4] Definitive hybrid surgery.
         - Report's workbook.xml, workbook.xml.rels, [Content_Types].xml → correct structure, print area, all pages
@@ -6778,20 +6715,18 @@ class PMIReportApp:
                             processed_sheets[f.lower()] = content
                         except: pass
 
-                # 리포트 인쇄 설정 추출 (force_print_settings 적용값)
-                rep_page_settings = {}  # fl_lower → setup/margins/options
+                # 리포트 pageSetup & pageMargins 추출 (force_print_settings 적용값)
+                rep_page_settings = {}  # fl_lower → {'setup': '...', 'margins': '...'}
                 rep_scale = None
                 for fl_s, c in processed_sheets.items():
                     setup_m  = re.search(r'<pageSetup\b[^>]*/>', c)
                     margin_m = re.search(r'<pageMargins\b[^>]*/>', c)
-                    options_m = re.search(r'<printOptions\b[^>]*/>', c)
                     scale_m  = re.search(r'<pageSetup\b[^>]*\bscale="(\d+)"', c)
                     if scale_m and not rep_scale:
                         rep_scale = scale_m.group(1)
                     rep_page_settings[fl_s] = {
                         'setup':   setup_m.group(0)  if setup_m  else None,
                         'margins': margin_m.group(0) if margin_m else None,
-                        'options': options_m.group(0) if options_m else None,
                     }
 
                 # 리포트의 workbook 메타 파일들 (raw bytes)
@@ -6837,9 +6772,19 @@ class PMIReportApp:
                     new_dns_list = []
                     for i, s_name in enumerate(snames):
                         if i == 0: # 갑지 (Cover)
-                            pa = 'A1:V35'
+                            if mode == "RT":
+                                default_pa = 'A1:V35'
+                            else:
+                                default_pa = 'A1:P49'
+                            pa = (self.config.get(f'PRINT_AREA_{mode}_COVER' if mode else '', '').strip() or 
+                                  self.config.get('PRINT_AREA_COVER', '').strip() or default_pa)
                         else: # 을지 (Data)
-                            pa = 'A1:V37'
+                            if mode == "RT":
+                                default_pa = 'A1:V36'
+                            else:
+                                default_pa = 'A1:M47'
+                            pa = (self.config.get(f'PRINT_AREA_{mode}_DATA' if mode else '', '').strip() or 
+                                  self.config.get('PRINT_AREA_DATA', '').strip() or default_pa)
                         
                         pa_norm = _get_norm_pa(pa)
                         new_dns_list.append(f'<definedName name="_xlnm.Print_Area" localSheetId="{i}">\'{s_name}\'!{pa_norm}</definedName>')
@@ -6900,6 +6845,14 @@ class PMIReportApp:
                                 else:
                                     # pageSetup 태그가 없으면 sheetData 앞에 삽입
                                     tmpl_sheet = tmpl_sheet.replace('</sheetData>', '</sheetData>' + rep_ps, 1)
+                                # [FIX] Inject fitToPage into sheetPr if fitToWidth or fitToHeight is used
+                                if 'fitToWidth="1"' in str(rep_ps) or 'fitToHeight="1"' in str(rep_ps):
+                                    if '<pageSetUpPr ' not in tmpl_sheet:
+                                        if '</sheetPr>' in tmpl_sheet:
+                                            tmpl_sheet = tmpl_sheet.replace('</sheetPr>', '<pageSetUpPr fitToPage="1"/></sheetPr>', 1)
+                                        elif re.search(r'<sheetPr\b([^>]*)/>', tmpl_sheet):
+                                            tmpl_sheet = re.sub(r'<sheetPr\b([^>]*)/>', r'<sheetPr\1><pageSetUpPr fitToPage="1"/></sheetPr>', tmpl_sheet, count=1)
+
                             elif rep_scale:
                                 # pageSetup은 없지만 scale만 있으면 기존 방식으로 패치
                                 tmpl_sheet = re.sub(r'<pageSetup\b[^>]*/>', lambda m: re.sub(r'\bscale="\d+"', f'scale="{rep_scale}"', m.group(0)) if 'scale=' in m.group(0) else m.group(0).replace('<pageSetup', f'<pageSetup scale="{rep_scale}"', 1), tmpl_sheet)
@@ -6911,16 +6864,6 @@ class PMIReportApp:
                                     tmpl_sheet = re.sub(r'<pageMargins\b[^>]*/>', rep_pm, tmpl_sheet, count=1)
                                 else:
                                     tmpl_sheet = tmpl_sheet.replace('</pageSetup>', '</pageSetup>' + rep_pm)
-
-                            # 가로/세로 페이지 가운데 맞춤(printOptions)도 최종 파일에 보존
-                            rep_po = rep_page_settings.get(fl_lower, {}).get('options')
-                            if rep_po:
-                                if re.search(r'<printOptions\b[^>]*/>', tmpl_sheet):
-                                    tmpl_sheet = re.sub(r'<printOptions\b[^>]*/>', rep_po, tmpl_sheet, count=1)
-                                elif '<pageMargins' in tmpl_sheet:
-                                    tmpl_sheet = tmpl_sheet.replace('<pageMargins', rep_po + '<pageMargins', 1)
-                                else:
-                                    tmpl_sheet = tmpl_sheet.replace('</sheetData>', '</sheetData>' + rep_po, 1)
                             # sheetData 주입 + 행 높이 보존
                             if fl_lower in processed_sheets:
                                 rc = processed_sheets[fl_lower]
@@ -7031,7 +6974,8 @@ class PMIReportApp:
         try:
             history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
             if not os.path.exists(history_path):
-                messagebox.showerror("오류", "daily_work_history.json 파일이 존재하지 않습니다.\n(중앙지사 어플에서 작업 감독일보를 저장했는지 확인하세요)")
+                messagebox.showerror("오류", "daily_work_history.json 파일이 존재하지 않습니다.
+(중앙지사 어플에서 작업 감독일보를 저장했는지 확인하세요)")
                 return
             with open(history_path, 'r', encoding='utf-8') as f:
                 history = json.load(f)
@@ -7071,11 +7015,7 @@ class PMIReportApp:
 
                 new_row = {k: "" for k in keys_attr}
                 new_row["Date"] = r.get("Date", "")
-
-                # 중앙지사 작업/감독일보의 '구간'은 RT의 SEC 값이다.
-                if mode in ("RT", "KOGAS"):
-                    new_row["Sec"] = r.get("구간", "")
-                 
+                
                 # 라인번호 / ISO / Dwg
                 dwg = r.get("라인번호", "")
                 if "ISO" in keys_attr: new_row["ISO"] = dwg
@@ -7115,13 +7055,12 @@ class PMIReportApp:
                     test_len = r.get(mode, "")
                 if "Tested Length" in keys_attr: new_row["Tested Length"] = test_len
                 
-                # 구간 / Loc
-                # RT의 Film Location은 중앙지사 작업/감독일보
-                # '2. 비파괴검사결과서'의 '구간정보' 값을 사용한다.
+                # 구간 / Loc (RT인 경우 Film Location이므로 구간정보를 매핑)
                 if mode in ("RT", "KOGAS"):
-                    loc = r.get("구간정보", "") or r.get("구간", "")
+                    loc = r.get("구간정보", "")
                 else:
                     loc = r.get("구간", "")
+                    
                 if "Loc" in keys_attr: new_row["Loc"] = loc
                 elif "Location" in keys_attr: new_row["Location"] = loc
                 
@@ -7159,7 +7098,8 @@ class PMIReportApp:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            messagebox.showerror("오류", f"일보 불러오기 중 오류가 발생했습니다:\n{e}")
+            messagebox.showerror("오류", f"일보 불러오기 중 오류가 발생했습니다:
+{e}")
 
     def extract_only(self, show_msg=True):
         """데이터만 추출하여 리스트와 미리보기에 반영 (PMI/RT 대응)"""
@@ -7923,7 +7863,8 @@ class PMIReportApp:
             self.progress['value'] = 100
             if show_msg:
                 self.log(f"✅ {mode} 데이터 누적 완료 (현재 총 {total_count} 건)")
-                messagebox.showinfo("완료", f"데이터가 추가되었습니다.\n현재 목록에는 총 {total_count}건의 데이터가 있습니다.")
+                messagebox.showinfo("완료", f"데이터가 추가되었습니다.
+현재 목록에는 총 {total_count}건의 데이터가 있습니다.")
             return True
         except Exception as e:
             self.log(f"❌ {mode} 추출 오류: {e}")
@@ -8089,7 +8030,9 @@ class PMIReportApp:
             messagebox.showinfo("완료", f"{count}개 행의 결과가 의뢰서에 반영되었습니다.")
 
         except PermissionError:
-            msg = f"파일이 Excel에서 열려 있어 저장할 수 없습니다.\n\n'{os.path.basename(target_file)}' 파일을 Excel에서 닫은 후 다시 시도해 주세요."
+            msg = f"파일이 Excel에서 열려 있어 저장할 수 없습니다.
+
+'{os.path.basename(target_file)}' 파일을 Excel에서 닫은 후 다시 시도해 주세요."
             self.log(f"❌ 의뢰서 결과 반영 실패: 파일이 열려 있음 (PermissionError)")
             messagebox.showerror("파일 접근 오류", msg)
         except Exception as e:
@@ -8198,7 +8141,8 @@ class PMIReportApp:
 
         # [NEW] 템플릿 파일 존재 여부 및 기본 구조 확인
         if not os.path.exists(template_path):
-            messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다:\n{template_path}")
+            messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다:
+{template_path}")
             return
         self.save_settings() # This now captures all setting_vars (Logo X/Y, Print Area, etc.)
         
@@ -8253,9 +8197,8 @@ class PMIReportApp:
                 thk_val = first_item.get('Th\'k(mm)', '')
                 if thk_val:
                     self.safe_set_value(ws, 'G35', thk_val)
-        elif mode in ("RT", "KOGAS"):
-            # RT/KOGAS 갑지 전용 좌표. PMI 기본 좌표를 사용하면 B9가
-            # A8:B9 병합영역의 A8로 이동하여 날짜가 부재두께/관경 칸에 들어간다.
+        elif mode in ["RT", "KOGAS"]:
+            # [RT/KOGAS Specific Mapping]
             mapping = [
                 ('GAPJI_PROJECT', 'Q2'),
                 ('GAPJI_CUSTOMER', 'Q1'),
@@ -8263,10 +8206,62 @@ class PMIReportApp:
                 ('GAPJI_EXAM_DATE', 'I28'),
                 ('GAPJI_REPORT_NO', 'C5'),
             ]
-            for cfg_key, coord in mapping:
-                val = self.config.get(cfg_key, "")
+            for key, default_cell in mapping:
+                val = self.config.get(key, "")
                 if val:
-                    self.safe_set_value(ws, coord, val)
+                    self.safe_set_value(ws, default_cell, val)
+                    
+            # Film Type Parsing
+            film_type = self.config.get('GAPJI_FILM_TYPE', "")
+            if film_type:
+                # Example: Carestream AA400-3.5*12" -> BRAND: Carestream, TYPE: AA400, SIZE: 3.5 X 12
+                # Custom User Logic for TYPE
+                parts = film_type.split(" ", 1)
+                brand = parts[0] if len(parts) > 0 else ""
+                rest = parts[1] if len(parts) > 1 else ""
+                
+                type_val = ""
+                size_val = ""
+                if "-" in rest:
+                    t_parts = rest.split("-", 1)
+                    raw_type = t_parts[0]
+                    raw_size = t_parts[1].replace('"', '').replace('*', ' X ')
+                    
+                    if "AA400" in raw_type.upper():
+                        type_val = "AA400(II)"
+                    else:
+                        type_val = f"{raw_type}(I)"
+                    
+                    size_val = raw_size
+                else:
+                    type_val = f"{rest}(I)" if rest else ""
+                
+                self.safe_set_value(ws, 'Q9', brand)
+                self.safe_set_value(ws, 'V9', type_val)
+                if size_val: self.safe_set_value(ws, 'Q10', size_val)
+
+            if first_item:
+                # 라인번호 / ISO / Dwg -> I5 (SEC NO./LINE NO.)
+                line_no = first_item.get("Line No.", "")
+                if not line_no: line_no = first_item.get("Dwg", "")
+                if line_no: self.safe_set_value(ws, 'I5', line_no)
+                
+                # 관경(Size) -> C9
+                size_val = first_item.get("Size", "")
+                if size_val: self.safe_set_value(ws, 'C9', size_val)
+                
+                # 두께(Thk) -> E9
+                thk_val = first_item.get("T", "") # RT uses 'T' for thickness mostly
+                if not thk_val: thk_val = first_item.get("Thk", "")
+                if thk_val: self.safe_set_value(ws, 'E9', thk_val)
+                
+                # 투과두께 (T*2+1) -> C16
+                if self.config.get('GAPJI_AUTO_THK', True):
+                    try:
+                        thk_f = float(str(thk_val).strip())
+                        pen_thk = thk_f * 2 + 1
+                        self.safe_set_value(ws, 'C16', str(pen_thk))
+                    except: pass
         else:
             # Default mapping: Project: B5, Customer: B6, Item: B7, Material: B8, Date: B9, Report No: B10
             mapping = [
@@ -8300,6 +8295,8 @@ class PMIReportApp:
 
             if len(wb.worksheets) >= 1:
                 ws0 = wb.worksheets[0]
+
+
                 self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="PMI")
                 self._write_gapji_metadata(ws0)
                 self.force_print_settings(ws0, context="COVER") # [NEW] 갑지 전용 여백 적용
@@ -8672,14 +8669,45 @@ class PMIReportApp:
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             output_name = f"{os.path.splitext(os.path.basename(template_path))[0]}_Unified_{now_str}{os.path.splitext(template_path)[1]}"
+
+            # [FIX] Merge H1:O4 and adjust row heights to match Data sheet so title isn't cut off
+            # Robustly unmerge to avoid openpyxl KeyError
+            to_remove = []
+            for m_range in list(ws0.merged_cells.ranges):
+                min_c, min_r, max_c, max_r = m_range.bounds
+                if not (max_c < 8 or min_c > 15 or max_r < 1 or min_r > 4):
+                    to_remove.append((min_c, min_r, max_c, max_r))
+            
+            for min_c, min_r, max_c, max_r in to_remove:
+                try:
+                    ws0.unmerge_cells(start_row=min_r, start_column=min_c, end_row=max_r, end_column=max_c)
+                except Exception as e:
+                    self.log(f"[ERROR] unmerge fail: {e}")
+            
+            try:
+                ws0.merge_cells(start_row=1, start_column=8, end_row=4, end_column=15)
+                ws0.row_dimensions[1].height = 32.25
+                ws0.row_dimensions[2].height = 14.1
+                ws0.row_dimensions[3].height = 14.1
+                ws0.row_dimensions[4].height = 14.1
+            except Exception as e:
+                self.log(f"[ERROR] Failed to merge H1:O4: {e}")
+
             save_path = os.path.join(os.path.dirname(template_path), output_name); wb.save(save_path)
             self.progress['value'] = 100; self.log(f"✨ 완료! 저장됨: {output_name}")
-            messagebox.showinfo("성공", f"통합 성적서 생성이 완료되었습니다.\n\n경로: {os.path.dirname(save_path)}\n파일명: {output_name}")
+            messagebox.showinfo("성공", f"통합 성적서 생성이 완료되었습니다.
+
+경로: {os.path.dirname(save_path)}
+파일명: {output_name}")
         except Exception as e:
             self.log(f"❌ 오류: {e}")
             traceback.print_exc()
             # [NEW] 사용자에게 친절한 팝업 알림 추가
-            error_msg = f"성적서 생성 중 오류가 발생했습니다.\n\n원인: {e}\n\n* 주로 양식 파일의 시트 구조나 병합 상태가 맞지 않을 때 발생합니다. 다른 양식을 시도하거나 설정을 확인해주세요."
+            error_msg = f"성적서 생성 중 오류가 발생했습니다.
+
+원인: {e}
+
+* 주로 양식 파일의 시트 구조나 병합 상태가 맞지 않을 때 발생합니다. 다른 양식을 시도하거나 설정을 확인해주세요."
             messagebox.showerror("생성 실패", error_msg)
             # End of _run_pmi_process logic
         finally:
@@ -8825,7 +8853,8 @@ class PMIReportApp:
             wb.save(save_path)
             self.progress['value'] = 100
             self.log(f"✨ PT 완료! 저장됨: {output_name}")
-            messagebox.showinfo("성공", f"PT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
+            messagebox.showinfo("성공", f"PT 성적서 생성이 완료되었습니다.
+경로: {os.path.dirname(save_path)}")
         except Exception as e:
             self.log(f"❌ PT 생성 오류: {e}")
             traceback.print_exc()
@@ -8857,70 +8886,43 @@ class PMIReportApp:
             self.log(f"?? [DEBUG] {mode} 갑지 로고 삽입 시도 중...")
             # Gapji (Cover) Logic
             ws0 = wb.worksheets[0]
+
+            # [FIX] Merge H1:O4 and adjust row heights to match Data sheet so title isn't cut off
+            # Robustly unmerge to avoid openpyxl KeyError
+
+
+            to_remove = []
+            for m_range in list(ws0.merged_cells.ranges):
+                # Intersects with H1:O4 (col 8-15, row 1-4)?
+                # bounds = (min_col, min_row, max_col, max_row)
+                min_c, min_r, max_c, max_r = m_range.bounds
+                if not (max_c < 8 or min_c > 15 or max_r < 1 or min_r > 4):
+                    to_remove.append(m_range)
+            
+            for m_range in to_remove:
+                try:
+                    ws0.merged_cells.ranges.remove(m_range)
+                except Exception as e:
+                    self.log(f"[ERROR] unmerge fail: {e}")
+                    with open(r'c:\Users\jjch2\Desktop\PMI\merge_error.txt', 'a', encoding='utf-8') as f_err:
+                        f_err.write(f'Unmerge error: {e}
+')
+            
+            try:
+                ws0.merge_cells(start_row=1, start_column=8, end_row=4, end_column=15)
+                ws0.row_dimensions[1].height = 32.25
+                ws0.row_dimensions[2].height = 14.1
+                ws0.row_dimensions[3].height = 14.1
+                ws0.row_dimensions[4].height = 14.1
+            except Exception as e:
+                self.log(f"[ERROR] Failed to merge H1:O4: {e}")
+                with open(r'c:\Users\jjch2\Desktop\PMI\merge_error.txt', 'a', encoding='utf-8') as f_err:
+                    f_err.write(f'Merge error: {e}
+')
             self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode=mode)
-            self._write_gapji_metadata(ws0, mode=mode, first_item=final_list[0] if final_list else None)
-            self.force_print_settings(ws0, context="COVER")
+            self._write_gapji_metadata(ws0, mode=mode)
+            self.force_print_settings(ws0, context="COVER", force_mode=mode)
             self.apply_custom_dimensions(ws0, f"{mode}_COVER")
-
-            if mode == "RT":
-                first_item = final_list[0] if final_list else {}
-                first_sec = str(first_item.get("Sec", "")).strip()
-                first_drawing_no = str(first_item.get("Dwg", "")).strip()
-                sec_drawing_value = "/".join(
-                    value for value in (first_sec, first_drawing_no) if value
-                )
-                if sec_drawing_value:
-                    self.safe_set_value(ws0, "I5", sec_drawing_value)
-
-                # 갑지 검사자/책임검사자 서명란 고정값
-                signature_values = {
-                    "B32": "대리",
-                    "D32": "우명광",
-                    "B35": "부장",
-                    "D35": "주진철",
-                }
-                for cell_ref, signature_value in signature_values.items():
-                    ws0[cell_ref] = signature_value
-                    ws0[cell_ref].alignment = Alignment(
-                        horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True
-                    )
-
-                # A8:B9 폭에 맞춰 영문/한글 항목명을 2줄로 모두 표시한다.
-                material_size_label = ws0["A8"]
-                material_size_label.value = "MAT'L THK./PIPE DIA.\n부재두께 및 관경"
-                material_size_label.font = Font(name='돋움체', size=8)
-                material_size_label.alignment = Alignment(
-                    horizontal='left', vertical='center',
-                    wrap_text=True, shrink_to_fit=True
-                )
-
-                # 갑지에서 자동 입력되는 값 영역만 상하좌우 중앙 정렬한다.
-                for cell_ref in ("Q1", "Q2", "C5", "I5", "C10", "I28"):
-                    ws0[cell_ref].alignment = Alignment(
-                        horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True
-                    )
-
-            # 갑지 제목 영역을 을지(F1:L4)와 같은 4행 높이로 구성한다.
-            # 기존 H1:O3 및 K4:L4 병합을 해제한 뒤 H1:O4로 통합한다.
-            cover_title_bounds = (8, 1, 15, 4)
-            for merged_range in list(ws0.merged_cells.ranges):
-                min_c, min_r, max_c, max_r = merged_range.bounds
-                if not (max_c < cover_title_bounds[0] or
-                        min_c > cover_title_bounds[2] or
-                        max_r < cover_title_bounds[1] or
-                        min_r > cover_title_bounds[3]):
-                    ws0.unmerge_cells(str(merged_range))
-
-            ws0.merge_cells("H1:O4")
-            cover_title = ws0["H1"]
-            cover_title.value = "방사선투과검사 보고서\nRADIOGRAPHIC EXAMINATION REPORT"
-            cover_title.alignment = Alignment(
-                horizontal='center', vertical='center',
-                wrap_text=True, shrink_to_fit=True
-            )
-            cover_title.font = Font(name='돋움체', size=14, bold=True)
 
             # Data Sheet Logic (1-row-per-data)
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
@@ -8928,32 +8930,8 @@ class PMIReportApp:
             ws.title = f"{ws.title[:20]}_001"
             # [FIX] Do NOT clear existing images if data sheet is the same as cover
             self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode=mode)
-            self.force_print_settings(ws, context="DATA")
+            self.force_print_settings(ws, context="DATA", force_mode=mode)
             self.apply_custom_dimensions(ws, f"{mode}_DATA")
-
-            # 을지 제목은 원본 병합영역(F1:L4)을 유지하고 한글/영문 2줄로 고정한다.
-            if ws != ws0 and mode == "RT":
-                title_cell = ws["F1"]
-                title_cell.value = "방사선투과검사 보고서\nRADIOGRAPHIC EXAMINATION REPORT"
-                title_cell.alignment = Alignment(
-                    horizontal='center', vertical='center',
-                    wrap_text=True, shrink_to_fit=True
-                )
-                title_cell.font = Font(name='돋움체', size=14, bold=True)
-
-                # 을지 검사 조건 헤더는 사용자 데이터와 무관한 고정값이다.
-                fixed_headers = {
-                    "N7": "SENSITIVITY\n식별도",
-                    "O7": "DENSITY\n농도",
-                    "R7": "TECHNIQUE\n촬영방법",
-                }
-                for cell_ref, header_text in fixed_headers.items():
-                    header_cell = ws[cell_ref]
-                    header_cell.value = header_text
-                    header_cell.alignment = Alignment(
-                        horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True
-                    )
             # RT usually doesn't have the same headers as PMI
             # self.set_eulji_headers(ws) 
 
@@ -8966,9 +8944,6 @@ class PMIReportApp:
             current_row = start_row
             current_page = 1
             data_ptr = 0
-            rt_condition_data_rows = set()
-            rt_film_location_counts = {}
-            cover_d32_value = ws0["D32"].value if mode == "RT" else None
             
             while data_ptr < len(final_list):
                 # 페이지 넘김 체크: 가스공사는 2행 블록 기준
@@ -8978,38 +8953,36 @@ class PMIReportApp:
                     current_row = start_row
                 
                 item = final_list[data_ptr]
-
-                # 각 을지 페이지의 SEC. NO./LINE NO. 값 영역(H5:L6)에는
-                # 갑지의 동일 항목 값(I5)을 그대로 복사한다.
-                if mode == "RT" and current_row == start_row:
-                    self.safe_set_value(ws, "H5", ws0["I5"].value)
-                 
-                # [DISABLED] Do NOT write headers automatically to preserve template's own headers
-                # if current_row == start_row:
-                #     try:
-                #         h_row = start_row - 1
-                #         if h_row >= 1:
-                #             h_map = {
-                #                 'RT_COL_NO': 'RT_NAME_NO', 'RT_COL_DATE': 'RT_NAME_DATE',
-                #                 'RT_COL_DWG': 'RT_NAME_DWG', 'RT_COL_JOINT': 'RT_NAME_JOINT',
-                #                 'RT_COL_LOC': 'RT_NAME_LOC', 'RT_COL_THK': 'RT_NAME_THK',
-                #                 'RT_COL_MAT': 'RT_NAME_MAT', 'RT_COL_ACC': 'RT_NAME_ACC',
-                #                 'RT_COL_REJ': 'RT_NAME_REJ', 'RT_COL_DEG': 'RT_NAME_DEG',
-                #                 'RT_COL_RES': 'RT_NAME_RES', 'RT_COL_WELDER': 'RT_NAME_WELDER',
-                #                 'RT_COL_REM': 'RT_NAME_REM'
-                #             }
-                #             for c_key, n_key in h_map.items():
-                #                 c_idx = self.col_to_num(self.config.get(c_key, '0'))
-                #                 if c_idx >= 1:
-                #                     h_default = c_key.replace('RT_COL_', '').capitalize()
-                #                     h_text = self.config.get(n_key, h_default)
-                #                     self.safe_set_value(ws, ws.cell(row=h_row, column=c_idx).coordinate, h_text)
-                #             for d_i in range(1, 16):
-                #                 d_c_idx = self.col_to_num(self.config.get(f'RT_COL_D{d_i}', '0'))
-                #                 if d_c_idx >= 1:
-                #                     d_text = self.config.get(f'RT_NAME_D{d_i}', f'D{d_i}')
-                #                     self.safe_set_value(ws, ws.cell(row=h_row, column=d_c_idx).coordinate, d_text)
-                #     except: pass
+                
+                # [NEW] 동적 헤더 생성 (데이터 개수에 따라 1-2, 2-3, 3-4, 4-1 등 자동 생성)
+                if current_row == start_row and not is_kogas:
+                    try:
+                        h_row = start_row - 1
+                        if h_row >= 1:
+                            # 현재 아이템의 D1~D15 중 가장 마지막에 데이터가 있는 인덱스 찾기
+                            max_d = 0
+                            for d_i in range(1, 16):
+                                if str(item.get(f'D{d_i}', '')).strip():
+                                    max_d = d_i
+                                    
+                            if max_d > 0:
+                                # 동적 헤더 텍스트 생성 (원형 연결)
+                                dyn_headers = []
+                                for i in range(1, max_d):
+                                    dyn_headers.append(f"{i}-{i+1}")
+                                if max_d >= 2:
+                                    dyn_headers.append(f"{max_d}-1")
+                                else:
+                                    dyn_headers.append("1")
+                                
+                                # 생성된 헤더를 지정된 D열 위치에 쓰기
+                                for idx, h_text in enumerate(dyn_headers):
+                                    d_i = idx + 1
+                                    d_c_idx = self.col_to_num(self.config.get(f'RT_COL_D{d_i}', '0'))
+                                    if d_c_idx >= 1:
+                                        self.safe_set_value(ws, ws.cell(row=h_row, column=d_c_idx).coordinate, h_text)
+                    except Exception as e: 
+                        self.log(f"[Warning] 동적 헤더 생성 실패: {e}")
 
                 if is_kogas:
                     # ===== 가스공사 전용: 1행 1세트 블록 주입 (KOGAS_W_COL_... 적용) =====
@@ -9139,55 +9112,12 @@ class PMIReportApp:
                     rem_col = self.col_to_num(self.config.get('RT_COL_REM', '30'))
                     if rem_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rem_col).coordinate, item.get('Remarks', ''))
 
-                    # Film Location(중앙지사 구간정보)은 쉼표로 구분된 값을
-                    # 각 데이터 행의 D:K에 왼쪽부터 최대 8개까지 순차 입력한다.
-                    film_locations = [
-                        value.strip()
-                        for value in re.split(r'[,;\n]+', str(item.get('Loc', '')))
-                        if value.strip()
-                    ]
-                    rt_film_location_counts[ws.title] = max(
-                        rt_film_location_counts.get(ws.title, 0),
-                        min(len(film_locations), 8)
-                    )
-                    for offset, col_idx in enumerate(range(4, 12)):
-                        ws.cell(row=current_row, column=col_idx).value = (
-                            film_locations[offset] if offset < len(film_locations) else None
-                        )
-
-                    # 갑지 D32 값은 을지 M열의 실제 데이터 행에 반복 입력한다.
-                    ws[f"M{current_row}"] = cover_d32_value
-
-                    # 을지 원본의 검사일자 열은 S열이다.
-                    ws[f"S{current_row}"] = item.get('Date', '')
-
-                    # 을지 원본의 관경(DIA.) 열은 T열이다.
-                    ws[f"T{current_row}"] = item.get('Size', '')
-
-                    # 기본 검사조건은 실제 RT 데이터가 있는 행에만 표시한다.
-                    fixed_condition_values = {
-                        "N": 0.20,   # SENSITIVITY
-                        "O": 1,      # DENSITY
-                        "P": "-",
-                        "Q": 4.0,
-                        "R": "DWSI" # TECHNIQUE
-                    }
-                    for col_letter, fixed_value in fixed_condition_values.items():
-                        ws[f"{col_letter}{current_row}"] = fixed_value
-                    rt_condition_data_rows.add((ws.title, current_row))
-
-                    # 을지의 실제 데이터 행은 모든 값을 상하좌우 중앙 정렬한다.
-                    for col_idx in range(1, 23):  # A:V
-                        ws.cell(row=current_row, column=col_idx).alignment = Alignment(
-                            horizontal='center', vertical='center',
-                            wrap_text=True, shrink_to_fit=True
-                        )
-
                     current_row += 1
 
                 data_ptr += 1
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
 
+            total_p = len(wb.worksheets)
             # [NEW] 서식 정리 [DISABLED] - 템플릿 선(Border) 보존을 위해 주석 처리
             # rt_data_end_row = int(float(self.config.get('RT_DATA_END_ROW', 31)))
             for p_idx, s in enumerate(wb.worksheets):
@@ -9197,64 +9127,8 @@ class PMIReportApp:
                 #             try: s.cell(row=r_idx, column=c_idx).border = Border()
                 #             except: pass
                 
+                page_num = p_idx + 1
                 self.apply_custom_dimensions(s, "DATA" if p_idx > 0 else "COVER")
-                # RT 원본에는 페이지 번호 전용 셀이 없다. 갑지 N3는 제목 영역,
-                # 을지 S2는 공사명(O2:V4) 영역이므로 셀 페이지 번호를 기입하지 않는다.
-                if p_idx > 0 and mode == "RT":
-                    # 갑지의 고정 발주처를 모든 을지 CUSTOMER 영역에 동일 적용한다.
-                    self.safe_set_value(s, "O1", ws0["Q1"].value)
-                    s["O1"].alignment = Alignment(
-                        horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True
-                    )
-
-                    # 갑지의 고정 공사명을 모든 을지 PROJECT 영역에 동일 적용한다.
-                    self.safe_set_value(s, "O2", ws0["Q2"].value)
-                    s["O2"].alignment = Alignment(
-                        horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True
-                    )
-
-                    # 을지 DRAWING NO./도면번호 값은 N/A로 고정한다.
-                    self.safe_set_value(s, "O5", "N/A")
-                    s["O5"].alignment = Alignment(
-                        horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True
-                    )
-
-                    # Film Location 개수에 따라 D8:K8 순환 구간 헤더를 생성한다.
-                    location_count = rt_film_location_counts.get(s.title, 0)
-                    for offset, col_idx in enumerate(range(4, 12)):
-                        if offset < location_count:
-                            next_no = offset + 2 if offset + 1 < location_count else 1
-                            s.cell(row=8, column=col_idx).value = f"{offset + 1}-{next_no}"
-                        else:
-                            s.cell(row=8, column=col_idx).value = None
-
-                    # 템플릿의 미사용 기본값은 제거하고 실제 데이터 행만 남긴다.
-                    for row_idx in range(9, 38):
-                        if (s.title, row_idx) not in rt_condition_data_rows:
-                            for col_letter in "NOPQR":
-                                s[f"{col_letter}{row_idx}"] = None
-
-                    # 마지막 데이터의 바로 다음 행에 이하 여백 문구를 표시한다.
-                    sheet_data_rows = sorted(
-                        row_idx for sheet_title, row_idx in rt_condition_data_rows
-                        if sheet_title == s.title
-                    )
-                    if sheet_data_rows:
-                        blank_notice_row = sheet_data_rows[-1] + 1
-                        if blank_notice_row <= 37:
-                            for col_idx in range(1, 21):  # A:T
-                                notice_cell = s.cell(row=blank_notice_row, column=col_idx)
-                                notice_cell.value = None
-                                notice_cell.alignment = Alignment(
-                                    horizontal='centerContinuous', vertical='center'
-                                )
-                            notice_cell = s.cell(row=blank_notice_row, column=1)
-                            notice_cell.value = "~이  하   여  백~"
-                            notice_cell.font = Font(name='돋움체', size=9)
-
             # [FINAL CLEANUP] Standardized cleanup for RT
             try:
                 ws0 = wb.worksheets[0]
@@ -9276,11 +9150,12 @@ class PMIReportApp:
             
             # [SURGERY] openpyxl destroys complex drawings (like grouped shapes). 
             # We surgically inject the template's drawing layer back into the generated file.
-            self.inject_drawing_layer(template_path, save_path)
+            self.inject_drawing_layer(template_path, save_path, mode=mode)
             
             self.progress['value'] = 100
             self.log(f"✨ RT 완료! 저장됨: {output_name}")
-            messagebox.showinfo("성공", f"RT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
+            messagebox.showinfo("성공", f"RT 성적서 생성이 완료되었습니다.
+경로: {os.path.dirname(save_path)}")
         except Exception as e:
             self.log(f"❌ RT 생성 오류: {e}")
             traceback.print_exc()
@@ -9607,7 +9482,8 @@ class PMIReportApp:
             return
             
         if not os.path.exists(img_path):
-            self.photo_preview_canvas.create_text(250, 100, text="⚠️ 선택한 사진 파일이 컴퓨터에 존재하지 않습니다.\n(파일이 삭제되었거나 이동되었을 수 있습니다.)", fill="red", font=("Malgun Gothic", 10, "bold"), justify="center")
+            self.photo_preview_canvas.create_text(250, 100, text="⚠️ 선택한 사진 파일이 컴퓨터에 존재하지 않습니다.
+(파일이 삭제되었거나 이동되었을 수 있습니다.)", fill="red", font=("Malgun Gothic", 10, "bold"), justify="center")
             return
             
         try:
@@ -9825,14 +9701,19 @@ class PMIReportApp:
             # Normal spaces are stripped by Excel, but NBSP are kept, allowing precise offset from the right margin.
             # \xa0 * 7 reduces the leftward push, moving it slightly to the right compared to 15.
             base_header = '&"바탕"&09Page   &P   of   &N'
-            # 엔터(\n)를 두 줄 넣어서 페이지 번호를 표(본문) 바로 위까지 확 내립니다.
-            header_text = '&R&10 \n\n' + base_header + ('\xa0' * 7)
+            # 엔터(
+)를 두 줄 넣어서 페이지 번호를 표(본문) 바로 위까지 확 내립니다.
+            header_text = '&R&10 
+
+' + base_header + ('\xa0' * 7)
             
             if s_page.isdigit():
                 worksheet.set_start_page(int(s_page))
             if t_pages.isdigit():
                 base_header = f'&"바탕"&09Page   &P   of   {t_pages}'
-                header_text = '&R&10 \n\n' + base_header + ('\xa0' * 7)
+                header_text = '&R&10 
+
+' + base_header + ('\xa0' * 7)
                 
             worksheet.set_header(header_text)
             worksheet.set_footer('')
@@ -9902,7 +9783,9 @@ class PMIReportApp:
             worksheet.set_row(0, 30)
             worksheet.merge_range(0, 0, 0, GRID_COLS-1, self.photo_report_title.get(), title_format)
             
-            company_text = "서   울   檢   査   株   式   會   社\nSEOUL INSPECTION & TESTING Co., Ltd.\nTEL : (02) 552-1112   FAX : (02) 2058-0720"
+            company_text = "서   울   檢   査   株   式   會   社
+SEOUL INSPECTION & TESTING Co., Ltd.
+TEL : (02) 552-1112   FAX : (02) 2058-0720"
             worksheet.merge_range(1, 0, 3, 5, company_text, company_format)
 
             # Logo Insertion
@@ -10081,7 +9964,8 @@ class PMIReportApp:
             if page_breaks: worksheet.set_h_pagebreaks(page_breaks)
             workbook.close()
             self.log(f"[PhotoLog] 완료: {os.path.basename(output_path)}")
-            messagebox.showinfo("성공", f"사진대장이 생성되었습니다.\n{output_path}")
+            messagebox.showinfo("성공", f"사진대장이 생성되었습니다.
+{output_path}")
 
             # [NEW] Open the folder
             try:
@@ -10090,7 +9974,8 @@ class PMIReportApp:
 
         except Exception as e:
             self.log(f"[Error] {e}")
-            messagebox.showerror("오류", f"작업 중 오류 발생:\n{e}")
+            messagebox.showerror("오류", f"작업 중 오류 발생:
+{e}")
 
     def _on_entry_esc(self, event):
         """Removes focus and clears selection on ESC (preserves text)."""
