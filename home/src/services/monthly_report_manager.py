@@ -1846,10 +1846,34 @@ class MonthlyReportManager:
                     for rec in ndt_details[method]
                 ]
             else:
-                data_items = [
-                    (k, {'count': v['count'], 'qty': v['qty'], 'ori': v['qty'], 're': 0.0})
-                    for k, v in ndt_groups[method].items()
-                ]
+                data_items = []
+                current_company = None
+                sub_count = 0
+                sub_qty = 0.0
+                
+                # 업체명 기준으로 1차 정렬
+                sorted_groups = sorted(ndt_groups[method].items(), key=lambda x: str(x[0][0]))
+                
+                for k, v in sorted_groups:
+                    comp = k[0]
+                    if current_company is not None and comp != current_company:
+                        data_items.append(
+                            ((f"[{current_company} 소계]", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
+                        )
+                        sub_count = 0
+                        sub_qty = 0.0
+                        
+                    current_company = comp
+                    data_items.append(
+                        (k, {'count': v['count'], 'qty': v['qty'], 'ori': v['qty'], 're': 0.0, 'is_subtotal': False})
+                    )
+                    sub_count += v['count']
+                    sub_qty += v['qty']
+                    
+                if current_company is not None:
+                    data_items.append(
+                        ((f"[{current_company} 소계]", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
+                    )
             num_items = len(data_items)
             section_item_counts[section_key] = num_items
             
@@ -1957,10 +1981,14 @@ class MonthlyReportManager:
                 rows_to_insert = 0
 
             current_row = start_row
+            seq_num = 1
             for idx, ((comp, sec, line, size, spec), vals) in enumerate(data_items):
                 count = vals['count']
                 qty = vals['qty']
                 unit = "매" if method == "RT" else "m"
+                is_subtotal = vals.get('is_subtotal', False)
+                if is_subtotal:
+                    unit = ""
 
                 # Clear reusable template values before writing this detail row.
                 for clear_col in range(17, 24):
@@ -1970,7 +1998,11 @@ class MonthlyReportManager:
                 
                 # 셀 위치: 2:업체, 3:순번, 4:Section, 6:Line No., 10:관경, 12:용접개소, 14:규격, 16:단위, 17:길이
                 ws.cell(row=current_row, column=2).value = comp
-                ws.cell(row=current_row, column=3).value = str(idx+1)
+                if is_subtotal:
+                    ws.cell(row=current_row, column=3).value = ""
+                else:
+                    ws.cell(row=current_row, column=3).value = str(seq_num)
+                    seq_num += 1
                 ws.cell(row=current_row, column=4).value = sec
                 ws.cell(row=current_row, column=6).value = line
                 ws.cell(row=current_row, column=10).value = size
@@ -2013,8 +2045,20 @@ class MonthlyReportManager:
                 # 폰트, 정렬 적용 (병합된 칸 전체에 정렬 속성을 먹여야 엑셀이 줄바꿈을 정상 인식함)
                 for c_idx in range(2, 24):
                     c_cell = ws.cell(row=current_row, column=c_idx)
-                    c_cell.font = self.font_normal
-                    c_cell.alignment = self.align_center
+                    if is_subtotal:
+                        import copy
+                        bold_font = copy.copy(self.font_normal)
+                        bold_font.bold = True
+                        c_cell.font = bold_font
+                        
+                        align = copy.copy(self.align_center)
+                        if c_idx == 2:
+                            align.wrap_text = False
+                            align.shrink_to_fit = True
+                        c_cell.alignment = align
+                    else:
+                        c_cell.font = self.font_normal
+                        c_cell.alignment = self.align_center
                     c_cell.border = self.border_thin
 
                 # Keep long Line No. values on one line inside the widened F:I area.
@@ -2067,8 +2111,8 @@ class MonthlyReportManager:
                     cell.border = self.border_thin
 
             # TOTAL 행 값 쓰기 및 스타일 보정
-            total_ori = sum(vals.get('ori', vals['qty']) for _, vals in data_items)
-            total_re = sum(vals.get('re', 0.0) for _, vals in data_items)
+            total_ori = sum(vals.get('ori', vals['qty']) for _, vals in data_items if not vals.get('is_subtotal', False))
+            total_re = sum(vals.get('re', 0.0) for _, vals in data_items if not vals.get('is_subtotal', False))
             total_qty = total_ori + total_re
             
             # TOTAL 행의 17, 18, 19, 20 칸 배경색(파란색)을 동일하게 맞춤 (첫 번째 셀 서식 복사)

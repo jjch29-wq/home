@@ -49,6 +49,48 @@ def insert_rows_safely(ws, insert_idx, amount):
         ws.merge_cells(str(cr))
 
 
+def add_subtotals(records):
+    """업체별 정렬 및 소계 행 추가"""
+    if not records:
+        return []
+    
+    sorted_recs = sorted(records, key=lambda x: str(x.get('업체', '')))
+    new_records = []
+    
+    current_company = None
+    sub_ori = 0.0
+    sub_re = 0.0
+    
+    for rec in sorted_recs:
+        comp = str(rec.get('업체', '')).strip()
+        
+        if current_company is not None and comp != current_company:
+            # 이전 업체의 소계 추가
+            new_records.append({
+                '업체': f"[{current_company} 소계]",
+                'is_subtotal': True,
+                'ORI': sub_ori,
+                'RE': sub_re
+            })
+            sub_ori = 0.0
+            sub_re = 0.0
+            
+        current_company = comp
+        new_records.append(rec)
+        sub_ori += float(rec.get('ORI', 0) or 0)
+        sub_re += float(rec.get('RE', 0) or 0)
+        
+    if current_company is not None:
+        new_records.append({
+            '업체': f"[{current_company} 소계]",
+            'is_subtotal': True,
+            'ORI': sub_ori,
+            'RE': sub_re
+        })
+        
+    return new_records
+
+
 def write_tagged_records(ws, tag, records, col_map):
     """
     태그를 찾아 그 위치부터 records를 기입합니다.
@@ -84,29 +126,41 @@ def write_tagged_records(ws, tag, records, col_map):
                     pass
 
     current_row = start_row
-    for i, rec in enumerate(records):
+    item_no = 1
+    
+    from openpyxl.styles import Font
+    bold_font = Font(bold=True)
+    
+    for rec in records:
+        is_sub = rec.get('is_subtotal', False)
+        
         if 'company' in col_map:
             safe_write(ws, current_row, col_map['company'], rec.get('업체', ''))
-        if 'no' in col_map:
-            safe_write(ws, current_row, col_map['no'], i + 1)
-        if 'section' in col_map:
-            safe_write(ws, current_row, col_map['section'], rec.get('구간', ''))
-        if 'line_no' in col_map:
-            safe_write(ws, current_row, col_map['line_no'], rec.get('라인번호', ''))
-        if 'pipe_size' in col_map:
-            safe_write(ws, current_row, col_map['pipe_size'], rec.get('관경', ''))
-        if 'joint' in col_map:
-            safe_write(ws, current_row, col_map['joint'], rec.get('Joint No.', ''))
-            
-        if 'welder' in col_map:
-            safe_write(ws, current_row, col_map['welder'], rec.get('용접사', ''))
-        elif 'shift' in col_map:
-            safe_write(ws, current_row, col_map['shift'], rec.get('규격', '주간'))
-            
-        if 'result' in col_map:
-            safe_write(ws, current_row, col_map['result'], rec.get('결과', '합격'))
-        elif 'unit' in col_map:
-            safe_write(ws, current_row, col_map['unit'], 'M')
+            if is_sub:
+                ws.cell(row=current_row, column=col_map['company']).font = bold_font
+                
+        if not is_sub:
+            if 'no' in col_map:
+                safe_write(ws, current_row, col_map['no'], item_no)
+                item_no += 1
+            if 'section' in col_map:
+                safe_write(ws, current_row, col_map['section'], rec.get('구간', ''))
+            if 'line_no' in col_map:
+                safe_write(ws, current_row, col_map['line_no'], rec.get('라인번호', ''))
+            if 'pipe_size' in col_map:
+                safe_write(ws, current_row, col_map['pipe_size'], rec.get('관경', ''))
+            if 'joint' in col_map:
+                safe_write(ws, current_row, col_map['joint'], rec.get('Joint No.', ''))
+                
+            if 'welder' in col_map:
+                safe_write(ws, current_row, col_map['welder'], rec.get('용접사', ''))
+            elif 'shift' in col_map:
+                safe_write(ws, current_row, col_map['shift'], rec.get('규격', '주간'))
+                
+            if 'result' in col_map:
+                safe_write(ws, current_row, col_map['result'], rec.get('결과', '합격'))
+            elif 'unit' in col_map:
+                safe_write(ws, current_row, col_map['unit'], 'M')
 
         ori = float(rec.get('ORI', 0) or 0)
         re_val = float(rec.get('RE', 0) or 0)
@@ -115,7 +169,7 @@ def write_tagged_records(ws, tag, records, col_map):
         ws.row_dimensions[current_row].height = 45 # Line No. 높이 조절
         
         # Line No. 줄바꿈 처리
-        if 'line_no' in col_map:
+        if 'line_no' in col_map and not is_sub:
             # 병합된 경우 앵커 셀에 적용
             for merge in ws.merged_cells.ranges:
                 if merge.min_row <= current_row <= merge.max_row and merge.min_col <= col_map['line_no'] <= merge.max_col:
@@ -139,12 +193,15 @@ def write_tagged_records(ws, tag, records, col_map):
         if 'ori' in col_map and ori > 0:
             safe_write(ws, current_row, col_map['ori'], round(ori, 4))
             ws.cell(row=current_row, column=col_map['ori']).alignment = shrink_align
+            if is_sub: ws.cell(row=current_row, column=col_map['ori']).font = bold_font
         if 're' in col_map and re_val > 0:
             safe_write(ws, current_row, col_map['re'], round(re_val, 4))
             ws.cell(row=current_row, column=col_map['re']).alignment = shrink_align
+            if is_sub: ws.cell(row=current_row, column=col_map['re']).font = bold_font
         if 'total' in col_map and tot > 0:
             safe_write(ws, current_row, col_map['total'], round(tot, 4))
             ws.cell(row=current_row, column=col_map['total']).alignment = shrink_align
+            if is_sub: ws.cell(row=current_row, column=col_map['total']).font = bold_font
 
         current_row += 1
 
@@ -155,6 +212,7 @@ def write_all_tagged_sections(ws, history, target_month_str, log_func=print):
     from ndt_section_writer import extract_records_by_method
     
     paut_recs = extract_records_by_method(history, target_month_str, 'PAUT')
+    paut_recs = add_subtotals(paut_recs)
     
     col_map_121 = {
         'company': 2, 'no': 3, 'section': 4, 'line_no': 6, 
