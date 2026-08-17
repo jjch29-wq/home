@@ -2,7 +2,7 @@
     "PMI_SASH_RATIO": 0.24554039874081846,
     "RT_SASH_RATIO": 0.3111227701993704,
     "PT_SASH_RATIO": 0.5,
-    "PAUT_SASH_RATIO": 0.3751311647429171,
+    "PAUT_SASH_RATIO": 0.2864637985309549,
     "PMI_COL_WIDTHS": {
         "ST": 40,
         "V": 40,
@@ -178,7 +178,7 @@
         "Welder": 100,
         "Remarks": 120
     },
-    "WINDOW_GEOMETRY": "1920x991+-2019+70",
+    "WINDOW_GEOMETRY": "1920x991+-2179+7",
     "WINDOW_STATE": "zoomed",
     "ACTIVE_TAB": 1,
     "PMI_TARGET_PATH": "",
@@ -1007,5 +1007,11 @@
     "GAPJI_AUTO_THK": "True",
     "GAPJI_FILM_TYPE": "Carestream T200-3\u2153*12\"",
     "RT_COL_SEC": "0",
-    "RT_NAME_SEC": "SEC"
+    "RT_NAME_SEC": "SEC",
+    "RT_ISOTOPE": "Ir-192",
+    "RT_ACTIVITY": "17",
+    "RT_ACTIVITY_UNIT": "Ci",
+    "RT_FILM_BRAND": "FUJI#80",
+    "RT_FILM_TYPE": "I",
+    "RT_FILM_SIZE": "3\u2153 X 12"
 }

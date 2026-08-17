@@ -757,8 +757,8 @@ class DailyWorkLogTab(ttk.Frame):
         top = tk.Toplevel(self)
         top.title("누적 진도보고서 엑셀 출력")
         # Allow enough vertical space for all fields and the generate button.
-        top.geometry("540x360")
-        top.minsize(540, 360)
+        top.geometry("620x430")
+        top.minsize(620, 430)
         top.transient(self)
         top.grab_set()
         
@@ -796,20 +796,50 @@ class DailyWorkLogTab(ttk.Frame):
         f_tmpl.pack(pady=10, fill=tk.X, padx=10)
         ttk.Label(f_tmpl, text="템플릿:").pack(side=tk.LEFT)
         
-        tmpl_var = tk.StringVar(value=r"C:\Users\-\OneDrive\바탕 화면\템플릿_최종완성본_V70.xlsx")
+        tmpl_var = tk.StringVar(value=os.path.join(
+            os.path.expanduser("~"), "Desktop", "템플릿_최종완성본_V70.xlsx"
+        ))
         ttk.Entry(f_tmpl, textvariable=tmpl_var, width=35).pack(side=tk.LEFT, padx=5)
         
         def browse_tmpl():
             path = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")], title="템플릿 선택")
             if path: tmpl_var.set(path)
         ttk.Button(f_tmpl, text="...", width=3, command=browse_tmpl).pack(side=tk.LEFT)
+
+        # 월별 발주자 보고자료 선택 (선택하지 않으면 16페이지는 빈 표 유지)
+        f_owner = ttk.Frame(top)
+        f_owner.pack(pady=5, fill=tk.X, padx=10)
+        ttk.Label(f_owner, text="발주자 보고:").pack(side=tk.LEFT)
+        owner_report_var = tk.StringVar()
+        ttk.Entry(
+            f_owner, textvariable=owner_report_var, width=43
+        ).pack(side=tk.LEFT, padx=5)
+
+        def browse_owner_report():
+            path = filedialog.askopenfilename(
+                filetypes=[("Excel", "*.xlsx")],
+                title="발주자 보고 파일 선택",
+            )
+            if path:
+                owner_report_var.set(path)
+
+        ttk.Button(
+            f_owner, text="...", width=3, command=browse_owner_report
+        ).pack(side=tk.LEFT)
         
         def do_generate():
             ym = f"{year_var.get()}-{month_var.get().zfill(2)}"
             tmpl_path = tmpl_var.get()
+            owner_report_path = owner_report_var.get().strip()
             
             if not os.path.exists(tmpl_path):
                 messagebox.showerror("오류", f"템플릿 파일을 찾을 수 없습니다.\n{tmpl_path}")
+                return
+            if owner_report_path and not os.path.exists(owner_report_path):
+                messagebox.showerror(
+                    "오류",
+                    f"발주자 보고 파일을 찾을 수 없습니다.\n{owner_report_path}",
+                )
                 return
                 
             save_path = filedialog.asksaveasfilename(
@@ -823,7 +853,14 @@ class DailyWorkLogTab(ttk.Frame):
             try:
                 # Assuming MonthlyReportManager is in the python path
                 manager = MonthlyReportManager(tmpl_path)
-                result_path = manager.generate_report(self.history_path, ym, save_path, doc_num=doc_var.get().strip(), create_date=create_date_var.get().strip())
+                result_path = manager.generate_report(
+                    self.history_path,
+                    ym,
+                    save_path,
+                    doc_num=doc_var.get().strip(),
+                    create_date=create_date_var.get().strip(),
+                    owner_report_path=owner_report_path or None,
+                )
                 if result_path:
                     messagebox.showinfo("성공", f"누적 진도보고서가 생성되었습니다.\n{result_path}")
                     os.startfile(result_path)

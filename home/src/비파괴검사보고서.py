@@ -290,10 +290,18 @@ class PMIReportApp:
         self.gapji_material = tk.StringVar(value=self.config.get('GAPJI_MATERIAL', ""))
         self.gapji_report_no = tk.StringVar(value=self.config.get('GAPJI_REPORT_NO', ""))
         self.gapji_exam_date = tk.StringVar(value=self.config.get('GAPJI_EXAM_DATE', datetime.datetime.now().strftime("%Y-%m-%d")))
+        self.rt_isotope = tk.StringVar(value=self.config.get('RT_ISOTOPE', 'Ir-192'))
+        self.rt_activity = tk.StringVar(value=self.config.get('RT_ACTIVITY', '17'))
+        self.rt_activity_unit = tk.StringVar(value=self.config.get('RT_ACTIVITY_UNIT', 'Ci'))
+        self.rt_film_brand = tk.StringVar(value=self.config.get('RT_FILM_BRAND', 'FUJI#80'))
+        self.rt_film_type = tk.StringVar(value=self.config.get('RT_FILM_TYPE', 'I'))
+        self.rt_film_size = tk.StringVar(value=self.config.get('RT_FILM_SIZE', '3⅓ X 12'))
         
         # [NEW] Trace Gapji metadata for real-time preview updates
         for var in [self.gapji_project, self.gapji_customer, self.gapji_item, 
-                    self.gapji_material, self.gapji_report_no, self.gapji_exam_date]:
+                    self.gapji_material, self.gapji_report_no, self.gapji_exam_date,
+                    self.rt_isotope, self.rt_activity, self.rt_activity_unit,
+                    self.rt_film_brand, self.rt_film_type, self.rt_film_size]:
             var.trace_add("write", lambda *a: self._update_gapji_preview(getattr(self, 'current_mode', 'PMI')))
 
         # --- Photo Log State Variables ---
@@ -773,6 +781,8 @@ class PMIReportApp:
         # 2. Mode-specific boundaries and column mappings
         if mode == "RT":
             keys_to_save += ["RT_START_ROW", "RT_END_ROW"]
+            keys_to_save += ["RT_FILM_BRAND", "RT_FILM_TYPE", "RT_FILM_SIZE",
+                             "RT_ISOTOPE", "RT_ACTIVITY", "RT_ACTIVITY_UNIT"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("RT_COL_") or k.startswith("RT_NAME_")]
         elif mode == "KOGAS":
             keys_to_save += ["KOGAS_START_ROW", "KOGAS_DATA_END_ROW", "RT_KOGAS_D_START_COL"]
@@ -825,6 +835,8 @@ class PMIReportApp:
         # 2. Mode-specific boundaries and column mappings
         if mode == "RT":
             keys_to_save += ["RT_START_ROW", "RT_END_ROW"]
+            keys_to_save += ["RT_FILM_BRAND", "RT_FILM_TYPE", "RT_FILM_SIZE",
+                             "RT_ISOTOPE", "RT_ACTIVITY", "RT_ACTIVITY_UNIT"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("RT_COL_") or k.startswith("RT_NAME_")]
         elif mode == "KOGAS":
             keys_to_save += ["KOGAS_START_ROW", "KOGAS_DATA_END_ROW", "RT_KOGAS_D_START_COL"]
@@ -3485,9 +3497,76 @@ class PMIReportApp:
             elif "검사일자" in lbl: cfg_key = "GAPJI_EXAM_DATE"
             self.setting_vars[cfg_key] = var
             
+        # RT radioactive-source settings (I10:M11 on the cover sheet).
+        isotope_frame = tk.Frame(block, background="#ffffff")
+        isotope_frame.grid(row=3, column=0, columnspan=4, sticky='ew', padx=2, pady=2)
+        tk.Label(
+            isotope_frame, text="방사성동위원소:", background="#ffffff",
+            font=("Malgun Gothic", 8)
+        ).pack(side='left', padx=(0, 3))
+        isotope_combo = ttk.Combobox(
+            isotope_frame, textvariable=self.rt_isotope,
+            values=("Ir-192", "Se-75"), state="readonly", width=8
+        )
+        isotope_combo.pack(side='left', padx=(0, 8))
+        tk.Label(
+            isotope_frame, text="방사능:", background="#ffffff",
+            font=("Malgun Gothic", 8)
+        ).pack(side='left', padx=(0, 3))
+        activity_entry = ttk.Entry(isotope_frame, textvariable=self.rt_activity, width=7)
+        activity_entry.pack(side='left', padx=(0, 3))
+        unit_combo = ttk.Combobox(
+            isotope_frame, textvariable=self.rt_activity_unit,
+            values=("Ci", "Bq", "GBq", "TBq"), state="readonly", width=5
+        )
+        unit_combo.pack(side='left')
+        for widget in (isotope_combo, activity_entry, unit_combo):
+            widget.bind("<FocusOut>", lambda e: self.save_settings())
+            widget.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
+        self.setting_vars['RT_ISOTOPE'] = self.rt_isotope
+        self.setting_vars['RT_ACTIVITY'] = self.rt_activity
+        self.setting_vars['RT_ACTIVITY_UNIT'] = self.rt_activity_unit
+
+        film_frame = tk.Frame(block, background="#ffffff")
+        film_frame.grid(row=4, column=0, columnspan=4, sticky='ew', padx=2, pady=2)
+        tk.Label(
+            film_frame, text="필름 상표:", background="#ffffff",
+            font=("Malgun Gothic", 8)
+        ).pack(side='left', padx=(0, 3))
+        brand_combo = ttk.Combobox(
+            film_frame, textvariable=self.rt_film_brand,
+            values=("FUJI#80", "CARESTREAM"), width=10
+        )
+        brand_combo.pack(side='left', padx=(0, 8))
+        tk.Label(
+            film_frame, text="타입:", background="#ffffff",
+            font=("Malgun Gothic", 8)
+        ).pack(side='left', padx=(0, 3))
+        type_combo = ttk.Combobox(
+            film_frame, textvariable=self.rt_film_type,
+            values=("I", "AA400"), width=7
+        )
+        type_combo.pack(side='left', padx=(0, 8))
+        tk.Label(
+            film_frame, text="크기:", background="#ffffff",
+            font=("Malgun Gothic", 8)
+        ).pack(side='left', padx=(0, 3))
+        size_combo = ttk.Combobox(
+            film_frame, textvariable=self.rt_film_size,
+            values=("3⅓ X 6", "3⅓ X 12", "3⅓ X 17"), width=12
+        )
+        size_combo.pack(side='left')
+        for widget in (brand_combo, type_combo, size_combo):
+            widget.bind("<FocusOut>", lambda e: self.save_settings())
+            widget.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
+            widget.bind("<<ComboboxSelected>>", lambda e: self.save_settings())
+        self.setting_vars['RT_FILM_BRAND'] = self.rt_film_brand
+        self.setting_vars['RT_FILM_TYPE'] = self.rt_film_type
+        self.setting_vars['RT_FILM_SIZE'] = self.rt_film_size
+
         # Add a refresh button for preview
         btn_f = tk.Frame(block, background="#ffffff")
-        btn_f.grid(row=3, column=0, columnspan=4, pady=5, sticky='ew')
+        btn_f.grid(row=5, column=0, columnspan=4, pady=5, sticky='ew')
         ttk.Button(btn_f, text="✨ 갑지 미리보기 업데이트", command=self._update_gapji_preview_current).pack(side='top', fill='x', padx=5)
 
     def _update_gapji_preview_current(self, event=None):
@@ -6505,11 +6584,19 @@ class PMIReportApp:
                          str(default_scale))
             ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
             
-            # [FIX] Force fit to 1 page (width and height) to avoid vertical/horizontal splitting
-            # Removes scale-based scaling which causes unwanted page breaks
-            ws.sheet_properties.pageSetUpPr.fitToPage = True
-            ws.page_setup.fitToWidth = 1
-            ws.page_setup.fitToHeight = 1
+            if mode == "RT" and context == "DATA":
+                # 을지는 갑지보다 약 4% 크게 출력되므로 고정 87%로 축소한다.
+                ws.sheet_properties.pageSetUpPr.fitToPage = False
+                ws.page_setup.fitToWidth = None
+                ws.page_setup.fitToHeight = None
+                ws.page_setup.scale = 87
+            else:
+                # 그 외 시트는 기존 한 페이지 맞춤을 유지한다.
+                ws.sheet_properties.pageSetUpPr.fitToPage = True
+                ws.page_setup.fitToWidth = 1
+                ws.page_setup.fitToHeight = (
+                    0 if mode == "RT" and context == "COVER" else 1
+                )
             
             def _margin(name, default):
                 return float(
@@ -6522,9 +6609,15 @@ class PMIReportApp:
             ws.page_margins.left   = _margin('LEFT',   0.5)
             ws.page_margins.right  = _margin('RIGHT',  0.3)
             if mode == "RT":
-                # RT는 좌우·상하 여백을 동일하게 하여 표를 페이지 정중앙에 배치한다.
                 ws.page_margins.top = ws.page_margins.bottom = 0.25
                 ws.page_margins.left = ws.page_margins.right = 0.25
+                # 표 영역을 침범하지 않는 인쇄 머리글 우측에 페이지 번호를 표시한다.
+                # &P: 현재 페이지, &N: 전체 페이지 (Excel header/footer field codes)
+                ws.oddHeader.right.text = "Page    &P    of    &N"
+                ws.oddHeader.right.font = "Arial"
+                ws.oddHeader.right.size = 9
+                # 페이지 번호를 표 상단 외곽선 바로 위에 배치한다.
+                ws.page_margins.header = 0.55
 
         except Exception as e:
             print(f"[WARNING] Print settings failed: {e}")
@@ -6779,12 +6872,16 @@ class PMIReportApp:
                         except: pass
 
                 # 리포트 인쇄 설정 추출 (force_print_settings 적용값)
-                rep_page_settings = {}  # fl_lower → setup/margins/options
+                rep_page_settings = {}  # fl_lower → setup/margins/options/header
                 rep_scale = None
                 for fl_s, c in processed_sheets.items():
                     setup_m  = re.search(r'<pageSetup\b[^>]*/>', c)
                     margin_m = re.search(r'<pageMargins\b[^>]*/>', c)
                     options_m = re.search(r'<printOptions\b[^>]*/>', c)
+                    header_m = re.search(
+                        r'<headerFooter\b[^>]*>.*?</headerFooter>|<headerFooter\b[^>]*/>',
+                        c, flags=re.DOTALL
+                    )
                     scale_m  = re.search(r'<pageSetup\b[^>]*\bscale="(\d+)"', c)
                     if scale_m and not rep_scale:
                         rep_scale = scale_m.group(1)
@@ -6792,6 +6889,7 @@ class PMIReportApp:
                         'setup':   setup_m.group(0)  if setup_m  else None,
                         'margins': margin_m.group(0) if margin_m else None,
                         'options': options_m.group(0) if options_m else None,
+                        'header':  header_m.group(0)  if header_m  else None,
                     }
 
                 # 리포트의 workbook 메타 파일들 (raw bytes)
@@ -6903,7 +7001,7 @@ class PMIReportApp:
                             elif rep_scale:
                                 # pageSetup은 없지만 scale만 있으면 기존 방식으로 패치
                                 tmpl_sheet = re.sub(r'<pageSetup\b[^>]*/>', lambda m: re.sub(r'\bscale="\d+"', f'scale="{rep_scale}"', m.group(0)) if 'scale=' in m.group(0) else m.group(0).replace('<pageSetup', f'<pageSetup scale="{rep_scale}"', 1), tmpl_sheet)
-                            
+
                             # pageMargins 교체 (여백 설정)
                             rep_pm = rep_page_settings.get(fl_lower, {}).get('margins')
                             if rep_pm:
@@ -6921,6 +7019,28 @@ class PMIReportApp:
                                     tmpl_sheet = tmpl_sheet.replace('<pageMargins', rep_po + '<pageMargins', 1)
                                 else:
                                     tmpl_sheet = tmpl_sheet.replace('</sheetData>', '</sheetData>' + rep_po, 1)
+
+                            # 우측 상단 Page &P of &N 인쇄 머리글도 템플릿 병합 후 유지한다.
+                            rep_header = rep_page_settings.get(fl_lower, {}).get('header')
+                            if rep_header:
+                                header_pattern = (
+                                    r'<headerFooter\b[^>]*>.*?</headerFooter>|'
+                                    r'<headerFooter\b[^>]*/>'
+                                )
+                                if re.search(header_pattern, tmpl_sheet, flags=re.DOTALL):
+                                    tmpl_sheet = re.sub(
+                                        header_pattern, rep_header, tmpl_sheet,
+                                        count=1, flags=re.DOTALL
+                                    )
+                                elif re.search(r'<pageSetup\b[^>]*/>', tmpl_sheet):
+                                    tmpl_sheet = re.sub(
+                                        r'(<pageSetup\b[^>]*/>)', r'\1' + rep_header,
+                                        tmpl_sheet, count=1
+                                    )
+                                else:
+                                    tmpl_sheet = tmpl_sheet.replace(
+                                        '</sheetData>', '</sheetData>' + rep_header, 1
+                                    )
                             # sheetData 주입 + 행 높이 보존
                             if fl_lower in processed_sheets:
                                 rc = processed_sheets[fl_lower]
@@ -6966,6 +7086,23 @@ class PMIReportApp:
                                         sd_inner = tmpl_sheet[ts2+len(s):te2]
                                         sd_inner = re.sub(r'<row\b([^>]*)>', _restore_height, sd_inner)
                                         tmpl_sheet = tmpl_sheet[:ts2+len(s)] + sd_inner + tmpl_sheet[te2:]
+
+                                    # Keep dynamic merges from the generated workbook.  Copying only
+                                    # sheetData leaves the template's old mergeCells block in place.
+                                    report_merges = re.search(
+                                        r'<mergeCells\b[^>]*>.*?</mergeCells>', rc, flags=re.DOTALL
+                                    )
+                                    if report_merges:
+                                        merge_pattern = r'<mergeCells\b[^>]*>.*?</mergeCells>'
+                                        if re.search(merge_pattern, tmpl_sheet, flags=re.DOTALL):
+                                            tmpl_sheet = re.sub(
+                                                merge_pattern, report_merges.group(0), tmpl_sheet,
+                                                count=1, flags=re.DOTALL
+                                            )
+                                        else:
+                                            tmpl_sheet = tmpl_sheet.replace(
+                                                '</sheetData>', '</sheetData>' + report_merges.group(0), 1
+                                            )
                                     self.log(f"   ✅ [V4] {os.path.basename(fl_lower)} 데이터 주입 (행높이 보존)")
                             z_out.writestr(fl_lower, tmpl_sheet.encode('utf-8'))
 
@@ -6988,6 +7125,63 @@ class PMIReportApp:
                             ts, te = bp.find(s), bp.find(e)
                             if si != -1 and ei != -1 and ts != -1 and te != -1:
                                 new_xml = bp[:ts+len(s)] + rc[si+len(s):ei] + bp[te:]
+                                # 추가 을지에도 생성된 리포트의 고정 배율과 여백을 적용한다.
+                                for tag_name in ('pageSetup', 'pageMargins', 'printOptions'):
+                                    report_tag = re.search(
+                                        fr'<{tag_name}\b[^>]*/>', rc
+                                    )
+                                    if not report_tag:
+                                        continue
+                                    tag_pattern = fr'<{tag_name}\b[^>]*/>'
+                                    if re.search(tag_pattern, new_xml):
+                                        new_xml = re.sub(
+                                            tag_pattern, report_tag.group(0),
+                                            new_xml, count=1
+                                        )
+                                    else:
+                                        new_xml = new_xml.replace(
+                                            '</sheetData>',
+                                            '</sheetData>' + report_tag.group(0), 1
+                                        )
+                                report_merges = re.search(
+                                    r'<mergeCells\b[^>]*>.*?</mergeCells>', rc, flags=re.DOTALL
+                                )
+                                if report_merges:
+                                    merge_pattern = r'<mergeCells\b[^>]*>.*?</mergeCells>'
+                                    if re.search(merge_pattern, new_xml, flags=re.DOTALL):
+                                        new_xml = re.sub(
+                                            merge_pattern, report_merges.group(0), new_xml,
+                                            count=1, flags=re.DOTALL
+                                        )
+                                    else:
+                                        new_xml = new_xml.replace(
+                                            '</sheetData>', '</sheetData>' + report_merges.group(0), 1
+                                        )
+                                report_header = re.search(
+                                    r'<headerFooter\b[^>]*>.*?</headerFooter>|'
+                                    r'<headerFooter\b[^>]*/>',
+                                    rc, flags=re.DOTALL
+                                )
+                                if report_header:
+                                    header_pattern = (
+                                        r'<headerFooter\b[^>]*>.*?</headerFooter>|'
+                                        r'<headerFooter\b[^>]*/>'
+                                    )
+                                    if re.search(header_pattern, new_xml, flags=re.DOTALL):
+                                        new_xml = re.sub(
+                                            header_pattern, report_header.group(0), new_xml,
+                                            count=1, flags=re.DOTALL
+                                        )
+                                    elif re.search(r'<pageSetup\b[^>]*/>', new_xml):
+                                        new_xml = re.sub(
+                                            r'(<pageSetup\b[^>]*/>)',
+                                            r'\1' + report_header.group(0), new_xml, count=1
+                                        )
+                                    else:
+                                        new_xml = new_xml.replace(
+                                            '</sheetData>',
+                                            '</sheetData>' + report_header.group(0), 1
+                                        )
                                 z_out.writestr(fl_rep, new_xml.encode('utf-8'))
                                 if blueprint_rels:
                                     z_out.writestr(f"xl/worksheets/_rels/{os.path.basename(fl_rep)}.rels", blueprint_rels)
@@ -8864,6 +9058,74 @@ class PMIReportApp:
 
             if mode == "RT":
                 first_item = final_list[0] if final_list else {}
+                # Cover inspection/film information.
+                cover_size = str(first_item.get("Size", "")).strip()
+                cover_thickness = str(first_item.get("T", "")).strip()
+                if cover_size and cover_size.lower() != "nan":
+                    self.safe_set_value(ws0, "C9", cover_size)
+                    size_number_match = re.search(r"\d+(?:\.\d+)?", cover_size)
+                    if size_number_match:
+                        size_number = float(size_number_match.group(0))
+                        self.safe_set_value(
+                            ws0, "C26",
+                            int(size_number) if size_number.is_integer() else size_number
+                        )
+                if cover_thickness and cover_thickness.lower() != "nan":
+                    self.safe_set_value(ws0, "E9", cover_thickness)
+
+                raw_film_type = self.rt_film_type.get().strip() or "I"
+                base_film_type = re.sub(r"\s*\((?:I|II)\)\s*$", "", raw_film_type, flags=re.IGNORECASE)
+                formatted_film_type = (
+                    f"{base_film_type}(II)"
+                    if base_film_type.upper() == "AA400"
+                    else f"{base_film_type}(I)"
+                )
+                cover_film_values = {
+                    "Q9": self.rt_film_brand.get().strip() or "FUJI#80",
+                    "V9": formatted_film_type,
+                    "Q10": self.rt_film_size.get().strip() or "3⅓ X 12",
+                }
+                for cell_ref, film_value in cover_film_values.items():
+                    self.safe_set_value(ws0, cell_ref, film_value)
+
+                selected_isotope = self.rt_isotope.get().strip() or "Ir-192"
+                self.safe_set_value(ws0, "I10", "[V]" if selected_isotope == "Ir-192" else "[ ]")
+                self.safe_set_value(ws0, "J10", "Ir-192")
+                self.safe_set_value(ws0, "I11", "[V]" if selected_isotope == "Se-75" else "[ ]")
+                self.safe_set_value(ws0, "J11", "SE-75")
+                self.safe_set_value(ws0, "K10", self.rt_activity.get().strip())
+                self.safe_set_value(ws0, "M10", self.rt_activity_unit.get().strip() or "Ci")
+                self.safe_set_value(ws0, "R20", "SIS-N-106 KDHC-JY")
+
+                # Mirror the examination date from I28 to I30 in the cover's
+                # Korean year/month/day presentation.
+                exam_date_value = ws0["I28"].value
+                date_parts = None
+                if isinstance(exam_date_value, (datetime.datetime, datetime.date)):
+                    date_parts = (
+                        exam_date_value.year, exam_date_value.month, exam_date_value.day
+                    )
+                else:
+                    date_match = re.search(
+                        r"(\d{4})\D+(\d{1,2})\D+(\d{1,2})",
+                        str(exam_date_value or "")
+                    )
+                    if date_match:
+                        date_parts = tuple(int(part) for part in date_match.groups())
+                if date_parts:
+                    year, month, day = date_parts
+                    formatted_exam_date = f"{year} 년   {month:02d} 월   {day:02d} 일"
+                    self.safe_set_value(ws0, "I28", formatted_exam_date)
+                    self.safe_set_value(
+                        ws0, "I30", formatted_exam_date
+                    )
+                    ws0["I28"].alignment = Alignment(
+                        horizontal='center', vertical='center', shrink_to_fit=True
+                    )
+                    ws0["I30"].alignment = Alignment(
+                        horizontal='center', vertical='center', shrink_to_fit=True
+                    )
+
                 first_sec = str(first_item.get("Sec", "")).strip()
                 first_drawing_no = str(first_item.get("Dwg", "")).strip()
                 sec_drawing_value = "/".join(
@@ -8899,7 +9161,7 @@ class PMIReportApp:
                 for cell_ref in ("Q1", "Q2", "C5", "I5", "C10", "I28"):
                     ws0[cell_ref].alignment = Alignment(
                         horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True
+                        wrap_text=(cell_ref != "I5"), shrink_to_fit=True
                     )
 
             # 갑지 제목 영역을 을지(F1:L4)와 같은 4행 높이로 구성한다.
@@ -8967,6 +9229,7 @@ class PMIReportApp:
             current_page = 1
             data_ptr = 0
             rt_condition_data_rows = set()
+            rt_summary_items = {}
             rt_film_location_counts = {}
             cover_d32_value = ws0["D32"].value if mode == "RT" else None
             
@@ -8978,6 +9241,7 @@ class PMIReportApp:
                     current_row = start_row
                 
                 item = final_list[data_ptr]
+                item_output_row = current_row
 
                 # 각 을지 페이지의 SEC. NO./LINE NO. 값 영역(H5:L6)에는
                 # 갑지의 동일 항목 값(I5)을 그대로 복사한다.
@@ -9185,11 +9449,15 @@ class PMIReportApp:
 
                     current_row += 1
 
+                    # Keep the exact item written to each RT row for the footer summary.
+                    rt_summary_items[(ws.title, item_output_row)] = item
+
                 data_ptr += 1
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
 
             # [NEW] 서식 정리 [DISABLED] - 템플릿 선(Border) 보존을 위해 주석 처리
             # rt_data_end_row = int(float(self.config.get('RT_DATA_END_ROW', 31)))
+            total_rt_pages = len(wb.worksheets)
             for p_idx, s in enumerate(wb.worksheets):
                 # if p_idx > 0: # 을지
                 #     for r_idx in range(rt_data_end_row + 1, rt_data_end_row + 15):
@@ -9198,8 +9466,14 @@ class PMIReportApp:
                 #             except: pass
                 
                 self.apply_custom_dimensions(s, "DATA" if p_idx > 0 else "COVER")
-                # RT 원본에는 페이지 번호 전용 셀이 없다. 갑지 N3는 제목 영역,
-                # 을지 S2는 공사명(O2:V4) 영역이므로 셀 페이지 번호를 기입하지 않는다.
+                # 각 워크시트가 한 페이지이므로 전체 보고서 기준 번호를 고정한다.
+                # 셀을 사용하지 않고 우측 인쇄 머리글에 표시해 기존 양식을 보존한다.
+                s.oddHeader.right.text = (
+                    f"Page    {p_idx + 1}    of    {total_rt_pages}"
+                )
+                s.oddHeader.right.font = "Arial"
+                s.oddHeader.right.size = 9
+                s.page_margins.header = 0.55
                 if p_idx > 0 and mode == "RT":
                     # 갑지의 고정 발주처를 모든 을지 CUSTOMER 영역에 동일 적용한다.
                     self.safe_set_value(s, "O1", ws0["Q1"].value)
@@ -9217,6 +9491,15 @@ class PMIReportApp:
 
                     # 을지 DRAWING NO./도면번호 값은 N/A로 고정한다.
                     self.safe_set_value(s, "O5", "N/A")
+                    # Slightly reduce the dense D7 header while preserving all other font styling.
+                    d7_cell = s["D7"]
+                    d7_font_size = d7_cell.font.sz or 8
+                    d7_cell.font = d7_cell.font.copy(size=max(1, d7_font_size - 0.5))
+                    s["S8"] = "검사일자"
+                    s["S8"].alignment = Alignment(
+                        horizontal='center', vertical='center',
+                        wrap_text=False, shrink_to_fit=True
+                    )
                     s["O5"].alignment = Alignment(
                         horizontal='center', vertical='center',
                         wrap_text=True, shrink_to_fit=True
@@ -9237,23 +9520,166 @@ class PMIReportApp:
                             for col_letter in "NOPQR":
                                 s[f"{col_letter}{row_idx}"] = None
 
-                    # 마지막 데이터의 바로 다음 행에 이하 여백 문구를 표시한다.
+                    # 마지막 데이터 다음 첫 행에는 검사 요약, 두 번째 행에는 이하 여백을 표시한다.
                     sheet_data_rows = sorted(
                         row_idx for sheet_title, row_idx in rt_condition_data_rows
                         if sheet_title == s.title
                     )
                     if sheet_data_rows:
-                        blank_notice_row = sheet_data_rows[-1] + 1
-                        if blank_notice_row <= 37:
-                            for col_idx in range(1, 21):  # A:T
+                        # 데이터 양에 맞춰 마지막 데이터 바로 다음 행에 요약을 배치한다.
+                        summary_row = sheet_data_rows[-1] + 1
+                        blank_notice_row = summary_row + 1
+                        print_end_row = int(self.config.get('RT_PRINT_END_ROW', end_row + 2))
+                        if blank_notice_row <= print_end_row:
+                            sheet_items = [
+                                rt_summary_items[(s.title, row_idx)]
+                                for row_idx in sheet_data_rows
+                                if (s.title, row_idx) in rt_summary_items
+                            ]
+
+                            def has_summary_value(value):
+                                text_value = str(value).strip()
+                                return bool(text_value) and text_value.lower() not in ("nan", "none", "null", "-")
+
+                            # ORIGINAL: number of populated inspection-position cells in D:K.
+                            original_count = sum(
+                                1
+                                for row_idx in sheet_data_rows
+                                for col_idx in range(4, 12)
+                                if has_summary_value(s.cell(row=row_idx, column=col_idx).value)
+                            )
+
+                            # REPAIR: only values 3 or 4 in D:K on rows checked as rejected in C.
+                            repair_count = 0
+                            for row_idx in sheet_data_rows:
+                                reject_value = s.cell(row=row_idx, column=3).value
+                                if not has_summary_value(reject_value):
+                                    continue
+                                for col_idx in range(4, 12):
+                                    interval_value = str(s.cell(row=row_idx, column=col_idx).value).strip()
+                                    if re.fullmatch(r"[34](?:\.0+)?", interval_value):
+                                        repair_count += 1
+
+                            total_count = original_count + repair_count
+                            inspection_count = sum(
+                                1 for item in sheet_items
+                                if has_summary_value(item.get("Joint", ""))
+                            )
+                            sizes = []
+                            for item in sheet_items:
+                                size = str(item.get("Size", "")).strip()
+                                if size and size.lower() != "nan" and size not in sizes:
+                                    sizes.append(size)
+                            size_text = "/".join(
+                                size if size.upper().endswith("A") else f"{size}A"
+                                for size in sizes
+                            )
+
+                            # Rebuild the row so it follows the requested nine-part summary layout.
+                            for merged_range in list(s.merged_cells.ranges):
+                                if (
+                                    merged_range.min_row <= summary_row <= merged_range.max_row
+                                    and merged_range.max_col >= 1
+                                    and merged_range.min_col <= 18  # Only merges intersecting A:R
+                                ):
+                                    s.unmerge_cells(str(merged_range))
+                            summary_parts = [
+                                (1, 2, "검 사 개 소"),       # A:B
+                                (3, 4, size_text),            # C:D
+                                (5, 6, f"{inspection_count} 개소"),  # E:F
+                                (7, 8, "ORIGINAL"),          # G:H
+                                (9, 10, f"{original_count} 매"),     # I:J
+                                (11, 12, "REPAIR"),          # K:L
+                                (13, 14, f"{repair_count} 매"),      # M:N
+                                (15, 18, f"TOTAL  {total_count} 매"), # O:R
+                            ]
+                            summary_border_side = Side(style='thin', color='000000')
+                            for start_col, end_col, value in summary_parts:
+                                if start_col != end_col:
+                                    s.merge_cells(
+                                        start_row=summary_row, start_column=start_col,
+                                        end_row=summary_row, end_column=end_col
+                                    )
+                                cell = s.cell(row=summary_row, column=start_col)
+                                cell.value = value
+                                cell.font = Font(name='맑은 고딕', size=9)
+                                cell.alignment = Alignment(
+                                    horizontal='center', vertical='center', shrink_to_fit=True
+                                )
+                                # Thin outline for every merged summary block. Together these
+                                # form a continuous A:R border with thin vertical separators.
+                                for col_idx in range(start_col, end_col + 1):
+                                    border_cell = s.cell(row=summary_row, column=col_idx)
+                                    old_border = border_cell.border
+                                    border_cell.border = Border(
+                                        left=(summary_border_side if col_idx == start_col else old_border.left),
+                                        right=(summary_border_side if col_idx == end_col else old_border.right),
+                                        top=summary_border_side,
+                                        bottom=summary_border_side
+                                    )
+
+                            # Extend the summary-row outer outline through column V while
+                            # preserving the existing S:V merges and their internal layout.
+                            for col_idx in range(1, 23):  # A:V
+                                outline_cell = s.cell(row=summary_row, column=col_idx)
+                                old_border = outline_cell.border
+                                outline_cell.border = Border(
+                                    left=(summary_border_side if col_idx == 1 else old_border.left),
+                                    right=(summary_border_side if col_idx == 22 else old_border.right),
+                                    top=summary_border_side,
+                                    bottom=summary_border_side
+                                )
+
+                            # Merge the entire RT report width for the blank notice.
+                            for merged_range in list(s.merged_cells.ranges):
+                                if merged_range.min_row <= blank_notice_row <= merged_range.max_row:
+                                    s.unmerge_cells(str(merged_range))
+                            for col_idx in range(1, 23):  # A:V
                                 notice_cell = s.cell(row=blank_notice_row, column=col_idx)
                                 notice_cell.value = None
-                                notice_cell.alignment = Alignment(
-                                    horizontal='centerContinuous', vertical='center'
-                                )
+                            s.merge_cells(
+                                start_row=blank_notice_row, start_column=1,
+                                end_row=blank_notice_row, end_column=22
+                            )
                             notice_cell = s.cell(row=blank_notice_row, column=1)
+                            notice_cell.alignment = Alignment(
+                                horizontal='center', vertical='center'
+                            )
                             notice_cell.value = "~이  하   여  백~"
                             notice_cell.font = Font(name='돋움체', size=9)
+
+                    # Standardize the RT data-sheet perimeter without changing inner borders.
+                    outer_side = Side(style='thin', color='000000')
+                    outer_last_row = 37
+                    for col_idx in range(1, 23):  # A:V
+                        top_cell = s.cell(row=1, column=col_idx)
+                        top_border = top_cell.border
+                        top_cell.border = Border(
+                            left=top_border.left, right=top_border.right,
+                            top=outer_side, bottom=top_border.bottom
+                        )
+
+                        bottom_cell = s.cell(row=outer_last_row, column=col_idx)
+                        bottom_border = bottom_cell.border
+                        bottom_cell.border = Border(
+                            left=bottom_border.left, right=bottom_border.right,
+                            top=bottom_border.top, bottom=outer_side
+                        )
+
+                    for row_idx in range(1, outer_last_row + 1):
+                        left_cell = s.cell(row=row_idx, column=1)
+                        left_border = left_cell.border
+                        left_cell.border = Border(
+                            left=outer_side, right=left_border.right,
+                            top=left_border.top, bottom=left_border.bottom
+                        )
+
+                        right_cell = s.cell(row=row_idx, column=22)
+                        right_border = right_cell.border
+                        right_cell.border = Border(
+                            left=right_border.left, right=outer_side,
+                            top=right_border.top, bottom=right_border.bottom
+                        )
 
             # [FINAL CLEANUP] Standardized cleanup for RT
             try:
@@ -10104,4 +10530,12 @@ class PMIReportApp:
 if __name__ == "__main__":
     root = tk.Tk()
     app = PMIReportApp(root)
-    root.mainloop()
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        # Ctrl+C from a terminal is a normal shutdown request, not an app error.
+        try:
+            app.on_closing()
+        except tk.TclError:
+            # The window may already have been destroyed while handling shutdown.
+            pass

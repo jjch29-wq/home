@@ -1,5 +1,10 @@
 import openpyxl
+import copy
+import math
+import re
 from openpyxl.styles import Alignment
+from openpyxl.worksheet.cell_range import CellRange
+from openpyxl.worksheet.pagebreak import Break
 
 
 def safe_write(ws, row, col, value):
@@ -154,6 +159,203 @@ def write_records_to_section(ws, records, data_start, col_map):
         current_row += 1
 
     return len(records)
+
+
+def _delete_rows_safely(ws, delete_idx, amount):
+    """병합 범위를 보존하면서 행을 삭제한다."""
+    if amount <= 0:
+        return
+    old_merges = [CellRange(str(m)) for m in ws.merged_cells.ranges]
+    ws.merged_cells.ranges = []
+    ws.delete_rows(delete_idx, amount)
+    delete_end = delete_idx + amount - 1
+    for cr in old_merges:
+        if cr.max_row < delete_idx:
+            ws.merge_cells(str(cr))
+        elif cr.min_row > delete_end:
+            cr.shift(row_shift=-amount)
+            ws.merge_cells(str(cr))
+        # 삭제 범위와 겹치는 병합은 빈 하단 행에만 사용되므로 제거한다.
+
+
+def _insert_rows_safely(ws, insert_idx, amount):
+    """병합 범위를 보존하면서 빈 행을 삽입한다."""
+    if amount <= 0:
+        return
+    old_merges = [CellRange(str(m)) for m in ws.merged_cells.ranges]
+    ws.merged_cells.ranges = []
+    ws.insert_rows(insert_idx, amount)
+    for cr in old_merges:
+        if cr.min_row >= insert_idx:
+            cr.shift(row_shift=amount)
+        elif cr.min_row < insert_idx <= cr.max_row:
+            cr.expand(down=amount)
+        ws.merge_cells(str(cr))
+
+
+def _copy_row_layout(ws, source_row, target_rows):
+    """한 행의 셀 서식과 단일행 병합을 새 데이터 행들에 복사한다."""
+    row_merges = [
+        (m.min_col, m.max_col)
+        for m in ws.merged_cells.ranges
+        if m.min_row == source_row and m.max_row == source_row
+    ]
+    for target_row in target_rows:
+        ws.row_dimensions[target_row].height = ws.row_dimensions[source_row].height
+        for col in range(1, ws.max_column + 1):
+            src = ws.cell(source_row, col)
+            dst = ws.cell(target_row, col)
+            if src.has_style:
+                dst._style = copy.copy(src._style)
+            dst.number_format = src.number_format
+            dst.alignment = copy.copy(src.alignment)
+            dst.protection = copy.copy(src.protection)
+        for min_col, max_col in row_merges:
+            try:
+                ws.merge_cells(
+                    start_row=target_row, start_column=min_col,
+                    end_row=target_row, end_column=max_col
+                )
+            except ValueError:
+                pass
+
+
+def _clone_page_block(ws, page_start, page_end, insert_at):
+    """수동 페이지 한 블록을 서식·병합·행높이와 함께 복제한다."""
+    page_height = page_end - page_start + 1
+    source_merges = [
+        CellRange(str(m)) for m in ws.merged_cells.ranges
+        if page_start <= m.min_row and m.max_row <= page_end
+    ]
+    old_break_ids = sorted(int(b.id) for b in ws.row_breaks.brk)
+
+    # 병합을 안전하게 이동한 뒤 새 공간에 원본 페이지를 복사한다.
+    old_merges = [CellRange(str(m)) for m in ws.merged_cells.ranges]
+    ws.merged_cells.ranges = []
+    ws.insert_rows(insert_at, page_height)
+    for cr in old_merges:
+        if cr.min_row >= insert_at:
+            cr.shift(row_shift=page_height)
+        elif cr.min_row < insert_at <= cr.max_row:
+            cr.expand(down=page_height)
+        ws.merge_cells(str(cr))
+
+    offset = insert_at - page_start
+    for source_row in range(page_start, page_end + 1):
+        target_row = source_row + offset
+        src_dim = ws.row_dimensions[source_row]
+        dst_dim = ws.row_dimensions[target_row]
+        dst_dim.height = src_dim.height
+        dst_dim.hidden = src_dim.hidden
+        dst_dim.outlineLevel = src_dim.outlineLevel
+        for col in range(1, ws.max_column + 1):
+            src = ws.cell(source_row, col)
+            dst = ws.cell(target_row, col)
+            dst.value = src.value
+            if src.has_style:
+                dst._style = copy.copy(src._style)
+            dst.number_format = src.number_format
+            dst.alignment = copy.copy(src.alignment)
+            dst.protection = copy.copy(src.protection)
+
+    for cr in source_merges:
+        cr.shift(row_shift=offset)
+        ws.merge_cells(str(cr))
+
+    # 기존 이후 페이지 나눔은 아래로 이동하고 복제 페이지 끝에 새 나눔을 둔다.
+    ws.row_breaks.brk = []
+    for break_id in old_break_ids:
+        shifted = break_id + page_height if break_id >= insert_at else break_id
+        ws.row_breaks.append(Break(id=shifted, min=0, max=16383))
+    ws.row_breaks.append(Break(id=insert_at + page_height - 1, min=0, max=16383))
+
+
+def _page_bounds_for_row(ws, row):
+    break_ids = sorted(int(b.id) for b in ws.row_breaks.brk)
+    previous = 0
+    for break_id in break_ids:
+        if row <= break_id:
+            return previous + 1, break_id
+        previous = break_id
+    return previous + 1, max(ws.max_row, row)
+
+
+def write_rt_detail_with_page_overflow(ws, history, target_month_str, log_func=print):
+    """
+    2.2 MT와 2.4 PT 데이터가 없을 때 2.3 RT가 PT 아래 빈 행을 재사용한다.
+    13페이지 용량을 넘으면 해당 페이지 블록 전체를 복제하여 RT를 이어 쓴다.
+    """
+    mt_records = extract_records_by_method(history, target_month_str, 'MT')
+    rt_records = extract_records_by_method(history, target_month_str, 'RT')
+    pt_records = extract_records_by_method(history, target_month_str, 'PT')
+    if not rt_records or mt_records or pt_records:
+        return False
+
+    mt_title, _, _ = find_section_by_title(ws, ['2.2', 'MT'])
+    rt_title, rt_header, rt_data_start = find_section_by_title(ws, ['2.3', 'RT'])
+    pt_title, _, pt_data_start = find_section_by_title(ws, ['2.4', 'PT'])
+    if not all((mt_title, rt_title, rt_header, rt_data_start, pt_title, pt_data_start)):
+        return False
+
+    col_map = build_col_map_from_row(ws, rt_header)
+    if not col_map:
+        return False
+
+    page_start, page_end = _page_bounds_for_row(ws, rt_title)
+    page_height = page_end - page_start + 1
+    base_capacity = max(0, pt_title - rt_data_start)
+    borrowed_capacity = max(0, page_end - pt_data_start + 1)
+    page_capacity = base_capacity + borrowed_capacity
+    if page_capacity <= 0:
+        return False
+
+    page_count = math.ceil(len(rt_records) / page_capacity)
+    for page_index in range(1, page_count):
+        insert_at = page_end + 1 + (page_index - 1) * page_height
+        _clone_page_block(ws, page_start, page_end, insert_at)
+
+    if page_count > 1 and ws.print_area:
+        print_area_text = str(ws.print_area)
+        area_match = re.search(
+            r'\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)',
+            print_area_text
+        )
+        if area_match:
+            min_col, min_row, max_col, max_row = area_match.groups()
+            extended_end = int(max_row) + page_height * (page_count - 1)
+            ws.print_area = (
+                f"{min_col}{min_row}:{max_col}{extended_end}"
+            )
+
+    template_row_height = ws.row_dimensions[rt_data_start].height
+    written = 0
+    for page_index in range(page_count):
+        offset = page_index * page_height
+        chunk = rt_records[written:written + page_capacity]
+        chunk_rt_start = rt_data_start + offset
+        chunk_pt_title = pt_title + offset
+        chunk_page_end = page_end + offset
+        extra_rows = max(0, len(chunk) - base_capacity)
+        if extra_rows:
+            # PT 제목을 아래로 밀어 RT 행을 만들고, 페이지 하단 빈 행을 같은 수만큼 제거한다.
+            _insert_rows_safely(ws, chunk_pt_title, extra_rows)
+            _copy_row_layout(
+                ws, chunk_rt_start,
+                range(chunk_pt_title, chunk_pt_title + extra_rows)
+            )
+            _delete_rows_safely(ws, chunk_page_end + 1, extra_rows)
+
+        write_records_to_section(
+            ws, chunk, chunk_rt_start, col_map,
+            row_height=template_row_height
+        )
+        written += len(chunk)
+
+    log_func(
+        f"✅ 2.3 RT: {written}건 기입, PT 하단 빈 행 재사용, "
+        f"13페이지 복제 {page_count - 1}회"
+    )
+    return True
 
 
 def extract_records_by_method(history, target_month_str, method_filter):

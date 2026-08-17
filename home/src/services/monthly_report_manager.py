@@ -1,5 +1,5 @@
 import openpyxl
-from openpyxl.styles import Alignment, Border, Side, Font
+from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from openpyxl.cell.cell import Cell
 import os
 import json
@@ -265,9 +265,10 @@ class MonthlyReportManager:
 
         ``table_header_row`` is the first of the table's two column-header
         rows; the subsection title is the row immediately above it.  The
-        resulting continuation block is ten rows high:
+        resulting continuation block is eleven rows high:
 
         * seven rows of the repeated document header;
+        * one blank spacer row below the document header;
         * one subsection-title row;
         * two table-column-header rows.
 
@@ -303,18 +304,21 @@ class MonthlyReportManager:
         self._insert_continuation_header(
             ws, insert_row, document_header_row, row_count=7
         )
-        table_insert_row = insert_row + 7
-        self._insert_rows_safely(ws, table_insert_row, 3)
+        # Leave the first row below the common report header empty.  The
+        # subsection title/table starts on the second row below the header.
+        spacer_row = insert_row + 7
+        table_insert_row = spacer_row + 1
+        self._insert_rows_safely(ws, spacer_row, 4)
 
         # Keep images below the repeated document header aligned with the rows
-        # moved by the three-row subsection/table-header insertion.
+        # moved by the spacer plus three-row subsection/table-header insertion.
         for image in list(ws._images):
             anchor = getattr(image, 'anchor', None)
             if not hasattr(anchor, '_from') or anchor._from.row + 1 < table_insert_row:
                 continue
-            anchor._from.row += 3
+            anchor._from.row += 4
             if hasattr(anchor, 'to'):
-                anchor.to.row += 3
+                anchor.to.row += 4
 
         for offset, row_snapshot in enumerate(cell_snapshot):
             target_row = table_insert_row + offset
@@ -339,7 +343,24 @@ class MonthlyReportManager:
                 cell.value = f"{cell.value} (계속)"
                 break
 
-        return 10
+        return 11
+
+    def _insert_page13_rt_continuation(self, ws, insert_row,
+                                       document_header_row, rt_header_row):
+        """Create a page-13-style continuation page for overflowing RT rows.
+
+        Rows at ``insert_row`` and below already contain the overflowing RT
+        records, the RT TOTAL row, and the unused lower-page frame. Inserting
+        the copied document/RT headers at that exact point completes the page
+        13 frame without duplicating PAUT, MT, or PT data. The safe insertion
+        also moves the original page 14 and every later page break down.
+        """
+        return self._insert_table_continuation(
+            ws,
+            insert_row,
+            document_header_row,
+            rt_header_row,
+        )
 
     def _first_print_overflow_row(self, ws, start_row, row_count):
         """Return the first data row that falls onto the next printed page."""
@@ -425,6 +446,379 @@ class MonthlyReportManager:
                 alignment.wrap_text = False
                 alignment.shrink_to_fit = True
                 cell.alignment = alignment
+
+    def _fix_ndt_section_labels(self, ws):
+        """Correct known text errors retained in the report template."""
+        for row in ws.iter_rows():
+            for cell in row:
+                if not isinstance(cell.value, str):
+                    continue
+                if 'SPETION' in cell.value:
+                    cell.value = cell.value.replace('SPETION', 'SECTION')
+
+    def _ensure_cover_cell_elements(self, ws, create_date):
+        """Use cell-native cover elements that survive openpyxl save cycles."""
+        import copy
+
+        thin = Side(style='thin', color='000000')
+        gray = Side(style='thin', color='BFBFBF')
+
+        def _merge_exactly(cell_range):
+            from openpyxl.worksheet.cell_range import CellRange
+
+            target = CellRange(cell_range)
+            for merged in list(ws.merged_cells.ranges):
+                overlaps = not (
+                    merged.max_row < target.min_row
+                    or merged.min_row > target.max_row
+                    or merged.max_col < target.min_col
+                    or merged.min_col > target.max_col
+                )
+                if overlaps and str(merged) != cell_range:
+                    ws.unmerge_cells(str(merged))
+            if not any(str(merged) == cell_range for merged in ws.merged_cells.ranges):
+                ws.merge_cells(cell_range)
+
+        # The original diagonal was an unsupported Line shape. A diagonal-up
+        # border on one merged cell produces the same slash and is preserved.
+        _merge_exactly('B4:C7')
+        diagonal_cell = ws['B4']
+        diagonal_cell.value = None
+        diagonal_cell.border = Border(
+            left=thin, right=thin, top=thin, bottom=thin,
+            diagonal=thin, diagonalUp=True,
+        )
+
+        # The original date was an unsupported text box. Write the creation
+        # date from the export dialog into a merged cell instead.
+        _merge_exactly('N4:T6')
+        date_cell = ws['N4']
+        date_cell.value = str(create_date or '')
+        # Match the cover's revision-number typography exactly.
+        date_cell.font = copy.copy(ws['N3'].font)
+        date_cell.alignment = Alignment(
+            horizontal='center', vertical='center', wrap_text=False,
+        )
+        date_cell.border = Border(left=gray, right=gray, top=gray, bottom=gray)
+
+    def _populate_radiation_network_report(self, ws, target_ym):
+        """Replace the section 6.0 screenshot with a real editable cell table."""
+        title_row = None
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 30) + 1)
+            ).replace(' ', '')
+            if '1.방사선안전관리통합정보망보고자료' in row_text:
+                title_row = row
+                break
+        if title_row is None:
+            return
+
+        table_start = title_row + 1
+        next_page_start = None
+        for row in range(table_start + 1, min(ws.max_row, table_start + 80) + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 30) + 1)
+            ).replace(' ', '')
+            if '6.0사진대지' in row_text:
+                next_page_start = max(table_start + 1, row - 4)
+                break
+        page_end = (next_page_start - 1) if next_page_start else table_start + 46
+
+        # Remove only the captured report image. Logos in the common header are
+        # anchored above table_start and must remain on the page.
+        kept_images = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if hasattr(anchor, '_from'):
+                image_row = anchor._from.row + 1
+                if table_start <= image_row <= page_end:
+                    continue
+            kept_images.append(image)
+        ws._images = kept_images
+
+        source_path = os.path.join(
+            os.path.expanduser('~'), 'Downloads', '발주자 보고.xlsx'
+        )
+        records = []
+        if os.path.exists(source_path):
+            try:
+                source_wb = openpyxl.load_workbook(source_path, data_only=True)
+                source_ws = source_wb['작업정보'] \
+                    if '작업정보' in source_wb.sheetnames else source_wb.active
+                target_key = str(target_ym or '').replace('-', '')[:6]
+
+                def _text(value):
+                    if value is None:
+                        return ''
+                    if isinstance(value, (datetime.datetime, datetime.date)):
+                        return value.strftime('%Y-%m-%d')
+                    return str(value).strip()
+
+                def _clock(value):
+                    text = _text(value)
+                    if len(text) == 4 and text.isdigit():
+                        return f'{text[:2]}:{text[2:]}'
+                    return text
+
+                for row in range(5, source_ws.max_row + 1):
+                    year_month = _text(source_ws.cell(row, 1).value).replace('-', '')[:6]
+                    if target_key and year_month != target_key:
+                        continue
+                    workers = [
+                        _text(source_ws.cell(row, col).value)
+                        for col in range(10, 15)
+                    ]
+                    workers = ', '.join(value for value in workers if value)
+
+                    source_name = ''
+                    source_activity = ''
+                    source_count = ''
+                    for name, activity_col, count_col in (
+                        ('Ir-192', 21, 22), ('Co-60', 23, 24),
+                        ('Se-75', 25, 26), ('Am-241', 27, 28),
+                    ):
+                        activity = source_ws.cell(row, activity_col).value
+                        count = source_ws.cell(row, count_col).value
+                        if activity not in (None, '') or count not in (None, ''):
+                            source_name = name
+                            source_activity = activity if activity is not None else ''
+                            source_count = count if count is not None else ''
+                            break
+
+                    generator = ' / '.join(
+                        value for value in (
+                            _text(source_ws.cell(row, 29).value),
+                            _text(source_ws.cell(row, 30).value),
+                        ) if value
+                    )
+                    records.append([
+                        year_month,
+                        _text(source_ws.cell(row, 2).value),
+                        _text(source_ws.cell(row, 3).value),
+                        _text(source_ws.cell(row, 4).value),
+                        _text(source_ws.cell(row, 5).value),
+                        source_ws.cell(row, 6).value or '',
+                        _text(source_ws.cell(row, 7).value),
+                        _text(source_ws.cell(row, 8).value),
+                        _text(source_ws.cell(row, 9).value),
+                        workers,
+                        _clock(source_ws.cell(row, 15).value),
+                        _clock(source_ws.cell(row, 16).value),
+                        source_ws.cell(row, 17).value or '',
+                        _text(source_ws.cell(row, 18).value),
+                        _text(source_ws.cell(row, 19).value),
+                        source_ws.cell(row, 20).value or '',
+                        source_name,
+                        source_activity,
+                        source_count,
+                        generator,
+                        source_ws.cell(row, 31).value or '',
+                        _text(source_ws.cell(row, 32).value),
+                    ])
+                source_wb.close()
+            except Exception as exc:
+                print(f'[WARN] 발주자 보고자료를 읽지 못했습니다: {exc}')
+
+        # Protect the following photo page when a month contains more rows than
+        # the original screenshot area. The page break and print area move with
+        # the inserted rows; drawings need the same explicit anchor adjustment.
+        planned_data_start = table_start + 2
+        available_rows = max(1, page_end - planned_data_start + 1)
+        extra_rows = max(0, len(records) - available_rows)
+        if extra_rows and next_page_start:
+            self._insert_rows_safely(ws, next_page_start, extra_rows)
+            for image in list(ws._images):
+                anchor = getattr(image, 'anchor', None)
+                if not hasattr(anchor, '_from') or anchor._from.row + 1 < next_page_start:
+                    continue
+                anchor._from.row += extra_rows
+                if hasattr(anchor, 'to'):
+                    anchor.to.row += extra_rows
+            page_end += extra_rows
+
+        # Clear the old screenshot area while retaining the surrounding page.
+        for merged in list(ws.merged_cells.ranges):
+            if merged.min_row >= table_start and merged.max_row <= page_end:
+                ws.unmerge_cells(str(merged))
+        for row in range(table_start, page_end + 1):
+            for col in range(2, 24):
+                ws.cell(row=row, column=col).value = None
+
+        group_row = table_start
+        header_row = table_start + 1
+        data_start = table_start + 2
+        groups = (
+            (2, 7, '작업장 정보'),
+            (8, 14, '작업 기본정보'),
+            (15, 17, '검사대상물'),
+            (18, 20, '최대사용선원'),
+            (21, 22, '방사선발생장치'),
+            (23, 23, '비고'),
+        )
+        headers = (
+            '년월', '업체코드', '검사업체명', '작업장코드', '작업장명',
+            '일일최대량', '작업일', '작업장소', '작업조장', '작업자',
+            '시작', '종료', '작업수량', '이름', '재질', '최대두께',
+            '선원', '방사능량', '수량', '최대전압/전류', '발생장치수량', '비고',
+        )
+        dark_fill = PatternFill('solid', fgColor='BFBFBF')
+        orange_fill = PatternFill('solid', fgColor='F4B183')
+        yellow_fill = PatternFill('solid', fgColor='FFF200')
+        header_font = Font(name='맑은 고딕', size=7, bold=True)
+        body_font = Font(name='맑은 고딕', size=7)
+        center = Alignment(
+            horizontal='center', vertical='center', wrap_text=True,
+            shrink_to_fit=True,
+        )
+
+        for start_col, end_col, label in groups:
+            if start_col < end_col:
+                ws.merge_cells(
+                    start_row=group_row, start_column=start_col,
+                    end_row=group_row, end_column=end_col,
+                )
+            cell = ws.cell(group_row, start_col, label)
+            cell.fill = dark_fill
+            cell.font = header_font
+            cell.alignment = center
+        for offset, label in enumerate(headers, start=2):
+            cell = ws.cell(header_row, offset, label)
+            cell.fill = orange_fill if offset <= 7 else yellow_fill
+            cell.font = header_font
+            cell.alignment = center
+
+        ws.row_dimensions[group_row].height = 20
+        ws.row_dimensions[header_row].height = 34
+        if not records:
+            ws.merge_cells(
+                start_row=data_start, start_column=2,
+                end_row=data_start, end_column=23,
+            )
+            ws.cell(data_start, 2).value = (
+                f'{target_ym} 발주자 보고자료 없음'
+            )
+            ws.cell(data_start, 2).alignment = center
+            ws.cell(data_start, 2).font = body_font
+            records_end = data_start
+        else:
+            for row_offset, record in enumerate(records):
+                target_row = data_start + row_offset
+                for col_offset, value in enumerate(record, start=2):
+                    cell = ws.cell(target_row, col_offset, value)
+                    cell.font = body_font
+                    cell.alignment = center
+                ws.row_dimensions[target_row].height = 24
+            records_end = data_start + len(records) - 1
+
+        for row in range(group_row, records_end + 1):
+            for col in range(2, 24):
+                ws.cell(row, col).border = self.border_thin
+
+    def _populate_owner_report_rows(self, ws, target_ym, source_path):
+        """Fill the existing section 6.0 template rows from a selected file."""
+        if not source_path:
+            return
+        if not os.path.exists(source_path):
+            raise FileNotFoundError(f'발주자 보고 파일을 찾을 수 없습니다: {source_path}')
+
+        title_row = None
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 30) + 1)
+            ).replace(' ', '')
+            if '1.방사선안전관리통합정보망보고자료' in row_text:
+                title_row = row
+                break
+        if title_row is None:
+            raise ValueError('템플릿에서 6.0 발주자 보고자료 표를 찾을 수 없습니다.')
+
+        # The edited V70 template uses rows 630~632 for its three-level header.
+        data_start = title_row + 4
+        data_end = data_start + 42
+        for row in range(data_start, data_end + 1):
+            for col in range(2, 24):
+                cell = ws.cell(row=row, column=col)
+                if type(cell).__name__ != 'MergedCell':
+                    cell.value = None
+
+        source_wb = openpyxl.load_workbook(source_path, data_only=True)
+        try:
+            if '작업정보' not in source_wb.sheetnames:
+                raise ValueError("발주자 보고 파일에 '작업정보' 시트가 없습니다.")
+            source_ws = source_wb['작업정보']
+            target_key = str(target_ym or '').replace('-', '')[:6]
+
+            def _text(value):
+                if value is None:
+                    return ''
+                if isinstance(value, (datetime.datetime, datetime.date)):
+                    return value.strftime('%Y-%m-%d')
+                return str(value).strip()
+
+            def _clock(value):
+                text = _text(value)
+                digits = re.sub(r'\D', '', text)
+                if len(digits) == 3:
+                    digits = f'0{digits}'
+                if len(digits) == 4:
+                    return f'{digits[:2]}:{digits[2:]}'
+                return text
+
+            records = []
+            for row in range(5, source_ws.max_row + 1):
+                year_month = _text(source_ws.cell(row, 1).value)
+                year_month = re.sub(r'\D', '', year_month)[:6]
+                if target_key and year_month != target_key:
+                    continue
+                record = [
+                    year_month,
+                    _text(source_ws.cell(row, 2).value),
+                    _text(source_ws.cell(row, 3).value),
+                    _text(source_ws.cell(row, 4).value),
+                    _text(source_ws.cell(row, 5).value),
+                    source_ws.cell(row, 6).value or '',
+                    _text(source_ws.cell(row, 7).value),
+                    _text(source_ws.cell(row, 8).value),
+                    _text(source_ws.cell(row, 9).value),
+                    *[
+                        _text(source_ws.cell(row, col).value)
+                        for col in range(10, 15)
+                    ],
+                    _clock(source_ws.cell(row, 15).value),
+                    _clock(source_ws.cell(row, 16).value),
+                    source_ws.cell(row, 17).value or '',
+                    _text(source_ws.cell(row, 18).value),
+                    _text(source_ws.cell(row, 19).value),
+                    source_ws.cell(row, 20).value or '',
+                    source_ws.cell(row, 25).value or '',
+                    source_ws.cell(row, 26).value or '',
+                ]
+                records.append(record)
+        finally:
+            source_wb.close()
+
+        if len(records) > data_end - data_start + 1:
+            raise ValueError(
+                f'발주자 보고자료가 {len(records)}행으로 16페이지 입력 가능 '
+                f'행수({data_end - data_start + 1}행)를 초과했습니다.'
+            )
+
+        body_font = Font(name='맑은 고딕', size=6)
+        body_alignment = Alignment(
+            horizontal='center', vertical='center',
+            wrap_text=True, shrink_to_fit=True,
+        )
+        for row_offset, record in enumerate(records):
+            target_row = data_start + row_offset
+            for column, value in enumerate(record, start=2):
+                cell = ws.cell(row=target_row, column=column)
+                cell.value = value
+                cell.font = body_font
+                cell.alignment = body_alignment
 
     def _trim_trailing_blank_print_pages(self, ws):
         """Stop printing at the end of the last page containing real content.
@@ -1217,7 +1611,8 @@ class MonthlyReportManager:
         ws.cell(row=pt_title_row, column=3).value = '1.4 침투탐상검사(PT)(SEC.16)'
         return pt_title_row
 
-    def generate_report(self, history_path, target_ym, output_path, doc_num="01", create_date=None):
+    def generate_report(self, history_path, target_ym, output_path, doc_num="01",
+                        create_date=None, owner_report_path=None):
 
         self._history_path = history_path
 
@@ -1424,6 +1819,13 @@ class MonthlyReportManager:
             ('pt_1', 'PT', False), ('rt_1', 'RT', False), ('mt_1', 'MT', False), ('paut_1', 'PAUT', False)
         ]
         section_item_counts = {}
+        # MT/PT가 없고 RT만 있는 경우 13페이지의 PT 하단 빈 행을
+        # RT 확장 공간으로 우선 재사용한다.
+        rt_uses_page13_blanks = (
+            bool(ndt_details['RT'])
+            and not ndt_details['MT']
+            and not ndt_details['PT']
+        )
         
         for section_key, method, is_detail in sections:
             header_row = self.table_markers[section_key]
@@ -1493,25 +1895,64 @@ class MonthlyReportManager:
                     if v >= start_row:
                         self.table_markers[k] += rows_to_insert
 
-                # 버퍼 행 정리: TOTAL 이후 빈 행을 rows_to_insert만큼 삭제
-                # 로고/쪽번호 헤더 블록이 TOTAL 바로 다음에 위치하도록 당김
-                scan_row = total_row + 1
                 cleaned = 0
-                while cleaned < rows_to_insert:
-                    is_empty = all(
-                        not str(ws.cell(row=scan_row, column=c).value or '').strip()
-                        for c in range(1, 25)
+                if section_key == 'rt_2' and rt_uses_page13_blanks:
+                    # RT 삽입으로 아래로 밀린 2.4 PT의 TOTAL 아래부터
+                    # 현재 수동 페이지 구분선까지 빈 행을 제거한다. 삽입/삭제
+                    # 수가 상쇄되므로 기존 14페이지 내용은 움직이지 않는다.
+                    pt_marker = self.table_markers['pt_2']
+                    later_breaks = sorted(
+                        int(brk.id) for brk in ws.row_breaks.brk
+                        if int(brk.id) >= pt_marker
                     )
-                    if is_empty:
+                    page_end = later_breaks[0] if later_breaks else None
+                    pt_total_row = None
+                    if page_end is not None:
+                        for candidate in range(pt_marker + 2, page_end + 1):
+                            if 'TOTAL' in str(
+                                ws.cell(row=candidate, column=2).value or ''
+                            ).upper():
+                                pt_total_row = candidate
+                                break
+
+                    scan_row = pt_total_row + 1 if pt_total_row else None
+                    while (
+                        scan_row is not None
+                        and page_end is not None
+                        and cleaned < rows_to_insert
+                        and scan_row <= page_end
+                    ):
+                        is_empty = all(
+                            not str(ws.cell(row=scan_row, column=c).value or '').strip()
+                            for c in range(1, 25)
+                        )
+                        if not is_empty:
+                            scan_row += 1
+                            continue
                         self._delete_rows_safely(ws, scan_row, 1)
-                        total_row -= 1  # 삭제로 없어진 행 보정
                         for k, v in self.table_markers.items():
                             if v >= scan_row:
                                 self.table_markers[k] -= 1
+                        page_end -= 1
                         cleaned += 1
-                        # scan_row 유지 (삭제 후 다음 행이 같은 위치로 올라옴)
-                    else:
-                        break  # 내용 있는 행(헤더 블록) 만나면 중지
+
+                # 일반 섹션은 기존처럼 TOTAL 직후의 연속 빈 행을 정리한다.
+                if not (section_key == 'rt_2' and rt_uses_page13_blanks):
+                    scan_row = total_row + 1
+                    while cleaned < rows_to_insert:
+                        is_empty = all(
+                            not str(ws.cell(row=scan_row, column=c).value or '').strip()
+                            for c in range(1, 25)
+                        )
+                        if is_empty:
+                            self._delete_rows_safely(ws, scan_row, 1)
+                            total_row -= 1
+                            for k, v in self.table_markers.items():
+                                if v >= scan_row:
+                                    self.table_markers[k] -= 1
+                            cleaned += 1
+                        else:
+                            break
             else:
                 rows_to_insert = 0
 
@@ -1664,6 +2105,17 @@ class MonthlyReportManager:
                 else:
                     _write_safe(total_row, 17, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
                     ws.cell(row=total_row, column=17).alignment = shrink_align
+                    if is_detail:
+                        # Detail tables display ORI' and TOTAL in separate
+                        # columns, so repeat the combined quantity in TOTAL.
+                        safe_merge(total_row, 20, total_row, 21)
+                        _write_safe(
+                            total_row,
+                            20,
+                            f"{total_qty:.4f}"
+                            if total_qty % 1 != 0 else str(int(total_qty)),
+                        )
+                        ws.cell(row=total_row, column=20).alignment = shrink_align
 
             # When either a 1.2 summary table or a 2.x detail table overflows,
             # continue it on a real new page. Repeat both the seven-row document
@@ -1688,9 +2140,14 @@ class MonthlyReportManager:
                     break
 
                 rows_on_current_page = continuation_row - remaining_start
-                inserted_rows = self._insert_table_continuation(
-                    ws, continuation_row, document_header_row, header_row
-                )
+                if section_key == 'rt_2' and rt_uses_page13_blanks:
+                    inserted_rows = self._insert_page13_rt_continuation(
+                        ws, continuation_row, document_header_row, header_row
+                    )
+                else:
+                    inserted_rows = self._insert_table_continuation(
+                        ws, continuation_row, document_header_row, header_row
+                    )
                 from openpyxl.worksheet.pagebreak import Break
                 if not any(
                     int(brk.id) == continuation_row - 1
@@ -1985,7 +2442,10 @@ class MonthlyReportManager:
             paut_original_lengths_by_welder, '1.2',
             ('위상배열초음파탐상검사', 'PAUT'),
         )
+        self._populate_owner_report_rows(ws, target_ym, owner_report_path)
         self._populate_process_photo_pages(ws, process_photos)
+        self._fix_ndt_section_labels(ws)
+        self._ensure_cover_cell_elements(ws, create_date)
         self._renumber_ndt_status_pages(ws)
         self._keep_iuc_euc_headers_single_line(ws)
 
