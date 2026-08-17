@@ -1,0 +1,10 @@
+{
+  "location": "한국지역난방공사 중앙지사 현장",
+  "instructor": "",
+  "processes": {
+    "RT": true,
+    "PAUT": false,
+    "PT": false,
+    "MT": false
+  }
+}
