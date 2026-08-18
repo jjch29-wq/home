@@ -116,7 +116,7 @@ class MonthlyReportManager:
             ws.row_breaks.brk = new_breaks
 
     def _repair_merged_right_borders(self, ws):
-        """Restore right edges that openpyxl can drop from merged template cells.
+        """Restore outer edges that openpyxl can drop from merged cells.
 
         Excel stores a merged range's visible outline across both the anchor cell
         and the cells on the perimeter.  After a load/save cycle, the right edge
@@ -127,6 +127,18 @@ class MonthlyReportManager:
 
         for merged in list(ws.merged_cells.ranges):
             anchor = ws.cell(row=merged.min_row, column=merged.min_col)
+
+            left_side = anchor.border.left
+            if left_side.style:
+                left_targets = [anchor]
+                left_targets.extend(
+                    ws.cell(row=row, column=merged.min_col)
+                    for row in range(merged.min_row, merged.max_row + 1)
+                )
+                for cell in left_targets:
+                    border = copy.copy(cell.border)
+                    border.left = copy.copy(left_side)
+                    cell.border = border
 
             # Prefer an existing right edge.  For framed merged cells whose right
             # edge was already lost, the matching left edge is the intended style.
@@ -446,6 +458,30 @@ class MonthlyReportManager:
                 alignment.wrap_text = False
                 alignment.shrink_to_fit = True
                 cell.alignment = alignment
+
+    def _fill_repeated_header_document_numbers(self, ws, doc_num):
+        """Restore the document number in every repeated report header."""
+        document_text = f'\ubb38\uc11c\ubc88\ud638 : \uc6d4\uac04\uc6a9\uc5ed\uc9c4\ub3c4\ubcf4\uace0\uc11c {doc_num}\ud638'
+        updated = set()
+        for row in range(1, ws.max_row + 1):
+            for col in range(16, min(ws.max_column, 23) + 1):
+                value = str(ws.cell(row=row, column=col).value or '')
+                compact = value.replace(' ', '').replace('\n', '')
+                if '\uac1c\uc815\ubc88\ud638' not in compact:
+                    continue
+                document_row = row - 2
+                if document_row < 1 or (document_row, col) in updated:
+                    continue
+                target = ws.cell(row=document_row, column=col)
+                if not isinstance(target, Cell):
+                    continue
+                target.value = document_text
+                target.alignment = Alignment(
+                    horizontal='left', vertical='center',
+                    wrap_text=False, shrink_to_fit=True, indent=1,
+                )
+                target.font = Font(name='\ub9d1\uc740 \uace0\ub515', size=8)
+                updated.add((document_row, col))
 
     def _fix_ndt_section_labels(self, ws):
         """Correct known text errors retained in the report template."""
@@ -1080,9 +1116,14 @@ class MonthlyReportManager:
             total_rate_alignment.shrink_to_fit = True
             total_rate_cell.alignment = total_rate_alignment
 
-    def _populate_process_photo_pages(self, ws, process_photos):
+    def _populate_process_photo_pages(self, ws, process_photos, doc_num='01'):
         """Place registered process photos into the template's 7.0 pages."""
         from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+        from openpyxl.drawing.xdr import XDRPositiveSize2D
+        from openpyxl.utils import get_column_letter
+        from openpyxl.utils.units import pixels_to_EMU, points_to_pixels
+        import copy
 
         base_dir = os.path.dirname(os.path.abspath(self._history_path))
         valid_photos = []
@@ -1113,6 +1154,44 @@ class MonthlyReportManager:
             ):
                 original_photo_starts.append(row - 9)
         photo_section_start = min(original_photo_starts) if original_photo_starts else None
+
+        # Page 16 is the layout reference for the following photo pages.  Read
+        # its seven actual header-row heights instead of estimating them; the
+        # photo header otherwise renders noticeably shorter on page 17.
+        reference_header_heights = None
+        reference_section_font = None
+        reference_header_start = None
+        reference_logo_anchor = None
+        reference_logo_size = None
+        if photo_section_start is not None:
+            for row in range(1, photo_section_start):
+                row_text = ''.join(
+                    str(ws.cell(row=row, column=col).value or '')
+                    for col in range(1, min(ws.max_column, 23) + 1)
+                ).replace(' ', '').replace('\n', '')
+                if '6.0\ubc29\uc0ac\uc120\uc548\uc804\uad00\ub9ac\ud1b5\ud569\uc815\ubcf4\ub9dd\ubcf4\uace0\uc790\ub8cc' in row_text:
+                    reference_start = max(1, row - 4)
+                    reference_header_start = reference_start
+                    reference_header_heights = [
+                        ws.row_dimensions[reference_start + offset].height
+                        for offset in range(7)
+                    ]
+                    reference_section_font = copy.copy(
+                        ws.cell(row=row, column=6).font
+                    )
+                    for image in list(ws._images):
+                        anchor = getattr(image, 'anchor', None)
+                        if not hasattr(anchor, '_from'):
+                            continue
+                        image_row = anchor._from.row + 1
+                        image_col = anchor._from.col + 1
+                        if (
+                            reference_start <= image_row <= reference_start + 6
+                            and image_col <= 5
+                        ):
+                            reference_logo_anchor = copy.deepcopy(anchor)
+                            reference_logo_size = (image.width, image.height)
+                            break
 
         pt_photos = [
             photo for photo in process_photos
@@ -1223,23 +1302,84 @@ class MonthlyReportManager:
                     continue
 
                 photo_slots = (
-                    ('C', layout['image_row'], 3, layout['image_row'] + 18),
-                    ('M', layout['image_row'], 13, layout['image_row'] + 18),
-                    ('C', layout['image_row'] + 21, 3, layout['image_row'] + 39),
-                    ('M', layout['image_row'] + 21, 13, layout['image_row'] + 39),
+                    ('C', layout['image_row'], 3, 12, layout['image_row'] + 16),
+                    ('M', layout['image_row'], 13, 23, layout['image_row'] + 16),
+                    ('C', layout['image_row'] + 21, 3, 12, layout['image_row'] + 37),
+                    ('M', layout['image_row'] + 21, 13, 23, layout['image_row'] + 37),
                 )
+
+                # Remove existing dummy images in this page's photo slots
+                page_start_row = layout['image_row']
+                page_end_row = layout['image_row'] + 42
+                kept_images = []
+                for existing_image in list(ws._images):
+                    anchor = getattr(existing_image, 'anchor', None)
+                    if hasattr(anchor, '_from'):
+                        r = anchor._from.row + 1
+                        if page_start_row <= r <= page_end_row:
+                            # Discard the template's dummy photo.
+                            continue
+                    kept_images.append(existing_image)
+                ws._images = kept_images
                 for index, photo in enumerate(page_photos):
                     image = XLImage(photo['_resolved_path'])
-                    max_width, max_height = 310, 180
+                    (
+                        anchor_col, anchor_row, caption_col,
+                        caption_end_col, caption_row,
+                    ) = photo_slots[index]
+
+                    # Size and center the photo inside the real cell frame.
+                    # The caption row is excluded from the available height.
+                    frame_width = 0
+                    for col in range(caption_col, caption_end_col + 1):
+                        width = ws.column_dimensions[
+                            get_column_letter(col)
+                        ].width
+                        if width is None:
+                            width = ws.sheet_format.defaultColWidth or 8.43
+                        frame_width += int(float(width) * 7 + 5)
+
+                    default_row_height = ws.sheet_format.defaultRowHeight or 15
+                    frame_height = sum(
+                        points_to_pixels(
+                            ws.row_dimensions[row].height or default_row_height
+                        )
+                        for row in range(anchor_row, caption_row)
+                    )
+                    # Keep a clear gap above the caption separator; drawings
+                    # render over cell borders when they touch the boundary.
+                    max_width = max(1, min(340, frame_width - 20))
+                    max_height = max(1, min(255, frame_height - 20))
                     scale = min(
                         max_width / image.width,
                         max_height / image.height,
-                        1.0,
                     )
                     image.width *= scale
                     image.height *= scale
-                    anchor_col, anchor_row, caption_col, caption_row = photo_slots[index]
-                    image.anchor = f"{anchor_col}{anchor_row}"
+
+                    # Excel's rendered column widths differ slightly from the
+                    # width-to-pixel estimate.  Apply the measured visual
+                    # correction so the picture is centered in the output.
+                    horizontal_correction = 11 if caption_col == 3 else 8
+                    offset_x = max(
+                        0,
+                        (frame_width - image.width) / 2
+                        + horizontal_correction,
+                    )
+                    offset_y = max(0, (frame_height - image.height) / 2 - 7)
+                    marker = AnchorMarker(
+                        col=caption_col - 1,
+                        colOff=pixels_to_EMU(offset_x),
+                        row=anchor_row - 1,
+                        rowOff=pixels_to_EMU(offset_y),
+                    )
+                    image.anchor = OneCellAnchor(
+                        _from=marker,
+                        ext=XDRPositiveSize2D(
+                            cx=pixels_to_EMU(image.width),
+                            cy=pixels_to_EMU(image.height),
+                        ),
+                    )
                     ws.add_image(image)
 
                     caption = ' / '.join(filter(None, [
@@ -1248,7 +1388,6 @@ class MonthlyReportManager:
                         str(photo.get('joint_no', '')),
                         str(photo.get('description', '')),
                     ]))
-                    caption_end_col = 12 if caption_col == 3 else 23
                     for merged in list(ws.merged_cells.ranges):
                         if (
                             merged.min_row <= caption_row <= merged.max_row
@@ -1266,6 +1405,34 @@ class MonthlyReportManager:
                         horizontal='center', vertical='center',
                         wrap_text=True, shrink_to_fit=True,
                     )
+                    caption_cell.font = Font(name='맑은 고딕', size=8)
+
+                    caption_cell.font = Font(
+                        name='\ub9d1\uc740 \uace0\ub515', size=9,
+                    )
+                    ws.row_dimensions[caption_row].height = 18
+
+                    # Make the image and its description read as one framed
+                    # item.  Keep the caption inside the bottom of that frame.
+                    frame_top = anchor_row
+                    frame_range = ws.iter_rows(
+                        min_row=frame_top, max_row=caption_row,
+                        min_col=caption_col, max_col=caption_end_col,
+                    )
+                    frame_side = Side(style='thin', color='808080')
+                    for frame_row in frame_range:
+                        for frame_cell in frame_row:
+                            border = copy.copy(frame_cell.border)
+                            if frame_cell.row == frame_top:
+                                border.top = copy.copy(frame_side)
+                            if frame_cell.row == caption_row:
+                                border.bottom = copy.copy(frame_side)
+                                border.top = copy.copy(frame_side)
+                            if frame_cell.column == caption_col:
+                                border.left = copy.copy(frame_side)
+                            if frame_cell.column == caption_end_col:
+                                border.right = copy.copy(frame_side)
+                            frame_cell.border = border
 
         # The template contains additional legacy photo-log pages after the
         # three SEC.16 pages.  Print only the generated process-photo pages;
@@ -1281,6 +1448,175 @@ class MonthlyReportManager:
                 if surviving_titles else photo_section_start - 1
             )
             self._set_print_area_end(ws, print_end_row)
+
+        # Rebuild the photo-page header deterministically.  Searching another
+        # page for a header can select the radiation-safety page because it has
+        # the same outer geometry but different text and internal merges.
+        thin_black = Side(style='thin', color='000000')
+        no_side = Side(style=None)
+        header_fill = PatternFill('solid', fgColor='FFFFFF')
+        ordered_photo_titles = sorted(surviving_titles)
+        total_photo_pages = len(ordered_photo_titles)
+        for photo_page_number, title_row in enumerate(
+            ordered_photo_titles, start=1
+        ):
+            header_start = title_row - 9
+            header_end = header_start + 6
+
+            if reference_header_heights:
+                for offset, height in enumerate(reference_header_heights):
+                    ws.row_dimensions[header_start + offset].height = height
+            else:
+                for row in range(header_start, header_start + 4):
+                    ws.row_dimensions[row].height = 10.5
+                for row in range(header_start + 4, header_end + 1):
+                    ws.row_dimensions[row].height = 6
+
+            # The merged photo-title band spans three worksheet rows, while
+            # the revision-number band spans two.  Normalize the three lower
+            # rows so both visible merged cells have exactly the same height.
+            default_height = ws.sheet_format.defaultRowHeight or 15
+            revision_height = sum(
+                float(ws.row_dimensions[row].height or default_height)
+                for row in range(header_start + 2, header_start + 4)
+            )
+            photo_row_height = revision_height / 3.0
+            for row in range(header_start + 4, header_end + 1):
+                ws.row_dimensions[row].height = photo_row_height
+
+            branch_name = ''
+            for row in range(header_start, header_end + 1):
+                for col in range(1, min(ws.max_column, 23) + 1):
+                    value = str(ws.cell(row=row, column=col).value or '').strip()
+                    if col <= 5 and '\uc9c0\uc0ac' in value and not branch_name:
+                        branch_name = value
+
+            for merged in list(ws.merged_cells.ranges):
+                if not (
+                    merged.max_row < header_start
+                    or merged.min_row > header_end
+                ):
+                    ws.unmerge_cells(str(merged))
+
+            # Apply the complete grid before merging.  Styling only the anchor
+            # cell of a merged range leaves gaps at its far and outer edges.
+            for row in range(header_start, header_end + 1):
+                for col in range(2, 24):
+                    cell = ws.cell(row=row, column=col)
+                    cell.fill = header_fill
+                    cell.border = Border(
+                        left=thin_black,
+                        right=thin_black,
+                        top=thin_black,
+                        bottom=thin_black,
+                    )
+
+            header_blocks = (
+                (header_start, 2, header_start + 3, 5),
+                (header_start + 4, 2, header_end, 5),
+                (header_start, 6, header_start + 3, 15),
+                (header_start + 4, 6, header_end, 15),
+                (header_start, 16, header_start + 1, 23),
+                (header_start + 2, 16, header_start + 3, 23),
+                (header_start + 4, 16, header_end, 23),
+            )
+            for min_row, min_col, max_row, max_col in header_blocks:
+                ws.merge_cells(
+                    start_row=min_row, start_column=min_col,
+                    end_row=max_row, end_column=max_col,
+                )
+                block = ws.cell(row=min_row, column=min_col)
+                block.fill = header_fill
+                block.alignment = Alignment(
+                    horizontal='center', vertical='center', wrap_text=True,
+                )
+
+            # The logo and branch name form one visual left panel, so there is
+            # no horizontal divider above "\uc911\uc559\uc9c0\uc0ac".  Reassert the
+            # black top/left perimeter after merging because openpyxl can drop
+            # the far edge of merged ranges.
+            for col in range(2, 6):
+                logo_edge = ws.cell(header_start + 3, col)
+                logo_border = copy.copy(logo_edge.border)
+                logo_border.bottom = no_side
+                logo_edge.border = logo_border
+
+                branch_edge = ws.cell(header_start + 4, col)
+                branch_border = copy.copy(branch_edge.border)
+                branch_border.top = no_side
+                branch_edge.border = branch_border
+
+            for col in range(2, 24):
+                top_cell = ws.cell(header_start, col)
+                top_border = copy.copy(top_cell.border)
+                top_border.top = thin_black
+                top_cell.border = top_border
+            for row in range(header_start, header_end + 1):
+                left_cell = ws.cell(row, 2)
+                left_border = copy.copy(left_cell.border)
+                left_border.left = thin_black
+                left_cell.border = left_border
+
+            # Match the page-16 logo position as well as the cell heights.
+            if reference_logo_anchor is not None and reference_header_start is not None:
+                for image in list(ws._images):
+                    anchor = getattr(image, 'anchor', None)
+                    if not hasattr(anchor, '_from'):
+                        continue
+                    image_row = anchor._from.row + 1
+                    image_col = anchor._from.col + 1
+                    if header_start <= image_row <= header_end and image_col <= 5:
+                        new_anchor = copy.deepcopy(reference_logo_anchor)
+                        row_shift = header_start - reference_header_start
+                        new_anchor._from.row += row_shift
+                        if hasattr(new_anchor, 'to'):
+                            new_anchor.to.row += row_shift
+                        image.anchor = new_anchor
+                        if reference_logo_size:
+                            image.width, image.height = reference_logo_size
+                        break
+
+            ws.cell(header_start, 2).value = None
+            branch_cell = ws.cell(header_start + 4, 2)
+            branch_cell.value = branch_name or '\uc911 \uc559 \uc9c0 \uc0ac'
+            branch_cell.fill = PatternFill('solid', fgColor='FFFFFF')
+            branch_cell.font = Font(
+                name='\ub9d1\uc740 \uace0\ub515', size=8, bold=True,
+            )
+            branch_cell.alignment = Alignment(
+                horizontal='center', vertical='top',
+                wrap_text=False, shrink_to_fit=True,
+            )
+            ws.cell(header_start, 6).value = (
+                '[2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 '
+                '\ube44\ud30c\uad34\uac80\uc0ac\uc6a9\uc5ed \ub2e8\uac00\uacc4\uc57d]\n'
+                '\uc6d4 \uac04 \uc6a9 \uc5ed \uc9c4 \ub3c4 \ubcf4 \uace0 \uc11c'
+            )
+            ws.cell(header_start, 6).font = Font(
+                name='\ub9d1\uc740 \uace0\ub515', size=9, bold=True,
+            )
+            ws.cell(header_start + 4, 6).value = '6.0 \uc0ac\uc9c4\ub300\uc9c0'
+            ws.cell(header_start + 4, 6).font = (
+                copy.copy(reference_section_font)
+                if reference_section_font
+                else Font(name='\ub9d1\uc740 \uace0\ub515', size=10, bold=True)
+            )
+            ws.cell(header_start, 16).value = (
+                f'\ubb38\uc11c\ubc88\ud638 : \uc6d4\uac04\uc6a9\uc5ed\uc9c4\ub3c4\ubcf4\uace0\uc11c {doc_num}\ud638'
+            )
+            ws.cell(header_start + 2, 16).value = '\uac1c\uc815\ubc88\ud638 :        0'
+            ws.cell(header_start + 4, 16).value = (
+                f'\ucabd \ubc88 \ud638 :    {photo_page_number}    of    '
+                f'{total_photo_pages}'
+            )
+            for row in (header_start, header_start + 2, header_start + 4):
+                ws.cell(row, 16).alignment = Alignment(
+                    horizontal='left', vertical='center',
+                    wrap_text=False, indent=1,
+                )
+                ws.cell(row, 16).font = Font(
+                    name='\ub9d1\uc740 \uace0\ub515', size=8,
+                )
 
     def _set_print_area_end(self, ws, end_row):
         """Set the vertical print limit and discard later manual breaks."""
@@ -2312,6 +2648,11 @@ class MonthlyReportManager:
                         ws.row_dimensions[spacer_row].height = default_height
 
         # 마지막으로 맨 위의 1.1 물량표 처리
+        qty_header_row = self.table_markers['qty']
+        # Monthly report terminology only; column positions and data mappings
+        # remain unchanged (I:J = prior-month cumulative, K:L = this month).
+        ws.cell(row=qty_header_row, column=9).value = '\uc804\uc6d4 \ub204\uacc4'
+        ws.cell(row=qty_header_row, column=11).value = '\uae08\uc6d4 \uc791\uc5c5'
         qty_start_row = self.table_markers['qty'] + 1
         qty_mapping = {
             'PAUT_300A이상': qty_start_row,
@@ -2377,17 +2718,40 @@ class MonthlyReportManager:
         ws.column_dimensions['W'].hidden = False
 
         # 사용자 요청: 모든 표의 좌측(2열), 우측(21열) 외곽선을 굵은 실선으로 복원/강제 설정
+        import copy
         medium = Side(style='medium')
         def apply_outer_borders(start_r, end_r):
+            # Preserve all internal thin lines and replace only the four
+            # perimeter edges with one consistent medium outline.
             for r in range(start_r, end_r + 1):
                 lc = ws.cell(row=r, column=2)
-                lc.border = Border(left=medium, right=lc.border.right, top=lc.border.top, bottom=lc.border.bottom)
+                left_border = copy.copy(lc.border)
+                left_border.left = copy.copy(medium)
+                lc.border = left_border
+
                 rc = ws.cell(row=r, column=23)
-                rc.border = Border(left=rc.border.left, right=medium, top=rc.border.top, bottom=rc.border.bottom)
+                right_border = copy.copy(rc.border)
+                right_border.right = copy.copy(medium)
+                rc.border = right_border
+
+            for c in range(2, 24):
+                tc = ws.cell(row=start_r, column=c)
+                top_border = copy.copy(tc.border)
+                top_border.top = copy.copy(medium)
+                tc.border = top_border
+
+                bc = ws.cell(row=end_r, column=c)
+                bottom_border = copy.copy(bc.border)
+                bottom_border.bottom = copy.copy(medium)
+                bc.border = bottom_border
                 
         # 1. 상단 물량표 외곽선 교정
         if self.table_markers['qty'] > 0:
-            apply_outer_borders(self.table_markers['qty'] + 1, self.table_markers['qty'] + 14)
+            qty_last_row = self.table_markers['qty'] + 15
+            apply_outer_borders(
+                self.table_markers['qty'],
+                qty_last_row,
+            )
             
         # 2. 하단 데이터 표 외곽선 교정 (헤더 제외, 데이터 행부터 TOTAL 전까지)
         for section_key in ['paut_1', 'paut_2', 'rt_1', 'rt_2', 'mt_1', 'mt_2', 'pt_1', 'pt_2']:
@@ -2487,7 +2851,8 @@ class MonthlyReportManager:
             ('위상배열초음파탐상검사', 'PAUT'),
         )
         self._populate_owner_report_rows(ws, target_ym, owner_report_path)
-        self._populate_process_photo_pages(ws, process_photos)
+        self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
+        self._fill_repeated_header_document_numbers(ws, doc_num)
         self._fix_ndt_section_labels(ws)
         self._ensure_cover_cell_elements(ws, create_date)
         self._renumber_ndt_status_pages(ws)
@@ -2519,8 +2884,37 @@ class MonthlyReportManager:
 
         self._trim_trailing_blank_print_pages(ws)
 
-        wb.save(output_path)
-        return output_path
+        return self._save_workbook_with_fallback(wb, output_path)
+
+    def _save_workbook_with_fallback(self, wb, output_path):
+        """Save the report, avoiding a hard failure when Excel locks the file.
+
+        Windows denies overwriting an xlsx that is already open in Excel.  In
+        that case keep the user's selected folder and save a timestamped copy.
+        A second PermissionError means the folder itself is not writable.
+        """
+        output_path = os.path.abspath(output_path)
+        try:
+            wb.save(output_path)
+            return output_path
+        except PermissionError:
+            output_dir = os.path.dirname(output_path)
+            stem, extension = os.path.splitext(os.path.basename(output_path))
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            fallback_path = os.path.join(
+                output_dir,
+                f'{stem}_{timestamp}{extension or ".xlsx"}',
+            )
+            try:
+                wb.save(fallback_path)
+                return fallback_path
+            except PermissionError as second_error:
+                raise PermissionError(
+                    '\uc120\ud0dd\ud55c \ud3f4\ub354\uc5d0 \ubcf4\uace0\uc11c\ub97c \uc800\uc7a5\ud560 \uc218 \uc5c6\uc2b5\ub2c8\ub2e4. '
+                    '\uae30\uc874 Excel \ud30c\uc77c\uc744 \ub2eb\uac70\ub098 OneDrive \ub3d9\uae30\ud654\ub97c \ud655\uc778\ud55c \ud6c4, '
+                    '\ub2e4\ub978 \ud3f4\ub354\ub97c \uc120\ud0dd\ud574 \ub2e4\uc2dc \uc2dc\ub3c4\ud574 \uc8fc\uc138\uc694.\n'
+                    f'\uc800\uc7a5 \uacbd\ub85c: {output_path}'
+                ) from second_error
 
     def _safe_float(self, val):
         try:

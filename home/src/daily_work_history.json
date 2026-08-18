@@ -726,7 +726,32 @@
                 "PT": ""
             }
         ],
-        "process_photos": []
+        "process_photos": [
+            {
+                "id": "e68d16afa99d4026b99160dd30d83dd3",
+                "process": "PAUT",
+                "date": "2026-08-07",
+                "section": "Sec.13-2",
+                "line_no": "JA2026-013-013-0-2-400A",
+                "joint_no": "S11",
+                "welder": "W-2023-A-13",
+                "location": "Sec.13-2",
+                "description": "위상배열 초음파탐상검사",
+                "file_path": "..\\data\\process_photos\\2026-08-07\\PAUT_e68d16afa99d4026b99160dd30d83dd3.jpg"
+            },
+            {
+                "id": "f9a3d54e1a3c40bf905f81417d4aaf0f",
+                "process": "PAUT",
+                "date": "2026-08-07",
+                "section": "Sec.13-2",
+                "line_no": "JA2026-013-013-0-2-400A",
+                "joint_no": "S14",
+                "welder": "W-2023-A-13",
+                "location": "Sec.13-2",
+                "description": "위상배열 초음파탐상검사",
+                "file_path": "..\\data\\process_photos\\2026-08-07\\PAUT_f9a3d54e1a3c40bf905f81417d4aaf0f.jpg"
+            }
+        ]
     },
     "2026-08-15": {
         "weather": "",
