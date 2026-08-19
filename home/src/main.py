@@ -62,6 +62,16 @@ print(f"DEBUG: daily_work_report_manager path: {daily_work_report_manager.__file
 # Pre-compiled regex for performance
 from views.components import *
 
+# 현장별 일일 사용량 탭의 차량정보 기본 목록.
+# 저장된 사용자 차량 목록과 병합되므로 기존 등록 차량은 유지된다.
+DEFAULT_VEHICLES = (
+    # 서울검사
+    '84저1259', '95가0200', '91주8839', '90서8616',
+    '76마3422', '71고4405', '89보4028', '81두1580',
+    # 인스펙트
+    '81루5100', '95가0175', '81도5958', '90너4889',
+)
+
 # Auto-install additional dependencies
 from tkcalendar import DateEntry, Calendar
 
@@ -450,7 +460,7 @@ class MaterialManager:
         ] # Initialize worker/name list
         self.warehouses = [] # Initialize warehouse list
         self.equipments = [] # Initialize equipment list
-        self.vehicles = [] # Initialize vehicle list
+        self.vehicles = list(DEFAULT_VEHICLES) # Initialize vehicle list
         self.vehicle_inspections = {} # [NEW] Track active inspection widgets
         self.vehicle_boxes = [] # [NEW] Track active inspection widgets for automated save
         self.companies = [] # Initialize companies list
@@ -13032,8 +13042,13 @@ class MaterialManager:
                     self.equipments = sorted(self.daily_usage_df['장비명'].dropna().unique().tolist())
                     self.equipments = [str(e).strip() for e in self.equipments if str(e).strip()]
                 
-                # Vehicle list
-                self.vehicles[:] = config.get('vehicles', [])
+                # Vehicle list: preserve user entries and ensure company vehicles are available.
+                saved_vehicles = config.get('vehicles', [])
+                self.vehicles[:] = sorted({
+                    str(vehicle).strip()
+                    for vehicle in [*saved_vehicles, *DEFAULT_VEHICLES]
+                    if str(vehicle).strip()
+                })
                 
                 # [FIX] Update combo box values after loading lists from config
                 # Update sites combo boxes
