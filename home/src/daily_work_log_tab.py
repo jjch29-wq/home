@@ -228,7 +228,7 @@ class DailyWorkLogTab(ttk.Frame):
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.ndt_cols = ('업체', '검사방법', '구간', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', 
+        self.ndt_cols = ('업체', '검사방법', '구간', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
                          'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
         history = self.load_history()
         sections = set()
@@ -253,6 +253,8 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Label(grid_frame, text=c, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
             if c in ('구간정보', '라인번호'):
                 grid_frame.grid_columnconfigure(col_idx, weight=3)
+            elif c == '규격':
+                grid_frame.grid_columnconfigure(col_idx, weight=2, minsize=105)
             else:
                 grid_frame.grid_columnconfigure(col_idx, weight=1)
             
@@ -266,7 +268,9 @@ class DailyWorkLogTab(ttk.Frame):
             for col_idx, c in enumerate(self.ndt_cols):
                 # Adjust width for some columns
                 w = 8
-                if c in ('검사방법', '결과', '규격', '관경', '두께'): w = 6
+                if c == '규격': w = 13
+                elif c == '근무구분': w = 7
+                elif c in ('검사방법', '결과', '관경', '두께'): w = 6
                 elif c in ('구간', '업체'): w = 10
                 elif c == '용접사': w = 15
                 elif c == '라인번호': w = 25
@@ -321,6 +325,13 @@ class DailyWorkLogTab(ttk.Frame):
                     row_entries[c] = ent
                 elif c == '규격':
                     ent = ttk.Combobox(grid_frame, width=w, values=[''], justify='center')
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    row_entries[c] = ent
+                elif c == '근무구분':
+                    ent = ttk.Combobox(
+                        grid_frame, width=w, values=['', '주간', '야간', '재검'],
+                        justify='center'
+                    )
                     ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     row_entries[c] = ent
                 elif c == '용접사':
@@ -406,9 +417,9 @@ class DailyWorkLogTab(ttk.Frame):
                 # Update '규격' values based on method
                 if '규격' in r and hasattr(r['규격'], 'configure'):
                     if method == 'RT':
-                        r['규격']['values'] = ['', '31/3 X12"주간', '31/3 X12"야간', '31/3 X6"주간', '31/3 X6"야간']
+                        r['규격']['values'] = ['', '3 1/3 X 12"', '3 1/3 X 6"']
                     elif method in ['PAUT', 'MT', 'PT']:
-                        r['규격']['values'] = ['', '주간', '야간', '재검']
+                        r['규격']['values'] = ['']
                     else:
                         r['규격']['values'] = ['']
                         
@@ -572,42 +583,104 @@ class DailyWorkLogTab(ttk.Frame):
         """현재 선택된 날짜의 데이터를 삭제하고 화면을 초기화합니다."""
         date_str = self.date_entry.get()
         if not date_str: return
-        
-        if not messagebox.askyesno("삭제 확인", f"정말로 {date_str}의 작업/감독일보 저장 내용을 모두 삭제하시겠습니까?\n(이 작업은 되돌릴 수 없습니다)", parent=self):
-            return
-            
-        # 1. 파일에서 데이터 삭제
+
         history = self.load_history()
+        day_data = history.get(date_str, {})
+        day_photos = day_data.get('process_photos', [])
+        photo_count = len(day_photos)
+
+        confirm_message = (
+            f"정말로 {date_str}의 작업/감독일보 저장 내용을 모두 삭제하시겠습니까?\n"
+            f"등록된 공정사진 {photo_count}장도 함께 삭제됩니다.\n\n"
+            "※ 프로그램 관리 폴더의 복사본만 삭제되며 외부 원본은 유지됩니다.\n"
+            "(이 작업은 되돌릴 수 없습니다)"
+        )
+        if not messagebox.askyesno("삭제 확인", confirm_message, parent=self):
+            return
+
+        # 다른 날짜에서 참조 중인 사진은 삭제하지 않는다.
+        other_photo_paths = set()
+        for other_date, other_data in history.items():
+            if other_date == date_str:
+                continue
+            for photo in other_data.get('process_photos', []):
+                file_path = photo.get('file_path', '')
+                if file_path:
+                    other_photo_paths.add(os.path.normcase(os.path.abspath(os.path.join(
+                        os.path.dirname(self.history_path), file_path
+                    ))))
+
+        managed_root = os.path.normcase(os.path.abspath(self.photo_root))
+
+        # 먼저 해당 날짜 기록을 저장소에서 제거한 뒤 관리용 사진을 정리한다.
+        # 저장에 실패하면 사진 삭제를 시작하지 않는다.
         if date_str in history:
             del history[date_str]
             self.save_history(history)
-            
-        # 2. 화면 UI 초기화 (Clear all fields)
+
+        deleted_photo_count = 0
+        failed_photos = []
+        for photo in day_photos:
+            file_path = photo.get('file_path', '')
+            if not file_path:
+                continue
+            photo_path = os.path.normcase(os.path.abspath(os.path.join(
+                os.path.dirname(self.history_path), file_path
+            )))
+            try:
+                is_managed_photo = os.path.commonpath(
+                    [managed_root, photo_path]
+                ) == managed_root
+            except ValueError:
+                is_managed_photo = False
+
+            if not is_managed_photo or photo_path in other_photo_paths:
+                continue
+            try:
+                if os.path.isfile(photo_path):
+                    os.remove(photo_path)
+                    deleted_photo_count += 1
+            except OSError as exc:
+                failed_photos.append(f"{os.path.basename(photo_path)}: {exc}")
+
+        # 화면 UI 초기화 (Clear all fields)
         self.weather_entry.delete(0, tk.END)
         
-        for (m, t), ents in self.qty_entries.items():
+        for ents in self.qty_entries.values():
             for k in ['예상량', '전일누계', '금일작업', '총누계', '공정률', '불량', '불량률', '비고']:
                 if ents.get(k):
                     ents[k].delete(0, tk.END)
                     
-        for i in range(1, 9):
-            w_ent = getattr(self, f"worker_count_{i}", None)
-            if w_ent:
-                w_ent.delete(0, tk.END)
-        
-        for row in self.ndt_entries:
-            for k, ent in row.items():
+        for entries in self.equip_entries.values():
+            for ent in entries.values():
+                ent.delete(0, tk.END)
+
+        for ent in self.personnel_entries.values():
+            ent.delete(0, tk.END)
+
+        self.remarks_text.delete('1.0', tk.END)
+
+        for row in self.ndt_grid_entries:
+            for ent in row.values():
                 if isinstance(ent, ttk.Combobox):
                     ent.set('')
-                elif isinstance(ent, tk.Entry):
+                elif hasattr(ent, 'delete'):
                     ent.delete(0, tk.END)
-                    
-        for k, ent in self.photo_desc_entries.items():
-            ent.delete('1.0', tk.END)
             
         if hasattr(self, 'log'):
             self.log(f"[{date_str}] 작업일보 데이터가 삭제되었습니다.")
-        messagebox.showinfo("삭제 완료", f"{date_str} 데이터가 완전히 삭제되었습니다.", parent=self)
+        result_message = (
+            f"{date_str} 데이터가 삭제되었습니다.\n"
+            f"관리용 공정사진 {deleted_photo_count}장을 삭제했습니다."
+        )
+        if failed_photos:
+            result_message += (
+                f"\n\n삭제하지 못한 사진 {len(failed_photos)}장:\n"
+                + "\n".join(failed_photos)
+            )
+            messagebox.showwarning("일부 삭제 완료", result_message, parent=self)
+        else:
+            messagebox.showinfo("삭제 완료", result_message, parent=self)
 
     def manage_process_photos(self):
         current_date = self.date_entry.get()
@@ -776,6 +849,17 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Label(f_date, text="종료 월:").pack(side=tk.LEFT, padx=5)
         month_var = tk.StringVar(value="08")
         ttk.Spinbox(f_date, from_=1, to=12, textvariable=month_var, width=4, format="%02.0f").pack(side=tk.LEFT)
+
+        # 집계 범위 선택
+        f_scope = ttk.LabelFrame(top, text="집계 범위", padding=(10, 5))
+        f_scope.pack(pady=5)
+        scope_var = tk.StringVar(value="month")
+        ttk.Radiobutton(
+            f_scope, text="해당 월만", variable=scope_var, value="month"
+        ).pack(side=tk.LEFT, padx=10)
+        ttk.Radiobutton(
+            f_scope, text="전체 누적", variable=scope_var, value="cumulative"
+        ).pack(side=tk.LEFT, padx=10)
         
         # 문서번호 입력
         f_doc = ttk.Frame(top)
@@ -844,7 +928,10 @@ class DailyWorkLogTab(ttk.Frame):
                 
             save_path = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
-                initialfile=f"누적진도보고서_{ym.replace('-', '')}.xlsx",
+                initialfile=(
+                    f"누적진도보고서_{ym.replace('-', '')}_"
+                    f"{'월간' if scope_var.get() == 'month' else '전체누적'}.xlsx"
+                ),
                 title="저장 위치 선택",
                 filetypes=[("Excel", "*.xlsx")]
             )
@@ -860,13 +947,18 @@ class DailyWorkLogTab(ttk.Frame):
                     doc_num=doc_var.get().strip(),
                     create_date=create_date_var.get().strip(),
                     owner_report_path=owner_report_path or None,
+                    report_scope=scope_var.get(),
                 )
                 if result_path:
                     messagebox.showinfo("성공", f"누적 진도보고서가 생성되었습니다.\n{result_path}")
                     os.startfile(result_path)
                     top.destroy()
                 else:
-                    messagebox.showwarning("알림", f"{ym}까지의 작업일보 데이터가 없습니다.")
+                    period_text = (
+                        f"{ym}의" if scope_var.get() == "month"
+                        else f"{ym}까지의"
+                    )
+                    messagebox.showwarning("알림", f"{period_text} 작업일보 데이터가 없습니다.")
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -937,6 +1029,7 @@ class DailyWorkLogTab(ttk.Frame):
             prev_data = {'qty_data': {}, 'equip_data': {}, 'personnel_data': {}}
             
         curr_data = history.get(current_date, {})
+        has_current_data = current_date in history
             
         # Update Qty
         def load_format_val(ckey, field_name, v):
@@ -952,9 +1045,16 @@ class DailyWorkLogTab(ttk.Frame):
                 except ValueError: return v
             return v
 
+        def is_zero_number(value):
+            try:
+                return float(str(value).replace(',', '').strip() or 0) == 0
+            except (TypeError, ValueError):
+                return False
+
         for comp_key, entries in self.qty_entries.items():
             # Load from today if exists
             curr_qty = curr_data.get('qty_data', {}).get(comp_key, {})
+            prev_qty = prev_data.get('qty_data', {}).get(comp_key, {})
             for field in ['예상량', '금일작업', '총누계', '공정률', '불량', '불량률', '비고']:
                 entries[field].delete(0, tk.END)
                 current_value = curr_qty.get(field, '')
@@ -969,28 +1069,68 @@ class DailyWorkLogTab(ttk.Frame):
                     else:
                         method, spec = comp_key.split('_', 1)
                         current_value = self.default_qty.get((method, spec), '')
+                if not has_current_data:
+                    if field == '금일작업':
+                        current_value = ''
+                    elif field == '총누계':
+                        current_value = prev_qty.get('총누계', '0') or '0'
+                    elif field in ['불량', '불량률', '비고']:
+                        current_value = prev_qty.get(field, '')
+                    elif field == '공정률':
+                        previous_total = prev_qty.get('총누계', '0') or '0'
+                        expected_value = curr_qty.get('예상량', '')
+                        if not str(expected_value).strip():
+                            expected_value = prev_qty.get('예상량', '')
+                        if not str(expected_value).strip():
+                            method, spec = comp_key.split('_', 1)
+                            expected_value = self.default_qty.get((method, spec), '')
+                        try:
+                            total_num = float(str(previous_total).replace(',', ''))
+                            expected_num = float(str(expected_value).replace(',', ''))
+                            current_value = f"{(total_num / expected_num) * 100:.1f}" if expected_num > 0 else ''
+                        except (TypeError, ValueError):
+                            current_value = ''
+                effective_total = curr_qty.get('총누계', '') if has_current_data else prev_qty.get('총누계', '0')
+                if field in ['금일작업', '총누계', '불량', '불량률'] and is_zero_number(current_value):
+                    current_value = ''
+                elif field == '공정률' and is_zero_number(effective_total):
+                    current_value = ''
                 if str(current_value).strip():
                     val = load_format_val(comp_key, field, current_value)
                     entries[field].insert(0, val)
                     
             # Always calculate 전일누계 from past
-            prev_total = prev_data.get('qty_data', {}).get(comp_key, {}).get('총누계', '0')
+            prev_total = prev_qty.get('총누계', '0') or '0'
             entries['전일누계'].delete(0, tk.END)
-            entries['전일누계'].insert(0, prev_total)
+            if not is_zero_number(prev_total):
+                entries['전일누계'].insert(0, load_format_val(comp_key, '전일누계', prev_total))
             
         # Update Equip
         for eq, entries in self.equip_entries.items():
             curr_eq = curr_data.get('equip_data', {}).get(eq, {})
+            prev_eq = prev_data.get('equip_data', {}).get(eq, {})
             for field in ['금일', '누계']:
                 entries[field].delete(0, tk.END)
-                if field in curr_eq:
-                    entries[field].insert(0, curr_eq[field])
+                if has_current_data:
+                    value = curr_eq.get(field, '')
+                elif field == '금일':
+                    value = ''
+                else:
+                    value = prev_eq.get('누계', '0') or '0'
+                if str(value).strip():
+                    entries[field].insert(0, value)
                     
         # Update Personnel
         for p_key, ent in self.personnel_entries.items():
             ent.delete(0, tk.END)
-            if p_key in curr_data.get('personnel_data', {}):
-                ent.insert(0, curr_data['personnel_data'][p_key])
+            if has_current_data:
+                value = curr_data.get('personnel_data', {}).get(p_key, '')
+            elif p_key.endswith('_누계'):
+                value = prev_data.get('personnel_data', {}).get(p_key, '0') or '0'
+            else:
+                value = ''
+            if str(value).strip():
+                ent.insert(0, value)
                 
         # Update Weather
         self.weather_entry.delete(0, tk.END)
@@ -1004,10 +1144,31 @@ class DailyWorkLogTab(ttk.Frame):
             
         # Update NDT Results
         curr_ndt = curr_data.get('ndt_results', [])
+
+        def split_legacy_spec(row_data):
+            spec = str(row_data.get('규격', '') or '').strip()
+            shift = str(row_data.get('근무구분', '') or '').strip()
+            if not shift:
+                for legacy_shift in ('주간', '야간', '재검'):
+                    if spec.endswith(legacy_shift):
+                        spec = spec[:-len(legacy_shift)].strip()
+                        shift = legacy_shift
+                        break
+            if spec.startswith('31/3'):
+                spec = '3 1/3' + spec[len('31/3'):]
+            spec = spec.replace(' X12"', ' X 12"').replace(' X6"', ' X 6"')
+            return spec, shift
+
         for i, row_entries in enumerate(self.ndt_grid_entries):
             row_data = curr_ndt[i] if i < len(curr_ndt) else {}
+            normalized_spec, work_shift = split_legacy_spec(row_data)
             for col, ent in row_entries.items():
-                val = row_data.get(col, '')
+                if col == '규격':
+                    val = normalized_spec
+                elif col == '근무구분':
+                    val = work_shift
+                else:
+                    val = row_data.get(col, '')
                 if col == '구간정보':
                     ent.set(val)
                 elif isinstance(ent, tk.ttk.Combobox):
@@ -1029,7 +1190,7 @@ class DailyWorkLogTab(ttk.Frame):
             if not method: continue
             
             size_str = row_entries['관경'].get().strip() if hasattr(row_entries['관경'], 'get') else ""
-            spec_str = row_entries['규격'].get().strip() if hasattr(row_entries['규격'], 'get') else ""
+            shift_str = row_entries['근무구분'].get().strip() if hasattr(row_entries['근무구분'], 'get') else ""
             
             import re
             size_match = re.search(r'\d+', size_str)
@@ -1039,7 +1200,7 @@ class DailyWorkLogTab(ttk.Frame):
                 val = float(row_entries['RT_OR'].get() or 0) + float(row_entries['RT_RE'].get() or 0)
                 if val > 0:
                     spec_key = '80A이하' if size_val <= 80 else '150A~100A'
-                    if spec_str == '야간': spec_key += '-야간'
+                    if shift_str == '야간': spec_key += '-야간'
                     comp = f"RT_{spec_key}"
                     if comp in today_qty: today_qty[comp] += val
             
@@ -1049,7 +1210,7 @@ class DailyWorkLogTab(ttk.Frame):
                     spec_key = '200A'
                     if size_val >= 300: spec_key = '300A이상'
                     elif size_val == 250: spec_key = '250A'
-                    if spec_str == '야간' and spec_key in ['300A이상', '200A']:
+                    if shift_str == '야간' and spec_key in ['300A이상', '200A']:
                         spec_key += '-야간'
                     comp = f"PAUT_{spec_key}"
                     if comp in today_qty: today_qty[comp] += val
@@ -1057,14 +1218,14 @@ class DailyWorkLogTab(ttk.Frame):
             elif method == 'MT':
                 val = float(row_entries['MT'].get() or 0)
                 if val > 0:
-                    spec_key = '전체(야간)' if spec_str == '야간' else '전체(주간)'
+                    spec_key = '전체(야간)' if shift_str == '야간' else '전체(주간)'
                     comp = f"MT_{spec_key}"
                     if comp in today_qty: today_qty[comp] += val
                     
             elif method == 'PT':
                 val = float(row_entries['PT'].get() or 0)
                 if val > 0:
-                    spec_key = '전체(야간)' if spec_str == '야간' else '전체(주간)'
+                    spec_key = '전체(야간)' if shift_str == '야간' else '전체(주간)'
                     comp = f"PT_{spec_key}"
                     if comp in today_qty: today_qty[comp] += val
                     
@@ -1078,7 +1239,8 @@ class DailyWorkLogTab(ttk.Frame):
             if '소계' not in comp_key:
                 ent = self.qty_entries[comp_key]['금일작업']
                 ent.delete(0, tk.END)
-                ent.insert(0, format_val(comp_key, val))
+                if val != 0:
+                    ent.insert(0, format_val(comp_key, val))
                 
         # 2. Update Totals based on previous date
         past_dates = [d for d in history.keys() if d < current_date]
@@ -1097,21 +1259,24 @@ class DailyWorkLogTab(ttk.Frame):
             today_val = float(entries['금일작업'].get() or 0)
             
             entries['금일작업'].delete(0, tk.END)
-            entries['금일작업'].insert(0, format_val(comp_key, today_val))
+            if today_val != 0:
+                entries['금일작업'].insert(0, format_val(comp_key, today_val))
             
             entries['전일누계'].delete(0, tk.END)
-            entries['전일누계'].insert(0, format_val(comp_key, prev_total))
+            if prev_total != 0:
+                entries['전일누계'].insert(0, format_val(comp_key, prev_total))
             
             total = prev_total + today_val
             entries['총누계'].delete(0, tk.END)
-            entries['총누계'].insert(0, format_val(comp_key, total))
+            if total != 0:
+                entries['총누계'].insert(0, format_val(comp_key, total))
             
             expected = float(entries['예상량'].get() or 0)
-            if expected > 0:
+            entries['공정률'].delete(0, tk.END)
+            if expected > 0 and total != 0:
                 entries['예상량'].delete(0, tk.END)
                 entries['예상량'].insert(0, f"{int(expected)}")
                 progress = (total / expected) * 100
-                entries['공정률'].delete(0, tk.END)
                 entries['공정률'].insert(0, f"{progress:.1f}")
 
         # Subtotals for Qty
@@ -1121,7 +1286,11 @@ class DailyWorkLogTab(ttk.Frame):
             self.qty_entries['PAUT_소계']['예상량'].insert(0, f"{int(paut_expected)}")
         paut_total = sum(float(self.qty_entries[f"PAUT_{s}"]['총누계'].get() or 0) for s in ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간'])
         self.qty_entries['PAUT_소계']['총누계'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['총누계'].insert(0, format_val('PAUT', paut_total))
+        self.qty_entries['PAUT_소계']['공정률'].delete(0, tk.END)
+        if paut_total != 0:
+            self.qty_entries['PAUT_소계']['총누계'].insert(0, format_val('PAUT', paut_total))
+            if paut_expected > 0:
+                self.qty_entries['PAUT_소계']['공정률'].insert(0, f"{(paut_total / paut_expected) * 100:.1f}")
         
         rt_expected = sum(float(self.qty_entries[f"RT_{s}"]['예상량'].get() or 0) for s in ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간'])
         if rt_expected > 0:
@@ -1129,7 +1298,11 @@ class DailyWorkLogTab(ttk.Frame):
             self.qty_entries['RT_소계']['예상량'].insert(0, f"{int(rt_expected)}")
         rt_total = sum(float(self.qty_entries[f"RT_{s}"]['총누계'].get() or 0) for s in ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간'])
         self.qty_entries['RT_소계']['총누계'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['총누계'].insert(0, format_val('RT', rt_total))
+        self.qty_entries['RT_소계']['공정률'].delete(0, tk.END)
+        if rt_total != 0:
+            self.qty_entries['RT_소계']['총누계'].insert(0, format_val('RT', rt_total))
+            if rt_expected > 0:
+                self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
                 
         # Equip
         for eq, entries in self.equip_entries.items():

@@ -128,8 +128,11 @@ class MonthlyReportManager:
         for merged in list(ws.merged_cells.ranges):
             anchor = ws.cell(row=merged.min_row, column=merged.min_col)
 
+            def has_style(side):
+                return bool(getattr(side, 'style', None))
+
             left_side = anchor.border.left
-            if left_side.style:
+            if has_style(left_side):
                 left_targets = [anchor]
                 left_targets.extend(
                     ws.cell(row=row, column=merged.min_col)
@@ -143,21 +146,21 @@ class MonthlyReportManager:
             # Prefer an existing right edge.  For framed merged cells whose right
             # edge was already lost, the matching left edge is the intended style.
             right_side = anchor.border.right
-            if not right_side.style:
+            if not has_style(right_side):
                 for row in range(merged.min_row, merged.max_row + 1):
                     candidate = ws.cell(row=row, column=merged.max_col).border.right
-                    if candidate.style:
+                    if has_style(candidate):
                         right_side = candidate
                         break
 
             is_framed = bool(
-                anchor.border.left.style
-                and (anchor.border.top.style or anchor.border.bottom.style)
+                has_style(anchor.border.left)
+                and (has_style(anchor.border.top) or has_style(anchor.border.bottom))
             )
-            if not right_side.style and is_framed:
+            if not has_style(right_side) and is_framed:
                 right_side = anchor.border.left
 
-            if not right_side.style:
+            if not has_style(right_side):
                 continue
 
             # Keep the anchor edge as well as every cell on the visible perimeter.
@@ -497,7 +500,6 @@ class MonthlyReportManager:
         import copy
 
         thin = Side(style='thin', color='000000')
-        gray = Side(style='thin', color='BFBFBF')
 
         def _merge_exactly(cell_range):
             from openpyxl.worksheet.cell_range import CellRange
@@ -535,7 +537,11 @@ class MonthlyReportManager:
         date_cell.alignment = Alignment(
             horizontal='center', vertical='center', wrap_text=False,
         )
-        date_cell.border = Border(left=gray, right=gray, top=gray, bottom=gray)
+        # 문서번호/개정번호와 동일하게 날짜는 외곽선 없이 표시한다.
+        # 병합 전 템플릿에서 남은 가장자리 선도 병합 영역 전체에서 제거한다.
+        for row in ws.iter_rows(min_row=4, max_row=6, min_col=14, max_col=20):
+            for cell in row:
+                cell.border = Border()
 
     def _populate_radiation_network_report(self, ws, target_ym):
         """Replace the section 6.0 screenshot with a real editable cell table."""
@@ -1948,7 +1954,8 @@ class MonthlyReportManager:
         return pt_title_row
 
     def generate_report(self, history_path, target_ym, output_path, doc_num="01",
-                        create_date=None, owner_report_path=None):
+                        create_date=None, owner_report_path=None,
+                        report_scope="month"):
 
         self._history_path = history_path
 
@@ -1969,16 +1976,23 @@ class MonthlyReportManager:
             history_data = json.load(f)
 
         # 1. 데이터 필터링 및 집계
-        # The selected year-month is the inclusive end of a cumulative report.
-        # Include every valid history date from the beginning through that
-        # month's final day (for example, 2027-08 includes through 2027-08-31).
-        target_dates = sorted(
+        # 월간: 선택한 월의 자료만 포함한다. 전체 누적: 최초 기록부터
+        # 선택 월 말일까지 포함한다.
+        valid_dates = sorted(
             d for d in history_data.keys()
             if re.match(r'^\d{4}-\d{2}-\d{2}$', str(d))
             and str(d)[:7] <= target_ym
         )
+        if report_scope == "month":
+            target_dates = [d for d in valid_dates if str(d)[:7] == target_ym]
+        elif report_scope == "cumulative":
+            target_dates = valid_dates
+        else:
+            raise ValueError(f"지원하지 않는 집계 범위입니다: {report_scope}")
+
         if not target_dates:
-            print(f"No data found through {target_ym}")
+            scope_text = "in" if report_scope == "month" else "through"
+            print(f"No data found {scope_text} {target_ym}")
             return None
 
         # 집계 구조 (1.2 요약용: 업체+구간+라인+관경+규격별 그룹)
@@ -1998,6 +2012,21 @@ class MonthlyReportManager:
         rt_original_counts_by_welder = defaultdict(int)
         paut_retest_lengths_by_welder = defaultdict(float)
         paut_original_lengths_by_welder = defaultdict(float)
+
+        def split_spec_and_shift(row):
+            """신규 분리 필드와 기존 결합 규격을 동일한 형태로 정규화한다."""
+            spec = str(row.get('규격', '') or '').strip()
+            shift = str(row.get('근무구분', '') or '').strip()
+            if not shift:
+                for legacy_shift in ('주간', '야간', '재검'):
+                    if spec.endswith(legacy_shift):
+                        spec = spec[:-len(legacy_shift)].strip()
+                        shift = legacy_shift
+                        break
+            if spec.startswith('31/3'):
+                spec = '3 1/3' + spec[len('31/3'):]
+            spec = re.sub(r'\s*[Xx×]\s*', ' X ', spec)
+            return spec, shift
 
         # 물량표(qty) 처리를 위해 시작일의 전일누계와 전체 금일작업 합산을 구함
         first_day_data = history_data[target_dates[0]]
@@ -2068,7 +2097,7 @@ class MonthlyReportManager:
                 section = str(row.get('구간', '')).strip()
                 line_no = str(row.get('라인번호', '')).strip()
                 size = str(row.get('관경', '')).strip()
-                spec = str(row.get('규격', '')).strip()
+                spec, work_shift = split_spec_and_shift(row)
                 
                 # 수량 (길이 또는 매수)
                 qty_val = 0.0
@@ -2081,7 +2110,7 @@ class MonthlyReportManager:
                     re_val = self._safe_float(row.get('RT_RE'))
                     qty_val = or_val + re_val
                 
-                group_key = (company, section, line_no, size, spec)
+                group_key = (company, section, line_no, size, spec, work_shift)
                 ndt_groups[method][group_key]['count'] += 1
                 ndt_groups[method][group_key]['qty'] += qty_val
 
@@ -2194,7 +2223,7 @@ class MonthlyReportManager:
                     comp = k[0]
                     if current_company is not None and comp != current_company:
                         data_items.append(
-                            ((f"[{current_company} 소계]", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
+                            ((f"[{current_company} 소계]", "", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
                         )
                         sub_count = 0
                         sub_qty = 0.0
@@ -2208,7 +2237,7 @@ class MonthlyReportManager:
                     
                 if current_company is not None:
                     data_items.append(
-                        ((f"[{current_company} 소계]", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
+                        ((f"[{current_company} 소계]", "", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
                     )
             num_items = len(data_items)
             section_item_counts[section_key] = num_items
@@ -2318,7 +2347,7 @@ class MonthlyReportManager:
 
             current_row = start_row
             seq_num = 1
-            for idx, ((comp, sec, line, size, spec), vals) in enumerate(data_items):
+            for idx, ((comp, sec, line, size, spec, work_shift), vals) in enumerate(data_items):
                 count = vals['count']
                 qty = vals['qty']
                 unit = "매" if method == "RT" else "m"
@@ -2373,6 +2402,7 @@ class MonthlyReportManager:
                 safe_merge(current_row, 18, current_row, 19) # RE'
                 safe_merge(current_row, 20, current_row, 21) # TOTAL
                 safe_merge(current_row, 22, current_row, 23) # 비고
+                _write_safe(current_row, 22, work_shift)
                     
                 # Line No. 글씨 다 보이도록 높이 조절
                 if current_row >= 401:
@@ -2399,6 +2429,11 @@ class MonthlyReportManager:
 
                 # Keep long Line No. values on one line inside the widened F:I area.
                 ws.cell(row=current_row, column=6).alignment = Alignment(
+                    horizontal='center', vertical='center',
+                    wrap_text=False, shrink_to_fit=True
+                )
+                # 규격은 좁은 N:O 병합 영역에서도 두 줄로 나뉘지 않게 한다.
+                ws.cell(row=current_row, column=14).alignment = Alignment(
                     horizontal='center', vertical='center',
                     wrap_text=False, shrink_to_fit=True
                 )
