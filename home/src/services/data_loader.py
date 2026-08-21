@@ -406,7 +406,7 @@ def load_data_impl(self):
 
             except Exception as e:
                 print(f"DEBUG: Budget sheet not found or load failed: {e}")
-                self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail'])
+                self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note'])
             
             # [NEW] 7. Settings (Excel-based Rate Management)
             try:
@@ -445,7 +445,7 @@ def load_data_impl(self):
                 self.save_data() # Save the newly created sheet
 
             # [NEW] Ensure budget columns are numeric to prevent NaN assignment errors in some pandas versions
-            numeric_cols = ['Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit']
+            numeric_cols = ['Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit']
             for col in numeric_cols:
                 if col in self.budget_df.columns:
                     self.budget_df[col] = pd.to_numeric(self.budget_df[col], errors='coerce').fillna(0).astype(float)
@@ -465,14 +465,14 @@ def load_data_impl(self):
                                             'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', '장비명', '검사량', '회사코드',
                                             '업체명', '단가', '출장비', '일식', '검사비', 'FilmCount',
                                             '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수'])
-        self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail'])
+        self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note'])
 
     
     # --- [NEW] Global Data Sanitization & Dtype Enforcement ---
     # This definitively prevents "TypeError: Invalid value '' for dtype 'float64'" by ensuring 
     # that all numeric columns are strictly float64 and free of empty strings or text.
     sanitization_map = {
-        'budget_df': ['Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit'],
+        'budget_df': ['Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit'],
         'daily_usage_df': ['Usage', '검사량', '단가', '출장비', '일식', '검사비', '수량', 
                             'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크', 
                             'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타'],

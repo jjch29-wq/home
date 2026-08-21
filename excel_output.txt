@@ -1,21 +1,257 @@
-Sheet names: ['월간보고서 05월(1호)']
+Sheets: ['사전원가', '인원투입계획', '경비예상지출항목', '장비감각상각 (2)', '사후원가', '근무현황', '개인일비', '장비감각상각', '계정별 사용내역 (2)', '계정별 사용내역', '대비표']
 
---- Sheet: 월간보고서 05월(1호) ---
-Shape: (795, 26)
-First 15 rows:
-     0                                      1    2    3    4                             5    6                                                   7    8    9    10   11                         12                    13   14   15   16   17   18   19   20   21   22  23   24   25
-0   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-1   NaN  계약번호     :  제  000000-0038-3-74     호  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN  문서번호 : 월간용역진도보고서 01호  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-2   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN         개정번호 : Rev. 0  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-3   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN         2026. 08. 17.  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-4   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-5   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-6   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-7   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-8   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-9   NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-10  NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-11  NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                                 NaN  NaN  NaN  NaN  NaN                                              NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-12  NaN                                    NaN  NaN  NaN  NaN  2026년 중앙지사 열수송관 비파괴검사용역 단가계약  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-13  NaN                                    NaN  NaN  NaN  NaN                  월간 용역 진도 보고서  NaN                                                 NaN  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
-14  NaN                                    NaN  NaN  NaN  NaN                           NaN  NaN                                            2027년 8월  NaN  NaN  NaN  NaN                        NaN                   NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN  NaN NaN  NaN  NaN
+--- Sheet: 사전원가 ---
+                                     Unnamed: 0 Unnamed: 1  Unnamed: 2 Unnamed: 3 Unnamed: 4 Unnamed: 5 Unnamed: 6     Unnamed: 7 Unnamed: 8       Unnamed: 9 Unnamed: 10 Unnamed: 11 Unnamed: 12 Unnamed: 13 Unnamed: 14 Unnamed: 15  Unnamed: 16  Unnamed: 17  Unnamed: 18  Unnamed: 19  Unnamed: 20 Unnamed: 21      Unnamed: 22 Unnamed: 23 Unnamed: 24 Unnamed: 25 Unnamed: 26     Unnamed: 27     Unnamed: 28      Unnamed: 29    Unnamed: 30
+0                               공사실행예산서(사전원가계산)        NaN         NaN        NaN        NaN        NaN        NaN             소장         담당               상무         본부장          사장         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+1                                           NaN        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+2   현 장 명 : 롯데바이오로직스 Project PROVIDENCE 중 비파괴검사        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+3           공사기간 : 2025. 02. 20 ~ 2026. 07. 31         NaN         NaN        NaN        428        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+4                              계약업체 : 롯데건설 주식회사        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+5                                   경인사무소 : 박홍규        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+6                                           NaN        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+7                                     1. 수입(매출)        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+8                                         계약 금액        NaN        산출근거        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+9                                     377600000        NaN  계약금액/부가세별도        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN          평균         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+10                                          NaN        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+11                                      2. 매출원가        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN      2019.07.01~        자격수당        가족수당        근속수당        지원수당             퇴직금            연차수당           기준급여/년         기준급여/일
+12                                        1)인건비        NaN         NaN        NaN        NaN        NaN        NaN            NaN        NaN              NaN         NaN         NaN         NaN         NaN   고정금액(변경不)         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+13                                           구분        NaN          직급       투입인원        NaN     투입일수/인        NaN           단가/일        NaN           사전원가금액         NaN         NaN         NaN          직급        기준급여         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+14                               정시근무\n(240일/년)        NaN          이사          0        NaN          0        NaN  230208.333333        NaN                0         NaN         NaN         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN         NaN              NaN         NaN         NaN         NaN         NaN             NaN             NaN              NaN            NaN
+15                                          NaN        NaN          부장          2        NaN         80        NaN  230208.333333        NaN  36833333.333333         NaN         NaN         NaN          부장    55250000         NaN          NaN          NaN          NaN          NaN          NaN          부장  53736926.465556         NaN         NaN         NaN         NaN  4477898.082375  4298954.117244  62513778.665175  260474.077772
+16                                          NaN        NaN          차장          2        NaN         60        NaN         198625        NaN         23835000         NaN         NaN         NaN          차장    47670000         NaN          NaN          NaN          NaN          NaN          NaN          차장   46463968.20339         NaN         NaN         NaN         NaN  3871842.470388  3717117.456271   54052928.13005  225220.533875
+17                                          NaN        NaN          과장          2        NaN        100        NaN  171541.666667        NaN  34308333.333333         NaN         NaN         NaN          과장    41170000         NaN          NaN          NaN          NaN          NaN          NaN          과장  42356572.883871         NaN         NaN         NaN         NaN  3529573.218413   3388525.83071  49274671.932994  205311.133054
+18                                          NaN        NaN          대리          2        NaN         80        NaN         158000        NaN         25280000         NaN         NaN         NaN          대리    37920000         NaN          NaN          NaN          NaN          NaN          NaN          대리  37672832.491689         NaN         NaN         NaN         NaN  3139277.131532  3013826.599335  43825936.222557  182608.067594
+19                                          NaN        NaN          계장          2        NaN         80        NaN  144458.333333        NaN  23113333.333333         NaN         NaN         NaN          계장    34670000         NaN          NaN          NaN          NaN          NaN          NaN        3을주임  34263930.207249         NaN         NaN         NaN         NaN   2855213.30417   2741114.41658  39860257.927999  166084.408033
+Shape: (103, 31)
+
+--- Sheet: 인원투입계획 ---
+   롯데바이오로직스 Project PROVIDENC 인원투입계획 Unnamed: 1 Unnamed: 2 Unnamed: 3 Unnamed: 4 Unnamed: 5 Unnamed: 6 Unnamed: 7 Unnamed: 8 Unnamed: 9 Unnamed: 10 Unnamed: 11 Unnamed: 12 Unnamed: 13 Unnamed: 14  Unnamed: 15  Unnamed: 16  Unnamed: 17  Unnamed: 18  Unnamed: 19  Unnamed: 20 Unnamed: 21 Unnamed: 22 Unnamed: 23 Unnamed: 24 Unnamed: 25
+0                                NaN        NaN         경인         경인         경인         경인         경인         경인         경인         경인          경인         NaN         NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN         NaN         NaN         NaN         NaN         NaN
+1                                NaN        NaN        주진철        박광복        김춘호        권인경        유상훈        박원준        현해룡        김성현         우명광         이준우         주유철         이은수         김진환          NaN          NaN          NaN          NaN          NaN          NaN        인원합계          비고          비고           방         숙박비
+2                                NaN        NaN         부장         부장         차장         차장         과장         과장         대리         대리          계장          계장          주임          주임          주임          NaN          NaN          NaN          NaN          NaN          NaN         NaN         NaN         NaN          갯수       (B급지)
+3                              2024년         4월         10          4          4          4          7          7          6          6           6           6           7           7           7          NaN          NaN          NaN          NaN          NaN          NaN          81         NaN         NaN         NaN         NaN
+4                                NaN         5월         10          4          5          5          8          8          6          6           6           6           8           8           8          NaN          NaN          NaN          NaN          NaN          NaN          88         NaN         NaN         NaN         NaN
+5                                NaN         6월         10          4          5          5          8          8          6          6           6           6           8           8           8          NaN          NaN          NaN          NaN          NaN          NaN          88         NaN         NaN         NaN         NaN
+6                                NaN         7월          8          5          5          5          8          8          6          6           6           6           8           8           8          NaN          NaN          NaN          NaN          NaN          NaN          87         NaN         NaN         NaN         NaN
+7                                NaN         8월          9          5          5          5          8          8          6          6           6           6           8           8           8          NaN          NaN          NaN          NaN          NaN          NaN          88         NaN         NaN         NaN         NaN
+8                                NaN         9월          9          5          5          5          8          8          6          6           6           6           8           8           8          NaN          NaN          NaN          NaN          NaN          NaN          88         NaN         NaN         NaN         NaN
+9                                NaN        10월          9          4          5          5          8          8          6          6           6           6           8           8           8          NaN          NaN          NaN          NaN          NaN          NaN          87         NaN         NaN         NaN         NaN
+10                               NaN        11월          7          4          4          4          7          7          5          5           5           5           7           7           7          NaN          NaN          NaN          NaN          NaN          NaN          74         NaN         NaN         NaN         NaN
+11                               NaN        12월          7          4          3          3          7          7          5          5           5           5           6           6           6          NaN          NaN          NaN          NaN          NaN          NaN          69         NaN         NaN         NaN         NaN
+12                             2025년         1월          6          2          3          3          6          6          5          5           5           5           6           6           6          NaN          NaN          NaN          NaN          NaN          NaN          64         NaN         NaN         NaN         NaN
+13                               NaN         2월          6          2          3          3          6          6          5          5           5           5           6           6           6          NaN          NaN          NaN          NaN          NaN          NaN          64         NaN         NaN         NaN         NaN
+14                               NaN         3월          5          2          4          4          5          5          5          5           5           5           6           6           6          NaN          NaN          NaN          NaN          NaN          NaN          63         NaN         NaN         NaN         NaN
+15                               NaN         4월          5          2          4          4          5          5          5          5           5           5           6           6           6          NaN          NaN          NaN          NaN          NaN          NaN          63         NaN         NaN         NaN         NaN
+16                               NaN         5월          4          2          3          3          5          5          4          4           4           4           4           4           4          NaN          NaN          NaN          NaN          NaN          NaN          50         NaN         NaN         NaN         NaN
+17                               NaN         6월          2          1          1          1          2          2          2          2           2           2           2           2           2          NaN          NaN          NaN          NaN          NaN          NaN          23         NaN         NaN         NaN         NaN
+18                               NaN         7월          2          1          1          1          2          2          2          2           2           2           2           2           2          NaN          NaN          NaN          NaN          NaN          NaN          23         NaN         NaN         NaN         NaN
+19                               NaN       합  계        109         51         60         60        100        100         80         80          80          80         100         100         100          0.0          0.0          0.0          0.0          NaN          NaN        1100           0           0           0           0
+Shape: (20, 26)
+
+--- Sheet: 경비예상지출항목 ---
+           경비 예상 지출내역 Unnamed: 1 Unnamed: 2 Unnamed: 3
+0    경인사무소(일산발전본부 현장)        NaN        NaN       단위:원
+1                지출과목  지출내역(산출근거         금액        비 고
+2                 숙박비        NaN        NaN        NaN
+3                  식비        NaN        NaN        NaN
+4                  일비        NaN        NaN        NaN
+5               안전관리비        NaN        NaN        NaN
+6               지급임차료        NaN        NaN        NaN
+7               차량유지비    1800000        NaN        NaN
+8                소모품비     180000                   NaN
+9               교육훈련비                              NaN
+10              여비교통비        NaN        NaN        NaN
+11                운반비        NaN        NaN        NaN
+12              복리후생비     600000        NaN        NaN
+13                NaN        NaN        NaN        NaN
+14                NaN        NaN        NaN        NaN
+15                NaN        NaN        NaN        NaN
+16                NaN        NaN        NaN        NaN
+17                NaN        NaN        NaN        NaN
+18                NaN        NaN        NaN        NaN
+19                NaN        NaN        NaN        NaN
+Shape: (23, 4)
+
+--- Sheet: 장비감각상각 (2) ---
+   주요 장비 감가상각 계산                         Unnamed: 1 Unnamed: 2                Unnamed: 3    Unnamed: 4           Unnamed: 5           Unnamed: 6 Unnamed: 7      Unnamed: 8 Unnamed: 9
+0             구분                                장비명      장비 금액  월별 감가상각 금액\n(추정 가격/60개월)    일별 감가상각 금액           장비 감가상각 계산                  NaN        NaN             NaN         비고
+1            NaN                                NaN        NaN                       NaN           NaN               공사 시작일               공사 종료일     장비 사용일         감가상각 금액        NaN
+2             RT                              CR 장비  150000000                   2500000  83333.333333                  NaN                  NaN        NaN             NaN        NaN
+3             UT                              UT 장비   14000000             233333.333333   7777.777778                  NaN                  NaN        NaN             NaN        NaN
+4            NaN                            PAUT 장비   80000000            1333333.333333  44444.444444  2025-04-01 00:00:00  2024-08-07 00:00:00        100  4444444.444444        NaN
+5            NaN              PAUT SCANNER (MANUAL)   10000000             166666.666667   5555.555556  2025-04-01 00:00:00  2024-08-07 00:00:00        100   555555.555556        NaN
+6            NaN  PAUT SCANNER (AUTO_NAWOO 등 국내 제조)   35000000             583333.333333  19444.444444                  NaN                  NaN        NaN             NaN        NaN
+7            NaN  PAUT SCANNER (AUTO_JIREH 등 해외 제조)   70000000            1166666.666667  38888.888889                  NaN                  NaN        NaN             NaN        NaN
+8            NaN               PAUT SCANNER (CHAIN)   15000000                    250000   8333.333333                  NaN                  NaN        NaN             NaN        NaN
+9            NaN               PAUT SCANNER (COBRA)   30000000                    500000  16666.666667  2025-04-01 00:00:00  2024-08-07 00:00:00        100  1666666.666667        NaN
+10           NaN                           초음파두께측정기   10000000             166666.666667   5555.555556                  NaN                  NaN        NaN             NaN        NaN
+11            MT                               YOKE     400000               6666.666667    222.222222  2025-04-01 00:00:00  2024-08-07 00:00:00         50    11111.111111        NaN
+12           NaN                    AC POWER SUPPLY    1000000              16666.666667    555.555556                  NaN                  NaN        NaN             NaN        NaN
+13           NaN                        BLACK LIGHT     800000              13333.333333    444.444444                  NaN                  NaN        NaN             NaN        NaN
+14         합금분석기                     PMI(동위원소 TYPE)   50000000             833333.333333  27777.777778                  NaN                  NaN        NaN             NaN        NaN
+15           NaN                    PMI(X-RAY TYPE)   23000000             383333.333333  12777.777778                  NaN                  NaN        NaN             NaN        NaN
+16           NaN                            SPECTRO   65000000            1083333.333333  36111.111111                  NaN                  NaN        NaN             NaN        NaN
+17      ECT&IRIS                         OLYMPUS 장비   60000000                   1000000  33333.333333                  NaN                  NaN        NaN             NaN        NaN
+18           NaN                          ECTANE 장비  150000000                   2500000  83333.333333                  NaN                  NaN        NaN             NaN        NaN
+19            차량                   스타렉스(5년간 보험비 포함)   30000000                    500000  16666.666667  2025-04-01 00:00:00  2024-08-07 00:00:00        100  1666666.666667        NaN
+Shape: (22, 10)
+
+--- Sheet: 사후원가 ---
+                         공사실행예산서(사후원가계산)  Unnamed: 1 Unnamed: 2                                                 Unnamed: 3   Unnamed: 4 Unnamed: 5            Unnamed: 6      Unnamed: 7 Unnamed: 8 Unnamed: 9 Unnamed: 10 Unnamed: 11 Unnamed: 12
+0                                    NaN         NaN        NaN                                                        NaN          NaN        NaN                   NaN             NaN        NaN        NaN         NaN         NaN         NaN
+1                                    NaN         NaN        NaN                                                        NaN          NaN        NaN             (경인)사무소 :             NaN        박홍규        NaN         NaN         NaN         NaN
+2   공사기간 : 2022. 08. 08. ~ 2023. 08. 07.         NaN        NaN                                                        NaN          365        NaN  계약업체 : 한국지역난방공사 동탄지사             NaN        NaN        NaN         NaN         NaN   251973696
+3                                 1. 수입          NaN        NaN                                                        NaN          NaN        NaN                   NaN             NaN        NaN        NaN         NaN         NaN         NaN
+4                                     금액         NaN        NaN                                                       산출근거          NaN        NaN                   NaN             NaN        NaN        NaN         NaN         NaN         NaN
+5                              251973696         NaN        NaN  준공금액(\251,973,696) - 계약금액 (\177,967,193) = \74,006,503 증가          NaN        NaN                   NaN             NaN        NaN        NaN         NaN         NaN   고정금액(변경不)
+6                                    NaN         NaN        NaN                                                        NaN          NaN        NaN                   NaN             NaN        NaN        NaN         NaN         NaN         NaN
+7                             2. 지출(직접비)         NaN        NaN                                                        NaN          NaN        NaN                   NaN             NaN        NaN        NaN         NaN         NaN        기준급여
+8                                  1)인건비         NaN        NaN                                                        NaN          NaN        NaN                   NaN             NaN        NaN        NaN         NaN         NaN         NaN
+9                                     적요         NaN          0                                                         단가  투입인원(  4 명)        NaN         투입일수(  139 일)              금액        NaN        139         NaN         NaN         NaN
+10                             240일기준/1년         NaN         부장                                                   55250000            1        NaN                    30         6906250        NaN        139         NaN          부장    55250000
+11                                   NaN         NaN         차장                                                   47670000            0        NaN                     0               0        NaN        58일         NaN          차장    47670000
+12                                   NaN         NaN         과장                                                   41170000            1        NaN                    58  9949416.666667        NaN        NaN         NaN          과장    41170000
+13                                   NaN         NaN         대리                                                   37920000            0        NaN                     0               0        NaN        NaN         NaN          대리    37920000
+14                                   NaN         NaN         계장                                                   34670000            1        NaN                    25  3611458.333333        NaN        NaN         NaN          계장    34670000
+15                                   NaN         NaN         주임                                                   31420000            1        NaN                    26  3403833.333333        NaN        NaN         NaN          주임    31420000
+16                                   NaN         NaN         기사                                                   29250000            0        NaN                     0               0        NaN        NaN         NaN          기사    29250000
+17                                    기준         NaN        NaN                                                        NaN           구분         금액                  투입인원              시간         금액        NaN         NaN         NaN         NaN
+18                              1시간기준/1일         NaN   4,000/시간                                                        NaN         연장수당       4000                     4             174    2784000        NaN        일3시간         NaN         NaN
+19                                   NaN         NaN   5,000/시간                                                        NaN         야간수당       5000                     0               0          0        NaN         NaN         NaN         NaN
+Shape: (76, 13)
+
+--- Sheet: 근무현황 ---
+    (  한국지역난방공사 파주지사  )비파괴검사용역 현장 근무현황           Unnamed: 1 Unnamed: 2 Unnamed: 3 Unnamed: 4 Unnamed: 5 Unnamed: 6 Unnamed: 7  Unnamed: 8  Unnamed: 9  Unnamed: 10  Unnamed: 11  Unnamed: 12  Unnamed: 13  Unnamed: 14  Unnamed: 15  Unnamed: 16  Unnamed: 17 Unnamed: 18 Unnamed: 19 Unnamed: 20 Unnamed: 21 Unnamed: 22
+0                                  NaN                  NaN         경인         경인         경인         외주         외주         외주         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN         NaN         NaN         NaN         NaN         NaN
+1                                  NaN                  NaN        박홍규        김이환        성봉철        박재순        박민규        이현석         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN        인원합계          비고          비고           방         숙박비
+2                                  NaN                  NaN         과장         계장         주임        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN         NaN         NaN         NaN          갯수       (B급지)
+3                                  1.0  2023-05-10 00:00:00          1          1          1          1          1          1         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           6         NaN         NaN         NaN         NaN
+4                                  2.0  2023-05-11 00:00:00          1          1          1          1          1          1         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           6         NaN         NaN         NaN         NaN
+5                                  3.0  2023-05-12 00:00:00          1          1          1          1          1          1         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           6         NaN         NaN         NaN         NaN
+6                                  4.0  2023-05-15 00:00:00          1          1          1          1          1          1         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           6         NaN         NaN         NaN         NaN
+7                                  5.0  2023-05-18 00:00:00          1          1          1          1          1          1         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           6         NaN         NaN         NaN         NaN
+8                                  6.0  2023-05-19 00:00:00          1          1          1          1        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           4         NaN         NaN         NaN         NaN
+9                                  7.0  2023-05-23 00:00:00          1          1          1          1        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           4         NaN         NaN         NaN         NaN
+10                                 8.0  2023-05-24 00:00:00          1          1          1          1        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           4         NaN         NaN         NaN         NaN
+11                                 9.0  2023-05-25 00:00:00          1          1          1        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           3         NaN         NaN         NaN         NaN
+12                                10.0  2023-05-26 00:00:00          1          1          1        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           3         NaN         NaN         NaN         NaN
+13                                11.0  2023-05-31 00:00:00          1          1          1        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           3         NaN         NaN         NaN         NaN
+14                                12.0  2023-06-01 00:00:00          1        NaN          1        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           2         NaN         NaN         NaN         NaN
+15                                13.0  2023-06-05 00:00:00          1        NaN          1        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           2         NaN         NaN         NaN         NaN
+16                                14.0  2023-06-07 00:00:00          1        NaN          1        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           2         NaN         NaN         NaN         NaN
+17                                15.0  2023-06-13 00:00:00          1        NaN          1        NaN        NaN        NaN         NaN         NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN          NaN           2         NaN         NaN         NaN         NaN
+18                                 NaN  2023-04-29 00:00:00          1          1          1          1          1          1         NaN         1.0          1.0          NaN          NaN          NaN          NaN          NaN          NaN          NaN           8         NaN         NaN         NaN         NaN
+19                                 NaN  2023-04-30 00:00:00          1          1          1          1          1          1         NaN         1.0          1.0          NaN          NaN          NaN          NaN          NaN          NaN          NaN           8         NaN         NaN         NaN         NaN
+Shape: (21, 23)
+
+--- Sheet: 개인일비 ---
+   ( 동서발전 동해화력 )비파괴검사용역 현장 일비 내역 현황 Unnamed: 1 Unnamed: 2 Unnamed: 3 Unnamed: 4 Unnamed: 5                            Unnamed: 6 Unnamed: 7 Unnamed: 8
+0                               NaN        NaN        NaN        NaN        NaN        NaN  2023. 04. 08. ~ 2023. 05. 15. (38일간)        NaN        NaN
+1                           이     름         직급      해당사무소      투입 일수      공제 일수  일비 적용\n일수                                 하루 일비  공제 일수\n일비    개인 총 일비
+2                               NaN        NaN        NaN         14        NaN         14                                 10000          0     140000
+3                               NaN        NaN        NaN         14        NaN         14                                 10000          0     140000
+4                               NaN        NaN        NaN         13        NaN         13                                 10000          0     130000
+5                               NaN        NaN        NaN         14        NaN         14                                 10000          0     140000
+6                               NaN        NaN        NaN         14        NaN         14                                 10000          0     140000
+7                               NaN        NaN        NaN         11        NaN         11                                 10000          0     110000
+8                               NaN        NaN        NaN          5        NaN          5                                 10000          0      50000
+9                               NaN        NaN        NaN         14        NaN         14                                 10000          0     140000
+10                              NaN        NaN        NaN         14        NaN         14                                 10000          0     140000
+11                              NaN        NaN        NaN          5        NaN          5                                 10000          0      50000
+12                                0        NaN        NaN          0        NaN          0                                 10000          0          0
+13                                0          0      포항사무소          0        NaN          0                                 10000          0          0
+14                                0          0      포항사무소          0        NaN          0                                 10000          0          0
+15                                0          0      포항사무소          0        NaN          0                                 10000          0          0
+16                                0          0      포항사무소          0        NaN          0                                 10000          0          0
+17                                0          0      포항사무소          0        NaN          0                                 10000          0          0
+18                                0          0      포항사무소          0        NaN          0                                 10000          0          0
+19                                0          0      포항사무소          0        NaN          0                                 10000          0          0
+Shape: (23, 9)
+
+--- Sheet: 장비감각상각 ---
+   주요 장비 감가상각 계산                         Unnamed: 1 Unnamed: 2                Unnamed: 3    Unnamed: 4           Unnamed: 5           Unnamed: 6 Unnamed: 7      Unnamed: 8 Unnamed: 9
+0             구분                                장비명      장비 금액  월별 감가상각 금액\n(추정 가격/60개월)    일별 감가상각 금액           장비 감가상각 계산                  NaN        NaN             NaN         비고
+1            NaN                                NaN        NaN                       NaN           NaN               공사 시작일               공사 종료일     장비 사용일         감가상각 금액        NaN
+2             RT                              CR 장비  150000000                   2500000  83333.333333                  NaN                  NaN        NaN             NaN        NaN
+3             UT                              UT 장비   14000000             233333.333333   7777.777778                  NaN                  NaN        NaN             NaN        NaN
+4            NaN                            PAUT 장비   80000000            1333333.333333  44444.444444  2022-08-08 00:00:00  2025-07-31 00:00:00        100  4444444.444444        NaN
+5            NaN              PAUT SCANNER (MANUAL)   10000000             166666.666667   5555.555556                  NaN                  NaN        NaN             NaN        NaN
+6            NaN  PAUT SCANNER (AUTO_NAWOO 등 국내 제조)   35000000             583333.333333  19444.444444                  NaN                  NaN        NaN             NaN        NaN
+7            NaN  PAUT SCANNER (AUTO_JIREH 등 해외 제조)   70000000            1166666.666667  38888.888889                  NaN                  NaN         30  1166666.666667        NaN
+8            NaN               PAUT SCANNER (CHAIN)   15000000                    250000   8333.333333                  NaN                  NaN        NaN             NaN        NaN
+9            NaN               PAUT SCANNER (COBRA)   30000000                    500000  16666.666667  2022-08-08 00:00:00  2023-08-07 00:00:00         30        500000.0        NaN
+10           NaN                           초음파두께측정기   10000000             166666.666667   5555.555556                  NaN                  NaN        NaN             NaN        NaN
+11            MT                               YOKE    1200000                     20000    666.666667  2022-08-08 00:00:00  2023-08-07 00:00:00         58    38666.666667        NaN
+12           NaN                    AC POWER SUPPLY    1000000              16666.666667    555.555556                  NaN                  NaN        NaN             NaN        NaN
+13           NaN                        BLACK LIGHT    2400000                     40000   1333.333333                  NaN                  NaN        NaN             NaN        NaN
+14         합금분석기                     PMI(동위원소 TYPE)   50000000             833333.333333  27777.777778                  NaN                  NaN        NaN             NaN        NaN
+15           NaN                    PMI(X-RAY TYPE)   23000000             383333.333333  12777.777778                  NaN                  NaN        NaN             NaN        NaN
+16           NaN                            SPECTRO   65000000            1083333.333333  36111.111111                  NaN                  NaN        NaN             NaN        NaN
+17      ECT&IRIS                         OLYMPUS 장비   60000000                   1000000  33333.333333                  NaN                  NaN        NaN             NaN        NaN
+18           NaN                          ECTANE 장비  150000000                   2500000  83333.333333                  NaN                  NaN        NaN             NaN        NaN
+19            차량                   스타렉스(5년간 보험비 포함)   30000000                    500000  16666.666667  2022-08-08 00:00:00  2023-08-07 00:00:00         58   966666.666667        NaN
+Shape: (24, 10)
+
+--- Sheet: 계정별 사용내역 (2) ---
+               Unnamed: 0 Unnamed: 1 Unnamed: 2 Unnamed: 3  Unnamed: 4
+0                     NaN        NaN        NaN        NaN         NaN
+1     계정별 사용내역 (2023. 06)        NaN        NaN        NaN         NaN
+2    경인사무소(한국지역난방공사 동탄지사)        NaN        NaN        NaN        단위:원
+3                    계정과목       차  변       대  변       잔  액   비 고(입금내역)
+4                    전월이월        NaN        NaN        NaN         NaN
+5                     전도금        NaN    4175420        NaN  사무실 전도금 사용
+6                     전도금        NaN        NaN        NaN         NaN
+7                     전도금        NaN        NaN        NaN         NaN
+8                     전도금        NaN        NaN        NaN         NaN
+9                   복리후생비     580000                   NaN         NaN
+10                   소모품비     870000                   NaN         NaN
+11                  차량유지비    2725420                   NaN         NaN
+12                   합  계    4175420    4175420          0         NaN
+Shape: (13, 5)
+
+--- Sheet: 계정별 사용내역 ---
+                Unnamed: 0 Unnamed: 1 Unnamed: 2 Unnamed: 3 Unnamed: 4
+0                      NaN        NaN        NaN        NaN        NaN
+1      계정별 사용내역 (2023. 05)        NaN        NaN        NaN        NaN
+2    경인사무소(동서발전(주) 일산발전본부)        NaN        NaN        NaN       단위:원
+3                     계정과목       차  변       대  변       잔  액  비 고(입금내역)
+4                     전월이월        NaN        NaN   12338405        NaN
+5                      전도금        NaN    2000000        NaN        NaN
+6                      전도금        NaN    3500000        NaN        NaN
+7                      전도금        NaN    2000000        NaN        NaN
+8                      전도금        NaN     378000        NaN        NaN
+9                      전도금                              NaN        NaN
+10                   가스수도료                              NaN        NaN
+11                   교육훈련비                              NaN        NaN
+12                   도서인쇄비        NaN        NaN        NaN        NaN
+13                    미지급금        NaN        NaN        NaN        NaN
+14                   복리후생비        NaN        NaN        NaN        NaN
+15                    소모품비        NaN        NaN        NaN        NaN
+16                   여비교통비        NaN        NaN        NaN        NaN
+17                     운반비        NaN        NaN        NaN        NaN
+18                     잡이익        NaN        NaN        NaN        NaN
+19                   지급수수료        NaN        NaN        NaN        NaN
+Shape: (25, 5)
+
+--- Sheet: 대비표 ---
+      Unnamed: 0                     Unnamed: 1 Unnamed: 2        Unnamed: 3       Unnamed: 4 Unnamed: 5            Unnamed: 6 Unnamed: 7      Unnamed: 8
+0            NaN                            NaN        NaN               NaN              NaN        NaN                   NaN        NaN             NaN
+1       공사 명  :         2022년 동탄지사 열수송관 비파괴검사용역        NaN               NaN              NaN        NaN                   NaN        NaN             NaN
+2     공 사  기 간 :  2022. 08. 08. ~ 2023. 08. 07.        NaN               NaN              NaN        NaN                   NaN        NaN             NaN
+3           구  분                        적     요       사전원가              사후원가             차  액        NaN                  내  용        비 고             NaN
+4            NaN                            NaN   (실행 예산서)          (실행 정산서)           (사전대비)        NaN                   NaN        NaN             NaN
+5           공사기간                            NaN        365               365                0        NaN                   NaN        NaN             NaN
+6        매출수입(A)                       원계약/준공계약        NaN         251973696              NaN          증               검사물량 증가        NaN             NaN
+7        지     출                            NaN        NaN               NaN              NaN        NaN                   NaN        NaN             NaN
+8    1. 직 접 비(B)                       1) 인 건 비   81218273   30254958.333333 -50963314.666667          감            인원 투입일수 감소        NaN             NaN
+9            NaN                        2) 4대보험    8458233    3196890.172292  -5261342.827708          감            인원 투입일수 감소        NaN             NaN
+10           NaN                3) 재 료 비(장비,재료)   14392610           1542500        -12850110          감           장비 감가상각비 증가        NaN  원부재료+장비손료+차량손료
+11           NaN                         4) 경비     5500000           4175420         -1324580          감  소모품, 차량유지비, 복리후생비 감소        NaN             NaN
+12           NaN                            NaN        NaN           (부가세제외)              NaN        NaN                   NaN        NaN             NaN
+13           NaN                          소   계  109569116   39169768.505625 -70399347.494375          감                   NaN        NaN             NaN
+14   2. 간 접 비(C)                      직접비 X 13%   14243985    8643409.183509  -5600575.816491          감                직접비 감소        NaN             NaN
+15     3. 외주비(D)                       1) 외주인건비          0          13000000         13000000          증               외주인력 투입        NaN             NaN
+16           NaN                       2) 외주용역비          0                 0                0        NaN                   NaN        NaN             NaN
+17           NaN                           소  계          0          13000000         13000000          증                   NaN        NaN             NaN
+18  4. 이       익                 A  - B - C - D        NaN  191160518.310866              NaN          감        검사물량 증가로 수익 증가        NaN             NaN
+Shape: (19, 9)

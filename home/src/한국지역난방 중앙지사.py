@@ -6288,35 +6288,48 @@ class MaterialManager:
         form_frame.pack(fill='x', pady=(0, 10), padx=5)
         
         # Grid layout for form fields
+        # Grid layout headers
+        headers = ["항목", "사전예산(계획)", "사후원가(실적)", "잔여예산(차액)"]
+        for col, h in enumerate(headers):
+            ttk.Label(form_frame, text=h, font=('Malgun Gothic', 9, 'bold')).grid(row=0, column=col, padx=10, pady=5)
+            
         rows = [
-            ("현장명:", "cb_budget_site"),
-            ("계약금액 (Revenue):", "ent_budget_revenue"),
-            ("매출금액 (UnitPrice):", "ent_budget_unit_price"),
-            ("실행 노무비 (Labor):", "ent_budget_labor"),
-            ("실행 재료비 (Material):", "ent_budget_material"),
-            ("실행 경비 (Expense):", "ent_budget_expense"),
-            ("실행 외주비 (Outsource):", "ent_budget_outsource"),
-            ("영업이익 (Profit):", "ent_budget_profit"),
-            ("이익률 (%):", "ent_budget_margin"),
-            ("비고:", "ent_budget_note")
+            ("현장명", "cb_budget_site", None, None),
+            ("계약금액(Revenue)", "ent_budget_revenue", "ent_budget_actual_revenue", "ent_budget_diff_revenue"),
+            ("매출금액(UnitPrice)", "ent_budget_unit_price", "ent_budget_actual_unit_price", "ent_budget_diff_unit_price"),
+            ("실행 노무비(Labor)", "ent_budget_labor", "ent_budget_actual_labor", "ent_budget_diff_labor"),
+            ("실행 재료비(Material)", "ent_budget_material", "ent_budget_actual_material", "ent_budget_diff_material"),
+            ("실행 경비(Expense)", "ent_budget_expense", "ent_budget_actual_expense", "ent_budget_diff_expense"),
+            ("실행 외주비(Outsource)", "ent_budget_outsource", "ent_budget_actual_outsource", "ent_budget_diff_outsource"),
+            ("영업이익(Profit)", "ent_budget_profit", "ent_budget_actual_profit", "ent_budget_diff_profit"),
+            ("이익률(%)", "ent_budget_margin", "ent_budget_actual_margin", "ent_budget_diff_margin"),
+            ("비고", "ent_budget_note", "ent_budget_actual_note", None)
         ]
-        
+
         self.budget_widgets = {}
-        for i, (label_text, attr_name) in enumerate(rows):
-            ttk.Label(form_frame, text=label_text).grid(row=i//4*2, column=i%4, sticky='w', padx=5, pady=2)
-            if attr_name == "cb_budget_site":
-                widget = ttk.Combobox(form_frame, width=30)
-                widget['values'] = self.sites
+        for r_idx, (label, w_plan, w_actual, w_diff) in enumerate(rows, start=1):
+            ttk.Label(form_frame, text=label).grid(row=r_idx, column=0, sticky='e', padx=10, pady=2)
+            if w_plan == "cb_budget_site":
+                w = ttk.Combobox(form_frame, width=20)
+                w['values'] = getattr(self, 'sites', [])
+                w.grid(row=r_idx, column=1, sticky='ew', padx=5, pady=2, columnspan=3)
             else:
-                widget = ttk.Entry(form_frame, width=32)
-                if attr_name == "ent_budget_labor":
-                    # [STABILITY] Make labor cost read-only if it's auto-calculated by the widget?
-                    # No, let the user override if needed, but the widget will update it.
-                    pass
+                w = ttk.Entry(form_frame, width=20)
+                w.grid(row=r_idx, column=1, sticky='ew', padx=5, pady=2)
+            setattr(self, w_plan, w)
+            self.budget_widgets[w_plan] = w
+            
+            if w_actual:
+                w_a = ttk.Entry(form_frame, width=20)
+                w_a.grid(row=r_idx, column=2, sticky='ew', padx=5, pady=2)
+                setattr(self, w_actual, w_a)
+                self.budget_widgets[w_actual] = w_a
                 
-            widget.grid(row=i//4*2+1, column=i%4, sticky='ew', padx=5, pady=2)
-            setattr(self, attr_name, widget)
-            self.budget_widgets[attr_name] = widget
+            if w_diff:
+                w_d = ttk.Entry(form_frame, width=20, state='readonly')
+                w_d.grid(row=r_idx, column=3, sticky='ew', padx=5, pady=2)
+                setattr(self, w_diff, w_d)
+                self.budget_widgets[w_diff] = w_d
 
         def _on_budget_site_selected(e):
             # [FIX] 현장명을 가장 먼저 캡처 - focus_set() 호출 전에 해야 값이 유지됨
@@ -6446,7 +6459,7 @@ class MaterialManager:
             'Date', 'Site', '장비명', '검사방법', '작업자', '품목명',
             '총기성액', '청구인건비', '청구재료비', '제경비', '기술료',
             '총지출액', '자재원가', 'OT합계', '출장비', '일식', 
-            '예상이윤', '이익률', '검사량', '단가', '검사단가', '합계', 
+            '예상이윤', '목표이익률', '현재이익률', '검사량', '단가', '검사단가', '합계', 
             '침투제', '세척제', '현상제', '자재단가', '비고',
             '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', 'MaterialID'
         )
@@ -6456,7 +6469,7 @@ class MaterialManager:
             '합계': 100, '비고': 150, '작업자': 170, '품목명': 180, '입력시간': 140,
             '차량번호': 110, '주행거리': 100, '차량점검': 120, '차량비고': 140, 'MaterialID': 90,
             '총기성액': 100, '청구인건비': 90, '청구재료비': 90, '제경비': 90, '기술료': 90,
-            '총지출액': 100, '자재원가': 90, '예상이윤': 100, '이익률': 70
+            '총지출액': 100, '자재원가': 90, '예상이윤': 100, '목표이익률': 80, '현재이익률': 80
         }
         self.budget_view_builtin_head_map = {
             'Date': '날짜', 'Site': '현장', '장비명': '장비', '검사방법': '검사방법', '검사량': '수량', '단가': '단가',
@@ -6465,7 +6478,7 @@ class MaterialManager:
             '입력시간': '입력시간', '차량번호': '차량번호', '주행거리': '주행거리', '차량점검': '차량점검',
             '차량비고': '차량비고', 'MaterialID': '자재ID',
             '총기성액': '총기성액', '청구인건비': '인건비(청구)', '청구재료비': '재료비(청구)', '제경비': '제경비', '기술료': '기술료',
-            '총지출액': '총지출액', '자재원가': '자재원가', '예상이윤': '예상이윤', '이익률': '이익률(%)'
+            '총지출액': '총지출액', '자재원가': '자재원가', '예상이윤': '예상이윤', '목표이익률': '목표이익률(%)', '현재이익률': '현재이익률(%)'
         }
         self.budget_view_heading_aliases = getattr(self, 'budget_view_heading_aliases', {})
         self.budget_view_custom_columns = getattr(self, 'budget_view_custom_columns', [])
@@ -6473,7 +6486,7 @@ class MaterialManager:
             'Date', 'Site', '장비명', '검사방법', '작업자', '품목명',
             '총기성액', '청구인건비', '청구재료비', '제경비', '기술료',
             '총지출액', '자재원가', 'OT합계', '출장비', '일식', 
-            '예상이윤', '이익률', '비고'
+            '예상이윤', '목표이익률', '현재이익률', '비고'
         )
 
         vsb = ttk.Scrollbar(tree_outer, orient='vertical')
@@ -7025,7 +7038,8 @@ class MaterialManager:
                     '총지출액': f"{row_expense_cost:,.0f}" if row_expense_cost else '',
                     '자재원가': f"{mat_cost:,.0f}" if mat_cost else '',
                     '예상이윤': f"{row_profit:,.0f}" if row_profit else '',
-                    '이익률': f"{row_margin:.1f}%" if row_revenue > 0 else '',
+                    '목표이익률': '',
+                    '현재이익률': f"{row_margin:.1f}%" if row_revenue > 0 else '',
                 }
                 for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
                     key = custom_col.get('key')
@@ -7092,7 +7106,8 @@ class MaterialManager:
                     '총지출액': f"{sys_total_expense_cost:,.0f}" if sys_total_expense_cost else '',
                     '자재원가': f"{total_mat_cost:,.0f}" if total_mat_cost else '',
                     '예상이윤': f"{sys_total_profit:,.0f}" if sys_total_profit else '',
-                    '이익률': f"{(sys_total_profit / sys_total_revenue * 100):.1f}%" if sys_total_revenue > 0 else '',
+                    '목표이익률': '',
+                    '현재이익률': f"{(sys_total_profit / sys_total_revenue * 100):.1f}%" if sys_total_revenue > 0 else '',
                 }
                 for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
                     key = custom_col.get('key')
@@ -7126,6 +7141,8 @@ class MaterialManager:
                     
                     # Final Net Profit Achievement
                     actual_profit = total_income - total_expense - total_mat_cost
+                    b_margin = (b_profit / b_rev * 100) if b_rev > 0 else 0
+                    actual_margin = (sys_total_profit / sys_total_revenue * 100) if sys_total_revenue > 0 else 0
                     
                     comparison_row_map = {
                         'Date': f"[예산대비]",
@@ -7145,6 +7162,8 @@ class MaterialManager:
                         '자재단가': '',
                         '합계': f"{actual_profit:,.0f}",
                         '비고': f"목표이익: {b_profit:,.0f} | 현재이익: {actual_profit:,.0f} ({actual_profit - b_profit:+,.0f})",
+                        '목표이익률': f"{b_margin:.1f}%",
+                        '현재이익률': f"{actual_margin:.1f}%",
                         '작업자': '',
                         '품목명': '',
                         '입력시간': '',
@@ -7154,6 +7173,8 @@ class MaterialManager:
                         '차량비고': '',
                         'MaterialID': '',
                         'Usage': '',
+                        '총기성액': '', '청구인건비': '', '청구재료비': '', '제경비': '', '기술료': '',
+                        '총지출액': '', '자재원가': '', '예상이윤': ''
                     }
                     for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
                         key = custom_col.get('key')
@@ -7180,60 +7201,63 @@ class MaterialManager:
     def _update_budget_kpis(self):
         """Update the top KPI summary labels based on current budget form values"""
         try:
-            def _get_val(widget):
-                try: return float(str(widget.get()).replace(',', '').split(' ')[0] or 0)
+            def _get_val(widget_name):
+                try: 
+                    w = getattr(self, widget_name, None)
+                    if w:
+                        v = str(w.get()).replace(',', '').split(' ')[0]
+                        return float(v or 0)
+                    return 0.0
                 except: return 0.0
                 
-            rev = _get_val(self.ent_budget_revenue)
-            if rev == 0 and hasattr(self, 'ent_budget_unit_price'):
-                rev = _get_val(self.ent_budget_unit_price) # Fallback to unit price if revenue empty
-                
-            lab = _get_val(self.ent_budget_labor)
-            mat = _get_val(self.ent_budget_material)
-            exp = _get_val(self.ent_budget_expense)
-            out = _get_val(self.ent_budget_outsource)
-            
-            # 4. Total Cost (Add Indirect Costs if needed, but here we sync from widget)
-            # [NEW] As per user request, KPI "실행원가" now shows Grand Total Cost (including Indirect Costs)
-            if hasattr(self, 'expense_detail_widget') and hasattr(self.expense_detail_widget, 'get_total_cost'):
-                # The widget's total already includes insurance/depreciation/indirect costs in sections 1~7
-                # but if we want exactly the same logic as the widget:
-                try: 
-                    # Get final total from the widget's label to match "4. 총원가" perfectly
-                    raw_total_text = self.expense_detail_widget.lbl_grand_total_cost.cget('text')
-                    total_cost = float("".join(c for c in raw_total_text if c.isdigit() or c == '.') or 0)
-                except:
-                    total_cost = lab + mat + exp + out
-            else:
-                total_cost = lab + mat + exp + out
-                
-            profit = rev - total_cost
-            
-            # [FIX] Safety check for Margin to prevent NaN or Inf
-            if rev > 0:
-                margin = (profit / rev * 100)
-            else:
-                margin = 0.0
-            
-            if np.isnan(profit) or np.isinf(profit): profit = 0.0
-            if np.isnan(margin) or np.isinf(margin): margin = 0.0
+            def _set_val(widget_name, val, is_percent=False):
+                w = getattr(self, widget_name, None)
+                if w:
+                    st = w.cget('state')
+                    if st == 'readonly': w.config(state='normal')
+                    w.delete(0, 'end')
+                    w.insert(0, f"{val:,.1f}" if is_percent else f"{val:,.0f}")
+                    if st == 'readonly': w.config(state='readonly')
 
+            def _calc_profit(prefix):
+                rev = _get_val(f'{prefix}revenue')
+                if rev == 0: rev = _get_val(f'{prefix}unit_price')
+                lab = _get_val(f'{prefix}labor')
+                mat = _get_val(f'{prefix}material')
+                exp = _get_val(f'{prefix}expense')
+                out = _get_val(f'{prefix}outsource')
+                
+                if prefix == 'ent_budget_' and hasattr(self, 'expense_detail_widget') and hasattr(self.expense_detail_widget, 'lbl_grand_total_cost'):
+                    try:
+                        raw_t = self.expense_detail_widget.lbl_grand_total_cost.cget('text')
+                        tc = float("".join(c for c in raw_t if c.isdigit() or c == '.') or 0)
+                    except: tc = lab + mat + exp + out
+                else:
+                    tc = lab + mat + exp + out
+                    
+                prof = rev - tc
+                mar = (prof / rev * 100) if rev > 0 else 0.0
+                _set_val(f'{prefix}profit', prof)
+                _set_val(f'{prefix}margin', mar, True)
+                return rev, lab, mat, exp, out, prof, mar
+                
+            p_r, p_l, p_m, p_e, p_o, p_p, p_mg = _calc_profit('ent_budget_')
+            a_r, a_l, a_m, a_e, a_o, a_p, a_mg = _calc_profit('ent_budget_actual_')
+            
+            _set_val('ent_budget_diff_revenue', p_r - a_r)
+            _set_val('ent_budget_diff_unit_price', _get_val('ent_budget_unit_price') - _get_val('ent_budget_actual_unit_price'))
+            _set_val('ent_budget_diff_labor', p_l - a_l)
+            _set_val('ent_budget_diff_material', p_m - a_m)
+            _set_val('ent_budget_diff_expense', p_e - a_e)
+            _set_val('ent_budget_diff_outsource', p_o - a_o)
+            _set_val('ent_budget_diff_profit', p_p - a_p)
+            _set_val('ent_budget_diff_margin', p_mg - a_mg, True)
             
             if hasattr(self, 'lbl_kpi_rev'):
-                self.lbl_kpi_rev.config(text=f"{rev:,.0f}원")
-                self.lbl_kpi_cost.config(text=f"{total_cost:,.0f}원")
-                self.lbl_kpi_profit.config(text=f"{profit:,.0f}원", foreground="#ef4444" if profit < 0 else "#10b981")
-                self.lbl_kpi_margin.config(text=f"{margin:.1f}%", foreground="#ef4444" if margin < 0 else "#10b981")
-                
-            # [NEW] Sync calculated profit and margin to the top entry fields
-            if hasattr(self, 'ent_budget_profit'):
-                self.ent_budget_profit.delete(0, tk.END)
-                self.ent_budget_profit.insert(0, f"{profit:,.0f}")
-            if hasattr(self, 'ent_budget_margin'):
-                self.ent_budget_margin.delete(0, tk.END)
-                self.ent_budget_margin.insert(0, f"{margin:.1f}")
-            
-            # [STABILITY] Force UI refresh to make changes visible
+                self.lbl_kpi_rev.config(text=f"{p_r:,.0f}원")
+                self.lbl_kpi_cost.config(text=f"{p_l+p_m+p_e+p_o:,.0f}원")
+                self.lbl_kpi_profit.config(text=f"{p_p:,.0f}원", foreground="#ef4444" if p_p < 0 else "#10b981")
+                self.lbl_kpi_margin.config(text=f"{p_mg:.1f}%", foreground="#ef4444" if p_mg < 0 else "#10b981")
             self.root.update_idletasks()
         except Exception as e:
             print(f"DEBUG: Budget KPI sync error: {e}")
@@ -7261,32 +7285,31 @@ class MaterialManager:
 
         row = match.iloc[0]
         self.cb_budget_site.set(site)
-        for attr, col in [('ent_budget_revenue',   'Revenue'),
-                          ('ent_budget_unit_price','UnitPrice'),
-                          ('ent_budget_labor',     'LaborCost'),
-                          ('ent_budget_material',  'MaterialCost'),
-                          ('ent_budget_expense',   'Expense'),
-                          ('ent_budget_outsource', 'OutsourceCost'),
-                          ('ent_budget_profit',    'Profit'),
-                          ('ent_budget_note',      'Note')]:
+        
+        mappings = [
+            ('ent_budget_revenue', 'Revenue'), ('ent_budget_unit_price','UnitPrice'),
+            ('ent_budget_labor', 'LaborCost'), ('ent_budget_material', 'MaterialCost'),
+            ('ent_budget_expense', 'Expense'), ('ent_budget_outsource', 'OutsourceCost'),
+            ('ent_budget_profit', 'Profit'), ('ent_budget_note', 'Note'),
+            ('ent_budget_actual_revenue', 'Actual_Revenue'), ('ent_budget_actual_unit_price','Actual_UnitPrice'),
+            ('ent_budget_actual_labor', 'Actual_LaborCost'), ('ent_budget_actual_material', 'Actual_MaterialCost'),
+            ('ent_budget_actual_expense', 'Actual_Expense'), ('ent_budget_actual_outsource', 'Actual_OutsourceCost'),
+            ('ent_budget_actual_profit', 'Actual_Profit'), ('ent_budget_actual_note', 'Actual_Note')
+        ]
+        
+        for attr, col in mappings:
             w = getattr(self, attr, None)
-            if w:
-                w.delete(0, tk.END)
-                val = row.get(col, '')
-                # [FIX] Sanitize NaN values to prevent "nan" string appearing in entry boxes
-                if pd.isna(val) or str(val).lower() == 'nan':
-                    display_val = "" if col == 'Note' else "0"
-                else:
-                    if col != 'Note' and col != 'Profit':
-                        try:
-                            # Re-sanitize and format to ensure float stability
-                            f_val = float(str(val).replace(',', '').strip() or 0)
-                            display_val = f"{f_val:,.0f}"
-                        except:
-                            display_val = str(val)
+            if w and col in match.columns:
+                st = w.cget('state')
+                if st == 'readonly': w.config(state='normal')
+                w.delete(0, 'end')
+                val = row[col]
+                if not pd.isna(val) and str(val).lower() != 'nan':
+                    if isinstance(val, (int, float)) and 'note' not in attr.lower():
+                        w.insert(0, f"{val:,.0f}")
                     else:
-                        display_val = str(val)
-                w.insert(0, display_val)
+                        w.insert(0, str(val))
+                if st == 'readonly': w.config(state='readonly')
 
         import json as _json
         for json_col, widget_attr in [('LaborDetail',   'labor_detail_widget'),
@@ -7302,33 +7325,6 @@ class MaterialManager:
             elif widget:
                 # [NEW] Clear data if no saved detail exists for this site
                 widget.reset()
-
-        # [FIX] set_data() → calculate_all() → on_change_callback() 순서로 금액 필드가
-        # 상세 항목 합계로 덮어씌워지는 문제 방지.
-        # 상세 위젯 로드 완료 후 저장된 원본 금액 값을 명시적으로 재설정한다.
-        for attr, col in [('ent_budget_revenue',   'Revenue'),
-                          ('ent_budget_unit_price','UnitPrice'),
-                          ('ent_budget_labor',     'LaborCost'),
-                          ('ent_budget_material',  'MaterialCost'),
-                          ('ent_budget_expense',   'Expense'),
-                          ('ent_budget_outsource', 'OutsourceCost'),
-                          ('ent_budget_profit',    'Profit')]:
-            w = getattr(self, attr, None)
-            if w:
-                val = row.get(col, '')
-                try:
-                    display = f"{float(val):,.0f}" if val else '0'
-                    if attr == 'ent_budget_profit':
-                        rev_val = row.get('Revenue', 0)
-                        try: rev_float = float(rev_val)
-                        except: rev_float = 0.0
-                        prof_float = float(val) if val else 0.0
-                        margin = (prof_float / rev_float * 100) if rev_float > 0 else 0.0
-                        display = f"{prof_float:,.0f} ({margin:.1f}%)"
-                except:
-                    display = '0'
-                w.delete(0, tk.END)
-                w.insert(0, display)
 
         if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
         # [STABILITY] Update KPI summary after load
@@ -7373,6 +7369,7 @@ class MaterialManager:
         total_net_revenue = 0.0 # 검사비
         total_travel = 0.0
         total_meal = 0.0
+        lab_total = 0.0
         
         # --- Labor Aggregation by Rank ---
         ranks = ["이사", "부장", "차장", "과장", "대리", "계장", "주임", "기사"]
@@ -7446,6 +7443,7 @@ class MaterialManager:
             nd_mat = _f(row.get('재료비', 0))
             nd_overhead = _f(row.get('제경비', 0))
             nd_tech = _f(row.get('기술료', 0))
+            lab_total += nd_labor
             row_revenue = nd_labor + nd_mat + nd_overhead + nd_tech
             if row_revenue <= 0:
                 row_revenue = _f(row.get('검사비', 0))
@@ -7752,173 +7750,67 @@ class MaterialManager:
             ot_revenue = sum(ot_data[t]['hours'] * _f(self.labor_detail_widget.entries[t]['unit_price'].get()) 
                             for t in special_types if t in self.labor_detail_widget.entries)
 
+        # 3. 폼에 입력 (사후실적 칸만 업데이트)
         self.cb_budget_site.set(site)
         
-        # [NEW] 도급액(Revenue) 칸에 실적 검사비 총액 자동 기입
-        self.ent_budget_revenue.delete(0, tk.END)
-        self.ent_budget_revenue.insert(0, f"{total_net_revenue:,.0f}")
+        # 도급액(Revenue)
+        if hasattr(self, 'ent_budget_actual_revenue'):
+            self.ent_budget_actual_revenue.delete(0, tk.END)
+            self.ent_budget_actual_revenue.insert(0, f"{total_net_revenue:,.0f}")
 
-        # [NEW] 실적 데이터의 검사비 총액을 '검사단가' 칸에 기본 입력
-        if hasattr(self, 'ent_budget_unit_price'):
-            self.ent_budget_unit_price.delete(0, tk.END)
-            self.ent_budget_unit_price.insert(0, f"{total_net_revenue:,.0f}")
+        # 검사단가
+        if hasattr(self, 'ent_budget_actual_unit_price'):
+            self.ent_budget_actual_unit_price.delete(0, tk.END)
+            self.ent_budget_actual_unit_price.insert(0, f"{total_net_revenue:,.0f}")
 
-        self.ent_budget_material.delete(0, tk.END)
-        self.ent_budget_material.insert(0, f"{np.nan_to_num(total_mat_cost):,.0f}")
+        # 재료비
+        if hasattr(self, 'ent_budget_actual_material'):
+            self.ent_budget_actual_material.delete(0, tk.END)
+            self.ent_budget_actual_material.insert(0, f"{np.nan_to_num(total_mat_cost):,.0f}")
 
-        self.ent_budget_expense.delete(0, tk.END)
-        self.ent_budget_expense.insert(0, f"{np.nan_to_num(total_travel + total_meal):,.0f}")
+        # 경비
+        if hasattr(self, 'ent_budget_actual_expense'):
+            self.ent_budget_actual_expense.delete(0, tk.END)
+            self.ent_budget_actual_expense.insert(0, f"{np.nan_to_num(total_travel + total_meal):,.0f}")
 
+        # 노무비 (lab_total is already calculated from df)
+        if hasattr(self, 'ent_budget_actual_labor'):
+            self.ent_budget_actual_labor.delete(0, tk.END)
+            self.ent_budget_actual_labor.insert(0, f"{np.nan_to_num(lab_total):,.0f}")
+            
+        # 외주비는 현재 실적 집계 로직에 없으므로 유지하거나 0으로.
+        if hasattr(self, 'ent_budget_actual_outsource'):
+            self.ent_budget_actual_outsource.delete(0, tk.END)
+            self.ent_budget_actual_outsource.insert(0, "0")
 
-        # 4. 인건비 상세 위젯 업데이트
-        if hasattr(self, 'labor_detail_widget'):
-            labor_data = self.labor_detail_widget.get_data()
-            # Regular
-            for rank in ranks:
-                if rank in labor_data:
-                    # Number of unique workers who logged time in this rank
-                    u_count = len(rank_labor_dates[rank])
-                    # Total number of unique working days summed across all workers in this rank
-                    t_days = sum(len(dates) for dates in rank_labor_dates[rank].values())
-                    if u_count > 0:
-                        avg_d = t_days / u_count
-                        labor_data[rank]['personnel'] = f"{u_count:g}"
-                        labor_data[rank]['period'] = f"{avg_d:g}"
-                    else:
-                        labor_data[rank]['personnel'] = ""
-                        labor_data[rank]['period'] = ""
-            # Special (OT)
-            for stype in special_types:
-                if stype in labor_data:
-                    u_count = len(ot_data[stype]['names'])
-                    t_hours = ot_data[stype]['hours']
-                    if u_count > 0:
-                        avg_h = t_hours / u_count
-                        labor_data[stype]['personnel'] = f"{u_count:g}"
-                        labor_data[stype]['period'] = f"{avg_h:g}"
-                    else:
-                        labor_data[stype]['personnel'] = ""
-                        labor_data[stype]['period'] = ""
-            self.labor_detail_widget.set_data(labor_data)
-
-        # 5. 재료비 상세 위젯 업데이트
-        if hasattr(self, 'material_detail_widget'):
-            current_mat_data = self.material_detail_widget.get_data()
-
-            # [FIX] 필름현상액/정착액 자동 계산
-            # 기준: 필름 500매 -> 각 2개, 1000매 -> 각 4개
-            # 즉 250매당 1개
-            film_chem_qty = (total_film_count / 250.0) if total_film_count > 0 else 0.0
-            # 수적방지액(200mL): 필름 500매당 1개
-            anti_drop_qty = (total_film_count / 500.0) if total_film_count > 0 else 0.0
-            if len(material_usage_sums) > 7:
-                material_usage_sums[7] = film_chem_qty  # 필름현상액 3L
-            if len(material_usage_sums) > 8:
-                material_usage_sums[8] = film_chem_qty  # 정착액 3L
-            if len(material_usage_sums) > 9:
-                material_usage_sums[9] = anti_drop_qty  # 수적방지액 200mL
-
-            for i, qty in enumerate(material_usage_sums):
-                if i < len(current_mat_data):
-                    current_mat_data[i]['qty'] = f"{qty:g}" if qty > 0 else ""
-            self.material_detail_widget.set_data(current_mat_data)
-        
-        # [NEW] Immediate KPI update after data fill
+        # KPI & Diff Update
         self._update_budget_kpis()
-            
-        # 6. 경비 상세 위젯 업데이트 (차량유지비, 소모품비, 복리후생비, Se-175 수량, 감가상각비 차량 사용일수 자동 할당)
-        if hasattr(self, 'expense_detail_widget'):
-            self.expense_detail_widget.calculate_all()
-            
-            # [DEFINITIVE FIX] Safely sync widget totals back to the main form entries
-            if hasattr(self, 'labor_detail_widget') and hasattr(self, 'ent_budget_labor'):
-                lab_total = 0.0
-                try:
-                    # Try method first
-                    if hasattr(self.labor_detail_widget, 'get_total_cost'):
-                        lab_total = self.labor_detail_widget.get_total_cost()
-                    else:
-                        # Direct label fallback
-                        raw_text = self.labor_detail_widget.lbl_grand_total.cget('text')
-                        val = "".join(c for c in raw_text if c.isdigit() or c == '.')
-                        lab_total = float(val or 0)
-                except: pass
-                
-                self.ent_budget_labor.delete(0, tk.END)
-                self.ent_budget_labor.insert(0, f"{lab_total:,.0f}")
-
-            if hasattr(self, 'expense_detail_widget') and hasattr(self, 'ent_budget_expense'):
-                exp_total = 0.0
-                try:
-                    if hasattr(self.expense_detail_widget, 'get_total_cost'):
-                        exp_total = self.expense_detail_widget.get_total_cost()
-                    else:
-                        raw_text = self.expense_detail_widget.lbl_exp_total.cget('text')
-                        val = "".join(c for c in raw_text if c.isdigit() or c == '.')
-                        exp_total = float(val or 0)
-                except: pass
-                
-                self.ent_budget_expense.delete(0, tk.END)
-                self.ent_budget_expense.insert(0, f"{exp_total:,.0f}")
-
-            # [STABILITY] Final KPI and Profit sync refresh
-            self._update_budget_kpis()
-            self.root.update_idletasks()
-            current_exp_data = self.expense_detail_widget.get_data()
-
-            # [FIX] 현장경비 수량(qty) 자동 할당 (기본값 무관하게 실적 기준 덮어쓰기)
-            for row_data in current_exp_data.get('site_expense', []):
-                cat = str(row_data.get('cat', '')).upper()
-                if any(k in cat for k in ['차량유지비', '소모품비', '복리후생비']):
-                    row_data['qty'] = f"{total_days_count:g}" if total_days_count > 0 else ""
-                elif 'SE-175' in cat or 'SE175' in cat:
-                    # [REVERT] Count unique work days instead of total inspection quantity
-                    row_data['qty'] = f"{len(rt_dates):g}" if len(rt_dates) > 0 else ""
-                    
-            for row_data in current_exp_data.get('depreciation', []):
-                item = row_data.get('item', '')
-                if '스타렉스' in item:
-                    row_data['days'] = f"{len(starex_dates):g}" if len(starex_dates) > 0 else ""
-                elif '탑차' in item:
-                    row_data['days'] = f"{len(toptruck_dates):g}" if len(toptruck_dates) > 0 else ""
-                item_upper_clean = str(item).upper().replace(' ', '')
-                if 'PAUTSCANNER(MANUAL)' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else ""
-                elif 'PAUTSCANNER(COBRA)' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else ""
-                elif 'PAUT' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else ""
-                elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
-                    row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
-                else:
-                    # [NEW] Check for generic equipment name matching (case-insensitive)
-                    item_upper = str(item).upper().strip()
-                    matched_days = 0
-                    for e_name, e_dates in equip_dates_map.items():
-                        if e_name.upper().strip() in item_upper or item_upper in e_name.upper().strip():
-                            matched_days = max(matched_days, len(e_dates))
-                    
-                    if matched_days > 0:
-                        row_data['days'] = f"{matched_days:g}"
-                    
-            self.expense_detail_widget.set_data(current_exp_data)
+        self.root.update_idletasks()
 
         # [NEW] Calculate profit/margin for the summary message
         try:
-            rev = float(self.ent_budget_unit_price.get().replace(',', '') or 0)
-            lab = float(self.ent_budget_labor.get().replace(',', '') or 0)
-            mat = float(self.ent_budget_material.get().replace(',', '') or 0)
-            exp = float(self.ent_budget_expense.get().replace(',', '') or 0)
-            out = float(self.ent_budget_outsource.get().replace(',', '') or 0)
-            cost = lab + mat + exp + out
-            profit = rev - cost
-            margin = (profit / rev * 100) if rev > 0 else 0.0
-            profit_str = f"\n\n▶ 집계 결과\n- 도급액(검사비): {rev:,.0f}원\n- 실행원가: {cost:,.0f}원\n- 영업이익: {profit:,.0f}원 ({margin:.1f}%)"
+            a_rev = float(self.ent_budget_actual_unit_price.get().replace(',', '') or 0)
+            if a_rev == 0:
+                a_rev = float(self.ent_budget_actual_revenue.get().replace(',', '') or 0)
+            a_lab = float(self.ent_budget_actual_labor.get().replace(',', '') or 0)
+            a_mat = float(self.ent_budget_actual_material.get().replace(',', '') or 0)
+            a_exp = float(self.ent_budget_actual_expense.get().replace(',', '') or 0)
+            a_out = float(self.ent_budget_actual_outsource.get().replace(',', '') or 0)
+            a_cost = a_lab + a_mat + a_exp + a_out
+            a_profit = a_rev - a_cost
+            a_margin = (a_profit / a_rev * 100) if a_rev > 0 else 0.0
+            
+            if hasattr(self, 'ent_budget_actual_profit'):
+                self.ent_budget_actual_profit.delete(0, tk.END)
+                self.ent_budget_actual_profit.insert(0, f"{a_profit:,.0f} ({a_margin:.1f}%)")
+
+            profit_str = f"\n\n▶ 실적 집계 결과\n- 도급액(실적): {a_rev:,.0f}원\n- 사후원가: {a_cost:,.0f}원\n- 현재이익: {a_profit:,.0f}원 ({a_margin:.1f}%)"
         except:
             profit_str = ""
 
         messagebox.showinfo("조회 완료", 
-                            f"'{site}' 현장의 실적 데이터를 집계하여 [5. 영업이익] 탭에 표시하였습니다.\n"
+                            f"'{site}' 현장의 실적 데이터를 집계하여 [사후원가(실적)] 칸에 표시하였습니다.\n"
+                            f"사전예산은 방어되어 변경되지 않았습니다.\n"
                             f"(기간: {start_ts.strftime('%Y-%m-%d')} ~ {end_ts.strftime('%Y-%m-%d')}){profit_str}")
 
     def save_budget_entry(self):
@@ -7929,15 +7821,30 @@ class MaterialManager:
             return
             
         try:
-            rev = float(str(self.ent_budget_revenue.get()).replace(',', '') or 0)
-            unit_price_val = str(getattr(self, 'ent_budget_unit_price', tk.Entry()).get() if hasattr(self, 'ent_budget_unit_price') else '').replace(',', '').strip()
-            unit_price = float(unit_price_val) if unit_price_val else 0.0
-            lab = float(str(self.ent_budget_labor.get()).replace(',', '') or 0)
-            mat = float(str(self.ent_budget_material.get()).replace(',', '') or 0)
-            exp = float(str(self.ent_budget_expense.get()).replace(',', '') or 0)
-            out = float(str(self.ent_budget_outsource.get()).replace(',', '') or 0)
-            note = self.ent_budget_note.get().strip()
+            def _get(attr):
+                try: 
+                    w = getattr(self, attr, None)
+                    if w: return float(str(w.get()).replace(',', '') or 0)
+                    return 0.0
+                except: return 0.0
+
+            rev = _get('ent_budget_revenue')
+            unit_price = _get('ent_budget_unit_price')
+            lab = _get('ent_budget_labor')
+            mat = _get('ent_budget_material')
+            exp = _get('ent_budget_expense')
+            out = _get('ent_budget_outsource')
             profit = rev - (lab + mat + exp + out)
+            note = self.ent_budget_note.get().strip() if hasattr(self, 'ent_budget_note') else ""
+            
+            a_rev = _get('ent_budget_actual_revenue')
+            a_unit = _get('ent_budget_actual_unit_price')
+            a_lab = _get('ent_budget_actual_labor')
+            a_mat = _get('ent_budget_actual_material')
+            a_exp = _get('ent_budget_actual_expense')
+            a_out = _get('ent_budget_actual_outsource')
+            a_prof = _get('ent_budget_actual_profit')
+            a_note = getattr(self, 'ent_budget_actual_note').get().strip() if hasattr(self, 'ent_budget_actual_note') else ""
         except ValueError:
             messagebox.showerror("입력 오류", "금액은 숫자여야 합니다.")
             return
@@ -7952,6 +7859,9 @@ class MaterialManager:
             'OutsourceCost': out,
             'Profit': profit,
             'Note': note,
+            'Actual_Revenue': a_rev, 'Actual_UnitPrice': a_unit, 'Actual_LaborCost': a_lab,
+            'Actual_MaterialCost': a_mat, 'Actual_Expense': a_exp, 'Actual_OutsourceCost': a_out,
+            'Actual_Profit': a_prof, 'Actual_Note': a_note,
             'LaborDetail': json.dumps(self.labor_detail_widget.get_data()),
             'MaterialDetail': json.dumps(self.material_detail_widget.get_data()),
             'ExpenseDetail': json.dumps(self.expense_detail_widget.get_data())
@@ -8054,16 +7964,17 @@ class MaterialManager:
     def clear_budget_form(self):
         """Reset budget form fields while maintaining site selection context"""
         # self.cb_budget_site.set('')  <- Removed to preserve 'appearance' as per user request
-        self.ent_budget_revenue.delete(0, tk.END)
-        if hasattr(self, 'ent_budget_unit_price'):
-            self.ent_budget_unit_price.delete(0, tk.END)
-        self.ent_budget_labor.delete(0, tk.END)
-        self.ent_budget_material.delete(0, tk.END)
-        self.ent_budget_expense.delete(0, tk.END)
-        self.ent_budget_outsource.delete(0, tk.END)
-        if hasattr(self, 'ent_budget_profit'):
-            self.ent_budget_profit.delete(0, tk.END)
-        self.ent_budget_note.delete(0, tk.END)
+        if hasattr(self, 'budget_widgets'):
+            for k, w in self.budget_widgets.items():
+                if k == "cb_budget_site": continue
+                if hasattr(w, 'cget'):
+                    st = w.cget('state')
+                    if st == 'readonly': w.config(state='normal')
+                    w.delete(0, 'end')
+                    if st == 'readonly': w.config(state='readonly')
+                else:
+                    try: w.delete(0, 'end')
+                    except: pass
         # [NEW] Reset detail widgets
         if hasattr(self, 'labor_detail_widget'): self.labor_detail_widget.reset()
         if hasattr(self, 'material_detail_widget'):
@@ -14514,13 +14425,13 @@ class MaterialManager:
         vsb = ttk.Scrollbar(tree_frame, orient='vertical')
         hsb = ttk.Scrollbar(tree_frame, orient='horizontal')
         
-        columns = ('Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Margin', 'Note')
+        columns = ('Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'TargetMargin', 'ActualMargin', 'Note')
         tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
         col_map = {
-            'Site': ('현장명', 150), 'Revenue': ('매출액', 120), 'UnitPrice': ('단가', 100),
+            'Site': ('현장명', 150), 'Revenue': ('매출액(목표)', 120), 'UnitPrice': ('단가', 100),
             'LaborCost': ('노무비', 120), 'MaterialCost': ('자재비', 120), 'Expense': ('경비', 120),
-            'OutsourceCost': ('외주비', 120), 'Profit': ('기대이익', 120), 'Margin': ('이익률', 100), 'Note': ('비고', 200)
+            'OutsourceCost': ('외주비', 120), 'Profit': ('기대이익(목표)', 120), 'TargetMargin': ('목표이익률', 100), 'ActualMargin': ('현재이익률', 100), 'Note': ('비고', 200)
         }
         for col in columns:
             head, width = col_map[col]
@@ -14578,11 +14489,15 @@ class MaterialManager:
             out = pd.to_numeric(row.get('OutsourceCost', 0), errors='coerce') or 0
             prof = pd.to_numeric(row.get('Profit', 0), errors='coerce') or 0
             
+            a_rev = pd.to_numeric(row.get('Actual_Revenue', 0), errors='coerce') or 0
+            a_prof = pd.to_numeric(row.get('Actual_Profit', 0), errors='coerce') or 0
+            
             total_rev += rev
             total_cost += (lab + mat + exp + out)
             total_profit += prof
             
-            margin = (prof / rev * 100) if rev > 0 else 0
+            target_margin = (prof / rev * 100) if rev > 0 else 0
+            actual_margin = (a_prof / a_rev * 100) if a_rev > 0 else 0
             
             tree.insert('', 'end', values=(
                 row.get('Site', ''),
@@ -14593,7 +14508,8 @@ class MaterialManager:
                 f"{exp:,.0f}",
                 f"{out:,.0f}",
                 f"{prof:,.0f}",
-                f"{margin:.1f}%",
+                f"{target_margin:.1f}%",
+                f"{actual_margin:.1f}%",
                 row.get('Note', '')
             ))
             

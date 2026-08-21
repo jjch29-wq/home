@@ -1,0 +1,324 @@
+{
+  "summary": {
+    "list1_rows": 42,
+    "list1_film": 134.0,
+    "list1_acc": 134.0,
+    "list1_rej": 0.0,
+    "status_all_rows": 1372,
+    "status_all_film": 4263.0,
+    "matched": 41,
+    "only_list1": 1,
+    "mismatch": 1,
+    "range_start": 120,
+    "range_end": 132,
+    "only_status_in_range": 1,
+    "only_status_in_range_film": 4.0
+  },
+  "reports": [
+    {
+      "report": "SIT-K1-KES-PIP-RT-0120",
+      "list1": {
+        "rows": 3,
+        "film": 10.0,
+        "acc": 10.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 3,
+        "film": 10.0,
+        "acc": 10.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0121",
+      "list1": {
+        "rows": 6,
+        "film": 21.0,
+        "acc": 21.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 6,
+        "film": 21.0,
+        "acc": 21.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0122",
+      "list1": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0123",
+      "list1": {
+        "rows": 7,
+        "film": 21.0,
+        "acc": 21.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 7,
+        "film": 21.0,
+        "acc": 21.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0124",
+      "list1": {
+        "rows": 2,
+        "film": 6.0,
+        "acc": 6.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 2,
+        "film": 6.0,
+        "acc": 6.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0125",
+      "list1": {
+        "rows": 4,
+        "film": 12.0,
+        "acc": 12.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 4,
+        "film": 12.0,
+        "acc": 12.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0126",
+      "list1": {
+        "rows": 6,
+        "film": 18.0,
+        "acc": 18.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 6,
+        "film": 18.0,
+        "acc": 18.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0127",
+      "list1": {
+        "rows": 6,
+        "film": 20.0,
+        "acc": 20.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 6,
+        "film": 20.0,
+        "acc": 20.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0128",
+      "list1": {
+        "rows": 2,
+        "film": 6.0,
+        "acc": 6.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 2,
+        "film": 6.0,
+        "acc": 6.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0129",
+      "list1": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0130",
+      "list1": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0131",
+      "list1": {
+        "rows": 2,
+        "film": 8.0,
+        "acc": 8.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 2,
+        "film": 8.0,
+        "acc": 8.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    },
+    {
+      "report": "SIT-K1-KES-PIP-RT-0132",
+      "list1": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "status": {
+        "rows": 1,
+        "film": 3.0,
+        "acc": 3.0,
+        "rej": 0.0,
+        "rs": 0.0
+      },
+      "delta_film": 0.0
+    }
+  ],
+  "only_list1": [
+    {
+      "row": 45,
+      "report": "SIT-K1-KES-PIP-RT-0131",
+      "report_num": 131,
+      "sno": "2",
+      "ident": "YURN-CW-7000004-01",
+      "joint": "1FA",
+      "size": "10",
+      "thk": "4.19",
+      "matl": "S/S",
+      "welder": "2059",
+      "film": 4.0,
+      "acc": 4.0,
+      "rej": 0.0,
+      "rs": 0.0,
+      "defect": "",
+      "remark1": "",
+      "remark2": "",
+      "key": [
+        "SIT-K1-KES-PIP-RT-0131",
+        "YURN-CW-7000004-01",
+        "1FA"
+      ]
+    }
+  ],
+  "mismatch": [
+    {
+      "key": [
+        "SIT-K1-KES-PIP-RT-0121",
+        "YURN-DHWR-7000001-01",
+        "3"
+      ],
+      "list1_row": 13,
+      "status_row": 1343,
+      "list1_sno": "6",
+      "status_sno": "6",
+      "diffs": {
+        "matl": {
+          "list1": "C/SU",
+          "status": "C/S"
+        }
+      }
+    }
+  ],
+  "only_status_in_range": [
+    {
+      "row": 1375,
+      "report": "SIT-K1-KES-PIP-RT-0131",
+      "report_num": 131,
+      "sno": "2",
+      "ident": "YURN-CW-7000004-01",
+      "joint": "2FA",
+      "size": "10",
+      "thk": "4.19",
+      "matl": "S/S",
+      "welder": "2059",
+      "film": 4.0,
+      "acc": 4.0,
+      "rej": 0.0,
+      "rs": 0.0,
+      "defect": "",
+      "remark1": "",
+      "remark2": "",
+      "key": [
+        "SIT-K1-KES-PIP-RT-0131",
+        "YURN-CW-7000004-01",
+        "2FA"
+      ]
+    }
+  ]
+}

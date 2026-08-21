@@ -1,0 +1,1279 @@
+{
+  "file": "C:\\Users\\-\\OneDrive\\바탕 화면\\공사실행예산서(중앙지사)수정 (2).xlsx",
+  "sheets": [
+    {
+      "name": "사전원가",
+      "state": "visible",
+      "bounds": "A2:AE104",
+      "rows": 103,
+      "cols": 31,
+      "formulas": 112,
+      "formula_errors": 0,
+      "merged_ranges": 291,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "인원투입계획",
+      "state": "visible",
+      "bounds": "A1:Z21",
+      "rows": 21,
+      "cols": 26,
+      "formulas": 37,
+      "formula_errors": 0,
+      "merged_ranges": 4,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "경비예상지출항목",
+      "state": "visible",
+      "bounds": "A1:D24",
+      "rows": 24,
+      "cols": 4,
+      "formulas": 4,
+      "formula_errors": 0,
+      "merged_ranges": 1,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "장비감각상각 (2)",
+      "state": "visible",
+      "bounds": "A1:J23",
+      "rows": 23,
+      "cols": 10,
+      "formulas": 69,
+      "formula_errors": 0,
+      "merged_ranges": 14,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "사후원가",
+      "state": "visible",
+      "bounds": "A1:M77",
+      "rows": 77,
+      "cols": 13,
+      "formulas": 48,
+      "formula_errors": 3,
+      "merged_ranges": 131,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "근무현황",
+      "state": "visible",
+      "bounds": "A1:W22",
+      "rows": 22,
+      "cols": 23,
+      "formulas": 37,
+      "formula_errors": 0,
+      "merged_ranges": 11,
+      "hidden_rows": 2,
+      "hidden_cols": 0
+    },
+    {
+      "name": "개인일비",
+      "state": "visible",
+      "bounds": "A1:I24",
+      "rows": 24,
+      "cols": 9,
+      "formulas": 74,
+      "formula_errors": 0,
+      "merged_ranges": 7,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "장비감각상각",
+      "state": "visible",
+      "bounds": "A1:J25",
+      "rows": 25,
+      "cols": 10,
+      "formulas": 69,
+      "formula_errors": 0,
+      "merged_ranges": 14,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "계정별 사용내역 (2)",
+      "state": "visible",
+      "bounds": "A3:E14",
+      "rows": 12,
+      "cols": 5,
+      "formulas": 6,
+      "formula_errors": 0,
+      "merged_ranges": 1,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "계정별 사용내역",
+      "state": "visible",
+      "bounds": "A3:E26",
+      "rows": 24,
+      "cols": 5,
+      "formulas": 3,
+      "formula_errors": 0,
+      "merged_ranges": 1,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    },
+    {
+      "name": "대비표",
+      "state": "visible",
+      "bounds": "A3:I20",
+      "rows": 18,
+      "cols": 9,
+      "formulas": 26,
+      "formula_errors": 4,
+      "merged_ranges": 5,
+      "hidden_rows": 0,
+      "hidden_cols": 0
+    }
+  ],
+  "formula_errors": [
+    {
+      "sheet": "사후원가",
+      "cell": "A3",
+      "error": "#REF!",
+      "formula": "=#REF!"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "M3",
+      "error": "#REF!",
+      "formula": "=#REF!"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "M5",
+      "error": "#REF!",
+      "formula": "=M3-M4"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "C8",
+      "error": "#REF!",
+      "formula": "=#REF!"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E8",
+      "error": "#REF!",
+      "formula": "=D8-C8"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "C20",
+      "error": "#REF!",
+      "formula": "=C8-C15-C16-C19"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E20",
+      "error": "#REF!",
+      "formula": "=D20-C20"
+    }
+  ],
+  "broken_refs": [
+    {
+      "sheet": "사후원가",
+      "cell": "A3",
+      "formula": "=#REF!"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "M3",
+      "formula": "=#REF!"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "C8",
+      "formula": "=#REF!"
+    }
+  ],
+  "sum_mismatches": [],
+  "formula_gaps": [
+    {
+      "sheet": "사전원가",
+      "cell": "J89",
+      "axis": "vertical",
+      "above": "=SUM(J82:J87)",
+      "below": "=+J57+J65+J74+J78+J88"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J92",
+      "axis": "vertical",
+      "above": "=+J58+J66+J75",
+      "below": "=+J30+J44+J90"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J99",
+      "axis": "vertical",
+      "above": "=(+F98-J74)*H98",
+      "below": "=+J93+J98"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I16",
+      "axis": "horizontal",
+      "left": "=+O17/240",
+      "right": "=+H16*D16*F16"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I17",
+      "axis": "horizontal",
+      "left": "=+O17/240",
+      "right": "=+H17*D17*F17"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I18",
+      "axis": "horizontal",
+      "left": "=+O18/240",
+      "right": "=+H18*D18*F18"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I19",
+      "axis": "horizontal",
+      "left": "=+O19/240",
+      "right": "=+H19*D19*F19"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I20",
+      "axis": "horizontal",
+      "left": "=+O20/240",
+      "right": "=+H20*D20*F20"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I21",
+      "axis": "horizontal",
+      "left": "=+O21/240",
+      "right": "=+H21*D21*F21"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I22",
+      "axis": "horizontal",
+      "left": "=+O22/240",
+      "right": "=+H22*D22*F22"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I23",
+      "axis": "horizontal",
+      "left": "=+O23/240",
+      "right": "=+H23*D23*F23"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "E24",
+      "axis": "horizontal",
+      "left": "=SUM(D16:D23)",
+      "right": "=SUM(F16:F23)"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "E29",
+      "axis": "horizontal",
+      "left": "=D24",
+      "right": "=SUM(F26:F28)"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I82",
+      "axis": "horizontal",
+      "left": "=[14]장비감각상각!E6",
+      "right": "=G82*H82"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I83",
+      "axis": "horizontal",
+      "left": "=[14]장비감각상각!E7",
+      "right": "=G83*H83"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I84",
+      "axis": "horizontal",
+      "left": "=[14]장비감각상각!E11",
+      "right": "=G84*H84"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I85",
+      "axis": "horizontal",
+      "left": "=[14]장비감각상각!E13",
+      "right": "=G85*H85"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I86",
+      "axis": "horizontal",
+      "left": "=[14]장비감각상각!E22",
+      "right": "=G86*H86"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I87",
+      "axis": "horizontal",
+      "left": "=[14]장비감각상각!E22",
+      "right": "=G87*H87"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "C104",
+      "axis": "horizontal",
+      "left": "=A11",
+      "right": "=+J100"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "E104",
+      "axis": "horizontal",
+      "left": "=+J100",
+      "right": "=+B104-D104"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "H33",
+      "axis": "vertical",
+      "above": "=D32*F32",
+      "below": "=D34*F34"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "G73",
+      "axis": "horizontal",
+      "left": "=SUM(F70:G72)",
+      "right": "=SUM(H70:I71)"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E4",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!C19",
+      "right": "=D4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E5",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!D19",
+      "right": "=D5"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E6",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!E19",
+      "right": "=D6"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E7",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!F19",
+      "right": "=D7"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E8",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!G19",
+      "right": "=D8"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E9",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!H19",
+      "right": "=D9"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E10",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!I19",
+      "right": "=D10"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E11",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!J19",
+      "right": "=D11"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E12",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!K19",
+      "right": "=D12"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E13",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!L19",
+      "right": "=D13"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E14",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!M19",
+      "right": "=D14"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E15",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!N19",
+      "right": "=D15"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E16",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!O19",
+      "right": "=D16"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E17",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!P19",
+      "right": "=D17"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E18",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!Q19",
+      "right": "=D18"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E19",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!R19",
+      "right": "=D19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E20",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!S19",
+      "right": "=D20"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "E21",
+      "axis": "horizontal",
+      "left": "=[15]근무현황!T19",
+      "right": "=D21"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "D9",
+      "axis": "vertical",
+      "above": "=SUM(사후원가!A7)",
+      "below": "=SUM(사후원가!C23)"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E9",
+      "axis": "vertical",
+      "above": "=D8-C8",
+      "below": "=D10-C10"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E14",
+      "axis": "vertical",
+      "above": "=D13-C13",
+      "below": "=D15-C15"
+    }
+  ],
+  "missing_inputs": [],
+  "numeric_anomalies": [
+    {
+      "sheet": "대비표",
+      "cell": "E10",
+      "type": "negative",
+      "value": -50963314.66666667,
+      "label": "1. 직 접 비(B) | 1) 인 건 비"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E11",
+      "type": "negative",
+      "value": -5261342.827708334,
+      "label": "2) 4대보험"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E12",
+      "type": "negative",
+      "value": -12850110.0,
+      "label": "3) 재 료 비(장비,재료)"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E13",
+      "type": "negative",
+      "value": -1324580.0,
+      "label": "4) 경비"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E15",
+      "type": "negative",
+      "value": -70399347.494375,
+      "label": "소   계"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "E16",
+      "type": "negative",
+      "value": -5600575.816490972,
+      "label": "2. 간 접 비(C) | 직접비 X 13%"
+    }
+  ],
+  "keywords": [
+    {
+      "sheet": "사전원가",
+      "cell": "A2",
+      "text": "공사실행예산서(사전원가계산)"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A13",
+      "text": "2. 매출원가"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J15",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J25",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A32",
+      "text": "2) 재료비"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J33",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A44",
+      "text": "재료비 합계"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A46",
+      "text": "3) 경비"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A47",
+      "text": "(1) 현장 경비"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J48",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A57",
+      "text": "현장 경비 소계"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J60",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J68",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A76",
+      "text": "(4) 4대 보험료"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J77",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A78",
+      "text": "4대 보험료"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J81",
+      "text": "사전원가금액"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A90",
+      "text": "경비 합계 : (1)~(5) 합계"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "G91",
+      "text": "경비 부가세 합계"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A93",
+      "text": "매출원가 총계 : 1), 2), 3) 합계"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "G94",
+      "text": "매출원가 부가세 합계"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A96",
+      "text": "3. 간접비(판관비)"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "F97",
+      "text": "산출직접비"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "H97",
+      "text": "간접비율(%)"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "J97",
+      "text": "사전 간접비 총계"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A98",
+      "text": "간접비"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "C98",
+      "text": "산출직접비 x 간접비율(2024년 기준)"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A100",
+      "text": "4. 총원가(매출원가+간접비)"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A102",
+      "text": "5. 영업이익, 영업이익율"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "D103",
+      "text": "총원가"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "F103",
+      "text": "영업이익"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "I103",
+      "text": "영업이익율"
+    },
+    {
+      "sheet": "경비예상지출항목",
+      "cell": "A1",
+      "text": "경비 예상 지출내역"
+    },
+    {
+      "sheet": "경비예상지출항목",
+      "cell": "A7",
+      "text": "안전관리비"
+    },
+    {
+      "sheet": "장비감각상각 (2)",
+      "cell": "B21",
+      "text": "스타렉스(5년간 보험비 포함)"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "A1",
+      "text": "공사실행예산서(사후원가계산)"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "A9",
+      "text": "2. 지출(직접비)"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "A25",
+      "text": "2) 4대보험"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "A29",
+      "text": "3) 원부재료비"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "J45",
+      "text": "보험료, 오일, 세금, 수리비 감안해서 *2"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "A49",
+      "text": "6) 경비"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "C55",
+      "text": "현장경비"
+    },
+    {
+      "sheet": "사후원가",
+      "cell": "A64",
+      "text": "3.간접비"
+    },
+    {
+      "sheet": "장비감각상각",
+      "cell": "B21",
+      "text": "스타렉스(5년간 보험비 포함)"
+    },
+    {
+      "sheet": "계정별 사용내역",
+      "cell": "A20",
+      "text": "잡이익"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "C5",
+      "text": "사전원가"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "D5",
+      "text": "사후원가"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "C6",
+      "text": "(실행 예산서)"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "D6",
+      "text": "(실행 정산서)"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "B11",
+      "text": "2) 4대보험"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "B13",
+      "text": "4) 경비"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "B16",
+      "text": "직접비 X 13%"
+    },
+    {
+      "sheet": "대비표",
+      "cell": "G16",
+      "text": "직접비 감소"
+    }
+  ],
+  "workbook_links": [
+    {
+      "sheet": "사전원가",
+      "cell": "A82",
+      "formula": "=[14]장비감각상각!B6"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "H82",
+      "formula": "=[14]장비감각상각!E6"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A83",
+      "formula": "=[14]장비감각상각!B7"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "H83",
+      "formula": "=[14]장비감각상각!E7"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A84",
+      "formula": "=[14]장비감각상각!B11"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "H84",
+      "formula": "=[14]장비감각상각!E11"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A85",
+      "formula": "=[14]장비감각상각!B13"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "H85",
+      "formula": "=[14]장비감각상각!E13"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A86",
+      "formula": "=[14]장비감각상각!B21"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "H86",
+      "formula": "=[14]장비감각상각!E22"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "A87",
+      "formula": "=[14]장비감각상각!B22"
+    },
+    {
+      "sheet": "사전원가",
+      "cell": "H87",
+      "formula": "=[14]장비감각상각!E22"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "G2",
+      "formula": "=[15]사후원가!B3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D4",
+      "formula": "=[15]근무현황!C19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D5",
+      "formula": "=[15]근무현황!D19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D6",
+      "formula": "=[15]근무현황!E19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D7",
+      "formula": "=[15]근무현황!F19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D8",
+      "formula": "=[15]근무현황!G19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D9",
+      "formula": "=[15]근무현황!H19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D10",
+      "formula": "=[15]근무현황!I19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D11",
+      "formula": "=[15]근무현황!J19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D12",
+      "formula": "=[15]근무현황!K19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D13",
+      "formula": "=[15]근무현황!L19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A14",
+      "formula": "=[15]근무현황!M3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D14",
+      "formula": "=[15]근무현황!M19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A15",
+      "formula": "=[15]근무현황!N3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "B15",
+      "formula": "=[15]근무현황!N4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D15",
+      "formula": "=[15]근무현황!N19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A16",
+      "formula": "=[15]근무현황!O3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "B16",
+      "formula": "=[15]근무현황!O4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D16",
+      "formula": "=[15]근무현황!O19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A17",
+      "formula": "=[15]근무현황!P3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "B17",
+      "formula": "=[15]근무현황!P4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D17",
+      "formula": "=[15]근무현황!P19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A18",
+      "formula": "=[15]근무현황!Q3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "B18",
+      "formula": "=[15]근무현황!Q4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D18",
+      "formula": "=[15]근무현황!Q19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A19",
+      "formula": "=[15]근무현황!R3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "B19",
+      "formula": "=[15]근무현황!R4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D19",
+      "formula": "=[15]근무현황!R19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A20",
+      "formula": "=[15]근무현황!S3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "B20",
+      "formula": "=[15]근무현황!S4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D20",
+      "formula": "=[15]근무현황!S19"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "A21",
+      "formula": "=[15]근무현황!T3"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "B21",
+      "formula": "=[15]근무현황!T4"
+    },
+    {
+      "sheet": "개인일비",
+      "cell": "D21",
+      "formula": "=[15]근무현황!T19"
+    }
+  ],
+  "defined_names": [
+    {
+      "name": "_1회",
+      "attr_text": "[1]목록!#REF!"
+    },
+    {
+      "name": "_2회",
+      "attr_text": "[1]목록!#REF!"
+    },
+    {
+      "name": "_3회",
+      "attr_text": "[1]목록!#REF!"
+    },
+    {
+      "name": "_Key1",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "_Order1",
+      "attr_text": "255"
+    },
+    {
+      "name": "_Order2",
+      "attr_text": "255"
+    },
+    {
+      "name": "dd",
+      "attr_text": "[3]목록!#REF!"
+    },
+    {
+      "name": "ddddsd",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "df",
+      "attr_text": "[4]목록!$R$2:$R$4"
+    },
+    {
+      "name": "ds",
+      "attr_text": "[1]목록!#REF!"
+    },
+    {
+      "name": "qqqq",
+      "attr_text": "[1]목록!#REF!"
+    },
+    {
+      "name": "_xlnm.Recorder",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "ww",
+      "attr_text": "[1]목록!#REF!"
+    },
+    {
+      "name": "www",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "강현모",
+      "attr_text": "[6]구내식당!$J$4"
+    },
+    {
+      "name": "결재자",
+      "attr_text": "'[8]식대결재(경비외)'!$R$5:$R$30"
+    },
+    {
+      "name": "관리부",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "근무",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "근무현황11",
+      "attr_text": "'[9]식대결재(경비외)'!$B$4:$P$4"
+    },
+    {
+      "name": "김성희",
+      "attr_text": "[6]구내식당!$E$4"
+    },
+    {
+      "name": "김정목",
+      "attr_text": "[6]구내식당!$I$4"
+    },
+    {
+      "name": "김종석",
+      "attr_text": "[6]구내식당!$B$4"
+    },
+    {
+      "name": "ㄴㄴㄴ",
+      "attr_text": "[3]목록!#REF!"
+    },
+    {
+      "name": "ㄴㅁ",
+      "attr_text": "[1]목록!#REF!"
+    },
+    {
+      "name": "날짜",
+      "attr_text": "'[6]일비 및 식비 관리'!$A$12:$A$39"
+    },
+    {
+      "name": "ㄷ",
+      "attr_text": "[3]목록!$Q$2:$Q$74"
+    },
+    {
+      "name": "ㄷㄷㄷ",
+      "attr_text": "[3]목록!$D$2:$D$13"
+    },
+    {
+      "name": "마일리지",
+      "attr_text": "[3]목록!$R$2:$R$4"
+    },
+    {
+      "name": "박태현",
+      "attr_text": "[6]구내식당!$K$4"
+    },
+    {
+      "name": "받을금액",
+      "attr_text": "'[8]식대결재(경비외)'!$S$5:$S$30"
+    },
+    {
+      "name": "사무소",
+      "attr_text": "[3]목록!$C$2:$C$13"
+    },
+    {
+      "name": "사후원가_솔레니스",
+      "attr_text": "[11]목록!#REF!"
+    },
+    {
+      "name": "서병관",
+      "attr_text": "[6]구내식당!$G$4"
+    },
+    {
+      "name": "석식",
+      "attr_text": "'[6]일비 및 식비 관리'!$I$40"
+    },
+    {
+      "name": "식대시간",
+      "attr_text": "[3]목록!$S$2:$S$7"
+    },
+    {
+      "name": "식대횟수",
+      "attr_text": "[3]목록!$R$2:$R$4"
+    },
+    {
+      "name": "식비일비",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "ㅇ",
+      "attr_text": "[3]목록!$S$2:$S$7"
+    },
+    {
+      "name": "업체명",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "오수용",
+      "attr_text": "[6]구내식당!$M$4"
+    },
+    {
+      "name": "윤수한",
+      "attr_text": "[6]구내식당!$F$4"
+    },
+    {
+      "name": "이건영",
+      "attr_text": "[6]구내식당!$H$4"
+    },
+    {
+      "name": "이후동",
+      "attr_text": "[6]구내식당!$L$4"
+    },
+    {
+      "name": "인금",
+      "attr_text": "[12]실제식대!$P$2"
+    },
+    {
+      "name": "일비",
+      "attr_text": "'[6]일비 및 식비 관리'!$C$40"
+    },
+    {
+      "name": "일비내역",
+      "attr_text": "[3]목록!#REF!"
+    },
+    {
+      "name": "조식",
+      "attr_text": "'[6]일비 및 식비 관리'!$E$40"
+    },
+    {
+      "name": "중식",
+      "attr_text": "'[6]일비 및 식비 관리'!$G$40"
+    },
+    {
+      "name": "직급",
+      "attr_text": "[3]목록!$D$2:$D$13"
+    },
+    {
+      "name": "참석자",
+      "attr_text": "'[8]식대결재(경비외)'!$B$4:$P$4"
+    },
+    {
+      "name": "최준영",
+      "attr_text": "[6]구내식당!$C$4"
+    },
+    {
+      "name": "출근시간",
+      "attr_text": "[3]목록!$P$2:$P$50"
+    },
+    {
+      "name": "ㅋㅋ",
+      "attr_text": "#REF!"
+    },
+    {
+      "name": "퇴근시간",
+      "attr_text": "[3]목록!$Q$2:$Q$74"
+    },
+    {
+      "name": "현금출납부",
+      "attr_text": "[13]목록!#REF!"
+    },
+    {
+      "name": "황병순",
+      "attr_text": "[6]구내식당!$D$4"
+    }
+  ]
+}
