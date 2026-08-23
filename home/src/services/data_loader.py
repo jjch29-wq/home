@@ -76,7 +76,7 @@ def load_data_impl(self):
                                             'User9', 'WorkTime9', 'OT9',
                                             'User10', 'WorkTime10', 'OT10',
                                             '차량번호', '주행거리', '차량점검', '차량비고'])
-            self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail'])
+            self.budget_df = pd.DataFrame(columns=['Site', 'Period', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Period', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note', 'Actual_LaborDetail', 'Actual_MaterialDetail', 'Actual_ExpenseDetail'])
         else:
             print("DEBUG: DB found. Reading Excel...")
             # 1. Materials
@@ -403,10 +403,19 @@ def load_data_impl(self):
                     self.budget_df['MaterialDetail'] = '{}'
                 if 'ExpenseDetail' not in self.budget_df.columns:
                     self.budget_df['ExpenseDetail'] = '{}'
-
+                if 'Period' not in self.budget_df.columns:
+                    self.budget_df['Period'] = ''
+                if 'Actual_Period' not in self.budget_df.columns:
+                    self.budget_df['Actual_Period'] = ''
+                if 'Actual_LaborDetail' not in self.budget_df.columns:
+                    self.budget_df['Actual_LaborDetail'] = '{}'
+                if 'Actual_MaterialDetail' not in self.budget_df.columns:
+                    self.budget_df['Actual_MaterialDetail'] = '{}'
+                if 'Actual_ExpenseDetail' not in self.budget_df.columns:
+                    self.budget_df['Actual_ExpenseDetail'] = '{}'
             except Exception as e:
                 print(f"DEBUG: Budget sheet not found or load failed: {e}")
-                self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note'])
+                self.budget_df = pd.DataFrame(columns=['Site', 'Period', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Period', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note', 'Actual_LaborDetail', 'Actual_MaterialDetail', 'Actual_ExpenseDetail'])
             
             # [NEW] 7. Settings (Excel-based Rate Management)
             try:
@@ -435,7 +444,7 @@ def load_data_impl(self):
                     ['Expense', '차량유지비', '주유, 수리, 통행, 주차 등', '일', 150000 // 30],
                     ['Expense', '소모품비', '장갑,일회용 작업복외', '일', 15000 // 30],
                     ['Expense', '복리후생비', '생수, 음료 외 기타', '일', 50000 // 30],
-                    ['Expense', 'Se-175', '방사성동위원소 구매', 'EA', 10000000 // 280]
+                    ['Expense', 'Se-175', '방사성동위원소 구매', '일', 10000000 // 280]
                 ]
                 outsource_defaults = [
                     ['Outsource', '케이엔디이', '방사선투과검사', '공수', 15000]
@@ -465,7 +474,7 @@ def load_data_impl(self):
                                             'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', '장비명', '검사량', '회사코드',
                                             '업체명', '단가', '출장비', '일식', '검사비', 'FilmCount',
                                             '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수'])
-        self.budget_df = pd.DataFrame(columns=['Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note'])
+        self.budget_df = pd.DataFrame(columns=['Site', 'Period', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit', 'Note', 'LaborDetail', 'MaterialDetail', 'ExpenseDetail', 'Actual_Period', 'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit', 'Actual_Note', 'Actual_LaborDetail', 'Actual_MaterialDetail', 'Actual_ExpenseDetail'])
 
     
     # --- [NEW] Global Data Sanitization & Dtype Enforcement ---

@@ -238,7 +238,8 @@ class DailyWorkLogExporter:
         # Populate NDT Results
         ndt_results = data.get('ndt_results', [])
         start_row = 28
-        for i in range(max(15, len(ndt_results))): # minimum 15 empty rows for good look
+        total_rows = max(10, len(ndt_results) + 1)
+        for i in range(total_rows): # minimum 10 empty rows for good look
             row_idx = start_row + i
             res = ndt_results[i] if i < len(ndt_results) else {}
             
@@ -254,24 +255,42 @@ class DailyWorkLogExporter:
             
             method = res.get('검사방법', '').upper().strip()
             
-            sec_info = res.get('구간정보', '').split(',')
-            sec_info += [''] * (4 - len(sec_info)) # Pad to 4
-            set_cell(f'J{row_idx}', sec_info[0])
-            set_cell(f'K{row_idx}', sec_info[1] if method not in ['PAUT', 'PT', 'MT'] else '')
-            set_cell(f'L{row_idx}', sec_info[2] if method not in ['PAUT', 'PT', 'MT'] else '')
-            set_cell(f'M{row_idx}', sec_info[3] if method not in ['PAUT', 'PT', 'MT'] else '')
+            sec_info_raw = res.get('구간정보', '').strip()
             
-            if method in ['PAUT', 'PT', 'MT']:
+            # 검사방법이나 결과 등 데이터가 있는 실제 행인데 구간정보가 비었을 때 '관련지시 없음' 처리
+            is_empty_row = not any(res.values())
+            if not is_empty_row and not sec_info_raw:
+                sec_info_raw = "관련지시 없음"
+                
+            sec_info = sec_info_raw.split(',')
+            sec_info += [''] * (4 - len(sec_info)) # Pad to 4
+            
+            set_cell(f'J{row_idx}', sec_info[0])
+            set_cell(f'K{row_idx}', sec_info[1] if method not in ['PAUT', 'PT', 'MT'] and sec_info_raw != "관련지시 없음" else '')
+            set_cell(f'L{row_idx}', sec_info[2] if method not in ['PAUT', 'PT', 'MT'] and sec_info_raw != "관련지시 없음" else '')
+            set_cell(f'M{row_idx}', sec_info[3] if method not in ['PAUT', 'PT', 'MT'] and sec_info_raw != "관련지시 없음" else '')
+            
+            if method in ['PAUT', 'PT', 'MT'] or sec_info_raw == "관련지시 없음":
                 ws.merge_cells(f'J{row_idx}:M{row_idx}')
             
+            spec_val = res.get('규격', '')
+            shift_val = res.get('근무구분', '')
+            if shift_val and shift_val != '주간':
+                spec_val = f"{spec_val}({shift_val})" if spec_val else shift_val
+                
             set_cell(f'N{row_idx}', res.get('결과', ''))
-            set_cell(f'O{row_idx}', res.get('규격', ''))
+            set_cell(f'O{row_idx}', spec_val)
             set_cell(f'P{row_idx}', res.get('RT_OR', ''))
             set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
             set_cell(f'R{row_idx}', res.get('PAUT', ''))
             set_cell(f'S{row_idx}', res.get('MT', ''))
             set_cell(f'T{row_idx}', res.get('PT', ''))
             
+            if i == len(ndt_results):
+                ws.merge_cells(f'B{row_idx}:T{row_idx}')
+                ws[f'B{row_idx}'].value = "- 이 하 여 백 -"
+                ws[f'B{row_idx}'].alignment = Alignment(horizontal='center', vertical='center')
+                
             ws.row_dimensions[row_idx].height = 20
 
         # Print setup (Landscape, fit to one page width)

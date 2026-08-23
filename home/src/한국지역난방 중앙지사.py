@@ -1086,7 +1086,7 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
             ]
         df = self.settings_df[self.settings_df['Category'] == 'Expense']
         if df.empty:
@@ -1094,7 +1094,7 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
             ]
         # Return in (cat, cont, ppl, qty, unit, price) format as expected by _add_row_s1
         return [tuple([x[0], x[1], "N/A", 1, x[2], x[3]]) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
@@ -2176,7 +2176,9 @@ class MaterialManager:
                 if getattr(combobox, '_just_selected', False):
                     return
                 # Alt-Down is the standard shortcut to post the dropdown in many OS/Toolkits
+                combobox._auto_opening = True
                 combobox.event_generate('<Alt-Down>')
+                combobox._auto_opening = False
                 # Re-verify cursor immediately after posting
                 combobox.icursor(cursor_pos)
             except:
@@ -2219,6 +2221,14 @@ class MaterialManager:
             combobox.after(500, _reset)
             
         combobox.bind('<<ComboboxSelected>>', _on_selected, add='+')
+        
+        # [NEW] Restore full list when user clicks anywhere on the combobox (including dropdown arrow)
+        def _on_click(e=None):
+            if not getattr(combobox, '_auto_opening', False):
+                try:
+                    combobox['values'] = source_getter()
+                except: pass
+        combobox.bind('<ButtonPress-1>', _on_click, add='+')
 
     def update_registration_combos(self):
         """Update registration comboboxes with unique values from database and centralized list"""
@@ -6126,6 +6136,60 @@ class MaterialManager:
 
     
 
+    def export_budget_estimation(self):
+        """Export the estimated budget details to Excel"""
+        site = self.cb_budget_site.get()
+        if not site:
+            messagebox.showwarning("현장 미선택", "사정원가를 내보낼 현장을 선택하거나 입력해주세요.")
+            return
+            
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            initialfile=f"사정예산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+        if not file_path:
+            return
+            
+        # Collect Summary Data
+        summary_data = {
+            'site': site,
+            'period': getattr(self, 'ent_budget_period').get() if hasattr(self, 'ent_budget_period') else "",
+            'revenue': getattr(self, 'ent_budget_revenue').get() if hasattr(self, 'ent_budget_revenue') else "",
+            'unitprice': getattr(self, 'ent_budget_unit_price').get() if hasattr(self, 'ent_budget_unit_price') else "",
+            'labor': getattr(self, 'ent_budget_labor').get() if hasattr(self, 'ent_budget_labor') else "",
+            'material': getattr(self, 'ent_budget_material').get() if hasattr(self, 'ent_budget_material') else "",
+            'expense': getattr(self, 'ent_budget_expense').get() if hasattr(self, 'ent_budget_expense') else "",
+            'outsource': getattr(self, 'ent_budget_outsource').get() if hasattr(self, 'ent_budget_outsource') else "",
+            'profit': getattr(self, 'ent_budget_profit').get() if hasattr(self, 'ent_budget_profit') else "",
+            'margin': getattr(self, 'ent_budget_margin').get() if hasattr(self, 'ent_budget_margin') else ""
+        }
+        
+        # Details
+        labor_data = self.labor_detail_widget.get_data() if hasattr(self, 'labor_detail_widget') else {}
+        
+        # Material Details - need to augment with name/spec/unit from default_items
+        raw_mat = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
+        material_data = []
+        defaults = self.material_detail_widget.default_items if hasattr(self, 'material_detail_widget') else []
+        for i, row in enumerate(raw_mat):
+            if i < len(defaults):
+                name, spec, unit, _ = defaults[i]
+                row['name'] = name
+                row['spec'] = spec
+                row['unit'] = unit
+                material_data.append(row)
+                
+        expense_data = self.expense_detail_widget.get_data() if hasattr(self, 'expense_detail_widget') else {}
+        
+        try:
+            from utils.export_helper import export_budget_estimation_to_excel
+            if export_budget_estimation_to_excel(file_path, summary_data, labor_data, material_data, expense_data):
+                messagebox.showinfo("내보내기 완료", f"사정예산서가 성공적으로 저장되었습니다.\n{file_path}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다.\n{e}")
 
     def export_budget_sales_status(self):
         """Export the currently filtered budget sales status to Excel"""
@@ -6256,6 +6320,7 @@ class MaterialManager:
         # Pop-out button
         ttk.Button(top_btn_frame, text="🔍 팝업창으로 열기", command=self.open_detached_budget_view).pack(side='left', padx=15)
         
+        ttk.Button(top_btn_frame, text="사정원가 출력", command=self.export_budget_estimation).pack(side='right', padx=10)
         ttk.Button(top_btn_frame, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
 
         main_paned = ttk.PanedWindow(self.tab_budget, orient='vertical')
@@ -6295,13 +6360,14 @@ class MaterialManager:
             
         rows = [
             ("현장명", "cb_budget_site", None, None),
-            ("계약금액(Revenue)", "ent_budget_revenue", "ent_budget_actual_revenue", "ent_budget_diff_revenue"),
-            ("매출금액(UnitPrice)", "ent_budget_unit_price", "ent_budget_actual_unit_price", "ent_budget_diff_unit_price"),
-            ("실행 노무비(Labor)", "ent_budget_labor", "ent_budget_actual_labor", "ent_budget_diff_labor"),
-            ("실행 재료비(Material)", "ent_budget_material", "ent_budget_actual_material", "ent_budget_diff_material"),
-            ("실행 경비(Expense)", "ent_budget_expense", "ent_budget_actual_expense", "ent_budget_diff_expense"),
-            ("실행 외주비(Outsource)", "ent_budget_outsource", "ent_budget_actual_outsource", "ent_budget_diff_outsource"),
-            ("영업이익(Profit)", "ent_budget_profit", "ent_budget_actual_profit", "ent_budget_diff_profit"),
+            ("공사기간 (일)", "ent_budget_period", "ent_budget_actual_period", "ent_budget_diff_period"),
+            ("계약금액(Revenue) (원)", "ent_budget_revenue", "ent_budget_actual_revenue", "ent_budget_diff_revenue"),
+            ("매출금액(UnitPrice) (원)", "ent_budget_unit_price", "ent_budget_actual_unit_price", "ent_budget_diff_unit_price"),
+            ("실행 노무비(Labor) (원)", "ent_budget_labor", "ent_budget_actual_labor", "ent_budget_diff_labor"),
+            ("실행 재료비(Material) (원)", "ent_budget_material", "ent_budget_actual_material", "ent_budget_diff_material"),
+            ("실행 경비(Expense) (원)", "ent_budget_expense", "ent_budget_actual_expense", "ent_budget_diff_expense"),
+            ("실행 외주비(Outsource) (원)", "ent_budget_outsource", "ent_budget_actual_outsource", "ent_budget_diff_outsource"),
+            ("영업이익(Profit) (원)", "ent_budget_profit", "ent_budget_actual_profit", "ent_budget_diff_profit"),
             ("이익률(%)", "ent_budget_margin", "ent_budget_actual_margin", "ent_budget_diff_margin"),
             ("비고", "ent_budget_note", "ent_budget_actual_note", None)
         ]
@@ -6340,8 +6406,18 @@ class MaterialManager:
             self.root.after(50, self.ent_budget_revenue.focus_set)
         self.cb_budget_site.bind('<<ComboboxSelected>>', _on_budget_site_selected)
 
-        # 2. Detailed Labor Cost Widget
-        labor_detail_frame = ttk.LabelFrame(form_scrollable, text="인건비 상세 (Labor Cost Detail)", padding=10)
+        # 1.5. 상세 탭 컨테이너 분리 (사전예산 / 사후원가)
+        self.detail_notebook = ttk.Notebook(form_scrollable)
+        self.detail_notebook.pack(fill='both', expand=True, pady=(0, 10), padx=5)
+        
+        self.tab_planned = ttk.Frame(self.detail_notebook)
+        self.tab_actual = ttk.Frame(self.detail_notebook)
+        
+        self.detail_notebook.add(self.tab_planned, text='사전예산 상세 (Planned)')
+        self.detail_notebook.add(self.tab_actual, text='사후원가(실적) 상세 (Actuals)')
+
+        # ===== [ 사전예산 (Planned) 상세 위젯 ] =====
+        labor_detail_frame = ttk.LabelFrame(self.tab_planned, text="인건비 상세 (Labor Cost Detail)", padding=10)
         labor_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
         
         def on_labor_change(total):
@@ -6352,8 +6428,7 @@ class MaterialManager:
         self.labor_detail_widget = LaborCostDetailWidget(labor_detail_frame, on_change_callback=on_labor_change)
         self.labor_detail_widget.pack(fill='x', expand=True)
 
-        # 3. Detailed Material Cost Widget
-        material_detail_frame = ttk.LabelFrame(form_scrollable, text="재료비 상세 (Material Cost Detail)", padding=10)
+        material_detail_frame = ttk.LabelFrame(self.tab_planned, text="재료비 상세 (Material Cost Detail)", padding=10)
         material_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
         
         def on_material_change(total):
@@ -6364,8 +6439,7 @@ class MaterialManager:
         self.material_detail_widget = MaterialCostDetailWidget(material_detail_frame, on_change_callback=on_material_change)
         self.material_detail_widget.pack(fill='x', expand=True)
 
-        # 4. Detailed Expense & Profit Widget
-        expense_detail_frame = ttk.LabelFrame(form_scrollable, text="경비 및 이익 상세 (Expense & Profit Detail)", padding=10)
+        expense_detail_frame = ttk.LabelFrame(self.tab_planned, text="경비 및 이익 상세 (Expense & Profit Detail)", padding=10)
         expense_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
         
         def on_expense_change(exp_total, outsource_total, op_profit):
@@ -6373,9 +6447,7 @@ class MaterialManager:
             self.ent_budget_expense.insert(0, f"{exp_total:,.0f}")
             self.ent_budget_outsource.delete(0, tk.END)
             self.ent_budget_outsource.insert(0, f"{outsource_total:,.0f}")
-            # [STABILITY] Update profit field if it exists
             if hasattr(self, 'ent_budget_profit'):
-                # Calculate margin
                 rev = get_rev()
                 margin = (op_profit / rev * 100) if rev > 0 else 0.0
                 self.ent_budget_profit.delete(0, tk.END)
@@ -6405,9 +6477,76 @@ class MaterialManager:
         )
         self.expense_detail_widget.pack(fill='x', expand=True)
         
+        # ===== [ 사후원가 (Actual) 상세 위젯 ] =====
+        a_labor_detail_frame = ttk.LabelFrame(self.tab_actual, text="실적 인건비 상세 (Actual Labor Detail)", padding=10)
+        a_labor_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
+        
+        def on_actual_labor_change(total):
+            self.ent_budget_actual_labor.delete(0, tk.END)
+            self.ent_budget_actual_labor.insert(0, f"{total:,.0f}")
+            self._update_budget_kpis()
+            
+        self.actual_labor_detail_widget = LaborCostDetailWidget(a_labor_detail_frame, on_change_callback=on_actual_labor_change)
+        self.actual_labor_detail_widget.pack(fill='x', expand=True)
+
+        a_material_detail_frame = ttk.LabelFrame(self.tab_actual, text="실적 재료비 상세 (Actual Material Detail)", padding=10)
+        a_material_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
+        
+        def on_actual_material_change(total):
+            self.ent_budget_actual_material.delete(0, tk.END)
+            self.ent_budget_actual_material.insert(0, f"{total:,.0f}")
+            self._update_budget_kpis()
+            
+        self.actual_material_detail_widget = MaterialCostDetailWidget(a_material_detail_frame, on_change_callback=on_actual_material_change)
+        self.actual_material_detail_widget.pack(fill='x', expand=True)
+
+        a_expense_detail_frame = ttk.LabelFrame(self.tab_actual, text="실적 경비 및 이익 상세 (Actual Expense & Profit)", padding=10)
+        a_expense_detail_frame.pack(fill='x', pady=(0, 10), padx=5)
+        
+        def on_actual_expense_change(exp_total, outsource_total, op_profit):
+            self.ent_budget_actual_expense.delete(0, tk.END)
+            self.ent_budget_actual_expense.insert(0, f"{exp_total:,.0f}")
+            self.ent_budget_actual_outsource.delete(0, tk.END)
+            self.ent_budget_actual_outsource.insert(0, f"{outsource_total:,.0f}")
+            if hasattr(self, 'ent_budget_actual_profit'):
+                rev = get_actual_rev()
+                margin = (op_profit / rev * 100) if rev > 0 else 0.0
+                self.ent_budget_actual_profit.delete(0, tk.END)
+                self.ent_budget_actual_profit.insert(0, f"{op_profit:,.0f} ({margin:.1f}%)")
+            self._update_budget_kpis()
+
+        def get_actual_lab():
+            try: return float(self.ent_budget_actual_labor.get().replace(',', '') or 0)
+            except: return 0.0
+        def get_actual_mat():
+            try: return float(self.ent_budget_actual_material.get().replace(',', '') or 0)
+            except: return 0.0
+        def get_actual_rev():
+            try: 
+                rev = float(self.ent_budget_actual_unit_price.get().replace(',', '') or 0)
+                if rev == 0 and hasattr(self, 'ent_budget_actual_revenue'):
+                    rev = float(self.ent_budget_actual_revenue.get().replace(',', '') or 0)
+                return rev
+            except: return 0.0
+            
+        self.actual_expense_detail_widget = ExpenseProfitDetailWidget(
+            a_expense_detail_frame, 
+            on_change_callback=on_actual_expense_change,
+            get_labor_total_func=get_actual_lab,
+            get_material_total_func=get_actual_mat,
+            get_revenue_func=get_actual_rev
+        )
+        self.actual_expense_detail_widget.pack(fill='x', expand=True)
+        
         # [NEW] 도급액 실시간 입력에 따른 이익금액 재계산 바인딩
         if hasattr(self, 'ent_budget_revenue'):
             self.ent_budget_revenue.bind('<KeyRelease>', lambda e: self.expense_detail_widget.calculate_all())
+            self.ent_budget_revenue.bind('<FocusOut>', lambda e: self.format_entry_with_commas(e, self.ent_budget_revenue), add='+')
+            self.ent_budget_revenue.bind('<Return>', lambda e: self.format_entry_with_commas(e, self.ent_budget_revenue), add='+')
+            
+        if hasattr(self, 'ent_budget_unit_price'):
+            self.ent_budget_unit_price.bind('<FocusOut>', lambda e: self.format_entry_with_commas(e, self.ent_budget_unit_price), add='+')
+            self.ent_budget_unit_price.bind('<Return>', lambda e: self.format_entry_with_commas(e, self.ent_budget_unit_price), add='+')
 
         # [MOVED to top_btn_frame]
 
@@ -7287,6 +7426,7 @@ class MaterialManager:
         self.cb_budget_site.set(site)
         
         mappings = [
+            ('ent_budget_period', 'Period'), ('ent_budget_actual_period', 'Actual_Period'),
             ('ent_budget_revenue', 'Revenue'), ('ent_budget_unit_price','UnitPrice'),
             ('ent_budget_labor', 'LaborCost'), ('ent_budget_material', 'MaterialCost'),
             ('ent_budget_expense', 'Expense'), ('ent_budget_outsource', 'OutsourceCost'),
@@ -7305,8 +7445,13 @@ class MaterialManager:
                 w.delete(0, 'end')
                 val = row[col]
                 if not pd.isna(val) and str(val).lower() != 'nan':
-                    if isinstance(val, (int, float)) and 'note' not in attr.lower():
-                        w.insert(0, f"{val:,.0f}")
+                    if 'note' not in attr.lower():
+                        try:
+                            # Try to convert to float for formatting
+                            f_val = float(str(val).replace(',', ''))
+                            w.insert(0, f"{f_val:,.0f}")
+                        except ValueError:
+                            w.insert(0, str(val))
                     else:
                         w.insert(0, str(val))
                 if st == 'readonly': w.config(state='readonly')
@@ -7314,17 +7459,50 @@ class MaterialManager:
         import json as _json
         for json_col, widget_attr in [('LaborDetail',   'labor_detail_widget'),
                                        ('MaterialDetail','material_detail_widget'),
-                                       ('ExpenseDetail', 'expense_detail_widget')]:
+                                       ('ExpenseDetail', 'expense_detail_widget'),
+                                       ('Actual_LaborDetail',   'actual_labor_detail_widget'),
+                                       ('Actual_MaterialDetail','actual_material_detail_widget'),
+                                       ('Actual_ExpenseDetail', 'actual_expense_detail_widget')]:
             jdata = row.get(json_col, '')
             widget = getattr(self, widget_attr, None)
-            if widget and jdata and str(jdata).strip():
-                try:
-                    widget.set_data(_json.loads(jdata))
-                except:
+            if widget:
+                # [FIX] 사후원가(실적) 위젯인데 DB에 저장된 내역이 없는 경우, 사전예산 내역의 텍스트 구조를 복사 (인원/수량은 비움)
+                if json_col.startswith('Actual_') and (not jdata or str(jdata).strip() in ['', '{}', '[]']):
+                    planned_col = json_col.replace('Actual_', '')
+                    p_jdata = row.get(planned_col, '')
+                    if p_jdata and str(p_jdata).strip() not in ['', '{}', '[]']:
+                        try:
+                            p_data = _json.loads(p_jdata)
+                            # 인원 및 수량 초기화
+                            if 'Labor' in json_col and isinstance(p_data, dict):
+                                for k, v in p_data.items():
+                                    if isinstance(v, dict):
+                                        v['personnel'] = ''
+                                        v['period'] = ''
+                            elif 'Material' in json_col and isinstance(p_data, list):
+                                for v in p_data:
+                                    if isinstance(v, dict):
+                                        v['qty'] = ''
+                            elif 'Expense' in json_col and isinstance(p_data, dict):
+                                for v_list in p_data.values():
+                                    if isinstance(v_list, list):
+                                        for v in v_list:
+                                            if isinstance(v, dict):
+                                                if 'qty' in v: v['qty'] = ''
+                                                if 'days' in v: v['days'] = ''
+                            widget.set_data(p_data)
+                            continue
+                        except Exception as e: 
+                            print(f"DEBUG: Failed to copy planned structure to actual widget: {e}")
+                
+                # 정상 로드 로직
+                if jdata and str(jdata).strip() not in ['', '{}', '[]']:
+                    try:
+                        widget.set_data(_json.loads(jdata))
+                    except:
+                        widget.reset()
+                else:
                     widget.reset()
-            elif widget:
-                # [NEW] Clear data if no saved detail exists for this site
-                widget.reset()
 
         if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
         # [STABILITY] Update KPI summary after load
@@ -7347,7 +7525,10 @@ class MaterialManager:
         # 1. 필터링
         df = self.daily_usage_df.copy()
         df['_date_ts'] = pd.to_datetime(df['Date'], errors='coerce')
-        mask = (df['_date_ts'] >= start_ts) & (df['_date_ts'] <= end_ts) & (df['Site'] == site)
+        if site == '전체':
+            mask = (df['_date_ts'] >= start_ts) & (df['_date_ts'] <= end_ts)
+        else:
+            mask = (df['_date_ts'] >= start_ts) & (df['_date_ts'] <= end_ts) & (df['Site'] == site)
         df = df[mask].copy()
 
         if df.empty:
@@ -7478,8 +7659,14 @@ class MaterialManager:
             # [FIX] If MaterialID is a manual name string (not in master map), use it directly as the name
             m_name_local = str(mat_id_name_map.get(m_id_local, m_id_local)).upper()
             
+            # [FIX] Resolve vehicle number from master config to capture '(스타렉스)' tags
+            v_no_raw = str(row.get('차량번호', '')).strip()
+            vehicles_list = getattr(self, 'vehicles', [])
+            vehicle_map = {v.split('(')[0].strip(): v for v in vehicles_list}
+            resolved_v_no = vehicle_map.get(v_no_raw, v_no_raw)
+            
             # [FIX] Check both Equipment Name (장비명) and Item Name (품목명) for vehicle detection
-            car_info = f"{row.get('차량번호', '')} {row.get('차량비고', '')} {row.get('장비명', '')} {m_name_local}".strip()
+            car_info = f"{resolved_v_no} {row.get('차량비고', '')} {row.get('장비명', '')} {m_name_local}".strip()
             
             try:
                 dt_obj = pd.to_datetime(date_val)
@@ -7509,15 +7696,13 @@ class MaterialManager:
                     m_clean = m_name_local.replace(' ', '').upper()
                     mid_clean = str(m_id_local).replace(' ', '').upper()
                     
-                    is_manual_scanner = ('SCANNER(MANUAL)' in eq_clean or 'SCANNER(MANUAL)' in m_clean or 'SCANNER(MANUAL)' in mid_clean or
-                                         ('MANUAL' in eq_clean and 'SCANNER' in eq_clean) or 
-                                         ('MANUAL' in m_clean and 'SCANNER' in m_clean) or
-                                         ('MANUAL' in mid_clean and 'SCANNER' in mid_clean))
-                    
                     is_cobra_scanner = ('SCANNER(COBRA)' in eq_clean or 'SCANNER(COBRA)' in m_clean or 'SCANNER(COBRA)' in mid_clean or
                                         ('COBRA' in eq_clean and 'SCANNER' in eq_clean) or 
                                         ('COBRA' in m_clean and 'SCANNER' in m_clean) or
                                         ('COBRA' in mid_clean and 'SCANNER' in mid_clean))
+
+                    # [FIX] If it's a scanner and not COBRA, it's MANUAL
+                    is_manual_scanner = ('SCANNER' in eq_clean or 'SCANNER' in m_clean or 'SCANNER' in mid_clean) and not is_cobra_scanner
 
                     if is_manual_scanner:
                         paut_manual_scanner_dates.add(date_key)
@@ -7783,6 +7968,145 @@ class MaterialManager:
             self.ent_budget_actual_outsource.delete(0, tk.END)
             self.ent_budget_actual_outsource.insert(0, "0")
 
+        # 4. 실적 인건비 상세 탭 누적 업데이트
+        if hasattr(self, 'actual_labor_detail_widget'):
+            labor_data = self.actual_labor_detail_widget.get_data()
+            planned_labor_data = self.labor_detail_widget.get_data() if hasattr(self, 'labor_detail_widget') else {}
+            for rank in ranks:
+                if rank in labor_data:
+                    u_count = len(rank_labor_dates[rank])
+                    t_days = sum(len(dates) for dates in rank_labor_dates[rank].values())
+                    if u_count > 0:
+                        avg_d = t_days / u_count
+                        labor_data[rank]['personnel'] = f"{u_count:g}"
+                        labor_data[rank]['period'] = f"{avg_d:g}"
+                    else:
+                        labor_data[rank]['personnel'] = ""
+                        labor_data[rank]['period'] = ""
+                    # [FIX] 사전예산 단가 복사
+                    if rank in planned_labor_data:
+                        labor_data[rank]['unit_price'] = planned_labor_data[rank].get('unit_price', '')
+            for stype in special_types:
+                if stype in labor_data:
+                    u_count = len(ot_data[stype]['names'])
+                    t_hours = ot_data[stype]['hours']
+                    if u_count > 0:
+                        avg_h = t_hours / u_count
+                        labor_data[stype]['personnel'] = f"{u_count:g}"
+                        labor_data[stype]['period'] = f"{avg_h:g}"
+                    else:
+                        labor_data[stype]['personnel'] = ""
+                        labor_data[stype]['period'] = ""
+                    # [FIX] 사전예산 단가 복사
+                    if stype in planned_labor_data:
+                        labor_data[stype]['unit_price'] = planned_labor_data[stype].get('unit_price', '')
+            self.actual_labor_detail_widget.set_data(labor_data)
+
+        # 5. 실적 자재비 상세 탭 누적 업데이트
+        if hasattr(self, 'actual_material_detail_widget'):
+            current_mat_data = self.actual_material_detail_widget.get_data()
+            planned_mat_data = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
+            film_chem_qty = (total_film_count / 250.0) if total_film_count > 0 else 0.0
+            anti_drop_qty = (total_film_count / 500.0) if total_film_count > 0 else 0.0
+            if len(material_usage_sums) > 7:
+                material_usage_sums[7] = film_chem_qty
+            if len(material_usage_sums) > 8:
+                material_usage_sums[8] = film_chem_qty
+            if len(material_usage_sums) > 9:
+                material_usage_sums[9] = anti_drop_qty
+
+            for i, qty in enumerate(material_usage_sums):
+                if i < len(current_mat_data):
+                    current_mat_data[i]['qty'] = f"{qty:g}" if qty > 0 else ""
+                    # [FIX] 사전예산 단가 복사
+                    if i < len(planned_mat_data):
+                        current_mat_data[i]['price'] = planned_mat_data[i].get('price', '')
+            self.actual_material_detail_widget.set_data(current_mat_data)
+        
+        # 6. 실적 경비 상세 탭 누적 업데이트
+        if hasattr(self, 'actual_expense_detail_widget'):
+            current_exp_data = self.actual_expense_detail_widget.get_data()
+            planned_exp_data = self.expense_detail_widget.get_data() if hasattr(self, 'expense_detail_widget') else {}
+            
+            # [NEW] 차량 대수 및 누적 투입 일수 계산 (차량유지비용 및 감가상각비)
+            vehicle_dates_map = {}
+            vehicles_list = getattr(self, 'vehicles', [])
+            vehicle_map = {v.split('(')[0].strip(): v for v in vehicles_list}
+            
+            for _, row in df.iterrows():
+                raw_v_no = str(row.get('차량번호', '')).strip()
+                date_val = str(row.get('Date', '')).strip()
+                if raw_v_no and raw_v_no.lower() not in ['nan', 'none']:
+                    # Split by || or comma in case multiple vehicles are entered in one cell
+                    v_list = [v.strip() for v in raw_v_no.replace('||', ',').split(',') if v.strip()]
+                    
+                    try:
+                        dt_obj = pd.to_datetime(date_val)
+                        date_key = dt_obj.date()
+                    except:
+                        date_key = date_val
+                        
+                    for v_no in v_list:
+                        resolved_v = vehicle_map.get(v_no, v_no)
+                        if resolved_v not in vehicle_dates_map:
+                            vehicle_dates_map[resolved_v] = set()
+                        vehicle_dates_map[resolved_v].add(date_key)
+            
+            total_vehicle_days = sum(len(dates) for dates in vehicle_dates_map.values())
+            starex_days = sum(len(dates) for v, dates in vehicle_dates_map.items() if '스타렉스' in v)
+            toptruck_days = sum(len(dates) for v, dates in vehicle_dates_map.items() if '탑차' in v)
+
+            for i, row_data in enumerate(current_exp_data.get('site_expense', [])):
+                cat = str(row_data.get('cat', '')).upper()
+                if any(k in cat for k in ['출장비', '소모품비', '식대']):
+                    row_data['qty'] = f"{total_days_count:g}" if total_days_count > 0 else ""
+                elif '차량유지비' in cat:
+                    row_data['qty'] = f"{total_vehicle_days:g}" if total_vehicle_days > 0 else ""
+                elif 'SE-175' in cat or 'SE175' in cat:
+                    row_data['qty'] = f"{len(rt_dates):g}" if len(rt_dates) > 0 else ""
+                # [FIX] 사전예산 단가 복사
+                if 'site_expense' in planned_exp_data and i < len(planned_exp_data['site_expense']):
+                    row_data['unit_price'] = planned_exp_data['site_expense'][i].get('unit_price', '')
+                    
+            for i, row_data in enumerate(current_exp_data.get('depreciation', [])):
+                item = row_data.get('item', '')
+                if '스타렉스' in item:
+                    row_data['days'] = f"{starex_days:g}" if starex_days > 0 else ""
+                elif '탑차' in item:
+                    row_data['days'] = f"{toptruck_days:g}" if toptruck_days > 0 else ""
+                item_upper_clean = str(item).upper().replace(' ', '')
+                if 'SCANNER(MANUAL)' in item_upper_clean:
+                    row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else ""
+                elif 'SCANNER(COBRA)' in item_upper_clean:
+                    row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else ""
+                elif 'PAUT' in item_upper_clean:
+                    row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else ""
+                elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
+                    row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
+                else:
+                    item_upper = str(item).upper().strip()
+                    matched_days = 0
+                    for e_name, e_dates in equip_dates_map.items():
+                        if e_name.upper().strip() in item_upper or item_upper in e_name.upper().strip():
+                            matched_days = max(matched_days, len(e_dates))
+                    if matched_days > 0:
+                        row_data['days'] = f"{matched_days:g}"
+                # [FIX] 사전예산 단가 및 수량 복사
+                if 'depreciation' in planned_exp_data and i < len(planned_exp_data['depreciation']):
+                    row_data['rate'] = planned_exp_data['depreciation'][i].get('rate', '')
+                    
+                    # 수량이 비어있으면 사전예산의 수량을 가져오거나 1로 강제 설정
+                    current_qty = str(row_data.get('qty', '')).strip()
+                    planned_qty = str(planned_exp_data['depreciation'][i].get('qty', '')).strip()
+                    if not current_qty:
+                        row_data['qty'] = planned_qty if planned_qty else '1'
+                else:
+                    # 사전예산 데이터가 없어도 수량이 비어있으면 1로 채움
+                    if not str(row_data.get('qty', '')).strip():
+                        row_data['qty'] = '1'
+            
+            self.actual_expense_detail_widget.set_data(current_exp_data)
+
         # KPI & Diff Update
         self._update_budget_kpis()
         self.root.update_idletasks()
@@ -7836,6 +8160,7 @@ class MaterialManager:
             out = _get('ent_budget_outsource')
             profit = rev - (lab + mat + exp + out)
             note = self.ent_budget_note.get().strip() if hasattr(self, 'ent_budget_note') else ""
+            period = getattr(self, 'ent_budget_period').get().strip() if hasattr(self, 'ent_budget_period') else ""
             
             a_rev = _get('ent_budget_actual_revenue')
             a_unit = _get('ent_budget_actual_unit_price')
@@ -7845,12 +8170,14 @@ class MaterialManager:
             a_out = _get('ent_budget_actual_outsource')
             a_prof = _get('ent_budget_actual_profit')
             a_note = getattr(self, 'ent_budget_actual_note').get().strip() if hasattr(self, 'ent_budget_actual_note') else ""
+            a_period = getattr(self, 'ent_budget_actual_period').get().strip() if hasattr(self, 'ent_budget_actual_period') else ""
         except ValueError:
             messagebox.showerror("입력 오류", "금액은 숫자여야 합니다.")
             return
 
         new_data = {
             'Site': site,
+            'Period': period,
             'Revenue': rev,
             'UnitPrice': unit_price,
             'LaborCost': lab,
@@ -7859,12 +8186,16 @@ class MaterialManager:
             'OutsourceCost': out,
             'Profit': profit,
             'Note': note,
+            'Actual_Period': a_period,
             'Actual_Revenue': a_rev, 'Actual_UnitPrice': a_unit, 'Actual_LaborCost': a_lab,
             'Actual_MaterialCost': a_mat, 'Actual_Expense': a_exp, 'Actual_OutsourceCost': a_out,
             'Actual_Profit': a_prof, 'Actual_Note': a_note,
-            'LaborDetail': json.dumps(self.labor_detail_widget.get_data()),
-            'MaterialDetail': json.dumps(self.material_detail_widget.get_data()),
-            'ExpenseDetail': json.dumps(self.expense_detail_widget.get_data())
+            'LaborDetail': json.dumps(self.labor_detail_widget.get_data()) if hasattr(self, 'labor_detail_widget') else "{}",
+            'MaterialDetail': json.dumps(self.material_detail_widget.get_data()) if hasattr(self, 'material_detail_widget') else "{}",
+            'ExpenseDetail': json.dumps(self.expense_detail_widget.get_data()) if hasattr(self, 'expense_detail_widget') else "{}",
+            'Actual_LaborDetail': json.dumps(self.actual_labor_detail_widget.get_data()) if hasattr(self, 'actual_labor_detail_widget') else "{}",
+            'Actual_MaterialDetail': json.dumps(self.actual_material_detail_widget.get_data()) if hasattr(self, 'actual_material_detail_widget') else "{}",
+            'Actual_ExpenseDetail': json.dumps(self.actual_expense_detail_widget.get_data()) if hasattr(self, 'actual_expense_detail_widget') else "{}"
         }
 
         # [NEW] Robust Sanitization: Ensure NO NaN or empty strings ever reach the float64 columns
@@ -8653,13 +8984,25 @@ class MaterialManager:
                     self.users.append(w); self.users.sort(); any_list_changed = True
             
             # 모든 생성된 레코드에서 차량번호 수집 및 추가
+            current_bases = {v.split('(')[0].strip(): v for v in self.vehicles}
             for r in records_to_save:
-                v_no = r.get('차량번호', '').strip()
-                if v_no and v_no not in self.vehicles:
-                    self.vehicles.append(v_no); any_list_changed = True
+                v_no_raw = r.get('차량번호', '').strip()
+                if v_no_raw and v_no_raw.lower() not in ['nan', 'none']:
+                    v_list = [v.strip() for v in v_no_raw.replace('||', ',').split(',') if v.strip()]
+                    for v_no in v_list:
+                        base_no = v_no.split('(')[0].strip()
+                        if base_no not in current_bases:
+                            if any(t in base_no for t in ['81두1580', '89보4028', '90너4889']):
+                                new_v = f"{base_no} (탑차)"
+                            else:
+                                new_v = f"{base_no} (스타렉스)"
+                            self.vehicles.append(new_v)
+                            current_bases[base_no] = new_v
+                            any_list_changed = True
             
             if any_list_changed:
                 self.vehicles.sort()
+                self.refresh_ui_for_list_change('vehicles') # Update UI comboboxes immediately
                 self.save_tab_config()
 
         if auto_save:
@@ -13245,7 +13588,16 @@ class MaterialManager:
                 self.worktimes = self._migrate_worktimes(raw_worktimes)
                 
                 # Restore vehicles, equipments, and preferred materials
-                self.vehicles[:] = config.get('vehicles', [])
+                raw_vehicles = config.get('vehicles', [])
+                updated_vehicles = []
+                for v in raw_vehicles:
+                    base = v.split('(')[0].strip()
+                    if any(t in base for t in ['81두1580', '89보4028', '90너4889']):
+                        updated_vehicles.append(f"{base} (탑차)")
+                    else:
+                        updated_vehicles.append(f"{base} (스타렉스)")
+                self.vehicles[:] = sorted(list(set(updated_vehicles)))
+                
                 self.equipments[:] = config.get('equipments', [])
                 self.test_items[:] = config.get('test_items', [])
                 self.applied_codes[:] = config.get('applied_codes', [])
@@ -13362,14 +13714,22 @@ class MaterialManager:
                     "76마3422", "71고4405", "89보4028", "81두1580",
                     "81루5100", "95가0175", "81도5958", "90너4889"
                 ]
-                added = False
-                for dv in default_vehicles:
-                    if dv not in self.vehicles:
-                        self.vehicles.append(dv)
-                        added = True
                 
-                if added:
-                    self.vehicles.sort()                
+                # Check based on base name to avoid duplicates
+                current_bases = [v.split('(')[0].strip() for v in self.vehicles]
+                for dv in default_vehicles:
+                    if dv not in current_bases:
+                        self.vehicles.append(dv)
+                
+                # [NEW] Force suffix application on all vehicles before UI update
+                final_vehicles = []
+                for v in self.vehicles:
+                    base = v.split('(')[0].strip()
+                    if any(t in base for t in ['81두1580', '89보4028', '90너4889']):
+                        final_vehicles.append(f"{base} (탑차)")
+                    else:
+                        final_vehicles.append(f"{base} (스타렉스)")
+                self.vehicles[:] = sorted(list(set(final_vehicles)))
                 # [FIX] Update combo box values after loading lists from config
                 # Update sites combo boxes
                 if hasattr(self, 'cb_trans_site'): 

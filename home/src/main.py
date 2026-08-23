@@ -1017,7 +1017,7 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
             ]
         df = self.settings_df[self.settings_df['Category'] == 'Expense']
         if df.empty:
@@ -1025,7 +1025,7 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
             ]
         # Return in (cat, cont, ppl, qty, unit, price) format as expected by _add_row_s1
         return [tuple([x[0], x[1], "N/A", 1, x[2], x[3]]) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]

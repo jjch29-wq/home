@@ -10,6 +10,7 @@ import re
 class MonthlyReportManager:
     WELDER_NAMES = {
         'W-2023-A-10': '이신희',
+        'W-2023-A-12': '황성철',
         'W-2023-A-13': '선성문',
         'W-2023-A-25': '이종근',
     }
@@ -761,11 +762,6 @@ class MonthlyReportManager:
 
     def _populate_owner_report_rows(self, ws, target_ym, source_path):
         """Fill the existing section 6.0 template rows from a selected file."""
-        if not source_path:
-            return
-        if not os.path.exists(source_path):
-            raise FileNotFoundError(f'발주자 보고 파일을 찾을 수 없습니다: {source_path}')
-
         title_row = None
         for row in range(1, ws.max_row + 1):
             row_text = ''.join(
@@ -775,7 +771,10 @@ class MonthlyReportManager:
             if '1.방사선안전관리통합정보망보고자료' in row_text:
                 title_row = row
                 break
+        
         if title_row is None:
+            if not source_path:
+                return
             raise ValueError('템플릿에서 6.0 발주자 보고자료 표를 찾을 수 없습니다.')
 
         # The edited V70 template uses rows 630~632 for its three-level header.
@@ -787,36 +786,37 @@ class MonthlyReportManager:
                 if type(cell).__name__ != 'MergedCell':
                     cell.value = None
 
-        source_wb = openpyxl.load_workbook(source_path, data_only=True)
-        try:
-            if '작업정보' not in source_wb.sheetnames:
-                raise ValueError("발주자 보고 파일에 '작업정보' 시트가 없습니다.")
-            source_ws = source_wb['작업정보']
-            target_key = str(target_ym or '').replace('-', '')[:6]
+        records = []
+        if source_path and os.path.exists(source_path):
+            source_wb = openpyxl.load_workbook(source_path, data_only=True)
+            try:
+                if '작업정보' not in source_wb.sheetnames:
+                    raise ValueError("발주자 보고 파일에 '작업정보' 시트가 없습니다.")
+                source_ws = source_wb['작업정보']
+                target_key = str(target_ym or '').replace('-', '')[:6]
 
-            def _text(value):
-                if value is None:
-                    return ''
-                if isinstance(value, (datetime.datetime, datetime.date)):
-                    return value.strftime('%Y-%m-%d')
-                return str(value).strip()
+                def _text(value):
+                    if value is None:
+                        return ''
+                    if isinstance(value, (datetime.datetime, datetime.date)):
+                        return value.strftime('%Y-%m-%d')
+                    return str(value).strip()
 
-            def _clock(value):
-                text = _text(value)
-                digits = re.sub(r'\D', '', text)
-                if len(digits) == 3:
-                    digits = f'0{digits}'
-                if len(digits) == 4:
-                    return f'{digits[:2]}:{digits[2:]}'
-                return text
+                def _clock(value):
+                    text = _text(value)
+                    digits = re.sub(r'\D', '', text)
+                    if len(digits) == 3:
+                        digits = f'0{digits}'
+                    if len(digits) == 4:
+                        return f'{digits[:2]}:{digits[2:]}'
+                    return text
 
-            records = []
-            for row in range(5, source_ws.max_row + 1):
-                year_month = _text(source_ws.cell(row, 1).value)
-                year_month = re.sub(r'\D', '', year_month)[:6]
-                if target_key and year_month != target_key:
-                    continue
-                record = [
+                for row in range(5, source_ws.max_row + 1):
+                    year_month = _text(source_ws.cell(row, 1).value)
+                    year_month = re.sub(r'\D', '', year_month)[:6]
+                    if target_key and year_month != target_key:
+                        continue
+                    record = [
                     year_month,
                     _text(source_ws.cell(row, 2).value),
                     _text(source_ws.cell(row, 3).value),
@@ -840,8 +840,18 @@ class MonthlyReportManager:
                     source_ws.cell(row, 26).value or '',
                 ]
                 records.append(record)
-        finally:
-            source_wb.close()
+            finally:
+                source_wb.close()
+        elif source_path and not os.path.exists(source_path):
+            raise FileNotFoundError(f'발주자 보고 파일을 찾을 수 없습니다: {source_path}')
+
+        if not records:
+            ws.merge_cells(start_row=data_start, start_column=2, end_row=data_start, end_column=23)
+            no_data_cell = ws.cell(row=data_start, column=2)
+            no_data_cell.value = "해당 월 방사선 투과검사(RT) 실적 없음"
+            no_data_cell.font = Font(name='맑은 고딕', size=10, bold=False)
+            no_data_cell.alignment = Alignment(horizontal='center', vertical='center')
+            return
 
         if len(records) > data_end - data_start + 1:
             raise ValueError(

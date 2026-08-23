@@ -1,440 +1,210 @@
-Line 501: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
-Line 1004: 'cb_budget_site': 'budget_sites',
-Line 1153: self.tab_budget = ttk.Frame(self.notebook)
-Line 1154: self.notebook.add(self.tab_budget, text='공사실행예산서')
-Line 1155: self.setup_budget_tab()
-Line 1478: columns = ('No.', '회사코드', '분류', '제조사', '품목명', '모델명', 'S/N', '관리단위', '수량(현장)', '단위(현장)', '현재재고', '단가', '재고하한', '재고금액', '상태/위치', '관리품번')
-Line 1490: '단가': 90, '재고하한': 80, '재고금액': 120, '상태/위치': 100, '관리품번': 120
-Line 1636: ttk.Label(reg_frame, text="단가(가격):").grid(row=6, column=2, padx=5, pady=2, sticky='w')
-Line 2358: messagebox.showwarning("입력 오류", "재고, 단가, 원가 정보는 숫자여야 합니다.")
-Line 2893: if hasattr(self, 'budget_view_tree'):
-Line 2894: self.update_budget_site_view()
-Line 2975: for k, label in [('단가', '단가'), ('출장비', '출장비'), ('일식', '일식'), ('검사비', '검사비')]:
-Line 4099: def apply_worker_shift_hours_to_budget(self):
-Line 4100: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
-Line 4103: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
-Line 4167: # 공사실행예산서 탭으로 이동
-Line 4169: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
-Line 4175: f"특별근무 투입시간 적용 완료!\n"
-Line 4664: if hasattr(self, 'cb_budget_site'): self.cb_budget_site['values'] = sorted_vals
-Line 4665: if hasattr(self, 'cb_budget_view_site'): self.cb_budget_view_site['values'] = sorted_vals
-Line 5371: 'Usage': 0.0, '단가': 0.0, '출장비': 0.0, '검사비': 0.0,
-Line 5766: if hasattr(self, 'budget_view_tree'):
-Line 5767: self.update_budget_site_view()
-Line 6005: columns = ('날짜', '업체명', '적용코드', '현장', '구분', '검사품명', '성적서번호', '작업자', '작업시간', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', '장비명', '검사방법', '회사코드', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '품목명', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', '(Full작업자)')
-Line 6011: visible_defaults = ['날짜', '업체명', '적용코드', '현장', '구분', '검사품명', '성적서번호', '작업자', '작업시간', '장비명', '검사방법', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT금액', '품목명', 'RTK총계', '비고']
-Line 6045: '수량': 70, '단위': 60, '단가': 90, '출장비': 90, '업체명': 120, '일식': 80,
-Line 6130: def export_budget_sales_status(self):
-Line 6131: """Export the currently filtered budget sales status to Excel"""
-Line 6132: if not hasattr(self, 'budget_view_tree') or not self.budget_view_tree.get_children():
-Line 6147: columns = [self.budget_view_tree.heading(col)['text'] for col in self.budget_view_tree['columns']]
-Line 6148: for item in self.budget_view_tree.get_children():
-Line 6149: data.append(self.budget_view_tree.item(item)['values'])
-Line 6157: summary_row['검사단가'] = self.lbl_bv_actual_income.cget('text').replace(' 원', '').replace(',', '').strip()
-Line 6223: def setup_budget_tab(self):
-Line 6224: """Setup the project execution budget management tab with detailed labor cost breakdown"""
-Line 6226: kpi_frame = tk.Frame(self.tab_budget, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
-Line 6248: top_btn_frame = ttk.Frame(self.tab_budget)
-Line 6251: ttk.Button(top_btn_frame, text="실적 데이터로 채우기", command=self.fill_budget_from_actuals).pack(side='left', padx=5)
-Line 6252: ttk.Button(top_btn_frame, text="저장/수정", command=self.save_budget_entry).pack(side='left', padx=5)
-Line 6253: ttk.Button(top_btn_frame, text="삭제", command=self.delete_budget_entry).pack(side='left', padx=5)
-Line 6254: ttk.Button(top_btn_frame, text="🧹 초기화", command=self.clear_budget_form).pack(side='left', padx=5)
-Line 6257: ttk.Button(top_btn_frame, text="🔍 팝업창으로 열기", command=self.open_detached_budget_view).pack(side='left', padx=15)
-Line 6259: ttk.Button(top_btn_frame, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
-Line 6261: main_paned = ttk.PanedWindow(self.tab_budget, orient='vertical')
-Line 6287: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
-Line 6292: ("현장명:", "cb_budget_site"),
-Line 6293: ("계약금액 (Revenue):", "ent_budget_revenue"),
-Line 6294: ("매출금액 (UnitPrice):", "ent_budget_unit_price"),
-Line 6295: ("실행 노무비 (Labor):", "ent_budget_labor"),
-Line 6296: ("실행 재료비 (Material):", "ent_budget_material"),
-Line 6297: ("실행 경비 (Expense):", "ent_budget_expense"),
-Line 6298: ("실행 외주비 (Outsource):", "ent_budget_outsource"),
-Line 6299: ("영업이익 (Profit):", "ent_budget_profit"),
-Line 6300: ("이익률 (%):", "ent_budget_margin"),
-Line 6301: ("비고:", "ent_budget_note")
-Line 6304: self.budget_widgets = {}
-Line 6307: if attr_name == "cb_budget_site":
-Line 6312: if attr_name == "ent_budget_labor":
-Line 6319: self.budget_widgets[attr_name] = widget
-Line 6321: def _on_budget_site_selected(e):
-Line 6323: selected_site = self.cb_budget_site.get().strip()
-Line 6325: self._load_budget_to_form(selected_site, silent=True)
-Line 6327: self.root.after(50, self.ent_budget_revenue.focus_set)
-Line 6328: self.cb_budget_site.bind('<<ComboboxSelected>>', _on_budget_site_selected)
-Line 6335: self.ent_budget_labor.delete(0, tk.END)
-Line 6336: self.ent_budget_labor.insert(0, f"{total:,.0f}")
-Line 6337: self._update_budget_kpis()
-Line 6347: self.ent_budget_material.delete(0, tk.END)
-Line 6348: self.ent_budget_material.insert(0, f"{total:,.0f}")
-Line 6349: self._update_budget_kpis()
-Line 6359: self.ent_budget_expense.delete(0, tk.END)
-Line 6360: self.ent_budget_expense.insert(0, f"{exp_total:,.0f}")
-Line 6361: self.ent_budget_outsource.delete(0, tk.END)
-Line 6362: self.ent_budget_outsource.insert(0, f"{outsource_total:,.0f}")
-Line 6364: if hasattr(self, 'ent_budget_profit'):
-Line 6368: self.ent_budget_profit.delete(0, tk.END)
-Line 6369: self.ent_budget_profit.insert(0, f"{op_profit:,.0f} ({margin:.1f}%)")
-Line 6370: self._update_budget_kpis()
-Line 6373: try: return float(self.ent_budget_labor.get().replace(',', '') or 0)
-Line 6376: try: return float(self.ent_budget_material.get().replace(',', '') or 0)
-Line 6380: rev = float(self.ent_budget_revenue.get().replace(',', '') or 0)
-Line 6381: if rev == 0 and hasattr(self, 'ent_budget_unit_price'):
-Line 6382: rev = float(self.ent_budget_unit_price.get().replace(',', '') or 0)
-Line 6396: if hasattr(self, 'ent_budget_revenue'):
-Line 6397: self.ent_budget_revenue.bind('<KeyRelease>', lambda e: self.expense_detail_widget.calculate_all())
-Line 6414: self.cb_budget_view_site = ttk.Combobox(bottom_filter, width=20, state='readonly')
-Line 6416: self.cb_budget_view_site['values'] = site_values
-Line 6417: self.cb_budget_view_site.pack(side='left', padx=5)
-Line 6418: self.cb_budget_view_site.set('전체')
-Line 6419: self.cb_budget_view_site.bind('<<ComboboxSelected>>', lambda e: self.update_budget_site_view())
-Line 6422: self.budget_view_start = DateEntry(bottom_filter, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
-Line 6423: self.budget_view_start.pack(side='left', padx=2)
-Line 6425: self.budget_view_start.set_date(datetime.date(2024, 1, 1))
-Line 6428: self.budget_view_end = DateEntry(bottom_filter, width=12, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly', showweeknumbers=True)
-Line 6429: self.budget_view_end.pack(side='left', padx=2)
-Line 6430: self.budget_view_end.set_date(today)
-Line 6432: ttk.Button(bottom_filter, text="조회", command=self.update_budget_site_view).pack(side='left', padx=8)
-Line 6433: ttk.Button(bottom_filter, text="예산 수정/불러오기",
-Line 6434: command=lambda: self._load_budget_to_form(self.cb_budget_view_site.get())).pack(side='left', padx=4)
-Line 6435: ttk.Button(bottom_filter, text="컬럼 추가", command=self.add_budget_view_custom_column).pack(side='left', padx=4)
-Line 6436: ttk.Button(bottom_filter, text="컬럼 관리", command=self.show_budget_view_column_dialog).pack(side='left', padx=4)
-Line 6437: ttk.Button(bottom_filter, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
-Line 6439: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
-Line 6445: self.budget_view_builtin_cols = (
-Line 6449: '예상이윤', '이익률', '검사량', '단가', '검사단가', '합계',
-Line 6450: '침투제', '세척제', '현상제', '자재단가', '비고',
-Line 6453: self.budget_view_builtin_width_map = {
-Line 6454: 'Date': 90, 'Site': 120, '장비명': 100, '검사방법': 80, '검사량': 70, '단가': 80,
-Line 6455: '검사단가': 90, '출장비': 80, '일식': 70, 'OT합계': 80, '침투제': 70, '세척제': 70, '현상제': 70, '자재단가': 90,
-Line 6461: self.budget_view_builtin_head_map = {
-Line 6462: 'Date': '날짜', 'Site': '현장', '장비명': '장비', '검사방법': '검사방법', '검사량': '수량', '단가': '단가',
-Line 6463: '검사단가': '매출금액', '출장비': '출장비', '일식': '일식', 'OT합계': 'OT지급액', '침투제': '침투제', '세척제': '세척제', '현상제': '현상제',
-Line 6464: '자재단가': '자재단가', '합계': '합계', '비고': '비고', '작업자': '작업자', '품목명': '품목명',
-Line 6470: self.budget_view_heading_aliases = getattr(self, 'budget_view_heading_aliases', {})
-Line 6471: self.budget_view_custom_columns = getattr(self, 'budget_view_custom_columns', [])
-Line 6472: self.budget_view_default_cols = (
-Line 6481: self.budget_view_tree = ttk.Treeview(tree_outer, columns=self.budget_view_builtin_cols, show='headings',
-Line 6483: self._refresh_budget_view_tree_columns(reload_data=False)
-Line 6485: vsb.config(command=self.budget_view_tree.yview)
-Line 6486: hsb.config(command=self.budget_view_tree.xview)
-Line 6487: self.budget_view_tree.grid(row=0, column=0, sticky='nsew')
-Line 6492: self.budget_view_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
-Line 6493: self.enable_tree_column_drag(self.budget_view_tree, context_menu_handler=self._show_budget_view_heading_context_menu)
-Line 6518: self.root.after(100, lambda: self.update_budget_site_view())
-Line 6520: def update_budget_view(self):
-Line 6521: """Refresh the budget inquiry view to reflect updated budget data."""
-Line 6522: if hasattr(self, 'cb_budget_view_site'):
-Line 6524: if self.cb_budget_view_site.get():
-Line 6525: self.update_budget_site_view()
-Line 6527: def _refresh_budget_view_tree_columns(self, reload_data=False):
-Line 6528: """Rebuild budget site performance tree column structure."""
-Line 6529: if not hasattr(self, 'budget_view_tree'):
-Line 6532: custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
-Line 6534: builtin_keys = set(getattr(self, 'budget_view_builtin_cols', []) or [])
-Line 6535: builtin_headings = set((getattr(self, 'budget_view_builtin_head_map', {}) or {}).values())
-Line 6554: self.budget_view_custom_columns = sanitized_custom_cols
-Line 6558: self.budget_view_cols = tuple(list(self.budget_view_builtin_cols) + custom_keys)
-Line 6560: head_map = dict(getattr(self, 'budget_view_builtin_head_map', {}))
-Line 6561: width_map = dict(getattr(self, 'budget_view_builtin_width_map', {}))
-Line 6569: alias_map = getattr(self, 'budget_view_heading_aliases', {}) or {}
-Line 6570: self.budget_view_tree.configure(columns=self.budget_view_cols)
-Line 6571: for col in self.budget_view_cols:
-Line 6573: self.budget_view_tree.heading(col, text=heading_text,
-Line 6574: command=lambda c=col: self.treeview_sort_column(self.budget_view_tree, c, False))
-Line 6575: self.budget_view_tree.column(col, width=width_map.get(col, 100), minwidth=40, anchor='center', stretch=False)
-Line 6577: visible_source = getattr(self, 'budget_view_visible_cols', []) or list(self.budget_view_default_cols)
-Line 6578: visible = [c for c in visible_source if c in self.budget_view_cols]
-Line 6579: self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_default_cols
-Line 6580: self.budget_view_visible_cols = list(self.budget_view_tree['displaycolumns'])
-Line 6583: self.update_budget_site_view()
-Line 6585: def add_budget_view_custom_column(self):
-Line 6586: """Add a custom column to budget site performance view."""
-Line 6593: builtin_names = set((getattr(self, 'budget_view_builtin_head_map', {}) or {}).values())
-Line 6594: existing_custom_names = {str(c.get('name', '')).strip() for c in (getattr(self, 'budget_view_custom_columns', []) or [])}
-Line 6601: existing = set(getattr(self, 'budget_view_cols', []))
-Line 6609: custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
-Line 6611: self.budget_view_custom_columns = custom_cols
-Line 6613: visible = list(getattr(self, 'budget_view_visible_cols', []) or list(self.budget_view_default_cols))
-Line 6616: self.budget_view_visible_cols = visible
-Line 6618: self._refresh_budget_view_tree_columns(reload_data=True)
-Line 6621: def rename_budget_view_column(self, col_key):
-Line 6622: """Rename a budget site performance column heading."""
-Line 6625: current_name = self.budget_view_tree.heading(col_key)['text'] if hasattr(self, 'budget_view_tree') else col_key
-Line 6633: for col in getattr(self, 'budget_view_custom_columns', []) or []:
-Line 6639: aliases = getattr(self, 'budget_view_heading_aliases', {}) or {}
-Line 6640: default_name = getattr(self, 'budget_view_builtin_head_map', {}).get(col_key, col_key)
-Line 6645: self.budget_view_heading_aliases = aliases
-Line 6647: self._refresh_budget_view_tree_columns(reload_data=False)
-Line 6650: def set_budget_view_custom_column_content(self, col_key):
-Line 6652: custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
-Line 6661: self._refresh_budget_view_tree_columns(reload_data=True)
-Line 6664: def delete_budget_view_custom_column(self, col_key):
-Line 6665: """Delete a custom budget column."""
-Line 6666: custom_cols = getattr(self, 'budget_view_custom_columns', []) or []
-Line 6673: self.budget_view_custom_columns = [c for c in custom_cols if c.get('key') != col_key]
-Line 6674: self.budget_view_visible_cols = [c for c in getattr(self, 'budget_view_visible_cols', []) if c != col_key]
-Line 6675: aliases = getattr(self, 'budget_view_heading_aliases', {}) or {}
-Line 6677: self.budget_view_heading_aliases = aliases
-Line 6678: self._refresh_budget_view_tree_columns(reload_data=True)
-Line 6681: def show_budget_view_column_dialog(self):
-Line 6682: """Open dialog to show/hide columns in budget site performance view"""
-Line 6683: if not hasattr(self, 'budget_view_tree'):
-Line 6686: all_cols = list(self.budget_view_tree['columns'])
-Line 6687: active_cols = self.budget_view_tree['displaycolumns']
-Line 6691: dialog_cols = [(col, self.budget_view_tree.heading(col)['text']) for col in all_cols]
-Line 6706: self.budget_view_tree['displaycolumns'] = sorted_selection if sorted_selection else all_cols
-Line 6707: self.budget_view_visible_cols = list(self.budget_view_tree['displaycolumns'])
-Line 6710: def _show_budget_view_heading_context_menu(self, event):
-Line 6712: if not hasattr(self, 'budget_view_tree'):
-Line 6714: tree = self.budget_view_tree
-Line 6726: custom_keys = {c.get('key') for c in (getattr(self, 'budget_view_custom_columns', []) or [])}
-Line 6732: menu.add_command(label=f"✏️ '{col_text}' 이름 변경...", command=lambda: self.rename_budget_view_column(col_key))
-Line 6733: menu.add_command(label="➕ 사용자 컬럼 추가...", command=self.add_budget_view_custom_column)
-Line 6735: menu.add_command(label=f"📝 '{col_text}' 내용 설정...", command=lambda: self.set_budget_view_custom_column_content(col_key))
-Line 6736: menu.add_command(label=f"🗑️ '{col_text}' 사용자 컬럼 삭제", command=lambda: self.delete_budget_view_custom_column(col_key))
-Line 6738: menu.add_command(label="⚙️ 컬럼 관리(추가/삭제)...", command=self.show_budget_view_column_dialog)
-Line 6744: def update_budget_site_view(self):
-Line 6747: if not hasattr(self, 'budget_view_tree'):
-Line 6750: for item in self.budget_view_tree.get_children():
-Line 6751: self.budget_view_tree.delete(item)
-Line 6753: if not hasattr(self, 'cb_budget_view_site'):
-Line 6755: site = self.cb_budget_view_site.get().strip()
-Line 6767: start_date = self.budget_view_start.get_date()
-Line 6768: end_date   = self.budget_view_end.get_date()
-Line 6852: has_data_map = {col: False for col in self.budget_view_cols if col not in mandatory_cols}
-Line 6910: price  = _f(row.get('단가', 0))
-Line 7000: '단가': f"{price:,.0f}",
-Line 7001: '검사단가': f"{net:,.0f}",
-Line 7008: '자재단가': f"{unit_cost:,.0f}",
-Line 7030: for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
-Line 7041: self.budget_view_tree.insert('', tk.END, values=tuple(row_map.get(col, '') for col in self.budget_view_cols))
-Line 7066: '단가': '',
-Line 7067: '검사단가': f"{total_net_revenue:,.0f}",
-Line 7075: '자재단가': '',
-Line 7097: for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
-Line 7101: self.budget_view_tree.insert('', tk.END, values=tuple(total_row_map.get(col, '') for col in self.budget_view_cols), tags=('total',))
-Line 7103: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
-Line 7104: if df.shape[0] > 0 and site and site != '전체' and hasattr(self, 'budget_df') and not self.budget_df.empty:
-Line 7105: budget_match = self.budget_df[self.budget_df['Site'] == site]
-Line 7106: if not budget_match.empty:
-Line 7107: b_row = budget_match.iloc[0]
-Line 7131: 'Date': f"[예산대비]",
-Line 7136: '단가': '',
-Line 7137: '검사단가': f"예산 {b_rev:,.0f}",
-Line 7145: '자재단가': '',
-Line 7158: for custom_col in getattr(self, 'budget_view_custom_columns', []) or []:
-Line 7164: self.budget_view_tree.tag_configure('comparison', background='#E3F2FD', font=('Malgun Gothic', 10, 'bold'))
-Line 7165: self.budget_view_tree.insert('', tk.END, values=tuple(comparison_row_map.get(col, '') for col in self.budget_view_cols), tags=('comparison',))
-Line 7168: active_cols = [col for col in self.budget_view_cols
-Line 7170: self.budget_view_tree['displaycolumns'] = active_cols
-Line 7174: if not self.budget_view_tree.tag_configure('total'):
-Line 7175: self.budget_view_tree.tag_configure('total', background='#ffff00', foreground='#000000')
-Line 7177: print(f"ERROR in update_budget_site_view: {e}")
-Line 7180: def _update_budget_kpis(self):
-Line 7181: """Update the top KPI summary labels based on current budget form values"""
-Line 7187: rev = _get_val(self.ent_budget_revenue)
-Line 7188: if rev == 0 and hasattr(self, 'ent_budget_unit_price'):
-Line 7189: rev = _get_val(self.ent_budget_unit_price) # Fallback to unit price if revenue empty
-Line 7191: lab = _get_val(self.ent_budget_labor)
-Line 7192: mat = _get_val(self.ent_budget_material)
-Line 7193: exp = _get_val(self.ent_budget_expense)
-Line 7194: out = _get_val(self.ent_budget_outsource)
-Line 7229: if hasattr(self, 'ent_budget_profit'):
-Line 7230: self.ent_budget_profit.delete(0, tk.END)
-Line 7231: self.ent_budget_profit.insert(0, f"{profit:,.0f}")
-Line 7232: if hasattr(self, 'ent_budget_margin'):
-Line 7233: self.ent_budget_margin.delete(0, tk.END)
-Line 7234: self.ent_budget_margin.insert(0, f"{margin:.1f}")
-Line 7241: def _load_budget_to_form(self, site, silent=False):
-Line 7242: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
-Line 7244: self.clear_budget_form()
-Line 7246: # [FIX] clear_budget_form()이 cb_budget_site를 지우므로 즉시 복원
-Line 7247: # budget_df에 해당 현장이 없더라도 콤보박스에 선택한 현장명은 유지해야 함
-Line 7248: if site and hasattr(self, 'cb_budget_site'):
-Line 7249: self.cb_budget_site.set(site)
-Line 7254: if not hasattr(self, 'budget_df') or self.budget_df.empty:
-Line 7255: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
-Line 7257: match = self.budget_df[self.budget_df['Site'] == site]
-Line 7259: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
-Line 7263: self.cb_budget_site.set(site)
-Line 7264: for attr, col in [('ent_budget_revenue',   'Revenue'),
-Line 7265: ('ent_budget_unit_price','UnitPrice'),
-Line 7266: ('ent_budget_labor',     'LaborCost'),
-Line 7267: ('ent_budget_material',  'MaterialCost'),
-Line 7268: ('ent_budget_expense',   'Expense'),
-Line 7269: ('ent_budget_outsource', 'OutsourceCost'),
-Line 7270: ('ent_budget_profit',    'Profit'),
-Line 7271: ('ent_budget_note',      'Note')]:
-Line 7309: for attr, col in [('ent_budget_revenue',   'Revenue'),
-Line 7310: ('ent_budget_unit_price','UnitPrice'),
-Line 7311: ('ent_budget_labor',     'LaborCost'),
-Line 7312: ('ent_budget_material',  'MaterialCost'),
-Line 7313: ('ent_budget_expense',   'Expense'),
-Line 7314: ('ent_budget_outsource', 'OutsourceCost'),
-Line 7315: ('ent_budget_profit',    'Profit')]:
-Line 7321: if attr == 'ent_budget_profit':
-Line 7333: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
-Line 7335: self._update_budget_kpis()
-Line 7337: def fill_budget_from_actuals(self):
-Line 7338: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
-Line 7339: site = self.cb_budget_view_site.get().strip()
-Line 7344: start_ts = pd.Timestamp(self.budget_view_start.get_date())
-Line 7345: end_ts = pd.Timestamp(self.budget_view_end.get_date())
-Line 7358: s_date = self.budget_view_start.get_date()
-Line 7359: e_date = self.budget_view_end.get_date()
-Line 7755: self.cb_budget_site.set(site)
-Line 7758: self.ent_budget_revenue.delete(0, tk.END)
-Line 7759: self.ent_budget_revenue.insert(0, f"{total_net_revenue:,.0f}")
-Line 7761: # [NEW] 실적 데이터의 검사비 총액을 '검사단가' 칸에 기본 입력
-Line 7762: if hasattr(self, 'ent_budget_unit_price'):
-Line 7763: self.ent_budget_unit_price.delete(0, tk.END)
-Line 7764: self.ent_budget_unit_price.insert(0, f"{total_net_revenue:,.0f}")
-Line 7766: self.ent_budget_material.delete(0, tk.END)
-Line 7767: self.ent_budget_material.insert(0, f"{np.nan_to_num(total_mat_cost):,.0f}")
-Line 7769: self.ent_budget_expense.delete(0, tk.END)
-Line 7770: self.ent_budget_expense.insert(0, f"{np.nan_to_num(total_travel + total_meal):,.0f}")
-Line 7827: self._update_budget_kpis()
-Line 7834: if hasattr(self, 'labor_detail_widget') and hasattr(self, 'ent_budget_labor'):
-Line 7847: self.ent_budget_labor.delete(0, tk.END)
-Line 7848: self.ent_budget_labor.insert(0, f"{lab_total:,.0f}")
-Line 7850: if hasattr(self, 'expense_detail_widget') and hasattr(self, 'ent_budget_expense'):
-Line 7861: self.ent_budget_expense.delete(0, tk.END)
-Line 7862: self.ent_budget_expense.insert(0, f"{exp_total:,.0f}")
-Line 7865: self._update_budget_kpis()
-Line 7908: rev = float(self.ent_budget_unit_price.get().replace(',', '') or 0)
-Line 7909: lab = float(self.ent_budget_labor.get().replace(',', '') or 0)
-Line 7910: mat = float(self.ent_budget_material.get().replace(',', '') or 0)
-Line 7911: exp = float(self.ent_budget_expense.get().replace(',', '') or 0)
-Line 7912: out = float(self.ent_budget_outsource.get().replace(',', '') or 0)
-Line 7924: def save_budget_entry(self):
-Line 7925: """Save or update budget entry"""
-Line 7926: site = self.cb_budget_site.get().strip()
-Line 7932: rev = float(str(self.ent_budget_revenue.get()).replace(',', '') or 0)
-Line 7933: unit_price_val = str(getattr(self, 'ent_budget_unit_price', tk.Entry()).get() if hasattr(self, 'ent_budget_unit_price') else '').replace(',', '').strip()
-Line 7935: lab = float(str(self.ent_budget_labor.get()).replace(',', '') or 0)
-Line 7936: mat = float(str(self.ent_budget_material.get()).replace(',', '') or 0)
-Line 7937: exp = float(str(self.ent_budget_expense.get()).replace(',', '') or 0)
-Line 7938: out = float(str(self.ent_budget_outsource.get()).replace(',', '') or 0)
-Line 7939: note = self.ent_budget_note.get().strip()
-Line 7982: if not self.budget_df.empty and site in self.budget_df['Site'].values:
-Line 7984: idx = self.budget_df[self.budget_df['Site'] == site].index[0]
-Line 7986: self.budget_df.loc[idx, key] = val
-Line 7990: self.budget_df = pd.concat([self.budget_df, row_df], ignore_index=True)
-Line 7993: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
-Line 7996: self.update_budget_view()
-Line 7998: if 'budget' in self.detached_windows: self._refresh_detached_budget()
-Line 8001: # self.clear_budget_form() # [UX] Don't clear immediately so user can verify
-Line 8036: def delete_budget_entry(self):
-Line 8037: """Delete selected budget entry"""
-Line 8038: site = self.cb_budget_site.get().strip()
-Line 8043: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
-Line 8044: self.budget_df = self.budget_df[self.budget_df['Site'] != site]
-Line 8047: self.update_budget_view()
-Line 8048: if 'budget' in self.detached_windows: self._refresh_detached_budget()
-Line 8051: self.clear_budget_form()
-Line 8054: def clear_budget_form(self):
-Line 8055: """Reset budget form fields while maintaining site selection context"""
-Line 8056: # self.cb_budget_site.set('')  <- Removed to preserve 'appearance' as per user request
-Line 8057: self.ent_budget_revenue.delete(0, tk.END)
-Line 8058: if hasattr(self, 'ent_budget_unit_price'):
-Line 8059: self.ent_budget_unit_price.delete(0, tk.END)
-Line 8060: self.ent_budget_labor.delete(0, tk.END)
-Line 8061: self.ent_budget_material.delete(0, tk.END)
-Line 8062: self.ent_budget_expense.delete(0, tk.END)
-Line 8063: self.ent_budget_outsource.delete(0, tk.END)
-Line 8064: if hasattr(self, 'ent_budget_profit'):
-Line 8065: self.ent_budget_profit.delete(0, tk.END)
-Line 8066: self.ent_budget_note.delete(0, tk.END)
-Line 8075: self._update_budget_kpis()
-Line 8077: def on_budget_tree_select(self, *args, **kwargs):
-Line 8078: from controllers.event_controller import on_budget_tree_select_impl
-Line 8079: return on_budget_tree_select_impl(self, *args, **kwargs)
-Line 8520: '단가': to_f(self.ent_daily_unit_price),
-Line 8683: for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']:
-Line 8689: for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']: row_record[k] = 0.0
-Line 9612: set_val(self.ent_daily_unit_price, '단가')
-Line 9900: # 1-2. 투입 인원 대비 검사 물량 검사
-Line 9922: if not messagebox.askyesno("입력 확인", "투입된 인원(작업시간)은 있으나 검사 물량(NDT 수량)이 모두 0입니다.\n결측치일 가능성이 있습니다. 이대로 저장하시겠습니까?"):
-Line 10404: def _get_budget_session_data(self):
-Line 10407: 'main': {k: w.get().strip() for k, w in self.budget_widgets.items()},
-Line 10414: def _set_budget_session_data(self, data):
-Line 10419: if k in self.budget_widgets:
-Line 10420: w = self.budget_widgets[k]
-Line 10426: self._update_budget_kpis()
-Line 10434: 'budget': self._get_budget_session_data(),
-Line 10446: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
-Line 10498: unit_price = self.clean_nan(first_record.get('단가', ''))
-Line 10562: self._set_budget_session_data(data.get('budget'))
-Line 10563: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
-Line 10697: # [NEW] budget_df에 저장된 현장명도 포함
-Line 10698: if hasattr(self, 'budget_df') and not self.budget_df.empty and 'Site' in self.budget_df.columns:
-Line 10699: raw_sites.update(self.budget_df['Site'].dropna().astype(str).apply(self.normalize_site_name).tolist())
-Line 10713: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
-Line 10715: if hasattr(self, 'cb_budget_site'):
-Line 10716: budget_sites = []
-Line 10717: if hasattr(self, 'budget_df') and not self.budget_df.empty and 'Site' in self.budget_df.columns:
-Line 10718: budget_sites = sorted([
-Line 10719: s for s in self.budget_df['Site'].dropna().astype(str).apply(self.normalize_site_name).unique()
-Line 10722: self.budget_sites[:] = budget_sites  # [FIX] 자동완성 목록 동기화
-Line 10723: current_val = self.cb_budget_site.get()
-Line 10724: self.cb_budget_site['values'] = budget_sites
-Line 10725: if current_val: self.cb_budget_site.set(current_val)
-Line 10726: # 하단 실적 조회 콤보박스 → 모든 현장(daily_usage_df + budget_df) 표시
-Line 10727: if hasattr(self, 'cb_budget_view_site'):
-Line 10728: self.cb_budget_view_site['values'] = unique_sites
-Line 10990: if hasattr(self, 'budget_view_tree'):
-Line 10991: self.update_budget_site_view()
-Line 11142: ('검사량', '검사량'), ('단가', '단가'), ('출장비', '출장비'),
-Line 11254: price = get_f(fields['단가'].get())
-Line 11267: for k in ['단가', '출장비', '일식', '검사비']:
-Line 11358: for key in ['검사량', '단가', '출장비', '일식', '검사비', 'FilmCount']:
-Line 11513: numeric_cols = ['Usage', '수량', '검사량', '단가', '출장비', '일식', '검사비', 'FilmCount', 'OT', 'OT금액']
-Line 11700: self.daily_usage_tree: ['날짜', '업체명', '현장', '작업자', '검사품명', '수량', '단위', '단가', '검사비', 'OT시간', 'OT금액', '비고'],
-Line 11826: headers = ['일자', '현장명', '작업내용', '투입인원', '작업시간', '검사실적', '비고']
-Line 11881: ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
-Line 13083: 'budget_view_visible_cols': getattr(self, 'budget_view_visible_cols', []),
-Line 13084: 'budget_view_heading_aliases': getattr(self, 'budget_view_heading_aliases', {}),
-Line 13085: 'budget_view_custom_columns': getattr(self, 'budget_view_custom_columns', []),
-Line 13138: # Save budget site performance column widths
-Line 13139: self.tab_config['budget_view_col_widths'] = {}
-Line 13140: if hasattr(self, 'budget_view_tree'):
-Line 13141: for col in self.budget_view_tree['columns']:
-Line 13142: self.tab_config['budget_view_col_widths'][col] = self.budget_view_tree.column(col, 'width')
-Line 13418: # Restore budget site performance view visibility if saved
-Line 13419: self.budget_view_visible_cols = config.get('budget_view_visible_cols', [])
-Line 13420: self.budget_view_heading_aliases = config.get('budget_view_heading_aliases', {})
-Line 13421: self.budget_view_custom_columns = config.get('budget_view_custom_columns', [])
-Line 13422: if hasattr(self, 'budget_view_tree'):
-Line 13424: self._refresh_budget_view_tree_columns(reload_data=False)
-Line 13427: if self.budget_view_visible_cols and hasattr(self, 'budget_view_tree'):
-Line 13429: visible = [c for c in self.budget_view_visible_cols if c in self.budget_view_tree['columns']]
-Line 13430: self.budget_view_tree['displaycolumns'] = visible if visible else self.budget_view_tree['columns']
-Line 13556: # Restore budget site performance column widths
-Line 13557: budget_view_col_widths = config.get('budget_view_col_widths', {})
-Line 13558: if budget_view_col_widths and hasattr(self, 'budget_view_tree'):
-Line 13559: for col, width in budget_view_col_widths.items():
-Line 13563: self.budget_view_tree.column(col, width=w, minwidth=20, stretch=False)
-Line 13888: self.root.after(300, lambda: self.update_budget_site_view())
-Line 14140: elif hasattr(self, 'budget_view_tree') and tree == self.budget_view_tree:
-Line 14141: self.budget_view_visible_cols = visible_names
-Line 14177: elif hasattr(self, 'budget_view_tree') and tree == self.budget_view_tree:
-Line 14178: self.budget_view_visible_cols = visible_names
-Line 14336: '수량', '단가', '출장비', '일식', '검사비', '품목명', '센터미스', '농도', '마킹미스', '필름마크',
-Line 14479: def open_detached_budget_view(self):
-Line 14480: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
-Line 14481: if 'budget' in self.detached_windows and self.detached_windows['budget']['window'].winfo_exists():
-Line 14482: self.detached_windows['budget']['window'].lift()
-Line 14486: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
-Line 14510: # 2. 예산 목록 트리뷰
-Line 14521: 'Site': ('현장명', 150), 'Revenue': ('매출액', 120), 'UnitPrice': ('단가', 100),
-Line 14540: self.detached_windows['budget'] = {
-Line 14550: if 'budget' in self.detached_windows:
-Line 14551: del self.detached_windows['budget']
-Line 14555: self._refresh_detached_budget()
-Line 14557: def _refresh_detached_budget(self):
-Line 14558: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
-Line 14559: if 'budget' not in self.detached_windows: return
-Line 14560: detached = self.detached_windows['budget']
-Line 14565: if self.budget_df.empty:
-Line 14572: for _, row in self.budget_df.iterrows():
+home/src\main.py:495: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
+home/src\main.py:1081: self.notebook.add(self.tab_budget, text='공사실행예산서')
+home/src\main.py:4027: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
+home/src\main.py:4030: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+home/src\main.py:4094: # 공사실행예산서 탭으로 이동
+home/src\main.py:4096: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+home/src\main.py:6206: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+home/src\main.py:6352: ttk.Button(bottom_filter, text="예산 수정/불러오기",
+home/src\main.py:6358: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
+home/src\main.py:7022: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
+home/src\main.py:7050: 'Date': f"[예산대비]",
+home/src\main.py:7056: '검사단가': f"예산 {b_rev:,.0f}",
+home/src\main.py:7161: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
+home/src\main.py:7174: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\main.py:7178: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\main.py:7252: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
+home/src\main.py:7257: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
+home/src\main.py:7912: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+home/src\main.py:7962: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+home/src\main.py:10329: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
+home/src\main.py:10446: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
+home/src\main.py:10596: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
+home/src\main.py:14071: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+home/src\main.py:14077: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+home/src\main.py:14101: # 2. 예산 목록 트리뷰
+home/src\main.py:14149: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
+home/src\ndt_billing_tab.py:489: # 기타 경비 및 실비 정산 예산 합산
+home/src\ndt_billing_tab.py:535: ttk.Label(hf, text="책정예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=1, padx=2)
+home/src\ndt_billing_tab.py:538: ttk.Label(hf, text="잔여예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=4, padx=2)
+home/src\가계부.py:175: ttk.Button(parent, text="🎯 예산 설정", command=self.set_budget).pack(side='right', padx=5)
+home/src\가계부.py:178: # 예산 프레임
+home/src\가계부.py:179: budget_frame = ttk.LabelFrame(parent, text=" 이번 달 지출 예산 현황 ", padding=10)
+home/src\가계부.py:181: self.lbl_budget_status = ttk.Label(budget_frame, text="목표 예산: 설정 안됨", font=('Malgun Gothic', 10, 'bold'))
+home/src\가계부.py:443: # 2. 요약 및 예산 갱신
+home/src\가계부.py:460: self.lbl_budget_status.config(text=f"목표 예산: {budget:,} 원 | 현재 {percent:.1f}% 사용", foreground=color)
+home/src\가계부.py:463: self.lbl_budget_status.config(text="목표 예산: 미설정 (상단 [예산 설정] 버튼 클릭)", foreground="black")
+home/src\가계부.py:571: new_budget = simpledialog.askinteger("예산 설정", "이번 달 목표 지출 예산(원):", initialvalue=int(current), parent=self.root)
+home/src\가계부.py:575: messagebox.showinfo("설정 완료", f"목표 예산이 {new_budget:,}원으로 설정되었습니다.")
+home/src\가계부_DB.py:214: # --- 추가: 설정(예산) 및 고정 항목 관리 ---
+home/src\가산가평기성_Calculator.py:397: ttk.Label(bf, text="경비 총 예산:", font=("Arial", 9, "bold")).pack(side=tk.LEFT)
+home/src\가산가평기성_Calculator.py:407: ttk.Label(rf, text="▶ 경비 잔액 (예산 - 전회 - 금회): ", font=("Arial", 9, "bold")).pack(side=tk.LEFT)
+home/src\자재작업일보기성서류.py:1657: ttk.Label(profit_table, text="사전(예산)", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+home/src\자재작업일보기성서류.py:2096: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
+home/src\자재작업일보기성서류.py:3352: self.notebook.add(self.tab_budget, text='공사실행예산서')
+home/src\자재작업일보기성서류.py:7742: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
+home/src\자재작업일보기성서류.py:7745: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+home/src\자재작업일보기성서류.py:7809: # 공사실행예산서 탭으로 이동
+home/src\자재작업일보기성서류.py:7811: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+home/src\자재작업일보기성서류.py:10694: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+home/src\자재작업일보기성서류.py:10840: ttk.Button(bottom_filter, text="예산 수정/불러오기",
+home/src\자재작업일보기성서류.py:10846: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
+home/src\자재작업일보기성서류.py:11510: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
+home/src\자재작업일보기성서류.py:11538: 'Date': f"[예산대비]",
+home/src\자재작업일보기성서류.py:11544: '검사단가': f"예산 {b_rev:,.0f}",
+home/src\자재작업일보기성서류.py:11649: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
+home/src\자재작업일보기성서류.py:11662: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\자재작업일보기성서류.py:11666: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\자재작업일보기성서류.py:11740: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
+home/src\자재작업일보기성서류.py:11745: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
+home/src\자재작업일보기성서류.py:12400: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+home/src\자재작업일보기성서류.py:12450: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+home/src\자재작업일보기성서류.py:15351: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
+home/src\자재작업일보기성서류.py:15419: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
+home/src\자재작업일보기성서류.py:15569: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
+home/src\자재작업일보기성서류.py:17949: elif tab_text == '공사실행예산서':
+home/src\자재작업일보기성서류.py:19701: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+home/src\자재작업일보기성서류.py:19707: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+home/src\자재작업일보기성서류.py:19731: # 2. 예산 목록 트리뷰
+home/src\자재작업일보기성서류.py:19779: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
+home/src\자재작업일보기성서류Ver.1.py:1657: ttk.Label(profit_table, text="사전(예산)", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+home/src\자재작업일보기성서류Ver.1.py:2096: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
+home/src\자재작업일보기성서류Ver.1.py:3352: self.notebook.add(self.tab_budget, text='공사실행예산서')
+home/src\자재작업일보기성서류Ver.1.py:7746: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
+home/src\자재작업일보기성서류Ver.1.py:7749: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+home/src\자재작업일보기성서류Ver.1.py:7813: # 공사실행예산서 탭으로 이동
+home/src\자재작업일보기성서류Ver.1.py:7815: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+home/src\자재작업일보기성서류Ver.1.py:10765: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+home/src\자재작업일보기성서류Ver.1.py:10911: ttk.Button(bottom_filter, text="예산 수정/불러오기",
+home/src\자재작업일보기성서류Ver.1.py:10917: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
+home/src\자재작업일보기성서류Ver.1.py:11581: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
+home/src\자재작업일보기성서류Ver.1.py:11609: 'Date': f"[예산대비]",
+home/src\자재작업일보기성서류Ver.1.py:11615: '검사단가': f"예산 {b_rev:,.0f}",
+home/src\자재작업일보기성서류Ver.1.py:11720: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
+home/src\자재작업일보기성서류Ver.1.py:11733: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\자재작업일보기성서류Ver.1.py:11737: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\자재작업일보기성서류Ver.1.py:11811: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
+home/src\자재작업일보기성서류Ver.1.py:11816: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
+home/src\자재작업일보기성서류Ver.1.py:12471: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+home/src\자재작업일보기성서류Ver.1.py:12521: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+home/src\자재작업일보기성서류Ver.1.py:15478: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
+home/src\자재작업일보기성서류Ver.1.py:15546: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
+home/src\자재작업일보기성서류Ver.1.py:15696: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
+home/src\자재작업일보기성서류Ver.1.py:18469: elif tab_text == '공사실행예산서':
+home/src\자재작업일보기성서류Ver.1.py:20238: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+home/src\자재작업일보기성서류Ver.1.py:20244: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+home/src\자재작업일보기성서류Ver.1.py:20268: # 2. 예산 목록 트리뷰
+home/src\자재작업일보기성서류Ver.1.py:20316: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
+home/src\한국지역난방 중앙지사.py:501: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
+home/src\한국지역난방 중앙지사.py:1154: self.notebook.add(self.tab_budget, text='공사실행예산서')
+home/src\한국지역난방 중앙지사.py:4100: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
+home/src\한국지역난방 중앙지사.py:4103: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+home/src\한국지역난방 중앙지사.py:4167: # 공사실행예산서 탭으로 이동
+home/src\한국지역난방 중앙지사.py:4169: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+home/src\한국지역난방 중앙지사.py:6287: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+home/src\한국지역난방 중앙지사.py:6292: headers = ["항목", "사전예산(계획)", "사후원가(실적)", "잔여예산(차액)"]
+home/src\한국지역난방 중앙지사.py:6446: ttk.Button(bottom_filter, text="예산 수정/불러오기",
+home/src\한국지역난방 중앙지사.py:6452: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
+home/src\한국지역난방 중앙지사.py:7118: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
+home/src\한국지역난방 중앙지사.py:7148: 'Date': f"[예산대비]",
+home/src\한국지역난방 중앙지사.py:7154: '검사단가': f"예산 {b_rev:,.0f}",
+home/src\한국지역난방 중앙지사.py:7266: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
+home/src\한국지역난방 중앙지사.py:7279: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\한국지역난방 중앙지사.py:7283: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\한국지역난방 중앙지사.py:7329: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
+home/src\한국지역난방 중앙지사.py:7334: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
+home/src\한국지역난방 중앙지사.py:7813: f"사전예산은 방어되어 변경되지 않았습니다.\n"
+home/src\한국지역난방 중앙지사.py:7903: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+home/src\한국지역난방 중앙지사.py:7953: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+home/src\한국지역난방 중앙지사.py:10357: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
+home/src\한국지역난방 중앙지사.py:10474: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
+home/src\한국지역난방 중앙지사.py:10624: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
+home/src\한국지역난방 중앙지사.py:14391: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+home/src\한국지역난방 중앙지사.py:14397: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+home/src\한국지역난방 중앙지사.py:14421: # 2. 예산 목록 트리뷰
+home/src\한국지역난방 중앙지사.py:14469: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
+home/src\controllers\event_controller.py:437: elif tab_text == '공사실행예산서':
+home/src\views\components.py:1263: ttk.Label(profit_table, text="사전(예산)", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+home/src\_archive\Material-Master-Manager-V13 260617.py:1629: ttk.Label(profit_table, text="사전(예산)", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+home/src\_archive\Material-Master-Manager-V13 260617.py:2066: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
+home/src\_archive\Material-Master-Manager-V13 260617.py:3343: self.notebook.add(self.tab_budget, text='공사실행예산서')
+home/src\_archive\Material-Master-Manager-V13 260617.py:7610: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
+home/src\_archive\Material-Master-Manager-V13 260617.py:7613: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+home/src\_archive\Material-Master-Manager-V13 260617.py:7677: # 공사실행예산서 탭으로 이동
+home/src\_archive\Material-Master-Manager-V13 260617.py:7679: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+home/src\_archive\Material-Master-Manager-V13 260617.py:10313: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+home/src\_archive\Material-Master-Manager-V13 260617.py:10459: ttk.Button(bottom_filter, text="예산 수정/불러오기",
+home/src\_archive\Material-Master-Manager-V13 260617.py:10465: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
+home/src\_archive\Material-Master-Manager-V13 260617.py:11129: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
+home/src\_archive\Material-Master-Manager-V13 260617.py:11157: 'Date': f"[예산대비]",
+home/src\_archive\Material-Master-Manager-V13 260617.py:11163: '검사단가': f"예산 {b_rev:,.0f}",
+home/src\_archive\Material-Master-Manager-V13 260617.py:11268: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
+home/src\_archive\Material-Master-Manager-V13 260617.py:11281: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\_archive\Material-Master-Manager-V13 260617.py:11285: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\_archive\Material-Master-Manager-V13 260617.py:11359: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
+home/src\_archive\Material-Master-Manager-V13 260617.py:11364: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
+home/src\_archive\Material-Master-Manager-V13 260617.py:12019: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+home/src\_archive\Material-Master-Manager-V13 260617.py:12069: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+home/src\_archive\Material-Master-Manager-V13 260617.py:14921: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
+home/src\_archive\Material-Master-Manager-V13 260617.py:14939: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
+home/src\_archive\Material-Master-Manager-V13 260617.py:15089: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
+home/src\_archive\Material-Master-Manager-V13 260617.py:17439: elif tab_text == '공사실행예산서':
+home/src\_archive\Material-Master-Manager-V13 260617.py:19172: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+home/src\_archive\Material-Master-Manager-V13 260617.py:19178: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+home/src\_archive\Material-Master-Manager-V13 260617.py:19202: # 2. 예산 목록 트리뷰
+home/src\_archive\Material-Master-Manager-V13 260617.py:19250: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
+home/src\_archive\Material-Master-Manager-V13-2.py:1484: ttk.Label(profit_table, text="사전(예산)", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+home/src\_archive\Material-Master-Manager-V13-2.py:1906: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
+home/src\_archive\Material-Master-Manager-V13-2.py:3057: self.notebook.add(self.tab_budget, text='공사실행예산서')
+home/src\_archive\Material-Master-Manager-V13-2.py:6819: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
+home/src\_archive\Material-Master-Manager-V13-2.py:6822: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+home/src\_archive\Material-Master-Manager-V13-2.py:6886: # 공사실행예산서 탭으로 이동
+home/src\_archive\Material-Master-Manager-V13-2.py:6888: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+home/src\_archive\Material-Master-Manager-V13-2.py:9073: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+home/src\_archive\Material-Master-Manager-V13-2.py:9219: ttk.Button(bottom_filter, text="예산 수정/불러오기",
+home/src\_archive\Material-Master-Manager-V13-2.py:9225: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
+home/src\_archive\Material-Master-Manager-V13-2.py:9814: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
+home/src\_archive\Material-Master-Manager-V13-2.py:9842: 'Date': f"[예산대비]",
+home/src\_archive\Material-Master-Manager-V13-2.py:9848: '검사단가': f"예산 {b_rev:,.0f}",
+home/src\_archive\Material-Master-Manager-V13-2.py:9953: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
+home/src\_archive\Material-Master-Manager-V13-2.py:9966: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\_archive\Material-Master-Manager-V13-2.py:9970: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\_archive\Material-Master-Manager-V13-2.py:10044: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
+home/src\_archive\Material-Master-Manager-V13-2.py:10049: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
+home/src\_archive\Material-Master-Manager-V13-2.py:10687: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+home/src\_archive\Material-Master-Manager-V13-2.py:10737: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+home/src\_archive\Material-Master-Manager-V13-2.py:11836: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
+home/src\_archive\Material-Master-Manager-V13-2.py:11854: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
+home/src\_archive\Material-Master-Manager-V13-2.py:11989: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
+home/src\_archive\Material-Master-Manager-V13-2.py:15556: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+home/src\_archive\Material-Master-Manager-V13-2.py:15562: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+home/src\_archive\Material-Master-Manager-V13-2.py:15586: # 2. 예산 목록 트리뷰
+home/src\_archive\Material-Master-Manager-V13-2.py:15634: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""
+home/src\_archive\Material-Master-Manager-V13.py:1629: ttk.Label(profit_table, text="사전(예산)", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
+home/src\_archive\Material-Master-Manager-V13.py:2066: self.budget_sites = []  # [NEW] 공사실행예산서 전용 현장 목록 (budget_df 현장만)
+home/src\_archive\Material-Master-Manager-V13.py:3343: self.notebook.add(self.tab_budget, text='공사실행예산서')
+home/src\_archive\Material-Master-Manager-V13.py:7584: """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
+home/src\_archive\Material-Master-Manager-V13.py:7587: "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+home/src\_archive\Material-Master-Manager-V13.py:7651: # 공사실행예산서 탭으로 이동
+home/src\_archive\Material-Master-Manager-V13.py:7653: tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
+home/src\_archive\Material-Master-Manager-V13.py:10109: form_frame = ttk.LabelFrame(form_scrollable, text="실행예산 입력/수정", padding=10)
+home/src\_archive\Material-Master-Manager-V13.py:10255: ttk.Button(bottom_filter, text="예산 수정/불러오기",
+home/src\_archive\Material-Master-Manager-V13.py:10261: # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
+home/src\_archive\Material-Master-Manager-V13.py:10868: # --- [NEW] 예산 대비 실적 요약 행 추가 ---
+home/src\_archive\Material-Master-Manager-V13.py:10896: 'Date': f"[예산대비]",
+home/src\_archive\Material-Master-Manager-V13.py:10902: '검사단가': f"예산 {b_rev:,.0f}",
+home/src\_archive\Material-Master-Manager-V13.py:11007: """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
+home/src\_archive\Material-Master-Manager-V13.py:11020: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\_archive\Material-Master-Manager-V13.py:11024: if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+home/src\_archive\Material-Master-Manager-V13.py:11098: if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
+home/src\_archive\Material-Master-Manager-V13.py:11103: """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
+home/src\_archive\Material-Master-Manager-V13.py:11750: messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+home/src\_archive\Material-Master-Manager-V13.py:11800: if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
+home/src\_archive\Material-Master-Manager-V13.py:14625: messagebox.showinfo("저장 완료", f"현장/입출고/실행예산 탭의 입력 내용이 일괄 저장되었습니다.\n{os.path.basename(file_path)}")
+home/src\_archive\Material-Master-Manager-V13.py:14643: messagebox.showinfo("불러오기 완료", "현장/입출고/실행예산 탭의 데이터가 일괄 복원되었습니다.")
+home/src\_archive\Material-Master-Manager-V13.py:14793: # [FIX] 공사실행예산서 상단 현장 콤보박스 → budget_df 현장만 표시
+home/src\_archive\Material-Master-Manager-V13.py:16849: elif tab_text == '공사실행예산서':
+home/src\_archive\Material-Master-Manager-V13.py:18576: """공사실행예산서 탭을 별도의 팝업창으로 엽니다. (메인 화면과 유사한 KPI/목록 구성)"""
+home/src\_archive\Material-Master-Manager-V13.py:18582: popup.title("📋 공사 실행예산서 모니터링 (팝업)")
+home/src\_archive\Material-Master-Manager-V13.py:18606: # 2. 예산 목록 트리뷰
+home/src\_archive\Material-Master-Manager-V13.py:18654: """팝업창의 예산 리스트와 KPI를 최신 데이터로 갱신"""

@@ -1204,7 +1204,7 @@ class LaborCostDetailWidget(ttk.Frame):
             p = self._to_f(self.entries[stype]['personnel'].get())
             h = self._to_f(self.entries[stype]['period'].get())
             c = self._to_f(self.totals[stype].cget('text'))
-            t2_personnel += p
+            t2_personnel = max(t2_personnel, p)  # [FIX] 투입인원은 동일 인원이 연장/야간/휴일을 병행하므로 합계(sum) 대신 최대값(max) 적용
             t2_hours += h
             t2_cost += c
             

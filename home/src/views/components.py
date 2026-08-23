@@ -808,7 +808,7 @@ class LaborCostDetailWidget(ttk.Frame):
             p = self._to_f(self.entries[stype]['personnel'].get())
             h = self._to_f(self.entries[stype]['period'].get())
             c = self._to_f(self.totals[stype].cget('text'))
-            t2_personnel += p
+            t2_personnel = max(t2_personnel, p)  # [FIX] 투입인원은 동일 인원이 연장/야간/휴일을 병행하므로 합계(sum) 대신 최대값(max) 적용
             t2_hours += h
             t2_cost += c
             
@@ -1094,7 +1094,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.s1_table = ttk.Frame(s1_frame)
         self.s1_table.pack(fill='x')
         
-        headers = ["구분", "내용", "인원수", "수량", "규격", "단가", "사전원가가액"]
+        headers = ["구분", "내용", "인원수", "수량", "규격", "단가", "금액(원)"]
         widths = [15, 20, 8, 8, 8, 15, 20]
         for j, (h, w) in enumerate(zip(headers, widths)):
             ttk.Label(self.s1_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=w).grid(row=0, column=j, sticky='nsew')
@@ -1110,7 +1110,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
             ]
         
         for i, (cat, cont, ppl, qty, unit, price) in enumerate(defaults_s1):
@@ -1123,7 +1123,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.s2_table = ttk.Frame(s2_frame)
         self.s2_table.pack(fill='x')
         
-        headers2 = ["구분", "사양", "수량", "사용기간", "기간단위", "단가/월,대", "사전원가가액"]
+        headers2 = ["구분", "사양", "수량", "사용기간", "기간단위", "단가/월,대", "금액(원)"]
         for j, h in enumerate(headers2):
             ttk.Label(self.s2_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j]).grid(row=0, column=j, sticky='nsew')
             self.s2_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
@@ -1140,7 +1140,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.s3_table = ttk.Frame(s3_frame)
         self.s3_table.pack(fill='x')
         
-        headers3 = ["구분", "작업내용", "공수", "단가", "사전원가가액"]
+        headers3 = ["구분", "작업내용", "공수", "단가", "금액(원)"]
         widths3 = [15, 30, 10, 15, 20]
         for j, h in enumerate(headers3):
             ttk.Label(self.s3_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths3[j]).grid(row=0, column=j, sticky='nsew')
@@ -1166,7 +1166,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         
         insurance_table = ttk.Frame(self)
         insurance_table.pack(fill='x')
-        headers4 = ["구분", "산출 기준", "산출 인건비", "단가(요율)", "사전원가가액"]
+        headers4 = ["구분", "산출 기준", "산출 인건비", "단가(요율)", "금액(원)"]
         for j, h in enumerate(headers4):
             ttk.Label(insurance_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j] if j < len(widths) else 20).grid(row=0, column=j, sticky='nsew')
             insurance_table.grid_columnconfigure(j, weight=1 if j in [1, 4] else 0)
@@ -1181,13 +1181,13 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.lbl_insurance_amount.grid(row=1, column=4, sticky='nsew')
 
         # --- Section 5: Depreciation ---
-        s5_frame = ttk.LabelFrame(self, text="(5) 감기상각비 (Depreciation)")
+        s5_frame = ttk.LabelFrame(self, text="(5) 감가상각비 (Depreciation)")
         s5_frame.pack(fill='x', pady=5)
         
         self.s5_table = ttk.Frame(s5_frame)
         self.s5_table.pack(fill='x')
         
-        headers5 = ["장비명", "사양", "내용년수", "수량", "사용일수", "감기비/일", "사전원가가액"]
+        headers5 = ["장비명", "사양", "내용년수", "수량", "사용일수", "감가비/일", "금액(원)"]
         for j, h in enumerate(headers5):
             ttk.Label(self.s5_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j]).grid(row=0, column=j, sticky='nsew')
             self.s5_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)

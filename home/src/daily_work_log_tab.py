@@ -1176,6 +1176,58 @@ class DailyWorkLogTab(ttk.Frame):
                 elif hasattr(ent, 'delete'):
                     ent.delete(0, tk.END)
                     ent.insert(0, val)
+                    
+        # [NEW] Recalculate Subtotals for Qty to heal missing '금일작업' fields in UI
+        def format_val(ckey, v):
+            if ckey.startswith(('PAUT', 'MT', 'PT')):
+                return f"{v:.4f}"
+            return f"{v:.1f}" if v % 1 else f"{int(v)}"
+            
+        paut_keys = ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간']
+        paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in paut_keys)
+        paut_prev = sum(float(self.qty_entries[f"PAUT_{s}"]['전일누계'].get() or 0) for s in paut_keys)
+        paut_today = sum(float(self.qty_entries[f"PAUT_{s}"]['금일작업'].get() or 0) for s in paut_keys)
+        paut_total = sum(float(self.qty_entries[f"PAUT_{s}"]['총누계'].get() or 0) for s in paut_keys)
+        
+        self.qty_entries['PAUT_소계']['예상량'].delete(0, tk.END)
+        self.qty_entries['PAUT_소계']['전일누계'].delete(0, tk.END)
+        self.qty_entries['PAUT_소계']['금일작업'].delete(0, tk.END)
+        self.qty_entries['PAUT_소계']['총누계'].delete(0, tk.END)
+        self.qty_entries['PAUT_소계']['공정률'].delete(0, tk.END)
+        
+        if paut_expected > 0:
+            self.qty_entries['PAUT_소계']['예상량'].insert(0, f"{int(paut_expected)}")
+        if paut_prev != 0:
+            self.qty_entries['PAUT_소계']['전일누계'].insert(0, format_val('PAUT', paut_prev))
+        if paut_today != 0:
+            self.qty_entries['PAUT_소계']['금일작업'].insert(0, format_val('PAUT', paut_today))
+        if paut_total != 0:
+            self.qty_entries['PAUT_소계']['총누계'].insert(0, format_val('PAUT', paut_total))
+            if paut_expected > 0:
+                self.qty_entries['PAUT_소계']['공정률'].insert(0, f"{(paut_total / paut_expected) * 100:.1f}")
+                
+        rt_keys = ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간']
+        rt_expected = sum(float(self.qty_entries[f"RT_{s}"]['예상량'].get() or 0) for s in rt_keys)
+        rt_prev = sum(float(self.qty_entries[f"RT_{s}"]['전일누계'].get() or 0) for s in rt_keys)
+        rt_today = sum(float(self.qty_entries[f"RT_{s}"]['금일작업'].get() or 0) for s in rt_keys)
+        rt_total = sum(float(self.qty_entries[f"RT_{s}"]['총누계'].get() or 0) for s in rt_keys)
+        
+        self.qty_entries['RT_소계']['예상량'].delete(0, tk.END)
+        self.qty_entries['RT_소계']['전일누계'].delete(0, tk.END)
+        self.qty_entries['RT_소계']['금일작업'].delete(0, tk.END)
+        self.qty_entries['RT_소계']['총누계'].delete(0, tk.END)
+        self.qty_entries['RT_소계']['공정률'].delete(0, tk.END)
+        
+        if rt_expected > 0:
+            self.qty_entries['RT_소계']['예상량'].insert(0, f"{int(rt_expected)}")
+        if rt_prev != 0:
+            self.qty_entries['RT_소계']['전일누계'].insert(0, format_val('RT', rt_prev))
+        if rt_today != 0:
+            self.qty_entries['RT_소계']['금일작업'].insert(0, format_val('RT', rt_today))
+        if rt_total != 0:
+            self.qty_entries['RT_소계']['총누계'].insert(0, format_val('RT', rt_total))
+            if rt_expected > 0:
+                self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
 
     def auto_calculate_and_save(self):
         current_date = self.date_entry.get()
@@ -1280,25 +1332,47 @@ class DailyWorkLogTab(ttk.Frame):
                 entries['공정률'].insert(0, f"{progress:.1f}")
 
         # Subtotals for Qty
-        paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간'])
-        if paut_expected > 0:
-            self.qty_entries['PAUT_소계']['예상량'].delete(0, tk.END)
-            self.qty_entries['PAUT_소계']['예상량'].insert(0, f"{int(paut_expected)}")
-        paut_total = sum(float(self.qty_entries[f"PAUT_{s}"]['총누계'].get() or 0) for s in ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간'])
+        paut_keys = ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간']
+        paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in paut_keys)
+        paut_prev = sum(float(self.qty_entries[f"PAUT_{s}"]['전일누계'].get() or 0) for s in paut_keys)
+        paut_today = sum(float(self.qty_entries[f"PAUT_{s}"]['금일작업'].get() or 0) for s in paut_keys)
+        paut_total = sum(float(self.qty_entries[f"PAUT_{s}"]['총누계'].get() or 0) for s in paut_keys)
+        
+        self.qty_entries['PAUT_소계']['예상량'].delete(0, tk.END)
+        self.qty_entries['PAUT_소계']['전일누계'].delete(0, tk.END)
+        self.qty_entries['PAUT_소계']['금일작업'].delete(0, tk.END)
         self.qty_entries['PAUT_소계']['총누계'].delete(0, tk.END)
         self.qty_entries['PAUT_소계']['공정률'].delete(0, tk.END)
+        
+        if paut_expected > 0:
+            self.qty_entries['PAUT_소계']['예상량'].insert(0, f"{int(paut_expected)}")
+        if paut_prev != 0:
+            self.qty_entries['PAUT_소계']['전일누계'].insert(0, format_val('PAUT', paut_prev))
+        if paut_today != 0:
+            self.qty_entries['PAUT_소계']['금일작업'].insert(0, format_val('PAUT', paut_today))
         if paut_total != 0:
             self.qty_entries['PAUT_소계']['총누계'].insert(0, format_val('PAUT', paut_total))
             if paut_expected > 0:
                 self.qty_entries['PAUT_소계']['공정률'].insert(0, f"{(paut_total / paut_expected) * 100:.1f}")
         
-        rt_expected = sum(float(self.qty_entries[f"RT_{s}"]['예상량'].get() or 0) for s in ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간'])
-        if rt_expected > 0:
-            self.qty_entries['RT_소계']['예상량'].delete(0, tk.END)
-            self.qty_entries['RT_소계']['예상량'].insert(0, f"{int(rt_expected)}")
-        rt_total = sum(float(self.qty_entries[f"RT_{s}"]['총누계'].get() or 0) for s in ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간'])
+        rt_keys = ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간']
+        rt_expected = sum(float(self.qty_entries[f"RT_{s}"]['예상량'].get() or 0) for s in rt_keys)
+        rt_prev = sum(float(self.qty_entries[f"RT_{s}"]['전일누계'].get() or 0) for s in rt_keys)
+        rt_today = sum(float(self.qty_entries[f"RT_{s}"]['금일작업'].get() or 0) for s in rt_keys)
+        rt_total = sum(float(self.qty_entries[f"RT_{s}"]['총누계'].get() or 0) for s in rt_keys)
+        
+        self.qty_entries['RT_소계']['예상량'].delete(0, tk.END)
+        self.qty_entries['RT_소계']['전일누계'].delete(0, tk.END)
+        self.qty_entries['RT_소계']['금일작업'].delete(0, tk.END)
         self.qty_entries['RT_소계']['총누계'].delete(0, tk.END)
         self.qty_entries['RT_소계']['공정률'].delete(0, tk.END)
+        
+        if rt_expected > 0:
+            self.qty_entries['RT_소계']['예상량'].insert(0, f"{int(rt_expected)}")
+        if rt_prev != 0:
+            self.qty_entries['RT_소계']['전일누계'].insert(0, format_val('RT', rt_prev))
+        if rt_today != 0:
+            self.qty_entries['RT_소계']['금일작업'].insert(0, format_val('RT', rt_today))
         if rt_total != 0:
             self.qty_entries['RT_소계']['총누계'].insert(0, format_val('RT', rt_total))
             if rt_expected > 0:

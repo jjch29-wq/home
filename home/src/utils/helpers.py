@@ -7,6 +7,7 @@ import sys
 import subprocess
 import os
 import pandas as pd
+import tkinter as tk
 
 def install_and_import(package, import_name=None):
     if import_name is None: import_name = package
