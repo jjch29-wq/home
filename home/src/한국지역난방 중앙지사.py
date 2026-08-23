@@ -8070,39 +8070,53 @@ class MaterialManager:
                     
             for i, row_data in enumerate(current_exp_data.get('depreciation', [])):
                 item = row_data.get('item', '')
+                
+                updated_days = False
                 if '스타렉스' in item:
                     row_data['days'] = f"{starex_days:g}" if starex_days > 0 else ""
+                    if starex_days > 0: updated_days = True
                 elif '탑차' in item:
                     row_data['days'] = f"{toptruck_days:g}" if toptruck_days > 0 else ""
-                item_upper_clean = str(item).upper().replace(' ', '')
-                if 'SCANNER(MANUAL)' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else ""
-                elif 'SCANNER(COBRA)' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else ""
-                elif 'PAUT' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else ""
-                elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
-                    row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
+                    if toptruck_days > 0: updated_days = True
                 else:
-                    item_upper = str(item).upper().strip()
-                    matched_days = 0
-                    for e_name, e_dates in equip_dates_map.items():
-                        if e_name.upper().strip() in item_upper or item_upper in e_name.upper().strip():
-                            matched_days = max(matched_days, len(e_dates))
-                    if matched_days > 0:
-                        row_data['days'] = f"{matched_days:g}"
-                # [FIX] 사전예산 단가 및 수량 복사
+                    item_upper_clean = str(item).upper().replace(' ', '')
+                    if 'SCANNER(MANUAL)' in item_upper_clean:
+                        row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else ""
+                        if len(paut_manual_scanner_dates) > 0: updated_days = True
+                    elif 'SCANNER(COBRA)' in item_upper_clean:
+                        row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else ""
+                        if len(paut_cobra_scanner_dates) > 0: updated_days = True
+                    elif 'PAUT' in item_upper_clean:
+                        row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else ""
+                        if len(paut_dates) > 0: updated_days = True
+                    elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
+                        row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
+                        if len(mt_dates) > 0: updated_days = True
+                    else:
+                        item_upper = str(item).upper().strip()
+                        matched_days = 0
+                        for e_name, e_dates in equip_dates_map.items():
+                            if e_name.upper().strip() in item_upper or item_upper in e_name.upper().strip():
+                                matched_days = max(matched_days, len(e_dates))
+                        if matched_days > 0:
+                            row_data['days'] = f"{matched_days:g}"
+                            updated_days = True
+
+                # [FIX] 사전예산 단가 복사 및 수량 처리
                 if 'depreciation' in planned_exp_data and i < len(planned_exp_data['depreciation']):
                     row_data['rate'] = planned_exp_data['depreciation'][i].get('rate', '')
                     
-                    # 수량이 비어있으면 사전예산의 수량을 가져오거나 1로 강제 설정
-                    current_qty = str(row_data.get('qty', '')).strip()
-                    planned_qty = str(planned_exp_data['depreciation'][i].get('qty', '')).strip()
-                    if not current_qty:
-                        row_data['qty'] = planned_qty if planned_qty else '1'
+                    if updated_days:
+                        # 일수가 자동 합산된 항목은 중복곱셈을 막기 위해 수량을 무조건 1로 강제
+                        row_data['qty'] = '1'
+                    else:
+                        # 자동 합산되지 않은 항목은 빈칸일 때만 사전예산 수량 복사
+                        current_qty = str(row_data.get('qty', '')).strip()
+                        planned_qty = str(planned_exp_data['depreciation'][i].get('qty', '')).strip()
+                        if not current_qty:
+                            row_data['qty'] = planned_qty if planned_qty else '1'
                 else:
-                    # 사전예산 데이터가 없어도 수량이 비어있으면 1로 채움
-                    if not str(row_data.get('qty', '')).strip():
+                    if updated_days or not str(row_data.get('qty', '')).strip():
                         row_data['qty'] = '1'
             
             self.actual_expense_detail_widget.set_data(current_exp_data)
