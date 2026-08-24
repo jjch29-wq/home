@@ -62,7 +62,7 @@
         "type": 95,
         "time": 96,
         "mat": 146,
-        "qty": 97,
+        "qty": 96,
         "unit": 97,
         "mat_cost": 122,
         "lab_cost": 124,
@@ -70,5 +70,5 @@
         "tech": 115,
         "total_amt": 135
     },
-    "SASH_POS": 394
+    "SASH_POS": 393
 }

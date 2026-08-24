@@ -10229,10 +10229,34 @@ class MaterialManager:
                         (self.daily_usage_df['적용코드'].astype(str).str.strip() == self.ent_daily_applied_code.get().strip())
                     ]
                     if not existing.empty:
-                        if not messagebox.askyesno("중복 확인", 
-                            f"이미 {date_val} 날짜에 '{site}' 현장의 '{mat_display}' 품목 기록이 {len(existing)}건 존재합니다.\n"
-                            "동일한 설정으로 추가 저장하시겠습니까?"):
+                        answer = messagebox.askyesnocancel("중복 확인", 
+                            f"이미 {date_val} 날짜에 '{site}' 현장의 '{mat_display}' 품목 기록이 {len(existing)}건 존재합니다.\n\n"
+                            "기존 기록을 덮어쓰시겠습니까?\n\n"
+                            "'예(Y)': 기존 기록 덮어쓰기 (수정)\n"
+                            "'아니오(N)': 새로운 기록으로 추가 저장\n"
+                            "'취소(Cancel)': 작업 취소")
+                        
+                        if answer is None:
                             return
+                        elif answer is True:
+                            # 덮어쓰기 위해 기존 기록 삭제 및 트랜잭션 롤백
+                            for idx in existing.index:
+                                entry = self.daily_usage_df.loc[idx]
+                                site_name = entry.get('Site', '')
+                                usage_date = pd.to_datetime(entry.get('Date'))
+                                mat_id_to_delete = entry.get('MaterialID', '')
+                                if not self.transactions_df.empty:
+                                    trans_mask = (
+                                        (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
+                                        (self.transactions_df['Site'].astype(str) == str(site_name)) &
+                                        (self.transactions_df['MaterialID'].astype(str) == str(mat_id_to_delete)) &
+                                        (self.transactions_df['Type'] == 'OUT') &
+                                        (self.transactions_df['Note'].str.contains(f"{site_name} 현장 사용", na=False, regex=False))
+                                    )
+                                    self.transactions_df = self.transactions_df[~trans_mask]
+                            
+                            self.daily_usage_df = self.daily_usage_df.drop(existing.index)
+                            self.daily_usage_df = self.daily_usage_df.reset_index(drop=True)
                 except Exception as e:
                     print(f"DEBUG: Duplicate check failed: {e}")
 
@@ -11226,12 +11250,14 @@ class MaterialManager:
                 # --- [FIX] 재고 환원 로직 (자동 차감된 트랜잭션만 선택적으로 환원) ---
                 site = entry.get('Site', '')
                 usage_date = pd.to_datetime(entry.get('Date'))
+                mat_id_to_delete = entry.get('MaterialID', '')
                 
                 if not self.transactions_df.empty:
                     # 해당 현장/날짜의 "(자동 차감)" 트랜잭션을 찾아 삭제
                     trans_mask = (
                         (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
                         (self.transactions_df['Site'].astype(str) == str(site)) &
+                        (self.transactions_df['MaterialID'].astype(str) == str(mat_id_to_delete)) &
                         (self.transactions_df['Type'] == 'OUT') &
                         (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False, regex=False))
                     )
