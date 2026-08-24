@@ -1,5 +1,5 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": ".venv\\Scripts\\python.exe",
     "python-envs.pythonProjects": [
         {
             "path": "Na-aba/home/src/주식정보.py",

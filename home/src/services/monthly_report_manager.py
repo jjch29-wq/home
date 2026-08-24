@@ -1,7 +1,13 @@
 import openpyxl
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
-from openpyxl.cell.cell import Cell
+from openpyxl.cell.cell import Cell, MergedCell
 import os
+
+# [FIX] Patch openpyxl MergedCell to prevent 'read-only' error when assigning to merged cells
+if not hasattr(MergedCell, '_patched_value'):
+    MergedCell._patched_value = True
+    MergedCell.value = property(lambda self: None, lambda self, val: None)
+
 import json
 import datetime
 from collections import defaultdict
@@ -1059,13 +1065,25 @@ class MonthlyReportManager:
                 font.bold = True
                 ws.cell(row=data_start, column=msg_col).font = font
             
+            table_end_col = defect_rate_col
+            if not table_end_col:
+                cols_found = [c for c in [retest_col, original_count_col] + list(header_cols.values()) if c is not None]
+                table_end_col = max(cols_found) if cols_found else msg_col + 15
+                
+            try:
+                ws.merge_cells(start_row=data_start, start_column=msg_col, end_row=data_start, end_column=table_end_col)
+            except Exception:
+                pass
+            
             # 나머지 데이터 행들은 값을 지우거나 그대로 둠
             for r in range(data_start + 1, total_row):
                 ws.row_dimensions[r].hidden = True
                 
             # 합계(TOTAL) 행의 값들도 초기화
             for c in range(msg_col + 1, ws.max_column + 1):
-                ws.cell(row=total_row, column=c).value = ""
+                cell = ws.cell(row=total_row, column=c)
+                if type(cell).__name__ != 'MergedCell':
+                    cell.value = ""
                 
             return
         welders = sorted(
@@ -1135,16 +1153,19 @@ class MonthlyReportManager:
                 self._safe_float(ws.cell(row=row, column=col).value)
                 for row in range(data_start, data_start + len(welders))
             )
-            ws.cell(row=total_row, column=col).value = int(total)
+            cell = ws.cell(row=total_row, column=col)
+            if type(cell).__name__ != 'MergedCell':
+                cell.value = int(total)
         if retest_col is not None:
-            ws.cell(row=total_row, column=retest_col).value = sum(
-                retests_by_welder.values()
-            )
+            cell = ws.cell(row=total_row, column=retest_col)
+            if type(cell).__name__ != 'MergedCell':
+                cell.value = sum(retests_by_welder.values())
         if original_count_col is not None:
-            ws.cell(row=total_row, column=original_count_col).value = sum(
-                original_counts_by_welder.values()
-            )
+            cell = ws.cell(row=total_row, column=original_count_col)
+            if type(cell).__name__ != 'MergedCell':
+                cell.value = sum(original_counts_by_welder.values())
         if defect_rate_col is not None:
+
             total_retest = sum(retests_by_welder.values())
             total_original = sum(original_counts_by_welder.values())
             total_rate_cell = ws.cell(row=total_row, column=defect_rate_col)
@@ -2920,7 +2941,7 @@ class MonthlyReportManager:
             paut_original_lengths_by_welder, '1.2',
             ('위상배열초음파탐상검사', 'PAUT'),
         )
-        self._populate_safety_training_log(ws, target_ym, ndt_groups)
+        self._populate_safety_training_log(ws, target_ym, ndt_groups, target_dates)
         self._populate_owner_report_rows(ws, target_ym, owner_report_path)
         self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
         self._fill_repeated_header_document_numbers(ws, doc_num)
@@ -3012,7 +3033,7 @@ class MonthlyReportManager:
                 cell.alignment = self.align_center
                 cell.border = self.border_thin
 
-    def _populate_safety_training_log(self, ws, target_ym, ndt_groups):
+    def _populate_safety_training_log(self, ws, target_ym, ndt_groups, target_dates=None):
         """Populate the 2.0 Safety Management Training Status table using values from 지역난방_안전관리교육."""
         try:
             import sys
@@ -3049,29 +3070,14 @@ class MonthlyReportManager:
             underground_topic = safety.UNDERGROUND_MONTHLY_TOPICS[month - 1]
             process_core_safety = safety.PAUT_MONTHLY_CORE_SAFETY[month - 1] if p == "PAUT" else ""
             
-            content = (
-                f"1. {month}월 공통 안전교육\n"
-                f" - {common_topic}\n"
-                " - 작업 전 TBM에서 작업순서, 위험요인, 통제대책 및 작업중지 기준을 확인한다.\n"
-                " - 작업구역 출입통제, 보호구 착용, 비상연락체계를 공유한다.\n\n"
-                f"2. {p} 공정 중점교육\n"
-                f" - {process_topic}\n"
-                f"{process_core_safety}"
-                " - 사용 장비와 계측기의 점검상태를 확인하고, 이상 발견 시 즉시 사용을 중지하고 장비 재점검을 실시한다.\n"
-                " - 작업 중 이상상태 발견 시 작업을 중지하고 관리감독자에게 보고한다.\n\n"
-                "3. 지하 1.5~3m 배관 용접부 검사 공통위험\n"
-                f" - {underground_topic}\n"
-                " - 굴착기·인양장비 가동 구역 접근 금지 및 상부 신호수 배치 확인\n"
-                " - 검사장비는 별도 인양수단으로 반입하고 인양물 아래와 굴착기 작업반경에 진입하지 않는다.\n"
-                " - 붕괴, 우수·누수 유입, 산소결핍, 유해가스, 장비 접근 시 즉시 대피하고 작업을 중지한다.\n\n"
-                "4. 마무리\n"
-                " - 자재와 장비를 정돈하고 주변을 정리한다.\n"
-                " - 작업 중 발생한 폐기물, 잔재물, 오염물질을 확인하고 즉시 처리한다."
-            )
+            content = f"{month}월 공통 안전교육({common_topic}) 및 {p} 공정 중점교육({process_topic}) 실시"
             training_logs.append(content)
 
-        # 1. 만든파일에 교육실시 날짜가 있는데 (Read from created file)
-        date_val = f"{year}-{month:02d}-01"
+        # 1. 실제 작업 시작일(착공일)을 기본값으로 사용
+        if target_dates:
+            date_val = min(target_dates)
+        else:
+            date_val = f"{year}-{month:02d}-01"
         search_pattern = f"c:\\Users\\-\\PMI\\home\\src\\지역난방_안전관리_{year}{month:02d}*.xlsx"
         found_files = glob.glob(search_pattern)
         if found_files:
@@ -3116,7 +3122,12 @@ class MonthlyReportManager:
             return
 
         data_row = header_row + 1
+        # 헤더가 세로로 병합되어 있는 경우, 병합된 영역의 바로 아래 행을 찾습니다.
+        for merged in ws.merged_cells.ranges:
+            if merged.min_row <= header_row <= merged.max_row:
+                data_row = max(data_row, merged.max_row + 1)
         
+
         # Hardcode columns based on typical merged structure in the template 
         cols = {'date': 2, 'category': 4, 'content': 8, 'time': 18, 'instructor': 20, 'location': 22}
         # Refine if possible
@@ -3153,7 +3164,7 @@ class MonthlyReportManager:
                 cell.alignment = align_center
             
             lines = content.split('\n')
-            estimated_height = sum(max(1, len(line)//45 + 1) for line in lines) * 16
-            ws.row_dimensions[data_row].height = max(180, estimated_height)
+            estimated_height = sum(max(1, len(line)//45 + 1) for line in lines) * 20
+            ws.row_dimensions[data_row].height = max(45, estimated_height)
             
             data_row += 1
