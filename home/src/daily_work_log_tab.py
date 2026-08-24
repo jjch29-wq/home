@@ -52,13 +52,19 @@ class DailyWorkLogTab(ttk.Frame):
         self.left_scrollbar = ttk.Scrollbar(self.left_container, orient="vertical", command=self.left_canvas.yview)
         self.left_frame = ttk.Frame(self.left_canvas)
         
-        self.left_frame.bind("<Configure>", lambda e: self.left_canvas.configure(scrollregion=self.left_canvas.bbox("all")))
+        def _update_left_scroll(e=None):
+            bbox = self.left_canvas.bbox("all")
+            if bbox:
+                self.left_canvas.configure(scrollregion=(0, 0, bbox[2], max(bbox[3], self.left_canvas.winfo_height())))
+        self.left_frame.bind("<Configure>", _update_left_scroll)
         self.left_window = self.left_canvas.create_window((0, 0), window=self.left_frame, anchor="nw")
         self.left_canvas.configure(yscrollcommand=self.left_scrollbar.set)
         
         def _on_left_canvas_configure(event):
             new_width = max(event.width, self.left_frame.winfo_reqwidth())
             self.left_canvas.itemconfig(self.left_window, width=new_width)
+            _update_left_scroll()
+            
         self.left_canvas.bind("<Configure>", _on_left_canvas_configure)
         
         self.left_canvas.pack(side="left", fill="both", expand=True)
@@ -75,7 +81,11 @@ class DailyWorkLogTab(ttk.Frame):
         self.right_yscroll = ttk.Scrollbar(self.right_container, orient="vertical", command=self.right_canvas.yview)
         self.right_frame = ttk.Frame(self.right_canvas)
         
-        self.right_frame.bind("<Configure>", lambda e: self.right_canvas.configure(scrollregion=self.right_canvas.bbox("all")))
+        def _update_right_scroll(e=None):
+            bbox = self.right_canvas.bbox("all")
+            if bbox:
+                self.right_canvas.configure(scrollregion=(0, 0, bbox[2], max(bbox[3], self.right_canvas.winfo_height())))
+        self.right_frame.bind("<Configure>", _update_right_scroll)
         self.right_window = self.right_canvas.create_window((0, 0), window=self.right_frame, anchor="nw")
         self.right_canvas.configure(xscrollcommand=self.right_xscroll.set, yscrollcommand=self.right_yscroll.set)
         
@@ -83,6 +93,7 @@ class DailyWorkLogTab(ttk.Frame):
             # Only stretch if the canvas is wider than the required width
             if event.width > self.right_frame.winfo_reqwidth():
                 self.right_canvas.itemconfig(self.right_window, width=event.width)
+            _update_right_scroll()
         self.right_canvas.bind("<Configure>", _on_right_canvas_configure)
         
         self.right_canvas.grid(row=0, column=0, sticky="nsew")

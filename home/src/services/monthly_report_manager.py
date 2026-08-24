@@ -969,8 +969,7 @@ class MonthlyReportManager:
         """Write welder defects and A/B quantities into a 4.0 summary table."""
         import copy
 
-        if not defects_by_welder and not retests_by_welder and not original_counts_by_welder:
-            return
+        has_data = bool(defects_by_welder or retests_by_welder or original_counts_by_welder)
 
         title_row = None
         for row in range(1, ws.max_row + 1):
@@ -1043,6 +1042,32 @@ class MonthlyReportManager:
 
         data_start = header_row + 1
         available_rows = total_row - data_start
+        
+        if not has_data:
+            msg_col = id_col if id_col else 2
+            ws.cell(row=data_start, column=msg_col).value = "당월 해당 공정 검사 실적 없음"
+            
+            # 텍스트 가운데 정렬 및 글씨 진하게
+            align = copy.copy(ws.cell(row=data_start, column=msg_col).alignment)
+            if align:
+                align.horizontal = 'center'
+                align.vertical = 'center'
+                ws.cell(row=data_start, column=msg_col).alignment = align
+                
+            font = copy.copy(ws.cell(row=data_start, column=msg_col).font)
+            if font:
+                font.bold = True
+                ws.cell(row=data_start, column=msg_col).font = font
+            
+            # 나머지 데이터 행들은 값을 지우거나 그대로 둠
+            for r in range(data_start + 1, total_row):
+                ws.row_dimensions[r].hidden = True
+                
+            # 합계(TOTAL) 행의 값들도 초기화
+            for c in range(msg_col + 1, ws.max_column + 1):
+                ws.cell(row=total_row, column=c).value = ""
+                
+            return
         welders = sorted(
             set(defects_by_welder)
             | set(retests_by_welder)
@@ -2895,6 +2920,7 @@ class MonthlyReportManager:
             paut_original_lengths_by_welder, '1.2',
             ('위상배열초음파탐상검사', 'PAUT'),
         )
+        self._populate_safety_training_log(ws, target_ym, ndt_groups)
         self._populate_owner_report_rows(ws, target_ym, owner_report_path)
         self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
         self._fill_repeated_header_document_numbers(ws, doc_num)
@@ -2985,3 +3011,149 @@ class MonthlyReportManager:
                 cell.font = self.font_normal
                 cell.alignment = self.align_center
                 cell.border = self.border_thin
+
+    def _populate_safety_training_log(self, ws, target_ym, ndt_groups):
+        """Populate the 2.0 Safety Management Training Status table using values from 지역난방_안전관리교육."""
+        try:
+            import sys
+            import copy
+            import glob
+            import os
+            from openpyxl.styles import Alignment
+            
+            if r'c:\Users\-\PMI\home\src' not in sys.path:
+                sys.path.append(r'c:\Users\-\PMI\home\src')
+            import 지역난방_안전관리교육 as safety
+        except Exception:
+            return
+
+        try:
+            year, month = map(int, target_ym.split('-'))
+        except:
+            return
+
+        # Find active processes
+        active_processes = []
+        for p in ('PAUT', 'MT', 'RT', 'PT'):
+            if ndt_groups.get(p) and sum(v.get('qty', 0) for v in ndt_groups[p].values()) > 0:
+                active_processes.append(p)
+                
+        if not active_processes:
+            active_processes = ['PAUT'] # Default if no data to ensure table isn't empty
+
+        # Create training contents
+        training_logs = []
+        for p in active_processes:
+            common_topic = safety.COMMON_MONTHLY_TOPICS[month - 1]
+            process_topic = safety.PROCESS_MONTHLY_TOPICS.get(p, safety.PROCESS_MONTHLY_TOPICS['PAUT'])[month - 1]
+            underground_topic = safety.UNDERGROUND_MONTHLY_TOPICS[month - 1]
+            process_core_safety = safety.PAUT_MONTHLY_CORE_SAFETY[month - 1] if p == "PAUT" else ""
+            
+            content = (
+                f"1. {month}월 공통 안전교육\n"
+                f" - {common_topic}\n"
+                " - 작업 전 TBM에서 작업순서, 위험요인, 통제대책 및 작업중지 기준을 확인한다.\n"
+                " - 작업구역 출입통제, 보호구 착용, 비상연락체계를 공유한다.\n\n"
+                f"2. {p} 공정 중점교육\n"
+                f" - {process_topic}\n"
+                f"{process_core_safety}"
+                " - 사용 장비와 계측기의 점검상태를 확인하고, 이상 발견 시 즉시 사용을 중지하고 장비 재점검을 실시한다.\n"
+                " - 작업 중 이상상태 발견 시 작업을 중지하고 관리감독자에게 보고한다.\n\n"
+                "3. 지하 1.5~3m 배관 용접부 검사 공통위험\n"
+                f" - {underground_topic}\n"
+                " - 굴착기·인양장비 가동 구역 접근 금지 및 상부 신호수 배치 확인\n"
+                " - 검사장비는 별도 인양수단으로 반입하고 인양물 아래와 굴착기 작업반경에 진입하지 않는다.\n"
+                " - 붕괴, 우수·누수 유입, 산소결핍, 유해가스, 장비 접근 시 즉시 대피하고 작업을 중지한다.\n\n"
+                "4. 마무리\n"
+                " - 자재와 장비를 정돈하고 주변을 정리한다.\n"
+                " - 작업 중 발생한 폐기물, 잔재물, 오염물질을 확인하고 즉시 처리한다."
+            )
+            training_logs.append(content)
+
+        # 1. 만든파일에 교육실시 날짜가 있는데 (Read from created file)
+        date_val = f"{year}-{month:02d}-01"
+        search_pattern = f"c:\\Users\\-\\PMI\\home\\src\\지역난방_안전관리_{year}{month:02d}*.xlsx"
+        found_files = glob.glob(search_pattern)
+        if found_files:
+            try:
+                import openpyxl
+                temp_wb = openpyxl.load_workbook(found_files[0], data_only=True)
+                for sheet_name in temp_wb.sheetnames:
+                    if '안전관리교육 총괄표' in sheet_name or '총괄표' in sheet_name:
+                        temp_ws = temp_wb[sheet_name]
+                        # Typically the date is in row 2, col 1
+                        date_cell = str(temp_ws.cell(row=2, column=1).value or '')
+                        if date_cell and '-' in date_cell:
+                            date_val = date_cell.split()[0] # YYYY-MM-DD
+                        break
+            except:
+                pass
+
+        category_val = "월간안전교육"
+        time_val = "1시간"
+        instructor_val = "현장소장"
+        location_val = "사무실"
+
+        # Find the table in the template
+        start_row = None
+        for row in range(1, ws.max_row + 1):
+            val = str(ws.cell(row=row, column=2).value or '').replace(' ', '')
+            if '2.0안전관리교육' in val or '2.0안전관리' in val:
+                start_row = row
+                break
+        
+        if not start_row:
+            return
+
+        header_row = None
+        for row in range(start_row + 1, start_row + 10):
+            val = str(ws.cell(row=row, column=2).value or '').replace(' ', '')
+            if '일자' in val:
+                header_row = row
+                break
+                
+        if not header_row:
+            return
+
+        data_row = header_row + 1
+        
+        # Hardcode columns based on typical merged structure in the template 
+        cols = {'date': 2, 'category': 4, 'content': 8, 'time': 18, 'instructor': 20, 'location': 22}
+        # Refine if possible
+        for col in range(2, 24):
+            val = str(ws.cell(row=header_row, column=col).value or '').replace(' ', '')
+            if '일자' in val: cols['date'] = col
+            elif '구분' in val: cols['category'] = col
+            elif '내용' in val: cols['content'] = col
+            elif '시간' in val: cols['time'] = col
+            elif '강사' in val: cols['instructor'] = col
+            elif '장소' in val: cols['location'] = col
+
+        for content in training_logs:
+            ws.cell(row=data_row, column=cols.get('date', 2)).value = date_val
+            ws.cell(row=data_row, column=cols.get('category', 4)).value = category_val
+            ws.cell(row=data_row, column=cols.get('content', 8)).value = content
+            ws.cell(row=data_row, column=cols.get('time', 18)).value = time_val
+            ws.cell(row=data_row, column=cols.get('instructor', 20)).value = instructor_val
+            ws.cell(row=data_row, column=cols.get('location', 22)).value = location_val
+            
+            c = ws.cell(row=data_row, column=cols.get('content', 8))
+            align = copy.copy(c.alignment) if c.alignment else Alignment()
+            align.wrap_text = True
+            align.vertical = 'center'
+            align.horizontal = 'left'
+            c.alignment = align
+            
+            for c_idx in [cols.get('date',2), cols.get('category',4), cols.get('time',18), cols.get('instructor',20), cols.get('location',22)]:
+                cell = ws.cell(row=data_row, column=c_idx)
+                align_center = copy.copy(cell.alignment) if cell.alignment else Alignment()
+                align_center.wrap_text = True
+                align_center.vertical = 'center'
+                align_center.horizontal = 'center'
+                cell.alignment = align_center
+            
+            lines = content.split('\n')
+            estimated_height = sum(max(1, len(line)//45 + 1) for line in lines) * 16
+            ws.row_dimensions[data_row].height = max(180, estimated_height)
+            
+            data_row += 1
