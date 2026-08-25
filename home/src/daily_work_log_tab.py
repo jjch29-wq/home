@@ -721,7 +721,7 @@ class DailyWorkLogTab(ttk.Frame):
             selection = tree.selection()
             return int(selection[0]) if selection else None
 
-        def open_photo():
+        def open_photo(event=None):
             index = selected_index()
             if index is None:
                 return
@@ -733,7 +733,7 @@ class DailyWorkLogTab(ttk.Frame):
             else:
                 messagebox.showerror('오류', f'사진 파일을 찾을 수 없습니다.\n{path}')
 
-        def delete_photo():
+        def delete_photo(event=None):
             index = selected_index()
             if index is None or not messagebox.askyesno('삭제', '선택한 사진을 삭제할까요?', parent=window):
                 return
@@ -749,11 +749,29 @@ class DailyWorkLogTab(ttk.Frame):
             except ValueError:
                 is_managed_photo = False
             if is_managed_photo and os.path.exists(path):
-                os.remove(path)
+                try:
+                    os.remove(path)
+                except Exception as e:
+                    messagebox.showwarning('경고', f'파일 삭제 중 오류가 발생했습니다: {e}', parent=window)
             history[current_date]['process_photos'] = photos
             self.save_history(history)
             window.destroy()
             self.manage_process_photos()
+
+        # Context menu & bindings
+        context_menu = tk.Menu(window, tearoff=0)
+        context_menu.add_command(label="사진 열기", command=open_photo)
+        context_menu.add_command(label="선택 삭제", command=delete_photo)
+
+        def show_context_menu(event):
+            item = tree.identify_row(event.y)
+            if item:
+                tree.selection_set(item)
+                context_menu.tk_popup(event.x_root, event.y_root)
+
+        tree.bind('<Double-1>', open_photo)
+        tree.bind('<Delete>', delete_photo)
+        tree.bind('<Button-3>', show_context_menu)
 
         button_bar = ttk.Frame(window)
         button_bar.pack(fill='x', padx=8, pady=(0, 8))

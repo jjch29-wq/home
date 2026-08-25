@@ -2941,7 +2941,7 @@ class MonthlyReportManager:
             paut_original_lengths_by_welder, '1.2',
             ('위상배열초음파탐상검사', 'PAUT'),
         )
-        self._populate_safety_training_log(ws, target_ym, ndt_groups, target_dates)
+        self._populate_safety_training_log(ws, target_ym, ndt_groups, target_dates, report_scope)
         self._populate_owner_report_rows(ws, target_ym, owner_report_path)
         self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
         self._fill_repeated_header_document_numbers(ws, doc_num)
@@ -3033,7 +3033,119 @@ class MonthlyReportManager:
                 cell.alignment = self.align_center
                 cell.border = self.border_thin
 
-    def _populate_safety_training_log(self, ws, target_ym, ndt_groups, target_dates=None):
+    def _clone_safety_training_header(self, ws, start_row, header_row, insert_row):
+        import copy
+        from io import BytesIO
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.styles import Border, Side
+        from openpyxl.worksheet.pagebreak import Break, RowBreak
+        
+        doc_header_start = 1
+        for row in range(start_row - 1, 0, -1):
+            val = ''.join(str(ws.cell(row=row, column=c).value or '') for c in range(1, 10)).replace(' ', '')
+            if '단가계약' in val or '월간용역진도보고서' in val:
+                doc_header_start = max(1, row - 1)
+                break
+                
+        doc_header_end = doc_header_start + 4
+        source_rows = list(range(doc_header_start, doc_header_end + 1)) + [start_row - 1] + list(range(start_row, header_row + 1))
+        clone_height = len(source_rows)
+        max_col = ws.max_column
+        
+        cell_snapshot, row_snapshot = [], []
+        for r in source_rows:
+            row_data = []
+            for c in range(1, max_col + 1):
+                cell = ws.cell(row=r, column=c)
+                row_data.append((cell.value, copy.copy(cell._style), copy.copy(cell.alignment), cell.number_format))
+            cell_snapshot.append(row_data)
+            row_snapshot.append((ws.row_dimensions[r].height, ws.row_dimensions[r].hidden))
+            
+        merge_snapshot = []
+        for merged in list(ws.merged_cells.ranges):
+            for i, r in enumerate(source_rows):
+                if merged.min_row == r and merged.max_row == r:
+                    merge_snapshot.append((i, merged.min_col, merged.max_col))
+                    break
+                    
+        image_snapshot = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if hasattr(anchor, '_from'):
+                img_r = anchor._from.row + 1
+                if doc_header_start <= img_r <= doc_header_end:
+                    image_snapshot.append((image, copy.deepcopy(anchor), img_r - doc_header_start))
+                    
+        # Give bottom border to previous page
+        thick = Side(style='medium')
+        for c in range(1, max_col + 1):
+            cell = ws.cell(row=insert_row - 1, column=c)
+            if cell.border and (cell.border.left or cell.border.right):
+                new_border = copy.copy(cell.border)
+                new_border.bottom = thick
+                cell.border = new_border
+                
+        self._insert_rows_safely(ws, insert_row, clone_height)
+        
+        for existing_image in list(ws._images):
+            anchor = getattr(existing_image, 'anchor', None)
+            if hasattr(anchor, '_from') and anchor._from.row + 1 >= insert_row:
+                anchor._from.row += clone_height
+                if hasattr(anchor, 'to'):
+                    anchor.to.row += clone_height
+                    
+        for offset, row_data in enumerate(cell_snapshot):
+            target_row = insert_row + offset
+            height, hidden = row_snapshot[offset]
+            ws.row_dimensions[target_row].height = height
+            ws.row_dimensions[target_row].hidden = hidden
+            for col, (value, style, alignment, number_format) in enumerate(row_data, 1):
+                cell = ws.cell(row=target_row, column=col)
+                cell.value = value
+                cell._style = copy.copy(style)
+                cell.alignment = copy.copy(alignment)
+                cell.number_format = number_format
+                
+        for offset, min_col, max_col in merge_snapshot:
+            try:
+                ws.merge_cells(start_row=insert_row+offset, start_column=min_col, end_row=insert_row+offset, end_column=max_col)
+            except ValueError:
+                pass
+                
+        for source_image, saved_anchor, offset in image_snapshot:
+            buffer = BytesIO()
+            image_ref = source_image.ref
+            if hasattr(image_ref, 'copy') and hasattr(image_ref, 'save'):
+                image_ref.copy().save(buffer, format=getattr(image_ref, 'format', None) or 'PNG')
+            elif isinstance(image_ref, (str, os.PathLike)):
+                with open(image_ref, 'rb') as stream:
+                    buffer.write(stream.read())
+            else:
+                old_position = image_ref.tell() if hasattr(image_ref, 'tell') else None
+                if hasattr(image_ref, 'seek'):
+                    image_ref.seek(0)
+                buffer.write(image_ref.read())
+                if old_position is not None and hasattr(image_ref, 'seek'):
+                    image_ref.seek(old_position)
+            buffer.seek(0)
+            new_image = XLImage(buffer)
+            new_image.width = source_image.width
+            new_image.height = source_image.height
+            
+            new_anchor = copy.deepcopy(saved_anchor)
+            new_anchor._from.row = (insert_row + offset) - 1
+            if hasattr(new_anchor, 'to'):
+                new_anchor.to.row = new_anchor._from.row + (saved_anchor.to.row - saved_anchor._from.row)
+            new_image.anchor = new_anchor
+            ws.add_image(new_image)
+            
+        if not ws.row_breaks:
+            ws.row_breaks = RowBreak()
+        ws.row_breaks.append(Break(id=insert_row - 1))
+        
+        return insert_row + clone_height
+
+    def _populate_safety_training_log(self, ws, target_ym, ndt_groups, target_dates=None, report_scope="month"):
         """Populate the 2.0 Safety Management Training Status table using values from 지역난방_안전관리교육."""
         try:
             import sys
@@ -3062,23 +3174,13 @@ class MonthlyReportManager:
         if not active_processes:
             active_processes = ['PAUT'] # Default if no data to ensure table isn't empty
 
-        # Create training contents
-        training_logs = []
-        for p in active_processes:
-            common_topic = safety.COMMON_MONTHLY_TOPICS[month - 1]
-            process_topic = safety.PROCESS_MONTHLY_TOPICS.get(p, safety.PROCESS_MONTHLY_TOPICS['PAUT'])[month - 1]
-            underground_topic = safety.UNDERGROUND_MONTHLY_TOPICS[month - 1]
-            process_core_safety = safety.PAUT_MONTHLY_CORE_SAFETY[month - 1] if p == "PAUT" else ""
-            
-            content = f"{month}월 공통 안전교육({common_topic}) 및 {p} 공정 중점교육({process_topic}) 실시"
-            training_logs.append(content)
-
         # 1. 실제 작업 시작일(착공일)을 기본값으로 사용
         if target_dates:
             date_val = min(target_dates)
         else:
             date_val = f"{year}-{month:02d}-01"
         search_pattern = f"c:\\Users\\-\\PMI\\home\\src\\지역난방_안전관리_{year}{month:02d}*.xlsx"
+        import glob
         found_files = glob.glob(search_pattern)
         if found_files:
             try:
@@ -3094,7 +3196,38 @@ class MonthlyReportManager:
                         break
             except:
                 pass
-
+            
+        # Create training contents based on report_scope
+        if report_scope == "cumulative":
+            start_year, start_month = 2026, 8
+            total_months = (year - start_year) * 12 + (month - start_month) + 1
+        else:
+            start_year, start_month = year, month
+            total_months = 1
+        
+        training_logs = []
+        if total_months > 0:
+            for i in range(total_months):
+                curr_y = start_year + (start_month - 1 + i) // 12
+                curr_m = (start_month - 1 + i) % 12 + 1
+                
+                for p in active_processes:
+                    common_topic = safety.COMMON_MONTHLY_TOPICS[curr_m - 1]
+                    process_topic = safety.PROCESS_MONTHLY_TOPICS.get(p, safety.PROCESS_MONTHLY_TOPICS['PAUT'])[curr_m - 1]
+                    content = f"{curr_m}월 공통 안전교육({common_topic}) 및 {p} 공정 중점교육({process_topic}) 실시"
+                    
+                    if curr_y == year and curr_m == month:
+                        m_date = date_val
+                    elif curr_y == 2026 and curr_m == 8:
+                        m_date = "2026-08-04"
+                    else:
+                        m_date = f"{curr_y}-{curr_m:02d}-01"
+                        
+                    training_logs.append({
+                        'date': m_date,
+                        'content': content
+                    })
+        
         category_val = "월간안전교육"
         time_val = "1시간"
         instructor_val = "현장소장"
@@ -3122,15 +3255,11 @@ class MonthlyReportManager:
             return
 
         data_row = header_row + 1
-        # 헤더가 세로로 병합되어 있는 경우, 병합된 영역의 바로 아래 행을 찾습니다.
         for merged in ws.merged_cells.ranges:
             if merged.min_row <= header_row <= merged.max_row:
                 data_row = max(data_row, merged.max_row + 1)
         
-
-        # Hardcode columns based on typical merged structure in the template 
         cols = {'date': 2, 'category': 4, 'content': 8, 'time': 18, 'instructor': 20, 'location': 22}
-        # Refine if possible
         for col in range(2, 24):
             val = str(ws.cell(row=header_row, column=col).value or '').replace(' ', '')
             if '일자' in val: cols['date'] = col
@@ -3140,15 +3269,46 @@ class MonthlyReportManager:
             elif '강사' in val: cols['instructor'] = col
             elif '장소' in val: cols['location'] = col
 
-        for content in training_logs:
-            ws.cell(row=data_row, column=cols.get('date', 2)).value = date_val
-            ws.cell(row=data_row, column=cols.get('category', 4)).value = category_val
-            ws.cell(row=data_row, column=cols.get('content', 8)).value = content
-            ws.cell(row=data_row, column=cols.get('time', 18)).value = time_val
-            ws.cell(row=data_row, column=cols.get('instructor', 20)).value = instructor_val
-            ws.cell(row=data_row, column=cols.get('location', 22)).value = location_val
+        reference_row = data_row
+        row_merges = []
+        for merged_range in list(ws.merged_cells.ranges):
+            if merged_range.min_row == reference_row and merged_range.max_row == reference_row:
+                row_merges.append((merged_range.min_col, merged_range.max_col))
+
+        max_first_page = 7
+        current_data_row = data_row
+        for i, log in enumerate(training_logs):
+            if i == max_first_page:
+                current_data_row = self._clone_safety_training_header(ws, start_row, header_row, current_data_row)
+                
+            current_row = current_data_row
             
-            c = ws.cell(row=data_row, column=cols.get('content', 8))
+            # Copy formatting and merges for rows beyond the first one
+            if current_row > reference_row:
+                for col in range(2, 24):
+                    ref_cell = ws.cell(row=reference_row, column=col)
+                    new_cell = ws.cell(row=current_row, column=col)
+                    if ref_cell.has_style:
+                        new_cell.font = copy.copy(ref_cell.font)
+                        new_cell.border = copy.copy(ref_cell.border)
+                        new_cell.fill = copy.copy(ref_cell.fill)
+                        new_cell.number_format = copy.copy(ref_cell.number_format)
+                        new_cell.alignment = copy.copy(ref_cell.alignment)
+                
+                for min_col, max_col in row_merges:
+                    try:
+                        ws.merge_cells(start_row=current_row, start_column=min_col, end_row=current_row, end_column=max_col)
+                    except ValueError:
+                        pass
+
+            ws.cell(row=current_row, column=cols.get('date', 2)).value = log['date']
+            ws.cell(row=current_row, column=cols.get('category', 4)).value = category_val
+            ws.cell(row=current_row, column=cols.get('content', 8)).value = log['content']
+            ws.cell(row=current_row, column=cols.get('time', 18)).value = time_val
+            ws.cell(row=current_row, column=cols.get('instructor', 20)).value = instructor_val
+            ws.cell(row=current_row, column=cols.get('location', 22)).value = location_val
+            
+            c = ws.cell(row=current_row, column=cols.get('content', 8))
             align = copy.copy(c.alignment) if c.alignment else Alignment()
             align.wrap_text = True
             align.vertical = 'center'
@@ -3156,15 +3316,15 @@ class MonthlyReportManager:
             c.alignment = align
             
             for c_idx in [cols.get('date',2), cols.get('category',4), cols.get('time',18), cols.get('instructor',20), cols.get('location',22)]:
-                cell = ws.cell(row=data_row, column=c_idx)
+                cell = ws.cell(row=current_row, column=c_idx)
                 align_center = copy.copy(cell.alignment) if cell.alignment else Alignment()
                 align_center.wrap_text = True
                 align_center.vertical = 'center'
                 align_center.horizontal = 'center'
                 cell.alignment = align_center
             
-            lines = content.split('\n')
+            lines = log['content'].split('\n')
             estimated_height = sum(max(1, len(line)//45 + 1) for line in lines) * 20
-            ws.row_dimensions[data_row].height = max(45, estimated_height)
+            ws.row_dimensions[current_row].height = max(45, estimated_height)
             
-            data_row += 1
+            current_data_row += 1
