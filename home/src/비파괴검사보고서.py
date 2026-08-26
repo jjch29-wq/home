@@ -180,7 +180,9 @@ class PMIReportApp:
         self.rt_sort_col = ""
         self.rt_sort_rev = False
         self.pt_sort_col = ""
+        self.mt_sort_col = ""
         self.pt_sort_rev = False
+        self.mt_sort_rev = False
         self.paut_sort_col = ""
         self.paut_sort_rev = False
         
@@ -236,6 +238,7 @@ class PMIReportApp:
         self.rt_column_keys = ["selected", "No", "Date", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
+        self.mt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Size", "Loc", "T", "Acc", "Rej", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
         
         # --- PT State Variables ---
@@ -245,6 +248,12 @@ class PMIReportApp:
         self.item_idx_map = []      # [NEW] Missing for PMI
         self.rt_item_idx_map = []   # [NEW] Missing for RT
         self.pt_item_idx_map = []
+        
+        self.mt_target_file_path = tk.StringVar(value=self.config.get('MT_TARGET_PATH', ""))
+        self.mt_template_file_path = tk.StringVar(value=self.config.get('MT_TEMPLATE_PATH', ""))
+        self.mt_extracted_data = []
+        self.mt_item_idx_map = []
+        
         self.paut_item_idx_map = [] 
         self.kogas_item_idx_map = []
         
@@ -253,6 +262,7 @@ class PMIReportApp:
         self.rt_column_keys = ["selected", "No", "Date", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
+        self.mt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
         
         self.date_listbox = None
@@ -279,6 +289,7 @@ class PMIReportApp:
             'RT': tk.StringVar(value="📄 파일을 선택해주세요."),
             'KOGAS': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PT': tk.StringVar(value="📄 파일을 선택해주세요."),
+            'MT': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PAUT': tk.StringVar(value="📄 파일을 선택해주세요."),
             'PHOTO': tk.StringVar(value="📸 사진 리스트를 구성해주세요.")
         }
@@ -517,6 +528,8 @@ class PMIReportApp:
                         self.kogas_column_keys = list(saved_data['kogas_column_keys'])
                     if 'pt_column_keys' in saved_data and isinstance(saved_data['pt_column_keys'], list):
                         self.pt_column_keys = list(saved_data['pt_column_keys'])
+                    if 'mt_column_keys' in saved_data:
+                        self.mt_column_keys = list(saved_data['mt_column_keys'])
                     if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
                         loaded_paut_keys = list(saved_data['paut_column_keys'])
                         # [FIX] Ensure new columns are added even if loading from old config
@@ -649,6 +662,7 @@ class PMIReportApp:
                 self.config['rt_column_keys'] = list(self.rt_column_keys)
                 self.config['kogas_column_keys'] = list(self.kogas_column_keys)
                 self.config['pt_column_keys'] = list(self.pt_column_keys)
+                self.config['mt_column_keys'] = list(self.mt_column_keys)
                 self.config['paut_column_keys'] = list(self.paut_column_keys)
             except Exception as e:
                 self.log(f"[ERROR] UI 상태 캡처 실패: {e}")
@@ -1213,6 +1227,8 @@ class PMIReportApp:
         
         self.pt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
         self.mode_notebook.add(self.pt_mode_frame, text=" 🔬 Penetrant (PT) ")
+        self.mt_mode_frame = tk.Frame(self.mode_notebook, background="#f9fafb")
+        self.mode_notebook.add(self.mt_mode_frame, text=" 🔬 Magnetic (MT) ")
         self.mode_notebook.add(self.paut_mode_frame, text=" 🔬 Phased Array (PAUT) ")
         self.mode_notebook.add(self.photo_mode_frame, text=" 📸 사진대장 (Photo Log) ")
 
@@ -1220,6 +1236,7 @@ class PMIReportApp:
         self._setup_pmi_ui(self.pmi_mode_frame)
         self._setup_rt_ui(self.rt_mode_frame) # [RE-INTEGRATED]
         self._setup_pt_ui(self.pt_mode_frame)
+        self._setup_mt_ui(self.mt_mode_frame)
         self._setup_paut_ui(self.paut_mode_frame)
         self._setup_photo_log_ui(self.photo_mode_frame)
 
@@ -1341,7 +1358,7 @@ class PMIReportApp:
 
         # [FIX] Do NOT reset setting_vars here to prevent data loss when switching tabs
         # [ALIGNED] Mode-specific context for logo grid
-        self._create_gapji_meta_ui(tab_cover, use_pack=False)
+        self._create_gapji_meta_ui(tab_cover, use_pack=False, mode="PMI")
         self.pmi_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
         next_row_cover = self._create_setting_grid(tab_cover, "PMI_COVER")
         next_row_data = self._create_setting_grid(tab_data, "PMI_DATA")
@@ -1645,7 +1662,7 @@ class PMIReportApp:
             for w in t.winfo_children(): w.destroy()
         
         # Meta & Margins (Cover/Data)
-        self._create_gapji_meta_ui(t_cover, use_pack=False)
+        self._create_gapji_meta_ui(t_cover, use_pack=False, mode="RT")
         ctx_cover = f"{mode}_COVER"
         ctx_data = f"{mode}_DATA"
         self._create_margin_settings(t_cover, ctx_cover, use_pack=False)
@@ -1947,7 +1964,7 @@ class PMIReportApp:
         self.pt_tab_notebook.add(pt_tab_cols, text="컬럼 설정")
 
         # [ALIGNED] Mode-specific context for logo grid
-        self._create_gapji_meta_ui(pt_tab_cover, use_pack=False)
+        self._create_gapji_meta_ui(pt_tab_cover, use_pack=False, mode="PT")
         self.pt_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
         next_row_pt_cover = self._create_setting_grid(pt_tab_cover, "PT_COVER")
         next_row_pt_data = self._create_setting_grid(pt_tab_data, "PT_DATA")
@@ -2010,6 +2027,144 @@ class PMIReportApp:
         self.pt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_pt_ratio))
         self.root.after(500, lambda: self._on_pt_paned_configure(None))
 
+
+    def _setup_mt_ui(self, parent):
+        # [FORCE] Ensure parent (pt_mode_frame) allows expansion
+        container = tk.Frame(parent, background="#f9fafb")
+        container.pack(fill='both', expand=True)
+
+        # --- Dual Pane Layout (PanedWindow) ---
+        self.mt_paned = tk.PanedWindow(container, orient='horizontal', background="#d1d5db", 
+                            sashwidth=6, sashpad=0, sashrelief='raised', borderwidth=0)
+        self.mt_paned.pack(fill='both', expand=True)
+
+        # [LEFT] Settings Sidebar
+        left_container = tk.Frame(self.mt_paned, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        self.mt_paned.add(left_container, width=425)
+        
+        # Scrollable area (Full size)
+        left_pane = self._create_scrollable_sidebar(left_container)
+
+        # FIXED FLOATING Header
+        header_frame = tk.Frame(left_container, background="#f9fafb", highlightthickness=0, borderwidth=0)
+        header_frame.place(x=0, y=0, relwidth=1, height=40)
+        
+        inner_header = tk.Frame(header_frame, background="#f9fafb", padx=20)
+        inner_header.pack(fill='both', expand=True, pady=(5, 0))
+        
+        tk.Label(inner_header, text="🔬 MT 성적서 관리", font=("Malgun Gothic", 15, "bold"), 
+                 background="#f9fafb", foreground="#1e3a8a").pack(side='left')
+        
+        tk.Frame(header_frame, height=1, background="#e5e7eb").pack(side='bottom', fill='x')
+        header_frame.lift()
+
+        # Spacer in scrollable area
+        tk.Frame(left_pane, height=40, background="#f9fafb").pack(fill='x')
+
+        # 1. File Selection Group
+        file_frame = ttk.LabelFrame(left_pane, text=" 데이터 및 양식 (Data) ", padding=10)
+        file_frame.pack(fill='x', pady=(0, 10))
+
+        def _add_file_row(parent_f, label, var, row, is_dir=False, types=None):
+            parent_f.columnconfigure(1, weight=1)
+            ttk.Label(parent_f, text=label, font=("Malgun Gothic", 8)).grid(row=row, column=0, sticky='e', padx=2, pady=2)
+            ttk.Entry(parent_f, textvariable=var, font=("Arial", 9), width=1, exportselection=False).grid(row=row, column=1, padx=2, pady=2, sticky='ew')
+            cmd = (lambda: self._browse_dir(var)) if is_dir else (lambda: self._browse_file(var, types))
+            ttk.Button(parent_f, text="...", width=3, command=cmd).grid(row=row, column=2, padx=2, pady=2)
+
+        _add_file_row(file_frame, "기본 로고 폴더:", self.logo_folder_path, 0, is_dir=True)
+        _add_file_row(file_frame, "MT 데이터:", self.mt_target_file_path, 1, types=[("Excel Source", "*.xls;*.xlsx;*.xlsm")])
+        _add_file_row(file_frame, "MT 양식:", self.mt_template_file_path, 2, types=[("Excel Template", "*.xlsx;*.xlsm")])
+        
+        # [NEW] Template Config Save Button
+        btn_frame = tk.Frame(file_frame, background="#f0f0f0")
+        btn_frame.grid(row=3, column=1, sticky='ew', pady=2)
+        ttk.Button(btn_frame, text="💾 현재 설정을 이 양식 전용으로 저장", command=lambda: self.save_template_specific_config("MT")).pack(side='left', padx=2)
+
+        # 2. Configuration Tabs
+        pt_config_frame = ttk.LabelFrame(left_pane, text=" 리포트 세부 설정 ", padding=2)
+        pt_config_frame.pack(fill='both', expand=True, pady=(0, 10))
+
+        self.mt_tab_notebook = ttk.Notebook(pt_config_frame)
+        self.mt_tab_notebook.pack(fill='both', expand=True)
+
+        pt_tab_cover = ttk.Frame(self.mt_tab_notebook, padding=5)
+        pt_tab_data = ttk.Frame(self.mt_tab_notebook, padding=5)
+        pt_tab_rows = ttk.Frame(self.mt_tab_notebook, padding=5)
+        pt_tab_cols = ttk.Frame(self.mt_tab_notebook, padding=5)
+        
+        # [CRITICAL] Allow children to expand
+        for t in [pt_tab_cover, pt_tab_data, pt_tab_rows, pt_tab_cols]: t.columnconfigure(0, weight=1)
+
+        self.mt_tab_notebook.add(pt_tab_cover, text="갑지")
+        self.mt_tab_notebook.add(pt_tab_data, text="을지")
+        self.mt_tab_notebook.add(pt_tab_rows, text="행 설정")
+        self.mt_tab_notebook.add(pt_tab_cols, text="컬럼 설정")
+
+        # [ALIGNED] Mode-specific context for logo grid
+        self._create_gapji_meta_ui(pt_tab_cover, use_pack=False, mode="MT")
+        self.mt_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
+        next_row_mt_cover = self._create_setting_grid(pt_tab_cover, "MT_COVER")
+        next_row_mt_data = self._create_setting_grid(pt_tab_data, "MT_DATA")
+        self._create_margin_settings(pt_tab_cover, "MT_COVER", use_pack=False)
+        self._create_margin_settings(pt_tab_data, "MT_DATA", use_pack=False)
+        self._create_row_settings(pt_tab_rows, mode="MT")
+        
+        pt_items = [
+            ("순번(No):", "MT_COL_NO", 1, "MT_NAME_NO", "No", "No"),
+            ("ISO/Dwg:", "MT_COL_DWG", 2, "MT_NAME_DWG", "Dwg", "Dwg"),
+            ("Joint No:", "MT_COL_JOINT", 5, "MT_NAME_JOINT", "Joint", "Joint"),
+            ("NPS:", "MT_COL_NPS", 6, "MT_NAME_NPS", "NPS", "NPS"),
+            ("두께(Th'k):", "MT_COL_THK", 7, "MT_NAME_THK", "Thk.", "Thk."),
+            ("재질(Material):", "MT_COL_MAT", 8, "MT_NAME_MAT", "Material", "Material"),
+            ("용접사(Welder):", "MT_COL_WELDER", 9, "MT_NAME_WELDER", "Welder", "Welder"),
+            ("검사타입(Type):", "MT_COL_TYPE", 10, "MT_NAME_TYPE", "WType", "WType"),
+            ("판정 결과:", "MT_COL_RES", 11, "MT_NAME_RES", "Result", "Result")
+        ]
+        self._create_column_mapping_ui(pt_tab_cols, "MT", pt_items)
+        
+
+        # 3. Action Section
+        action_frame = tk.Frame(left_pane, background="#ffffff", highlightthickness=1, highlightbackground="#d1d5db", padx=10, pady=5)
+        action_frame.pack(fill='x', pady=(0, 10))
+
+        filter_row = tk.Frame(action_frame, background="#ffffff")
+        filter_row.pack(fill='x', pady=2)
+        ttk.Label(filter_row, text="📊 특정순번:", background="#ffffff", font=("Malgun Gothic", 8)).pack(side='left')
+        ttk.Entry(filter_row, textvariable=self.sequence_filter, width=15, font=("Arial", 9), exportselection=False).pack(side='left', padx=5, fill='x', expand=True)
+
+        btn_row = tk.Frame(left_pane, background="#f9fafb")
+        btn_row.pack(fill='x', pady=5)
+        ttk.Button(btn_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
+        ttk.Button(btn_row, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x', pady=(0, 5))
+        ttk.Button(btn_row, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(fill='x')
+
+        # [RIGHT] Multi-Preview Pane (Data & Gapji)
+        right_container = tk.Frame(self.mt_paned, background="#f3f4f6")
+        self.mt_paned.add(right_container, stretch="always")
+        
+        if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
+        nb = ttk.Notebook(right_container)
+        nb.pack(fill='both', expand=True)
+        self.preview_notebooks["MT"] = nb
+        
+        tab_data = tk.Frame(nb, background="#ffffff")
+        tab_gapji = tk.Frame(nb, background="#ffffff")
+        nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
+        nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
+        
+        self._create_mt_preview_ui(tab_data)
+        self._create_gapji_preview_ui(tab_gapji, "MT")
+        self._apply_sash_ratio("MT")
+        
+        self.mt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("MT"))
+
+        # Adaptive Resizing Bindings
+        self.mt_pane_ratio = self.config.get('MT_SASH_RATIO', 0.5)
+        self.mt_paned.bind("<Configure>", lambda e: [self._on_mt_paned_configure(e), self.root.update_idletasks()])
+        self.mt_paned.bind("<ButtonRelease-1>", lambda e: self.root.after(10, self._update_mt_ratio))
+        self.root.after(500, lambda: self._on_mt_paned_configure(None))
+
     def _update_pt_ratio(self):
         try:
             total_w = self.pt_paned.winfo_width()
@@ -2020,6 +2175,17 @@ class PMIReportApp:
                 self.save_settings()
         except: pass
 
+
+    def _update_mt_ratio(self):
+        try:
+            total_w = self.mt_paned.winfo_width()
+            if total_w > 100:
+                current_sash = self.mt_paned.sash_coord(0)[0]
+                self.mt_pane_ratio = current_sash / total_w
+                self.config['MT_SASH_RATIO'] = self.mt_pane_ratio
+                self.save_settings()
+        except: pass
+
     def _on_pt_paned_configure(self, event):
         try:
             total_w = self.pt_paned.winfo_width()
@@ -2027,6 +2193,16 @@ class PMIReportApp:
                 if event and event.widget == self.pt_paned:
                     new_pos = int(total_w * self.pt_pane_ratio)
                     self.pt_paned.sash_place(0, new_pos, 0)
+        except: pass
+
+
+    def _on_mt_paned_configure(self, event):
+        try:
+            total_w = self.mt_paned.winfo_width()
+            if total_w > 100:
+                if event and event.widget == self.mt_paned:
+                    new_pos = int(total_w * self.mt_pane_ratio)
+                    self.mt_paned.sash_place(0, new_pos, 0)
         except: pass
 
     def _create_pt_preview_ui(self, parent):
@@ -2073,6 +2249,53 @@ class PMIReportApp:
         tree_frame.grid_columnconfigure(0, weight=1)
 
         self._setup_preview_sidebar(self.pt_preview_tree, container, mode="PT")
+        tree_frame.pack(side="left", fill="both", expand=True)
+
+
+    def _create_mt_preview_ui(self, parent):
+        container = tk.Frame(parent, background="#f9fafb")
+        container.pack(fill='both', expand=True)
+
+        # [NEW] File Info Header
+        header_info = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
+        header_info.pack(fill='x', pady=(0, 5))
+        tk.Label(header_info, textvariable=self.file_info_vars['PT'], background="#ffffff", 
+                 foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
+
+        self.mt_display_cols = ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
+        saved_widths = self.config.get("MT_COL_WIDTHS", {})
+        default_widths = {"V": 40, "No": 50, "Date": 90, "ISO/Dwg": 300, "Joint No.": 120, "Material": 100, "Test Item": 100, "Result": 80, "Welder No": 100}
+
+        tree_frame = tk.Frame(container, background="#f9fafb")
+        self.mt_preview_tree = ttk.Treeview(tree_frame, columns=self.mt_display_cols, show='headings', height=10, selectmode='extended')
+        for col in self.mt_preview_tree["columns"]:
+            name_key = f"MT_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').upper()}"
+            if col == "Date": name_key = "MT_NAME_DATE"
+            elif col == "ISO/Dwg": name_key = "MT_NAME_DWG"
+            elif col == "Joint No.": name_key = "MT_NAME_JOINT"
+            elif col == "Material": name_key = "MT_NAME_MAT"
+            elif col == "Thk": name_key = "MT_NAME_THK"
+            elif col == "Test Item": name_key = "MT_NAME_ITEM"
+            elif col == "Result": name_key = "MT_NAME_RES"
+            elif col == "Welder No": name_key = "MT_NAME_WELDER"
+            else: name_key = None
+            
+            display_text = self.config.get(name_key, col) if name_key else col
+            self.mt_preview_tree.heading(col, text=display_text, anchor='center', command=lambda _c=col: self.sort_by_column(_c, mode="MT"))
+            w = saved_widths.get(col, default_widths.get(col, 80))
+            self.mt_preview_tree.column(col, width=w, anchor='center', stretch=False)
+        
+        scroll_y = ttk.Scrollbar(tree_frame, orient="vertical", command=self.mt_preview_tree.yview)
+        scroll_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.mt_preview_tree.xview)
+        self.mt_preview_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        
+        self.mt_preview_tree.grid(row=0, column=0, sticky='nsew')
+        scroll_y.grid(row=0, column=1, sticky='ns')
+        scroll_x.grid(row=1, column=0, sticky='ew')
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        self._setup_preview_sidebar(self.mt_preview_tree, container, mode="MT")
         tree_frame.pack(side="left", fill="both", expand=True)
 
     def _setup_paut_ui(self, parent):
@@ -2245,7 +2468,7 @@ class PMIReportApp:
                 equip_r += 1
 
         # [NEW] Populate Settings
-        self._create_gapji_meta_ui(tab_cover, use_pack=False)
+        self._create_gapji_meta_ui(tab_cover, use_pack=False, mode="PAUT")
         self.paut_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
         next_row_cover = self._create_setting_grid(tab_cover, "PAUT_COVER")
         next_row_data = self._create_setting_grid(tab_data, "PAUT_DATA")
@@ -3458,7 +3681,7 @@ class PMIReportApp:
                 except Exception as e:
                     print(f"Preview error for {lt}: {e}")
 
-    def _create_gapji_meta_ui(self, parent, use_pack=True):
+    def _create_gapji_meta_ui(self, parent, use_pack=True, mode="PMI"):
         block = tk.LabelFrame(parent, text=" 리포트 기본 정보 (Gapji Info) ", padx=10, pady=5, background="#ffffff", font=("Malgun Gothic", 9, "bold"))
         if use_pack:
             block.pack(fill='x', pady=5, padx=2)
@@ -3499,7 +3722,8 @@ class PMIReportApp:
             
         # RT radioactive-source settings (I10:M11 on the cover sheet).
         isotope_frame = tk.Frame(block, background="#ffffff")
-        isotope_frame.grid(row=3, column=0, columnspan=4, sticky='ew', padx=2, pady=2)
+        if mode == "RT":
+            isotope_frame.grid(row=3, column=0, columnspan=4, sticky='ew', padx=2, pady=2)
         tk.Label(
             isotope_frame, text="방사성동위원소:", background="#ffffff",
             font=("Malgun Gothic", 8)
@@ -3528,7 +3752,8 @@ class PMIReportApp:
         self.setting_vars['RT_ACTIVITY_UNIT'] = self.rt_activity_unit
 
         film_frame = tk.Frame(block, background="#ffffff")
-        film_frame.grid(row=4, column=0, columnspan=4, sticky='ew', padx=2, pady=2)
+        if mode == "RT":
+            film_frame.grid(row=4, column=0, columnspan=4, sticky='ew', padx=2, pady=2)
         tk.Label(
             film_frame, text="필름 상표:", background="#ffffff",
             font=("Malgun Gothic", 8)
@@ -6043,6 +6268,7 @@ class PMIReportApp:
             ('RT', self.rt_target_file_path.get()),
             ('KOGAS', self.kogas_target_file_path.get()),
             ('PT', self.pt_target_file_path.get()),
+            ('MT', self.mt_target_file_path.get()),
             ('PAUT', self.paut_target_file_path.get())
         ]
         for mode, path in modes:
@@ -6056,7 +6282,7 @@ class PMIReportApp:
             var.set(path)
             # Find which mode this belongs to and update info
             for mode, m_var in [('PMI', self.target_file_path), ('RT', self.rt_target_file_path), 
-                               ('KOGAS', self.kogas_target_file_path), ('PT', self.pt_target_file_path), 
+                               ('KOGAS', self.kogas_target_file_path), ('PT', self.pt_target_file_path), ('MT', self.mt_target_file_path), 
                                ('PAUT', self.paut_target_file_path)]:
                 if var == m_var:
                     self._update_file_info(mode, path)
@@ -6396,6 +6622,7 @@ class PMIReportApp:
                 if "PMI" in tab_text: mode = "PMI"
                 elif "RT" in tab_text: mode = "RT"
                 elif "PT" in tab_text: mode = "PT"
+                elif "MT" in tab_text: mode = "MT"
                 elif "PAUT" in tab_text: mode = "PAUT"
             except: pass
             
@@ -6524,6 +6751,7 @@ class PMIReportApp:
                 if "PMI" in tab_text: mode = "PMI"
                 elif "RT" in tab_text: mode = "RT"
                 elif "PT" in tab_text: mode = "PT"
+                elif "MT" in tab_text: mode = "MT"
                 elif "PAUT" in tab_text: mode = "PAUT"
             except: pass
             
@@ -6633,6 +6861,7 @@ class PMIReportApp:
                 if "PMI" in tab_text: mode = "PMI"
                 elif "RT" in tab_text: mode = "RT"
                 elif "PT" in tab_text: mode = "PT"
+                elif "MT" in tab_text: mode = "MT"
                 elif "PAUT" in tab_text: mode = "PAUT"
             except: pass
             
@@ -7249,6 +7478,7 @@ class PMIReportApp:
                     sub_tab_text = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
                     mode = "KOGAS" if "가스공사" in sub_tab_text else "RT"
                 elif "PT" in main_tab: mode = "PT"
+                elif "MT" in main_tab: mode = "MT"
                 elif "PAUT" in main_tab: mode = "PAUT"
                 else: mode = "PMI"
             except: mode = "PMI"
@@ -7366,6 +7596,7 @@ class PMIReportApp:
                 sub_tab_text = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
                 mode = "KOGAS" if "가스공사" in sub_tab_text else "RT"
             elif "PT" in main_tab: mode = "PT"
+            elif "MT" in main_tab: mode = "MT"
             elif "PAUT" in main_tab: mode = "PAUT"
             else: mode = "PMI"
         except Exception as e:
@@ -7374,6 +7605,8 @@ class PMIReportApp:
 
         if mode == "PT":
             target_file = self.pt_target_file_path.get()
+        elif mode == "MT":
+            target_file = self.mt_target_file_path.get()
         elif mode == "PAUT":
             target_file = self.paut_target_file_path.get()
         elif mode == "RT":
@@ -8104,7 +8337,8 @@ class PMIReportApp:
             elif mode == "PT":
                 self.pt_extracted_data.extend(all_extracted_data)
                 self.update_date_listbox("PT")
-                self.pt_sort_col = "" # [NEW] Force Ascending
+                self.pt_sort_col = ""
+                self.mt_sort_col = ""
                 self.sort_by_column("Dwg", mode="PT") 
                 total_count = len(self.pt_extracted_data)
             else:
@@ -8361,6 +8595,7 @@ class PMIReportApp:
                 sub_tab = self.rt_preview_nb.tab(self.rt_preview_nb.select(), "text")
                 mode = "KOGAS" if "가스공사" in sub_tab else "RT"
             elif "PT" in tab_text: mode = "PT"
+            elif "MT" in tab_text: mode = "MT"
             elif "PAUT" in tab_text: mode = "PAUT"
             else: mode = "PMI"
         except: mode = "PMI"
@@ -8375,6 +8610,12 @@ class PMIReportApp:
             data = self.kogas_extracted_data
         elif mode == "PT":
             target_file = self.pt_target_file_path.get()
+        elif mode == "MT":
+            target_file = self.mt_target_file_path.get()
+            template_path = self.pt_template_file_path.get()
+            data = self.pt_extracted_data
+        elif mode == "MT":
+            target_file = self.mt_target_file_path.get()
             template_path = self.pt_template_file_path.get()
             data = self.pt_extracted_data
         else:
@@ -8417,6 +8658,8 @@ class PMIReportApp:
             self._run_rt_process(final_list, template_path, mode="KOGAS")
         elif mode == "PT":
             self._run_pt_process(final_list, template_path)
+        elif mode == "MT":
+            self._run_mt_process(final_list, template_path)
         else:
             self._run_pmi_process(final_list, template_path)
 
@@ -8461,6 +8704,26 @@ class PMIReportApp:
                 val = self.config.get(cfg_key, "")
                 if val:
                     self.safe_set_value(ws, coord, val)
+        elif mode == "PT":
+            # [NEW] PT 지역난방 템플릿 갑지 전용 좌표 매핑
+            mapping = [
+                ('GAPJI_PROJECT', 'A9'),   # 공사명 (Project Name)
+                ('GAPJI_CUSTOMER', 'P4'),  # 발주처 (Customer)
+                ('GAPJI_ITEM', 'F9'),      # 품명 (Item Name)
+                ('GAPJI_MATERIAL', 'A11'), # 재질 (Material)
+                ('GAPJI_REPORT_NO', 'P6')  # 리포트번호 (Report No.)
+                # 검사일자(Date)는 원본 템플릿 상단에 명시적인 고정 칸이 없음
+            ]
+            for key, default_cell in mapping:
+                val = self.config.get(key, "")
+                if val:
+                    self.safe_set_value(ws, default_cell, val)
+                    
+            if first_item:
+                # 첫 번째 데이터의 도면번호(ISO/Dwg)를 갑지의 Dwg. No 칸(L9)에 자동 기입
+                line_no = first_item.get('Line No.', '') or first_item.get('Dwg', '') or first_item.get('ISO', '')
+                if line_no:
+                    self.safe_set_value(ws, 'L9', line_no)
         else:
             # Default mapping: Project: B5, Customer: B6, Item: B7, Material: B8, Date: B9, Report No: B10
             mapping = [
@@ -9024,6 +9287,138 @@ class PMIReportApp:
             self.log(f"❌ PT 생성 오류: {e}")
             traceback.print_exc()
             messagebox.showerror("생성 실패", f"PT 성적서 생성 중 오류가 발생했습니다: {e}")
+        finally:
+            if 'wb' in locals() and wb:
+                try:
+                    if hasattr(wb, 'vba_archive') and wb.vba_archive:
+                        wb.vba_archive.close()
+                except: pass
+                try: wb.close()
+                except: pass
+            for f in glob.glob(os.path.join(tempfile.gettempdir(), "temp_*.png")):
+                try: os.remove(f)
+                except: pass
+
+
+    def _run_mt_process(self, final_list, template_path):
+        """MT 성적서 생성 (1-row-per-data 레이아웃 + ISO 병합)"""
+        self.save_settings() # Ensure UI -> config sync
+        self.log(f"🚀 MT 성적서 생성 시작 (총 {len(final_list)} 건)...")
+        self.progress['value'] = 0
+        try:
+            wb = openpyxl.load_workbook(template_path)
+            if len(wb.worksheets) < 1:
+                raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
+
+            # 갑지 (Cover)
+            ws0 = wb.worksheets[0]
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="MT")
+            self._write_gapji_metadata(ws0, mode="MT")
+            self.force_print_settings(ws0, context="COVER")
+            self.apply_custom_dimensions(ws0, "COVER")
+
+            # 을지 (Data)
+            data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
+            ws = wb.worksheets[data_sheet_id]
+            ws.title = f"{ws.title[:20]}_001"
+            # [FIX] Do NOT clear existing images if data sheet is the same as cover
+            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="MT")
+            self.force_print_settings(ws, context="DATA")
+
+            # [NEW] 지역난방 MT 맞춤형 페이징 및 행 설정
+            gapji_start_row = 29
+            gapji_end_row = 36
+            eulji_start_row = 10
+            eulji_end_row = 38
+            
+            # 스타일 설정
+            thin_side = Side(style='thin')
+            thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+            
+            current_row = gapji_start_row
+            current_page = 1
+            data_ptr = 0
+            is_gapji = True
+            
+            while data_ptr < len(final_list):
+                if is_gapji and current_row > gapji_end_row:
+                    is_gapji = False
+                    current_page += 1
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    current_row = eulji_start_row
+                elif not is_gapji and current_row > eulji_end_row:
+                    current_page += 1
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    current_row = eulji_start_row
+                
+                item = final_list[data_ptr]
+                
+                # [MT] ISO/Joint No. 병합 기록
+                merged_iso_joint = f"{item.get('Dwg', '')}/{item.get('Joint', '')}"
+                
+                if is_gapji:
+                    self.safe_set_value(ws, ws.cell(row=current_row, column=2).coordinate, merged_iso_joint)
+                else:
+                    self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, merged_iso_joint)
+                
+                # [MT] Acc (Col 6), Rej (Col 8) O표시 처리
+                result_val = str(item.get('Result', 'Acc')).strip().upper()
+                acc_cell = ws.cell(row=current_row, column=6)
+                rej_cell = ws.cell(row=current_row, column=8)
+                
+                if "ACC" in result_val:
+                    self.safe_set_value(ws, acc_cell.coordinate, "O")
+                    self.safe_set_value(ws, rej_cell.coordinate, "")
+                elif "REJ" in result_val:
+                    self.safe_set_value(ws, acc_cell.coordinate, "")
+                    self.safe_set_value(ws, rej_cell.coordinate, "O")
+                
+                # [MT] Interpretation (Col 12) 에는 용접사 번호
+                interp_cell = ws.cell(row=current_row, column=12)
+                self.safe_set_value(ws, interp_cell.coordinate, item.get('Welder', ''))
+                
+                # [MT] Remarks (Col 21) 에는 비고
+                remarks_cell = ws.cell(row=current_row, column=21)
+                self.safe_set_value(ws, remarks_cell.coordinate, item.get('Remarks', ''))
+                
+                # 스타일링 (가운데 정렬)
+                for c in [1, 2, 6, 8, 12, 21]:
+                    cell = ws.cell(row=current_row, column=c)
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+
+                data_ptr += 1
+                current_row += 1
+                self.progress['value'] = (data_ptr / len(final_list)) * 95
+
+            total_p = len(wb.worksheets)
+            # [NEW] 서식 정리 (48행 유령 선 제거용)
+            pt_data_end_row = int(float(self.config.get('MT_END_ROW', 37)))
+            for p_idx, s in enumerate(wb.worksheets):
+                if p_idx > 0: # 을지
+                    for r_idx in range(pt_data_end_row + 1, pt_data_end_row + 15):
+                        for c_idx in range(1, 15):
+                            try: s.cell(row=r_idx, column=c_idx).border = Border()
+                            except: pass
+                
+                page_num = p_idx + 1
+                # 페이지 번호 기입
+                try:
+                    p_text = f"Page    {page_num}    of    {total_p}"
+                    # if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
+                    if p_idx > 0: self.safe_set_value(s, 'V3', p_text)
+                except: pass
+
+            now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_name = f"MT_Report_{now_str}.xlsx"
+            save_path = os.path.join(os.path.dirname(template_path), output_name)
+            wb.save(save_path)
+            self.progress['value'] = 100
+            self.log(f"✨ PT 완료! 저장됨: {output_name}")
+            messagebox.showinfo("성공", f"MT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
+        except Exception as e:
+            self.log(f"❌ PT 생성 오류: {e}")
+            traceback.print_exc()
+            messagebox.showerror("생성 실패", f"MT 성적서 생성 중 오류가 발생했습니다: {e}")
         finally:
             if 'wb' in locals() and wb:
                 try:
