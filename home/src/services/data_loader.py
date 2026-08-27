@@ -36,7 +36,8 @@ def load_data_impl(self):
         
         # Check if database exists in app_dir. If not, try to restore from bundle_dir
         if not os.path.exists(self.db_path):
-            bundled_db = os.path.join(self.bundle_dir, 'Material_Inventory.xlsx')
+            db_basename = os.path.basename(self.db_path)
+            bundled_db = os.path.join(self.bundle_dir, db_basename)
             print(f"DEBUG: Main DB not found. Trying to restore from bundle: {bundled_db}")
             if os.path.exists(bundled_db):
                 import shutil
@@ -44,7 +45,8 @@ def load_data_impl(self):
                     shutil.copy2(bundled_db, self.db_path)
                     print("DEBUG: Restored DB from bundle.")
                     # Also try to copy config if it exists in bundle but not in app_dir
-                    bundled_config = os.path.join(self.bundle_dir, 'Material_Manager_Config.json')
+                    config_basename = os.path.basename(self.config_path)
+                    bundled_config = os.path.join(self.bundle_dir, config_basename)
                     if os.path.exists(bundled_config) and not os.path.exists(self.config_path):
                         shutil.copy2(bundled_config, self.config_path)
                         print("DEBUG: Restored Config from bundle.")

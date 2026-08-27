@@ -56,7 +56,7 @@ finally:
 
 from daily_work_report_manager import DailyWorkReportManager
 from ndt_billing_kogas_tab import NDTCalculatorTab
-from daily_work_log_tab import DailyWorkLogTab
+from kogas_daily_work_log_tab import KogasDailyWorkLogTab
 import daily_work_report_manager
 print(f"DEBUG: daily_work_report_manager path: {daily_work_report_manager.__file__}")
 
@@ -439,7 +439,7 @@ class MaterialManager:
             documents_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'MaterialManager')
             if not os.path.exists(documents_dir):
                 os.makedirs(documents_dir, exist_ok=True)
-            self.config_path = os.path.join(documents_dir, 'Material_Manager_Config.json')
+            self.config_path = os.path.join(documents_dir, 'Kogas_Material_Manager_Config.json')
         else:
             # 스크립트 실행 모드: src/ 우선, 없으면 ../data/ 탐색
             self.app_dir = os.path.dirname(os.path.abspath(__file__))
@@ -455,7 +455,7 @@ class MaterialManager:
 
         if getattr(sys, 'frozen', False):
             # exe 실행 모드: exe와 같은 폴더에 DB 저장 (어디서 실행해도 동일)
-            self.db_path = os.path.join(self.app_dir, 'Material_Inventory.xlsx')
+            self.db_path = os.path.join(self.app_dir, 'Kogas_Material_Inventory.xlsx')
 
         # db_path 확정
         
@@ -1124,7 +1124,7 @@ class MaterialManager:
         self.setup_inout_tab()
         
         # Tab 3: Daily Work Log (New)
-        self.tab_daily_work_log = DailyWorkLogTab(self.notebook)
+        self.tab_daily_work_log = KogasDailyWorkLogTab(self.notebook)
         self.tab_daily_work_log.main_app = self
         self.notebook.add(self.tab_daily_work_log, text='작업/감독일보')
 

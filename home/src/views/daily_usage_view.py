@@ -271,9 +271,9 @@ def setup_daily_usage_tab_impl(self):
     self.ndt_calc_frame.grid_remove() # 기본 숨김
 
     self.ndt_work_time_var = tk.StringVar(value="일반")
-    self.ndt_loc_type_var = tk.StringVar(value="열배관")
-    self.ndt_source_var = tk.StringVar(value="Se-75 (1.0)")
-    self.ndt_thickness_var = tk.StringVar(value="조건없음 (1.0)")
+    self.ndt_loc_type_var = tk.StringVar(value="주배관")
+    self.ndt_source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
+    self.ndt_thickness_var = tk.StringVar(value="15mm 이하 (1.0)")
     self.ndt_pipe_var = tk.StringVar(value="250mm 초과 [10인치 이상] (1.0)")
     self.ndt_overhead_var = tk.DoubleVar(value=110.0)
     self.ndt_tech_var = tk.DoubleVar(value=20.0)
@@ -287,7 +287,7 @@ def setup_daily_usage_tab_impl(self):
     row0 = ttk.Frame(self.ndt_calc_frame)
     row0.pack(fill='x', pady=2)
     ttk.Label(row0, text="구분:").pack(side='left')
-    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열배관", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
+    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["주배관", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
     ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
     for t in ["일반", "야간", "휴일"]:
         ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
@@ -471,8 +471,8 @@ def setup_daily_usage_tab_impl(self):
     self.ent_daily_test_amount.bind('<Return>', lambda e: self.cb_daily_unit.focus_set())
     self.cb_daily_unit.set('매')
     self.ndt_work_time_var.set("일반")
-    self.ndt_source_var.set("Se-75 (1.0)")
-    self.ndt_thickness_var.set("조건없음 (1.0)")
+    self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
+    self.ndt_thickness_var.set("15mm 이하 (1.0)")
     self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
     self.ndt_overhead_var.set(110.0)
     self.ndt_tech_var.set(20.0)
@@ -523,8 +523,8 @@ def setup_daily_usage_tab_impl(self):
                 self.empty_guide_frame.grid_remove() # Hide guide
                 self.rtk_grid.lift() # [FIX] Prevent overlay click-blocking
                 self.master_form_panel.update_idletasks()
-                self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Se-75 (1.0)", "Ir-192 (1.0)"])
-                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
+                self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
+                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm초과~25mm이하 (1.4)", "25mm초과~40mm이하 (2.2)"])
             elif method == "UT":
                 self.rtk_grid.grid_remove() # [NEW] Hide RTK
                 self.empty_guide_frame.grid() # Show guide

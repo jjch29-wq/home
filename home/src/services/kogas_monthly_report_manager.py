@@ -13,7 +13,7 @@ import datetime
 from collections import defaultdict
 import re
 
-class MonthlyReportManager:
+class KogasMonthlyReportManager:
     WELDER_NAMES = {
         'W-2023-A-10': '이신희',
         'W-2023-A-12': '황성철',
@@ -2746,66 +2746,14 @@ class MonthlyReportManager:
         ws.cell(row=qty_header_row, column=11).value = '\uae08\uc6d4 \uc791\uc5c5'
         qty_start_row = self.table_markers['qty'] + 1
         qty_mapping = {
-            'PAUT_300A이상': qty_start_row,
-            'PAUT_300A이상-야간': qty_start_row + 1,
-            'PAUT_250A': qty_start_row + 2,
-            'PAUT_200A': qty_start_row + 3,
-            'PAUT_200A-야간': qty_start_row + 4,
-            'PAUT_소계': qty_start_row + 5,
-            
-            'RT_150A~100A': qty_start_row + 6,
-            'RT_150A~100A-야간': qty_start_row + 7,
-            'RT_80A이하': qty_start_row + 8,
-            'RT_80A이하-야간': qty_start_row + 9,
-            'RT_소계': qty_start_row + 10,
-            
-            'MT_전체(주간)': qty_start_row + 11,
-            'MT_전체(야간)': qty_start_row + 12,
-            
-            'PT_전체(주간)': qty_start_row + 13,
-            'PT_전체(야간)': qty_start_row + 14,
+            'RT_B필름: 3⅓"x17"': qty_start_row,
+            'RT_A필름: 3⅓"x12"': qty_start_row + 1,
+            'RT_A/2필름: 3⅓"x6"': qty_start_row + 2,
+            'RT_소계': qty_start_row + 3,
+            'UT_초음파탐상': qty_start_row + 4,
+            'PT_침투탐상': qty_start_row + 5,
+            'MT_자분탐상': qty_start_row + 6,
         }
-
-        # [FIX] Dynamically recalculate subtotals (소계) to ensure accuracy even if daily JSON records are missing subtotal values
-        paut_keys = ['PAUT_300A이상', 'PAUT_300A이상-야간', 'PAUT_250A', 'PAUT_200A', 'PAUT_200A-야간', 'PAUT_150A~125A', 'PAUT_150A~125A-야간', 'PAUT_100A이하', 'PAUT_100A이하-야간', 'PAUT_불가']
-        rt_keys = ['RT_150A~100A', 'RT_150A~100A-야간', 'RT_80A이하', 'RT_80A이하-야간', 'RT_불가']
-        
-        for sub_key, keys_to_sum in [('PAUT_소계', paut_keys), ('RT_소계', rt_keys)]:
-            if sub_key not in qty_summary:
-                qty_summary[sub_key] = {'예상량': '0', '전월': '0', '금월작업': 0.0, '총누계': '0', '공정률': '', '불량': 0, '불량률': ''}
-            
-            qty_summary[sub_key]['금월작업'] = 0.0
-            total_expected = 0.0
-            total_prev = 0.0
-            total_accum = 0.0
-            total_defect = 0.0
-            
-            for k in keys_to_sum:
-                if k in qty_summary:
-                    try:
-                        qty_summary[sub_key]['금월작업'] += float(qty_summary[k].get('금월작업', 0))
-                        total_expected += float(str(qty_summary[k].get('예상량', '0')).replace(',', '') or 0)
-                        
-                        # 전월은 '전월' 대신 '전일누계'에서 올 수 있음.
-                        prev_val = qty_summary[k].get('전월', '0')
-                        if prev_val == '0' and '전일누계' in qty_summary[k]:
-                            prev_val = qty_summary[k]['전일누계']
-                        total_prev += float(str(prev_val).replace(',', '') or 0)
-                        
-                        total_accum += float(str(qty_summary[k].get('총누계', '0')).replace(',', '') or 0)
-                        total_defect += float(str(qty_summary[k].get('불량', '0')).replace(',', '') or 0)
-                    except ValueError:
-                        pass
-            
-            qty_summary[sub_key]['예상량'] = str(total_expected)
-            qty_summary[sub_key]['전월'] = str(total_prev)
-            qty_summary[sub_key]['총누계'] = str(total_accum)
-            qty_summary[sub_key]['불량'] = str(total_defect)
-            if total_expected > 0:
-                qty_summary[sub_key]['공정률'] = str(round((total_accum / total_expected) * 100, 1))
-            else:
-                qty_summary[sub_key]['공정률'] = ''
-
 
         for key, r_idx in qty_mapping.items():
             if key in qty_summary:

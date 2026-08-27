@@ -239,10 +239,15 @@ class NDTCalculatorTab(ttk.Frame):
         self.loc_type_var = tk.StringVar(value="주배관")
         self.work_time_var = tk.StringVar(value="일반")
         
+        type_time_frame1 = ttk.Frame(left_frame)
+        type_time_frame1.pack(fill=tk.X, pady=2)
+        ttk.Label(type_time_frame1, text="구분:").pack(side=tk.LEFT)
+        ttk.Combobox(type_time_frame1, textvariable=self.loc_type_var, values=["주배관", "플랜트(관리소)"], width=15, state="readonly").pack(side=tk.LEFT, padx=5)
+        
         type_time_frame2 = ttk.Frame(left_frame)
         type_time_frame2.pack(fill=tk.X, pady=2)
         ttk.Label(type_time_frame2, text="시간:").pack(side=tk.LEFT)
-        for t in ["일반", "야간"]:
+        for t in ["일반", "야간", "휴일"]:
             ttk.Radiobutton(type_time_frame2, text=t, value=t, variable=self.work_time_var).pack(side=tk.LEFT, padx=5)
 
         self.material_lbl = ttk.Label(left_frame, text="3. 세부 규격 및 조건", font=("Arial", 11, "bold"))
@@ -269,8 +274,9 @@ class NDTCalculatorTab(ttk.Frame):
         
         self.thickness_frame = ttk.Frame(self.dynamic_frame)
         ttk.Label(self.thickness_frame, text="• 투과/모재두께 :", width=14).pack(side=tk.LEFT)
-        self.thickness_var = tk.StringVar()
+        self.thickness_var = tk.StringVar(value="15mm 이하 (1.0)")
         self.thickness_combo = ttk.Combobox(self.thickness_frame, textvariable=self.thickness_var, state="readonly")
+        self.thickness_combo['values'] = ["15mm 이하 (1.0)", "15mm초과~25mm이하 (1.4)", "25mm초과~40mm이하 (2.2)"]
         self.thickness_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         ttk.Label(left_frame, text="5. 실검사 물량 (RT: 매 / UT,PT: Meter)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
@@ -497,9 +503,7 @@ class NDTCalculatorTab(ttk.Frame):
             for k, v in self.contract_vars.items():
                 total += self.get_int(v["contract"])
                 
-            # 2. 산출명세서에 존재하는 보고서작성, 기술관리, 현장검사조건확인 등 RT/UT/PT 수량에 직접 곱해지지 않는 총괄 노무비(및 제경비/기술료) 누락분(89,502,069원)을 더해주어야 순공사원가와 일치함
-            total += 89502069
-            self.total_contract_amt_var.set(f"비파괴검사(NDT) 총액 (+부대작업 및 기술관리비 포함): {total:,} 원")
+            self.total_contract_amt_var.set(f"순수 비파괴검사(NDT) 총액: {total:,} 원")
             
         for k, v in self.contract_vars.items():
             v["contract"].trace_add("write", update_total_contract_amt)
@@ -537,14 +541,35 @@ class NDTCalculatorTab(ttk.Frame):
         
         hf = ttk.Frame(exp_frame)
         hf.pack(fill=tk.X, pady=2)
-        ttk.Label(hf, text="항목", width=18, font=("Arial", 9, "bold")).grid(row=0, column=0, padx=2)
+        ttk.Label(hf, text="항목", width=26, font=("Arial", 9, "bold")).grid(row=0, column=0, padx=2)
         ttk.Label(hf, text="책정예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=1, padx=2)
         ttk.Label(hf, text="전회청구액", width=12, font=("Arial", 9, "bold")).grid(row=0, column=2, padx=2)
         ttk.Label(hf, text="금회청구액", width=12, font=("Arial", 9, "bold")).grid(row=0, column=3, padx=2)
         ttk.Label(hf, text="잔여예산", width=12, font=("Arial", 9, "bold")).grid(row=0, column=4, padx=2)
         
         self.exp_vars = {}
+        
+        def _calculate_overhead_by_progress():
+            try:
+                contract_sum = 0
+                curr_sum = 0
+                for v in self.contract_vars.values():
+                    contract_sum += self.get_int(v["contract"])
+                    c_price = self.get_int(v["c_price_var"])
+                    curr_qty = self.get_float(v["curr_qty"])
+                    curr_sum += (c_price * curr_qty)
+                
+                if contract_sum > 0:
+                    progress = curr_sum / contract_sum
+                    overhead = int(89502069 * progress)
+                    self.exp_vars["overhead_labor"]["curr"].set(overhead)
+                else:
+                    self.exp_vars["overhead_labor"]["curr"].set(0)
+            except Exception as e:
+                print(f"Error calculating overhead: {e}")
+                
         items = [
+            ("overhead_labor", "부대작업 및 기술관리비", 89502069),
             ("equip", "기계경비", 41000000),
             ("safety", "방사선투과검사안전관리비", 22325000),
             ("office", "가설사무실", 6183000),
@@ -557,7 +582,7 @@ class NDTCalculatorTab(ttk.Frame):
             f = ttk.Frame(exp_frame)
             f.pack(fill=tk.X, pady=2)
             
-            ttk.Label(f, text=name, width=18).grid(row=0, column=0, padx=2)
+            ttk.Label(f, text=name, width=26).grid(row=0, column=0, padx=2)
             
             b_var = tk.StringVar(value=f"{budget:,}")
             p_var = tk.StringVar(value="0")
@@ -590,6 +615,9 @@ class NDTCalculatorTab(ttk.Frame):
             
             if k == "equip":
                 btn = ttk.Button(f, text="계산기", width=6, command=lambda v=c_var: self.open_equip_calculator(v))
+                btn.grid(row=0, column=5, padx=2)
+            elif k == "overhead_labor":
+                btn = ttk.Button(f, text="공정률 자동 산출", width=14, command=_calculate_overhead_by_progress)
                 btn.grid(row=0, column=5, padx=2)
             
             self.exp_vars[k] = {"budget": b_var, "prev": p_var, "curr": c_var, "rem": r_var, "lbl": lbl}
@@ -850,11 +878,31 @@ class NDTCalculatorTab(ttk.Frame):
         self.source_frame.pack_forget()
         self.pipe_frame.pack_forget()
         self.thickness_frame.pack_forget()
+        
+        if ndt_type == "RT":
+            self.source_frame.pack(fill=tk.X, pady=2)
+            self.thickness_frame.pack(fill=tk.X, pady=2)
 
     def get_correction_factor(self):
-        # 2026 단가계약은 고정 단가를 주로 사용하므로, 
-        # 보정계수(source, pipe, thickness)가 별도로 지정되지 않으면 기본 1.0 적용.
-        return 1.0
+        if self.ndt_type_var.get() != "RT":
+            return 1.0
+            
+        try:
+            source_str = self.source_var.get()
+            s_coeff = 1.0
+            if "1.3" in source_str:
+                s_coeff = 1.3
+                
+            thick_str = self.thickness_var.get()
+            t_coeff = 1.0
+            if "1.4" in thick_str:
+                t_coeff = 1.4
+            elif "2.2" in thick_str:
+                t_coeff = 2.2
+                
+            return s_coeff * t_coeff
+        except Exception:
+            return 1.0
 
     def _do_calculate(self):
         date_str = self.date_var.get()
@@ -980,7 +1028,7 @@ class NDTCalculatorTab(ttk.Frame):
         try:
             import pandas as pd
             import os
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Material_Inventory.xlsx')
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Kogas_Material_Inventory.xlsx')
             if not os.path.exists(db_path):
                 messagebox.showerror("오류", "DB 파일을 찾을 수 없습니다.")
                 return
@@ -1272,21 +1320,24 @@ class NDTCalculatorTab(ttk.Frame):
                     } for t, v in self.contract_vars.items()
                 },
                 "expenses": {
+                    "overhead_labor": self.exp_vars["overhead_labor"]["curr"].get(),
+                    "overhead_labor_budget": self.get_int(self.exp_vars["overhead_labor"]["budget"]),
+                    "overhead_labor_prev": self.get_int(self.exp_vars["overhead_labor"]["prev"]),
                     "equip": self.exp_vars["equip"]["curr"].get(),
                     "equip_budget": self.get_int(self.exp_vars["equip"]["budget"]),
                     "equip_prev": self.get_int(self.exp_vars["equip"]["prev"]),
                     "safety": self.exp_vars["safety"]["curr"].get(),
                     "safety_budget": self.get_int(self.exp_vars["safety"]["budget"]),
                     "safety_prev": self.get_int(self.exp_vars["safety"]["prev"]),
+                    "office": self.exp_vars["office"]["curr"].get(),
+                    "office_budget": self.get_int(self.exp_vars["office"]["budget"]),
+                    "office_prev": self.get_int(self.exp_vars["office"]["prev"]),
                     "travel": self.exp_vars["travel"]["curr"].get(),
                     "travel_budget": self.get_int(self.exp_vars["travel"]["budget"]),
                     "travel_prev": self.get_int(self.exp_vars["travel"]["prev"]),
                     "print": self.exp_vars["print"]["curr"].get(),
                     "print_budget": self.get_int(self.exp_vars["print"]["budget"]),
                     "print_prev": self.get_int(self.exp_vars["print"]["prev"]),
-                    "consumable": self.exp_vars["consumable"]["curr"].get(),
-                    "consumable_budget": self.get_int(self.exp_vars["consumable"]["budget"]),
-                    "consumable_prev": self.get_int(self.exp_vars["consumable"]["prev"]),
                     "liability": self.exp_vars["liability"]["curr"].get(),
                     "liability_budget": self.get_int(self.exp_vars["liability"]["budget"]),
                     "liability_prev": self.get_int(self.exp_vars["liability"]["prev"])
@@ -1419,9 +1470,13 @@ class NDTCalculatorTab(ttk.Frame):
             self.exp_vars["print"]["prev"].set(f"{ex.get('print_prev', 0):,}")
             self.exp_vars["print"]["curr"].set(ex.get("print", 0))
             
-            self.exp_vars["consumable"]["budget"].set(f"{ex.get('consumable_budget', 481000):,}")
-            self.exp_vars["consumable"]["prev"].set(f"{ex.get('consumable_prev', 0):,}")
-            self.exp_vars["consumable"]["curr"].set(ex.get("consumable", 0))
+            self.exp_vars["office"]["budget"].set(f"{ex.get('office_budget', ex.get('consumable_budget', 6183000)):,}")
+            self.exp_vars["office"]["prev"].set(f"{ex.get('office_prev', ex.get('consumable_prev', 0)):,}")
+            self.exp_vars["office"]["curr"].set(ex.get("office", ex.get("consumable", 0)))
+            
+            self.exp_vars["overhead_labor"]["budget"].set(f"{ex.get('overhead_labor_budget', 89502069):,}")
+            self.exp_vars["overhead_labor"]["prev"].set(f"{ex.get('overhead_labor_prev', 0):,}")
+            self.exp_vars["overhead_labor"]["curr"].set(ex.get("overhead_labor", 0))
             
             self.exp_vars["liability"]["budget"].set(f"{ex.get('liability_budget', 14729000):,}")
             self.exp_vars["liability"]["prev"].set(f"{ex.get('liability_prev', 0):,}")
@@ -1585,9 +1640,9 @@ class NDTCalculatorTab(ttk.Frame):
                 ws.Cells(6, c).Interior.Color = 14277081
                 ws.Cells(7, c).Interior.Color = 14277081
             
-            extra_items_total = sum([self.equip_cost_var.get(), self.safety_cost_var.get(), self.travel_cost_var.get(), self.print_cost_var.get(), self.liability_cost_var.get()])
+            extra_items_total = sum([self.exp_vars["overhead_labor"]["curr"].get(), self.equip_cost_var.get(), self.safety_cost_var.get(), self.exp_vars["office"]["curr"].get(), self.travel_cost_var.get(), self.print_cost_var.get(), self.liability_cost_var.get()])
             
-            categories = list(self.contract_vars.keys()) + ["장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "기타실비 소계", "엔지니어링 손해배상공제료", "총 계"]
+            categories = list(self.contract_vars.keys()) + ["부대작업 및 기술관리비", "장비손료", "안전관리비", "가설사무실", "주재비 및 출장여비", "도서인쇄비", "기타실비 소계", "엔지니어링 손해배상공제료", "총 계"]
             
             ws.Range(ws.Cells(6, 1), ws.Cells(6 + len(categories) + 1, 15)).Borders.LineStyle = 1
             
@@ -1608,16 +1663,19 @@ class NDTCalculatorTab(ttk.Frame):
                     cur_amt = sum(r["subtotal"] for r in target_records) + extra_items_total
                     total_row = row
                 elif cat == "기타실비 소계":
-                    c_amt = sum(self.get_int(self.exp_vars[k]["budget"]) for k in ["equip", "safety", "travel", "print"])
-                    p_amt = sum(self.get_int(self.exp_vars[k]["prev"]) for k in ["equip", "safety", "travel", "print"])
-                    cur_amt = sum(self.exp_vars[k]["curr"].get() for k in ["equip", "safety", "travel", "print"])
+                    expense_keys = ["overhead_labor", "equip", "safety", "office", "travel", "print"]
+                    c_amt = sum(self.get_int(self.exp_vars[k]["budget"]) for k in expense_keys)
+                    p_amt = sum(self.get_int(self.exp_vars[k]["prev"]) for k in expense_keys)
+                    cur_amt = sum(self.exp_vars[k]["curr"].get() for k in expense_keys)
                     subtotal_row = row
-                elif cat in ["장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
+                elif cat in ["부대작업 및 기술관리비", "장비손료", "안전관리비", "가설사무실", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
                     if cat == "엔지니어링 손해배상공제료": liability_row = row
                     else: extra_rows.append(row)
                     k = ""
-                    if cat == "장비손료": k = "equip"
+                    if cat == "부대작업 및 기술관리비": k = "overhead_labor"
+                    elif cat == "장비손료": k = "equip"
                     elif cat == "안전관리비": k = "safety"
+                    elif cat == "가설사무실": k = "office"
                     elif cat == "주재비 및 출장여비": k = "travel"
                     elif cat == "엔지니어링 손해배상공제료": k = "liability"
                     else: k = "print"
