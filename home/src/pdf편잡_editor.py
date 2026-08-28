@@ -19,6 +19,7 @@ class PDFEditor:
         self.docs = []  # Keep references to memory-loaded documents
         
         self.drag_start_idx = -1
+        self.zoom_level = 1.0
         
         self.setup_ui()
         
@@ -66,11 +67,59 @@ class PDFEditor:
         ttk.Button(rot_frame, text="↺ 왼쪽으로 회전", command=lambda: self.rotate_selected(-90)).pack(side=tk.LEFT, padx=5)
         ttk.Button(rot_frame, text="↻ 오른쪽으로 회전", command=lambda: self.rotate_selected(90)).pack(side=tk.LEFT, padx=5)
         
-        self.preview_label = ttk.Label(right_frame, text="페이지를 선택하면 미리보기가 표시됩니다.")
-        self.preview_label.pack(expand=True)
+        ttk.Button(rot_frame, text="🔍 줌 인(+)", command=self.zoom_in).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(rot_frame, text="🔍 줌 아웃(-)", command=self.zoom_out).pack(side=tk.RIGHT, padx=5)
+        self.zoom_label = ttk.Label(rot_frame, text="100%")
+        self.zoom_label.pack(side=tk.RIGHT, padx=5)
+        
+        self.canvas_frame = ttk.Frame(right_frame)
+        self.canvas_frame.pack(fill=tk.BOTH, expand=True)
+        
+        self.canvas = tk.Canvas(self.canvas_frame, bg='white')
+        self.scrollbar_y = ttk.Scrollbar(self.canvas_frame, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.scrollbar_x = ttk.Scrollbar(self.canvas_frame, orient=tk.HORIZONTAL, command=self.canvas.xview)
+        
+        self.canvas.configure(yscrollcommand=self.scrollbar_y.set, xscrollcommand=self.scrollbar_x.set)
+        
+        self.scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        self.preview_image_id = self.canvas.create_image(0, 0, anchor=tk.CENTER)
+        self.preview_text_id = self.canvas.create_text(200, 200, text="페이지를 선택하면 미리보기가 표시됩니다.", font=("Arial", 12), fill="gray")
+        
+        self.canvas.bind('<Configure>', self._center_image)
+        self.canvas.bind('<MouseWheel>', self.on_mousewheel_scroll)
+        self.canvas.bind('<Control-MouseWheel>', self.on_mousewheel_zoom)
         
         self.current_image = None
         
+    def _center_image(self, event=None):
+        c_width = self.canvas.winfo_width()
+        c_height = self.canvas.winfo_height()
+        
+        if self.current_image:
+            i_width = self.current_image.width()
+            i_height = self.current_image.height()
+            
+            x = max(c_width // 2, i_width // 2)
+            y = max(c_height // 2, i_height // 2)
+            self.canvas.coords(self.preview_image_id, x, y)
+        else:
+            self.canvas.coords(self.preview_image_id, c_width // 2, c_height // 2)
+            
+        self.canvas.coords(self.preview_text_id, c_width // 2, c_height // 2)
+        self.canvas.config(scrollregion=self.canvas.bbox(tk.ALL))
+        
+    def on_mousewheel_scroll(self, event):
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+    def on_mousewheel_zoom(self, event):
+        if event.delta > 0:
+            self.zoom_in()
+        else:
+            self.zoom_out()
+
     def batch_select(self, mode):
         self.listbox.selection_clear(0, tk.END)
         for i in range(len(self.pages)):
@@ -110,7 +159,8 @@ class PDFEditor:
         self.pages.clear()
         self.docs.clear()
         self.listbox.delete(0, tk.END)
-        self.preview_label.config(image='', text="페이지를 선택하면 미리보기가 표시됩니다.")
+        self.canvas.itemconfig(self.preview_image_id, image='')
+        self.canvas.itemconfig(self.preview_text_id, text="페이지를 선택하면 미리보기가 표시됩니다.")
         for filepath in filepaths:
             self.add_document(filepath)
         
@@ -139,7 +189,8 @@ class PDFEditor:
     def update_preview(self):
         selection = self.listbox.curselection()
         if not selection: 
-            self.preview_label.config(image='', text="페이지를 선택하면 미리보기가 표시됩니다.")
+            self.canvas.itemconfig(self.preview_image_id, image='')
+            self.canvas.itemconfig(self.preview_text_id, text="페이지를 선택하면 미리보기가 표시됩니다.")
             return
         idx = selection[0]
         page_info = self.pages[idx]
@@ -160,13 +211,17 @@ class PDFEditor:
             mode = "RGBA" if pix.alpha else "RGB"
             img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
             
-            # Resize for preview
-            img.thumbnail((1200, 1600), Image.Resampling.LANCZOS)
+            # Resize for preview with zoom
+            max_w, max_h = int(1200 * self.zoom_level), int(1600 * self.zoom_level)
+            img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
             
             self.current_image = ImageTk.PhotoImage(img)
-            self.preview_label.config(image=self.current_image, text="")
+            self.canvas.itemconfig(self.preview_image_id, image=self.current_image)
+            self.canvas.itemconfig(self.preview_text_id, text="")
+            self._center_image()
         except Exception as e:
-            self.preview_label.config(image='', text=f"미리보기 오류: {e}")
+            self.canvas.itemconfig(self.preview_image_id, image='')
+            self.canvas.itemconfig(self.preview_text_id, text=f"미리보기 오류: {e}")
             
     def on_select(self, event):
         self.update_preview()
@@ -176,6 +231,16 @@ class PDFEditor:
         if not selection: return
         for idx in selection:
             self.pages[idx]['rotation'] = (self.pages[idx]['rotation'] + angle) % 360
+        self.update_preview()
+            
+    def zoom_in(self):
+        self.zoom_level += 0.2
+        self.zoom_label.config(text=f"{int(self.zoom_level * 100)}%")
+        self.update_preview()
+        
+    def zoom_out(self):
+        self.zoom_level = max(0.2, self.zoom_level - 0.2)
+        self.zoom_label.config(text=f"{int(self.zoom_level * 100)}%")
         self.update_preview()
             
     def delete_selected(self):

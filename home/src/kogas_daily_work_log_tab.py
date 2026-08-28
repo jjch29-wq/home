@@ -27,6 +27,26 @@ SIZE_LENGTH = {
     '32A':   0.1341, '25A':   0.1068, '20A':  0.0855,
 }
 
+KOGAS_SHOT_COUNTS = {
+    '30"': 7,
+    '24"': 5,
+    '20"': 5,
+    '16"': 5,
+    '14"': 5,
+    '12"': 4,
+    '10"': 4,
+    '6"': 3,
+    '4"': 4,
+    '4"(wed)': 4,
+    '2 1/2"': 3,
+    '2"': 4,
+    '2"(wed)': 4,
+    '1.5"': 4,
+    '1 1/2"(wed)': 4,
+    '3/4"': 4,
+    '1/2"': 4
+}
+
 class KogasDailyWorkLogTab(ttk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
@@ -299,16 +319,19 @@ class KogasDailyWorkLogTab(ttk.Frame):
                     frame = ttk.Frame(grid_frame)
                     frame.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     entries = []
-                    for i in range(4):
+                    for i in range(7):
                         e = ttk.Entry(frame, width=3, justify='center')
-                        e.pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
+                        # Do not pack here; packed in on_ndt_change
                         entries.append(e)
                     frame.entries = entries
                     def get_val(ents=entries, r_dict=row_entries):
                         method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
                         if method in ['PAUT', 'PT', 'MT']:
                             return ents[0].get()
-                        parts = [e.get().strip() for e in ents]
+                        
+                        pipe = r_dict['관경'].get().strip() if '관경' in r_dict else ''
+                        shots = KOGAS_SHOT_COUNTS.get(pipe, 4)
+                        parts = [ents[i].get().strip() for i in range(shots)]
                         return ','.join([p for p in parts if p])
                     def set_val(val, ents=entries, r_dict=row_entries):
                         for e in ents: e.delete(0, tk.END)
@@ -329,7 +352,7 @@ class KogasDailyWorkLogTab(ttk.Frame):
                     frame.insert = insert_val
                     row_entries[c] = frame
                 elif c == '관경':
-                    ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(SIZE_LENGTH.keys()), justify='center')
+                    ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(KOGAS_SHOT_COUNTS.keys()), justify='center')
                     ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     row_entries[c] = ent
                 elif c == '결과':
@@ -416,16 +439,19 @@ class KogasDailyWorkLogTab(ttk.Frame):
                             r[col].delete(0, tk.END)
                         r[target_col].insert(0, length_str)
                         
-                # Update '구간정보' display based on method
+                # Update '구간정보' display based on method and pipe size
                 if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
+                    for e in r['구간정보'].entries:
+                        e.pack_forget()
+                        
                     if method in ['PAUT', 'PT', 'MT']:
                         r['구간정보'].entries[0].configure(justify='left')
-                        for i in range(1, 4):
-                            r['구간정보'].entries[i].pack_forget()
+                        r['구간정보'].entries[0].pack(side='left', fill='x', expand=True)
                     else:
+                        shots = KOGAS_SHOT_COUNTS.get(pipe, 4)
                         r['구간정보'].entries[0].configure(justify='center')
-                        for i in range(1, 4):
-                            r['구간정보'].entries[i].pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
+                        for i in range(shots):
+                            r['구간정보'].entries[i].pack(side='left', fill='x', expand=True, padx=(0, 1 if i<shots-1 else 0))
                             
                 # Update '규격' values based on method
                 if '규격' in r and hasattr(r['규격'], 'configure'):
@@ -694,6 +720,90 @@ class KogasDailyWorkLogTab(ttk.Frame):
             messagebox.showwarning("일부 삭제 완료", result_message, parent=self)
         else:
             messagebox.showinfo("삭제 완료", result_message, parent=self)
+
+    def auto_calculate_and_save(self):
+        current_date = self.date_entry.get()
+        if not current_date:
+            messagebox.showwarning("경고", "검사일자를 선택해주세요.")
+            return
+            
+        today_qty = {comp_key: 0.0 for comp_key in self.qty_entries.keys()}
+        
+        for row_entries in self.ndt_grid_entries:
+            if not hasattr(row_entries.get('검사방법'), 'get'): continue
+            method = row_entries['검사방법'].get().upper().strip()
+            if not method: continue
+            
+            spec = row_entries.get('규격', '').get().strip() if hasattr(row_entries.get('규격'), 'get') else ''
+            
+            try:
+                if method == 'RT':
+                    rt_or = float(row_entries.get('RT_OR', '').get() or 0)
+                    rt_re = float(row_entries.get('RT_RE', '').get() or 0)
+                    val = rt_or + rt_re
+                    if val > 0:
+                        comp = None
+                        if 'B' in spec.upper(): comp = 'RT_B필름: 3⅓"x17"'
+                        elif 'A/2' in spec.upper() or 'A / 2' in spec.upper() or 'A/ 2' in spec.upper(): comp = 'RT_A/2필름: 3⅓"x6"'
+                        elif 'A' in spec.upper(): comp = 'RT_A필름: 3⅓"x12"'
+                        
+                        if comp in today_qty:
+                            today_qty[comp] += val
+                            
+                elif method == 'UT':
+                    val = float(row_entries.get('UT', '').get() or 0)
+                    if val > 0: today_qty['UT_초음파탐상'] += val
+                        
+                elif method == 'PT':
+                    val = float(row_entries.get('PT', '').get() or 0)
+                    if val > 0: today_qty['PT_침투탐상'] += val
+                        
+                elif method == 'MT':
+                    val = float(row_entries.get('MT', '').get() or 0)
+                    if val > 0: today_qty['MT_자분탐상'] += val
+            except ValueError:
+                pass
+                    
+        # Update UI for 금일작업
+        rt_subtotal = today_qty.get('RT_B필름: 3⅓"x17"', 0) + today_qty.get('RT_A필름: 3⅓"x12"', 0) + today_qty.get('RT_A/2필름: 3⅓"x6"', 0)
+        today_qty['RT_소계'] = rt_subtotal
+        
+        for comp_key, val in today_qty.items():
+            if comp_key not in self.qty_entries: continue
+            entry = self.qty_entries[comp_key]['금일작업']
+            entry.delete(0, tk.END)
+            if val > 0:
+                # 콤마 및 소수점 자리수 처리
+                val_str = f"{val:,.1f}".rstrip('0').rstrip('.') if val % 1 != 0 else f"{int(val):,}"
+                entry.insert(0, val_str)
+                
+        # Re-calculate totals
+        for comp_key, entries in self.qty_entries.items():
+            prev_str = entries['전일누계'].get().replace(',', '')
+            today_str = entries['금일작업'].get().replace(',', '')
+            expected_str = entries['예상량'].get().replace(',', '')
+            
+            try:
+                prev_val = float(prev_str) if prev_str else 0.0
+                today_val = float(today_str) if today_str else 0.0
+                expected_val = float(expected_str) if expected_str else 0.0
+                
+                total_val = prev_val + today_val
+                
+                entries['총누계'].delete(0, tk.END)
+                if total_val > 0:
+                    total_str = f"{total_val:,.1f}".rstrip('0').rstrip('.') if total_val % 1 != 0 else f"{int(total_val):,}"
+                    entries['총누계'].insert(0, total_str)
+                    
+                entries['공정률'].delete(0, tk.END)
+                if expected_val > 0 and total_val > 0:
+                    progress = (total_val / expected_val) * 100
+                    entries['공정률'].insert(0, f"{progress:.1f}")
+            except ValueError:
+                pass
+                
+        self.save_current_history()
+        messagebox.showinfo("성공", "집계 및 저장이 완료되었습니다.")
 
     def manage_process_photos(self):
         current_date = self.date_entry.get()

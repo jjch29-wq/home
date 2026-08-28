@@ -2102,7 +2102,8 @@ class KogasMonthlyReportManager:
         # 날짜별 금일작업 누적
         for d in target_dates:
             day_data = history_data[d]
-            process_photos.extend(day_data.get('process_photos', []))
+            if str(d)[:7] == target_ym:
+                process_photos.extend(day_data.get('process_photos', []))
             for key, val in day_data.get('qty_data', {}).items():
                 if key not in qty_summary:
                     qty_summary[key] = {'예상량': val.get('예상량', ''), '전월누계': '0', '금월작업': 0.0, '총누계': '0', '공정률': '', '불량': 0, '불량률': ''}
