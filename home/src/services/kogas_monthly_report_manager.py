@@ -56,6 +56,17 @@ class KogasMonthlyReportManager:
         ws.merged_cells.ranges = []
         # 3. 안전하게 빈 행 삽입
         ws.insert_rows(insert_idx, amount)
+        
+        # openpyxl bug: manually shift row_dimensions down
+        import copy
+        existing_rows = sorted(ws.row_dimensions.keys(), reverse=True)
+        for r in existing_rows:
+            if r >= insert_idx:
+                new_dim = copy.copy(ws.row_dimensions[r])
+                new_dim.index = r + amount
+                new_dim.worksheet = ws
+                ws.row_dimensions[r + amount] = new_dim
+                del ws.row_dimensions[r]
         # 4. 백업된 병합 정보를 위치에 맞게 수정하여 다시 적용
         for m_str in old_merges:
             cr = CellRange(m_str)
@@ -100,6 +111,19 @@ class KogasMonthlyReportManager:
         ws.merged_cells.ranges = []
         # 2. 행 삭제
         ws.delete_rows(delete_idx, amount)
+        
+        # openpyxl bug: manually shift row_dimensions up
+        import copy
+        existing_rows = sorted(ws.row_dimensions.keys())
+        for r in existing_rows:
+            if r >= delete_idx and r < delete_idx + amount:
+                del ws.row_dimensions[r]
+            elif r >= delete_idx + amount:
+                new_dim = copy.copy(ws.row_dimensions[r])
+                new_dim.index = r - amount
+                new_dim.worksheet = ws
+                ws.row_dimensions[r - amount] = new_dim
+                del ws.row_dimensions[r]
         # 3. 병합 정보 복원 (삭제 위치 기준으로 조정)
         for m_str in old_merges:
             cr = CellRange(m_str)
@@ -1205,6 +1229,15 @@ class KogasMonthlyReportManager:
         process_photos = valid_photos
 
         original_photo_starts = []
+        for row in reversed(range(600, ws.max_row + 1)):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, ws.max_column + 1)
+            ).replace(' ', '').upper()
+            if 'SEC.16' in row_text:
+                # Insert 21 blank rows to accommodate the 3rd row of photos (6 photos total)
+                self._insert_rows_safely(ws, row + 42, 21)
+
         for row in range(600, ws.max_row + 1):
             row_text = ''.join(
                 str(ws.cell(row=row, column=col).value or '')
@@ -1321,7 +1354,7 @@ class KogasMonthlyReportManager:
                 1 for photo in process_photos
                 if str(photo.get('process', '')).upper() == process
             )
-            extra_pages = max(0, (photo_count - 1) // 4)
+            extra_pages = max(0, (photo_count - 1) // 6)
             source_title_row = layout['title_row']
             for continuation_no in range(2, extra_pages + 2):
                 source_title_row = self._clone_process_photo_page(
@@ -1359,7 +1392,7 @@ class KogasMonthlyReportManager:
                 ),
             )
             for page_index, layout in enumerate(process_layouts):
-                page_photos = photos[page_index * 4:(page_index + 1) * 4]
+                page_photos = photos[page_index * 6:(page_index + 1) * 6]
                 if not page_photos:
                     continue
 
@@ -1368,11 +1401,54 @@ class KogasMonthlyReportManager:
                     ('M', layout['image_row'], 13, 23, layout['image_row'] + 16),
                     ('C', layout['image_row'] + 21, 3, 12, layout['image_row'] + 37),
                     ('M', layout['image_row'] + 21, 13, 23, layout['image_row'] + 37),
+                    ('C', layout['image_row'] + 42, 3, 12, layout['image_row'] + 58),
+                    ('M', layout['image_row'] + 42, 13, 23, layout['image_row'] + 58),
                 )
+
+                # dynamically copy styles from the second row to the third row
+                import copy
+                source_start = layout['image_row'] + 21
+                source_end = layout['image_row'] + 37
+                target_start = layout['image_row'] + 42
+                
+                for offset in range(source_end - source_start + 1):
+                    source_r = source_start + offset
+                    target_r = target_start + offset
+                    
+                    # copy row height
+                    if source_r in ws.row_dimensions:
+                        ws.row_dimensions[target_r].height = ws.row_dimensions[source_r].height
+                        
+                # Hide gaps so that the 3rd row fits exactly onto one A4 page
+                for gap_offset in [18, 19, 20, 39, 40, 41, 61, 62]:
+                    ws.row_dimensions[layout['image_row'] + gap_offset].hidden = True
+                    
+                    for col in range(2, 24):
+                        source_cell = ws.cell(row=source_r, column=col)
+                        target_cell = ws.cell(row=target_r, column=col)
+                        
+                        target_cell._style = copy.copy(source_cell._style)
+                        target_cell.alignment = copy.copy(source_cell.alignment)
+                        target_cell.number_format = source_cell.number_format
+                        target_cell.font = copy.copy(source_cell.font)
+                        target_cell.border = copy.copy(source_cell.border)
+                        target_cell.fill = copy.copy(source_cell.fill)
+
+                # Clone merge ranges for the 3rd row
+                new_merges = []
+                for merged in list(ws.merged_cells.ranges):
+                    if merged.min_row >= source_start and merged.max_row <= source_end:
+                        new_merges.append((
+                            merged.min_row + 21, merged.min_col,
+                            merged.max_row + 21, merged.max_col
+                        ))
+                
+                for mr in new_merges:
+                    ws.merge_cells(start_row=mr[0], start_column=mr[1], end_row=mr[2], end_column=mr[3])
 
                 # Remove existing dummy images in this page's photo slots
                 page_start_row = layout['image_row']
-                page_end_row = layout['image_row'] + 42
+                page_end_row = layout['image_row'] + 63
                 kept_images = []
                 for existing_image in list(ws._images):
                     anchor = getattr(existing_image, 'anchor', None)
@@ -1506,7 +1582,7 @@ class KogasMonthlyReportManager:
         ]
         if photo_section_start is not None:
             print_end_row = (
-                max(surviving_titles) + 44
+                max(surviving_titles) + 65
                 if surviving_titles else photo_section_start - 1
             )
             self._set_print_area_end(ws, print_end_row)
