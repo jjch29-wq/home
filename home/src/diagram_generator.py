@@ -184,7 +184,7 @@ def create_radiation_diagram(top_dist, bottom_dist, left_dist, right_dist, pipe_
     img.save(output_path, quality=95)
     return output_path
 
-def create_side_diagram(left_dist, right_dist, trench_width, output_path="temp_side_diagram.png"):
+def create_side_diagram(left_dist, right_dist, trench_width, pipe_dia=150, pipe_depth_val=1500, output_path="temp_side_diagram.png"):
     img_w, img_h = 1000, 700
     img = Image.new('RGB', (img_w, img_h), color='white')
     draw = ImageDraw.Draw(img)
@@ -193,6 +193,17 @@ def create_side_diagram(left_dist, right_dist, trench_width, output_path="temp_s
     font_large = get_korean_font(20)
     font_math = get_korean_font(18)
     font_title = get_korean_font(22)
+    
+    try:
+        pipe_depth = float(pipe_depth_val)
+    except:
+        pipe_depth = 1500
+        
+    try:
+        p_dia = float(pipe_dia)
+    except:
+        p_dia = 150
+
     
     # 타이틀
     draw.text((30, 20), "다. 방사선관리구역 및 감시구역 횡방향 측면도(매설 배관)", fill="black", font=font_title)
@@ -227,7 +238,7 @@ def create_side_diagram(left_dist, right_dist, trench_width, output_path="temp_s
     pipe_y_bot = pipe_cy + pipe_radius
     
     draw.ellipse([cx - pipe_radius, pipe_y_top, cx + pipe_radius, pipe_y_bot], fill="white", outline="#3b82f6", width=2)
-    draw.text((cx - 12, pipe_cy - 8), "150", fill="black", font=font_small)
+    draw.text((cx - 12, pipe_cy - 8), str(int(p_dia)), fill="black", font=font_small)
     draw_arrow(draw, (cx, pipe_y_top), (cx, pipe_y_bot), fill="#f59e0b", width=1, arrow_size=4, double=True)
     
     # 파란 반원
@@ -249,7 +260,6 @@ def create_side_diagram(left_dist, right_dist, trench_width, output_path="temp_s
         person_dist = 2000
         
     person_x_math = W + person_dist # 2500
-    pipe_depth = 1500
     person_height = 2000
     
     slope = (pipe_depth + person_height) / person_x_math if person_x_math > 0 else 1.4
@@ -325,11 +335,12 @@ def create_side_diagram(left_dist, right_dist, trench_width, output_path="temp_s
     
     # 1500 수직
     draw_arrow(draw, (person_x + 30, ground_y), (person_x + 30, collimator_y), fill="#3b82f6", width=1, double=True)
-    draw.text((person_x + 10, (ground_y + collimator_y)//2 - 10), "1500", fill="black", font=font_small)
+    draw.text((person_x + 10, (ground_y + collimator_y)//2 - 10), str(int(pipe_depth)), fill="black", font=font_small)
     
-    # 1750 수직
+    # 1750 수직 (깊이 + 관경 + 하단이격거리100)
+    total_depth = pipe_depth + p_dia + 100
     draw_arrow(draw, (person_x + 70, ground_y), (person_x + 70, trench_bot_y), fill="#3b82f6", width=1, double=True)
-    draw.text((person_x + 50, (ground_y + trench_bot_y)//2 - 10), "1750", fill="black", font=font_small)
+    draw.text((person_x + 50, (ground_y + trench_bot_y)//2 - 10), str(int(total_depth)), fill="black", font=font_small)
     
     # 2000 사람 키
     draw_arrow(draw, (person_x + 30, person_y - 20), (person_x + 30, ground_y), fill="#3b82f6", width=1, double=True)
@@ -386,5 +397,5 @@ def create_side_diagram(left_dist, right_dist, trench_width, output_path="temp_s
 if __name__ == "__main__":
     # 테스트 실행
     create_radiation_diagram("2000", "2000", "2000", "2000", "10000", "1000", "test_diagram.jpg")
-    create_side_diagram("2000", "2000", "1000", "test_side_diagram.jpg")
+    create_side_diagram("2000", "2000", "1000", 150, 1500, "test_side_diagram.jpg")
     print("test_diagram.jpg, test_side_diagram.jpg 생성 완료")

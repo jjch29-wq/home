@@ -12,6 +12,8 @@ import win32com.client as win32
 import diagram_generator
 import math_generator
 import json
+import re
+from datetime import datetime
 
 # 헤더(치환할 태그들) 리스트
 HEADERS = [
@@ -19,16 +21,13 @@ HEADERS = [
     "주야간작업", "관공서거리", "경찰서이름", "소방서이름", "발주처담당자", "담당자이름", 
     "담당자부서", "담당자휴대폰", "담당자사무실전화", "담당자이메일", "사업자번호", 
     "안전관리자", "사용선원", "현장전화번호", "작업조", "시작일", "종료일", 
-    "시작일_단축", "종료일_단축", "운반경로", "총이동거리", "소요시간", 
+    "운반경로", "총이동거리", "소요시간", 
     "작업장구분", "작업장크기", "차폐물", 
-    "거리_상단", "거리_하단", "거리_좌측", "거리_우측", "배관길이", "배관폭", "관경",
-    "재질", "관경범위", "최대두께", "총작업량", "작업기간",
+    "거리_상단", "거리_하단", "거리_좌측", "거리_우측", "배관길이", "배관폭", "매설깊이", "관경",
+    "재질", "관경범위", "최대두께", "총작업량", 
     "조사대상_OUT", "조사방법", "조사방향", "Stop시간", "Shooting시간",
     "계산식_선원종류", "계산식_방사능", "계산식_콜리메이터_두께", "계산식_콜리메이터_반가층",
-    "계산식_납패드_두께", "계산식_납패드_반가층", "계산식_토양_두께", "계산식_토양_반가층",
-    "계산식1", "계산식2", "계산식3", "계산식4", "계산식5", "계산식6", "계산식7", "계산식8",
-    "평가결과1", "평가결과2", "평가수식1", "평가수식2", "만족여부1", "만족여부2", "만족여부3", "만족여부4",
-    "최대선량률", "가로거리", "세로거리",
+    "계산식_납패드_두께", "계산식_납패드_반가층", "계산식_토양_반가층",
     "지도이미지폴더"
 ]
 
@@ -74,6 +73,21 @@ class HWPGeneratorThread(QThread):
 
             current_progress = 0
             
+            def parse_num(val_str, default_val):
+                if not val_str: return default_val
+                nums = re.findall(r'[\d.]+', str(val_str))
+                if nums: return float(nums[0])
+                return default_val
+                
+            def parse_date(date_str):
+                date_str = str(date_str).strip()
+                try:
+                    if "-" in date_str: return datetime.strptime(date_str, "%Y-%m-%d")
+                    else: return datetime.strptime(date_str, "%Y.%m.%d")
+                except: return None
+            
+            warnings_list = []
+            
             for row_idx, row in enumerate(data_rows):
                 if row[0] is None:
                     continue # 폴더명이 없으면 스킵
@@ -82,10 +96,31 @@ class HWPGeneratorThread(QThread):
                 row_data = {headers[i]: (str(row[i]) if row[i] is not None else "") for i in range(len(headers))}
                 folder_name = row_data.get("폴더명", f"새로운현장_{row_idx}")
                 
+                # 날짜 자동 계산
+                start_date = parse_date(row_data.get("시작일", ""))
+                end_date = parse_date(row_data.get("종료일", ""))
+                
+                if start_date and end_date:
+                    delta = end_date - start_date
+                    months = delta.days // 30
+                    years = months // 12
+                    rem_months = months % 12
+                    
+                    period_str = ""
+                    if years > 0: period_str += f"{years}년 "
+                    if rem_months > 0: period_str += f"{rem_months}개월"
+                    elif years == 0: period_str = f"{delta.days}일"
+                        
+                    row_data["작업기간"] = period_str.strip()
+                    row_data["시작일_단축"] = start_date.strftime("%y.%m.%d")
+                    row_data["종료일_단축"] = end_date.strftime("%y.%m.%d")
+                else:
+                    row_data["작업기간"] = row_data.get("작업기간", "")
+                    row_data["시작일_단축"] = row_data.get("시작일", "")
+                    row_data["종료일_단축"] = row_data.get("종료일", "")
+                
                 try:
-                    pipe_dia_str = str(row_data.get("관경", "150")).strip()
-                    if not pipe_dia_str: pipe_dia_str = "150"
-                    pipe_dia_val = float(pipe_dia_str.replace("mm", "").replace("이하", "").strip())
+                    pipe_dia_val = parse_num(row_data.get("관경", "150"), 150)
                     shield_size = int(pipe_dia_val * 3.14 * (2/3))
                     row_data["납패드계산"] = f"- {int(pipe_dia_val)}mm이하 (관경) x 3.14 x 2/3 = {shield_size}mm"
                 except Exception:
@@ -93,13 +128,14 @@ class HWPGeneratorThread(QThread):
                     
                 try:
                     workspace_size = str(row_data.get("작업장크기", "5 x 14")).strip()
-                    parts = [p.strip() for p in workspace_size.replace("X", "x").replace("*", "x").split("x")]
-                    if len(parts) == 2:
-                        w1, w2 = parts[0], parts[1]
+                    nums = re.findall(r'[\d.]+', workspace_size)
+                    if len(nums) >= 2:
+                        w1, w2 = nums[0], nums[1]
                     else:
                         w1, w2 = "5", "14"
                     row_data["통제구역계산"] = f"- 방사선 관리·감시 구역은 {w1}m x {w2}m 이나 매설구간으로부터 종방향 최소 {w1}m 이상, 횡방향 {w2}m 이상에서 이동식 펜스를 설치하여 일반인의 접근을 통제함."
                 except Exception:
+                    w1, w2 = "5", "14"
                     row_data["통제구역계산"] = "- 방사선 관리·감시 구역은 5m x 14m 이나 매설구간으로부터 종방향 최소 5m 이상, 횡방향 14m 이상에서 이동식 펜스를 설치하여 일반인의 접근을 통제함."
                 try:
                     w1_half = float(w1) / 2
@@ -111,11 +147,12 @@ class HWPGeneratorThread(QThread):
                     row_data["종축거리"] = "7"
                 
                 try:
-                    trench_width = float(str(row_data.get("배관폭", "1000")).replace("mm", "").strip())
+                    trench_width = parse_num(row_data.get("배관폭", "1000"), 1000)
                     W = trench_width / 2
-                    right_dist = float(str(row_data.get("거리_우측", "2000")).replace("mm", "").strip())
+                    right_dist = parse_num(row_data.get("거리_우측", "2000"), 2000)
                     person_x_math = W + right_dist
-                    pipe_depth = 1500
+                    pipe_depth = parse_num(row_data.get("매설깊이", "1500"), 1500)
+                        
                     person_height = 2000
                     slope = (pipe_depth + person_height) / person_x_math if person_x_math > 0 else 1.4
                     angle_rad = math.atan(slope)
@@ -129,9 +166,9 @@ class HWPGeneratorThread(QThread):
                     row_data["계산식_토양_두께"] = "983"
 
                 try:
-                    total_shots = float(str(row_data.get("총작업량", "2000")).replace(",", "").strip())
-                    stop_time = float(str(row_data.get("Stop시간", "35")).strip())
-                    shoot_time = float(str(row_data.get("Shooting시간", "4")).strip())
+                    total_shots = parse_num(row_data.get("총작업량", "2000"), 2000)
+                    stop_time = parse_num(row_data.get("Stop시간", "35"), 35)
+                    shoot_time = parse_num(row_data.get("Shooting시간", "4"), 4)
                     
                     stop_hr = (total_shots * stop_time) / 3600
                     shoot_hr = (total_shots * shoot_time) / 3600
@@ -197,18 +234,17 @@ class HWPGeneratorThread(QThread):
                     diagram_path = ""
                     side_diagram_path = ""
                     try:
-                        d_top = row_data.get("거리_상단", 2000)
-                        d_bot = row_data.get("거리_하단", 2000)
-                        d_left = row_data.get("거리_좌측", 2000)
-                        d_right = row_data.get("거리_우측", 2000)
-                        p_len = row_data.get("배관길이", 10000)
-                        p_wid = row_data.get("배관폭", 1000)
-                        try:
-                            p_dia = float(str(row_data.get("관경", "150")).replace("mm", "").replace("이하", "").strip())
-                        except:
-                            p_dia = 150
+                        d_top = parse_num(row_data.get("거리_상단", 2000), 2000)
+                        d_bot = parse_num(row_data.get("거리_하단", 2000), 2000)
+                        d_left = parse_num(row_data.get("거리_좌측", 2000), 2000)
+                        d_right = parse_num(row_data.get("거리_우측", 2000), 2000)
+                        p_len = parse_num(row_data.get("배관길이", 10000), 10000)
+                        p_wid = parse_num(row_data.get("배관폭", 1000), 1000)
+                        p_dia = parse_num(row_data.get("관경", "150"), 150)
+                        p_depth = parse_num(row_data.get("매설깊이", "1500"), 1500)
+                            
                         diagram_path = create_radiation_diagram(d_top, d_bot, d_left, d_right, p_len, p_wid, os.path.join(target_dir, f"{file_prefix}_temp_diagram.jpg"))
-                        side_diagram_path = create_side_diagram(d_left, d_right, p_wid, p_dia, os.path.join(target_dir, f"{file_prefix}_side_diagram.jpg"))
+                        side_diagram_path = create_side_diagram(d_left, d_right, p_wid, p_dia, p_depth, os.path.join(target_dir, f"{file_prefix}_side_diagram.jpg"))
                     except Exception as e:
                         self.log_signal.emit(f"    - 도면 생성 실패: {str(e)}")
                         diagram_path = ""
@@ -225,10 +261,8 @@ class HWPGeneratorThread(QThread):
                         pb_h = float(row_data.get("계산식_납패드_반가층", "1") or "1")
                         soil_t = float(row_data.get("계산식_토양_두께", "983") or "983")
                         soil_h = float(row_data.get("계산식_토양_반가층", "45") or "45")
-                        dist_top = float(row_data.get("거리_상단", "2000") or "2000")
-                        dist_left = float(row_data.get("거리_좌측", "2000") or "2000")
-                        pipe_length = float(row_data.get("배관길이", "10000") or "10000")
-                        pipe_width = float(row_data.get("배관폭", "1000") or "1000")
+                        d_ab = float(w1_half)
+                        d_cd = float(w2_half)
                         
                         stop_hr = float(row_data.get("계산_Stop시간", "19.4"))
                         shoot_hr = float(row_data.get("계산_Shooting시간", "2.22"))
@@ -236,10 +270,13 @@ class HWPGeneratorThread(QThread):
                         
                         generated_math_paths, satisfaction = math_generator.generate_math_images(
                             source_type, activity, col_t, col_h, pb_t, pb_h, soil_t, soil_h, 
-                            dist_top, dist_left, pipe_length, pipe_width, stop_hr, shoot_hr, math_imgs_dir, scatter_base
+                            d_ab, d_cd, stop_hr, shoot_hr, math_imgs_dir, scatter_base
                         )
                         # 만족여부 텍스트 치환 (이미지보다 먼저 수행)
                         for key, val in satisfaction.items():
+                            if val == "불만족" and key.startswith("만족여부"):
+                                warnings_list.append(folder_name)
+                                self.log_signal.emit(f"<font color='red'><b>[경고] {folder_name} 현장 선량률 기준치 초과 (불만족)</b></font>")
                             find_str = f"{{{{{key}}}}}"
                             hwp.HAction.Run("MoveDocBegin")
                             hwp.HAction.GetDefault("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
@@ -315,7 +352,7 @@ class HWPGeneratorThread(QThread):
                                 if hwp.HAction.Execute("RepeatFind", hwp.HParameterSet.HFindReplace.HSet):
                                     hwp.HAction.Run("Delete") # 태그 지우기
                                     if tag == "구역도":
-                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 90)
+                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 98)
                                     elif tag == "횡방향측면도":
                                         hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 105)
                                     elif tag == "지도1":
@@ -323,9 +360,9 @@ class HWPGeneratorThread(QThread):
                                     elif tag in ["지도2", "지도3"] or tag.startswith("부지사진") or tag.startswith("상세사진"):
                                         hwp.InsertPicture(img_path, True, 1, False, False, 0, 75, 55)
                                     elif tag.startswith("평가수식"):
-                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 15)
+                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 10)
                                     elif tag.startswith("계산식"):
-                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 20)
+                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 30)
                                     elif tag.startswith("평가결과"):
                                         # 평가결과는 작은 크기로 삽입
                                         hwp.InsertPicture(img_path, True, 1, False, False, 0, 45, 15)
@@ -346,6 +383,8 @@ class HWPGeneratorThread(QThread):
                 self.log_signal.emit(f"[{folder_name}] 생성 완료!")
 
             hwp.Quit()
+            if warnings_list:
+                self.log_signal.emit(f"\n<font color='red'><b>총 {len(warnings_list)}건의 현장에서 방사선량 '불만족'이 발생했습니다. 설계를 확인하세요!</b></font>")
             self.log_signal.emit("\n모든 작업이 성공적으로 완료되었습니다!")
             self.finished_signal.emit(True)
             
@@ -458,14 +497,13 @@ class MainWindow(QMainWindow):
                 "인천광역시 송도동 418", "신 매립지", "800m", "야간 작업", "10km", "인천 송도 경찰서", "인천 송도 소방서", 
                 "고준호(010-5090-8871)", "고준호", "롯데건설 품질팀", "010-5090-8871", "032-822-0988", 
                 "junhoko@lotte.net", "114-81-16377", "김춘호(010-7763-3436)", "Se-75 60Ci x 1EA", 
-                "032-549-8457", "3인 1조 (1개조)", "2025.04.03", "2025.05.07", "25.04.03", "25.05.07",
+                "032-549-8457", "3인 1조 (1개조)", "2025.04.03", "2025.05.07",
                 "소래로 → 아암대로 → 인천신항대로", "15km", "30분", 
                 "야외(매설배관)", "5 x 14", "황축토양(983)",
-                "2000", "2000", "2000", "2000", "10000", "1000", "150",
-                "C/S", "2~10''", "~5.5", "2000", "1년 2개월",
+                "2000", "2000", "2000", "2000", "10000", "1000", "1500", "150",
+                "C/S", "2~10''", "~5.5", "2000", 
                 "O", "이중벽 단상", "하향, 상향, 측하향, 측방향, 측상향", "35", "4",
-                "Se-75", "60", "11", "0.8", "12", "1", "983", "45",
-                "", "", "", "", "", "", "", "",
+                "Se-75", "60", "11", "0.8", "12", "1", "45",
                 r"C:\Users\jjch2\Desktop\신고서_마스터템플릿\지도사진들"
             ]
             for col_num, val in enumerate(sample_data, 1):

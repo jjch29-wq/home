@@ -11,7 +11,7 @@ def format_scientific(value):
         return f"{value:.3g}"
     return f"{coef:.2f} \\times 10^{{{exp}}}"
 
-def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t, soil_h, dist_top, dist_left, pipe_length, pipe_width, stop_hr, shoot_hr, output_dir, scatter_base=27.1):
+def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t, soil_h, d_ab, d_cd, stop_hr, shoot_hr, output_dir, scatter_base=27.1):
     # Set gamma constant based on source type
     if "Ir-192" in source_type or "Ir" in source_type:
         gamma = 4800
@@ -119,8 +119,7 @@ def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t
         generated_paths.append(out_path)
 
     # Calculate dose rates (평가결과)
-    d_ab = (pipe_width / 2.0 + dist_top) / 1000.0  # in meters
-    d_cd = (pipe_length / 2.0 + dist_left) / 1000.0 # in meters
+    # d_ab and d_cd are passed directly in meters
 
     numerator_ab = gamma * activity * math.exp(-0.693 * (val_col + val_pb + val_soil))
     numerator_cd = gamma * activity * math.exp(-0.693 * (val_col + val_pb))
@@ -263,7 +262,7 @@ def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t
 
 if __name__ == "__main__":
     # Test
-    paths, sats = generate_math_images("Se-75", 60, 11, 0.8, 12, 1, 983, 45, 2000, 2000, 10000, 1000, 19.4, 2.22, "temp_math_imgs")
+    paths, sats = generate_math_images("Se-75", 60, 11, 0.8, 12, 1, 983, 45, 2.5, 7.0, 19.4, 2.22, "temp_math_imgs")
     for p in paths:
         print(p)
     print(sats)
