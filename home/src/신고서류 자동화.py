@@ -2,6 +2,7 @@ import sys
 import os
 import glob
 import openpyxl
+import math
 from openpyxl.styles import Font, PatternFill, Alignment
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QHBoxLayout, QPushButton, QLabel, QFileDialog, 
@@ -20,7 +21,9 @@ HEADERS = [
     "안전관리자", "사용선원", "현장전화번호", "작업조", "시작일", "종료일", 
     "시작일_단축", "종료일_단축", "운반경로", "총이동거리", "소요시간", 
     "작업장구분", "작업장크기", "차폐물", 
-    "거리_상단", "거리_하단", "거리_좌측", "거리_우측", "배관길이", "배관폭",
+    "거리_상단", "거리_하단", "거리_좌측", "거리_우측", "배관길이", "배관폭", "관경",
+    "재질", "관경범위", "최대두께", "총작업량", "작업기간",
+    "조사대상_OUT", "조사방법", "조사방향", "Stop시간", "Shooting시간",
     "계산식_선원종류", "계산식_방사능", "계산식_콜리메이터_두께", "계산식_콜리메이터_반가층",
     "계산식_납패드_두께", "계산식_납패드_반가층", "계산식_토양_두께", "계산식_토양_반가층",
     "계산식1", "계산식2", "계산식3", "계산식4", "계산식5", "계산식6", "계산식7", "계산식8",
@@ -79,6 +82,87 @@ class HWPGeneratorThread(QThread):
                 row_data = {headers[i]: (str(row[i]) if row[i] is not None else "") for i in range(len(headers))}
                 folder_name = row_data.get("폴더명", f"새로운현장_{row_idx}")
                 
+                try:
+                    pipe_dia_str = str(row_data.get("관경", "150")).strip()
+                    if not pipe_dia_str: pipe_dia_str = "150"
+                    pipe_dia_val = float(pipe_dia_str.replace("mm", "").replace("이하", "").strip())
+                    shield_size = int(pipe_dia_val * 3.14 * (2/3))
+                    row_data["납패드계산"] = f"- {int(pipe_dia_val)}mm이하 (관경) x 3.14 x 2/3 = {shield_size}mm"
+                except Exception:
+                    row_data["납패드계산"] = "- 150mm이하 (관경) x 3.14 x 2/3 = 314mm"
+                    
+                try:
+                    workspace_size = str(row_data.get("작업장크기", "5 x 14")).strip()
+                    parts = [p.strip() for p in workspace_size.replace("X", "x").replace("*", "x").split("x")]
+                    if len(parts) == 2:
+                        w1, w2 = parts[0], parts[1]
+                    else:
+                        w1, w2 = "5", "14"
+                    row_data["통제구역계산"] = f"- 방사선 관리·감시 구역은 {w1}m x {w2}m 이나 매설구간으로부터 종방향 최소 {w1}m 이상, 횡방향 {w2}m 이상에서 이동식 펜스를 설치하여 일반인의 접근을 통제함."
+                except Exception:
+                    row_data["통제구역계산"] = "- 방사선 관리·감시 구역은 5m x 14m 이나 매설구간으로부터 종방향 최소 5m 이상, 횡방향 14m 이상에서 이동식 펜스를 설치하여 일반인의 접근을 통제함."
+                try:
+                    w1_half = float(w1) / 2
+                    w2_half = float(w2) / 2
+                    row_data["횡축거리"] = f"{w1_half:g}"
+                    row_data["종축거리"] = f"{w2_half:g}"
+                except:
+                    row_data["횡축거리"] = "2.5"
+                    row_data["종축거리"] = "7"
+                
+                try:
+                    trench_width = float(str(row_data.get("배관폭", "1000")).replace("mm", "").strip())
+                    W = trench_width / 2
+                    right_dist = float(str(row_data.get("거리_우측", "2000")).replace("mm", "").strip())
+                    person_x_math = W + right_dist
+                    pipe_depth = 1500
+                    person_height = 2000
+                    slope = (pipe_depth + person_height) / person_x_math if person_x_math > 0 else 1.4
+                    angle_rad = math.atan(slope)
+                    A_math = slope * W
+                    B_math = pipe_depth - A_math
+                    C_math = B_math / math.sin(angle_rad) if angle_rad > 0 else 0
+                    row_data["자동계산토양두께"] = f"{int(C_math)}mm"
+                    row_data["계산식_토양_두께"] = f"{int(C_math)}"
+                except Exception:
+                    row_data["자동계산토양두께"] = "983mm"
+                    row_data["계산식_토양_두께"] = "983"
+
+                try:
+                    total_shots = float(str(row_data.get("총작업량", "2000")).replace(",", "").strip())
+                    stop_time = float(str(row_data.get("Stop시간", "35")).strip())
+                    shoot_time = float(str(row_data.get("Shooting시간", "4")).strip())
+                    
+                    stop_hr = (total_shots * stop_time) / 3600
+                    shoot_hr = (total_shots * shoot_time) / 3600
+                    
+                    row_data["계산_Stop시간"] = f"{round(stop_hr, 1)}"
+                    row_data["계산_Shooting시간"] = f"{round(shoot_hr, 2)}"
+                except Exception:
+                    row_data["계산_Stop시간"] = "19.4"
+                    row_data["계산_Shooting시간"] = "2.22"
+
+                out_val = row_data.get("조사대상_OUT", "O")
+                row_data["체크_OUT"] = "☑" if out_val.strip().upper() == "O" else "□"
+                
+                method = row_data.get("조사방법", "이중벽 단상").strip()
+                row_data["체크_이중벽단상"] = "☑이중벽 단상" if method == "이중벽 단상" else "□이중벽 단상"
+                
+                directions = row_data.get("조사방향", "하향, 상향, 측하향, 측방향, 측상향")
+                row_data["체크_하향"] = "☑ 하향" if "하향" in directions else "□ 하향"
+                row_data["체크_상향"] = "☑ 상향" if "상향" in directions else "□ 상향"
+                row_data["체크_측하향"] = "☑ 측하향" if "측하향" in directions else "□ 측하향"
+                row_data["체크_측방향"] = "☑ 측방향" if "측방향" in directions else "□ 측방향"
+                row_data["체크_측상향"] = "☑ 측상향" if "측상향" in directions else "□ 측상향"
+                
+                daynight = row_data.get("주야간작업", "야간")
+                if "주" in daynight:
+                    row_data["체크_주"] = "☑주"
+                    row_data["체크_야"] = "□야"
+                else:
+                    row_data["체크_주"] = "□주"
+                    row_data["체크_야"] = "☑야"
+
                 # 폴더를 새로 만들지 않고, 바탕화면(또는 선택한 저장경로)에 바로 저장
                 target_dir = self.output_base_dir
                 file_prefix = folder_name
@@ -113,14 +197,18 @@ class HWPGeneratorThread(QThread):
                     diagram_path = ""
                     side_diagram_path = ""
                     try:
-                        d_top = row_data.get("상단_이격거리", 2000)
-                        d_bot = row_data.get("하단_이격거리", 2000)
-                        d_left = row_data.get("좌단_이격거리", 2000)
-                        d_right = row_data.get("우단_이격거리", 2000)
-                        p_len = row_data.get("배관_길이", 10000)
-                        p_wid = row_data.get("배관_폭", 1000)
+                        d_top = row_data.get("거리_상단", 2000)
+                        d_bot = row_data.get("거리_하단", 2000)
+                        d_left = row_data.get("거리_좌측", 2000)
+                        d_right = row_data.get("거리_우측", 2000)
+                        p_len = row_data.get("배관길이", 10000)
+                        p_wid = row_data.get("배관폭", 1000)
+                        try:
+                            p_dia = float(str(row_data.get("관경", "150")).replace("mm", "").replace("이하", "").strip())
+                        except:
+                            p_dia = 150
                         diagram_path = create_radiation_diagram(d_top, d_bot, d_left, d_right, p_len, p_wid, os.path.join(target_dir, f"{file_prefix}_temp_diagram.jpg"))
-                        side_diagram_path = create_side_diagram(d_left, d_right, p_wid, os.path.join(target_dir, f"{file_prefix}_side_diagram.jpg"))
+                        side_diagram_path = create_side_diagram(d_left, d_right, p_wid, p_dia, os.path.join(target_dir, f"{file_prefix}_side_diagram.jpg"))
                     except Exception as e:
                         self.log_signal.emit(f"    - 도면 생성 실패: {str(e)}")
                         diagram_path = ""
@@ -142,9 +230,13 @@ class HWPGeneratorThread(QThread):
                         pipe_length = float(row_data.get("배관길이", "10000") or "10000")
                         pipe_width = float(row_data.get("배관폭", "1000") or "1000")
                         
+                        stop_hr = float(row_data.get("계산_Stop시간", "19.4"))
+                        shoot_hr = float(row_data.get("계산_Shooting시간", "2.22"))
+                        scatter_base = float(row_data.get("산란방사선_기본값", "27.1"))
+                        
                         generated_math_paths, satisfaction = math_generator.generate_math_images(
                             source_type, activity, col_t, col_h, pb_t, pb_h, soil_t, soil_h, 
-                            dist_top, dist_left, pipe_length, pipe_width, math_imgs_dir
+                            dist_top, dist_left, pipe_length, pipe_width, stop_hr, shoot_hr, math_imgs_dir, scatter_base
                         )
                         # 만족여부 텍스트 치환 (이미지보다 먼저 수행)
                         for key, val in satisfaction.items():
@@ -156,15 +248,24 @@ class HWPGeneratorThread(QThread):
                             hwp.HParameterSet.HFindReplace.IgnoreMessage = 1
                             hwp.HAction.Execute("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
 
-                        for i, p in enumerate(generated_math_paths, 1):
-                            if i <= 8:
-                                math_paths[f"계산식{i}"] = p
-                            elif i <= 10:
-                                math_paths[f"평가결과{i-8}"] = p
-                            elif i <= 12:
-                                math_paths[f"평가수식{i-10}"] = p
-                            else:
-                                math_paths["최대선량률"] = p
+                        for path in generated_math_paths:
+                            if "diagram1" in path: math_paths["평가수식1"] = path
+                            elif "diagram2" in path: math_paths["평가수식2"] = path
+                            elif "diagram3" in path: math_paths["평가수식3"] = path
+                            elif "equation1" in path: math_paths["계산식1"] = path
+                            elif "equation2" in path: math_paths["계산식2"] = path
+                            elif "equation3" in path: math_paths["계산식3"] = path
+                            elif "eval_eq1" in path: math_paths["평가결과1"] = path
+                            elif "eval_eq2" in path: math_paths["평가결과2"] = path
+                            elif "max_dose" in path: math_paths["최대선량률"] = path
+                            elif "dose_ab" in path: math_paths["피폭선량결과"] = path
+                            elif "dose_cd" in path: math_paths["산란방사선결과"] = path
+                            elif "eq_shooting" in path: math_paths["평가수식_Shooting"] = path
+                            elif "eq_stop" in path: math_paths["평가수식_Stop"] = path
+                            elif "eq_scatter" in path: math_paths["평가수식_Scatter"] = path
+                            elif "eq_total" in path: math_paths["평가수식_Total"] = path
+                            elif "total_result" in path: math_paths["최종피폭선량"] = path
+                            
                     except Exception as e:
                         self.log_signal.emit(f"    - 수식 생성 실패: {str(e)}")
 
@@ -176,11 +277,14 @@ class HWPGeneratorThread(QThread):
                     image_tags = [
                         "지도1", "지도2", "지도3", 
                         "부지사진1", "부지사진2",
+                        "상세사진1", "상세사진2",
+                        "구역도", "횡방향측면도", 
                         "계산식1", "계산식2", "계산식3", "계산식4",
                         "계산식5", "계산식6", "계산식7", "계산식8",
                         "평가결과1", "평가결과2", "평가수식1", "평가수식2",
-                        "최대선량률",
-                        "구역도", "측면도"
+                        "최대선량률", "피폭선량결과", "산란방사선결과",
+                        "평가수식_Shooting", "평가수식_Stop",
+                        "평가수식_Scatter", "평가수식_Total", "최종피폭선량"
                     ]
                     
                     for tag in image_tags:
@@ -190,9 +294,9 @@ class HWPGeneratorThread(QThread):
                         # 구역도 태그이고 자동 생성된 파일이 있다면 우선 사용
                         if tag == "구역도" and diagram_path and os.path.exists(diagram_path):
                             img_path = diagram_path
-                        elif tag == "측면도" and side_diagram_path and os.path.exists(side_diagram_path):
+                        elif tag == "횡방향측면도" and side_diagram_path and os.path.exists(side_diagram_path):
                             img_path = side_diagram_path
-                        elif (tag.startswith("계산식") or tag.startswith("평가결과") or tag.startswith("평가수식") or tag == "최대선량률") and tag in math_paths and os.path.exists(math_paths[tag]):
+                        elif (tag.startswith("계산식") or tag.startswith("평가결과") or tag.startswith("평가수식") or tag in ["최대선량률", "최종피폭선량"]) and tag in math_paths and os.path.exists(math_paths[tag]):
                             img_path = math_paths[tag]
                         # 그 외엔 이미지 폴더에서 찾기
                         elif img_folder and os.path.exists(img_folder):
@@ -212,8 +316,12 @@ class HWPGeneratorThread(QThread):
                                     hwp.HAction.Run("Delete") # 태그 지우기
                                     if tag == "구역도":
                                         hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 90)
-                                    elif tag == "측면도":
-                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 84)
+                                    elif tag == "횡방향측면도":
+                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 105)
+                                    elif tag == "지도1":
+                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 80)
+                                    elif tag in ["지도2", "지도3"] or tag.startswith("부지사진") or tag.startswith("상세사진"):
+                                        hwp.InsertPicture(img_path, True, 1, False, False, 0, 75, 55)
                                     elif tag.startswith("평가수식"):
                                         hwp.InsertPicture(img_path, True, 1, False, False, 0, 150, 15)
                                     elif tag.startswith("계산식"):
@@ -221,8 +329,8 @@ class HWPGeneratorThread(QThread):
                                     elif tag.startswith("평가결과"):
                                         # 평가결과는 작은 크기로 삽입
                                         hwp.InsertPicture(img_path, True, 1, False, False, 0, 45, 15)
-                                    elif tag == "최대선량률":
-                                        # 최대선량률은 줄글 중간에 들어가므로 아주 작게 삽입
+                                    elif tag in ["최대선량률", "피폭선량결과", "산란방사선결과", "최종피폭선량"]:
+                                        # 최대선량률 등은 줄글 중간이나 좁은 칸에 들어가므로 아주 작게 삽입
                                         hwp.InsertPicture(img_path, True, 1, False, False, 0, 30, 8)
                                     else:
                                         # 지도/부지사진 등은 지정된 15cm x 10cm 크기로 고정 (크기 옵션 1, 150mm x 100mm)
@@ -353,7 +461,9 @@ class MainWindow(QMainWindow):
                 "032-549-8457", "3인 1조 (1개조)", "2025.04.03", "2025.05.07", "25.04.03", "25.05.07",
                 "소래로 → 아암대로 → 인천신항대로", "15km", "30분", 
                 "야외(매설배관)", "5 x 14", "황축토양(983)",
-                "2000", "2000", "2000", "2000", "10000", "1000",
+                "2000", "2000", "2000", "2000", "10000", "1000", "150",
+                "C/S", "2~10''", "~5.5", "2000", "1년 2개월",
+                "O", "이중벽 단상", "하향, 상향, 측하향, 측방향, 측상향", "35", "4",
                 "Se-75", "60", "11", "0.8", "12", "1", "983", "45",
                 "", "", "", "", "", "", "", "",
                 r"C:\Users\jjch2\Desktop\신고서_마스터템플릿\지도사진들"

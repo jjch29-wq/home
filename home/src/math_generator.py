@@ -11,7 +11,7 @@ def format_scientific(value):
         return f"{value:.3g}"
     return f"{coef:.2f} \\times 10^{{{exp}}}"
 
-def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t, soil_h, dist_top, dist_left, pipe_length, pipe_width, output_dir):
+def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t, soil_h, dist_top, dist_left, pipe_length, pipe_width, stop_hr, shoot_hr, output_dir, scatter_base=27.1):
     # Set gamma constant based on source type
     if "Ir-192" in source_type or "Ir" in source_type:
         gamma = 4800
@@ -185,20 +185,23 @@ def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t
     max_dose = max(dose_ab, dose_cd)
     max_dose_str = format_scientific(max_dose)
     
-    eq_max = r'$' + max_dose_str + r'\times 10' # wait, format_scientific returns string without 10^ if not scientific!
-    # Let's just reuse format_scientific which returns something like 4.42 \times 10^{-5}
     eq_max = r'$' + max_dose_str + r'$'
+    eq_dose_ab = r'$' + dose_str_ab + r'$'
+    eq_dose_cd = r'$' + dose_str_cd + r'$'
     
-    fig = plt.figure(figsize=(1.5, 0.4))
-    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-    fig.text(0.5, 0.5, eq_max, fontsize=16, ha='center', va='center', color='black')
-    plt.axis('off')
-    
-    out_path_max = os.path.join(output_dir, "max_dose.jpg")
-    plt.savefig(out_path_max, bbox_inches='tight', pad_inches=0.05, dpi=200)
-    plt.close(fig)
-    
-    generated_paths.append(out_path_max)
+    def save_tiny_eq(eq_str, filename):
+        fig = plt.figure(figsize=(1.5, 0.4))
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        fig.text(0.5, 0.5, eq_str, fontsize=16, ha='center', va='center', color='black')
+        plt.axis('off')
+        out_path = os.path.join(output_dir, filename)
+        plt.savefig(out_path, bbox_inches='tight', pad_inches=0.05, dpi=200)
+        plt.close(fig)
+        generated_paths.append(out_path)
+
+    save_tiny_eq(eq_max, "max_dose.jpg")
+    save_tiny_eq(eq_dose_ab, "dose_ab.jpg")
+    save_tiny_eq(eq_dose_cd, "dose_cd.jpg")
 
     # Satisfaction text
     satisfaction = {
@@ -211,11 +214,56 @@ def generate_math_images(source_type, activity, col_t, col_h, pb_t, pb_h, soil_t
         "세로거리": d_cd_str,
     }
 
+    # Calculate Shooting & Stop Evaluation Equations
+    if d_ab > 0:
+        shoot_dose = gamma * activity / (d_ab**2) * math.exp(-0.693 * (soil_t / soil_h)) * shoot_hr
+        stop_dose = gamma * activity / (d_ab**2) * math.exp(-0.693 * (pb_t / pb_h + soil_t / soil_h)) * stop_hr
+    else:
+        shoot_dose = 0
+        stop_dose = 0
+        
+    shoot_dose_str = format_scientific(shoot_dose)
+    stop_dose_str = format_scientific(stop_dose)
+    
+    eq_shooting = r'$' + f"\\frac{{{gamma}\\mu Sv\\cdot m^2 / Ci\\cdot hr \\times {activity} Ci}}{{({d_ab_str}m)^2}} \\times e^{{-0.693(\\frac{{{soil_t:g}}}{{{soil_h:g}}})}} \\times {shoot_hr:g}hr/yr = {shoot_dose_str}\\mu Sv/yr" + r'$'
+    eq_stop = r'$' + f"\\frac{{{gamma}\\mu Sv\\cdot m^2 / Ci\\cdot hr \\times {activity} Ci}}{{({d_ab_str}m)^2}} \\times e^{{-0.693(\\frac{{{pb_t:g}}}{{{pb_h:g}}} + \\frac{{{soil_t:g}}}{{{soil_h:g}}})}} \\times {stop_hr:g}hr/yr = {stop_dose_str}\\mu Sv/yr" + r'$'
+    
+    def save_long_eq(eq_str, filename):
+        fig = plt.figure(figsize=(15, 1.0))
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        fig.text(0.5, 0.5, eq_str, fontsize=20, ha='center', va='center', color='black')
+        plt.axis('off')
+        out_path = os.path.join(output_dir, filename)
+        plt.savefig(out_path, bbox_inches='tight', pad_inches=0.1, dpi=200)
+        plt.close(fig)
+        generated_paths.append(out_path)
+        
+    save_long_eq(eq_shooting, "eq_shooting.jpg")
+    save_long_eq(eq_stop, "eq_stop.jpg")
+    
+    # Calculate Scatter and Total
+    total_hr = shoot_hr + stop_hr
+    scatter_dose = scatter_base * math.exp(-0.693 * (pb_t / pb_h)) * total_hr * 0.4
+    scatter_dose_str = format_scientific(scatter_dose)
+    
+    eq_scatter = r'$' + f"{scatter_base}\\mu Sv/hr \\times e^{{-0.693(\\frac{{{pb_t:g}}}{{{pb_h:g}}})}} \\times {total_hr:g}hr/yr \\times 40\\% = {scatter_dose_str}\\mu Sv/yr" + r'$'
+    
+    total_dose = shoot_dose + stop_dose + scatter_dose
+    total_dose_str = format_scientific(total_dose)
+    
+    eq_total = r'$' + f"{shoot_dose_str} + {stop_dose_str} + {scatter_dose_str} = {total_dose_str}\\mu Sv/yr" + r'$'
+    
+    eq_total_result = r'$' + f"{total_dose_str}\\mu Sv/yr" + r'$'
+    
+    save_long_eq(eq_scatter, "eq_scatter.jpg")
+    save_long_eq(eq_total, "eq_total.jpg")
+    save_tiny_eq(eq_total_result, "total_result.jpg")
+
     return generated_paths, satisfaction
 
 if __name__ == "__main__":
     # Test
-    paths, sats = generate_math_images("Se-75", 60, 11, 0.8, 12, 1, 983, 45, 2000, 2000, 10000, 1000, "temp_math_imgs")
+    paths, sats = generate_math_images("Se-75", 60, 11, 0.8, 12, 1, 983, 45, 2000, 2000, 10000, 1000, 19.4, 2.22, "temp_math_imgs")
     for p in paths:
         print(p)
     print(sats)
