@@ -1,0 +1,972 @@
+Sheets: ['표지', '목차', '1.용역개요', '2. 공정율 (전체)', '2. 공정율 (주배관)', '2. 공정율 (관리소)', '3. 비파괴검사 현황 (주배관)', '3. 비파괴검사 현황 (관리소)', '나. 검사물량 세부내역 (주배관)', '나. 검사물량 세부내역 (관리소)', '4. 물량세부내역 (주배관)', '4. 물량세부내역 (관리소)', '5.1 월별 용접불량(2025년)', '5.1 월별 용접불량(2026년)', '5.1 25년~26년 용접불량 현황', '5.2 용접사 불량률-주배관(완료)', '5.2 용접사 불량률-대산관리소', '5.3 불합격 관리대장', '5.4 불합격매수발생내용', '6. 안전관리 활동 및 교육 현황', '6.3 투입인원현황 ', '6.4.현장조직도', '6.5.안전관리활동', '6.6.교육계획서', '6-7.교육출석부', ' 교육사진대장', '7. 배출시설운영일지', '8. 지입자재', '9.0 수검현황', '10. 절단개소 & 11. 굴착확인', '12. 문서 접수', '12. 문서 발송', '13.1 사진대장', '3.2 용접사 불량률(가로)', '3.2 공사별 불량현황', '5.2(교육일지 ) (2)']
+
+Sheet: 표지
+  Row 2: Col 9: 관리번호
+  Row 3: Col 1: 계약번호 : 제2025-WS-0012호, Col 9: No.
+  Row 8: Col 1: 씨지앤대산 복합발전소 및 서산시 천연가스 공급시설 건설공사
+비파괴검사 기술용역
+  Row 10: Col 1: 월 간 용 역 진 도 보 고 서
+  Row 11: Col 1: 보고연월
+  Row 16: Col 1: 제  11  호
+
+Sheet: 목차
+  Row 3: Col 1: 목    차
+  Row 5: Col 2: 1. 용역 개요 및 용역업무 일반현황
+  Row 7: Col 2: 2. 공정율
+  Row 9: Col 2: 3. 비파괴검사 현황
+  Row 11: Col 2: 4. 작업물량 세부 내역
+  Row 13: Col 2: 5. 용접결함 발생현황 및 재검사 현황
+  Row 15: Col 2: 6. 안전관리 활동 및 교육 현황
+  Row 17: Col 2: 7. 배출시설 및 방지시설 운영일지
+  Row 19: Col 2: 8. 지입 자재/장비 검수 현황
+  Row 21: Col 2: 9. 한국가스안전공사 R.T 필름 수검현황
+  Row 23: Col 2: 10. 용접부 절단개소 현황
+  Row 25: Col 2: 11. 굴착 확인 촬영 현황
+  Row 27: Col 2: 12. 문서 접수 및 발송 사항
+  Row 29: Col 2: 13. 사진대장
+
+Sheet: 1.용역개요
+  Row 1: Col 1: 1. 용역 개요 및 용역업무 일반현황
+  Row 3: Col 1: 가., Col 2: 용역 개요
+  Row 4: Col 2: (1) 씨지앤대산 복합발전소/서산시 천연가스 공급시설 건설공사 비파괴검사 기술용역
+  Row 5: Col 2: (2) 계약기간 : 2025. 06. 25 ~ 2026. 07. 30
+  Row 7: Col 1: 나., Col 2: 용역 목적
+  Row 8: Col 2: 가스배관 용접부에 대한 비파괴검사를 수행하여 용접부위의 결함을 제거, 재해 발생요인을 사전
+  Row 9: Col 2: 배제함으로써 설비의 품질향상 및 안전성을 확보하고자 함.
+  Row 11: Col 1: 다., Col 2: 검사용역 규모
+  Row 12: Col 2: -1, Col 3: 씨지앤대산 복합발전소 천연가스 공급시설 건설공사 주배관 : 20" X 7.87km (KR산업)
+  Row 13: Col 2: -2, Col 3: 서산시 천연가스 공급설비 건설공사 대산관리소(증설) ((주)덕일)
+  Row 15: Col 1: 라., Col 2: 검사용역 범위
+  Row 16: Col 2: -1, Col 3: 방사선투과검사
+  Row 17: Col 3: 방사선투과검사 부위는 맞대기 용접부, 압력시험용 가배관 맞대기 용접부, RT가 가능한
+  Row 18: Col 3: 용접부 및 소구경(2"이하) 맞대기 용접부 및 2"이상의 필렛용접부에 대하여 100%
+  Row 19: Col 3: 실시한다.
+  Row 20: Col 2: -2, Col 3: 액체침투탐상검사
+  Row 21: Col 3: 액체침투탐상검사 부위는 내압.기밀시험 실시 불가 맞대기 용접부, 압력시험용 가배관,
+  Row 22: Col 3: 필렛, 소켓 용접부 및 Weldolet, Sockolet, Coupling등의 접속구 필렛용접부에 대하여
+  Row 23: Col 3: 100% 실시하고, 한국가스공사 감독원이 필요하다고 판단되는 용접부에 대하여 실시한다.
+  Row 24: Col 2: -3, Col 3: 초음파탐상검사
+  Row 25: Col 3: 초음파탐상검사 부위는 해저, 하천, 철도, 교량통과 및 도로 횡단부 Casing내 용접부 등
+  Row 26: Col 3: 작업여건이 열악한 용접부와 내압.기밀시험실시 불가 맞대기 용접부에 대하여 100%
+  Row 27: Col 3: 실시하고, 한국가스공사 감독원이 필요하다고 판단되는 용접부에 대하여 실시한다.
+  Row 29: Col 1: 마., Col 2: 비파괴검사 절차, 방법 및 판정기준
+  Row 30: Col 2: -1, Col 3: KS B 0888 : 배관용접부의 비파괴시험 방법
+  Row 31: Col 2: -2, Col 3: KS B 0845 : 강 용접부의 방사선 투과검사 시험방법 및 투과사진의 등급
+  Row 32: Col 2: -3, Col 3: KS B 0896 : 강 용접부의 초음파탐상시험 방법 및 시험결과의 등급분류 방법
+  Row 33: Col 2: -4, Col 3: KS B 0816 : 침투탐상시험 방법 및 결함지시 모양의 분류
+  Row 34: Col 2: -5, Col 3: 도시가스사업법 KGS Code GC 205 "가스시설 용접 및 비파괴시험 기준“
+  Row 35: Col 2: -6, Col 3: 발주자 지침서
+  Row 36: Col 3: 가) KOGAS-GSD-2130 [천연가스 배관 용접 기술표준]
+  Row 37: Col 3: 나) KOGAS-GSD-0102 [비파괴검사 선정기준]
+
+Sheet: 2. 공정율 (전체)
+  Row 1: Col 1: 2. 공정율, Col 16: * 검사물량 집계표
+  Row 2: Col 16: 1. 주배관 검사물량(종합) 총괄 집계표
+  Row 3: Col 1: 용역명 : 씨지앤대산 복합발전소/서산시 천연가스 공급시설 건설공사 비파괴검사 기술용역, Col 15: , Col 16: 구  분, Col 19: 실검사 물량(종합)
+  Row 4: Col 1: 용역사 : 서울검사(주), Col 19: 일반검사
+  Row 5: Col 11: (총괄), Col 12: 2026-07-07 00:00:00, Col 14: 현재, Col 16: 방사선
+투과검사, Col 17: 필름
+규격
+(매), Col 18: B-TYPE, Col 19: 2659.5
+  Row 6: Col 18: A-TYPE
+  Row 7: Col 1: 구   분, Col 2: 검  사, Col 3: 계약물량, Col 4: 전월검사물량, Col 7: 당월검사물량, Col 10: 누계검사물량, Col 13: 금월공정율
+(%), Col 14: 누계공정율
+(%), Col 18: A/2-TYPE
+  Row 8: Col 4: Original, Col 5: Repair, Col 6: 소  계, Col 7: Original, Col 8: Repair, Col 9: 소  계, Col 10: Original, Col 11: Repair, Col 12: 소  계, Col 17: 계, Col 19: 2659.5
+  Row 9: Col 1: 방사선투과검사, Col 2: 일반검사, Col 16: 초음파탐상검사(M), Col 19: 8.48
+  Row 10: Col 2: 야간(휴일)검사, Col 16: 액체침투탐상검사(M), Col 19: 42.42
+  Row 11: Col 2: 합  계, Col 3: 0, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 16: 비파괴검사
+기록 전산화, Col 17: 필름(매), Col 19: 3830
+  Row 12: Col 1: 초음파탐상검사, Col 2: 일반검사, Col 17: 보고서(매)
+  Row 13: Col 2: 야간(휴일)검사
+  Row 14: Col 2: 합  계, Col 3: 0, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 16: 2. 관리소 검사물량(종합) 총괄 집계표
+  Row 15: Col 1: 침투탐상검사, Col 2: 일반검사, Col 16: 구  분, Col 19: 실검사 물량(종합)
+  Row 16: Col 2: 야간(휴일)검사, Col 19: 일반검사
+  Row 17: Col 2: 합  계, Col 3: 0, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: #DIV/0!, Col 14: #DIV/0!, Col 16: 방사선
+투과검사, Col 17: 필름
+규격
+(매), Col 18: B-TYPE, Col 19: 1028
+  Row 18: Col 18: A-TYPE, Col 19: 739.6
+  Row 19: Col 1: ◈ 필름 타입별 수량, Col 18: A/2-TYPE, Col 19: 600.5999999999999
+  Row 20: Col 1: 구   분, Col 3: 계약물량, Col 4: 전월검사물량, Col 7: 당월검사물량, Col 10: 누계검사물량, Col 13: 금월공정율
+(%), Col 14: 누계공정율
+(%), Col 17: 계, Col 19: 2368.2
+  Row 21: Col 4: 일반검사, Col 5: 야간/휴일검사, Col 6: 소  계, Col 7: 일반검사, Col 8: 야간/휴일검사, Col 9: 소  계, Col 10: 일반검사, Col 11: 야간/휴일검사, Col 12: 소  계, Col 16: 초음파탐상검사(M), Col 19: 14.000000000000002
+  Row 22: Col 1: 방사선투과검사, Col 2: B-TYPE (3⅓X17"), Col 16: 액체침투탐상검사(M), Col 19: 24.86
+  Row 23: Col 2: A-TYPE (3⅓X12"), Col 16: 비파괴검사
+기록 전산화, Col 17: 필름(매), Col 19: 3164.85
+  Row 24: Col 2: A/2-TYPE (3⅓X6"), Col 17: 보고서(매)
+  Row 25: Col 1: 합    계, Col 3: 0, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0
+  Row 27: Col 4: 
+
+Sheet: 2. 공정율 (주배관)
+  Row 1: Col 1: 2. 공정율, Col 16: * 검사물량 집계표
+  Row 2: Col 16: 1. 주배관 검사물량(종합) 총괄 집계표
+  Row 3: Col 1: 용역명 : 씨지앤대산 복합발전소 천연가스 공급시설 건설공사 비파괴검사 기술용역, Col 16: 구  분, Col 19: 실검사 물량(종합)
+  Row 4: Col 1: 용역사 : 서울검사(주), Col 19: 일반검사
+  Row 5: Col 11: (주배관), Col 12: 2026-07-07 00:00:00, Col 14: 현재, Col 16: 방사선
+투과검사, Col 17: 필름
+규격
+(매), Col 18: B-TYPE, Col 19: 2659.5
+  Row 6: Col 18: A-TYPE
+  Row 7: Col 1: 구   분, Col 2: 검  사, Col 3: 계약물량, Col 4: 전월검사물량, Col 7: 당월검사물량, Col 10: 누계검사물량, Col 13: 금월공정율
+(%), Col 14: 누계공정율
+(%), Col 18: A/2-TYPE
+  Row 8: Col 4: Original, Col 5: Repair, Col 6: 소  계, Col 7: Original, Col 8: Repair, Col 9: 소  계, Col 10: Original, Col 11: Repair, Col 12: 소  계, Col 17: 계, Col 19: 2659.5
+  Row 9: Col 1: 방사선투과검사, Col 2: 일반검사, Col 16: 초음파탐상검사(M), Col 19: 8.48
+  Row 10: Col 2: 야간(휴일)검사, Col 16: 액체침투탐상검사(M), Col 19: 42.42
+  Row 11: Col 2: 합  계, Col 16: 비파괴검사
+기록 전산화, Col 17: 필름(매), Col 19: 3830
+  Row 12: Col 1: 초음파탐상검사, Col 2: 일반검사, Col 17: 보고서(매)
+  Row 13: Col 2: 야간(휴일)검사
+  Row 14: Col 2: 합  계, Col 16: 2. 관리소 검사물량(종합) 총괄 집계표
+  Row 15: Col 1: 침투탐상검사, Col 2: 일반검사, Col 16: 구  분, Col 19: 실검사 물량(종합)
+  Row 16: Col 2: 야간(휴일)검사, Col 19: 일반검사
+  Row 17: Col 2: 합  계, Col 16: 방사선
+투과검사, Col 17: 필름
+규격
+(매), Col 18: B-TYPE, Col 19: 1028
+  Row 18: Col 18: A-TYPE, Col 19: 739.6
+  Row 19: Col 1: ◈ 필름 타입별 수량, Col 18: A/2-TYPE, Col 19: 600.5999999999999
+  Row 20: Col 1: 구   분, Col 3: 계약물량, Col 4: 전월검사물량, Col 7: 당월검사물량, Col 10: 누계검사물량, Col 13: 금월공정율
+(%), Col 14: 누계공정율
+(%), Col 17: 계, Col 19: 2368.2
+  Row 21: Col 4: 일반검사, Col 5: 야간/휴일검사, Col 6: 소  계, Col 7: 일반검사, Col 8: 야간/휴일검사, Col 9: 소  계, Col 10: 일반검사, Col 11: 야간/휴일검사, Col 12: 소  계, Col 16: 초음파탐상검사(M), Col 19: 14.000000000000002
+  Row 22: Col 1: 방사선투과검사, Col 2: B-TYPE (3⅓X17"), Col 16: 액체침투탐상검사(M), Col 19: 24.86
+  Row 23: Col 2: A-TYPE (3⅓X12"), Col 16: 비파괴검사
+기록 전산화, Col 17: 필름(매), Col 19: 3164.85
+  Row 24: Col 2: A/2-TYPE (3⅓X6"), Col 17: 보고서(매)
+  Row 25: Col 1: 합    계
+
+Sheet: 2. 공정율 (관리소)
+  Row 1: Col 1: 2. 공정율, Col 16: * 검사물량 집계표
+  Row 2: Col 16: 1. 관리소 검사물량(종합) 총괄 집계표
+  Row 3: Col 1: 용역명 : 서산시 천연가스 공급시설 건설공사 비파괴검사 기술용역, Col 16: 구  분, Col 19: 실검사 물량(종합)
+  Row 4: Col 1: 용역사 : 서울검사(주), Col 19: 일반검사
+  Row 5: Col 11: (관리소), Col 12: 2026-07-07 00:00:00, Col 14: 현재, Col 16: 방사선
+투과검사, Col 17: 필름
+규격
+(매), Col 18: B-TYPE, Col 19: 2659.`5
+  Row 6: Col 18: A-TYPE
+  Row 7: Col 1: 구   분, Col 2: 검  사, Col 3: 계약물량, Col 4: 전월검사물량, Col 7: 당월검사물량, Col 10: 누계검사물량, Col 13: 금월공정율
+(%), Col 14: 누계공정율
+(%), Col 18: A/2-TYPE
+  Row 8: Col 4: Original, Col 5: Repair, Col 6: 소  계, Col 7: Original, Col 8: Repair, Col 9: 소  계, Col 10: Original, Col 11: Repair, Col 12: 소  계, Col 17: 계, Col 19: 2659.5
+  Row 9: Col 1: 방사선투과검사, Col 2: 일반검사, Col 16: 초음파탐상검사(M), Col 19: 8.48
+  Row 10: Col 2: 야간(휴일)검사, Col 16: 액체침투탐상검사(M), Col 19: 42.42
+  Row 11: Col 2: 합  계, Col 16: 비파괴검사
+기록 전산화, Col 17: 필름(매), Col 19: 3830
+  Row 12: Col 1: 초음파탐상검사, Col 2: 일반검사, Col 17: 보고서(매)
+  Row 13: Col 2: 야간(휴일)검사
+  Row 14: Col 2: 합  계, Col 16: 2. 관리소 검사물량(종합) 총괄 집계표
+  Row 15: Col 1: 침투탐상검사, Col 2: 일반검사, Col 16: 구  분, Col 19: 실검사 물량(종합)
+  Row 16: Col 2: 야간(휴일)검사, Col 19: 일반검사
+  Row 17: Col 2: 합  계, Col 16: 방사선
+투과검사, Col 17: 필름
+규격
+(매), Col 18: B-TYPE, Col 19: 1028
+  Row 18: Col 18: A-TYPE, Col 19: 739.6
+  Row 19: Col 1: ◈ 필름 타입별 수량, Col 18: A/2-TYPE, Col 19: 600.5999999999999
+  Row 20: Col 1: 구   분, Col 3: 계약물량, Col 4: 전월검사물량, Col 7: 당월검사물량, Col 10: 누계검사물량, Col 13: 금월공정율
+(%), Col 14: 누계공정율
+(%), Col 17: 계, Col 19: 2368.2
+  Row 21: Col 4: 일반검사, Col 5: 야간/휴일검사, Col 6: 소  계, Col 7: 일반검사, Col 8: 야간/휴일검사, Col 9: 소  계, Col 10: 일반검사, Col 11: 야간/휴일검사, Col 12: 소  계, Col 16: 초음파탐상검사(M), Col 19: 14.000000000000002
+  Row 22: Col 1: 방사선투과검사, Col 2: B-TYPE (3⅓X17"), Col 16: 액체침투탐상검사(M), Col 19: 24.86
+  Row 23: Col 2: A-TYPE (3⅓X12"), Col 16: 비파괴검사
+기록 전산화, Col 17: 필름(매), Col 19: 3164.85
+  Row 24: Col 2: A/2-TYPE (3⅓X6"), Col 17: 보고서(매)
+  Row 25: Col 1: 합    계
+
+Sheet: 3. 비파괴검사 현황 (주배관)
+  Row 1: Col 1: 3. 비파괴검사 현황
+  Row 3: Col 1: 가. 검사물량 총괄 집계표 (주배관)
+  Row 4: Col 1: 구        분, Col 3: 당월검사물량, Col 15: 비고
+  Row 5: Col 3: 일 반 검 사, Col 7: 휴일/야간검사, Col 11: 합  계
+  Row 6: Col 1: 검사 구분, Col 2: 규    격, Col 3: 용접개소, Col 4: 검사물량, Col 7: 용접개소, Col 8: 검사물량, Col 11: 용접개소, Col 12: 검사물량
+  Row 7: Col 4: ORI, Col 5: REP, Col 6: 합계, Col 8: ORI, Col 9: REP, Col 10: 합계, Col 12: ORI, Col 13: REP, Col 14: 합계
+  Row 8: Col 1: 방사선
+투과검사, Col 2: B-TYPE
+(3⅓"×17"), Col 3: 0, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 9: Col 2: A-TYPE
+(3⅓"×12"), Col 3: 0, Col 4: 0, Col 6: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 10: Col 2: A/2-TYPE
+(3⅓"×6"), Col 3: 0, Col 4: 0, Col 6: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 11: Col 2: 합      계, Col 3: 0, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 12: Col 1: 초음파
+탐상검사, Col 2: 실검사길이(M), Col 3: 0, Col 4: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 14: 0
+  Row 13: Col 2: 검사보정길이(M), Col 4: 0, Col 6: 0, Col 8: 0, Col 10: 0, Col 12: 0, Col 14: 0
+  Row 14: Col 1: 액체침투
+탐상검사, Col 2: 실검사길이(M), Col 3: 0, Col 4: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 14: 0
+  Row 15: Col 2: 검사보정길이(M), Col 4: 0, Col 6: 0, Col 8: 0, Col 10: 0, Col 12: 0, Col 14: 0
+  Row 16: Col 1: 비파괴검사
+기록 전산화, Col 2: 필름(매), Col 11: 0, Col 12: 0
+  Row 17: Col 2: 보고서(매), Col 11: 0, Col 12: 0
+
+Sheet: 3. 비파괴검사 현황 (관리소)
+  Row 1: Col 1: 3. 비파괴검사 현황
+  Row 3: Col 1: 가. 검사물량 총괄 집계표 (관리소)
+  Row 4: Col 1: 구        분, Col 3: 당월검사물량, Col 15: 비고
+  Row 5: Col 3: 일 반 검 사, Col 7: 휴일/야간검사, Col 11: 합  계
+  Row 6: Col 1: 검사 구분, Col 2: 규    격, Col 3: 용접개소, Col 4: 검사물량, Col 7: 용접개소, Col 8: 검사물량, Col 11: 용접개소, Col 12: 검사물량
+  Row 7: Col 4: ORI, Col 5: REP, Col 6: 합계, Col 8: ORI, Col 9: REP, Col 10: 합계, Col 12: ORI, Col 13: REP, Col 14: 합계
+  Row 8: Col 1: 방사선
+투과검사, Col 2: B-TYPE
+(3⅓"×17")
+  Row 9: Col 2: A-TYPE
+(3⅓"×12")
+  Row 10: Col 2: A/2-TYPE
+(3⅓"×6")
+  Row 11: Col 2: 합      계
+  Row 12: Col 1: 초음파
+탐상검사, Col 2: 실검사길이(M)
+  Row 13: Col 2: 검사보정길이(M)
+  Row 14: Col 1: 액체침투
+탐상검사, Col 2: 실검사길이(M)
+  Row 15: Col 2: 검사보정길이(M)
+  Row 16: Col 1: 비파괴검사
+기록 전산화, Col 2: 필름(매), Col 11: 0, Col 12: 0
+  Row 17: Col 2: 보고서(매), Col 11: 0, Col 12: 0
+
+Sheet: 나. 검사물량 세부내역 (주배관)
+  Row 1: Col 1: 나. 검사물량 세부 내역 (주배관)
+  Row 3: Col 1: (1)  방사선투과검사
+  Row 4: Col 1: 구 분, Col 2: 관 경
+(Inch), Col 3: 개소당
+촬영매수, Col 4: 용접개소
+(BW), Col 5: 필  름  매  수, Col 8: 필름 규격
+  Row 5: Col 5: Original, Col 6: Repair, Col 7: Total
+  Row 6: Col 1: 주간, Col 2: 20, Col 10: A/2-TYPE
+  Row 7: Col 1: 휴일/야간, Col 2: 20
+  Row 8: Col 1: 주간, Col 2: 24
+  Row 9: Col 1: 주간, Col 2: 6
+  Row 10: Col 1: 주간, Col 2: 4
+  Row 11: Col 1: 주간, Col 2: 2
+  Row 12: Col 1: 주간, Col 2: 3/4
+  Row 13: Col 1: 주간, Col 2: 6
+  Row 14: Col 1: 주간, Col 2: 4
+  Row 15: Col 1: 주간, Col 2: 2
+  Row 16: Col 1: 주간, Col 2: 3/4'(wed)
+  Row 17: Col 1: 합 계, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0
+  Row 18: Col 1: ※ 관리소 물량은 주간:휴일/야간 = 6:4, 주배관은 95:5
+  Row 19: Col 1: ※ 휴일/야간검사 물량은 주간:휴일/야간 = 9:1 반영
+  Row 21: Col 1: (2) 초음파탐상검사
+  Row 22: Col 1: 구 분, Col 2: 관 경
+(Inch), Col 3: 관 경 당
+검사길이, Col 4: 용접개소
+(BW), Col 5: 실검사길이
+(M), Col 6: 보정 계수, Col 7: 검사보정길이
+(M), Col 8: 비  고
+  Row 24: Col 1: 주간, Col 2: 20, Col 7: 0
+  Row 25: Col 1: 휴일/야간, Col 2: 20, Col 7: 0
+  Row 26: Col 1: 총   계, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0
+  Row 27: Col 1: ※ UT 주간물량은 RT 주간물량의 5% 반영
+  Row 28: Col 1: ※ UT 휴일/야간검사 물량은 RT 야간물량의 5% 반영
+  Row 30: Col 1: (3) 액체침투탐상검사
+  Row 31: Col 1: 구 분, Col 2: 관 경
+(Inch), Col 3: 관 경 당
+검사길이, Col 4: 용접개소
+(BW), Col 5: 실검사길이
+(M), Col 6: 보정 계수, Col 7: 검사보정길이
+(M), Col 8: 비  고
+  Row 33: Col 1: 주간, Col 2: 20, Col 7: 0
+  Row 34: Col 1: 휴일/야간, Col 2: 20, Col 7: 0
+  Row 35: Col 1: 주간, Col 2: 2", Col 7: 0
+  Row 36: Col 1: 주간, Col 2: 2, Col 7: 0
+  Row 37: Col 1: 주간, Col 2: 2, Col 7: 0
+  Row 38: Col 1: 총   계, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0
+  Row 39: Col 1: ※ 필렛,소켓 용접개소의 100% 적용(주간:휴일/야간 = 6:4), 주배관 PT 주간물량은 RT 주간물량의 5% 반영
+
+Sheet: 나. 검사물량 세부내역 (관리소)
+  Row 1: Col 1: 나. 검사물량 세부 내역 (관리소)
+  Row 3: Col 1: (1)  방사선투과검사
+  Row 4: Col 1: 구 분, Col 2: 관 경
+(Inch), Col 3: 개소당
+촬영매수, Col 4: 용접개소
+(BW), Col 5: 필  름  매  수, Col 8: 필름 규격
+  Row 5: Col 5: Original, Col 6: Repair, Col 7: Total
+  Row 6: Col 1: 주간, Col 2: 30, Col 3: 7, Col 8: B-TYPE, Col 10: A-TYPE
+  Row 7: Col 2: 24, Col 3: 5, Col 10: B-TYPE
+  Row 8: Col 2: 20, Col 3: 5, Col 10: A/2-TYPE
+  Row 9: Col 2: 16, Col 3: 5, Col 8: A-TYPE
+  Row 10: Col 2: 14, Col 3: 5
+  Row 11: Col 2: 12, Col 3: 4
+  Row 12: Col 2: 10, Col 3: 4
+  Row 13: Col 2: 6, Col 3: 3
+  Row 14: Col 2: 4, Col 3: 4, Col 9: VALVE
+  Row 15: Col 2: 4, Col 3: 4, Col 8: A/2-TYPE
+  Row 16: Col 2: 2.5, Col 3: 3
+  Row 17: Col 2: 2, Col 3: 4
+  Row 18: Col 2: 2, Col 3: 4
+  Row 19: Col 2: 1.5", Col 3: 4
+  Row 20: Col 2: 1.5, Col 3: 4
+  Row 21: Col 2: 3/4", Col 3: 4
+  Row 22: Col 2: 0.5, Col 3: 4
+  Row 23: Col 1: 소 계, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0
+  Row 24: Col 1: 휴일
+/
+야간, Col 2: 30, Col 3: 7, Col 4: 0, Col 5: 0, Col 7: 0, Col 8: B-TYPE
+  Row 25: Col 2: 24, Col 3: 5, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 26: Col 2: 20, Col 3: 5, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 27: Col 2: 16, Col 3: 5, Col 4: 0, Col 5: 0, Col 7: 0, Col 8: A-TYPE
+  Row 28: Col 2: 14, Col 3: 5, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 29: Col 2: 12, Col 3: 4, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 30: Col 2: 10, Col 3: 4, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 31: Col 2: 6, Col 3: 3, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 32: Col 2: 4, Col 3: 3, Col 4: 0, Col 5: 0, Col 7: 0, Col 8: A/2-TYPE
+  Row 33: Col 2: 4, Col 3: 4, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 34: Col 2: 2.5, Col 3: 3, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 35: Col 2: 2, Col 3: 3, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 36: Col 2: 2, Col 3: 4, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 37: Col 2: 1.5, Col 3: 3, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 38: Col 2: 0.5, Col 3: 3, Col 4: 0, Col 5: 0, Col 7: 0
+  Row 39: Col 1: 소계, Col 4: 0, Col 5: 0, Col 6: 0, Col 7: 0
+
+Sheet: 4. 물량세부내역 (주배관)
+  Row 1: Col 1: 4. 작업물량 세부 내역
+  Row 3: Col 1: 기간 : 2026. 07. 01 ~ 2026. 07. 03
+  Row 4: Col 1: 순
+번, Col 2: Project, Col 3: DWG No., Col 4: SEC No., Col 5: 시공사, Col 6: 구분, Col 7: Joint
+ No., Col 8: 용접사번호 KGW-LT-, Col 9: 1
+(A), Col 10: 2
+(B), Col 11: 3
+(C), Col 12: 4
+(D), Col 13: 5, Col 14: 6, Col 15: 7, Col 16: 주/
+야/휴
+검사, Col 17: 관경, Col 18: 두께, Col 19: 촬영
+방법
+  Row 5: Col 7: 0
+
+Sheet: 4. 물량세부내역 (관리소)
+  Row 1: Col 1: 4. 작업물량 세부 내역
+  Row 3: Col 1: 기간 : 2026. 07. 01 ~ 2026. 07. 07
+  Row 4: Col 1: 순
+번, Col 2: Project, Col 3: DWG No., Col 4: SEC No., Col 5: 시공사, Col 6: 구분, Col 7: Joint
+ No., Col 8: 용접사번호 KGW-LT-, Col 9: 1
+(A), Col 10: 2
+(B), Col 11: 3
+(C), Col 12: 4
+(D), Col 13: 5, Col 14: 6, Col 15: 7, Col 16: 주/
+야/휴
+검사, Col 17: 관경, Col 18: 두께, Col 19: 촬영
+방법
+
+Sheet: 5.1 월별 용접불량(2025년)
+  Row 1: Col 1: 5. 용접결함 발생현황 및 재검사 현황
+  Row 3: Col 1: 5-1.  월별 용접불량 현황
+  Row 5: Col 1: 2025년 
+     결함종류, Col 3: 1, Col 4: 2, Col 5: 3, Col 6: 4, Col 7: 5, Col 8: 6, Col 9: 7, Col 10: 8, Col 11: 9, Col 12: 10, Col 13: 11, Col 14: 12
+  Row 6: Col 1: 1.  균열(Crack)
+  Row 7: Col 1: 2.  용입부족(IP)
+  Row 8: Col 1: 3.  융합불량(LF)
+  Row 9: Col 1: 4.  슬래그 혼입(S)
+  Row 10: Col 1: 5.  기 공(P)
+  Row 11: Col 1: 6.  언더 컷(UC)
+  Row 12: Col 1: 7.  루트 언더 컷(RUC)
+  Row 13: Col 1: 8.  용 락(BT)
+  Row 14: Col 1: 9.  텅스텐 혼입(TI)
+  Row 15: Col 1: 10. 루트 오목부(RC)
+  Row 16: Col 1: 11. 용입과다(EP)
+  Row 17: Col 1: 12. 표면 결함(SD)
+  Row 18: Col 1: 13. 크레이트 피트(C/P)
+  Row 19: Col 1: 14. 비드육성(OVER GR)
+  Row 20: Col 1: 15. 표면 연삭(GR)
+  Row 21: Col 1: 16. 관 청소(CL)
+  Row 22: Col 1: 17. 절단 재촬영(C)
+  Row 23: Col 1: 불 합 격 후 재 검 사 된
+물 량  (S:SECOND)
+  Row 24: Col 1: 순 수 불 합 격 발 생
+물 량  (R)
+  Row 25: Col 1: 당 초 시 공 계 획 된
+검 사 물 량  (O)
+  Row 26: Col 1: 순 수 용 접 불 량 율(%)
+(R/O+C)
+  Row 27: Col 1: 재 검 사 비 율(%)
+(S/O)
+  Row 29: Col 1: 주) ① 방사선 투과검사 필름매수를 기준하여 기재
+  Row 30: Col 1: ② 불합격후 재검사물량(S)은 1~17항까지의 합계수치 기재
+  Row 31: Col 1: ③ 보수 용접후 재검사물량(R)은 1~14항까지의 합계수치 기재
+  Row 32: Col 1: ④ 당초 시공계획된 검사물량(O)은 Original검사물량 기재
+  Row 33: Col 1: ⑤ 1~14항까지의 결함종류는 보수용접후 재검사되는 물량을 기재하며,
+  Row 34: Col 1: GR로 처리 가능한 결함 종류는 15항에 기재
+
+Sheet: 5.1 월별 용접불량(2026년)
+  Row 1: Col 1: 5. 용접결함 발생현황 및 재검사 현황
+  Row 3: Col 1: 5-1.  월별 용접불량 현황
+  Row 5: Col 1: 2026년 
+     결함종류, Col 3: 1, Col 4: 2, Col 5: 3, Col 6: 4, Col 7: 5, Col 8: 6, Col 9: 7, Col 10: 8, Col 11: 9, Col 12: 10, Col 13: 11, Col 14: 12
+  Row 6: Col 1: 1.  균열(Crack)
+  Row 7: Col 1: 2.  용입부족(IP)
+  Row 8: Col 1: 3.  융합불량(LF)
+  Row 9: Col 1: 4.  슬래그 혼입(S)
+  Row 10: Col 1: 5.  기 공(P)
+  Row 11: Col 1: 6.  언더 컷(UC)
+  Row 12: Col 1: 7.  루트 언더 컷(RUC)
+  Row 13: Col 1: 8.  용 락(BT)
+  Row 14: Col 1: 9.  텅스텐 혼입(TI)
+  Row 15: Col 1: 10. 루트 오목부(RC)
+  Row 16: Col 1: 11. 용입과다(EP)
+  Row 17: Col 1: 12. 표면 결함(SD)
+  Row 18: Col 1: 13. 크레이트 피트(C/P)
+  Row 19: Col 1: 14. 비드육성(OVER GR)
+  Row 20: Col 1: 15. 표면 연삭(GR)
+  Row 21: Col 1: 16. 관 청소(CL)
+  Row 22: Col 1: 17. 절단 재촬영(C)
+  Row 23: Col 1: 불 합 격 후 재 검 사 된
+물 량  (S:SECOND)
+  Row 24: Col 1: 순 수 불 합 격 발 생
+물 량  (R)
+  Row 25: Col 1: 당 초 시 공 계 획 된
+검 사 물 량  (O)
+  Row 26: Col 1: 순 수 용 접 불 량 율(%)
+(R/O+C)
+  Row 27: Col 1: 재 검 사 비 율(%)
+(S/O)
+  Row 29: Col 1: 주) ① 방사선 투과검사 필름매수를 기준하여 기재
+  Row 30: Col 1: ② 불합격후 재검사물량(S)은 1~17항까지의 합계수치 기재
+  Row 31: Col 1: ③ 보수 용접후 재검사물량(R)은 1~14항까지의 합계수치 기재
+  Row 32: Col 1: ④ 당초 시공계획된 검사물량(O)은 Original검사물량 기재
+  Row 33: Col 1: ⑤ 1~14항까지의 결함종류는 보수용접후 재검사되는 물량을 기재하며,
+  Row 34: Col 1: GR로 처리 가능한 결함 종류는 15항에 기재
+
+Sheet: 5.1 25년~26년 용접불량 현황
+  Row 1: Col 1: 5. 용접결함 발생현황 및 재검사 현황
+  Row 3: Col 1: 5-1.  용접불량 현황
+  Row 5: Col 1: 2025년~2026년 
+     결함종류, Col 3: 1, Col 4: 2, Col 5: 3, Col 6: 4, Col 7: 5, Col 8: 6, Col 9: 7, Col 10: 8, Col 11: 9, Col 12: 10, Col 13: 11, Col 14: 12
+  Row 6: Col 1: 1.  균열(Crack)
+  Row 7: Col 1: 2.  용입부족(IP)
+  Row 8: Col 1: 3.  융합불량(LF)
+  Row 9: Col 1: 4.  슬래그 혼입(S)
+  Row 10: Col 1: 5.  기 공(P)
+  Row 11: Col 1: 6.  언더 컷(UC)
+  Row 12: Col 1: 7.  루트 언더 컷(RUC)
+  Row 13: Col 1: 8.  용 락(BT)
+  Row 14: Col 1: 9.  텅스텐 혼입(TI)
+  Row 15: Col 1: 10. 루트 오목부(RC)
+  Row 16: Col 1: 11. 용입과다(EP)
+  Row 17: Col 1: 12. 표면 결함(SD)
+  Row 18: Col 1: 13. 크레이트 피트(C/P)
+  Row 19: Col 1: 14. 비드육성(OVER GR)
+  Row 20: Col 1: 15. 표면 연삭(GR)
+  Row 21: Col 1: 16. 관 청소(CL)
+  Row 22: Col 1: 17. 절단 재촬영(C)
+  Row 23: Col 1: 불 합 격 후 재 검 사 된
+물 량  (S:SECOND)
+  Row 24: Col 1: 순 수 불 합 격 발 생
+물 량  (R)
+  Row 25: Col 1: 당 초 시 공 계 획 된
+검 사 물 량  (O)
+  Row 26: Col 1: 순 수 용 접 불 량 율(%)
+(R/O+C)
+  Row 27: Col 1: 재 검 사 비 율(%)
+(S/O)
+  Row 29: Col 1: 주) ① 방사선 투과검사 필름매수를 기준하여 기재
+  Row 30: Col 1: ② 불합격후 재검사물량(S)은 1~17항까지의 합계수치 기재
+  Row 31: Col 1: ③ 보수 용접후 재검사물량(R)은 1~14항까지의 합계수치 기재
+  Row 32: Col 1: ④ 당초 시공계획된 검사물량(O)은 Original검사물량 기재
+  Row 33: Col 1: ⑤ 1~14항까지의 결함종류는 보수용접후 재검사되는 물량을 기재하며,
+  Row 34: Col 1: GR로 처리 가능한 결함 종류는 15항에 기재
+
+Sheet: 5.2 용접사 불량률-주배관(완료)
+  Row 1: Col 1: 26년7월 용접사별 불량 현황
+  Row 3: Col 1: 용 접 사, Col 2: 성        명
+  Row 4: Col 2: 용접사 ID No.
+  Row 5: Col 2: 검 사 기 간
+  Row 8: Col 1: 결   함   발   생   내   역, Col 2: 1.  균열(Crack)
+  Row 9: Col 2: 2.  용입부족(IP)
+  Row 10: Col 2: 3.  융합불량(LF)
+  Row 11: Col 2: 4.  슬래그 혼입(S)
+  Row 12: Col 2: 5.  기 공(P)
+  Row 13: Col 2: 6.  언더 컷(UC)
+  Row 14: Col 2: 7.  루트 언더 컷(RUC)
+  Row 15: Col 2: 8.  용 락(BT)
+  Row 16: Col 2: 9.  텅스텐 혼입(TI)
+  Row 17: Col 2: 10. 루트 오목부(RC)
+  Row 18: Col 2: 11. 용입과다(EP)
+  Row 19: Col 2: 12. 표면 결함(SD)
+  Row 20: Col 2: 13. 크레이트 피트(C/P)
+  Row 21: Col 2: 14. 비드육성(OVER GR)
+  Row 22: Col 2: 15. 표면 연삭(GR)
+  Row 23: Col 2: 16. 관 청소(CL)
+  Row 24: Col 2: 17. 절단 재촬영(C)
+  Row 25: Col 1: 금 월 분 석, Col 2: 불합격후 재검사된
+ 물량(S):SECOND)
+  Row 26: Col 2: 순수 불합격
+발생 물량(R)
+  Row 27: Col 2: 당초 시공계획된
+검사물량(O)
+  Row 28: Col 2: 순수 용접불량율(%)
+(R/O+C)
+  Row 29: Col 2: 재검사 비율(%)
+(S/O)
+  Row 30: Col 1: 결   함   발   생   내   역 (누 계), Col 2: 1.  균열(Crack)
+  Row 31: Col 2: 2.  용입부족(IP)
+  Row 32: Col 2: 3.  융합불량(LF)
+  Row 33: Col 2: 4.  슬래그 혼입(S)
+  Row 34: Col 2: 5.  기 공(P)
+  Row 35: Col 2: 6.  언더 컷(UC)
+  Row 36: Col 2: 7.  루트 언더 컷(RUC)
+  Row 37: Col 2: 8.  용 락(BT)
+  Row 38: Col 2: 9.  텅스텐 혼입(TI)
+  Row 39: Col 2: 10. 루트 오목부(RC)
+
+Sheet: 5.2 용접사 불량률-대산관리소
+  Row 1: Col 1: 26년7월 용접사별 불량 현황
+  Row 3: Col 1: 용 접 사, Col 2: 성        명, Col 5: 김인하, Col 6: 배종현
+  Row 4: Col 2: 용접사 ID No.
+  Row 5: Col 2: 검 사 기 간
+  Row 8: Col 1: 결   함   발   생   내   역, Col 2: 1.  균열(Crack)
+  Row 9: Col 2: 2.  용입부족(IP)
+  Row 10: Col 2: 3.  융합불량(LF)
+  Row 11: Col 2: 4.  슬래그 혼입(S)
+  Row 12: Col 2: 5.  기 공(P)
+  Row 13: Col 2: 6.  언더 컷(UC)
+  Row 14: Col 2: 7.  루트 언더 컷(RUC)
+  Row 15: Col 2: 8.  용 락(BT)
+  Row 16: Col 2: 9.  텅스텐 혼입(TI)
+  Row 17: Col 2: 10. 루트 오목부(RC)
+  Row 18: Col 2: 11. 용입과다(EP)
+  Row 19: Col 2: 12. 표면 결함(SD)
+  Row 20: Col 2: 13. 크레이트 피트(C/P)
+  Row 21: Col 2: 14. 비드육성(OVER GR)
+  Row 22: Col 2: 15. 표면 연삭(GR)
+  Row 23: Col 2: 16. 관 청소(CL)
+  Row 24: Col 2: 17. 절단 재촬영(C)
+  Row 25: Col 1: 금 월 분 석, Col 2: 불합격후 재검사된
+ 물량(S):SECOND)
+  Row 26: Col 2: 순수 불합격
+발생 물량(R)
+  Row 27: Col 2: 당초 시공계획된
+검사물량(O)
+  Row 28: Col 2: 순수 용접불량율(%)
+(R/O+C)
+  Row 29: Col 2: 재검사 비율(%)
+(S/O)
+  Row 30: Col 1: 결   함   발   생   내   역 (누 계), Col 2: 1.  균열(Crack)
+  Row 31: Col 2: 2.  용입부족(IP)
+  Row 32: Col 2: 3.  융합불량(LF)
+  Row 33: Col 2: 4.  슬래그 혼입(S)
+  Row 34: Col 2: 5.  기 공(P)
+  Row 35: Col 2: 6.  언더 컷(UC)
+  Row 36: Col 2: 7.  루트 언더 컷(RUC)
+  Row 37: Col 2: 8.  용 락(BT)
+  Row 38: Col 2: 9.  텅스텐 혼입(TI)
+  Row 39: Col 2: 10. 루트 오목부(RC)
+
+Sheet: 5.3 불합격 관리대장
+  Row 1: Col 1: 5-3. 불합격 매수 관리대장
+  Row 3: Col 1: 용 역 명 : 2025년 비파괴검사 기술용역
+  Row 4: Col 1: 공 종 명 : 씨지앤대산,서산시 복합발전소 천연가스 공급설비 건설공사
+  Row 5: Col 1: 비파괴검사 용역 수행자 :, Col 3: 서울검사(주)
+  Row 6: Col 1: 순번, Col 2: 구 간
+번 호, Col 3: 용접부
+번  호, Col 4: 결 함 내 용, Col 7: 판 독
+일 자, Col 8: 판 독 자
+ 및 
+서   명, Col 10: 완 료
+일 자, Col 11: 비 고
+  Row 7: Col 4: 결함위치, Col 5: 결함등급, Col 6: 결함종류
+  Row 8: Col 1: 1
+  Row 9: Col 1: 2
+  Row 10: Col 1: 3
+  Row 11: Col 1: 4
+  Row 12: Col 1: 5
+  Row 13: Col 1: 6
+  Row 14: Col 1: 7
+  Row 15: Col 1: 8
+  Row 16: Col 1: 9
+  Row 17: Col 1: 10
+  Row 18: Col 1: 11
+
+Sheet: 5.4 불합격매수발생내용
+  Row 1: Col 1: 5-4. 불합격 매수 발생내용
+  Row 2: Col 1: 비파괴검사용역수행자 : 서울검사(주)
+  Row 5: Col 2: 0, Col 4: 5, Col 6: 10, Col 8: 15, Col 10: 20, Col 12: 25, Col 14: 30, Col 16: 35, Col 18: 40
+  Row 11: Col 2: 불합격매수
+일련번호, Col 6: 용접부번호, Col 10: 결함내용, Col 14: 판독일자, Col 18: 판독자
+및
+성   명
+  Row 17: Col 1: 불합격 매수 발생내용
+  Row 18: Col 1: 비파괴검사용역수행자 : 서울검사(주)
+  Row 21: Col 2: 0, Col 4: 5, Col 6: 10, Col 8: 15, Col 10: 20, Col 12: 25, Col 14: 30, Col 16: 35, Col 18: 40
+  Row 27: Col 2: 불합격매수
+일련번호, Col 6: 용접부번호, Col 10: 결함내용, Col 14: 판독일자, Col 18: 판독자
+및
+성   명
+  Row 32: Col 2: ※  서식규격  :  가로×세로 (500 × 130㎜)
+  Row 33: Col 1: 5-4. 불합격 매수 발생내용
+  Row 34: Col 1: 비파괴검사용역수행자 : 서울검사(주)
+  Row 37: Col 2: 0, Col 4: 5, Col 6: 10, Col 8: 15, Col 10: 20, Col 12: 25, Col 14: 30, Col 16: 35, Col 18: 40
+
+Sheet: 6. 안전관리 활동 및 교육 현황
+  Row 1: Col 1: 6. 안전관리 활동 및 교육 현황
+  Row 3: Col 1: 6-1., Col 2: 안전관리 조직표
+  Row 5: Col 5: 대 표 이 사
+  Row 8: Col 5: 본사
+방사선안전관리책임자
+  Row 11: Col 5: 한국가스공사 건설사업단
+ 비파괴검사 기술용역
+  Row 15: Col 2: 방사선투과검사 작업팀, Col 8: 방사선투과검사 작업팀
+  Row 19: Col 1: 6-2., Col 2: 방사선 안전관리 활동 및 기술교육
+  Row 21: Col 1: 1., Col 2: 본사의 안전관리 총 책임자의 감독하에 배관건설공사 안전관리책임자가 안전 문제에
+  Row 22: Col 2: 관한 제반사항에 대해 관리, 감독 및 운영에 철저.
+  Row 24: Col 1: 2., Col 2: 방사성 물질 오염선량 측정
+  Row 25: Col 2: 선원안내 튜브 및 원격조작장치, 감마선조사기 내 오염 여부
+  Row 27: Col 1: 3., Col 2: 방사성물질 저장시설 및 안전관리 장비 일일점검, 조치 후 본사 일일보고.
+  Row 29: Col 1: 4., Col 2: 현장 사무실 안전점검(전기시설 및 소화기 등 화재예방 교육)
+  Row 31: Col 1: 5., Col 2: 비파괴검사 용역 시방서 등을 교육함과 동시에 상호 토론 등을 통해 기술력 증진.
+
+Sheet: 6.3 투입인원현황 
+  Row 1: Col 1: 6-3., Col 2: 인원 투입 현황
+  Row 2: Col 1: 공사명 : 씨지앤대산,서산시 천연가스 공급설비 건설공사, Col 7: 
+  Row 3: Col 1: 순번, Col 2: 성명, Col 3: 담당업무, Col 4: 경력
+(취득후), Col 5: 자격사항, Col 6: 취득일, Col 7: 방사선
+작업종사자
+정기교육
+  Row 4: Col 1: 1, Col 2: 경삼수, Col 3: 현장대리인 
+ 판독자 : RT,PT, Col 4: 18년4개월, Col 5: 기사(RT,PT), Col 6: 2014.05.30(RT)
+ 2007.06.04(PT), Col 7: 2025.06.20
+  Row 5: Col 1: 2, Col 2: 안도하, Col 3: 안전관리자, Col 4: 12년7개월, Col 5: RI일반면허, Col 6: 2013.06.24(RI), Col 7: 2026.10.29
+  Row 6: Col 1: 3, Col 2: 장익창, Col 3: 검사자 : RT,PT, Col 4: 3년1개월, Col 5: 기능사(PT)
+ 기사(PT), Col 6: 2022.09.08(PT)
+ 2025.06.13(PT), Col 7: 2025.06.16
+  Row 7: Col 1: 4, Col 2: 홍태훈, Col 3: 검사자 : 
+ RT,UT,PT,MT, Col 4: 4년10개월, Col 5: 기능사(RT,UT,MT)
+ 산업기사(PT), Col 6: 2020.12.24(RT) 
+ 2021.07.09(UT)  
+ 2025.06.13(PT) 
+ 2020.12.24(MT), Col 7: 2025.06.17
+  Row 8: Col 1: 5, Col 2: 정종호, Col 3: 검사자 :
+ RT,UT,PT,MT
+ 판독자 : UT, Col 4: 15년, Col 5: 기사(RT,UT,PT,MT), Col 6: 1998.12.21(PT)
+ 2000.09.18(RT)
+ 2006.06.05(UT)
+ 2007.06.04(MT), Col 7: 2025.02.11
+  Row 9: Col 1: 6, Col 2: 김형석, Col 3: 검사자 :
+ RT,PT,MT, Col 4: 16년4개월, Col 5: 기능사(RT,PT,MT), Col 6: 2009.06.22(PT)
+ 2009.09.28(MT)
+ 2011.04.29(RT), Col 7: 2024.01.11
+  Row 10: Col 1: 7, Col 2: 박지훈, Col 3: 검사자 : RT,PT, Col 4: 14년10개월, Col 5: 기능사(RT,PT), Col 6: 2010.12.24(RT)
+ 2010.12.24(PT), Col 7: 2024.11.20
+
+Sheet: 6.4.현장조직도
+  Row 1: Col 1: 6-4. 현 장 조 직 도
+  Row 3: Col 15: 본 사
+  Row 4: Col 15: 02-6284-7122
+  Row 7: Col 15: 현장대리인
+/ 품질,환경관리
+  Row 9: Col 15: 부장 / 경 삼 수
+010-2413-1681
+  Row 14: Col 5: 안전보건 담당자
+  Row 16: Col 5: 차장 / 안 도 하
+010-8884-5088
+  Row 22: Col 10: RT,PT 판독자
+  Row 24: Col 10: 부장 / 경 삼 수
+010-2413-1681
+  Row 30: Col 2: 검사자, Col 15: 검사자
+  Row 32: Col 2: 계장 / 장익창
+010-5422-8193
+
+계장 / 홍태훈
+010-9937-5607, Col 15: 차장 / 김형석
+010-4543-9363
+
+과장 / 박지훈
+010-8415-2235
+
+Sheet: 6.5.안전관리활동
+  Row 1: Col 1: 6-5. 안전관리 활동, 교육 사항
+  Row 2: Col 1: 
+  Row 3: Col 1: 가., Col 2: 조직도
+  Row 4: Col 8: 대 표 이 사
+  Row 6: Col 8: 본     사
+  Row 7: Col 8: 안전관리 책임자
+  Row 9: Col 8: 현     장
+  Row 10: Col 8: 안전관리 책임자
+  Row 13: Col 2: 비파괴 검사, Col 8: 비파괴 검사, Col 13: 비파괴 검사
+  Row 14: Col 2: 검사1팀, Col 8: 검사2팀, Col 13: 검사3팀
+  Row 16: Col 1: 나., Col 2: 안전 관리 운영사항
+  Row 17: Col 2: 1), Col 3: 본사의 방사선 안전관리자의 감독하에 현장 방사선 안전관리자가 안전 문제에 관한 제반
+  Row 18: Col 3: 사항에 대해 관리, 감독 및 운영에 철저를 기함.
+  Row 20: Col 2: 2), Col 3: 안전관리 서류를 작성, 보고하고, 방사선 안전 문제에 관한 수시 점검을 통하여 안전사고
+  Row 21: Col 3: 를 미연에 방지하도록 함.
+  Row 23: Col 2: 3), Col 3: 안전교육을 실시하여 작업종사자가 안전관리 제반사항을 충분히 숙지하고 작업에 임할
+  Row 24: Col 3: 수 있도록 조치함.
+  Row 26: Col 1: 다., Col 2: 교육 실시 현황
+  Row 27: Col 2: 일자, Col 5: 구분, Col 7: 대상, Col 9: 교육내용, Col 12: 시간, Col 13: 강사, Col 15: 장소
+  Row 28: Col 2: -, Col 5: -, Col 7: -, Col 9: -, Col 12: -, Col 13: -, Col 15: -
+  Row 30: Col 2: -, Col 5: -, Col 7: -, Col 9: -, Col 12: -, Col 13: -, Col 15: -
+
+Sheet: 6.6.교육계획서
+  Row 1: Col 1: 6-6. 교육/훈련 계획서
+  Row 2: Col 1: 교육/훈련 계획서
+  Row 3: Col 1: 교육/훈련명
+  Row 4: Col 1: 기간 / 시간
+  Row 5: Col 1: 교육/훈련장소
+  Row 6: Col 1: 강       사
+  Row 7: Col 1: 교육 대상자
+  Row 8: Col 1: 내 용 요 약
+  Row 10: Col 6: N/A
+  Row 23: Col 5: 작    성    자, Col 11: 승    인    자
+  Row 24: Col 1: 직     책
+  Row 25: Col 1: 성     명
+  Row 26: Col 1: 서     명
+  Row 27: Col 1: 서울검사(주)
+  Row 29: Col 1: 교육/훈련 계획서
+  Row 30: Col 1: 교육/훈련명
+  Row 31: Col 1: 기간 / 시간
+  Row 32: Col 1: 교육/훈련장소
+  Row 33: Col 1: 강       사
+  Row 34: Col 1: 교육 대상자
+  Row 35: Col 1: 내 용 요 약
+  Row 37: Col 1: 1., Col 2: 교육 목적
+
+Sheet: 6-7.교육출석부
+  Row 1: Col 1: 6-7. 교육 출석부, Col 4: 6-7. 교육 출석부
+  Row 5: Col 2: N/A
+  Row 22: Col 1: 6-7. 교육 출석부, Col 4: 6-7. 교육 출석부
+
+Sheet:  교육사진대장
+  Row 1: Col 4: 교 육 사 진 대 장
+  Row 4: Col 8: 공 사 명
+  Row 5: Col 8: 25년
+비파괴검사 기술용역
+  Row 8: Col 8: 위    치
+  Row 9: Col 8: 경인사무실
+  Row 12: Col 8: 내    용, Col 13: 
+  Row 13: Col 8: 품질,산업안전,방화교육
+  Row 17: Col 8: 공 사 명
+  Row 18: Col 8: 25년
+비파괴검사 기술용역
+  Row 21: Col 8: 위    치
+  Row 22: Col 8: 경인사무실
+  Row 25: Col 8: 내    용
+  Row 26: Col 8: 방사선 안전교육
+  Row 30: Col 8: 공 사 명
+  Row 31: Col 8: 25년
+비파괴검사 기술용역
+  Row 34: Col 8: 위    치
+  Row 35: Col 8: 경인사무실
+  Row 38: Col 8: 내    용
+  Row 39: Col 8: 방사선 안전교육
+
+Sheet: 7. 배출시설운영일지
+  Row 1: Col 1: 7. 배출시설 및 방지시설 운영일지(전량 위탁처리하는 사업자)
+  Row 3: Col 1: 년 월 일, Col 2: 결재, Col 4: 가동시간, Col 5: 원 료 사 용 량, Col 7: 용  수, Col 8: 폐  수, Col 9: 폐 수 위 탁 처 리, Col 12: 보관폐수량, Col 13: 기      타          중요한사항
+  Row 4: Col 2: 대표자, Col 3: 환경관리인, Col 5: 현  상, Col 6: 정  착, Col 7: 사용량, Col 8: 발생량, Col 9: 위탁량, Col 10: 위,수탁확인서 일련번호, Col 11: 처리업소명
+  Row 5: Col 4: (  ~  ), Col 7: (ℓ), Col 8: (ℓ), Col 9: (ℓ), Col 12: (ℓ)
+  Row 6: Col 5: 해당사항없음
+  Row 24: Col 9: 현상 200 ℓ, Col 10: 제2625261호, Col 11: ㈜일성
+  Row 25: Col 9: 정착 200 ℓ
+  Row 26: Col 9: 세척 250 ℓ
+
+Sheet: 8. 지입자재
+  Row 1: Col 1: 8. 지입 자재/장비 검수 현황
+  Row 2: Col 1: 용역명 : 2025년 비파괴검사 기술용역
+  Row 3: Col 1: 항목, Col 2: 자재명, Col 3: 규  격, Col 4: 총소요량, Col 5: 단위, Col 6: 전월, Col 7: 금월, Col 8: 검수량, Col 9: 비  고
+  Row 4: Col 1: 번호, Col 6: 검수량, Col 7: 검수량, Col 8: 누계
+  Row 5: Col 1: 1, Col 2: Film, Col 3: 3⅓×17", Col 5: 매
+  Row 6: Col 3: 3⅓×12", Col 5: 매
+  Row 7: Col 3: 3⅓×6", Col 5: 매
+  Row 8: Col 1: 2, Col 2: 현상액, Col 3: 10ℓ, Col 5: 개
+  Row 9: Col 1: 3, Col 2: 정착액, Col 3: 10ℓ, Col 5: 개
+  Row 10: Col 1: 4, Col 2: Screen, Col 3: 3⅓×17", Col 5: 조
+  Row 11: Col 3: 3⅓×12", Col 5: 조
+  Row 12: Col 3: 3⅓×6", Col 5: 조
+  Row 13: Col 1: 5, Col 2: Cassette, Col 3: 3⅓×17", Col 5: 개
+  Row 14: Col 3: 3⅓×12", Col 5: 개
+  Row 15: Col 3: 3⅓×6", Col 5: 개
+  Row 16: Col 1: 6, Col 2: Film보관Box, Col 3: 3⅓×17", Col 5: Box
+  Row 17: Col 3: 3⅓×12", Col 5: Box
+  Row 18: Col 3: 3⅓×6", Col 5: Box
+  Row 19: Col 1: 7, Col 2: 동위원소, Col 3: Se-75, Col 5: 개
+  Row 20: Col 2: 동위원소, Col 3: Ir-192, Col 5: 개
+  Row 21: Col 1: 8, Col 2: 염색침투탐상제, Col 3: 450㎎, Col 5: set
+  Row 22: Col 1: 9, Col 2: 엔진오일, Col 3: SD 5000 CF-4, Col 5: ℓ
+  Row 23: Col 1: 10, Col 2: 흡수지, Col 3: 핸드타올(250매), Col 5: 개
+  Row 24: Col 1: 11, Col 2: 소창직, Col 3: 20수, Col 5: 개
+  Row 25: Col 1: 12, Col 2: 인소스 크롤러 장비, Col 3: 5BA2D1, Col 5: 개
+  Row 26: Col 1: 13, Col 2: 가설 사무실, Col 3: 3*9*2.6, Col 5: 개
+  Row 27: Col 1: 14, Col 2: 초음파탐상장비, Col 3: SS-150, Col 5: 개
+  Row 28: Col 1: 15, Col 2: CD-RW, Col 3: 4.7GB, Col 5: 개
+
+Sheet: 9.0 수검현황
+  Row 1: Col 1: 9. 한국가스안전공사 R.T 필름 수검현황
+  Row 3: Col 1: 순번, Col 2: 수검 일자, Col 3: 구간번호, Col 4: 수검 보고서 번호, Col 5: 용 접
+개 소, Col 6: 필름매수, Col 9: 결 과, Col 10: 부적합
+내  용, Col 11: 수검기관, Col 12: 비 고
+  Row 4: Col 6: ORI, Col 7: REP, Col 8: 합계
+  Row 5: Col 1: 1, Col 11: 한국가스안전공사
+  Row 6: Col 1: 2, Col 11: 한국가스안전공사
+  Row 7: Col 1: 3, Col 11: 한국가스안전공사
+  Row 8: Col 1: 4, Col 11: 한국가스안전공사
+  Row 9: Col 1: 5, Col 11: 한국가스안전공사
+  Row 10: Col 1: 6, Col 11: 한국가스안전공사
+  Row 11: Col 1: 7, Col 11: 한국가스안전공사
+  Row 12: Col 1: 8, Col 11: 한국가스안전공사
+  Row 13: Col 1: 9, Col 11: 한국가스안전공사
+  Row 14: Col 1: 10, Col 11: 한국가스안전공사
+  Row 15: Col 1: 11, Col 11: 한국가스안전공사
+  Row 16: Col 1: 12, Col 11: 한국가스안전공사
+  Row 17: Col 1: 13, Col 11: 한국가스안전공사
+  Row 18: Col 1: 14, Col 11: 한국가스안전공사
+  Row 19: Col 1: 15, Col 11: 한국가스안전공사
+  Row 20: Col 1: 16, Col 11: 한국가스안전공사
+  Row 21: Col 1: 17, Col 11: 한국가스안전공사
+  Row 22: Col 1: 18, Col 11: 한국가스안전공사
+  Row 23: Col 1: 19, Col 11: 한국가스안전공사
+  Row 24: Col 1: 20, Col 11: 한국가스안전공사
+  Row 25: Col 1: 21, Col 11: 한국가스안전공사
+  Row 26: Col 1: 22, Col 11: 한국가스안전공사
+  Row 27: Col 1: 23, Col 11: 한국가스안전공사
+  Row 28: Col 1: 24, Col 11: 한국가스안전공사
+  Row 29: Col 1: 25, Col 11: 한국가스안전공사
+  Row 30: Col 1: 26, Col 11: 한국가스안전공사
+  Row 31: Col 1: 27, Col 11: 한국가스안전공사
+  Row 32: Col 1: 28, Col 11: 한국가스안전공사
+  Row 33: Col 1: 29, Col 11: 한국가스안전공사
+  Row 34: Col 1: 30, Col 11: 한국가스안전공사
+  Row 35: Col 1: 31, Col 11: 한국가스안전공사
+  Row 36: Col 1: 32, Col 11: 한국가스안전공사
+  Row 37: Col 1: 33, Col 11: 한국가스안전공사
+  Row 38: Col 1: 34, Col 11: 한국가스안전공사
+  Row 39: Col 1: 35, Col 11: 한국가스안전공사
+
+Sheet: 10. 절단개소 & 11. 굴착확인
+  Row 1: Col 1: 10. 용접부 절단개소 현황
+  Row 3: Col 1: 검 사 기 간 : 2026. 01. 01 ~ 2026. 01. 31
+  Row 4: Col 1: 순번, Col 2: 촬 영
+날 짜, Col 3: 도면 번호, Col 4: 용 접
+번 호, Col 5: 관경
+(Size), Col 7: 필름 매수, Col 9: 절 단 사 유, Col 10: 재 촬 영, Col 13: 비 고
+  Row 5: Col 5: 외경
+(inch), Col 6: 두께
+(mm), Col 7: Original, Col 8: Repair, Col 10: 날 짜, Col 11: 매 수, Col 12: 결 과
+  Row 6: Col 1: 1, Col 2: -  해당사항 없음 -
+  Row 7: Col 1: 2
+  Row 8: Col 1: 3
+  Row 9: Col 1: 4
+  Row 10: Col 1: 5
+  Row 13: Col 1: 11. 굴착 확인 촬영 현황
+  Row 15: Col 1: 구간 번호, Col 5: 용접부 번호, Col 9: 사  유, Col 11: 후속 조치
+  Row 16: Col 1: -  해당사항 없음 -
+
+Sheet: 12. 문서 접수
+  Row 1: Col 1: 12. 문서 접수 및 발송 사항
+  Row 3: Col 1: 12-1. 문서 접수 사항
+  Row 5: Col 1: 일 자, Col 2: 문서번호, Col 3: 제          목, Col 4: 비     고
+
+Sheet: 12. 문서 발송
+  Row 1: Col 1: 12-2. 문서 발송 사항
+  Row 3: Col 1: 일 자, Col 2: 문서번호, Col 3: 제          목, Col 4: 비     고
+  Row 39: Col 8: 
+
+Sheet: 13.1 사진대장
+  Row 1: Col 2: 사 진 대 장, Col 12: 방사선투과검사
+  Row 2: Col 12: 초음파탐상검사
+  Row 3: Col 12: 액체침투탐상검사
+  Row 4: Col 8: 공 사 명
+  Row 8: Col 8: 위    치
+  Row 12: Col 8: 내    용, Col 14: 
+  Row 17: Col 8: 공 사 명
+  Row 21: Col 8: 위    치
+  Row 25: Col 8: 내    용
+  Row 30: Col 8: 공 사 명
+  Row 34: Col 8: 위    치
+  Row 38: Col 8: 내    용
+
+Sheet: 3.2 용접사 불량률(가로)
+  Row 1: Col 1: 3-2. 용접사별 불량 현황
+  Row 3: Col 1: 용 접 사, Col 2: 성        명
+  Row 4: Col 2: 용접사 ID No.
+  Row 5: Col 2: 검 사 기 간, Col 5: 2017-03-01 00:00:00, Col 6: 2017-03-01 00:00:00, Col 7: 2017-03-01 00:00:00, Col 8: 2017-03-01 00:00:00, Col 9: 2017-03-01 00:00:00, Col 10: 2017-03-01 00:00:00, Col 11: 2017-03-01 00:00:00, Col 12: 2017-03-01 00:00:00, Col 13: 2017-03-01 00:00:00, Col 14: 2017-03-01 00:00:00, Col 15: 2017-03-01 00:00:00, Col 16: 2017-03-01 00:00:00, Col 17: 2017-03-01 00:00:00, Col 18: 2017-03-01 00:00:00, Col 19: 2017-03-01 00:00:00
+  Row 6: Col 5: ~, Col 6: ~, Col 7: ~, Col 8: ~, Col 9: ~, Col 10: ~, Col 11: ~, Col 12: ~, Col 13: ~, Col 14: ~, Col 15: ~, Col 16: ~, Col 17: ~, Col 18: ~, Col 19: ~
+  Row 7: Col 5: 2017-03-31 00:00:00, Col 6: 2017-03-31 00:00:00, Col 7: 2017-03-31 00:00:00, Col 8: 2017-03-31 00:00:00, Col 9: 2017-03-31 00:00:00, Col 10: 2017-03-31 00:00:00, Col 11: 2017-03-31 00:00:00, Col 12: 2017-03-31 00:00:00, Col 13: 2017-03-31 00:00:00, Col 14: 2017-03-31 00:00:00, Col 15: 2017-03-31 00:00:00, Col 16: 2017-03-31 00:00:00, Col 17: 2017-03-31 00:00:00, Col 18: 2017-03-31 00:00:00, Col 19: 2017-03-31 00:00:00
+  Row 8: Col 1: 결   함   발   생   내   역, Col 2: 1.  균열(Crack)
+  Row 9: Col 2: 2.  용입부족(IP)
+  Row 10: Col 2: 3.  융합불량(LF)
+  Row 11: Col 2: 4.  슬래그 혼입(S)
+  Row 12: Col 2: 5.  기 공(P)
+  Row 13: Col 2: 6.  언더 컷(UC)
+  Row 14: Col 2: 7.  루트 언더 컷(RUC)
+  Row 15: Col 2: 8.  용 락(BT)
+  Row 16: Col 2: 9.  텅스텐 혼입(TI)
+  Row 17: Col 2: 10. 루트 오목부(RC)
+  Row 18: Col 2: 11. 용입과다(EP)
+  Row 19: Col 2: 12. 비드육성(OVER GR)
+  Row 20: Col 2: 13. 크레이트 피트(C/P)
+  Row 21: Col 2: 14. 표면 결함(SD)
+  Row 22: Col 2: 15. 모재 결함(BD)
+  Row 23: Col 2: 16. 관 청소(CL)
+  Row 24: Col 2: 17. 절단 재촬영(C)
+  Row 25: Col 2: 18. 표면그라인더(GR)
+  Row 26: Col 1: 금 월 분 석, Col 2: 불합격후 재검사된
+ 물량(S):SECOND), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 27: Col 2: 순수 불합격
+발생 물량(R), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 28: Col 2: 당초 시공계획된
+검사물량(O), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 29: Col 2: 순수 용접불량율(%)
+(R/O+C), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: #DIV/0!, Col 11: #DIV/0!, Col 12: #DIV/0!, Col 13: #DIV/0!, Col 14: #DIV/0!, Col 15: #DIV/0!, Col 16: #DIV/0!, Col 17: #DIV/0!, Col 18: #DIV/0!, Col 19: #DIV/0!
+  Row 30: Col 2: 재검사 비율(%)
+(S/O), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: #DIV/0!, Col 11: #DIV/0!, Col 12: #DIV/0!, Col 13: #DIV/0!, Col 14: #DIV/0!, Col 15: #DIV/0!, Col 16: #DIV/0!, Col 17: #DIV/0!, Col 18: #DIV/0!, Col 19: #DIV/0!
+  Row 31: Col 1: 결   함   발   생   내   역 (누 계), Col 2: 1.  균열(Crack), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 32: Col 2: 2.  용입부족(IP), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 33: Col 2: 3.  융합불량(LF), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0.5, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 34: Col 2: 4.  슬래그 혼입(S), Col 5: 0.5, Col 6: 0.5, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 35: Col 2: 5.  기 공(P), Col 5: 1.5, Col 6: 1.5, Col 7: 1.5, Col 8: 1.5, Col 9: 5.5, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 36: Col 2: 6.  언더 컷(UC), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 37: Col 2: 7.  루트 언더 컷(RUC), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 38: Col 2: 8.  용 락(BT), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+  Row 39: Col 2: 9.  텅스텐 혼입(TI), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0, Col 15: 0, Col 16: 0, Col 17: 0, Col 18: 0, Col 19: 0
+
+Sheet: 3.2 공사별 불량현황
+  Row 1: Col 1: 3-2. 공사별 불량 현황
+  Row 3: Col 1: 구분, Col 2: 라 인 번 호, Col 5: 평택~오산(고속철도) 
+이설공사, Col 6: 천현~미사리
+(미사로지하차도)
+이설공사, Col 7: 안중~발안(모재부식부)
+배관이설, Col 8: 발안~반월(모재부식부)
+배관이설, Col 9: 안중~발안(사유지) 
+배관이설, Col 14: 총  계
+  Row 6: Col 2: 검 사 기 간, Col 5: 2014-08-01 00:00:00, Col 6: 2014-08-01 00:00:00, Col 7: 2014-08-01 00:00:00, Col 8: 2014-08-01 00:00:00, Col 9: 2014-08-01 00:00:00, Col 10: 2014-02-01 00:00:00, Col 11: 2014-02-01 00:00:00, Col 12: 2014-02-01 00:00:00, Col 13: 2014-02-01 00:00:00, Col 14: 2014-08-01 00:00:00
+  Row 7: Col 5: ~, Col 6: ~, Col 7: ~, Col 8: ~, Col 9: ~, Col 10: ~, Col 11: ~, Col 12: ~, Col 13: ~, Col 14: ~
+  Row 8: Col 5: 2014-08-31 00:00:00, Col 6: 2014-08-31 00:00:00, Col 7: 2014-08-31 00:00:00, Col 8: 2014-08-31 00:00:00, Col 9: 2014-08-31 00:00:00, Col 10: 2014-02-28 00:00:00, Col 11: 2014-02-28 00:00:00, Col 12: 2014-02-28 00:00:00, Col 13: 2014-02-28 00:00:00, Col 14: 2014-08-31 00:00:00
+  Row 9: Col 1: 금  월  결  함  발  생  내  역, Col 2: 1. 균열(Crack), Col 14: 0
+  Row 10: Col 2: 2. 용입부족(IP), Col 14: 0
+  Row 11: Col 2: 3. 융합불량(LF), Col 14: 0
+  Row 12: Col 2: 4. 슬래그 혼입(S), Col 14: 0
+  Row 13: Col 2: 5. 기 공(P), Col 6: 0, Col 14: 0
+  Row 14: Col 2: 6. 언더 컷(UC), Col 14: 0
+  Row 15: Col 2: 7. 루트 언더 컷(RUC), Col 14: 0
+  Row 16: Col 2: 8. 용 락(BT), Col 14: 0
+  Row 17: Col 2: 9. 텅스텐 혼입(TI), Col 14: 0
+  Row 18: Col 2: 10. 루트 오목부(RC), Col 14: 0
+  Row 19: Col 2: 11. 용입과다(EP), Col 14: 0
+  Row 20: Col 2: 12. 표면 결함(SD), Col 14: 0
+  Row 21: Col 2: 13. 크레이트 피트(C/P), Col 14: 0
+  Row 22: Col 2: 14. 비드육성(OVER GR), Col 14: 0
+  Row 23: Col 2: 15. 모재 결함(BD), Col 14: 0
+  Row 24: Col 2: 16. 관 청소(CL), Col 14: 0
+  Row 25: Col 2: 17. 절단 재촬영(C), Col 14: 0
+  Row 26: Col 2: 18. 표면 그라인더(GR), Col 6: #REF!, Col 14: #REF!
+  Row 27: Col 1: 금 월 분 석, Col 2: 불합격후 재검사된
+ 물량(S):SECOND), Col 5: 0, Col 6: #REF!, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: #REF!
+  Row 28: Col 2: 순수 불합격
+발생 물량(R), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 29: Col 2: 당초 시공계획된
+검사물량(O), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 30: Col 2: 순수 용접불량율(%)
+(R/O+C), Col 5: 0, Col 6: #DIV/0!, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: #REF!
+  Row 31: Col 2: 재검사 비율(%)
+(S/O), Col 5: 0, Col 6: #REF!, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: #REF!
+  Row 32: Col 1: 결   함   발   생   내   역, Col 2: 1. 균열(Crack), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 33: Col 2: 2. 용입부족(IP), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 34: Col 2: 3. 융합불량(LF), Col 5: 0, Col 6: 2, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 2
+  Row 35: Col 2: 4. 슬래그 혼입(S), Col 5: 1, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 1
+  Row 36: Col 2: 5. 기 공(P), Col 5: 6, Col 6: 13, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 19
+  Row 37: Col 2: 6. 언더 컷(UC), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 38: Col 2: 7. 루트 언더 컷(RUC), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+  Row 39: Col 2: 8. 용 락(BT), Col 5: 0, Col 6: 0, Col 7: 0, Col 8: 0, Col 9: 0, Col 10: 0, Col 11: 0, Col 12: 0, Col 13: 0, Col 14: 0
+
+Sheet: 5.2(교육일지 ) (2)

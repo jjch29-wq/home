@@ -1,0 +1,27 @@
+Col 1: 구 분 / 
+Col 2: 관 경
+(Inch) / 
+Col 3: 개소당
+촬영매수 / 
+Col 4: 용접개소
+(BW) / 
+Col 5: 필  름  매  수 / Original
+Col 6:  / Repair
+Col 7:  / Total
+Col 8: 필름 규격 / 
+Col 9:  / 
+Col 10:  / 
+Col 11:  / 
+Col 12:  / 
+Col 13:  / 
+Col 14:  / 
+Col 15:  / 
+Col 16:  / 
+Col 17:  / 
+Col 18:  / 
+Col 19:  / 
+Col 20:  / 
+Col 21:  / 
+Col 22:  / 
+Col 23:  / 
+Col 24:  / 
