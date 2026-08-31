@@ -2137,6 +2137,11 @@ class KogasMonthlyReportManager:
         }
         # 세부 현황용 (2.x 전체 레코드 - 날짜순)
         ndt_details = {'PAUT': [], 'MT': [], 'RT': [], 'PT': []}
+        
+        # 4. 물량세부내역용 데이터 (주배관/관리소)
+        quantity_details_main = []
+        quantity_details_mgmt = []
+        
         process_photos = []
         # 4.0/1.1 RT 용접사별 불합격 결함 수
         rt_defects_by_welder = defaultdict(lambda: defaultdict(int))
@@ -2259,6 +2264,13 @@ class KogasMonthlyReportManager:
                         'key': group_key,
                         'ori': d_ori, 're': d_re, 'qty': d_ori + d_re
                     })
+                    
+                # 4. 물량세부내역용 데이터 수집
+                gongsa = str(row.get('공사구분', '')).strip()
+                if gongsa == '관리소':
+                    quantity_details_mgmt.append(row)
+                else:
+                    quantity_details_main.append(row)
 
         # 마지막 날의 총누계와 공정률을 최종 반영
         for key, val in last_day_data.get('qty_data', {}).items():
@@ -2861,6 +2873,564 @@ class KogasMonthlyReportManager:
         for col in ('N', 'O'):
             ws.column_dimensions[col].width = 3.5
         ws.column_dimensions['P'].width = 5.0
+
+        # 3. 4. 물량세부내역 시트 작성
+        from openpyxl.styles import Border, Side, Alignment, Font
+        thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                             top=Side(style='thin'), bottom=Side(style='thin'))
+        center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        default_font = Font(name='맑은 고딕', size=9)
+
+        def write_quantity_details(sheet_name, data_rows):
+            if sheet_name not in wb.sheetnames or not data_rows:
+                return
+            ws_detail = wb[sheet_name]
+            
+            # Find the starting row. Usually starts at row 6.
+            # We find the first row where column A (or B) is empty after row 5.
+            start_row = 6
+            for r in range(6, 5000):
+                if not ws_detail.cell(row=r, column=1).value and not ws_detail.cell(row=r, column=2).value:
+                    start_row = r
+                    break
+                    
+            current_row = start_row
+            
+            for i, row in enumerate(data_rows, 1):
+                method = str(row.get('검사방법', '')).strip()
+                line_no = str(row.get('라인번호', '')).strip()
+                sec_no = str(row.get('구간', '')).strip()
+                joint_no = str(row.get('Joint No.', '')).strip()
+                size = str(row.get('관경', '')).strip()
+                thick = str(row.get('두께', '')).strip()
+                company = str(row.get('업체', '')).strip()
+                welder = str(row.get('용접사', '')).strip()
+                spec, _ = split_spec_and_shift(row)
+                result = str(row.get('결과', '')).strip()
+                
+                # 구간정보 분리 (최대 7개)
+                segments = str(row.get('구간정보', '')).split(',')
+                while len(segments) < 7:
+                    segments.append('')
+                
+                ws_detail.cell(row=current_row, column=1).value = i # 순번
+                ws_detail.cell(row=current_row, column=2).value = '' # Project
+                ws_detail.cell(row=current_row, column=3).value = line_no # DWG No.
+                ws_detail.cell(row=current_row, column=4).value = sec_no # SEC No.
+                ws_detail.cell(row=current_row, column=5).value = company # 시공사
+                ws_detail.cell(row=current_row, column=6).value = '' # 구분
+                ws_detail.cell(row=current_row, column=7).value = joint_no # Joint No.
+                ws_detail.cell(row=current_row, column=8).value = welder # 용접사번호
+                
+                # 1(A) ~ 7(G) -> Col 9 ~ 15
+                for s_idx in range(7):
+                    ws_detail.cell(row=current_row, column=9 + s_idx).value = segments[s_idx].strip()
+                    
+                ws_detail.cell(row=current_row, column=16).value = result # 검사결과
+                ws_detail.cell(row=current_row, column=17).value = size # 관경
+                ws_detail.cell(row=current_row, column=18).value = thick # 두께
+                ws_detail.cell(row=current_row, column=19).value = method # 촬영방법
+                ws_detail.cell(row=current_row, column=20).value = spec # 필름규격
+                
+                ws_detail.cell(row=current_row, column=21).value = self._safe_float(row.get('RT_OR')) if method == 'RT' else ''
+                ws_detail.cell(row=current_row, column=22).value = self._safe_float(row.get('RT_RE')) if method == 'RT' else ''
+                
+                # 서식 적용
+                ws_detail.row_dimensions[current_row].height = 15
+                for c in range(1, 25):
+                    cell = ws_detail.cell(row=current_row, column=c)
+                    cell.border = thin_border
+                    cell.alignment = center_align
+                    cell.font = default_font
+                    
+                current_row += 1
+
+        write_quantity_details('4. 물량세부내역 (주배관)', quantity_details_main)
+        write_quantity_details('4. 물량세부내역 (관리소)', quantity_details_mgmt)
+
+        # 4. 나. 검사물량 세부내역 (요약) 시트 작성
+        def write_na_quantity_summary(sheet_name, data_rows):
+            if sheet_name not in wb.sheetnames:
+                return
+            ws_summary = wb[sheet_name]
+            
+            from collections import defaultdict
+            agg = defaultdict(lambda: {'count': 0, 'ori': 0.0, 're': 0.0})
+            
+            for row in data_rows:
+                method = str(row.get('검사방법', '')).strip().upper()
+                raw_shift = str(row.get('근무구분', '')).strip()
+                size = str(row.get('관경', '')).strip()
+                
+                # 근무구분 정규화: 야간 -> 야/휴간, 재검 -> 주간 (Repair에 합산됨)
+                shift = '주간'
+                if '야간' in raw_shift or '휴간' in raw_shift:
+                    shift = '야/휴간'
+                
+                if method == 'RT':
+                    ori = self._safe_float(row.get('RT_OR'))
+                    re = self._safe_float(row.get('RT_RE'))
+                else:
+                    ori = self._safe_float(row.get(method))
+                    re = 0.0 
+                
+                if ori + re > 0 or method:
+                    agg[(method, shift, size)]['count'] += 1
+                    agg[(method, shift, size)]['ori'] += ori
+                    agg[(method, shift, size)]['re'] += re
+
+            current_method = None
+            for r in range(1, 150):
+                col1_val = str(ws_summary.cell(row=r, column=1).value or "").strip()
+                if "방사선투과" in col1_val:
+                    current_method = "RT"
+                elif "초음파탐상" in col1_val:
+                    current_method = "UT"
+                elif "자분탐상" in col1_val or "침투탐상" in col1_val:
+                    current_method = "MT/PT"
+                
+                if not current_method:
+                    continue
+                    
+                shift_val = str(ws_summary.cell(row=r, column=1).value or "").strip()
+                size_val = str(ws_summary.cell(row=r, column=2).value or "").strip()
+                
+                if shift_val not in ["주간", "야/휴간"]:
+                    continue
+                    
+                search_methods = [current_method]
+                if current_method == "UT": search_methods.append("PAUT")
+                if current_method == "MT/PT": search_methods.extend(["MT", "PT"])
+                
+                total_count = 0
+                total_ori = 0.0
+                total_re = 0.0
+                
+                for m in search_methods:
+                    key = (m, shift_val, size_val)
+                    if key in agg:
+                        total_count += agg[key]['count']
+                        total_ori += agg[key]['ori']
+                        total_re += agg[key]['re']
+                
+                # 템플릿에 값이 있으면 덮어씀 (없으면 0은 쓰지 않음)
+                if total_count > 0 or total_ori > 0 or total_re > 0:
+                    ws_summary.cell(row=r, column=4).value = total_count
+                    if current_method == "RT":
+                        ws_summary.cell(row=r, column=5).value = total_ori
+                        ws_summary.cell(row=r, column=6).value = total_re
+                        ws_summary.cell(row=r, column=7).value = total_ori + total_re
+                    else:
+                        ws_summary.cell(row=r, column=5).value = total_ori + total_re
+                        ws_summary.cell(row=r, column=7).value = total_ori + total_re
+
+        write_na_quantity_summary('나. 검사물량 세부내역 (주배관)', quantity_details_main)
+        write_na_quantity_summary('나. 검사물량 세부내역 (관리소)', quantity_details_mgmt)
+
+        # 5. 3. 비파괴검사 현황 시트 작성
+        def write_3_status_summary(sheet_name, data_rows):
+            if sheet_name not in wb.sheetnames:
+                return
+            ws_3 = wb[sheet_name]
+            
+            from collections import defaultdict
+            agg = defaultdict(lambda: {'count': 0, 'ori': 0.0, 're': 0.0})
+            
+            for row in data_rows:
+                method = str(row.get('검사방법', '')).strip().upper()
+                raw_shift = str(row.get('근무구분', '')).strip()
+                spec, _ = split_spec_and_shift(row)
+                
+                # 정규화
+                shift = '주간작업'
+                if '야간' in raw_shift or '휴간' in raw_shift:
+                    shift = '야/휴간작업'
+                    
+                if method == 'RT':
+                    ori = self._safe_float(row.get('RT_OR'))
+                    re = self._safe_float(row.get('RT_RE'))
+                else:
+                    ori = self._safe_float(row.get(method))
+                    re = 0.0
+                    
+                # RT 규격 매핑
+                if 'B-TYPE' in spec.upper():
+                    spec_key = 'B-TYPE'
+                elif 'A/2' in spec.upper():
+                    spec_key = 'A/2-TYPE'
+                elif 'A-TYPE' in spec.upper():
+                    spec_key = 'A-TYPE'
+                else:
+                    spec_key = '기타'
+                
+                if ori + re > 0 or method:
+                    if method == 'RT':
+                        key = ('RT', spec_key, shift)
+                    else:
+                        key = (method, 'ALL', shift)
+                    agg[key]['count'] += 1
+                    agg[key]['ori'] += ori
+                    agg[key]['re'] += re
+                    
+            # 엑셀 기입
+            # RT (Row 8, 9, 10)
+            rt_mappings = {
+                'B-TYPE': 8,
+                'A-TYPE': 9,
+                'A/2-TYPE': 10
+            }
+            
+            for spec_key, r_idx in rt_mappings.items():
+                # 주간작업
+                day_data = agg.get(('RT', spec_key, '주간작업'))
+                if day_data:
+                    ws_3.cell(row=r_idx, column=3).value = day_data['count']
+                    ws_3.cell(row=r_idx, column=4).value = day_data['ori']
+                    ws_3.cell(row=r_idx, column=5).value = day_data['re']
+                    ws_3.cell(row=r_idx, column=6).value = day_data['ori'] + day_data['re']
+                # 야/휴간작업
+                night_data = agg.get(('RT', spec_key, '야/휴간작업'))
+                if night_data:
+                    ws_3.cell(row=r_idx, column=7).value = night_data['count']
+                    ws_3.cell(row=r_idx, column=8).value = night_data['ori']
+                    ws_3.cell(row=r_idx, column=9).value = night_data['re']
+                    ws_3.cell(row=r_idx, column=10).value = night_data['ori'] + night_data['re']
+                    
+            # 소계 계산 (Row 11)
+            for c_idx in [3, 4, 5, 6, 7, 8, 9, 10]:
+                total = sum(self._safe_float(ws_3.cell(row=r, column=c_idx).value) for r in [8, 9, 10])
+                if total > 0:
+                    ws_3.cell(row=11, column=c_idx).value = total
+                    
+            # UT/PAUT (Row 12: 검사길이(개소?), Row 13: 검사물량)
+            # Row 12 (Col 3: 주간개소, Col 7: 야간개소) - 템플릿에 맞춰서 3열(개소), 4열(ORI+RE)
+            ut_day = agg.get(('UT', 'ALL', '주간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            paut_day = agg.get(('PAUT', 'ALL', '주간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            ut_night = agg.get(('UT', 'ALL', '야/휴간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            paut_night = agg.get(('PAUT', 'ALL', '야/휴간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            
+            ut_day_cnt = ut_day['count'] + paut_day['count']
+            ut_day_vol = ut_day['ori'] + ut_day['re'] + paut_day['ori'] + paut_day['re']
+            ut_night_cnt = ut_night['count'] + paut_night['count']
+            ut_night_vol = ut_night['ori'] + ut_night['re'] + paut_night['ori'] + paut_night['re']
+            
+            if ut_day_cnt > 0 or ut_day_vol > 0:
+                ws_3.cell(row=12, column=3).value = ut_day_cnt
+                ws_3.cell(row=12, column=4).value = ut_day_vol
+                ws_3.cell(row=12, column=6).value = ut_day_vol
+                ws_3.cell(row=13, column=4).value = ut_day_vol # 물량도 같은 위치에 기록?
+            if ut_night_cnt > 0 or ut_night_vol > 0:
+                ws_3.cell(row=12, column=7).value = ut_night_cnt
+                ws_3.cell(row=12, column=8).value = ut_night_vol
+                ws_3.cell(row=12, column=10).value = ut_night_vol
+                ws_3.cell(row=13, column=8).value = ut_night_vol
+                
+            # MT/PT (Row 14: 검사길이(개소?), Row 15: 검사물량)
+            mt_day = agg.get(('MT', 'ALL', '주간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            pt_day = agg.get(('PT', 'ALL', '주간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            mt_night = agg.get(('MT', 'ALL', '야/휴간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            pt_night = agg.get(('PT', 'ALL', '야/휴간작업'), {'count': 0, 'ori': 0.0, 're': 0.0})
+            
+            mp_day_cnt = mt_day['count'] + pt_day['count']
+            mp_day_vol = mt_day['ori'] + mt_day['re'] + pt_day['ori'] + pt_day['re']
+            mp_night_cnt = mt_night['count'] + pt_night['count']
+            mp_night_vol = mt_night['ori'] + mt_night['re'] + pt_night['ori'] + pt_night['re']
+            
+            if mp_day_cnt > 0 or mp_day_vol > 0:
+                ws_3.cell(row=14, column=3).value = mp_day_cnt
+                ws_3.cell(row=14, column=4).value = mp_day_vol
+                ws_3.cell(row=14, column=6).value = mp_day_vol
+                ws_3.cell(row=15, column=4).value = mp_day_vol
+            if mp_night_cnt > 0 or mp_night_vol > 0:
+                ws_3.cell(row=14, column=7).value = mp_night_cnt
+                ws_3.cell(row=14, column=8).value = mp_night_vol
+                ws_3.cell(row=14, column=10).value = mp_night_vol
+                ws_3.cell(row=15, column=8).value = mp_night_vol
+
+        write_3_status_summary('3. 비파괴검사 현황 (주배관)', quantity_details_main)
+        write_3_status_summary('3. 비파괴검사 현황 (관리소)', quantity_details_mgmt)
+
+        # 6. 2. 공정율 시트 작성
+        def write_2_progress_summary(history_data, target_ym):
+            from collections import defaultdict
+            # agg[sheet][method][spec][period]['ori'/'re']
+            agg = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'ori': 0.0, 're': 0.0}))))
+            
+            for date_str, daily_data in history_data.items():
+                if not re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)):
+                    continue
+                
+                period = 'prev' if date_str[:7] < target_ym else ('curr' if date_str[:7] == target_ym else 'future')
+                if period == 'future':
+                    continue
+                    
+                for row in daily_data.get('ndt_results', []):
+                    method = str(row.get('검사방법', '')).strip().upper()
+                    if not method:
+                        continue
+                    
+                    gongsa = row.get('공사구분', '주배관')
+                    sheets = ['전체', gongsa] # 전체와 해당 공사구분 시트에 동시 기록
+                    
+                    spec, _ = split_spec_and_shift(row)
+                    
+                    if method == 'RT':
+                        ori = self._safe_float(row.get('RT_OR'))
+                        re = self._safe_float(row.get('RT_RE'))
+                    else:
+                        ori = self._safe_float(row.get(method))
+                        re = 0.0
+                        
+                    if 'B-TYPE' in spec.upper():
+                        spec_key = 'B-TYPE'
+                    elif 'A/2' in spec.upper():
+                        spec_key = 'A/2-TYPE'
+                    elif 'A-TYPE' in spec.upper():
+                        spec_key = 'A-TYPE'
+                    else:
+                        spec_key = '기타'
+                        
+                    for s in sheets:
+                        if method == 'RT':
+                            agg[s]['RT']['ALL'][period]['ori'] += ori
+                            agg[s]['RT']['ALL'][period]['re'] += re
+                            agg[s]['RT'][spec_key][period]['ori'] += ori
+                            agg[s]['RT'][spec_key][period]['re'] += re
+                        elif method in ['UT', 'PAUT']:
+                            agg[s]['UT']['ALL'][period]['ori'] += ori
+                            agg[s]['UT']['ALL'][period]['re'] += re
+                        elif method in ['MT', 'PT']:
+                            agg[s]['MT_PT']['ALL'][period]['ori'] += ori
+                            agg[s]['MT_PT']['ALL'][period]['re'] += re
+
+            for sheet_suffix in ['전체', '주배관', '관리소']:
+                sheet_name = f'2. 공정율 ({sheet_suffix})'
+                if sheet_name not in wb.sheetnames:
+                    continue
+                ws_2 = wb[sheet_name]
+                sheet_data = agg.get(sheet_suffix, {})
+                
+                def write_row(r_idx, period_data):
+                    prev = period_data.get('prev', {'ori': 0.0, 're': 0.0})
+                    curr = period_data.get('curr', {'ori': 0.0, 're': 0.0})
+                    
+                    p_ori, p_re = prev['ori'], prev['re']
+                    c_ori, c_re = curr['ori'], curr['re']
+                    t_ori = p_ori + c_ori
+                    t_re = p_re + c_re
+                    
+                    if p_ori + p_re > 0:
+                        ws_2.cell(row=r_idx, column=4).value = p_ori
+                        ws_2.cell(row=r_idx, column=5).value = p_re
+                        ws_2.cell(row=r_idx, column=6).value = p_ori + p_re
+                    if c_ori + c_re > 0:
+                        ws_2.cell(row=r_idx, column=7).value = c_ori
+                        ws_2.cell(row=r_idx, column=8).value = c_re
+                        ws_2.cell(row=r_idx, column=9).value = c_ori + c_re
+                    if t_ori + t_re > 0:
+                        ws_2.cell(row=r_idx, column=10).value = t_ori
+                        ws_2.cell(row=r_idx, column=11).value = t_re
+                        ws_2.cell(row=r_idx, column=12).value = t_ori + t_re
+                        
+                        # 공정률 = 총누계 / 총물량
+                        total_expected = self._safe_float(ws_2.cell(row=r_idx, column=3).value)
+                        if total_expected > 0:
+                            ws_2.cell(row=r_idx, column=13).value = ((t_ori + t_re) / total_expected) * 100
+                            
+                # RT 일반구간 (Row 9: Original), 재검사 (Row 10: Repair)
+                rt_data = sheet_data.get('RT', {}).get('ALL', {})
+                # RT Original (일반구간)
+                rt_ori_data = {
+                    'prev': {'ori': rt_data.get('prev', {}).get('ori', 0.0), 're': 0.0},
+                    'curr': {'ori': rt_data.get('curr', {}).get('ori', 0.0), 're': 0.0}
+                }
+                write_row(9, rt_ori_data)
+                
+                # RT Repair (재검사) -> 10행의 ori 자리에 쓴다 (왜냐하면 재검사 행 자체가 repair를 의미하므로, 엑셀 표에서는 10행 4열(ori) 혹은 5열(rep) 중 하나에 쓰면 되지만, 표 형태상 10행 5열에 쓰는것이 맞음)
+                # Wait, 엑셀 10행은 '추가(재)검사'. 4,5,6열이 있음.
+                rt_re_data = {
+                    'prev': {'ori': 0.0, 're': rt_data.get('prev', {}).get('re', 0.0)},
+                    'curr': {'ori': 0.0, 're': rt_data.get('curr', {}).get('re', 0.0)}
+                }
+                write_row(10, rt_re_data)
+                
+                # 소계(Row 11)
+                for col in range(4, 13):
+                    val = sum(self._safe_float(ws_2.cell(row=r, column=col).value) for r in (9, 10))
+                    if val > 0: ws_2.cell(row=11, column=col).value = val
+                # 공정률 (Row 11)
+                t_exp = sum(self._safe_float(ws_2.cell(row=r, column=3).value) for r in (9, 10))
+                if t_exp > 0: ws_2.cell(row=11, column=13).value = (self._safe_float(ws_2.cell(row=11, column=12).value) / t_exp) * 100
+                
+                # UT/PAUT (Row 12: Original, Row 13: Repair)
+                ut_data = sheet_data.get('UT', {}).get('ALL', {})
+                ut_ori_data = {
+                    'prev': {'ori': ut_data.get('prev', {}).get('ori', 0.0), 're': 0.0},
+                    'curr': {'ori': ut_data.get('curr', {}).get('ori', 0.0), 're': 0.0}
+                }
+                ut_re_data = {
+                    'prev': {'ori': 0.0, 're': ut_data.get('prev', {}).get('re', 0.0)},
+                    'curr': {'ori': 0.0, 're': ut_data.get('curr', {}).get('re', 0.0)}
+                }
+                write_row(12, ut_ori_data)
+                write_row(13, ut_re_data)
+                for col in range(4, 13):
+                    val = sum(self._safe_float(ws_2.cell(row=r, column=col).value) for r in (12, 13))
+                    if val > 0: ws_2.cell(row=14, column=col).value = val
+                t_exp = sum(self._safe_float(ws_2.cell(row=r, column=3).value) for r in (12, 13))
+                if t_exp > 0: ws_2.cell(row=14, column=13).value = (self._safe_float(ws_2.cell(row=14, column=12).value) / t_exp) * 100
+                
+                # MT/PT (Row 15: Original, Row 16: Repair)
+                mt_data = sheet_data.get('MT_PT', {}).get('ALL', {})
+                mt_ori_data = {
+                    'prev': {'ori': mt_data.get('prev', {}).get('ori', 0.0), 're': 0.0},
+                    'curr': {'ori': mt_data.get('curr', {}).get('ori', 0.0), 're': 0.0}
+                }
+                mt_re_data = {
+                    'prev': {'ori': 0.0, 're': mt_data.get('prev', {}).get('re', 0.0)},
+                    'curr': {'ori': 0.0, 're': mt_data.get('curr', {}).get('re', 0.0)}
+                }
+                write_row(15, mt_ori_data)
+                write_row(16, mt_re_data)
+                for col in range(4, 13):
+                    val = sum(self._safe_float(ws_2.cell(row=r, column=col).value) for r in (15, 16))
+                    if val > 0: ws_2.cell(row=17, column=col).value = val
+                t_exp = sum(self._safe_float(ws_2.cell(row=r, column=3).value) for r in (15, 16))
+                if t_exp > 0: ws_2.cell(row=17, column=13).value = (self._safe_float(ws_2.cell(row=17, column=12).value) / t_exp) * 100
+                
+                # RT 규격별 (Row 22: B-TYPE, Row 23: A-TYPE, Row 24: A/2-TYPE)
+                # 22~24행은 총누계 (10, 11, 12열) 만 기록하는 듯? (위 표기된 row layout 보면)
+                # 아니면 전월, 금월 다 기록? 일단 write_row 그대로 쓴다.
+                write_row(22, sheet_data.get('RT', {}).get('B-TYPE', {}))
+                write_row(23, sheet_data.get('RT', {}).get('A-TYPE', {}))
+                write_row(24, sheet_data.get('RT', {}).get('A/2-TYPE', {}))
+
+        write_2_progress_summary(history_data, target_ym)
+
+        # ---------------------------------------------------------------------
+        # [5.1 & 5.2] 용접불량 현황 및 용접사 불량률 기입
+        # ---------------------------------------------------------------------
+        def write_5_defect_reports():
+            # 1. 시트 찾기
+            sheet_5_1_2025 = None
+            sheet_5_1_2026 = None
+            sheet_5_2_main = None
+            sheet_5_2_mgmt = None
+            for sname in wb.sheetnames:
+                if '5.1' in sname and '2025' in sname: sheet_5_1_2025 = wb[sname]
+                if '5.1' in sname and '2026' in sname: sheet_5_1_2026 = wb[sname]
+                if '5.2' in sname and '주배관' in sname: sheet_5_2_main = wb[sname]
+                if '5.2' in sname and '관리소' in sname: sheet_5_2_mgmt = wb[sname]
+            
+            # 결함 코드 매핑 (인덱스 0~16)
+            DEFECT_MAP = {
+                'CRACK': 0, 'CR': 0,
+                'IP': 1,
+                'LF': 2,
+                'S': 3, 'SLAG': 3,
+                'P': 4, 'POROSITY': 4,
+                'UC': 5,
+                'RUC': 6,
+                'BT': 7,
+                'TI': 8,
+                'RC': 9,
+                'EP': 10,
+                'SD': 11,
+                'C/P': 12, 'CP': 12,
+                'OVER GR': 13, 'OGR': 13,
+                'GR': 14,
+                'CL': 15,
+                'C': 16
+            }
+            
+            monthly_defects = collections.defaultdict(lambda: collections.defaultdict(lambda: [0]*17))
+            welder_stats = collections.defaultdict(lambda: collections.defaultdict(lambda: {'total': 0, 'fail': 0, 'defects': [0]*17}))
+            
+            # 데이터 수집
+            for date_str, daily_data in history_data.items():
+                if not re.match(r'^\d{4}-\d{2}-\d{2}$', str(date_str)): continue
+                year = date_str[:4]
+                month = int(date_str[5:7])
+                
+                for row in daily_data.get('ndt_results', []):
+                    method = str(row.get('검사방법', '')).strip().upper()
+                    if not method: continue
+                    
+                    gongsa = row.get('공사구분', '주배관')
+                    welder = str(row.get('용접사', '')).strip()
+                    if not welder or welder == '-': continue
+                    
+                    result = str(row.get('결과', '')).strip()
+                    is_fail = (result == '불합격' or result == '재촬영')
+                    
+                    welder_stats[gongsa][welder]['total'] += 1
+                    if is_fail:
+                        welder_stats[gongsa][welder]['fail'] += 1
+                        
+                    sec_info = str(row.get('구간정보', '')).strip()
+                    if sec_info:
+                        parts = sec_info.split(',')
+                        for part in parts:
+                            part = part.strip()
+                            if '/' in part:
+                                code = part.split('/')[-1].strip().upper()
+                                if code in DEFECT_MAP:
+                                    idx = DEFECT_MAP[code]
+                                    monthly_defects[year][month][idx] += 1
+                                    welder_stats[gongsa][welder]['defects'][idx] += 1
+                                    
+            # 5.1 시트 기입 로직
+            def write_5_1_sheet(sheet, year_key):
+                if not sheet: return
+                for m in range(1, 13):
+                    col = m + 2 # 1월은 C열(3)
+                    for idx in range(14): # 5.1 시트는 14개 항목 (row 6~19)
+                        val = monthly_defects[year_key][m][idx]
+                        if val > 0:
+                            sheet.cell(row=6 + idx, column=col).value = val
+                            
+            write_5_1_sheet(sheet_5_1_2025, '2025')
+            write_5_1_sheet(sheet_5_1_2026, '2026')
+            
+            # 5.2 시트 기입 로직
+            def write_5_2_sheet(sheet, gongsa_key):
+                if not sheet: return
+                welders = list(welder_stats[gongsa_key].keys())
+                welders.sort()
+                
+                # 5.2 시트 열은 C(3)부터 시작
+                for i, w in enumerate(welders):
+                    col = 3 + i
+                    stats = welder_stats[gongsa_key][w]
+                    
+                    # 용접사명
+                    sheet.cell(row=3, column=col).value = w
+                    
+                    # 결함 개수 (row 8~24)
+                    for idx in range(17):
+                        val = stats['defects'][idx]
+                        if val > 0:
+                            sheet.cell(row=8 + idx, column=col).value = val
+                            
+                    # 25행: 합격물량 (total - fail)
+                    # 26행: 불합격물량 (fail)
+                    # 27행: 총물량 (total)
+                    passed = stats['total'] - stats['fail']
+                    sheet.cell(row=25, column=col).value = passed
+                    sheet.cell(row=26, column=col).value = stats['fail']
+                    sheet.cell(row=27, column=col).value = stats['total']
+                    
+                    # 28행: 불량률(%) 수식
+                    col_letter = openpyxl.utils.get_column_letter(col)
+                    # 불량률 = R / (O+C) (C가 없으면 O) -> (26행 / 27행) * 100
+                    sheet.cell(row=28, column=col).value = f'=IF({col_letter}27>0, ROUND({col_letter}26/{col_letter}27*100, 1), 0)'
+                    # 29행: 검사량(%) -> 이건 전체 합계대비 비율이라 각 열 수식은 패스
+                    
+            write_5_2_sheet(sheet_5_2_main, '주배관')
+            write_5_2_sheet(sheet_5_2_mgmt, '관리소')
+            
+        write_5_defect_reports()
+
 
         ws.column_dimensions['Q'].width = 9.0
         ws.column_dimensions['R'].width = 4.5

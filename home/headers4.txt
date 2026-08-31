@@ -1,0 +1,34 @@
+Col 1: 순
+번 / 
+Col 2: Project / 
+Col 3: DWG No. / 
+Col 4: SEC No. / 
+Col 5: 시공사 / 
+Col 6: 구분 / 
+Col 7: Joint
+ No. / 
+Col 8: 용접사번호 KGW-LT- / 
+Col 9: 1
+(A) / 
+Col 10: 2
+(B) / 
+Col 11: 3
+(C) / 
+Col 12: 4
+(D) / 
+Col 13: 5 / 
+Col 14: 6 / 
+Col 15: 7 / 
+Col 16: 주/
+야/휴
+검사 / 
+Col 17: 관경 / 
+Col 18: 두께 / 
+Col 19: 촬영
+방법 / 
+Col 20: 필름
+규격 / *검사물량
+Col 21: OR. / 
+Col 22: Rep. / 
+Col 23: Cut. / 
+Col 24: C.R / 

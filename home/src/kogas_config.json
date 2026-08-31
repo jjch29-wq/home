@@ -59,18 +59,18 @@
         }
     },
     "TREE_WIDTHS": {
-        "date": 100,
-        "loc": 141,
-        "type": 61,
-        "time": 85,
-        "mat": 140,
-        "qty": 90,
-        "unit": 113,
-        "mat_cost": 143,
-        "lab_cost": 149,
-        "overhead": 116,
-        "tech": 115,
-        "total_amt": 134
+        "date": 105,
+        "loc": 146,
+        "type": 65,
+        "time": 89,
+        "mat": 145,
+        "qty": 95,
+        "unit": 118,
+        "mat_cost": 148,
+        "lab_cost": 154,
+        "overhead": 121,
+        "tech": 120,
+        "total_amt": 139
     },
     "SASH_POS": 393
 }

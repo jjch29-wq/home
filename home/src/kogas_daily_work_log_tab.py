@@ -261,7 +261,7 @@ class KogasDailyWorkLogTab(ttk.Frame):
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.ndt_cols = ('업체', '검사방법', '구간', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
+        self.ndt_cols = ('업체', '공사구분', '검사방법', '구간', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
                          'RT_OR', 'RT_RE', 'UT', 'MT', 'PT')
         history = self.load_history()
         sections = set()
@@ -305,6 +305,7 @@ class KogasDailyWorkLogTab(ttk.Frame):
                 elif c == '근무구분': w = 7
                 elif c in ('검사방법', '결과', '관경', '두께'): w = 6
                 elif c in ('구간', '업체'): w = 10
+                elif c == '공사구분': w = 8
                 elif c == '용접사': w = 15
                 elif c == '라인번호': w = 25
                 elif c == 'Joint No.': w = 12
@@ -379,6 +380,10 @@ class KogasDailyWorkLogTab(ttk.Frame):
                     row_entries[c] = ent
                 elif c == '업체':
                     ent = ttk.Combobox(grid_frame, width=w, values=self.history_companies, justify='center')
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                    row_entries[c] = ent
+                elif c == '공사구분':
+                    ent = ttk.Combobox(grid_frame, width=w, values=['주배관', '관리소'], justify='center')
                     ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     row_entries[c] = ent
                 elif c == '구간':
@@ -488,7 +493,7 @@ class KogasDailyWorkLogTab(ttk.Frame):
                             next_num = str(int(num_str) + 1).zfill(len(num_str))
                             r['Joint No.'].insert(0, prefix + next_num)
                 
-                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '결과', '규격']:
+                for col in ['업체', '공사구분', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '결과', '규격']:
                     if not r[col].get().strip():
                         prev_val = prev_row[col].get().strip()
                         if prev_val:
@@ -1308,6 +1313,10 @@ class KogasDailyWorkLogTab(ttk.Frame):
                     val = normalized_spec
                 elif col == '근무구분':
                     val = work_shift
+                elif col == '공사구분':
+                    val = row_data.get(col, '')
+                    if not val and row_data.get('검사방법', '').strip():
+                        val = '주배관'
                 else:
                     val = row_data.get(col, '')
                 if col == '구간정보':
@@ -1317,7 +1326,6 @@ class KogasDailyWorkLogTab(ttk.Frame):
                 elif hasattr(ent, 'delete'):
                     ent.delete(0, tk.END)
                     ent.insert(0, val)
-            return f"{v:.1f}" if v % 1 else f"{int(v)}"
         today_qty = {comp_key: 0.0 for comp_key in self.qty_entries.keys()}
         
         for row_entries in self.ndt_grid_entries:
