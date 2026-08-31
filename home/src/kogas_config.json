@@ -59,8 +59,8 @@
         }
     },
     "TREE_WIDTHS": {
-        "date": 105,
-        "loc": 146,
+        "date": 104,
+        "loc": 145,
         "type": 65,
         "time": 89,
         "mat": 145,
@@ -72,5 +72,5 @@
         "tech": 120,
         "total_amt": 139
     },
-    "SASH_POS": 393
+    "SASH_POS": 394
 }

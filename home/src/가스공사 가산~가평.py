@@ -444,8 +444,8 @@ class MaterialManager:
             # 스크립트 실행 모드: src/ 우선, 없으면 ../data/ 탐색
             self.app_dir = os.path.dirname(os.path.abspath(__file__))
             self.bundle_dir = self.app_dir
-            self.config_path = os.path.join(self.app_dir, 'Material_Manager_Config.json')
-            _db_name = 'Material_Inventory.xlsx'
+            self.config_path = os.path.join(self.app_dir, 'Kogas_Material_Manager_Config.json')
+            _db_name = 'Kogas_Material_Inventory.xlsx'
             _data_dir = os.path.join(os.path.dirname(self.app_dir), 'data')
             _candidates = [
                 os.path.join(self.app_dir, _db_name),   # src/Material_Inventory.xlsx
@@ -12080,7 +12080,7 @@ class MaterialManager:
                 messagebox.showerror("오류", "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)")
                 return
                 
-            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kogas_daily_work_history.json')
             if not os.path.exists(history_path):
                 messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
                 return
@@ -12614,7 +12614,7 @@ class MaterialManager:
                         
                 history = {}
                 import json, os
-                history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+                history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kogas_daily_work_history.json')
                 if os.path.exists(history_path):
                     with open(history_path, 'r', encoding='utf-8') as f:
                         history = json.load(f)
