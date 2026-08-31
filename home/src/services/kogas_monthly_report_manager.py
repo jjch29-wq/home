@@ -2102,10 +2102,10 @@ class KogasMonthlyReportManager:
             raise FileNotFoundError(f"Template not found at {self.template_path}")
             
         if not os.path.exists(history_path):
-            raise FileNotFoundError(f"History file not found at {history_path}")
-
-        with open(history_path, 'r', encoding='utf-8') as f:
-            history_data = json.load(f)
+            history_data = {}
+        else:
+            with open(history_path, 'r', encoding='utf-8') as f:
+                history_data = json.load(f)
 
         # 1. 데이터 필터링 및 집계
         # 월간: 선택한 월의 자료만 포함한다. 전체 누적: 최초 기록부터
