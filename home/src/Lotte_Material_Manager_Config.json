@@ -1,6 +1,6 @@
 {
-  "selected_tab": 6,
-  "selected_tab_text": "공사실행예산서",
+  "selected_tab": 7,
+  "selected_tab_text": "작업/감독일보",
   "tab_order": [
     "현재 재고 현황",
     "데이터 가져오기/내보내기",
@@ -120,7 +120,7 @@
     1211,
     1772
   ],
-  "entry_inner_frame_height": 833,
+  "entry_inner_frame_height": 815,
   "history_visible_cols": [],
   "monthly_visible_cols": [],
   "budget_view_visible_cols": [
@@ -147,7 +147,7 @@
   "budget_view_custom_columns": [],
   "window_state": "zoomed",
   "window_width": 1920,
-  "window_height": 1009,
+  "window_height": 991,
   "stock_col_widths": {
     "No.": 60,
     "회사코드": 80,
@@ -531,7 +531,7 @@
     "초안",
     "롯데현장"
   ],
-  "daily_usage_sash_ratio": 0.5296610169491526,
+  "daily_usage_sash_ratio": 0.5399568034557235,
   "tv_recent_col_widths": {
     "id": 200,
     "date": 160,
