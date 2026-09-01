@@ -1389,7 +1389,9 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             w['amount'].config(text=f"{amt:,.0f}")
             t5 += amt
             
-        exp_total = t1 + t2 + t3 + t4 + t5
+        # 실행 경비와 외주비는 요약 화면에서 별도 항목으로 관리한다.
+        # 외주비(t3)를 경비에 포함하면 영업이익 계산 시 외주비가 두 번 차감된다.
+        exp_total = t1 + t2 + t4 + t5
 
         # 롯데 전용 화면은 생성 시 planned/actual 모드를 명시적으로 전달한다.
         # Tk 위젯의 master 체인만으로는 MaterialManager 컨트롤러에 도달하지 못할 수 있다.
@@ -1417,9 +1419,9 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.lbl_exp_total.config(text=f"₩ {exp_total:,.0f}")
         self.lbl_exp_vat.config(text=f"{exp_vat:,.0f}")
         
-        # 6. Sales Cost (Labor + Material + Exp)
+        # 6. Sales Cost (Labor + Material + Expense + Outsource)
         mat_total = self.get_material_total() if self.get_material_total else 0.0
-        direct_cost = labor_total + mat_total + exp_total
+        direct_cost = labor_total + mat_total + exp_total + t3
         self.lbl_sales_cost_total.config(text=f"₩ {direct_cost:,.0f}")
         
         # 7. Indirect Cost (14%)
@@ -1443,8 +1445,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         # Update main form "Expense" and "Outsource" fields
         if self.on_change_callback:
             # We pass (Expense, Outsource, TotalProfit) or something?
-            # Let's just update the main Expense field with exp_total (1~5)
-            # and Outsource with t3.
+            # Expense excludes outsource; outsource is passed separately as t3.
             self.on_change_callback(exp_total, t3, op_profit)
 
     def _to_f(self, val):
