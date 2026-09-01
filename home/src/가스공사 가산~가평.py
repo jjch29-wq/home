@@ -1086,7 +1086,7 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
             ]
         df = self.settings_df[self.settings_df['Category'] == 'Expense']
         if df.empty:
@@ -1094,10 +1094,32 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
             ]
         # Return in (cat, cont, ppl, qty, unit, price) format as expected by _add_row_s1
-        return [tuple([x[0], x[1], "N/A", 1, x[2], x[3]]) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
+        result = []
+        for x in df[['Name', 'Spec', 'Unit', 'Rate']].values:
+            name = x[0]
+            spec = x[1]
+            unit = x[2]
+            rate = x[3]
+            
+            # 강제로 단가 및 규격 덮어쓰기
+            if name == '차량유지비':
+                unit = '일'
+                rate = 5000
+            elif name == '소모품비':
+                unit = '일'
+                rate = 500
+            elif name == '복리후생비':
+                unit = '일'
+                rate = 1667
+            elif name == 'Se-175':
+                unit = '일'
+                rate = 47619
+                
+            result.append((name, spec, "N/A", 1, unit, rate))
+        return result
 
     def get_outsource_defaults(self):
         """Extract outsource defaults from settings_df"""
@@ -4692,12 +4714,12 @@ class MaterialManager:
                 if hasattr(self, attr):
                     widget = getattr(self, attr)
                     if isinstance(widget, WorkerCompositeWidget):
-                         widget.cb_name['values'] = sorted_vals
+                         widget.cb_name['values'] = [''] + sorted_vals
                     elif hasattr(widget, 'configure'):
-                        try: widget['values'] = sorted_vals
+                        try: widget['values'] = [''] + sorted_vals
                         except: pass
             
-            if hasattr(self, 'ent_user'): self.ent_user['values'] = sorted_vals
+            if hasattr(self, 'ent_user'): self.ent_user['values'] = [''] + sorted_vals
         elif config_key == 'worktimes':
             # Update all worktime fields (1-10)
             for i in range(1, 11):
@@ -4706,8 +4728,11 @@ class MaterialManager:
                     widget = getattr(self, attr)
                     if hasattr(widget, 'configure'):
                         try: 
-                            widget['values'] = sorted_vals
+                            widget['values'] = [''] + sorted_vals
                         except: pass
+                grp_attr = f'worker_group{i}'
+                if hasattr(self, grp_attr):
+                    getattr(self, grp_attr).update_time_list(sorted_vals)
         elif config_key == 'equipments' or config_key == 'materials':
             # Both affect the unified material/equipment suggestion lists
             self.update_material_combo()
@@ -7551,6 +7576,7 @@ class MaterialManager:
         total_travel = 0.0
         total_meal = 0.0
         lab_total = 0.0
+        outsource_total = 0.0  # 작업자 없는 행 → 외주비
         
         # --- Labor Aggregation by Rank ---
         ranks = ["이사", "부장", "차장", "과장", "대리", "계장", "주임", "기사"]
@@ -7624,7 +7650,14 @@ class MaterialManager:
             nd_mat = _f(row.get('재료비', 0))
             nd_overhead = _f(row.get('제경비', 0))
             nd_tech = _f(row.get('기술료', 0))
-            lab_total += nd_labor
+            has_worker = any(
+                str(row.get('User' if i == 1 else f'User{i}', '')).strip() not in ('', 'nan')
+                for i in range(1, 11)
+            )
+            if has_worker:
+                lab_total += nd_labor
+            else:
+                outsource_total += nd_labor
             row_revenue = nd_labor + nd_mat + nd_overhead + nd_tech
             if row_revenue <= 0:
                 row_revenue = _f(row.get('검사비', 0))
@@ -7963,10 +7996,10 @@ class MaterialManager:
             self.ent_budget_actual_labor.delete(0, tk.END)
             self.ent_budget_actual_labor.insert(0, f"{np.nan_to_num(lab_total):,.0f}")
             
-        # 외주비는 현재 실적 집계 로직에 없으므로 유지하거나 0으로.
+        # 외주비: 작업자 없는 행의 인건비 합산
         if hasattr(self, 'ent_budget_actual_outsource'):
             self.ent_budget_actual_outsource.delete(0, tk.END)
-            self.ent_budget_actual_outsource.insert(0, "0")
+            self.ent_budget_actual_outsource.insert(0, f"{np.nan_to_num(outsource_total):,.0f}")
 
         # 4. 실적 인건비 상세 탭 누적 업데이트
         if hasattr(self, 'actual_labor_detail_widget'):
@@ -11580,14 +11613,14 @@ class MaterialManager:
             ttk.Label(w_frame, text=f"{i}:", width=2).pack(side='left')
             
             # Name
-            cb_name = ttk.Combobox(w_frame, width=8, values=self.users)
+            cb_name = ttk.Combobox(w_frame, width=8, values=[''] + self.users)
             name_key = 'User' if i == 1 else f'User{i}'
             cb_name.set(self.clean_nan(entry_data.get(name_key, '')))
             cb_name.pack(side='left', padx=2)
             worker_fields[f'name{i}'] = cb_name
             
             # Time
-            cb_time = ttk.Combobox(w_frame, width=16, values=self.worktimes)
+            cb_time = ttk.Combobox(w_frame, width=16, values=[''] + self.worktimes)
             time_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
             cb_time.set(self.clean_nan(entry_data.get(time_key, '')))
             cb_time.pack(side='left', padx=2)

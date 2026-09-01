@@ -1504,7 +1504,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
             ]
         
         for i, (cat, cont, ppl, qty, unit, price) in enumerate(defaults_s1):
@@ -1837,7 +1837,23 @@ class ExpenseProfitDetailWidget(ttk.Frame):
                         if k in entry_list[i] and hasattr(entry_list[i][k], 'delete'):
                             entry_list[i][k].delete(0, tk.END); entry_list[i][k].insert(0, str(v))
         
-        fill(self.entries['site_expense'], data.get('site_expense', []))
+        site_expenses = data.get('site_expense', [])
+        for exp in site_expenses:
+            name = exp.get('cat', '')
+            if name == '차량유지비':
+                exp['unit'] = '일'
+                exp['price'] = 5000
+            elif name == '소모품비':
+                exp['unit'] = '일'
+                exp['price'] = 500
+            elif name == '복리후생비':
+                exp['unit'] = '일'
+                exp['price'] = 1667
+            elif name == 'Se-175':
+                exp['unit'] = '일'
+                exp['price'] = 47619
+
+        fill(self.entries['site_expense'], site_expenses)
         fill(self.entries['rental'], data.get('rental', []))
         fill(self.entries['outsource'], data.get('outsource', []))
         fill(self.entries['depreciation'], data.get('depreciation', []))
@@ -2756,7 +2772,7 @@ class MaterialManager:
                         ['Expense', '차량유지비', '주유, 수리, 통행, 주차 등', '일', 150000 // 30],
                         ['Expense', '소모품비', '장갑,일회용 작업복외', '일', 15000 // 30],
                         ['Expense', '복리후생비', '생수, 음료 외 기타', '일', 50000 // 30],
-                        ['Expense', 'Se-175', '방사성동위원소 구매', 'EA', 10000000 // 280]
+                        ['Expense', 'Se-175', '방사성동위원소 구매', '일', 10000000 // 210]
                     ]
                     outsource_defaults = [
                         ['Outsource', '케이엔디이', '방사선투과검사', '공수', 15000]
@@ -3288,7 +3304,7 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
             ]
         df = self.settings_df[self.settings_df['Category'] == 'Expense']
         if df.empty:
@@ -3296,10 +3312,32 @@ class MaterialManager:
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
             ]
         # Return in (cat, cont, ppl, qty, unit, price) format as expected by _add_row_s1
-        return [tuple([x[0], x[1], "N/A", 1, x[2], x[3]]) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
+        result = []
+        for x in df[['Name', 'Spec', 'Unit', 'Rate']].values:
+            name = x[0]
+            spec = x[1]
+            unit = x[2]
+            rate = x[3]
+            
+            # 강제로 단가 및 규격 덮어쓰기
+            if name == '차량유지비':
+                unit = '일'
+                rate = 5000
+            elif name == '소모품비':
+                unit = '일'
+                rate = 500
+            elif name == '복리후생비':
+                unit = '일'
+                rate = 1667
+            elif name == 'Se-175':
+                unit = '일'
+                rate = 47619
+                
+            result.append((name, spec, "N/A", 1, unit, rate))
+        return result
 
     def get_outsource_defaults(self):
         """Extract outsource defaults from settings_df"""
@@ -17045,14 +17083,14 @@ class MaterialManager:
             ttk.Label(w_frame, text=f"{i}:", width=2).pack(side='left')
             
             # Name
-            cb_name = ttk.Combobox(w_frame, width=8, values=self.users)
+            cb_name = ttk.Combobox(w_frame, width=8, values=[''] + self.users)
             name_key = 'User' if i == 1 else f'User{i}'
             cb_name.set(self.clean_nan(entry_data.get(name_key, '')))
             cb_name.pack(side='left', padx=2)
             worker_fields[f'name{i}'] = cb_name
             
             # Time
-            cb_time = ttk.Combobox(w_frame, width=16, values=self.worktimes)
+            cb_time = ttk.Combobox(w_frame, width=16, values=[''] + self.worktimes)
             time_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
             cb_time.set(self.clean_nan(entry_data.get(time_key, '')))
             cb_time.pack(side='left', padx=2)

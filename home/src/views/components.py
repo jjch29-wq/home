@@ -1,4 +1,4 @@
-import tkinter as tk
+﻿import tkinter as tk
 from tkinter import ttk, simpledialog
 import pandas as pd
 from tkcalendar import DateEntry
@@ -164,10 +164,11 @@ class WorkerDataGroup(ttk.Frame):
         self.worker_index = worker_index
         
         # 1. Name selection (WorkerCompositeWidget now handles only name)
+        mod_users = [''] + list(users_list) if users_list else ['']
         self.composite = WorkerCompositeWidget(
-            self, width=10, values=users_list, 
+            self, width=10, values=mod_users, 
             enable_autocomplete=enable_autocomplete, 
-            user_list=users_list
+            user_list=mod_users
         )
         self.composite.pack(side='left', padx=(0, 2), fill='x', expand=True)
         self.cb_name = self.composite.cb_name
@@ -179,7 +180,8 @@ class WorkerDataGroup(ttk.Frame):
         
         # 3. Work Time (Changed to Combobox for mouse selection)
         ttk.Label(self, text="시간:").pack(side='left', padx=(1, 0))
-        self.ent_worktime = ttk.Combobox(self, width=12, values=time_list or [])
+        mod_time = [''] + list(time_list) if time_list else ['']
+        self.ent_worktime = ttk.Combobox(self, width=12, values=mod_time)
         self.ent_worktime.pack(side='left', padx=(0, 2), fill='x', expand=True)
         self.ent_worktime.set("") # Default empty
         
@@ -246,7 +248,7 @@ class WorkerDataGroup(ttk.Frame):
     def update_time_list(self, new_list):
         """Refresh the combobox values with a new list"""
         if hasattr(self, 'ent_worktime'):
-            self.ent_worktime['values'] = new_list
+            self.ent_worktime['values'] = [''] + list(new_list) if new_list else ['']
 
 
 class VehicleInspectionWidget(ttk.Frame):
@@ -1058,12 +1060,13 @@ class ExpenseProfitDetailWidget(ttk.Frame):
     Comprehensive expense and profit calculation widget.
     Sections: 1) Site Expenses, 2) Rental, 3) Outsource, 4) Insurance, 5) Depreciation, 6) Indirect Cost, 7) Profit
     """
-    def __init__(self, parent, on_change_callback=None, get_labor_total_func=None, get_material_total_func=None, get_revenue_func=None, **kwargs):
+    def __init__(self, parent, on_change_callback=None, get_labor_total_func=None, get_material_total_func=None, get_revenue_func=None, budget_mode=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.on_change_callback = on_change_callback
         self.get_labor_total = get_labor_total_func
         self.get_material_total = get_material_total_func
         self.get_revenue = get_revenue_func
+        self.budget_mode = budget_mode
         
         self.entries = {
             'site_expense': [], # list of dicts
@@ -1110,11 +1113,21 @@ class ExpenseProfitDetailWidget(ttk.Frame):
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
                 ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
                 ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 35714)
+                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
             ]
         
         for i, (cat, cont, ppl, qty, unit, price) in enumerate(defaults_s1):
-            self._add_row_s1(cat, cont, ppl, qty, unit, price)
+            if self.budget_mode == 'actual':
+                actual_rates = {
+                    '차량유지비': ('일', 5000),
+                    '소모품비': ('일', 500),
+                    '복리후생비': ('일', 1667),
+                    'Se-175': ('일', 47619),
+                }
+                actual_unit, actual_price = actual_rates.get(str(cat).strip(), (unit, price))
+                self._add_row_s1(cat, cont, ppl, '', actual_unit, actual_price)
+            else:
+                self._add_row_s1(cat, cont, ppl, qty, unit, price)
 
         # --- Section 2: Rental Costs ---
         s2_frame = ttk.LabelFrame(self, text="(2) 장비/차량 임차료")
@@ -1152,10 +1165,22 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         if self.master_app:
             outsource_defaults = self.master_app.get_outsource_defaults()
         else:
-            outsource_defaults = [("케이엔디이", "방사선투과검사", 0, 15000)]
+            outsource_defaults = [
+                ("케이엔디이",     "방사선투과검사", 0, 15000),
+                ("고려검사",       "방사선투과검사", 0, 13000),
+                ("한국기계검사소", "방사선투과검사", 0, 15000),
+            ]
 
         for cat, content, qty, price in outsource_defaults:
-            self._add_row_s3(cat, content, qty, price)
+            if self.budget_mode == 'actual':
+                initial_count = {
+                    '케이엔디이': 3918,
+                    '고려검사': 651,
+                    '한국기계검사소': 453,
+                }.get(str(cat).strip(), '')
+            else:
+                initial_count = '' if self.budget_mode == 'actual' else qty
+            self._add_row_s3(cat, content, initial_count, price)
 
         for _ in range(2): self._add_row_s3()
 
@@ -1365,7 +1390,30 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             t5 += amt
             
         exp_total = t1 + t2 + t3 + t4 + t5
-        exp_vat = (t1 + t2 + t3) * 0.1 # Example: VAT on direct expenses
+
+        # 롯데 전용 화면은 생성 시 planned/actual 모드를 명시적으로 전달한다.
+        # Tk 위젯의 master 체인만으로는 MaterialManager 컨트롤러에 도달하지 못할 수 있다.
+        lotte_rules = self.budget_mode in ('planned', 'actual') or bool(getattr(self.master_app, 'lotte_budget_rules', False))
+        if lotte_rules:
+            # 롯데 사전원가 시트의 VAT 기준:
+            # 현장경비는 차량유지비, 임차료는 첫 행, 외주비는 케이엔디이를 제외한다.
+            site_vat_base = sum(
+                self._to_f(w['qty'].get()) * self._to_f(w['price'].get())
+                for w in self.entries['site_expense']
+                if '차량유지비' not in str(w['cat'].get())
+            )
+            rental_vat_base = sum(
+                self._to_f(w['qty'].get()) * self._to_f(w['period'].get()) * self._to_f(w['price'].get())
+                for i, w in enumerate(self.entries['rental']) if i != 0
+            )
+            outsource_vat_base = sum(
+                self._to_f(w['count'].get()) * self._to_f(w['price'].get())
+                for w in self.entries['outsource']
+                if str(w['cat'].get()).strip() != '케이엔디이'
+            )
+            exp_vat = (site_vat_base + rental_vat_base + outsource_vat_base) * 0.1
+        else:
+            exp_vat = (t1 + t2 + t3) * 0.1
         self.lbl_exp_total.config(text=f"₩ {exp_total:,.0f}")
         self.lbl_exp_vat.config(text=f"{exp_vat:,.0f}")
         
@@ -1376,7 +1424,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         
         # 7. Indirect Cost (14%)
         self.lbl_indirect_base.config(text=f"₩ {direct_cost:,.0f}")
-        indirect_cost = direct_cost * 0.14
+        indirect_cost = (direct_cost - t3) * 0.14 if lotte_rules else direct_cost * 0.14
         self.lbl_indirect_total.config(text=f"₩ {indirect_cost:,.0f}")
         
         grand_total_cost = direct_cost + indirect_cost
@@ -1443,7 +1491,31 @@ class ExpenseProfitDetailWidget(ttk.Frame):
                         if k in entry_list[i] and hasattr(entry_list[i][k], 'delete'):
                             entry_list[i][k].delete(0, tk.END); entry_list[i][k].insert(0, str(v))
         
-        fill(self.entries['site_expense'], data.get('site_expense', []))
+        site_expenses = data.get('site_expense', [])
+        if self.budget_mode in ('planned', 'actual'):
+            for exp in site_expenses:
+                name = str(exp.get('cat', ''))
+                if self.budget_mode == 'planned':
+                    if '차량' in name:
+                        exp['qty'], exp['unit'], exp['price'] = '12', '개월', '150,000'
+                    elif '소모' in name:
+                        exp['qty'], exp['unit'], exp['price'] = '12', '개월', '15,000'
+                    elif '복리' in name or '후생' in name:
+                        exp['qty'], exp['unit'], exp['price'] = '12', '개월', '50,000'
+                    elif 'Se' in name or '175' in name:
+                        exp['qty'], exp['unit'], exp['price'] = '1', 'EA', '10,000,000'
+                elif self.budget_mode == 'actual':
+                    # 사후원가는 현장별 실제 투입일수 × 일일 단가로 계산한다.
+                    if '차량' in name:
+                        exp['unit'], exp['price'] = '일', '5,000'
+                    elif '소모' in name:
+                        exp['unit'], exp['price'] = '일', '500'
+                    elif '복리' in name or '후생' in name:
+                        exp['unit'], exp['price'] = '일', '1,667'
+                    elif 'Se' in name or '175' in name:
+                        exp['unit'], exp['price'] = '일', '47,619'
+
+        fill(self.entries['site_expense'], site_expenses)
         fill(self.entries['rental'], data.get('rental', []))
         fill(self.entries['outsource'], data.get('outsource', []))
         fill(self.entries['depreciation'], data.get('depreciation', []))

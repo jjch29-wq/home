@@ -4609,12 +4609,12 @@ class MaterialManager:
                 if hasattr(self, attr):
                     widget = getattr(self, attr)
                     if isinstance(widget, WorkerCompositeWidget):
-                         widget.cb_name['values'] = sorted_vals
+                         widget.cb_name['values'] = [''] + sorted_vals
                     elif hasattr(widget, 'configure'):
-                        try: widget['values'] = sorted_vals
+                        try: widget['values'] = [''] + sorted_vals
                         except: pass
             
-            if hasattr(self, 'ent_user'): self.ent_user['values'] = sorted_vals
+            if hasattr(self, 'ent_user'): self.ent_user['values'] = [''] + sorted_vals
         elif config_key == 'worktimes':
             # Update all worktime fields (1-10)
             for i in range(1, 11):
@@ -4623,8 +4623,11 @@ class MaterialManager:
                     widget = getattr(self, attr)
                     if hasattr(widget, 'configure'):
                         try: 
-                            widget['values'] = sorted_vals
+                            widget['values'] = [''] + sorted_vals
                         except: pass
+                grp_attr = f'worker_group{i}'
+                if hasattr(self, grp_attr):
+                    getattr(self, grp_attr).update_time_list(sorted_vals)
         elif config_key == 'equipments' or config_key == 'materials':
             # Both affect the unified material/equipment suggestion lists
             self.update_material_combo()
