@@ -1,6 +1,6 @@
 {
-  "selected_tab": 7,
-  "selected_tab_text": "작업/감독일보",
+  "selected_tab": 6,
+  "selected_tab_text": "공사실행예산서",
   "tab_order": [
     "현재 재고 현황",
     "데이터 가져오기/내보내기",
@@ -53,6 +53,7 @@
   "equipments": [
     "PAUT MX2(OMNI2-103085)",
     "PAUT MX2(OMNI2-103085), scanner",
+    "R-ray(se-75)",
     "paut mx2",
     "scanner"
   ],
@@ -118,9 +119,9 @@
   "daily_history_sash_pos": null,
   "bottom_dashboard_sashes": [
     1211,
-    1772
+    1771
   ],
-  "entry_inner_frame_height": 815,
+  "entry_inner_frame_height": 918,
   "history_visible_cols": [],
   "monthly_visible_cols": [],
   "budget_view_visible_cols": [
