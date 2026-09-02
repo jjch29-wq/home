@@ -723,6 +723,17 @@ def setup_daily_usage_tab_impl(self):
     calc_trigger = lambda e: self.update_daily_test_fee_calc()
     
     def on_qty_change(e):
+        # 롯데 저장 로직은 ORI/REP 물량을 최종 수량으로 사용한다.
+        # 기존 기록의 상단 수량을 수정할 때 숨겨진 이전 물량이 다시
+        # 덮어쓰지 않도록 현재 검사구분의 물량을 함께 갱신한다.
+        quantity = self.ent_daily_test_amount.get().strip().replace(',', '')
+        inspection_type = getattr(
+            self, 'ndt_inspection_type_var', tk.StringVar(value='ORI')
+        ).get().strip().upper()
+        if inspection_type == 'REP':
+            self.ndt_rep_qty_var.set(quantity)
+        else:
+            self.ndt_ori_qty_var.set(quantity)
         self.update_daily_test_fee_calc()
         
     # Handle Date Changes globally for recalculations

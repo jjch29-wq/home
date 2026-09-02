@@ -16,6 +16,7 @@ import json
 import ctypes
 import re
 import traceback
+import logging
 import sys
 import subprocess
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -62,6 +63,8 @@ print(f"DEBUG: daily_work_report_manager path: {daily_work_report_manager.__file
 # Pre-compiled regex for performance
 from views.components import *
 
+LOGGER = logging.getLogger(__name__)
+
 # 현장별 일일 사용량 탭의 차량정보 기본 목록.
 # 저장된 사용자 차량 목록과 병합되므로 기존 등록 차량은 유지된다.
 DEFAULT_VEHICLES = (
@@ -74,249 +77,10 @@ DEFAULT_VEHICLES = (
 
 # Auto-install additional dependencies
 from tkcalendar import DateEntry, Calendar
+from utils.tkcalendar_compat import apply_tkcalendar_compatibility_patches
 
-# [FIX] Patch tkcalendar for stability in ko_KR locale / Python 3.14.
-# 각 패치를 독립적으로 적용 - 한 패치 실패가 나머지를 무효화하지 않도록 분리.
-import tkinter as _tk_ref
+apply_tkcalendar_compatibility_patches()
 
-# 1) Calendar.__init__ : select_on_nav=False 기본값 + 헤더 너비 조정
-try:
-    _orig_cal_init = Calendar.__init__
-    def _patched_cal_init(self, *args, **kwargs):
-        if 'select_on_nav' not in kwargs:
-            kwargs['select_on_nav'] = False
-        _orig_cal_init(self, *args, **kwargs)
-        def widen():
-            if hasattr(self, '_header_month'):
-                try: self._header_month.configure(width=25)
-                except: pass
-            if hasattr(self, '_header_year'):
-                try: self._header_year.configure(width=10)
-                except: pass
-        self.after_idle(widen)
-        self._widen_headers = widen
-    Calendar.__init__ = _patched_cal_init
-except Exception:
-    pass
-
-# 2) Calendar._display_calendar : 헤더 너비 재조정
-try:
-    _orig_cal_display = Calendar._display_calendar
-    def _patched_cal_display(self, *args, **kwargs):
-        _orig_cal_display(self, *args, **kwargs)
-        if hasattr(self, '_widen_headers'):
-            self.after_idle(self._widen_headers)
-    Calendar._display_calendar = _patched_cal_display
-except Exception:
-    pass
-
-# 3) DateEntry._show_calendar : tkcalendar < 1.6 버전 호환 (1.6.1에서는 없음 - 무시)
-try:
-    if hasattr(DateEntry, '_show_calendar'):
-        _orig_de_show_cal = DateEntry._show_calendar
-        def _patched_de_show_cal(self):
-            try: self._last_known_date = self.get_date()
-            except: self._last_known_date = None
-            try: _orig_de_show_cal(self)
-            except BaseException: pass
-            if hasattr(self, '_calendar'):
-                try: self._calendar.configure(select_on_nav=False)
-                except: pass
-        DateEntry._show_calendar = _patched_de_show_cal
-except Exception:
-    pass
-
-# --- GLOBAL UTILITY FUNCTIONS MOVED TO utils/helpers.py ---
-
-
-# 4) DateEntry.drop_down : tkcalendar 1.6.1+ 날짜박스 클릭 시 튕김 방지 (핵심 패치)
-try:
-    if hasattr(DateEntry, 'drop_down'):
-        _orig_drop_down = DateEntry.drop_down
-        def _patched_drop_down(self):
-            try: self._last_known_date = self.get_date()
-            except: self._last_known_date = None
-            try:
-                _orig_drop_down(self)
-                if hasattr(self, '_calendar'):
-                    try: self._calendar.configure(select_on_nav=False)
-                    except: pass
-            except BaseException:
-                pass
-        DateEntry.drop_down = _patched_drop_down
-except Exception:
-    pass
-
-# 5) DateEntry._on_b1_press : 클릭 이벤트 처리 중 예외 방지
-try:
-    if hasattr(DateEntry, '_on_b1_press'):
-        _orig_b1_press = DateEntry._on_b1_press
-        def _patched_b1_press(self, event):
-            try: _orig_b1_press(self, event)
-            except BaseException: pass
-        DateEntry._on_b1_press = _patched_b1_press
-except Exception:
-    pass
-
-# 6) DateEntry._on_calendar_selection
-try:
-    if hasattr(DateEntry, '_on_calendar_selection'):
-        _orig_de_on_sel = DateEntry._on_calendar_selection
-        def _patched_de_on_sel(self, event):
-            try:
-                new_date = self._calendar.selection_get()
-                if hasattr(self, '_last_known_date') and self._last_known_date == new_date:
-                    pass
-            except: pass
-            _orig_de_on_sel(self, event)
-        DateEntry._on_calendar_selection = _patched_de_on_sel
-except Exception:
-    pass
-
-# 7) DateEntry._setup_style : 스타일 설정 중 update_idletasks 일시 차단
-try:
-    if hasattr(DateEntry, '_setup_style'):
-        _orig_setup_style = DateEntry._setup_style
-        def _patched_setup_style(self):
-            _orig_update = self.update_idletasks
-            self.update_idletasks = lambda: None
-            try:
-                _orig_setup_style(self)
-            except BaseException:
-                pass
-            finally:
-                self.update_idletasks = _orig_update
-        DateEntry._setup_style = _patched_setup_style
-except Exception:
-    pass
-
-# 8) DateEntry.update_idletasks : Python 3.14 BaseException 안전화 (클래스 레벨 영구 적용)
-try:
-    def _safe_de_update_idletasks(self):
-        try:
-            _tk_ref.Misc.update_idletasks(self)
-        except BaseException:
-            pass
-    DateEntry.update_idletasks = _safe_de_update_idletasks
-except Exception:
-    pass
-
-# 9) DateEntry._determine_downarrow_name : Configure/Map 이벤트 콜백 예외 방지
-try:
-    if hasattr(DateEntry, '_determine_downarrow_name'):
-        _orig_det = DateEntry._determine_downarrow_name
-        def _patched_det(self, event=None):
-            try: _orig_det(self, event)
-            except BaseException: pass
-        DateEntry._determine_downarrow_name = _patched_det
-except Exception:
-    pass
-
-# 10) Calendar._setup_style : ThemeChanged 시 예외 방지
-try:
-    if hasattr(Calendar, '_setup_style'):
-        _orig_cal_setup_style = Calendar._setup_style
-        def _patched_cal_setup_style(self, event=None):
-            try: _orig_cal_setup_style(self, event)
-            except BaseException: pass
-        Calendar._setup_style = _patched_cal_setup_style
-except Exception:
-    pass
-
-# 11) Calendar._prev_year / _next_year : 년도 이동
-# [FIX] Exception 수준에서만 잡고, 날짜도 롤백.
-try:
-    if hasattr(Calendar, '_prev_year'):
-        _orig_prev_year = Calendar._prev_year
-        def _patched_prev_year(self):
-            _saved = self._date
-            try:
-                _orig_prev_year(self)
-            except Exception:
-                self._date = _saved   # 실패 시 날짜 롤백
-        Calendar._prev_year = _patched_prev_year
-except Exception:
-    pass
-
-try:
-    if hasattr(Calendar, '_next_year'):
-        _orig_next_year = Calendar._next_year
-        def _patched_next_year(self):
-            _saved = self._date
-            try:
-                _orig_next_year(self)
-            except Exception:
-                self._date = _saved   # 실패 시 날짜 롤백
-        Calendar._next_year = _patched_next_year
-except Exception:
-    pass
-
-# 12) Calendar._prev_month / _next_month : 월 이동도 동일하게 안전화
-try:
-    if hasattr(Calendar, '_prev_month'):
-        _orig_prev_month = Calendar._prev_month
-        def _patched_prev_month(self):
-            _saved = self._date
-            try:
-                _orig_prev_month(self)
-            except Exception:
-                self._date = _saved
-        Calendar._prev_month = _patched_prev_month
-except Exception:
-    pass
-
-try:
-    if hasattr(Calendar, '_next_month'):
-        _orig_next_month = Calendar._next_month
-        def _patched_next_month(self):
-            _saved = self._date
-            try:
-                _orig_next_month(self)
-            except Exception:
-                self._date = _saved
-        Calendar._next_month = _patched_next_month
-except Exception:
-    pass
-
-# 12.5) tk.Misc.destroy : Python 3.13+ 종료 시 TclError ("can't delete Tcl command") 예외 방지
-try:
-    _orig_misc_destroy = tk.Misc.destroy
-    def _patched_misc_destroy(self):
-        try:
-            _orig_misc_destroy(self)
-        except tk.TclError:
-            pass
-        except Exception:
-            pass
-    tk.Misc.destroy = _patched_misc_destroy
-except Exception:
-    pass
-
-# 13) DateEntry._on_focus_out_cal : 년도/월 네비게이션 버튼 클릭 시 달력 닫힘 방지
-# [근본 원인] 년도 버튼(_l_year/_r_year) 클릭 → Calendar에 <FocusOut> 발생
-# → focus_get()이 버튼 위젯(DateEntry가 아닌 _top_cal 자식)을 반환
-# → 기존 코드: "focus != self(DateEntry)" 이므로 else: _top_cal.withdraw() → 달력 닫힘
-# → 사용자 입장: 년도 버튼 누를 때마다 달력이 꺼짐 ("화면 튕김")
-# [수정] focus가 _top_cal 내부 위젯으로 이동한 경우 → 달력 유지
-try:
-    if hasattr(DateEntry, '_on_focus_out_cal'):
-        _orig_on_focus_out_cal = DateEntry._on_focus_out_cal
-        def _patched_on_focus_out_cal(self, event):
-            fw = self.focus_get()
-            if fw is not None:
-                try:
-                    # focus가 _top_cal 내부(년도·월 버튼 등)로 이동한 경우 → 유지
-                    if str(fw).startswith(str(self._top_cal)):
-                        return
-                except Exception:
-                    pass
-            try:
-                _orig_on_focus_out_cal(self, event)
-            except BaseException:
-                pass
-        DateEntry._on_focus_out_cal = _patched_on_focus_out_cal
-except Exception:
-    pass
 
 # --- Custom Draggable Messagebox Implementation ---
 
@@ -356,18 +120,18 @@ class MaterialManager:
         # High DPI awareness
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except Exception:
+        except (AttributeError, OSError):
             try:
                 ctypes.windll.user32.SetProcessDPIAware()
-            except Exception:
-                pass
+            except (AttributeError, OSError) as exc:
+                LOGGER.debug("DPI awareness is unavailable: %s", exc)
                 
         self.root.title("자재 및 소모품 관리 시스템 (Material Manager)")
         self.root.geometry("1600x900")
         try:
             self.root.state('zoomed') # Maximize on Windows
-        except:
-            pass
+        except tk.TclError as exc:
+            LOGGER.debug("The current window manager cannot maximize the window: %s", exc)
         
         # Configure overall style
         
@@ -405,8 +169,8 @@ class MaterialManager:
         self.style = ttk.Style()
         try:
             self.style.theme_use('clam') # Use 'clam' theme for better grid line visibility
-        except:
-            pass
+        except tk.TclError as exc:
+            LOGGER.warning("Could not activate the clam theme: %s", exc)
             
         self.style.configure(".", font=('Malgun Gothic', 12))
         self.style.configure("Treeview.Heading", font=('Malgun Gothic', 12, 'bold'))
@@ -658,10 +422,7 @@ class MaterialManager:
         return _sync_dataframe_schema_impl(self, *args, **kwargs)
 
     def load_data(self, *args, **kwargs):
-        if "export" in "load_data" or "excel" in "load_data":
-            from services.excel_exporter import load_data_impl
-        else:
-            from services.data_loader import load_data_impl
+        from services.data_loader import load_data_impl
         return load_data_impl(self, *args, **kwargs)
 
 
@@ -996,10 +757,7 @@ class MaterialManager:
         return s
 
     def save_data(self, *args, **kwargs):
-        if "export" in "save_data" or "excel" in "save_data":
-            from services.excel_exporter import save_data_impl
-        else:
-            from services.data_loader import save_data_impl
+        from services.data_loader import save_data_impl
         return save_data_impl(self, *args, **kwargs)
             
     def get_base_salaries(self, *args, **kwargs):
@@ -1040,6 +798,12 @@ class MaterialManager:
         return [tuple(x) for x in df[['Name', 'Spec', 'Unit', 'Rate']].values]
 
     def create_widgets(self):
+        from views.tab_views import (
+            BudgetTabView, DailyUsageQueryTabView, DailyUsageTabView,
+            ImportExportTabView, InOutTabView, MonthlyUsageTabView,
+            NdtBillingTabView, StockTabView,
+        )
+
         # Notebook for Tabs
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
@@ -1047,44 +811,44 @@ class MaterialManager:
         # Tab 1: Current Stock
         self.tab_stock = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_stock, text='현재 재고 현황')
-        self.setup_stock_tab()
+        self.stock_view = StockTabView.attach(self, self.notebook, self.tab_stock)
         
         # Tab 2: Register/Transaction
         self.tab_inout = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_inout, text='입출고 관리')
-        self.setup_inout_tab()
+        self.inout_view = InOutTabView.attach(self, self.notebook, self.tab_inout)
         
 
         # Tab 4: Import/Export
         self.tab_import = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_import, text='데이터 가져오기/내보내기')
-        self.setup_import_tab()
+        self.import_export_view = ImportExportTabView.attach(self, self.notebook, self.tab_import)
         
         # Tab 5: Monthly Usage Entry
         self.tab_monthly_usage = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_monthly_usage, text='월별 집계')
-        self.setup_monthly_usage_tab()
+        self.monthly_usage_view = MonthlyUsageTabView.attach(self, self.notebook, self.tab_monthly_usage)
         
         # Tab 6: Daily Usage Entry by Site
         self.tab_daily_usage = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_daily_usage, text='현장별 일일 사용량 기입')
-        self.setup_daily_usage_tab()
+        self.daily_usage_view = DailyUsageTabView.attach(self, self.notebook, self.tab_daily_usage)
         
         # Tab 7: Daily Usage Query
         self.tab_daily_usage_query = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_daily_usage_query, text='현장 일일기록 조회 및 관리')
-        self.setup_daily_usage_query_tab()
+        self.daily_usage_query_view = DailyUsageQueryTabView.attach(self, self.notebook, self.tab_daily_usage_query)
         
 
         # Tab 8: Project Execution Budget (New)
         self.tab_budget = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_budget, text='공사실행예산서')
-        self.setup_budget_tab()
+        self.budget_view = BudgetTabView.attach(self, self.notebook, self.tab_budget)
         
         # Tab 9: NDT Billing Calculator
         self.tab_ndt_billing = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
-        self.setup_ndt_billing_tab()
+        self.ndt_billing_view = NdtBillingTabView.attach(self, self.notebook, self.tab_ndt_billing)
         
         # Select default tab instantly to prevent flicker
         self.notebook.select(self.tab_daily_usage)
@@ -1434,25 +1198,6 @@ class MaterialManager:
         
         # 첫 데이터 로딩
         self.update_stock_view()
-        
-    def treeview_sort_column(self, tv, col, reverse):
-        """Standard sorting function for Treeview columns"""
-        l = [(tv.set(k, col), k) for k in tv.get_children('')]
-        
-        # Try to sort numerically if it looks like a number
-        try:
-            # Clean values like "1,234" or "EA"
-            l.sort(key=lambda t: float(str(t[0]).replace(',', '').strip()) if str(t[0]).replace(',', '').strip() else 0, reverse=reverse)
-        except (ValueError, TypeError):
-            # Fallback to string sort
-            l.sort(reverse=reverse)
-
-        # Rearrange items in sorted positions
-        for index, (val, k) in enumerate(l):
-            tv.move(k, '', index)
-
-        # Switch to reverse sort for next click
-        tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
         
     def setup_inout_tab(self):
         # Main PanedWindow (Vertical): Top (Registration) vs Bottom (History)
@@ -5706,7 +5451,7 @@ class MaterialManager:
             messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
 
     def update_recent_entries_view(self):
-        """오늘 입력된 내역을 미니 테이블에 업데이트"""
+        """최근 현장 기록을 작업일자와 입력시간의 최신순으로 표시."""
         if not hasattr(self, 'tv_recent') or getattr(self, 'daily_usage_df', None) is None:
             return
             
@@ -5717,15 +5462,28 @@ class MaterialManager:
             return
             
         try:
-            # Filter for today's entries
+            # Prefer today's work records, otherwise show the latest history.
             today = datetime.datetime.now().date()
-            recent_df = self.daily_usage_df[pd.to_datetime(self.daily_usage_df['Date']).dt.date == today]
+            work_dates = pd.to_datetime(self.daily_usage_df['Date'], errors='coerce')
+            recent_df = self.daily_usage_df[work_dates.dt.date == today].copy()
             
-            # Or get the last 15 entries
+            # Keep original DataFrame indices because row selection/editing uses them.
             if recent_df.empty:
-                recent_df = self.daily_usage_df.tail(15)
+                recent_df = self.daily_usage_df.copy()
+
+            recent_df['_recent_date'] = pd.to_datetime(recent_df['Date'], errors='coerce')
+            if 'EntryTime' in recent_df.columns:
+                recent_df['_recent_entry_time'] = pd.to_datetime(recent_df['EntryTime'], errors='coerce')
+                recent_df = recent_df.sort_values(
+                    by=['_recent_date', '_recent_entry_time'],
+                    ascending=[False, False],
+                    na_position='last',
+                )
             else:
-                recent_df = recent_df.tail(30)
+                recent_df = recent_df.sort_values(
+                    by='_recent_date', ascending=False, na_position='last'
+                )
+            recent_df = recent_df.head(30)
                 
             for idx, row in recent_df.iterrows():
                 # Extract first worker
@@ -5775,10 +5533,10 @@ class MaterialManager:
                 )
                 self.tv_recent.insert('', 'end', values=values, tags=(str(idx),))
                 
-            # Scroll to bottom
+            # Newest record is at the top.
             if self.tv_recent.get_children():
-                last_item = self.tv_recent.get_children()[-1]
-                self.tv_recent.see(last_item)
+                first_item = self.tv_recent.get_children()[0]
+                self.tv_recent.see(first_item)
         except Exception as e:
             print(f"DEBUG: Error updating recent entries view: {e}")
 
@@ -7349,6 +7107,8 @@ class MaterialManager:
         paut_manual_scanner_dates = set()
         paut_cobra_scanner_dates = set()
         mt_dates = set()
+        pmi_dates = set()
+        ut_dates = set()
         rt_dates = set()
         # [NEW] Track unique dates for ANY equipment name found in the '장비명' column
         equip_dates_map = {}
@@ -7425,6 +7185,8 @@ class MaterialManager:
                 # [FIX] Check both Equipment Name and Item Name for PAUT/MT detection
                 is_paut = 'PAUT' in method_val or 'PAUT' in equip_name or 'PAUT' in m_name_local
                 is_mt = 'MT' in method_val or 'MT' in equip_name or 'MT' in m_name_local or 'YOKE' in equip_name or 'YOKE' in m_name_local
+                is_pmi = 'PMI' in method_val or 'PMI' in equip_name or 'PMI' in m_name_local
+                is_ut = method_val == 'UT' or 'UT장비' in equip_name.replace(' ', '') or 'UT장비' in m_name_local.replace(' ', '')
                 
                 if is_paut:
                     paut_dates.add(date_key)
@@ -7450,6 +7212,10 @@ class MaterialManager:
                         
                 if is_mt:
                     mt_dates.add(date_key)
+                if is_pmi:
+                    pmi_dates.add(date_key)
+                if is_ut:
+                    ut_dates.add(date_key)
                 if 'RT' in method_val or 'RT' in equip_name or 'RT' in m_name_local:
                     rt_dates.add(date_key)
             except Exception:
@@ -7800,18 +7566,22 @@ class MaterialManager:
             for row_data in current_exp_data.get('depreciation', []):
                 item = row_data.get('item', '')
                 if '스타렉스' in item:
-                    row_data['days'] = f"{len(starex_dates):g}" if len(starex_dates) > 0 else ""
+                    row_data['days'] = str(len(starex_dates))
                 elif '탑차' in item:
-                    row_data['days'] = f"{len(toptruck_dates):g}" if len(toptruck_dates) > 0 else ""
+                    row_data['days'] = str(len(toptruck_dates))
                 item_upper_clean = str(item).upper().replace(' ', '')
                 if 'PAUTSCANNER(MANUAL)' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else ""
+                    row_data['days'] = str(len(paut_manual_scanner_dates))
                 elif 'PAUTSCANNER(COBRA)' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else ""
+                    row_data['days'] = str(len(paut_cobra_scanner_dates))
                 elif 'PAUT' in item_upper_clean:
-                    row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else ""
+                    row_data['days'] = str(len(paut_dates))
                 elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
-                    row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
+                    row_data['days'] = str(len(mt_dates))
+                elif 'PMI' in item_upper_clean:
+                    row_data['days'] = str(len(pmi_dates))
+                elif item_upper_clean.startswith('UT'):
+                    row_data['days'] = str(len(ut_dates))
                 else:
                     # [NEW] Check for generic equipment name matching (case-insensitive)
                     item_upper = str(item).upper().strip()
@@ -10107,15 +9877,12 @@ class MaterialManager:
         ttk.Button(btn_frame, text="❌ 취소", command=dialog.destroy).pack(side='right', padx=5)
 
     def export_daily_work_report(self, *args, **kwargs):
-        if "export" in "export_daily_work_report" or "excel" in "export_daily_work_report":
-            from services.excel_exporter import export_daily_work_report_impl
-        else:
-            from services.data_loader import export_daily_work_report_impl
-        return export_daily_work_report_impl(self, *args, **kwargs)
+        from services.report_exporter import export_daily_work_report
+        return export_daily_work_report(self, *args, **kwargs)
 
     def export_central_daily_work_report(self, *args, **kwargs):
-        from services.excel_exporter import export_central_daily_work_report_impl
-        return export_central_daily_work_report_impl(self, *args, **kwargs)
+        from services.report_exporter import export_central_daily_work_report
+        return export_central_daily_work_report(self, *args, **kwargs)
 
     def _get_usage_session_data(self):
         """Helper to collect Site tab entry data"""
@@ -13775,48 +13542,10 @@ class MaterialManager:
 
 
     def treeview_sort_column(self, tv, col, reverse):
-        """Sort treeview contents when a column header is clicked"""
-        l = [(tv.set(k, col), k) for k in tv.get_children('')]
-        
-        # Separate the 'Total' row (tagged 'total') from sorting
-        data_rows = []
-        total_row = None
-        
-        for val, k in l:
-            # Check tags for this item
-            tags = tv.item(k, 'tags')
-            # If tags is a tuple/list, check if 'total' is in it. 
-            # If it's a string (though usually tuple), check equality or contains.
-            if tags and ('total' in tags or tags == 'total'):
-                total_row = (val, k)
-            else:
-                data_rows.append((val, k))
-                
-        # Helper for numeric conversion
-        def convert(val):
-            try:
-                # Remove common non-numeric chars
-                s = str(val).replace(',', '').replace('시간', '').replace('Hrs', '').replace('원', '').replace(' ', '').replace('(', '').replace(')', '')
-                if not s: return 0.0
-                return float(s)
-            except ValueError:
-                return str(val).lower() # Default to string sort
+        """Sort a Treeview column using the shared, total-row-aware utility."""
+        from utils.treeview import sort_treeview_column
+        return sort_treeview_column(tv, col, reverse)
 
-        try:
-            data_rows.sort(key=lambda t: convert(t[0]), reverse=reverse)
-        except Exception:
-            data_rows.sort(key=lambda t: t[0].lower(), reverse=reverse)
-
-        # Rearrange items in sorted positions
-        for index, (val, k) in enumerate(data_rows):
-            tv.move(k, '', index)
-            
-        # Ensure Total row is always at the bottom
-        if total_row:
-             tv.move(total_row[1], '', 'end')
-
-        # Reverse sort next time
-        tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
 
     def switch_to_daily_usage_details(self):
         """Switch to Daily Usage tab and apply current filters from Sales tab"""
@@ -14161,7 +13890,11 @@ class MaterialManager:
             detached['lbl_margin'].config(text="0.0%")
             return
         
-        total_rev = total_cost = total_profit = 0
+        from services.budget_calculator import row_margin, summarize_budget_rows
+
+        budget_rows = self.budget_df.to_dict("records")
+        summary = summarize_budget_rows(budget_rows)
+        total_rev, total_cost, total_profit = summary.revenue, summary.cost, summary.profit
         
         for _, row in self.budget_df.iterrows():
             rev = pd.to_numeric(row.get('Revenue', 0), errors='coerce') or 0
@@ -14172,11 +13905,7 @@ class MaterialManager:
             out = pd.to_numeric(row.get('OutsourceCost', 0), errors='coerce') or 0
             prof = pd.to_numeric(row.get('Profit', 0), errors='coerce') or 0
             
-            total_rev += rev
-            total_cost += (lab + mat + exp + out)
-            total_profit += prof
-            
-            margin = (prof / rev * 100) if rev > 0 else 0
+            margin = row_margin(row)
             
             tree.insert('', 'end', values=(
                 row.get('Site', ''),
@@ -14195,8 +13924,7 @@ class MaterialManager:
         detached['lbl_rev'].config(text=f"{total_rev:,.0f}")
         detached['lbl_cost'].config(text=f"{total_cost:,.0f}")
         detached['lbl_profit'].config(text=f"{total_profit:,.0f}")
-        total_margin = (total_profit / total_rev * 100) if total_rev > 0 else 0
-        detached['lbl_margin'].config(text=f"{total_margin:.1f}%")
+        detached['lbl_margin'].config(text=f"{summary.margin:.1f}%")
 
 
     def cleanup_auto_transactions(self):

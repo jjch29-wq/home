@@ -552,9 +552,10 @@ class LaborCostDetailWidget(ttk.Frame):
     Detailed labor cost calculation widget with three sections: 
     1) Regular Work (정시근무), 2) Special Work (특별근무), and 3) Base Salary Reference (기준급여)
     """
-    def __init__(self, parent, on_change_callback=None, **kwargs):
+    def __init__(self, parent, on_change_callback=None, cost_mode='planned', **kwargs):
         super().__init__(parent, **kwargs)
         self.on_change_callback = on_change_callback
+        self.cost_mode = cost_mode
         
         # Rankings for Table 1
         self.ranks = ["이사", "부장", "차장", "과장", "대리", "계장", "주임", "기사"]
@@ -618,7 +619,8 @@ class LaborCostDetailWidget(ttk.Frame):
         table1_frame = ttk.Frame(calc_frame)
         table1_frame.pack(fill='x')
         
-        headers1 = ["구분", "직급", "투입인원(명)", "투입일수/인(일)", "단가/일", "사전원가가액"]
+        cost_header = "사후원가가액" if self.cost_mode == 'actual' else "사전원가가액"
+        headers1 = ["구분", "직급", "투입인원(명)", "투입일수/인(일)", "단가/일", cost_header]
         for j, h in enumerate(headers1):
             lbl = ttk.Label(table1_frame, text=h, style="LaborHeader.TLabel", padding=5, anchor='center')
             lbl.grid(row=0, column=j, sticky='nsew')
@@ -674,7 +676,7 @@ class LaborCostDetailWidget(ttk.Frame):
         table2_frame = ttk.Frame(calc_frame)
         table2_frame.pack(fill='x')
         
-        headers2 = ["구분", "형태", "투입인원(명)", "투입시간/인(시간)", "단가", "사전원가가액"]
+        headers2 = ["구분", "형태", "투입인원(명)", "투입시간/인(시간)", "단가", cost_header]
         for j, h in enumerate(headers2):
             lbl = ttk.Label(table2_frame, text=h, style="LaborHeader.TLabel", padding=5, anchor='center')
             lbl.grid(row=0, column=j, sticky='nsew')
@@ -1223,6 +1225,8 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             ("PAUT SCANNER (MANUAL)", "", 5, 1, 0, 5556),
             ("PAUT SCANNER (COBRA)", "", 5, 1, 0, 16667),
             ("YOKE", "", 5, 1, 0, 222),
+            ("PMI 장비", "", 5, 1, 0, 12778),
+            ("UT 장비", "", 5, 1, 0, 7778),
             ("현상용 탑차(5년간 보험비 포함)", "현장별 차량기입시 탑차 구분 기입", 5, 1, 0, 16667),
             ("스타렉스(5년간 보험비 포함)", "현장별 차량기입시 스타렉스 구분 기입", 5, 1, 0, 16667)
         ]
@@ -1491,6 +1495,32 @@ class ExpenseProfitDetailWidget(ttk.Frame):
                     for k, v in d.items():
                         if k in entry_list[i] and hasattr(entry_list[i][k], 'delete'):
                             entry_list[i][k].delete(0, tk.END); entry_list[i][k].insert(0, str(v))
+
+        def fill_depreciation(data_list):
+            """Restore depreciation rows by equipment name, not legacy row index."""
+            rows_by_name = {
+                str(row['item'].get()).strip().upper(): row
+                for row in self.entries['depreciation']
+            }
+            restored_names = set()
+            for saved in data_list:
+                name = str(saved.get('item', '')).strip().upper()
+                row = rows_by_name.get(name)
+                if row is None or name in restored_names:
+                    continue
+                restored_names.add(name)
+                for key, value in saved.items():
+                    widget = row.get(key)
+                    if widget is not None and hasattr(widget, 'delete'):
+                        # Legacy saved rows may contain an empty depreciation rate.
+                        # Keep the current equipment default instead of erasing it.
+                        normalized = str(value).strip().replace(',', '')
+                        if key in ('qty', 'rate') and normalized in ('', '0', '0.0', 'None', 'nan'):
+                            continue
+                        if key == 'days' and normalized in ('', 'None', 'nan'):
+                            continue
+                        widget.delete(0, tk.END)
+                        widget.insert(0, str(value))
         
         site_expenses = data.get('site_expense', [])
         if self.budget_mode in ('planned', 'actual'):
@@ -1519,7 +1549,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         fill(self.entries['site_expense'], site_expenses)
         fill(self.entries['rental'], data.get('rental', []))
         fill(self.entries['outsource'], data.get('outsource', []))
-        fill(self.entries['depreciation'], data.get('depreciation', []))
+        fill_depreciation(data.get('depreciation', []))
         
         self.calculate_all()
 

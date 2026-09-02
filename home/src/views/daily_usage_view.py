@@ -723,6 +723,17 @@ def setup_daily_usage_tab_impl(self):
     calc_trigger = lambda e: self.update_daily_test_fee_calc()
     
     def on_qty_change(e):
+        # The save path stores ORI/REP quantities separately.  Keep the active
+        # quantity synchronized when a loaded record is edited in the main
+        # quantity field; otherwise the old hidden value overwrites the edit.
+        quantity = self.ent_daily_test_amount.get().strip().replace(',', '')
+        inspection_type = getattr(
+            self, 'ndt_inspection_type_var', tk.StringVar(value='ORI')
+        ).get().strip().upper()
+        if inspection_type == 'REP':
+            self.ndt_rep_qty_var.set(quantity)
+        else:
+            self.ndt_ori_qty_var.set(quantity)
         self.update_daily_test_fee_calc()
         
     # Handle Date Changes globally for recalculations
