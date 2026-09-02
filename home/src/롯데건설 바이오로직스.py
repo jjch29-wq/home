@@ -1068,11 +1068,58 @@ class MaterialManager:
         return s
 
     def save_data(self, *args, **kwargs):
+        # 신규 등록과 기존 기록 수정 등 모든 저장 경로에서 마지막으로 OT 중복을 정리한다.
+        self._deduplicate_daily_ot()
         if "export" in "save_data" or "excel" in "save_data":
             from services.excel_exporter import save_data_impl
         else:
             from services.data_loader import save_data_impl
         return save_data_impl(self, *args, **kwargs)
+
+    def _deduplicate_daily_ot(self):
+        """원본 일일기록에서 동일 날짜·작업자의 OT를 최초 한 건에만 남긴다."""
+        df = getattr(self, 'daily_usage_df', None)
+        if df is None or df.empty or 'Date' not in df.columns:
+            return
+
+        claimed_worker_dates = set()
+        suppressed_count = 0
+
+        for row_idx, row in df.iterrows():
+            try:
+                date_key = pd.to_datetime(row.get('Date'), errors='coerce')
+                if pd.isna(date_key):
+                    continue
+                date_key = date_key.date()
+            except (TypeError, ValueError, AttributeError):
+                continue
+
+            for i in range(1, 11):
+                suffix = '' if i == 1 else str(i)
+                worker_col = f'User{suffix}'
+                ot_col = f'OT{suffix}'
+                if worker_col not in df.columns or ot_col not in df.columns:
+                    continue
+
+                worker = str(row.get(worker_col, '')).strip()
+                ot_value = str(row.get(ot_col, '')).strip()
+                if (
+                    not worker
+                    or worker.casefold() in ('nan', 'none', 'null')
+                    or ot_value.casefold() in ('', '0', '0.0', 'nan', 'none', 'null')
+                ):
+                    continue
+
+                worker_key = ' '.join(worker.split()).casefold()
+                claim_key = (date_key, worker_key)
+                if claim_key in claimed_worker_dates:
+                    self._safe_set_daily_df(row_idx, ot_col, '', is_numeric=False)
+                    suppressed_count += 1
+                else:
+                    claimed_worker_dates.add(claim_key)
+
+        if suppressed_count:
+            print(f"INFO: 원본 일일기록 OT 중복 {suppressed_count}건을 제거했습니다.")
             
     def get_base_salaries(self, *args, **kwargs):
         from models.worker_model import get_base_salaries_impl
@@ -4090,6 +4137,14 @@ class MaterialManager:
                     'A_Holiday': 'sum',
                     'OT_A': 'sum'
                 }).reset_index()
+
+                # 총 OT 금액은 원본 OT 입력액을 별도로 합산하지 않고,
+                # 화면에 표시되는 연장·야간·휴일 금액의 합과 항상 일치시킨다.
+                worker_summary['OT_A'] = (
+                    worker_summary['A_Day']
+                    + worker_summary['A_Night']
+                    + worker_summary['A_Holiday']
+                )
                 
                 for _, row in worker_summary.iterrows():
                     # Track active columns using robust is_active helper
@@ -4117,6 +4172,29 @@ class MaterialManager:
                     self.worker_summary_tree.insert('', tk.END, values=values)
                     if detached:
                         detached['worker_tree'].insert('', tk.END, values=values)
+
+                # 작업자별 목록 마지막에 전체 합계를 표시한다.
+                total_row = worker_summary[
+                    ['Count', 'H_Day', 'H_Night', 'H_Holiday', 'OT_H',
+                     'A_Day', 'A_Night', 'A_Holiday', 'OT_A']
+                ].sum(numeric_only=True)
+                total_values = (
+                    '총누계',
+                    f"{total_row['Count']:.1f}",
+                    f"{total_row['H_Day']:.1f}",
+                    f"{total_row['H_Night']:.1f}",
+                    f"{total_row['H_Holiday']:.1f}",
+                    f"{total_row['OT_H']:.1f}",
+                    f"{total_row['A_Day']:,.0f}",
+                    f"{total_row['A_Night']:,.0f}",
+                    f"{total_row['A_Holiday']:,.0f}",
+                    f"{total_row['OT_A']:,.0f}"
+                )
+                self.worker_summary_tree.insert('', tk.END, values=total_values, tags=('total',))
+                self.worker_summary_tree.tag_configure('total', background='#fff59d')
+                if detached:
+                    detached['worker_tree'].insert('', tk.END, values=total_values, tags=('total',))
+                    detached['worker_tree'].tag_configure('total', background='#fff59d')
                 
                 # Apply dynamic column hiding to Worker Summary
                 visible_worker_cols = [col for col in worker_sum_cols if col in active_worker_cols]
@@ -4125,10 +4203,11 @@ class MaterialManager:
                     detached['worker_tree']['displaycolumns'] = visible_worker_cols
 
     def apply_worker_shift_hours_to_budget(self):
-        """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
-        if not hasattr(self, 'labor_detail_widget'):
+        """월별 작업자 누계를 공사실행예산서의 사후원가 특별근무에 적용한다."""
+        actual_labor_widget = getattr(self, 'actual_labor_detail_widget', None)
+        if actual_labor_widget is None:
             messagebox.showwarning("공사탭 미초기화",
-                                   "공사실행예산서 탭을 먼저 열어 초기화하세요.")
+                                   "공사실행예산서의 사후원가 탭을 먼저 열어 초기화하세요.")
             return
 
         # worker_summary_tree에서 모든 행의 주간/야간/휴일 합산
@@ -4146,6 +4225,8 @@ class MaterialManager:
         for item in self.worker_summary_tree.get_children():
             vals = self.worker_summary_tree.item(item, 'values')
             # 컬럼 순서: 작업자, 총공수, 연장(시간), 야간(시간), 휴일(시간), 총OT(시간), 연장(금액), 야간(금액), 휴일(금액), 총OT(금액)
+            if vals and str(vals[0]).strip() == '총누계':
+                continue
             h_day     = _f(vals[2]) if len(vals) > 2 else 0.0
             h_night   = _f(vals[3]) if len(vals) > 3 else 0.0
             h_holiday = _f(vals[4]) if len(vals) > 4 else 0.0
@@ -4165,39 +4246,39 @@ class MaterialManager:
                                 "월별 탭에서 조회를 먼저 실행하세요.")
             return
 
-        # LaborCostDetailWidget 특별근무 섹션에 입력
-        ldw = self.labor_detail_widget
-        # 연장근무 ← 주간 OT 시간 합계 / 인원수
-        if worker_count_day > 0:
-            avg_day = total_h_day / worker_count_day
-            ldw.entries["연장근무"]['personnel'].delete(0, 'end')
-            ldw.entries["연장근무"]['personnel'].insert(0, f"{worker_count_day:g}")
-            ldw.entries["연장근무"]['period'].delete(0, 'end')
-            ldw.entries["연장근무"]['period'].insert(0, f"{avg_day:.1f}")
-        # 야간근무 ← 야간 OT 시간 합계
-        if worker_count_night > 0:
-            avg_night = total_h_night / worker_count_night
-            ldw.entries["야간근무"]['personnel'].delete(0, 'end')
-            ldw.entries["야간근무"]['personnel'].insert(0, f"{worker_count_night:g}")
-            ldw.entries["야간근무"]['period'].delete(0, 'end')
-            ldw.entries["야간근무"]['period'].insert(0, f"{avg_night:.1f}")
-        # 휴일근무 ← 휴일 OT 시간 합계
-        if worker_count_holiday > 0:
-            avg_holiday = total_h_holiday / worker_count_holiday
-            ldw.entries["휴일근무"]['personnel'].delete(0, 'end')
-            ldw.entries["휴일근무"]['personnel'].insert(0, f"{worker_count_holiday:g}")
-            ldw.entries["휴일근무"]['period'].delete(0, 'end')
-            ldw.entries["휴일근무"]['period'].insert(0, f"{avg_holiday:.1f}")
+        shift_totals = {
+            '연장근무': (worker_count_day, total_h_day),
+            '야간근무': (worker_count_night, total_h_night),
+            '휴일근무': (worker_count_holiday, total_h_holiday),
+        }
+        # 계획값인 사전원가는 유지하고 사후원가만 작업자 누계로 갱신한다.
+        for shift_name, (worker_count, total_hours) in shift_totals.items():
+            personnel_entry = actual_labor_widget.entries[shift_name]['personnel']
+            period_entry = actual_labor_widget.entries[shift_name]['period']
+            personnel_entry.delete(0, 'end')
+            period_entry.delete(0, 'end')
+            if worker_count > 0:
+                avg_hours = total_hours / worker_count
+                personnel_entry.insert(0, f"{worker_count:g}")
+                period_entry.insert(0, f"{avg_hours:.6f}".rstrip('0').rstrip('.'))
+        actual_labor_widget.calculate_all()
 
-        # 계산 반영
-        ldw.calculate_all()
-
-        # 공사실행예산서 탭으로 이동
-        try:
-            tab_idx = [self.notebook.tab(i, 'text') for i in range(self.notebook.index('end'))].index('공사실행예산서')
-            self.notebook.select(tab_idx)
-        except:
-            pass
+        # 공사 탭으로 이동할 때 기존 Actual_LaborDetail이 다시 로드되어
+        # 방금 적용한 값이 사라지지 않도록 Budget 데이터에도 즉시 반영한다.
+        monthly_site = str(getattr(self, 'cb_filter_site_monthly', tk.StringVar(value='')).get()).strip()
+        budget_site = monthly_site if monthly_site and monthly_site != '전체' else self.cb_budget_site.get().strip()
+        if (
+            budget_site
+            and not self.budget_df.empty
+            and 'Site' in self.budget_df.columns
+            and budget_site in self.budget_df['Site'].astype(str).values
+        ):
+            budget_idx = self.budget_df[self.budget_df['Site'].astype(str) == budget_site].index[0]
+            self.budget_df.loc[budget_idx, 'Actual_LaborDetail'] = json.dumps(
+                actual_labor_widget.get_data(), ensure_ascii=False
+            )
+            self.budget_df.loc[budget_idx, 'Actual_LaborCost'] = actual_labor_widget.get_total_cost()
+            self.save_data()
 
         messagebox.showinfo("적용 완료",
                             f"특별근무 투입시간 적용 완료!\n"
@@ -5819,7 +5900,7 @@ class MaterialManager:
             messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
 
     def update_recent_entries_view(self):
-        """오늘 입력된 내역을 미니 테이블에 업데이트"""
+        """최근 현장 기록을 작업일자와 입력시간의 최신순으로 표시."""
         if not hasattr(self, 'tv_recent') or getattr(self, 'daily_usage_df', None) is None:
             return
             
@@ -5830,15 +5911,28 @@ class MaterialManager:
             return
             
         try:
-            # Filter for today's entries
+            # Prefer today's work records, otherwise show the latest history.
             today = datetime.datetime.now().date()
-            recent_df = self.daily_usage_df[pd.to_datetime(self.daily_usage_df['Date']).dt.date == today]
+            work_dates = pd.to_datetime(self.daily_usage_df['Date'], errors='coerce')
+            recent_df = self.daily_usage_df[work_dates.dt.date == today].copy()
             
-            # Or get the last 15 entries
+            # Preserve original indices because selection/editing uses them.
             if recent_df.empty:
-                recent_df = self.daily_usage_df.tail(15)
+                recent_df = self.daily_usage_df.copy()
+
+            recent_df['_recent_date'] = pd.to_datetime(recent_df['Date'], errors='coerce')
+            if 'EntryTime' in recent_df.columns:
+                recent_df['_recent_entry_time'] = pd.to_datetime(recent_df['EntryTime'], errors='coerce')
+                recent_df = recent_df.sort_values(
+                    by=['_recent_date', '_recent_entry_time'],
+                    ascending=[False, False],
+                    na_position='last',
+                )
             else:
-                recent_df = recent_df.tail(30)
+                recent_df = recent_df.sort_values(
+                    by='_recent_date', ascending=False, na_position='last'
+                )
+            recent_df = recent_df.head(30)
                 
             for idx, row in recent_df.iterrows():
                 # Extract first worker
@@ -5888,10 +5982,10 @@ class MaterialManager:
                 )
                 self.tv_recent.insert('', 'end', values=values, tags=(str(idx),))
                 
-            # Scroll to bottom
+            # Newest record is at the top.
             if self.tv_recent.get_children():
-                last_item = self.tv_recent.get_children()[-1]
-                self.tv_recent.see(last_item)
+                first_item = self.tv_recent.get_children()[0]
+                self.tv_recent.see(first_item)
         except Exception as e:
             print(f"DEBUG: Error updating recent entries view: {e}")
 
@@ -6520,7 +6614,11 @@ class MaterialManager:
             self.ent_budget_actual_labor.insert(0, f"{total:,.0f}")
             self._update_budget_kpis()
             
-        self.actual_labor_detail_widget = LaborCostDetailWidget(a_labor_detail_frame, on_change_callback=on_actual_labor_change)
+        self.actual_labor_detail_widget = LaborCostDetailWidget(
+            a_labor_detail_frame,
+            on_change_callback=on_actual_labor_change,
+            cost_mode='actual'
+        )
         self.actual_labor_detail_widget.pack(fill='x', expand=True)
 
         a_material_detail_frame = ttk.LabelFrame(self.tab_actual, text="실적 재료비 상세 (Actual Material Detail)", padding=10)
@@ -7699,6 +7797,10 @@ class MaterialManager:
         
         # [NEW] Track logically unique entries to avoid double-counting materials from split-row records
         processed_entry_ids = set()
+
+        # 같은 날짜에 검사 내역을 여러 건 저장해도 동일 작업자의 OT는 하루 한 번만 반영한다.
+        # 직급별 일공수는 아래 rank_labor_dates에서 별도로 날짜 중복 제거된다.
+        processed_ot_worker_dates = set()
         
         # [NEW] Track unique dates for vehicles and specialized equipment
         starex_dates = set()
@@ -7707,6 +7809,8 @@ class MaterialManager:
         paut_manual_scanner_dates = set()
         paut_cobra_scanner_dates = set()
         mt_dates = set()
+        pmi_dates = set()
+        ut_dates = set()
         rt_dates = set()
         # [NEW] Track unique dates for ANY equipment name found in the '장비명' column
         equip_dates_map = {}
@@ -7798,6 +7902,8 @@ class MaterialManager:
                 # [FIX] Check both Equipment Name and Item Name for PAUT/MT detection
                 is_paut = 'PAUT' in method_val or 'PAUT' in equip_name or 'PAUT' in m_name_local
                 is_mt = 'MT' in method_val or 'MT' in equip_name or 'MT' in m_name_local or 'YOKE' in equip_name or 'YOKE' in m_name_local
+                is_pmi = 'PMI' in method_val or 'PMI' in equip_name or 'PMI' in m_name_local
+                is_ut = method_val == 'UT' or 'UT장비' in equip_name.replace(' ', '') or 'UT장비' in m_name_local.replace(' ', '')
                 
                 if is_paut:
                     paut_dates.add(date_key)
@@ -7821,6 +7927,10 @@ class MaterialManager:
                         
                 if is_mt:
                     mt_dates.add(date_key)
+                if is_pmi:
+                    pmi_dates.add(date_key)
+                if is_ut:
+                    ut_dates.add(date_key)
                 if 'RT' in method_val or 'RT' in equip_name or 'RT' in m_name_local:
                     rt_dates.add(date_key)
             except Exception:
@@ -7864,11 +7974,55 @@ class MaterialManager:
                     except:
                         d_key = date_val
                     rank_labor_dates[rank][worker_name_only].add(d_key)
+
+                # 월별 누계와 동일하게 실제 OT 값이 저장된 작업자만 특별근무로 집계한다.
+                # 작업시간이 있어도 OT가 비어 있으면 정시근무 기록이므로 제외한다.
+                ot_col = f'OT{suffix}'
+                raw_ot_value = str(row.get(ot_col, '')).strip()
+                if raw_ot_value.casefold() in ('', '0', '0.0', 'nan', 'none', 'null'):
+                    continue
+
+                # 한 작업자가 같은 날 RT/PT/UT 등 여러 검사 내역에 반복 저장된 경우
+                # 실제 OT가 있는 최초 한 건만 청구한다.
+                try:
+                    ot_date_key = pd.to_datetime(date_val).date()
+                except Exception:
+                    ot_date_key = date_val
+                ot_worker_key = (ot_date_key, worker_name_only.strip().casefold())
+                if ot_worker_key in processed_ot_worker_dates:
+                    continue
+                processed_ot_worker_dates.add(ot_worker_key)
                 
                 # [FIX] WorkTime 컬럼에서 분류(주간/야간/휴일)와 시간 파싱
                 # 형식: "(야간) 4h" or "(주야간) 2.5h" 또는 "8h" (구형식)
                 wt_col = f'WorkTime{suffix}'
                 wt_val = str(row.get(wt_col, '')).strip()
+
+                # 월별 작업자 누계와 완전히 동일한 함수로 연장/야간/휴일을 분류한다.
+                # 숫자 OT는 금액이므로 작업시간에서 총 시간을 구한 뒤 분류 함수에 전달한다.
+                ot_compact = raw_ot_value.replace(',', '')
+                if ot_compact.isdigit() and int(ot_compact) > 100:
+                    ot_hours, _ = self._calculate_ot_from_worktime(wt_val, row.get('Date'))
+                    split_source = f"{ot_hours}시간 ({raw_ot_value}원)"
+                    clean_wt_for_split = MARKER_PATTERN.sub('', wt_val).strip()
+                    if '~' in clean_wt_for_split:
+                        start_time = clean_wt_for_split.split('~')[0]
+                        split_source = f"{start_time}~{ot_hours}시간 ({raw_ot_value}원)"
+                else:
+                    split_source = raw_ot_value
+
+                h_day, h_night, h_holiday = self._calculate_split_ot_hours(
+                    split_source, row.get('Date')
+                )
+                for shift_name, shift_hours in (
+                    ('연장근무', h_day),
+                    ('야간근무', h_night),
+                    ('휴일근무', h_holiday),
+                ):
+                    if shift_hours > 0:
+                        ot_data[shift_name]['hours'] += shift_hours
+                        ot_data[shift_name]['names'].add(worker_name_only)
+                continue
                 
                 # WorkTime에서 분류 파싱
                 wt_shift = shift  # 기본값: 레코드의 Shift 컬럼
@@ -8101,7 +8255,9 @@ class MaterialManager:
                     if u_count > 0:
                         avg_h = t_hours / u_count
                         labor_data[stype]['personnel'] = f"{u_count:g}"
-                        labor_data[stype]['period'] = f"{avg_h:g}"
+                        # 반복소수 평균을 6자리 유효숫자로 자르면 인원수와 다시
+                        # 곱할 때 1~수 원 오차가 생기므로 충분한 소수 정밀도를 유지한다.
+                        labor_data[stype]['period'] = f"{avg_h:.10f}".rstrip('0').rstrip('.')
                     else:
                         labor_data[stype]['personnel'] = ""
                         labor_data[stype]['period'] = ""
@@ -8200,6 +8356,12 @@ class MaterialManager:
                     elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
                         row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
                         if len(mt_dates) > 0: updated_days = True
+                    elif 'PMI' in item_upper_clean:
+                        row_data['days'] = str(len(pmi_dates))
+                        if pmi_dates: updated_days = True
+                    elif item_upper_clean.startswith('UT'):
+                        row_data['days'] = str(len(ut_dates))
+                        if ut_dates: updated_days = True
                     else:
                         item_upper = str(item).upper().strip()
                         matched_days = 0
@@ -8832,6 +8994,48 @@ class MaterialManager:
                 worker_data_map[wt_key] = ""
                 worker_data_map[ot_key] = ""
                 worker_data_map[m_key] = ""
+
+        # 동일 날짜에 이미 OT가 저장된 작업자는 새 검사 기록의 OT를 비운다.
+        # 작업자명과 작업시간은 유지하므로 검사별 투입 내역은 그대로 확인할 수 있다.
+        existing_ot_workers = set()
+        if not self.daily_usage_df.empty and 'Date' in self.daily_usage_df.columns:
+            try:
+                target_date = pd.to_datetime(date_val).date()
+                stored_dates = pd.to_datetime(
+                    self.daily_usage_df['Date'], errors='coerce'
+                ).dt.date
+                same_day_rows = self.daily_usage_df[stored_dates == target_date]
+
+                for _, stored_row in same_day_rows.iterrows():
+                    for i in range(1, 11):
+                        suffix = '' if i == 1 else str(i)
+                        stored_worker = str(stored_row.get(f'User{suffix}', '')).strip()
+                        stored_ot = str(stored_row.get(f'OT{suffix}', '')).strip()
+                        if (
+                            stored_worker
+                            and stored_worker.casefold() not in ('nan', 'none', 'null')
+                            and stored_ot.casefold() not in ('', '0', '0.0', 'nan', 'none', 'null')
+                        ):
+                            existing_ot_workers.add(stored_worker.casefold())
+
+                suppressed_workers = []
+                for i in range(1, 11):
+                    suffix = '' if i == 1 else str(i)
+                    worker_key = f'User{suffix}'
+                    ot_key = f'OT{suffix}'
+                    worker_name = str(worker_data_map.get(worker_key, '')).strip()
+                    if worker_name and worker_name.casefold() in existing_ot_workers:
+                        if str(worker_data_map.get(ot_key, '')).strip():
+                            worker_data_map[ot_key] = ''
+                            suppressed_workers.append(worker_name)
+
+                if suppressed_workers:
+                    print(
+                        f"INFO: {date_val} OT 중복 저장 방지 - "
+                        f"{', '.join(suppressed_workers)}"
+                    )
+            except (KeyError, TypeError, ValueError, AttributeError) as exc:
+                print(f"DEBUG: OT 중복 저장 검사 실패: {exc}")
         
         all_workers = ", ".join(workers_list)
 
@@ -8984,6 +9188,49 @@ class MaterialManager:
                 merged_v_mileage.append(v_mileage)
                 merged_v_check.append(v_check_str)
                 merged_v_remarks.append(v_remarks)
+
+        # 동일 날짜/현장에 이미 저장된 차량은 검사공법별 기록에 다시
+        # 저장하지 않는다. 여러 차량 중 신규 차량이 있으면 신규 차량만 유지한다.
+        def normalize_vehicle_no(value):
+            return re.sub(r'\s+', '', str(value)).upper()
+
+        existing_vehicle_nos = set()
+        if not self.daily_usage_df.empty and '차량번호' in self.daily_usage_df.columns:
+            try:
+                target_date = pd.to_datetime(date_val).date()
+                stored_dates = pd.to_datetime(
+                    self.daily_usage_df['Date'], errors='coerce'
+                ).dt.date
+                same_day_site = self.daily_usage_df[
+                    (stored_dates == target_date)
+                    & (self.daily_usage_df['Site'].astype(str).str.strip() == site)
+                ]
+                for raw_vehicle_nos in same_day_site['차량번호'].fillna(''):
+                    for stored_no in str(raw_vehicle_nos).split('||'):
+                        normalized = normalize_vehicle_no(stored_no)
+                        if normalized and normalized != 'NAN':
+                            existing_vehicle_nos.add(normalized)
+            except (KeyError, TypeError, ValueError, AttributeError) as exc:
+                print(f"DEBUG: 차량 중복 검사 실패: {exc}")
+
+        if existing_vehicle_nos:
+            unique_vehicle_rows = [
+                (v_no, mileage, check, remarks)
+                for v_no, mileage, check, remarks in zip(
+                    merged_v_no, merged_v_mileage, merged_v_check, merged_v_remarks
+                )
+                if not v_no or normalize_vehicle_no(v_no) not in existing_vehicle_nos
+            ]
+            suppressed_count = len(merged_v_no) - len(unique_vehicle_rows)
+            if suppressed_count:
+                print(
+                    f"INFO: {date_val} {site} 차량 중복 {suppressed_count}건의 "
+                    "차량정보 저장을 생략했습니다."
+                )
+            merged_v_no = [row[0] for row in unique_vehicle_rows]
+            merged_v_mileage = [row[1] for row in unique_vehicle_rows]
+            merged_v_check = [row[2] for row in unique_vehicle_rows]
+            merged_v_remarks = [row[3] for row in unique_vehicle_rows]
         
         final_v_no = " || ".join(merged_v_no)
         final_v_mileage = " || ".join(merged_v_mileage)

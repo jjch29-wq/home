@@ -5,6 +5,7 @@ import os
 import json
 import win32com.client as win32
 from tkcalendar import DateEntry
+from services.ndt_calculator import calculate_billing
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
@@ -801,24 +802,28 @@ class NDTCalculatorTab(ttk.Frame):
         adjusted_qty = qty * corr
         
         key = f"{ndt_type}_{material_type}"
-        mat_unit_cost = MATERIAL_COST.get(key, MATERIAL_COST.get(material_type, 0))
-        total_mat_cost = int(qty * mat_unit_cost)
-        
         loc_type = getattr(self, "loc_type_var", None)
         loc_type_val = loc_type.get() if loc_type else "열배관"
-        
-        if loc_type_val in LABOR_COST:
-            lab_unit_cost = LABOR_COST[loc_type_val][work_time].get(key, LABOR_COST[loc_type_val][work_time].get(ndt_type, 0))
-        else:
-            lab_unit_cost = LABOR_COST.get(work_time, {}).get(key, LABOR_COST.get(work_time, {}).get(ndt_type, 0))
-        total_lab_cost = int(adjusted_qty * lab_unit_cost)
-        
-        overhead_cost = int(total_lab_cost * overhead_rate)
-        tech_fee = int((total_lab_cost + overhead_cost) * tech_fee_rate)
-        
-        subtotal = total_mat_cost + total_lab_cost + overhead_cost + tech_fee
-        vat = int(subtotal * 0.1)
-        total_amount = subtotal + vat
+
+        costs = calculate_billing(
+            quantity=qty,
+            adjusted_quantity=adjusted_qty,
+            material_key=key,
+            ndt_type=ndt_type,
+            location=loc_type_val,
+            work_time=work_time,
+            material_costs=MATERIAL_COST,
+            labor_costs=LABOR_COST,
+            overhead_rate=overhead_rate,
+            technical_fee_rate=tech_fee_rate,
+        )
+        total_mat_cost = costs["mat_cost"]
+        total_lab_cost = costs["lab_cost"]
+        overhead_cost = costs["overhead"]
+        tech_fee = costs["tech"]
+        subtotal = costs["subtotal"]
+        vat = costs["vat"]
+        total_amount = costs["total_amount"]
         
         display_loc = f"[{loc_type_val}] {loc_str}".strip() if loc_str else f"[{loc_type_val}]"
         

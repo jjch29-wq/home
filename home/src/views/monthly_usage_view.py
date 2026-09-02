@@ -177,7 +177,7 @@ def setup_monthly_usage_tab_impl(self):
     btn_apply_frame = ttk.Frame(worker_frame)
     btn_apply_frame.pack(fill='x', pady=3)
     ttk.Button(btn_apply_frame,
-               text="📋 공사탭 특별근무에 적용",
+               text="📋 사후원가 특별근무에 적용",
                command=self.apply_worker_shift_hours_to_budget).pack(side='right', padx=5)
 
     # Initial view update
