@@ -12063,10 +12063,6 @@ class MaterialManager:
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
         import os
         
-        if getattr(self, 'daily_usage_df', None) is None or self.daily_usage_df.empty:
-            messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
-            return
-            
         top = tk.Toplevel(self.root)
         top.title("주간 업무보고서 출력")
         top.geometry("400x350")
@@ -12123,16 +12119,44 @@ class MaterialManager:
                 history = json.load(f)
                 
             week_data = {}
+            cumulative_data = {}
             for d_str, data in history.items():
                 try:
                     d_obj = pd.to_datetime(d_str).date()
                     if s_dt <= d_obj <= e_dt:
                         week_data[d_str] = data
+                    if d_obj <= e_dt:
+                        cumulative_data[d_str] = data
                 except: pass
-                
-            if not week_data:
-                messagebox.showinfo("알림", f"{s_date} ~ {e_date} 기간에 저장된 데이터가 없습니다.")
+
+            if not cumulative_data:
+                messagebox.showinfo("알림", f"{e_date}까지 저장된 작업일보 데이터가 없습니다.")
                 return
+
+            def get_personnel_count(data, use_report_default=False):
+                """작업일보의 검사원 인원을 안전하게 숫자로 변환한다."""
+                p_data = data.get('personnel_data', {})
+                count = 0
+                try:
+                    count_str = str(p_data.get('검사원_누계', '0')).strip()
+                    if count_str and count_str.isdigit() and count_str != '0':
+                        count = int(count_str)
+                    if count == 0:
+                        inspector = str(p_data.get('검사원_인원', '0')).strip()
+                        manager = str(p_data.get('검사원_현장대리인', '0')).strip()
+                        count = (int(inspector) if inspector.isdigit() else 0) + (int(manager) if manager.isdigit() else 0)
+                except Exception:
+                    count = 0
+                return count if count > 0 else (1 if use_report_default else 0)
+
+            cumulative_time = 0
+            cumulative_ndt_methods = {}
+            for data in cumulative_data.values():
+                cumulative_time += get_personnel_count(data) * 8
+                for result in data.get('ndt_results', []):
+                    method = str(result.get("검사방법", "")).strip().upper()
+                    if method:
+                        cumulative_ndt_methods[method] = cumulative_ndt_methods.get(method, 0) + 1
                 
             wb = Workbook()
             ws = wb.active
@@ -12166,6 +12190,19 @@ class MaterialManager:
             
             # Sort dates
             sorted_dates = sorted(week_data.keys())
+
+            if not sorted_dates:
+                ws.cell(row=row_idx, column=1, value=f"{s_date} ~ {e_date}").alignment = center_align
+                ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
+                ws.cell(row=row_idx, column=3, value="금주 신규 작업 없음").alignment = center_align
+                ws.cell(row=row_idx, column=4, value="-").alignment = center_align
+                ws.cell(row=row_idx, column=5, value="0 시간").alignment = center_align
+                ws.cell(row=row_idx, column=6, value="0 POINT").alignment = center_align
+                ws.cell(row=row_idx, column=7, value="누계 및 차주 계획 참조").alignment = center_align_wrap
+                for col_num in range(1, 8):
+                    ws.cell(row=row_idx, column=col_num).border = thin_border
+                    ws.cell(row=row_idx, column=col_num).font = norm_font
+                row_idx += 1
             
             for date_val in sorted_dates:
                 data = week_data[date_val]
@@ -12183,24 +12220,7 @@ class MaterialManager:
                 ndt_text = "\n".join(daily_ndt_texts) if daily_ndt_texts else "0 POINT"
                 
                 # Personnel data
-                p_data = data.get('personnel_data', {})
-                w_count = 0
-                
-                try:
-                    # 안전하게 딕셔너리의 .get()을 활용해 값을 가져오기 (문자열 공백 제거 포함)
-                    w_count_str = str(p_data.get('검사원_누계', '0')).strip()
-                    if w_count_str and w_count_str.isdigit() and w_count_str != '0':
-                        w_count = int(w_count_str)
-                    
-                    if w_count == 0:
-                        insp_w = str(p_data.get('검사원_인원', '0')).strip()
-                        insp_m = str(p_data.get('검사원_현장대리인', '0')).strip()
-                        w_count = (int(insp_w) if insp_w.isdigit() else 0) + (int(insp_m) if insp_m.isdigit() else 0)
-                except:
-                    pass
-                
-                if w_count == 0:
-                    w_count = 1
+                w_count = get_personnel_count(data, use_report_default=True)
                     
                 total_time += w_count * 8
                 
@@ -12243,19 +12263,32 @@ class MaterialManager:
             for col_num in range(4, 8):
                 ws.cell(row=row_idx, column=col_num).border = thin_border
                 ws.cell(row=row_idx, column=col_num).font = Font(name='맑은 고딕', size=11, bold=True)
-                
-            if next_plan:
+
+            if not week_data:
                 row_idx += 2
+                cumulative_ndt_texts = [f"{m} {c} POINT" for m, c in sorted(cumulative_ndt_methods.items())]
+                cumulative_ndt_text = ", ".join(cumulative_ndt_texts) if cumulative_ndt_texts else "검사실적 없음"
                 ws.merge_cells(f'A{row_idx}:G{row_idx+2}')
                 cell = ws.cell(row=row_idx, column=1)
-                cell.value = f"■ 다음 주 작업 예정 및 의견\n{next_plan}"
+                cell.value = (f"■ 작업 누계 (최초 작업일 ~ {e_date})\n"
+                              f"작업일보 {len(cumulative_data)}일 / 투입 {cumulative_time} 시간 / {cumulative_ndt_text}")
                 cell.font = Font(name='맑은 고딕', size=11)
                 cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
-                
-                # Draw borders for the merged cell block
                 for r in range(row_idx, row_idx+3):
                     for c in range(1, 8):
                         ws.cell(row=r, column=c).border = thin_border
+
+            row_idx += 4 if not week_data else 2
+            ws.merge_cells(f'A{row_idx}:G{row_idx+2}')
+            cell = ws.cell(row=row_idx, column=1)
+            cell.value = f"■ 다음 주 작업 예정 및 의견\n{next_plan or '미입력'}"
+            cell.font = Font(name='맑은 고딕', size=11)
+            cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+
+            # Draw borders for the merged cell block
+            for r in range(row_idx, row_idx+3):
+                for c in range(1, 8):
+                    ws.cell(row=r, column=c).border = thin_border
                         
             out_name = f"주간업무보고_{s_date.replace('-','')}_{e_date.replace('-','')}.xlsx"
             out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), out_name)
