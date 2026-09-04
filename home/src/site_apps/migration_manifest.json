@@ -1,0 +1,1525 @@
+{
+  "version": 1,
+  "code": [
+    {
+      "source": "src\\controllers\\event_controller.py",
+      "target": "src\\site_apps\\central\\src\\controllers\\event_controller.py",
+      "original_sha256": "5971c69b28a80e4356ff4cb43339dfc81bad2c4f15a0ac6e2f3029998f2829a6",
+      "sha256": "fe41d9b4246390d7456d50659a93e439ce6294e07bff04569718559195d686aa"
+    },
+    {
+      "source": "src\\daily_work_log_exporter.py",
+      "target": "src\\site_apps\\central\\src\\daily_work_log_exporter.py",
+      "original_sha256": "36e53197d7ee16614c3e6b899c6f32aeb983d67a6cb72141863c8469e509c074",
+      "sha256": "f5fd9a1b147bb46d357a19a0d16c6bd273973dde8b387b2a73a10b96513f2dd3"
+    },
+    {
+      "source": "src\\daily_work_log_tab.py",
+      "target": "src\\site_apps\\central\\src\\daily_work_log_tab.py",
+      "original_sha256": "1d40534b544e6b265b07402eff732c7c5efe2417db1e4b516397595ac9496d21",
+      "sha256": "e088b0cfb003d6114c2556186335360bfbe7761dba22c9be4d85e95c9bae01da"
+    },
+    {
+      "source": "src\\daily_work_report_manager.py",
+      "target": "src\\site_apps\\central\\src\\daily_work_report_manager.py",
+      "original_sha256": "d384ce82b11b008dc2ede884461d0aa47539be55dc68ddb058f4f332096e7bbb",
+      "sha256": "44bfd20218f6bf166abc409ab5e1e4efc3dc13b15036a7bd79e5979523458f42"
+    },
+    {
+      "source": "src\\models\\material_model.py",
+      "target": "src\\site_apps\\central\\src\\models\\material_model.py",
+      "original_sha256": "311044cd23a6793c7c8345657e03d27e51563734696da4dcdd5c70fc7d3cc715",
+      "sha256": "f7567a11b187dee7ff4eb73a81ca7346c4dfc8a1570aaabb73729796ba26fb7d"
+    },
+    {
+      "source": "src\\models\\worker_model.py",
+      "target": "src\\site_apps\\central\\src\\models\\worker_model.py",
+      "original_sha256": "015bdd121ce67bd8ae9d821d6626fd10b3cb075fdbda56a33eb4b8689bcac7f8",
+      "sha256": "3a5ae3b13f1f852d753a0c8f6053a3edb8ba6a285bc2c3bd106990947d79b992"
+    },
+    {
+      "source": "src\\ndt_billing_tab.py",
+      "target": "src\\site_apps\\central\\src\\ndt_billing_tab.py",
+      "original_sha256": "f956dcea404886a807999069128a99785a7ee48748d24adc7e3e3023025c9653",
+      "sha256": "42744e3a8549607a341473c45f708fa0421f60246c71efecc71069add496fcef"
+    },
+    {
+      "source": "src\\ndt_section_writer.py",
+      "target": "src\\site_apps\\central\\src\\ndt_section_writer.py",
+      "original_sha256": "7ebc4856e6ea2e67534a5861db0c5f58cc1061b63d7257ead19e1a8fa3015595",
+      "sha256": "e56ddbdc5cb4bb732b239afd1b5000068d793982fa851670a165e6f29c6fdbda"
+    },
+    {
+      "source": "src\\ndt_summary_exporter.py",
+      "target": "src\\site_apps\\central\\src\\ndt_summary_exporter.py",
+      "original_sha256": "99b77fe267810aef12fc2571bfbf2054f47b24143920e0787836625e22482d75",
+      "sha256": "a709607068f71ed0bc9282931ccd20fab71c46226318e8f9e22ed8b5efb1ec0a"
+    },
+    {
+      "source": "src\\paut_writer.py",
+      "target": "src\\site_apps\\central\\src\\paut_writer.py",
+      "original_sha256": "842a8852f37d9d67d3ddabc283516d24ad7dab6b117966d80864f872a0af2af8",
+      "sha256": "d0e220f12fe0d39b0effa7dcad8be484a22a3bdd875e2fb9c279bfeb66aee548"
+    },
+    {
+      "source": "src\\services\\data_loader.py",
+      "target": "src\\site_apps\\central\\src\\services\\data_loader.py",
+      "original_sha256": "3ba08e2d3e73f606cae47b5d7593622451264a0d389857735feb94563d7ee083",
+      "sha256": "bcee699d89258a39f32e51bbb2dc6cd6c615fae17ca378ca5b56078841196d3b"
+    },
+    {
+      "source": "src\\services\\excel_exporter.py",
+      "target": "src\\site_apps\\central\\src\\services\\excel_exporter.py",
+      "original_sha256": "8eeac43606c389bc8f99198755f4865e8427acf7a629edcbe2ba0cdd4d28ca72",
+      "sha256": "1f943c7bf1d5c7d9640bb779e3e3f78838c5a6b58261c623a90c78ad6c3883d3"
+    },
+    {
+      "source": "src\\services\\monthly_report_manager.py",
+      "target": "src\\site_apps\\central\\src\\services\\monthly_report_manager.py",
+      "original_sha256": "d92f07513ab6becd3276100bb41a703e647eac5ff13fe8aa3397c2086d1af593",
+      "sha256": "d149cd8427fdfe91610625ecf6d6c2c744e7f73f224e065be53f1093a92cd596"
+    },
+    {
+      "source": "src\\services\\ndt_calculator.py",
+      "target": "src\\site_apps\\central\\src\\services\\ndt_calculator.py",
+      "original_sha256": "d9118021da799be53cf740118e3fac0e27a7c46b3ee86ddfabb2bbcbd580e1b8",
+      "sha256": "09d3afc62ad5d70fdfce672e6f56e7cfcc822744da02d34e82ea2e98b4adc5b6"
+    },
+    {
+      "source": "src\\tagged_ndt_writer.py",
+      "target": "src\\site_apps\\central\\src\\tagged_ndt_writer.py",
+      "original_sha256": "08fcee25643c1dbdbab75f8e0311c152b25c8637150e1d0752de44ef811b4f94",
+      "sha256": "4206ec213860839ac91f5604a6ba2ec6a8a11f9c234445dd125eef83be367550"
+    },
+    {
+      "source": "src\\utils\\export_helper.py",
+      "target": "src\\site_apps\\central\\src\\utils\\export_helper.py",
+      "original_sha256": "9296565ec55fd417316dbd48abca1b72764aff2bdb99ff8da9c351bdb16dbf37",
+      "sha256": "ad01d6949143010b03a7e40d5e06cf6fb43e3238bb408955a58ae87c781d1472"
+    },
+    {
+      "source": "src\\utils\\helpers.py",
+      "target": "src\\site_apps\\central\\src\\utils\\helpers.py",
+      "original_sha256": "c7f5b03e0a2766f44678d4eb7aedbee68e61d3826005778a6da87d4429536713",
+      "sha256": "16db0a2ce434370003b6e41c5d698e7330f822c6b632befda817b1dff60d925f"
+    },
+    {
+      "source": "src\\views\\components.py",
+      "target": "src\\site_apps\\central\\src\\views\\components.py",
+      "original_sha256": "22f3ef5f64a425900cb049f5e90deac90a3989e3e701b3c8dfd1f1c84c0a08df",
+      "sha256": "976ef6f3a749c32db4725ba425fdcbee46fb74f089c51dbbaffb3516f9740518"
+    },
+    {
+      "source": "src\\views\\daily_usage_view.py",
+      "target": "src\\site_apps\\central\\src\\views\\daily_usage_view.py",
+      "original_sha256": "8dcae9af8a61aa8f8306e2aba27ee8bc49c17cbcaa168d1f015f07764dac03cb",
+      "sha256": "41cdb67aee136b4bfaabddd64cc8dfd47697aaf0b713f81fe9ab4fea54dc0047"
+    },
+    {
+      "source": "src\\views\\monthly_usage_view.py",
+      "target": "src\\site_apps\\central\\src\\views\\monthly_usage_view.py",
+      "original_sha256": "217bd688985426c202335e4606e2faf011cd816c66738501bdeeb4280282a122",
+      "sha256": "be3809bbcac9e986eb298b5628187ee9400c18c132a9f6915a17036706b54918"
+    },
+    {
+      "source": "src\\views\\stock_management_view.py",
+      "target": "src\\site_apps\\central\\src\\views\\stock_management_view.py",
+      "original_sha256": "54e05a4471cce961f921dc47c4dd1e4ab97fee8bdc5ef0eccb729fcdf23311ed",
+      "sha256": "4cb4d7114d30b56a46660252a5e43cfb0a69ad6f709cf67a9b79106cb92c9bbd"
+    },
+    {
+      "source": "src\\문서_통합_관리_허브.py",
+      "target": "src\\site_apps\\central\\src\\문서_통합_관리_허브.py",
+      "original_sha256": "19985e7bbfc00b6c8bcb8028f42dd5befa1d1691d012737471a67cb0589361ae",
+      "sha256": "b5cd77054daf8ff4ad3f6549be3f545616736ec413f9bb11a0030a8fdfc6f261"
+    },
+    {
+      "source": "src\\지역난방_안전관리교육.py",
+      "target": "src\\site_apps\\central\\src\\지역난방_안전관리교육.py",
+      "original_sha256": "fc337fc911c092ad416ba46704f919497a7120be2abb9e3c0a154721cf8f934d",
+      "sha256": "d39211cf07c214084b96be884f55bab91f1dd00c4c1b70153986aab376753ba5"
+    },
+    {
+      "source": "src\\한국지역난방 중앙지사.py",
+      "target": "src\\site_apps\\central\\src\\app.py",
+      "original_sha256": "bdb9f547afb4c7906070a5f68b4268eeee280e7421bca712fe38f94edfaf751a",
+      "sha256": "5bdfc58465691db207a9433a2d98010e5dd7e8a991267dd232a1cefc1aa9a05d"
+    },
+    {
+      "source": "src\\controllers\\event_controller.py",
+      "target": "src\\site_apps\\kogas\\src\\controllers\\event_controller.py",
+      "original_sha256": "5971c69b28a80e4356ff4cb43339dfc81bad2c4f15a0ac6e2f3029998f2829a6",
+      "sha256": "fbae10f8c1770de912b936d7aee68d4f5b399c66431b87f9bb6adf7102f0e1de"
+    },
+    {
+      "source": "src\\daily_work_report_manager.py",
+      "target": "src\\site_apps\\kogas\\src\\daily_work_report_manager.py",
+      "original_sha256": "d384ce82b11b008dc2ede884461d0aa47539be55dc68ddb058f4f332096e7bbb",
+      "sha256": "44bfd20218f6bf166abc409ab5e1e4efc3dc13b15036a7bd79e5979523458f42"
+    },
+    {
+      "source": "src\\kogas_daily_work_log_exporter.py",
+      "target": "src\\site_apps\\kogas\\src\\kogas_daily_work_log_exporter.py",
+      "original_sha256": "1ebbca53739046bae89018cadddd6f938e89b9a4688b3122d3ff23540c164a27",
+      "sha256": "cb164087dd181329d25aa981cb4ff98ca1f438d3c772ea73cdd28e350d186cfc"
+    },
+    {
+      "source": "src\\kogas_daily_work_log_tab.py",
+      "target": "src\\site_apps\\kogas\\src\\kogas_daily_work_log_tab.py",
+      "original_sha256": "232ed0549cde434f83ad57ee330503b7bb0a64019dc88b724d9ae0bf2f650f1b",
+      "sha256": "8c0518f2d8ffe1fcb15a7e419840ab0f2244d726512416410a014671c236a215"
+    },
+    {
+      "source": "src\\models\\material_model.py",
+      "target": "src\\site_apps\\kogas\\src\\models\\material_model.py",
+      "original_sha256": "311044cd23a6793c7c8345657e03d27e51563734696da4dcdd5c70fc7d3cc715",
+      "sha256": "b17aa9cac4a32c13fbb1c03e7567e330b5cb47977d8d241c04a6caeecab147d2"
+    },
+    {
+      "source": "src\\models\\worker_model.py",
+      "target": "src\\site_apps\\kogas\\src\\models\\worker_model.py",
+      "original_sha256": "015bdd121ce67bd8ae9d821d6626fd10b3cb075fdbda56a33eb4b8689bcac7f8",
+      "sha256": "e2c484bd821e32f82387f37b651af5ad67ffb65b69af6e3475d078b5f4535dd0"
+    },
+    {
+      "source": "src\\ndt_billing_kogas_tab.py",
+      "target": "src\\site_apps\\kogas\\src\\ndt_billing_kogas_tab.py",
+      "original_sha256": "ed92639ccd20cdcd7c4b5398e7a1d32baab18734c35bcd517986c15e656e7af5",
+      "sha256": "ead5774d06902b624099c005b944a6f5b9ce939c4d8d26d7efc4425f46a1df97"
+    },
+    {
+      "source": "src\\ndt_billing_tab.py",
+      "target": "src\\site_apps\\kogas\\src\\ndt_billing_tab.py",
+      "original_sha256": "f956dcea404886a807999069128a99785a7ee48748d24adc7e3e3023025c9653",
+      "sha256": "29b094e7633f176bfd99aa6bc24899602ec9355a1c36f8e09cde29718611fba8"
+    },
+    {
+      "source": "src\\ndt_section_writer.py",
+      "target": "src\\site_apps\\kogas\\src\\ndt_section_writer.py",
+      "original_sha256": "7ebc4856e6ea2e67534a5861db0c5f58cc1061b63d7257ead19e1a8fa3015595",
+      "sha256": "99043149dd0a9a3deaaaa38d7dca04dca715ff97efec551daaf0ffe6fc5416fb"
+    },
+    {
+      "source": "src\\ndt_summary_exporter.py",
+      "target": "src\\site_apps\\kogas\\src\\ndt_summary_exporter.py",
+      "original_sha256": "99b77fe267810aef12fc2571bfbf2054f47b24143920e0787836625e22482d75",
+      "sha256": "a709607068f71ed0bc9282931ccd20fab71c46226318e8f9e22ed8b5efb1ec0a"
+    },
+    {
+      "source": "src\\paut_writer.py",
+      "target": "src\\site_apps\\kogas\\src\\paut_writer.py",
+      "original_sha256": "842a8852f37d9d67d3ddabc283516d24ad7dab6b117966d80864f872a0af2af8",
+      "sha256": "d0e220f12fe0d39b0effa7dcad8be484a22a3bdd875e2fb9c279bfeb66aee548"
+    },
+    {
+      "source": "src\\services\\data_loader.py",
+      "target": "src\\site_apps\\kogas\\src\\services\\data_loader.py",
+      "original_sha256": "3ba08e2d3e73f606cae47b5d7593622451264a0d389857735feb94563d7ee083",
+      "sha256": "bcee699d89258a39f32e51bbb2dc6cd6c615fae17ca378ca5b56078841196d3b"
+    },
+    {
+      "source": "src\\services\\excel_exporter.py",
+      "target": "src\\site_apps\\kogas\\src\\services\\excel_exporter.py",
+      "original_sha256": "8eeac43606c389bc8f99198755f4865e8427acf7a629edcbe2ba0cdd4d28ca72",
+      "sha256": "848a8bd31f0784444ec35158c7b8ceaeaffbbeb020e5bbe03b14a69ff4496bbf"
+    },
+    {
+      "source": "src\\services\\kogas_monthly_report_manager.py",
+      "target": "src\\site_apps\\kogas\\src\\services\\kogas_monthly_report_manager.py",
+      "original_sha256": "846d637f59cd1f9e5c5b05869955fcd17593f9461df7a79c8083af0984c8dbe5",
+      "sha256": "cc0e72d21a67dd4dd908922607d31604335755bc746ba9967dfd9c653497ed24"
+    },
+    {
+      "source": "src\\services\\ndt_calculator.py",
+      "target": "src\\site_apps\\kogas\\src\\services\\ndt_calculator.py",
+      "original_sha256": "d9118021da799be53cf740118e3fac0e27a7c46b3ee86ddfabb2bbcbd580e1b8",
+      "sha256": "09d3afc62ad5d70fdfce672e6f56e7cfcc822744da02d34e82ea2e98b4adc5b6"
+    },
+    {
+      "source": "src\\tagged_ndt_writer.py",
+      "target": "src\\site_apps\\kogas\\src\\tagged_ndt_writer.py",
+      "original_sha256": "08fcee25643c1dbdbab75f8e0311c152b25c8637150e1d0752de44ef811b4f94",
+      "sha256": "bf4adb0a0cb85035f20c8122725e7bda58f46dc894ea1cac1d0f0a2a07a874eb"
+    },
+    {
+      "source": "src\\utils\\export_helper.py",
+      "target": "src\\site_apps\\kogas\\src\\utils\\export_helper.py",
+      "original_sha256": "9296565ec55fd417316dbd48abca1b72764aff2bdb99ff8da9c351bdb16dbf37",
+      "sha256": "ad01d6949143010b03a7e40d5e06cf6fb43e3238bb408955a58ae87c781d1472"
+    },
+    {
+      "source": "src\\utils\\helpers.py",
+      "target": "src\\site_apps\\kogas\\src\\utils\\helpers.py",
+      "original_sha256": "c7f5b03e0a2766f44678d4eb7aedbee68e61d3826005778a6da87d4429536713",
+      "sha256": "16db0a2ce434370003b6e41c5d698e7330f822c6b632befda817b1dff60d925f"
+    },
+    {
+      "source": "src\\views\\components.py",
+      "target": "src\\site_apps\\kogas\\src\\views\\components.py",
+      "original_sha256": "22f3ef5f64a425900cb049f5e90deac90a3989e3e701b3c8dfd1f1c84c0a08df",
+      "sha256": "856683846e62c641d573933bf0e29530e4e36a29139f6a2c32ae00582c4d56ff"
+    },
+    {
+      "source": "src\\views\\daily_usage_view.py",
+      "target": "src\\site_apps\\kogas\\src\\views\\daily_usage_view.py",
+      "original_sha256": "8dcae9af8a61aa8f8306e2aba27ee8bc49c17cbcaa168d1f015f07764dac03cb",
+      "sha256": "d1034767f0f1497de9611dd6d483d8ddc2594ad2eb12216ad8825ad0fdcb4ced"
+    },
+    {
+      "source": "src\\views\\monthly_usage_view.py",
+      "target": "src\\site_apps\\kogas\\src\\views\\monthly_usage_view.py",
+      "original_sha256": "217bd688985426c202335e4606e2faf011cd816c66738501bdeeb4280282a122",
+      "sha256": "73413ab732c5dcc3780b0b2416707d240e82f40c14d1da0333459074aaf8d8cb"
+    },
+    {
+      "source": "src\\views\\stock_management_view.py",
+      "target": "src\\site_apps\\kogas\\src\\views\\stock_management_view.py",
+      "original_sha256": "54e05a4471cce961f921dc47c4dd1e4ab97fee8bdc5ef0eccb729fcdf23311ed",
+      "sha256": "65a993b4b6ba963ef97938dd09f65a1ae2eee95834b1865c42142d3835c4de7d"
+    },
+    {
+      "source": "src\\가스공사 가산~가평.py",
+      "target": "src\\site_apps\\kogas\\src\\app.py",
+      "original_sha256": "fe6c5f74659484d5c78247c8b4d4728e728d1ab20186d591a19f6752e0ff1baa",
+      "sha256": "dfaa54b27e7a4124848f07e66874b808fb3654dad53a1a37270bb30e2f05304c"
+    },
+    {
+      "source": "src\\문서_통합_관리_허브.py",
+      "target": "src\\site_apps\\kogas\\src\\문서_통합_관리_허브.py",
+      "original_sha256": "19985e7bbfc00b6c8bcb8028f42dd5befa1d1691d012737471a67cb0589361ae",
+      "sha256": "75e728df88b92a06a59e3059b82328619673141fc772910ce24466ccba33bcc2"
+    },
+    {
+      "source": "src\\지역난방_안전관리교육.py",
+      "target": "src\\site_apps\\kogas\\src\\지역난방_안전관리교육.py",
+      "original_sha256": "fc337fc911c092ad416ba46704f919497a7120be2abb9e3c0a154721cf8f934d",
+      "sha256": "d39211cf07c214084b96be884f55bab91f1dd00c4c1b70153986aab376753ba5"
+    },
+    {
+      "source": "src\\controllers\\event_controller.py",
+      "target": "src\\site_apps\\lotte\\src\\controllers\\event_controller.py",
+      "original_sha256": "5971c69b28a80e4356ff4cb43339dfc81bad2c4f15a0ac6e2f3029998f2829a6",
+      "sha256": "21c48fd8e26180e2fbf1716bd72fd9e5310dc0b8cd289b303b4de22dec4e6108"
+    },
+    {
+      "source": "src\\daily_work_log_exporter.py",
+      "target": "src\\site_apps\\lotte\\src\\daily_work_log_exporter.py",
+      "original_sha256": "36e53197d7ee16614c3e6b899c6f32aeb983d67a6cb72141863c8469e509c074",
+      "sha256": "f5fd9a1b147bb46d357a19a0d16c6bd273973dde8b387b2a73a10b96513f2dd3"
+    },
+    {
+      "source": "src\\daily_work_log_tab.py",
+      "target": "src\\site_apps\\lotte\\src\\daily_work_log_tab.py",
+      "original_sha256": "1d40534b544e6b265b07402eff732c7c5efe2417db1e4b516397595ac9496d21",
+      "sha256": "78ab81e64db9fbe28d527e2cdd98e73edb98744df3403a912a8d6baa60a59792"
+    },
+    {
+      "source": "src\\daily_work_report_manager.py",
+      "target": "src\\site_apps\\lotte\\src\\daily_work_report_manager.py",
+      "original_sha256": "d384ce82b11b008dc2ede884461d0aa47539be55dc68ddb058f4f332096e7bbb",
+      "sha256": "44bfd20218f6bf166abc409ab5e1e4efc3dc13b15036a7bd79e5979523458f42"
+    },
+    {
+      "source": "src\\models\\material_model.py",
+      "target": "src\\site_apps\\lotte\\src\\models\\material_model.py",
+      "original_sha256": "311044cd23a6793c7c8345657e03d27e51563734696da4dcdd5c70fc7d3cc715",
+      "sha256": "d84b045157e0980059b35e85eac20dc4f8d61016ed218b584284cb95ce3a3eb0"
+    },
+    {
+      "source": "src\\models\\worker_model.py",
+      "target": "src\\site_apps\\lotte\\src\\models\\worker_model.py",
+      "original_sha256": "015bdd121ce67bd8ae9d821d6626fd10b3cb075fdbda56a33eb4b8689bcac7f8",
+      "sha256": "c200e585cc81ea3c7c973133703b82d59c39455481380f2f3533662618df373c"
+    },
+    {
+      "source": "src\\ndt_billing_tab.py",
+      "target": "src\\site_apps\\lotte\\src\\ndt_billing_tab.py",
+      "original_sha256": "f956dcea404886a807999069128a99785a7ee48748d24adc7e3e3023025c9653",
+      "sha256": "3c87cb803066a1378fe6f9f139739c56470cf011609ca5379304ee4f389b8ad5"
+    },
+    {
+      "source": "src\\ndt_section_writer.py",
+      "target": "src\\site_apps\\lotte\\src\\ndt_section_writer.py",
+      "original_sha256": "7ebc4856e6ea2e67534a5861db0c5f58cc1061b63d7257ead19e1a8fa3015595",
+      "sha256": "c53fd4d6daf881bcd36b00a86c1c06318f223ce1aa81ede601d8b38a3fc28951"
+    },
+    {
+      "source": "src\\ndt_summary_exporter.py",
+      "target": "src\\site_apps\\lotte\\src\\ndt_summary_exporter.py",
+      "original_sha256": "99b77fe267810aef12fc2571bfbf2054f47b24143920e0787836625e22482d75",
+      "sha256": "a709607068f71ed0bc9282931ccd20fab71c46226318e8f9e22ed8b5efb1ec0a"
+    },
+    {
+      "source": "src\\paut_writer.py",
+      "target": "src\\site_apps\\lotte\\src\\paut_writer.py",
+      "original_sha256": "842a8852f37d9d67d3ddabc283516d24ad7dab6b117966d80864f872a0af2af8",
+      "sha256": "d0e220f12fe0d39b0effa7dcad8be484a22a3bdd875e2fb9c279bfeb66aee548"
+    },
+    {
+      "source": "src\\services\\data_loader.py",
+      "target": "src\\site_apps\\lotte\\src\\services\\data_loader.py",
+      "original_sha256": "3ba08e2d3e73f606cae47b5d7593622451264a0d389857735feb94563d7ee083",
+      "sha256": "bcee699d89258a39f32e51bbb2dc6cd6c615fae17ca378ca5b56078841196d3b"
+    },
+    {
+      "source": "src\\services\\excel_exporter.py",
+      "target": "src\\site_apps\\lotte\\src\\services\\excel_exporter.py",
+      "original_sha256": "8eeac43606c389bc8f99198755f4865e8427acf7a629edcbe2ba0cdd4d28ca72",
+      "sha256": "97454a444d8821d507885a6bd5086d691f140b26a4acb992c75779eda2c7f661"
+    },
+    {
+      "source": "src\\services\\monthly_report_manager.py",
+      "target": "src\\site_apps\\lotte\\src\\services\\monthly_report_manager.py",
+      "original_sha256": "d92f07513ab6becd3276100bb41a703e647eac5ff13fe8aa3397c2086d1af593",
+      "sha256": "8db761d6e66ba3bd133eb27afac3684d19b2aa4943c10a86c13592061d401f7c"
+    },
+    {
+      "source": "src\\services\\ndt_calculator.py",
+      "target": "src\\site_apps\\lotte\\src\\services\\ndt_calculator.py",
+      "original_sha256": "d9118021da799be53cf740118e3fac0e27a7c46b3ee86ddfabb2bbcbd580e1b8",
+      "sha256": "09d3afc62ad5d70fdfce672e6f56e7cfcc822744da02d34e82ea2e98b4adc5b6"
+    },
+    {
+      "source": "src\\tagged_ndt_writer.py",
+      "target": "src\\site_apps\\lotte\\src\\tagged_ndt_writer.py",
+      "original_sha256": "08fcee25643c1dbdbab75f8e0311c152b25c8637150e1d0752de44ef811b4f94",
+      "sha256": "e8dd6353840012e99cf5fc9dffb9247b5d3535774f4dac22f92388ca1adc5ad9"
+    },
+    {
+      "source": "src\\utils\\export_helper.py",
+      "target": "src\\site_apps\\lotte\\src\\utils\\export_helper.py",
+      "original_sha256": "9296565ec55fd417316dbd48abca1b72764aff2bdb99ff8da9c351bdb16dbf37",
+      "sha256": "ad01d6949143010b03a7e40d5e06cf6fb43e3238bb408955a58ae87c781d1472"
+    },
+    {
+      "source": "src\\utils\\helpers.py",
+      "target": "src\\site_apps\\lotte\\src\\utils\\helpers.py",
+      "original_sha256": "c7f5b03e0a2766f44678d4eb7aedbee68e61d3826005778a6da87d4429536713",
+      "sha256": "16db0a2ce434370003b6e41c5d698e7330f822c6b632befda817b1dff60d925f"
+    },
+    {
+      "source": "src\\views\\components.py",
+      "target": "src\\site_apps\\lotte\\src\\views\\components.py",
+      "original_sha256": "22f3ef5f64a425900cb049f5e90deac90a3989e3e701b3c8dfd1f1c84c0a08df",
+      "sha256": "9765b2d706f5d1ca999ddcba1152c51c1d1ca097835a2c53af781bb0375691b6"
+    },
+    {
+      "source": "src\\views\\daily_usage_view_lotte.py",
+      "target": "src\\site_apps\\lotte\\src\\views\\daily_usage_view_lotte.py",
+      "original_sha256": "b75a154c90aec9b6e45557bf1382b274ca208f93b9a04b3b079260bd2af5f7dc",
+      "sha256": "e13f93d42e2738876e8aab9666b27f2c1cfc5e73992fc14cfb2484557019cacb"
+    },
+    {
+      "source": "src\\views\\monthly_usage_view.py",
+      "target": "src\\site_apps\\lotte\\src\\views\\monthly_usage_view.py",
+      "original_sha256": "217bd688985426c202335e4606e2faf011cd816c66738501bdeeb4280282a122",
+      "sha256": "65c4f9861f1009b69b5e3c6d7d5d382b083c8d8f86f2344723076bd90de32d70"
+    },
+    {
+      "source": "src\\views\\stock_management_view.py",
+      "target": "src\\site_apps\\lotte\\src\\views\\stock_management_view.py",
+      "original_sha256": "54e05a4471cce961f921dc47c4dd1e4ab97fee8bdc5ef0eccb729fcdf23311ed",
+      "sha256": "2261021b062db3419140de9cf2b7607345b27108a80ca9028655baad7f4e2f4b"
+    },
+    {
+      "source": "src\\롯데건설 바이오로직스.py",
+      "target": "src\\site_apps\\lotte\\src\\app.py",
+      "original_sha256": "e017c4e2d04b23d15e71fb1f3c725f2d6db26b75318287ecc26eaaa34f3fcf63",
+      "sha256": "7f6f8782afb4f861c397ecfe554fb5f7e04faf8a80d291fcd675311c4c50eea1"
+    },
+    {
+      "source": "src\\문서_통합_관리_허브.py",
+      "target": "src\\site_apps\\lotte\\src\\문서_통합_관리_허브.py",
+      "original_sha256": "19985e7bbfc00b6c8bcb8028f42dd5befa1d1691d012737471a67cb0589361ae",
+      "sha256": "f1708ef2bda546e3d067cfc0a783a6111cb3767c6c64169b1e6f7b834e7eb596"
+    },
+    {
+      "source": "src\\지역난방_안전관리교육.py",
+      "target": "src\\site_apps\\lotte\\src\\지역난방_안전관리교육.py",
+      "original_sha256": "fc337fc911c092ad416ba46704f919497a7120be2abb9e3c0a154721cf8f934d",
+      "sha256": "d39211cf07c214084b96be884f55bab91f1dd00c4c1b70153986aab376753ba5"
+    }
+  ],
+  "copies": [
+    {
+      "source": "src\\kogas_config.json",
+      "target": "src\\site_apps\\central\\src\\kogas_config.json",
+      "sha256": "ef6000903fcf6e1be92861397bc3bf2e26ac9952edb3fa44cb589742b42e0748"
+    },
+    {
+      "source": "src\\config_district_heating_safety_training.json",
+      "target": "src\\site_apps\\central\\src\\config_district_heating_safety_training.json",
+      "sha256": "7b19af204c7841f5a8194c79e1e0200dd9a9aa11243f3f975a97fc216f013240"
+    },
+    {
+      "source": "src\\daily_work_history.json",
+      "target": "src\\site_apps\\central\\src\\daily_work_history.json",
+      "sha256": "110eaa5f7d95cc25b9988631c7e8d5e638ec927f12604fad0840eda55a0aa705"
+    },
+    {
+      "source": "src\\codebook_db.json",
+      "target": "src\\site_apps\\central\\src\\codebook_db.json",
+      "sha256": "4dc7c4c1a5291d9a25b30d51af60e252a240c4b8aeef7b2dde7258f985f44251"
+    },
+    {
+      "source": "src\\config.json",
+      "target": "src\\site_apps\\central\\src\\config.json",
+      "sha256": "4e0e787e41113b9f9f6b1b3dc4b15193374114bdf73ce7c3639a085c1656e9b5"
+    },
+    {
+      "source": "src\\Material_Manager_Config.json",
+      "target": "src\\site_apps\\central\\src\\Material_Manager_Config.json",
+      "sha256": "3855220d757635242040071fe1ea6c7f5f6db628f922167e1338f6d6e5c9c027"
+    },
+    {
+      "source": "resources\\logo.png",
+      "target": "src\\site_apps\\central\\resources\\logo.png",
+      "sha256": "b40cf611844b9df9be3feb3879fb2055f076b957207833134a1e8ed29512b68c"
+    },
+    {
+      "source": "resources\\logo_dongtan.png",
+      "target": "src\\site_apps\\central\\resources\\logo_dongtan.png",
+      "sha256": "5aaaf702f74b40c4fd19821d3f6840252faa4c43c187ceddca45c056723ccdf0"
+    },
+    {
+      "source": "resources\\logo_joongang.png",
+      "target": "src\\site_apps\\central\\resources\\logo_joongang.png",
+      "sha256": "91cc41782314b69e4fadd2d6db79326d672c5c5976fcfee482d09fcea8ddbe36"
+    },
+    {
+      "source": "resources\\logo_동탄지사.png",
+      "target": "src\\site_apps\\central\\resources\\logo_동탄지사.png",
+      "sha256": "4136432695c96cee0757a6ed9082d2a28891ada1417272fcc63ec9dd2260ffbf"
+    },
+    {
+      "source": "resources\\logo_중앙지사.png",
+      "target": "src\\site_apps\\central\\resources\\logo_중앙지사.png",
+      "sha256": "c30a158b5c43d06d1c4849c5ad7f924473310e7bc3e9dc54f7cb424caaf25b90"
+    },
+    {
+      "source": "resources\\report_mapping.json",
+      "target": "src\\site_apps\\central\\resources\\report_mapping.json",
+      "sha256": "5ffa45a8a89cb3d0467031c780ea54db670887d200eb82a8ae8c24116144d5ab"
+    },
+    {
+      "source": "resources\\SITCO.png",
+      "target": "src\\site_apps\\central\\resources\\SITCO.png",
+      "sha256": "c0363e33ac526da7ab1cab4af8e6cd632dd10f6d67929e50d3cea806d17204ad"
+    },
+    {
+      "source": "resources\\Template_Central_DailyWorkReport.xlsx",
+      "target": "src\\site_apps\\central\\resources\\Template_Central_DailyWorkReport.xlsx",
+      "sha256": "91adb664e7d090424552259fdf4c3f2f682765aa1e97347cab5e80923e5a2413"
+    },
+    {
+      "source": "resources\\Template_DailyWorkReport.xls",
+      "target": "src\\site_apps\\central\\resources\\Template_DailyWorkReport.xls",
+      "sha256": "ba6fb27ecbf5fd019db75a62808ea75de4cc8b0a01b50c5801b95eeae6f07fda"
+    },
+    {
+      "source": "resources\\Template_DailyWorkReport.xlsx",
+      "target": "src\\site_apps\\central\\resources\\Template_DailyWorkReport.xlsx",
+      "sha256": "f04b54fe19b1f9b64730d6e743a432f0aeb7694b62670e6e39b84287faa2ffdf"
+    },
+    {
+      "source": "resources\\test_write_ai.txt",
+      "target": "src\\site_apps\\central\\resources\\test_write_ai.txt",
+      "sha256": "f68e37dc9cabf2ee8b94d6a5d28ad04be246ccc2e82911f8f1ac390dcf0ee364"
+    },
+    {
+      "source": "resources\\바닥글 PMI-1.png",
+      "target": "src\\site_apps\\central\\resources\\바닥글 PMI-1.png",
+      "sha256": "6f5382c7c007fd91babe1ba0cb70c1372043109fbcd39e7992026692d1ec3d53"
+    },
+    {
+      "source": "resources\\바닥글 PMI.png",
+      "target": "src\\site_apps\\central\\resources\\바닥글 PMI.png",
+      "sha256": "38e4b2015024b57935231155d36ebe09a982372c186c80df957cd9ca73c41db3"
+    },
+    {
+      "source": "resources\\바닥글 PMI갑.png",
+      "target": "src\\site_apps\\central\\resources\\바닥글 PMI갑.png",
+      "sha256": "3f2217c3a4f44a772409479d140b747d8bc6093bbd25939d271dea968b60205f"
+    },
+    {
+      "source": "resources\\서울검사.png",
+      "target": "src\\site_apps\\central\\resources\\서울검사.png",
+      "sha256": "b0cb449b341c8c90f489735d1970a6ea6608cb00e57f98e9cb20ee5bfea9318f"
+    },
+    {
+      "source": "src\\signs\\temp_1_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_1_유상훈.png",
+      "sha256": "35b52bcbc28e4b5fed8b27524800999479bef97f9cc9280a3fb37300feba1254"
+    },
+    {
+      "source": "src\\signs\\temp_1_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_1_주진철.png",
+      "sha256": "a4ad3068469485ab574d366c6a36aafb872df6d22926a4bd195357e37936d20e"
+    },
+    {
+      "source": "src\\signs\\temp_2_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_2_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_2_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_2_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_3_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_3_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_3_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_3_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_4_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_4_유상훈.png",
+      "sha256": "8b944b99b435e6a8e69b56a4719085c133ce5cf58217a2f5af28ca9797d6c2e7"
+    },
+    {
+      "source": "src\\signs\\temp_4_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_4_주진철.png",
+      "sha256": "ed88f3a7b8bb7832dc4eafa9b3f0d5d6b80b9b77f207c5b299248594b9520f94"
+    },
+    {
+      "source": "src\\signs\\temp_level1_custom.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level1_custom.png",
+      "sha256": "65210a8ee6b71098bd2c3cac89f79d1d346e09370e6a26ae4050bdd637067c3d"
+    },
+    {
+      "source": "src\\signs\\temp_level1_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level1_유상훈.png",
+      "sha256": "35b52bcbc28e4b5fed8b27524800999479bef97f9cc9280a3fb37300feba1254"
+    },
+    {
+      "source": "src\\signs\\temp_level1_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level1_주진철.png",
+      "sha256": "a4ad3068469485ab574d366c6a36aafb872df6d22926a4bd195357e37936d20e"
+    },
+    {
+      "source": "src\\signs\\temp_level2_custom.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level2_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level2_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level2_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_level2_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level2_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_level3_custom.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level3_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level3_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level3_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_level3_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level3_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_level4_custom.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level4_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level4_유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level4_유상훈.png",
+      "sha256": "8b944b99b435e6a8e69b56a4719085c133ce5cf58217a2f5af28ca9797d6c2e7"
+    },
+    {
+      "source": "src\\signs\\temp_level4_주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\temp_level4_주진철.png",
+      "sha256": "ed88f3a7b8bb7832dc4eafa9b3f0d5d6b80b9b77f207c5b299248594b9520f94"
+    },
+    {
+      "source": "src\\signs\\강신태.jpg",
+      "target": "src\\site_apps\\central\\src\\signs\\강신태.jpg",
+      "sha256": "85bc3ca05fe3200e659b7d4492efd5bce292dbe9831ba54de2a0a6ce5ef3dbdf"
+    },
+    {
+      "source": "src\\signs\\강신태.png",
+      "target": "src\\site_apps\\central\\src\\signs\\강신태.png",
+      "sha256": "1bb477f27b1e03f9028c3b85f1ab31b5e1351db2f1f0e17adaad30222b7795b0"
+    },
+    {
+      "source": "src\\signs\\강신태_padded.png",
+      "target": "src\\site_apps\\central\\src\\signs\\강신태_padded.png",
+      "sha256": "9b3b24e922ea44854e39efa89c852f7e003c35b16816b610423cbffa2898059f"
+    },
+    {
+      "source": "src\\signs\\곽재운.png",
+      "target": "src\\site_apps\\central\\src\\signs\\곽재운.png",
+      "sha256": "5a030444b3652015bceddbc19af3f11d54939f0e25ac5acf125c14e2a26ad1f1"
+    },
+    {
+      "source": "src\\signs\\권인경.png",
+      "target": "src\\site_apps\\central\\src\\signs\\권인경.png",
+      "sha256": "7daf2098d906d90cfbf6a27617416aa3d49e4e65d47f7485d4defe22ec676aab"
+    },
+    {
+      "source": "src\\signs\\박광복.png",
+      "target": "src\\site_apps\\central\\src\\signs\\박광복.png",
+      "sha256": "98cb5972a67a46a4330e941bb22767e07718ba5d4ccf94379d515461bc17a13a"
+    },
+    {
+      "source": "src\\signs\\박상태.png",
+      "target": "src\\site_apps\\central\\src\\signs\\박상태.png",
+      "sha256": "9ceea587bebb4f33f993855b06706eaccf97e768d38082acf596b0593957635e"
+    },
+    {
+      "source": "src\\signs\\우명광.png",
+      "target": "src\\site_apps\\central\\src\\signs\\우명광.png",
+      "sha256": "6f064f1055fa9e4869c7d23839b15f32a5227040a25481717e3aeb567571ab99"
+    },
+    {
+      "source": "src\\signs\\유상훈.png",
+      "target": "src\\site_apps\\central\\src\\signs\\유상훈.png",
+      "sha256": "8d3832b6779add35f47edc84986898b1f98481642b5347de7ae22c4f08fe40b7"
+    },
+    {
+      "source": "src\\signs\\유상훈_padded.png",
+      "target": "src\\site_apps\\central\\src\\signs\\유상훈_padded.png",
+      "sha256": "04a1dd767e06b1c251c82670b1beb89bccdb1de64c855bd6f12c60455568c418"
+    },
+    {
+      "source": "src\\signs\\유상훈_thick.png",
+      "target": "src\\site_apps\\central\\src\\signs\\유상훈_thick.png",
+      "sha256": "c983bd68e00ace0e560d8575ef56c04383dff3e46d86b6e88f8d9907bd8772d3"
+    },
+    {
+      "source": "src\\signs\\장승대_padded.png",
+      "target": "src\\site_apps\\central\\src\\signs\\장승대_padded.png",
+      "sha256": "419e0b37c1d5799c2b2a7a8f737fc3121f5d8b3c64ee8e4d33e6642fe5a087b3"
+    },
+    {
+      "source": "src\\signs\\주진철.png",
+      "target": "src\\site_apps\\central\\src\\signs\\주진철.png",
+      "sha256": "60c9dd25c165f404ea3c384c7a4fe9957b372fc31aaf91e5809391a92ebf0c3c"
+    },
+    {
+      "source": "src\\signs\\주진철_padded.png",
+      "target": "src\\site_apps\\central\\src\\signs\\주진철_padded.png",
+      "sha256": "2c81d47780117812147b7ca90e8630c54768e649b72322732ba7ed5566c5be8a"
+    },
+    {
+      "source": "src\\signs\\주진철_thick.png",
+      "target": "src\\site_apps\\central\\src\\signs\\주진철_thick.png",
+      "sha256": "34c086ff7b8a961c799c75d761c1ccf414127e730fc38e237d592e2a881d8c79"
+    },
+    {
+      "source": "src\\templates\\양식_기본.xlsx",
+      "target": "src\\site_apps\\central\\src\\templates\\양식_기본.xlsx",
+      "sha256": "7074f5c9e9f629a903450a0f12d6203db0de9b24eef9c4228ffe43ce5e165f71"
+    },
+    {
+      "source": "src\\templates\\양식_동탄.xlsx",
+      "target": "src\\site_apps\\central\\src\\templates\\양식_동탄.xlsx",
+      "sha256": "bc5deeda2919dbbb41fbb76f62ef054bd2a9d0be9d9f43a1ed18b1714ea8127c"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_기본양식.xlsx",
+      "target": "src\\site_apps\\central\\src\\templates\\인원_장비투입_기본양식.xlsx",
+      "sha256": "3475ff07c14294176b36c47ccf7b4f33a60aacd0a6ae840a52a5206bb925c8b4"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_기본양식_fixed.xlsx",
+      "target": "src\\site_apps\\central\\src\\templates\\인원_장비투입_기본양식_fixed.xlsx",
+      "sha256": "7074f5c9e9f629a903450a0f12d6203db0de9b24eef9c4228ffe43ce5e165f71"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_동탄양식.xlsx",
+      "target": "src\\site_apps\\central\\src\\templates\\인원_장비투입_동탄양식.xlsx",
+      "sha256": "bc5deeda2919dbbb41fbb76f62ef054bd2a9d0be9d9f43a1ed18b1714ea8127c"
+    },
+    {
+      "source": "src\\templates\\지역난방_RT_기본형.xlsx",
+      "target": "src\\site_apps\\central\\src\\templates\\지역난방_RT_기본형.xlsx",
+      "sha256": "f0867f0ba6ce54b67b3cac5fa860554c45747e69e56fc3ff0e966b0630675478"
+    },
+    {
+      "source": "data\\Material_Inventory.xlsx",
+      "target": "src\\site_apps\\central\\data\\Material_Inventory.xlsx",
+      "sha256": "621e2578bc1993fabc392627d7642361954cdf52667a2ab14a60576c86a6d15f"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-07\\PAUT_e68d16afa99d4026b99160dd30d83dd3.jpg",
+      "target": "src\\site_apps\\central\\data\\process_photos\\2026-08-07\\PAUT_e68d16afa99d4026b99160dd30d83dd3.jpg",
+      "sha256": "435f6f392278d634e452a260bd36e24a86b47a24119b7cb52d8ac9468c8f95ff"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-07\\PAUT_f9a3d54e1a3c40bf905f81417d4aaf0f.jpg",
+      "target": "src\\site_apps\\central\\data\\process_photos\\2026-08-07\\PAUT_f9a3d54e1a3c40bf905f81417d4aaf0f.jpg",
+      "sha256": "e40780f6e3e47660caa30f0ce14bcc9fa6412a550d7b107e7bf4030cc96b2f5c"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-22\\PAUT_768bc36d3080404cac1b55af77660e8a.jpg",
+      "target": "src\\site_apps\\central\\data\\process_photos\\2026-08-22\\PAUT_768bc36d3080404cac1b55af77660e8a.jpg",
+      "sha256": "ea2eae59fda5dffda3995d52ec003b5529f63566a0350c26951b605c4068ff35"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-22\\PAUT_811d5fa342114d369ac46aec1a4a4908.jpg",
+      "target": "src\\site_apps\\central\\data\\process_photos\\2026-08-22\\PAUT_811d5fa342114d369ac46aec1a4a4908.jpg",
+      "sha256": "5ea3ed1f26716ba37cbb7a4f4b08e42bd728d2656e669c09d9be3ef9be004e8c"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_0ae6e888f90b4684bb16c38cfe5de3ef.jpg",
+      "target": "src\\site_apps\\central\\data\\process_photos\\2026-09-03\\PAUT_0ae6e888f90b4684bb16c38cfe5de3ef.jpg",
+      "sha256": "658b0b9baef84b0533aaa085567c3960a155cc8dae45ce95920ec0f660e3765d"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_a76cd65d33094e32b0c5e33770e26250.jpg",
+      "target": "src\\site_apps\\central\\data\\process_photos\\2026-09-03\\PAUT_a76cd65d33094e32b0c5e33770e26250.jpg",
+      "sha256": "3574f089826dbbde1c874bdb94eebb8ef5336e2f88797f60da7735ee550f40c1"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_f8db52d01740430e9b84bd76775090ea.jpg",
+      "target": "src\\site_apps\\central\\data\\process_photos\\2026-09-03\\PAUT_f8db52d01740430e9b84bd76775090ea.jpg",
+      "sha256": "941d2cca9f1a43f5b6cfd15d92eb0cf3961cb2062499ca71921b3ad227afc4f0"
+    },
+    {
+      "source": "src\\한국지역난방 중앙지사.py",
+      "target": "archive\\site_isolation_originals\\한국지역난방 중앙지사.py",
+      "sha256": "bdb9f547afb4c7906070a5f68b4268eeee280e7421bca712fe38f94edfaf751a"
+    },
+    {
+      "source": "src\\Kogas_Material_Manager_Config.json",
+      "target": "src\\site_apps\\kogas\\src\\Kogas_Material_Manager_Config.json",
+      "sha256": "32e6b4f3f8f9be82a82f035b3ebd66012a71516b1e5a399a8ac15cb669c7fd4e"
+    },
+    {
+      "source": "src\\kogas_config.json",
+      "target": "src\\site_apps\\kogas\\src\\kogas_config.json",
+      "sha256": "ef6000903fcf6e1be92861397bc3bf2e26ac9952edb3fa44cb589742b42e0748"
+    },
+    {
+      "source": "src\\config_district_heating_safety_training.json",
+      "target": "src\\site_apps\\kogas\\src\\config_district_heating_safety_training.json",
+      "sha256": "7b19af204c7841f5a8194c79e1e0200dd9a9aa11243f3f975a97fc216f013240"
+    },
+    {
+      "source": "src\\codebook_db.json",
+      "target": "src\\site_apps\\kogas\\src\\codebook_db.json",
+      "sha256": "4dc7c4c1a5291d9a25b30d51af60e252a240c4b8aeef7b2dde7258f985f44251"
+    },
+    {
+      "source": "src\\config.json",
+      "target": "src\\site_apps\\kogas\\src\\config.json",
+      "sha256": "4e0e787e41113b9f9f6b1b3dc4b15193374114bdf73ce7c3639a085c1656e9b5"
+    },
+    {
+      "source": "src\\kogas_daily_work_history.json",
+      "target": "src\\site_apps\\kogas\\src\\kogas_daily_work_history.json",
+      "sha256": "7e138ae22d3f319b401c027bab8ad3858145bc10de6950fa0b6017d383235ae7"
+    },
+    {
+      "source": "resources\\logo.png",
+      "target": "src\\site_apps\\kogas\\resources\\logo.png",
+      "sha256": "b40cf611844b9df9be3feb3879fb2055f076b957207833134a1e8ed29512b68c"
+    },
+    {
+      "source": "resources\\logo_dongtan.png",
+      "target": "src\\site_apps\\kogas\\resources\\logo_dongtan.png",
+      "sha256": "5aaaf702f74b40c4fd19821d3f6840252faa4c43c187ceddca45c056723ccdf0"
+    },
+    {
+      "source": "resources\\logo_joongang.png",
+      "target": "src\\site_apps\\kogas\\resources\\logo_joongang.png",
+      "sha256": "91cc41782314b69e4fadd2d6db79326d672c5c5976fcfee482d09fcea8ddbe36"
+    },
+    {
+      "source": "resources\\logo_동탄지사.png",
+      "target": "src\\site_apps\\kogas\\resources\\logo_동탄지사.png",
+      "sha256": "4136432695c96cee0757a6ed9082d2a28891ada1417272fcc63ec9dd2260ffbf"
+    },
+    {
+      "source": "resources\\logo_중앙지사.png",
+      "target": "src\\site_apps\\kogas\\resources\\logo_중앙지사.png",
+      "sha256": "c30a158b5c43d06d1c4849c5ad7f924473310e7bc3e9dc54f7cb424caaf25b90"
+    },
+    {
+      "source": "resources\\report_mapping.json",
+      "target": "src\\site_apps\\kogas\\resources\\report_mapping.json",
+      "sha256": "5ffa45a8a89cb3d0467031c780ea54db670887d200eb82a8ae8c24116144d5ab"
+    },
+    {
+      "source": "resources\\SITCO.png",
+      "target": "src\\site_apps\\kogas\\resources\\SITCO.png",
+      "sha256": "c0363e33ac526da7ab1cab4af8e6cd632dd10f6d67929e50d3cea806d17204ad"
+    },
+    {
+      "source": "resources\\Template_Central_DailyWorkReport.xlsx",
+      "target": "src\\site_apps\\kogas\\resources\\Template_Central_DailyWorkReport.xlsx",
+      "sha256": "91adb664e7d090424552259fdf4c3f2f682765aa1e97347cab5e80923e5a2413"
+    },
+    {
+      "source": "resources\\Template_DailyWorkReport.xls",
+      "target": "src\\site_apps\\kogas\\resources\\Template_DailyWorkReport.xls",
+      "sha256": "ba6fb27ecbf5fd019db75a62808ea75de4cc8b0a01b50c5801b95eeae6f07fda"
+    },
+    {
+      "source": "resources\\Template_DailyWorkReport.xlsx",
+      "target": "src\\site_apps\\kogas\\resources\\Template_DailyWorkReport.xlsx",
+      "sha256": "f04b54fe19b1f9b64730d6e743a432f0aeb7694b62670e6e39b84287faa2ffdf"
+    },
+    {
+      "source": "resources\\test_write_ai.txt",
+      "target": "src\\site_apps\\kogas\\resources\\test_write_ai.txt",
+      "sha256": "f68e37dc9cabf2ee8b94d6a5d28ad04be246ccc2e82911f8f1ac390dcf0ee364"
+    },
+    {
+      "source": "resources\\바닥글 PMI-1.png",
+      "target": "src\\site_apps\\kogas\\resources\\바닥글 PMI-1.png",
+      "sha256": "6f5382c7c007fd91babe1ba0cb70c1372043109fbcd39e7992026692d1ec3d53"
+    },
+    {
+      "source": "resources\\바닥글 PMI.png",
+      "target": "src\\site_apps\\kogas\\resources\\바닥글 PMI.png",
+      "sha256": "38e4b2015024b57935231155d36ebe09a982372c186c80df957cd9ca73c41db3"
+    },
+    {
+      "source": "resources\\바닥글 PMI갑.png",
+      "target": "src\\site_apps\\kogas\\resources\\바닥글 PMI갑.png",
+      "sha256": "3f2217c3a4f44a772409479d140b747d8bc6093bbd25939d271dea968b60205f"
+    },
+    {
+      "source": "resources\\서울검사.png",
+      "target": "src\\site_apps\\kogas\\resources\\서울검사.png",
+      "sha256": "b0cb449b341c8c90f489735d1970a6ea6608cb00e57f98e9cb20ee5bfea9318f"
+    },
+    {
+      "source": "src\\signs\\temp_1_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_1_유상훈.png",
+      "sha256": "35b52bcbc28e4b5fed8b27524800999479bef97f9cc9280a3fb37300feba1254"
+    },
+    {
+      "source": "src\\signs\\temp_1_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_1_주진철.png",
+      "sha256": "a4ad3068469485ab574d366c6a36aafb872df6d22926a4bd195357e37936d20e"
+    },
+    {
+      "source": "src\\signs\\temp_2_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_2_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_2_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_2_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_3_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_3_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_3_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_3_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_4_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_4_유상훈.png",
+      "sha256": "8b944b99b435e6a8e69b56a4719085c133ce5cf58217a2f5af28ca9797d6c2e7"
+    },
+    {
+      "source": "src\\signs\\temp_4_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_4_주진철.png",
+      "sha256": "ed88f3a7b8bb7832dc4eafa9b3f0d5d6b80b9b77f207c5b299248594b9520f94"
+    },
+    {
+      "source": "src\\signs\\temp_level1_custom.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level1_custom.png",
+      "sha256": "65210a8ee6b71098bd2c3cac89f79d1d346e09370e6a26ae4050bdd637067c3d"
+    },
+    {
+      "source": "src\\signs\\temp_level1_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level1_유상훈.png",
+      "sha256": "35b52bcbc28e4b5fed8b27524800999479bef97f9cc9280a3fb37300feba1254"
+    },
+    {
+      "source": "src\\signs\\temp_level1_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level1_주진철.png",
+      "sha256": "a4ad3068469485ab574d366c6a36aafb872df6d22926a4bd195357e37936d20e"
+    },
+    {
+      "source": "src\\signs\\temp_level2_custom.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level2_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level2_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level2_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_level2_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level2_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_level3_custom.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level3_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level3_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level3_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_level3_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level3_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_level4_custom.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level4_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level4_유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level4_유상훈.png",
+      "sha256": "8b944b99b435e6a8e69b56a4719085c133ce5cf58217a2f5af28ca9797d6c2e7"
+    },
+    {
+      "source": "src\\signs\\temp_level4_주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\temp_level4_주진철.png",
+      "sha256": "ed88f3a7b8bb7832dc4eafa9b3f0d5d6b80b9b77f207c5b299248594b9520f94"
+    },
+    {
+      "source": "src\\signs\\강신태.jpg",
+      "target": "src\\site_apps\\kogas\\src\\signs\\강신태.jpg",
+      "sha256": "85bc3ca05fe3200e659b7d4492efd5bce292dbe9831ba54de2a0a6ce5ef3dbdf"
+    },
+    {
+      "source": "src\\signs\\강신태.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\강신태.png",
+      "sha256": "1bb477f27b1e03f9028c3b85f1ab31b5e1351db2f1f0e17adaad30222b7795b0"
+    },
+    {
+      "source": "src\\signs\\강신태_padded.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\강신태_padded.png",
+      "sha256": "9b3b24e922ea44854e39efa89c852f7e003c35b16816b610423cbffa2898059f"
+    },
+    {
+      "source": "src\\signs\\곽재운.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\곽재운.png",
+      "sha256": "5a030444b3652015bceddbc19af3f11d54939f0e25ac5acf125c14e2a26ad1f1"
+    },
+    {
+      "source": "src\\signs\\권인경.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\권인경.png",
+      "sha256": "7daf2098d906d90cfbf6a27617416aa3d49e4e65d47f7485d4defe22ec676aab"
+    },
+    {
+      "source": "src\\signs\\박광복.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\박광복.png",
+      "sha256": "98cb5972a67a46a4330e941bb22767e07718ba5d4ccf94379d515461bc17a13a"
+    },
+    {
+      "source": "src\\signs\\박상태.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\박상태.png",
+      "sha256": "9ceea587bebb4f33f993855b06706eaccf97e768d38082acf596b0593957635e"
+    },
+    {
+      "source": "src\\signs\\우명광.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\우명광.png",
+      "sha256": "6f064f1055fa9e4869c7d23839b15f32a5227040a25481717e3aeb567571ab99"
+    },
+    {
+      "source": "src\\signs\\유상훈.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\유상훈.png",
+      "sha256": "8d3832b6779add35f47edc84986898b1f98481642b5347de7ae22c4f08fe40b7"
+    },
+    {
+      "source": "src\\signs\\유상훈_padded.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\유상훈_padded.png",
+      "sha256": "04a1dd767e06b1c251c82670b1beb89bccdb1de64c855bd6f12c60455568c418"
+    },
+    {
+      "source": "src\\signs\\유상훈_thick.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\유상훈_thick.png",
+      "sha256": "c983bd68e00ace0e560d8575ef56c04383dff3e46d86b6e88f8d9907bd8772d3"
+    },
+    {
+      "source": "src\\signs\\장승대_padded.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\장승대_padded.png",
+      "sha256": "419e0b37c1d5799c2b2a7a8f737fc3121f5d8b3c64ee8e4d33e6642fe5a087b3"
+    },
+    {
+      "source": "src\\signs\\주진철.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\주진철.png",
+      "sha256": "60c9dd25c165f404ea3c384c7a4fe9957b372fc31aaf91e5809391a92ebf0c3c"
+    },
+    {
+      "source": "src\\signs\\주진철_padded.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\주진철_padded.png",
+      "sha256": "2c81d47780117812147b7ca90e8630c54768e649b72322732ba7ed5566c5be8a"
+    },
+    {
+      "source": "src\\signs\\주진철_thick.png",
+      "target": "src\\site_apps\\kogas\\src\\signs\\주진철_thick.png",
+      "sha256": "34c086ff7b8a961c799c75d761c1ccf414127e730fc38e237d592e2a881d8c79"
+    },
+    {
+      "source": "src\\templates\\양식_기본.xlsx",
+      "target": "src\\site_apps\\kogas\\src\\templates\\양식_기본.xlsx",
+      "sha256": "7074f5c9e9f629a903450a0f12d6203db0de9b24eef9c4228ffe43ce5e165f71"
+    },
+    {
+      "source": "src\\templates\\양식_동탄.xlsx",
+      "target": "src\\site_apps\\kogas\\src\\templates\\양식_동탄.xlsx",
+      "sha256": "bc5deeda2919dbbb41fbb76f62ef054bd2a9d0be9d9f43a1ed18b1714ea8127c"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_기본양식.xlsx",
+      "target": "src\\site_apps\\kogas\\src\\templates\\인원_장비투입_기본양식.xlsx",
+      "sha256": "3475ff07c14294176b36c47ccf7b4f33a60aacd0a6ae840a52a5206bb925c8b4"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_기본양식_fixed.xlsx",
+      "target": "src\\site_apps\\kogas\\src\\templates\\인원_장비투입_기본양식_fixed.xlsx",
+      "sha256": "7074f5c9e9f629a903450a0f12d6203db0de9b24eef9c4228ffe43ce5e165f71"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_동탄양식.xlsx",
+      "target": "src\\site_apps\\kogas\\src\\templates\\인원_장비투입_동탄양식.xlsx",
+      "sha256": "bc5deeda2919dbbb41fbb76f62ef054bd2a9d0be9d9f43a1ed18b1714ea8127c"
+    },
+    {
+      "source": "src\\templates\\지역난방_RT_기본형.xlsx",
+      "target": "src\\site_apps\\kogas\\src\\templates\\지역난방_RT_기본형.xlsx",
+      "sha256": "f0867f0ba6ce54b67b3cac5fa860554c45747e69e56fc3ff0e966b0630675478"
+    },
+    {
+      "source": "data\\Kogas_Material_Inventory.xlsx",
+      "target": "src\\site_apps\\kogas\\data\\Kogas_Material_Inventory.xlsx",
+      "sha256": "8bbb7ddca11bab91b0f73bbddf4a813f4f125d32490369a3a41477a679a97340"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-07\\PAUT_e68d16afa99d4026b99160dd30d83dd3.jpg",
+      "target": "src\\site_apps\\kogas\\data\\process_photos\\2026-08-07\\PAUT_e68d16afa99d4026b99160dd30d83dd3.jpg",
+      "sha256": "435f6f392278d634e452a260bd36e24a86b47a24119b7cb52d8ac9468c8f95ff"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-07\\PAUT_f9a3d54e1a3c40bf905f81417d4aaf0f.jpg",
+      "target": "src\\site_apps\\kogas\\data\\process_photos\\2026-08-07\\PAUT_f9a3d54e1a3c40bf905f81417d4aaf0f.jpg",
+      "sha256": "e40780f6e3e47660caa30f0ce14bcc9fa6412a550d7b107e7bf4030cc96b2f5c"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-22\\PAUT_768bc36d3080404cac1b55af77660e8a.jpg",
+      "target": "src\\site_apps\\kogas\\data\\process_photos\\2026-08-22\\PAUT_768bc36d3080404cac1b55af77660e8a.jpg",
+      "sha256": "ea2eae59fda5dffda3995d52ec003b5529f63566a0350c26951b605c4068ff35"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-22\\PAUT_811d5fa342114d369ac46aec1a4a4908.jpg",
+      "target": "src\\site_apps\\kogas\\data\\process_photos\\2026-08-22\\PAUT_811d5fa342114d369ac46aec1a4a4908.jpg",
+      "sha256": "5ea3ed1f26716ba37cbb7a4f4b08e42bd728d2656e669c09d9be3ef9be004e8c"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_0ae6e888f90b4684bb16c38cfe5de3ef.jpg",
+      "target": "src\\site_apps\\kogas\\data\\process_photos\\2026-09-03\\PAUT_0ae6e888f90b4684bb16c38cfe5de3ef.jpg",
+      "sha256": "658b0b9baef84b0533aaa085567c3960a155cc8dae45ce95920ec0f660e3765d"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_a76cd65d33094e32b0c5e33770e26250.jpg",
+      "target": "src\\site_apps\\kogas\\data\\process_photos\\2026-09-03\\PAUT_a76cd65d33094e32b0c5e33770e26250.jpg",
+      "sha256": "3574f089826dbbde1c874bdb94eebb8ef5336e2f88797f60da7735ee550f40c1"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_f8db52d01740430e9b84bd76775090ea.jpg",
+      "target": "src\\site_apps\\kogas\\data\\process_photos\\2026-09-03\\PAUT_f8db52d01740430e9b84bd76775090ea.jpg",
+      "sha256": "941d2cca9f1a43f5b6cfd15d92eb0cf3961cb2062499ca71921b3ad227afc4f0"
+    },
+    {
+      "source": "src\\가스공사 가산~가평.py",
+      "target": "archive\\site_isolation_originals\\가스공사 가산~가평.py",
+      "sha256": "fe6c5f74659484d5c78247c8b4d4728e728d1ab20186d591a19f6752e0ff1baa"
+    },
+    {
+      "source": "src\\kogas_config.json",
+      "target": "src\\site_apps\\lotte\\src\\kogas_config.json",
+      "sha256": "ef6000903fcf6e1be92861397bc3bf2e26ac9952edb3fa44cb589742b42e0748"
+    },
+    {
+      "source": "src\\Lotte_Material_Manager_Config.json",
+      "target": "src\\site_apps\\lotte\\src\\Lotte_Material_Manager_Config.json",
+      "sha256": "5f2f0732723298291a2a62ae0ec0c882db2cdfc2562c712ab7123a96879a680a"
+    },
+    {
+      "source": "src\\config_district_heating_safety_training.json",
+      "target": "src\\site_apps\\lotte\\src\\config_district_heating_safety_training.json",
+      "sha256": "7b19af204c7841f5a8194c79e1e0200dd9a9aa11243f3f975a97fc216f013240"
+    },
+    {
+      "source": "src\\lotte_daily_work_history.json",
+      "target": "src\\site_apps\\lotte\\src\\lotte_daily_work_history.json",
+      "sha256": "7e138ae22d3f319b401c027bab8ad3858145bc10de6950fa0b6017d383235ae7"
+    },
+    {
+      "source": "src\\codebook_db.json",
+      "target": "src\\site_apps\\lotte\\src\\codebook_db.json",
+      "sha256": "4dc7c4c1a5291d9a25b30d51af60e252a240c4b8aeef7b2dde7258f985f44251"
+    },
+    {
+      "source": "src\\config.json",
+      "target": "src\\site_apps\\lotte\\src\\config.json",
+      "sha256": "4e0e787e41113b9f9f6b1b3dc4b15193374114bdf73ce7c3639a085c1656e9b5"
+    },
+    {
+      "source": "resources\\logo.png",
+      "target": "src\\site_apps\\lotte\\resources\\logo.png",
+      "sha256": "b40cf611844b9df9be3feb3879fb2055f076b957207833134a1e8ed29512b68c"
+    },
+    {
+      "source": "resources\\logo_dongtan.png",
+      "target": "src\\site_apps\\lotte\\resources\\logo_dongtan.png",
+      "sha256": "5aaaf702f74b40c4fd19821d3f6840252faa4c43c187ceddca45c056723ccdf0"
+    },
+    {
+      "source": "resources\\logo_joongang.png",
+      "target": "src\\site_apps\\lotte\\resources\\logo_joongang.png",
+      "sha256": "91cc41782314b69e4fadd2d6db79326d672c5c5976fcfee482d09fcea8ddbe36"
+    },
+    {
+      "source": "resources\\logo_동탄지사.png",
+      "target": "src\\site_apps\\lotte\\resources\\logo_동탄지사.png",
+      "sha256": "4136432695c96cee0757a6ed9082d2a28891ada1417272fcc63ec9dd2260ffbf"
+    },
+    {
+      "source": "resources\\logo_중앙지사.png",
+      "target": "src\\site_apps\\lotte\\resources\\logo_중앙지사.png",
+      "sha256": "c30a158b5c43d06d1c4849c5ad7f924473310e7bc3e9dc54f7cb424caaf25b90"
+    },
+    {
+      "source": "resources\\report_mapping.json",
+      "target": "src\\site_apps\\lotte\\resources\\report_mapping.json",
+      "sha256": "5ffa45a8a89cb3d0467031c780ea54db670887d200eb82a8ae8c24116144d5ab"
+    },
+    {
+      "source": "resources\\SITCO.png",
+      "target": "src\\site_apps\\lotte\\resources\\SITCO.png",
+      "sha256": "c0363e33ac526da7ab1cab4af8e6cd632dd10f6d67929e50d3cea806d17204ad"
+    },
+    {
+      "source": "resources\\Template_Central_DailyWorkReport.xlsx",
+      "target": "src\\site_apps\\lotte\\resources\\Template_Central_DailyWorkReport.xlsx",
+      "sha256": "91adb664e7d090424552259fdf4c3f2f682765aa1e97347cab5e80923e5a2413"
+    },
+    {
+      "source": "resources\\Template_DailyWorkReport.xls",
+      "target": "src\\site_apps\\lotte\\resources\\Template_DailyWorkReport.xls",
+      "sha256": "ba6fb27ecbf5fd019db75a62808ea75de4cc8b0a01b50c5801b95eeae6f07fda"
+    },
+    {
+      "source": "resources\\Template_DailyWorkReport.xlsx",
+      "target": "src\\site_apps\\lotte\\resources\\Template_DailyWorkReport.xlsx",
+      "sha256": "f04b54fe19b1f9b64730d6e743a432f0aeb7694b62670e6e39b84287faa2ffdf"
+    },
+    {
+      "source": "resources\\test_write_ai.txt",
+      "target": "src\\site_apps\\lotte\\resources\\test_write_ai.txt",
+      "sha256": "f68e37dc9cabf2ee8b94d6a5d28ad04be246ccc2e82911f8f1ac390dcf0ee364"
+    },
+    {
+      "source": "resources\\바닥글 PMI-1.png",
+      "target": "src\\site_apps\\lotte\\resources\\바닥글 PMI-1.png",
+      "sha256": "6f5382c7c007fd91babe1ba0cb70c1372043109fbcd39e7992026692d1ec3d53"
+    },
+    {
+      "source": "resources\\바닥글 PMI.png",
+      "target": "src\\site_apps\\lotte\\resources\\바닥글 PMI.png",
+      "sha256": "38e4b2015024b57935231155d36ebe09a982372c186c80df957cd9ca73c41db3"
+    },
+    {
+      "source": "resources\\바닥글 PMI갑.png",
+      "target": "src\\site_apps\\lotte\\resources\\바닥글 PMI갑.png",
+      "sha256": "3f2217c3a4f44a772409479d140b747d8bc6093bbd25939d271dea968b60205f"
+    },
+    {
+      "source": "resources\\서울검사.png",
+      "target": "src\\site_apps\\lotte\\resources\\서울검사.png",
+      "sha256": "b0cb449b341c8c90f489735d1970a6ea6608cb00e57f98e9cb20ee5bfea9318f"
+    },
+    {
+      "source": "src\\signs\\temp_1_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_1_유상훈.png",
+      "sha256": "35b52bcbc28e4b5fed8b27524800999479bef97f9cc9280a3fb37300feba1254"
+    },
+    {
+      "source": "src\\signs\\temp_1_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_1_주진철.png",
+      "sha256": "a4ad3068469485ab574d366c6a36aafb872df6d22926a4bd195357e37936d20e"
+    },
+    {
+      "source": "src\\signs\\temp_2_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_2_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_2_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_2_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_3_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_3_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_3_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_3_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_4_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_4_유상훈.png",
+      "sha256": "8b944b99b435e6a8e69b56a4719085c133ce5cf58217a2f5af28ca9797d6c2e7"
+    },
+    {
+      "source": "src\\signs\\temp_4_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_4_주진철.png",
+      "sha256": "ed88f3a7b8bb7832dc4eafa9b3f0d5d6b80b9b77f207c5b299248594b9520f94"
+    },
+    {
+      "source": "src\\signs\\temp_level1_custom.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level1_custom.png",
+      "sha256": "65210a8ee6b71098bd2c3cac89f79d1d346e09370e6a26ae4050bdd637067c3d"
+    },
+    {
+      "source": "src\\signs\\temp_level1_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level1_유상훈.png",
+      "sha256": "35b52bcbc28e4b5fed8b27524800999479bef97f9cc9280a3fb37300feba1254"
+    },
+    {
+      "source": "src\\signs\\temp_level1_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level1_주진철.png",
+      "sha256": "a4ad3068469485ab574d366c6a36aafb872df6d22926a4bd195357e37936d20e"
+    },
+    {
+      "source": "src\\signs\\temp_level2_custom.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level2_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level2_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level2_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_level2_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level2_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_level3_custom.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level3_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level3_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level3_유상훈.png",
+      "sha256": "2033f4454e14de64cefdb8b4e91bce74fbf1c1ab7ff205a574e740470b665168"
+    },
+    {
+      "source": "src\\signs\\temp_level3_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level3_주진철.png",
+      "sha256": "df655540220ae26826bb1280065281bd71711dbc74ee8f911219b9cedf42bfaf"
+    },
+    {
+      "source": "src\\signs\\temp_level4_custom.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level4_custom.png",
+      "sha256": "b01f5c5debdad9bca3ac14aef6691bfad459dadc27332ad2361c886a0d38e5e9"
+    },
+    {
+      "source": "src\\signs\\temp_level4_유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level4_유상훈.png",
+      "sha256": "8b944b99b435e6a8e69b56a4719085c133ce5cf58217a2f5af28ca9797d6c2e7"
+    },
+    {
+      "source": "src\\signs\\temp_level4_주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\temp_level4_주진철.png",
+      "sha256": "ed88f3a7b8bb7832dc4eafa9b3f0d5d6b80b9b77f207c5b299248594b9520f94"
+    },
+    {
+      "source": "src\\signs\\강신태.jpg",
+      "target": "src\\site_apps\\lotte\\src\\signs\\강신태.jpg",
+      "sha256": "85bc3ca05fe3200e659b7d4492efd5bce292dbe9831ba54de2a0a6ce5ef3dbdf"
+    },
+    {
+      "source": "src\\signs\\강신태.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\강신태.png",
+      "sha256": "1bb477f27b1e03f9028c3b85f1ab31b5e1351db2f1f0e17adaad30222b7795b0"
+    },
+    {
+      "source": "src\\signs\\강신태_padded.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\강신태_padded.png",
+      "sha256": "9b3b24e922ea44854e39efa89c852f7e003c35b16816b610423cbffa2898059f"
+    },
+    {
+      "source": "src\\signs\\곽재운.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\곽재운.png",
+      "sha256": "5a030444b3652015bceddbc19af3f11d54939f0e25ac5acf125c14e2a26ad1f1"
+    },
+    {
+      "source": "src\\signs\\권인경.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\권인경.png",
+      "sha256": "7daf2098d906d90cfbf6a27617416aa3d49e4e65d47f7485d4defe22ec676aab"
+    },
+    {
+      "source": "src\\signs\\박광복.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\박광복.png",
+      "sha256": "98cb5972a67a46a4330e941bb22767e07718ba5d4ccf94379d515461bc17a13a"
+    },
+    {
+      "source": "src\\signs\\박상태.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\박상태.png",
+      "sha256": "9ceea587bebb4f33f993855b06706eaccf97e768d38082acf596b0593957635e"
+    },
+    {
+      "source": "src\\signs\\우명광.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\우명광.png",
+      "sha256": "6f064f1055fa9e4869c7d23839b15f32a5227040a25481717e3aeb567571ab99"
+    },
+    {
+      "source": "src\\signs\\유상훈.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\유상훈.png",
+      "sha256": "8d3832b6779add35f47edc84986898b1f98481642b5347de7ae22c4f08fe40b7"
+    },
+    {
+      "source": "src\\signs\\유상훈_padded.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\유상훈_padded.png",
+      "sha256": "04a1dd767e06b1c251c82670b1beb89bccdb1de64c855bd6f12c60455568c418"
+    },
+    {
+      "source": "src\\signs\\유상훈_thick.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\유상훈_thick.png",
+      "sha256": "c983bd68e00ace0e560d8575ef56c04383dff3e46d86b6e88f8d9907bd8772d3"
+    },
+    {
+      "source": "src\\signs\\장승대_padded.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\장승대_padded.png",
+      "sha256": "419e0b37c1d5799c2b2a7a8f737fc3121f5d8b3c64ee8e4d33e6642fe5a087b3"
+    },
+    {
+      "source": "src\\signs\\주진철.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\주진철.png",
+      "sha256": "60c9dd25c165f404ea3c384c7a4fe9957b372fc31aaf91e5809391a92ebf0c3c"
+    },
+    {
+      "source": "src\\signs\\주진철_padded.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\주진철_padded.png",
+      "sha256": "2c81d47780117812147b7ca90e8630c54768e649b72322732ba7ed5566c5be8a"
+    },
+    {
+      "source": "src\\signs\\주진철_thick.png",
+      "target": "src\\site_apps\\lotte\\src\\signs\\주진철_thick.png",
+      "sha256": "34c086ff7b8a961c799c75d761c1ccf414127e730fc38e237d592e2a881d8c79"
+    },
+    {
+      "source": "src\\templates\\양식_기본.xlsx",
+      "target": "src\\site_apps\\lotte\\src\\templates\\양식_기본.xlsx",
+      "sha256": "7074f5c9e9f629a903450a0f12d6203db0de9b24eef9c4228ffe43ce5e165f71"
+    },
+    {
+      "source": "src\\templates\\양식_동탄.xlsx",
+      "target": "src\\site_apps\\lotte\\src\\templates\\양식_동탄.xlsx",
+      "sha256": "bc5deeda2919dbbb41fbb76f62ef054bd2a9d0be9d9f43a1ed18b1714ea8127c"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_기본양식.xlsx",
+      "target": "src\\site_apps\\lotte\\src\\templates\\인원_장비투입_기본양식.xlsx",
+      "sha256": "3475ff07c14294176b36c47ccf7b4f33a60aacd0a6ae840a52a5206bb925c8b4"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_기본양식_fixed.xlsx",
+      "target": "src\\site_apps\\lotte\\src\\templates\\인원_장비투입_기본양식_fixed.xlsx",
+      "sha256": "7074f5c9e9f629a903450a0f12d6203db0de9b24eef9c4228ffe43ce5e165f71"
+    },
+    {
+      "source": "src\\templates\\인원_장비투입_동탄양식.xlsx",
+      "target": "src\\site_apps\\lotte\\src\\templates\\인원_장비투입_동탄양식.xlsx",
+      "sha256": "bc5deeda2919dbbb41fbb76f62ef054bd2a9d0be9d9f43a1ed18b1714ea8127c"
+    },
+    {
+      "source": "src\\templates\\지역난방_RT_기본형.xlsx",
+      "target": "src\\site_apps\\lotte\\src\\templates\\지역난방_RT_기본형.xlsx",
+      "sha256": "f0867f0ba6ce54b67b3cac5fa860554c45747e69e56fc3ff0e966b0630675478"
+    },
+    {
+      "source": "data\\Lotte_Material_Inventory.xlsx",
+      "target": "src\\site_apps\\lotte\\data\\Lotte_Material_Inventory.xlsx",
+      "sha256": "3bf2dfbb9837aaf4be3b32c2a6c042bad4abacc9955f0262bc02a5bf4afbe85d"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-07\\PAUT_e68d16afa99d4026b99160dd30d83dd3.jpg",
+      "target": "src\\site_apps\\lotte\\data\\process_photos\\2026-08-07\\PAUT_e68d16afa99d4026b99160dd30d83dd3.jpg",
+      "sha256": "435f6f392278d634e452a260bd36e24a86b47a24119b7cb52d8ac9468c8f95ff"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-07\\PAUT_f9a3d54e1a3c40bf905f81417d4aaf0f.jpg",
+      "target": "src\\site_apps\\lotte\\data\\process_photos\\2026-08-07\\PAUT_f9a3d54e1a3c40bf905f81417d4aaf0f.jpg",
+      "sha256": "e40780f6e3e47660caa30f0ce14bcc9fa6412a550d7b107e7bf4030cc96b2f5c"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-22\\PAUT_768bc36d3080404cac1b55af77660e8a.jpg",
+      "target": "src\\site_apps\\lotte\\data\\process_photos\\2026-08-22\\PAUT_768bc36d3080404cac1b55af77660e8a.jpg",
+      "sha256": "ea2eae59fda5dffda3995d52ec003b5529f63566a0350c26951b605c4068ff35"
+    },
+    {
+      "source": "data\\process_photos\\2026-08-22\\PAUT_811d5fa342114d369ac46aec1a4a4908.jpg",
+      "target": "src\\site_apps\\lotte\\data\\process_photos\\2026-08-22\\PAUT_811d5fa342114d369ac46aec1a4a4908.jpg",
+      "sha256": "5ea3ed1f26716ba37cbb7a4f4b08e42bd728d2656e669c09d9be3ef9be004e8c"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_0ae6e888f90b4684bb16c38cfe5de3ef.jpg",
+      "target": "src\\site_apps\\lotte\\data\\process_photos\\2026-09-03\\PAUT_0ae6e888f90b4684bb16c38cfe5de3ef.jpg",
+      "sha256": "658b0b9baef84b0533aaa085567c3960a155cc8dae45ce95920ec0f660e3765d"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_a76cd65d33094e32b0c5e33770e26250.jpg",
+      "target": "src\\site_apps\\lotte\\data\\process_photos\\2026-09-03\\PAUT_a76cd65d33094e32b0c5e33770e26250.jpg",
+      "sha256": "3574f089826dbbde1c874bdb94eebb8ef5336e2f88797f60da7735ee550f40c1"
+    },
+    {
+      "source": "data\\process_photos\\2026-09-03\\PAUT_f8db52d01740430e9b84bd76775090ea.jpg",
+      "target": "src\\site_apps\\lotte\\data\\process_photos\\2026-09-03\\PAUT_f8db52d01740430e9b84bd76775090ea.jpg",
+      "sha256": "941d2cca9f1a43f5b6cfd15d92eb0cf3961cb2062499ca71921b3ad227afc4f0"
+    },
+    {
+      "source": "src\\롯데건설 바이오로직스.py",
+      "target": "archive\\site_isolation_originals\\롯데건설 바이오로직스.py",
+      "sha256": "e017c4e2d04b23d15e71fb1f3c725f2d6db26b75318287ecc26eaaa34f3fcf63"
+    },
+    {
+      "source": "src\\daily_work_history.json",
+      "target": "src\\site_apps\\kogas\\src\\daily_work_history.json",
+      "sha256": "110eaa5f7d95cc25b9988631c7e8d5e638ec927f12604fad0840eda55a0aa705"
+    },
+    {
+      "source": "src\\daily_work_history.json",
+      "target": "src\\site_apps\\lotte\\src\\daily_work_history.json",
+      "sha256": "110eaa5f7d95cc25b9988631c7e8d5e638ec927f12604fad0840eda55a0aa705"
+    }
+  ],
+  "launchers": {
+    "한국지역난방 중앙지사.py": "bdb9f547afb4c7906070a5f68b4268eeee280e7421bca712fe38f94edfaf751a",
+    "가스공사 가산~가평.py": "fe6c5f74659484d5c78247c8b4d4728e728d1ab20186d591a19f6752e0ff1baa",
+    "롯데건설 바이오로직스.py": "e017c4e2d04b23d15e71fb1f3c725f2d6db26b75318287ecc26eaaa34f3fcf63"
+  }
+}
