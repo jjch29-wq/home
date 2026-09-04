@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDockWidget, QFileDialog, QFormLayout, QInputDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QPushButton, QToolBar, QVBoxLayout,
@@ -35,7 +35,9 @@ class DrawingCanvas(QWidget):
         return QPointF(p.x * self.scale + self.offset.x(), p.y * self.scale + self.offset.y())
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MiddleButton:
+        if event.button() == Qt.MiddleButton or (
+            event.button() == Qt.LeftButton and event.modifiers() & Qt.ShiftModifier
+        ):
             self.pan_anchor = (event.position(), QPointF(self.offset))
             self.setCursor(Qt.ClosedHandCursor)
             return
@@ -67,7 +69,7 @@ class DrawingCanvas(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MiddleButton:
+        if self.pan_anchor and event.button() in (Qt.MiddleButton, Qt.LeftButton):
             self.pan_anchor = None
             self.setCursor(Qt.CrossCursor)
 
@@ -80,7 +82,7 @@ class DrawingCanvas(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.cursor_world = None; self.update()
-        elif event.matches(event.StandardKey.Undo):
+        elif event.matches(QKeySequence.StandardKey.Undo):
             self.undo()
         else:
             super().keyPressEvent(event)
@@ -121,6 +123,18 @@ class DrawingCanvas(QWidget):
             pen=QPen(QColor("#ffbf69"),2,Qt.DashLine); p.setPen(pen); p.drawLine(self.to_screen(last),self.to_screen(Point(*q)))
 
 
+class WindowDragToolBar(QToolBar):
+    """Allow moving the main window from an empty part of the toolbar."""
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.actionAt(event.position().toPoint()) is None:
+            window_handle = self.window().windowHandle()
+            if window_handle is not None and window_handle.startSystemMove():
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+
 class MainWindow(QMainWindow):
     COMPONENTS = ("NONE","ELBOW_90","ELBOW_45","TEE","GATE_VALVE","BALL_VALVE","CHECK_VALVE","FLANGE","REDUCER","WELD")
 
@@ -135,7 +149,7 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(a)
 
     def _toolbar(self):
-        self.toolbar=QToolBar("도구"); self.toolbar.setMovable(False); self.addToolBar(self.toolbar)
+        self.toolbar=WindowDragToolBar("도구"); self.toolbar.setMovable(False); self.addToolBar(self.toolbar)
         for args in [("새 도면",self.new,"Ctrl+N"),("열기",self.open,"Ctrl+O"),("저장",self.save,"Ctrl+S"),("DXF 출력",self.dxf,None),("PDF 출력",self.pdf,None),("실행 취소",self.canvas.undo,"Ctrl+Z"),("전체 맞춤",self.canvas.fit,"F")]: self.action(*args)
 
     def _properties(self):
@@ -143,7 +157,7 @@ class MainWindow(QMainWindow):
         self.line=QLineEdit("LINE-001"); self.size_edit=QLineEdit('4"'); self.spec=QLineEdit(); self.comp=QComboBox(); self.comp.addItems(self.COMPONENTS)
         form.addRow("라인 번호",self.line); form.addRow("배관 구경",self.size_edit); form.addRow("SPEC",self.spec); form.addRow("끝점 부속",self.comp); lay.addLayout(form)
         apply=QPushButton("끝점에 부속 적용"); apply.clicked.connect(self.apply_component); lay.addWidget(apply)
-        help=QLabel("<b>작업 방법</b><br><br>1. 시작점을 클릭합니다.<br>2. 다음 방향을 클릭합니다.<br>3. 실제 길이(mm)를 입력합니다.<br>4. 필요할 때 부속을 적용합니다.<br><br>우클릭/ESC: 입력 종료<br>휠: 확대·축소<br>가운데 드래그: 화면 이동"); help.setWordWrap(True); help.setAlignment(Qt.AlignTop); lay.addWidget(help,1)
+        help=QLabel("<b>작업 방법</b><br><br>1. 시작점을 클릭합니다.<br>2. 다음 방향을 클릭합니다.<br>3. 실제 길이(mm)를 입력합니다.<br>4. 필요할 때 부속을 적용합니다.<br><br>우클릭/ESC: 입력 종료<br>휠: 확대·축소<br>Shift+왼쪽 드래그 또는 가운데 드래그: 도면 이동<br>상단 도구 모음의 빈 공간 드래그: 창 이동"); help.setWordWrap(True); help.setAlignment(Qt.AlignTop); lay.addWidget(help,1)
         dock.setWidget(box); self.addDockWidget(Qt.RightDockWidgetArea,dock)
 
     def sync(self):
