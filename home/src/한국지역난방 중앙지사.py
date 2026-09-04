@@ -5822,15 +5822,30 @@ class MaterialManager:
             return
             
         try:
-            # Filter for today's entries
+            # 오늘 작업일자 기록을 우선 표시하고, 없으면 전체 최근 기록을 표시한다.
             today = datetime.datetime.now().date()
-            recent_df = self.daily_usage_df[pd.to_datetime(self.daily_usage_df['Date']).dt.date == today]
+            work_dates = pd.to_datetime(self.daily_usage_df['Date'], errors='coerce')
+            recent_df = self.daily_usage_df[work_dates.dt.date == today].copy()
             
-            # Or get the last 15 entries
+            # 선택/수정에서 원본 행 번호를 사용하므로 DataFrame 인덱스는 유지한다.
             if recent_df.empty:
-                recent_df = self.daily_usage_df.tail(15)
+                recent_df = self.daily_usage_df.copy()
+
+            recent_df['_recent_date'] = pd.to_datetime(recent_df['Date'], errors='coerce')
+            if 'EntryTime' in recent_df.columns:
+                recent_df['_recent_entry_time'] = pd.to_datetime(
+                    recent_df['EntryTime'], errors='coerce'
+                )
+                recent_df = recent_df.sort_values(
+                    by=['_recent_date', '_recent_entry_time'],
+                    ascending=[False, False],
+                    na_position='last',
+                )
             else:
-                recent_df = recent_df.tail(30)
+                recent_df = recent_df.sort_values(
+                    by='_recent_date', ascending=False, na_position='last'
+                )
+            recent_df = recent_df.head(30)
                 
             for idx, row in recent_df.iterrows():
                 # Extract first worker

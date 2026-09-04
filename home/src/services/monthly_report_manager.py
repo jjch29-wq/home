@@ -15,10 +15,41 @@ import re
 
 class MonthlyReportManager:
     WELDER_NAMES = {
+        'W-2023-A-08': '김홍환',
         'W-2023-A-10': '이신희',
         'W-2023-A-12': '황성철',
         'W-2023-A-13': '선성문',
+        'W-2023-A-19': '서병오',
         'W-2023-A-25': '이종근',
+        'W-2023-A-27': '박은식',
+        'W-2023-A-28': '하선종',
+        'W-2023-A-34': '강대용',
+        'W-2024-A-01': '허동윤',
+        'W-2024-A-03': '김진철',
+        'W-2024-A-04': '주정용',
+        'W-2024-A-05': '이일재',
+        'W-2024-A-07': '김성열',
+        'W-2024-A-08': '김병규',
+        'W-2024-A-09': '김영기',
+        'W-2024-A-10': '박상길',
+        'W-2024-A-12': '송영섭',
+        'W-2024-A-15': '이정규',
+        'W-2024-A-17': '이두열',
+        'W-2024-A-22': '김양준',
+        'W-2024-A-28': '임황제',
+        'W-2024-A-29': '이정철',
+        'W-2024-A-30': '임병철',
+        'W-2024-A-31': '배준봉',
+        'W-2024-A-32': '이지운',
+        'W-2024-A-33': '김태웅',
+        'W-2024-A-36': '노정래',
+        'W-2024-A-44': '정경윤',
+        'W-2024-A-46': '신상원',
+        'W-2024-A-47': '황수인',
+        'W-2026-A-02': '이봉준',
+        'W-2026-A-07': '황규창',
+        'W-2026-A-09': '김동필',
+        'W-2026-A-10': '임병준',
     }
 
     def __init__(self, template_path):
@@ -408,6 +439,64 @@ class MonthlyReportManager:
             rt_header_row,
         )
 
+    def _insert_status_continuation(self, ws, insert_row, document_header_row,
+                                    title_row, header_row):
+        """14페이지 용접사 현황의 공통 헤더와 전체 표 헤더를 반복한다."""
+        import copy
+
+        max_col = ws.max_column
+        source_rows = list(range(title_row, header_row + 1))
+        snapshots = []
+        for source_row in source_rows:
+            snapshots.append([
+                (cell.value, copy.copy(cell._style), cell.number_format)
+                for cell in ws[source_row]
+            ])
+        heights = [ws.row_dimensions[row].height for row in source_rows]
+        merges = [
+            (merged.min_row - title_row, merged.min_col,
+             merged.max_row - title_row, merged.max_col)
+            for merged in list(ws.merged_cells.ranges)
+            if merged.min_row >= title_row and merged.max_row <= header_row
+        ]
+
+        self._insert_continuation_header(
+            ws, insert_row, document_header_row, row_count=7
+        )
+        block_start = insert_row + 8  # 공통 헤더 아래 한 행은 공백
+        block_rows = len(source_rows)
+        self._insert_rows_safely(ws, insert_row + 7, block_rows + 1)
+
+        # 두 번째 삽입 아래의 그림도 행과 함께 이동시킨다.
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from') or anchor._from.row + 1 < insert_row + 7:
+                continue
+            anchor._from.row += block_rows + 1
+            if hasattr(anchor, 'to'):
+                anchor.to.row += block_rows + 1
+
+        for offset, snapshot in enumerate(snapshots):
+            target_row = block_start + offset
+            ws.row_dimensions[target_row].height = heights[offset]
+            for col, (value, style, number_format) in enumerate(snapshot, 1):
+                cell = ws.cell(target_row, col)
+                cell.value = value
+                cell._style = copy.copy(style)
+                cell.number_format = number_format
+        for min_ro, min_col, max_ro, max_col_idx in merges:
+            ws.merge_cells(
+                start_row=block_start + min_ro, start_column=min_col,
+                end_row=block_start + max_ro, end_column=max_col_idx,
+            )
+
+        for col in range(1, max_col + 1):
+            cell = ws.cell(block_start, col)
+            if str(cell.value or '').strip():
+                cell.value = f"{cell.value} (계속)"
+                break
+        return 8 + block_rows
+
     def _first_print_overflow_row(self, ws, start_row, row_count):
         """Return the first data row that falls onto the next printed page."""
         break_ids = sorted(int(brk.id) for brk in ws.row_breaks.brk)
@@ -477,6 +566,361 @@ class MonthlyReportManager:
                 f"  쪽  번 호 :      {page_number}     of     {total_pages}"
             )
 
+    def _align_report_breaks_to_repeated_headers(self, ws):
+        """Start every copied report header on a real printed page.
+
+        Dynamic detail rows can push a template page downward.  Copying the
+        continuation header alone is not sufficient: unless a manual break is
+        also restored immediately before *every* repeated document header,
+        Excel may leave the following template header in the middle of the
+        same printed page and create a header-only overflow page.
+
+        The exact title-row offset varies between template pages.  Locate the
+        contract/report-title row immediately above each major section and put
+        the break directly above that row.  This also avoids mistaking the
+        table-of-contents entries for real page headers.
+        """
+        from openpyxl.worksheet.pagebreak import Break
+
+        section_titles = (
+            '3.0비파괴검사현황',
+            '4.0용접결함,불량률현황',
+            '5.0안전관리활동및교육현황',
+            '6.0방사선안전관리통합정보망보고자료',
+            '6.0사진대지',
+            '7.0사진대지',
+        )
+        required_breaks = set()
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            compact = ''.join(row_text.split())
+            if not any(title in compact for title in section_titles):
+                continue
+
+            header_start = None
+            for candidate in range(max(1, row - 6), row + 1):
+                candidate_text = ''.join(
+                    str(ws.cell(row=candidate, column=col).value or '')
+                    for col in range(1, min(ws.max_column, 23) + 1)
+                )
+                candidate_compact = ''.join(candidate_text.split())
+                if '월간용역진도보고서' in candidate_compact:
+                    header_start = candidate
+                    break
+            if header_start and header_start > 1:
+                required_breaks.add(header_start - 1)
+
+        existing = {int(brk.id): brk for brk in ws.row_breaks.brk}
+        for break_id in required_breaks:
+            existing.setdefault(break_id, Break(id=break_id))
+        ws.row_breaks.brk = [existing[key] for key in sorted(existing)]
+
+    def _pad_ndt_continuation_pages(self, ws):
+        """Give each generated 3.0 continuation a complete page-height block.
+
+        A continuation used to consist only of its repeated header, remaining
+        records, and TOTAL row.  The next template page therefore started
+        immediately after TOTAL (for example at row 492), leaving a visibly
+        short page.  Use the preceding 3.0 page span as the page-height
+        blueprint and insert cleared spacer rows after TOTAL so the following
+        document starts only after the full continuation page.
+        """
+        header_starts = []
+        for row in range(1, ws.max_row + 1):
+            title = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if '3.0비파괴검사현황' not in ''.join(title.split()):
+                continue
+            for candidate in range(max(1, row - 6), row + 1):
+                candidate_text = ''.join(
+                    str(ws.cell(row=candidate, column=col).value or '')
+                    for col in range(1, min(ws.max_column, 23) + 1)
+                )
+                if '월간용역진도보고서' in ''.join(candidate_text.split()):
+                    header_starts.append(candidate)
+                    break
+
+        if len(header_starts) < 3:
+            return
+
+        index = 1
+        while index < len(header_starts) - 1:
+            page_start = header_starts[index]
+            next_start = header_starts[index + 1]
+            # The continuation caption is finalized later in some generation
+            # paths, so use the structural page span rather than label text.
+            # A shorter span between two repeated 3.0 headers is precisely the
+            # partial-page condition this method must eliminate.
+            blueprint_rows = page_start - header_starts[index - 1]
+            current_rows = next_start - page_start
+            padding_rows = blueprint_rows - current_rows
+            if padding_rows <= 0:
+                index += 1
+                continue
+
+            self._insert_rows_safely(ws, next_start, padding_rows)
+
+            # insert_rows() does not move drawings; keep every later logo and
+            # photo aligned with the report section it belongs to.
+            for image in list(ws._images):
+                anchor = getattr(image, 'anchor', None)
+                if not hasattr(anchor, '_from') or anchor._from.row + 1 < next_start:
+                    continue
+                anchor._from.row += padding_rows
+                if hasattr(anchor, 'to'):
+                    anchor.to.row += padding_rows
+
+            spacer_height = (
+                ws.row_dimensions[next_start - 1].height
+                or ws.sheet_format.defaultRowHeight
+                or 15
+            )
+            for spacer_row in range(next_start, next_start + padding_rows):
+                ws.row_dimensions[spacer_row].height = spacer_height
+
+            for key, marker_row in self.table_markers.items():
+                if marker_row >= next_start:
+                    self.table_markers[key] += padding_rows
+            for later_index in range(index + 1, len(header_starts)):
+                header_starts[later_index] += padding_rows
+            index += 1
+
+    def _normalize_ndt_header_logos(self, ws):
+        """Keep one logo in each 3.0 header and none inside its data tables."""
+        import copy
+
+        header_starts = []
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if '3.0비파괴검사현황' not in ''.join(row_text.split()):
+                continue
+            for candidate in range(max(1, row - 6), row + 1):
+                candidate_text = ''.join(
+                    str(ws.cell(row=candidate, column=col).value or '')
+                    for col in range(1, min(ws.max_column, 23) + 1)
+                )
+                if '월간용역진도보고서' in ''.join(candidate_text.split()):
+                    header_starts.append(candidate)
+                    break
+        if not header_starts:
+            return
+
+        logo_images = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            image_row = anchor._from.row + 1
+            image_col = anchor._from.col + 1
+            if image_col <= 5 and float(image.width) < 300 and float(image.height) < 100:
+                logo_images.append(image)
+
+        reference = next(
+            (
+                image for image in logo_images
+                if header_starts[0] <= image.anchor._from.row + 1 <= header_starts[0] + 6
+            ),
+            None,
+        )
+        if reference is None:
+            return
+        reference_anchor = copy.deepcopy(reference.anchor)
+        reference_start = header_starts[0]
+
+        keep_ids = set()
+        for header_start in header_starts:
+            candidates = [
+                image for image in logo_images
+                if header_start <= image.anchor._from.row + 1 <= header_start + 6
+            ]
+            if not candidates:
+                continue
+            keeper = candidates[0]
+            keeper.anchor = copy.deepcopy(reference_anchor)
+            row_shift = header_start - reference_start
+            keeper.anchor._from.row += row_shift
+            if hasattr(keeper.anchor, 'to'):
+                keeper.anchor.to.row += row_shift
+            keeper.width = reference.width
+            keeper.height = reference.height
+            keep_ids.add(id(keeper))
+
+        continuation_bodies = []
+        for index in range(len(header_starts) - 1):
+            page_start = header_starts[index]
+            page_end = header_starts[index + 1]
+            page_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for row in range(page_start, page_end)
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if '(계속)' in page_text:
+                continuation_bodies.append((page_start + 7, page_end))
+
+        cleaned_images = []
+        for image in list(ws._images):
+            if image not in logo_images:
+                cleaned_images.append(image)
+                continue
+            image_row = image.anchor._from.row + 1
+            inside_ndt_header = any(
+                header_start <= image_row <= header_start + 6
+                for header_start in header_starts
+            )
+            inside_continuation_body = any(
+                body_start <= image_row < body_end
+                for body_start, body_end in continuation_bodies
+            )
+            if id(image) in keep_ids or (
+                not inside_ndt_header and not inside_continuation_body
+            ):
+                cleaned_images.append(image)
+        ws._images = cleaned_images
+
+    def _normalize_all_report_header_logos(self, ws):
+        """Place one identically anchored logo in every repeated report header."""
+        import copy
+        from io import BytesIO
+        from openpyxl.drawing.image import Image as XLImage
+
+        header_starts = []
+        for row in range(300, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if '월간용역진도보고서' in ''.join(row_text.split()):
+                header_starts.append(row)
+        if not header_starts:
+            return
+
+        logo_images = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            if (
+                anchor._from.col + 1 <= 5
+                and float(image.width) < 300
+                and float(image.height) < 100
+            ):
+                logo_images.append(image)
+
+        reference_start = next(
+            (
+                start for start in header_starts
+                if any(
+                    start <= image.anchor._from.row + 1 <= start + 6
+                    for image in logo_images
+                )
+            ),
+            None,
+        )
+        if reference_start is None:
+            return
+        reference = next(
+            image for image in logo_images
+            if reference_start <= image.anchor._from.row + 1 <= reference_start + 6
+        )
+        reference_anchor = copy.deepcopy(reference.anchor)
+
+        def clone_logo(source_image):
+            buffer = BytesIO()
+            image_ref = source_image.ref
+            if hasattr(image_ref, 'copy') and hasattr(image_ref, 'save'):
+                image_format = getattr(image_ref, 'format', None) or 'PNG'
+                image_ref.copy().save(buffer, format=image_format)
+            elif isinstance(image_ref, (str, os.PathLike)):
+                with open(image_ref, 'rb') as image_file:
+                    buffer.write(image_file.read())
+            else:
+                old_position = image_ref.tell() if hasattr(image_ref, 'tell') else None
+                if hasattr(image_ref, 'seek'):
+                    image_ref.seek(0)
+                buffer.write(image_ref.read())
+                if old_position is not None and hasattr(image_ref, 'seek'):
+                    image_ref.seek(old_position)
+            buffer.seek(0)
+            cloned = XLImage(buffer)
+            cloned._report_header_stream = buffer
+            cloned.width = source_image.width
+            cloned.height = source_image.height
+            return cloned
+
+        keep_ids = set()
+        for header_start in header_starts:
+            candidates = [
+                image for image in logo_images
+                if header_start <= image.anchor._from.row + 1 <= header_start + 6
+            ]
+            if candidates:
+                keeper = candidates[0]
+            else:
+                keeper = clone_logo(reference)
+                ws.add_image(keeper)
+                logo_images.append(keeper)
+            keeper.anchor = copy.deepcopy(reference_anchor)
+            row_shift = header_start - reference_start
+            keeper.anchor._from.row += row_shift
+            if hasattr(keeper.anchor, 'to'):
+                keeper.anchor.to.row += row_shift
+            keeper.width = reference.width
+            keeper.height = reference.height
+            keep_ids.add(id(keeper))
+
+        # After dynamic row insertion, old header logos can remain behind in
+        # tables or page bottoms.  Every report page now has a normalized
+        # keeper, so any other logo-sized drawing in the report body is stale.
+        ws._images = [
+            image for image in ws._images
+            if not (
+                image in logo_images
+                and image.anchor._from.row + 1 >= 300
+                and id(image) not in keep_ids
+            )
+        ]
+
+    def _collapse_blank_rows_before_report_headers(self, ws):
+        """Prevent a blank row becoming a one-row printed page.
+
+        Excel can insert an automatic page break immediately before the last
+        blank spacer row, followed by the template's manual break immediately
+        before the next document header.  The spacer then prints as a page by
+        itself.  A zero-height blank spacer preserves the header boundary while
+        eliminating that phantom page.
+        """
+        header_starts = []
+        for row in range(300, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if '월간용역진도보고서' in ''.join(row_text.split()):
+                header_starts.append(row)
+
+        image_rows = {
+            image.anchor._from.row + 1
+            for image in ws._images
+            if hasattr(getattr(image, 'anchor', None), '_from')
+        }
+        for header_start in header_starts[1:]:
+            spacer_row = header_start - 1
+            is_blank = all(
+                not str(ws.cell(row=spacer_row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if is_blank and spacer_row not in image_rows:
+                ws.row_dimensions[spacer_row].height = 0
+                ws.row_dimensions[spacer_row].hidden = True
+
     def _keep_iuc_euc_headers_single_line(self, ws):
         """Keep the narrow IUC/EUC column headers on a single line."""
         import copy
@@ -492,6 +936,13 @@ class MonthlyReportManager:
                 alignment.wrap_text = False
                 alignment.shrink_to_fit = True
                 cell.alignment = alignment
+
+    def _clear_broken_reference_placeholders(self, ws):
+        """Remove stale template formulas whose referenced sheet was removed."""
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.strip().upper() == '=#REF!':
+                    cell.value = None
 
     def _fill_repeated_header_document_numbers(self, ws, doc_num):
         """Restore the document number in every repeated report header."""
@@ -868,8 +1319,8 @@ class MonthlyReportManager:
                     source_ws.cell(row, 20).value or '',
                     source_ws.cell(row, 25).value or '',
                     source_ws.cell(row, 26).value or '',
-                ]
-                records.append(record)
+                    ]
+                    records.append(record)
             finally:
                 source_wb.close()
         elif source_path and not os.path.exists(source_path):
@@ -883,19 +1334,59 @@ class MonthlyReportManager:
             no_data_cell.alignment = Alignment(horizontal='center', vertical='center')
             return
 
-        if len(records) > data_end - data_start + 1:
-            raise ValueError(
-                f'발주자 보고자료가 {len(records)}행으로 16페이지 입력 가능 '
-                f'행수({data_end - data_start + 1}행)를 초과했습니다.'
-            )
-
         body_font = Font(name='맑은 고딕', size=6)
         body_alignment = Alignment(
             horizontal='center', vertical='center',
             wrap_text=True, shrink_to_fit=True,
         )
-        for row_offset, record in enumerate(records):
-            target_row = data_start + row_offset
+
+        # 첫 페이지의 43개 행을 모두 사용한 뒤에는 16페이지 형식의
+        # 공통 문서 헤더와 6.0 표 헤더를 반복한 계속 페이지를 만든다.
+        import copy
+        from openpyxl.worksheet.pagebreak import Break
+
+        rows_per_page = data_end - data_start + 1
+        target_rows = list(range(data_start, data_start + min(len(records), rows_per_page)))
+        remaining = len(records) - len(target_rows)
+        insert_row = data_end + 1
+        previous_breaks = sorted(
+            int(brk.id) for brk in ws.row_breaks.brk if int(brk.id) < title_row
+        )
+        document_header_row = previous_breaks[-1] + 1 if previous_breaks else 1
+        table_header_end = data_start - 1
+
+        reference_styles = [
+            copy.copy(ws.cell(data_start, col)._style)
+            for col in range(1, ws.max_column + 1)
+        ]
+        reference_height = ws.row_dimensions[data_start].height
+
+        while remaining > 0:
+            inserted_header_rows = self._insert_status_continuation(
+                ws, insert_row, document_header_row, title_row, table_header_end
+            )
+            body_start = insert_row + inserted_header_rows
+            self._insert_rows_safely(ws, body_start, rows_per_page)
+            for image in list(ws._images):
+                anchor = getattr(image, 'anchor', None)
+                if not hasattr(anchor, '_from') or anchor._from.row + 1 < body_start:
+                    continue
+                anchor._from.row += rows_per_page
+                if hasattr(anchor, 'to'):
+                    anchor.to.row += rows_per_page
+            for row in range(body_start, body_start + rows_per_page):
+                ws.row_dimensions[row].height = reference_height
+                for col, style in enumerate(reference_styles, 1):
+                    ws.cell(row, col)._style = copy.copy(style)
+            if not any(int(brk.id) == insert_row - 1 for brk in ws.row_breaks.brk):
+                ws.row_breaks.append(Break(id=insert_row - 1))
+
+            rows_this_page = min(remaining, rows_per_page)
+            target_rows.extend(range(body_start, body_start + rows_this_page))
+            remaining -= rows_this_page
+            insert_row = body_start + rows_per_page
+
+        for target_row, record in zip(target_rows, records):
             for column, value in enumerate(record, start=2):
                 cell = ws.cell(row=target_row, column=column)
                 cell.value = value
@@ -1202,6 +1693,35 @@ class MonthlyReportManager:
             total_rate_alignment.shrink_to_fit = True
             total_rate_cell.alignment = total_rate_alignment
 
+        # 14페이지 표가 인쇄 가능 영역을 넘으면 공통 문서 헤더와 현재
+        # 용접사 현황 표 헤더를 반복하고 남은 행을 새 페이지에서 계속한다.
+        remaining_start = data_start
+        remaining_count = len(welders) + 1  # TOTAL 행 포함
+        previous_breaks = sorted(
+            int(brk.id) for brk in ws.row_breaks.brk
+            if int(brk.id) < title_row
+        )
+        document_header_row = previous_breaks[-1] + 1 if previous_breaks else 1
+        while remaining_count > 0:
+            continuation_row = self._first_print_overflow_row(
+                ws, remaining_start, remaining_count
+            )
+            if continuation_row is None:
+                break
+            rows_on_page = continuation_row - remaining_start
+            if rows_on_page <= 0:
+                break
+            inserted_rows = self._insert_status_continuation(
+                ws, continuation_row, document_header_row, title_row, header_row
+            )
+            from openpyxl.worksheet.pagebreak import Break
+            if not any(
+                int(brk.id) == continuation_row - 1 for brk in ws.row_breaks.brk
+            ):
+                ws.row_breaks.append(Break(id=continuation_row - 1))
+            remaining_count -= rows_on_page
+            remaining_start = continuation_row + inserted_rows
+
     def _populate_process_photo_pages(self, ws, process_photos, doc_num='01'):
         """Place registered process photos into the template's 7.0 pages."""
         from openpyxl.drawing.image import Image as XLImage
@@ -1346,7 +1866,7 @@ class MonthlyReportManager:
             'RT': '방사선투과검사',
             'PT': '침투탐상검사',
         }
-        # Add as many continuation pages as needed (four photos per page).
+        # Add as many continuation pages as needed (six photos per page).
         for process, layout in sorted(
             page_layouts.items(), key=lambda item: item[1]['title_row'], reverse=True
         ):
@@ -1447,16 +1967,27 @@ class MonthlyReportManager:
                     ws.merge_cells(start_row=mr[0], start_column=mr[1], end_row=mr[2], end_column=mr[3])
 
 
-                # Remove existing dummy images in this page's photo slots
-                page_start_row = layout['image_row']
-                page_end_row = layout['image_row'] + 63
+                # Remove legacy/template photos from the complete photo page,
+                # not only from the new photo slots.  Some old templates store
+                # an entire photo ledger as one large image anchored above the
+                # first slot, which otherwise survives and appears mixed with
+                # the newly registered cumulative photos.
+                page_start_row = layout['title_row'] - 9
+                page_end_row = page_start_row + 74
                 kept_images = []
                 for existing_image in list(ws._images):
                     anchor = getattr(existing_image, 'anchor', None)
                     if hasattr(anchor, '_from'):
                         r = anchor._from.row + 1
-                        if page_start_row <= r <= page_end_row:
-                            # Discard the template's dummy photo.
+                        c = anchor._from.col + 1
+                        is_header_logo = (
+                            c <= 5
+                            and float(existing_image.width) < 300
+                            and float(existing_image.height) < 100
+                        )
+                        if page_start_row <= r <= page_end_row and not is_header_logo:
+                            # Discard template/legacy photo drawings while
+                            # preserving the common document-header logo.
                             continue
                     kept_images.append(existing_image)
                 ws._images = kept_images
@@ -1684,6 +2215,20 @@ class MonthlyReportManager:
                 branch_border = copy.copy(branch_edge.border)
                 branch_border.top = no_side
                 branch_edge.border = branch_border
+
+            # For merged ranges, Excel/openpyxl rebuilds the far-edge border
+            # from the top-left cell when the workbook is reopened.  Clear
+            # those source borders too, otherwise the divider reappears even
+            # though every cell along the shared edge was cleared above.
+            logo_block = ws.cell(header_start, 2)
+            logo_block_border = copy.copy(logo_block.border)
+            logo_block_border.bottom = no_side
+            logo_block.border = logo_block_border
+
+            branch_block = ws.cell(header_start + 4, 2)
+            branch_block_border = copy.copy(branch_block.border)
+            branch_block_border.top = no_side
+            branch_block.border = branch_block_border
 
             for col in range(2, 24):
                 top_cell = ws.cell(header_start, col)
@@ -2179,7 +2724,9 @@ class MonthlyReportManager:
         # 날짜별 금일작업 누적
         for d in target_dates:
             day_data = history_data[d]
-            if str(d)[:7] == target_ym:
+            # 월간 보고서는 해당 월 사진만 사용한다. 전체누적 보고서는
+            # 누적 시작일부터 종료 월까지 등록된 공정사진을 모두 포함한다.
+            if report_scope == "cumulative" or str(d)[:7] == target_ym:
                 process_photos.extend(day_data.get('process_photos', []))
             for key, val in day_data.get('qty_data', {}).items():
                 if key not in qty_summary:
@@ -2879,7 +3426,9 @@ class MonthlyReportManager:
             qty_summary[sub_key]['전월'] = str(total_prev)
             qty_summary[sub_key]['총누계'] = str(total_accum)
             qty_summary[sub_key]['불량'] = str(total_defect)
-            if total_expected > 0:
+            # 실적이 전혀 없는 공정은 0.0%로 표시하지 않는다. 0.0은
+            # 실제 실적값처럼 보일 수 있으므로 템플릿의 빈칸을 유지한다.
+            if total_expected > 0 and total_accum > 0:
                 qty_summary[sub_key]['공정률'] = str(round((total_accum / total_expected) * 100, 1))
             else:
                 qty_summary[sub_key]['공정률'] = ''
@@ -3066,8 +3615,18 @@ class MonthlyReportManager:
         self._fill_repeated_header_document_numbers(ws, doc_num)
         self._fix_ndt_section_labels(ws)
         self._ensure_cover_cell_elements(ws, create_date)
+        # Page-title placeholders have now been replaced, so repeated 3.0
+        # headers can be located reliably.  Pad continuation pages only after
+        # every later section/photo has been populated; inserted blank rows
+        # then move all subsequent content as one intact block.
+        self._pad_ndt_continuation_pages(ws)
+        self._normalize_ndt_header_logos(ws)
+        self._normalize_all_report_header_logos(ws)
+        self._collapse_blank_rows_before_report_headers(ws)
+        self._align_report_breaks_to_repeated_headers(ws)
         self._renumber_ndt_status_pages(ws)
         self._keep_iuc_euc_headers_single_line(ws)
+        self._clear_broken_reference_placeholders(ws)
 
         # Preserve the visible right edge of merged template boxes and headers.
         for sheet in wb.worksheets:
@@ -3394,10 +3953,12 @@ class MonthlyReportManager:
             if merged_range.min_row == reference_row and merged_range.max_row == reference_row:
                 row_merges.append((merged_range.min_col, merged_range.max_col))
 
-        max_first_page = 7
+        max_rows_per_page = 7
         current_data_row = data_row
         for i, log in enumerate(training_logs):
-            if i == max_first_page:
+            # 교육내용이 여러 페이지로 늘어나는 경우에도 매 페이지마다
+            # 공통 문서 헤더와 2.0 교육현황 표 헤더를 반복한다.
+            if i > 0 and i % max_rows_per_page == 0:
                 current_data_row = self._clone_safety_training_header(ws, start_row, header_row, current_data_row)
                 
             current_row = current_data_row

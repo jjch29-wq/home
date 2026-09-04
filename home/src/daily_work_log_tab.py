@@ -245,7 +245,18 @@ class DailyWorkLogTab(ttk.Frame):
         sections = set()
         lines = set()
         companies = set()
-        welders = {'W-2023-A-10', 'W-2023-A-13', 'W-2023-A-25'}
+        # 2026년 중앙지사 열수송관 개설 및 추가공사 용접사 명단
+        welders = {
+            'W-2023-A-10', 'W-2023-A-12', 'W-2023-A-13', 'W-2023-A-19',
+            'W-2023-A-25', 'W-2023-A-27', 'W-2023-A-28', 'W-2023-A-34',
+            'W-2024-A-01', 'W-2024-A-03', 'W-2024-A-04', 'W-2024-A-05',
+            'W-2024-A-07', 'W-2024-A-08', 'W-2024-A-09', 'W-2024-A-10',
+            'W-2024-A-12', 'W-2024-A-15', 'W-2024-A-17', 'W-2024-A-22',
+            'W-2024-A-28', 'W-2024-A-29', 'W-2024-A-30', 'W-2024-A-31',
+            'W-2024-A-32', 'W-2024-A-33', 'W-2024-A-36', 'W-2024-A-44',
+            'W-2024-A-46', 'W-2024-A-47',
+            'W-2026-A-02', 'W-2026-A-07', 'W-2026-A-09', 'W-2026-A-10',
+        }
         for date_str, data in history.items():
             for r in data.get('ndt_results', []):
                 if r.get('구간'): sections.add(r['구간'].strip())
@@ -460,7 +471,7 @@ class DailyWorkLogTab(ttk.Frame):
                             next_num = str(int(num_str) + 1).zfill(len(num_str))
                             r['Joint No.'].insert(0, prefix + next_num)
                 
-                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '결과', '규격']:
+                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '결과', '규격', '근무구분']:
                     if not r[col].get().strip():
                         prev_val = prev_row[col].get().strip()
                         if prev_val:

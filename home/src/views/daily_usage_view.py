@@ -7,6 +7,7 @@ from tkinter import ttk, messagebox, filedialog
 import math
 import datetime
 import json
+import re
 from tkcalendar import DateEntry
 import traceback
 
@@ -271,7 +272,7 @@ def setup_daily_usage_tab_impl(self):
     self.ndt_calc_frame.grid_remove() # 기본 숨김
 
     self.ndt_work_time_var = tk.StringVar(value="일반")
-    self.ndt_loc_type_var = tk.StringVar(value="주배관")
+    self.ndt_loc_type_var = tk.StringVar(value="열수송관")
     self.ndt_source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
     self.ndt_thickness_var = tk.StringVar(value="15mm 이하 (1.0)")
     self.ndt_pipe_var = tk.StringVar(value="250mm 초과 [10인치 이상] (1.0)")
@@ -287,7 +288,7 @@ def setup_daily_usage_tab_impl(self):
     row0 = ttk.Frame(self.ndt_calc_frame)
     row0.pack(fill='x', pady=2)
     ttk.Label(row0, text="구분:").pack(side='left')
-    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["주배관", "플랜트(관리소)"], width=18, state="readonly").pack(side='left', padx=2)
+    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열수송관"], width=18, state="readonly").pack(side='left', padx=2)
     ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
     for t in ["일반", "야간", "휴일"]:
         ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
@@ -304,7 +305,17 @@ def setup_daily_usage_tab_impl(self):
     row2 = ttk.Frame(self.ndt_calc_frame)
     row2.pack(fill='x', pady=2)
     ttk.Label(row2, text="보고서용 관경(Inch):").pack(side='left', padx=(0,0))
-    self.cb_ndt_report_pipe = ttk.Combobox(row2, textvariable=self.ndt_report_pipe_var, width=10, values=list(getattr(self, 'SIZE_LENGTH', {}).keys()))
+    def _pipe_size_sort_key(value):
+        """관경 문자열을 숫자 크기로 정렬하기 위한 키를 반환한다."""
+        match = re.search(r"\d+(?:\.\d+)?", str(value))
+        return float(match.group()) if match else -1.0
+
+    report_pipe_values = sorted(
+        getattr(self, 'SIZE_LENGTH', {}).keys(),
+        key=_pipe_size_sort_key,
+        reverse=True,
+    )
+    self.cb_ndt_report_pipe = ttk.Combobox(row2, textvariable=self.ndt_report_pipe_var, width=10, values=report_pipe_values)
     self.cb_ndt_report_pipe.pack(side='left', padx=2)
     ttk.Label(row2, text="  제경비율(%):").pack(side='left', padx=(5,0))
     ttk.Entry(row2, textvariable=self.ndt_overhead_var, width=5).pack(side='left')
@@ -388,43 +399,36 @@ def setup_daily_usage_tab_impl(self):
             
             adj_qty = qty * factor
             mat_type = self.cb_daily_material.get().strip().lower()
-            mat_unit_cost = 0
+            billing_key = ndt_type
             if ndt_type == "RT":
-                if "b" in mat_type or "17" in mat_type:
-                    mat_unit_cost = MATERIAL_COST.get('RT (B필름: 3⅓"x17")', 8867)
-                elif "a/2" in mat_type or 'a/2' in mat_type or "6" in mat_type:
-                    mat_unit_cost = MATERIAL_COST.get('RT (A/2필름: 3⅓"x6")', 7003)
-                elif "a" in mat_type or "12" in mat_type:
-                    mat_unit_cost = MATERIAL_COST.get('RT (A필름: 3⅓"x12")', 8025)
-                else:
-                    mat_unit_cost = MATERIAL_COST.get('RT (B필름: 3⅓"x17")', 8867)
-            elif ndt_type == "UT":
-                mat_unit_cost = MATERIAL_COST.get('UT', 1112)
+                # 중앙지사 계약은 RT 필름 규격별로 단가가 구분된다.
+                billing_key = 'RT_3 1/3 x 6"' if "6" in mat_type and "12" not in mat_type else 'RT_3 1/3 x 12"'
             elif ndt_type == "PT":
-                mat_unit_cost = MATERIAL_COST.get('PT', 3974)
+                billing_key = "PT_PT"
+            elif ndt_type == "MT":
+                billing_key = "MT_MT"
             elif ndt_type == "PAUT":
-                # Cond1 for PAUT is like "300A 이상 (1.0)". We need the string before the "(" to match the key
-                # The key in MATERIAL_COST is "PAUT_300A 이상"
                 paut_cond = self.ndt_pipe_var.get().split('(')[0].strip()
-                mat_key = f"PAUT_{paut_cond}"
-                mat_unit_cost = MATERIAL_COST.get(mat_key, 0)
+                billing_key = f"PAUT_{paut_cond}"
+
+            # 신규 중앙지사 계약 키를 우선 사용하고, UT 등 기존 항목은
+            # 과거 설정 키도 계속 읽을 수 있도록 검사방법명으로 보완한다.
+            mat_unit_cost = MATERIAL_COST.get(billing_key, MATERIAL_COST.get(ndt_type, 0))
             
             total_mat = int(qty * mat_unit_cost)
             
             loc_type_val = self.ndt_loc_type_var.get().strip()
+            # 화면 명칭은 계약 명칭인 '열수송관'으로 표시하되,
+            # 기존 단가 설정 파일의 '열배관' 키와 호환한다.
+            contract_loc = {"열수송관": "열배관"}.get(loc_type_val, loc_type_val)
             
-            if loc_type_val in LABOR_COST:
-                if ndt_type == "PAUT":
-                    lab_key = f"PAUT_{self.ndt_pipe_var.get().split('(')[0].strip()}"
-                    lab_unit = LABOR_COST[loc_type_val].get(work_time, {}).get(lab_key, 0)
-                else:
-                    lab_unit = LABOR_COST[loc_type_val].get(work_time, {}).get(ndt_type, 0)
+            if contract_loc in LABOR_COST:
+                labor_rates = LABOR_COST[contract_loc].get(work_time, {})
+                lab_unit = labor_rates.get(billing_key, labor_rates.get(ndt_type, 0))
             else:
-                if ndt_type == "PAUT":
-                    lab_key = f"PAUT_{self.ndt_pipe_var.get().split('(')[0].strip()}"
-                    lab_unit = LABOR_COST.get(work_time, {}).get(lab_key, 0)
-                else:
-                    lab_unit = LABOR_COST.get(work_time, {}).get(ndt_type, 0)
+                # 과거 설정 파일의 작업형태 최상위 구조도 호환한다.
+                labor_rates = LABOR_COST.get(work_time, {})
+                lab_unit = labor_rates.get(billing_key, labor_rates.get(ndt_type, 0))
                 
             total_lab = int(adj_qty * lab_unit)
             
@@ -535,21 +539,29 @@ def setup_daily_usage_tab_impl(self):
                 self.master_form_panel.update_idletasks()
                 self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
                 self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm초과~25mm이하 (1.4)", "25mm초과~40mm이하 (2.2)"])
+                self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
+                self.ndt_thickness_var.set("15mm 이하 (1.0)")
             elif method == "UT":
                 self.rtk_grid.grid_remove() # [NEW] Hide RTK
                 self.empty_guide_frame.grid() # Show guide
                 self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"])
                 self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
+                self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
+                self.ndt_thickness_var.set("조건없음 (1.0)")
             elif method in ["PT", "MT"]:
                 self.rtk_grid.grid_remove() # [NEW] Hide RTK
                 # guide already hidden above
                 self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["조건없음 (1.0)"])
                 self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
+                self.ndt_pipe_var.set("조건없음 (1.0)")
+                self.ndt_thickness_var.set("조건없음 (1.0)")
             elif method == "PAUT":
                 self.rtk_grid.grid_remove() # [NEW] Hide RTK
                 self.empty_guide_frame.grid() # Show guide
                 self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["300A 이상 (1.0)", "250A (1.0)", "200A (1.0)", "150A-125A (1.0)", "100A 이하 (1.0)"])
                 self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
+                self.ndt_pipe_var.set("300A 이상 (1.0)")
+                self.ndt_thickness_var.set("조건없음 (1.0)")
         else:
             self.ndt_calc_frame.grid_remove()
             self.rtk_grid.grid_remove() # [NEW] Hide RTK
@@ -570,7 +582,7 @@ def setup_daily_usage_tab_impl(self):
     def _get_pipe_candidates():
         base_candidates = list(getattr(self, 'SIZE_LENGTH', {}).keys())
         if not hasattr(self, 'daily_usage_df') or self.daily_usage_df.empty: 
-            return base_candidates
+            return sorted(base_candidates, key=_pipe_size_sort_key, reverse=True)
         
         # '관경(Inch)' 컬럼명은 인코딩 문제 방지를 위해 안전하게 처리
         pipe_col = None
@@ -579,10 +591,12 @@ def setup_daily_usage_tab_impl(self):
                 pipe_col = col
                 break
                 
-        if not pipe_col: return base_candidates
+        if not pipe_col:
+            return sorted(base_candidates, key=_pipe_size_sort_key, reverse=True)
         
         df_candidates = [str(x).strip() for x in self.daily_usage_df[pipe_col].dropna() if str(x).strip()]
-        return sorted(list(set(base_candidates + df_candidates)))
+        candidates = list(dict.fromkeys(base_candidates + df_candidates))
+        return sorted(candidates, key=_pipe_size_sort_key, reverse=True)
     self._bind_combobox_word_suggest(self.cb_ndt_report_pipe, _get_pipe_candidates)
 
     # Category definitions for focus flow and loops
