@@ -6,6 +6,8 @@ AutoCAD 없이 포인트를 찍어 배관 아이소메트릭 라인을 작성하
 
 `run.bat`을 더블 클릭하면 일반 Windows 프로그램 창으로 실행됩니다. Python 설치나 인터넷 연결은 필요 없습니다. 실행 파일은 `dist/ISO_Drawer/ISO_Drawer.exe`입니다. 다른 PC로 옮길 때는 `dist/ISO_Drawer` 폴더 전체를 복사해야 합니다.
 
+소스 코드를 직접 실행할 때는 프로젝트의 `.venv` 인터프리터를 선택하거나 `run_source.bat`을 사용합니다. 실행 중에는 상태와 오류를 확인할 수 있는 명령 프롬프트 창도 함께 표시됩니다. 새 환경에서는 `pip install -r requirements.txt`로 PySide6를 먼저 설치해야 합니다.
+
 DXF는 R12 ASCII 형식이며 일반 CAD 프로그램에서 열 수 있습니다. 소스 실행에는 PySide6가 필요하지만 배포된 EXE에는 필요한 라이브러리가 포함되어 있습니다.
 
 ## 조작

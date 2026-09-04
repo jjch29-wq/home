@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ISO Drawer 실행",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\ISO_Drawer\\desktop_app.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src\\ISO_Drawer",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}
