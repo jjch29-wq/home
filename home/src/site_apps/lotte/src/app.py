@@ -1131,25 +1131,30 @@ class MaterialManager:
 
     def get_expense_defaults(self):
         """Extract site expense defaults from settings_df"""
-        # 롯데 공사실행예산서 '사전원가' 시트(A49:J52)와 동일한 기준.
-        # 기존 Settings의 일 단가가 화면을 다시 덮어쓰지 않도록 현장 기준을 우선한다.
-        return [
-            ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 12, "개월", 150000),
-            ("소모품비", "장갑,일회용 작업복외", "N/A", 12, "개월", 15000),
-            ("복리후생비", "생수, 음료 외 기타", "N/A", 12, "개월", 50000),
-            ("Se-175", "방사성동위원소 구매", "N/A", 1, "EA", 10000000),
-        ]
+        try:
+            from site_apps.lotte.src.services.lotte_planned_budget import load_planned_budget
+            return [(r['cat'], r['cont'], r['ppl'], r['qty'], r['unit'], float(r['price']))
+                    for r in load_planned_budget()['expense']['site_expense']]
+        except:
+            return []
 
     def get_outsource_defaults(self):
         """Extract outsource defaults from settings_df"""
-        # 롯데 현장은 Settings 시트의 예전 외주 항목(예: "미지정")보다
-        # 아래 현장 전용 업체 목록을 우선한다.  Settings 값을 반환하면
-        # ExpenseProfitDetailWidget에 추가한 기본값이 화면에서 덮어써진다.
-        return [
-            ("케이엔디이",      "방사선투과검사", 2084, 15000),
-            ("고려검사",        "방사선투과검사", 0, 13000),
-            ("한국기계검사소",  "방사선투과검사", 0, 15000),
-        ]
+        try:
+            from site_apps.lotte.src.services.lotte_planned_budget import load_planned_budget
+            return [(r['cat'], r['work'], r['count'], float(r['price']))
+                    for r in load_planned_budget()['expense']['outsource']]
+        except:
+            return []
+
+    def get_depreciation_defaults(self):
+        """Extract depreciation defaults from settings_df"""
+        try:
+            from site_apps.lotte.src.services.lotte_planned_budget import load_planned_budget
+            return [(r['item'], r['spec'], r['life'], r['qty'], r['days'], float(r['rate']))
+                    for r in load_planned_budget()['expense']['depreciation']]
+        except:
+            return []
 
     def create_widgets(self):
         # Notebook for Tabs
@@ -6552,7 +6557,11 @@ class MaterialManager:
             self.ent_budget_labor.insert(0, f"{total:,.0f}")
             self._update_budget_kpis()
             
-        self.labor_detail_widget = LaborCostDetailWidget(labor_detail_frame, on_change_callback=on_labor_change)
+        from site_apps.lotte.src.services.lotte_planned_budget import load_planned_budget
+        planned_labor = load_planned_budget().get('labor', {})
+        self.labor_detail_widget = LaborCostDetailWidget(
+            labor_detail_frame, on_change_callback=on_labor_change,
+            exact_rates=True, default_labor=planned_labor)
         self.labor_detail_widget.pack(fill='x', expand=True)
 
         material_detail_frame = ttk.LabelFrame(self.tab_planned, text="재료비 상세 (Material Cost Detail)", padding=10)
@@ -6563,7 +6572,10 @@ class MaterialManager:
             self.ent_budget_material.insert(0, f"{total:,.0f}")
             self._update_budget_kpis()
             
-        self.material_detail_widget = MaterialCostDetailWidget(material_detail_frame, on_change_callback=on_material_change)
+        from site_apps.lotte.src.services.lotte_planned_budget import load_planned_budget
+        planned_materials = load_planned_budget().get('material', [])
+        default_materials = [(r['item'], r['spec'], r['qty'], r['unit'], float(r['price'])) for r in planned_materials]
+        self.material_detail_widget = MaterialCostDetailWidget(material_detail_frame, on_change_callback=on_material_change, default_items=default_materials)
         self.material_detail_widget.pack(fill='x', expand=True)
 
         expense_detail_frame = ttk.LabelFrame(self.tab_planned, text="경비 및 이익 상세 (Expense & Profit Detail)", padding=10)
@@ -6582,6 +6594,8 @@ class MaterialManager:
             self._update_budget_kpis()
 
         def get_lab():
+            if hasattr(self, 'labor_detail_widget'):
+                return getattr(self.labor_detail_widget, 'raw_total', 0.0)
             try: return float(self.ent_budget_labor.get().replace(',', '') or 0)
             except: return 0.0
         def get_mat():
@@ -6601,7 +6615,8 @@ class MaterialManager:
             get_labor_total_func=get_lab,
             get_material_total_func=get_mat,
             get_revenue_func=get_rev,
-            budget_mode='planned'
+            budget_mode='planned',
+            master_app=self
         )
         self.expense_detail_widget.pack(fill='x', expand=True)
         
@@ -6667,7 +6682,8 @@ class MaterialManager:
             get_labor_total_func=get_actual_lab,
             get_material_total_func=get_actual_mat,
             get_revenue_func=get_actual_rev,
-            budget_mode='actual'
+            budget_mode='actual',
+            master_app=self
         )
         self.actual_expense_detail_widget.pack(fill='x', expand=True)
         
