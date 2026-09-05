@@ -1,4 +1,4 @@
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import ttk, simpledialog
 import pandas as pd
 from tkcalendar import DateEntry
@@ -552,10 +552,12 @@ class LaborCostDetailWidget(ttk.Frame):
     Detailed labor cost calculation widget with three sections: 
     1) Regular Work (정시근무), 2) Special Work (특별근무), and 3) Base Salary Reference (기준급여)
     """
-    def __init__(self, parent, on_change_callback=None, cost_mode='planned', **kwargs):
+    def __init__(self, parent, on_change_callback=None, cost_mode='planned', exact_rates=False, default_labor=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.on_change_callback = on_change_callback
         self.cost_mode = cost_mode
+        self.exact_rates = exact_rates
+        self.default_labor = default_labor
         
         # Rankings for Table 1
         self.ranks = ["이사", "부장", "차장", "과장", "대리", "계장", "주임", "기사"]
@@ -650,10 +652,22 @@ class LaborCostDetailWidget(ttk.Frame):
             ent_price.bind("<KeyRelease>", lambda e, r=rank: self._on_input_change(r))
             self.entries[rank]['unit_price'] = ent_price
             
-            # [NEW] Default value from base salary / 240
-            daily_rate = round(self.base_salaries.get(rank, 0) / 240)
-            if daily_rate > 0:
-                ent_price.insert(0, f"{daily_rate:,.0f}")
+            if self.default_labor and rank in self.default_labor:
+                d_val = self.default_labor[rank]
+                if str(d_val.get('personnel', '0')) not in ('0', '', '0.0'):
+                    ent_personnel.insert(0, str(d_val.get('personnel', '')))
+                if str(d_val.get('period', '0')) not in ('0', '', '0.0'):
+                    ent_days.insert(0, str(d_val.get('period', '')))
+                if str(d_val.get('unit_price', '0')) not in ('0', '', '0.0'):
+                    try:
+                        ent_price.insert(0, f"{float(d_val.get('unit_price', 0)):,.0f}")
+                    except ValueError:
+                        pass
+            else:
+                # [NEW] Default value from base salary / 240
+                daily_rate = round(self.base_salaries.get(rank, 0) / 240)
+                if daily_rate > 0:
+                    ent_price.insert(0, f"{daily_rate:,.0f}")
             
             lbl_subtotal = ttk.Label(table1_frame, text="0", relief='solid', anchor='e', padding=5)
             lbl_subtotal.grid(row=row, column=5, sticky='nsew')
@@ -706,10 +720,22 @@ class LaborCostDetailWidget(ttk.Frame):
             ent_price.bind("<KeyRelease>", lambda e, s=stype: self._on_input_change(s))
             self.entries[stype]['unit_price'] = ent_price
             
-            # [NEW] Default OT Rates
-            ot_rates = {"연장근무": 4000, "야간근무": 5000, "휴일근무": 7500}
-            if stype in ot_rates:
-                ent_price.insert(0, f"{ot_rates[stype]:,.0f}")
+            if self.default_labor and stype in self.default_labor:
+                d_val = self.default_labor[stype]
+                if str(d_val.get('personnel', '0')) not in ('0', '', '0.0'):
+                    ent_personnel.insert(0, str(d_val.get('personnel', '')))
+                if str(d_val.get('period', '0')) not in ('0', '', '0.0'):
+                    ent_hours.insert(0, str(d_val.get('period', '')))
+                if str(d_val.get('unit_price', '0')) not in ('0', '', '0.0'):
+                    try:
+                        ent_price.insert(0, f"{float(d_val.get('unit_price', 0)):,.0f}")
+                    except ValueError:
+                        pass
+            else:
+                # [NEW] Default OT Rates
+                ot_rates = {"연장근무": 4000, "야간근무": 5000, "휴일근무": 7500}
+                if stype in ot_rates:
+                    ent_price.insert(0, f"{ot_rates[stype]:,.0f}")
             
             lbl_subtotal = ttk.Label(table2_frame, text="0", relief='solid', anchor='e', padding=5)
             lbl_subtotal.grid(row=row, column=5, sticky='nsew')
@@ -854,11 +880,45 @@ class LaborCostDetailWidget(ttk.Frame):
             self._on_input_change(key)
 
     def reset(self):
-        """Clear all entries"""
-        for key, widgets in self.entries.items():
+        """Clear all entries, or restore defaults if available"""
+        for rank in self.ranks:
+            widgets = self.entries.get(rank)
+            if not widgets: continue
             widgets['personnel'].delete(0, tk.END)
             widgets['period'].delete(0, tk.END)
             widgets['unit_price'].delete(0, tk.END)
+            if self.default_labor and rank in self.default_labor:
+                d_val = self.default_labor[rank]
+                if str(d_val.get('personnel', '0')) not in ('0', '', '0.0'):
+                    widgets['personnel'].insert(0, str(d_val.get('personnel', '')))
+                if str(d_val.get('period', '0')) not in ('0', '', '0.0'):
+                    widgets['period'].insert(0, str(d_val.get('period', '')))
+                if str(d_val.get('unit_price', '0')) not in ('0', '', '0.0'):
+                    try: widgets['unit_price'].insert(0, f"{float(d_val.get('unit_price', 0)):,.0f}")
+                    except ValueError: pass
+            else:
+                daily_rate = round(self.base_salaries.get(rank, 0) / 240)
+                if daily_rate > 0: widgets['unit_price'].insert(0, f"{daily_rate:,.0f}")
+                
+        for stype in self.special_types:
+            widgets = self.entries.get(stype)
+            if not widgets: continue
+            widgets['personnel'].delete(0, tk.END)
+            widgets['period'].delete(0, tk.END)
+            widgets['unit_price'].delete(0, tk.END)
+            if self.default_labor and stype in self.default_labor:
+                d_val = self.default_labor[stype]
+                if str(d_val.get('personnel', '0')) not in ('0', '', '0.0'):
+                    widgets['personnel'].insert(0, str(d_val.get('personnel', '')))
+                if str(d_val.get('period', '0')) not in ('0', '', '0.0'):
+                    widgets['period'].insert(0, str(d_val.get('period', '')))
+                if str(d_val.get('unit_price', '0')) not in ('0', '', '0.0'):
+                    try: widgets['unit_price'].insert(0, f"{float(d_val.get('unit_price', 0)):,.0f}")
+                    except ValueError: pass
+            else:
+                ot_rates = {"연장근무": 4000, "야간근무": 5000, "휴일근무": 7500}
+                if stype in ot_rates: widgets['unit_price'].insert(0, f"{ot_rates[stype]:,.0f}")
+                
         self.calculate_all()
 
 
@@ -867,7 +927,7 @@ class MaterialCostDetailWidget(ttk.Frame):
     Detailed material cost calculation widget.
     Columns: Item (품목), Spec (사양), Quantity (수량), Unit (규격), Price (단가), Amount (사전원가가액)
     """
-    def __init__(self, parent, on_change_callback=None, **kwargs):
+    def __init__(self, parent, on_change_callback=None, default_items=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.on_change_callback = on_change_callback
         
@@ -889,6 +949,9 @@ class MaterialCostDetailWidget(ttk.Frame):
                 ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
                 ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
             ]
+            
+        if default_items is not None:
+            self.default_items = default_items
         
         self.entries = [] # List of dicts for each row: {'item': lbl, 'spec': lbl, 'qty': ent, 'unit': lbl, 'price': ent, 'amount': lbl}
         self._create_widgets()
@@ -925,7 +988,15 @@ class MaterialCostDetailWidget(ttk.Frame):
             table_frame.grid_columnconfigure(j, weight=1 if j in [0, 5] else 0)
         enable_column_resize(table_frame, len(headers))
 
-        for i, (item, spec, unit, price) in enumerate(self.default_items):
+        for i, item_data in enumerate(self.default_items):
+            if len(item_data) == 4:
+                item, spec, unit, price = item_data
+                qty = ""
+            elif len(item_data) == 5:
+                item, spec, qty, unit, price = item_data
+            else:
+                continue
+                
             row = i + 1
             # Item
             ttk.Label(table_frame, text=item, relief='solid', padding=5, anchor='center').grid(row=row, column=0, sticky='nsew')
@@ -936,6 +1007,8 @@ class MaterialCostDetailWidget(ttk.Frame):
             # Quantity
             ent_qty = ttk.Entry(table_frame, width=10, justify='center')
             ent_qty.grid(row=row, column=2, sticky='nsew')
+            if str(qty).strip() not in ('', '0', '0.0'):
+                ent_qty.insert(0, str(qty))
             ent_qty.bind("<KeyRelease>", lambda e, idx=i: self._on_input_change(idx))
             row_widgets['qty'] = ent_qty
             
@@ -1050,9 +1123,18 @@ class MaterialCostDetailWidget(ttk.Frame):
         """Clear quantities and restore default prices"""
         for i, widgets in enumerate(self.entries):
             widgets['qty'].delete(0, tk.END)
-            # Restore default price
-            default_price = self.default_items[i][3]
-            widgets['price'].delete(0, tk.END); widgets['price'].insert(0, f"{default_price:,.0f}")
+            
+            item_data = self.default_items[i]
+            if len(item_data) == 5:
+                item, spec, qty, unit, price = item_data
+                if str(qty).strip() not in ('', '0', '0.0', 'nan', 'None'):
+                    widgets['qty'].insert(0, str(qty))
+            else:
+                price = item_data[3]
+                
+            widgets['price'].delete(0, tk.END)
+            try: widgets['price'].insert(0, f"{float(price):,.0f}")
+            except (ValueError, TypeError): pass
             
         self.calculate_all()
 
@@ -1062,7 +1144,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
     Comprehensive expense and profit calculation widget.
     Sections: 1) Site Expenses, 2) Rental, 3) Outsource, 4) Insurance, 5) Depreciation, 6) Indirect Cost, 7) Profit
     """
-    def __init__(self, parent, on_change_callback=None, get_labor_total_func=None, get_material_total_func=None, get_revenue_func=None, budget_mode=None, **kwargs):
+    def __init__(self, parent, on_change_callback=None, get_labor_total_func=None, get_material_total_func=None, get_revenue_func=None, budget_mode=None, master_app=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.on_change_callback = on_change_callback
         self.get_labor_total = get_labor_total_func
@@ -1078,9 +1160,11 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         }
         
         # Resolve MaterialManager to get rates
-        self.master_app = parent
-        while self.master_app and not hasattr(self.master_app, 'get_expense_defaults'):
-            self.master_app = getattr(self.master_app, 'master', None)
+        self.master_app = master_app
+        if not self.master_app:
+            self.master_app = parent
+            while self.master_app and not hasattr(self.master_app, 'get_expense_defaults'):
+                self.master_app = getattr(self.master_app, 'master', None)
             
         self._create_widgets()
 
@@ -1220,16 +1304,20 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             self.s5_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
         enable_column_resize(self.s5_table, len(headers5))
             
-        defaults_s5 = [
-            ("PAUT 장비", "", 5, 1, 0, 44444),
-            ("PAUT SCANNER (MANUAL)", "", 5, 1, 0, 5556),
-            ("PAUT SCANNER (COBRA)", "", 5, 1, 0, 16667),
-            ("YOKE", "", 5, 1, 0, 222),
-            ("PMI 장비", "", 5, 1, 0, 12778),
-            ("UT 장비", "", 5, 1, 0, 7778),
-            ("현상용 탑차(5년간 보험비 포함)", "현장별 차량기입시 탑차 구분 기입", 5, 1, 0, 16667),
-            ("스타렉스(5년간 보험비 포함)", "현장별 차량기입시 스타렉스 구분 기입", 5, 1, 0, 16667)
-        ]
+        defaults_s5 = []
+        if self.master_app and hasattr(self.master_app, 'get_depreciation_defaults'):
+            defaults_s5 = self.master_app.get_depreciation_defaults()
+        else:
+            defaults_s5 = [
+                ("PAUT 장비", "", 5, 1, 0, 44444),
+                ("PAUT SCANNER (MANUAL)", "", 5, 1, 0, 5556),
+                ("PAUT SCANNER (COBRA)", "", 5, 1, 0, 16667),
+                ("YOKE", "", 5, 1, 0, 222),
+                ("PMI 장비", "", 5, 1, 0, 12778),
+                ("UT 장비", "", 5, 1, 0, 7778),
+                ("현상용 탑차(5년간 보험비 포함)", "현장별 차량기입시 탑차 구분 기입", 5, 1, 0, 16667),
+                ("스타렉스(5년간 보험비 포함)", "현장별 차량기입시 스타렉스 구분 기입", 5, 1, 0, 16667)
+            ]
         for item, spec, life, qty, days, rate in defaults_s5:
             self._add_row_s5(item, spec, life, qty, days, rate)
 
@@ -1563,6 +1651,38 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         clear(self.entries['rental'])
         clear(self.entries['outsource'])
         clear(self.entries['depreciation'])
+        
+        # Restore defaults
+        if self.budget_mode == 'planned':
+            if self.master_app and hasattr(self.master_app, 'get_expense_defaults'):
+                defs = self.master_app.get_expense_defaults()
+                for i, (cat, cont, ppl, qty, unit, price) in enumerate(defs):
+                    if i < len(self.entries['site_expense']):
+                        self.entries['site_expense'][i]['cat'].insert(0, str(cat))
+                        self.entries['site_expense'][i]['cont'].insert(0, str(cont))
+                        self.entries['site_expense'][i]['ppl'].insert(0, str(ppl))
+                        self.entries['site_expense'][i]['qty'].insert(0, str(qty))
+                        self.entries['site_expense'][i]['unit'].insert(0, str(unit))
+                        self.entries['site_expense'][i]['price'].insert(0, f"{price:,.0f}")
+            if self.master_app and hasattr(self.master_app, 'get_outsource_defaults'):
+                defs = self.master_app.get_outsource_defaults()
+                for i, (cat, work, qty, price) in enumerate(defs):
+                    if i < len(self.entries['outsource']):
+                        self.entries['outsource'][i]['cat'].insert(0, str(cat))
+                        self.entries['outsource'][i]['work'].insert(0, str(work))
+                        self.entries['outsource'][i]['count'].insert(0, str(qty))
+                        self.entries['outsource'][i]['price'].insert(0, f"{price:,.0f}")
+            if self.master_app and hasattr(self.master_app, 'get_depreciation_defaults'):
+                defs = self.master_app.get_depreciation_defaults()
+                for i, (item, spec, life, qty, days, rate) in enumerate(defs):
+                    if i < len(self.entries['depreciation']):
+                        self.entries['depreciation'][i]['item'].insert(0, str(item))
+                        self.entries['depreciation'][i]['spec'].insert(0, str(spec))
+                        self.entries['depreciation'][i]['life'].insert(0, str(life))
+                        self.entries['depreciation'][i]['qty'].insert(0, str(qty))
+                        self.entries['depreciation'][i]['days'].insert(0, str(days))
+                        self.entries['depreciation'][i]['rate'].insert(0, f"{rate:,.0f}")
+                        
         self.calculate_all()
 
 
