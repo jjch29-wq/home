@@ -19,6 +19,11 @@ import traceback
 import sys
 import subprocess
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+# Add top-level src directory to sys.path for 'site_apps' module resolution
+top_src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if top_src_dir not in sys.path:
+    sys.path.insert(0, top_src_dir)
+
 from site_apps.kogas.src.utils.helpers import install_and_import, normalize_id
 from site_apps.kogas.src.utils.helpers import NAN_PATTERN, DOT_ZERO_PATTERN, MARKER_PATTERN
 # [FIX] Bypass slow pytz timezone loading on network drives (Google Drive)
