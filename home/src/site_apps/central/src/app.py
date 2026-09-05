@@ -432,26 +432,30 @@ class MaterialManager:
         
         # Determine base directory and bundle directory for portability
         if getattr(sys, 'frozen', False):
-            # If running as an executable
             self.app_dir = os.path.dirname(sys.executable)
             self.bundle_dir = getattr(sys, '_MEIPASS', self.app_dir)
-            # For exe, use user's Documents folder for config to ensure write permissions
-            documents_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'MaterialManager', 'central')
-            if not os.path.exists(documents_dir):
-                os.makedirs(documents_dir, exist_ok=True)
-            self.config_path = os.path.join(documents_dir, 'Material_Manager_Config.json')
         else:
-            # 스크립트 실행 모드: src/ 우선, 없으면 ../data/ 탐색
             self.app_dir = os.path.dirname(os.path.abspath(__file__))
             self.bundle_dir = self.app_dir
-            self.config_path = os.path.join(self.app_dir, 'Material_Manager_Config.json')
-            _db_name = 'Material_Inventory.xlsx'
-            _data_dir = os.path.join(os.path.dirname(self.app_dir), 'data')
-            _candidates = [
-                os.path.join(self.app_dir, _db_name),   # src/Material_Inventory.xlsx
-                os.path.join(_data_dir, _db_name),      # data/Material_Inventory.xlsx
-            ]
-            self.db_path = next((p for p in _candidates if os.path.exists(p)), _candidates[0])
+
+        # [DATA/CONFIG ISOLATION] Store mutable settings/data in %APPDATA%
+        appdata_dir = os.getenv('APPDATA')
+        if not appdata_dir:
+            appdata_dir = os.path.expanduser('~')
+        
+        self.data_dir = os.path.join(appdata_dir, 'PMI_Apps', 'Central')
+        os.makedirs(self.data_dir, exist_ok=True)
+        
+        self.config_path = os.path.join(self.data_dir, 'Material_Manager_Config.json')
+
+        # 스크립트 실행 모드: src/ 우선, 없으면 ../data/ 탐색 (For DB)
+        _db_name = 'Material_Inventory.xlsx'
+        _data_candidates = [
+            os.path.join(self.data_dir, _db_name),
+            os.path.join(self.app_dir, _db_name),
+            os.path.join(os.path.dirname(self.app_dir), 'data', _db_name),
+        ]
+        self.db_path = next((p for p in _data_candidates if os.path.exists(p)), _data_candidates[0])
 
         if getattr(sys, 'frozen', False):
             # exe 실행 모드: exe와 같은 폴더에 DB 저장 (어디서 실행해도 동일)

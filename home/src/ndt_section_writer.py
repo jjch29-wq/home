@@ -475,16 +475,17 @@ def write_all_ndt_sections(ws, history, target_month_str, log_func=print):
 # 테스트 실행
 # ====================
 if __name__ == '__main__':
-    import json, sys
-    sys.path.insert(0, r'c:\Users\jjch2\Desktop\PMI\home\src')
+    import json, sys, os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, script_dir)
     from paut_writer import find_paut_section, write_paut_data
 
-    history_path = r'c:\Users\jjch2\Desktop\PMI\home\src\daily_work_history.json'
+    history_path = os.path.join(script_dir, 'daily_work_history.json')
     with open(history_path, 'r', encoding='utf-8') as f:
         history = json.load(f)
 
-    wb = openpyxl.load_workbook(r'C:\Users\jjch2\Desktop\템플릿_최종완성본_V74.xlsx')
-    ws = wb.worksheets[0]
+    # wb = openpyxl.load_workbook(r'C:\Users\jjch2\Desktop\템플릿_최종완성본_V74.xlsx')
+    # ws = wb.worksheets[0]
 
     target_month = '2026-08'
     write_all_ndt_sections(ws, history, target_month)
