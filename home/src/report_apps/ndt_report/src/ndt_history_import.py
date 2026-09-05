@@ -11,9 +11,19 @@ SITES = {
 }
 
 
+def find_src_root(start_path=None):
+    current = Path(start_path or __file__).resolve()
+    if current.is_file():
+        current = current.parent
+    for path in (current, *current.parents):
+        if (path / 'site_apps').is_dir():
+            return path
+    return Path(__file__).resolve().parent
+
+
 def history_path(site, source_dir=None):
     folder, filename = SITES[site]
-    base = Path(source_dir) if source_dir is not None else Path(__file__).resolve().parent
+    base = Path(source_dir) if source_dir is not None else find_src_root()
     return base / 'site_apps' / folder / 'src' / filename
 
 

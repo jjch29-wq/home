@@ -8,7 +8,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-SRC = Path(__file__).resolve().parents[1] / 'src'
+REPORT_ROOT = Path(__file__).resolve().parents[1]
+SRC = REPORT_ROOT / 'src'
 sys.path.insert(0, str(SRC))
 from ndt_history_import import SITES, history_path, read_results
 
