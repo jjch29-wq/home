@@ -31,7 +31,7 @@ class DailyWorkLogTab(ttk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.parent = parent
-        self.history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+        self.history_path = os.path.join(os.getenv('APPDATA') or os.path.expanduser('~'), 'PMI_Apps', 'Lotte', 'lotte_daily_work_history.json')
         self.photo_root = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'data', 'process_photos'

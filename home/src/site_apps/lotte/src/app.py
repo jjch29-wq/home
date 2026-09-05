@@ -7529,6 +7529,11 @@ class MaterialManager:
                         raw_t = self.expense_detail_widget.lbl_grand_total_cost.cget('text')
                         tc = float("".join(c for c in raw_t if c.isdigit() or c == '.') or 0)
                     except: tc = lab + mat + exp + out
+                elif prefix == 'ent_budget_actual_' and hasattr(self, 'actual_expense_detail_widget') and hasattr(self.actual_expense_detail_widget, 'lbl_grand_total_cost'):
+                    try:
+                        raw_t = self.actual_expense_detail_widget.lbl_grand_total_cost.cget('text')
+                        tc = float("".join(c for c in raw_t if c.isdigit() or c == '.') or 0)
+                    except: tc = lab + mat + exp + out
                 else:
                     tc = lab + mat + exp + out
                     
@@ -8362,30 +8367,30 @@ class MaterialManager:
                 
                 updated_days = False
                 if '스타렉스' in item:
-                    row_data['days'] = f"{starex_days:g}" if starex_days > 0 else ""
+                    row_data['days'] = f"{starex_days:g}" if starex_days > 0 else "0"
                     if starex_days > 0: updated_days = True
                 elif '탑차' in item:
-                    row_data['days'] = f"{toptruck_days:g}" if toptruck_days > 0 else ""
+                    row_data['days'] = f"{toptruck_days:g}" if toptruck_days > 0 else "0"
                     if toptruck_days > 0: updated_days = True
                 else:
                     item_upper_clean = str(item).upper().replace(' ', '')
                     if 'SCANNER(MANUAL)' in item_upper_clean:
-                        row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else ""
+                        row_data['days'] = f"{len(paut_manual_scanner_dates):g}" if len(paut_manual_scanner_dates) > 0 else "0"
                         if len(paut_manual_scanner_dates) > 0: updated_days = True
                     elif 'SCANNER(COBRA)' in item_upper_clean:
-                        row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else ""
+                        row_data['days'] = f"{len(paut_cobra_scanner_dates):g}" if len(paut_cobra_scanner_dates) > 0 else "0"
                         if len(paut_cobra_scanner_dates) > 0: updated_days = True
                     elif 'PAUT' in item_upper_clean:
-                        row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else ""
+                        row_data['days'] = f"{len(paut_dates):g}" if len(paut_dates) > 0 else "0"
                         if len(paut_dates) > 0: updated_days = True
                     elif 'YOKE' in str(item).upper() or ('MT' in str(item).upper() and 'PAUT' not in str(item).upper()):
-                        row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else ""
+                        row_data['days'] = f"{len(mt_dates):g}" if len(mt_dates) > 0 else "0"
                         if len(mt_dates) > 0: updated_days = True
                     elif 'PMI' in item_upper_clean:
-                        row_data['days'] = str(len(pmi_dates))
+                        row_data['days'] = str(len(pmi_dates)) if pmi_dates else "0"
                         if pmi_dates: updated_days = True
                     elif item_upper_clean.startswith('UT'):
-                        row_data['days'] = str(len(ut_dates))
+                        row_data['days'] = str(len(ut_dates)) if ut_dates else "0"
                         if ut_dates: updated_days = True
                     else:
                         item_upper = str(item).upper().strip()
@@ -8396,6 +8401,8 @@ class MaterialManager:
                         if matched_days > 0:
                             row_data['days'] = f"{matched_days:g}"
                             updated_days = True
+                        else:
+                            row_data['days'] = "0"
 
                 # [FIX] 사전예산 단가 복사 및 수량 처리
                 if 'depreciation' in planned_exp_data and i < len(planned_exp_data['depreciation']):
@@ -12464,7 +12471,7 @@ class MaterialManager:
                 messagebox.showerror("오류", "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)")
                 return
                 
-            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lotte_daily_work_history.json')
+            history_path = os.path.join(getattr(self, 'data_dir', os.path.dirname(os.path.abspath(__file__))), 'lotte_daily_work_history.json')
             if not os.path.exists(history_path):
                 messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
                 return
@@ -12998,7 +13005,7 @@ class MaterialManager:
                         
                 history = {}
                 import json, os
-                history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lotte_daily_work_history.json')
+                history_path = os.path.join(getattr(self, 'data_dir', os.path.dirname(os.path.abspath(__file__))), 'lotte_daily_work_history.json')
                 if os.path.exists(history_path):
                     with open(history_path, 'r', encoding='utf-8') as f:
                         history = json.load(f)
