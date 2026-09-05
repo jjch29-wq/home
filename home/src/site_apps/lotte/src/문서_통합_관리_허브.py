@@ -1,0 +1,1958 @@
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+import json
+import os
+import re
+
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
+
+try:
+    from tkinterweb import HtmlFrame
+except ImportError:
+    HtmlFrame = None
+
+try:
+    import mammoth
+except ImportError:
+    mammoth = None
+
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "codebook_db.json")
+
+# =========================================================
+# 1. DatabaseManager: DB 로딩, 저장, 내보내기, 규격 추가 등
+# =========================================================
+class DatabaseManager:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.data = []
+        self.load_data()
+
+    def load_data(self):
+        if os.path.exists(self.db_path):
+            try:
+                with open(self.db_path, 'r', encoding='utf-8') as f:
+                    self.data = json.load(f)
+            except Exception as e:
+                messagebox.showerror("로딩 오류", f"DB 파일을 불러오지 못했습니다:\n{e}")
+                self.data = []
+        else:
+            self.data = [
+                {"category": "Article 2 (RT - 방사선투과)", "find": "ASME Sec.V Art.2", "replace": "ISO 17636-1", "details": "RT 절차서 관련 규격 예시"},
+                {"category": "Article 4 (UT/PAUT - 초음파탐상)", "find": "ASME Sec.V Art.4", "replace": "ISO 11666", "details": "UT 절차서 관련 규격 예시"},
+                {"category": "Article 7 (MT - 자분탐상)", "find": "ASME Sec.V Art.7", "replace": "ISO 17638", "details": "MT 절차서 관련 규격 예시"},
+                {"category": "Article 6 (PT - 침투탐상)", "find": "ASME Sec.V Art.6", "replace": "ISO 3452-1", "details": "PT 절차서 관련 규격 예시"},
+                {"category": "PMI (재질분석 - API/ASTM 등)", "find": "API RP 578", "replace": "ASTM E1476", "details": "PMI 절차서 관련 규격 예시"},
+                {"category": "공통 (프로젝트/용어/기타)", "find": "기존프로젝트명", "replace": "가산~가평 천연가스 공급시설", "details": "문서 내 일괄 수정될 프로젝트명"}
+            ]
+
+    def save_data(self):
+        try:
+            with open(self.db_path, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            messagebox.showerror("저장 오류", f"DB 파일을 저장하지 못했습니다:\n{e}")
+
+# =========================================================
+# 2. DocumentProcessor: 문서 파일 변환 엔진
+# =========================================================
+class DocumentProcessor:
+    @staticmethod
+    def replace_text_in_paragraph(paragraph, find_text, replace_text):
+        if find_text in paragraph.text:
+            count_in_para = paragraph.text.count(find_text)
+            count_in_runs = sum(run.text.count(find_text) for run in paragraph.runs)
+            
+            if count_in_runs == count_in_para:
+                for run in paragraph.runs:
+                    if find_text in run.text:
+                        run.text = run.text.replace(find_text, replace_text)
+            else:
+                inline = paragraph.runs
+                if not inline: return
+                text = paragraph.text.replace(find_text, replace_text)
+                for i in range(len(inline)): inline[i].text = ''
+                inline[0].text = text
+
+    @staticmethod
+    def process_docx(input_file, output_file, replacements):
+        try:
+            import docx
+            doc = docx.Document(input_file)
+            
+            def process_paragraphs(paragraphs):
+                for paragraph in paragraphs:
+                    for f_text, r_text in replacements:
+                        DocumentProcessor.replace_text_in_paragraph(paragraph, f_text, r_text)
+                        
+            def process_tables(tables):
+                for table in tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            process_paragraphs(cell.paragraphs)
+            
+            # 본문 처리
+            process_paragraphs(doc.paragraphs)
+            process_tables(doc.tables)
+            
+            # 머릿글 및 바닥글 처리 (첫 페이지, 짝수 페이지 등 모든 옵션 포함)
+            for section in doc.sections:
+                for header in [section.header, section.first_page_header, section.even_page_header]:
+                    if header:
+                        process_paragraphs(header.paragraphs)
+                        process_tables(header.tables)
+                for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+                    if footer:
+                        process_paragraphs(footer.paragraphs)
+                        process_tables(footer.tables)
+                
+            doc.save(output_file)
+        except Exception as e:
+            raise Exception(f"docx 처리 실패: {e}")
+
+    @staticmethod
+    def process_xlsx(input_file, output_file, replacements):
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(input_file)
+            for sheet in wb.worksheets:
+                for row in sheet.iter_rows():
+                    for cell in row:
+                        if cell.value and isinstance(cell.value, str):
+                            new_val = cell.value
+                            for f_text, r_text in replacements:
+                                new_val = new_val.replace(f_text, r_text)
+                            if new_val != cell.value:
+                                cell.value = new_val
+            wb.save(output_file)
+        except Exception as e:
+            raise Exception(f"xlsx 처리 실패: {e}")
+
+    @staticmethod
+    def process_hwp(input_file, output_file, replacements):
+        import tempfile
+        import shutil
+        import os
+        temp_input = None
+        try:
+            import win32com.client as win32
+            hwp = win32.gencache.EnsureDispatch("HWPFrame.HwpObject")
+            hwp.RegisterModule("FilePathCheckDLL", "SecurityModule")
+            hwp.XHwpWindows.Item(0).Visible = False
+            
+            # Copy to local temp path to avoid Google Drive network/lock issues
+            temp_dir = tempfile.gettempdir()
+            temp_input = os.path.join(temp_dir, f"temp_hwp_{os.path.basename(input_file)}")
+            shutil.copy2(input_file, temp_input)
+            
+            abs_input = os.path.abspath(temp_input)
+            abs_output = os.path.abspath(output_file)
+            
+            if not hwp.Open(abs_input, "HWP", "forceopen:true;versionwarning:false"):
+                hwp.Quit()
+                raise Exception(f"HWP 파일을 여는데 실패했습니다. (경로: {abs_input})")
+                
+            def execute_replace():
+                for f_text, r_text in replacements:
+                    hwp.HAction.GetDefault("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
+                    hwp.HParameterSet.HFindReplace.IgnoreMessage = 1
+                    hwp.HParameterSet.HFindReplace.FindString = f_text
+                    hwp.HParameterSet.HFindReplace.ReplaceString = r_text
+                    hwp.HParameterSet.HFindReplace.Direction = hwp.FindDir("AllDoc")
+                    hwp.HParameterSet.HFindReplace.MatchCase = 0
+                    hwp.HParameterSet.HFindReplace.WholeWordOnly = 0
+                    hwp.HParameterSet.HFindReplace.UseWildCards = 0
+                    hwp.HParameterSet.HFindReplace.SeveralWords = 0
+                    hwp.HParameterSet.HFindReplace.AllWordForms = 0
+                    hwp.HAction.Execute("AllReplace", hwp.HParameterSet.HFindReplace.HSet)
+
+            # 본문 변환
+            hwp.Run("MoveDocBegin")
+            execute_replace()
+            
+            # 모든 컨트롤(표, 글상자 등) 순회하며 변환
+            ctrl = hwp.HeadCtrl
+            while ctrl:
+                if ctrl.CtrlID in ["tbl", "gso", "eqed"]:
+                    hwp.SetPosBySet(ctrl.GetAnchorPos(0))
+                    hwp.FindCtrl()
+                    hwp.Run("ShapeObjTableSelCell")
+                    hwp.Run("Cancel") # 블록 지정을 해제해야 표 전체를 검색함!
+                    execute_replace()
+                ctrl = ctrl.Next
+                
+            hwp.SaveAs(abs_output)
+            hwp.Quit()
+        except Exception as e:
+            raise Exception(f"hwp 처리 실패: {e}")
+        finally:
+            if temp_input and os.path.exists(temp_input):
+                try:
+                    os.remove(temp_input)
+                except:
+                    pass
+
+    @staticmethod
+    def process_txt(input_file, output_file, replacements):
+        try:
+            with open(input_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            enc = 'utf-8'
+        except:
+            with open(input_file, 'r', encoding='euc-kr') as f:
+                content = f.read()
+            enc = 'euc-kr'
+            
+        for f_text, r_text in replacements:
+            content = content.replace(f_text, r_text)
+            
+        with open(output_file, 'w', encoding=enc) as f:
+            f.write(content)
+
+    @staticmethod
+    def process_doc(input_file, output_file, replacements):
+        import os
+        try:
+            import win32com.client as win32
+            word = win32.gencache.EnsureDispatch("Word.Application")
+            word.Visible = False
+            
+            abs_input = os.path.abspath(input_file)
+            abs_output = os.path.abspath(output_file)
+            
+            doc = word.Documents.Open(abs_input)
+            
+            # 모든 영역(본문, 머릿글, 바닥글 등) 순회하며 찾기 및 바꾸기 (Replace=2 는 모두 바꾸기)
+            for f_text, r_text in replacements:
+                for story in doc.StoryRanges:
+                    story.Find.Execute(FindText=f_text, ReplaceWith=r_text, Replace=2)
+                    while story.NextStoryRange:
+                        story = story.NextStoryRange
+                        story.Find.Execute(FindText=f_text, ReplaceWith=r_text, Replace=2)
+                
+            doc.SaveAs(abs_output)
+            doc.Close()
+            word.Quit()
+        except Exception as e:
+            try:
+                word.Quit()
+            except:
+                pass
+            raise Exception(f"doc 처리 오류: {e}")
+
+    @staticmethod
+    def process_xls(input_file, output_file, replacements):
+        import os
+        try:
+            import win32com.client as win32
+            excel = win32.gencache.EnsureDispatch("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            
+            abs_input = os.path.abspath(input_file)
+            abs_output = os.path.abspath(output_file)
+            
+            wb = excel.Workbooks.Open(abs_input)
+            
+            for sheet in wb.Worksheets:
+                for f_text, r_text in replacements:
+                    # LookAt=2 (xlPart: 부분 일치)
+                    sheet.Cells.Replace(What=f_text, Replacement=r_text, LookAt=2, SearchOrder=1, MatchCase=False)
+                    
+            wb.SaveAs(abs_output)
+            wb.Close(SaveChanges=False)
+            excel.Quit()
+        except Exception as e:
+            try:
+                excel.Quit()
+            except:
+                pass
+            raise Exception(f"xls 처리 오류: {e}")
+
+    @staticmethod
+    def process_single_document(input_file, output_file, rules):
+        ext_lower = os.path.splitext(input_file)[1].lower()
+        if ext_lower == '.docx':
+            DocumentProcessor.process_docx(input_file, output_file, rules)
+        elif ext_lower == '.doc':
+            DocumentProcessor.process_doc(input_file, output_file, rules)
+        elif ext_lower == '.xlsx':
+            DocumentProcessor.process_xlsx(input_file, output_file, rules)
+        elif ext_lower == '.xls':
+            DocumentProcessor.process_xls(input_file, output_file, rules)
+        elif ext_lower in ['.hwp', '.hwpx']:
+            DocumentProcessor.process_hwp(input_file, output_file, rules)
+        elif ext_lower == '.txt':
+            DocumentProcessor.process_txt(input_file, output_file, rules)
+        else:
+            raise ValueError(f"지원하지 않는 파일 형식입니다: {ext_lower}")
+
+
+# =========================================================
+# 3. MacroController: 운영체제 및 외부 프로그램 제어
+# =========================================================
+class MacroController:
+    @staticmethod
+    def sync_search_to_external_app(root, filepath, search_query=""):
+        import os, time, threading
+        import win32gui, win32con
+        
+        base_name = os.path.basename(filepath)
+        name_without_ext = os.path.splitext(base_name)[0]
+        
+        def _macro_thread():
+            for _ in range(10):
+                time.sleep(0.5)
+                found_hwnd = [0]
+                def callback(hwnd, _):
+                    if win32gui.IsWindowVisible(hwnd):
+                        title = win32gui.GetWindowText(hwnd)
+                        # 엄격한 매칭: PAUT절차서가 PAUT절차서_rev를 잡지 않도록 함
+                        if title.startswith(base_name) or title.startswith(name_without_ext + " -") or title.startswith(name_without_ext + " [") or title == name_without_ext:
+                            found_hwnd[0] = hwnd
+                win32gui.EnumWindows(callback, None)
+                
+                if found_hwnd[0] != 0:
+                    hwnd = found_hwnd[0]
+                    screen_width = root.winfo_screenwidth()
+                    screen_height = root.winfo_screenheight()
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    win32gui.MoveWindow(hwnd, screen_width//2, 0, screen_width//2, screen_height-40, True)
+                    
+                    if search_query:
+                        try: win32gui.SetForegroundWindow(hwnd)
+                        except: pass
+                        time.sleep(0.3)
+                        try:
+                            import win32com.client
+                            shell = win32com.client.Dispatch("WScript.Shell")
+                            shell.SendKeys("^f")
+                            time.sleep(0.3)
+                            shell.SendKeys("^v")
+                            time.sleep(0.2)
+                            shell.SendKeys("{ENTER}")
+                        except Exception as e:
+                            print("매크로 전송 오류:", e)
+                    break
+                    
+        if search_query:
+            root.clipboard_clear()
+            root.clipboard_append(search_query)
+            root.update()
+        threading.Thread(target=_macro_thread, daemon=True).start()
+
+
+# =========================================================
+# 4. CodebookApp: 메인 UI 컨트롤러 (View 담당)
+# =========================================================
+class CodebookApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("🔥 통합 절차서 규격 관리 및 일괄 개정 허브 🔥")
+        self.root.geometry("850x650")
+        
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # 1. 의존성 생성 (Managers & Controllers)
+        self.db_manager = DatabaseManager(DB_FILE)
+        
+        # 2. 탭(Notebook) 구성
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True)
+        
+        self.tab_viewer = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_viewer, text="📖 절차서 뷰어 및 추출")
+        
+        self.tab_code = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_code, text="📚 규격(코드) 관리 DB")
+        
+        self.tab_batch = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_batch, text="✍️ 다중 일괄 변환 (프리셋)")
+        
+        self.tab_report = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_report, text="📈 월간보고서 자동 생성기")
+        
+        # 3. 상태 관리 변수
+        self.current_doc_text = ""
+        self.current_filepath = ""
+        self.current_search_index = 0
+        self.last_search_query = ""
+        self.report_template_path = ""
+        self.report_rawdata_path = ""
+        
+        # 4. UI 생성 및 초기화
+        self.create_viewer_widgets()
+        self.create_widgets()
+        self.create_batch_widgets()
+        self.create_report_widgets()
+
+        self.refresh_list()
+        
+    def create_widgets(self):
+        # 상단 검색 및 필터 프레임
+        search_frame = ttk.LabelFrame(self.tab_code, text="🔍 검색 및 필터")
+        
+        ttk.Label(search_frame, text="카테고리:").pack(side="left", padx=5, pady=5)
+        self.combo_filter_cat = ttk.Combobox(search_frame, state="readonly", width=15)
+        self.combo_filter_cat.pack(side="left", padx=5, pady=5)
+        self.combo_filter_cat.bind("<<ComboboxSelected>>", lambda e: self.refresh_list())
+        
+        ttk.Label(search_frame, text="검색어:").pack(side="left", padx=(15, 5), pady=5)
+        self.entry_search = ttk.Entry(search_frame, width=30)
+        self.entry_search.pack(side="left", padx=5, pady=5)
+        self.entry_search.bind("<KeyRelease>", lambda e: self.refresh_list())
+        
+        ttk.Button(search_frame, text="초기화", command=self.reset_filter).pack(side="left", padx=10, pady=5)
+
+        # 메인 리스트 및 상세 보기 팬(PanedWindow)
+        paned = ttk.PanedWindow(self.tab_code, orient=tk.HORIZONTAL)
+        
+        list_frame = ttk.Frame(paned)
+        paned.add(list_frame, weight=5)
+        
+        detail_frame = ttk.LabelFrame(paned, text="📖 상세 내용 보기")
+        paned.add(detail_frame, weight=3)
+        
+        self.detail_text = tk.Text(detail_frame, wrap="word", font=("맑은 고딕", 11))
+        
+        detail_scrollbar = ttk.Scrollbar(detail_frame, orient="vertical", command=self.detail_text.yview)
+        detail_scrollbar.pack(side="right", fill="y")
+        self.detail_text.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+        self.detail_text.config(yscrollcommand=detail_scrollbar.set)
+        self.detail_text.config(state="disabled")
+        
+        columns = ("category", "find", "replace")
+        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+        self.tree.heading("category", text="분류 (카테고리)")
+        self.tree.heading("find", text="찾을 내용 (기존 코드/문구)")
+        self.tree.heading("replace", text="바꿀 내용 (새로운 코드/문구)")
+        
+        self.tree.column("category", width=150, anchor="center")
+        self.tree.column("find", width=300)
+        self.tree.column("replace", width=300)
+        
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True)
+        self.tree.config(yscrollcommand=scrollbar.set)
+        
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        
+        # 버튼 프레임
+        btn_frame = ttk.Frame(self.tab_code)
+        ttk.Button(btn_frame, text="📋 찾을 내용 복사", command=lambda: self.copy_to_clipboard("find")).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="📋 바꿀 내용 복사", command=lambda: self.copy_to_clipboard("replace")).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="📤 현재 목록을 통합 허브용(JSON)으로 내보내기", command=self.export_preset).pack(side="right", padx=5)
+
+        # 하단 입력 프레임
+        input_frame = ttk.LabelFrame(self.tab_code, text="✍️ 코드 추가 및 수정")
+        
+        ttk.Label(input_frame, text="카테고리:").grid(row=0, column=0, padx=5, pady=10, sticky="e")
+        self.combo_cat = ttk.Combobox(input_frame, width=15)
+        self.combo_cat.grid(row=0, column=1, padx=5, pady=10, sticky="w")
+        
+        ttk.Label(input_frame, text="찾을 내용:").grid(row=0, column=2, padx=5, pady=10, sticky="e")
+        self.entry_find = ttk.Entry(input_frame, width=25)
+        self.entry_find.grid(row=0, column=3, padx=5, pady=10, sticky="w")
+        
+        ttk.Label(input_frame, text="바꿀 내용:").grid(row=0, column=4, padx=5, pady=10, sticky="e")
+        self.entry_replace = ttk.Entry(input_frame, width=25)
+        self.entry_replace.grid(row=0, column=5, padx=5, pady=10, sticky="w")
+        
+        ttk.Label(input_frame, text="코드 내용\n(상세 설명):").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.text_details_input = tk.Text(input_frame, width=32, height=4, font=("맑은 고딕", 10))
+        self.text_details_input.grid(row=1, column=1, columnspan=2, padx=5, pady=5, sticky="w")
+        
+        ttk.Label(input_frame, text="개정 내역\n(변경 사유):").grid(row=1, column=3, padx=5, pady=5, sticky="e")
+        self.text_revision_input = tk.Text(input_frame, width=32, height=4, font=("맑은 고딕", 10))
+        self.text_revision_input.grid(row=1, column=4, columnspan=2, padx=5, pady=5, sticky="w")
+        
+        action_frame = ttk.Frame(input_frame)
+        action_frame.grid(row=2, column=0, columnspan=6, pady=10)
+        
+        ttk.Button(action_frame, text="✨ 추가", command=self.add_code, width=15).pack(side="left", padx=10)
+        ttk.Button(action_frame, text="💾 수정", command=self.update_code, width=15).pack(side="left", padx=10)
+        ttk.Button(action_frame, text="🗑️ 삭제", command=self.delete_code, width=15).pack(side="left", padx=10)
+
+        # 화면 배치
+        search_frame.pack(side="top", fill="x", padx=10, pady=10)
+        input_frame.pack(side="bottom", fill="x", padx=10, pady=10)
+        btn_frame.pack(side="bottom", fill="x", padx=10, pady=5)
+        paned.pack(side="top", fill="both", expand=True, padx=10, pady=5)
+
+    def update_categories(self):
+        cats = sorted(list(set([d.get("category", "") for d in self.db_manager.data if d.get("category", "")])))
+        self.combo_cat['values'] = cats
+        self.combo_filter_cat['values'] = ["전체"] + cats
+        if self.combo_filter_cat.get() not in ["전체"] + cats:
+            self.combo_filter_cat.set("전체")
+
+    def refresh_list(self):
+        self.update_categories()
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+            
+        filter_cat = self.combo_filter_cat.get()
+        search_kw = self.entry_search.get().lower()
+        
+        for idx, row in enumerate(self.db_manager.data):
+            cat = row.get("category", "")
+            f_txt = row.get("find", "")
+            r_txt = row.get("replace", "")
+            
+            if filter_cat and filter_cat != "전체" and cat != filter_cat:
+                continue
+            if search_kw:
+                if search_kw not in cat.lower() and search_kw not in f_txt.lower() and search_kw not in r_txt.lower():
+                    continue
+            self.tree.insert("", "end", iid=str(idx), values=(cat, f_txt, r_txt))
+
+    def reset_filter(self):
+        self.combo_filter_cat.set("전체")
+        self.entry_search.delete(0, tk.END)
+        self.refresh_list()
+
+    def on_tree_select(self, event):
+        selected = self.tree.selection()
+        if selected:
+            idx = int(selected[0])
+            row = self.db_manager.data[idx]
+            
+            self.combo_cat.set(row.get("category", ""))
+            self.entry_find.delete(0, tk.END)
+            self.entry_find.insert(0, row.get("find", ""))
+            self.entry_replace.delete(0, tk.END)
+            self.entry_replace.insert(0, row.get("replace", ""))
+            
+            self.text_details_input.delete("1.0", tk.END)
+            self.text_details_input.insert("1.0", row.get("details", ""))
+            
+            self.text_revision_input.delete("1.0", tk.END)
+            self.text_revision_input.insert("1.0", row.get("revision_note", ""))
+            
+            cat_text = row.get("category", "")
+            f_text = row.get("find", "")
+            r_text = row.get("replace", "")
+            d_text = row.get("details", "")
+            rev_text = row.get("revision_note", "")
+            
+            detail_content = f"■ 분류 (카테고리)\n{cat_text}\n\n"
+            detail_content += f"■ 찾을 내용 (설명/기존문구)\n{f_text}\n\n"
+            detail_content += f"■ 바꿀 내용 (적용할 규격/코드)\n{r_text}\n\n"
+            detail_content += f"■ 개정 내역 및 변경 사유\n{rev_text if rev_text else '(등록된 개정 내역이 없습니다.)'}\n\n"
+            detail_content += f"■ 실제 코드 내용 (상세 설명)\n{d_text if d_text else '(등록된 상세 내용이 없습니다.)'}"
+            
+            self.detail_text.config(state="normal")
+            self.detail_text.delete("1.0", tk.END)
+            self.detail_text.insert("1.0", detail_content)
+            self.detail_text.config(state="disabled")
+
+    def add_code(self):
+        cat = self.combo_cat.get().strip()
+        f_txt = self.entry_find.get().strip()
+        r_txt = self.entry_replace.get().strip()
+        d_txt = self.text_details_input.get("1.0", tk.END).strip()
+        rev_txt = self.text_revision_input.get("1.0", tk.END).strip()
+        
+        if not f_txt:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            return
+            
+        # Check for duplicates to merge
+        merged = False
+        for item in self.db_manager.data:
+            if item.get("category") == cat and item.get("find") == f_txt:
+                # Merge details if different and not empty
+                if d_txt and d_txt not in item.get("details", ""):
+                    if item.get("details"):
+                        item["details"] += f"\n\n[추가 내용]\n{d_txt}"
+                    else:
+                        item["details"] = d_txt
+                
+                # Merge revision_note if different and not empty
+                if rev_txt and rev_txt not in item.get("revision_note", ""):
+                    if item.get("revision_note"):
+                        item["revision_note"] += f"\n\n[추가 개정내역]\n{rev_txt}"
+                    else:
+                        item["revision_note"] = rev_txt
+                
+                if r_txt:
+                    item["replace"] = r_txt
+                
+                merged = True
+                break
+
+        if not merged:
+            self.db_manager.data.append({
+                "category": cat,
+                "find": f_txt,
+                "replace": r_txt,
+                "details": d_txt,
+                "revision_note": rev_txt
+            })
+        self.db_manager.save_data()
+        self.refresh_list()
+        
+        self.combo_cat.set("")
+        self.entry_find.delete(0, tk.END)
+        self.entry_replace.delete(0, tk.END)
+        self.text_details_input.delete("1.0", tk.END)
+        self.text_revision_input.delete("1.0", tk.END)
+        
+        self.detail_text.config(state="normal")
+        self.detail_text.delete("1.0", tk.END)
+        self.detail_text.config(state="disabled")
+        
+        self.entry_find.focus()
+
+    def update_code(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "수정할 코드를 위 목록에서 선택해주세요.")
+            return
+            
+        idx = int(selected[0])
+        cat = self.combo_cat.get().strip()
+        f_txt = self.entry_find.get().strip()
+        r_txt = self.entry_replace.get().strip()
+        d_txt = self.text_details_input.get("1.0", tk.END).strip()
+        rev_txt = self.text_revision_input.get("1.0", tk.END).strip()
+        
+        if not f_txt:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            return
+            
+        self.db_manager.data[idx] = {
+            "category": cat,
+            "find": f_txt,
+            "replace": r_txt,
+            "details": d_txt,
+            "revision_note": rev_txt
+        }
+        self.db_manager.save_data()
+        self.refresh_list()
+        
+    def delete_code(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "삭제할 코드를 위 목록에서 선택해주세요.")
+            return
+            
+        if messagebox.askyesno("삭제 확인", "선택한 코드를 정말 삭제하시겠습니까?"):
+            idxs = sorted([int(s) for s in selected], reverse=True)
+            for idx in idxs:
+                del self.db_manager.data[idx]
+                
+            self.db_manager.save_data()
+            self.refresh_list()
+            
+            self.combo_cat.set("")
+            self.entry_find.delete(0, tk.END)
+            self.entry_replace.delete(0, tk.END)
+            self.text_details_input.delete("1.0", tk.END)
+            self.text_revision_input.delete("1.0", tk.END)
+            
+            self.detail_text.config(state="normal")
+            self.detail_text.delete("1.0", tk.END)
+            self.detail_text.config(state="disabled")
+
+    def copy_to_clipboard(self, field="find"):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showinfo("안내", "복사할 항목을 먼저 선택해주세요.")
+            return
+        idx = int(selected[0])
+        text = self.db_manager.data[idx].get(field, "")
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.root.update()
+        messagebox.showinfo("복사 완료", f"클립보드에 복사되었습니다:\n\n{text}")
+
+    def export_preset(self):
+        items = self.tree.get_children()
+        if not items:
+            messagebox.showwarning("경고", "내보낼 항목이 없습니다.")
+            return
+            
+        preset_data = []
+        for item in items:
+            val = self.tree.item(item, 'values')
+            preset_data.append({"find": val[1], "replace": val[2]})
+            
+        filepath = filedialog.asksaveasfilename(
+            title="절차서 수정 헬퍼용 단어 목록으로 내보내기",
+            defaultextension=".json",
+            filetypes=[("JSON 파일", "*.json")],
+            initialfile="내보낸_코드세트.json"
+        )
+        
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(preset_data, f, ensure_ascii=False, indent=4)
+                messagebox.showinfo("내보내기 완료", f"성공적으로 내보냈습니다!\n\n저장 경로: {filepath}")
+            except Exception as e:
+                messagebox.showerror("오류", f"저장 중 오류 발생:\n{e}")
+
+    def create_viewer_widgets(self):
+        ctrl_frame = ttk.Frame(self.tab_viewer)
+        ctrl_frame.pack(side="top", fill="x", padx=10, pady=5)
+        
+        ttk.Button(ctrl_frame, text="📂 문서 열기 (Word, Excel, HWP, TXT)", command=self.load_document).pack(side="left", padx=5)
+        ttk.Button(ctrl_frame, text="✨ 2.0 Reference 추출", command=self.extract_references).pack(side="left", padx=10)
+        
+        self.btn_edit_doc = ttk.Button(ctrl_frame, text="📝 원본 프로그램으로 열어서 직접 수정하기", command=self.open_current_document, state="disabled")
+        self.btn_edit_doc.pack(side="left", padx=10)
+        
+        self.btn_apply_db = ttk.Button(ctrl_frame, text="✨ 전체 규격 코드 DB 일괄 적용", command=self.apply_db_to_current, state="disabled")
+        self.btn_apply_db.pack(side="left", padx=10)
+        
+        self.btn_popup_db = ttk.Button(ctrl_frame, text="🔍 DB 검색/수정 (팝업)", command=self.open_db_popup)
+        self.btn_popup_db.pack(side="right", padx=10)
+        
+        if HtmlFrame is None or mammoth is None:
+            ttk.Label(ctrl_frame, text="⚠️ 필수 모듈(tkinterweb, mammoth)이 부족합니다.", foreground="red").pack(side="right", padx=10)
+            
+        search_frame = ttk.Frame(self.tab_viewer)
+        search_frame.pack(side="top", fill="x", padx=10, pady=0)
+        
+        ttk.Label(search_frame, text="🔍 찾을 단어:").pack(side="left", padx=5)
+        self.entry_viewer_search = ttk.Entry(search_frame, width=20)
+        self.entry_viewer_search.pack(side="left", padx=5)
+        self.entry_viewer_search.bind("<Return>", lambda e: self.search_in_viewer(direction=1))
+        
+        ttk.Button(search_frame, text="◀ 이전", command=lambda: self.search_in_viewer(direction=-1)).pack(side="left", padx=2)
+        ttk.Button(search_frame, text="다음 ▶", command=lambda: self.search_in_viewer(direction=1)).pack(side="left", padx=2)
+        ttk.Button(search_frame, text="초기화", command=self.reset_viewer_search).pack(side="left", padx=2)
+        
+        self.lbl_viewer_search_result = ttk.Label(search_frame, text="")
+        self.lbl_viewer_search_result.pack(side="left", padx=5)
+        
+        ttk.Label(search_frame, text=" | ").pack(side="left", padx=2)
+        
+        ttk.Label(search_frame, text="➡ 바꿀 단어:").pack(side="left", padx=5)
+        self.entry_viewer_replace = ttk.Entry(search_frame, width=20)
+        self.entry_viewer_replace.pack(side="left", padx=5)
+        
+        self.btn_quick_replace = ttk.Button(search_frame, text="✨ 즉시 고치기", command=self.quick_replace_viewer_text, state="disabled")
+        self.btn_quick_replace.pack(side="left", padx=5)
+        
+        viewer_frame = ttk.Frame(self.tab_viewer)
+        viewer_frame.pack(side="top", fill="both", expand=True, padx=10, pady=5)
+        
+        if HtmlFrame:
+            self.html_viewer = HtmlFrame(viewer_frame, messages_enabled=False)
+            self.html_viewer.pack(fill="both", expand=True)
+        else:
+            self.html_viewer = None
+
+        # Status label
+        self.lbl_viewer_status = ttk.Label(self.tab_viewer, text="준비됨", foreground="gray")
+        self.lbl_viewer_status.pack(side="bottom", fill="x", padx=10, pady=5)
+
+    def open_db_popup(self):
+        """뷰어에서 즉시 DB를 검색/수정할 수 있는 팝업창 열기"""
+        popup = tk.Toplevel(self.root)
+        popup.title("규격 DB 빠른 검색 및 수정")
+        popup.geometry("950x650")
+        popup.attributes('-topmost', True)
+        
+        # 1. Search Frame
+        search_f = ttk.Frame(popup, padding=10)
+        search_f.pack(fill='x')
+        ttk.Label(search_f, text="검색 (카테고리, 찾을값 등):").pack(side='left', padx=5)
+        ent_search = ttk.Entry(search_f, width=40)
+        ent_search.pack(side='left', padx=5)
+        
+        # 2. Treeview
+        tree_f = ttk.Frame(popup, padding=10)
+        tree_f.pack(fill='both', expand=True)
+        columns = ("ID", "Category", "Find", "Replace", "Details")
+        tree = ttk.Treeview(tree_f, columns=columns, show="headings", height=12)
+        for col in columns: tree.heading(col, text=col)
+        tree.column("ID", width=40, anchor="center")
+        tree.column("Category", width=120)
+        tree.column("Find", width=250)
+        tree.column("Replace", width=250)
+        tree.column("Details", width=180)
+        scroll = ttk.Scrollbar(tree_f, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scroll.set)
+        tree.pack(side='left', fill='both', expand=True)
+        scroll.pack(side='right', fill='y')
+        
+        # 3. Edit Frame
+        edit_f = ttk.LabelFrame(popup, text="항목 편집", padding=10)
+        edit_f.pack(fill='x', padx=10, pady=10)
+        
+        ttk.Label(edit_f, text="카테고리:").grid(row=0, column=0, padx=2, pady=5, sticky='e')
+        c_cat = ttk.Combobox(edit_f, width=15)
+        c_cat.grid(row=0, column=1, padx=2, pady=5, sticky='w')
+        
+        ttk.Label(edit_f, text="찾을 값:").grid(row=0, column=2, padx=2, pady=5, sticky='e')
+        e_find = ttk.Entry(edit_f, width=25)
+        e_find.grid(row=0, column=3, padx=2, pady=5, sticky='w')
+        
+        ttk.Label(edit_f, text="바꿀 값:").grid(row=0, column=4, padx=2, pady=5, sticky='e')
+        e_rep = ttk.Entry(edit_f, width=25)
+        e_rep.grid(row=0, column=5, padx=2, pady=5, sticky='w')
+        
+        ttk.Label(edit_f, text="상세내용:").grid(row=1, column=0, padx=2, pady=5, sticky='ne')
+        e_note = tk.Text(edit_f, width=95, height=5, font=("Malgun Gothic", 9))
+        e_note.grid(row=1, column=1, columnspan=5, sticky='w', padx=2, pady=5)
+        
+        # Functions
+        def refresh_popup(e=None):
+            for i in tree.get_children(): tree.delete(i)
+            q = ent_search.get().lower()
+            cats = set()
+            for idx, item in enumerate(self.db_manager.data):
+                cat = item.get('category', '')
+                f = item.get('find', '')
+                r = item.get('replace', '')
+                d = item.get('details', '')
+                cats.add(cat)
+                if q in cat.lower() or q in f.lower() or q in r.lower() or q in d.lower():
+                    tree.insert("", "end", iid=str(idx), values=(idx, cat, f, r, d))
+            c_cat['values'] = sorted(list(cats))
+            
+        def on_select(e):
+            sel = tree.selection()
+            if not sel: return
+            idx = int(sel[0])
+            item = self.db_manager.data[idx]
+            c_cat.set(item.get('category', ''))
+            e_find.delete(0, tk.END); e_find.insert(0, item.get('find', ''))
+            e_rep.delete(0, tk.END); e_rep.insert(0, item.get('replace', ''))
+            e_note.delete("1.0", tk.END); e_note.insert("1.0", item.get('details', ''))
+            
+        def do_add():
+            if not e_find.get(): return messagebox.showwarning("경고", "찾을 값을 입력하세요.", parent=popup)
+            self.db_manager.data.append({"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get("1.0", "end-1c")})
+            self.db_manager.save_data()
+            refresh_popup(); self.refresh_list(); self.update_categories()
+            messagebox.showinfo("추가", "추가되었습니다.", parent=popup)
+            
+        def do_edit():
+            sel = tree.selection()
+            if not sel: return messagebox.showwarning("경고", "수정할 항목을 선택하세요.", parent=popup)
+            self.db_manager.data[int(sel[0])] = {"category": c_cat.get(), "find": e_find.get(), "replace": e_rep.get(), "details": e_note.get("1.0", "end-1c")}
+            self.db_manager.save_data()
+            refresh_popup(); self.refresh_list(); self.update_categories()
+            messagebox.showinfo("수정", "수정되었습니다.", parent=popup)
+            
+        def do_del():
+            sel = tree.selection()
+            if not sel: return messagebox.showwarning("경고", "삭제할 항목을 선택하세요.", parent=popup)
+            if messagebox.askyesno("삭제", "정말 삭제하시겠습니까?", parent=popup):
+                del self.db_manager.data[int(sel[0])]
+                self.db_manager.save_data()
+                refresh_popup(); self.refresh_list(); self.update_categories()
+                
+        # Bindings & Buttons
+        ent_search.bind("<KeyRelease>", refresh_popup)
+        tree.bind("<<TreeviewSelect>>", on_select)
+        
+        btn_f = ttk.Frame(popup, padding=10)
+        btn_f.pack(fill='x')
+        ttk.Button(btn_f, text="➕ 새 항목 추가", command=do_add).pack(side='left', padx=5)
+        ttk.Button(btn_f, text="✏️ 선택 항목 수정", command=do_edit).pack(side='left', padx=5)
+        ttk.Button(btn_f, text="🗑️ 선택 항목 삭제", command=do_del).pack(side='left', padx=5)
+        ttk.Button(btn_f, text="닫기", command=popup.destroy).pack(side='right', padx=5)
+        
+        refresh_popup()
+
+    def load_document(self):
+        if self.html_viewer is None or mammoth is None:
+            messagebox.showerror("오류", "문서를 렌더링하기 위한 필수 라이브러리가 없습니다.")
+            return
+            
+        filepath = filedialog.askopenfilename(
+            title="절차서 문서 열기",
+            filetypes=[
+                ("모든 지원 파일", "*.docx *.xlsx *.xls *.hwp *.hwpx *.txt *.doc *.pdf"),
+                ("워드 파일", "*.docx *.doc"),
+                ("엑셀 파일", "*.xlsx *.xls"),
+                ("한글 파일", "*.hwp *.hwpx"),
+                ("텍스트 파일", "*.txt"),
+                ("PDF 파일", "*.pdf"),
+                ("모든 파일", "*.*")
+            ]
+        )
+        if filepath:
+            self._load_document_by_path(filepath)
+
+    def _load_document_by_path(self, filepath):
+        ext = filepath.lower().split('.')[-1]
+        try:
+            if ext == 'docx':
+                with open(filepath, "rb") as docx_file:
+                    result = mammoth.convert_to_html(docx_file)
+                    html = result.value
+                    docx_file.seek(0)
+                    text_result = mammoth.extract_raw_text(docx_file)
+                    self.current_doc_text = text_result.value
+                    
+                styled_html = f"""
+                <html>
+                <head>
+                <style>
+                    body {{ font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; padding: 20px; }}
+                    table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f2f2f2; }}
+                    img {{ max-width: 100%; height: auto; }}
+                </style>
+                </head>
+                <body>{html}</body>
+                </html>
+                """
+                self.html_viewer.load_html(styled_html)
+                
+            elif ext == 'txt':
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        text_content = f.read()
+                except:
+                    with open(filepath, 'r', encoding='euc-kr') as f:
+                        text_content = f.read()
+                self.current_doc_text = text_content
+                html_content = text_content.replace('\n', '<br>')
+                styled_html = f"<html><body style=\"font-family: 'Malgun Gothic', sans-serif; padding: 20px; line-height: 1.6;\">{html_content}</body></html>"
+                self.html_viewer.load_html(styled_html)
+                
+            elif ext in ['xlsx', 'xls', 'hwp', 'hwpx', 'doc', 'pdf']:
+                self.current_doc_text = ""
+                styled_html = f"""
+                <html>
+                <body style="font-family: 'Malgun Gothic', sans-serif; padding: 40px; text-align: center; color: #555; line-height: 1.8;">
+                    <h2>{ext.upper()} 파일이 로드되었습니다.</h2>
+                    <p>현재 뷰어 화면의 미리보기는 최신 워드(.docx) 및 텍스트(.txt) 문서만 지원합니다.</p>
+                    <p>하지만 상단의 <b>[📝 원본 프로그램으로 열어서 직접 수정하기]</b> 버튼을 누르시면<br>
+                    정상적으로 해당 문서를 여실 수 있습니다.</p>
+                </body>
+                </html>
+                """
+                self.html_viewer.load_html(styled_html)
+            else:
+                messagebox.showinfo("안내", "지원하지 않는 파일 형식입니다.")
+                return
+
+            self.notebook.update()
+            self.current_filepath = filepath
+            self.btn_edit_doc.config(state="normal")
+            self.btn_apply_db.config(state="normal")
+            if hasattr(self, 'btn_quick_replace'):
+                self.btn_quick_replace.config(state="normal")
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"문서를 여는 중 오류가 발생했습니다:\\n{e}")
+
+    def apply_db_to_current(self):
+        if not self.current_filepath:
+            messagebox.showwarning("경고", "먼저 문서를 열어주세요.")
+            return
+            
+        rules = [(d["find"], d["replace"]) for d in self.db_manager.data if d.get("find") and d.get("replace")]
+        if not rules:
+            messagebox.showwarning("경고", "코드 DB에 바꿀 내용(Replace)이 설정된 규격이 하나도 없습니다.")
+            return
+            
+        if not messagebox.askyesno("일괄 적용 확인", f"현재 문서에 DB의 변환 규칙 {len(rules)}개를 모두 적용하시겠습니까?"):
+            return
+            
+        try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
+            dir_name = os.path.dirname(self.current_filepath)
+            base_name = os.path.basename(self.current_filepath)
+            name, ext = os.path.splitext(base_name)
+            output_filepath = os.path.join(dir_name, f"{name}_수정본{ext}")
+            
+            try:
+                DocumentProcessor.process_single_document(self.current_filepath, output_filepath, rules)
+            except Exception as fe:
+                self.root.config(cursor="")
+                messagebox.showinfo("안내", str(fe))
+                return
+            
+            self._load_document_by_path(output_filepath)
+            self.root.config(cursor="")
+            messagebox.showinfo("적용 완료", f"적용 완료! 저장 경로: {output_filepath}")
+        except Exception as e:
+            self.root.config(cursor="")
+            messagebox.showerror("오류", f"문서 변환 중 오류가 발생했습니다:\\n{e}")
+
+    def quick_replace_viewer_text(self):
+        if not self.current_filepath:
+            return
+            
+        find_txt = self.entry_viewer_search.get().strip()
+        replace_txt = self.entry_viewer_replace.get().strip()
+        if not find_txt:
+            messagebox.showwarning("입력 오류", "찾을 단어를 입력해주세요.")
+            return
+            
+        if not messagebox.askyesno("빠른 치환 확인", f"'{find_txt}' 단어를 '{replace_txt}'(으)로 즉시 변경하시겠습니까?"):
+            return
+            
+        try:
+            with open(self.current_filepath, 'a'):
+                pass
+        except PermissionError:
+            messagebox.showwarning("문서 사용 중", "현재 이 문서가 Word, Excel, HWP 등 다른 프로그램에서 열려 있습니다!\n\n수정된 내용을 덮어쓰려면 열려 있는 원본 프로그램을 완전히 닫은 후 다시 [즉시 고치기]를 눌러주세요.\n(또는 열려있는 창에서 직접 찾기/바꾸기 단축키를 이용하세요.)")
+            return
+            
+        try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
+            rules = [(find_txt, replace_txt)]
+            import os, shutil
+            dir_name = os.path.dirname(self.current_filepath)
+            base_name = os.path.basename(self.current_filepath)
+            name, ext = os.path.splitext(base_name)
+            temp_filepath = os.path.join(dir_name, f"{name}_temp_replace{ext}")
+            
+            try:
+                DocumentProcessor.process_single_document(self.current_filepath, temp_filepath, rules)
+            except Exception as fe:
+                self.root.config(cursor="")
+                messagebox.showinfo("안내", str(fe))
+                return
+                
+            try:
+                os.remove(self.current_filepath)
+                shutil.move(temp_filepath, self.current_filepath)
+                final_path = self.current_filepath
+            except Exception:
+                final_path = os.path.join(dir_name, f"{name}_즉시수정본{ext}")
+                shutil.move(temp_filepath, final_path)
+                messagebox.showwarning("저장 안내", "원본 파일이 열려 있어 덮어쓰지 못했습니다.\\n대신 '_즉시수정본'으로 저장되었습니다.")
+                
+            self._load_document_by_path(final_path)
+            self.root.config(cursor="")
+            messagebox.showinfo("수정 완료", "성공적으로 수정되었습니다!")
+        except Exception as e:
+            self.root.config(cursor="")
+            messagebox.showerror("오류", f"문서 수정 중 오류:\\n{e}")
+
+    def open_current_document(self):
+        if self.current_filepath:
+            try:
+                if self.root.state() == 'zoomed':
+                    self.root.state('normal')
+                self.root.update_idletasks()
+                screen_width = self.root.winfo_screenwidth()
+                screen_height = self.root.winfo_screenheight()
+                self.root.geometry(f"{screen_width//2}x{screen_height-80}+0+0")
+                
+                os.startfile(self.current_filepath)
+                search_term = self.entry_viewer_search.get().strip()
+                MacroController.sync_search_to_external_app(self.root, self.current_filepath, search_term)
+            except Exception as e:
+                messagebox.showerror("오류", f"실행 오류:\\n{e}")
+
+    def search_in_viewer(self, direction=1):
+        if not self.html_viewer: return
+        query = self.entry_viewer_search.get().strip()
+        if not query:
+            self.reset_viewer_search()
+            return
+            
+        safe_query = re.escape(query)
+        
+        # Check total matches first without selecting
+        try:
+            matches_count = self.html_viewer.find_text(safe_query, select=0, ignore_case=True, highlight_all=True)
+        except Exception:
+            self.lbl_viewer_search_result.config(text="검색 오류", foreground="red")
+            return
+            
+        if matches_count == 0:
+            self.lbl_viewer_search_result.config(text="결과 없음", foreground="red")
+            self.last_search_query = query
+            return
+            
+        if query != self.last_search_query:
+            self.last_search_query = query
+            self.current_search_index = 1 if direction == 1 else matches_count
+        else:
+            self.current_search_index += direction
+            if self.current_search_index > matches_count:
+                self.current_search_index = 1
+            elif self.current_search_index < 1:
+                self.current_search_index = matches_count
+                
+        try:
+            self.html_viewer.find_text(safe_query, select=self.current_search_index, ignore_case=True, highlight_all=True)
+            self.lbl_viewer_search_result.config(text=f"{self.current_search_index} / {matches_count} 개", foreground="blue")
+        except Exception:
+            self.lbl_viewer_search_result.config(text="검색 오류", foreground="red")
+            
+        if self.current_filepath:
+            MacroController.sync_search_to_external_app(self.root, self.current_filepath, query)
+
+    def reset_viewer_search(self):
+        self.entry_viewer_search.delete(0, tk.END)
+        self.last_search_query = ""
+        self.current_search_index = 0
+        self.lbl_viewer_search_result.config(text="")
+        if self.html_viewer:
+            self.html_viewer.find_text("")
+
+    def extract_references(self):
+        if not self.current_doc_text:
+            messagebox.showwarning("경고", "먼저 문서를 열어주세요.")
+            return
+            
+        full_text = self.current_doc_text
+        lines = full_text.split('\n')
+        extracted_count = 0
+        found_codes = set()
+        
+        # 문서 제목 및 앞부분 텍스트로 절차서 종류(RT, UT 등) 자동 판별
+        head_text = ""
+        if self.current_filepath:
+            head_text += os.path.basename(self.current_filepath).lower() + " "
+        head_text += "\n".join(lines[:50]).lower()
+        
+        doc_type_category = None
+        if "paut" in head_text or "phased array" in head_text or "위상배열" in head_text or "ut" in head_text.split() or "초음파" in head_text or "ultrasonic" in head_text:
+            doc_type_category = "Article 4 (UT/PAUT - 용접부 초음파)"
+        elif "rt" in head_text.split() or "방사선" in head_text or "radiographic" in head_text:
+            doc_type_category = "Article 2 (RT - 방사선투과)"
+        elif "mt" in head_text.split() or "자분" in head_text or "magnetic" in head_text:
+            doc_type_category = "Article 7 (MT - 자분탐상)"
+        elif "pt" in head_text.split() or "침투" in head_text or "penetrant" in head_text:
+            doc_type_category = "Article 6 (PT - 침투탐상)"
+        elif "pmi" in head_text.split() or "재질분석" in head_text or "positive material" in head_text:
+            doc_type_category = "PMI (재질분석 - API/ASTM 등)"
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line or len(line) < 4: continue
+            
+            pattern = r'\b(ASME\s+(?:Sec(?:tion|\.)?\s*[IVX]+(?:\s*Art(?:icle|\.)?\s*\d+(?:\s*(?:SE|SA|SB)-[\w\d\-]+)?)?(?:\s*Mandatory\s*Appendix\s*[IVX]+)?|B\s*\d+(?:\.\d+)?)|(?:ASME\s*)?BPV[C]?\s*Code\s*\d{2,4}(?:\s*Ed\.?)?|API\s*(?:Std|Spec)?\s*\d+[A-Z]?|AWS\s*[A-Z]\d+(?:\.\d+)?|ISO\s*\d+(?:-\d+)?|KS\s*[A-Z]\s*\d+(?:-\d+)?|ASTM\s*[A-Z]\s*\d+|EN\s*\d+(?:-\d+)?|ASNT\s*SNT-TC-1A(?:(?:\s*\(\d{4}\s*Ed\.?\))?)|KEPIC\s*[A-Z\d]+)'
+            match = re.search(pattern, line, re.IGNORECASE)
+            
+            if match:
+                code_name = match.group(1).strip()
+                code_name_norm = " ".join(code_name.split())
+                
+                if code_name_norm.lower() in found_codes:
+                    continue
+                found_codes.add(code_name_norm.lower())
+                
+                details = f"[규격 명칭]\n{line}"
+                if i + 1 < len(lines) and lines[i+1].strip() and not re.search(r'^\d+\.', lines[i+1]):
+                    details += " " + lines[i+1].strip()
+                    
+                usages = []
+                for usage_match in re.finditer(r'.{0,40}' + re.escape(code_name) + r'.{0,40}', full_text, re.IGNORECASE):
+                    usage_text = usage_match.group(0).replace('\n', ' ').strip()
+                    if usage_text not in usages and "Reference" not in usage_text:
+                        usages.append(usage_text)
+                
+                if usages:
+                    details += "\n\n[문서 내 검색된 사용 예시]\n"
+                    for u in usages[:5]:
+                        details += f"- ...{u}...\n"
+                        
+                existing_item = None
+                for d in self.db_manager.data:
+                    if code_name_norm.lower() in d.get("find", "").lower():
+                        existing_item = d
+                        break
+                        
+                if not existing_item:
+                    prefix = code_name_norm.split()[0].upper()
+                    if doc_type_category:
+                        category_name = doc_type_category
+                    elif prefix in ["ASME", "API", "AWS", "ISO", "KS", "ASTM", "EN", "KEPIC", "ASNT", "BPV", "BPVC"]:
+                        category_name = f"{prefix} 규격"
+                    else:
+                        category_name = "규격 (자동추출)"
+                        
+                    self.db_manager.data.append({
+                        "category": category_name,
+                        "find": code_name_norm,
+                        "replace": "",
+                        "details": details
+                    })
+                    extracted_count += 1
+                else:
+                    old_details = existing_item.get("details", "")
+                    new_usages = [u for u in usages[:5] if u not in old_details]
+                    if new_usages:
+                        if "[문서 내 검색된 사용 예시]" not in old_details:
+                            old_details += "\n\n[문서 내 검색된 추가 사용 예시]\n"
+                        for u in new_usages:
+                            old_details += f"- ...{u}...\n"
+                        existing_item["details"] = old_details
+                        extracted_count += 1
+                    
+        if extracted_count > 0:
+            self.db_manager.save_data()
+            self.refresh_list()
+            messagebox.showinfo("추출 완료", f"성공적으로 {extracted_count}개의 규격을 신규 등록/업데이트했습니다!")
+            self.notebook.select(self.tab_code)
+        else:
+            if found_codes:
+                messagebox.showinfo("추출 완료", f"문서에서 {len(found_codes)}개의 규격을 찾았으나, 모두 이미 등록되어 있습니다.")
+            else:
+                messagebox.showinfo("추출 실패", "문서에서 규격 코드를 찾지 못했습니다.")
+
+    def create_batch_widgets(self):
+        file_frame = ttk.LabelFrame(self.tab_batch, text="1. 원본 절차서 파일 선택 (여러 파일 동시 선택 가능)")
+        file_frame.pack(fill="x", padx=15, pady=10)
+        
+        self.file_listbox = tk.Listbox(file_frame, height=4, selectmode=tk.EXTENDED)
+        self.file_listbox.pack(side="left", padx=10, pady=10, expand=True, fill="both")
+        
+        scrollbar = ttk.Scrollbar(self.file_listbox, orient="vertical")
+        scrollbar.config(command=self.file_listbox.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.file_listbox.config(yscrollcommand=scrollbar.set)
+        
+        btn_frame = ttk.Frame(file_frame)
+        btn_frame.pack(side="right", padx=10, pady=10)
+        ttk.Button(btn_frame, text="파일 추가", command=self.add_files).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="선택 삭제", command=self.remove_file).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="미리보기(Text)", command=self.preview_file).pack(fill="x", pady=2)
+        
+        list_frame = ttk.LabelFrame(self.tab_batch, text="2. 단어/코드 일괄 자동 변환 (다중 파일 동시 적용 가능)")
+        list_frame.pack(fill="both", expand=True, padx=15, pady=5)
+        
+        preset_frame = ttk.Frame(list_frame)
+        preset_frame.pack(fill="x", padx=10, pady=5)
+        ttk.Label(preset_frame, text="자주 쓰는 단어 세트를 저장하고 불러올 수 있습니다.").pack(side="left")
+        ttk.Button(preset_frame, text="💾 현재 목록 저장", command=self.save_preset).pack(side="right", padx=2)
+        ttk.Button(preset_frame, text="📂 목록 불러오기", command=self.load_preset).pack(side="right", padx=2)
+        ttk.Button(preset_frame, text="📚 코드 DB에서 최신 규격 끌어오기", command=self.load_from_code_db).pack(side="right", padx=10)
+        
+        columns = ("find", "replace")
+        self.batch_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=6)
+        self.batch_tree.heading("find", text="찾을 내용 (기존 코드/문구)")
+        self.batch_tree.heading("replace", text="바꿀 내용 (새로운 코드/문구)")
+        self.batch_tree.column("find", width=300)
+        self.batch_tree.column("replace", width=300)
+        self.batch_tree.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        input_frame = ttk.Frame(list_frame)
+        input_frame.pack(fill="x", padx=10, pady=5)
+        
+        ttk.Label(input_frame, text="찾을 내용:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.batch_entry_find = ttk.Entry(input_frame, width=20)
+        self.batch_entry_find.grid(row=0, column=1, padx=5, pady=5)
+        
+        ttk.Label(input_frame, text="바꿀 내용:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
+        self.batch_entry_replace = ttk.Entry(input_frame, width=20)
+        self.batch_entry_replace.grid(row=0, column=3, padx=5, pady=5)
+        
+        self.batch_entry_replace.bind("<Return>", lambda e: self.batch_add_item())
+        self.batch_entry_find.bind("<Return>", lambda e: self.batch_entry_replace.focus())
+        
+        ttk.Button(input_frame, text="추가", command=self.batch_add_item, width=8).grid(row=0, column=4, padx=5)
+        ttk.Button(input_frame, text="수정", command=self.batch_update_item, width=8).grid(row=0, column=5, padx=5)
+        ttk.Button(input_frame, text="삭제", command=self.batch_delete_item, width=8).grid(row=0, column=6, padx=5)
+        
+        self.batch_tree.bind("<<TreeviewSelect>>", self.batch_on_tree_select)
+        
+        run_frame = ttk.Frame(list_frame)
+        run_frame.pack(fill="x", padx=10, pady=10)
+        ttk.Button(run_frame, text="위 목록대로 1번에 등록된 모든 파일을 일괄 변환하여 폴더에 자동 저장", command=self.process_files).pack(fill="x", ipady=10)
+
+    def add_files(self):
+        filepaths = filedialog.askopenfilenames(
+            title="절차서 파일 선택 (여러 개 선택 가능)",
+            filetypes=[
+                ("모든 지원 파일", "*.docx *.xlsx *.hwp *.hwpx *.txt"),
+                ("모든 파일", "*.*")
+            ]
+        )
+        for path in filepaths:
+            if path not in self.file_listbox.get(0, tk.END):
+                self.file_listbox.insert(tk.END, path)
+
+    def remove_file(self):
+        selected = self.file_listbox.curselection()
+        for index in reversed(selected):
+            self.file_listbox.delete(index)
+
+    def preview_file(self):
+        selected = self.file_listbox.curselection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "미리보기할 파일을 위 목록에서 먼저 선택해주세요.")
+            return
+            
+        filepath = self.file_listbox.get(selected[0])
+        ext = os.path.splitext(filepath)[1].lower()
+        content = ""
+        try:
+            if ext == '.docx':
+                try:
+                    import docx
+                    doc = docx.Document(filepath)
+                    content = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+                except ImportError:
+                    content = "(docx 모듈이 설치되어 있지 않습니다.)"
+            elif ext == '.txt':
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                except:
+                    with open(filepath, 'r', encoding='euc-kr') as f:
+                        content = f.read()
+            else:
+                messagebox.showinfo("안내", f"{ext} 파일은 텍스트 미리보기를 지원하지 않습니다.")
+                return
+                
+            if not content.strip():
+                content = "(추출된 텍스트가 없습니다. 문서가 비어있거나 스캔 이미지 형태일 수 있습니다.)"
+                
+            top = tk.Toplevel(self.root)
+            top.title(f"텍스트 미리보기 - {os.path.basename(filepath)}")
+            top.geometry("600x600")
+            
+            top_frame = ttk.Frame(top)
+            top_frame.pack(fill="both", expand=True, padx=10, pady=10)
+            
+            txt_widget = tk.Text(top_frame, wrap="word", font=("맑은 고딕", 10))
+            scrollbar = ttk.Scrollbar(top_frame, orient="vertical", command=txt_widget.yview)
+            scrollbar.pack(side="right", fill="y")
+            txt_widget.pack(side="left", fill="both", expand=True)
+            txt_widget.config(yscrollcommand=scrollbar.set)
+            
+            txt_widget.insert("1.0", content)
+            txt_widget.config(state="disabled")
+            
+        except Exception as e:
+            messagebox.showerror("오류", f"미리보기를 불러오는 중 오류가 발생했습니다:\\n{e}")
+
+    def save_preset(self):
+        items = self.batch_tree.get_children()
+        if not items:
+            messagebox.showwarning("경고", "저장할 단어 목록이 없습니다.")
+            return
+        preset_data = []
+        for item in items:
+            val = self.batch_tree.item(item, 'values')
+            preset_data.append({"find": val[0], "replace": val[1]})
+            
+        filepath = filedialog.asksaveasfilename(
+            title="단어 목록 저장",
+            defaultextension=".json",
+            filetypes=[("JSON 파일", "*.json")],
+            initialfile="자주쓰는단어.json"
+        )
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(preset_data, f, ensure_ascii=False, indent=4)
+                messagebox.showinfo("저장 완료", "단어 목록이 성공적으로 저장되었습니다.")
+            except Exception as e:
+                messagebox.showerror("오류", f"저장 중 오류 발생:\\n{e}")
+
+    def load_preset(self):
+        filepath = filedialog.askopenfilename(
+            title="단어 목록 불러오기",
+            filetypes=[("JSON 파일", "*.json")]
+        )
+        if filepath:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    preset_data = json.load(f)
+                for item in self.batch_tree.get_children():
+                    self.batch_tree.delete(item)
+                for entry in preset_data:
+                    self.batch_tree.insert("", "end", values=(entry.get("find", ""), entry.get("replace", "")))
+                messagebox.showinfo("불러오기 완료", "단어 목록을 성공적으로 불러왔습니다.")
+            except Exception as e:
+                messagebox.showerror("오류", f"불러오기 중 오류 발생:\\n{e}")
+
+    def load_from_code_db(self):
+        rules = [(d["find"], d["replace"]) for d in self.db_manager.data if d.get("find") and d.get("replace")]
+        if not rules:
+            messagebox.showwarning("경고", "코드 관리 DB에 '바꿀 내용'이 설정된 규격이 없습니다.")
+            return
+            
+        if messagebox.askyesno("불러오기 확인", f"코드 DB에 저장된 {len(rules)}개의 변환 규칙을 목록에 가져오시겠습니까?"):
+            for item in self.batch_tree.get_children():
+                self.batch_tree.delete(item)
+            for f_text, r_text in rules:
+                self.batch_tree.insert("", "end", values=(f_text, r_text))
+            messagebox.showinfo("불러오기 완료", "성공적으로 코드 DB에서 규칙을 불러왔습니다!")
+
+    def batch_add_item(self):
+        f_text = self.batch_entry_find.get().strip()
+        r_text = self.batch_entry_replace.get().strip()
+        if f_text:
+            self.batch_tree.insert("", "end", values=(f_text, r_text))
+            self.batch_entry_find.delete(0, tk.END)
+            self.batch_entry_replace.delete(0, tk.END)
+            self.batch_entry_find.focus()
+        else:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            
+    def batch_update_item(self):
+        selected = self.batch_tree.selection()
+        if not selected:
+            messagebox.showwarning("선택 오류", "수정할 항목을 위 목록에서 선택해주세요.")
+            return
+        f_text = self.batch_entry_find.get().strip()
+        r_text = self.batch_entry_replace.get().strip()
+        if f_text:
+            self.batch_tree.item(selected[0], values=(f_text, r_text))
+        else:
+            messagebox.showwarning("입력 오류", "찾을 내용을 입력해주세요.")
+            
+    def batch_on_tree_select(self, event):
+        selected = self.batch_tree.selection()
+        if selected:
+            item = self.batch_tree.item(selected[0])
+            val = item['values']
+            self.batch_entry_find.delete(0, tk.END)
+            self.batch_entry_find.insert(0, val[0])
+            self.batch_entry_replace.delete(0, tk.END)
+            self.batch_entry_replace.insert(0, val[1])
+
+    def batch_delete_item(self):
+        selected = self.batch_tree.selection()
+        if selected:
+            for item in selected:
+                self.batch_tree.delete(item)
+
+    def process_files(self):
+        files = self.file_listbox.get(0, tk.END)
+        if not files:
+            messagebox.showerror("오류", "변환할 파일을 먼저 추가해주세요.")
+            return
+            
+        items = self.batch_tree.get_children()
+        if not items:
+            messagebox.showwarning("경고", "변경할 단어 목록이 비어있습니다.")
+            return
+            
+        replacements = []
+        for item in items:
+            val = self.batch_tree.item(item, 'values')
+            replacements.append((val[0], val[1]))
+            
+        output_dir = filedialog.askdirectory(title="변환된 새 파일들을 저장할 폴더 선택")
+        if not output_dir:
+            return
+            
+        try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
+            success_count = 0
+            failed_files = []
+            for input_file in files:
+                if not os.path.exists(input_file): continue
+                filename = os.path.basename(input_file)
+                output_file = os.path.join(output_dir, f"일괄변환_{filename}")
+                
+                try:
+                    DocumentProcessor.process_single_document(input_file, output_file, replacements)
+                    success_count += 1
+                except Exception as e:
+                    print(f"파일 변환 실패: {filename}, {e}")
+                    failed_files.append(f"{filename} ({e})")
+                    continue
+                    
+            self.root.config(cursor="")
+            
+            if failed_files:
+                error_msg = "\n".join(failed_files)
+                messagebox.showwarning("변환 완료 (일부 실패)", f"총 {success_count}개의 파일이 변환되었으나, 다음 파일들은 에러가 발생했습니다:\n\n{error_msg}\n\n저장 폴더: {output_dir}")
+            else:
+                messagebox.showinfo("완료", f"총 {success_count}개의 파일이 성공적으로 일괄 변환 및 저장되었습니다!\n\n저장 폴더: {output_dir}")
+                
+            os.startfile(output_dir)
+            
+        except Exception as e:
+            messagebox.showerror("실행 오류", f"파일을 자동 변환하는 중 오류가 발생했습니다:\n{e}")
+
+    # =========================================================
+    # 5. 월간보고서 자동생성기 기능
+    # =========================================================
+    def create_report_widgets(self):
+        main_frame = ttk.Frame(self.tab_report, padding=20)
+        main_frame.pack(fill="both", expand=True)
+        
+        lbl_title = ttk.Label(main_frame, text="📈 가산~가평 월간 용역보고서 자동 생성기", font=("맑은 고딕", 16, "bold"))
+        lbl_title.pack(pady=(0, 20))
+        
+        # 입력 폼
+        form_frame = ttk.LabelFrame(main_frame, text="설정 및 파일 선택", padding=15)
+        form_frame.pack(fill="x", padx=10, pady=10)
+        
+        # 1. 템플릿
+        ttk.Label(form_frame, text="마스터 템플릿:").grid(row=0, column=0, sticky="e", pady=5)
+        self.lbl_template_path = ttk.Label(form_frame, text="(선택 안 됨)", foreground="gray")
+        self.lbl_template_path.grid(row=0, column=1, sticky="w", padx=10, pady=5)
+        ttk.Button(form_frame, text="찾아보기...", command=self.select_report_template).grid(row=0, column=2, padx=5, pady=5)
+        
+        # (삭제됨) Raw Data 선택 UI는 자동화되어 더 이상 필요하지 않습니다.
+        
+        # 2. 월 선택
+        ttk.Label(form_frame, text="보고 연월:").grid(row=2, column=0, sticky="e", pady=5)
+        self.entry_report_month = ttk.Entry(form_frame, width=15)
+        self.entry_report_month.insert(0, "2026년 7월")
+        self.entry_report_month.grid(row=2, column=1, sticky="w", padx=10, pady=5)
+        
+        # 실행 버튼
+        btn_generate = ttk.Button(main_frame, text="✨ 보고서 자동 생성하기", command=self.generate_monthly_report, style="Accent.TButton")
+        btn_generate.pack(pady=20, ipadx=20, ipady=10)
+        
+        # 안내 문구
+        ttk.Label(main_frame, text="* 템플릿 파일 선택 후 '보고 연월'을 입력하고 버튼을 누르면\n* 일일작업일보 DB에서 해당 월의 데이터를 자동 조회하여 물량이 세팅됩니다.", foreground="gray", justify="center").pack()
+
+    def select_report_template(self):
+        filepath = filedialog.askopenfilename(title="마스터 템플릿 엑셀 선택", filetypes=[("Excel 파일", "*.xlsx")])
+        if filepath:
+            self.report_template_path = filepath
+            self.lbl_template_path.config(text=os.path.basename(filepath), foreground="blue")
+
+    def generate_monthly_report(self):
+        if not getattr(self, 'report_template_path', None):
+            messagebox.showwarning("입력 오류", "템플릿 엑셀 파일을 선택해주세요.")
+            return
+            
+        month_text = self.entry_report_month.get().strip()
+        if not month_text:
+            messagebox.showwarning("입력 오류", "보고 연월을 입력해주세요.")
+            return
+            
+        try:
+            self.root.config(cursor="wait")
+            self.root.update()
+            
+            import openpyxl
+            
+            dir_name = os.path.dirname(self.report_template_path)
+            output_filename = f"가산~가평_열배관_{month_text.replace(' ', '')}_용역진도보고서.xlsx"
+            output_path = os.path.join(dir_name, output_filename)
+            
+            # 1. 템플릿 열기
+            wb_temp = openpyxl.load_workbook(self.report_template_path)
+            
+            # 2. 표지 및 1.용역개요 치환 (DB의 '가산~가평' 관련 규칙 적용)
+            rules = [(d["find"], d["replace"]) for d in self.db_manager.data if d.get("find") and d.get("replace")]
+            # 필수 치환 규칙 추가
+            rules.append(("[보고연월]", month_text))
+            
+            for sheet_name in wb_temp.sheetnames:
+                sheet = wb_temp[sheet_name]
+                # 36개 시트의 수만 줄의 데이터를 모두 검사하면 느리므로, 
+                # 프로젝트명과 날짜가 위치하는 상단 30행까지만 텍스트 치환을 수행하여 1초 만에 끝나게 최적화합니다.
+                for row in sheet.iter_rows(max_row=30):
+                    for cell in row:
+                        if cell.value and isinstance(cell.value, str):
+                            new_val = cell.value
+                            for f_text, r_text in rules:
+                                new_val = new_val.replace(f_text, r_text)
+                            if new_val != cell.value:
+                                cell.value = new_val
+                                
+            # 2.5 기성정산 연동 데이터 입력
+            try:
+                import json
+                billing_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'billing_export.json')
+                if os.path.exists(billing_json_path):
+                    with open(billing_json_path, 'r', encoding='utf-8') as f:
+                        b_data = json.load(f)
+                    
+                    def inject_billing_data(ws, loc_filter=None):
+                        def get_vals(t_time, mat):
+                            cq = pq = curq = 0.0
+                            for k, v in b_data.items():
+                                parts = k.split('_')
+                                if len(parts) >= 3:
+                                    k_loc = parts[0]
+                                    k_time = parts[1]
+                                    k_mat = '_'.join(parts[2:])
+                                    
+                                    if (loc_filter is None or loc_filter in k_loc) and k_time == t_time:
+                                        if (mat == "RT" and k_mat.startswith("RT")) or mat == k_mat:
+                                            cq += v.get("contract_qty", 0.0)
+                                            pq += v.get("prev_qty", 0.0)
+                                            curq += v.get("current_qty", 0.0)
+                            return cq, pq, curq
+                            
+                        def write_row(row, t_time, mat):
+                            cq1, pq1, curq1 = get_vals(t_time, mat)
+                            if t_time == "야간":
+                                cq2, pq2, curq2 = get_vals("휴일", mat)
+                                cq1 += cq2; pq1 += pq2; curq1 += curq2
+                            
+                            ws[f'C{row}'] = cq1 if cq1 else 0
+                            ws[f'D{row}'] = pq1 if pq1 else 0
+                            if not ws[f'E{row}'].value: ws[f'E{row}'] = 0
+                            ws[f'F{row}'] = f"=SUM(D{row}:E{row})"
+                            
+                            ws[f'G{row}'] = curq1 if curq1 else 0
+                            if not ws[f'H{row}'].value: ws[f'H{row}'] = 0
+                            ws[f'I{row}'] = f"=SUM(G{row}:H{row})"
+                            
+                            ws[f'J{row}'] = f"=D{row}+G{row}"
+                            ws[f'K{row}'] = f"=E{row}+H{row}"
+                            ws[f'L{row}'] = f"=SUM(J{row}:K{row})"
+                            
+                            ws[f'M{row}'] = f"=IF(C{row}=0, 0, I{row}/C{row})"
+                            ws[f'N{row}'] = f"=IF(C{row}=0, 0, L{row}/C{row})"
+
+                        write_row(9, "일반", "RT")
+                        write_row(10, "야간", "RT")
+                        write_row(12, "일반", "UT")
+                        write_row(13, "야간", "UT")
+                        write_row(15, "일반", "PT")
+                        write_row(16, "야간", "PT")
+                        
+                        def write_film(row, mat):
+                            cq, pq, curq = 0.0, 0.0, 0.0
+                            for t_time in ["일반", "야간", "휴일"]:
+                                c, p, cu = get_vals(t_time, mat)
+                                cq += c; pq += p; curq += cu
+                            ws[f'C{row}'] = cq if cq else 0
+                            ws[f'D{row}'] = pq if pq else 0
+                            if not ws[f'E{row}'].value: ws[f'E{row}'] = 0
+                            ws[f'F{row}'] = f"=SUM(D{row}:E{row})"
+                            
+                            ws[f'G{row}'] = curq if curq else 0
+                            if not ws[f'H{row}'].value: ws[f'H{row}'] = 0
+                            ws[f'I{row}'] = f"=SUM(G{row}:H{row})"
+                            
+                            ws[f'J{row}'] = f"=D{row}+G{row}"
+                            ws[f'K{row}'] = f"=E{row}+H{row}"
+                            ws[f'L{row}'] = f"=SUM(J{row}:K{row})"
+                            
+                            ws[f'M{row}'] = f"=IF(C{row}=0, 0, I{row}/C{row})"
+                            ws[f'N{row}'] = f"=IF(C{row}=0, 0, L{row}/C{row})"
+                            
+                        write_film(22, "RT_B")
+                        write_film(23, "RT_A")
+                        write_film(24, "RT_A2")
+                        
+                        # 합계 수식 주입
+                        def write_sum(sum_row, start_row, end_row):
+                            for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']:
+                                ws[f'{col}{sum_row}'] = f"=SUM({col}{start_row}:{col}{end_row})"
+                            ws[f'M{sum_row}'] = f"=IF(C{sum_row}=0, 0, I{sum_row}/C{sum_row})"
+                            ws[f'N{sum_row}'] = f"=IF(C{sum_row}=0, 0, L{sum_row}/C{sum_row})"
+                            
+                        write_sum(11, 9, 10)
+                        write_sum(14, 12, 13)
+                        write_sum(17, 15, 16)
+                        write_sum(25, 22, 24)
+                        
+                    for s_name in wb_temp.sheetnames:
+                        if "2. 공정율" in s_name:
+                            ws = wb_temp[s_name]
+                            if "(전체)" in s_name:
+                                inject_billing_data(ws, None)
+                            elif "(열배관)" in s_name:
+                                inject_billing_data(ws, "열배관")
+                            elif "(관리소)" in s_name:
+                                inject_billing_data(ws, "관리소")
+            except Exception as e:
+                print(f"기성정산 데이터 연동 중 오류 발생: {e}")
+                                
+            # 3. 일일작업일보 DB에서 물량 세부내역 복사 및 NDT 현황 집계
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Lotte_Material_Inventory.xlsx')
+            if os.path.exists(db_path):
+                # 3.1 NDT 현황(조인트 수 및 물량) 집계
+                try:
+                    import pandas as pd
+                    import re
+                    
+                    try:
+                        raw_df = pd.read_excel(db_path, sheet_name='DailyUsage')
+                    except Exception as e:
+                        self.root.config(cursor="")
+                        messagebox.showwarning("오류", f"일일작업일보 DB(DailyUsage)를 읽어올 수 없습니다:\n{e}")
+                        return
+                        
+                    # 날짜 필터링 ("2026년 7월" -> "2026-07")
+                    match = re.search(r'(\d{4})년\s*(\d{1,2})월', month_text)
+                    if match:
+                        year_str = match.group(1)
+                        month_str = f"{int(match.group(2)):02d}"
+                        target_month = f"{year_str}-{month_str}"
+                        if 'Date' in raw_df.columns:
+                            raw_df = raw_df[raw_df['Date'].astype(str).str.startswith(target_month)]
+                            
+                    if raw_df.empty:
+                        messagebox.showwarning("데이터 없음", f"일일작업일보 DB에 '{month_text}'({target_month})에 해당하는 데이터가 하나도 없습니다!\n\n(참고: '현장 일일 사용량 기입' 탭에서 입력한 날짜와 보고 연월이 일치하는지 확인해주세요.)")
+                        # 멈추지 않고 계속 진행하여 빈 양식이라도 생성하도록 둠.
+                    
+                    def inject_ndt_status(ws, loc_filter):
+                        if 'Site' not in raw_df.columns: return
+                        
+                        def is_match(row, target):
+                            site = str(row.get('Site', '')).strip()
+                            item = str(row.get('검사품명', '')).strip().upper()
+                            
+                            is_station = '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item
+                            if target == '관리소':
+                                return is_station
+                            else: # 열배관
+                                return not is_station
+                                
+                        df_loc = raw_df[raw_df.apply(lambda r: is_match(r, loc_filter), axis=1)]
+                        # REMOVED: if df_loc.empty: df_loc = raw_df (Prevent data leak to empty sheets)
+                        
+                        def get_ndt_sums(method, insp_type, time_filter, pipe_filter=None):
+                            if '검사방법' not in df_loc.columns or '검사구분' not in df_loc.columns:
+                                return 0, 0, 0
+                            
+                            df_filtered = df_loc[(df_loc['검사방법'] == method) & (df_loc['검사구분'] == insp_type)]
+                            
+                            if time_filter == "일반":
+                                df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["일반", "주간"])]
+                            elif time_filter == "휴일/야간":
+                                df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["야간", "휴일", "야간/휴일"])]
+                                
+                            if pipe_filter and '관경(Inch)' in df_loc.columns:
+                                def check_pipe(v):
+                                    try:
+                                        val = str(v).replace('"', '').replace("'", '').strip()
+                                        if '/' in val and len(val) <= 5:
+                                            parts = val.split('/')
+                                            num = float(parts[0]) / float(parts[1])
+                                        else:
+                                            num = float(val)
+                                            
+                                        if pipe_filter == 'B': return num >= 20
+                                        elif pipe_filter == 'A': return 6 <= num < 20
+                                        elif pipe_filter == 'A/2': return num <= 4
+                                        return False
+                                    except:
+                                        return pipe_filter == 'A'
+                                        
+                                df_filtered = df_filtered[df_filtered['관경(Inch)'].apply(check_pipe)]
+                                
+                            joints = pd.to_numeric(df_filtered.get('조인트수', pd.Series(dtype=float)), errors='coerce').sum()
+                            
+                            # 실제 수량은 '검사량' (또는 'Usage')에 기록됨
+                            qty_col = df_filtered.get('검사량', df_filtered.get('Usage', pd.Series(dtype=float)))
+                            qty = pd.to_numeric(qty_col, errors='coerce').sum()
+                            
+                            # 환산물량 (UT, PT 보정길이용)
+                            adj_qty = pd.to_numeric(df_filtered.get('환산물량', pd.Series(dtype=float)), errors='coerce').sum()
+                            
+                            return joints, qty, adj_qty
+
+                        def write_ndt_row(row_idx, method, pipe_filter=None, is_adj_row=False):
+                            # 일반 검사 (C, D, E)
+                            ori_j_day, ori_q_day, ori_adj_day = get_ndt_sums(method, 'ORI', "일반", pipe_filter)
+                            rep_j_day, rep_q_day, rep_adj_day = get_ndt_sums(method, 'REP', "일반", pipe_filter)
+                            
+                            val_ori_day = ori_adj_day if is_adj_row else ori_q_day
+                            val_rep_day = rep_adj_day if is_adj_row else rep_q_day
+                            
+                            # 보정길이(환산물량) 행인 경우 조인트수는 기입하지 않음 (이전 행과 중복되므로)
+                            if not is_adj_row:
+                                ws[f'C{row_idx}'] = (ori_j_day + rep_j_day) if (ori_j_day + rep_j_day) else '-'
+                            ws[f'D{row_idx}'] = val_ori_day if val_ori_day else '-'
+                            ws[f'E{row_idx}'] = val_rep_day if val_rep_day else '-'
+                            ws[f'F{row_idx}'] = f"=SUM(D{row_idx}:E{row_idx})"
+                            
+                            # 휴일/야간 검사 (G, H, I)
+                            ori_j_night, ori_q_night, ori_adj_night = get_ndt_sums(method, 'ORI', "휴일/야간", pipe_filter)
+                            rep_j_night, rep_q_night, rep_adj_night = get_ndt_sums(method, 'REP', "휴일/야간", pipe_filter)
+                            
+                            val_ori_night = ori_adj_night if is_adj_row else ori_q_night
+                            val_rep_night = rep_adj_night if is_adj_row else rep_q_night
+                            
+                            if not is_adj_row:
+                                ws[f'G{row_idx}'] = (ori_j_night + rep_j_night) if (ori_j_night + rep_j_night) else '-'
+                            ws[f'H{row_idx}'] = val_ori_night if val_ori_night else '-'
+                            ws[f'I{row_idx}'] = val_rep_night if val_rep_night else '-'
+                            ws[f'J{row_idx}'] = f"=SUM(H{row_idx}:I{row_idx})"
+                            
+                            # 합계 (K, L, M, N)
+                            if not is_adj_row:
+                                ws[f'K{row_idx}'] = f"=SUM(C{row_idx},G{row_idx})"
+                            ws[f'L{row_idx}'] = f"=SUM(D{row_idx},H{row_idx})"
+                            ws[f'M{row_idx}'] = f"=SUM(E{row_idx},I{row_idx})"
+                            ws[f'N{row_idx}'] = f"=SUM(F{row_idx},J{row_idx})"
+
+                        write_ndt_row(8, 'RT', 'B')
+                        write_ndt_row(9, 'RT', 'A')
+                        write_ndt_row(10, 'RT', 'A/2')
+                        
+                        # UT 실검사길이 (12행), 검사보정길이(환산물량, 13행)
+                        write_ndt_row(12, 'UT')
+                        write_ndt_row(13, 'UT', is_adj_row=True)
+                        
+                        # PT 실검사길이 (14행), 검사보정길이(환산물량, 15행)
+                        write_ndt_row(14, 'PT')
+                        write_ndt_row(15, 'PT', is_adj_row=True)
+                        
+                        # RT 합계 행 (row 11) 수식 주입
+                        for col in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N']:
+                            ws[f'{col}11'] = f"=SUM({col}8:{col}10)"
+
+                    for s_name in wb_temp.sheetnames:
+                        if "3. 비파괴검사 현황" in s_name:
+                            ws_ndt = wb_temp[s_name]
+                            if "(열배관)" in s_name:
+                                inject_ndt_status(ws_ndt, "열배관")
+                            elif "(관리소)" in s_name:
+                                inject_ndt_status(ws_ndt, "관리소")
+                except Exception as e:
+                    print(f"NDT 현황 데이터 연동 중 오류 발생: {e}")
+
+                # 3.2 물량 세부내역(열배관/관리소) 주입
+                def inject_detailed_ndt_status(ws, loc_filter):
+                    if 'Site' not in raw_df.columns: return
+                    
+                    mat_df = None
+                    try:
+                        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Lotte_Material_Inventory.xlsx')
+                        mat_df = pd.read_excel(db_path, sheet_name='Materials')
+                    except Exception:
+                        pass
+                    
+                    def is_match(row, target):
+                        site = str(row.get('Site', '')).strip()
+                        item = str(row.get('검사품명', '')).strip().upper()
+                        is_station = '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item
+                        return is_station if target == '관리소' else not is_station
+                        
+                    df_loc = raw_df[raw_df.apply(lambda r: is_match(r, loc_filter), axis=1)]
+                    
+                    def get_sums(method, insp_type, time_val, pipe_val):
+                        if '검사방법' not in df_loc.columns or '검사구분' not in df_loc.columns:
+                            return 0, 0, 0
+                            
+                        df_filtered = df_loc[(df_loc['검사방법'] == method) & (df_loc['검사구분'] == insp_type)]
+                        
+                        time_str = str(time_val).replace(' ', '')
+                        if time_str == "주간" or time_str == "일반":
+                            df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["일반", "주간"])]
+                        elif time_str == "휴일/야간" or time_str == "야간" or time_str == "휴일":
+                            df_filtered = df_filtered[df_filtered.get('작업형태', '').isin(["야간", "휴일", "야간/휴일"])]
+                            
+                        if pipe_val and '관경(Inch)' in df_loc.columns:
+                            def check_pipe(v):
+                                db_v = str(v).replace('"', '').replace("'", '').replace(' ', '').lower()
+                                sh_v = str(pipe_val).replace('"', '').replace("'", '').replace(' ', '').lower()
+                                if db_v.endswith('.0'): db_v = db_v[:-2]
+                                if sh_v.endswith('.0'): sh_v = sh_v[:-2]
+                                return db_v == sh_v
+                            df_filtered = df_filtered[df_filtered['관경(Inch)'].apply(check_pipe)]
+                            
+                        joints = pd.to_numeric(df_filtered.get('조인트수', pd.Series(dtype=float)), errors='coerce').sum()
+                        qty_col = df_filtered.get('검사량', df_filtered.get('Usage', pd.Series(dtype=float)))
+                        qty = pd.to_numeric(qty_col, errors='coerce').sum()
+                        adj_qty = pd.to_numeric(df_filtered.get('환산물량', pd.Series(dtype=float)), errors='coerce').sum()
+                        
+                        mat_name = ""
+                        if not df_filtered.empty and 'MaterialID' in df_filtered.columns and mat_df is not None:
+                            mat_ids = df_filtered['MaterialID'].dropna().unique()
+                            if len(mat_ids) > 0:
+                                m_df = mat_df[mat_df['MaterialID'] == mat_ids[0]]
+                                if not m_df.empty:
+                                    mat_name = str(m_df.iloc[0].get('품목명', '')).strip()
+                                    
+                        return joints, qty, adj_qty, mat_name
+
+                    current_method = 'RT'
+                    for r in range(1, ws.max_row + 1):
+                        val_a = str(ws[f'A{r}'].value or '').strip()
+                        if '초음파' in val_a:
+                            current_method = 'UT'
+                        elif '침투' in val_a:
+                            current_method = 'PT'
+                            
+                        if val_a in ['주간', '일반', '휴일/야간', '야간', '휴일']:
+                            val_b = str(ws[f'B{r}'].value or '').strip()
+                            if not val_b: continue
+                            
+                            ori_j, ori_q, ori_adj, ori_mat = get_sums(current_method, 'ORI', val_a, val_b)
+                            rep_j, rep_q, rep_adj, _ = get_sums(current_method, 'REP', val_a, val_b)
+                            
+                            if current_method == 'RT':
+                                # Calculate film per joint
+                                if ori_j > 0:
+                                    ws[f'C{r}'] = round(ori_q / ori_j, 1)
+                                elif rep_j > 0:
+                                    ws[f'C{r}'] = round(rep_q / rep_j, 1)
+                                    
+                                ws[f'D{r}'] = (ori_j + rep_j) if (ori_j + rep_j) > 0 else '-'
+                                ws[f'E{r}'] = ori_q if ori_q > 0 else '-'
+                                ws[f'F{r}'] = rep_q if rep_q > 0 else '-'
+                                ws[f'G{r}'] = f"=SUM(E{r}:F{r})"
+                                
+                                # 필름 규격 (B, A, A/2)
+                                film_size = ""
+                                try:
+                                    clean_val = str(val_b).replace('"', '').replace("'", '').strip()
+                                    if '/' in clean_val and len(clean_val) <= 5:
+                                        parts = clean_val.split('/')
+                                        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                                            f_val = float(parts[0]) / float(parts[1])
+                                        else:
+                                            f_val = 0.0
+                                    else:
+                                        import re
+                                        m = re.match(r'^([\d\.]+)', clean_val)
+                                        f_val = float(m.group(1)) if m else 0.0
+                                        
+                                    if f_val >= 14: film_size = 'B-TYPE'
+                                    elif f_val > 4: film_size = 'A-TYPE'
+                                    else: film_size = 'A/2-TYPE'
+                                except Exception:
+                                    pass
+                                    
+                                if film_size:
+                                    ws[f'H{r}'] = film_size
+                                    
+                            elif current_method in ['UT', 'PT']:
+                                ws[f'D{r}'] = (ori_j + rep_j) if (ori_j + rep_j) > 0 else '-'
+                                ws[f'E{r}'] = ori_q if ori_q > 0 else '-'
+                                ws[f'G{r}'] = ori_adj if ori_adj > 0 else '-'
+                            
+                            # Fix borders for the row and header
+                            from openpyxl.styles import Border, Side
+                            thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+                            for col in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
+                                ws[f'{col}{r}'].border = thin_border
+                                if r == 6: # Apply to header row 5 as well when we process the first data row
+                                    ws[f'{col}5'].border = thin_border
+
+                for s_name in wb_temp.sheetnames:
+                    if "세부 내역" in s_name or "세부내역" in s_name:
+                        ws_detail = wb_temp[s_name]
+                        if "(열배관)" in s_name:
+                            inject_detailed_ndt_status(ws_detail, "열배관")
+                        elif "(관리소)" in s_name:
+                            inject_detailed_ndt_status(ws_detail, "관리소")
+                
+            # 4. 저장 및 완료
+            wb_temp.save(output_path)
+            self.root.config(cursor="")
+            
+            messagebox.showinfo("생성 완료", f"월간 보고서가 성공적으로 생성되었습니다!\n\n저장 경로: {output_path}")
+            os.startfile(dir_name)
+            
+        except Exception as e:
+            self.root.config(cursor="")
+            messagebox.showerror("오류 발생", f"보고서 생성 중 문제가 발생했습니다:\n{str(e)}")
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = CodebookApp(root)
+    root.mainloop()
