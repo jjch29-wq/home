@@ -5214,6 +5214,8 @@ class PMIReportApp:
 
     def _get_mode_info(self, mode):
         """Helper to get core UI/Data objects for a specific module mode."""
+        if mode == "MT":
+            return (self.mt_preview_tree, self.mt_item_idx_map, self.mt_extracted_data, self.mt_column_keys)
         if mode == "PMI":
             return (self.preview_tree, self.item_idx_map, self.extracted_data, self.column_keys)
         elif mode == "RT":
@@ -7450,28 +7452,8 @@ class PMIReportApp:
         except: return 1
 
     def load_daily_work_history(self):
-        """작업 감독일보에 저장된 NDT 누계 대장 데이터(daily_work_history.json)를 불러옵니다."""
+        """사업장별 작업 감독일보에서 확인한 NDT 항목만 읽어 가져옵니다."""
         try:
-            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
-            if not os.path.exists(history_path):
-                messagebox.showerror("오류", "daily_work_history.json 파일이 존재하지 않습니다.\n(중앙지사 어플에서 작업 감독일보를 저장했는지 확인하세요)")
-                return
-            with open(history_path, 'r', encoding='utf-8') as f:
-                history = json.load(f)
-            
-            ndt_list = []
-            for date_str, data in history.items():
-                results = data.get("ndt_results", [])
-                for r in results:
-                    # 기본적으로 빈 값은 제거
-                    r_clean = {k: str(v).strip() for k, v in r.items() if str(v).strip()}
-                    r_clean["Date"] = date_str
-                    ndt_list.append(r_clean)
-            
-            if not ndt_list:
-                messagebox.showinfo("알림", "저장된 NDT 비파괴검사 결과 데이터가 없습니다.")
-                return
-                
             try:
                 main_tab = self.mode_notebook.tab(self.mode_notebook.select(), "text")
                 if "RT" in main_tab:
@@ -7483,17 +7465,27 @@ class PMIReportApp:
                 else: mode = "PMI"
             except: mode = "PMI"
             
+            from ndt_history_import import select_history_rows
+            ndt_list = select_history_rows(self.root, mode)
+            if not ndt_list:
+                return
             tree, idx_map, data, keys_attr = self._get_mode_info(mode)
             
             # Map NDT data to the tree columns
+            source_site = ndt_list[0]['_source_site']
+            if data and any(row.get('_source_site') != source_site for row in data):
+                if not messagebox.askyesno('사업장 확인',
+                    f'현재 보고서에 다른 사업장 또는 출처 미확인 자료가 있습니다.\n{source_site} 자료를 함께 추가할까요?'):
+                    return
+            existing_ids = {row.get('_source_id') for row in data if row.get('_source_id')}
             added_count = 0
             for r in ndt_list:
-                # 업체, 검사방법 필터 (선택적)
-                if mode == "PT" and "PT" not in r.get("검사방법", ""): continue
-                if mode == "PAUT" and "PAUT" not in r.get("검사방법", ""): continue
-                if mode in ("RT", "KOGAS") and "RT" not in r.get("검사방법", ""): continue
-
+                if r.get('_source_id') and r['_source_id'] in existing_ids:
+                    continue
                 new_row = {k: "" for k in keys_attr}
+                new_row['_source_site'] = r['_source_site']
+                new_row['_source_path'] = r['_source_path']
+                new_row['_source_id'] = r.get('_source_id')
                 new_row["Date"] = r.get("Date", "")
 
                 # 중앙지사 작업/감독일보의 '구간'은 RT의 SEC 값이다.
@@ -7517,18 +7509,11 @@ class PMIReportApp:
                 thickness = r.get("두께", "")
                 if "Size" in keys_attr: new_row["Size"] = size
                 
-                # Auto-map Thickness based on Size if Th'k is missing
-                if not thickness and size:
-                    thk_mapping = {
-                        "1100": "11.1", "1000": "11.1", "900": "10.3", "850": "10.3", "800": "9.5",
-                        "750": "8.7", "700": "8.7", "650": "8.7", "600": "9.5", "550": "9.5",
-                        "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4", "150": "4.5", "100": "4.5", "80": "4.5"
-                    }
-                    lookup_key = str(size).replace("A", "").strip()
-                    thickness = thk_mapping.get(lookup_key, size)
-
-                if "T" in keys_attr and not new_row.get("T"): new_row["T"] = thickness if thickness else size
-                if "Th'k(mm)" in keys_attr: new_row["Th'k(mm)"] = thickness if thickness else size
+                # 두께는 원본 명시값만 사용한다. 관경으로 추정하지 않는다.
+                if "T" in keys_attr: new_row["T"] = thickness
+                if "Th'k(mm)" in keys_attr: new_row["Th'k(mm)"] = thickness
+                if not thickness and any(k in keys_attr for k in ('T', "Th'k(mm)")):
+                    new_row['Remarks'] = '두께 확인 필요'
                 # 용접사 / Welder
                 welder = r.get("용접사", "")
                 if "Welder" in keys_attr: new_row["Welder"] = welder
@@ -7565,6 +7550,8 @@ class PMIReportApp:
                 if "No" in keys_attr: new_row["No"] = str(len(data) + 1)
                 
                 data.append(new_row)
+                if r.get('_source_id'):
+                    existing_ids.add(r['_source_id'])
                 
                 row_vals = [new_row.get(k, "") for k in keys_attr]
                 row_tags = []
@@ -7578,7 +7565,7 @@ class PMIReportApp:
                 added_count += 1
                 
             self.update_date_listbox(mode=mode)
-            messagebox.showinfo("완료", f"작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
+            messagebox.showinfo("완료", f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
             
         except Exception as e:
             import traceback
@@ -8610,14 +8597,12 @@ class PMIReportApp:
             data = self.kogas_extracted_data
         elif mode == "PT":
             target_file = self.pt_target_file_path.get()
-        elif mode == "MT":
-            target_file = self.mt_target_file_path.get()
             template_path = self.pt_template_file_path.get()
             data = self.pt_extracted_data
         elif mode == "MT":
             target_file = self.mt_target_file_path.get()
-            template_path = self.pt_template_file_path.get()
-            data = self.pt_extracted_data
+            template_path = self.mt_template_file_path.get()
+            data = self.mt_extracted_data
         else:
             target_file = self.target_file_path.get()
             template_path = self.template_file_path.get()
@@ -8642,6 +8627,7 @@ class PMIReportApp:
             if not self.extract_only(show_msg=False): return
             # Re-fetch data after extraction
             if mode == "PT": data = self.pt_extracted_data
+            elif mode == "MT": data = self.mt_extracted_data
             elif mode == "RT": data = self.rt_extracted_data
             elif mode == "KOGAS": data = self.kogas_extracted_data
             else: data = self.extracted_data
