@@ -8,7 +8,9 @@ import unittest
 
 SRC = Path(__file__).resolve().parents[1] / 'src'
 sys.path.insert(0, str(SRC))
-from services.lotte_planned_budget import load_planned_budget
+from site_apps.lotte.src.services.lotte_planned_budget import load_planned_budget
+
+LOTTE_SRC = SRC / 'site_apps/lotte/src'
 
 
 class Field:
@@ -26,22 +28,23 @@ class Field:
 
 
 def widget_class(name):
-    tree = ast.parse((SRC / 'views/components.py').read_text(encoding='utf-8-sig'))
+    tree = ast.parse((LOTTE_SRC / 'views/components.py').read_text(encoding='utf-8-sig'))
     node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == name)
     node.bases = []
     scope = {}
-    exec(compile(ast.Module(body=[node], type_ignores=[]), str(SRC / 'views/components.py'), 'exec'), scope)
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(LOTTE_SRC / 'views/components.py'), 'exec'), scope)
     return scope[name]
 
 
 class PlannedBudgetTests(unittest.TestCase):
     def test_workbook_totals_using_widget_calculations(self):
         baseline = load_planned_budget()
-        source = json.loads((SRC / 'services/lotte_planned_budget.json').read_text(encoding='utf-8'))['cells']
+        source = json.loads((LOTTE_SRC / 'services/lotte_planned_budget.json').read_text(encoding='utf-8'))['cells']
         labor = widget_class('LaborCostDetailWidget').__new__(widget_class('LaborCostDetailWidget'))
         labor.ranks = list(baseline['labor'])[:8]
         labor.special_types = list(baseline['labor'])[8:]
         labor.exact_rates = True
+        labor.default_labor = baseline['labor']
         labor.entries = {k: {col: Field(v) for col, v in row.items()} for k, row in baseline['labor'].items()}
         labor.totals = {k: Field() for k in labor.entries}
         for label in ('t1_personnel_sum', 't1_days_sum', 't1_cost_sum',
@@ -83,8 +86,8 @@ class PlannedBudgetTests(unittest.TestCase):
         self.assertEqual(expense.entries['depreciation'][4]['qty'].get(), '0')
 
     def test_all_changed_python_files_parse(self):
-        for name in ('views/components.py', 'services/lotte_planned_budget.py', '롯데건설 바이오로직스.py'):
-            ast.parse((SRC / name).read_text(encoding='utf-8-sig'))
+        for name in ('views/components.py', 'services/lotte_planned_budget.py', 'app.py'):
+            ast.parse((LOTTE_SRC / name).read_text(encoding='utf-8-sig'))
 
 
 if __name__ == '__main__':

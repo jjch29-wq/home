@@ -9,6 +9,19 @@ import os
 import pandas as pd
 import tkinter as tk
 
+def get_appdata_dir(app_name):
+    """
+    Returns a safe, writable directory in the user's AppData for storing config/data.
+    Ensures the directory exists.
+    """
+    appdata = os.getenv('APPDATA')
+    if not appdata:
+        appdata = os.path.expanduser('~')
+    
+    target_dir = os.path.join(appdata, 'PMI_Apps', app_name)
+    os.makedirs(target_dir, exist_ok=True)
+    return target_dir
+
 def install_and_import(package, import_name=None):
     if import_name is None: import_name = package
     try:
