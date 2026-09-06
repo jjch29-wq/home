@@ -17,7 +17,7 @@ class IsoDrawer(tk.Tk):
         self.project = Project()
         self.cursor = None
         self._build()
-        self._bind()
+        self._setup_binds()
         self.redraw()
 
     def _build(self):
@@ -40,7 +40,7 @@ class IsoDrawer(tk.Tk):
         self.status = tk.StringVar(); ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w", padding=4).pack(fill="x")
         self.scale, self.ox, self.oy = 1.0, 0.0, 0.0
 
-    def _bind(self):
+    def _setup_binds(self):
         self.canvas.bind("<Button-1>", self.click); self.canvas.bind("<Motion>", self.motion)
         self.canvas.bind("<Button-3>", lambda e: self.end_line()); self.bind("<Escape>", lambda e: self.end_line())
         self.canvas.bind("<MouseWheel>", self.zoom); self.canvas.bind("<ButtonPress-2>", self.pan_start); self.canvas.bind("<B2-Motion>", self.pan)
@@ -102,9 +102,9 @@ class IsoDrawer(tk.Tk):
                 for k in ("line_no","size","spec"): self.vars[k].set(getattr(self.project,k))
                 self.fit()
             except Exception as ex: messagebox.showerror("열기 실패",str(ex))
-    def dxf(self): self._export(".dxf", export_dxf, [("DXF 도면","*.dxf")])
-    def pdf(self): self._export(".pdf", export_pdf, [("PDF 도면","*.pdf")])
-    def _export(self, ext, func, types):
+    def dxf(self): self._do_export(".dxf", export_dxf, [("DXF 도면","*.dxf")])
+    def pdf(self): self._do_export(".pdf", export_pdf, [("PDF 도면","*.pdf")])
+    def _do_export(self, ext, func, types):
         if len(self.project.points)<2: return messagebox.showwarning("출력 불가","두 개 이상의 포인트를 입력하세요.")
         self.sync(); path=filedialog.asksaveasfilename(defaultextension=ext,filetypes=types)
         if path:
