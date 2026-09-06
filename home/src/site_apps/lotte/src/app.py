@@ -8441,6 +8441,12 @@ class MaterialManager:
             a_exp = float(self.ent_budget_actual_expense.get().replace(',', '') or 0)
             a_out = float(self.ent_budget_actual_outsource.get().replace(',', '') or 0)
             a_cost = a_lab + a_mat + a_exp + a_out
+            if hasattr(self, 'actual_expense_detail_widget') and hasattr(self.actual_expense_detail_widget, 'lbl_grand_total_cost'):
+                try:
+                    raw_t = self.actual_expense_detail_widget.lbl_grand_total_cost.cget('text')
+                    a_cost = float("".join(c for c in raw_t if c.isdigit() or c == '.') or 0)
+                except:
+                    pass
             a_profit = a_rev - a_cost
             a_margin = (a_profit / a_rev * 100) if a_rev > 0 else 0.0
             

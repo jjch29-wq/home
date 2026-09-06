@@ -16,7 +16,7 @@ except ImportError:
 
 try:
     from tkinterweb import HtmlFrame
-except ImportError:
+except (ImportError, OSError):
     HtmlFrame = None
 
 try:
@@ -400,8 +400,11 @@ class CodebookApp:
         viewer_frame.pack(side="top", fill="both", expand=True, padx=10, pady=5)
         
         if HtmlFrame:
-            self.html_viewer = HtmlFrame(viewer_frame, messages_enabled=False)
-            self.html_viewer.pack(fill="both", expand=True)
+            try:
+                self.html_viewer = HtmlFrame(viewer_frame, messages_enabled=False)
+                self.html_viewer.pack(fill="both", expand=True)
+            except OSError:
+                self.html_viewer = None
         else:
             self.html_viewer = None
             

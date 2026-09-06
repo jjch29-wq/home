@@ -11,57 +11,22 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
 DEFAULT_CONFIG = {
-    "MATERIAL_COST": {
-        "PAUT_300A 이상": 37559,
-        "PAUT_250A": 37559,
-        "PAUT_200A": 37559,
-        "PAUT_150A-125A": 38229,
-        "PAUT_100A 이하": 38229,
-        "RT_3 1/3 x 12\"": 9274,
-        "RT_3 1/3 x 6\"": 8044,
-        "MT_MT": 411,
-        "PT_PT": 1177
-    },
-    "LABOR_COST": {
-        "열배관": {
-            "일반": {
-                "PAUT_300A 이상": 65200, "PAUT_250A": 76163, "PAUT_200A": 87348, "PAUT_150A-125A": 98560, "PAUT_100A 이하": 92362,
-                "RT_3 1/3 x 12\"": 51885, "RT_3 1/3 x 6\"": 51885,
-                "MT_MT": 29771, "PT_PT": 30847
-            },
-            "야간": {
-                "PAUT_300A 이상": 97800, "PAUT_250A": 114243, "PAUT_200A": 131021, "PAUT_150A-125A": 147841, "PAUT_100A 이하": 138544,
-                "RT_3 1/3 x 12\"": 77833, "RT_3 1/3 x 6\"": 77833,
-                "MT_MT": 44659, "PT_PT": 46272
-            }
-        }
+    "UNIT_PRICE": {
+        "PT_PT": 4200,
+        "MT_MT": 4200,
+        "RT_RT": 25500,
+        "PAUT_PAUT": 18500,
+        "PMI_PMI": 14300,
+        "UT_UT": 9300
     },
     "CONTRACT_QTY": {
-        "열배관": {
-            "일반": {
-                "PAUT_300A 이상": 129,
-                "PAUT_250A": 4,
-                "PAUT_200A": 4,
-                "PAUT_150A-125A": 1,
-                "PAUT_100A 이하": 1,
-                "RT_3 1/3 x 12\"": 293,
-                "RT_3 1/3 x 6\"": 105,
-                "MT_MT": 26,
-                "PT_PT": 26
-            },
-            "야간": {
-                "PAUT_300A 이상": 624,
-                "PAUT_250A": 1,
-                "PAUT_200A": 2,
-                "PAUT_150A-125A": 1,
-                "PAUT_100A 이하": 1,
-                "RT_3 1/3 x 12\"": 43,
-                "RT_3 1/3 x 6\"": 49,
-                "MT_MT": 1,
-                "PT_PT": 1
-            }
-        }
-    },
+        "PT_PT": 5900,
+        "MT_MT": 5900,
+        "RT_RT": 10300,
+        "PAUT_PAUT": 2000,
+        "PMI_PMI": 670,
+        "UT_UT": 88
+    }
 }
 
 def load_config():
@@ -72,19 +37,25 @@ def load_config():
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            # 2026 신규 단가계약 스키마가 없는 경우(과거 config.json) DEFAULT로 덮어쓰기
-            if "PAUT_300A 이상" not in config.get("MATERIAL_COST", {}):
-                with open(CONFIG_FILE, 'w', encoding='utf-8') as fw:
-                    json.dump(DEFAULT_CONFIG, fw, ensure_ascii=False, indent=4)
-                return DEFAULT_CONFIG
+            
+            # Migrate old config structure to new flat structure
+            if "UNIT_PRICE" not in config:
+                if "MATERIAL_COST" in config:
+                    mat = config.get("MATERIAL_COST", {})
+                    lab = config.get("LABOR_COST", {})
+                    exp = config.get("EXPENSE_COST", {})
+                    unit_prices = {}
+                    for k in mat.keys():
+                        m = mat.get(k, 0)
+                        l = lab.get(k, 0) if isinstance(lab.get(k), (int, float)) else lab.get("일반", {}).get(k, 0)
+                        e = exp.get(k, 0)
+                        unit_prices[k] = m + l + e
+                    config["UNIT_PRICE"] = unit_prices
+                else:
+                    config["UNIT_PRICE"] = DEFAULT_CONFIG["UNIT_PRICE"]
                 
-            # Migrate old config to district heating schema
-            if "열배관" in config.get("LABOR_COST", {}):
-                config["LABOR_COST"]["열배관"] = config["LABOR_COST"].pop("열배관")
-                config["LABOR_COST"].pop("플랜트(관리소)", None)
                 with open(CONFIG_FILE, 'w', encoding='utf-8') as fw:
                     json.dump(config, fw, ensure_ascii=False, indent=4)
-                    
             return config
     except:
         return DEFAULT_CONFIG
@@ -95,8 +66,7 @@ def save_config(config):
 
 # 글로벌 변수
 CONFIG = load_config()
-MATERIAL_COST = CONFIG["MATERIAL_COST"]
-LABOR_COST = CONFIG["LABOR_COST"]
+UNIT_PRICE = CONFIG["UNIT_PRICE"]
 CONTRACT_QTY = CONFIG.get("CONTRACT_QTY", DEFAULT_CONFIG["CONTRACT_QTY"])
 
 class NDTCalculatorTab(ttk.Frame):
@@ -120,6 +90,14 @@ class NDTCalculatorTab(ttk.Frame):
         global CONFIG
         self.records = CONFIG.get("BILLING_RECORDS", [])
         
+        # Migrate old records missing unit_price
+        for res in self.records:
+            if "unit_price" not in res or res["unit_price"] == 0:
+                subtotal = res.get("subtotal", 0)
+                adj_qty = res.get("adjusted_qty", res.get("qty", 1))
+                if adj_qty > 0 and subtotal > 0:
+                    res["unit_price"] = int(subtotal / adj_qty)
+        
         if hasattr(self, 'tree'):
             for item in self.tree.get_children():
                 self.tree.delete(item)
@@ -128,16 +106,13 @@ class NDTCalculatorTab(ttk.Frame):
                 self.tree.insert("", tk.END, values=(
                     res.get("date", ""), res.get("loc", ""), res.get("ndt_type", ""), res.get("work_time", ""), 
                     res.get("material_type", ""), f"{res.get('qty', 0):.1f}", res.get("unit", ""),
-                    f"{res.get('corr', 1):.2f}", f"{res.get('adjusted_qty', 0):.2f}", 
-                    f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
-                    f"{res.get('overhead', 0):,}", f"{res.get('tech', 0):,}", f"{res.get('subtotal', 0):,}"
+                    f"{res.get('unit_price', 0):,}", f"{res.get('subtotal', 0):,}"
                 ))
             if hasattr(self, 'update_qty_summary'):
                 self.update_qty_summary()
 
     def save_billing_records(self):
         try:
-            from config_manager import save_config
             global CONFIG
             CONFIG["BILLING_RECORDS"] = self.records
             save_config(CONFIG)
@@ -241,28 +216,29 @@ class NDTCalculatorTab(ttk.Frame):
         self.ndt_type_var = tk.StringVar(value="PAUT")
         type_frame = ttk.Frame(left_frame)
         type_frame.pack(fill=tk.X, pady=5)
-        for t in ["PAUT", "RT", "MT", "PT"]:
+        for t in ["PAUT", "RT", "UT", "MT", "PT", "PMI"]:
             ttk.Radiobutton(type_frame, text=t, value=t, variable=self.ndt_type_var, command=self.update_dynamic_ui).pack(side=tk.LEFT, padx=10)
             
-        ttk.Label(left_frame, text="2. 작업 구분 (시간대)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
-        
         self.loc_type_var = tk.StringVar(value="열배관")
         self.work_time_var = tk.StringVar(value="일반")
         
-        type_time_frame2 = ttk.Frame(left_frame)
-        type_time_frame2.pack(fill=tk.X, pady=2)
-        ttk.Label(type_time_frame2, text="시간:").pack(side=tk.LEFT)
-        for t in ["일반", "야간"]:
-            ttk.Radiobutton(type_time_frame2, text=t, value=t, variable=self.work_time_var).pack(side=tk.LEFT, padx=5)
+        # Hide 시간대
+        # ttk.Label(left_frame, text="2. 작업 구분 (시간대)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
+        # type_time_frame2 = ttk.Frame(left_frame)
+        # type_time_frame2.pack(fill=tk.X, pady=2)
+        # ttk.Label(type_time_frame2, text="시간:").pack(side=tk.LEFT)
+        # for t in ["일반", "야간"]:
+        #     ttk.Radiobutton(type_time_frame2, text=t, value=t, variable=self.work_time_var).pack(side=tk.LEFT, padx=5)
 
-        self.material_lbl = ttk.Label(left_frame, text="3. 세부 규격 및 조건", font=("Arial", 11, "bold"))
+        self.material_lbl = ttk.Label(left_frame, text="2. 세부 규격 및 조건", font=("Arial", 11, "bold"))
         self.material_lbl.pack(anchor=tk.W, pady=(10, 5))
-        self.material_var = tk.StringVar(value='RT (B필름: 3⅓"x17")')
-        self.material_combo = ttk.Combobox(left_frame, textvariable=self.material_var, values=['RT (B필름: 3⅓"x17")', 'RT (A필름: 3⅓"x12")', 'RT (A/2필름: 3⅓"x6")'], state="readonly")
+        self.material_var = tk.StringVar(value='PAUT')
+        self.material_combo = ttk.Combobox(left_frame, textvariable=self.material_var, values=['PAUT'], state="readonly")
         self.material_combo.pack(fill=tk.X, pady=5)
         
         self.dynamic_frame = ttk.LabelFrame(left_frame, text="4. 보정계수 조건 선택", padding=10)
-        self.dynamic_frame.pack(fill=tk.X, pady=(10, 5))
+        # Hide dynamic frame
+        # self.dynamic_frame.pack(fill=tk.X, pady=(10, 5))
         
         self.source_frame = ttk.Frame(self.dynamic_frame)
         ttk.Label(self.source_frame, text="• 방사선원 :", width=14).pack(side=tk.LEFT)
@@ -283,23 +259,24 @@ class NDTCalculatorTab(ttk.Frame):
         self.thickness_combo = ttk.Combobox(self.thickness_frame, textvariable=self.thickness_var, state="readonly")
         self.thickness_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        ttk.Label(left_frame, text="5. 실검사 물량 (RT: 매 / UT,PT: Meter)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
+        ttk.Label(left_frame, text="3. 실검사 물량", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(10, 5))
         self.quantity_var = tk.DoubleVar(value=10.0)
         ttk.Entry(left_frame, textvariable=self.quantity_var).pack(fill=tk.X, pady=5)
         
-        rate_outer_frame = ttk.Frame(left_frame)
-        rate_outer_frame.pack(fill=tk.X, pady=(15, 5))
-        ttk.Label(rate_outer_frame, text="6. 적용 요율 (%)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 5))
+        # Hide rate frame since it's hardcoded for Lotte Bio
+        # rate_outer_frame = ttk.Frame(left_frame)
+        # rate_outer_frame.pack(fill=tk.X, pady=(15, 5))
+        # ttk.Label(rate_outer_frame, text="6. 적용 요율 (%)", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 5))
         
-        rate_frame = ttk.Frame(rate_outer_frame)
-        rate_frame.pack(fill=tk.X)
-        ttk.Label(rate_frame, text="제경비율:").pack(side=tk.LEFT)
-        self.overhead_rate_var = tk.DoubleVar(value=110.0)
-        ttk.Entry(rate_frame, textvariable=self.overhead_rate_var, width=8).pack(side=tk.LEFT, padx=5)
+        # rate_frame = ttk.Frame(rate_outer_frame)
+        # rate_frame.pack(fill=tk.X)
+        # ttk.Label(rate_frame, text="제경비율:").pack(side=tk.LEFT)
+        self.overhead_rate_var = tk.DoubleVar(value=0.0)
+        # ttk.Entry(rate_frame, textvariable=self.overhead_rate_var, width=8).pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(rate_frame, text="기술료율:").pack(side=tk.LEFT, padx=(10, 0))
-        self.tech_fee_rate_var = tk.DoubleVar(value=20.0)
-        ttk.Entry(rate_frame, textvariable=self.tech_fee_rate_var, width=8).pack(side=tk.LEFT, padx=5)
+        # ttk.Label(rate_frame, text="기술료율:").pack(side=tk.LEFT, padx=(10, 0))
+        self.tech_fee_rate_var = tk.DoubleVar(value=0.0)
+        # ttk.Entry(rate_frame, textvariable=self.tech_fee_rate_var, width=8).pack(side=tk.LEFT, padx=5)
         
         btn_frame = ttk.Frame(left_frame)
         btn_frame.pack(fill=tk.X, pady=15)
@@ -329,8 +306,8 @@ class NDTCalculatorTab(ttk.Frame):
         
         content_frame = ttk.Frame(billing_container)
         content_frame.pack(fill=tk.BOTH, expand=True)
-        content_frame.columnconfigure(0, weight=2)  # Left frame takes 2/3
-        content_frame.columnconfigure(1, weight=1)  # Right frame takes 1/3
+        content_frame.columnconfigure(0, weight=1)  # Left frame takes 1/1
+        content_frame.columnconfigure(1, weight=0)  # Right frame hidden
         content_frame.rowconfigure(0, weight=1)
         
         contract_frame = ttk.LabelFrame(content_frame, text="항목별 계약 및 전회 기성 (세액 미포함)", padding=10)
@@ -385,98 +362,92 @@ class NDTCalculatorTab(ttk.Frame):
         
         self.contract_vars = {}
         
-        headers = ["구간", "시간", "항목", "단위", "계약수량", "전회수량", "금회수량", "잔여수량", "계약단가", "계약금액", "전회금액"]
+        headers = ["항목", "단위", "계약수량", "전회수량", "금회수량", "잔여수량", "계약단가", "계약금액", "전회금액"]
         for i, h in enumerate(headers):
             ttk.Label(contract_inner_frame, text=h, font=("Arial", 9, "bold"), anchor="center").grid(row=0, column=i, padx=5, pady=2, sticky="ew")
             
-        locations = ["열배관"]
-        times = ["일반", "야간"]
         materials = [
-            ("PAUT_300A 이상", "PAUT 300A 이상"),
-            ("PAUT_250A", "PAUT 250A"),
-            ("PAUT_200A", "PAUT 200A"),
-            ("PAUT_150A-125A", "PAUT 150A-125A"),
-            ("PAUT_100A 이하", "PAUT 100A 이하"),
-            ("RT_3 1/3 x 12\"", 'RT 3 1/3 x 12"'),
-            ("RT_3 1/3 x 6\"", 'RT 3 1/3 x 6"'),
+            ("PT_PT", "PT"),
             ("MT_MT", "MT"),
-            ("PT_PT", "PT")
+            ("RT_RT", "RT"),
+            ("PAUT_PAUT", "PAUT"),
+            ("PMI_PMI", "PMI"),
+            ("UT_UT", "UT")
         ]
+
         
         row_idx = 1
-        for loc in locations:
-            for t_time in times:
-                for m_key, m_name in materials:
-                    unit = "매" if m_key.startswith("RT") else "M"
-                    full_key = f"{loc}_{t_time}_{m_key}"
+        for m_key, m_name in materials:
+            if m_key == "PMI_PMI": unit = "JOINT"
+            elif m_key == "RT_RT": unit = "SHEET"
+            else: unit = "D/I"
+            
+            full_key = f"{m_key}"
+            
+            ttk.Label(contract_inner_frame, text=m_name).grid(row=row_idx, column=0, sticky="w", padx=2)
+            ttk.Label(contract_inner_frame, text=unit).grid(row=row_idx, column=1, padx=2)
+            
+            c_qty = tk.StringVar(value="0")
+            p_qty = tk.StringVar(value="0")
+            curr_qty = tk.StringVar(value="0")
+            rem_qty = tk.StringVar(value="0")
+            
+            c_var = tk.StringVar(value="0")
+            p_var = tk.StringVar(value="0")
+            c_price_var = tk.StringVar(value="0")
+            
+            unit_cost = 0
+            try:
+                lab_unit = LABOR_COST.get(m_key, 0)
+                mat_unit = MATERIAL_COST.get(m_key, 0)
+                oh = EXPENSE_COST.get(m_key, 0)
+                tech = 0
+                
+                unit_cost = mat_unit + lab_unit + oh + tech
+            except Exception as e:
+                print(e)
+                pass
+            c_qty.trace_add("write", lambda *a, v=c_qty: format_qty(var=v))
+            p_qty.trace_add("write", lambda *a, v=p_qty: format_qty(var=v))
+            
+            def update_rem_qty(*args, k=full_key):
+                try:
+                    c = self.get_float(self.contract_vars[k]["c_qty"])
+                    p = self.get_float(self.contract_vars[k]["p_qty"])
+                    cur = self.get_float(self.contract_vars[k]["curr_qty"])
+                    rem = c - p - cur
+                    formatted_rem = f"{int(rem):,}" if rem.is_integer() else f"{rem:,.2f}"
+                    self.contract_vars[k]["rem_qty"].set(formatted_rem)
                     
-                    ttk.Label(contract_inner_frame, text=loc).grid(row=row_idx, column=0, sticky="w", padx=2)
-                    ttk.Label(contract_inner_frame, text=t_time).grid(row=row_idx, column=1, sticky="w", padx=2)
-                    ttk.Label(contract_inner_frame, text=m_name).grid(row=row_idx, column=2, sticky="w", padx=2)
-                    ttk.Label(contract_inner_frame, text=unit).grid(row=row_idx, column=3, padx=2)
+                    if rem < 0:
+                        self.contract_vars[k]["lbl_rem"].config(foreground="red")
+                    else:
+                        self.contract_vars[k]["lbl_rem"].config(foreground="blue")
+                except:
+                    pass
                     
-                    c_qty = tk.StringVar(value="0")
-                    p_qty = tk.StringVar(value="0")
-                    curr_qty = tk.StringVar(value="0")
-                    rem_qty = tk.StringVar(value="0")
+            c_qty.trace_add("write", update_rem_qty)
+            p_qty.trace_add("write", update_rem_qty)
+            curr_qty.trace_add("write", update_rem_qty)
+            
+            ttk.Entry(contract_inner_frame, textvariable=c_qty, width=8).grid(row=row_idx, column=2, padx=1, pady=1)
+            ttk.Entry(contract_inner_frame, textvariable=p_qty, width=8).grid(row=row_idx, column=3, padx=1, pady=1)
+            ttk.Label(contract_inner_frame, textvariable=curr_qty, width=6, anchor="e", foreground="green").grid(row=row_idx, column=4, padx=1, pady=1)
+            lbl_rem = ttk.Label(contract_inner_frame, textvariable=rem_qty, width=8, anchor="e", font=("Arial", 9, "bold"))
+            lbl_rem.grid(row=row_idx, column=5, padx=1, pady=1)
+            
+            ttk.Label(contract_inner_frame, textvariable=c_price_var, anchor="e", width=12).grid(row=row_idx, column=6, padx=2, pady=1)
+            ttk.Entry(contract_inner_frame, textvariable=c_var, width=12).grid(row=row_idx, column=7, padx=1, pady=1)
+            ttk.Entry(contract_inner_frame, textvariable=p_var, width=12).grid(row=row_idx, column=8, padx=1, pady=1)
                     
-                    c_var = tk.StringVar(value="0")
-                    p_var = tk.StringVar(value="0")
-                    c_price_var = tk.StringVar(value="0")
-                    
-                    unit_cost = 0
-                    try:
-                        lab_unit = LABOR_COST[loc][t_time].get(m_key, 0)
-                        mat_unit = MATERIAL_COST.get(m_key, 0)
-                        
-                        oh = int(lab_unit * float(self.overhead_rate_var.get()) / 100.0)
-                        tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
-                        
-                        unit_cost = mat_unit + lab_unit + oh + tech
-                    except Exception as e:
-                        print(e)
-                        pass
-                    c_qty.trace_add("write", lambda *a, v=c_qty: format_qty(var=v))
-                    p_qty.trace_add("write", lambda *a, v=p_qty: format_qty(var=v))
-                    
-                    def update_rem_qty(*args, k=full_key):
-                        try:
-                            c = self.get_float(self.contract_vars[k]["c_qty"])
-                            p = self.get_float(self.contract_vars[k]["p_qty"])
-                            cur = self.get_float(self.contract_vars[k]["curr_qty"])
-                            rem = c - p - cur
-                            formatted_rem = f"{int(rem):,}" if rem.is_integer() else f"{rem:,.2f}"
-                            self.contract_vars[k]["rem_qty"].set(formatted_rem)
-                            
-                            if rem < 0:
-                                self.contract_vars[k]["lbl_rem"].config(foreground="red")
-                            else:
-                                self.contract_vars[k]["lbl_rem"].config(foreground="blue")
-                        except:
-                            pass
-                            
-                    c_qty.trace_add("write", update_rem_qty)
-                    p_qty.trace_add("write", update_rem_qty)
-                    curr_qty.trace_add("write", update_rem_qty)
-                    
-                    ttk.Entry(contract_inner_frame, textvariable=c_qty, width=8).grid(row=row_idx, column=4, padx=1, pady=1)
-                    ttk.Entry(contract_inner_frame, textvariable=p_qty, width=8).grid(row=row_idx, column=5, padx=1, pady=1)
-                    ttk.Label(contract_inner_frame, textvariable=curr_qty, width=6, anchor="e", foreground="green").grid(row=row_idx, column=6, padx=1, pady=1)
-                    lbl_rem = ttk.Label(contract_inner_frame, textvariable=rem_qty, width=8, anchor="e", font=("Arial", 9, "bold"))
-                    lbl_rem.grid(row=row_idx, column=7, padx=1, pady=1)
-                    
-                    ttk.Label(contract_inner_frame, textvariable=c_price_var, anchor="e", width=12).grid(row=row_idx, column=8, padx=2, pady=1)
-                    ttk.Entry(contract_inner_frame, textvariable=c_var, width=12).grid(row=row_idx, column=9, padx=1, pady=1)
-                    ttk.Entry(contract_inner_frame, textvariable=p_var, width=12).grid(row=row_idx, column=10, padx=1, pady=1)
-                    
-                    c_var.trace_add("write", lambda *a, v=c_var: format_currency(var=v))
-                    p_var.trace_add("write", lambda *a, v=p_var: format_currency(var=v))
-                    
-                    self.contract_vars[full_key] = {
-                        "c_qty": c_qty, "p_qty": p_qty, "curr_qty": curr_qty, "rem_qty": rem_qty, "lbl_rem": lbl_rem,
-                        "c_price": unit_cost, "c_price_var": c_price_var, "contract": c_var, "prev": p_var
-                    }
-                    row_idx += 1
+            c_var.trace_add("write", lambda *a, v=c_var: format_currency(var=v))
+            p_var.trace_add("write", lambda *a, v=p_var: format_currency(var=v))
+            
+            self.contract_vars[full_key] = {
+                "c_qty": c_qty, "p_qty": p_qty, "curr_qty": curr_qty, "rem_qty": rem_qty, "lbl_rem": lbl_rem,
+                "c_price": unit_cost, "c_price_var": c_price_var, "contract": c_var, "prev": p_var
+            }
+            row_idx += 1
                     
         # Total Contract Amount Label
         self.total_contract_amt_var = tk.StringVar(value="총 계약금액: 0 원")
@@ -487,14 +458,12 @@ class NDTCalculatorTab(ttk.Frame):
             for k, v in self.contract_vars.items():
                 total += self.get_int(v["contract"])
                 
-            # 기타 경비 및 실비 정산 예산 합산
-            if hasattr(self, 'exp_vars'):
-                for k, v in self.exp_vars.items():
-                    total += self.get_int(v["budget"])
-            else:
-                total += 86944000 # exp_vars 초기화 전 기본 실비 합계 (단수조정 제거 후 순수 합계)
-                
             self.total_contract_amt_var.set(f"총 계약금액 (부가세 별도): {total:,} 원")
+            if hasattr(self, 'total_contract_var'):
+                try:
+                    self.total_contract_var.set(f"{total:,}")
+                except Exception:
+                    pass
             
         for k, v in self.contract_vars.items():
             v["contract"].trace_add("write", update_total_contract_amt)
@@ -516,7 +485,7 @@ class NDTCalculatorTab(ttk.Frame):
         f.pack(fill=tk.X, pady=2)
         ttk.Label(f, text="[프로젝트 총액]", width=12, font=("Arial", 9, "bold")).grid(row=0, column=0, rowspan=2, sticky=tk.W)
         ttk.Label(f, text="계약 총액:").grid(row=0, column=1, sticky=tk.W)
-        self.total_contract_var = tk.StringVar(value="288,268,000")
+        self.total_contract_var = tk.StringVar(value="0")
         self.total_contract_var.trace_add("write", lambda *a, v=self.total_contract_var: format_currency(var=v))
         ttk.Entry(f, textvariable=self.total_contract_var, width=15).grid(row=0, column=2, padx=2)
         ttk.Label(f, text="원").grid(row=0, column=3)
@@ -528,7 +497,7 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Label(f, text="원").grid(row=1, column=3)
         
         exp_frame = ttk.LabelFrame(content_frame, text="기타 경비 및 실비 정산 (월간)", padding=10)
-        exp_frame.grid(row=0, column=1, sticky='nsew')
+        # exp_frame.grid(row=0, column=1, sticky='nsew') # UI에서 완전히 숨김 처리
         
         hf = ttk.Frame(exp_frame)
         hf.pack(fill=tk.X, pady=2)
@@ -606,12 +575,15 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="일일 장부에서 연동", command=self.import_from_daily_db).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
+        ttk.Button(lbl_frame, text="전체 선택", command=self.select_all_records).pack(side=tk.RIGHT, padx=5)
 
         tree_container = ttk.Frame(bottom_frame)
         tree_container.pack(fill=tk.BOTH, expand=True)
 
-        columns = ("date", "loc", "type", "time", "mat", "qty", "unit", "mat_cost", "lab_cost", "overhead", "tech", "total_amt")
+        columns = ("date", "loc", "type", "time", "mat", "qty", "unit", "unit_price", "total_amt")
         self.tree = ttk.Treeview(tree_container, columns=columns, show="headings", height=8)
+        self.tree.bind('<Control-a>', self.select_all_records)
+        self.tree.bind('<Control-A>', self.select_all_records)
         
         self.tree.heading("date", text="일자", anchor="center")
         self.tree.heading("loc", text="구간/위치", anchor="center")
@@ -620,16 +592,13 @@ class NDTCalculatorTab(ttk.Frame):
         self.tree.heading("mat", text="자재", anchor="center")
         self.tree.heading("qty", text="실물량", anchor="center")
         self.tree.heading("unit", text="단위", anchor="center")
-        self.tree.heading("mat_cost", text="재료비(원)", anchor="center")
-        self.tree.heading("lab_cost", text="인건비(원)", anchor="center")
-        self.tree.heading("overhead", text="제경비(원)", anchor="center")
-        self.tree.heading("tech", text="기술료(원)", anchor="center")
+        self.tree.heading("unit_price", text="단가(원)", anchor="center")
         self.tree.heading("total_amt", text="공급가액(원)", anchor="center")
         
         default_widths = {
             "date": 80, "loc": 120, "type": 40, "time": 40, "mat": 90, 
             "qty": 40, "unit": 40,
-            "mat_cost": 70, "lab_cost": 70, "overhead": 60, "tech": 60, "total_amt": 80
+            "unit_price": 80, "total_amt": 100
         }
         saved_widths = CONFIG.get("TREE_WIDTHS", {})
         
@@ -640,11 +609,8 @@ class NDTCalculatorTab(ttk.Frame):
         self.tree.column("mat", width=saved_widths.get("mat", default_widths["mat"]), anchor="center")
         self.tree.column("qty", width=saved_widths.get("qty", default_widths["qty"]), anchor="center")
         self.tree.column("unit", width=saved_widths.get("unit", default_widths["unit"]), anchor="center")
-        self.tree.column("mat_cost", width=saved_widths.get("mat_cost", default_widths["mat_cost"]), anchor="center")
-        self.tree.column("lab_cost", width=saved_widths.get("lab_cost", default_widths["lab_cost"]), anchor="center")
-        self.tree.column("overhead", width=saved_widths.get("overhead", default_widths["overhead"]), anchor="center")
-        self.tree.column("tech", width=saved_widths.get("tech", default_widths["tech"]), anchor="center")
-        self.tree.column("total_amt", width=saved_widths.get("total_amt", default_widths["total_amt"]), anchor="center")
+        self.tree.column("unit_price", width=saved_widths.get("unit_price", default_widths["unit_price"]), anchor="e")
+        self.tree.column("total_amt", width=saved_widths.get("total_amt", default_widths["total_amt"]), anchor="e")
         
         tree_scroll = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree.yview)
         tree_hscroll = ttk.Scrollbar(tree_container, orient="horizontal", command=self.tree.xview)
@@ -761,24 +727,16 @@ class NDTCalculatorTab(ttk.Frame):
 
     def update_dynamic_ui(self, *args):
         ndt_type = self.ndt_type_var.get()
-        if ndt_type == "PAUT":
-            self.material_combo.config(values=["300A 이상", "250A", "200A", "150A-125A", "100A 이하"], state="readonly")
-            if self.material_var.get() not in ["300A 이상", "250A", "200A", "150A-125A", "100A 이하"]:
-                self.material_var.set("300A 이상")
-        elif ndt_type == "RT":
-            self.material_combo.config(values=['3 1/3 x 12"', '3 1/3 x 6"'], state="readonly")
-            if self.material_var.get() not in ['3 1/3 x 12"', '3 1/3 x 6"']:
-                self.material_var.set('3 1/3 x 12"')
-        elif ndt_type == "MT":
-            self.material_combo.config(values=["MT"], state="disabled")
-            self.material_var.set("MT")
-        elif ndt_type == "PT":
-            self.material_combo.config(values=["PT"], state="disabled")
-            self.material_var.set("PT")
-            
-        self.source_frame.pack_forget()
-        self.pipe_frame.pack_forget()
-        self.thickness_frame.pack_forget()
+        self.material_combo.config(values=[ndt_type], state="disabled")
+        self.material_var.set(ndt_type)
+        
+        # dynamic frames are hidden anyway, but just in case
+        try:
+            self.source_frame.pack_forget()
+            self.pipe_frame.pack_forget()
+            self.thickness_frame.pack_forget()
+        except:
+            pass
 
     def get_correction_factor(self):
         # 2026 단가계약은 고정 단가를 주로 사용하므로, 
@@ -793,10 +751,12 @@ class NDTCalculatorTab(ttk.Frame):
         material_type = self.material_var.get()
         qty = float(self.quantity_var.get())
         
-        unit_str = "매" if ndt_type == "RT" else "M"
-        
-        overhead_rate = float(self.overhead_rate_var.get()) / 100.0
-        tech_fee_rate = float(self.tech_fee_rate_var.get()) / 100.0
+        if ndt_type == "PMI":
+            unit_str = "JOINT"
+        elif ndt_type == "RT":
+            unit_str = "SHEET"
+        else:
+            unit_str = "D/I"
         
         corr = self.get_correction_factor()
         adjusted_qty = qty * corr
@@ -810,17 +770,9 @@ class NDTCalculatorTab(ttk.Frame):
             adjusted_quantity=adjusted_qty,
             material_key=key,
             ndt_type=ndt_type,
-            location=loc_type_val,
-            work_time=work_time,
-            material_costs=MATERIAL_COST,
-            labor_costs=LABOR_COST,
-            overhead_rate=overhead_rate,
-            technical_fee_rate=tech_fee_rate,
+            unit_prices=UNIT_PRICE
         )
-        total_mat_cost = costs["mat_cost"]
-        total_lab_cost = costs["lab_cost"]
-        overhead_cost = costs["overhead"]
-        tech_fee = costs["tech"]
+        unit_price = costs["unit_price"]
         subtotal = costs["subtotal"]
         vat = costs["vat"]
         total_amount = costs["total_amount"]
@@ -835,15 +787,11 @@ class NDTCalculatorTab(ttk.Frame):
             "material_type": material_type,
             "qty": qty,
             "unit": unit_str,
-            "corr": corr,
-            "adjusted_qty": adjusted_qty,
-            "mat_cost": total_mat_cost,
-            "lab_cost": total_lab_cost,
-            "overhead": overhead_cost,
-            "tech": tech_fee,
+            "unit_price": unit_price,
             "subtotal": subtotal,
             "vat": vat,
-            "total_amount": total_amount
+            "total_amount": total_amount,
+            "adjusted_qty": adjusted_qty
         }
 
     def calculate(self):
@@ -852,19 +800,11 @@ class NDTCalculatorTab(ttk.Frame):
             self.result_text.config(state=tk.NORMAL)
             self.result_text.delete(1.0, tk.END)
             
-            key = f"{res['ndt_type']}_{res['material_type']}"
-            mat_unit = MATERIAL_COST.get(key, MATERIAL_COST.get(res['material_type'], 0))
-            loc_type = getattr(self, "loc_type_var", None)
-            loc_type_val = loc_type.get() if loc_type else "열배관"
-            
-            if loc_type_val in LABOR_COST:
-                lab_unit = LABOR_COST[loc_type_val][res['work_time']].get(key, LABOR_COST[loc_type_val][res['work_time']].get(res['ndt_type'], 0))
-            else:
-                lab_unit = LABOR_COST.get(res['work_time'], {}).get(key, LABOR_COST.get(res['work_time'], {}).get(res['ndt_type'], 0))
+            unit_price = res.get('unit_price', 0)
             
             txt = (f"▶ [현재 입력값] 일자: {res['date']} | 구간: {res['loc']}\n"
-                   f"▶ [적용 기준] 재료비 단가: {mat_unit:,}원 | 인건비 단가: {lab_unit:,}원\n"
-                   f"▶ [공급 가액] {res['subtotal']:,} 원 (재료비 {res['mat_cost']:,} + 인건비 {res['lab_cost']:,} + 제경비 {res['overhead']:,} + 기술료 {res['tech']:,})\n"
+                   f"▶ [적용 기준] 통합 단가: {unit_price:,}원\n"
+                   f"▶ [공급 가액] {res['subtotal']:,} 원\n"
                    f"▶ [최종 금액] 총 청구액 {res['total_amount']:,} 원 (부가세 {res['vat']:,}원 포함)\n")
             
             self.result_text.insert(tk.END, txt)
@@ -913,8 +853,14 @@ class NDTCalculatorTab(ttk.Frame):
         try:
             import pandas as pd
             import os
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Lotte_Material_Inventory.xlsx')
-            if not os.path.exists(db_path):
+            
+            # [FIX] Use actual DB path from main_app instead of hardcoded data/ path
+            if hasattr(self, 'main_app') and hasattr(self.main_app, 'db_path') and os.path.exists(self.main_app.db_path):
+                db_path = self.main_app.db_path
+            else:
+                db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Lotte_Material_Inventory.xlsx')
+                
+            if not db_path or not os.path.exists(db_path):
                 messagebox.showerror("오류", "DB 파일을 찾을 수 없습니다.")
                 return
             df = pd.read_excel(db_path, sheet_name='DailyUsage')
@@ -931,7 +877,13 @@ class NDTCalculatorTab(ttk.Frame):
                     site_filter = self.main_app.cb_daily_filter_site.get().strip()
                     
                     if start_str or end_str:
-                        df['Date'] = pd.to_datetime(df['Date'])
+                        def _fix_date(x):
+                            if pd.isna(x): return x
+                            if isinstance(x, str):
+                                import re
+                                return re.sub(r'^([2-9]\d)-(\d{1,2})-(\d{1,2})$', r'20\1-\2-\3', x.strip().replace('.', '-'))
+                            return x
+                        df['Date'] = pd.to_datetime(df['Date'].apply(_fix_date), errors='coerce')
                         if start_str:
                             df = df[df['Date'] >= pd.to_datetime(start_str)]
                         if end_str:
@@ -942,7 +894,7 @@ class NDTCalculatorTab(ttk.Frame):
                 except Exception as e:
                     print(f"Date filter applying error: {e}")
                 
-            ndt_df = df[df['검사방법'].isin(['RT', 'UT', 'PT', 'PAUT'])]
+            ndt_df = df[df['검사방법'].isin(['RT', 'UT', 'PT', 'PAUT', 'MT', 'PMI'])]
             if ndt_df.empty:
                 messagebox.showinfo("안내", "연동할 NDT 작업 기록이 없습니다.")
                 return
@@ -998,18 +950,22 @@ class NDTCalculatorTab(ttk.Frame):
             self.contract_vars[k]["curr_qty"].set("0")
             
         for rec in self.records:
-            loc = "플랜트(관리소)" if "관리소" in rec["loc"] or "플랜트" in rec.get("loc_type", rec["loc"]) else "열배관"
-            t_time = rec.get("work_time", "일반")
-            ndt_type = rec["ndt_type"]
-            mat = ""
-            mat = f"{rec['ndt_type']}_{rec['material_type']}"
+            ndt = rec.get('ndt_type', '')
+            mat = f"{ndt}_{rec.get('material_type', '')}"
+            
+            # Map old materials to new simple keys
+            if "PAUT" in ndt or "PAUT" in mat: key = "PAUT_PAUT"
+            elif "PMI" in ndt or "PMI" in mat: key = "PMI_PMI"
+            elif "RT" in ndt or "RT" in mat: key = "RT_RT"
+            elif "PT" in ndt or "PT" in mat: key = "PT_PT"
+            elif "MT" in ndt or "MT" in mat: key = "MT_MT"
+            elif "UT" in ndt or "UT" in mat: key = "UT_UT"
+            else: key = mat
                 
-            if mat:
-                key = f"{loc}_{t_time}_{mat}"
-                if key in self.contract_vars:
-                    cur_val = self.get_float(self.contract_vars[key]["curr_qty"])
-                    new_val = cur_val + rec["qty"]
-                    self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
+            if key in self.contract_vars:
+                cur_val = self.get_float(self.contract_vars[key]["curr_qty"])
+                new_val = cur_val + float(rec.get("qty", 0))
+                self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
                     
         self.export_billing_data()
 
@@ -1043,8 +999,7 @@ class NDTCalculatorTab(ttk.Frame):
             self.tree.insert("", tk.END, values=(
                 res["date"], res["loc"], res["ndt_type"], res["work_time"], 
                 res["material_type"], f"{res['qty']:.1f}", res["unit"],
-                f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
-                f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
+                f"{res.get('unit_price', 0):,}", f"{res.get('subtotal', 0):,}"
             ))
             self.update_qty_summary()
             if auto_save:
@@ -1057,6 +1012,11 @@ class NDTCalculatorTab(ttk.Frame):
         self.update_qty_summary()
         self.save_billing_records()
         
+    def select_all_records(self, event=None):
+        for item in self.tree.get_children():
+            self.tree.selection_add(item)
+        return "break"
+
     def delete_selected_records(self, event=None):
         selected_items = self.tree.selection()
         if not selected_items:
@@ -1230,66 +1190,41 @@ class NDTCalculatorTab(ttk.Frame):
             messagebox.showerror("오류", f"저장 중 오류가 발생했습니다: {e}")
 
     def auto_load_contract_qty(self):
-        global CONFIG, MATERIAL_COST, LABOR_COST
+        global CONFIG, MATERIAL_COST, LABOR_COST, EXPENSE_COST
         CONFIG = load_config()
         MATERIAL_COST = CONFIG["MATERIAL_COST"]
         LABOR_COST = CONFIG["LABOR_COST"]
+        EXPENSE_COST = CONFIG.get("EXPENSE_COST", {})
         # 강제로 소스코드의 완벽한 마스터 물량(DEFAULT_CONFIG)을 불러오도록 수정
         contract_qtys = DEFAULT_CONFIG.get("CONTRACT_QTY", {})
         
         debug_msg = []
         updated_count = 0
         
-        for loc in contract_qtys:
-            for t_time in contract_qtys[loc]:
-                if isinstance(contract_qtys[loc][t_time], dict):
-                    for mat, val in contract_qtys[loc][t_time].items():
-                        key = f"{loc}_{t_time}_{mat}"
-                        if key in self.contract_vars:
-                            formatted = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
-                            self.contract_vars[key]["c_qty"].set(formatted)
-                            updated_count += 1
-                            if updated_count <= 3:
-                                debug_msg.append(f"{key}: {formatted}")
-                            
-                            # Recalculate unit cost dynamically based on latest config and UI rates
-                            try:
-                                lab_unit = LABOR_COST[loc][t_time].get(mat, 0)
-                                mat_unit = MATERIAL_COST.get(mat, 0)
-                                oh = int(lab_unit * float(self.overhead_rate_var.get()) / 100.0)
-                                tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
-                                unit_cost = mat_unit + lab_unit + oh + tech
-                                
-                                self.contract_vars[key]["c_price"] = unit_cost
-                                self.contract_vars[key]["c_price_var"].set(f"{int(unit_cost):,}")
-                            except Exception as e:
-                                unit_cost = self.contract_vars[key].get("c_price", 0)
-                                self.contract_vars[key].get("c_price_var", tk.StringVar()).set(f"{int(unit_cost):,}")
-                                
-                            amt = float(val) * unit_cost
-                            self.contract_vars[key]["contract"].set(f"{int(amt):,}")
-                else:
-                    # Backward compatibility if config.json hasn't been updated or has old format
-                    mat = t_time
-                    val = contract_qtys[loc][t_time]
-                    key = f"{loc}_일반_{mat}"
-                    if key in self.contract_vars:
-                        formatted = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
-                        self.contract_vars[key]["c_qty"].set(formatted)
-                        try:
-                            lab_unit = LABOR_COST[loc]["일반"].get(mat, 0)
-                            mat_unit = MATERIAL_COST.get(mat, 0)
-                            oh = int(lab_unit * float(self.overhead_rate_var.get()) / 100.0)
-                            tech = int((lab_unit + oh) * float(self.tech_fee_rate_var.get()) / 100.0)
-                            unit_cost = mat_unit + lab_unit + oh + tech
-                            
-                            self.contract_vars[key]["c_price"] = unit_cost
-                        except Exception:
-                            unit_cost = self.contract_vars[key].get("c_price", 0)
-                            
-                        amt = float(val) * unit_cost
-                        self.contract_vars[key]["contract"].set(f"{int(amt):,}")
+        for key, val in contract_qtys.items():
+            if key in self.contract_vars:
+                formatted = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
+                self.contract_vars[key]["c_qty"].set(formatted)
+                updated_count += 1
+                if updated_count <= 3:
+                    debug_msg.append(f"{key}: {formatted}")
+                
+                try:
+                    lab_unit = LABOR_COST.get(key, 0)
+                    mat_unit = MATERIAL_COST.get(key, 0)
+                    oh = EXPENSE_COST.get(key, 0)
+                    tech = 0
+                    unit_cost = mat_unit + lab_unit + oh + tech
                     
+                    self.contract_vars[key]["c_price"] = unit_cost
+                    self.contract_vars[key]["c_price_var"].set(f"{int(unit_cost):,}")
+                except Exception as e:
+                    unit_cost = self.contract_vars[key].get("c_price", 0)
+                    self.contract_vars[key].get("c_price_var", tk.StringVar()).set(f"{int(unit_cost):,}")
+                    
+                amt = float(val) * unit_cost
+                self.contract_vars[key]["contract"].set(f"{int(amt):,}")
+                
         msg = f"총 {updated_count}개의 항목이 업데이트 되었습니다.\n\n[업데이트 샘플]\n" + "\n".join(debug_msg)
         self.export_billing_data()
         messagebox.showinfo("불러오기 완료", msg)
@@ -1319,8 +1254,7 @@ class NDTCalculatorTab(ttk.Frame):
                     self.tree.insert("", tk.END, values=(
                         res["date"], res["loc"], res["ndt_type"], res["work_time"], 
                         res["material_type"], f"{res['qty']:.1f}", res["unit"],
-                        f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
-                        f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
+                        f"{res.get('unit_price', 0):,}", f"{res['subtotal']:,}"
                     ))
                     
                 curr_round = data.get("round", 1)
@@ -1333,18 +1267,28 @@ class NDTCalculatorTab(ttk.Frame):
             self.round_var.set(latest_data.get("round", max_round))
             cont = latest_data.get("contract", {})
             
-            # 하위 호환성 (과거 저장 파일에 'RT' 하나만 있는 경우 RT_B에 모두 몰아넣음)
-            if "RT" in cont and "RT_B" not in cont:
-                cont["RT_B"] = cont.pop("RT")
+            # 과거 파일 포맷과 현재 포맷 모두 호환되도록 계약 키 매핑 및 합산
+            aggregated = {}
+            for t in self.contract_vars.keys():
+                aggregated[t] = {"p_qty": 0.0, "prev": 0}
+                
+            for k, v in cont.items():
+                if "PAUT" in k: new_k = "PAUT_PAUT"
+                elif "PMI" in k: new_k = "PMI_PMI"
+                elif "RT" in k: new_k = "RT_RT"
+                elif "PT" in k: new_k = "PT_PT"
+                elif "MT" in k: new_k = "MT_MT"
+                elif "UT" in k: new_k = "UT_UT"
+                else: continue
+                
+                aggregated[new_k]["p_qty"] += float(v.get("p_qty", 0.0))
+                aggregated[new_k]["prev"] += int(v.get("prev", 0))
                 
             for t, v in self.contract_vars.items():
-                if t in cont:
-                    cq = cont[t].get("c_qty", 0.0)
-                    pq = cont[t].get("p_qty", 0.0)
-                    v["c_qty"].set(f"{int(cq):,}" if cq.is_integer() else f"{cq:,.2f}")
-                    v["contract"].set(f"{cont[t].get('contract', 0):,}")
-                    v["p_qty"].set(f"{int(pq):,}" if pq.is_integer() else f"{pq:,.2f}")
-                    v["prev"].set(f"{cont[t].get('prev', 0):,}")
+                if t in aggregated:
+                    pq = aggregated[t]["p_qty"]
+                    v["p_qty"].set(f"{int(pq):,}" if float(pq).is_integer() else f"{pq:,.2f}")
+                    v["prev"].set(f"{aggregated[t]['prev']:,}")
             
             self.update_qty_summary()
             
@@ -1388,49 +1332,7 @@ class NDTCalculatorTab(ttk.Frame):
         else:
             messagebox.showerror("오류", "문서_통합_관리_허브.py 파일을 찾을 수 없습니다.")
 
-    def open_settings(self):
-        top = tk.Toplevel(self)
-        top.title("단가 설정 (Settings)")
-        top.geometry("450x550")
-        top.configure(padx=20, pady=20)
-        
-        ttk.Label(top, text="[재료비 단가 설정]", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(0, 5))
-        mat_vars = {}
-        for k, v in MATERIAL_COST.items():
-            f = ttk.Frame(top)
-            f.pack(fill=tk.X, pady=2)
-            ttk.Label(f, text=k, width=25).pack(side=tk.LEFT)
-            var = tk.IntVar(value=v)
-            ttk.Entry(f, textvariable=var, width=15).pack(side=tk.RIGHT)
-            mat_vars[k] = var
-            
-        ttk.Label(top, text="[인건비 단가 설정]", font=("Arial", 11, "bold")).pack(anchor=tk.W, pady=(20, 5))
-        lab_vars = {}
-        for w_time in ["일반", "야간", "휴일"]:
-            ttk.Label(top, text=f"■ {w_time}", font=("Arial", 9, "bold")).pack(anchor=tk.W, pady=(5, 2))
-            lab_vars[w_time] = {}
-            for t in ["RT", "UT", "PT"]:
-                f = ttk.Frame(top)
-                f.pack(fill=tk.X, pady=2)
-                ttk.Label(f, text=f"{w_time} - {t}", width=25).pack(side=tk.LEFT)
-                var = tk.IntVar(value=LABOR_COST[w_time][t])
-                ttk.Entry(f, textvariable=var, width=15).pack(side=tk.RIGHT)
-                lab_vars[w_time][t] = var
-                
-        def save_and_close():
-            global MATERIAL_COST, LABOR_COST
-            for k, var in mat_vars.items():
-                MATERIAL_COST[k] = var.get()
-            for w_time in lab_vars:
-                for t, var in lab_vars[w_time].items():
-                    LABOR_COST[w_time][t] = var.get()
-            CONFIG["MATERIAL_COST"] = MATERIAL_COST
-            CONFIG["LABOR_COST"] = LABOR_COST
-            save_config(CONFIG)
-            messagebox.showinfo("저장 완료", "새로운 단가가 저장되었습니다.")
-            top.destroy()
-            
-        ttk.Button(top, text="단가 저장하기", command=save_and_close).pack(pady=20, ipady=5, fill=tk.X)
+
 
     def export_to_excel(self):
         target_records = []
@@ -1692,7 +1594,7 @@ class NDTCalculatorTab(ttk.Frame):
 
             # --- 세부 내역 테이블 ---
             headers = ["No.", "검사일자", "작업구간", "검사종류", "규격/자재", "근무형태", "실물량", "단위", "보정계수", "환산물량", 
-                       "재료비", "직접인건비", "제경비", "기술료", "공급가액소계"]
+                       "통합 단가", "", "", "", "공급가액소계"]
             
             start_row = row + 2
             for col, h in enumerate(headers, start=1):
@@ -1702,6 +1604,7 @@ class NDTCalculatorTab(ttk.Frame):
                 cell.Interior.Color = 14277081
                 cell.HorizontalAlignment = -4108
                 cell.Borders.LineStyle = 1
+            ws.Range(ws.Cells(start_row, 11), ws.Cells(start_row, 14)).Merge()
             
             ws.Columns(1).ColumnWidth = 15
             ws.Columns(2).ColumnWidth = 11
@@ -1720,7 +1623,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Columns(15).ColumnWidth = 16
             
             current_row = start_row + 1
-            total_mat = total_lab = total_ovr = total_tech = total_sub = 0
+            total_sub = 0
             idx = 1
             
             categories_det = ["RT_B", "RT_A", "RT_A2", "UT", "PT"]
@@ -1742,7 +1645,7 @@ class NDTCalculatorTab(ttk.Frame):
                     
                 if not group_records: continue
                 
-                sub_mat = sub_lab = sub_ovr = sub_tech = sub_sub = 0
+                sub_sub = 0
                 
                 aggregated = {}
                 for r in group_records:
@@ -1750,15 +1653,12 @@ class NDTCalculatorTab(ttk.Frame):
                     if key not in aggregated:
                         aggregated[key] = {
                             "date_list": [], "qty": 0.0, "adjusted_qty": 0.0,
-                            "mat_cost": 0, "lab_cost": 0, "overhead": 0, "tech": 0, "subtotal": 0
+                            "unit_price": 0, "subtotal": 0
                         }
                     aggregated[key]["date_list"].append(r["date"])
                     aggregated[key]["qty"] += r["qty"]
                     aggregated[key]["adjusted_qty"] += r["adjusted_qty"]
-                    aggregated[key]["mat_cost"] += r["mat_cost"]
-                    aggregated[key]["lab_cost"] += r["lab_cost"]
-                    aggregated[key]["overhead"] += r["overhead"]
-                    aggregated[key]["tech"] += r["tech"]
+                    aggregated[key]["unit_price"] = r.get("unit_price", 0)
                     aggregated[key]["subtotal"] += r["subtotal"]
                 
                 for key, data in aggregated.items():
@@ -1777,43 +1677,11 @@ class NDTCalculatorTab(ttk.Frame):
                     ws.Cells(current_row, 7).Value = data["qty"]
                     ws.Cells(current_row, 8).Value = key[4]
                     ws.Cells(current_row, 9).Value = key[5]
-                    loc_val = "플랜트(관리소)" if "관리소" in key[0] or "플랜트" in key[0] else "열배관"
-                    t_time = key[3]
-                    mat_raw = key[2]
-                    ndt_type = key[1]
+                    ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
                     
-                    mat = ""
-                    if ndt_type == "RT":
-                        if "17" in mat_raw: mat = "RT_B"
-                        elif "12" in mat_raw: mat = "RT_A"
-                        elif "6" in mat_raw: mat = "RT_A2"
-                    else:
-                        mat = ndt_type
-                        
-                    cat_key = f"{loc_val}_{t_time}_{mat}"
-                    c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
-                    
-                    if c_price > 0:
-                        exact_subtotal = int(data["qty"] * c_price)
-                        adj_tech = exact_subtotal - data["mat_cost"] - data["lab_cost"] - data["overhead"]
-                        
-                        ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
-                        ws.Cells(current_row, 11).Value = data["mat_cost"]
-                        ws.Cells(current_row, 12).Value = data["lab_cost"]
-                        ws.Cells(current_row, 13).Value = data["overhead"]
-                        ws.Cells(current_row, 14).Value = adj_tech
-                        ws.Cells(current_row, 15).Value = exact_subtotal
-                        
-                        # Update the data dictionary so that sub_mat/sub_lab/sub_sub sums use the adjusted values
-                        data["tech"] = adj_tech
-                        data["subtotal"] = exact_subtotal
-                    else:
-                        ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
-                        ws.Cells(current_row, 11).Value = data["mat_cost"]
-                        ws.Cells(current_row, 12).Value = data["lab_cost"]
-                        ws.Cells(current_row, 13).Value = data["overhead"]
-                        ws.Cells(current_row, 14).Value = data["tech"]
-                        ws.Cells(current_row, 15).Value = data["subtotal"]
+                    ws.Range(ws.Cells(current_row, 11), ws.Cells(current_row, 14)).Merge()
+                    ws.Cells(current_row, 11).Value = data["unit_price"]
+                    ws.Cells(current_row, 15).Value = data["subtotal"]
                     
                     unit_str = key[4]
                     for c in range(1, 16):
@@ -1830,20 +1698,14 @@ class NDTCalculatorTab(ttk.Frame):
                         elif c >= 11: 
                             cell.NumberFormat = "#,##0"
                     
-                    sub_mat += data["mat_cost"]; sub_lab += data["lab_cost"]
-                    sub_ovr += data["overhead"]; sub_tech += data["tech"]
                     sub_sub += data["subtotal"]
                     idx += 1; current_row += 1
                 
-                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
+                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
                 ws.Cells(current_row, 1).Value = f"[{display_names_det[g_type]}] 검사 소계"
                 ws.Cells(current_row, 1).HorizontalAlignment = -4108
                 ws.Cells(current_row, 1).Font.Bold = True
                 
-                ws.Cells(current_row, 11).Value = sub_mat
-                ws.Cells(current_row, 12).Value = sub_lab
-                ws.Cells(current_row, 13).Value = sub_ovr
-                ws.Cells(current_row, 14).Value = sub_tech
                 ws.Cells(current_row, 15).Value = sub_sub
                 
                 for c in range(1, 16):
@@ -1853,20 +1715,15 @@ class NDTCalculatorTab(ttk.Frame):
                     cell.Interior.Color = 15987699
                     if c >= 11: cell.NumberFormat = "#,##0"
                 
-                total_mat += sub_mat; total_lab += sub_lab; total_ovr += sub_ovr
-                total_tech += sub_tech; total_sub += sub_sub
+                total_sub += sub_sub
                 current_row += 1
                 
             # --- 전체 합계 ---
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
             ws.Cells(current_row, 1).Value = "검사 비용 합계"
             ws.Cells(current_row, 1).HorizontalAlignment = -4108
             ws.Cells(current_row, 1).Font.Bold = True
             
-            ws.Cells(current_row, 11).Value = total_mat
-            ws.Cells(current_row, 12).Value = total_lab
-            ws.Cells(current_row, 13).Value = total_ovr
-            ws.Cells(current_row, 14).Value = total_tech
             ws.Cells(current_row, 15).Value = total_sub
             
             for c in range(1, 16):
@@ -1967,44 +1824,33 @@ class NDTCalculatorTab(ttk.Frame):
 
     def show_contract_status(self):
         win = tk.Toplevel(self)
-        win.title("가산~가평 총 계약 수량")
-        win.geometry("500x350")
+        win.title("롯데바이오로직스 총 계약 수량")
+        win.geometry("400x300")
         
         main_frame = ttk.Frame(win, padding=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        ttk.Label(main_frame, text="📄 프로젝트 총 계약 수량 (실검사 물량 기준)", font=("Arial", 13, "bold")).pack(pady=(0, 15))
+        ttk.Label(main_frame, text="📄 총 계약 수량", font=("Arial", 13, "bold")).pack(pady=(0, 15))
         
-        tree = ttk.Treeview(main_frame, columns=("Type", "Pipeline", "Plant", "Total"), show="headings", height=8)
+        tree = ttk.Treeview(main_frame, columns=("Type", "Total", "Unit"), show="headings", height=8)
         tree.heading("Type", text="검사 종류")
-        tree.heading("Pipeline", text="수송배관 (열배관)")
-        tree.heading("Plant", text="플랜트 (관리소)")
         tree.heading("Total", text="총계")
+        tree.heading("Unit", text="단위")
         
         tree.column("Type", width=120, anchor=tk.CENTER)
-        tree.column("Pipeline", width=100, anchor=tk.E)
-        tree.column("Plant", width=100, anchor=tk.E)
         tree.column("Total", width=100, anchor=tk.E)
-        
-        pipe = CONTRACT_QTY.get("열배관", {})
-        plant = CONTRACT_QTY.get("플랜트(관리소)", {})
+        tree.column("Unit", width=80, anchor=tk.CENTER)
         
         items = [
-            ("RT (B필름: 17\")", pipe.get("RT_B", 0), plant.get("RT_B", 0), "매"),
-            ("RT (A필름: 12\")", pipe.get("RT_A", 0), plant.get("RT_A", 0), "매"),
-            ("RT (A/2필름: 6\")", pipe.get("RT_A2", 0), plant.get("RT_A2", 0), "매"),
-            ("UT", pipe.get("UT", 0), plant.get("UT", 0), "M"),
-            ("PT", pipe.get("PT", 0), plant.get("PT", 0), "M")
+            ("PT / MT", CONTRACT_QTY.get("PT_PT", 0), "D/I"),
+            ("RT", CONTRACT_QTY.get("RT_RT", 0), "SHEET"),
+            ("PAUT", CONTRACT_QTY.get("PAUT_PAUT", 0), "D/I"),
+            ("PMI", CONTRACT_QTY.get("PMI_PMI", 0), "JOINT"),
+            ("UT", CONTRACT_QTY.get("UT_UT", 0), "D/I")
         ]
         
-        for name, p_val, pl_val, unit in items:
-            total = round(p_val + pl_val, 2)
-            tree.insert("", tk.END, values=(
-                name,
-                f"{p_val:,.2f}".rstrip('0').rstrip('.') + f" {unit}",
-                f"{pl_val:,.2f}".rstrip('0').rstrip('.') + f" {unit}",
-                f"{total:,.2f}".rstrip('0').rstrip('.') + f" {unit}"
-            ))
+        for name, val, unit in items:
+            tree.insert("", tk.END, values=(name, f"{val:,.1f}".rstrip('0').rstrip('.'), unit))
             
         tree.pack(fill=tk.BOTH, expand=True)
         ttk.Button(main_frame, text="닫기", command=win.destroy).pack(pady=15)
@@ -2012,68 +1858,35 @@ class NDTCalculatorTab(ttk.Frame):
     def open_settings(self):
         settings_win = tk.Toplevel(self)
         settings_win.title("단가 설정")
-        settings_win.geometry("450x650")
+        settings_win.geometry("350x450")
         
-        main_frame = ttk.Frame(settings_win)
+        main_frame = ttk.Frame(settings_win, padding=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        canvas = tk.Canvas(main_frame)
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True, padx=10, pady=10)
-        scrollbar.pack(side="right", fill="y")
+        ttk.Label(main_frame, text="[ 통합 단가 설정 (원) ]", font=("Arial", 12, "bold")).pack(anchor=tk.W, pady=(0, 15))
         
         self.setting_entries = {}
-        
-        row = 0
-        ttk.Label(scrollable_frame, text="[ 재료비 단가 (원) ]", font=("Arial", 12, "bold")).grid(row=row, column=0, columnspan=2, pady=10, sticky="w")
-        row += 1
-        for key, val in MATERIAL_COST.items():
-            ttk.Label(scrollable_frame, text=key).grid(row=row, column=0, padx=10, pady=2, sticky="w")
-            var = tk.StringVar(value=str(val))
-            ttk.Entry(scrollable_frame, textvariable=var, width=15).grid(row=row, column=1, padx=10, pady=2)
-            self.setting_entries[("MATERIAL_COST", key)] = var
-            row += 1
+        for key, val in UNIT_PRICE.items():
+            f = ttk.Frame(main_frame)
+            f.pack(fill=tk.X, pady=5)
+            ttk.Label(f, text=key, width=15).pack(side=tk.LEFT)
+            var = tk.StringVar(value=f"{val:,}")
+            ttk.Entry(f, textvariable=var, width=15).pack(side=tk.RIGHT)
+            self.setting_entries[key] = var
             
-        ttk.Label(scrollable_frame, text="[ 인건비 단가 (원) ]", font=("Arial", 12, "bold")).grid(row=row, column=0, columnspan=2, pady=(20, 10), sticky="w")
-        row += 1
-        for loc_type, times in LABOR_COST.items():
-            ttk.Label(scrollable_frame, text=f"- {loc_type}", font=("Arial", 10, "bold")).grid(row=row, column=0, columnspan=2, pady=5, sticky="w")
-            row += 1
-            for work_time, ndts in times.items():
-                for ndt_type, val in ndts.items():
-                    ttk.Label(scrollable_frame, text=f"{work_time}검사 - {ndt_type}").grid(row=row, column=0, padx=30, pady=2, sticky="w")
-                    var = tk.StringVar(value=str(val))
-                    ttk.Entry(scrollable_frame, textvariable=var, width=15).grid(row=row, column=1, padx=10, pady=2)
-                    self.setting_entries[("LABOR_COST", loc_type, work_time, ndt_type)] = var
-                    row += 1
-                    
         def save_and_close():
             try:
-                for key_tuple, var in self.setting_entries.items():
-                    if key_tuple[0] == "MATERIAL_COST":
-                        MATERIAL_COST[key_tuple[1]] = int(var.get().replace(",", ""))
-                    elif key_tuple[0] == "LABOR_COST":
-                        LABOR_COST[key_tuple[1]][key_tuple[2]][key_tuple[3]] = int(var.get().replace(",", ""))
+                for key, var in self.setting_entries.items():
+                    UNIT_PRICE[key] = int(var.get().replace(",", ""))
                 
-                save_config({"MATERIAL_COST": MATERIAL_COST, "LABOR_COST": LABOR_COST})
+                CONFIG["UNIT_PRICE"] = UNIT_PRICE
+                save_config(CONFIG)
                 messagebox.showinfo("저장 완료", "단가 설정이 파일(config.json)에 정상적으로 저장되었습니다.\n변경된 단가는 다음 계산부터 바로 적용됩니다.", parent=settings_win)
                 settings_win.destroy()
             except ValueError:
                 messagebox.showerror("오류", "모든 단가는 숫자 형식이어야 합니다.", parent=settings_win)
                 
-        ttk.Button(settings_win, text="저장 및 닫기", command=save_and_close).pack(pady=10)
+        ttk.Button(main_frame, text="단가 저장", command=save_and_close).pack(pady=20, ipady=5, fill=tk.X)
 
 if __name__ == '__main__':
     root = tk.Tk()

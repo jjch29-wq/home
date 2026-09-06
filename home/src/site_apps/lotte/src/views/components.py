@@ -1362,7 +1362,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         enable_column_resize(indirect_table, len(headers_ind))
 
         ttk.Label(indirect_table, text="간접비", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
-        ttk.Label(indirect_table, text="산출직접비 x 간접비율(2024년 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
+        ttk.Label(indirect_table, text="(직접비 - 외주비) x 간접비율(2024년 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
         self.lbl_indirect_base = ttk.Label(indirect_table, text="₩ 0", relief='solid', padding=5, anchor='e')
         self.lbl_indirect_base.grid(row=1, column=2, sticky='nsew')
         ttk.Label(indirect_table, text="14%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
@@ -1529,8 +1529,9 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.lbl_sales_cost_total.config(text=f"₩ {direct_cost:,.0f}")
 
         # 7. Indirect Cost (14%)
-        self.lbl_indirect_base.config(text=f"₩ {direct_cost:,.0f}")
-        indirect_cost = (direct_cost - t3) * 0.14 if lotte_rules else direct_cost * 0.14
+        base_for_indirect = (direct_cost - t3) if lotte_rules else direct_cost
+        self.lbl_indirect_base.config(text=f"₩ {base_for_indirect:,.0f}")
+        indirect_cost = base_for_indirect * 0.14
         self.lbl_indirect_total.config(text=f"₩ {indirect_cost:,.0f}")
 
         grand_total_cost = direct_cost + indirect_cost

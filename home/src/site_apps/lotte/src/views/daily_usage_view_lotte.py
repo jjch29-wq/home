@@ -498,15 +498,13 @@ def setup_daily_usage_tab_impl(self):
         unit_map = {'RT': '매', 'UT': 'P,M,I/D', 'MT': 'P,M,I/D', 'PT': 'P,M,I/D', 'PAUT': 'M,I/D'}
         if method in unit_map: self.cb_daily_unit.set(unit_map[method])
 
-        import sys
-        if "롯데건설 바이오로직스" in sys.argv[0]:
-            contract_prices = {'PT': 4200, 'MT': 4200, 'RT': 25500, 'PAUT': 18500, 'PMI': 14300, 'UT': 9300}
-            if method in contract_prices:
-                try:
-                    self.ent_daily_unit_price.delete(0, 'end')
-                    self.ent_daily_unit_price.insert(0, f"{contract_prices[method]:,}")
-                except Exception:
-                    pass
+        contract_prices = {'PT': 4200, 'MT': 4200, 'RT': 25500, 'PAUT': 18500, 'PMI': 14300, 'UT': 9300}
+        if method in contract_prices:
+            try:
+                self.ent_daily_unit_price.delete(0, 'end')
+                self.ent_daily_unit_price.insert(0, f"{contract_prices[method]:,}")
+            except Exception:
+                pass
         
         if method in ["MT", "PT"]:
             try:
@@ -975,6 +973,8 @@ def update_daily_usage_view_impl(self):
             
             # Standard pandas parse with dot-to-hyphen cleanup
             clean_val = s_val.replace('.', '-').replace(' ', '')
+            import re
+            clean_val = re.sub(r'^([2-9]\d)-(\d{1,2})-(\d{1,2})$', r'20\1-\2-\3', clean_val)
             d = pd.to_datetime(clean_val, errors='coerce')
             if pd.notna(d): return d.replace(tzinfo=None)
             
