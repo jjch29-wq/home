@@ -18,7 +18,7 @@ import re
 import traceback
 import sys
 import subprocess
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 from site_apps.central.src.utils.helpers import install_and_import, normalize_id
 from site_apps.central.src.utils.helpers import NAN_PATTERN, DOT_ZERO_PATTERN, MARKER_PATTERN
 # [FIX] Bypass slow pytz timezone loading on network drives (Google Drive)
