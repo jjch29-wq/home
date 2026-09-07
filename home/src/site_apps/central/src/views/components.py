@@ -651,9 +651,11 @@ class LaborCostDetailWidget(ttk.Frame):
             self.entries[rank]['unit_price'] = ent_price
             
             # [NEW] Default value from base salary / 240
-            daily_rate = round(self.base_salaries.get(rank, 0) / 240)
+            exact_daily = self.base_salaries.get(rank, 0) / 240
+            daily_rate = round(exact_daily)
             if daily_rate > 0:
                 ent_price.insert(0, f"{daily_rate:,.0f}")
+                ent_price._exact_val = exact_daily
             
             lbl_subtotal = ttk.Label(table1_frame, text="0", relief='solid', anchor='e', padding=5)
             lbl_subtotal.grid(row=row, column=5, sticky='nsew')
@@ -756,9 +758,11 @@ class LaborCostDetailWidget(ttk.Frame):
         """Reset Daily Unit Price to the standard (Base Salary / 240)"""
         for rank, salary in self.base_salaries.items():
             if rank in self.entries:
-                daily_rate = round(salary / 240)
+                exact_daily = salary / 240
+                daily_rate = round(exact_daily)
                 self.entries[rank]['unit_price'].delete(0, tk.END)
                 self.entries[rank]['unit_price'].insert(0, f"{daily_rate:,.0f}")
+                self.entries[rank]['unit_price']._exact_val = exact_daily
                 self._on_input_change(rank)
         messagebox.showinfo("적용 완료", "기준급여에 따른 일일 단가가 적용되었습니다.")
 
@@ -776,11 +780,26 @@ class LaborCostDetailWidget(ttk.Frame):
         except:
             return 0.0
 
+    def _get_exact_price(self, key):
+        """Get exact unit price if the text hasn't been manually changed, otherwise parse text"""
+        entry = self.entries[key]['unit_price']
+        text_val = entry.get()
+        exact_val = getattr(entry, '_exact_val', None)
+        
+        # If the exact value was stored and the displayed text matches its rounded formatted string, use exact_val
+        if exact_val is not None:
+            formatted_exact = f"{exact_val:,.0f}" if exact_val >= 1000 else f"{exact_val:g}"
+            if text_val == formatted_exact:
+                return exact_val
+                
+        # Otherwise fallback to parsed float
+        return self._to_f(text_val)
+
     def _on_input_change(self, key):
         # Calculate row total
         personnel = self._to_f(self.entries[key]['personnel'].get())
         period = self._to_f(self.entries[key]['period'].get())
-        price = self._to_f(self.entries[key]['unit_price'].get())
+        price = self._get_exact_price(key)
         
         row_total = personnel * period * price
         self.totals[key].config(text=f"{row_total:,.0f}")
@@ -826,6 +845,12 @@ class LaborCostDetailWidget(ttk.Frame):
         if self.on_change_callback:
             self.on_change_callback(grand_total)
 
+    def get_exact_total(self):
+        """Retrieve the exact unrounded total cost"""
+        t1_cost = sum(self._to_f(self.entries[rank]['personnel'].get()) * self._to_f(self.entries[rank]['period'].get()) * self._get_exact_price(rank) for rank in self.ranks)
+        t2_cost = sum(self._to_f(self.entries[stype]['personnel'].get()) * self._to_f(self.entries[stype]['period'].get()) * self._get_exact_price(stype) for stype in self.special_types)
+        return t1_cost + t2_cost
+
     def get_data(self):
         """Export all entry values as a dictionary"""
         data = {}
@@ -833,7 +858,7 @@ class LaborCostDetailWidget(ttk.Frame):
             data[key] = {
                 'personnel': widgets['personnel'].get(),
                 'period': widgets['period'].get(),
-                'unit_price': widgets['unit_price'].get()
+                'unit_price': self._get_exact_price(key)
             }
         return data
 
@@ -847,8 +872,28 @@ class LaborCostDetailWidget(ttk.Frame):
             if key in self.entries:
                 self.entries[key]['personnel'].delete(0, tk.END); self.entries[key]['personnel'].insert(0, values.get('personnel', ''))
                 self.entries[key]['period'].delete(0, tk.END); self.entries[key]['period'].insert(0, values.get('period', ''))
-                self.entries[key]['unit_price'].delete(0, tk.END); self.entries[key]['unit_price'].insert(0, values.get('unit_price', ''))
-        
+                
+                # Handle exact decimals for unit price while hiding them in UI
+                raw_price = str(values.get('unit_price', '')).strip()
+                self.entries[key]['unit_price'].delete(0, tk.END)
+                if raw_price:
+                    try:
+                        exact_val = float(raw_price.replace(',', ''))
+                        # [FIX] If the loaded exact_val matches the rounded base salary exactly, restore the true decimal exact_val!
+                        if key in self.base_salaries:
+                            true_exact = self.base_salaries[key] / 240
+                            if round(true_exact) == round(exact_val):
+                                exact_val = true_exact
+                                print(f"DEBUG: Restored exact_val for {key}: {exact_val}")
+                                
+                        self.entries[key]['unit_price']._exact_val = exact_val
+                        # Format without decimals for display
+                        display_val = f"{exact_val:,.0f}" if exact_val >= 1000 else f"{exact_val:g}"
+                        self.entries[key]['unit_price'].insert(0, display_val)
+                    except Exception as e:
+                        print(f"DEBUG: Error parsing exact_val: {e}")
+                        self.entries[key]['unit_price'].insert(0, raw_price)
+                
         # Trigger all row calculations
         for key in list(self.ranks) + list(self.special_types):
             self._on_input_change(key)
@@ -887,7 +932,8 @@ class MaterialCostDetailWidget(ttk.Frame):
                 ("PT 약품", "현상제", "CAN", 2000), ("MT 약품", "백색페인트", "CAN", 2350),
                 ("MT 약품", "흑색자분", "CAN", 1800), ("방사선투과검사 필름", "MX125", "매", 990),
                 ("글리세린", "20L", "통", 100000), ("필름 현상액", "3L", "통", 16500),
-                ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500)
+                ("필름 정착액", "3L", "통", 16500), ("수적방지액", "200mL", "통", 2500),
+                ("방사성동위원소 구매", "Se-175", "대", 10300000)
             ]
         
         self.entries = [] # List of dicts for each row: {'item': lbl, 'spec': lbl, 'qty': ent, 'unit': lbl, 'price': ent, 'amount': lbl}
@@ -1062,7 +1108,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
     Comprehensive expense and profit calculation widget.
     Sections: 1) Site Expenses, 2) Rental, 3) Outsource, 4) Insurance, 5) Depreciation, 6) Indirect Cost, 7) Profit
     """
-    def __init__(self, parent, on_change_callback=None, get_labor_total_func=None, get_material_total_func=None, get_revenue_func=None, budget_mode=None, **kwargs):
+    def __init__(self, parent, on_change_callback=None, get_labor_total_func=None, get_material_total_func=None, get_revenue_func=None, budget_mode=None, master_app=None, **kwargs):
         super().__init__(parent, **kwargs)
         self.on_change_callback = on_change_callback
         self.get_labor_total = get_labor_total_func
@@ -1077,18 +1123,27 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             'depreciation': []
         }
         
-        # Resolve MaterialManager to get rates
-        self.master_app = parent
-        while self.master_app and not hasattr(self.master_app, 'get_expense_defaults'):
-            self.master_app = getattr(self.master_app, 'master', None)
+        # Resolve master_app to get rates
+        if master_app:
+            self.master_app = master_app
+        else:
+            self.master_app = parent
+            while self.master_app and not hasattr(self.master_app, 'get_expense_defaults'):
+                self.master_app = getattr(self.master_app, 'master', None)
             
         self._create_widgets()
+        self._default_state = self.get_data()
 
     def _create_widgets(self):
         style = ttk.Style()
         style.configure("ExpHeader.TLabel", font=('Malgun Gothic', 10, 'bold'), background='#e0e0e0', relief='solid')
         style.configure("ExpTotal.TLabel", font=('Malgun Gothic', 10, 'bold'), background='#ffff00', relief='solid')
         style.configure("Margin.TLabel", font=('Malgun Gothic', 10, 'bold'), background='#90ee90', relief='solid') # Light green for profit
+
+        self._row_idx_s1 = 0
+        self._row_idx_s2 = 0
+        self._row_idx_s3 = 0
+        self._row_idx_s5 = 0
 
         # --- Section 1: Site Expenses ---
         ttk.Label(self, text="3) 경비", font=('Malgun Gothic', 11, 'bold')).pack(anchor='w', pady=(10, 5))
@@ -1099,8 +1154,8 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.s1_table = ttk.Frame(s1_frame)
         self.s1_table.pack(fill='x')
         
-        headers = ["구분", "내용", "인원수", "수량", "규격", "단가", "금액(원)"]
-        widths = [15, 20, 8, 8, 8, 15, 20]
+        headers = ["구분", "내용", "인원수", "수량", "규격", "단가", "금액(원)", ""]
+        widths = [15, 20, 8, 8, 8, 15, 20, 3]
         for j, (h, w) in enumerate(zip(headers, widths)):
             ttk.Label(self.s1_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=w).grid(row=0, column=j, sticky='nsew')
             self.s1_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
@@ -1109,7 +1164,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         # Default Site Expenses - Dynamically loaded from master
         defaults_s1 = []
         if self.master_app:
-            defaults_s1 = self.master_app.get_expense_defaults()
+            defaults_s1 = self.master_app.get_expense_defaults(actual=(self.budget_mode == 'actual'))
         else:
             defaults_s1 = [
                 ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
@@ -1119,17 +1174,24 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             ]
         
         for i, (cat, cont, ppl, qty, unit, price) in enumerate(defaults_s1):
-            if self.budget_mode == 'actual':
-                actual_rates = {
-                    '차량유지비': ('일', 5000),
-                    '소모품비': ('일', 500),
-                    '복리후생비': ('일', 1667),
-                    'Se-175': ('일', 47619),
-                }
-                actual_unit, actual_price = actual_rates.get(str(cat).strip(), (unit, price))
-                self._add_row_s1(cat, cont, ppl, '', actual_unit, actual_price)
-            else:
-                self._add_row_s1(cat, cont, ppl, qty, unit, price)
+            self._add_row_s1(cat, cont, ppl, qty, unit, price)
+            
+        s1_footer = ttk.Frame(s1_frame)
+        s1_footer.pack(fill='x')
+        
+        # Configure weights for proper alignment with the table above
+        s1_footer.grid_columnconfigure(0, weight=1)
+        s1_footer.grid_columnconfigure(1, weight=0, minsize=140) # Match width of amount column roughly
+        
+        ttk.Label(s1_footer, text="현장 경비 소계", style="ExpTotal.TLabel", anchor='center', padding=5).grid(row=0, column=0, sticky='nsew')
+        self.lbl_s1_subtotal = ttk.Label(s1_footer, text="0", style="ExpTotal.TLabel", anchor='e', padding=5)
+        self.lbl_s1_subtotal.grid(row=0, column=1, sticky='nsew')
+        
+        ttk.Label(s1_footer, text="부가세(일비,마일리지 제외)", style="ExpHeader.TLabel", anchor='center', padding=5).grid(row=1, column=0, sticky='nsew')
+        self.lbl_s1_vat = ttk.Label(s1_footer, text="0", style="ExpHeader.TLabel", anchor='e', padding=5)
+        self.lbl_s1_vat.grid(row=1, column=1, sticky='nsew')
+        
+        ttk.Button(s1_frame, text="+ 항목 추가", command=self._add_row_s1).pack(pady=5, anchor='e')
 
         # --- Section 2: Rental Costs ---
         s2_frame = ttk.LabelFrame(self, text="(2) 장비/차량 임차료")
@@ -1138,15 +1200,18 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.s2_table = ttk.Frame(s2_frame)
         self.s2_table.pack(fill='x')
         
-        headers2 = ["구분", "사양", "수량", "사용기간", "기간단위", "단가/월,대", "금액(원)"]
+        headers2 = ["구분", "사양", "수량", "사용기간", "기간단위", "단가/월,대", "금액(원)", ""]
+        widths2 = [15, 20, 8, 8, 8, 15, 20, 3]
         for j, h in enumerate(headers2):
-            ttk.Label(self.s2_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j]).grid(row=0, column=j, sticky='nsew')
+            ttk.Label(self.s2_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths2[j]).grid(row=0, column=j, sticky='nsew')
             self.s2_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
         enable_column_resize(self.s2_table, len(headers2))
             
         # Add 3 empty rows by default
         for _ in range(3):
             self._add_row_s2()
+            
+        ttk.Button(s2_frame, text="+ 항목 추가", command=self._add_row_s2).pack(pady=5, anchor='e')
 
         # --- Section 3: Outsource Costs ---
         s3_frame = ttk.LabelFrame(self, text="(3) 외주비/잡급")
@@ -1155,8 +1220,8 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.s3_table = ttk.Frame(s3_frame)
         self.s3_table.pack(fill='x')
         
-        headers3 = ["구분", "작업내용", "공수", "단가", "금액(원)"]
-        widths3 = [15, 30, 10, 15, 20]
+        headers3 = ["구분", "작업내용", "공수", "단가", "금액(원)", ""]
+        widths3 = [15, 30, 10, 15, 20, 3]
         for j, h in enumerate(headers3):
             ttk.Label(self.s3_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths3[j]).grid(row=0, column=j, sticky='nsew')
             self.s3_table.grid_columnconfigure(j, weight=1 if j in [1, 4] else 0)
@@ -1184,26 +1249,29 @@ class ExpenseProfitDetailWidget(ttk.Frame):
                 initial_count = '' if self.budget_mode == 'actual' else qty
             self._add_row_s3(cat, content, initial_count, price)
 
-        for _ in range(2): self._add_row_s3()
+        for _ in range(3):
+            self._add_row_s3()
+            
+        ttk.Button(s3_frame, text="+ 항목 추가", command=self._add_row_s3).pack(pady=5, anchor='e')
 
-        # --- Section 4: Social Insurance ---
+        # --- Section 4: Insurance Costs ---
         s4_frame = ttk.Frame(self)
         s4_frame.pack(fill='x', pady=5)
         ttk.Label(s4_frame, text="(4) 4대 보험료", font=('Malgun Gothic', 10, 'bold')).pack(side='left', padx=5)
         
         insurance_table = ttk.Frame(self)
         insurance_table.pack(fill='x')
-        headers4 = ["구분", "산출 기준", "산출 인건비", "단가(요율)", "금액(원)"]
+        headers4 = ["구분", "산출 기준", "산출 인건비", "단가(요율)", "사전원가금액"]
         for j, h in enumerate(headers4):
             ttk.Label(insurance_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j] if j < len(widths) else 20).grid(row=0, column=j, sticky='nsew')
             insurance_table.grid_columnconfigure(j, weight=1 if j in [1, 4] else 0)
         enable_column_resize(insurance_table, len(headers4))
             
         ttk.Label(insurance_table, text="4대 보험료", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
-        ttk.Label(insurance_table, text="산출인건비 X 요율(2024.7.1 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
+        ttk.Label(insurance_table, text="산출인건비 X 요율(2026.1.1 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
         self.lbl_insurance_base = ttk.Label(insurance_table, text="₩ 0", relief='solid', padding=5, anchor='e')
         self.lbl_insurance_base.grid(row=1, column=2, sticky='nsew')
-        ttk.Label(insurance_table, text="10.6661%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
+        ttk.Label(insurance_table, text="10.97%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
         self.lbl_insurance_amount = ttk.Label(insurance_table, text="0", relief='solid', padding=5, anchor='e')
         self.lbl_insurance_amount.grid(row=1, column=4, sticky='nsew')
 
@@ -1214,24 +1282,35 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         self.s5_table = ttk.Frame(s5_frame)
         self.s5_table.pack(fill='x')
         
-        headers5 = ["장비명", "사양", "내용년수", "수량", "사용일수", "감가비/일", "금액(원)"]
+        headers5 = ["장비명", "사양", "내용년수", "수량", "사용일수", "감가비/일", "사전원가금액", ""]
+        widths5 = [15, 20, 8, 8, 8, 15, 20, 3]
         for j, h in enumerate(headers5):
-            ttk.Label(self.s5_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths[j]).grid(row=0, column=j, sticky='nsew')
+            ttk.Label(self.s5_table, text=h, style="ExpHeader.TLabel", padding=5, anchor='center', width=widths5[j]).grid(row=0, column=j, sticky='nsew')
             self.s5_table.grid_columnconfigure(j, weight=1 if j in [1, 6] else 0)
         enable_column_resize(self.s5_table, len(headers5))
             
         defaults_s5 = [
-            ("PAUT 장비", "", 5, 1, 0, 44444),
-            ("PAUT SCANNER (MANUAL)", "", 5, 1, 0, 5556),
-            ("PAUT SCANNER (COBRA)", "", 5, 1, 0, 16667),
-            ("YOKE", "", 5, 1, 0, 222),
-            ("PMI 장비", "", 5, 1, 0, 12778),
-            ("UT 장비", "", 5, 1, 0, 7778),
-            ("현상용 탑차(5년간 보험비 포함)", "현장별 차량기입시 탑차 구분 기입", 5, 1, 0, 16667),
-            ("스타렉스(5년간 보험비 포함)", "현장별 차량기입시 스타렉스 구분 기입", 5, 1, 0, 16667)
+            ("PAUT 장비", "", 5, 1, "" if self.budget_mode == 'actual' else 120, 5333333/120),
+            ("PAUT SCANNER (MANUAL)", "", 5, 1, "" if self.budget_mode == 'actual' else 120, 666667/120),
+            ("PAUT SCANNER (COBRA)", "", 5, 1, "" if self.budget_mode == 'actual' else 120, 2000000/120),
+            ("YOKE", "", 5, 1, "" if self.budget_mode == 'actual' else 10, 2222/10),
+            ("현장용 탑차(5년간 보험비 포함)", "현장별 차량기입시 탑차 구분 기입", 5, 1, "" if self.budget_mode == 'actual' else 30, 500000/30),
+            ("스타렉스(5년간 보험비 포함)", "현장별 차량기입시 스타렉스 구분 기입", 5, 1, "" if self.budget_mode == 'actual' else 160, 2666667/160)
         ]
         for item, spec, life, qty, days, rate in defaults_s5:
             self._add_row_s5(item, spec, life, qty, days, rate)
+            
+        s5_footer = ttk.Frame(s5_frame)
+        s5_footer.pack(fill='x')
+        
+        s5_footer.grid_columnconfigure(0, weight=1)
+        s5_footer.grid_columnconfigure(1, weight=0, minsize=140)
+        
+        ttk.Label(s5_footer, text="장비/차량 임차료 소계", style="ExpTotal.TLabel", anchor='center', padding=5).grid(row=0, column=0, sticky='nsew')
+        self.lbl_s5_subtotal = ttk.Label(s5_footer, text="0", style="ExpTotal.TLabel", anchor='e', padding=5)
+        self.lbl_s5_subtotal.grid(row=0, column=1, sticky='nsew')
+        
+        ttk.Button(s5_frame, text="+ 항목 추가", command=self._add_row_s5).pack(pady=5, anchor='e')
 
         # --- TOTALS SUMMARY ---
         summary_frame = ttk.Frame(self, padding=10)
@@ -1264,10 +1343,10 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         enable_column_resize(indirect_table, len(headers_ind))
         
         ttk.Label(indirect_table, text="간접비", relief='solid', padding=5, anchor='center').grid(row=1, column=0, sticky='nsew')
-        ttk.Label(indirect_table, text="산출직접비 x 간접비율(2024년 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
+        ttk.Label(indirect_table, text="산출직접비 x 간접비율(2026년 기준)", relief='solid', padding=5, anchor='w').grid(row=1, column=1, sticky='nsew')
         self.lbl_indirect_base = ttk.Label(indirect_table, text="₩ 0", relief='solid', padding=5, anchor='e')
         self.lbl_indirect_base.grid(row=1, column=2, sticky='nsew')
-        ttk.Label(indirect_table, text="14%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
+        ttk.Label(indirect_table, text="18%", relief='solid', padding=5, anchor='center').grid(row=1, column=3, sticky='nsew')
         self.lbl_indirect_total = ttk.Label(indirect_table, text="₩ 0", font=('Malgun Gothic', 10, 'bold'), background='#00ffff', relief='solid', anchor='e', padding=5)
         self.lbl_indirect_total.grid(row=1, column=4, sticky='nsew')
 
@@ -1301,7 +1380,8 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         ttk.Label(profit_table, text="부가세 별도", relief='solid', padding=5, anchor='center').grid(row=1, column=5, sticky='nsew')
 
     def _add_row_s1(self, cat="", cont="", ppl="", qty="", unit="", price=0):
-        row = len(self.entries['site_expense']) + 1
+        self._row_idx_s1 += 1
+        row = self._row_idx_s1
         widgets = {}
         ent_cat = ttk.Entry(self.s1_table, width=15, justify='center'); ent_cat.insert(0, cat); ent_cat.grid(row=row, column=0, sticky='nsew')
         ent_cont = ttk.Entry(self.s1_table, width=20); ent_cont.insert(0, cont); ent_cont.grid(row=row, column=1, sticky='nsew')
@@ -1310,51 +1390,74 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         ent_unit = ttk.Entry(self.s1_table, width=8, justify='center'); ent_unit.insert(0, unit); ent_unit.grid(row=row, column=4, sticky='nsew')
         ent_price = ttk.Entry(self.s1_table, width=15, justify='right'); ent_price.insert(0, f"{price:,.0f}"); ent_price.grid(row=row, column=5, sticky='nsew')
         lbl_amt = ttk.Label(self.s1_table, text="0", relief='solid', anchor='e', padding=5); lbl_amt.grid(row=row, column=6, sticky='nsew')
+        btn_del = ttk.Button(self.s1_table, text="X", width=3, command=lambda r=row: self._delete_row('site_expense', r))
+        btn_del.grid(row=row, column=7, sticky='nsew', padx=2)
         
-        widgets = {'cat': ent_cat, 'cont': ent_cont, 'ppl': ent_ppl, 'qty': ent_qty, 'unit': ent_unit, 'price': ent_price, 'amount': lbl_amt}
+        widgets = {'cat': ent_cat, 'cont': ent_cont, 'ppl': ent_ppl, 'qty': ent_qty, 'unit': ent_unit, 'price': ent_price, 'amount': lbl_amt, 'btn_del': btn_del, 'row': row}
         for w in [ent_ppl, ent_qty, ent_price]: w.bind("<KeyRelease>", lambda e: self.calculate_all())
         self.entries['site_expense'].append(widgets)
 
     def _add_row_s2(self, cat="", spec="", qty="", period="", unit="", price=0):
-        row = len(self.entries['rental']) + 1
+        self._row_idx_s2 += 1
+        row = self._row_idx_s2
         widgets = {}
         e1 = ttk.Entry(self.s2_table, width=15, justify='center'); e1.insert(0, cat); e1.grid(row=row, column=0, sticky='nsew')
         e2 = ttk.Entry(self.s2_table, width=20); e2.insert(0, spec); e2.grid(row=row, column=1, sticky='nsew')
         e3 = ttk.Entry(self.s2_table, width=8, justify='center'); e3.insert(0, str(qty)); e3.grid(row=row, column=2, sticky='nsew')
         e4 = ttk.Entry(self.s2_table, width=8, justify='center'); e4.insert(0, str(period)); e4.grid(row=row, column=3, sticky='nsew')
         e5 = ttk.Entry(self.s2_table, width=8, justify='center'); e5.insert(0, unit); e5.grid(row=row, column=4, sticky='nsew')
-        e6 = ttk.Entry(self.s2_table, width=15, justify='right'); e6.insert(0, f"{price:,.0f}"); e6.grid(row=row, column=5, sticky='nsew')
+        ent_price = ttk.Entry(self.s2_table, width=15, justify='right'); ent_price.insert(0, f"{price:,.0f}"); ent_price.grid(row=row, column=5, sticky='nsew')
         lbl = ttk.Label(self.s2_table, text="0", relief='solid', anchor='e', padding=5); lbl.grid(row=row, column=6, sticky='nsew')
+        btn_del = ttk.Button(self.s2_table, text="X", width=3, command=lambda r=row: self._delete_row('rental', r))
+        btn_del.grid(row=row, column=7, sticky='nsew', padx=2)
         
-        widgets = {'cat': e1, 'spec': e2, 'qty': e3, 'period': e4, 'unit': e5, 'price': e6, 'amount': lbl}
-        for w in [e3, e4, e6]: w.bind("<KeyRelease>", lambda e: self.calculate_all())
+        widgets = {'cat': e1, 'spec': e2, 'qty': e3, 'period': e4, 'unit': e5, 'price': ent_price, 'amount': lbl, 'btn_del': btn_del, 'row': row}
+        for w in [e3, e4, ent_price]: w.bind("<KeyRelease>", lambda e: self.calculate_all())
         self.entries['rental'].append(widgets)
 
     def _add_row_s3(self, cat="", work="", count=0, price=0):
-        row = len(self.entries['outsource']) + 1
+        self._row_idx_s3 += 1
+        row = self._row_idx_s3
         widgets = {}
         e1 = ttk.Entry(self.s3_table, width=15, justify='center'); e1.insert(0, cat); e1.grid(row=row, column=0, sticky='nsew')
         e2 = ttk.Entry(self.s3_table, width=30); e2.insert(0, work); e2.grid(row=row, column=1, sticky='nsew')
         e3 = ttk.Entry(self.s3_table, width=10, justify='center'); e3.insert(0, str(count)); e3.grid(row=row, column=2, sticky='nsew')
         e4 = ttk.Entry(self.s3_table, width=15, justify='right'); e4.insert(0, f"{price:,.0f}"); e4.grid(row=row, column=3, sticky='nsew')
         lbl = ttk.Label(self.s3_table, text="0", relief='solid', anchor='e', padding=5); lbl.grid(row=row, column=4, sticky='nsew')
+        btn_del = ttk.Button(self.s3_table, text="X", width=3, command=lambda r=row: self._delete_row('outsource', r))
+        btn_del.grid(row=row, column=5, sticky='nsew', padx=2)
         
-        widgets = {'cat': e1, 'work': e2, 'count': e3, 'price': e4, 'amount': lbl}
+        widgets = {'cat': e1, 'work': e2, 'count': e3, 'price': e4, 'amount': lbl, 'btn_del': btn_del, 'row': row}
         for w in [e3, e4]: w.bind("<KeyRelease>", lambda e: self.calculate_all())
         self.entries['outsource'].append(widgets)
+        
+    def _delete_row(self, section, row_id):
+        for i, w in enumerate(self.entries[section]):
+            if w.get('row') == row_id:
+                for v in w.values():
+                    if hasattr(v, 'destroy'):
+                        v.destroy()
+                del self.entries[section][i]
+                break
+        self.calculate_all()
 
-    def _add_row_s5(self, item="", spec="", life=5, qty=1, days=0, rate=0):
-        row = len(self.entries['depreciation']) + 1
+    def _add_row_s5(self, item="", spec="", life=5, qty=1, days="", rate=0):
+        self._row_idx_s5 += 1
+        row = self._row_idx_s5
         widgets = {}
+        precise_rate = float(rate)  # store precise float before rounding
+        display_rate = round(precise_rate)  # integer for display
         e1 = ttk.Entry(self.s5_table, width=20); e1.insert(0, item); e1.grid(row=row, column=0, sticky='nsew')
         e2 = ttk.Entry(self.s5_table, width=15); e2.insert(0, spec); e2.grid(row=row, column=1, sticky='nsew')
         e3 = ttk.Entry(self.s5_table, width=8, justify='center'); e3.insert(0, str(life)); e3.grid(row=row, column=2, sticky='nsew')
         e4 = ttk.Entry(self.s5_table, width=8, justify='center'); e4.insert(0, str(qty)); e4.grid(row=row, column=3, sticky='nsew')
         e5 = ttk.Entry(self.s5_table, width=8, justify='center'); e5.insert(0, str(days)); e5.grid(row=row, column=4, sticky='nsew')
-        e6 = ttk.Entry(self.s5_table, width=15, justify='right'); e6.insert(0, f"{rate:,.0f}"); e6.grid(row=row, column=5, sticky='nsew')
+        e6 = ttk.Entry(self.s5_table, width=15, justify='right'); e6.insert(0, f"{display_rate:,}"); e6.grid(row=row, column=5, sticky='nsew')
         lbl = ttk.Label(self.s5_table, text="0", relief='solid', anchor='e', padding=5); lbl.grid(row=row, column=6, sticky='nsew')
+        btn_del = ttk.Button(self.s5_table, text="X", width=3, command=lambda r=row: self._delete_row('depreciation', r))
+        btn_del.grid(row=row, column=7, sticky='nsew', padx=2)
         
-        widgets = {'item': e1, 'spec': e2, 'life': e3, 'qty': e4, 'days': e5, 'rate': e6, 'amount': lbl}
+        widgets = {'item': e1, 'spec': e2, 'life': e3, 'qty': e4, 'days': e5, 'rate': e6, 'amount': lbl, 'btn_del': btn_del, 'row': row, '_precise_rate': precise_rate}
         for w in [e4, e5, e6]: w.bind("<KeyRelease>", lambda e: self.calculate_all())
         self.entries['depreciation'].append(widgets)
 
@@ -1365,6 +1468,9 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             amt = self._to_f(w['qty'].get()) * self._to_f(w['price'].get())
             w['amount'].config(text=f"{amt:,.0f}")
             t1 += amt
+            
+        if hasattr(self, 'lbl_s1_subtotal'):
+            self.lbl_s1_subtotal.config(text=f"{t1:,.0f}")
             
         # 2. Rentals
         t2 = 0.0
@@ -1382,16 +1488,43 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             
         # 4. Insurance
         labor_total = self.get_labor_total() if self.get_labor_total else 0.0
-        t4 = labor_total * 0.106661
+        t4 = labor_total * 0.109744
         self.lbl_insurance_base.config(text=f"₩ {labor_total:,.0f}")
         self.lbl_insurance_amount.config(text=f"{t4:,.0f}")
         
         # 5. Depreciation
+        # 아이템 이름별 정밀 단가 테이블 (표시는 반올림 정수, 계산은 정밀값 사용)
+        PRECISE_RATE_TABLE = {
+            'PAUT 장비':             5333333 / 120,
+            'PAUT SCANNER (MANUAL)': 666667  / 120,
+            'PAUT SCANNER (COBRA)':  2000000 / 120,
+            'YOKE':                  2222    / 10,
+            '탑차':                  500000  / 30,
+            '스타렉스':              2666667 / 160,
+        }
         t5 = 0.0
         for w in self.entries['depreciation']:
-            amt = self._to_f(w['qty'].get()) * self._to_f(w['days'].get()) * self._to_f(w['rate'].get())
+            item_name = w['item'].get().strip()
+            # 1순위: _precise_rate
+            precise = w.get('_precise_rate')
+            if precise is not None and precise > 0:
+                used_rate = precise
+            else:
+                # 2순위: 이름 기반 정밀값 테이블 (구 저장 데이터 포함)
+                used_rate = None
+                for key, val in PRECISE_RATE_TABLE.items():
+                    if key in item_name or item_name in key:
+                        used_rate = val
+                        w['_precise_rate'] = val
+                        break
+                if used_rate is None:
+                    used_rate = self._to_f(w['rate'].get())
+            amt = self._to_f(w['qty'].get()) * self._to_f(w['days'].get()) * used_rate
             w['amount'].config(text=f"{amt:,.0f}")
             t5 += amt
+            
+        if hasattr(self, 'lbl_s5_subtotal'):
+            self.lbl_s5_subtotal.config(text=f"{t5:,.0f}")
             
         # 실행 경비와 외주비는 요약 화면에서 별도 항목으로 관리한다.
         # 외주비(t3)를 경비에 포함하면 영업이익 계산 시 외주비가 두 번 차감된다.
@@ -1399,7 +1532,7 @@ class ExpenseProfitDetailWidget(ttk.Frame):
 
         # 롯데 전용 화면은 생성 시 planned/actual 모드를 명시적으로 전달한다.
         # Tk 위젯의 master 체인만으로는 MaterialManager 컨트롤러에 도달하지 못할 수 있다.
-        lotte_rules = self.budget_mode in ('planned', 'actual') or bool(getattr(self.master_app, 'lotte_budget_rules', False))
+        lotte_rules = bool(getattr(self.master_app, 'lotte_budget_rules', False))
         if lotte_rules:
             # 롯데 사전원가 시트의 VAT 기준:
             # 현장경비는 차량유지비, 임차료는 첫 행, 외주비는 케이엔디이를 제외한다.
@@ -1419,7 +1552,16 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             )
             exp_vat = (site_vat_base + rental_vat_base + outsource_vat_base) * 0.1
         else:
-            exp_vat = (t1 + t2 + t3) * 0.1
+            site_vat_base = sum(
+                self._to_f(w['qty'].get()) * self._to_f(w['price'].get())
+                for w in self.entries['site_expense']
+                if '일비' not in str(w['cat'].get()) and '마일리지' not in str(w['cat'].get())
+            )
+            exp_vat = (site_vat_base + t2 + t3) * 0.1
+            
+        if hasattr(self, 'lbl_s1_vat'):
+            self.lbl_s1_vat.config(text=f"{site_vat_base * 0.1:,.0f}")
+            
         self.lbl_exp_total.config(text=f"₩ {exp_total:,.0f}")
         self.lbl_exp_vat.config(text=f"{exp_vat:,.0f}")
         
@@ -1428,9 +1570,9 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         direct_cost = labor_total + mat_total + exp_total + t3
         self.lbl_sales_cost_total.config(text=f"₩ {direct_cost:,.0f}")
         
-        # 7. Indirect Cost (14%)
+        # 7. Indirect Cost (17.8% ≈ 18% 표시, 정확 계산은 17.8%)
         self.lbl_indirect_base.config(text=f"₩ {direct_cost:,.0f}")
-        indirect_cost = (direct_cost - t3) * 0.14 if lotte_rules else direct_cost * 0.14
+        indirect_cost = (direct_cost - t3) * 0.178 if lotte_rules else direct_cost * 0.178
         self.lbl_indirect_total.config(text=f"₩ {indirect_cost:,.0f}")
         
         grand_total_cost = direct_cost + indirect_cost
@@ -1468,11 +1610,23 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             return 0.0
 
     def get_data(self):
+        def extract_row_data(row_dict):
+            res = {}
+            for k, v in row_dict.items():
+                if k in ('btn_del', 'row') or k.startswith('_'):
+                    continue
+                res[k] = v.get() if hasattr(v, 'get') else v.cget('text')
+            return res
+
+        def extract_precise_rates(entries_list):
+            return [w.get('_precise_rate', None) for w in entries_list]
+
         data = {
-            'site_expense': [{k: v.get() if hasattr(v, 'get') else v.cget('text') for k, v in row.items()} for row in self.entries['site_expense']],
-            'rental': [{k: v.get() if hasattr(v, 'get') else v.cget('text') for k, v in row.items()} for row in self.entries['rental']],
-            'outsource': [{k: v.get() if hasattr(v, 'get') else v.cget('text') for k, v in row.items()} for row in self.entries['outsource']],
-            'depreciation': [{k: v.get() if hasattr(v, 'get') else v.cget('text') for k, v in row.items()} for row in self.entries['depreciation']]
+            'site_expense': [extract_row_data(row) for row in self.entries['site_expense']],
+            'rental': [extract_row_data(row) for row in self.entries['rental']],
+            'outsource': [extract_row_data(row) for row in self.entries['outsource']],
+            'depreciation': [extract_row_data(row) for row in self.entries['depreciation']],
+            '_depreciation_precise_rates': extract_precise_rates(self.entries['depreciation'])
         }
         return data
 
@@ -1489,81 +1643,99 @@ class ExpenseProfitDetailWidget(ttk.Frame):
             self.reset()
             return
             
-        def fill(entry_list, data_list):
-            for i, d in enumerate(data_list):
-                if i < len(entry_list):
-                    for k, v in d.items():
-                        if k in entry_list[i] and hasattr(entry_list[i][k], 'delete'):
-                            entry_list[i][k].delete(0, tk.END); entry_list[i][k].insert(0, str(v))
-
-        def fill_depreciation(data_list):
-            """Restore depreciation rows by equipment name, not legacy row index."""
-            rows_by_name = {
-                str(row['item'].get()).strip().upper(): row
-                for row in self.entries['depreciation']
-            }
-            restored_names = set()
-            for saved in data_list:
-                name = str(saved.get('item', '')).strip().upper()
-                row = rows_by_name.get(name)
-                if row is None or name in restored_names:
-                    continue
-                restored_names.add(name)
-                for key, value in saved.items():
-                    widget = row.get(key)
-                    if widget is not None and hasattr(widget, 'delete'):
-                        # Legacy saved rows may contain an empty depreciation rate.
-                        # Keep the current equipment default instead of erasing it.
-                        normalized = str(value).strip().replace(',', '')
-                        if key in ('qty', 'rate') and normalized in ('', '0', '0.0', 'None', 'nan'):
-                            continue
-                        if key == 'days' and normalized in ('', 'None', 'nan'):
-                            continue
-                        widget.delete(0, tk.END)
-                        widget.insert(0, str(value))
+        def sync_rows(section_key, data_list, add_func):
+            if data_list is None:
+                return
+            
+            default_rows = {}
+            for row in self.entries[section_key]:
+                key_widget = row.get('item') or row.get('cat')
+                if key_widget:
+                    name = str(key_widget.get()).strip()
+                    default_rows[name] = {k: (v.get() if hasattr(v, 'get') else v.cget('text')) for k, v in row.items() if k not in ('btn_del', 'row') and not k.startswith('_')}
+            
+            while self.entries[section_key]:
+                row_id = self.entries[section_key][0].get('row')
+                self._delete_row(section_key, row_id)
+                
+            for d in data_list:
+                add_func()
+                new_row = self.entries[section_key][-1]
+                
+                name = str(d.get('item', d.get('cat', ''))).strip()
+                if name in default_rows:
+                    def_d = default_rows[name]
+                    for k, v in def_d.items():
+                        if k in new_row and hasattr(new_row[k], 'delete'):
+                            new_row[k].delete(0, tk.END)
+                            new_row[k].insert(0, str(v))
+                            
+                for k, v in d.items():
+                    if k in new_row and hasattr(new_row[k], 'delete'):
+                        if section_key == 'depreciation':
+                            normalized = str(v).strip().replace(',', '')
+                            if k in ('qty', 'rate') and normalized in ('', '0', '0.0', 'None', 'nan'):
+                                continue
+                        new_row[k].delete(0, tk.END)
+                        new_row[k].insert(0, str(v))
         
-        site_expenses = data.get('site_expense', [])
-        if self.budget_mode in ('planned', 'actual'):
-            for exp in site_expenses:
-                name = str(exp.get('cat', ''))
-                if self.budget_mode == 'planned':
-                    if '차량' in name:
-                        exp['qty'], exp['unit'], exp['price'] = '12', '개월', '150,000'
-                    elif '소모' in name:
-                        exp['qty'], exp['unit'], exp['price'] = '12', '개월', '15,000'
-                    elif '복리' in name or '후생' in name:
-                        exp['qty'], exp['unit'], exp['price'] = '12', '개월', '50,000'
-                    elif 'Se' in name or '175' in name:
-                        exp['qty'], exp['unit'], exp['price'] = '1', 'EA', '10,000,000'
-                elif self.budget_mode == 'actual':
-                    # 사후원가는 현장별 실제 투입일수 × 일일 단가로 계산한다.
-                    if '차량' in name:
-                        exp['unit'], exp['price'] = '일', '5,000'
-                    elif '소모' in name:
-                        exp['unit'], exp['price'] = '일', '500'
-                    elif '복리' in name or '후생' in name:
-                        exp['unit'], exp['price'] = '일', '1,667'
-                    elif 'Se' in name or '175' in name:
-                        exp['unit'], exp['price'] = '일', '47,619'
-
-        fill(self.entries['site_expense'], site_expenses)
-        fill(self.entries['rental'], data.get('rental', []))
-        fill(self.entries['outsource'], data.get('outsource', []))
-        fill_depreciation(data.get('depreciation', []))
+        sync_rows('site_expense', data.get('site_expense'), self._add_row_s1)
+        sync_rows('rental', data.get('rental'), self._add_row_s2)
+        sync_rows('outsource', data.get('outsource'), self._add_row_s3)
+        sync_rows('depreciation', data.get('depreciation'), self._add_row_s5)
+        
+        # Ensure all default depreciation items exist (fill in missing ones from saved data)
+        DEFAULTS_S5 = [
+            ("PAUT 장비", "", 5, 1, 120, 5333333/120),
+            ("PAUT SCANNER (MANUAL)", "", 5, 1, 120, 666667/120),
+            ("PAUT SCANNER (COBRA)", "", 5, 1, 120, 2000000/120),
+            ("YOKE", "", 5, 1, 10, 2222/10),
+            ("현장용 탑차(5년간 보험비 포함)", "", 5, 1, 30, 500000/30),
+            ("스타렉스(5년간 보험비 포함)", "", 5, 1, 160, 2666667/160),
+        ]
+        existing_items = {w['item'].get().strip() for w in self.entries['depreciation']}
+        
+        def _already_exists(item_name, existing_set):
+            """부분 일치로 항목 존재 여부 확인 (이름 변경된 구 저장 데이터 대응)"""
+            if item_name in existing_set:
+                return True
+            for ex in existing_set:
+                if item_name in ex or ex in item_name:
+                    return True
+            return False
+        
+        for item, spec, life, qty, days, rate in DEFAULTS_S5:
+            if not _already_exists(item, existing_items):
+                self._add_row_s5(item, spec, life, qty, days, rate)
+        
+        # Restore precise rates after rebuilding depreciation rows
+        precise_rates = data.get('_depreciation_precise_rates', [])
+        for i, w in enumerate(self.entries['depreciation']):
+            if i < len(precise_rates) and precise_rates[i] is not None:
+                w['_precise_rate'] = float(precise_rates[i])
         
         self.calculate_all()
 
     def reset(self):
-        def clear(entry_list):
-            for row in entry_list:
-                for k, v in row.items():
-                    if hasattr(v, 'delete'): v.delete(0, tk.END)
-        
-        clear(self.entries['site_expense'])
-        clear(self.entries['rental'])
-        clear(self.entries['outsource'])
-        clear(self.entries['depreciation'])
-        self.calculate_all()
+        if hasattr(self, '_default_state'):
+            def sync_from_defaults(section_key, data_list, add_func):
+                if data_list is None: return
+                while self.entries[section_key]:
+                    row_id = self.entries[section_key][0].get('row')
+                    self._delete_row(section_key, row_id)
+                for d in data_list:
+                    add_func()
+                    new_row = self.entries[section_key][-1]
+                    for k, v in d.items():
+                        if k in new_row and hasattr(new_row[k], 'delete'):
+                            new_row[k].delete(0, tk.END)
+                            new_row[k].insert(0, str(v))
+            
+            sync_from_defaults('site_expense', self._default_state.get('site_expense'), self._add_row_s1)
+            sync_from_defaults('rental', self._default_state.get('rental'), self._add_row_s2)
+            sync_from_defaults('outsource', self._default_state.get('outsource'), self._add_row_s3)
+            sync_from_defaults('depreciation', self._default_state.get('depreciation'), self._add_row_s5)
+            self.calculate_all()
 
 
 class ColumnSelectionDialog(tk.Toplevel):

@@ -1079,22 +1079,20 @@ class MaterialManager:
         from site_apps.central.src.models.material_model import get_material_defaults_impl
         return get_material_defaults_impl(self, *args, **kwargs)
 
-    def get_expense_defaults(self):
+    def get_expense_defaults(self, actual=False):
         """Extract site expense defaults from settings_df"""
         if not hasattr(self, 'settings_df') or self.settings_df.empty:
             return [
-                ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
-                ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
-                ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
+                ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 12 if not actual else 1, "개월" if not actual else "일", 200000 if not actual else 6667),
+                ("소모품비", "장갑,일회용 작업복외", "N/A", 12 if not actual else 1, "개월" if not actual else "일", 100000 if not actual else 3333),
+                ("복리후생비", "생수, 음료 외 기타", "N/A", 12 if not actual else 1, "개월" if not actual else "일", 50000 if not actual else 1667)
             ]
         df = self.settings_df[self.settings_df['Category'] == 'Expense']
         if df.empty:
             return [
-                ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 1, "일", 5000),
-                ("소모품비", "장갑,일회용 작업복외", "N/A", 1, "일", 500),
-                ("복리후생비", "생수, 음료 외 기타", "N/A", 1, "일", 1667),
-                ("Se-175", "방사성동위원소 구매", "N/A", 1, "일", 47619)
+                ("차량유지비", "주유, 수리, 통행, 주차 등", "N/A", 12 if not actual else 1, "개월" if not actual else "일", 200000 if not actual else 6667),
+                ("소모품비", "장갑,일회용 작업복외", "N/A", 12 if not actual else 1, "개월" if not actual else "일", 100000 if not actual else 3333),
+                ("복리후생비", "생수, 음료 외 기타", "N/A", 12 if not actual else 1, "개월" if not actual else "일", 50000 if not actual else 1667)
             ]
         # Return in (cat, cont, ppl, qty, unit, price) format as expected by _add_row_s1
         result = []
@@ -1103,22 +1101,24 @@ class MaterialManager:
             spec = x[1]
             unit = x[2]
             rate = x[3]
+            qty = 12 if not actual else 1
             
-            # 강제로 단가 및 규격 덮어쓰기
+            # 사전원가 기준: 개월 단위, 월별 금액
+            # 사후원가 기준: 일 단위, 일별 금액 (월 금액 / 30)
             if name == '차량유지비':
-                unit = '일'
-                rate = 5000
+                unit = '개월' if not actual else '일'
+                rate = 200000 if not actual else 6667
             elif name == '소모품비':
-                unit = '일'
-                rate = 500
+                unit = '개월' if not actual else '일'
+                rate = 100000 if not actual else 3333
             elif name == '복리후생비':
-                unit = '일'
-                rate = 1667
+                unit = '개월' if not actual else '일'
+                rate = 50000 if not actual else 1667
             elif name == 'Se-175':
-                unit = '일'
-                rate = 47619
+                unit = '식' if not actual else '일'
+                rate = 0 if not actual else 35714
                 
-            result.append((name, spec, "N/A", 1, unit, rate))
+            result.append((name, spec, "N/A", qty, unit, rate))
         return result
 
     def get_outsource_defaults(self):
@@ -6495,10 +6495,16 @@ class MaterialManager:
             self._update_budget_kpis()
 
         def get_lab():
-            try: return float(self.ent_budget_labor.get().replace(',', '') or 0)
+            try:
+                if hasattr(self, 'labor_detail_widget') and hasattr(self.labor_detail_widget, 'get_exact_total'):
+                    return self.labor_detail_widget.get_exact_total()
+                return float(self.ent_budget_labor.get().replace(',', '') or 0)
             except: return 0.0
         def get_mat():
-            try: return float(self.ent_budget_material.get().replace(',', '') or 0)
+            try:
+                if hasattr(self, 'material_detail_widget') and hasattr(self.material_detail_widget, 'get_exact_total'):
+                    return self.material_detail_widget.get_exact_total()
+                return float(self.ent_budget_material.get().replace(',', '') or 0)
             except: return 0.0
         def get_rev():
             try: 
@@ -6513,7 +6519,8 @@ class MaterialManager:
             on_change_callback=on_expense_change,
             get_labor_total_func=get_lab,
             get_material_total_func=get_mat,
-            get_revenue_func=get_rev
+            get_revenue_func=get_rev,
+            master_app=self
         )
         self.expense_detail_widget.pack(fill='x', expand=True)
         
@@ -6556,10 +6563,16 @@ class MaterialManager:
             self._update_budget_kpis()
 
         def get_actual_lab():
-            try: return float(self.ent_budget_actual_labor.get().replace(',', '') or 0)
+            try:
+                if hasattr(self, 'actual_labor_detail_widget') and hasattr(self.actual_labor_detail_widget, 'get_exact_total'):
+                    return self.actual_labor_detail_widget.get_exact_total()
+                return float(self.ent_budget_actual_labor.get().replace(',', '') or 0)
             except: return 0.0
         def get_actual_mat():
-            try: return float(self.ent_budget_actual_material.get().replace(',', '') or 0)
+            try:
+                if hasattr(self, 'actual_material_detail_widget') and hasattr(self.actual_material_detail_widget, 'get_exact_total'):
+                    return self.actual_material_detail_widget.get_exact_total()
+                return float(self.ent_budget_actual_material.get().replace(',', '') or 0)
             except: return 0.0
         def get_actual_rev():
             try: 
@@ -6574,7 +6587,8 @@ class MaterialManager:
             on_change_callback=on_actual_expense_change,
             get_labor_total_func=get_actual_lab,
             get_material_total_func=get_actual_mat,
-            get_revenue_func=get_actual_rev
+            get_revenue_func=get_actual_rev,
+            budget_mode='actual'
         )
         self.actual_expense_detail_widget.pack(fill='x', expand=True)
         
@@ -7530,6 +7544,16 @@ class MaterialManager:
                                             if isinstance(v, dict):
                                                 if 'qty' in v: v['qty'] = ''
                                                 if 'days' in v: v['days'] = ''
+                                                # [NEW] Convert units and prices to daily format for Actual Expense
+                                                item_name = str(v.get('cat', v.get('item', ''))).strip()
+                                                if item_name == '차량유지비':
+                                                    v['unit'] = '일'; v['price'] = 6667
+                                                elif item_name == '소모품비':
+                                                    v['unit'] = '일'; v['price'] = 3333
+                                                elif item_name == '복리후생비':
+                                                    v['unit'] = '일'; v['price'] = 1667
+                                                elif item_name == 'Se-175':
+                                                    v['unit'] = '일'; v['price'] = 35714
                             widget.set_data(p_data)
                             continue
                         except Exception as e: 
@@ -7538,7 +7562,23 @@ class MaterialManager:
                 # 정상 로드 로직
                 if jdata and str(jdata).strip() not in ['', '{}', '[]']:
                     try:
-                        widget.set_data(_json.loads(jdata))
+                        loaded_data = _json.loads(jdata)
+                        if json_col == 'Actual_ExpenseDetail' and isinstance(loaded_data, dict):
+                            # Force update existing loaded data to daily units as well
+                            for v_list in loaded_data.values():
+                                if isinstance(v_list, list):
+                                    for v in v_list:
+                                        if isinstance(v, dict):
+                                            item_name = str(v.get('cat', v.get('item', ''))).strip()
+                                            if item_name == '차량유지비' and str(v.get('unit')) == '개월':
+                                                v['unit'] = '일'; v['price'] = 6667; v['qty'] = ''
+                                            elif item_name == '소모품비' and str(v.get('unit')) == '개월':
+                                                v['unit'] = '일'; v['price'] = 3333; v['qty'] = ''
+                                            elif item_name == '복리후생비' and str(v.get('unit')) == '개월':
+                                                v['unit'] = '일'; v['price'] = 1667; v['qty'] = ''
+                                            elif item_name == 'Se-175' and str(v.get('unit')) == '식':
+                                                v['unit'] = '일'; v['price'] = 35714; v['qty'] = ''
+                        widget.set_data(loaded_data)
                     except:
                         widget.reset()
                 else:
@@ -7617,7 +7657,7 @@ class MaterialManager:
         }
 
         # 상세 재료비 집계를 위한 맵
-        material_usage_sums = [0.0] * 10
+        material_usage_sums = [0.0] * 11
         mat_map = {
             '세척': 0, '침투': 1, '현상': 2, '자분': 3, '흑색': 4,
             '필름': 5, '글리세': 6, '현상액': 7, '정착액': 8, '수적': 9
@@ -8062,6 +8102,8 @@ class MaterialManager:
                 material_usage_sums[8] = film_chem_qty
             if len(material_usage_sums) > 9:
                 material_usage_sums[9] = anti_drop_qty
+            if len(material_usage_sums) > 10:
+                material_usage_sums[10] = float(len(rt_dates))
 
             for i, qty in enumerate(material_usage_sums):
                 if i < len(current_mat_data):
@@ -8105,16 +8147,10 @@ class MaterialManager:
             toptruck_days = sum(len(dates) for v, dates in vehicle_dates_map.items() if '탑차' in v)
 
             for i, row_data in enumerate(current_exp_data.get('site_expense', [])):
-                cat = str(row_data.get('cat', '')).upper()
-                if any(k in cat for k in ['출장비', '소모품비', '식대']):
-                    row_data['qty'] = f"{total_days_count:g}" if total_days_count > 0 else ""
-                elif '차량유지비' in cat:
-                    row_data['qty'] = f"{total_vehicle_days:g}" if total_vehicle_days > 0 else ""
-                elif 'SE-175' in cat or 'SE175' in cat:
-                    row_data['qty'] = f"{len(rt_dates):g}" if len(rt_dates) > 0 else ""
-                # [FIX] 사전예산 단가 복사
+                # [FIX] 사전예산 단가/규격 복사 (수량은 사용자가 직접 입력)
                 if 'site_expense' in planned_exp_data and i < len(planned_exp_data['site_expense']):
-                    row_data['unit_price'] = planned_exp_data['site_expense'][i].get('unit_price', '')
+                    row_data['price'] = planned_exp_data['site_expense'][i].get('price', '')
+                    row_data['unit'] = planned_exp_data['site_expense'][i].get('unit', '')
                     
             for i, row_data in enumerate(current_exp_data.get('depreciation', [])):
                 item = row_data.get('item', '')
@@ -8262,7 +8298,11 @@ class MaterialManager:
 
         # [NEW] Robust Sanitization: Ensure NO NaN or empty strings ever reach the float64 columns
         # This fixes TypeError: Invalid value '' for dtype 'float64' permanently
-        numeric_keys = {'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit'}
+        numeric_keys = {
+            'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit',
+            'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 
+            'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit'
+        }
         new_data_sanitized = {}
         for k, v in new_data.items():
             if k in numeric_keys:
@@ -8286,6 +8326,8 @@ class MaterialManager:
             # [FIX] Use explicit .loc[index, key] to ensure correct row update
             idx = self.budget_df[self.budget_df['Site'] == site].index[0]
             for key, val in new_data_sanitized.items():
+                if isinstance(val, str) and key in self.budget_df.columns and self.budget_df[key].dtype != 'object':
+                    self.budget_df[key] = self.budget_df[key].astype(object)
                 self.budget_df.loc[idx, key] = val
         else:
             # Create a properly typed DataFrame for concatenation to avoid dtype clashes
