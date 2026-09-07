@@ -125,12 +125,14 @@ class NDTCalculatorTab(ttk.Frame):
                 self.tree.delete(item)
                 
             for res in self.records:
+                unit_price = res.get("unit_price", 0)
+                if unit_price == 0 and res.get("qty", 0) > 0:
+                    unit_price = int(res.get("subtotal", 0) / res.get("qty"))
+                    
                 self.tree.insert("", tk.END, values=(
-                    res.get("date", ""), res.get("loc", ""), res.get("ndt_type", ""), res.get("work_time", ""), 
+                    res.get("date", ""), res.get("company", ""), res.get("loc", ""), res.get("ndt_type", ""), res.get("work_time", ""), 
                     res.get("material_type", ""), f"{res.get('qty', 0):.1f}", res.get("unit", ""),
-                    f"{res.get('corr', 1):.2f}", f"{res.get('adjusted_qty', 0):.2f}", 
-                    f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
-                    f"{res.get('overhead', 0):,}", f"{res.get('tech', 0):,}", f"{res.get('subtotal', 0):,}"
+                    f"{unit_price:,}", f"{res.get('subtotal', 0):,}"
                 ))
             if hasattr(self, 'update_qty_summary'):
                 self.update_qty_summary()
@@ -230,6 +232,10 @@ class NDTCalculatorTab(ttk.Frame):
         self.date_var = tk.StringVar(value=datetime.now().strftime('%Y-%m-%d'))
         self.date_entry = DateEntry(info_frame1, textvariable=self.date_var, width=13, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2)
         self.date_entry.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(info_frame1, text="• 업체명:", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 0))
+        self.company_var = tk.StringVar(value="")
+        ttk.Entry(info_frame1, textvariable=self.company_var, width=15).pack(side=tk.LEFT, padx=5)
         
         info_frame2 = ttk.Frame(left_frame)
         info_frame2.pack(fill=tk.X, pady=(0, 10))
@@ -610,40 +616,36 @@ class NDTCalculatorTab(ttk.Frame):
         tree_container = ttk.Frame(bottom_frame)
         tree_container.pack(fill=tk.BOTH, expand=True)
 
-        columns = ("date", "loc", "type", "time", "mat", "qty", "unit", "mat_cost", "lab_cost", "overhead", "tech", "total_amt")
+        columns = ("date", "company", "loc", "type", "time", "mat", "qty", "unit", "unit_price", "total_amt")
         self.tree = ttk.Treeview(tree_container, columns=columns, show="headings", height=8)
         
         self.tree.heading("date", text="일자", anchor="center")
+        self.tree.heading("company", text="업체명", anchor="center")
         self.tree.heading("loc", text="구간/위치", anchor="center")
         self.tree.heading("type", text="종류", anchor="center")
         self.tree.heading("time", text="형태", anchor="center")
         self.tree.heading("mat", text="자재", anchor="center")
         self.tree.heading("qty", text="실물량", anchor="center")
         self.tree.heading("unit", text="단위", anchor="center")
-        self.tree.heading("mat_cost", text="재료비(원)", anchor="center")
-        self.tree.heading("lab_cost", text="인건비(원)", anchor="center")
-        self.tree.heading("overhead", text="제경비(원)", anchor="center")
-        self.tree.heading("tech", text="기술료(원)", anchor="center")
+        self.tree.heading("unit_price", text="단가(원)", anchor="center")
         self.tree.heading("total_amt", text="공급가액(원)", anchor="center")
         
         default_widths = {
-            "date": 80, "loc": 120, "type": 40, "time": 40, "mat": 90, 
+            "date": 80, "company": 80, "loc": 120, "type": 40, "time": 40, "mat": 90, 
             "qty": 40, "unit": 40,
-            "mat_cost": 70, "lab_cost": 70, "overhead": 60, "tech": 60, "total_amt": 80
+            "unit_price": 90, "total_amt": 90
         }
         saved_widths = CONFIG.get("TREE_WIDTHS", {})
         
         self.tree.column("date", width=saved_widths.get("date", default_widths["date"]), anchor="center")
+        self.tree.column("company", width=saved_widths.get("company", default_widths["company"]), anchor="center")
         self.tree.column("loc", width=saved_widths.get("loc", default_widths["loc"]), anchor="w")
         self.tree.column("type", width=saved_widths.get("type", default_widths["type"]), anchor="center")
         self.tree.column("time", width=saved_widths.get("time", default_widths["time"]), anchor="center")
         self.tree.column("mat", width=saved_widths.get("mat", default_widths["mat"]), anchor="center")
         self.tree.column("qty", width=saved_widths.get("qty", default_widths["qty"]), anchor="center")
         self.tree.column("unit", width=saved_widths.get("unit", default_widths["unit"]), anchor="center")
-        self.tree.column("mat_cost", width=saved_widths.get("mat_cost", default_widths["mat_cost"]), anchor="center")
-        self.tree.column("lab_cost", width=saved_widths.get("lab_cost", default_widths["lab_cost"]), anchor="center")
-        self.tree.column("overhead", width=saved_widths.get("overhead", default_widths["overhead"]), anchor="center")
-        self.tree.column("tech", width=saved_widths.get("tech", default_widths["tech"]), anchor="center")
+        self.tree.column("unit_price", width=saved_widths.get("unit_price", default_widths["unit_price"]), anchor="center")
         self.tree.column("total_amt", width=saved_widths.get("total_amt", default_widths["total_amt"]), anchor="center")
         
         tree_scroll = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree.yview)
@@ -787,6 +789,7 @@ class NDTCalculatorTab(ttk.Frame):
 
     def _do_calculate(self):
         date_str = self.date_var.get()
+        company_str = self.company_var.get()
         loc_str = self.loc_var.get()
         ndt_type = self.ndt_type_var.get()
         work_time = self.work_time_var.get()
@@ -829,6 +832,7 @@ class NDTCalculatorTab(ttk.Frame):
         
         return {
             "date": date_str,
+            "company": company_str,
             "loc": display_loc,
             "ndt_type": ndt_type,
             "work_time": work_time,
@@ -837,6 +841,7 @@ class NDTCalculatorTab(ttk.Frame):
             "unit": unit_str,
             "corr": corr,
             "adjusted_qty": adjusted_qty,
+            "unit_price": costs["unit_price"],
             "mat_cost": total_mat_cost,
             "lab_cost": total_lab_cost,
             "overhead": overhead_cost,
@@ -954,6 +959,8 @@ class NDTCalculatorTab(ttk.Frame):
             for _, row in ndt_df.iterrows():
                 date_str = str(row.get('Date', ''))[:10]
                 loc_str = str(row.get('Site', ''))
+                company_str = str(row.get('업체명', ''))
+                if not company_str or company_str == 'nan': company_str = ''
                 ndt_type = str(row.get('검사방법', 'RT'))
                 work_time = str(row.get('작업형태', '일반'))
                 if work_time not in ['일반', '야간', '휴일']: work_time = '일반'
@@ -962,6 +969,7 @@ class NDTCalculatorTab(ttk.Frame):
                 if qty == 0.0: qty = float(row.get('Usage', 0.0) if not pd.isna(row.get('Usage')) else 0.0)
                 
                 self.date_var.set(date_str)
+                self.company_var.set(company_str)
                 if '관리소' in loc_str or '플랜트' in loc_str:
                     self.loc_type_var.set('플랜트(관리소)')
                 else:
@@ -1040,11 +1048,15 @@ class NDTCalculatorTab(ttk.Frame):
         res = self.calculate()
         if res:
             self.records.append(res)
+            
+            unit_price = res.get("unit_price", 0)
+            if unit_price == 0 and res.get("qty", 0) > 0:
+                unit_price = int(res.get("subtotal", 0) / res.get("qty"))
+                
             self.tree.insert("", tk.END, values=(
-                res["date"], res["loc"], res["ndt_type"], res["work_time"], 
+                res["date"], res.get("company", ""), res["loc"], res["ndt_type"], res["work_time"], 
                 res["material_type"], f"{res['qty']:.1f}", res["unit"],
-                f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
-                f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
+                f"{unit_price:,}", f"{res['subtotal']:,}"
             ))
             self.update_qty_summary()
             if auto_save:
@@ -1692,7 +1704,7 @@ class NDTCalculatorTab(ttk.Frame):
 
             # --- 세부 내역 테이블 ---
             headers = ["No.", "검사일자", "작업구간", "검사종류", "규격/자재", "근무형태", "실물량", "단위", "보정계수", "환산물량", 
-                       "재료비", "직접인건비", "제경비", "기술료", "공급가액소계"]
+                       "단가", "공급가액소계"]
             
             start_row = row + 2
             for col, h in enumerate(headers, start=1):
@@ -1713,11 +1725,8 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Columns(8).ColumnWidth = 9
             ws.Columns(9).ColumnWidth = 14
             ws.Columns(10).ColumnWidth = 11
-            ws.Columns(11).ColumnWidth = 16
-            ws.Columns(12).ColumnWidth = 14
-            ws.Columns(13).ColumnWidth = 14
-            ws.Columns(14).ColumnWidth = 14
-            ws.Columns(15).ColumnWidth = 16
+            ws.Columns(11).ColumnWidth = 14
+            ws.Columns(12).ColumnWidth = 16
             
             current_row = start_row + 1
             total_mat = total_lab = total_ovr = total_tech = total_sub = 0
@@ -1795,28 +1804,21 @@ class NDTCalculatorTab(ttk.Frame):
                     
                     if c_price > 0:
                         exact_subtotal = int(data["qty"] * c_price)
-                        adj_tech = exact_subtotal - data["mat_cost"] - data["lab_cost"] - data["overhead"]
                         
                         ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
-                        ws.Cells(current_row, 11).Value = data["mat_cost"]
-                        ws.Cells(current_row, 12).Value = data["lab_cost"]
-                        ws.Cells(current_row, 13).Value = data["overhead"]
-                        ws.Cells(current_row, 14).Value = adj_tech
-                        ws.Cells(current_row, 15).Value = exact_subtotal
+                        ws.Cells(current_row, 11).Value = c_price
+                        ws.Cells(current_row, 12).Value = exact_subtotal
                         
-                        # Update the data dictionary so that sub_mat/sub_lab/sub_sub sums use the adjusted values
-                        data["tech"] = adj_tech
+                        # Update the data dictionary so that sub_sub sums use the adjusted values
                         data["subtotal"] = exact_subtotal
                     else:
                         ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
-                        ws.Cells(current_row, 11).Value = data["mat_cost"]
-                        ws.Cells(current_row, 12).Value = data["lab_cost"]
-                        ws.Cells(current_row, 13).Value = data["overhead"]
-                        ws.Cells(current_row, 14).Value = data["tech"]
-                        ws.Cells(current_row, 15).Value = data["subtotal"]
+                        unit_p = int(data["subtotal"] / data["qty"]) if data["qty"] > 0 else 0
+                        ws.Cells(current_row, 11).Value = unit_p
+                        ws.Cells(current_row, 12).Value = data["subtotal"]
                     
                     unit_str = key[4]
-                    for c in range(1, 16):
+                    for c in range(1, 13):
                         cell = ws.Cells(current_row, c)
                         cell.Borders.LineStyle = 1
                         if c <= 4 or c == 6 or c == 8: cell.HorizontalAlignment = -4108
@@ -1840,13 +1842,10 @@ class NDTCalculatorTab(ttk.Frame):
                 ws.Cells(current_row, 1).HorizontalAlignment = -4108
                 ws.Cells(current_row, 1).Font.Bold = True
                 
-                ws.Cells(current_row, 11).Value = sub_mat
-                ws.Cells(current_row, 12).Value = sub_lab
-                ws.Cells(current_row, 13).Value = sub_ovr
-                ws.Cells(current_row, 14).Value = sub_tech
-                ws.Cells(current_row, 15).Value = sub_sub
+                ws.Cells(current_row, 11).Value = ""
+                ws.Cells(current_row, 12).Value = sub_sub
                 
-                for c in range(1, 16):
+                for c in range(1, 13):
                     cell = ws.Cells(current_row, c)
                     cell.Borders.LineStyle = 1
                     cell.Font.Bold = True
@@ -1863,13 +1862,10 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Cells(current_row, 1).HorizontalAlignment = -4108
             ws.Cells(current_row, 1).Font.Bold = True
             
-            ws.Cells(current_row, 11).Value = total_mat
-            ws.Cells(current_row, 12).Value = total_lab
-            ws.Cells(current_row, 13).Value = total_ovr
-            ws.Cells(current_row, 14).Value = total_tech
-            ws.Cells(current_row, 15).Value = total_sub
+            ws.Cells(current_row, 11).Value = ""
+            ws.Cells(current_row, 12).Value = total_sub
             
-            for c in range(1, 16):
+            for c in range(1, 13):
                 cell = ws.Cells(current_row, c)
                 cell.Borders.LineStyle = 1
                 cell.Font.Bold = True
@@ -1900,58 +1896,187 @@ class NDTCalculatorTab(ttk.Frame):
             for item in extra_items_map:
                 name = item[0]
                 val_or_row = item[1]
-                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
                 ws.Cells(current_row, 1).Value = f"'+ {name}"
                 ws.Cells(current_row, 1).HorizontalAlignment = -4152
                 
                 if val_or_row > 0 and val_or_row < 1000:
-                    ws.Cells(current_row, 15).Formula = f"=K{val_or_row}"
+                    ws.Cells(current_row, 12).Formula = f"=K{val_or_row}"
                 else:
-                    ws.Cells(current_row, 15).Value = val_or_row if val_or_row > 0 else 0
+                    ws.Cells(current_row, 12).Value = val_or_row if val_or_row > 0 else 0
                     
-                ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
-                for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+                ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
+                for c in range(1, 13): ws.Cells(current_row, c).Borders.LineStyle = 1
                 current_row += 1
             
             # --- 총 공급가액 (검사합계 + 실비) ---
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
             ws.Cells(current_row, 1).Value = "공급가액 총액"
             ws.Cells(current_row, 1).HorizontalAlignment = -4152
             ws.Cells(current_row, 1).Font.Bold = True
             if total_row > 0:
-                ws.Cells(current_row, 15).Formula = f"=K{total_row}"
+                ws.Cells(current_row, 12).Formula = f"=K{total_row}"
             else:
-                ws.Cells(current_row, 15).Value = 0
-            ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
-            ws.Cells(current_row, 15).Font.Bold = True
-            for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+                ws.Cells(current_row, 12).Value = 0
+            ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
+            ws.Cells(current_row, 12).Font.Bold = True
+            for c in range(1, 13): ws.Cells(current_row, c).Borders.LineStyle = 1
             
             # --- 부가세 및 최종 청구액 ---
             current_row += 1
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
             ws.Cells(current_row, 1).Value = "'+ 부가가치세 (10%)"
             ws.Cells(current_row, 1).HorizontalAlignment = -4152
-            ws.Cells(current_row, 15).Formula = f"=TRUNC(O{current_row-1}*0.1)"
-            ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
-            for c in range(1, 16): ws.Cells(current_row, c).Borders.LineStyle = 1
+            ws.Cells(current_row, 12).Formula = f"=TRUNC(L{current_row-1}*0.1)"
+            ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
+            for c in range(1, 13): ws.Cells(current_row, c).Borders.LineStyle = 1
             
             current_row += 1
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 14)).Merge()
+            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
             ws.Cells(current_row, 1).Value = "최 종 기 성 청 구 액"
             ws.Cells(current_row, 1).HorizontalAlignment = -4152
             ws.Cells(current_row, 1).Font.Bold = True
             ws.Cells(current_row, 1).Font.Size = 12
             
-            ws.Cells(current_row, 15).Formula = f"=O{current_row-2}+O{current_row-1}"
-            ws.Cells(current_row, 15).NumberFormat = '#,##0;-#,##0;"-"'
-            ws.Cells(current_row, 15).Font.Bold = True
-            ws.Cells(current_row, 15).Font.Size = 12
+            ws.Cells(current_row, 12).Formula = f"=L{current_row-2}+L{current_row-1}"
+            ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
+            ws.Cells(current_row, 12).Font.Bold = True
+            ws.Cells(current_row, 12).Font.Size = 12
             
-            for c in range(1, 16):
+            for c in range(1, 13):
                 cell = ws.Cells(current_row, c)
                 cell.Borders.LineStyle = 1
                 cell.Interior.Color = 13434879
                 
+            # --- 표지 (청구서 갑지) 생성 ---
+            ws_cover = wb.Sheets.Add(Before=ws)
+            ws_cover.Name = "청구서(갑지)"
+            
+            ws_cover.Range("A1:G2").Merge()
+            ws_cover.Range("A1").Value = "청 구 서"
+            ws_cover.Range("A1").Font.Size = 24
+            ws_cover.Range("A1").Font.Bold = True
+            ws_cover.Range("A1").HorizontalAlignment = -4108
+            ws_cover.Range("A1").VerticalAlignment = -4108
+            
+            ws_cover.Range("A4:B4").Merge()
+            ws_cover.Range("A4").Value = "건 명 :"
+            ws_cover.Range("C4:G4").Merge()
+            ws_cover.Range("C4").Value = f"제 {round_val} 회 비파괴검사기술용역 기성청구"
+            
+            ws_cover.Range("A5:B5").Merge()
+            ws_cover.Range("A5").Value = "청구금액 :"
+            ws_cover.Range("C5:G5").Merge()
+            
+            grand_total = total_sub + extra_items_total
+            vat = int(grand_total * 0.1)
+            grand_total_with_vat = grand_total + vat
+            ws_cover.Range("C5").Value = f"일금 {grand_total_with_vat:,} 원정 (VAT 포함)"
+            ws_cover.Range("C5").Font.Bold = True
+            ws_cover.Range("C5").Font.Size = 14
+            
+            ws_cover.Range("A8:G8").Merge()
+            ws_cover.Range("A8").Value = "위와 같이 청구하오니 지정계좌로 입금하여 주시기 바랍니다."
+            ws_cover.Range("A8").HorizontalAlignment = -4108
+            
+            ws_cover.Range("A10:B10").Merge()
+            ws_cover.Range("A10").Value = "입금계좌 :"
+            ws_cover.Range("C10:G10").Merge()
+            ws_cover.Range("C10").Value = "(은행명) (계좌번호) (예금주)"
+            
+            ws_cover.Range("A12:G12").Merge()
+            ws_cover.Range("A12").Value = f"{datetime.now().strftime('%Y년 %m월 %d일')}"
+            ws_cover.Range("A12").HorizontalAlignment = -4108
+            
+            ws_cover.Range("A15:C15").Merge()
+            ws_cover.Range("A15").Value = "청구인 :"
+            ws_cover.Range("D15:G15").Merge()
+            ws_cover.Range("D15").Value = "(회사명 기입) (인)"
+            
+            ws_cover.Columns(1).ColumnWidth = 10
+            ws_cover.Columns(2).ColumnWidth = 10
+            ws_cover.Columns(3).ColumnWidth = 15
+            ws_cover.Columns(4).ColumnWidth = 15
+            ws_cover.Columns(5).ColumnWidth = 15
+            
+            # --- 업체별 수량내역 시트 생성 ---
+            ws_cont = wb.Sheets.Add(After=ws)
+            ws_cont.Name = "업체별 수량내역"
+            
+            ws_cont.Range("A1:K2").Merge()
+            ws_cont.Range("A1").Value = f"제 {round_val} 회 기성청구 업체별 수량내역"
+            ws_cont.Range("A1").Font.Size = 16
+            ws_cont.Range("A1").Font.Bold = True
+            ws_cont.Range("A1").HorizontalAlignment = -4108
+            ws_cont.Range("A1").VerticalAlignment = -4108
+            
+            headers_cont = ["No.", "업체명", "검사방법", "구간", "라인번호", "Joint No.", "관경", "두께", "용접사", "구간정보", "결과"]
+            for col, h in enumerate(headers_cont, start=1):
+                cell = ws_cont.Cells(4, col)
+                cell.Value = h
+                cell.Font.Bold = True
+                cell.Interior.Color = 14277081
+                cell.HorizontalAlignment = -4108
+                cell.Borders.LineStyle = 1
+                
+            ws_cont.Columns(1).ColumnWidth = 8
+            ws_cont.Columns(2).ColumnWidth = 20
+            ws_cont.Columns(3).ColumnWidth = 10
+            ws_cont.Columns(4).ColumnWidth = 15
+            ws_cont.Columns(5).ColumnWidth = 35
+            ws_cont.Columns(6).ColumnWidth = 10
+            ws_cont.Columns(7).ColumnWidth = 10
+            ws_cont.Columns(8).ColumnWidth = 10
+            ws_cont.Columns(9).ColumnWidth = 12
+            ws_cont.Columns(10).ColumnWidth = 15
+            ws_cont.Columns(11).ColumnWidth = 10
+            
+            cont_row = 5
+            
+            import json
+            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            history_data = {}
+            if os.path.exists(history_path):
+                try:
+                    with open(history_path, 'r', encoding='utf-8') as f:
+                        history_data = json.load(f)
+                except: pass
+                
+            target_dates = set(r["date"] for r in target_records)
+            all_ndt_results = []
+            for t_date in target_dates:
+                if t_date in history_data and "ndt_results" in history_data[t_date]:
+                    all_ndt_results.extend(history_data[t_date]["ndt_results"])
+                    
+            all_ndt_results.sort(key=lambda x: (str(x.get("업체", "")), str(x.get("검사방법", "")), str(x.get("구간", "")), str(x.get("라인번호", ""))))
+            
+            idx_cont = 1
+            for r in all_ndt_results:
+                if not str(r.get("업체", "")).strip() and not str(r.get("Joint No.", "")).strip():
+                    continue
+                    
+                ws_cont.Cells(cont_row, 1).Value = idx_cont
+                ws_cont.Cells(cont_row, 2).Value = r.get("업체", "")
+                ws_cont.Cells(cont_row, 3).Value = r.get("검사방법", "")
+                ws_cont.Cells(cont_row, 4).Value = r.get("구간", "")
+                ws_cont.Cells(cont_row, 5).Value = r.get("라인번호", "")
+                ws_cont.Cells(cont_row, 6).Value = r.get("Joint No.", "")
+                ws_cont.Cells(cont_row, 7).Value = r.get("관경", "")
+                ws_cont.Cells(cont_row, 8).Value = r.get("두께", "")
+                ws_cont.Cells(cont_row, 9).Value = r.get("용접사", "")
+                ws_cont.Cells(cont_row, 10).Value = r.get("구간정보", "")
+                ws_cont.Cells(cont_row, 11).Value = r.get("결과", "")
+                
+                for c in range(1, 12):
+                    cell = ws_cont.Cells(cont_row, c)
+                    cell.Borders.LineStyle = 1
+                    cell.HorizontalAlignment = -4108
+                
+                idx_cont += 1
+                cont_row += 1
+            
+            ws_cover.Select()
+            
             filepath = filepath.replace("/", "\\")
             wb.SaveAs(filepath)
             wb.Close()

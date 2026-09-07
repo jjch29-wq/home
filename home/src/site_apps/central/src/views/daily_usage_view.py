@@ -430,8 +430,6 @@ def setup_daily_usage_tab_impl(self):
                 labor_rates = LABOR_COST.get(work_time, {})
                 lab_unit = labor_rates.get(billing_key, labor_rates.get(ndt_type, 0))
                 
-            total_lab = int(adj_qty * lab_unit)
-            
             import math
             try:
                 overhead_rate = float(self.ndt_overhead_var.get()) / 100
@@ -444,11 +442,20 @@ def setup_daily_usage_tab_impl(self):
             except:
                 tech_rate = 0.0
                 
-            overhead = int(total_lab * overhead_rate)
-            tech = int((total_lab + overhead) * tech_rate)
+            # [FIX] Calculate fixed base unit price first to prevent 1-won fluctuations
+            base_mat = mat_unit_cost
+            base_lab = int(factor * lab_unit)
+            base_overhead = int(base_lab * overhead_rate)
+            base_tech = int((base_lab + base_overhead) * tech_rate)
             
-            subtotal = total_mat + total_lab + overhead + tech
-            unit_price = subtotal / qty if qty > 0 else 0
+            unit_price = base_mat + base_lab + base_overhead + base_tech
+            subtotal = int(qty * unit_price)
+            
+            # Store proportional totals for internal logs
+            total_mat = int(qty * base_mat)
+            total_lab = int(qty * base_lab)
+            overhead = int(qty * base_overhead)
+            tech = int(qty * base_tech)
             
             self.ent_daily_unit_price.delete(0, tk.END)
             self.ent_daily_unit_price.insert(0, f"{unit_price:,.0f}")

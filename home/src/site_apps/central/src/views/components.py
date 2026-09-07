@@ -1684,29 +1684,8 @@ class ExpenseProfitDetailWidget(ttk.Frame):
         sync_rows('outsource', data.get('outsource'), self._add_row_s3)
         sync_rows('depreciation', data.get('depreciation'), self._add_row_s5)
         
-        # Ensure all default depreciation items exist (fill in missing ones from saved data)
-        DEFAULTS_S5 = [
-            ("PAUT 장비", "", 5, 1, 120, 5333333/120),
-            ("PAUT SCANNER (MANUAL)", "", 5, 1, 120, 666667/120),
-            ("PAUT SCANNER (COBRA)", "", 5, 1, 120, 2000000/120),
-            ("YOKE", "", 5, 1, 10, 2222/10),
-            ("현장용 탑차(5년간 보험비 포함)", "", 5, 1, 30, 500000/30),
-            ("스타렉스(5년간 보험비 포함)", "", 5, 1, 160, 2666667/160),
-        ]
-        existing_items = {w['item'].get().strip() for w in self.entries['depreciation']}
-        
-        def _already_exists(item_name, existing_set):
-            """부분 일치로 항목 존재 여부 확인 (이름 변경된 구 저장 데이터 대응)"""
-            if item_name in existing_set:
-                return True
-            for ex in existing_set:
-                if item_name in ex or ex in item_name:
-                    return True
-            return False
-        
-        for item, spec, life, qty, days, rate in DEFAULTS_S5:
-            if not _already_exists(item, existing_items):
-                self._add_row_s5(item, spec, life, qty, days, rate)
+        # Removed forced recreation of missing default items here 
+        # so that when a user deletes a row and saves, it doesn't reappear on reload.
         
         # Restore precise rates after rebuilding depreciation rows
         precise_rates = data.get('_depreciation_precise_rates', [])

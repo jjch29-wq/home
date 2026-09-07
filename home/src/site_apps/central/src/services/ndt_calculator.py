@@ -16,13 +16,26 @@ def calculate_billing(
     time_costs = location_costs.get(work_time, {})
     labor_unit = time_costs.get(material_key, time_costs.get(ndt_type, 0))
 
+    corr = adjusted_quantity / quantity if quantity > 0 else 1.0
+    u_mat = int(float(material_unit or 0))
+    u_lab = int(corr * float(labor_unit or 0))
+    u_overhead = int(u_lab * overhead_rate)
+    u_tech = int((u_lab + u_overhead) * technical_fee_rate)
+    unit_price = u_mat + u_lab + u_overhead + u_tech
+
+    subtotal = int(quantity * unit_price)
+    vat = int(subtotal * vat_rate)
+
     material = int(quantity * float(material_unit or 0))
     labor = int(adjusted_quantity * float(labor_unit or 0))
     overhead = int(labor * overhead_rate)
     technical_fee = int((labor + overhead) * technical_fee_rate)
-    subtotal = material + labor + overhead + technical_fee
-    vat = int(subtotal * vat_rate)
+    
+    # Adjust technical fee to absorb any rounding differences so sum == subtotal
+    technical_fee += (subtotal - (material + labor + overhead + technical_fee))
+
     return {
+        "unit_price": unit_price,
         "mat_cost": material,
         "lab_cost": labor,
         "overhead": overhead,

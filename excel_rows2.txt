@@ -1,0 +1,15 @@
+45:    3) 경비 | nan | nan | nan | nan
+46:         (1) 현장 경비 | nan | nan | nan | nan
+47: 구분 | nan | 수량 | 단가 | 사전원가금액
+48: 차량유지비 | nan | 12 | 200000 | 2400000
+49: 소모품비 | nan | 12 | 100000 | 1200000
+50: 복리후생비 | nan | 12 | 50000 | 600000
+51: nan | nan | nan | nan | nan
+52: nan | nan | nan | nan | nan
+53: nan | nan | nan | nan | nan
+54: nan | nan | nan | nan | nan
+55: 현장 경비 소계 | nan | nan | nan | 4200000
+56: nan | nan | nan | nan | 420000
+57:         (2) 장비/차량 임차료 | nan | nan | nan | nan
+58: 구분 | nan | 사용기간 | 단가/월.대 | 사전원가금액
+59: nan | nan | nan | nan | nan
