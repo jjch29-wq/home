@@ -1943,8 +1943,161 @@ class NDTCalculatorTab(ttk.Frame):
                 outer_range.Borders(edge).LineStyle = 1
                 outer_range.Borders(edge).Weight = 4 # xlThick
             
+            # --- 업체별 기성요약 시트 생성 ---
+            ws_summary = wb.Sheets.Add(None, ws)
+            ws_summary.Name = "업체별 기성요약"
+            
+            ws_summary.PageSetup.Orientation = 1 # xlPortrait
+            ws_summary.PageSetup.Zoom = False
+            ws_summary.PageSetup.FitToPagesWide = 1
+            ws_summary.PageSetup.FitToPagesTall = False
+            ws_summary.PageSetup.LeftMargin = 20
+            ws_summary.PageSetup.RightMargin = 20
+            ws_summary.PageSetup.TopMargin = 20
+            ws_summary.PageSetup.BottomMargin = 20
+            ws_summary.PageSetup.CenterHorizontally = True
+            
+            ws_summary.Range("A1:G2").Merge()
+            ws_summary.Range("A1").Value = f"제 {round_val} 회 비파괴검사기술용역 업체별 기성요약"
+            ws_summary.Range("A1").Font.Size = 16
+            ws_summary.Range("A1").Font.Bold = True
+            ws_summary.Range("A1").HorizontalAlignment = -4108
+            ws_summary.Range("A1").VerticalAlignment = -4108
+            
+            # --- 실제 시공업체 매핑 ---
+            # target_records의 'company'가 '한국지역난방공사' 등으로 일괄 지정되어 있으므로,
+            # daily_work_history.json의 ndt_results에서 해당 일자/검사방법의 실제 업체를 찾아 매핑합니다.
+            import json
+            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            history_data = {}
+            if os.path.exists(history_path):
+                try:
+                    with open(history_path, 'r', encoding='utf-8') as f:
+                        history_data = json.load(f)
+                except: pass
+
+            for r in target_records:
+                t_date = r["date"]
+                n_type = r["ndt_type"]
+                actual_comp = "미지정"
+                
+                if t_date in history_data and "ndt_results" in history_data[t_date]:
+                    comps = {}
+                    for nr in history_data[t_date]["ndt_results"]:
+                        # RT의 경우 상세에서는 RT, RT_A 등으로 나뉠 수 있음
+                        if nr.get("검사방법", "").startswith(n_type) or n_type.startswith(nr.get("검사방법", "")):
+                            c = nr.get("업체", "미지정")
+                            if str(c).strip() == "": c = "미지정"
+                            comps[c] = comps.get(c, 0) + 1
+                    if comps:
+                        actual_comp = max(comps.items(), key=lambda x: x[1])[0]
+                
+                r["actual_company"] = actual_comp
+
+            sum_row = 4
+            companies = sorted(list(set(r.get("actual_company", "미지정") for r in target_records)))
+            if not companies:
+                companies = ["미지정"]
+                
+            for comp in companies:
+                ws_summary.Cells(sum_row, 1).Value = f"■ 업체명 : {comp}"
+                ws_summary.Cells(sum_row, 1).Font.Bold = True
+                ws_summary.Cells(sum_row, 1).Font.Size = 12
+                sum_row += 1
+                
+                headers_sum = ["구간", "시간", "항목", "단위", "단가", "금회 수량", "금회 금액"]
+                for col, h in enumerate(headers_sum, start=1):
+                    cell = ws_summary.Cells(sum_row, col)
+                    cell.Value = h
+                    cell.Font.Bold = True
+                    cell.Interior.Color = 14277081
+                    cell.HorizontalAlignment = -4108
+                    cell.Borders.LineStyle = 1
+                    
+                sum_row += 1
+                start_data_row = sum_row
+                
+                comp_records = [r for r in target_records if r.get("actual_company", "미지정") == comp]
+                
+                comp_summary = {}
+                for r in comp_records:
+                    loc = "플랜트(관리소)" if "관리소" in r["loc"] or "플랜트" in r.get("loc_type", r["loc"]) else "열배관"
+                    t_time = r.get("work_time", "일반")
+                    mat_raw = f"{r['ndt_type']}_{r['material_type']}"
+                    cat_key = f"{loc}_{t_time}_{mat_raw}"
+                    
+                    if cat_key not in comp_summary:
+                        comp_summary[cat_key] = {
+                            "loc": loc,
+                            "time": t_time,
+                            "item": mat_raw,
+                            "unit": r["unit"],
+                            "qty": 0.0,
+                            "amt": 0
+                        }
+                        
+                    comp_summary[cat_key]["qty"] += r["qty"]
+                    comp_summary[cat_key]["amt"] += r["subtotal"]
+                    
+                for cat_key, data in comp_summary.items():
+                    if data["qty"] == 0: continue
+                    
+                    c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
+                    if c_price == 0 and data["qty"] > 0:
+                        c_price = data["amt"] / data["qty"]
+                        
+                    ws_summary.Cells(sum_row, 1).Value = data["loc"]
+                    ws_summary.Cells(sum_row, 2).Value = data["time"]
+                    ws_summary.Cells(sum_row, 3).Value = data["item"]
+                    ws_summary.Cells(sum_row, 4).Value = data["unit"]
+                    
+                    ws_summary.Cells(sum_row, 5).Value = int(c_price)
+                    ws_summary.Cells(sum_row, 5).NumberFormat = "#,##0"
+                    
+                    if data["unit"] == "M":
+                        ws_summary.Cells(sum_row, 6).Value = round(data["qty"], 2)
+                        ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.00;-#,##0.00;"-"'
+                    else:
+                        ws_summary.Cells(sum_row, 6).Value = int(data["qty"])
+                        ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0;-#,##0;"-"'
+                        
+                    ws_summary.Cells(sum_row, 7).Value = data["amt"]
+                    ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
+                    
+                    for col in range(1, 8):
+                        cell = ws_summary.Cells(sum_row, col)
+                        cell.Borders.LineStyle = 1
+                        if col <= 4: cell.HorizontalAlignment = -4108
+                    
+                    sum_row += 1
+                
+                ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 6)).Merge()
+                ws_summary.Cells(sum_row, 1).Value = "소 계"
+                ws_summary.Cells(sum_row, 1).HorizontalAlignment = -4108
+                ws_summary.Cells(sum_row, 1).Font.Bold = True
+                ws_summary.Cells(sum_row, 1).Interior.Color = 15987699
+                
+                sum_formula = f"=SUM(G{start_data_row}:G{sum_row-1})" if sum_row > start_data_row else "0"
+                ws_summary.Cells(sum_row, 7).Formula = sum_formula
+                ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
+                ws_summary.Cells(sum_row, 7).Font.Bold = True
+                ws_summary.Cells(sum_row, 7).Interior.Color = 15987699
+                
+                for col in range(1, 8):
+                    ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
+                    
+                sum_row += 3 
+                
+            ws_summary.Columns(1).ColumnWidth = 12
+            ws_summary.Columns(2).ColumnWidth = 10
+            ws_summary.Columns(3).ColumnWidth = 20
+            ws_summary.Columns(4).ColumnWidth = 8
+            ws_summary.Columns(5).ColumnWidth = 12
+            ws_summary.Columns(6).ColumnWidth = 12
+            ws_summary.Columns(7).ColumnWidth = 15
+            
             # --- 업체별 수량내역 시트 생성 ---
-            ws_cont = wb.Sheets.Add(None, ws)
+            ws_cont = wb.Sheets.Add(None, ws_summary)
             ws_cont.Name = "업체별 수량내역"
             
             # --- 페이지 가로 모드 및 폭 1장 맞춤 설정 ---
