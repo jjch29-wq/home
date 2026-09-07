@@ -139,7 +139,6 @@ class NDTCalculatorTab(ttk.Frame):
 
     def save_billing_records(self):
         try:
-            from config_manager import save_config
             global CONFIG
             CONFIG["BILLING_RECORDS"] = self.records
             save_config(CONFIG)
@@ -1541,7 +1540,12 @@ class NDTCalculatorTab(ttk.Frame):
             
             extra_items_total = sum([self.equip_cost_var.get(), self.safety_cost_var.get(), self.travel_cost_var.get(), self.print_cost_var.get(), self.liability_cost_var.get()])
             
-            categories = list(self.contract_vars.keys()) + ["장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "기타실비 소계", "엔지니어링 손해배상공제료", "총 계"]
+            categories = list(self.contract_vars.keys())
+            # 금액이 존재하는 실비 항목만 내역서 표에 출력 (0원인 항목 숨김 처리)
+            for cat, k in [("장비손료", "equip"), ("안전관리비", "safety"), ("주재비 및 출장여비", "travel"), ("도서인쇄비", "print")]:
+                if self.get_int(self.exp_vars[k]["budget"]) > 0 or self.get_int(self.exp_vars[k]["prev"]) > 0 or self.exp_vars[k]["curr"].get() > 0:
+                    categories.append(cat)
+            categories.extend(["기타실비 소계", "엔지니어링 손해배상공제료", "총 계"])
             
             ws.Range(ws.Cells(6, 1), ws.Cells(6 + len(categories) + 1, 15)).Borders.LineStyle = 1
             
@@ -1701,43 +1705,19 @@ class NDTCalculatorTab(ttk.Frame):
                     for col in [7, 9, 11, 13, 15]: ws.Cells(row, col).NumberFormat = num_fmt
                     
                 row += 1
+                
+            # 전체 행 높이 일괄 적용 (표시를 시원하게 하여 갑지와 밸런스 맞춤)
+            ws.Rows(1).RowHeight = 45 # 제목
+            ws.Rows(4).RowHeight = 25 # 서브 타이틀
+            ws.Rows(6).RowHeight = 25 # 헤더 1
+            ws.Rows(7).RowHeight = 25 # 헤더 2
+            for r in range(8, row):
+                ws.Rows(r).RowHeight = 25 # 데이터 행
 
-            # --- 세부 내역 테이블 ---
-            headers = ["No.", "검사일자", "작업구간", "검사종류", "규격/자재", "근무형태", "실물량", "단위", "보정계수", "환산물량", 
-                       "단가", "공급가액소계"]
-            
-            start_row = row + 2
-            for col, h in enumerate(headers, start=1):
-                cell = ws.Cells(start_row, col)
-                cell.Value = h
-                cell.Font.Bold = True
-                cell.Interior.Color = 14277081
-                cell.HorizontalAlignment = -4108
-                cell.Borders.LineStyle = 1
-            
-            ws.Columns(1).ColumnWidth = 15
-            ws.Columns(2).ColumnWidth = 11
-            ws.Columns(3).ColumnWidth = 16
-            ws.Columns(4).ColumnWidth = 11
-            ws.Columns(5).ColumnWidth = 24
-            ws.Columns(6).ColumnWidth = 11
-            ws.Columns(7).ColumnWidth = 14
-            ws.Columns(8).ColumnWidth = 9
-            ws.Columns(9).ColumnWidth = 14
-            ws.Columns(10).ColumnWidth = 11
-            ws.Columns(11).ColumnWidth = 14
-            ws.Columns(12).ColumnWidth = 16
-            
-            current_row = start_row + 1
+            # --- 세부 내역 테이블 (기성청구 내역서 하단에서 제거됨, 수량 및 금액 계산 로직만 유지) ---
             total_mat = total_lab = total_ovr = total_tech = total_sub = 0
-            idx = 1
             
             categories_det = ["RT_B", "RT_A", "RT_A2", "UT", "PT"]
-            display_names_det = {
-                "RT_B": "RT (B필름)", "RT_A": "RT (A필름)", "RT_A2": "RT (A/2필름)",
-                "UT": "UT", "PT": "PT"
-            }
-            
             for g_type in categories_det:
                 if g_type.startswith("RT"):
                     if g_type == "RT_B":
@@ -1771,21 +1751,6 @@ class NDTCalculatorTab(ttk.Frame):
                     aggregated[key]["subtotal"] += r["subtotal"]
                 
                 for key, data in aggregated.items():
-                    dates = sorted(list(set(data["date_list"])))
-                    if len(dates) == 1:
-                        date_str = dates[0]
-                    else:
-                        date_str = f"{dates[0]} ~ {dates[-1]}"
-                    
-                    ws.Cells(current_row, 1).Value = idx
-                    ws.Cells(current_row, 2).Value = date_str
-                    ws.Cells(current_row, 3).Value = key[0].split()[0] if isinstance(key[0], str) and key[0] else key[0]
-                    ws.Cells(current_row, 4).Value = key[1]
-                    ws.Cells(current_row, 5).Value = key[2]
-                    ws.Cells(current_row, 6).Value = key[3]
-                    ws.Cells(current_row, 7).Value = data["qty"]
-                    ws.Cells(current_row, 8).Value = key[4]
-                    ws.Cells(current_row, 9).Value = key[5]
                     loc_val = "플랜트(관리소)" if "관리소" in key[0] or "플랜트" in key[0] else "열배관"
                     t_time = key[3]
                     mat_raw = key[2]
@@ -1804,204 +1769,194 @@ class NDTCalculatorTab(ttk.Frame):
                     
                     if c_price > 0:
                         exact_subtotal = int(data["qty"] * c_price)
-                        
-                        ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
-                        ws.Cells(current_row, 11).Value = c_price
-                        ws.Cells(current_row, 12).Value = exact_subtotal
-                        
-                        # Update the data dictionary so that sub_sub sums use the adjusted values
                         data["subtotal"] = exact_subtotal
-                    else:
-                        ws.Cells(current_row, 10).Value = round(data["adjusted_qty"], 2)
-                        unit_p = int(data["subtotal"] / data["qty"]) if data["qty"] > 0 else 0
-                        ws.Cells(current_row, 11).Value = unit_p
-                        ws.Cells(current_row, 12).Value = data["subtotal"]
-                    
-                    unit_str = key[4]
-                    for c in range(1, 13):
-                        cell = ws.Cells(current_row, c)
-                        cell.Borders.LineStyle = 1
-                        if c <= 4 or c == 6 or c == 8: cell.HorizontalAlignment = -4108
-                        elif c == 5 or c == 3: cell.HorizontalAlignment = -4131
-                        elif c == 7: 
-                            cell.NumberFormat = '#,##0.000;-#,##0.000;"-"' if unit_str == "M" else '#,##0;-#,##0;"-"'
-                        elif c == 9: 
-                            cell.NumberFormat = "0.0"
-                        elif c == 10: 
-                            cell.NumberFormat = '#,##0.00;-#,##0.00;"-"' if unit_str == "M" else '#,##0;-#,##0;"-"'
-                        elif c >= 11: 
-                            cell.NumberFormat = "#,##0"
                     
                     sub_mat += data["mat_cost"]; sub_lab += data["lab_cost"]
                     sub_ovr += data["overhead"]; sub_tech += data["tech"]
                     sub_sub += data["subtotal"]
-                    idx += 1; current_row += 1
-                
-                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
-                ws.Cells(current_row, 1).Value = f"[{display_names_det[g_type]}] 검사 소계"
-                ws.Cells(current_row, 1).HorizontalAlignment = -4108
-                ws.Cells(current_row, 1).Font.Bold = True
-                
-                ws.Cells(current_row, 11).Value = ""
-                ws.Cells(current_row, 12).Value = sub_sub
-                
-                for c in range(1, 13):
-                    cell = ws.Cells(current_row, c)
-                    cell.Borders.LineStyle = 1
-                    cell.Font.Bold = True
-                    cell.Interior.Color = 15987699
-                    if c >= 11: cell.NumberFormat = "#,##0"
                 
                 total_mat += sub_mat; total_lab += sub_lab; total_ovr += sub_ovr
                 total_tech += sub_tech; total_sub += sub_sub
-                current_row += 1
-                
-            # --- 전체 합계 ---
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 10)).Merge()
-            ws.Cells(current_row, 1).Value = "검사 비용 합계"
-            ws.Cells(current_row, 1).HorizontalAlignment = -4108
-            ws.Cells(current_row, 1).Font.Bold = True
-            
-            ws.Cells(current_row, 11).Value = ""
-            ws.Cells(current_row, 12).Value = total_sub
-            
-            for c in range(1, 13):
-                cell = ws.Cells(current_row, c)
-                cell.Borders.LineStyle = 1
-                cell.Font.Bold = True
-                cell.Interior.Color = 14277081
-                if c >= 11: cell.NumberFormat = "#,##0"
                     
-            # --- 실비 정산 추가 ---
-            current_row += 1
-            
-            extra_items_map = []
-            if len(extra_rows) >= 4:
-                extra_items_map = [
-                    ("장비손료", extra_rows[0]),
-                    ("안전관리비", extra_rows[1]),
-                    ("주재비 및 출장여비", extra_rows[2]),
-                    ("도서인쇄비", extra_rows[3]),
-                    ("엔지니어링 손해배상공제료", liability_row)
-                ]
-            else:
-                extra_items_map = [
-                    ("장비손료", self.equip_cost_var.get()),
-                    ("안전관리비", self.safety_cost_var.get()),
-                    ("주재비 및 출장여비", self.travel_cost_var.get()),
-                    ("도서인쇄비", self.print_cost_var.get()),
-                    ("엔지니어링 손해배상공제료", self.liability_cost_var.get())
-                ]
-            
-            for item in extra_items_map:
-                name = item[0]
-                val_or_row = item[1]
-                ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
-                ws.Cells(current_row, 1).Value = f"'+ {name}"
-                ws.Cells(current_row, 1).HorizontalAlignment = -4152
+            # (세부 내역에는 실비 정산 및 부가세 항목 생략 - 갑지 및 기성내역서에만 포함)
                 
-                if val_or_row > 0 and val_or_row < 1000:
-                    ws.Cells(current_row, 12).Formula = f"=K{val_or_row}"
-                else:
-                    ws.Cells(current_row, 12).Value = val_or_row if val_or_row > 0 else 0
-                    
-                ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
-                for c in range(1, 13): ws.Cells(current_row, c).Borders.LineStyle = 1
-                current_row += 1
+            # --- 내역서 페이지 여백 및 A4 1장 맞춤 설정 ---
+            ws.PageSetup.Orientation = 2 # xlLandscape
+            ws.PageSetup.Zoom = False
+            ws.PageSetup.FitToPagesWide = 1
+            ws.PageSetup.FitToPagesTall = 1
+            ws.PageSetup.LeftMargin = 20
+            ws.PageSetup.RightMargin = 20
+            ws.PageSetup.TopMargin = 20
+            ws.PageSetup.BottomMargin = 20
+            ws.PageSetup.CenterHorizontally = True # 페이지 가로 가운데 정렬
+            ws.PageSetup.CenterVertically = True # 페이지 세로 가운데 정렬 (위아래 여백 동일하게)
             
-            # --- 총 공급가액 (검사합계 + 실비) ---
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
-            ws.Cells(current_row, 1).Value = "공급가액 총액"
-            ws.Cells(current_row, 1).HorizontalAlignment = -4152
-            ws.Cells(current_row, 1).Font.Bold = True
-            if total_row > 0:
-                ws.Cells(current_row, 12).Formula = f"=K{total_row}"
-            else:
-                ws.Cells(current_row, 12).Value = 0
-            ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
-            ws.Cells(current_row, 12).Font.Bold = True
-            for c in range(1, 13): ws.Cells(current_row, c).Borders.LineStyle = 1
+            # --- 열 너비 자동 맞춤 및 여백 넉넉하게 확장 ---
+            ws.Columns("A:O").AutoFit()
             
-            # --- 부가세 및 최종 청구액 ---
-            current_row += 1
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
-            ws.Cells(current_row, 1).Value = "'+ 부가가치세 (10%)"
-            ws.Cells(current_row, 1).HorizontalAlignment = -4152
-            ws.Cells(current_row, 12).Formula = f"=TRUNC(L{current_row-1}*0.1)"
-            ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
-            for c in range(1, 13): ws.Cells(current_row, c).Borders.LineStyle = 1
+            # 너무 좁은 열들은 최소 너비 확보하여 시원하게 표시
+            if ws.Columns(1).ColumnWidth < 8: ws.Columns(1).ColumnWidth = 8
+            if ws.Columns(2).ColumnWidth < 8: ws.Columns(2).ColumnWidth = 8
+            if ws.Columns(3).ColumnWidth < 20: ws.Columns(3).ColumnWidth = 20
+            if ws.Columns(4).ColumnWidth < 6: ws.Columns(4).ColumnWidth = 6
+            if ws.Columns(5).ColumnWidth < 12: ws.Columns(5).ColumnWidth = 12
             
-            current_row += 1
-            ws.Range(ws.Cells(current_row, 1), ws.Cells(current_row, 11)).Merge()
-            ws.Cells(current_row, 1).Value = "최 종 기 성 청 구 액"
-            ws.Cells(current_row, 1).HorizontalAlignment = -4152
-            ws.Cells(current_row, 1).Font.Bold = True
-            ws.Cells(current_row, 1).Font.Size = 12
-            
-            ws.Cells(current_row, 12).Formula = f"=L{current_row-2}+L{current_row-1}"
-            ws.Cells(current_row, 12).NumberFormat = '#,##0;-#,##0;"-"'
-            ws.Cells(current_row, 12).Font.Bold = True
-            ws.Cells(current_row, 12).Font.Size = 12
-            
-            for c in range(1, 13):
-                cell = ws.Cells(current_row, c)
-                cell.Borders.LineStyle = 1
-                cell.Interior.Color = 13434879
-                
+            # 금액/수량 열(F~O) 넓게 설정하여 A4 가로폭 채우기
+            for c in range(6, 16):
+                if ws.Columns(c).ColumnWidth < 12:
+                    ws.Columns(c).ColumnWidth = 12
             # --- 표지 (청구서 갑지) 생성 ---
-            ws_cover = wb.Sheets.Add(Before=ws)
+            ws_cover = wb.Sheets.Add(ws)
             ws_cover.Name = "청구서(갑지)"
             
-            ws_cover.Range("A1:G2").Merge()
-            ws_cover.Range("A1").Value = "청 구 서"
-            ws_cover.Range("A1").Font.Size = 24
-            ws_cover.Range("A1").Font.Bold = True
-            ws_cover.Range("A1").HorizontalAlignment = -4108
-            ws_cover.Range("A1").VerticalAlignment = -4108
+            # --- 페이지 가로 모드 및 여백 설정 ---
+            ws_cover.PageSetup.Orientation = 2 # xlLandscape
+            ws_cover.PageSetup.LeftMargin = 20
+            ws_cover.PageSetup.RightMargin = 20
+            ws_cover.PageSetup.TopMargin = 20
+            ws_cover.PageSetup.BottomMargin = 20
+            ws_cover.PageSetup.CenterHorizontally = True
+            ws_cover.PageSetup.CenterVertically = True
+            ws_cover.PageSetup.Zoom = False
+            ws_cover.PageSetup.FitToPagesWide = 1
+            ws_cover.PageSetup.FitToPagesTall = 1
             
-            ws_cover.Range("A4:B4").Merge()
-            ws_cover.Range("A4").Value = "건 명 :"
-            ws_cover.Range("C4:G4").Merge()
-            ws_cover.Range("C4").Value = f"제 {round_val} 회 비파괴검사기술용역 기성청구"
+            # --- 제목 ---
+            ws_cover.Range("A2:D5").Merge()
+            ws_cover.Range("A2").Value = "청 구 서"
+            ws_cover.Range("A2").Font.Size = 36
+            ws_cover.Range("A2").Font.Bold = True
+            ws_cover.Range("A2").HorizontalAlignment = -4108
+            ws_cover.Range("A2").VerticalAlignment = -4108
             
-            ws_cover.Range("A5:B5").Merge()
-            ws_cover.Range("A5").Value = "청구금액 :"
-            ws_cover.Range("C5:G5").Merge()
+            # --- 결재란 (우측 상단) ---
+            ws_cover.Range("E2").Value = "담 당"
+            ws_cover.Range("F2").Value = "검 토"
+            ws_cover.Range("G2").Value = "승 인"
             
+            for col_name in ["E", "F", "G"]:
+                cell = ws_cover.Range(f"{col_name}2")
+                cell.HorizontalAlignment = -4108
+                cell.VerticalAlignment = -4108
+                cell.Interior.Color = 15132390
+                cell.Borders.LineStyle = 1
+                cell.Font.Bold = True
+                
+                sig_range = ws_cover.Range(f"{col_name}3:{col_name}5")
+                sig_range.Merge()
+                sig_range.Borders.LineStyle = 1
+            
+            ws_cover.Range("A7:B7").Merge()
+            ws_cover.Range("A7").Value = "건 명 :"
+            ws_cover.Range("A7").Font.Size = 18
+            ws_cover.Range("A7").Font.Bold = True
+            ws_cover.Range("A7").HorizontalAlignment = -4152 # xlRight
+            
+            ws_cover.Range("C7:G7").Merge()
+            ws_cover.Range("C7").Value = f"제{round_val}회 비파괴검사기술용역 기성청구"
+            ws_cover.Range("C7").Font.Size = 18
+            ws_cover.Range("C7").Font.Bold = True
+            
+            ws_cover.Range("A9:B9").Merge()
+            ws_cover.Range("A9").Value = "청구금액 :"
+            ws_cover.Range("A9").Font.Size = 20
+            ws_cover.Range("A9").Font.Bold = True
+            ws_cover.Range("A9").HorizontalAlignment = -4152 # xlRight
+            
+            ws_cover.Range("C9:G9").Merge()
             grand_total = total_sub + extra_items_total
             vat = int(grand_total * 0.1)
             grand_total_with_vat = grand_total + vat
-            ws_cover.Range("C5").Value = f"일금 {grand_total_with_vat:,} 원정 (VAT 포함)"
-            ws_cover.Range("C5").Font.Bold = True
-            ws_cover.Range("C5").Font.Size = 14
+            ws_cover.Range("C9").Value = f"일금 {grand_total_with_vat:,}원정 (VAT포함)"
+            ws_cover.Range("C9").Font.Bold = True
+            ws_cover.Range("C9").Font.Size = 20
             
-            ws_cover.Range("A8:G8").Merge()
-            ws_cover.Range("A8").Value = "위와 같이 청구하오니 지정계좌로 입금하여 주시기 바랍니다."
-            ws_cover.Range("A8").HorizontalAlignment = -4108
+            # --- 공사명, 계약기간, 기성 표 ---
+            table_start = 13
+            table_data = [
+                ("공 사 명", "2026년 중앙지사 열수송관 비파괴검사용역 단가계약"),
+                ("계약기간", "2026.08.05 ~ 2027.08.05"),
+                ("누계기성", "(누계금액 기입)"),
+                ("금회기성", f"\\ {grand_total_with_vat:,}")
+            ]
+            for i, (label, val) in enumerate(table_data):
+                r = table_start + i
+                ws_cover.Range(f"A{r}:B{r}").Merge()
+                ws_cover.Range(f"A{r}").Value = label
+                ws_cover.Range(f"A{r}").Font.Size = 16
+                ws_cover.Range(f"A{r}").Font.Bold = True
+                ws_cover.Range(f"A{r}").HorizontalAlignment = -4108 # xlCenter
+                ws_cover.Range(f"A{r}").VerticalAlignment = -4108
+                ws_cover.Range(f"A{r}").Interior.Color = 15132390 # Light gray background
+                
+                ws_cover.Range(f"C{r}:G{r}").Merge()
+                ws_cover.Range(f"C{r}").Value = val
+                ws_cover.Range(f"C{r}").Font.Size = 16
+                ws_cover.Range(f"C{r}").HorizontalAlignment = -4108 # xlCenter
+                ws_cover.Range(f"C{r}").VerticalAlignment = -4108
+                
+                for c_idx in range(1, 8):
+                    ws_cover.Cells(r, c_idx).Borders.LineStyle = 1
+                
+                ws_cover.Rows(r).RowHeight = 35 # 표의 행 높이를 넓게
             
-            ws_cover.Range("A10:B10").Merge()
-            ws_cover.Range("A10").Value = "입금계좌 :"
-            ws_cover.Range("C10:G10").Merge()
-            ws_cover.Range("C10").Value = "(은행명) (계좌번호) (예금주)"
+            ws_cover.Range("A21:G21").Merge()
+            ws_cover.Range("A21").Value = "위와 같이 기성대금을 청구합니다."
+            ws_cover.Range("A21").Font.Size = 16
+            ws_cover.Range("A21").HorizontalAlignment = -4108
             
-            ws_cover.Range("A12:G12").Merge()
-            ws_cover.Range("A12").Value = f"{datetime.now().strftime('%Y년 %m월 %d일')}"
-            ws_cover.Range("A12").HorizontalAlignment = -4108
+            ws_cover.Range("A26:G26").Merge()
+            ws_cover.Range("A26").Value = f"{datetime.now().strftime('%Y년 %m월 %d일')}"
+            ws_cover.Range("A26").Font.Size = 16
+            ws_cover.Range("A26").HorizontalAlignment = -4108
             
-            ws_cover.Range("A15:C15").Merge()
-            ws_cover.Range("A15").Value = "청구인 :"
-            ws_cover.Range("D15:G15").Merge()
-            ws_cover.Range("D15").Value = "(회사명 기입) (인)"
+            ws_cover.Range("A29:B29").Merge()
+            ws_cover.Range("A29").Value = "청구인 :"
+            ws_cover.Range("A29").Font.Size = 18
+            ws_cover.Range("A29").Font.Bold = True
+            ws_cover.Range("A29").HorizontalAlignment = -4152 # xlRight
             
-            ws_cover.Columns(1).ColumnWidth = 10
-            ws_cover.Columns(2).ColumnWidth = 10
-            ws_cover.Columns(3).ColumnWidth = 15
-            ws_cover.Columns(4).ColumnWidth = 15
-            ws_cover.Columns(5).ColumnWidth = 15
+            ws_cover.Range("C29:G29").Merge()
+            ws_cover.Range("C29").Value = "서울검사(주) (인)"
+            ws_cover.Range("C29").Font.Size = 18
+            ws_cover.Range("C29").Font.Bold = True
+            ws_cover.Range("C29").HorizontalAlignment = -4131 # xlLeft
+            
+            ws_cover.Range("A32:G32").Merge()
+            ws_cover.Range("A32").Value = "한국지역난방공사 중앙지사 귀하"
+            ws_cover.Range("A32").Font.Size = 22
+            ws_cover.Range("A32").Font.Bold = True
+            ws_cover.Range("A32").HorizontalAlignment = -4108 # xlCenter
+            
+            ws_cover.Columns(1).ColumnWidth = 20
+            ws_cover.Columns(2).ColumnWidth = 20
+            ws_cover.Columns(3).ColumnWidth = 26
+            ws_cover.Columns(4).ColumnWidth = 26
+            ws_cover.Columns(5).ColumnWidth = 26
+            ws_cover.Columns(6).ColumnWidth = 26
+            ws_cover.Columns(7).ColumnWidth = 26
+            
+            # --- 전체 외곽선 (A1 ~ G33) 굵게 설정 ---
+            outer_range = ws_cover.Range("A1:G33")
+            for edge in (7, 8, 9, 10): # xlEdgeLeft, xlEdgeTop, xlEdgeBottom, xlEdgeRight
+                outer_range.Borders(edge).LineStyle = 1
+                outer_range.Borders(edge).Weight = 4 # xlThick
             
             # --- 업체별 수량내역 시트 생성 ---
-            ws_cont = wb.Sheets.Add(After=ws)
+            ws_cont = wb.Sheets.Add(None, ws)
             ws_cont.Name = "업체별 수량내역"
+            
+            # --- 페이지 가로 모드 및 폭 1장 맞춤 설정 ---
+            ws_cont.PageSetup.Orientation = 2 # xlLandscape
+            ws_cont.PageSetup.Zoom = False
+            ws_cont.PageSetup.FitToPagesWide = 1
+            ws_cont.PageSetup.FitToPagesTall = False
+            ws_cont.PageSetup.LeftMargin = 20
+            ws_cont.PageSetup.RightMargin = 20
+            ws_cont.PageSetup.TopMargin = 20
+            ws_cont.PageSetup.BottomMargin = 20
+            ws_cont.PageSetup.CenterHorizontally = True
             
             ws_cont.Range("A1:K2").Merge()
             ws_cont.Range("A1").Value = f"제 {round_val} 회 기성청구 업체별 수량내역"
