@@ -1729,6 +1729,8 @@ class MonthlyReportManager:
         from openpyxl.drawing.xdr import XDRPositiveSize2D
         from openpyxl.utils import get_column_letter
         from openpyxl.utils.units import pixels_to_EMU, points_to_pixels
+        from PIL import Image as PILImage, ImageOps
+        from io import BytesIO
         import copy
 
         base_dir = os.path.dirname(os.path.abspath(self._history_path))
@@ -1807,6 +1809,30 @@ class MonthlyReportManager:
                             reference_logo_anchor = copy.deepcopy(anchor)
                             reference_logo_size = (image.width, image.height)
                             break
+
+        # Clear every legacy/template photo before building the photo pages.
+        # Some templates contain a sample ledger image anchored above the
+        # detected SEC.16 page start (the May 11 image is anchored at row 718,
+        # while the generated PAUT slots begin at row 739).  Page-local cleanup
+        # therefore cannot see it.  Rows from 600 onward are the report's photo
+        # section; retain only the small document-header logos there.
+        cleaned_images = []
+        for existing_image in list(ws._images):
+            anchor = getattr(existing_image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                cleaned_images.append(existing_image)
+                continue
+            image_row = anchor._from.row + 1
+            image_col = anchor._from.col + 1
+            is_header_logo = (
+                image_col <= 5
+                and float(existing_image.width) < 300
+                and float(existing_image.height) < 100
+            )
+            if image_row >= 600 and not is_header_logo:
+                continue
+            cleaned_images.append(existing_image)
+        ws._images = cleaned_images
 
         pt_photos = [
             photo for photo in process_photos
@@ -1913,6 +1939,29 @@ class MonthlyReportManager:
             )
             for page_index, layout in enumerate(process_layouts):
                 page_photos = photos[page_index * 6:(page_index + 1) * 6]
+
+                # Always clear photos embedded in the source template, even
+                # when this particular page has no newly registered photos.
+                # Previously the early continue below left old photo ledgers
+                # (for example, the May 11 sample) on unused/extra pages.
+                page_start_row = layout['title_row'] - 9
+                page_end_row = page_start_row + 74
+                kept_images = []
+                for existing_image in list(ws._images):
+                    anchor = getattr(existing_image, 'anchor', None)
+                    if hasattr(anchor, '_from'):
+                        r = anchor._from.row + 1
+                        c = anchor._from.col + 1
+                        is_header_logo = (
+                            c <= 5
+                            and float(existing_image.width) < 300
+                            and float(existing_image.height) < 100
+                        )
+                        if page_start_row <= r <= page_end_row and not is_header_logo:
+                            continue
+                    kept_images.append(existing_image)
+                ws._images = kept_images
+
                 if not page_photos:
                     continue
 
@@ -1967,32 +2016,7 @@ class MonthlyReportManager:
                     ws.merge_cells(start_row=mr[0], start_column=mr[1], end_row=mr[2], end_column=mr[3])
 
 
-                # Remove legacy/template photos from the complete photo page,
-                # not only from the new photo slots.  Some old templates store
-                # an entire photo ledger as one large image anchored above the
-                # first slot, which otherwise survives and appears mixed with
-                # the newly registered cumulative photos.
-                page_start_row = layout['title_row'] - 9
-                page_end_row = page_start_row + 74
-                kept_images = []
-                for existing_image in list(ws._images):
-                    anchor = getattr(existing_image, 'anchor', None)
-                    if hasattr(anchor, '_from'):
-                        r = anchor._from.row + 1
-                        c = anchor._from.col + 1
-                        is_header_logo = (
-                            c <= 5
-                            and float(existing_image.width) < 300
-                            and float(existing_image.height) < 100
-                        )
-                        if page_start_row <= r <= page_end_row and not is_header_logo:
-                            # Discard template/legacy photo drawings while
-                            # preserving the common document-header logo.
-                            continue
-                    kept_images.append(existing_image)
-                ws._images = kept_images
                 for index, photo in enumerate(page_photos):
-                    image = XLImage(photo['_resolved_path'])
                     (
                         anchor_col, anchor_row, caption_col,
                         caption_end_col, caption_row,
@@ -2020,6 +2044,27 @@ class MonthlyReportManager:
                     # render over cell borders when they touch the boundary.
                     max_width = max(1, min(340, frame_width - 20))
                     max_height = max(1, min(255, frame_height - 20))
+
+                    # Respect phone-camera EXIF orientation, then fill the
+                    # landscape photo slot with a centered crop.  Portrait
+                    # photos no longer appear as a narrow vertical strip.
+                    target_size = (int(max_width), int(max_height))
+                    with PILImage.open(photo['_resolved_path']) as source_image:
+                        source_image = ImageOps.exif_transpose(source_image)
+                        if source_image.mode not in ('RGB', 'RGBA'):
+                            source_image = source_image.convert('RGB')
+                        fitted_image = ImageOps.fit(
+                            source_image,
+                            target_size,
+                            method=PILImage.Resampling.LANCZOS,
+                            centering=(0.5, 0.5),
+                        )
+                        image_buffer = BytesIO()
+                        fitted_image.save(image_buffer, format='PNG')
+                    image_buffer.seek(0)
+                    image = XLImage(image_buffer)
+                    image.width, image.height = target_size
+
                     scale = min(
                         max_width / image.width,
                         max_height / image.height,
@@ -3006,8 +3051,14 @@ class MonthlyReportManager:
                         page_end -= 1
                         cleaned += 1
 
-                # 일반 섹션은 기존처럼 TOTAL 직후의 연속 빈 행을 정리한다.
-                if not (section_key == 'rt_2' and rt_uses_page13_blanks):
+                # Detail pages may reuse blank spacer rows to stay within their
+                # fixed page layout.  Summary tables on page 11 must not do
+                # this: deleting the spacer immediately after an expanded
+                # PAUT table pulls the following MT table back to its original
+                # position and makes the two sections overlap visually.
+                if is_detail and not (
+                    section_key == 'rt_2' and rt_uses_page13_blanks
+                ):
                     scan_row = total_row + 1
                     while cleaned < rows_to_insert:
                         is_empty = all(
