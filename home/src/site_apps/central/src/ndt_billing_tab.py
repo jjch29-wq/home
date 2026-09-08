@@ -2259,6 +2259,7 @@ class NDTCalculatorTab(ttk.Frame):
             total_points = 0
             total_meters = 0.0
             
+            data_start_row = cont_row  # 데이터 시작 행 기록
             idx_cont = 1
             for r in all_ndt_results:
                 if not str(r.get("업체", "")).strip() and not str(r.get("Joint No.", "")).strip():
@@ -2297,8 +2298,10 @@ class NDTCalculatorTab(ttk.Frame):
                     total_meters += q_val
                 else:
                     total_points += q_val
-                    
-                ws_cont.Cells(cont_row, 10).Value = qty
+                
+                # [FIX] 수량을 숫자로 저장해야 SUBTOTAL 수식이 작동함
+                ws_cont.Cells(cont_row, 10).Value = q_val if q_val != 0.0 else (qty if str(qty).strip() else "")
+                ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
                 ws_cont.Cells(cont_row, 11).Value = r.get("결과", "")
                 
                 for c in range(1, 12):
@@ -2308,6 +2311,8 @@ class NDTCalculatorTab(ttk.Frame):
                 
                 idx_cont += 1
                 cont_row += 1
+            
+            data_end_row = cont_row - 1  # 데이터 마지막 행
                 
             if all_ndt_results:
                 ws_cont.Cells(cont_row, 1).Value = "총 누적 물량"
@@ -2316,17 +2321,31 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_cont.Cells(cont_row, 1).Font.Bold = True
                 ws_cont.Cells(cont_row, 1).Interior.Color = 14277081
                 
-                ws_cont.Range(ws_cont.Cells(cont_row, 10), ws_cont.Cells(cont_row, 11)).Merge()
-                ws_cont.Cells(cont_row, 10).Value = f"{idx_cont - 1:,} 개소 / {total_meters:,.2f} m"
+                # [FIX] 필터 시 자동 합산: SUBTOTAL(103)=COUNTA(가시행), SUBTOTAL(9)=SUM(가시행)
+                # 셀 10: 개소 수 (필터된 행 수)
+                ws_cont.Cells(cont_row, 10).Formula = (
+                    f'=SUBTOTAL(103,A{data_start_row}:A{data_end_row})&" 개소"'
+                )
                 ws_cont.Cells(cont_row, 10).Font.Bold = True
                 ws_cont.Cells(cont_row, 10).Font.Color = 255
                 ws_cont.Cells(cont_row, 10).HorizontalAlignment = -4108
+                ws_cont.Cells(cont_row, 10).Interior.Color = 14277081
+                ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
                 
-                for c in range(1, 12):
-                    cell = ws_cont.Cells(cont_row, c)
-                    cell.Borders.LineStyle = 1
+                # 셀 11: 검사량 합계 (필터된 수량 합)
+                ws_cont.Cells(cont_row, 11).Formula = (
+                    f'=TEXT(SUBTOTAL(9,J{data_start_row}:J{data_end_row}),"#,##0.00")&" m"'
+                )
+                ws_cont.Cells(cont_row, 11).Font.Bold = True
+                ws_cont.Cells(cont_row, 11).Font.Color = 255
+                ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
+                ws_cont.Cells(cont_row, 11).Interior.Color = 14277081
+                ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
+                
+                for c in range(1, 10):
+                    ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
                     if c < 10:
-                        cell.Interior.Color = 14277081
+                        ws_cont.Cells(cont_row, c).Interior.Color = 14277081
                 
                 cont_row += 1
             
