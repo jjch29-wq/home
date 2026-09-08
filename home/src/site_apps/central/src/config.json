@@ -88,7 +88,8 @@
             "tech": 279691,
             "subtotal": 2061747,
             "vat": 206174,
-            "total_amount": 2267921
+            "total_amount": 2267921,
+            "actual_company": "GS네오텍"
         },
         {
             "date": "2026-08-08",
@@ -108,7 +109,8 @@
             "tech": 279691,
             "subtotal": 2061747,
             "vat": 206174,
-            "total_amount": 2267921
+            "total_amount": 2267921,
+            "actual_company": "GS네오텍"
         },
         {
             "date": "2026-08-22",
@@ -128,7 +130,8 @@
             "tech": 109603,
             "subtotal": 807936,
             "vat": 80793,
-            "total_amount": 888729
+            "total_amount": 888729,
+            "actual_company": "GS네오텍"
         },
         {
             "date": "2026-09-05",
@@ -148,7 +151,8 @@
             "tech": 489475,
             "subtotal": 3608180,
             "vat": 360818,
-            "total_amount": 3968998
+            "total_amount": 3968998,
+            "actual_company": "GS네오텍"
         },
         {
             "date": "2026-09-03",
@@ -168,7 +172,8 @@
             "tech": 122370,
             "subtotal": 902045,
             "vat": 90204,
-            "total_amount": 992249
+            "total_amount": 992249,
+            "actual_company": "GS네오텍"
         }
     ]
 }

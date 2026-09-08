@@ -420,14 +420,17 @@ class NDTCalculatorTab(ttk.Frame):
                     ttk.Label(contract_inner_frame, text=m_name).grid(row=row_idx, column=2, sticky="w", padx=2)
                     ttk.Label(contract_inner_frame, text=unit).grid(row=row_idx, column=3, padx=2)
                     
-                    c_qty = tk.StringVar(value="0")
+                    val = 0
+                    if isinstance(CONTRACT_QTY.get(loc), dict) and isinstance(CONTRACT_QTY[loc].get(t_time), dict):
+                        val = CONTRACT_QTY[loc][t_time].get(m_key, 0)
+                    else:
+                        flat_key = f"{m_key}_야간" if t_time == "야간" else m_key
+                        val = CONTRACT_QTY.get(flat_key, 0)
+
+                    formatted_val = f"{int(val):,}" if float(val).is_integer() else f"{float(val):,.2f}"
+                    c_qty = tk.StringVar(value=formatted_val)
                     p_qty = tk.StringVar(value="0")
                     curr_qty = tk.StringVar(value="0")
-                    rem_qty = tk.StringVar(value="0")
-                    
-                    c_var = tk.StringVar(value="0")
-                    p_var = tk.StringVar(value="0")
-                    c_price_var = tk.StringVar(value="0")
                     
                     unit_cost = 0
                     try:
@@ -441,6 +444,12 @@ class NDTCalculatorTab(ttk.Frame):
                     except Exception as e:
                         print(e)
                         pass
+
+                    amt = float(val) * unit_cost
+                    c_var = tk.StringVar(value=f"{int(amt):,}")
+                    p_var = tk.StringVar(value="0")
+                    c_price_var = tk.StringVar(value=f"{int(unit_cost):,}")
+                    rem_qty = tk.StringVar(value=formatted_val)
                     c_qty.trace_add("write", lambda *a, v=c_qty: format_qty(var=v))
                     p_qty.trace_add("write", lambda *a, v=p_qty: format_qty(var=v))
                     
@@ -503,6 +512,8 @@ class NDTCalculatorTab(ttk.Frame):
             
         for k, v in self.contract_vars.items():
             v["contract"].trace_add("write", update_total_contract_amt)
+            
+        update_total_contract_amt()
             
         def _on_contract_mousewheel(event):
             try:
@@ -1717,7 +1728,7 @@ class NDTCalculatorTab(ttk.Frame):
             # --- 세부 내역 테이블 (기성청구 내역서 하단에서 제거됨, 수량 및 금액 계산 로직만 유지) ---
             total_mat = total_lab = total_ovr = total_tech = total_sub = 0
             
-            categories_det = ["RT_B", "RT_A", "RT_A2", "UT", "PT"]
+            categories_det = ["PAUT", "RT_B", "RT_A", "RT_A2", "UT", "PT", "MT"]
             for g_type in categories_det:
                 if g_type.startswith("RT"):
                     if g_type == "RT_B":
@@ -1872,34 +1883,72 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cover.Range("C9").Font.Bold = True
             ws_cover.Range("C9").Font.Size = 20
             
-            # --- 공사명, 계약기간, 기성 표 ---
-            table_start = 13
-            table_data = [
-                ("공 사 명", "2026년 중앙지사 열수송관 비파괴검사용역 단가계약"),
-                ("계약기간", "2026.08.05 ~ 2027.08.05"),
-                ("누계기성", "(누계금액 기입)"),
-                ("금회기성", f"\\ {grand_total_with_vat:,}")
-            ]
-            for i, (label, val) in enumerate(table_data):
-                r = table_start + i
-                ws_cover.Range(f"A{r}:B{r}").Merge()
-                ws_cover.Range(f"A{r}").Value = label
-                ws_cover.Range(f"A{r}").Font.Size = 16
-                ws_cover.Range(f"A{r}").Font.Bold = True
-                ws_cover.Range(f"A{r}").HorizontalAlignment = -4108 # xlCenter
-                ws_cover.Range(f"A{r}").VerticalAlignment = -4108
-                ws_cover.Range(f"A{r}").Interior.Color = 15132390 # Light gray background
-                
-                ws_cover.Range(f"C{r}:G{r}").Merge()
-                ws_cover.Range(f"C{r}").Value = val
-                ws_cover.Range(f"C{r}").Font.Size = 16
-                ws_cover.Range(f"C{r}").HorizontalAlignment = -4108 # xlCenter
-                ws_cover.Range(f"C{r}").VerticalAlignment = -4108
-                
+            # --- 공사명 (row 11) ---
+            def _cover_row(row, label, value, label_size=16, val_size=16):
+                ws_cover.Range(f"A{row}:B{row}").Merge()
+                ws_cover.Range(f"A{row}").Value = label
+                ws_cover.Range(f"A{row}").Font.Size = label_size
+                ws_cover.Range(f"A{row}").Font.Bold = True
+                ws_cover.Range(f"A{row}").HorizontalAlignment = -4152
+                ws_cover.Range(f"A{row}").VerticalAlignment = -4108
+                ws_cover.Range(f"A{row}").Interior.Color = 15132390
+                ws_cover.Range(f"C{row}:G{row}").Merge()
+                ws_cover.Range(f"C{row}").Value = value
+                ws_cover.Range(f"C{row}").Font.Size = val_size
+                ws_cover.Range(f"C{row}").HorizontalAlignment = -4108
+                ws_cover.Range(f"C{row}").VerticalAlignment = -4108
                 for c_idx in range(1, 8):
-                    ws_cover.Cells(r, c_idx).Borders.LineStyle = 1
-                
-                ws_cover.Rows(r).RowHeight = 35 # 표의 행 높이를 넓게
+                    ws_cover.Cells(row, c_idx).Borders.LineStyle = 1
+                ws_cover.Rows(row).RowHeight = 30
+
+            _cover_row(11, "공 사 명 :", "2026년 중앙지사 열수송관 비파괴검사용역 단가계약")
+            _cover_row(12, "계약기간 :", "2026.08.05 ~ 2027.08.05")
+
+            # --- 5단계 자금 흐름 표 ---
+            total_contract_amt_val = grand_total_with_vat
+            try:
+                total_contract_amt_val = int(self.total_contract_amt_var.get().replace(',','').replace('₩','').strip())
+            except: pass
+
+            prev_cumul = 0
+            curr_amt = grand_total_with_vat
+            cumul_amt = prev_cumul + curr_amt
+            remain_amt = total_contract_amt_val - cumul_amt
+
+            table_start = 14
+            table_headers = ["구 분", "계약금액", "전회누계", "금회청구", "총누계", "잔여금액"]
+            for col_i, h in enumerate(table_headers, start=1):
+                cell = ws_cover.Cells(table_start, col_i)
+                cell.Value = h
+                cell.Font.Bold = True
+                cell.Font.Size = 14
+                cell.HorizontalAlignment = -4108
+                cell.VerticalAlignment = -4108
+                cell.Interior.Color = 10066329
+                cell.Font.Color = 16777215
+                cell.Borders.LineStyle = 1
+            ws_cover.Rows(table_start).RowHeight = 28
+
+            amt_row = table_start + 1
+            amt_vals = [
+                "금 액(원)",
+                f"{total_contract_amt_val:,}",
+                f"{prev_cumul:,}",
+                f"{curr_amt:,}",
+                f"{cumul_amt:,}",
+                f"{remain_amt:,}",
+            ]
+            for col_i, val in enumerate(amt_vals, start=1):
+                cell = ws_cover.Cells(amt_row, col_i)
+                cell.Value = val
+                cell.Font.Size = 14
+                cell.HorizontalAlignment = -4108
+                cell.VerticalAlignment = -4108
+                if col_i == 1:
+                    cell.Font.Bold = True
+                    cell.Interior.Color = 15132390
+                cell.Borders.LineStyle = 1
+            ws_cover.Rows(amt_row).RowHeight = 28
             
             ws_cover.Range("A21:G21").Merge()
             ws_cover.Range("A21").Value = "위와 같이 기성대금을 청구합니다."
@@ -1976,22 +2025,44 @@ class NDTCalculatorTab(ttk.Frame):
                         history_data = json.load(f)
                 except: pass
 
+            global_comps = {}
+            for d, d_data in history_data.items():
+                if "ndt_results" in d_data:
+                    for nr in d_data["ndt_results"]:
+                        c = str(nr.get("업체", "")).strip()
+                        if c and c != "미지정" and "지역난방공사" not in c:
+                            global_comps[c] = global_comps.get(c, 0) + 1
+            global_fallback = max(global_comps.items(), key=lambda x: x[1])[0] if global_comps else "미지정"
+
             for r in target_records:
                 t_date = r["date"]
                 n_type = r["ndt_type"]
-                actual_comp = "미지정"
+                
+                actual_comp = r.get("company", "미지정")
+                if not actual_comp or str(actual_comp).strip() == "" or "지역난방공사" in str(actual_comp):
+                    actual_comp = "미지정"
                 
                 if t_date in history_data and "ndt_results" in history_data[t_date]:
                     comps = {}
                     for nr in history_data[t_date]["ndt_results"]:
-                        # RT의 경우 상세에서는 RT, RT_A 등으로 나뉠 수 있음
-                        if nr.get("검사방법", "").startswith(n_type) or n_type.startswith(nr.get("검사방법", "")):
+                        nr_type = str(nr.get("검사방법", "")).strip()
+                        if not nr_type:
+                            continue
+                        if nr_type.startswith(n_type) or n_type.startswith(nr_type):
                             c = nr.get("업체", "미지정")
                             if str(c).strip() == "": c = "미지정"
                             comps[c] = comps.get(c, 0) + 1
                     if comps:
-                        actual_comp = max(comps.items(), key=lambda x: x[1])[0]
+                        best_comp = max(comps.items(), key=lambda x: x[1])[0]
+                        if best_comp != "미지정":
+                            actual_comp = best_comp
                 
+                if actual_comp == "미지정" and r.get("company") and str(r.get("company")).strip() != "" and "지역난방공사" not in str(r.get("company")):
+                    actual_comp = r.get("company")
+                    
+                if actual_comp == "미지정" and global_fallback != "미지정":
+                    actual_comp = global_fallback
+                    
                 r["actual_company"] = actual_comp
 
             sum_row = 4
@@ -2087,6 +2158,27 @@ class NDTCalculatorTab(ttk.Frame):
                     ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
                     
                 sum_row += 3 
+            
+            # --- 전체 총합계 행 ---
+            ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 6)).Merge()
+            ws_summary.Cells(sum_row, 1).Value = "▶ 총 합 계"
+            ws_summary.Cells(sum_row, 1).HorizontalAlignment = -4108
+            ws_summary.Cells(sum_row, 1).Font.Bold = True
+            ws_summary.Cells(sum_row, 1).Font.Size = 13
+            ws_summary.Cells(sum_row, 1).Interior.Color = 10066329
+            ws_summary.Cells(sum_row, 1).Font.Color = 16777215
+            
+            grand_sum_formula = f"=SUM(G4:G{sum_row-1})"
+            ws_summary.Cells(sum_row, 7).Formula = grand_sum_formula
+            ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
+            ws_summary.Cells(sum_row, 7).Font.Bold = True
+            ws_summary.Cells(sum_row, 7).Font.Size = 13
+            ws_summary.Cells(sum_row, 7).Interior.Color = 10066329
+            ws_summary.Cells(sum_row, 7).Font.Color = 16777215
+            
+            for col in range(1, 8):
+                ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
+                ws_summary.Rows(sum_row).RowHeight = 28
                 
             ws_summary.Columns(1).ColumnWidth = 12
             ws_summary.Columns(2).ColumnWidth = 10
@@ -2118,7 +2210,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cont.Range("A1").HorizontalAlignment = -4108
             ws_cont.Range("A1").VerticalAlignment = -4108
             
-            headers_cont = ["No.", "업체명", "검사방법", "구간", "라인번호", "Joint No.", "관경", "두께", "용접사", "구간정보", "결과"]
+            headers_cont = ["No.", "업체명", "검사방법", "구간", "라인번호", "Joint No.", "관경", "두께", "용접사", "수량", "결과"]
             for col, h in enumerate(headers_cont, start=1):
                 cell = ws_cont.Cells(4, col)
                 cell.Value = h
@@ -2136,8 +2228,14 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cont.Columns(7).ColumnWidth = 10
             ws_cont.Columns(8).ColumnWidth = 10
             ws_cont.Columns(9).ColumnWidth = 12
-            ws_cont.Columns(10).ColumnWidth = 15
+            ws_cont.Columns(10).ColumnWidth = 12
             ws_cont.Columns(11).ColumnWidth = 10
+            
+            # 헤더에 자동 필터 적용 (지원 여부에 따라 선택적 적용)
+            try:
+                ws_cont.Range("A4:K4").AutoFilter(Field=1)
+            except:
+                pass
             
             cont_row = 5
             
@@ -2158,6 +2256,9 @@ class NDTCalculatorTab(ttk.Frame):
                     
             all_ndt_results.sort(key=lambda x: (str(x.get("업체", "")), str(x.get("검사방법", "")), str(x.get("구간", "")), str(x.get("라인번호", ""))))
             
+            total_points = 0
+            total_meters = 0.0
+            
             idx_cont = 1
             for r in all_ndt_results:
                 if not str(r.get("업체", "")).strip() and not str(r.get("Joint No.", "")).strip():
@@ -2172,7 +2273,32 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_cont.Cells(cont_row, 7).Value = r.get("관경", "")
                 ws_cont.Cells(cont_row, 8).Value = r.get("두께", "")
                 ws_cont.Cells(cont_row, 9).Value = r.get("용접사", "")
-                ws_cont.Cells(cont_row, 10).Value = r.get("구간정보", "")
+                
+                m_type = str(r.get("검사방법", "")).strip()
+                if "PAUT" in m_type:
+                    qty = r.get("PAUT", "")
+                elif "RT" in m_type:
+                    qty = r.get("RT_OR", "")
+                    if not qty: qty = r.get("RT_RE", "")
+                    if not qty: qty = "1"
+                elif "MT" in m_type:
+                    qty = r.get("MT", "")
+                elif "PT" in m_type:
+                    qty = r.get("PT", "")
+                else:
+                    qty = r.get(m_type, "")
+                    
+                try:
+                    q_val = float(qty) if str(qty).strip() else 0.0
+                except ValueError:
+                    q_val = 0.0
+                    
+                if "PAUT" in m_type or "UT" in m_type:
+                    total_meters += q_val
+                else:
+                    total_points += q_val
+                    
+                ws_cont.Cells(cont_row, 10).Value = qty
                 ws_cont.Cells(cont_row, 11).Value = r.get("결과", "")
                 
                 for c in range(1, 12):
@@ -2181,6 +2307,27 @@ class NDTCalculatorTab(ttk.Frame):
                     cell.HorizontalAlignment = -4108
                 
                 idx_cont += 1
+                cont_row += 1
+                
+            if all_ndt_results:
+                ws_cont.Cells(cont_row, 1).Value = "총 누적 물량"
+                ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
+                ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
+                ws_cont.Cells(cont_row, 1).Font.Bold = True
+                ws_cont.Cells(cont_row, 1).Interior.Color = 14277081
+                
+                ws_cont.Range(ws_cont.Cells(cont_row, 10), ws_cont.Cells(cont_row, 11)).Merge()
+                ws_cont.Cells(cont_row, 10).Value = f"{idx_cont - 1:,} 개소 / {total_meters:,.2f} m"
+                ws_cont.Cells(cont_row, 10).Font.Bold = True
+                ws_cont.Cells(cont_row, 10).Font.Color = 255
+                ws_cont.Cells(cont_row, 10).HorizontalAlignment = -4108
+                
+                for c in range(1, 12):
+                    cell = ws_cont.Cells(cont_row, c)
+                    cell.Borders.LineStyle = 1
+                    if c < 10:
+                        cell.Interior.Color = 14277081
+                
                 cont_row += 1
             
             ws_cover.Select()
