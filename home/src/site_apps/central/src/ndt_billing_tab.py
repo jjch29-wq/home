@@ -1521,12 +1521,10 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Range("M4").HorizontalAlignment = -4108
             
             # --- 기성 요약 테이블 ---
-            ws.Cells(6, 1).Value = "구간"
+            ws.Cells(6, 1).Value = "공종"
             ws.Range(ws.Cells(6, 1), ws.Cells(7, 1)).Merge()
-            ws.Cells(6, 2).Value = "시간"
-            ws.Range(ws.Cells(6, 2), ws.Cells(7, 2)).Merge()
-            ws.Cells(6, 3).Value = "항목"
-            ws.Range(ws.Cells(6, 3), ws.Cells(7, 3)).Merge()
+            ws.Cells(6, 2).Value = "규격"
+            ws.Range(ws.Cells(6, 2), ws.Cells(7, 3)).Merge()
             ws.Cells(6, 4).Value = "단위"
             ws.Range(ws.Cells(6, 4), ws.Cells(7, 4)).Merge()
             
@@ -1551,21 +1549,46 @@ class NDTCalculatorTab(ttk.Frame):
             
             extra_items_total = sum([self.equip_cost_var.get(), self.safety_cost_var.get(), self.travel_cost_var.get(), self.print_cost_var.get(), self.liability_cost_var.get()])
             
-            categories = list(self.contract_vars.keys())
+            # 계약서 원본 순서: 검사 규격별로 일반/야간을 나란히 배치한다.
+            material_order = [
+                "PAUT_300A 이상", "PAUT_250A", "PAUT_200A",
+                "PAUT_150A-125A", "PAUT_100A 이하",
+                'RT_3 1/3 x 12"', 'RT_3 1/3 x 6"', "MT_MT", "PT_PT"
+            ]
+            preferred_categories = [
+                f"열배관_{work_time}_{material}"
+                for material in material_order
+                for work_time in ("일반", "야간")
+                if f"열배관_{work_time}_{material}" in self.contract_vars
+            ]
+            # 업체별 기성요약에 집계되는 실제 청구 항목이 기성청구내역서에서
+            # 누락되지 않도록, 계약서 기본 순서에 없는 계약 항목도 모두 포함한다.
+            # (플랜트/추가 규격 등 현장별로 확장된 항목 대응)
+            categories = preferred_categories + [
+                cat for cat in self.contract_vars
+                if cat not in preferred_categories
+            ]
             # 금액이 존재하는 실비 항목만 내역서 표에 출력 (0원인 항목 숨김 처리)
             for cat, k in [("장비손료", "equip"), ("안전관리비", "safety"), ("주재비 및 출장여비", "travel"), ("도서인쇄비", "print")]:
                 if self.get_int(self.exp_vars[k]["budget"]) > 0 or self.get_int(self.exp_vars[k]["prev"]) > 0 or self.exp_vars[k]["curr"].get() > 0:
                     categories.append(cat)
             categories.extend(["기타실비 소계", "엔지니어링 손해배상공제료", "총 계"])
             
-            ws.Range(ws.Cells(6, 1), ws.Cells(6 + len(categories) + 1, 15)).Borders.LineStyle = 1
+            ws.Range(ws.Cells(6, 1), ws.Cells(6 + len(categories) + 2, 15)).Borders.LineStyle = 1
             
             row = 8
+            ws.Cells(row, 1).Value = "□ 비파괴검사용역비"
+            ws.Range(ws.Cells(row, 1), ws.Cells(row, 3)).Merge()
+            ws.Cells(row, 1).Font.Bold = True
+            ws.Cells(row, 1).HorizontalAlignment = -4131
+            row += 1
+
             data_rows = []
             extra_rows = []
             subtotal_row = 0
             liability_row = 0
             total_row = 0
+            contract_item_no = 0
             
             for cat in categories:
                 c_qty, p_qty, cur_qty, tot_qty, rem_qty = "", "", "", "", ""
@@ -1625,9 +1648,25 @@ class NDTCalculatorTab(ttk.Frame):
                     t_time = parts[1]
                     m_key = '_'.join(parts[2:])
                     unit = "매" if m_key.startswith("RT") else "M"
-                    ws.Cells(row, 1).Value = loc
-                    ws.Cells(row, 2).Value = t_time
-                    ws.Cells(row, 3).Value = m_key
+                    contract_item_no += 1
+                    if m_key.startswith("PAUT"):
+                        work_name = "위상배열초음파검사(PAUT)"
+                        spec = m_key.removeprefix("PAUT_")
+                    elif m_key.startswith("RT"):
+                        work_name = "방사선투과검사(RT)"
+                        spec = m_key.removeprefix("RT_")
+                    elif m_key.startswith("MT"):
+                        work_name = "자분탐상검사(MT)"
+                        spec = ""
+                    else:
+                        work_name = "액체침투탐상검사(PT)"
+                        spec = ""
+                    if t_time == "야간":
+                        spec = f"{spec}, 야간" if spec else "야간"
+
+                    ws.Cells(row, 1).Value = f"{contract_item_no})    {work_name}"
+                    ws.Cells(row, 2).Value = spec
+                    ws.Range(ws.Cells(row, 2), ws.Cells(row, 3)).Merge()
                     ws.Cells(row, 4).Value = unit
                     unit_price = self.contract_vars[cat].get("c_price", 0)
                     if unit_price == 0:
@@ -2066,6 +2105,13 @@ class NDTCalculatorTab(ttk.Frame):
                 r["actual_company"] = actual_comp
 
             sum_row = 4
+            contract_category_order = [
+                cat for cat in categories if cat in self.contract_vars
+            ]
+            contract_item_numbers = {
+                cat: idx for idx, cat in enumerate(contract_category_order, start=1)
+            }
+            company_subtotal_rows = []
             companies = sorted(list(set(r.get("actual_company", "미지정") for r in target_records)))
             if not companies:
                 companies = ["미지정"]
@@ -2076,14 +2122,19 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_summary.Cells(sum_row, 1).Font.Size = 12
                 sum_row += 1
                 
-                headers_sum = ["구간", "시간", "항목", "단위", "단가", "금회 수량", "금회 금액"]
-                for col, h in enumerate(headers_sum, start=1):
+                headers_sum = {
+                    1: "공종", 2: "규격", 4: "단위", 5: "단가",
+                    6: "금회 수량", 7: "금회 금액"
+                }
+                ws_summary.Range(ws_summary.Cells(sum_row, 2), ws_summary.Cells(sum_row, 3)).Merge()
+                for col, h in headers_sum.items():
                     cell = ws_summary.Cells(sum_row, col)
                     cell.Value = h
                     cell.Font.Bold = True
                     cell.Interior.Color = 14277081
                     cell.HorizontalAlignment = -4108
-                    cell.Borders.LineStyle = 1
+                for col in range(1, 8):
+                    ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
                     
                 sum_row += 1
                 start_data_row = sum_row
@@ -2110,16 +2161,37 @@ class NDTCalculatorTab(ttk.Frame):
                     comp_summary[cat_key]["qty"] += r["qty"]
                     comp_summary[cat_key]["amt"] += r["subtotal"]
                     
-                for cat_key, data in comp_summary.items():
+                for cat_key, data in sorted(
+                    comp_summary.items(),
+                    key=lambda item: contract_item_numbers.get(item[0], len(contract_item_numbers) + 1)
+                ):
                     if data["qty"] == 0: continue
+
+                    item_no = contract_item_numbers.get(cat_key, "")
+                    item_key = data["item"]
+                    if item_key.startswith("PAUT"):
+                        work_name = "위상배열초음파검사(PAUT)"
+                        spec = item_key.removeprefix("PAUT_")
+                    elif item_key.startswith("RT"):
+                        work_name = "방사선투과검사(RT)"
+                        spec = item_key.removeprefix("RT_")
+                    elif item_key.startswith("MT"):
+                        work_name = "자분탐상검사(MT)"
+                        spec = ""
+                    else:
+                        work_name = "액체침투탐상검사(PT)"
+                        spec = ""
+                    if data["time"] == "야간":
+                        spec = f"{spec}, 야간" if spec else "야간"
                     
                     c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
                     if c_price == 0 and data["qty"] > 0:
                         c_price = data["amt"] / data["qty"]
                         
-                    ws_summary.Cells(sum_row, 1).Value = data["loc"]
-                    ws_summary.Cells(sum_row, 2).Value = data["time"]
-                    ws_summary.Cells(sum_row, 3).Value = data["item"]
+                    number_prefix = f"{item_no})    " if item_no != "" else ""
+                    ws_summary.Cells(sum_row, 1).Value = f"{number_prefix}{work_name}"
+                    ws_summary.Cells(sum_row, 2).Value = spec
+                    ws_summary.Range(ws_summary.Cells(sum_row, 2), ws_summary.Cells(sum_row, 3)).Merge()
                     ws_summary.Cells(sum_row, 4).Value = data["unit"]
                     
                     ws_summary.Cells(sum_row, 5).Value = int(c_price)
@@ -2156,33 +2228,50 @@ class NDTCalculatorTab(ttk.Frame):
                 
                 for col in range(1, 8):
                     ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
+
+                company_subtotal_rows.append(sum_row)
                     
                 sum_row += 3 
             
-            # --- 전체 총합계 행 ---
-            ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 6)).Merge()
-            ws_summary.Cells(sum_row, 1).Value = "▶ 총 합 계"
-            ws_summary.Cells(sum_row, 1).HorizontalAlignment = -4108
-            ws_summary.Cells(sum_row, 1).Font.Bold = True
-            ws_summary.Cells(sum_row, 1).Font.Size = 13
-            ws_summary.Cells(sum_row, 1).Interior.Color = 10066329
-            ws_summary.Cells(sum_row, 1).Font.Color = 16777215
-            
-            grand_sum_formula = f"=SUM(G4:G{sum_row-1})"
-            ws_summary.Cells(sum_row, 7).Formula = grand_sum_formula
-            ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
-            ws_summary.Cells(sum_row, 7).Font.Bold = True
-            ws_summary.Cells(sum_row, 7).Font.Size = 13
-            ws_summary.Cells(sum_row, 7).Interior.Color = 10066329
-            ws_summary.Cells(sum_row, 7).Font.Color = 16777215
-            
+            # --- 전체 공급가액 / 부가가치세 / 합계 ---
+            supply_row = sum_row
+            vat_row = sum_row + 1
+            grand_total_row = sum_row + 2
+
+            supply_formula = (
+                "=" + "+".join(f"G{row_no}" for row_no in company_subtotal_rows)
+                if company_subtotal_rows else "=0"
+            )
+            total_rows = [
+                (supply_row, "공 급 가 액", supply_formula),
+                (vat_row, "부가가치세", f"=TRUNC(G{supply_row}*10%,0)"),
+                (grand_total_row, "합        계", f"=G{supply_row}+G{vat_row}"),
+            ]
+            for total_summary_row, label, formula in total_rows:
+                ws_summary.Range(
+                    ws_summary.Cells(total_summary_row, 1),
+                    ws_summary.Cells(total_summary_row, 6)
+                ).Merge()
+                ws_summary.Cells(total_summary_row, 1).Value = label
+                ws_summary.Cells(total_summary_row, 1).HorizontalAlignment = -4108
+                ws_summary.Cells(total_summary_row, 1).Font.Bold = True
+                ws_summary.Cells(total_summary_row, 7).Formula = formula
+                ws_summary.Cells(total_summary_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
+                ws_summary.Cells(total_summary_row, 7).Font.Bold = True
+                for col in range(1, 8):
+                    ws_summary.Cells(total_summary_row, col).Borders.LineStyle = 1
+                ws_summary.Rows(total_summary_row).RowHeight = 26
+
+            # VAT 포함 최종 합계 행을 기존 총합계 강조 형식으로 표시한다.
             for col in range(1, 8):
-                ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
-                ws_summary.Rows(sum_row).RowHeight = 28
-                
-            ws_summary.Columns(1).ColumnWidth = 12
-            ws_summary.Columns(2).ColumnWidth = 10
-            ws_summary.Columns(3).ColumnWidth = 20
+                ws_summary.Cells(grand_total_row, col).Interior.Color = 10066329
+                ws_summary.Cells(grand_total_row, col).Font.Color = 16777215
+                ws_summary.Cells(grand_total_row, col).Font.Size = 13
+            ws_summary.Rows(grand_total_row).RowHeight = 28
+
+            ws_summary.Columns(1).ColumnWidth = 34
+            ws_summary.Columns(2).ColumnWidth = 13
+            ws_summary.Columns(3).ColumnWidth = 13
             ws_summary.Columns(4).ColumnWidth = 8
             ws_summary.Columns(5).ColumnWidth = 12
             ws_summary.Columns(6).ColumnWidth = 12

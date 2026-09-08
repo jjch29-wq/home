@@ -37,7 +37,30 @@ class DailyWorkLogTab(ttk.Frame):
             'data', 'process_photos'
         )
         self.selected_ndt_row = None
+        self.welder_names = dict(MonthlyReportManager.WELDER_NAMES)
+        self.welder_ids_by_name = {
+            name: welder_id for welder_id, name in self.welder_names.items()
+        }
         self.setup_ui()
+
+    def _normalize_welder_id(self, value):
+        """화면 표시값 또는 이름을 기존 용접사 번호 형식으로 변환한다."""
+        value = str(value or '').strip()
+        if not value:
+            return ''
+        if '|' in value:
+            display_name, welder_id = value.rsplit('|', 1)
+            welder_id = welder_id.strip()
+            if welder_id:
+                return welder_id
+            value = display_name.strip()
+        return self.welder_ids_by_name.get(value, value)
+
+    def _format_welder_display(self, value):
+        """저장된 용접사 번호를 '이름 | 번호' 화면 표시 형식으로 변환한다."""
+        welder_id = self._normalize_welder_id(value)
+        name = self.welder_names.get(welder_id)
+        return f"{name} | {welder_id}" if name else welder_id
         
     def setup_ui(self):
         # Create PanedWindow for Left/Right split
@@ -245,29 +268,22 @@ class DailyWorkLogTab(ttk.Frame):
         sections = set()
         lines = set()
         companies = set()
-        # 2026년 중앙지사 열수송관 개설 및 추가공사 용접사 명단
-        welders = {
-            'W-2023-A-10', 'W-2023-A-12', 'W-2023-A-13', 'W-2023-A-19',
-            'W-2023-A-25', 'W-2023-A-27', 'W-2023-A-28', 'W-2023-A-34',
-            'W-2024-A-01', 'W-2024-A-03', 'W-2024-A-04', 'W-2024-A-05',
-            'W-2024-A-07', 'W-2024-A-08', 'W-2024-A-09', 'W-2024-A-10',
-            'W-2024-A-12', 'W-2024-A-15', 'W-2024-A-17', 'W-2024-A-22',
-            'W-2024-A-28', 'W-2024-A-29', 'W-2024-A-30', 'W-2024-A-31',
-            'W-2024-A-32', 'W-2024-A-33', 'W-2024-A-36', 'W-2024-A-44',
-            'W-2024-A-46', 'W-2024-A-47',
-            'W-2026-A-02', 'W-2026-A-07', 'W-2026-A-09', 'W-2026-A-10',
-        }
+        # 월간 보고서와 동일한 용접사 번호/성명 기준정보를 사용한다.
+        welders = set(self.welder_names)
         for date_str, data in history.items():
             for r in data.get('ndt_results', []):
                 if r.get('구간'): sections.add(r['구간'].strip())
                 if r.get('라인번호'): lines.add(r['라인번호'].strip())
                 if r.get('업체'): companies.add(r['업체'].strip())
-                if r.get('용접사'): welders.add(r['용접사'].strip())
+                if r.get('용접사'): welders.add(self._normalize_welder_id(r['용접사']))
         
         self.history_sections = [''] + sorted(list(sections))
         self.history_lines = [''] + sorted(list(lines))
         self.history_companies = [''] + sorted(list(companies))
-        self.history_welders = [''] + sorted(welders)
+        self.history_welders = [''] + [
+            self._format_welder_display(welder_id)
+            for welder_id in sorted(welders)
+        ]
 
         
         # Draw Headers
@@ -294,7 +310,7 @@ class DailyWorkLogTab(ttk.Frame):
                 elif c == '근무구분': w = 7
                 elif c in ('검사방법', '결과', '관경', '두께'): w = 6
                 elif c in ('구간', '업체'): w = 10
-                elif c == '용접사': w = 15
+                elif c == '용접사': w = 23
                 elif c == '라인번호': w = 25
                 elif c == 'Joint No.': w = 12
                 elif c == '구간정보': w = 20
@@ -586,7 +602,7 @@ class DailyWorkLogTab(ttk.Frame):
                 'section': row['구간'].get().strip(),
                 'line_no': row['라인번호'].get().strip(),
                 'joint_no': joint,
-                'welder': row['용접사'].get().strip(),
+                'welder': self._normalize_welder_id(row['용접사'].get()),
                 'location': row['구간'].get().strip() or joint,
                 'description': description.strip(),
                 'file_path': os.path.relpath(target_path, os.path.dirname(self.history_path)),
@@ -817,6 +833,7 @@ class DailyWorkLogTab(ttk.Frame):
         # NDT - only gather rows that have at least one non-empty value
         for row_entries in self.ndt_grid_entries:
             row_dict = {col: ent.get() for col, ent in row_entries.items()}
+            row_dict['용접사'] = self._normalize_welder_id(row_dict.get('용접사'))
             if any(val.strip() for val in row_dict.values()):
                 data['ndt_results'].append(row_dict)
             
@@ -1047,6 +1064,8 @@ class DailyWorkLogTab(ttk.Frame):
                     val = ent.get()
                     if callable(val): # In case get() returned a method? No, ent.get is the method.
                         pass
+                    if col == '용접사':
+                        val = self._normalize_welder_id(val)
                     row_dict[col] = str(val) if val else ""
             data['ndt_results'].append(row_dict)
             
@@ -1207,6 +1226,8 @@ class DailyWorkLogTab(ttk.Frame):
                     val = normalized_spec
                 elif col == '근무구분':
                     val = work_shift
+                elif col == '용접사':
+                    val = self._format_welder_display(row_data.get(col, ''))
                 else:
                     val = row_data.get(col, '')
                 if col == '구간정보':
