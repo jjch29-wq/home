@@ -968,6 +968,179 @@ class MonthlyReportManager:
                 target.font = Font(name='\ub9d1\uc740 \uace0\ub515', size=8)
                 updated.add((document_row, col))
 
+    def _rebalance_toc_page_layout(self, ws):
+        """Spread the table-of-contents entries without moving its page break.
+
+        The template reserves several alternating-height rows below the last
+        visible TOC entry. Reuse that height for the seven visible entries and
+        their intervening gaps, then divide the remainder across the blank rows
+        at the foot of the page. Because the total height from the first entry
+        through the manual page break is unchanged, every following report page
+        keeps its existing start row and print position.
+        """
+        default_height = float(ws.sheet_format.defaultRowHeight or 15)
+        break_rows = sorted(int(brk.id) for brk in ws.row_breaks.brk)
+
+        # Locate the real TOC page by its common-header caption and page label;
+        # this avoids matching the larger body title farther down the page.
+        toc_header_row = None
+        for row in range(1, ws.max_row + 1):
+            values = [
+                str(ws.cell(row=row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            ]
+            if '목 차' in values and any('쪽' in value and '번호' in value for value in values):
+                toc_header_row = row
+                break
+        if toc_header_row is None:
+            return
+
+        page_end = next((row for row in break_rows if row >= toc_header_row), None)
+        if page_end is None:
+            return
+
+        expected_labels = {f'{number}.0' for number in range(1, 8)}
+        entry_rows = {}
+        for row in range(toc_header_row + 1, page_end + 1):
+            for col in range(1, min(ws.max_column, 12) + 1):
+                value = str(ws.cell(row=row, column=col).value or '').strip()
+                if value in expected_labels:
+                    entry_rows[value] = row
+                    break
+        ordered_entries = [entry_rows.get(f'{number}.0') for number in range(1, 8)]
+        if any(row is None for row in ordered_entries):
+            return
+
+        first_entry = ordered_entries[0]
+        last_entry = ordered_entries[-1]
+        original_height = sum(
+            float(ws.row_dimensions[row].height or default_height)
+            for row in range(first_entry, page_end + 1)
+        )
+
+        # Move the complete 1.0-7.0 block down while keeping the TOC title and
+        # column headings fixed. The same height is removed from the blank rows
+        # below 7.0, so the page break and every following page remain stable.
+        content_offset = 50.0
+        pre_entry_spacer = first_entry - 1
+        ws.row_dimensions[pre_entry_spacer].height = (
+            float(ws.row_dimensions[pre_entry_spacer].height or default_height)
+            + content_offset
+        )
+
+        entry_height = 34.0
+        gap_height = 18.0
+        for row in ordered_entries:
+            ws.row_dimensions[row].height = entry_height
+
+        for current, following in zip(ordered_entries, ordered_entries[1:]):
+            rows_between = list(range(current + 1, following))
+            if not rows_between:
+                continue
+            per_row_height = gap_height / len(rows_between)
+            for row in rows_between:
+                ws.row_dimensions[row].height = per_row_height
+
+        bottom_rows = list(range(last_entry + 1, page_end + 1))
+        used_height = entry_height * len(ordered_entries) + gap_height * 6
+        remaining_height = original_height - used_height - content_offset
+        if bottom_rows and remaining_height > 0:
+            bottom_height = remaining_height / len(bottom_rows)
+            for row in bottom_rows:
+                ws.row_dimensions[row].height = bottom_height
+
+    def _normalize_repeated_report_header_text(self, ws, doc_num):
+        """Write repeated-header text to the real merged-cell anchors.
+
+        Row insertion can leave copied text in cells immediately outside the
+        header merges while the actual F:O title anchor retains a stale formula.
+        Excel evaluates that blank reference as 0. Locate each report header by
+        its section caption and write all visible labels to the fixed merged
+        anchors instead of relying on the copied cell value or formula.
+        """
+        contract_name = '2026년 중앙지사 열수송관 비파괴검사용역 단가계약'
+        report_title = f'【{contract_name}】\n월 간 용 역 진 도 보 고 서'
+        document_text = f'문서번호 : 월간용역진도보고서 {doc_num}호'
+        section_markers = (
+            '목 차',
+            '1.0 용역업무일반',
+            '2.0 인원,장비/자재 투입현황',
+            '3.0 비파괴검사현황',
+            '4.0 용접결함,불량율 현황',
+            '5.0 안전관리활동 및 교육현황',
+            '6.0 방사선안전관리통합정보망 보고',
+            '6.0 사진대지',
+            '7.0 사진대지',
+        )
+
+        normalized_headers = set()
+        for section_row in range(1, ws.max_row + 1):
+            row_values = [
+                str(ws.cell(row=section_row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            ]
+            compact_values = [''.join(value.split()) for value in row_values]
+            section_text = next(
+                (
+                    marker for marker in section_markers
+                    if ''.join(marker.split()) in compact_values
+                ),
+                None,
+            )
+            if section_text is None:
+                continue
+
+            header_row = section_row - 4
+            if header_row < 1 or header_row in normalized_headers:
+                continue
+
+            # A real repeated header has the title and metadata merge anchors at
+            # F and P. This guard excludes body headings and TOC list entries.
+            title_merge = next(
+                (
+                    merged for merged in ws.merged_cells.ranges
+                    if merged.min_row == header_row
+                    and merged.min_col == 6
+                    and merged.max_col >= 15
+                ),
+                None,
+            )
+            metadata_merge = next(
+                (
+                    merged for merged in ws.merged_cells.ranges
+                    if merged.min_row == header_row
+                    and merged.min_col == 16
+                    and merged.max_col >= 23
+                ),
+                None,
+            )
+            if title_merge is None or metadata_merge is None:
+                continue
+
+            title_cell = ws.cell(row=header_row, column=6)
+            title_cell.value = report_title
+            title_cell.font = Font(name='맑은 고딕', size=9, bold=True)
+            title_cell.alignment = Alignment(
+                horizontal='center', vertical='center', wrap_text=True,
+            )
+
+            doc_cell = ws.cell(row=header_row, column=16)
+            doc_cell.value = document_text
+            revision_cell = ws.cell(row=header_row + 2, column=16)
+            revision_cell.value = '  개정번호 :            0'
+            for cell in (doc_cell, revision_cell):
+                cell.font = Font(name='맑은 고딕', size=8)
+                cell.alignment = Alignment(
+                    horizontal='left', vertical='center',
+                    wrap_text=False, shrink_to_fit=True, indent=1,
+                )
+
+            # Normalize the section caption anchor as well. The page-number
+            # anchor is deliberately left intact and is recalculated later.
+            section_cell = ws.cell(row=section_row, column=6)
+            section_cell.value = section_text
+            normalized_headers.add(header_row)
+
     def _fix_ndt_section_labels(self, ws):
         """Correct known text errors retained in the report template."""
         for row in ws.iter_rows():
@@ -3674,6 +3847,8 @@ class MonthlyReportManager:
         self._normalize_ndt_header_logos(ws)
         self._normalize_all_report_header_logos(ws)
         self._collapse_blank_rows_before_report_headers(ws)
+        self._normalize_repeated_report_header_text(ws, doc_num)
+        self._rebalance_toc_page_layout(ws)
         self._align_report_breaks_to_repeated_headers(ws)
         self._renumber_ndt_status_pages(ws)
         self._keep_iuc_euc_headers_single_line(ws)
