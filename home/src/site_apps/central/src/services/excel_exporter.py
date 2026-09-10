@@ -9,8 +9,10 @@ from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 from site_apps.central.src.utils.helpers import normalize_id
 import json
+import re
 import sys
 import subprocess
+import re
 from site_apps.central.src.daily_work_report_manager import DailyWorkReportManager
 
 def export_daily_work_report_impl(self):
@@ -45,6 +47,7 @@ def export_daily_work_report_impl(self):
             'inspector': '', 
             'car_no': '', 
             'methods': {},
+            'inspection_details': [],
             'rtk': {},
             'ot_status': [],
             'materials': {}
@@ -168,6 +171,37 @@ def export_daily_work_report_impl(self):
                     'travel': float(travel_val.replace(',', '')) if travel_val else 0,
                     'total': float(total_val.replace(',', '')) if total_val else 0
                 }
+
+        # 2. 검사업무현황 아래에 표시할 관경별 상세(POINT / 검사길이)
+        if not site_records.empty:
+            pipe_col = next((c for c in ('관경(Inch)', '관경') if c in site_records.columns), '')
+            joint_col = next((c for c in ('조인트수', 'POINT', 'Point') if c in site_records.columns), '')
+            if pipe_col:
+                detail_groups = {}
+                for _, row in site_records.iterrows():
+                    pipe_size = _clean_str(row.get(pipe_col, '')).upper()
+                    if not pipe_size:
+                        continue
+                    detail = detail_groups.setdefault(pipe_size, {'points': 0.0, 'length': 0.0})
+                    if joint_col:
+                        point_value = pd.to_numeric(row.get(joint_col, 0), errors='coerce')
+                        if pd.notna(point_value):
+                            detail['points'] += float(point_value)
+                    length_value = pd.to_numeric(row.get('Usage', 0), errors='coerce')
+                    if pd.notna(length_value):
+                        detail['length'] += float(length_value)
+
+                def _pipe_sort_key(item):
+                    match = re.search(r'\d+(?:\.\d+)?', item[0])
+                    return float(match.group()) if match else -1
+
+                for pipe_size, detail in sorted(detail_groups.items(), key=_pipe_sort_key, reverse=True):
+                    points = detail['points']
+                    data['inspection_details'].append({
+                        'pipe_size': pipe_size,
+                        'points': int(points) if points.is_integer() else points,
+                        'length': detail['length'],
+                    })
 
         # 작업자 및 O/T (간소화 버전)
         # [NEW] 작업자 / OT 정보 DB에서 집계 (현장 탭 기록 기준)
@@ -813,6 +847,27 @@ def export_central_daily_work_report_impl(self):
             df_copy = self.daily_usage_df.copy()
             site_col = 'Site' if 'Site' in df_copy.columns else '현장' if '현장' in df_copy.columns else ''
             date_col = 'Date' if 'Date' in df_copy.columns else '날짜' if '날짜' in df_copy.columns else ''
+
+            # 선택 행은 출력 기준(날짜·현장)만 정하고, 실제 출력은 같은 날·같은
+            # 현장의 모든 기록을 합산한다. 한 행만 선택해도 복수 관경 작업이 누락되지 않는다.
+            selection = self.daily_usage_tree.selection()
+            if selection:
+                tags = self.daily_usage_tree.item(selection[0], 'tags')
+                if tags:
+                    try:
+                        selected_idx = int(tags[0])
+                        if selected_idx in df_copy.index:
+                            selected_row = df_copy.loc[selected_idx]
+                            if site_col:
+                                selected_site = str(selected_row.get(site_col, '')).strip()
+                                if selected_site:
+                                    site = selected_site
+                            if date_col:
+                                selected_date = pd.to_datetime(selected_row.get(date_col), errors='coerce')
+                                if pd.notna(selected_date):
+                                    date_val = selected_date.date()
+                    except (TypeError, ValueError):
+                        pass
             
             if site_col and date_col:
                 df_copy['Date_norm'] = pd.to_datetime(df_copy[date_col], errors='coerce').dt.date
@@ -846,17 +901,24 @@ def export_central_daily_work_report_impl(self):
             for _, row in records.iterrows():
                 m = str(row.get(method_col, '')).upper().strip()
                 if base_method in m:
+                    size_info = ' '.join(str(row.get(col, '')).upper() for col in (
+                        '관경(Inch)', '관경', 'MaterialID', '품목명', '검사품명'
+                    ))
                     # 야간 확인
-                    is_night = '야간' in m or 'NIGHT' in m
+                    work_type = ' '.join(str(row.get(col, '')).upper() for col in (
+                        '작업형태', '근무구분', '구분', 'WorkType'
+                    ))
+                    is_night = '야간' in m or 'NIGHT' in m or '야간' in work_type or 'NIGHT' in work_type
                     target_is_night = '_N' in method_key
                     
                     # 관경 확인 (PAUT, RT의 경우)
                     size_match = True
-                    if '300A' in method_key and not ('300' in m or '400' in m or '500' in m): size_match = False
-                    if '250A' in method_key and not ('250' in m): size_match = False
-                    if '200A' in method_key and not ('200' in m): size_match = False
-                    if '150A' in method_key and not ('150' in m or '100' in m): size_match = False
-                    if '80A' in method_key and not ('80' in m or '65' in m or '50' in m or '40' in m): size_match = False
+                    size_numbers = [int(x) for x in re.findall(r'\d+', size_info)]
+                    if '300A' in method_key and not any(x >= 300 for x in size_numbers): size_match = False
+                    if '250A' in method_key and 250 not in size_numbers: size_match = False
+                    if '200A' in method_key and 200 not in size_numbers: size_match = False
+                    if '150A' in method_key and not any(x in (100, 125, 150) for x in size_numbers): size_match = False
+                    if '80A' in method_key and not any(x <= 80 for x in size_numbers): size_match = False
                     
                     if size_match and (is_night == target_is_night):
                         qty += pd.to_numeric(row.get('Usage', 0), errors='coerce')

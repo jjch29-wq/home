@@ -12122,7 +12122,7 @@ class MaterialManager:
         
         top = tk.Toplevel(self.root)
         top.title("주간 업무보고서 출력")
-        top.geometry("400x350")
+        top.geometry("460x390")
         top.transient(self.root)
         top.grab_set()
         
@@ -12137,17 +12137,21 @@ class MaterialManager:
         
         from tkcalendar import DateEntry
 
-        ttk.Label(frame1, text="시작일 (월):").grid(row=0, column=0, padx=5, pady=5)
+        ttk.Label(frame1, text="공사명:").grid(row=0, column=0, padx=5, pady=5, sticky='e')
+        project_name_entry = ttk.Entry(frame1, width=35)
+        project_name_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(frame1, text="시작일 (월):").grid(row=1, column=0, padx=5, pady=5)
         start_cal = DateEntry(frame1, width=12, background='darkblue',
                               foreground='white', borderwidth=2,
                               date_pattern='yyyy-mm-dd', year=monday.year, month=monday.month, day=monday.day)
-        start_cal.grid(row=0, column=1, padx=5)
+        start_cal.grid(row=1, column=1, padx=5, sticky='w')
         
-        ttk.Label(frame1, text="종료일 (일):").grid(row=1, column=0, padx=5, pady=5)
+        ttk.Label(frame1, text="종료일 (일):").grid(row=2, column=0, padx=5, pady=5)
         end_cal = DateEntry(frame1, width=12, background='darkblue',
                             foreground='white', borderwidth=2,
                             date_pattern='yyyy-mm-dd', year=sunday.year, month=sunday.month, day=sunday.day)
-        end_cal.grid(row=1, column=1, padx=5)
+        end_cal.grid(row=2, column=1, padx=5, sticky='w')
         
         frame2 = ttk.Frame(top)
         frame2.pack(pady=5, fill='both', expand=True, padx=10)
@@ -12156,9 +12160,14 @@ class MaterialManager:
         next_week_txt.pack(fill='both', expand=True, pady=5)
         
         def do_export():
+            project_name = project_name_entry.get().strip()
             s_date = start_cal.get().strip()
             e_date = end_cal.get().strip()
             next_plan = next_week_txt.get("1.0", "end-1c").strip()
+            if not project_name:
+                messagebox.showwarning("입력 필요", "공사명을 입력해주세요.")
+                project_name_entry.focus_set()
+                return
             try:
                 s_dt = pd.to_datetime(s_date).date()
                 e_dt = pd.to_datetime(e_date).date()
@@ -12195,13 +12204,9 @@ class MaterialManager:
                 p_data = data.get('personnel_data', {})
                 count = 0
                 try:
-                    count_str = str(p_data.get('검사원_누계', '0')).strip()
-                    if count_str and count_str.isdigit() and count_str != '0':
-                        count = int(count_str)
-                    if count == 0:
-                        inspector = str(p_data.get('검사원_인원', '0')).strip()
-                        manager = str(p_data.get('검사원_현장대리인', '0')).strip()
-                        count = (int(inspector) if inspector.isdigit() else 0) + (int(manager) if manager.isdigit() else 0)
+                    inspector = str(p_data.get('검사원_인원', '0')).strip()
+                    manager = str(p_data.get('검사원_현장대리인', '0')).strip()
+                    count = (int(inspector) if inspector.isdigit() else 0) + (int(manager) if manager.isdigit() else 0)
                 except Exception:
                     count = 0
                 return count if count > 0 else (1 if use_report_default else 0)
@@ -12209,7 +12214,7 @@ class MaterialManager:
             cumulative_time = 0
             cumulative_ndt_methods = {}
             for data in cumulative_data.values():
-                cumulative_time += get_personnel_count(data) * 8
+                cumulative_time += 8
                 for result in data.get('ndt_results', []):
                     method = str(result.get("검사방법", "")).strip().upper()
                     if method:
@@ -12230,6 +12235,11 @@ class MaterialManager:
             ws['A1'] = f"주간 업무보고서 ({s_date} ~ {e_date})"
             ws['A1'].font = title_font
             ws['A1'].alignment = center_align
+
+            ws.merge_cells('A2:G2')
+            ws['A2'] = f"공사명: {project_name}"
+            ws['A2'].font = Font(name='맑은 고딕', size=11, bold=True)
+            ws['A2'].alignment = center_align
             
             headers = ['일자', '현장명', '작업내용', '투입인원', '작업시간', '검사실적', '비고']
             for col_num, head in enumerate(headers, 1):
@@ -12275,17 +12285,34 @@ class MaterialManager:
                 
                 daily_ndt_texts = [f"{m} {c} POINT" for m, c in daily_ndt_methods.items()]
                 ndt_text = "\n".join(daily_ndt_texts) if daily_ndt_texts else "0 POINT"
+
+                # 같은 날짜·현장에서 검사한 관경을 한 작업내용으로 묶어 표시한다.
+                pipe_sizes = {
+                    str(r.get("관경", "")).strip()
+                    for r in ndt_results
+                    if str(r.get("관경", "")).strip()
+                }
+                sorted_pipe_sizes = sorted(
+                    pipe_sizes,
+                    key=lambda value: int(re.search(r'\d+', value).group())
+                    if re.search(r'\d+', value) else 0,
+                    reverse=True,
+                )
+                work_description = (
+                    f"{', '.join(sorted_pipe_sizes)} 검사 진행"
+                    if sorted_pipe_sizes else "검사 작업 진행"
+                )
                 
                 # Personnel data
                 w_count = get_personnel_count(data, use_report_default=True)
                     
-                total_time += w_count * 8
+                total_time += 8
                 
                 ws.cell(row=row_idx, column=1, value=str(date_val)).alignment = center_align
                 ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
-                ws.cell(row=row_idx, column=3, value=f"{w_count}명 작업 진행").alignment = center_align
+                ws.cell(row=row_idx, column=3, value=work_description).alignment = center_align_wrap
                 ws.cell(row=row_idx, column=4, value=f"{w_count} 명").alignment = center_align
-                ws.cell(row=row_idx, column=5, value=f"{w_count * 8} 시간").alignment = center_align
+                ws.cell(row=row_idx, column=5, value="8 시간").alignment = center_align
                 ws.cell(row=row_idx, column=6, value=ndt_text).alignment = center_align_wrap
                 ws.cell(row=row_idx, column=7, value="").alignment = center_align
                 

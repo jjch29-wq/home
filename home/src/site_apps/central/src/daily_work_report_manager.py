@@ -424,7 +424,27 @@ class DailyWorkReportManager:
                 if not isinstance(cell, MergedCell):
                     cell.value = None
 
-        note_text = data.get('note', '')
+        inspection_lines = []
+        for detail in data.get('inspection_details', []):
+            pipe_size = str(detail.get('pipe_size', '')).strip()
+            points = detail.get('points', 0)
+            length = detail.get('length', 0)
+            try:
+                point_text = f"{float(points):g}"
+            except (TypeError, ValueError):
+                point_text = str(points)
+            try:
+                length_text = f"{float(length):.4f}".rstrip('0').rstrip('.')
+            except (TypeError, ValueError):
+                length_text = str(length)
+            if pipe_size:
+                inspection_lines.append(
+                    f"• {pipe_size}: {point_text} POINT / 검사길이 {length_text} M"
+                )
+
+        detail_text = "검사 상세\n" + "\n".join(inspection_lines) if inspection_lines else ""
+        memo_text = str(data.get('note', '') or '').strip()
+        note_text = "\n\n".join(text for text in (detail_text, memo_text) if text)
         if note_text:
             start_cell = sheet.cell(row=note_range_start, column=2)
             start_cell.value = note_text
