@@ -19,6 +19,7 @@ from PIL import Image as PILImage, ImageChops, ImageOps
 import io
 import base64
 import time
+import copy
 
 
 def find_src_root_for_import(start_path):
@@ -3132,6 +3133,31 @@ class PMIReportApp:
         self.log(f"✅ 판정 완료: 총 {len(self.paut_extracted_data)} 건 (합격: {count_ok}, 불합격: {count_ng})")
 
     def _generate_paut_report(self):
+        # PAUT 기준 성적서 값은 실행 중 메모리에 남아 있는 이전 설정보다
+        # 우선한다. save_settings() 전에 UI 변수까지 갱신하여 설정 파일이
+        # 다시 예전 값으로 덮어써지지 않게 한다.
+        reference_settings = {
+            'probe': '5L64-A2 / 5L16A10',
+            'wedge': 'SA2-N55S-IHC / SA10-N55S',
+            'gain': '11 + 6dB / 21.4 + 6dB',
+            'offset': '±17 mm',
+            'tcg1_p1': '0', 'tcg1_g1': '4.2dB',
+            'tcg1_p2': '8.96mm', 'tcg1_g2': '4.5dB',
+            'tcg1_p3': '17.13mm', 'tcg1_g3': '7.0dB',
+            'tcg1_p4': '24.79mm', 'tcg1_g4': '12.7dB',
+            'tcg2_p1': '0', 'tcg2_g1': '3.2dB',
+            'tcg2_p2': '7.61mm', 'tcg2_g2': '2.7dB',
+            'tcg2_p3': '15.35mm', 'tcg2_g3': '5.3dB',
+            'tcg2_p4': '23.17mm', 'tcg2_g4': '8.1dB',
+            'set1_qty': '16', 'set1_first': '1', 'set1_last': '16',
+            'set2_qty': '16', 'set2_first': '49', 'set2_last': '64',
+        }
+        if hasattr(self, 'paut_equip_vars'):
+            for key, value in reference_settings.items():
+                if key in self.paut_equip_vars:
+                    self.paut_equip_vars[key].set(value)
+                self.config[f'PAUT_EQUIP_{key.upper()}'] = value
+
         self.save_settings() # Ensure UI -> config sync
         template_path = self.paut_template_file_path.get()
         if not template_path or not os.path.exists(template_path):
@@ -3161,12 +3187,33 @@ class PMIReportApp:
                 
             ws = target_ws
             ws.title = f"PAUT_Report_001"
+            self._prepare_paut_data_stamp(ws)
             
             # [NEW] Write Cover (Gapji) metadata if there is a cover sheet
             if len(wb.worksheets) > 1:
                 first_item = final_list[0] if final_list else None
                 ws0 = wb.worksheets[0]
                 self._write_gapji_metadata(ws0, mode="PAUT", first_item=first_item)
+
+                # 첫 기준 성적서처럼 선택 데이터의 실제 검사기간을 표시한다.
+                selected_dates = []
+                for report_item in final_list:
+                    date_text = str(report_item.get("Date", "")).strip()
+                    date_match = re.search(r"\d{4}-\d{2}-\d{2}", date_text)
+                    if date_match:
+                        selected_dates.append(date_match.group())
+                if selected_dates:
+                    start_date = min(selected_dates)
+                    end_date = max(selected_dates)
+                    exam_period = (
+                        start_date if start_date == end_date
+                        else f"{start_date}~{end_date}"
+                    )
+                    self.safe_set_value(ws0, "AA6", exam_period)
+
+                if not str(ws0["AA5"].value or "").strip():
+                    self.safe_set_value(ws0, "AA5", "SIT/GI-JY-SRJ-PAUT-001")
+                self._prepare_paut_cover_identity(ws0)
                 
                 # 갑지의 AA4, AA5, AA6 내용을 을지의 Y4, Y5, Y6에 복사
                 try:
@@ -3263,7 +3310,6 @@ class PMIReportApp:
             total_rep_m = 0.0
             processed_joints = set()
             
-            import re
             for item in final_list:
                 try:
                     joint_no = str(item.get('Joint No.', '')).strip().upper()
@@ -3360,12 +3406,22 @@ class PMIReportApp:
                         if s['AC3'].font: s['AC3'].font = s['AC3'].font.copy(name='바탕', size=9, bold=False)
                         else: s['AC3'].font = Font(name='바탕', size=9, bold=False)
                     except: pass
-                    
-                    # [NEW] Inject Equipment Settings to Gapji
+
+                    # 장비/TCG 및 ISO 시험 등급 기준값은 갑지에만 적용한다.
                     if hasattr(self, 'paut_equip_vars'):
                         for k, (lbl, cell, default_val) in self.paut_equip_map.items():
                             val = self.paut_equip_vars[k].get()
                             self.safe_set_value(s, cell, val)
+
+                    grade_values = {
+                        'A38': 'C',
+                        'F38': 'A-Technique',
+                        'K38': 'Level 3',
+                        'R38': '11 + 6dB / 21.4 + 6dB',
+                    }
+                    for cell_ref, value in grade_values.items():
+                        self.safe_set_value(s, cell_ref, value)
+
                 else:
                     self.safe_set_value(s, 'AA3', p_text)
                     try: 
@@ -6165,11 +6221,19 @@ class PMIReportApp:
             "Drawing No.": "Dwg", "Joint No.": "Joint"
         }
         data_key = key_map.get(col, col)
-        # PAUT는 내부 필드명도 화면과 동일하게 "Joint No."를 사용한다.
-        # 공통 매핑의 "Joint"를 사용하면 모든 값이 빈 값으로 처리되어
-        # 헤더를 눌러도 접합부 번호가 정렬되지 않는다.
-        if mode == "PAUT" and col in {"Joint", "Joint No", "Joint No."}:
-            data_key = "Joint No."
+        # PAUT 데이터는 공통 검사 데이터와 달리 화면 컬럼명을 그대로 키로 사용한다.
+        # 따라서 Joint No.를 공통 키인 "Joint"로 매핑하면 모든 값이 빈 문자열로
+        # 평가되어 헤더를 클릭해도 실제 정렬이 일어나지 않는다.
+        if mode == "PAUT":
+            paut_key_map = {
+                "ISO/DWG": "Line No.",
+                "ISO Drawing No.": "Line No.",
+                "Drawing No.": "Line No.",
+                "Joint": "Joint No.",
+                "Joint No": "Joint No.",
+                "Joint No.": "Joint No.",
+            }
+            data_key = paut_key_map.get(col, data_key)
         if not data_key: return
 
         # 2. 정렬 방향 결정 (기존 방향과 같으면 토글)
@@ -6211,7 +6275,7 @@ class PMIReportApp:
 
         # 4. 계층적 정렬 수행 (클릭컬럼 -> Dwg -> Joint 순서로 Tie-break)
         try:
-            k_dwg = "ISO" if mode == "PAUT" else "Dwg"
+            k_dwg = "Line No." if mode == "PAUT" else "Dwg"
             k_joint = "Joint No." if mode == "PAUT" else "Joint"
             
             sort_key_func = lambda x: (
@@ -6810,6 +6874,134 @@ class PMIReportApp:
         except Exception as e:
             msg = f"[ERROR] 로고 배치 실패: {e}"
             self.log(f"   {msg}")
+
+    @staticmethod
+    def _white_background_to_transparent_png(source):
+        """이미지의 흰 배경만 제거하고 원본 색상/획은 그대로 유지한다."""
+        if isinstance(source, (bytes, bytearray)):
+            source = io.BytesIO(source)
+
+        with PILImage.open(source) as original:
+            image = original.convert("RGBA")
+            converted = []
+            for red, green, blue, alpha in image.getdata():
+                # 완전한 흰색은 투명하게, 가장자리의 밝은 픽셀은 부드럽게
+                # 반투명 처리하여 흰 테두리가 남지 않도록 한다.
+                whiteness = min(red, green, blue)
+                if whiteness >= 248:
+                    new_alpha = 0
+                elif whiteness >= 210:
+                    new_alpha = int(alpha * (248 - whiteness) / 38)
+                else:
+                    new_alpha = alpha
+                converted.append((red, green, blue, new_alpha))
+            image.putdata(converted)
+
+            output = io.BytesIO()
+            image.save(output, format="PNG")
+            output.seek(0)
+            return output
+
+    def _prepare_paut_cover_identity(self, ws):
+        """PAUT 갑지 직인/검사자 이름/서명을 투명 이미지로 정리한다."""
+        # 원본 양식의 이름 셀 서식을 유지하면서 검사자만 교체한다.
+        self.safe_set_value(ws, "D45", "박 광 복")
+        self.safe_set_value(ws, "AA44", "한국지역난방공사 중앙지사")
+
+        signature_path = os.path.join(SRC_ROOT or "", "signs", "박광복.png")
+        if not os.path.exists(signature_path):
+            self.log(f"⚠️ 박광복 서명 파일을 찾을 수 없습니다: {signature_path}")
+            return
+
+        reviewer_signature_path = os.path.join(
+            SRC_ROOT or "", "signs", "주진철.png"
+        )
+        if not os.path.exists(reviewer_signature_path):
+            self.log(
+                f"⚠️ 주진철 서명 파일을 찾을 수 없습니다: "
+                f"{reviewer_signature_path}"
+            )
+            return
+
+        # 원본 양식 기준 그림 위치(0부터 시작):
+        # 직인 Q3, 검사자 서명 I44, 판독자 서명 S44.
+        replacement_specs = {
+            (16, 2): None,
+            (8, 43): signature_path,
+            (18, 43): reviewer_signature_path,
+        }
+        replaced_images = []
+
+        for original_image in list(getattr(ws, "_images", [])):
+            marker = getattr(getattr(original_image, "anchor", None), "_from", None)
+            position = (
+                getattr(marker, "col", None),
+                getattr(marker, "row", None),
+            )
+            if position not in replacement_specs:
+                replaced_images.append(original_image)
+                continue
+
+            try:
+                replacement_source = replacement_specs[position]
+                if replacement_source:
+                    transparent_stream = self._white_background_to_transparent_png(
+                        replacement_source
+                    )
+                else:
+                    transparent_stream = self._white_background_to_transparent_png(
+                        original_image._data()
+                    )
+
+                replacement = XLImage(transparent_stream)
+                replacement.anchor = copy.deepcopy(original_image.anchor)
+                # workbook 저장 시까지 BytesIO가 닫히지 않게 참조를 유지한다.
+                replacement._pmi_source_stream = transparent_stream
+                replaced_images.append(replacement)
+            except Exception as exc:
+                replaced_images.append(original_image)
+                self.log(f"⚠️ PAUT 직인/서명 투명화 실패({position}): {exc}")
+
+        ws._images = replaced_images
+        self.log(
+            "✅ PAUT 갑지 직인 투명화 및 박광복/주진철 투명 서명 교체 완료"
+        )
+
+    def _prepare_paut_data_stamp(self, ws):
+        """PAUT 두 번째 시트 헤더 직인의 흰 배경만 투명하게 만든다."""
+        # 원본 양식 drawing2 기준 직인 위치(0부터 시작): O2.
+        stamp_position = (14, 1)
+        replaced_images = []
+        stamp_replaced = False
+
+        for original_image in list(getattr(ws, "_images", [])):
+            marker = getattr(getattr(original_image, "anchor", None), "_from", None)
+            position = (
+                getattr(marker, "col", None),
+                getattr(marker, "row", None),
+            )
+            if position != stamp_position:
+                replaced_images.append(original_image)
+                continue
+
+            try:
+                transparent_stream = self._white_background_to_transparent_png(
+                    original_image._data()
+                )
+                replacement = XLImage(transparent_stream)
+                replacement.anchor = copy.deepcopy(original_image.anchor)
+                replacement._pmi_source_stream = transparent_stream
+                replaced_images.append(replacement)
+                stamp_replaced = True
+            except Exception as exc:
+                replaced_images.append(original_image)
+                self.log(f"⚠️ PAUT 두 번째 시트 직인 투명화 실패: {exc}")
+
+        ws._images = replaced_images
+        if stamp_replaced:
+            self.log("✅ PAUT 두 번째 시트 헤더 직인 투명화 완료")
+        else:
+            self.log("⚠️ PAUT 두 번째 시트 헤더 직인을 찾지 못했습니다.")
 
     def add_logos_to_sheet(self, ws, is_cover=False, clear_existing=True, mode=None):
         # [SUPER SAFE] Identify if this is the first sheet (Cover/Gapji) of the workbook
@@ -8881,6 +9073,23 @@ class PMIReportApp:
                 val = self.config.get(key, "")
                 if val:
                     self.safe_set_value(ws, default_cell, val)
+
+            # PAUT 원본 양식에 남아 있는 동탄지사 문구를 중앙지사 기준으로 교체한다.
+            general_information = {
+                "A9": "GS네오텍",
+                "G9": "중앙지사 열수송관 공사",
+                "AB9": "SIS N 264 KDHC-JY Rev.0",
+                "AA44": "한국지역난방공사 중앙지사",
+            }
+            gain_value = self.config.get(
+                "PAUT_EQUIP_GAIN", "11 + 6dB / 21.4 + 6dB"
+            )
+            if hasattr(self, "paut_equip_vars") and "gain" in self.paut_equip_vars:
+                gain_value = self.paut_equip_vars["gain"].get() or gain_value
+            general_information["R38"] = gain_value
+
+            for cell_ref, cell_value in general_information.items():
+                self.safe_set_value(ws, cell_ref, cell_value)
                 
             if first_item:
                 line_no = first_item.get('Line No.', '')
