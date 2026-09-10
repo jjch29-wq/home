@@ -1,0 +1,115 @@
+{
+  "project": "A25 Probe 및 Wedge 입고",
+  "received_date": "2026-09-07",
+  "items": [
+    {
+      "kind": "PAUT Probe",
+      "model": "5DL16-12X5-A25-P-2.5-OM",
+      "size": "",
+      "serial": "",
+      "quantity": "",
+      "note": "",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_15.jpg",
+        "photos/KakaoTalk_20260910_092226548_17.jpg"
+      ],
+      "ocr_text": "= | 5DLIB | AX | PART:03301132 | PART ID: XAAB-1114O | SIN:Y1193 | SDL16-12X5-A25-P-2.5-OM\nI"
+    },
+    {
+      "kind": "Wedge",
+      "model": "SA15-N60S-IH",
+      "size": "기본",
+      "serial": "N/A",
+      "quantity": "2",
+      "note": "기본 Wedge",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_06.jpg",
+        "photos/KakaoTalk_20260910_092226548_12.jpg"
+      ]
+    },
+    {
+      "kind": "Wedge",
+      "model": "SA15-N60S-IH-AOD",
+      "size": "Ø0.84 IN",
+      "serial": "N/A",
+      "quantity": "2",
+      "note": "외경 0.84 inch용 Wedge",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_01.jpg",
+        "photos/KakaoTalk_20260910_092226548_08.jpg"
+      ]
+    },
+    {
+      "kind": "Wedge",
+      "model": "SA15-N60S-IH-AOD",
+      "size": "Ø1.315 IN",
+      "serial": "N/A",
+      "quantity": "2",
+      "note": "외경 1.315 inch용 Wedge",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_02.jpg",
+        "photos/KakaoTalk_20260910_092226548_11.jpg"
+      ]
+    },
+    {
+      "kind": "Wedge",
+      "model": "SA15-N60S-IH-AOD",
+      "size": "Ø2.875 IN",
+      "serial": "N/A",
+      "quantity": "2",
+      "note": "외경 2.875 inch용 Wedge",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_04.jpg",
+        "photos/KakaoTalk_20260910_092226548_05.jpg"
+      ]
+    },
+    {
+      "kind": "Wedge",
+      "model": "SA15-N60S-IH-AOD",
+      "size": "Ø3.25 IN",
+      "serial": "N/A",
+      "quantity": "2",
+      "note": "외경 3.25 inch용 Wedge",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_07.jpg",
+        "photos/KakaoTalk_20260910_092226548_10.jpg"
+      ]
+    },
+    {
+      "kind": "Wedge",
+      "model": "SA15-N60S-IH-AOD",
+      "size": "Ø3.5 IN",
+      "serial": "N/A",
+      "quantity": "2",
+      "note": "외경 3.5 inch용 Wedge",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548.jpg",
+        "photos/KakaoTalk_20260910_092226548_03.jpg"
+      ]
+    },
+    {
+      "kind": "Wedge",
+      "model": "SA15-N60S-IH-AOD",
+      "size": "Ø4.5 IN",
+      "serial": "N/A",
+      "quantity": "2",
+      "note": "외경 4.5 inch용 Wedge",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_09.jpg",
+        "photos/KakaoTalk_20260910_092226548_13.jpg"
+      ]
+    },
+    {
+      "kind": "입고 증빙",
+      "model": "Wedge 포장 및 검수확인서",
+      "size": "전체",
+      "serial": "",
+      "quantity": "1식",
+      "note": "Wedge 포장상자 전체 및 인수·인계 확인서",
+      "photos": [
+        "photos/KakaoTalk_20260910_092226548_14.jpg",
+        "photos/KakaoTalk_20260910_092226548_16.jpg"
+      ]
+    }
+  ]
+}
