@@ -47,8 +47,24 @@ def read_results(site, mode, source_dir=None):
             if not clean:
                 continue
             methods = re.findall(r'[A-Z]+', clean.get('검사방법', '').upper())
+            # 중앙지사 기존 일보는 검사방법을 한 열에 저장하지 않고
+            # RT_OR/RT_RE/PAUT/MT/PT 열에 각각 검사량을 저장한다.
+            legacy_columns = {
+                'RT': ('RT_OR', 'RT_RE'),
+                'PAUT': ('PAUT',),
+                'MT': ('MT',),
+                'PT': ('PT',),
+                'PMI': ('PMI',),
+            }
+            for legacy_method, columns in legacy_columns.items():
+                if any(clean.get(column, '') for column in columns):
+                    methods.append(legacy_method)
             if method not in methods:
                 continue
+            if not clean.get('검사방법'):
+                clean['검사방법'] = method
+            if not clean.get('검사길이') and method in {'PAUT', 'MT', 'PT'}:
+                clean['검사길이'] = clean.get(method, '')
             clean['Date'] = date
             identity = json.dumps([site, date, record_index, record], sort_keys=True, ensure_ascii=False)
             clean['_source_id'] = hashlib.sha256(identity.encode('utf-8')).hexdigest()

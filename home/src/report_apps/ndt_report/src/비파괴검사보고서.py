@@ -2423,8 +2423,8 @@ class PMIReportApp:
         self.paut_equip_map = {
             'equip': ('검사장비', 'A12', 'OmniScan MX2'),
             'module': ('검사모듈', 'H12', '32-128PR'),
-            'probe': ('탐촉자', 'O12', '5L64-A2'),
-            'wedge': ('웻지', 'V12', 'SA2-N55S-IHC'),
+            'probe': ('탐촉자', 'O12', '5L64-A2 / 5L16A10'),
+            'wedge': ('웻지', 'V12', 'SA2-N55S-IHC / SA10-N55S'),
             'program': ('판독프로그램', 'AC12', 'Tomoview, Omni PC'),
             'method': ('검사기법', 'A15', 'PA/Sectoria'),
             'wave': ('파형', 'H15', '횡파'),
@@ -2432,32 +2432,32 @@ class PMIReportApp:
             'filter': ('Band-Pass Filter', 'V15', 'Band-Pass 5MHz'),
             'medium': ('접촉 매질', 'AC15', '물 & 글리세린'),
             'voltage': ('Voltage', 'A17', '80V'),
-            'gain': ('Gain', 'H17', '13 + 6dB'),
+            'gain': ('Gain', 'H17', '11 + 6dB / 21.4 + 6dB'),
             'mode': ('Mode', 'O17', 'PE(Pulse-Echo)'),
-            'offset': ('Index Offset', 'V17', '±18 mm'),
+            'offset': ('Index Offset', 'V17', '±17 mm'),
             'ref_block': ('Ref Block', 'AC17', 'Test Level A Block(Φ2.5)'),
-            
-            'tcg1_p1': ('TCG1 Pos 1', 'H19', '5.95mm'),
-            'tcg1_g1': ('TCG1 Gain 1', 'O19', '8.8dB'),
-            'tcg1_p2': ('TCG1 Pos 2', 'H20', '12.48mm'),
-            'tcg1_g2': ('TCG1 Gain 2', 'O20', '12.6dB'),
-            'tcg1_p3': ('TCG1 Pos 3', 'H21', '21.07mm'),
-            'tcg1_g3': ('TCG1 Gain 3', 'O21', '13.8dB'),
-            'tcg1_p4': ('TCG1 Pos 4', 'H22', '29.67mm'),
-            'tcg1_g4': ('TCG1 Gain 4', 'O22', '19.8dB'),
-            
-            'tcg2_p1': ('TCG2 Pos 1', 'AA19', '5.95mm'),
-            'tcg2_g1': ('TCG2 Gain 1', 'AG19', '8.8dB'),
-            'tcg2_p2': ('TCG2 Pos 2', 'AA20', '12.48mm'),
-            'tcg2_g2': ('TCG2 Gain 2', 'AG20', '12.06dB'),
-            'tcg2_p3': ('TCG2 Pos 3', 'AA21', '21.07mm'),
-            'tcg2_g3': ('TCG2 Gain 3', 'AG21', '13.8dB'),
-            'tcg2_p4': ('TCG2 Pos 4', 'AA22', '29.67mm'),
-            'tcg2_g4': ('TCG2 Gain 4', 'AG22', '19.08dB'),
-            
-            'set1_qty': ('Gr.1 Used Elem', 'A25', '32'),
-            'set1_first': ('Gr.1 First Elem', 'H25', '33'),
-            'set1_last': ('Gr.1 Last Elem', 'O25', '64'),
+
+            'tcg1_p1': ('TCG1 Pos 1', 'H19', '0'),
+            'tcg1_g1': ('TCG1 Gain 1', 'O19', '4.2dB'),
+            'tcg1_p2': ('TCG1 Pos 2', 'H20', '8.96mm'),
+            'tcg1_g2': ('TCG1 Gain 2', 'O20', '4.5dB'),
+            'tcg1_p3': ('TCG1 Pos 3', 'H21', '17.13mm'),
+            'tcg1_g3': ('TCG1 Gain 3', 'O21', '7.0dB'),
+            'tcg1_p4': ('TCG1 Pos 4', 'H22', '24.79mm'),
+            'tcg1_g4': ('TCG1 Gain 4', 'O22', '12.7dB'),
+
+            'tcg2_p1': ('TCG2 Pos 1', 'AA19', '0'),
+            'tcg2_g1': ('TCG2 Gain 1', 'AG19', '3.2dB'),
+            'tcg2_p2': ('TCG2 Pos 2', 'AA20', '7.61mm'),
+            'tcg2_g2': ('TCG2 Gain 2', 'AG20', '2.7dB'),
+            'tcg2_p3': ('TCG2 Pos 3', 'AA21', '15.35mm'),
+            'tcg2_g3': ('TCG2 Gain 3', 'AG21', '5.3dB'),
+            'tcg2_p4': ('TCG2 Pos 4', 'AA22', '23.17mm'),
+            'tcg2_g4': ('TCG2 Gain 4', 'AG22', '8.1dB'),
+
+            'set1_qty': ('Gr.1 Used Elem', 'A25', '16'),
+            'set1_first': ('Gr.1 First Elem', 'H25', '1'),
+            'set1_last': ('Gr.1 Last Elem', 'O25', '16'),
             'set1_scan': ('Gr.1 Scan Res', 'V25', '1'),
             'set1_focal': ('Gr.1 Focal', 'AC25', '10'),
             'set1_start': ('Gr.1 Start Ang', 'A27', '45°'),
@@ -2465,8 +2465,8 @@ class PMIReportApp:
             'set1_ang_res': ('Gr.1 Ang Res', 'O27', '1°'),
             'set1_law': ('Gr.1 Law Config', 'V27', 'Sectorial'),
             
-            'set2_qty': ('Gr.2 Used Elem', 'A30', '32'),
-            'set2_first': ('Gr.2 First Elem', 'H30', '33'),
+            'set2_qty': ('Gr.2 Used Elem', 'A30', '16'),
+            'set2_first': ('Gr.2 First Elem', 'H30', '49'),
             'set2_last': ('Gr.2 Last Elem', 'O30', '64'),
             'set2_scan': ('Gr.2 Scan Res', 'V30', '1'),
             'set2_focal': ('Gr.2 Focal', 'AC30', '10'),
@@ -2477,10 +2477,15 @@ class PMIReportApp:
         }
         
         equip_r, equip_c = 0, 0
+        paut_standard_revision = "CENTRAL_PAUT_20260910"
+        apply_new_standard = (
+            self.config.get("PAUT_EQUIP_STANDARD_REV") != paut_standard_revision
+        )
         for k, (label, cell, default_val) in self.paut_equip_map.items():
             config_val = self.config.get(f'PAUT_EQUIP_{k.upper()}')
-            if config_val is None or str(config_val).strip() == '':
+            if apply_new_standard or config_val is None or str(config_val).strip() == '':
                 config_val = default_val
+                self.config[f'PAUT_EQUIP_{k.upper()}'] = default_val
             var = tk.StringVar(value=config_val)
             self.paut_equip_vars[k] = var
             ttk.Label(tab_equip, text=label).grid(row=equip_r, column=equip_c*2, sticky='e', padx=5, pady=5)
@@ -2493,6 +2498,7 @@ class PMIReportApp:
             if equip_c > 1: # 2 columns layout
                 equip_c = 0
                 equip_r += 1
+        self.config["PAUT_EQUIP_STANDARD_REV"] = paut_standard_revision
 
         # [NEW] Populate Settings
         self._create_gapji_meta_ui(tab_cover, use_pack=False, mode="PAUT")
@@ -2623,6 +2629,9 @@ class PMIReportApp:
         ttk.Label(photo_pages_frame, text="첨부할 사진대장 장수:", font=("Malgun Gothic", 9)).pack(side='left', padx=2)
         self.paut_photo_pages_var = tk.StringVar(value=str(self.config.get("PAUT_PHOTO_PAGES", "0")))
         ttk.Entry(photo_pages_frame, textvariable=self.paut_photo_pages_var, width=5).pack(side='left', padx=2)
+        self.paut_photo_pages_var.trace_add(
+            "write", lambda *_: self._sync_paut_photo_page_numbers()
+        )
         
         paut_btn_row = tk.Frame(left_pane, background="#f9fafb")
         paut_btn_row.pack(fill='x', pady=2)
@@ -3325,6 +3334,21 @@ class PMIReportApp:
                 pass
             
             total_p = len(wb.worksheets) + photo_pages
+
+            # PAUT 보고서 뒤에 붙는 사진대장은 전체 보고서의 다음 번호부터
+            # 이어지도록 사진대장 탭의 시작/전체 페이지를 자동 동기화한다.
+            # 예: PAUT 2페이지 + 사진대장 3페이지 -> 사진대장 3~5 / 전체 5.
+            if photo_pages > 0:
+                photo_start = len(wb.worksheets) + 1
+                if hasattr(self, "photo_start_page"):
+                    self.photo_start_page.set(str(photo_start))
+                if hasattr(self, "photo_total_pages"):
+                    self.photo_total_pages.set(str(total_p))
+                self.log(
+                    f"[PAUT] 사진대장 페이지 자동 설정: "
+                    f"시작 {photo_start}, 전체 {total_p}"
+                )
+
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
                 p_text = f"Page    {page_num}    of    {total_p}"
@@ -3362,6 +3386,10 @@ class PMIReportApp:
                 except Exception as e:
                     self.log(f"AJ border error: {e}")
 
+                # 갑지 검사자는 박광복으로 표시하고 등록된 서명을 함께 넣는다.
+                self._apply_paut_inspector_signature(s)
+                self._make_header_stamp_transparent(s)
+
             # [NEW] 최종 저장 직전 사용자의 행/열 커스텀 설정을 모든 시트에 적용
             for p_idx, s in enumerate(wb.worksheets):
                 ctx = "COVER" if p_idx == 0 else "DATA"
@@ -3378,6 +3406,30 @@ class PMIReportApp:
             
         except Exception as e:
             self.log(f"❌ PAUT 성적서 생성 오류: {e}")
+
+    def _sync_paut_photo_page_numbers(self):
+        """PAUT 첨부 장수로 사진대장의 시작/전체 페이지를 미리 계산한다."""
+        if not hasattr(self, "photo_start_page") or not hasattr(self, "photo_total_pages"):
+            return
+        try:
+            photo_pages = int(self.paut_photo_pages_var.get().strip() or "0")
+        except (TypeError, ValueError):
+            return
+        if photo_pages <= 0:
+            return
+
+        selected_count = sum(
+            1 for item in getattr(self, "paut_extracted_data", [])
+            if item.get("selected", True) and item.get("date_filtered", True)
+        )
+        start_row = int(self.config.get("PAUT_START_ROW", 11))
+        end_row = int(self.config.get("PAUT_DATA_END_ROW", 40))
+        rows_per_page = max(1, end_row - start_row + 1)
+        data_pages = max(1, math.ceil(selected_count / rows_per_page))
+        paut_pages = 1 + data_pages  # 갑지 1장 + 을지
+
+        self.photo_start_page.set(str(paut_pages + 1))
+        self.photo_total_pages.set(str(paut_pages + photo_pages))
 
     def _export_paut_session(self):
         """[NEW] 현재 PAUT 미리보기 데이터를 CSV로 내보내기"""
@@ -3485,6 +3537,137 @@ class PMIReportApp:
                     pass
         
         return new_sheet
+
+    def _apply_paut_inspector_signature(self, ws):
+        """PAUT 갑지의 검사자 이름과 서명을 박광복으로 교체한다."""
+        inspector_name = str(ws["D45"].value or "").replace(" ", "")
+        if inspector_name not in {"박원준", "박광복"}:
+            return False
+
+        signature_path = os.path.join(SRC_ROOT or "", "signs", "박광복.png")
+        if not os.path.exists(signature_path):
+            self.log(f"[WARNING] 검사자 서명 파일을 찾을 수 없습니다: {signature_path}")
+            return False
+
+        ws["D45"] = "박 광 복"
+        ws["D45"].alignment = Alignment(
+            horizontal="center", vertical="center", shrink_to_fit=True
+        )
+
+        # 기존 검사자 서명(I44:K45)의 위치와 크기는 양식 그대로 유지한다.
+        inspector_anchor = None
+        retained_images = []
+        for image in ws._images:
+            anchor = getattr(image, "anchor", None)
+            marker = getattr(anchor, "_from", None)
+            if (
+                marker is not None
+                and 7 <= marker.col <= 10
+                and 43 <= marker.row <= 44
+            ):
+                inspector_anchor = anchor
+                continue
+            retained_images.append(image)
+
+        if inspector_anchor is None:
+            self.log("[WARNING] 기존 검사자 서명 위치를 찾을 수 없습니다.")
+            return False
+
+        import copy
+        ws._images = retained_images
+        signature = XLImage(signature_path)
+        signature.anchor = copy.copy(inspector_anchor)
+        ws.add_image(signature)
+        return True
+
+    def _make_header_stamp_transparent(self, ws):
+        """보고서 머리글의 붉은 도장에서 흰 배경을 제거한다."""
+        import copy
+
+        replaced_images = []
+        changed = False
+        for image in ws._images:
+            anchor = getattr(image, "anchor", None)
+            marker = getattr(anchor, "_from", None)
+            is_header_stamp = (
+                marker is not None
+                and 12 <= marker.col <= 22
+                and 0 <= marker.row <= 7
+                and 0.65 <= (float(image.width) / max(float(image.height), 1.0)) <= 1.35
+            )
+            if not is_header_stamp:
+                replaced_images.append(image)
+                continue
+
+            try:
+                source_bytes = image._data()
+                with PILImage.open(io.BytesIO(source_bytes)) as source:
+                    rgba = source.convert("RGBA")
+                    transparent_pixels = []
+                    for red, green, blue, alpha in rgba.getdata():
+                        # 붉은 인영만 남기고 JPEG 압축으로 생긴 흰색/회색 배경도 제거한다.
+                        if red > 100 and red - green > 12 and red - blue > 12:
+                            transparent_pixels.append((red, green, blue, alpha))
+                        else:
+                            transparent_pixels.append((red, green, blue, 0))
+                    rgba.putdata(transparent_pixels)
+                    output = io.BytesIO()
+                    rgba.save(output, format="PNG")
+                    output.seek(0)
+
+                stamp = XLImage(output)
+                stamp.anchor = copy.copy(anchor)
+                replaced_images.append(stamp)
+                changed = True
+            except Exception as exc:
+                self.log(f"[WARNING] 도장 배경 투명 처리 실패: {exc}")
+                replaced_images.append(image)
+
+        if changed:
+            ws._images = replaced_images
+        return changed
+
+
+    def _get_photo_log_stamp(self):
+        """PAUT 양식의 도장을 추출해 투명 PNG 데이터로 반환한다."""
+        template_path = self.paut_template_file_path.get().strip()
+        if not template_path or not os.path.exists(template_path):
+            return None
+
+        template_wb = None
+        try:
+            template_wb = openpyxl.load_workbook(template_path)
+            for sheet in template_wb.worksheets:
+                for image in sheet._images:
+                    anchor = getattr(image, "anchor", None)
+                    marker = getattr(anchor, "_from", None)
+                    is_header_stamp = (
+                        marker is not None
+                        and 12 <= marker.col <= 22
+                        and 0 <= marker.row <= 7
+                        and 0.65 <= (float(image.width) / max(float(image.height), 1.0)) <= 1.35
+                    )
+                    if not is_header_stamp:
+                        continue
+
+                    with PILImage.open(io.BytesIO(image._data())) as source:
+                        rgba = source.convert("RGBA")
+                        pixels = []
+                        for red, green, blue, alpha in rgba.getdata():
+                            if red > 100 and red - green > 12 and red - blue > 12:
+                                pixels.append((red, green, blue, alpha))
+                            else:
+                                pixels.append((red, green, blue, 0))
+                        rgba.putdata(pixels)
+                        output = io.BytesIO()
+                        rgba.save(output, format="PNG")
+                        return output.getvalue()
+        except Exception as exc:
+            self.log(f"[PhotoLog] 도장 이미지 준비 실패: {exc}")
+        finally:
+            if template_wb is not None:
+                template_wb.close()
+        return None
 
     def col_to_num(self, col_str):
         """[NEW] 엑셀 열 이름(A, B, AA...)을 숫자 인덱스(1, 2, 27...)로 변환"""
@@ -5982,6 +6165,11 @@ class PMIReportApp:
             "Drawing No.": "Dwg", "Joint No.": "Joint"
         }
         data_key = key_map.get(col, col)
+        # PAUT는 내부 필드명도 화면과 동일하게 "Joint No."를 사용한다.
+        # 공통 매핑의 "Joint"를 사용하면 모든 값이 빈 값으로 처리되어
+        # 헤더를 눌러도 접합부 번호가 정렬되지 않는다.
+        if mode == "PAUT" and col in {"Joint", "Joint No", "Joint No."}:
+            data_key = "Joint No."
         if not data_key: return
 
         # 2. 정렬 방향 결정 (기존 방향과 같으면 토글)
@@ -6024,7 +6212,7 @@ class PMIReportApp:
         # 4. 계층적 정렬 수행 (클릭컬럼 -> Dwg -> Joint 순서로 Tie-break)
         try:
             k_dwg = "ISO" if mode == "PAUT" else "Dwg"
-            k_joint = "Joint"
+            k_joint = "Joint No." if mode == "PAUT" else "Joint"
             
             sort_key_func = lambda x: (
                 get_natural_key(get_value(x, "_current")),
@@ -8679,6 +8867,9 @@ class PMIReportApp:
     def _write_gapji_metadata(self, ws, mode="PMI", first_item=None):
         """Write common report metadata to the cover sheet."""
         if mode == "PAUT":
+            # 중앙지사 PAUT 표준 표기
+            self.safe_set_value(ws, "G9", "중앙지사 열수송관 공사")
+            self.safe_set_value(ws, "AB9", "SIS N 264 KDHC DT Rev.0")
             mapping = [
                 ('GAPJI_PROJECT', 'G8'),
                 ('GAPJI_CUSTOMER', 'AA4'),
@@ -10355,6 +10546,7 @@ class PMIReportApp:
                 
         self._apply_sash_ratio("PHOTO")
         self.root.after(500, lambda: self._on_photo_paned_configure(None))
+        self._sync_paut_photo_page_numbers()
         
         # [NEW] 화면을 처음 켰을 때, 선택된 게 없더라도 초기 화면/안내 문구가 뜨도록 강제 1회 실행
         self.root.after(800, self._update_photo_preview)
@@ -10792,6 +10984,28 @@ class PMIReportApp:
 
             worksheet.merge_range(1, 6, 1, 11, f"발주처: {self.photo_orderer.get()}", center_border)
             worksheet.merge_range(2, 6, 2, 11, f"REPORT NO: {self.photo_report_no.get()}", center_border)
+
+            # PAUT 보고서와 동일한 투명 도장을 사진대장 정보 영역에도 표시한다.
+            stamp_data = self._get_photo_log_stamp()
+            if stamp_data:
+                try:
+                    stamp_buffer = io.BytesIO(stamp_data)
+                    with PILImage.open(io.BytesIO(stamp_data)) as stamp_image:
+                        stamp_w, stamp_h = stamp_image.size
+                    stamp_size = 58.0
+                    worksheet.insert_image(
+                        "G2", "transparent_stamp.png",
+                        {
+                            "image_data": stamp_buffer,
+                            "x_scale": stamp_size / stamp_w,
+                            "y_scale": stamp_size / stamp_h,
+                            "x_offset": 8,
+                            "y_offset": 0,
+                            "object_position": 1,
+                        },
+                    )
+                except Exception as exc:
+                    self.log(f"[PhotoLog] 도장 삽입 실패: {exc}")
             worksheet.merge_range(3, 6, 3, 11, f"검사일자: {self.photo_inspect_date.get()}", center_border)
             
             worksheet.set_row(4, 25)

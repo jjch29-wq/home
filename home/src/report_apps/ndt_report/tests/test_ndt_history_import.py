@@ -51,6 +51,20 @@ class HistoryImportTests(unittest.TestCase):
             rows[0]['Date'] = 'modified snapshot'
         self.assertEqual(before, hashlib.sha256(path.read_bytes()).digest())
 
+    def test_legacy_wide_columns_are_imported(self):
+        site = next(iter(SITES))
+        self.write(site, {'2026-09-08': {'ndt_results': [
+            {'Joint No.': 'S01', 'PAUT': '0.6795', 'PT': '', 'MT': ''},
+            {'Joint No.': 'R01', 'RT_OR': '1', 'RT_RE': ''},
+        ]}})
+        paut = read_results(site, 'PAUT', self.base)
+        rt = read_results(site, 'RT', self.base)
+        self.assertEqual(len(paut), 1)
+        self.assertEqual(paut[0]['Date'], '2026-09-08')
+        self.assertEqual(paut[0]['검사방법'], 'PAUT')
+        self.assertEqual(paut[0]['검사길이'], '0.6795')
+        self.assertEqual(rt[0]['Joint No.'], 'R01')
+
     def test_malformed_data_never_returns_partial_rows(self):
         site = next(iter(SITES))
         for value in ([], {'date': []}, {'date': {'ndt_results': {}}},
