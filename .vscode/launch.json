@@ -2,14 +2,62 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "ISO Drawer 실행",
+            "name": "중앙지사 앱 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}\\home\\src\\ISO_Drawer\\desktop_app.py",
+            "program": "${workspaceFolder}\\home\\src\\site_apps\\central\\main.py",
             "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-            "cwd": "${workspaceFolder}\\home\\src\\ISO_Drawer",
-            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "PAUT 캡처 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\paut capture.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "PAUT 이름변경 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\paut_rename.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "비파괴검사보고서 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\비파괴검사보고서.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home",
+            "console": "externalTerminal",
+            "justMyCode": true
+        }
+    ],
+    "compounds": [
+        {
+            "name": "중앙지사 + PAUT 이름변경 동시 실행",
+            "configurations": [
+                "중앙지사 앱 실행 (독립 창)",
+                "PAUT 이름변경 실행 (독립 창)"
+            ],
+            "stopAll": false
+        },
+        {
+            "name": "PAUT 캡처 + 이름변경 동시 실행",
+            "configurations": [
+                "PAUT 캡처 실행 (독립 창)",
+                "PAUT 이름변경 실행 (독립 창)"
+            ],
+            "stopAll": false
         }
     ]
 }

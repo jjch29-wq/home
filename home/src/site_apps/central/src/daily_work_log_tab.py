@@ -140,6 +140,12 @@ class DailyWorkLogTab(ttk.Frame):
         self.date_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         self.date_entry.bind("<<DateEntrySelected>>", self.on_date_change)
         # self.date_entry.bind("<FocusOut>", self.on_date_change) # Removed to prevent accidental UI wipes
+
+        self.date_status_label = tk.Label(
+            top_frame, text="○ 저장되지 않은 날짜", fg="#777777",
+            font=('맑은 고딕', 9, 'bold')
+        )
+        self.date_status_label.grid(row=1, column=0, columnspan=2, padx=5, sticky="e")
         
         ttk.Label(top_frame, text="날씨:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
         self.weather_entry = ttk.Entry(top_frame, width=15)
@@ -1035,6 +1041,48 @@ class DailyWorkLogTab(ttk.Frame):
     def save_history(self, history):
         with open(self.history_path, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=4)
+        self._refresh_saved_date_markers(history)
+        self._update_date_status(history)
+
+    def _refresh_saved_date_markers(self, history=None):
+        """달력 팝업에서 작업일보가 저장된 날짜를 녹색으로 강조한다."""
+        if history is None:
+            history = self.load_history()
+
+        calendar = getattr(self.date_entry, '_calendar', None)
+        if calendar is None:
+            return
+
+        try:
+            calendar.calevent_remove('all')
+            calendar.tag_config(
+                'saved_work_log', background='#2E7D32', foreground='white'
+            )
+            for date_str in history:
+                try:
+                    saved_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                except (TypeError, ValueError):
+                    continue
+                calendar.calevent_create(
+                    saved_date, '작업일보 저장됨', 'saved_work_log'
+                )
+        except (AttributeError, tk.TclError):
+            # tkcalendar 버전 차이가 있어도 날짜 선택 기능은 그대로 유지한다.
+            pass
+
+    def _update_date_status(self, history=None):
+        """현재 선택한 날짜의 저장 여부를 날짜 입력칸 아래에 표시한다."""
+        if history is None:
+            history = self.load_history()
+        current_date = self.date_entry.get()
+        if current_date in history:
+            self.date_status_label.configure(
+                text='● 저장된 날짜', fg='#1B5E20'
+            )
+        else:
+            self.date_status_label.configure(
+                text='○ 저장되지 않은 날짜', fg='#777777'
+            )
 
     def save_current_history(self):
         history = self.load_history()
@@ -1079,6 +1127,8 @@ class DailyWorkLogTab(ttk.Frame):
     def on_date_change(self, event=None):
         current_date = self.date_entry.get()
         history = self.load_history()
+        self._refresh_saved_date_markers(history)
+        self._update_date_status(history)
         
         past_dates = [d for d in history.keys() if d < current_date]
         if past_dates:
