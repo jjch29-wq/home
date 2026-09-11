@@ -7318,7 +7318,10 @@ class PMIReportApp:
             except: pass
 
             ws.page_setup.paperSize = 9
-            if context == "DATA" or mode == "RT":
+            # PAUT 갑지와 을지는 모두 A4 세로 방향으로 출력한다.
+            if mode == "PAUT":
+                ws.page_setup.orientation = 'portrait'
+            elif context == "DATA" or mode == "RT":
                 ws.page_setup.orientation = 'landscape'
             else:
                 ws.page_setup.orientation = 'portrait'
@@ -11760,6 +11763,7 @@ class PMIReportApp:
                 slot_in_page = slot_index % photos_per_page
                 photo_row_in_page = slot_in_page // num_cols
                 col_ptr = slot_in_page % num_cols
+                is_page_start_photo = page_index > 0 and photo_row_in_page == 0
                 logical_row_slot = (page_index * num_rows) + photo_row_in_page
                 used_photo_row_slots.add(logical_row_slot)
                 row = 5 + (logical_row_slot * 2)
@@ -11827,6 +11831,31 @@ class PMIReportApp:
                         # [UNIFIED] Uniform Margin Distribution with Manual Shift (High Precision)
                         x_off_float = ((CELL_WIDTH_PX - (img_w * x_scale)) / 2) + SHIFT_X
                         y_off_float = ((final_row_h_px - (img_h * y_scale)) / 2) + SHIFT_Y
+
+                        # 확대율과 수동 이동값 때문에 이미지가 행 경계를 1~2px
+                        # 넘어가면 다음/이전 인쇄 페이지에 가는 선으로 나타난다.
+                        # 출력 이미지가 사진 셀 안에 완전히 들어오도록 높이와
+                        # 오프셋을 마지막에 다시 제한한다.
+                        safe_vertical_gap = 2.0
+                        # Excel이 페이지 경계에 정확히 닿은 이미지의 첫 픽셀을
+                        # 이전 페이지에 그리는 현상을 피한다.
+                        page_top_gap = 6.0 if is_page_start_photo else 0.0
+                        max_image_height = max(
+                            1.0,
+                            final_row_h_px - safe_vertical_gap - page_top_gap,
+                        )
+                        if (img_h * y_scale) > max_image_height:
+                            y_scale = max_image_height / img_h
+                            y_off_float = (
+                                (final_row_h_px - (img_h * y_scale)) / 2
+                            ) + SHIFT_Y
+                        max_y_offset = max(
+                            page_top_gap,
+                            final_row_h_px - (img_h * y_scale) - 1.0,
+                        )
+                        y_off_float = min(
+                            max(y_off_float, page_top_gap), max_y_offset
+                        )
                         
                         x_off = round(x_off_float)
                         y_off = round(y_off_float)
