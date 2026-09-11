@@ -2,6 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "비파괴검사보고서 실행",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\비파괴검사보고서.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "ISO Drawer 실행",
             "type": "debugpy",
             "request": "launch",
