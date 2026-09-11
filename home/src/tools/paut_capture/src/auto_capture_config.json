@@ -1,20 +1,20 @@
 {
-    "data_dir": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/data jjch",
-    "capture_dir": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/captuer",
-    "shortcut": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/OmniPC 6.0.lnk",
+    "data_dir": "C:/Users/jjch2/Desktop/\uc0ac\uc6a9\uc804\uac80\uc0ac",
+    "capture_dir": "C:/Users/jjch2/Desktop/captuer",
+    "shortcut": "C:\\Users\\jjch2\\Desktop\\OmniPC 6.0.lnk",
     "delay": 12,
     "use_click": true,
-    "click1_x": 517,
-    "click1_y": 128,
-    "click2_x": 522,
-    "click2_y": 159,
-    "click3_x": 524,
-    "click3_y": 319,
+    "click1_x": 499,
+    "click1_y": 155,
+    "click2_x": 505,
+    "click2_y": 204,
+    "click3_x": 522,
+    "click3_y": 393,
     "use_region": true,
     "region": [
-        2,
-        230,
-        1817,
-        805
+        1,
+        288,
+        1795,
+        734
     ]
 }

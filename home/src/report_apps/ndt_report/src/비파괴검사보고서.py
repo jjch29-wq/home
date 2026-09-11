@@ -370,7 +370,7 @@ class PMIReportApp:
         self.photo_logo_x_var = tk.StringVar(value="2")
         self.photo_logo_y_var = tk.StringVar(value="0")
         self.photo_cell_width_var = tk.StringVar(value="53.0")
-        self.photo_cell_height_var = tk.StringVar(value="178.0")
+        self.photo_cell_height_var = tk.StringVar(value="193.0")
         self.photo_margin_top_var = tk.StringVar(value="0.5")
         self.photo_margin_bottom_var = tk.StringVar(value="0.5")
         self.photo_margin_left_var = tk.StringVar(value="0.4")
@@ -379,7 +379,7 @@ class PMIReportApp:
         self.photo_desc_height_var = tk.StringVar(value="20.0")
         self.photo_align_var = tk.StringVar(value="중앙 정렬")
         self.photo_fit_width_var = tk.BooleanVar(value=False)
-        self.photo_auto_fit_page_var = tk.BooleanVar(value=True) # [NEW] Auto-fit to A4 page
+        self.photo_auto_fit_page_var = tk.BooleanVar(value=False)
         self.photo_auto_rotate_var = tk.BooleanVar(value=False)
         self.photo_width_pct_var = tk.StringVar(value="100.0")
         self.photo_width_pixel_adj_var = tk.StringVar(value="0")

@@ -91,6 +91,7 @@ class AutoCaptureApp:
             "region": [0, 0, 0, 0] # x, y, w, h
         }
         self.load_config()
+        self.resolve_omnipc_path()
         self.create_widgets()
         
         # Ensure config is saved when window is closed
@@ -108,6 +109,26 @@ class AutoCaptureApp:
                     self.config.update(loaded)
             except:
                 pass
+
+    def resolve_omnipc_path(self):
+        """Replace a stale machine-specific OmniPC path with a local install."""
+        configured = Path(self.config.get("shortcut", ""))
+        if configured.is_file():
+            return
+
+        candidates = [
+            Path.home() / "Desktop" / "OmniPC 6.0.lnk",
+            Path(os.environ.get("APPDATA", ""))
+            / "Microsoft/Windows/Start Menu/Programs/Evident/OmniPC 6.0/OmniPC 6.0.lnk",
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+            / "Evident/OmniPC 6/6.0/OmniPC.exe",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+            / "Evident/OmniPC 6/6.0/OmniPC.exe",
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                self.config["shortcut"] = str(candidate)
+                return
                 
     def save_config(self):
         # 현재 UI의 값들을 config에 업데이트 후 저장
@@ -268,6 +289,29 @@ class AutoCaptureApp:
         self.log_text.delete(1.0, tk.END)
         threading.Thread(target=self.run_capture, daemon=True).start()
 
+    def set_capture_window_hidden(self, hidden):
+        """Hide or restore the app on Tk's UI thread and wait for completion."""
+        completed = threading.Event()
+
+        def apply_visibility():
+            try:
+                if hidden:
+                    # withdraw() removes the window from the desktop completely;
+                    # iconify() can remain visible during the Windows animation.
+                    self.root.withdraw()
+                else:
+                    self.root.deiconify()
+                    self.root.lift()
+                self.root.update_idletasks()
+            finally:
+                completed.set()
+
+        self.root.after(0, apply_visibility)
+        completed.wait(timeout=3)
+        if hidden:
+            # Give the desktop compositor time to remove the last window frame.
+            time.sleep(0.3)
+
     def run_capture(self):
         try:
             data_dir = Path(self.data_var.get())
@@ -277,6 +321,14 @@ class AutoCaptureApp:
             
             if not data_dir.exists():
                 self.log(f"에러: 데이터 폴더를 찾을 수 없습니다. ({data_dir})")
+                return
+
+            if not Path(shortcut_path).is_file():
+                self.log(f"에러: OmniPC 실행 경로를 찾을 수 없습니다. ({shortcut_path})")
+                messagebox.showerror(
+                    "OmniPC 경로 오류",
+                    "OmniPC 바로가기 또는 실행 파일을 다시 선택해주세요.",
+                )
                 return
                 
             capture_dir.mkdir(parents=True, exist_ok=True)
@@ -293,9 +345,8 @@ class AutoCaptureApp:
                 self.log(f"[{idx}/{len(all_files)}] {target_file.name} 처리 중...")
                 
                 try:
-                    # OmniPC 프로그램 화면을 가리지 않도록 캡처 어플 창을 미리 최소화 (숨김)
-                    self.root.after(0, self.root.iconify)
-                    time.sleep(0.5)
+                    # 캡처 앱이 결과 이미지에 포함되지 않도록 완전히 숨긴다.
+                    self.set_capture_window_hidden(True)
 
                     # 1. 프로그램 실행 (경로에 공백이 있어도 안전하게 실행되도록 start 명령어 사용)
                     os.system(f'start "" "{shortcut_path}" "{target_file}"')
@@ -356,7 +407,7 @@ class AutoCaptureApp:
                     
                 finally:
                     # 캡처 완료(또는 에러) 후 창 다시 복원
-                    self.root.after(0, self.root.deiconify)
+                    self.set_capture_window_hidden(False)
                     
                     # 5. 프로그램 강제 종료
                     subprocess.run(['taskkill', '/F', '/IM', 'OmniPC.exe'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
