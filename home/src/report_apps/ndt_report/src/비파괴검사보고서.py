@@ -382,6 +382,7 @@ class PMIReportApp:
         self.photo_auto_fit_page_var = tk.BooleanVar(value=True) # [NEW] Auto-fit to A4 page
         self.photo_auto_rotate_var = tk.BooleanVar(value=False)
         self.photo_width_pct_var = tk.StringVar(value="100.0")
+        self.photo_height_pct_var = tk.StringVar(value="140.0")
         self.photo_width_pixel_adj_var = tk.StringVar(value="0")
         self.photo_height_pixel_adj_var = tk.StringVar(value="10") # [NEW] Height padding inside cell
         self.photo_shift_x_var = tk.StringVar(value="0")
@@ -526,6 +527,7 @@ class PMIReportApp:
                         'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
                         'photo_align': self.photo_align_var, 'auto_fit_page': self.photo_auto_fit_page_var, 'fit_width': self.photo_fit_width_var,
                         'auto_rotate': self.photo_auto_rotate_var, 'width_pct': self.photo_width_pct_var,
+                        'height_pct': self.photo_height_pct_var,
                         'pixel_adj': self.photo_width_pixel_adj_var, 'shift_x': self.photo_shift_x_var,
                         'shift_y': self.photo_shift_y_var, 'dpi': self.photo_dpi_var
                     }
@@ -679,6 +681,7 @@ class PMIReportApp:
                     'print_scale': self.photo_print_scale_var.get(), 'desc_height': self.photo_desc_height_var.get(),
                     'photo_align': self.photo_align_var.get(), 'auto_fit_page': self.photo_auto_fit_page_var.get(), 'fit_width': self.photo_fit_width_var.get(),
                     'auto_rotate': self.photo_auto_rotate_var.get(), 'width_pct': self.photo_width_pct_var.get(),
+                    'height_pct': self.photo_height_pct_var.get(),
                     'pixel_adj': self.photo_width_pixel_adj_var.get(), 'shift_x': self.photo_shift_x_var.get(),
                     'shift_y': self.photo_shift_y_var.get(), 'dpi': self.photo_dpi_var.get(),
                     'selected_files': self.photo_selected_files,
@@ -735,6 +738,7 @@ class PMIReportApp:
                 'print_scale': self.photo_print_scale_var, 'desc_height': self.photo_desc_height_var,
                 'photo_align': self.photo_align_var, 'auto_fit_page': self.photo_auto_fit_page_var, 'fit_width': self.photo_fit_width_var,
                 'auto_rotate': self.photo_auto_rotate_var, 'width_pct': self.photo_width_pct_var,
+                'height_pct': self.photo_height_pct_var,
                 'pixel_adj': self.photo_width_pixel_adj_var, 'shift_x': self.photo_shift_x_var,
                 'shift_y': self.photo_shift_y_var, 'dpi': self.photo_dpi_var
             }
@@ -10663,6 +10667,9 @@ class PMIReportApp:
         ttk.Spinbox(wf_f, textvariable=self.photo_shift_y_var, from_=-500, to=500, increment=1, width=4).pack(side='left', padx=2)
         tk.Label(wf_f, text="(100% 기준 미세조정)", font=('', 9), foreground='gray').pack(side='left', padx=5)
 
+        tk.Label(layout_frame, text="높이비율(%):").grid(row=7, column=0, sticky='w', pady=2)
+        ttk.Entry(layout_frame, textvariable=self.photo_height_pct_var, width=10).grid(row=7, column=1, sticky='w', padx=2)
+
         # 3. Logo Options
         logo_frame = ttk.LabelFrame(left_pane, text=" 로고 및 출력 설정 ", padding=10)
         logo_frame.pack(fill='x', padx=10, pady=5)
@@ -10745,7 +10752,7 @@ class PMIReportApp:
                 
         # [NEW] Bindings for Live Preview Update
         self.photo_listbox.bind("<<ListboxSelect>>", self._update_photo_preview)
-        for var in (self.photo_width_pct_var, self.photo_width_pixel_adj_var, self.photo_height_pixel_adj_var, self.photo_shift_x_var, 
+        for var in (self.photo_width_pct_var, self.photo_height_pct_var, self.photo_width_pixel_adj_var, self.photo_height_pixel_adj_var, self.photo_shift_x_var,
                     self.photo_shift_y_var, self.photo_cell_width_var, self.photo_cell_height_var,
                     self.photo_cols_per_row, self.photo_rows_per_page):
             var.trace_add("write", lambda *args: self.root.after(300, self._update_photo_preview))
@@ -10823,6 +10830,27 @@ class PMIReportApp:
         self.log("[PhotoLog] 리스트 초기화 완료")
         self._update_photo_preview()
 
+    def _photo_log_auto_row_height(self, num_rows, desc_row_height):
+        """Return a photo-row height that uses the printable A4 height evenly."""
+        def value_as_float(value, default):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float(default)
+
+        rows = max(1, int(num_rows))
+        margin_top = value_as_float(self.photo_margin_top_var.get(), 0.5)
+        margin_bottom = value_as_float(self.photo_margin_bottom_var.get(), 0.5)
+
+        # A4 is about 842 pt high. The 40 pt allowance covers the fixed title
+        # area and Excel's print rounding. Keeping this allowance small extends
+        # all photo rows downward without allowing the last row onto a new page.
+        available_height = 842.0 - ((margin_top + margin_bottom) * 72.0) - 40.0
+        return max(
+            20.0,
+            (available_height - (rows * float(desc_row_height))) / float(rows),
+        )
+
     def _update_photo_preview(self, *args):
         def safe_float(val, default=0.0):
             try: return float(val.strip())
@@ -10851,15 +10879,14 @@ class PMIReportApp:
             unit_per_grid = (float(self.photo_cell_width_var.get()) * 2) / GRID_COLS
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
             
-            # [NEW] A4 Auto-Fit Logic
+            # A4 auto-fit uses the same row-height calculation as Excel output.
             if self.photo_auto_fit_page_var.get():
-                m_t = safe_float(self.photo_margin_top_var.get(), 0.5)
-                m_b = safe_float(self.photo_margin_bottom_var.get(), 0.5)
                 desc_h = safe_float(self.photo_desc_height_var.get(), 15.0)
-                avail_h = 842.0 - ((m_t + m_b) * 72.0) - 110.0 # A4 - Margins - Header
-                CELL_ROW_HEIGHT = (avail_h - (4 * desc_h)) / 4.0 - 1.0 # 4 rows per page
+                preview_rows = max(1, int(self.photo_rows_per_page.get()))
+                CELL_ROW_HEIGHT = self._photo_log_auto_row_height(preview_rows, desc_h)
                 
             WIDTH_PCT = safe_float(self.photo_width_pct_var.get(), 100.0) / 100.0
+            HEIGHT_PCT = max(0.01, safe_float(self.photo_height_pct_var.get(), 100.0) / 100.0)
             PIXEL_ADJ = safe_float(self.photo_width_pixel_adj_var.get(), 0.0)
             SHIFT_X = safe_float(self.photo_shift_x_var.get(), 0.0)
             SHIFT_Y = safe_float(self.photo_shift_y_var.get(), 0.0)
@@ -10907,6 +10934,9 @@ class PMIReportApp:
                     scale = min(SAFE_WIDTH / img_w, CELL_HEIGHT_PX / img_h)
                     x_scale = y_scale = scale
                     final_row_h_px = (CELL_ROW_HEIGHT * ROW_PT_TO_PX) + HEIGHT_ADJ
+
+                # Keep the calculated width fixed and adjust only image height.
+                y_scale = min(y_scale * HEIGHT_PCT, CELL_HEIGHT_PX / img_h)
                 
                 x_off = round(((CELL_WIDTH_PX - (img_w * x_scale)) / 2) + SHIFT_X)
                 y_off = round(((final_row_h_px - (img_h * y_scale)) / 2) + SHIFT_Y)
@@ -11040,6 +11070,7 @@ class PMIReportApp:
             worksheet.set_paper(9) # A4
             worksheet.set_portrait()
             worksheet.center_horizontally()
+            worksheet.center_vertically()
             
             try:
                 m_t = float(self.photo_margin_top_var.get())
@@ -11053,23 +11084,18 @@ class PMIReportApp:
             s_page = self.photo_start_page.get().strip()
             t_pages = self.photo_total_pages.get().strip()
             
-            # [NEW] Use Center Header (&C) with leading spaces to push text to the right.
-            # Right Header (&R) strips trailing spaces, so it stays stuck to the right margin.
-            # 130 leading spaces pushes it slightly left from the previous 180 setting.
-            # [NEW] Use Right Header (&R) with Non-Breaking Spaces (\xa0) to push left.
-            # Normal spaces are stripped by Excel, but NBSP are kept, allowing precise offset from the right margin.
-            # \xa0 * 7 reduces the leftward push, moving it slightly to the right compared to 15.
-            base_header = '&"바탕"&09Page   &P   of   &N'
-            # 엔터(\n)를 두 줄 넣어서 페이지 번호를 표(본문) 바로 위까지 확 내립니다.
+            # 페이지 번호는 제목보다 한 단계 작은 10pt로 표시하고, 표 바로 위에
+            # 오도록 기본 헤더 여백(0.30in)보다 약간 아래로 배치한다.
+            base_header = '&"바탕"&10Page   &P   of   &N'
             header_text = '&R&10 \n\n' + base_header + ('\xa0' * 7)
             
             if s_page.isdigit():
                 worksheet.set_start_page(int(s_page))
             if t_pages.isdigit():
-                base_header = f'&"바탕"&09Page   &P   of   {t_pages}'
+                base_header = f'&"바탕"&10Page   &P   of   {t_pages}'
                 header_text = '&R&10 \n\n' + base_header + ('\xa0' * 7)
                 
-            worksheet.set_header(header_text)
+            worksheet.set_header(header_text, {'margin': 0.36})
             worksheet.set_footer('')
             worksheet.repeat_rows(0, 4) 
 
@@ -11109,6 +11135,7 @@ class PMIReportApp:
             # [REFINED] Percentage-Based Precision Scaling
                 
             WIDTH_PCT = safe_float(self.photo_width_pct_var.get(), 100.0) / 100.0
+            HEIGHT_PCT = max(0.01, safe_float(self.photo_height_pct_var.get(), 100.0) / 100.0)
             PIXEL_ADJ = safe_float(self.photo_width_pixel_adj_var.get(), 0.0)
             SHIFT_X = safe_float(self.photo_shift_x_var.get(), 0.0)
             SHIFT_Y = safe_float(self.photo_shift_y_var.get(), 0.0)
@@ -11201,14 +11228,14 @@ class PMIReportApp:
                     stamp_buffer = io.BytesIO(stamp_data)
                     with PILImage.open(io.BytesIO(stamp_data)) as stamp_image:
                         stamp_w, stamp_h = stamp_image.size
-                    stamp_size = 58.0
+                    stamp_size = 72.0
                     worksheet.insert_image(
-                        "G2", "transparent_stamp.png",
+                        "E2", "transparent_stamp.png",
                         {
                             "image_data": stamp_buffer,
                             "x_scale": stamp_size / stamp_w,
                             "y_scale": stamp_size / stamp_h,
-                            "x_offset": 8,
+                            "x_offset": 45,
                             "y_offset": 0,
                             "object_position": 1,
                         },
@@ -11229,11 +11256,9 @@ class PMIReportApp:
 
             CELL_ROW_HEIGHT = float(self.photo_cell_height_var.get())
             if self.photo_auto_fit_page_var.get():
-                m_t = safe_float(self.photo_margin_top_var.get(), 0.5)
-                m_b = safe_float(self.photo_margin_bottom_var.get(), 0.5)
-                # 하단 여백이 넓게 남는 것을 방지하기 위해 95.0 -> 65.0으로 수정하여 사진 높이를 최대로 키움
-                avail_h = 842.0 - ((m_t + m_b) * 72.0) - 65.0
-                CELL_ROW_HEIGHT = (avail_h - (num_rows * DESC_ROW_HEIGHT)) / float(num_rows)
+                CELL_ROW_HEIGHT = self._photo_log_auto_row_height(
+                    num_rows, DESC_ROW_HEIGHT
+                )
             
             total = len(image_files)
             current_row_max_h_pt = CELL_ROW_HEIGHT
@@ -11289,6 +11314,9 @@ class PMIReportApp:
                             scale = min(SAFE_WIDTH / img_w, CELL_HEIGHT_PX / img_h)
                             x_scale = y_scale = scale
                             current_row_max_h_pt = CELL_ROW_HEIGHT + (HEIGHT_ADJ / ROW_PT_TO_PX)
+
+                        # Preserve horizontal size while stretching only vertically.
+                        y_scale = min(y_scale * HEIGHT_PCT, CELL_HEIGHT_PX / img_h)
                         
                         # Apply the potentially updated row height
                         worksheet.set_row(row, current_row_max_h_pt)
@@ -11334,6 +11362,19 @@ class PMIReportApp:
 
                 self.progress["value"] = ((i + 1) / total) * 100
                 self.log(f"[PhotoLog] 처리 중.. ({i+1}/{total})")
+
+            # 세로 가운데 정렬은 마지막 페이지의 데이터가 적으면 내용을 페이지
+            # 중앙으로 내린다. 부족한 사진 행을 보이지 않는 빈 행으로 채워 모든
+            # 페이지의 인쇄 높이를 같게 유지하면 각 페이지가 동일한 위치에서 시작한다.
+            used_photo_rows = math.ceil(total / num_cols)
+            full_photo_rows = total_pages * num_rows
+            for slot in range(used_photo_rows, full_photo_rows):
+                padding_row = 5 + (slot * 2)
+                worksheet.set_row(padding_row, CELL_ROW_HEIGHT)
+                worksheet.set_row(padding_row + 1, DESC_ROW_HEIGHT)
+
+            full_print_end_row = 5 + (full_photo_rows * 2) - 1
+            worksheet.print_area(0, 0, full_print_end_row, GRID_COLS - 1)
 
             if page_breaks: worksheet.set_h_pagebreaks(page_breaks)
             workbook.close()
