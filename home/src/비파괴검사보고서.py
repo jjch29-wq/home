@@ -7452,7 +7452,19 @@ class PMIReportApp:
     def load_daily_work_history(self):
         """작업 감독일보에 저장된 NDT 누계 대장 데이터(daily_work_history.json)를 불러옵니다."""
         try:
-            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            central_history_path = os.path.join(
+                script_dir, 'site_apps', 'central', 'src',
+                'daily_work_history.json'
+            )
+            legacy_history_path = os.path.join(script_dir, 'daily_work_history.json')
+            # 중앙지사 앱이 실제 저장하는 파일을 우선 사용하고, 이전 구조의
+            # 파일은 중앙지사 파일이 없을 때만 호환용으로 사용한다.
+            history_path = (
+                central_history_path
+                if os.path.exists(central_history_path)
+                else legacy_history_path
+            )
             if not os.path.exists(history_path):
                 messagebox.showerror("오류", "daily_work_history.json 파일이 존재하지 않습니다.\n(중앙지사 어플에서 작업 감독일보를 저장했는지 확인하세요)")
                 return

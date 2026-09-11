@@ -27,11 +27,19 @@ SIZE_LENGTH = {
     '32A':   0.1341, '25A':   0.1068, '20A':  0.0855,
 }
 
+# 용접사 관리대장에서 갱신된 최신 발급번호.
+# 과거 작업일보 및 공정사진에 저장된 번호도 같은 기준으로 자동 이관한다.
+LEGACY_WELDER_IDS = {
+    'W-2023-A-12': 'W-2026-A-08',
+    'W-2023-A-13': 'W-2026-A-05',
+}
+
 class DailyWorkLogTab(ttk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.parent = parent
         self.history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+        self._migrate_legacy_welder_ids()
         self.photo_root = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'data', 'process_photos'
@@ -44,7 +52,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.setup_ui()
 
     def _normalize_welder_id(self, value):
-        """화면 표시값 또는 이름을 기존 용접사 번호 형식으로 변환한다."""
+        """화면 표시값 또는 이름을 최신 용접사 번호 형식으로 변환한다."""
         value = str(value or '').strip()
         if not value:
             return ''
@@ -52,9 +60,43 @@ class DailyWorkLogTab(ttk.Frame):
             display_name, welder_id = value.rsplit('|', 1)
             welder_id = welder_id.strip()
             if welder_id:
-                return welder_id
+                return LEGACY_WELDER_IDS.get(welder_id, welder_id)
             value = display_name.strip()
-        return self.welder_ids_by_name.get(value, value)
+        welder_id = self.welder_ids_by_name.get(value, value)
+        return LEGACY_WELDER_IDS.get(welder_id, welder_id)
+
+    def _migrate_legacy_welder_ids(self):
+        """기존 작업일보 JSON의 과거 용접사 번호를 최신 번호로 저장한다."""
+        if not os.path.exists(self.history_path):
+            return
+        try:
+            with open(self.history_path, 'r', encoding='utf-8') as history_file:
+                history = json.load(history_file)
+
+            changed_count = 0
+
+            def replace_legacy_ids(value):
+                nonlocal changed_count
+                if isinstance(value, dict):
+                    return {key: replace_legacy_ids(item) for key, item in value.items()}
+                if isinstance(value, list):
+                    return [replace_legacy_ids(item) for item in value]
+                if isinstance(value, str) and value.strip() in LEGACY_WELDER_IDS:
+                    changed_count += 1
+                    return LEGACY_WELDER_IDS[value.strip()]
+                return value
+
+            migrated_history = replace_legacy_ids(history)
+            if not changed_count:
+                return
+
+            temp_path = self.history_path + '.tmp'
+            with open(temp_path, 'w', encoding='utf-8') as history_file:
+                json.dump(migrated_history, history_file, ensure_ascii=False, indent=4)
+            os.replace(temp_path, self.history_path)
+            print(f"[DailyWorkLog] 용접사 번호 {changed_count}건 최신화 완료")
+        except Exception as exc:
+            print(f"[DailyWorkLog] 용접사 번호 최신화 실패: {exc}")
 
     def _format_welder_display(self, value):
         """저장된 용접사 번호를 '이름 | 번호' 화면 표시 형식으로 변환한다."""
@@ -139,6 +181,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.date_entry = DateEntry(top_frame, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
         self.date_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         self.date_entry.bind("<<DateEntrySelected>>", self.on_date_change)
+        self.date_entry.bind("<Return>", self.on_date_change)
         # self.date_entry.bind("<FocusOut>", self.on_date_change) # Removed to prevent accidental UI wipes
 
         self.date_status_label = tk.Label(
@@ -146,6 +189,9 @@ class DailyWorkLogTab(ttk.Frame):
             font=('맑은 고딕', 9, 'bold')
         )
         self.date_status_label.grid(row=1, column=0, columnspan=2, padx=5, sticky="e")
+        ttk.Button(
+            top_frame, text="일보 불러오기", command=self.on_date_change
+        ).grid(row=1, column=2, padx=5, pady=(0, 3), sticky="w")
         
         ttk.Label(top_frame, text="날씨:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
         self.weather_entry = ttk.Entry(top_frame, width=15)
@@ -1074,7 +1120,7 @@ class DailyWorkLogTab(ttk.Frame):
         """현재 선택한 날짜의 저장 여부를 날짜 입력칸 아래에 표시한다."""
         if history is None:
             history = self.load_history()
-        current_date = self.date_entry.get()
+        current_date = self._selected_date_key()
         if current_date in history:
             self.date_status_label.configure(
                 text='● 저장된 날짜', fg='#1B5E20'
@@ -1084,9 +1130,22 @@ class DailyWorkLogTab(ttk.Frame):
                 text='○ 저장되지 않은 날짜', fg='#777777'
             )
 
+    def _selected_date_key(self):
+        """DateEntry 값을 작업일보 저장 키(YYYY-MM-DD)로 통일한다."""
+        try:
+            return self.date_entry.get_date().strftime('%Y-%m-%d')
+        except (AttributeError, TypeError, ValueError):
+            value = str(self.date_entry.get() or '').strip()
+            for date_format in ('%Y-%m-%d', '%Y.%m.%d', '%Y/%m/%d'):
+                try:
+                    return datetime.strptime(value, date_format).strftime('%Y-%m-%d')
+                except ValueError:
+                    continue
+            return value
+
     def save_current_history(self):
         history = self.load_history()
-        current_date = self.date_entry.get()
+        current_date = self._selected_date_key()
         existing_photos = history.get(current_date, {}).get('process_photos', [])
         
         data = {
@@ -1125,7 +1184,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.save_history(history)
 
     def on_date_change(self, event=None):
-        current_date = self.date_entry.get()
+        current_date = self._selected_date_key()
         history = self.load_history()
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
