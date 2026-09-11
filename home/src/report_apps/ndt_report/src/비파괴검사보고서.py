@@ -3174,7 +3174,9 @@ class PMIReportApp:
                     'Height(mm)': str(row.get(mapping["h"], "")) if mapping["h"] else "",
                     'Type of Flaw': "" if acc_raw == "√" else (str(row.get(mapping["nature"], "Slag")) if mapping["nature"] else "Slag"),
                     'a/l': "", 'a/t': "",
-                    'Welder': str(row.get(mapping["welder"], "")) if mapping["welder"] else "",
+                    'Welder': self._normalize_daily_photo_welder(
+                        row.get(mapping["welder"], "")
+                    ) if mapping["welder"] else "",
                     'Tested Length': str(row.get(mapping["tested_len"], "")) if mapping["tested_len"] else "",
                     'Evaluation': eval_raw,
                     'Remarks': str(row.get(mapping["remarks"], "")) if mapping["remarks"] else ""
@@ -3733,7 +3735,16 @@ class PMIReportApp:
 
         import copy
         ws._images = retained_images
-        signature = XLImage(signature_path)
+        try:
+            transparent_stream = self._white_background_to_transparent_png(
+                signature_path
+            )
+            signature = XLImage(transparent_stream)
+            # workbook 저장 시까지 BytesIO가 닫히지 않도록 참조를 유지한다.
+            signature._pmi_source_stream = transparent_stream
+        except Exception as exc:
+            self.log(f"[WARNING] 검사자 서명 투명 처리 실패: {exc}")
+            signature = XLImage(signature_path)
         signature.anchor = copy.copy(inspector_anchor)
         ws.add_image(signature)
         return True
@@ -8024,7 +8035,9 @@ class PMIReportApp:
                 if not thickness and any(k in keys_attr for k in ('T', "Th'k(mm)")):
                     new_row['Remarks'] = '두께 확인 필요'
                 # 용접사 / Welder
-                welder = r.get("용접사", "")
+                welder = self._normalize_daily_photo_welder(
+                    r.get("용접사", "")
+                )
                 if "Welder" in keys_attr: new_row["Welder"] = welder
                 
                 # 검사길이 / Tested Length
@@ -10911,9 +10924,14 @@ class PMIReportApp:
         metadata = self.photo_item_metadata.get(
             self._photo_metadata_key(img_path), {}
         )
+        line_no = str(metadata.get('line_no', '')).strip()
+        size = str(metadata.get('size', '')).strip()
+        # 라인번호가 이미 관경으로 끝나면(예: ...-700A) 관경을 다시 붙이지 않는다.
+        if line_no and size and line_no.upper().endswith(size.upper()):
+            size = ""
         details = [
-            str(metadata.get('line_no', '')).strip(),
-            str(metadata.get('size', '')).strip(),
+            line_no,
+            size,
             str(metadata.get('joint_no', '')).strip(),
             str(metadata.get('welder', '')).strip(),
         ]
@@ -10968,7 +10986,7 @@ class PMIReportApp:
 
     @staticmethod
     def _normalize_daily_photo_welder(welder):
-        """작업일보에 남은 교정 전 용접사 번호를 최신 발급번호로 변환한다."""
+        """교정 전 용접사 번호를 최신 발급번호로 변환한다."""
         welder_id = str(welder or '').strip()
         legacy_ids = {
             'W-2023-A-12': 'W-2026-A-08',
@@ -11020,8 +11038,16 @@ class PMIReportApp:
 
         dialog = tk.Toplevel(self.root)
         dialog.title("작업일보 사진 선택")
-        dialog.geometry("940x500")
-        dialog.minsize(760, 400)
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        dialog_width = min(940, max(760, screen_width - 80))
+        dialog_height = min(600, max(440, screen_height - 120))
+        dialog_x = max(20, (screen_width - dialog_width) // 2)
+        dialog_y = max(20, (screen_height - dialog_height) // 2)
+        dialog.geometry(
+            f"{dialog_width}x{dialog_height}+{dialog_x}+{dialog_y}"
+        )
+        dialog.minsize(min(760, dialog_width), min(440, dialog_height))
         dialog.transient(self.root)
         dialog.grab_set()
 
@@ -11036,6 +11062,10 @@ class PMIReportApp:
             text=f"보고서 검사일자({preferred_date})는 변경되지 않습니다.",
             foreground='#555555', anchor='w',
         ).pack(fill='x', padx=15, pady=(0, 8))
+
+        # 목록이 커져도 상태와 실행 버튼은 항상 창 하단에 남겨 둔다.
+        footer_frame = ttk.Frame(dialog)
+        footer_frame.pack(side='bottom', fill='x', padx=15, pady=(2, 12))
 
         tree_frame = ttk.Frame(dialog)
         tree_frame.pack(fill='both', expand=True, padx=15, pady=5)
@@ -11088,8 +11118,10 @@ class PMIReportApp:
         photo_tree.see(initial_items[0])
 
         status_var = tk.StringVar()
-        status_label = ttk.Label(dialog, textvariable=status_var, anchor='w')
-        status_label.pack(fill='x', padx=15, pady=(2, 0))
+        status_label = ttk.Label(
+            footer_frame, textvariable=status_var, anchor='w'
+        )
+        status_label.pack(fill='x', pady=(2, 4))
 
         def update_selection_status(event=None):
             selected_count = len(photo_tree.selection())
@@ -11117,8 +11149,8 @@ class PMIReportApp:
             ]
             dialog.destroy()
 
-        button_frame = ttk.Frame(dialog)
-        button_frame.pack(fill='x', padx=15, pady=(5, 15))
+        button_frame = ttk.Frame(footer_frame)
+        button_frame.pack(fill='x')
         ttk.Button(
             button_frame, text="전체 선택",
             command=lambda: photo_tree.selection_set(*photo_tree.get_children())
