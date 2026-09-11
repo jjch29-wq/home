@@ -5,7 +5,7 @@
             "name": "중앙지사 앱 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}\\home\\src\\site_apps\\central\\src\\app.py",
+            "program": "${workspaceFolder}\\home\\src\\site_apps\\central\\main.py",
             "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
             "cwd": "${workspaceFolder}\\home\\src",
             "console": "externalTerminal",
@@ -50,6 +50,24 @@
             "cwd": "${workspaceFolder}\\home\\src\\ISO_Drawer",
             "console": "externalTerminal",
             "justMyCode": true
+        }
+    ],
+    "compounds": [
+        {
+            "name": "중앙지사 + PAUT 이름변경 동시 실행",
+            "configurations": [
+                "중앙지사 앱 실행 (독립 창)",
+                "PAUT 이름변경 실행 (독립 창)"
+            ],
+            "stopAll": false
+        },
+        {
+            "name": "PAUT 캡처 + 이름변경 동시 실행",
+            "configurations": [
+                "PAUT 캡처 실행 (독립 창)",
+                "PAUT 이름변경 실행 (독립 창)"
+            ],
+            "stopAll": false
         }
     ]
 }
