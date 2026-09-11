@@ -2,23 +2,53 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "비파괴검사보고서 실행",
+            "name": "중앙지사 앱 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\site_apps\\central\\src\\app.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "PAUT 캡처 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\paut capture.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "PAUT 이름변경 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\paut_rename.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "비파괴검사보고서 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}\\home\\src\\비파괴검사보고서.py",
             "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
             "cwd": "${workspaceFolder}\\home",
-            "console": "integratedTerminal",
+            "console": "externalTerminal",
             "justMyCode": true
         },
         {
-            "name": "ISO Drawer 실행",
+            "name": "ISO Drawer 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}\\home\\src\\ISO_Drawer\\desktop_app.py",
             "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
             "cwd": "${workspaceFolder}\\home\\src\\ISO_Drawer",
-            "console": "integratedTerminal",
+            "console": "externalTerminal",
             "justMyCode": true
         }
     ]
