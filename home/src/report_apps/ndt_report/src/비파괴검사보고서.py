@@ -323,9 +323,13 @@ class PMIReportApp:
         }
 
         # --- Gapji (Cover) Metadata Variables ---
-        self.gapji_project = tk.StringVar(value="2026년 중앙지사 열수송관 비파괴검사 단가계약")
-        self.gapji_customer = tk.StringVar(value="한국지역난방 중앙지사")
-        self.gapji_item = tk.StringVar(value="PIPE")
+        self.gapji_project = tk.StringVar(value=self.config.get(
+            'GAPJI_PROJECT', "2026년 중앙지사 열수송관 비파괴검사 단가계약"
+        ))
+        # 모든 검사 보고서의 발주처는 중앙지사 표준 명칭으로 통일한다.
+        self.config['GAPJI_CUSTOMER'] = "한국지역난방공사 중앙지사"
+        self.gapji_customer = tk.StringVar(value=self.config['GAPJI_CUSTOMER'])
+        self.gapji_item = tk.StringVar(value=self.config.get('GAPJI_ITEM', "PIPE"))
         self.gapji_material = tk.StringVar(value=self.config.get('GAPJI_MATERIAL', ""))
         self.gapji_report_no = tk.StringVar(value=self.config.get('GAPJI_REPORT_NO', ""))
         self.gapji_exam_date = tk.StringVar(value=self.config.get('GAPJI_EXAM_DATE', datetime.datetime.now().strftime("%Y-%m-%d")))
@@ -388,9 +392,19 @@ class PMIReportApp:
         self.photo_shift_x_var = tk.StringVar(value="0")
         self.photo_shift_y_var = tk.StringVar(value="0")
         self.photo_dpi_var = tk.StringVar(value="96") # [NEW] User Configurable DPI
-        self.photo_selected_files = [] 
+        self.photo_selected_files = []
+        self.photo_item_metadata = {}
+
+        # 검사방법별 기본정보를 저장하고 사진대장 정보에도 즉시 반영한다.
+        for var in (
+            self.gapji_customer, self.gapji_report_no, self.gapji_exam_date
+        ):
+            var.trace_add("write", lambda *_args: self._on_report_info_changed())
         
         self.load_settings()
+        self._initialize_report_info_by_mode()
+        self._load_report_info_for_mode("PMI")
+        self._sync_photo_report_info()
         
         # [MIGRATION] Add missing keys from loaded config
         if "Size" not in self.paut_column_keys:
@@ -545,6 +559,8 @@ class PMIReportApp:
                                 self.photo_listbox.delete(0, tk.END)
                                 for f_path in self.photo_selected_files:
                                     self.photo_listbox.insert(tk.END, f_path)
+                        if isinstance(plist.get('item_metadata'), dict):
+                            self.photo_item_metadata = plist['item_metadata']
 
                     # [NEW] Restore custom column layouts if they exist
                     if 'column_keys' in saved_data and isinstance(saved_data['column_keys'], list):
@@ -685,6 +701,7 @@ class PMIReportApp:
                     'pixel_adj': self.photo_width_pixel_adj_var.get(), 'shift_x': self.photo_shift_x_var.get(),
                     'shift_y': self.photo_shift_y_var.get(), 'dpi': self.photo_dpi_var.get(),
                     'selected_files': self.photo_selected_files,
+                    'item_metadata': self.photo_item_metadata,
                     'last_save_dir': getattr(self, 'last_photo_save_dir', "")
                 }
                 
@@ -753,6 +770,8 @@ class PMIReportApp:
                     self.photo_listbox.delete(0, tk.END)
                     for f_path in self.photo_selected_files:
                         self.photo_listbox.insert(tk.END, f_path)
+            if isinstance(plist.get('item_metadata'), dict):
+                self.photo_item_metadata = plist['item_metadata']
             
             self.log("📂 사진대장 전용 설정을 불러왔습니다.")
         except Exception as e:
@@ -909,6 +928,7 @@ class PMIReportApp:
 
     def save_settings(self):
         """현재 설정을 파일(JSON)에 저장"""
+        self._store_report_info_for_mode(getattr(self, 'current_mode', ''))
         self.capture_ui_state()
         try:
             if hasattr(self, 'setting_vars'):
@@ -1102,14 +1122,89 @@ class PMIReportApp:
                 # RT 탭 진입 시 현재 설정된 서브 모드(표준/가스공사) 확인
                 self.current_mode = self.rt_sub_mode.get()
             elif "PT" in tab_text: self.current_mode = "PT"
+            elif "MT" in tab_text: self.current_mode = "MT"
             elif "PAUT" in tab_text: self.current_mode = "PAUT"
-            elif "사진" in tab_text: self.current_mode = "PHOTO"
+            elif "사진" in tab_text:
+                self.current_mode = "PHOTO"
+                self._sync_photo_report_info()
+
+            if self.current_mode in self._report_info_modes():
+                self._load_report_info_for_mode(self.current_mode)
             
             # [NEW] 모드 변경 시 해당 모드의 설정을 다시 로드
             if self.current_mode in ["RT", "KOGAS"]:
                 t_path = self.rt_template_file_path.get() if self.current_mode == "RT" else self.kogas_template_file_path.get()
                 self.load_template_specific_config(t_path, self.current_mode)
         except: pass
+
+    @staticmethod
+    def _report_info_modes():
+        return ("PMI", "RT", "KOGAS", "PT", "MT", "PAUT")
+
+    def _initialize_report_info_by_mode(self):
+        """기존 공통정보를 마이그레이션하여 검사방법별 정보로 준비한다."""
+        common_report_no = str(self.config.get('GAPJI_REPORT_NO', '')).strip()
+        common_exam_date = str(self.config.get('GAPJI_EXAM_DATE', '')).strip()
+        self.report_info_by_mode = {}
+        for mode in self._report_info_modes():
+            self.report_info_by_mode[mode] = {
+                'report_no': str(self.config.get(
+                    f'{mode}_REPORT_NO', common_report_no
+                )).strip(),
+                'exam_date': str(self.config.get(
+                    f'{mode}_EXAM_DATE', common_exam_date
+                )).strip(),
+            }
+        self._report_info_loading = False
+
+    def _store_report_info_for_mode(self, mode):
+        if (
+            mode not in self._report_info_modes()
+            or not hasattr(self, 'report_info_by_mode')
+            or getattr(self, '_report_info_loading', False)
+        ):
+            return
+        report_no = self.gapji_report_no.get().strip()
+        exam_date = self.gapji_exam_date.get().strip()
+        self.report_info_by_mode[mode] = {
+            'report_no': report_no, 'exam_date': exam_date
+        }
+        self.config[f'{mode}_REPORT_NO'] = report_no
+        self.config[f'{mode}_EXAM_DATE'] = exam_date
+        # 현재 탭의 성적서 생성 함수가 사용하는 공통 키도 함께 맞춘다.
+        self.config['GAPJI_REPORT_NO'] = report_no
+        self.config['GAPJI_EXAM_DATE'] = exam_date
+
+    def _load_report_info_for_mode(self, mode):
+        if mode not in self._report_info_modes() or not hasattr(self, 'report_info_by_mode'):
+            return
+        info = self.report_info_by_mode[mode]
+        self._report_info_loading = True
+        try:
+            self.gapji_customer.set("한국지역난방공사 중앙지사")
+            self.gapji_report_no.set(info['report_no'])
+            self.gapji_exam_date.set(info['exam_date'])
+            self.config['GAPJI_REPORT_NO'] = info['report_no']
+            self.config['GAPJI_EXAM_DATE'] = info['exam_date']
+        finally:
+            self._report_info_loading = False
+
+    def _on_report_info_changed(self):
+        if getattr(self, '_report_info_loading', False):
+            return
+        self._store_report_info_for_mode(getattr(self, 'current_mode', ''))
+        self._sync_photo_report_info()
+
+    def _sync_photo_report_info(self):
+        """사진대장에서 선택한 검사방법의 저장정보를 불러온다."""
+        if not hasattr(self, 'photo_orderer'):
+            return
+        self.photo_orderer.set("한국지역난방공사 중앙지사")
+        mode = self.photo_inspect_type.get().strip().upper()
+        info = getattr(self, 'report_info_by_mode', {}).get(mode)
+        if info:
+            self.photo_report_no.set(info['report_no'])
+            self.photo_inspect_date.set(info['exam_date'])
 
     def create_widgets(self):
         style = ttk.Style()
@@ -1771,6 +1866,7 @@ class PMIReportApp:
         except: pass
         mode = self.rt_sub_mode.get()
         self.current_mode = mode
+        self._load_report_info_for_mode(mode)
         self._sub_mode_switching = True  # guard: prevent _on_rt_kogas_mode_change from overwriting paths
         self.rt_kogas_mode.set(mode == "KOGAS")
         self._sub_mode_switching = False
@@ -3199,21 +3295,23 @@ class PMIReportApp:
                 ws0 = wb.worksheets[0]
                 self._write_gapji_metadata(ws0, mode="PAUT", first_item=first_item)
 
-                # 첫 기준 성적서처럼 선택 데이터의 실제 검사기간을 표시한다.
-                selected_dates = []
-                for report_item in final_list:
-                    date_text = str(report_item.get("Date", "")).strip()
-                    date_match = re.search(r"\d{4}-\d{2}-\d{2}", date_text)
-                    if date_match:
-                        selected_dates.append(date_match.group())
-                if selected_dates:
-                    start_date = min(selected_dates)
-                    end_date = max(selected_dates)
-                    exam_period = (
-                        start_date if start_date == end_date
-                        else f"{start_date}~{end_date}"
-                    )
-                    self.safe_set_value(ws0, "AA6", exam_period)
+                # 리포트 기본정보의 검사일자를 우선 사용한다. 입력값이 없을 때만
+                # 선택 데이터의 실제 검사기간을 대신 표시한다.
+                if not self.gapji_exam_date.get().strip():
+                    selected_dates = []
+                    for report_item in final_list:
+                        date_text = str(report_item.get("Date", "")).strip()
+                        date_match = re.search(r"\d{4}-\d{2}-\d{2}", date_text)
+                        if date_match:
+                            selected_dates.append(date_match.group())
+                    if selected_dates:
+                        start_date = min(selected_dates)
+                        end_date = max(selected_dates)
+                        exam_period = (
+                            start_date if start_date == end_date
+                            else f"{start_date}~{end_date}"
+                        )
+                        self.safe_set_value(ws0, "AA6", exam_period)
 
                 if not str(ws0["AA5"].value or "").strip():
                     self.safe_set_value(ws0, "AA5", "SIT/GI-JY-SRJ-PAUT-001")
@@ -9071,7 +9169,8 @@ class PMIReportApp:
                 ('GAPJI_CUSTOMER', 'AA4'),
                 ('GAPJI_EXAM_DATE', 'AA6'),
                 ('GAPJI_REPORT_NO', 'AA5'),
-                ('GAPJI_ITEM', 'M35') # 품목(Item) 칸을 '지역'으로 매핑
+                ('GAPJI_ITEM', 'M35'),
+                ('GAPJI_MATERIAL', 'A35'),
             ]
             for key, default_cell in mapping:
                 val = self.config.get(key, "")
@@ -10726,6 +10825,10 @@ class PMIReportApp:
         # Tools under header
         tool_bar = tk.Frame(right_container, background="#ffffff", padx=10, pady=5)
         tool_bar.pack(fill='x')
+        ttk.Button(
+            tool_bar, text="작업일보 사진 불러오기",
+            command=self._import_daily_work_photos
+        ).pack(side='left', padx=2)
         ttk.Button(tool_bar, text="파일 개별 추가", command=self._add_photo_files).pack(side='left', padx=2)
         ttk.Button(tool_bar, text="폴더 전체 추가", command=self._add_photo_folder).pack(side='left', padx=2)
         ttk.Button(tool_bar, text="전체 비우기", command=self._clear_photo_all).pack(side='right', padx=2)
@@ -10790,6 +10893,353 @@ class PMIReportApp:
         new_type = self.photo_inspect_type.get()
         if new_type in self.photo_header_map:
             self.photo_report_title.set(self.photo_header_map[new_type])
+        self._sync_photo_report_info()
+        self.save_settings()
+
+    @staticmethod
+    def _photo_metadata_key(path):
+        return os.path.normcase(os.path.abspath(os.path.normpath(path)))
+
+    def _central_daily_history_path(self):
+        if not SRC_ROOT:
+            return ""
+        return os.path.join(
+            SRC_ROOT, "site_apps", "central", "src", "daily_work_history.json"
+        )
+
+    def _daily_photo_description(self, img_path):
+        metadata = self.photo_item_metadata.get(
+            self._photo_metadata_key(img_path), {}
+        )
+        details = [
+            str(metadata.get('line_no', '')).strip(),
+            str(metadata.get('size', '')).strip(),
+            str(metadata.get('joint_no', '')).strip(),
+            str(metadata.get('welder', '')).strip(),
+        ]
+        details = [value for value in details if value]
+        if details:
+            return "_".join(details)
+        saved_description = str(metadata.get('description', '')).strip()
+        if saved_description:
+            return saved_description
+        return os.path.splitext(os.path.basename(img_path))[0].replace(
+            "_capture", ""
+        )
+
+    def _is_daily_work_photo(self, img_path):
+        metadata = self.photo_item_metadata.get(
+            self._photo_metadata_key(img_path), {}
+        )
+        return metadata.get('source') == 'central_daily_work_log'
+
+    def _should_auto_rotate_photo(self, img_path):
+        """작업일보 세로 사진은 가로형 사진대장에 맞게 자동 회전한다."""
+        return self.photo_auto_rotate_var.get() or self._is_daily_work_photo(
+            img_path
+        )
+
+    def _schedule_photo_output(self, image_files, photos_per_page):
+        """데이터 사진 뒤의 새 페이지부터 작업일보 사진 슬롯을 배정한다."""
+        data_photos = [
+            path for path in image_files if not self._is_daily_work_photo(path)
+        ]
+        daily_photos = [
+            path for path in image_files if self._is_daily_work_photo(path)
+        ]
+
+        scheduled = []
+        next_slot = 0
+        for path in data_photos:
+            scheduled.append((path, next_slot))
+            next_slot += 1
+
+        if data_photos and daily_photos:
+            next_slot = (
+                math.ceil(next_slot / photos_per_page) * photos_per_page
+            )
+
+        daily_start_slot = next_slot if daily_photos else None
+        for path in daily_photos:
+            scheduled.append((path, next_slot))
+            next_slot += 1
+
+        return scheduled, next_slot, daily_start_slot
+
+    @staticmethod
+    def _normalize_daily_photo_welder(welder):
+        """작업일보에 남은 교정 전 용접사 번호를 최신 발급번호로 변환한다."""
+        welder_id = str(welder or '').strip()
+        legacy_ids = {
+            'W-2023-A-12': 'W-2026-A-08',
+            'W-2023-A-13': 'W-2026-A-05',
+        }
+        return legacy_ids.get(welder_id, welder_id)
+
+    def _select_daily_work_photos(self, history, inspect_type, preferred_date):
+        """작업일보 사진의 날짜/관경/Joint 정보를 보여주고 복수 선택한다."""
+        allowed_all = inspect_type in {"NDT", "기타 (직접 입력)".upper()}
+        candidates = []
+        for date_str in sorted(history):
+            day_data = history[date_str]
+            if not isinstance(day_data, dict):
+                continue
+
+            result_lookup = {}
+            for result in day_data.get('ndt_results', []):
+                if not isinstance(result, dict):
+                    continue
+                key = (
+                    str(result.get('검사방법', '')).strip().upper(),
+                    str(result.get('라인번호', '')).strip(),
+                    str(result.get('Joint No.', '')).strip(),
+                )
+                result_lookup[key] = result
+
+            for photo in day_data.get('process_photos', []):
+                if not isinstance(photo, dict):
+                    continue
+                process = str(photo.get('process', '')).strip().upper()
+                if not allowed_all and process != inspect_type:
+                    continue
+                line_no = str(photo.get('line_no', '')).strip()
+                joint_no = str(photo.get('joint_no', '')).strip()
+                result = result_lookup.get((process, line_no, joint_no), {})
+                item = dict(photo)
+                item['_source_date'] = date_str
+                item['_size'] = str(result.get('관경', '')).strip()
+                if not str(item.get('welder', '')).strip():
+                    item['welder'] = str(result.get('용접사', '')).strip()
+                candidates.append(item)
+
+        if not candidates:
+            messagebox.showinfo(
+                "저장 사진 없음", f"저장된 {inspect_type} 작업일보 사진이 없습니다."
+            )
+            return []
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("작업일보 사진 선택")
+        dialog.geometry("940x500")
+        dialog.minsize(760, 400)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tk.Label(
+            dialog,
+            text=f"불러올 {inspect_type} 사진을 선택하세요. (Ctrl/Shift 복수 선택)",
+            font=("Malgun Gothic", 10, "bold"),
+            anchor='w',
+        ).pack(fill='x', padx=15, pady=(15, 8))
+        tk.Label(
+            dialog,
+            text=f"보고서 검사일자({preferred_date})는 변경되지 않습니다.",
+            foreground='#555555', anchor='w',
+        ).pack(fill='x', padx=15, pady=(0, 8))
+
+        tree_frame = ttk.Frame(dialog)
+        tree_frame.pack(fill='both', expand=True, padx=15, pady=5)
+        photo_tree = ttk.Treeview(
+            tree_frame,
+            columns=('date', 'size', 'joint', 'welder', 'section', 'description'),
+            show='headings', height=13, selectmode='extended'
+        )
+        headings = {
+            'date': ('사진 저장일', 105), 'size': ('관경', 65),
+            'joint': ('Joint', 70), 'welder': ('용접사', 115),
+            'section': ('구간', 80), 'description': ('설명', 360),
+        }
+        for column, (label, width) in headings.items():
+            photo_tree.heading(column, text=label)
+            photo_tree.column(
+                column, width=width,
+                anchor='w' if column == 'description' else 'center'
+            )
+        photo_tree.pack(side='left', fill='both', expand=True)
+        tree_scroll = ttk.Scrollbar(
+            tree_frame, orient='vertical', command=photo_tree.yview
+        )
+        tree_scroll.pack(side='right', fill='y')
+        photo_tree.configure(yscrollcommand=tree_scroll.set)
+
+        candidate_by_item = {}
+        preferred_items = []
+        latest_date = max(item['_source_date'] for item in candidates)
+        for photo in candidates:
+            item_id = photo_tree.insert(
+                '', tk.END,
+                values=(
+                    photo['_source_date'], photo.get('_size', ''),
+                    photo.get('joint_no', ''),
+                    self._normalize_daily_photo_welder(photo.get('welder', '')),
+                    photo.get('section', ''), photo.get('description', ''),
+                ),
+            )
+            candidate_by_item[item_id] = photo
+            if photo['_source_date'] == preferred_date:
+                preferred_items.append(item_id)
+
+        initial_items = preferred_items or [
+            item_id for item_id, photo in candidate_by_item.items()
+            if photo['_source_date'] == latest_date
+        ]
+        photo_tree.selection_set(*initial_items)
+        photo_tree.focus(initial_items[0])
+        photo_tree.see(initial_items[0])
+
+        status_var = tk.StringVar()
+        status_label = ttk.Label(dialog, textvariable=status_var, anchor='w')
+        status_label.pack(fill='x', padx=15, pady=(2, 0))
+
+        def update_selection_status(event=None):
+            selected_count = len(photo_tree.selection())
+            status_var.set(
+                f"선택 {selected_count}장 / 전체 {len(candidates)}장"
+            )
+
+        update_selection_status()
+        photo_tree.bind('<<TreeviewSelect>>', update_selection_status)
+
+        result = {'photos': []}
+
+        def confirm_selection(event=None):
+            selected = set(photo_tree.selection())
+            if not selected:
+                messagebox.showwarning(
+                    "사진 선택", "불러올 사진을 한 장 이상 선택하세요.",
+                    parent=dialog,
+                )
+                return
+            result['photos'] = [
+                candidate_by_item[item_id]
+                for item_id in photo_tree.get_children()
+                if item_id in selected
+            ]
+            dialog.destroy()
+
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(fill='x', padx=15, pady=(5, 15))
+        ttk.Button(
+            button_frame, text="전체 선택",
+            command=lambda: photo_tree.selection_set(*photo_tree.get_children())
+        ).pack(side='left')
+        ttk.Button(
+            button_frame, text="선택 해제",
+            command=lambda: photo_tree.selection_remove(*photo_tree.selection())
+        ).pack(side='left', padx=5)
+        ttk.Button(
+            button_frame, text="불러오기", command=confirm_selection
+        ).pack(side='right', padx=(5, 0))
+        ttk.Button(
+            button_frame, text="취소", command=dialog.destroy
+        ).pack(side='right')
+        dialog.protocol('WM_DELETE_WINDOW', dialog.destroy)
+        dialog.wait_window()
+        return result['photos']
+
+    def _import_daily_work_photos(self):
+        """검사일자/검사종류에 맞는 중앙지사 작업일보 사진을 추가한다."""
+        inspect_date = self.photo_inspect_date.get().strip()
+        try:
+            datetime.datetime.strptime(inspect_date, "%Y-%m-%d")
+        except ValueError:
+            messagebox.showwarning(
+                "날짜 확인", "검사 일자를 YYYY-MM-DD 형식으로 입력하세요."
+            )
+            return
+
+        history_path = self._central_daily_history_path()
+        if not history_path or not os.path.isfile(history_path):
+            messagebox.showwarning(
+                "작업일보 없음",
+                "중앙지사 작업일보 저장 파일을 찾을 수 없습니다.\n"
+                f"확인 경로: {history_path or '(경로 확인 실패)'}",
+            )
+            return
+
+        try:
+            with open(history_path, 'r', encoding='utf-8') as history_file:
+                history = json.load(history_file)
+        except (OSError, json.JSONDecodeError) as exc:
+            messagebox.showerror(
+                "불러오기 오류", f"작업일보를 읽을 수 없습니다.\n{exc}"
+            )
+            return
+
+        inspect_type = self.photo_inspect_type.get().strip().upper()
+        matching_photos = self._select_daily_work_photos(
+            history, inspect_type, inspect_date
+        )
+        if not matching_photos:
+            return
+
+        history_dir = os.path.dirname(history_path)
+        existing_keys = {
+            self._photo_metadata_key(path) for path in self.photo_selected_files
+        }
+        added_count = 0
+        duplicate_count = 0
+        missing_files = []
+        selected_dates = set()
+
+        for photo in matching_photos:
+            source_date = str(photo.get('_source_date', '')).strip()
+            if source_date:
+                selected_dates.add(source_date)
+            stored_path = str(photo.get('file_path', '')).strip()
+            if not stored_path:
+                missing_files.append('(저장 경로 없음)')
+                continue
+            if os.path.isabs(stored_path):
+                image_path = os.path.normpath(stored_path)
+            else:
+                image_path = os.path.normpath(os.path.join(history_dir, stored_path))
+            image_path = os.path.abspath(image_path)
+            metadata_key = self._photo_metadata_key(image_path)
+
+            if not os.path.isfile(image_path):
+                missing_files.append(os.path.basename(image_path) or stored_path)
+                continue
+
+            self.photo_item_metadata[metadata_key] = {
+                'source': 'central_daily_work_log',
+                'date': source_date,
+                'process': str(photo.get('process', '')).strip(),
+                'section': str(photo.get('section', '')).strip(),
+                'line_no': str(photo.get('line_no', '')).strip(),
+                'size': str(photo.get('_size', '')).strip(),
+                'joint_no': str(photo.get('joint_no', '')).strip(),
+                'welder': self._normalize_daily_photo_welder(
+                    photo.get('welder', '')
+                ),
+                'location': str(photo.get('location', '')).strip(),
+                'description': str(photo.get('description', '')).strip(),
+            }
+            if metadata_key in existing_keys:
+                duplicate_count += 1
+                continue
+
+            self.photo_selected_files.append(image_path)
+            self.photo_listbox.insert(tk.END, image_path)
+            existing_keys.add(metadata_key)
+            added_count += 1
+
+        self._update_photo_preview()
+        self.save_settings()
+        selected_dates_text = ", ".join(sorted(selected_dates)) or "확인 불가"
+        summary = (
+            f"사진 저장일: {selected_dates_text} / {inspect_type}\n"
+            f"보고서 검사일자: {inspect_date}\n"
+            f"추가: {added_count}장\n"
+            f"중복 제외: {duplicate_count}장\n"
+            f"파일 없음: {len(missing_files)}장"
+        )
+        if missing_files:
+            summary += "\n\n찾지 못한 파일:\n" + "\n".join(missing_files[:5])
+            if len(missing_files) > 5:
+                summary += f"\n외 {len(missing_files) - 5}장"
+        self.log(f"[PhotoLog] 작업일보 연동: {summary.replace(chr(10), ' / ')}")
+        messagebox.showinfo("작업일보 사진 불러오기", summary)
 
     def _add_photo_files(self):
         files = filedialog.askopenfilenames(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp")])
@@ -10822,10 +11272,12 @@ class PMIReportApp:
             path = self.photo_listbox.get(i)
             if path in self.photo_selected_files:
                 self.photo_selected_files.remove(path)
+            self.photo_item_metadata.pop(self._photo_metadata_key(path), None)
             self.photo_listbox.delete(i)
 
     def _clear_photo_all(self):
         self.photo_selected_files.clear()
+        self.photo_item_metadata.clear()
         self.photo_listbox.delete(0, tk.END)
         self.log("[PhotoLog] 리스트 초기화 완료")
         self._update_photo_preview()
@@ -10913,7 +11365,7 @@ class PMIReportApp:
                 img = ImageOps.exif_transpose(img)
                 img_w, img_h = img.size
                 
-                if self.photo_auto_rotate_var.get() and img_h > img_w:
+                if self._should_auto_rotate_photo(img_path) and img_h > img_w:
                     img = img.rotate(90, expand=True)
                     img_w, img_h = img.size
                 
@@ -11019,7 +11471,7 @@ class PMIReportApp:
         if selected_idxs:
             target_files = [self.photo_listbox.get(i) for i in selected_idxs]
         else:
-            target_files = sorted(self.photo_selected_files)
+            target_files = list(self.photo_selected_files)
             
         self.save_settings() # Auto-save before generation
         threading.Thread(target=self.generate_photo_report, args=(target_files,), daemon=True).start()
@@ -11031,7 +11483,7 @@ class PMIReportApp:
         try:
             if target_files is None:
                 if not self.photo_selected_files: return
-                image_files = sorted(self.photo_selected_files)
+                image_files = list(self.photo_selected_files)
             else:
                 if not target_files: return
                 image_files = target_files
@@ -11103,7 +11555,11 @@ class PMIReportApp:
             num_cols = int(self.photo_cols_per_row.get())
             num_rows = int(self.photo_rows_per_page.get())
             photos_per_page = num_cols * num_rows
-            total_pages = math.ceil(len(image_files) / photos_per_page)
+            scheduled_photos, used_slot_count, _daily_start_slot = (
+                self._schedule_photo_output(image_files, photos_per_page)
+            )
+            image_files = [path for path, _slot in scheduled_photos]
+            total_pages = math.ceil(used_slot_count / photos_per_page)
             # 가로(너비)는 무조건 1페이지에 맞추고, 세로(높이)는 자동(0)으로 두어 
             # 사진이 옆 페이지로 밀려나는 현상을 완벽히 방지합니다.
             worksheet.fit_to_pages(1, 0)
@@ -11247,9 +11703,10 @@ class PMIReportApp:
             worksheet.set_row(4, 25)
             worksheet.merge_range(4, 0, 4, GRID_COLS-1, "PHOTO LOG (사진 대장)", bold_format)
 
-            row = 5
-            col_ptr = 0
-            page_breaks = []
+            page_breaks = [
+                5 + (page_index * num_rows * 2)
+                for page_index in range(1, total_pages)
+            ]
             num_rows = int(self.photo_rows_per_page.get())
             photos_per_page = num_cols * num_rows
             DESC_ROW_HEIGHT = float(self.photo_desc_height_var.get())
@@ -11265,7 +11722,16 @@ class PMIReportApp:
             CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
             ROW_PT_TO_PX = 1.33333
 
-            for i, img_path in enumerate(image_files):
+            used_photo_row_slots = set()
+            for i, (img_path, slot_index) in enumerate(scheduled_photos):
+                page_index = slot_index // photos_per_page
+                slot_in_page = slot_index % photos_per_page
+                photo_row_in_page = slot_in_page // num_cols
+                col_ptr = slot_in_page % num_cols
+                logical_row_slot = (page_index * num_rows) + photo_row_in_page
+                used_photo_row_slots.add(logical_row_slot)
+                row = 5 + (logical_row_slot * 2)
+
                 # Reset max height for a new row of photos
                 if col_ptr == 0:
                     current_row_max_h_pt = 0 if self.photo_fit_width_var.get() else CELL_ROW_HEIGHT
@@ -11276,7 +11742,7 @@ class PMIReportApp:
                         img_w, img_h = img.size
                         
                         # [NEW] Auto-rotate vertical images to horizontal if option enabled
-                        if self.photo_auto_rotate_var.get() and img_h > img_w:
+                        if self._should_auto_rotate_photo(img_path) and img_h > img_w:
                             img = img.rotate(90, expand=True)
                             img_w, img_h = img.size
                             self.log(f"[PhotoLog] 자동 회전 적용: {os.path.basename(img_path)}")
@@ -11347,28 +11813,21 @@ class PMIReportApp:
                 except Exception as e:
                     self.log(f"[Error] {os.path.basename(img_path)}: {e}")
 
-                name = os.path.splitext(os.path.basename(img_path))[0].replace("_capture", "")
+                name = self._daily_photo_description(img_path)
                 worksheet.set_row(row + 1, DESC_ROW_HEIGHT)
                 c_start, c_end = photo_col_spans[col_ptr]
                 worksheet.merge_range(row+1, c_start, row+1, c_end, f"사진 설명: {name}", desc_format)
                 
-                col_ptr += 1
-                if col_ptr >= num_cols:
-                    col_ptr = 0
-                    row += 2
-                
-                if (i + 1) % photos_per_page == 0 and (i + 1) < total:
-                    page_breaks.append(row if col_ptr==0 else row+2)
-
                 self.progress["value"] = ((i + 1) / total) * 100
                 self.log(f"[PhotoLog] 처리 중.. ({i+1}/{total})")
 
-            # 세로 가운데 정렬은 마지막 페이지의 데이터가 적으면 내용을 페이지
-            # 중앙으로 내린다. 부족한 사진 행을 보이지 않는 빈 행으로 채워 모든
-            # 페이지의 인쇄 높이를 같게 유지하면 각 페이지가 동일한 위치에서 시작한다.
-            used_photo_rows = math.ceil(total / num_cols)
+            # 모든 페이지의 빈 사진행도 같은 높이로 유지한다. 데이터 사진과
+            # 작업일보 사진 사이에 남은 빈 슬롯은 그대로 두어 서로 다른 페이지에
+            # 출력되도록 한다.
             full_photo_rows = total_pages * num_rows
-            for slot in range(used_photo_rows, full_photo_rows):
+            for slot in range(full_photo_rows):
+                if slot in used_photo_row_slots:
+                    continue
                 padding_row = 5 + (slot * 2)
                 worksheet.set_row(padding_row, CELL_ROW_HEIGHT)
                 worksheet.set_row(padding_row + 1, DESC_ROW_HEIGHT)
