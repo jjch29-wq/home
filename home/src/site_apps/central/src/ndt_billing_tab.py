@@ -1630,7 +1630,7 @@ class NDTCalculatorTab(ttk.Frame):
             for cat, k in [("장비손료", "equip"), ("안전관리비", "safety"), ("주재비 및 출장여비", "travel"), ("도서인쇄비", "print")]:
                 if self.get_int(self.exp_vars[k]["budget"]) > 0 or self.get_int(self.exp_vars[k]["prev"]) > 0 or self.exp_vars[k]["curr"].get() > 0:
                     categories.append(cat)
-            categories.extend(["기타실비 소계", "엔지니어링 손해배상공제료", "총 계"])
+            categories.extend(["기타실비 소계", "엔지니어링 손해배상공제료", "공 급 가 액", "부가가치세", "합        계"])
             
             ws.Range(ws.Cells(6, 1), ws.Cells(6 + len(categories) + 2, 15)).Borders.LineStyle = 1
             
@@ -1652,11 +1652,13 @@ class NDTCalculatorTab(ttk.Frame):
                 c_qty, p_qty, cur_qty, tot_qty, rem_qty = "", "", "", "", ""
                 c_amt, p_amt, cur_amt, tot_amt, rem_amt = 0, 0, 0, 0, 0
                 
-                if cat == "총 계":
+                if cat == "공 급 가 액":
                     c_amt = self.get_int(self.total_contract_var)
                     p_amt = self.get_int(self.total_prev_var)
                     cur_amt = sum(r["subtotal"] for r in target_records) + extra_items_total
                     total_row = row
+                elif cat in ["부가가치세", "합        계"]:
+                    pass
                 elif cat == "기타실비 소계":
                     c_amt = sum(self.get_int(self.exp_vars[k]["budget"]) for k in ["equip", "safety", "travel", "print"])
                     p_amt = sum(self.get_int(self.exp_vars[k]["prev"]) for k in ["equip", "safety", "travel", "print"])
@@ -1693,11 +1695,16 @@ class NDTCalculatorTab(ttk.Frame):
                             
                     data_rows.append(row)
                 
-                if cat in ["총 계", "기타실비 소계", "장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
+                if cat in ["공 급 가 액", "부가가치세", "합        계", "기타실비 소계", "장비손료", "안전관리비", "주재비 및 출장여비", "도서인쇄비", "엔지니어링 손해배상공제료"]:
                     ws.Cells(row, 1).Value = cat
                     ws.Range(ws.Cells(row, 1), ws.Cells(row, 5)).Merge()
                     ws.Cells(row, 1).HorizontalAlignment = -4108
-                    if cat in ["총 계", "기타실비 소계"]:
+                    
+                    if cat == "합        계":
+                        ws.Range(ws.Cells(row, 1), ws.Cells(row, 15)).Interior.Color = 10066329
+                        ws.Range(ws.Cells(row, 1), ws.Cells(row, 15)).Font.Color = 16777215
+                        ws.Range(ws.Cells(row, 1), ws.Cells(row, 15)).Font.Bold = True
+                    elif cat in ["공 급 가 액", "기타실비 소계"]:
                         ws.Range(ws.Cells(row, 1), ws.Cells(row, 15)).Interior.Color = 15987699
                         ws.Cells(row, 1).Font.Bold = True
                 else:
@@ -1740,7 +1747,7 @@ class NDTCalculatorTab(ttk.Frame):
                 num_fmt = '#,##0;-#,##0;"-"'
                 float_fmt = '#,##0.0000;-#,##0.0000;"-"'
                 
-                if cat == "총 계":
+                if cat == "공 급 가 액":
                     ws.Cells(row, 7).Value = c_amt
                     ws.Cells(row, 7).NumberFormat = num_fmt
                     ws.Cells(row, 7).Font.Bold = True
@@ -1761,6 +1768,30 @@ class NDTCalculatorTab(ttk.Frame):
                     ws.Cells(row, 15).NumberFormat = num_fmt
                     ws.Cells(row, 15).Font.Bold = True
                     
+                    for col in [6, 8, 10, 12, 14]:
+                        ws.Cells(row, col).Value = 0
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                        
+                    self.supply_row = row
+                    
+                elif cat == "부가가치세":
+                    ws.Cells(row, 7).Formula = f"=TRUNC(G{self.supply_row}*10%,0)"
+                    ws.Cells(row, 9).Formula = f"=TRUNC(I{self.supply_row}*10%,0)"
+                    ws.Cells(row, 11).Formula = f"=TRUNC(K{self.supply_row}*10%,0)"
+                    ws.Cells(row, 13).Formula = f"=I{row}+K{row}"
+                    ws.Cells(row, 15).Formula = f"=G{row}-M{row}"
+                    for col in [7, 9, 11, 13, 15]: ws.Cells(row, col).NumberFormat = num_fmt
+                    for col in [6, 8, 10, 12, 14]:
+                        ws.Cells(row, col).Value = 0
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                        
+                elif cat == "합        계":
+                    cols_idx = [7, 9, 11, 13, 15]
+                    cols_let = ['G', 'I', 'K', 'M', 'O']
+                    for col, let in zip(cols_idx, cols_let):
+                        ws.Cells(row, col).Formula = f"={let}{self.supply_row}+{let}{self.supply_row+1}"
+                        ws.Cells(row, col).NumberFormat = num_fmt
+                        ws.Cells(row, col).Font.Bold = True
                     for col in [6, 8, 10, 12, 14]:
                         ws.Cells(row, col).Value = 0
                         ws.Cells(row, col).NumberFormat = num_fmt
@@ -2002,19 +2033,41 @@ class NDTCalculatorTab(ttk.Frame):
             _cover_row(12, "계약기간 :", "2026.08.05 ~ 2027.08.05")
 
             # --- 5단계 자금 흐름 표 ---
-            total_contract_amt_val = grand_total_with_vat
-            try:
-                total_contract_amt_val = int(self.total_contract_amt_var.get().replace(',','').replace('₩','').strip())
-            except: pass
-
-            prev_cumul = 0
-            curr_amt = grand_total_with_vat
-            cumul_amt = prev_cumul + curr_amt
-            remain_amt = total_contract_amt_val - cumul_amt
+            c_sup = self.get_int(self.total_contract_var)
+            c_vat = int(c_sup * 0.1)
+            c_tot = c_sup + c_vat
+            
+            p_sup = self.get_int(self.total_prev_var)
+            p_vat = int(p_sup * 0.1)
+            p_tot = p_sup + p_vat
+            
+            cur_sup = grand_total
+            cur_vat = vat
+            cur_tot = grand_total_with_vat
+            
+            cum_sup = p_sup + cur_sup
+            cum_vat = p_vat + cur_vat
+            cum_tot = p_tot + cur_tot
+            
+            rem_sup = c_sup - cum_sup
+            rem_vat = c_vat - cum_vat
+            rem_tot = c_tot - cum_tot
 
             table_start = 14
-            table_headers = ["구 분", "계약금액", "전회누계", "금회청구", "총누계", "잔여금액"]
-            for col_i, h in enumerate(table_headers, start=1):
+            table_headers = ["계약금액", "전회누계", "금회청구", "총누계", "잔여금액"]
+            
+            ws_cover.Range(f"A{table_start}:B{table_start}").Merge()
+            cell = ws_cover.Range(f"A{table_start}")
+            cell.Value = "구 분"
+            cell.Font.Bold = True
+            cell.Font.Size = 14
+            cell.HorizontalAlignment = -4108
+            cell.VerticalAlignment = -4108
+            cell.Interior.Color = 10066329
+            cell.Font.Color = 16777215
+            for col_i in [1, 2]: ws_cover.Cells(table_start, col_i).Borders.LineStyle = 1
+            
+            for col_i, h in enumerate(table_headers, start=3):
                 cell = ws_cover.Cells(table_start, col_i)
                 cell.Value = h
                 cell.Font.Bold = True
@@ -2026,26 +2079,32 @@ class NDTCalculatorTab(ttk.Frame):
                 cell.Borders.LineStyle = 1
             ws_cover.Rows(table_start).RowHeight = 28
 
-            amt_row = table_start + 1
-            amt_vals = [
-                "금 액(원)",
-                f"{total_contract_amt_val:,}",
-                f"{prev_cumul:,}",
-                f"{curr_amt:,}",
-                f"{cumul_amt:,}",
-                f"{remain_amt:,}",
+            rows_data = [
+                ("공급가액", [c_sup, p_sup, cur_sup, cum_sup, rem_sup]),
+                ("부가가치세", [c_vat, p_vat, cur_vat, cum_vat, rem_vat]),
+                ("합     계", [c_tot, p_tot, cur_tot, cum_tot, rem_tot])
             ]
-            for col_i, val in enumerate(amt_vals, start=1):
-                cell = ws_cover.Cells(amt_row, col_i)
-                cell.Value = val
-                cell.Font.Size = 14
-                cell.HorizontalAlignment = -4108
-                cell.VerticalAlignment = -4108
-                if col_i == 1:
-                    cell.Font.Bold = True
-                    cell.Interior.Color = 15132390
-                cell.Borders.LineStyle = 1
-            ws_cover.Rows(amt_row).RowHeight = 28
+            
+            for r_idx, (label, vals) in enumerate(rows_data):
+                row_idx = table_start + 1 + r_idx
+                ws_cover.Range(f"A{row_idx}:B{row_idx}").Merge()
+                cell_lbl = ws_cover.Range(f"A{row_idx}")
+                cell_lbl.Value = label
+                cell_lbl.Font.Bold = True
+                cell_lbl.Font.Size = 14
+                cell_lbl.HorizontalAlignment = -4108
+                cell_lbl.VerticalAlignment = -4108
+                cell_lbl.Interior.Color = 15132390
+                for col_i in [1, 2]: ws_cover.Cells(row_idx, col_i).Borders.LineStyle = 1
+                
+                for c_idx, v in enumerate(vals, start=3):
+                    cell_val = ws_cover.Cells(row_idx, c_idx)
+                    cell_val.Value = f"{v:,}"
+                    cell_val.Font.Size = 14
+                    cell_val.HorizontalAlignment = -4152
+                    cell_val.VerticalAlignment = -4108
+                    cell_val.Borders.LineStyle = 1
+                ws_cover.Rows(row_idx).RowHeight = 28
             
             ws_cover.Range("A21:G21").Merge()
             ws_cover.Range("A21").Value = "위와 같이 기성대금을 청구합니다."
@@ -2057,17 +2116,11 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cover.Range("A26").Font.Size = 16
             ws_cover.Range("A26").HorizontalAlignment = -4108
             
-            ws_cover.Range("A29:B29").Merge()
-            ws_cover.Range("A29").Value = "청구인 :"
+            ws_cover.Range("A29:G29").Merge()
+            ws_cover.Range("A29").Value = "청구인 : 서울검사(주) (인)"
             ws_cover.Range("A29").Font.Size = 18
             ws_cover.Range("A29").Font.Bold = True
-            ws_cover.Range("A29").HorizontalAlignment = -4152 # xlRight
-            
-            ws_cover.Range("C29:G29").Merge()
-            ws_cover.Range("C29").Value = "서울검사(주) (인)"
-            ws_cover.Range("C29").Font.Size = 18
-            ws_cover.Range("C29").Font.Bold = True
-            ws_cover.Range("C29").HorizontalAlignment = -4131 # xlLeft
+            ws_cover.Range("A29").HorizontalAlignment = -4108 # xlCenter
             
             ws_cover.Range("A32:G32").Merge()
             ws_cover.Range("A32").Value = "한국지역난방공사 중앙지사 귀하"
@@ -2093,7 +2146,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws_summary = wb.Sheets.Add(None, ws)
             ws_summary.Name = "업체별 기성요약"
             
-            ws_summary.PageSetup.Orientation = 1 # xlPortrait
+            ws_summary.PageSetup.Orientation = 2 # xlLandscape
             ws_summary.PageSetup.Zoom = False
             ws_summary.PageSetup.FitToPagesWide = 1
             ws_summary.PageSetup.FitToPagesTall = False
@@ -2285,16 +2338,13 @@ class NDTCalculatorTab(ttk.Frame):
                             sec, l_no = sg_key
                             group_key = (sec, l_no, spec, unit, c_price)
                             if group_key not in work_summary:
-                                work_summary[group_key] = {"places": 0, "qty": 0.0, "amt": 0}
+                                work_summary[group_key] = {"places": 0, "qty": 0.0}
                                 
                             places = max(len(sg_data["joints"]), sg_data["rows"])
                             work_summary[group_key]["places"] += places
                             
                             my_qty = sg_data["length"]
-                            my_amt = int(my_qty * c_price)
-                                
                             work_summary[group_key]["qty"] += my_qty
-                            work_summary[group_key]["amt"] += my_amt
 
                 # 테이블 헤더 렌더링
                 headers_sum = {
@@ -2314,11 +2364,35 @@ class NDTCalculatorTab(ttk.Frame):
                 # 정렬: 섹션 -> 라인번호 -> 규격
                 sorted_keys = sorted(work_summary.keys(), key=lambda x: (x[0], x[1], x[2]))
                 
+                # 단수 조정(Fraction Adjustment): 규격별로 수량을 합산하여 총 금액을 구한 뒤, 각 행에 분배하여 1원 단위 오차 방지
+                spec_totals = {}
+                for key in sorted_keys:
+                    sec, l_no, spec, unit, c_price = key
+                    qty = work_summary[key]["qty"]
+                    spec_key = (spec, c_price)
+                    if spec_key not in spec_totals:
+                        spec_totals[spec_key] = {"qty": 0.0, "total_amt": 0, "allocated_amt": 0, "rows": []}
+                    spec_totals[spec_key]["qty"] += qty
+                    spec_totals[spec_key]["rows"].append(key)
+                
+                for spec_key, totals in spec_totals.items():
+                    totals["total_amt"] = int(totals["qty"] * spec_key[1])
+                    rows = totals["rows"]
+                    for i, key in enumerate(rows):
+                        row_qty = work_summary[key]["qty"]
+                        if i == len(rows) - 1:
+                            row_amt = totals["total_amt"] - totals["allocated_amt"]
+                        else:
+                            row_amt = int(row_qty * spec_key[1])
+                            totals["allocated_amt"] += row_amt
+                        work_summary[key]["calculated_amt"] = row_amt
+                
                 for key in sorted_keys:
                     data = work_summary[key]
-                    if data["qty"] == 0 and data["amt"] == 0: continue
-                    
                     sec, l_no, spec, unit, c_price = key
+                    calculated_amt = data.get("calculated_amt", 0)
+                    
+                    if data["qty"] == 0 and calculated_amt == 0: continue
                     
                     ws_summary.Cells(sum_row, 1).Value = sec
                     ws_summary.Cells(sum_row, 2).Value = l_no
@@ -2335,7 +2409,7 @@ class NDTCalculatorTab(ttk.Frame):
                         ws_summary.Cells(sum_row, 6).Value = int(data["qty"])
                         ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0;-#,##0;"-"'
                         
-                    ws_summary.Cells(sum_row, 7).Value = data["amt"]
+                    ws_summary.Cells(sum_row, 7).Value = calculated_amt
                     ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
                     
                     for col in range(1, 8):
