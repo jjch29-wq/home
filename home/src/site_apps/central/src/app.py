@@ -7180,9 +7180,14 @@ class MaterialManager:
                 nd_overhead = _f(row.get('제경비', 0))
                 nd_tech = _f(row.get('기술료', 0))
                 
-                # If NDT fields exist, use them. Otherwise fallback to standard net revenue.
+                # If NDT fields exist, use them.
                 row_revenue = nd_labor + nd_mat + nd_overhead + nd_tech
-                if row_revenue <= 0:
+                
+                # [FIX] Absorb 1-won truncation differences into tech fee so component sums perfectly match the exact subtotal (net)
+                if row_revenue > 0 and net > 0 and abs(net - row_revenue) < 10:
+                    nd_tech += (net - row_revenue)
+                    row_revenue = net
+                elif row_revenue <= 0:
                     row_revenue = net
 
                 row_expense_cost = travel + meal + ot_sum + mat_cost
@@ -7740,8 +7745,12 @@ class MaterialManager:
             else:
                 outsource_total += nd_labor
             row_revenue = nd_labor + nd_mat + nd_overhead + nd_tech
-            if row_revenue <= 0:
-                row_revenue = _f(row.get('검사비', 0))
+            net = _f(row.get('검사비', 0))
+            if row_revenue > 0 and net > 0 and abs(net - row_revenue) < 10:
+                nd_tech += (net - row_revenue)
+                row_revenue = net
+            elif row_revenue <= 0:
+                row_revenue = net
             total_net_revenue += row_revenue
             total_travel += _f(row.get('출장비', 0))
             total_meal += _f(row.get('일식', 0))

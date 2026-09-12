@@ -131,7 +131,7 @@ class NDTCalculatorTab(ttk.Frame):
                     
                 self.tree.insert("", tk.END, values=(
                     res.get("date", ""), res.get("company", ""), res.get("loc", ""), res.get("ndt_type", ""), res.get("work_time", ""), 
-                    res.get("material_type", ""), f"{res.get('qty', 0):.1f}", res.get("unit", ""),
+                    res.get("material_type", ""), f"{res.get('qty', 0):.4f}", res.get("unit", ""),
                     f"{unit_price:,}", f"{res.get('subtotal', 0):,}"
                 ))
             if hasattr(self, 'update_qty_summary'):
@@ -194,7 +194,7 @@ class NDTCalculatorTab(ttk.Frame):
         self.work_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         left_outer_frame = ttk.Frame(self.work_pane)
-        self.work_pane.add(left_outer_frame, stretch="always")
+        # self.work_pane.add(left_outer_frame, stretch="always")
         
         left_canvas = tk.Canvas(left_outer_frame, highlightthickness=0)
         left_scroll = ttk.Scrollbar(left_outer_frame, orient="vertical", command=left_canvas.yview)
@@ -651,6 +651,10 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Button(lbl_frame, text="일일 장부에서 연동", command=self.import_from_daily_db).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
 
+        self.subtotal_var = tk.StringVar(value="[소계] 총 실물량: 0.0  |  총 공급가액: 0 원")
+        subtotal_lbl = ttk.Label(bottom_frame, textvariable=self.subtotal_var, font=("Arial", 11, "bold"), foreground="blue")
+        subtotal_lbl.pack(side=tk.BOTTOM, anchor=tk.E, pady=(5, 5))
+
         tree_container = ttk.Frame(bottom_frame)
         tree_container.pack(fill=tk.BOTH, expand=True)
 
@@ -1065,7 +1069,13 @@ class NDTCalculatorTab(ttk.Frame):
         for k in self.contract_vars:
             self.contract_vars[k]["curr_qty"].set("0")
             
+        total_qty = 0.0
+        total_amt = 0
+            
         for rec in self.records:
+            total_qty += float(rec.get("qty", 0.0))
+            total_amt += int(rec.get("subtotal", 0))
+            
             loc = "플랜트(관리소)" if "관리소" in rec["loc"] or "플랜트" in rec.get("loc_type", rec["loc"]) else "열배관"
             t_time = rec.get("work_time", "일반")
             ndt_type = rec["ndt_type"]
@@ -1078,6 +1088,9 @@ class NDTCalculatorTab(ttk.Frame):
                     cur_val = self.get_float(self.contract_vars[key]["curr_qty"])
                     new_val = cur_val + rec["qty"]
                     self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
+                    
+        if hasattr(self, 'subtotal_var'):
+            self.subtotal_var.set(f"[소계] 총 실물량: {total_qty:,.4f}  |  총 공급가액: {total_amt:,} 원")
                     
         self.export_billing_data()
 
@@ -1115,7 +1128,7 @@ class NDTCalculatorTab(ttk.Frame):
                 
             self.tree.insert("", tk.END, values=(
                 res["date"], res.get("company", ""), res["loc"], res["ndt_type"], res["work_time"], 
-                res["material_type"], f"{res['qty']:.1f}", res["unit"],
+                res["material_type"], f"{res['qty']:.4f}", res["unit"],
                 f"{unit_price:,}", f"{res['subtotal']:,}"
             ))
             self.update_qty_summary()
@@ -1390,7 +1403,7 @@ class NDTCalculatorTab(ttk.Frame):
                 for res in current_records:
                     self.tree.insert("", tk.END, values=(
                         res["date"], res["loc"], res["ndt_type"], res["work_time"], 
-                        res["material_type"], f"{res['qty']:.1f}", res["unit"],
+                        res["material_type"], f"{res['qty']:.4f}", res["unit"],
                         f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
                         f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
                     ))

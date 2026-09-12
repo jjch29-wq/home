@@ -57,18 +57,18 @@
         "PT_PT_야간": 1
     },
     "TREE_WIDTHS": {
-        "date": 138,
-        "company": 230,
-        "loc": 173,
-        "type": 86,
-        "time": 134,
-        "mat": 184,
-        "qty": 131,
-        "unit": 135,
-        "unit_price": 128,
-        "total_amt": 173
+        "date": 171,
+        "company": 263,
+        "loc": 206,
+        "type": 119,
+        "time": 167,
+        "mat": 217,
+        "qty": 163,
+        "unit": 168,
+        "unit_price": 161,
+        "total_amt": 206
     },
-    "SASH_POS": 573,
+    "SASH_POS": 579,
     "BILLING_RECORDS": [
         {
             "date": "2026-08-07",
