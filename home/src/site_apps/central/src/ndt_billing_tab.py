@@ -328,13 +328,13 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Entry(round_frame, textvariable=self.round_var, width=5, justify="center", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=5)
         ttk.Label(round_frame, text="회", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
         
-        ttk.Label(round_frame, text="  |  기성청구 기간:", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=(15, 5))
-        self.billing_period_var = tk.StringVar(value="")
-        ttk.Entry(round_frame, textvariable=self.billing_period_var, width=25, font=("Arial", 11)).pack(side=tk.LEFT)
+        # ttk.Label(round_frame, text="  |  기성청구 기간:", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=(15, 5))
+        # self.billing_period_var = tk.StringVar(value="")
+        # ttk.Entry(round_frame, textvariable=self.billing_period_var, width=25, font=("Arial", 11)).pack(side=tk.LEFT)
         
         ttk.Button(round_frame, text="다음 회차로 이월하기 (전회 누적 & 금회 초기화)", command=self.carry_over_round).pack(side=tk.RIGHT)
         ttk.Button(round_frame, text="이전 백업 불러오기 (.ndt)", command=self.load_project).pack(side=tk.RIGHT, padx=10)
-        ttk.Button(round_frame, text="✨ 엑셀 보고서 생성기 열기", command=self.open_report_hub).pack(side=tk.RIGHT, padx=5)
+        # ttk.Button(round_frame, text="✨ 엑셀 보고서 생성기 열기", command=self.open_report_hub).pack(side=tk.RIGHT, padx=5)
         
         content_frame = ttk.Frame(billing_container)
         content_frame.pack(fill=tk.BOTH, expand=True)
@@ -1559,24 +1559,22 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Range("A1").HorizontalAlignment = -4108
             ws.Range("A1").VerticalAlignment = -4108
             
-            ws.Range("A4:B4").Merge()
-            ws.Range("A4").Value = "공 사 명 :"
+            ws.Range("A4:J4").Merge()
+            ws.Range("A4").Value = "공 사 명 :  2026년 중앙지사 열수송관 비파괴검사용역 단가계약"
             ws.Range("A4").Font.Bold = True
-            ws.Range("A4").Font.Size = 12
-            ws.Range("C4:J4").Merge()
-            ws.Range("C4").Value = "2026년 중앙지사 열수송관 비파괴검사용역 단가계약"
-            ws.Range("C4").Font.Bold = True
-            ws.Range("C4").Font.Size = 14
+            ws.Range("A4").Font.Size = 14
+            ws.Range("A4").HorizontalAlignment = -4131 # xlLeft
             
             ws.Range("K4:L4").Merge()
             ws.Range("K4").Value = "청구 기간 :"
             ws.Range("K4").Font.Bold = True
             ws.Range("K4").Font.Size = 11
-            ws.Range("K4").HorizontalAlignment = -4152
+            ws.Range("K4").HorizontalAlignment = -4152 # xlRight
+            
             ws.Range("M4:O4").Merge()
             ws.Range("M4").Value = global_period
             ws.Range("M4").Font.Size = 11
-            ws.Range("M4").HorizontalAlignment = -4108
+            ws.Range("M4").HorizontalAlignment = -4131 # xlLeft
             
             # --- 기성 요약 테이블 ---
             ws.Cells(6, 1).Value = "공종"
@@ -2017,20 +2015,20 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_cover.Range(f"A{row}").Value = label
                 ws_cover.Range(f"A{row}").Font.Size = label_size
                 ws_cover.Range(f"A{row}").Font.Bold = True
-                ws_cover.Range(f"A{row}").HorizontalAlignment = -4152
+                ws_cover.Range(f"A{row}").HorizontalAlignment = -4108 # xlCenter
                 ws_cover.Range(f"A{row}").VerticalAlignment = -4108
                 ws_cover.Range(f"A{row}").Interior.Color = 15132390
                 ws_cover.Range(f"C{row}:G{row}").Merge()
-                ws_cover.Range(f"C{row}").Value = value
+                ws_cover.Range(f"C{row}").Value = " " + value # Add slight padding
                 ws_cover.Range(f"C{row}").Font.Size = val_size
-                ws_cover.Range(f"C{row}").HorizontalAlignment = -4108
+                ws_cover.Range(f"C{row}").HorizontalAlignment = -4131 # xlLeft
                 ws_cover.Range(f"C{row}").VerticalAlignment = -4108
                 for c_idx in range(1, 8):
                     ws_cover.Cells(row, c_idx).Borders.LineStyle = 1
                 ws_cover.Rows(row).RowHeight = 30
 
-            _cover_row(11, "공 사 명 :", "2026년 중앙지사 열수송관 비파괴검사용역 단가계약")
-            _cover_row(12, "계약기간 :", "2026.08.05 ~ 2027.08.05")
+            _cover_row(11, "공 사 명", "2026년 중앙지사 열수송관 비파괴검사용역 단가계약")
+            _cover_row(12, "계 약 기 간", "2026.08.05 ~ 2027.08.05")
 
             # --- 5단계 자금 흐름 표 ---
             c_sup = self.get_int(self.total_contract_var)
