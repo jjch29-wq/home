@@ -7078,6 +7078,9 @@ class MaterialManager:
                         return _f(_row.get(k, 0))
                 return 0.0
 
+            # 규격별 작업 행의 검사 기성액은 모두 합산하되, 동일 근무의 OT는 한 번만 차감한다.
+            processed_financial_ot_signatures = set()
+
             for _, row in df.iterrows():
                 # [NEW] Logical entry deduplication for the display list (Treeview)
                 e_date = str(row.get('Date', '')).split(' ')[0]
@@ -7108,6 +7111,25 @@ class MaterialManager:
                         parsed_ots.append(_f(v_str))
                 
                 ot_sum = sum(parsed_ots)
+
+                worker_time_pairs = []
+                for i in range(1, 11):
+                    user_key = 'User' if i == 1 else f'User{i}'
+                    time_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
+                    worker_name = _clean_str(row.get(user_key, ''))
+                    if worker_name:
+                        worker_time_pairs.append((worker_name, _clean_str(row.get(time_key, ''))))
+
+                financial_ot_signature = (
+                    str(row.get('Date', '')).split(' ')[0],
+                    str(row.get('Site', '')).strip(),
+                    tuple(worker_time_pairs),
+                )
+                is_duplicate_financial_ot = financial_ot_signature in processed_financial_ot_signatures
+                if worker_time_pairs:
+                    processed_financial_ot_signatures.add(financial_ot_signature)
+                if is_duplicate_financial_ot:
+                    ot_sum = 0.0
 
                 net    = _f(row.get('검사비', 0))
                 travel = _f(row.get('출장비', 0))
@@ -7207,7 +7229,7 @@ class MaterialManager:
                     '검사단가': f"{net:,.0f}",
                     '출장비': f"{travel:,.0f}",
                     '일식': f"{meal:,.0f}",
-                    'OT합계': f"{ot_sum:,.0f}",
+                    'OT합계': f"{ot_sum:,.0f}" if ot_sum else '',
                     '침투제': f"{_f(row.get('NDT_침투제', row.get('침투제', 0))):g}",
                     '세척제': f"{_f(row.get('NDT_세척제', row.get('세척제', 0))):g}",
                     '현상제': f"{_f(row.get('NDT_현상제', row.get('현상제', 0))):g}",
@@ -7678,6 +7700,10 @@ class MaterialManager:
         
         # [NEW] Track logically unique entries to avoid double-counting materials from split-row records
         processed_entry_ids = set()
+
+        # 같은 날짜/현장에서 규격별 작업을 따로 저장해도 동일 작업자의 동일 OT는 1회만 집계한다.
+        # 작업시간이 다른 경우에는 실제 별도 근무일 수 있으므로 시간 문자열까지 식별키에 포함한다.
+        processed_ot_signatures = set()
         
         # [NEW] Track unique dates for vehicles and specialized equipment
         starex_dates = set()
@@ -7880,9 +7906,19 @@ class MaterialManager:
                         if h_match:
                             try: wt_hours = float(h_match.group(1))
                             except: pass
+
+                ot_signature = (
+                    str(date_val).strip(),
+                    e_site,
+                    worker_name_only,
+                    _re.sub(r'\s+', '', wt_val).lower(),
+                )
+                is_duplicate_ot = ot_signature in processed_ot_signatures
+                if wt_hours > 0:
+                    processed_ot_signatures.add(ot_signature)
                 
                 # [FIX] 분류별 OT 상세 집계
-                if wt_hours > 0:
+                if wt_hours > 0 and not is_duplicate_ot:
                     # 명시적으로 '휴일'이라고 쓰여있거나, 주말인데 기본 교대근무가 아닌 특근성 출근인 경우 (이번엔 단순히 텍스트 명시에 더 의존)
                     if '휴일' in wt_shift:
                         ot_data['휴일근무']['hours'] += wt_hours
@@ -8151,6 +8187,14 @@ class MaterialManager:
                 if 'site_expense' in planned_exp_data and i < len(planned_exp_data['site_expense']):
                     row_data['price'] = planned_exp_data['site_expense'][i].get('price', '')
                     row_data['unit'] = planned_exp_data['site_expense'][i].get('unit', '')
+
+                # 차량유지비는 작업 행 수가 아니라 차량별 고유 사용일수로 반영한다.
+                # 같은 날짜/현장의 700A, 200A 작업에 같은 차량이 반복 저장돼도 1일이다.
+                if str(row_data.get('cat', '')).strip() == '차량유지비':
+                    row_data['ppl'] = f"{len(vehicle_dates_map):g}" if vehicle_dates_map else ""
+                    row_data['qty'] = f"{total_vehicle_days:g}" if total_vehicle_days > 0 else ""
+                    row_data['unit'] = '일'
+                    row_data['price'] = 6667
                     
             for i, row_data in enumerate(current_exp_data.get('depreciation', [])):
                 item = row_data.get('item', '')
@@ -13734,8 +13778,7 @@ class MaterialManager:
                             if current_pos != i:
                                 self.notebook.insert(i, tab, text=tab_text)
                 
-                # Restore selected tab
-                # [USER REQUEST] Always start at Daily Usage tab
+                # 기존 시작 화면 유지: 현장별 일일 사용량 기입
                 selected_idx = 4
                 selected_text = "현장별 일일 사용량 기입"
                 

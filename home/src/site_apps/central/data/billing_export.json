@@ -2,7 +2,7 @@
     "열배관_일반_PAUT_300A 이상": {
         "contract_qty": 129.0,
         "prev_qty": 0.0,
-        "current_qty": 46.76
+        "current_qty": 64.63
     },
     "열배관_일반_PAUT_250A": {
         "contract_qty": 4.0,
@@ -12,7 +12,7 @@
     "열배관_일반_PAUT_200A": {
         "contract_qty": 4.0,
         "prev_qty": 0.0,
-        "current_qty": 0.0
+        "current_qty": 2.04
     },
     "열배관_일반_PAUT_150A-125A": {
         "contract_qty": 1.0,

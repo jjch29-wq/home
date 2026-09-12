@@ -1161,6 +1161,8 @@ def update_daily_usage_view_impl(self):
     # Seen sets for deduping
     seen_entry_times = set()
     seen_contents = set()
+    seen_labor_signatures = set()
+    seen_vehicle_days = set()
     
     for idx, row in filtered_df.iterrows():
         entry = row.to_dict()
@@ -1176,10 +1178,14 @@ def update_daily_usage_view_impl(self):
         import re as _re
         def clean_s(v): return self.clean_nan(v)
         raw_workers = []
+        worker_time_pairs = []
         for j in range(1, 11):
             u_k = 'User' if j == 1 else f'User{j}'
+            wt_k = 'WorkTime' if j == 1 else f'WorkTime{j}'
             u_v = clean_s(entry.get(u_k, ''))
-            if u_v: raw_workers.append(u_v)
+            if u_v:
+                raw_workers.append(u_v)
+                worker_time_pairs.append((u_v, clean_s(entry.get(wt_k, ''))))
         
         c_workers = self.format_worker_summary(raw_workers)
         c_worktime = clean_s(entry.get('WorkTime', '')) if raw_workers else ""
@@ -1202,6 +1208,13 @@ def update_daily_usage_view_impl(self):
         n_method = str(entry.get('검사방법', '')).strip()
         n_insp = str(entry.get('검사품명', '')).strip()
         n_code = str(entry.get('적용코드', '')).strip()
+
+        # 규격(700A/200A)별로 따로 저장된 행이어도 동일 날짜/현장/작업자/근무시간은
+        # 작업시간과 OT KPI에서 한 번만 반영한다. 화면의 작업 행과 검사물량은 유지한다.
+        labor_signature = (n_date, n_site, tuple(worker_time_pairs))
+        is_duplicate_labor = labor_signature in seen_labor_signatures
+        if worker_time_pairs:
+            seen_labor_signatures.add(labor_signature)
         
         content_key = (n_date, n_site, c_worktime, n_method, t_key, mat_id, n_insp, n_code)
         
@@ -1259,10 +1272,16 @@ def update_daily_usage_view_impl(self):
             total_test_fee += f_val_cost
             total_film_count += to_f_local(entry.get('FilmCount', 0.0))
 
-        # Cumulative mileage (Always sum)
+        # Cumulative mileage: 같은 날짜에 같은 차량이 여러 규격 행에 반복돼도 1회만 합산
         milk = to_f_local(entry.get('주행거리', entry.get('거리', 0)))
-        total_mileage += milk
-        if milk > 0.001:
+        vehicle_no = clean_s(entry.get('차량번호', ''))
+        vehicle_day_key = (n_date, vehicle_no)
+        is_duplicate_vehicle_day = bool(vehicle_no) and vehicle_day_key in seen_vehicle_days
+        if vehicle_no:
+            seen_vehicle_days.add(vehicle_day_key)
+        if not is_duplicate_vehicle_day:
+            total_mileage += milk
+        if milk > 0.001 and not is_duplicate_vehicle_day:
             min_mileage = min(min_mileage, milk) if min_mileage != float('inf') else milk
             max_mileage = max(max_mileage, milk) if max_mileage != float('-inf') else milk
 
@@ -1311,7 +1330,7 @@ def update_daily_usage_view_impl(self):
                         # Cost-based amounts: Always sum across all workers
                         row_ot_amount += a_p
                         
-                        if not is_duplicate_split:
+                        if not is_duplicate_split and not is_duplicate_labor:
                             # Update global individual totals (primarily for column data presence/amounts)
                             total_ot_amount += a_p
                             total_indiv_ot_hours[i-1] += h_p
@@ -1332,11 +1351,11 @@ def update_daily_usage_view_impl(self):
             row_ots.append("")
 
         # Global OT Hours: Sum of per-activity maximums
-        if not is_duplicate_split:
+        if not is_duplicate_split and not is_duplicate_labor:
             total_ot_hours += row_ot_hours
 
         # Global Work Hours (ONLY for primary rows)
-        if not is_duplicate_split and display_worktime and '~' in str(display_worktime):
+        if not is_duplicate_split and not is_duplicate_labor and display_worktime and '~' in str(display_worktime):
             try:
                 cwt = marker_pattern.sub('', str(display_worktime)).strip()
                 if '~' in cwt:
@@ -1415,6 +1434,23 @@ def update_daily_usage_view_impl(self):
         disp_row_ots = row_ots
         disp_rtk = rtk_vals
         disp_ndt = ndt_vals
+        disp_vehicle_no = self.clean_nan(entry.get('차량번호', ''))
+        disp_mileage = self.clean_nan(entry.get('주행거리', ''))
+        disp_vehicle_check = self.clean_nan(entry.get('차량점검', ''))
+        disp_vehicle_note = self.clean_nan(entry.get('차량비고', ''))
+
+        # 같은 근무가 규격별 행에 반복 저장된 경우 OT는 첫 행에만 표시한다.
+        if is_duplicate_labor:
+            disp_oth = ""
+            disp_ota = ""
+            disp_row_ots = [""] * 10
+
+        # 같은 날짜의 같은 차량 정보도 첫 행에만 표시한다.
+        if is_duplicate_vehicle_day:
+            disp_vehicle_no = ""
+            disp_mileage = ""
+            disp_vehicle_check = ""
+            disp_vehicle_note = ""
         
         if is_duplicate_split:
             disp_q = ""
@@ -1455,10 +1491,10 @@ def update_daily_usage_view_impl(self):
             *disp_ndt,            # Index 37..43
             display_remark,       # Index 44
             str(entry.get('EntryTime', '')),
-            self.clean_nan(entry.get('차량번호', '')),
-            self.clean_nan(entry.get('주행거리', '')),
-            self.clean_nan(entry.get('차량점검', '')),
-            self.clean_nan(entry.get('차량비고', '')),
+            disp_vehicle_no,
+            disp_mileage,
+            disp_vehicle_check,
+            disp_vehicle_note,
             ", ".join(raw_workers)
         )
 

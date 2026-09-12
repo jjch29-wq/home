@@ -328,6 +328,10 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Entry(round_frame, textvariable=self.round_var, width=5, justify="center", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=5)
         ttk.Label(round_frame, text="회", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
         
+        ttk.Label(round_frame, text="  |  기성청구 기간:", font=("Arial", 11, "bold")).pack(side=tk.LEFT, padx=(15, 5))
+        self.billing_period_var = tk.StringVar(value="")
+        ttk.Entry(round_frame, textvariable=self.billing_period_var, width=25, font=("Arial", 11)).pack(side=tk.LEFT)
+        
         ttk.Button(round_frame, text="다음 회차로 이월하기 (전회 누적 & 금회 초기화)", command=self.carry_over_round).pack(side=tk.RIGHT)
         ttk.Button(round_frame, text="이전 백업 불러오기 (.ndt)", command=self.load_project).pack(side=tk.RIGHT, padx=10)
         ttk.Button(round_frame, text="✨ 엑셀 보고서 생성기 열기", command=self.open_report_hub).pack(side=tk.RIGHT, padx=5)
@@ -617,7 +621,31 @@ class NDTCalculatorTab(ttk.Frame):
         
         lbl_frame = ttk.Frame(bottom_frame)
         lbl_frame.pack(fill=tk.X, pady=(0, 5))
-        ttk.Label(lbl_frame, text="[ 일일 작업 기록 목록 ]", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+        ttk.Label(lbl_frame, text="[ 월별 작업 기록 목록 ]", font=("Arial", 11, "bold")).pack(side=tk.LEFT)
+        
+        ttk.Label(lbl_frame, text="  |  기성청구 기간: ", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 2))
+        
+        self.billing_start_date = tk.StringVar(value=datetime.now().strftime('%Y-%m-01'))
+        self.billing_end_date = tk.StringVar(value=datetime.now().strftime('%Y-%m-%d'))
+        
+        try:
+            self.ent_billing_start = DateEntry(lbl_frame, textvariable=self.billing_start_date, width=12, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2)
+            self.ent_billing_start.pack(side=tk.LEFT)
+        except Exception:
+            self.ent_billing_start = ttk.Entry(lbl_frame, textvariable=self.billing_start_date, width=12)
+            self.ent_billing_start.pack(side=tk.LEFT)
+            
+        ttk.Label(lbl_frame, text=" ~ ", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
+        
+        try:
+            self.ent_billing_end = DateEntry(lbl_frame, textvariable=self.billing_end_date, width=12, date_pattern='yyyy-mm-dd', background='darkblue', foreground='white', borderwidth=2)
+            self.ent_billing_end.pack(side=tk.LEFT)
+        except Exception:
+            self.ent_billing_end = ttk.Entry(lbl_frame, textvariable=self.billing_end_date, width=12)
+            self.ent_billing_end.pack(side=tk.LEFT)
+            
+        ttk.Button(lbl_frame, text="선택", command=self.import_from_daily_db).pack(side=tk.LEFT, padx=(5, 0))
+            
         ttk.Button(lbl_frame, text="기성청구", command=self.export_to_excel).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="일일 장부에서 연동", command=self.import_from_daily_db).pack(side=tk.RIGHT, padx=5)
@@ -941,8 +969,8 @@ class NDTCalculatorTab(ttk.Frame):
             # [NEW] 현장 탭의 조회 기간 및 현장 필터를 그대로 적용
             if hasattr(self, 'main_app') and self.main_app:
                 try:
-                    start_str = self.main_app.ent_daily_start_date.get().strip()
-                    end_str = self.main_app.ent_daily_end_date.get().strip()
+                    start_str = getattr(self, "billing_start_date", self.main_app.ent_daily_start_date).get().strip()
+                    end_str = getattr(self, "billing_end_date", self.main_app.ent_daily_end_date).get().strip()
                     site_filter = self.main_app.cb_daily_filter_site.get().strip()
                     
                     if start_str or end_str:
@@ -968,7 +996,12 @@ class NDTCalculatorTab(ttk.Frame):
             count = 0
             for _, row in ndt_df.iterrows():
                 date_str = str(row.get('Date', ''))[:10]
-                loc_str = str(row.get('Site', ''))
+                site_str = str(row.get('Site', ''))
+                item_name = str(row.get('검사품명', ''))
+                if item_name and item_name != 'nan':
+                    loc_str = f"{site_str}_{item_name}"
+                else:
+                    loc_str = site_str
                 company_str = str(row.get('업체명', ''))
                 if not company_str or company_str == 'nan': company_str = ''
                 ndt_type = str(row.get('검사방법', 'RT'))
@@ -988,6 +1021,23 @@ class NDTCalculatorTab(ttk.Frame):
                 self.ndt_type_var.set(ndt_type)
                 self.work_time_var.set(work_time)
                 
+                # [NEW] PAUT의 경우 관경을 우선적으로 확인하여 자동 맵핑
+                pipe_size_str = ""
+                for k in row.keys():
+                    if 'Inch' in str(k) or '관경' in str(k):
+                        pipe_size_str = str(row.get(k, '')).strip()
+                        break
+                if ndt_type == 'PAUT' and pipe_size_str and pipe_size_str != 'nan':
+                    import re
+                    m = re.search(r'(\d+)', pipe_size_str)
+                    if m:
+                        p_val = int(m.group(1))
+                        if p_val >= 300: material_type = "300A 이상"
+                        elif p_val == 250: material_type = "250A"
+                        elif p_val == 200: material_type = "200A"
+                        elif 125 <= p_val <= 150: material_type = "150A-125A"
+                        else: material_type = "100A 이하"
+
                 # trigger update_dynamic_ui to populate material values correctly
                 self.update_dynamic_ui()
                 
@@ -1472,7 +1522,15 @@ class NDTCalculatorTab(ttk.Frame):
                 target_records = self.records
                 
         dates_all = sorted([r["date"] for r in target_records])
-        if dates_all:
+        
+        user_period = getattr(self, "billing_period_var", None)
+        user_period_val = user_period.get().strip() if user_period else ""
+        
+        billed_nrs = set()
+        
+        if user_period_val:
+            global_period = user_period_val
+        elif dates_all:
             start_date = dates_all[0].replace("-", ".")
             end_date = dates_all[-1].replace("-", ".")
             global_period = f"{start_date} ~ {end_date}" if start_date != end_date else start_date
@@ -1680,7 +1738,7 @@ class NDTCalculatorTab(ttk.Frame):
                     ws.Range(ws.Cells(row, 1), ws.Cells(row, 5)).HorizontalAlignment = -4108
                 
                 num_fmt = '#,##0;-#,##0;"-"'
-                float_fmt = '#,##0.00;-#,##0.00;"-"'
+                float_fmt = '#,##0.0000;-#,##0.0000;"-"'
                 
                 if cat == "총 계":
                     ws.Cells(row, 7).Value = c_amt
@@ -1736,13 +1794,13 @@ class NDTCalculatorTab(ttk.Frame):
                     is_float = (unit == "M")
                     fmt_qty = float_fmt if is_float else num_fmt
                     
-                    ws.Cells(row, 6).Value = round(float(c_qty), 2) if c_qty else 0
+                    ws.Cells(row, 6).Value = round(float(c_qty), 4) if c_qty else 0
                     ws.Cells(row, 7).Formula = f"=TRUNC(F{row}*E{row})"
                     
-                    ws.Cells(row, 8).Value = round(float(p_qty), 2) if p_qty else 0
+                    ws.Cells(row, 8).Value = round(float(p_qty), 4) if p_qty else 0
                     ws.Cells(row, 9).Formula = f"=TRUNC(H{row}*E{row})"
                     
-                    ws.Cells(row, 10).Value = round(float(cur_qty), 2) if cur_qty else 0
+                    ws.Cells(row, 10).Value = round(float(cur_qty), 4) if cur_qty else 0
                     ws.Cells(row, 11).Formula = f"=TRUNC(J{row}*E{row})"
                     
                     ws.Cells(row, 12).Formula = f"=H{row}+J{row}"
@@ -2044,6 +2102,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws_summary.PageSetup.TopMargin = 20
             ws_summary.PageSetup.BottomMargin = 20
             ws_summary.PageSetup.CenterHorizontally = True
+            ws_summary.PageSetup.RightHeader = "\n\nPage &P of &N&KFFFFFF" + " "*10 + "."
             
             ws_summary.Range("A1:G2").Merge()
             ws_summary.Range("A1").Value = f"제 {round_val} 회 비파괴검사기술용역 업체별 기성요약"
@@ -2122,84 +2181,156 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_summary.Cells(sum_row, 1).Font.Size = 12
                 sum_row += 1
                 
+                comp_records = [r for r in target_records if r.get("actual_company", "미지정") == comp]
+                
+                # --- 통합 기성요약 표 (섹션 -> 라인번호 -> 규격) ---
+                work_summary = {}
+                for r in comp_records:
+                    t_date = str(r.get("date", ""))
+                    n_type = str(r.get("ndt_type", "")).strip()
+                    m_type = str(r.get("material_type", "")).strip()
+                    w_time = str(r.get("work_time", "")).strip()
+                    r_qty = r.get("qty", 0.0)
+                    r_amt = r.get("subtotal", 0)
+                    
+                    if n_type == "PAUT":
+                        spec = f"위상배열초음파검사(PAUT) {m_type.removeprefix('PAUT_')}"
+                    elif n_type == "RT":
+                        spec = f"방사선투과검사(RT) {m_type.removeprefix('RT_')}"
+                    elif n_type == "MT":
+                        spec = "자분탐상검사(MT)"
+                    else:
+                        spec = "액체침투탐상검사(PT)"
+                    if w_time == "야간":
+                        spec += " 야간"
+                        
+                    unit = r.get("unit", "")
+                    
+                    loc_type = "플랜트(관리소)" if "관리소" in r.get("loc", "") or "플랜트" in r.get("loc_type", r.get("loc", "")) else "열배관"
+                    cat_key = f"{loc_type}_{w_time}_{n_type}_{m_type}"
+                    c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
+                    if c_price == 0 and r_qty > 0:
+                        c_price = r_amt / r_qty
+                    
+                    matched_results = []
+                    if t_date in history_data:
+                        for nr in history_data[t_date].get("ndt_results", []):
+                            if id(nr) in billed_nrs: continue
+                            method = str(nr.get("검사방법", "")).strip()
+                            c = str(nr.get("업체", "")).strip()
+                            pipe_size = str(nr.get("관경", "")).strip()
+                            
+                            size_matched = True
+                            if m_type and pipe_size:
+                                import re
+                                m1 = re.search(r'(\d+)', pipe_size)
+                                m2_all = re.findall(r'(\d+)', m_type)
+                                if m1 and m2_all:
+                                    p_val = int(m1.group(1))
+                                    t_vals = [int(x) for x in m2_all]
+                                    if "이상" in m_type:
+                                        size_matched = (p_val >= t_vals[0])
+                                    elif "미만" in m_type:
+                                        size_matched = (p_val < t_vals[0])
+                                    elif "이하" in m_type:
+                                        size_matched = (p_val <= t_vals[0])
+                                    elif len(t_vals) >= 2:
+                                        min_val = min(t_vals)
+                                        max_val = max(t_vals)
+                                        size_matched = (min_val <= p_val <= max_val)
+                                    else:
+                                        size_matched = (p_val == t_vals[0])
+                                        
+                            if method and (method.startswith(n_type) or n_type.startswith(method)) and size_matched:
+                                if c == comp or c == "미지정" or not c:
+                                    matched_results.append(nr)
+                                    billed_nrs.add(id(nr))
+                                    
+                    if not matched_results:
+                        continue  # 작업/감독일보에 매칭되는 내역이 없으면 기성청구에서 제외
+                    else:
+                        sub_groups = {}
+                        for nr in matched_results:
+                            sec = str(nr.get("구간", "")).strip() or "미지정"
+                            l_no = str(nr.get("라인번호", "")).strip() or "미지정"
+                            j_no = str(nr.get("Joint No.", "")).strip()
+                            method = str(nr.get("검사방법", "")).strip()
+                            
+                            sg_key = (sec, l_no)
+                            if sg_key not in sub_groups:
+                                sub_groups[sg_key] = {"joints": set(), "rows": 0, "length": 0.0}
+                            
+                            if j_no:
+                                sub_groups[sg_key]["joints"].add(j_no)
+                            sub_groups[sg_key]["rows"] += 1
+                            
+                            if "PAUT" in method or "UT" in method:
+                                try: sub_groups[sg_key]["length"] += float(nr.get("PAUT", 0) or 0)
+                                except: pass
+                            elif "RT" in method:
+                                try: sub_groups[sg_key]["length"] += float(nr.get("RT", 0) or 0)
+                                except: pass
+                            elif "PT" in method:
+                                try: sub_groups[sg_key]["length"] += float(nr.get("PT", 0) or 0)
+                                except: pass
+                            elif "MT" in method:
+                                try: sub_groups[sg_key]["length"] += float(nr.get("MT", 0) or 0)
+                                except: pass
+                                
+                        total_length = sum(sg["length"] for sg in sub_groups.values())
+                        total_places = sum(max(len(sg["joints"]), sg["rows"]) for sg in sub_groups.values())
+                        
+                        sg_items = list(sub_groups.items())
+                        for i, (sg_key, sg_data) in enumerate(sg_items):
+                            sec, l_no = sg_key
+                            group_key = (sec, l_no, spec, unit, c_price)
+                            if group_key not in work_summary:
+                                work_summary[group_key] = {"places": 0, "qty": 0.0, "amt": 0}
+                                
+                            places = max(len(sg_data["joints"]), sg_data["rows"])
+                            work_summary[group_key]["places"] += places
+                            
+                            my_qty = sg_data["length"]
+                            my_amt = int(my_qty * c_price)
+                                
+                            work_summary[group_key]["qty"] += my_qty
+                            work_summary[group_key]["amt"] += my_amt
+
+                # 테이블 헤더 렌더링
                 headers_sum = {
-                    1: "공종", 2: "규격", 4: "단위", 5: "단가",
-                    6: "금회 수량", 7: "금회 금액"
+                    1: "섹션", 2: "라인번호", 3: "규격", 4: "개소", 5: "단가",
+                    6: "검사수량", 7: "금액"
                 }
-                ws_summary.Range(ws_summary.Cells(sum_row, 2), ws_summary.Cells(sum_row, 3)).Merge()
                 for col, h in headers_sum.items():
                     cell = ws_summary.Cells(sum_row, col)
                     cell.Value = h
                     cell.Font.Bold = True
                     cell.Interior.Color = 14277081
                     cell.HorizontalAlignment = -4108
-                for col in range(1, 8):
-                    ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
-                    
+                    cell.Borders.LineStyle = 1
                 sum_row += 1
                 start_data_row = sum_row
                 
-                comp_records = [r for r in target_records if r.get("actual_company", "미지정") == comp]
+                # 정렬: 섹션 -> 라인번호 -> 규격
+                sorted_keys = sorted(work_summary.keys(), key=lambda x: (x[0], x[1], x[2]))
                 
-                comp_summary = {}
-                for r in comp_records:
-                    loc = "플랜트(관리소)" if "관리소" in r["loc"] or "플랜트" in r.get("loc_type", r["loc"]) else "열배관"
-                    t_time = r.get("work_time", "일반")
-                    mat_raw = f"{r['ndt_type']}_{r['material_type']}"
-                    cat_key = f"{loc}_{t_time}_{mat_raw}"
+                for key in sorted_keys:
+                    data = work_summary[key]
+                    if data["qty"] == 0 and data["amt"] == 0: continue
                     
-                    if cat_key not in comp_summary:
-                        comp_summary[cat_key] = {
-                            "loc": loc,
-                            "time": t_time,
-                            "item": mat_raw,
-                            "unit": r["unit"],
-                            "qty": 0.0,
-                            "amt": 0
-                        }
-                        
-                    comp_summary[cat_key]["qty"] += r["qty"]
-                    comp_summary[cat_key]["amt"] += r["subtotal"]
+                    sec, l_no, spec, unit, c_price = key
                     
-                for cat_key, data in sorted(
-                    comp_summary.items(),
-                    key=lambda item: contract_item_numbers.get(item[0], len(contract_item_numbers) + 1)
-                ):
-                    if data["qty"] == 0: continue
-
-                    item_no = contract_item_numbers.get(cat_key, "")
-                    item_key = data["item"]
-                    if item_key.startswith("PAUT"):
-                        work_name = "위상배열초음파검사(PAUT)"
-                        spec = item_key.removeprefix("PAUT_")
-                    elif item_key.startswith("RT"):
-                        work_name = "방사선투과검사(RT)"
-                        spec = item_key.removeprefix("RT_")
-                    elif item_key.startswith("MT"):
-                        work_name = "자분탐상검사(MT)"
-                        spec = ""
-                    else:
-                        work_name = "액체침투탐상검사(PT)"
-                        spec = ""
-                    if data["time"] == "야간":
-                        spec = f"{spec}, 야간" if spec else "야간"
-                    
-                    c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
-                    if c_price == 0 and data["qty"] > 0:
-                        c_price = data["amt"] / data["qty"]
-                        
-                    number_prefix = f"{item_no})    " if item_no != "" else ""
-                    ws_summary.Cells(sum_row, 1).Value = f"{number_prefix}{work_name}"
-                    ws_summary.Cells(sum_row, 2).Value = spec
-                    ws_summary.Range(ws_summary.Cells(sum_row, 2), ws_summary.Cells(sum_row, 3)).Merge()
-                    ws_summary.Cells(sum_row, 4).Value = data["unit"]
+                    ws_summary.Cells(sum_row, 1).Value = sec
+                    ws_summary.Cells(sum_row, 2).Value = l_no
+                    ws_summary.Cells(sum_row, 3).Value = f"{spec} ({unit})"
+                    ws_summary.Cells(sum_row, 4).Value = int(data["places"])
                     
                     ws_summary.Cells(sum_row, 5).Value = int(c_price)
                     ws_summary.Cells(sum_row, 5).NumberFormat = "#,##0"
                     
-                    if data["unit"] == "M":
-                        ws_summary.Cells(sum_row, 6).Value = round(data["qty"], 2)
-                        ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.00;-#,##0.00;"-"'
+                    if unit == "M":
+                        ws_summary.Cells(sum_row, 6).Value = round(data["qty"], 4)
+                        ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
                     else:
                         ws_summary.Cells(sum_row, 6).Value = int(data["qty"])
                         ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0;-#,##0;"-"'
@@ -2210,16 +2341,26 @@ class NDTCalculatorTab(ttk.Frame):
                     for col in range(1, 8):
                         cell = ws_summary.Cells(sum_row, col)
                         cell.Borders.LineStyle = 1
-                        if col <= 4: cell.HorizontalAlignment = -4108
+                        if col in (1, 2, 4): 
+                            cell.HorizontalAlignment = -4108
+                        elif col == 3: 
+                            cell.HorizontalAlignment = -4131
                     
                     sum_row += 1
-                
-                ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 6)).Merge()
+                    
+                # 소계 렌더링
+                ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 5)).Merge()
                 ws_summary.Cells(sum_row, 1).Value = "소 계"
                 ws_summary.Cells(sum_row, 1).HorizontalAlignment = -4108
                 ws_summary.Cells(sum_row, 1).Font.Bold = True
                 ws_summary.Cells(sum_row, 1).Interior.Color = 15987699
                 
+
+                qty_sum_formula = f"=SUM(F{start_data_row}:F{sum_row-1})" if sum_row > start_data_row else "0"
+                ws_summary.Cells(sum_row, 6).Formula = qty_sum_formula
+                ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
+                ws_summary.Cells(sum_row, 6).Font.Bold = True
+                ws_summary.Cells(sum_row, 6).Interior.Color = 15987699
                 sum_formula = f"=SUM(G{start_data_row}:G{sum_row-1})" if sum_row > start_data_row else "0"
                 ws_summary.Cells(sum_row, 7).Formula = sum_formula
                 ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
@@ -2231,7 +2372,7 @@ class NDTCalculatorTab(ttk.Frame):
 
                 company_subtotal_rows.append(sum_row)
                     
-                sum_row += 3 
+                sum_row += 3
             
             # --- 전체 공급가액 / 부가가치세 / 합계 ---
             supply_row = sum_row
@@ -2270,8 +2411,8 @@ class NDTCalculatorTab(ttk.Frame):
             ws_summary.Rows(grand_total_row).RowHeight = 28
 
             ws_summary.Columns(1).ColumnWidth = 34
-            ws_summary.Columns(2).ColumnWidth = 13
-            ws_summary.Columns(3).ColumnWidth = 13
+            ws_summary.Columns(2).ColumnWidth = 25
+            ws_summary.Columns(3).ColumnWidth = 35
             ws_summary.Columns(4).ColumnWidth = 8
             ws_summary.Columns(5).ColumnWidth = 12
             ws_summary.Columns(6).ColumnWidth = 12
@@ -2291,6 +2432,8 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cont.PageSetup.TopMargin = 20
             ws_cont.PageSetup.BottomMargin = 20
             ws_cont.PageSetup.CenterHorizontally = True
+            ws_cont.PageSetup.PrintTitleRows = "$1:$4"
+            ws_cont.PageSetup.RightHeader = "\n\nPage &P of &N&KFFFFFF" + " "*12 + "."
             
             ws_cont.Range("A1:K2").Merge()
             ws_cont.Range("A1").Value = f"제 {round_val} 회 기성청구 업체별 수량내역"
@@ -2413,7 +2556,7 @@ class NDTCalculatorTab(ttk.Frame):
                 # [FIX] 필터 시 자동 합산: SUBTOTAL(103)=COUNTA(가시행), SUBTOTAL(9)=SUM(가시행)
                 # 셀 10: 개소 수 (필터된 행 수)
                 ws_cont.Cells(cont_row, 10).Formula = (
-                    f'=SUBTOTAL(103,A{data_start_row}:A{data_end_row})&" 개소"'
+                    f'=TEXT(SUBTOTAL(9,J{data_start_row}:J{data_end_row}),"0.0000")'
                 )
                 ws_cont.Cells(cont_row, 10).Font.Bold = True
                 ws_cont.Cells(cont_row, 10).Font.Color = 255
@@ -2423,7 +2566,7 @@ class NDTCalculatorTab(ttk.Frame):
                 
                 # 셀 11: 검사량 합계 (필터된 수량 합)
                 ws_cont.Cells(cont_row, 11).Formula = (
-                    f'=TEXT(SUBTOTAL(9,J{data_start_row}:J{data_end_row}),"#,##0.00")&" m"'
+                    f'=""'
                 )
                 ws_cont.Cells(cont_row, 11).Font.Bold = True
                 ws_cont.Cells(cont_row, 11).Font.Color = 255

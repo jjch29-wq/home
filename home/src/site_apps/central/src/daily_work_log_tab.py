@@ -127,7 +127,8 @@ class DailyWorkLogTab(ttk.Frame):
         
         def _on_left_canvas_configure(event):
             new_width = max(event.width, self.left_frame.winfo_reqwidth())
-            self.left_canvas.itemconfig(self.left_window, width=new_width)
+            new_height = max(event.height, self.left_frame.winfo_reqheight())
+            self.left_canvas.itemconfig(self.left_window, width=new_width, height=new_height)
             _update_left_scroll()
             
         self.left_canvas.bind("<Configure>", _on_left_canvas_configure)
@@ -155,9 +156,11 @@ class DailyWorkLogTab(ttk.Frame):
         self.right_canvas.configure(xscrollcommand=self.right_xscroll.set, yscrollcommand=self.right_yscroll.set)
         
         def _on_right_canvas_configure(event):
-            # Only stretch if the canvas is wider than the required width
+            # Stretch the embedded pane to the visible canvas so no unused strip remains.
             if event.width > self.right_frame.winfo_reqwidth():
                 self.right_canvas.itemconfig(self.right_window, width=event.width)
+            if event.height > self.right_frame.winfo_reqheight():
+                self.right_canvas.itemconfig(self.right_window, height=event.height)
             _update_right_scroll()
         self.right_canvas.bind("<Configure>", _on_right_canvas_configure)
         
@@ -168,9 +171,21 @@ class DailyWorkLogTab(ttk.Frame):
         self.right_container.grid_columnconfigure(0, weight=1)
         
         self._build_right_pane(self.right_frame)
+
+        # 재시작할 때 좌우 작업영역을 화면 중앙에서 동일한 폭으로 시작한다.
+        self.after(200, self._apply_initial_pane_layout)
         
         # Initial load for today's date
         self.after(100, self.on_date_change)
+
+    def _apply_initial_pane_layout(self):
+        try:
+            self.update_idletasks()
+            total_width = self.paned.winfo_width()
+            if total_width > 200:
+                self.paned.sashpos(0, total_width // 2)
+        except (tk.TclError, AttributeError):
+            pass
 
     def _build_left_pane(self, parent):
         # --- Top Section: General Info ---
@@ -189,9 +204,6 @@ class DailyWorkLogTab(ttk.Frame):
             font=('맑은 고딕', 9, 'bold')
         )
         self.date_status_label.grid(row=1, column=0, columnspan=2, padx=5, sticky="e")
-        ttk.Button(
-            top_frame, text="일보 불러오기", command=self.on_date_change
-        ).grid(row=1, column=2, padx=5, pady=(0, 3), sticky="w")
         
         ttk.Label(top_frame, text="날씨:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
         self.weather_entry = ttk.Entry(top_frame, width=15)
@@ -205,7 +217,7 @@ class DailyWorkLogTab(ttk.Frame):
         btn_delete.grid(row=0, column=5, padx=5, pady=5)
         
         btn_export = ttk.Button(top_frame, text="엑셀 출력 (일보 생성)", command=self.export_excel)
-        btn_export.grid(row=0, column=6, padx=10, pady=5)
+        btn_export.grid(row=1, column=4, columnspan=2, padx=5, pady=(0, 3), sticky="e")
         
         # --- Middle Section: Work Quantities ---
         mid_frame = ttk.LabelFrame(parent, text="1. 작업 물량 및 누계 현황", padding=10)
@@ -292,8 +304,78 @@ class DailyWorkLogTab(ttk.Frame):
         # Remarks
         rm_frame = ttk.LabelFrame(bot_frame, text="특이사항 및 계획", padding=10)
         rm_frame.pack(side="left", fill="both", expand=True, padx=5)
+        memo_toolbar = ttk.Frame(rm_frame)
+        memo_toolbar.pack(fill="x", pady=(0, 5))
+        ttk.Label(memo_toolbar, text="선택한 검사일자의 메모").pack(side="left")
+        ttk.Button(memo_toolbar, text="메모 이력", command=self.open_memo_history).pack(side="right")
         self.remarks_text = tk.Text(rm_frame, width=20, height=8)
         self.remarks_text.pack(fill="both", expand=True)
+
+    def open_memo_history(self):
+        """저장된 일보 메모를 날짜/키워드로 찾아 해당 날짜로 이동한다."""
+        history = self.load_history()
+        memo_rows = []
+        for date_key, day_data in history.items():
+            memo = str(day_data.get('remarks', '') or '').strip()
+            if memo:
+                preview = ' '.join(memo.split())
+                memo_rows.append((str(date_key), preview))
+        memo_rows.sort(key=lambda item: item[0], reverse=True)
+
+        window = tk.Toplevel(self)
+        window.title("일보 메모 이력")
+        window.geometry("760x480")
+        window.minsize(560, 320)
+        window.transient(self.winfo_toplevel())
+
+        search_frame = ttk.Frame(window, padding=10)
+        search_frame.pack(fill="x")
+        ttk.Label(search_frame, text="날짜·내용 검색:").pack(side="left")
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=search_var)
+        search_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
+
+        table_frame = ttk.Frame(window, padding=(10, 0, 10, 10))
+        table_frame.pack(fill="both", expand=True)
+        columns = ('date', 'memo')
+        tree = ttk.Treeview(table_frame, columns=columns, show='headings', selectmode='browse')
+        tree.heading('date', text='날짜')
+        tree.heading('memo', text='메모 내용')
+        tree.column('date', width=110, minwidth=100, stretch=False, anchor='center')
+        tree.column('memo', width=580, minwidth=300, stretch=True, anchor='w')
+        scrollbar = ttk.Scrollbar(table_frame, orient='vertical', command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+        status_var = tk.StringVar()
+        ttk.Label(window, textvariable=status_var, padding=(10, 0, 10, 8)).pack(fill='x')
+
+        def refresh_rows(*_args):
+            query = search_var.get().strip().lower()
+            tree.delete(*tree.get_children())
+            matched = [row for row in memo_rows if not query or query in row[0].lower() or query in row[1].lower()]
+            for date_key, preview in matched:
+                tree.insert('', 'end', values=(date_key, preview))
+            status_var.set(f"메모 {len(matched)}건  ·  더블클릭하면 해당 날짜로 이동합니다.")
+
+        def move_to_selected(_event=None):
+            selected = tree.selection()
+            if not selected:
+                return
+            date_key = str(tree.item(selected[0], 'values')[0])
+            try:
+                self.date_entry.set_date(datetime.strptime(date_key, '%Y-%m-%d').date())
+                self.on_date_change()
+                window.destroy()
+            except ValueError:
+                messagebox.showerror("날짜 오류", f"저장된 날짜 형식을 읽을 수 없습니다: {date_key}", parent=window)
+
+        search_var.trace_add('write', refresh_rows)
+        search_entry.bind('<Return>', lambda _event: move_to_selected())
+        tree.bind('<Double-1>', move_to_selected)
+        refresh_rows()
+        search_entry.focus_set()
 
     def _build_right_pane(self, parent):
         # --- NDT Results Grid ---
@@ -569,7 +651,7 @@ class DailyWorkLogTab(ttk.Frame):
             self.ndt_grid_entries.append(row_entries)
 
         photo_bar = ttk.LabelFrame(parent, text="선택 행 공정사진")
-        photo_bar.pack(fill='x', padx=5, pady=(8, 5))
+        photo_bar.pack(fill='x', padx=5, pady=(8, 0))
         self.photo_selection_var = tk.StringVar(value="NDT 행을 선택하세요.")
         ttk.Label(photo_bar, textvariable=self.photo_selection_var).pack(
             side='left', padx=8, pady=6
