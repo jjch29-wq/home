@@ -467,6 +467,51 @@ def export_to_excel(self):
             ws_cover.Range("A9").HorizontalAlignment = -4152 # xlRight
             
             ws_cover.Range("C9:G9").Merge()
+            
+            # [FIX] 내역서의 '단수 조정(Fraction Adjustment)' 로직과 동일하게 total_sub 재계산
+            exact_total_sub = 0
+            companies = sorted(list(set(r.get("actual_company", "미지정") for r in target_records)))
+            if not companies: companies = ["미지정"]
+            for comp in companies:
+                spec_totals = {}
+                comp_records = [r for r in target_records if r.get("actual_company", "미지정") == comp]
+                for r in comp_records:
+                    n_type = str(r.get("ndt_type", "")).strip()
+                    m_type = str(r.get("material_type", "")).strip()
+                    w_time = str(r.get("work_time", "")).strip()
+                    r_qty = r.get("qty", 0.0)
+                    
+                    if n_type == "PAUT":
+                        spec = f"위상배열초음파검사(PAUT) {m_type.removeprefix('PAUT_')}"
+                    elif n_type == "RT":
+                        spec = f"방사선투과검사(RT) {m_type.removeprefix('RT_')}"
+                    elif n_type == "MT":
+                        spec = "자분탐상검사(MT)"
+                    else:
+                        spec = "액체침투탐상검사(PT)"
+                    if w_time == "야간":
+                        spec += " 야간"
+                        
+                    loc_type = "플랜트(관리소)" if "관리소" in r.get("loc", "") or "플랜트" in r.get("loc_type", r.get("loc", "")) else "열배관"
+                    cat_key = f"{loc_type}_{w_time}_{n_type}_{m_type}"
+                    c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
+                    
+                    if c_price == 0 and r_qty > 0:
+                        for k, v in self.contract_vars.items():
+                            if v["spec"] == spec:
+                                c_price = v["c_price"]
+                                break
+                                
+                    spec_key = (spec, c_price)
+                    if spec_key not in spec_totals:
+                        spec_totals[spec_key] = 0.0
+                    spec_totals[spec_key] += r_qty
+                    
+                for spec_key, total_qty in spec_totals.items():
+                    exact_total_sub += int(total_qty * spec_key[1])
+                    
+            total_sub = exact_total_sub
+            
             grand_total = total_sub + extra_items_total
             vat = int(grand_total * 0.1)
             grand_total_with_vat = grand_total + vat
@@ -1050,7 +1095,7 @@ def export_to_excel(self):
                 # [FIX] 필터 시 자동 합산: SUBTOTAL(103)=COUNTA(가시행), SUBTOTAL(9)=SUM(가시행)
                 # 셀 10: 개소 수 (필터된 행 수)
                 ws_cont.Cells(cont_row, 10).Formula = (
-                    f'=TEXT(SUBTOTAL(9,J{data_start_row}:J{data_end_row}),"0.0000")'
+                    f'=TEXT(SUBTOTAL(9,J{data_start_row}:J{data_end_row}),"0.0000") & " m"'
                 )
                 ws_cont.Cells(cont_row, 10).Font.Bold = True
                 ws_cont.Cells(cont_row, 10).Font.Color = 255
