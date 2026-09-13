@@ -6360,6 +6360,10 @@ class MaterialManager:
         # Pop-out button
         ttk.Button(top_btn_frame, text="🔍 팝업창으로 열기", command=self.open_detached_budget_view).pack(side='left', padx=15)
         
+        # [NEW] Toggle button for bottom pane
+        self.btn_toggle_bottom = ttk.Button(top_btn_frame, text="🔽 하단 일일기록 숨기기")
+        self.btn_toggle_bottom.pack(side='left', padx=15)
+        
         ttk.Button(top_btn_frame, text="사정원가 출력", command=self.export_budget_estimation).pack(side='right', padx=10)
         ttk.Button(top_btn_frame, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
 
@@ -6609,6 +6613,19 @@ class MaterialManager:
         # ===============================================================
         bottom_container = ttk.Frame(main_paned)
         main_paned.add(bottom_container, weight=3)
+        self._budget_bottom_visible = True
+        
+        def toggle_budget_bottom():
+            if getattr(self, '_budget_bottom_visible', True):
+                main_paned.remove(bottom_container)
+                self.btn_toggle_bottom.config(text="🔼 하단 일일기록 펼치기")
+                self._budget_bottom_visible = False
+            else:
+                main_paned.add(bottom_container, weight=3)
+                self.btn_toggle_bottom.config(text="🔽 하단 일일기록 숨기기")
+                self._budget_bottom_visible = True
+                
+        self.btn_toggle_bottom.config(command=toggle_budget_bottom)
 
         # 필터 영역
         bottom_filter = ttk.Frame(bottom_container)
@@ -8199,11 +8216,21 @@ class MaterialManager:
 
                 # 차량유지비는 작업 행 수가 아니라 차량별 고유 사용일수로 반영한다.
                 # 같은 날짜/현장의 700A, 200A 작업에 같은 차량이 반복 저장돼도 1일이다.
-                if str(row_data.get('cat', '')).strip() == '차량유지비':
-                    row_data['ppl'] = f"{len(vehicle_dates_map):g}" if vehicle_dates_map else ""
+                actual_days = len(set(str(r.get('Date', '')).strip().split(' ')[0] for _, r in df.iterrows() if str(r.get('Date', '')).strip()))
+                cat_name = str(row_data.get('cat', '')).strip()
+                if cat_name == '차량유지비':
+                    row_data['ppl'] = 'N/A'
                     row_data['qty'] = f"{total_vehicle_days:g}" if total_vehicle_days > 0 else ""
                     row_data['unit'] = '일'
                     row_data['price'] = 6667
+                elif cat_name == '소모품비':
+                    row_data['qty'] = f"{actual_days:g}" if actual_days > 0 else ""
+                    row_data['unit'] = '일'
+                    row_data['price'] = 3333
+                elif cat_name == '복리후생비':
+                    row_data['qty'] = f"{actual_days:g}" if actual_days > 0 else ""
+                    row_data['unit'] = '일'
+                    row_data['price'] = 1667
                     
             for i, row_data in enumerate(current_exp_data.get('depreciation', [])):
                 item = row_data.get('item', '')
@@ -15163,6 +15190,85 @@ class MaterialManager:
                 self.update_transaction_view()
         else:
             messagebox.showinfo("알림", "정리할 대상이 없습니다.")
+
+    def open_usage_memo_history(self):
+        """현장별 일일 사용량 기입 탭의 상시 메모 이력 조회 및 이동"""
+        memo_rows = []
+        if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
+            if 'DailyMemo' in self.daily_usage_df.columns:
+                import pandas as pd
+                df_memos = self.daily_usage_df.dropna(subset=['DailyMemo'])
+                df_memos = df_memos[df_memos['DailyMemo'].astype(str).str.strip() != '']
+                
+                for date_val, group in df_memos.groupby('Date'):
+                    memo = str(group['DailyMemo'].iloc[0]).strip()
+                    if memo:
+                        if isinstance(date_val, pd.Timestamp):
+                            date_str = date_val.strftime('%Y-%m-%d')
+                        else:
+                            date_str = str(date_val).split(' ')[0]
+                        preview = ' '.join(memo.split())
+                        memo_rows.append((date_str, preview))
+                        
+        memo_rows.sort(key=lambda item: item[0], reverse=True)
+
+        import tkinter as tk
+        from tkinter import ttk
+        window = tk.Toplevel(self.root)
+        window.title("현장 메모 이력")
+        window.geometry("760x480")
+        window.minsize(560, 320)
+        window.transient(self.root)
+
+        search_frame = ttk.Frame(window, padding=10)
+        search_frame.pack(fill="x")
+        ttk.Label(search_frame, text="날짜·내용 검색:").pack(side="left")
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=search_var)
+        search_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
+
+        table_frame = ttk.Frame(window, padding=(10, 0, 10, 10))
+        table_frame.pack(fill="both", expand=True)
+        columns = ('date', 'memo')
+        tree = ttk.Treeview(table_frame, columns=columns, show='headings', selectmode='browse')
+        tree.heading('date', text='날짜')
+        tree.heading('memo', text='메모 내용')
+        tree.column('date', width=110, minwidth=100, stretch=False, anchor='center')
+        tree.column('memo', width=580, minwidth=300, stretch=True, anchor='w')
+        scrollbar = ttk.Scrollbar(table_frame, orient='vertical', command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+
+        status_var = tk.StringVar()
+        ttk.Label(window, textvariable=status_var, padding=(10, 0, 10, 8)).pack(fill='x')
+
+        def refresh_rows(*_args):
+            query = search_var.get().strip().lower()
+            tree.delete(*tree.get_children())
+            matched = [row for row in memo_rows if not query or query in row[0].lower() or query in row[1].lower()]
+            for date_key, preview in matched:
+                tree.insert('', 'end', values=(date_key, preview))
+            status_var.set(f"메모 {len(matched)}건  ·  더블클릭하면 해당 날짜로 이동합니다.")
+
+        def move_to_selected(_event=None):
+            selected = tree.selection()
+            if not selected:
+                return
+            date_key = str(tree.item(selected[0], 'values')[0])
+            try:
+                import datetime
+                self.ent_daily_date.set_date(datetime.datetime.strptime(date_key, '%Y-%m-%d').date())
+                self.update_daily_usage_view()
+                window.destroy()
+            except Exception as e:
+                print(f"Date navigate error: {e}")
+
+        tree.bind('<Double-1>', move_to_selected)
+        tree.bind('<Return>', move_to_selected)
+        search_var.trace_add('write', refresh_rows)
+        refresh_rows()
+        search_entry.focus_set()
 
 if __name__ == "__main__":
     root = tk.Tk()

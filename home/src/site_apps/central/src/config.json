@@ -88,8 +88,7 @@
             "tech": 279691,
             "subtotal": 2061747,
             "vat": 206174,
-            "total_amount": 2267921,
-            "actual_company": "GS네오텍"
+            "total_amount": 2267921
         },
         {
             "date": "2026-08-08",
@@ -109,8 +108,7 @@
             "tech": 279691,
             "subtotal": 2061747,
             "vat": 206174,
-            "total_amount": 2267921,
-            "actual_company": "GS네오텍"
+            "total_amount": 2267921
         },
         {
             "date": "2026-08-22",
@@ -130,8 +128,7 @@
             "tech": 109603,
             "subtotal": 807936,
             "vat": 80793,
-            "total_amount": 888729,
-            "actual_company": "GS네오텍"
+            "total_amount": 888729
         },
         {
             "date": "2026-09-05",
@@ -151,8 +148,7 @@
             "tech": 489475,
             "subtotal": 3608180,
             "vat": 360818,
-            "total_amount": 3968998,
-            "actual_company": "GS네오텍"
+            "total_amount": 3968998
         },
         {
             "date": "2026-09-03",
@@ -172,29 +168,7 @@
             "tech": 122370,
             "subtotal": 902045,
             "vat": 90204,
-            "total_amount": 992249,
-            "actual_company": "GS네오텍"
-        },
-        {
-            "date": "2026-09-08",
-            "company": "한국지역난방공사 중앙지사",
-            "loc": "[열배관] 중앙지사_Pipe",
-            "ndt_type": "PAUT",
-            "work_time": "일반",
-            "material_type": "300A 이상",
-            "qty": 17.8744,
-            "unit": "M",
-            "corr": 1.0,
-            "adjusted_qty": 17.8744,
-            "unit_price": 201863,
-            "mat_cost": 671344,
-            "lab_cost": 1165410,
-            "overhead": 1281951,
-            "tech": 489475,
-            "subtotal": 3608180,
-            "vat": 360818,
-            "total_amount": 3968998,
-            "actual_company": "GS네오텍"
+            "total_amount": 992249
         },
         {
             "date": "2026-09-08",
@@ -214,8 +188,27 @@
             "tech": 74785,
             "subtotal": 525270,
             "vat": 52527,
-            "total_amount": 577797,
-            "actual_company": "GS네오텍"
+            "total_amount": 577797
+        },
+        {
+            "date": "2026-09-08",
+            "company": "한국지역난방공사 중앙지사",
+            "loc": "[열배관] 중앙지사_Pipe",
+            "ndt_type": "PAUT",
+            "work_time": "일반",
+            "material_type": "300A 이상",
+            "qty": 17.8744,
+            "unit": "M",
+            "corr": 1.0,
+            "adjusted_qty": 17.8744,
+            "unit_price": 201863,
+            "mat_cost": 671344,
+            "lab_cost": 1165410,
+            "overhead": 1281951,
+            "tech": 489475,
+            "subtotal": 3608180,
+            "vat": 360818,
+            "total_amount": 3968998
         }
     ]
 }

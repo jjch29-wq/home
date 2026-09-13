@@ -889,6 +889,11 @@ def setup_daily_usage_tab_impl(self):
     # 3. Right: Memo (Fixed)
     self.fixed_memo_frame = ttk.LabelFrame(self.bottom_dashboard, text="메모 (상시 패널)")
     self.bottom_dashboard.add(self.fixed_memo_frame, weight=2)
+    
+    # [NEW] Add toolbar for memo history
+    memo_toolbar = ttk.Frame(self.fixed_memo_frame)
+    memo_toolbar.pack(fill='x', padx=2, pady=2)
+    ttk.Button(memo_toolbar, text="메모 이력", command=lambda: getattr(self, 'open_usage_memo_history', lambda: None)()).pack(side='right')
     self.fixed_memo_text = tk.Text(self.fixed_memo_frame, wrap='word', height=5, width=10, font=('Arial', 10), bg=self.theme_bg, highlightthickness=0)
     self.fixed_memo_text.pack(fill='both', expand=True, padx=2, pady=2)
     # Store for data retrieval

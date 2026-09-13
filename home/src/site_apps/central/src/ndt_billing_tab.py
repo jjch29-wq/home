@@ -644,12 +644,30 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_end = ttk.Entry(lbl_frame, textvariable=self.billing_end_date, width=12)
             self.ent_billing_end.pack(side=tk.LEFT)
             
-        ttk.Button(lbl_frame, text="선택", command=self.import_from_daily_db).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Label(lbl_frame, text="  |  업체명(현장): ", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 2))
+        
+        # [NEW] Dropdown for site filter
+        self.cb_billing_site = ttk.Combobox(lbl_frame, width=20, state='readonly')
+        self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 10))
+        
+        def _populate_sites(event=None):
+            if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'sites'):
+                sites = ['전체'] + sorted([str(s).strip() for s in (self.main_app.sites or []) if str(s).strip()])
+                self.cb_billing_site['values'] = sites
+                if not self.cb_billing_site.get():
+                    self.cb_billing_site.set('전체')
+        
+        # Populate initially and bind to click to ensure it's up-to-date
+        _populate_sites()
+        self.cb_billing_site.bind('<Button-1>', _populate_sites)
+            
+        ttk.Button(lbl_frame, text="조회(데이터 연동)", command=self.import_from_daily_db).pack(side=tk.LEFT, padx=(5, 0))
             
         ttk.Button(lbl_frame, text="기성청구", command=self.export_to_excel).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="일일 장부에서 연동", command=self.import_from_daily_db).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
+        ttk.Button(lbl_frame, text="전체 선택", command=self.select_all_records).pack(side=tk.RIGHT, padx=5)
 
         self.subtotal_var = tk.StringVar(value="[소계] 총 실물량: 0.0  |  총 공급가액: 0 원")
         subtotal_lbl = ttk.Label(bottom_frame, textvariable=self.subtotal_var, font=("Arial", 11, "bold"), foreground="blue")
@@ -975,7 +993,9 @@ class NDTCalculatorTab(ttk.Frame):
                 try:
                     start_str = getattr(self, "billing_start_date", self.main_app.ent_daily_start_date).get().strip()
                     end_str = getattr(self, "billing_end_date", self.main_app.ent_daily_end_date).get().strip()
-                    site_filter = self.main_app.cb_daily_filter_site.get().strip()
+                    
+                    # [FIX] Use the local site dropdown in the billing tab!
+                    site_filter = getattr(self, "cb_billing_site", self.main_app.cb_daily_filter_site).get().strip()
                     
                     if start_str or end_str:
                         df['Date'] = pd.to_datetime(df['Date'])
@@ -1142,6 +1162,10 @@ class NDTCalculatorTab(ttk.Frame):
         self.update_qty_summary()
         self.save_billing_records()
         
+    def select_all_records(self, event=None):
+        for item in self.tree.get_children():
+            self.tree.selection_add(item)
+            
     def delete_selected_records(self, event=None):
         selected_items = self.tree.selection()
         if not selected_items:
