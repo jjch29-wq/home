@@ -147,6 +147,7 @@
     "RT_DATA_END_ROW": "36",
     "RT_PRINT_END_ROW": "36",
     "PHOTO_SASH_RATIO": 0.4758656873032529,
+    "GAPJI_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
     "KOGAS_COL_WIDTHS": {
         "selected": 40,
         "No": 50,
@@ -242,11 +243,11 @@
     "PAUT_EQUIP_SET2_LAW": "Sectorial",
     "PAUT_PHOTO_PAGES": "3",
     "PHOTO_LOG_SETTINGS": {
-        "orderer": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \ub3d9\ud0c4\uc9c0\uc0ac",
-        "inspect_date": "2026-04-07",
+        "orderer": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
+        "inspect_date": "2026-09-11",
         "inspect_type": "PAUT",
         "report_title": "REPORT OF PHASED ARRAY UT EXAMINATION (\uc704 \uc0c1 \ubc30 \uc5f4 \ucd08 \uc74c \ud30c \ud0d0 \uc0c1 \uac80 \uc0ac \ubcf4 \uace0 \uc11c)",
-        "report_no": "SIT/GI-DT-PAUT-009",
+        "report_no": "",
         "start_page": "3",
         "total_pages": "5",
         "cols_per_row": "2",
@@ -277,6 +278,7 @@
         "shift_y": "1",
         "dpi": "96",
         "selected_files": [],
+        "item_metadata": {},
         "last_save_dir": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/captuer"
     },
     "column_keys": [
@@ -392,7 +394,6 @@
         "Remarks"
     ],
     "GAPJI_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
-    "GAPJI_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29 \uc911\uc559\uc9c0\uc0ac",
     "GAPJI_ITEM": "PIPE",
     "GAPJI_MATERIAL": "",
     "GAPJI_REPORT_NO": "",
@@ -1025,5 +1026,15 @@
     "MT_COL_RES": "11",
     "MT_NAME_RES": "Result",
     "MT_SASH_RATIO": 0.3646379853095488,
-    "PAUT_EQUIP_STANDARD_REV": "CENTRAL_PAUT_20260910"
+    "PAUT_EQUIP_STANDARD_REV": "CENTRAL_PAUT_20260910",
+    "PMI_REPORT_NO": "",
+    "PMI_EXAM_DATE": "2026-09-11",
+    "RT_REPORT_NO": "",
+    "RT_EXAM_DATE": "2026-09-11",
+    "PAUT_REPORT_NO": "",
+    "PAUT_EXAM_DATE": "2026-09-11",
+    "MT_REPORT_NO": "",
+    "MT_EXAM_DATE": "2026-09-11",
+    "PT_REPORT_NO": "",
+    "PT_EXAM_DATE": "2026-09-11"
 }
