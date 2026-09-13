@@ -1319,20 +1319,7 @@ class PMIReportApp:
         self.status_log.pack(side='left', fill='both', expand=True)
         vsb.pack(side='right', fill='y')
         
-        # [NEW] Top Action Bar for Data Entry
-        top_action_frame = tk.Frame(self.root, background="#f9fafb")
-        top_action_frame.pack(fill='x', padx=5, pady=5)
-        
-        def _open_data_entry():
-            try:
-                import importlib
-                import list_data_entry
-                importlib.reload(list_data_entry)
-                list_data_entry.open_data_entry_ui(self.root)
-            except Exception as e:
-                messagebox.showerror("오류", f"입력기를 열 수 없습니다: {e}")
-                
-        ttk.Button(top_action_frame, text="⚡ 종합 리스트 초고속 입력기 실행", style="Action.TButton", command=_open_data_entry).pack(side='right')
+
         
         # 3. THEN pack Notebook (fills all remaining space)
         self.mode_notebook = ttk.Notebook(self.root, style="Main.TNotebook")
@@ -3948,7 +3935,6 @@ class PMIReportApp:
         
         btn_f = tk.Frame(toolbar, background="#ffffff")
         btn_f.pack(side='right')
-        ttk.Button(btn_f, text=" 🚀 이대로 성적서 생성 ", command=self.run_process).pack(side='right')
         ttk.Button(btn_f, text=" 🔄 새로고침 ", command=lambda: self._update_gapji_preview(mode)).pack(side='right', padx=5)
         
         # Scrollable area
