@@ -298,6 +298,7 @@ class PMIReportApp:
         # [NEW] Handle Application Closing for Final State Capture
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.rt_date_listbox = None
+        self.mt_date_listbox = None
         self.paut_date_listbox = None
         self.kogas_date_listbox = None
 
@@ -1488,8 +1489,9 @@ class PMIReportApp:
         # [ALIGNED] Mode-specific context for logo grid
         self._create_gapji_meta_ui(tab_cover, use_pack=False, mode="PMI")
         self.pmi_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
-        next_row_cover = self._create_setting_grid(tab_cover, "PMI_COVER")
-        next_row_data = self._create_setting_grid(tab_data, "PMI_DATA")
+        # PMI logos are placed automatically from the saved configuration/template.
+        # Keep the settings and insertion engine, but do not expose manual logo
+        # path/position controls in the PMI tabs.
         self._create_margin_settings(tab_cover, "PMI_COVER", use_pack=False)
         self._create_margin_settings(tab_data, "PMI_DATA", use_pack=False)
         self._create_row_settings(tab_rows, mode="PMI")
@@ -4914,6 +4916,7 @@ class PMIReportApp:
         
         if mode == "RT": self.rt_date_listbox = listbox
         elif mode == "PT": self.pt_date_listbox = listbox
+        elif mode == "MT": self.mt_date_listbox = listbox
         elif mode == "PAUT": self.paut_date_listbox = listbox
         elif mode == "KOGAS": self.kogas_date_listbox = listbox
         else: self.date_listbox = listbox
@@ -4950,6 +4953,7 @@ class PMIReportApp:
             if m == "RT": data = self.rt_extracted_data
             elif m == "KOGAS": data = self.kogas_extracted_data
             elif m == "PT": data = self.pt_extracted_data
+            elif m == "MT": data = self.mt_extracted_data
             elif m == "PAUT": data = self.paut_extracted_data
             else: data = self.extracted_data
             
@@ -5594,6 +5598,9 @@ class PMIReportApp:
         elif mode == "PT":
             listbox = self.pt_date_listbox
             data = self.pt_extracted_data
+        elif mode == "MT":
+            listbox = self.mt_date_listbox
+            data = self.mt_extracted_data
         elif mode == "PAUT":
             listbox = self.paut_date_listbox
             data = self.paut_extracted_data
@@ -5619,6 +5626,12 @@ class PMIReportApp:
             prefix = "[v]" if is_v else "[ ]"
             listbox.insert(tk.END, f"{prefix} {d}")
             if is_v: listbox.select_set(tk.END)
+        self.log(
+            f"📅 {mode} 날짜 필터 갱신: {listbox.size()}개 "
+            f"({', '.join(dates) if dates else '날짜 없음'})"
+        )
+        if mode == "PMI":
+            self.update_pmi_loc_listbox()
 
     def _get_mode_info(self, mode):
         """Helper to get core UI/Data objects for a specific module mode."""
@@ -8921,6 +8934,9 @@ class PMIReportApp:
                 # Refresh after sorting/populating so the visible PMI sidebar is
                 # updated last and cannot be left with its initial empty state.
                 self.update_date_listbox("PMI")
+                # Run once more through Tk's event loop. This guarantees that the
+                # visible widget is updated after all preview redraw callbacks.
+                self.root.after_idle(lambda: self.update_date_listbox("PMI"))
                 total_count = len(self.extracted_data)
             
             self.progress['value'] = 100
