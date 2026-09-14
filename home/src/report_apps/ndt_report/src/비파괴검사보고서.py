@@ -3262,7 +3262,7 @@ class PMIReportApp:
         self.progress['value'] = 0
         
         try:
-            wb = openpyxl.load_workbook(template_path)
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
             
             # [NEW] Find "을" sheet for data entry
             target_ws = None
@@ -3792,7 +3792,7 @@ class PMIReportApp:
 
         template_wb = None
         try:
-            template_wb = openpyxl.load_workbook(template_path)
+            template_wb = openpyxl.load_workbook(template_path, keep_vba=True)
             for sheet in template_wb.worksheets:
                 for image in sheet._images:
                     anchor = getattr(image, "anchor", None)
@@ -6902,6 +6902,14 @@ class PMIReportApp:
             if not folder_path or not os.path.exists(folder_path): return None
             candidates = glob.glob(os.path.join(folder_path, "*.*"))
             valid_extensions = ['.PNG', '.JPG', '.JPEG', '.BMP', '.GIF']
+            # Prefer an exact file-stem match before falling back to substring
+            # matching (PMI must not resolve to PMI-1 or PMI갑).
+            for path in candidates:
+                fname = os.path.basename(path); ext = os.path.splitext(path)[1].upper()
+                if ext not in valid_extensions: continue
+                if os.path.splitext(fname)[0].upper() == keyword.upper():
+                    if exclude_keyword and exclude_keyword.upper() in fname.upper(): continue
+                    return path
             for path in candidates:
                 fname = os.path.basename(path).upper(); ext = os.path.splitext(path)[1].upper()
                 if ext not in valid_extensions: continue 
@@ -6913,6 +6921,20 @@ class PMIReportApp:
         # 1. UI에서 설정한 폴더에서 먼저 검색
         found = _search_in_folder(self.logo_folder_path.get())
         if found: return found
+
+        # Use the bundled project resources when no logo folder/path was selected.
+        # This is required for PMI generation because the data-sheet images are
+        # cleared before the configured logos are added again.
+        app_home = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '..', '..', '..', '..')
+        )
+        for resource_dir in (
+            os.path.join(app_home, 'resources'),
+            os.path.join(os.path.dirname(app_home), 'Assets'),
+        ):
+            found = _search_in_folder(resource_dir)
+            if found:
+                return found
         
         # 2. PyInstaller 묶음(실행파일 내부 임시 폴더)에서 검색 (Standalone 지원)
         if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -7241,11 +7263,16 @@ class PMIReportApp:
         if p: self.place_image_freely(ws, p, _get_val("SEOUL", "_ANCHOR", "A1"), float(_get_val("SEOUL", "_W", 100)), float(_get_val("SEOUL", "_H", 50)), float(_get_val("SEOUL", "_X", 0)), float(_get_val("SEOUL", "_Y", 0)))
         
         # 3. FOOTER
-        p = _get_effective_path("FOOTER", ["바닥글", "PMI"])
+        footer_keywords = ["바닥글 PMI", "PMI"] if mode == "PMI" else ["바닥글", "PMI"]
+        p = _get_effective_path("FOOTER", footer_keywords)
         if p: self.place_image_freely(ws, p, _get_val("FOOTER", "_ANCHOR", "A1"), float(_get_val("FOOTER", "_W", 100)), float(_get_val("FOOTER", "_H", 50)), float(_get_val("FOOTER", "_X", 0)), float(_get_val("FOOTER", "_Y", 0)))
 
         # 4. FOOTER_PT (Left)
-        p = _get_effective_path("FOOTER_PT", ["PMI갑", "PMI-1", "PT"])
+        if mode == "PMI":
+            footer_left_keywords = ["바닥글 PMI갑"] if is_cover else ["바닥글 PMI-1"]
+        else:
+            footer_left_keywords = ["PMI갑", "PMI-1", "PT"]
+        p = _get_effective_path("FOOTER_PT", footer_left_keywords)
         if p: self.place_image_freely(ws, p, _get_val("FOOTER_PT", "_ANCHOR", "A1"), float(_get_val("FOOTER_PT", "_W", 100)), float(_get_val("FOOTER_PT", "_H", 50)), float(_get_val("FOOTER_PT", "_X", 0)), float(_get_val("FOOTER_PT", "_Y", 0)))
 
 
@@ -7305,7 +7332,7 @@ class PMIReportApp:
 
             ws.page_setup.paperSize = 9
             # PAUT 갑지와 을지는 모두 A4 세로 방향으로 출력한다.
-            if mode == "PAUT":
+            if mode in ("PMI", "PAUT"):
                 ws.page_setup.orientation = 'portrait'
             elif context == "DATA" or mode == "RT":
                 ws.page_setup.orientation = 'landscape'
@@ -7472,7 +7499,7 @@ class PMIReportApp:
         materials = "SS304,SS304L,SS316,SS316L,SS321,SS347,SS410,SS430,DUPLEX,MONEL,INCONEL,ER308,ER308L,ER309,ER309L,ER316,ER316L,ER347,ER2209,WP316,WP316L,TP316,TP316L,F316L,A182-F316L,A312-TP316L"
         dv_q = DataValidation(type="list", formula1=f'"{materials}"', allow_blank=True)
         ws.add_data_validation(dv_q)
-        for r in range(self.config['START_ROW'], self.config['DATA_END_ROW'] + 1):
+        for r in range(int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 1):
             target_l = ws.cell(row=r, column=13); dv_q.add(target_l) # 12 -> 13 (M)
             target_l.alignment = Alignment(wrap_text=True, horizontal='center', vertical='center'); target_l.font = Font(size=8.5)
     
@@ -7480,11 +7507,12 @@ class PMIReportApp:
         self.safe_set_value(ws, 'K15', "-")
         ws['K15'].alignment = Alignment(horizontal='center', vertical='center')
         
-    def prepare_next_sheet(self, wb, source_sheet_idx, page_num):
+    def prepare_next_sheet(self, wb, source_sheet_idx, page_num, mode=None):
         source_sheet = wb.worksheets[source_sheet_idx]; new_sheet = wb.copy_worksheet(source_sheet) 
+        current_mode = mode or getattr(self, 'current_mode', '')
         
         # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them for RT to preserve Shooting Sketches.
-        if getattr(self, 'current_mode', "") == "RT":
+        if current_mode == "RT":
             try:
                 import io
                 import copy
@@ -7509,8 +7537,8 @@ class PMIReportApp:
         self.force_print_settings(new_sheet, context="DATA")
         
         # [FIX] Only add logos if they weren't already copied from the source sheet
-        if getattr(self, 'current_mode', "") != "RT" or not new_sheet._images:
-            self.add_logos_to_sheet(new_sheet, is_cover=False)
+        if current_mode != "RT" or not new_sheet._images:
+            self.add_logos_to_sheet(new_sheet, is_cover=False, mode=current_mode or None)
         self.apply_custom_dimensions(new_sheet, "DATA")
         for col_letter, col_dim in source_sheet.column_dimensions.items(): new_sheet.column_dimensions[col_letter].width = col_dim.width
         data_font = Font(size=9); grade_font = Font(size=8.5)
@@ -7518,7 +7546,6 @@ class PMIReportApp:
             rd = new_sheet.row_dimensions[r] # [REMOVED] Hardcoded 20.55 override
         
         # [FIX] RT 모드일 경우 Shooting Sketch(32행~42행)를 보호하기 위해 데이터 종료 행을 조절
-        current_mode = getattr(self, 'current_mode', "")
         start_row = int(self.config.get('START_ROW', 17))
         end_row = int(self.config.get('DATA_END_ROW', 45))
         
@@ -7529,14 +7556,18 @@ class PMIReportApp:
             start_row = int(self.config.get('KOGAS_START_ROW', 14))
             end_row = int(self.config.get('KOGAS_DATA_END_ROW', 25))
             
+        # Unmerge the copied data area before clearing it. Clearing through
+        # safe_set_value while cells are still merged repeatedly targets only
+        # the merge anchor and can leave copied values in the later rows.
+        merged_to_clear = [rng for rng in new_sheet.merged_cells.ranges if rng.min_row >= start_row and rng.max_row <= end_row]
+        for rng in merged_to_clear:
+            new_sheet.unmerge_cells(str(rng))
+
         for r in range(start_row, end_row + 1):
             for c in range(1, 14):
                 cell = new_sheet.cell(row=r, column=c)
+                cell.value = None
                 cell.font = grade_font if c == 13 else data_font
-                self.safe_set_value(new_sheet, cell, None)
-                
-        merged_to_clear = [rng for rng in new_sheet.merged_cells.ranges if rng.min_row >= start_row and rng.max_row <= end_row]
-        for rng in merged_to_clear: new_sheet.unmerge_cells(str(rng))
         
         # [FIX] 갑지 데이터 수식으로 연결 (첫번째 시트 참조)
         try:
@@ -9269,7 +9300,7 @@ class PMIReportApp:
         data_end_row = int(self.config.get('DATA_END_ROW', 45))
         
         try:
-            wb = openpyxl.load_workbook(template_path)
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
@@ -9291,14 +9322,46 @@ class PMIReportApp:
                         # Left Border (Column A)
                         cell_a = ws0.cell(row=r, column=1); eb = cell_a.border
                         ws0.cell(row=r, column=1).border = Border(left=medium_side, right=eb.right, top=eb.top, bottom=eb.bottom)
-                        # Right Border (Column M/13)
-                        cell_m = ws0.cell(row=r, column=13); eb_m = cell_m.border
-                        ws0.cell(row=r, column=13).border = Border(left=eb_m.left, right=medium_side, top=eb_m.top, bottom=eb_m.bottom)
+                        # Right Border (Column T)
+                        cell_t = ws0.cell(row=r, column=20); eb_t = cell_t.border
+                        ws0.cell(row=r, column=20).border = Border(left=eb_t.left, right=medium_side, top=eb_t.top, bottom=eb_t.bottom)
                     except: pass
                 
-                # 2. [FIX] AGGRESSIVE CLEAR below row 48 (Signature end)
+                def _add_border(cell_ref, *, right=None, bottom=None):
+                    cell = ws0[cell_ref]
+                    eb = cell.border
+                    cell.border = Border(
+                        left=eb.left,
+                        right=right if right is not None else eb.right,
+                        top=eb.top,
+                        bottom=bottom if bottom is not None else eb.bottom,
+                    )
+
+                # Set borders on merged-range anchor cells. Borders applied only to
+                # MergedCell placeholders disappear when openpyxl saves the file.
+                _add_border('I46', right=thin_side, bottom=thin_side)  # I46:J48
+                _add_border('D48', bottom=thin_side)                     # D48:G48
+                _add_border('H48', bottom=thin_side)
+                _add_border('J49', right=thin_side, bottom=medium_side)
+
+                # Row 49 bottom: ordinary A:J cells plus the two merged anchors.
+                for c in range(1, 11):
+                    _add_border(ws0.cell(row=49, column=c).coordinate, bottom=medium_side)
+                _add_border('K40', bottom=medium_side)  # K40:N49
+                _add_border('O40', bottom=medium_side)  # O40:T49
+
+                # Expand the anchor-cell borders back over the merged edges now,
+                # rather than relying on Excel to infer them when the file opens.
+                for merged_ref in ('I46:J48', 'D48:G48', 'K40:N49', 'O40:T49'):
+                    for merged_range in ws0.merged_cells.ranges:
+                        if str(merged_range) == merged_ref:
+                            merged_range.format()
+                            break
+                
+                # 2. [FIX] AGGRESSIVE CLEAR below row 49 (Signature end + 1)
                 # Unmerge and clear all borders to ensure no ghost lines remain
-                for r in range(sig_end + 1, sig_end + 30):
+                # Start at sig_end + 2 (row 50) so we don't wipe out row 49 which contains the merged cell bottom borders!
+                for r in range(sig_end + 2, sig_end + 30):
                     # Clear merges first
                     merged_ranges = [str(rng) for rng in ws0.merged_cells.ranges if rng.min_row >= r]
                     for m_rng in merged_ranges:
@@ -9309,8 +9372,10 @@ class PMIReportApp:
                         try: ws0.cell(row=r, column=c).border = Border()
                         except: pass
 
-                # [FORCE] Strict Print Area for Gapji to prevent printing row 49+
-                ws0.print_area = f'A1:M{sig_end}'
+                # Keep the PMI footer (form number/logo on rows 50-51) inside the
+                # print area, matching the template and the preview setting.
+                gapji_print_end = int(self.config.get('GAPJI_PRINT_END_ROW', 51))
+                ws0.print_area = f'A1:T{gapji_print_end}'
                 
                 ws0['I35'].border = Border() # [FIX] I35 셀 선 제거
                 self.safe_set_value(ws0, 'I35', None) 
@@ -9354,7 +9419,52 @@ class PMIReportApp:
                         except: pass
 
             ws = wb.worksheets[data_sheet_id]
-            clear_merges_in_range(ws, self.config['START_ROW'], self.config['DATA_END_ROW'] + 20)
+            # Preserve a pristine copy of the PMI data-sheet header. Additional
+            # pages are copied from a sheet whose data area has already been
+            # unmerged/rebuilt, which can corrupt the large merged header blocks.
+            pmi_start_row = int(self.config.get('START_ROW', 17))
+            header_end_row = max(1, pmi_start_row - 1)
+            header_cells = {}
+            for header_row in range(1, header_end_row + 1):
+                for header_col in range(1, 21):
+                    source_cell = ws.cell(row=header_row, column=header_col)
+                    header_cells[(header_row, header_col)] = {
+                        'value': source_cell.value,
+                        'style': copy.copy(source_cell._style),
+                        'hyperlink': copy.copy(getattr(source_cell, 'hyperlink', None)),
+                        'comment': copy.copy(getattr(source_cell, 'comment', None)),
+                    }
+            header_merges = [
+                str(merged_range)
+                for merged_range in ws.merged_cells.ranges
+                if merged_range.max_row <= header_end_row
+            ]
+            header_row_heights = {
+                row_idx: ws.row_dimensions[row_idx].height
+                for row_idx in range(1, header_end_row + 1)
+            }
+
+            def restore_pmi_header(sheet):
+                # Remove the copied header merges first so every source cell can
+                # receive its original value and style safely.
+                for merged_range in list(sheet.merged_cells.ranges):
+                    if merged_range.min_row <= header_end_row:
+                        try:
+                            sheet.unmerge_cells(str(merged_range))
+                        except Exception:
+                            pass
+                for (header_row, header_col), snapshot in header_cells.items():
+                    target_cell = sheet.cell(row=header_row, column=header_col)
+                    target_cell.value = snapshot['value']
+                    target_cell._style = copy.copy(snapshot['style'])
+                    target_cell.hyperlink = copy.copy(snapshot['hyperlink'])
+                    target_cell.comment = copy.copy(snapshot['comment'])
+                for row_idx, row_height in header_row_heights.items():
+                    sheet.row_dimensions[row_idx].height = row_height
+                for merged_ref in header_merges:
+                    sheet.merge_cells(merged_ref)
+
+            clear_merges_in_range(ws, int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 20)
             ws.add_data_validation(dv_q)
 
             # [DYNAMIC ELEMENTS] Identify newly appended chemical elements
@@ -9369,22 +9479,23 @@ class PMIReportApp:
             if len(custom_elements) > 0: print_elements.append((custom_elements[0], 11))
             if len(custom_elements) > 1: print_elements.append((custom_elements[1], 12))
 
-            current_row = self.config['START_ROW']; current_page = 1; data_ptr = 0
+            current_row = int(self.config.get('START_ROW', 17)); current_page = 1; data_ptr = 0
             while data_ptr < len(all_extracted_data):
                 # 가용 행 수 계산 (DATA_END_ROW까지만 채움)
-                rows_left = self.config['DATA_END_ROW'] - current_row + 1
+                rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
                 
                 # 만약 공간이 전혀 없으면 새 시트로 전환
                 if rows_left <= 0:
-                    current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
-                    clear_merges_in_range(ws, self.config['START_ROW'], self.config['DATA_END_ROW'] + 20)
-                    current_row = self.config['START_ROW']; ws.add_data_validation(dv_q)
-                    rows_left = self.config['DATA_END_ROW'] - current_row + 1
+                    current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="PMI")
+                    restore_pmi_header(ws)
+                    clear_merges_in_range(ws, int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 20)
+                    current_row = int(self.config.get('START_ROW', 17)); ws.add_data_validation(dv_q)
+                    rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
 
                 # [NEW] Dynamically print headers for the new elements precisely on the first row of each sheet
-                if current_row == self.config['START_ROW'] and len(print_elements) > 3:
-                    h_row = self.config['START_ROW'] - 1
-                    for r_i in range(max(1, self.config['START_ROW'] - 5), self.config['START_ROW']):
+                if current_row == int(self.config.get('START_ROW', 17)) and len(print_elements) > 3:
+                    h_row = int(self.config.get('START_ROW', 17)) - 1
+                    for r_i in range(max(1, int(self.config.get('START_ROW', 17)) - 5), int(self.config.get('START_ROW', 17))):
                         if str(ws.cell(row=r_i, column=8).value).strip().upper() == "NI":
                             h_row = r_i; break
                     for val_k, c_idx in print_elements[3:]:
@@ -9433,8 +9544,8 @@ class PMIReportApp:
                     for c in range(1, 14):
                         cell = ws.cell(row=r, column=c)
                         l_s = thin_side; r_s = thin_side
-                        t_s = medium_side if r == self.config['START_ROW'] else thin_side
-                        b_s = medium_side if r == self.config['DATA_END_ROW'] else thin_side
+                        t_s = medium_side if r == int(self.config.get('START_ROW', 17)) else thin_side
+                        b_s = medium_side if r == int(self.config.get('DATA_END_ROW', 45)) else thin_side
                         
                         if c == 1: l_s = medium_side
                         if c == 13: r_s = medium_side
@@ -9502,7 +9613,7 @@ class PMIReportApp:
             try:
                 # current_row는 이미 다음 3행 블록의 시작점이므로, 실제 마지막 데이터 r의 다음 행을 계산
                 last_data_r = (current_row - actual_block_rows) + len(batch)
-                if last_data_r <= self.config['DATA_END_ROW']:
+                if last_data_r <= int(self.config.get('DATA_END_ROW', 45)):
                     # H(8)~L(12) 열 병합 후 BLANK 입력
                     self.safe_merge_cells(ws, start_row=last_data_r, start_column=8, end_row=last_data_r, end_column=12)
                     self.safe_set_value(ws, ws.cell(row=last_data_r, column=8).coordinate, "BLANK")
@@ -9512,8 +9623,8 @@ class PMIReportApp:
 
             # [RE-NC] 데이터가 없는 빈 칸도 45열까지 3개 행 블록 단위로 테두리/병합 적용
             d_height = float(self.config.get('ROW_HEIGHT_DATA', 20.55))
-            while current_row <= self.config['DATA_END_ROW']:
-                rows_left = self.config['DATA_END_ROW'] - current_row + 1
+            while current_row <= int(self.config.get('DATA_END_ROW', 45)):
+                rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
                 this_block_size = min(3, rows_left)
                 
                 for r_offset in range(this_block_size):
@@ -9522,8 +9633,8 @@ class PMIReportApp:
                     for c in range(1, 14):
                         cell = ws.cell(row=r, column=c)
                         l_s = thin_side; r_s = thin_side
-                        t_s = medium_side if r == self.config['START_ROW'] else thin_side
-                        b_s = medium_side if r == self.config['DATA_END_ROW'] else thin_side
+                        t_s = medium_side if r == int(self.config.get('START_ROW', 17)) else thin_side
+                        b_s = medium_side if r == int(self.config.get('DATA_END_ROW', 45)) else thin_side
                         
                         if c == 1: l_s = medium_side
                         if c == 13: r_s = medium_side
@@ -9553,7 +9664,10 @@ class PMIReportApp:
             data_end_row = int(float(self.config.get('DATA_END_ROW', 45)))
             for idx, s in enumerate(wb.worksheets):
                 # 데이터 영역 아래쪽(60행까지)의 불필요한 선 제거
-                clear_borders_in_range(s, data_end_row + 1, data_end_row + 15)
+                # The first sheet is the PMI cover; rows 46-49 contain its
+                # signature table and must retain the template borders.
+                if idx > 0:
+                    clear_borders_in_range(s, data_end_row + 1, data_end_row + 15)
                 
                 if s.max_row >= data_end_row:
                     for c in range(1, 14):
@@ -9675,7 +9789,7 @@ class PMIReportApp:
         self.log(f"🚀 PT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path)
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
@@ -9725,7 +9839,7 @@ class PMIReportApp:
             while data_ptr < len(final_list):
                 if current_row > end_row:
                     current_page += 1
-                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="PT")
                     current_row = start_row
                 
                 item = final_list[data_ptr]
@@ -9824,7 +9938,7 @@ class PMIReportApp:
         self.log(f"🚀 MT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path)
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
@@ -9862,11 +9976,11 @@ class PMIReportApp:
                 if is_gapji and current_row > gapji_end_row:
                     is_gapji = False
                     current_page += 1
-                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="MT")
                     current_row = eulji_start_row
                 elif not is_gapji and current_row > eulji_end_row:
                     current_page += 1
-                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="MT")
                     current_row = eulji_start_row
                 
                 item = final_list[data_ptr]
@@ -9957,7 +10071,7 @@ class PMIReportApp:
         self.log(f"🚀 {mode} 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path)
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
@@ -10150,7 +10264,7 @@ class PMIReportApp:
                 # 페이지 넘김 체크: 가스공사는 2행 블록 기준
                 if current_row + block_size - 1 > end_row:
                     current_page += 1
-                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page)
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode=mode)
                     current_row = start_row
                 
                 item = final_list[data_ptr]
