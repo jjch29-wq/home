@@ -11868,9 +11868,7 @@ class PMIReportApp:
                 self.progress["value"] = ((i + 1) / total) * 100
                 self.log(f"[PhotoLog] 처리 중.. ({i+1}/{total})")
 
-            # 모든 페이지의 빈 사진행도 같은 높이로 유지한다. 데이터 사진과
-            # 작업일보 사진 사이에 남은 빈 슬롯은 그대로 두어 서로 다른 페이지에
-            # 출력되도록 한다.
+            # 모든 페이지의 빈 사진행도 같은 높이로 유지하고 테두리를 그려 표 형태를 완성한다.
             full_photo_rows = total_pages * num_rows
             for slot in range(full_photo_rows):
                 if slot in used_photo_row_slots:
@@ -11878,6 +11876,13 @@ class PMIReportApp:
                 padding_row = 5 + (slot * 2)
                 worksheet.set_row(padding_row, CELL_ROW_HEIGHT)
                 worksheet.set_row(padding_row + 1, DESC_ROW_HEIGHT)
+                
+                # 빈 슬롯에도 테두리 서식을 적용하여 표 형태를 채움
+                for col_ptr in range(num_cols):
+                    c_start, c_end = photo_col_spans[col_ptr]
+                    if c_start != c_end:
+                        worksheet.merge_range(padding_row, c_start, padding_row, c_end, "", center_border)
+                        worksheet.merge_range(padding_row + 1, c_start, padding_row + 1, c_end, "사진 설명: ", desc_format)
 
             full_print_end_row = 5 + (full_photo_rows * 2) - 1
             worksheet.print_area(0, 0, full_print_end_row, GRID_COLS - 1)
