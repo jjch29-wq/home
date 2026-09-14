@@ -326,13 +326,25 @@ class PMIReportApp:
         self.gapji_project = tk.StringVar(value=self.config.get(
             'GAPJI_PROJECT', "2026년 중앙지사 열수송관 비파괴검사 단가계약"
         ))
-        # 모든 검사 보고서의 발주처는 중앙지사 표준 명칭으로 통일한다.
-        self.config['GAPJI_CUSTOMER'] = "한국지역난방공사 중앙지사"
-        self.gapji_customer = tk.StringVar(value=self.config['GAPJI_CUSTOMER'])
+        self.gapji_customer = tk.StringVar(value=self.config.get(
+            'GAPJI_CUSTOMER', "한국지역난방공사 중앙지사"
+        ))
         self.gapji_item = tk.StringVar(value=self.config.get('GAPJI_ITEM', "PIPE"))
         self.gapji_material = tk.StringVar(value=self.config.get('GAPJI_MATERIAL', ""))
         self.gapji_report_no = tk.StringVar(value=self.config.get('GAPJI_REPORT_NO', ""))
         self.gapji_exam_date = tk.StringVar(value=self.config.get('GAPJI_EXAM_DATE', datetime.datetime.now().strftime("%Y-%m-%d")))
+        self.pmi_chem_elements = [
+            tk.StringVar(value=self.config.get(f'PMI_CHEM_ELEMENT_{idx}', default))
+            for idx, default in enumerate(("Ni", "Cr", "Mo", "-", "-"), start=1)
+        ]
+        self.pmi_chem_specs = [
+            tk.StringVar(value=self.config.get(f'PMI_CHEM_SPEC_{idx}', default))
+            for idx, default in enumerate((
+                "A312- Ni:10.0 ~ 14.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
+                "ER316L- Ni:11.0 ~ 14.0%, Cr:18.0 ~ 20.0%, Mo:2.0 ~ 3.0%",
+                "A182-Ni:10.0 ~ 15.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
+            ), start=1)
+        ]
         self.rt_isotope = tk.StringVar(value=self.config.get('RT_ISOTOPE', 'Ir-192'))
         self.rt_activity = tk.StringVar(value=self.config.get('RT_ACTIVITY', '17'))
         self.rt_activity_unit = tk.StringVar(value=self.config.get('RT_ACTIVITY_UNIT', 'Ci'))
@@ -1181,7 +1193,9 @@ class PMIReportApp:
         info = self.report_info_by_mode[mode]
         self._report_info_loading = True
         try:
-            self.gapji_customer.set("한국지역난방공사 중앙지사")
+            self.gapji_customer.set(str(self.config.get(
+                'GAPJI_CUSTOMER', "한국지역난방공사 중앙지사"
+            )))
             self.gapji_report_no.set(info['report_no'])
             self.gapji_exam_date.set(info['exam_date'])
             self.config['GAPJI_REPORT_NO'] = info['report_no']
@@ -4056,18 +4070,23 @@ class PMIReportApp:
         # Grid for info entries
         for col in [1, 3]: block.columnconfigure(col, weight=1)
         
+        customer_label = "주문주:" if mode == "PMI" else "발주처:"
+        date_label = "작성일자:" if mode == "PMI" else "검사일자:"
+        report_label = "보고서 번호:" if mode == "PMI" else "리포트번호:"
         fields = [
             ("공사명:", self.gapji_project, 0, 0),
-            ("발주처:", self.gapji_customer, 0, 2),
+            (customer_label, self.gapji_customer, 0, 2),
             ("품명:", self.gapji_item, 1, 0),
             ("재질:", self.gapji_material, 1, 2),
-            ("리포트번호:", self.gapji_report_no, 2, 0),
-            ("검사일자:", self.gapji_exam_date, 2, 2)
+            (report_label, self.gapji_report_no, 2, 0),
+            (date_label, self.gapji_exam_date, 2, 2)
         ]
         
         for lbl, var, r, c in fields:
             tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
-            fixed_field = lbl in ("공사명:", "발주처:", "품명:")
+            fixed_field = lbl == "품명:" or (
+                mode != "PMI" and lbl in ("공사명:", "발주처:")
+            )
             ent = ttk.Entry(
                 block, textvariable=var, width=15,
                 state="readonly" if fixed_field else "normal"
@@ -4078,12 +4097,34 @@ class PMIReportApp:
             # Add to setting_vars for auto-save
             cfg_key = f"GAPJI_{lbl.replace(':', '').upper()}"
             if "공사명" in lbl: cfg_key = "GAPJI_PROJECT"
-            elif "발주처" in lbl: cfg_key = "GAPJI_CUSTOMER"
+            elif "발주처" in lbl or "주문주" in lbl: cfg_key = "GAPJI_CUSTOMER"
             elif "품명" in lbl: cfg_key = "GAPJI_ITEM"
             elif "재질" in lbl: cfg_key = "GAPJI_MATERIAL"
-            elif "리포트번호" in lbl: cfg_key = "GAPJI_REPORT_NO"
-            elif "검사일자" in lbl: cfg_key = "GAPJI_EXAM_DATE"
+            elif "리포트번호" in lbl or "보고서 번호" in lbl: cfg_key = "GAPJI_REPORT_NO"
+            elif "검사일자" in lbl or "작성일자" in lbl: cfg_key = "GAPJI_EXAM_DATE"
             self.setting_vars[cfg_key] = var
+
+        if mode == "PMI":
+            chem_frame = tk.LabelFrame(
+                block, text=" Chemical Composition ", padx=6, pady=4,
+                background="#ffffff", font=("Malgun Gothic", 8, "bold")
+            )
+            chem_frame.grid(row=3, column=0, columnspan=4, sticky='ew', padx=2, pady=(5, 2))
+            tk.Label(chem_frame, text="원소명:", background="#ffffff").grid(row=0, column=0, padx=2)
+            for idx, var in enumerate(self.pmi_chem_elements, start=1):
+                ttk.Entry(chem_frame, textvariable=var, width=8).grid(
+                    row=0, column=idx, sticky='ew', padx=2, pady=1
+                )
+                chem_frame.columnconfigure(idx, weight=1)
+                self.setting_vars[f'PMI_CHEM_ELEMENT_{idx}'] = var
+            for idx, var in enumerate(self.pmi_chem_specs, start=1):
+                tk.Label(
+                    chem_frame, text=f"기준 {idx}:", background="#ffffff"
+                ).grid(row=idx, column=0, sticky='e', padx=2)
+                ttk.Entry(chem_frame, textvariable=var).grid(
+                    row=idx, column=1, columnspan=5, sticky='ew', padx=2, pady=1
+                )
+                self.setting_vars[f'PMI_CHEM_SPEC_{idx}'] = var
             
         # RT radioactive-source settings (I10:M11 on the cover sheet).
         isotope_frame = tk.Frame(block, background="#ffffff")
@@ -5560,13 +5601,15 @@ class PMIReportApp:
             listbox = self.date_listbox
             data = self.extracted_data
         
-        if not listbox: return
+        if listbox is None or not listbox.winfo_exists(): return
         
         listbox.delete(0, tk.END)
         # [NEW] 데이터 기반으로 날짜별 선택 상태(date_filtered) 수집
         date_status = {}
         for item in data:
-            dt = item.get('Date', 'N/A')
+            dt = str(item.get('Date', '') or '').strip()
+            if not dt:
+                continue
             if dt not in date_status:
                 date_status[dt] = item.get('date_filtered', True)
         
@@ -8434,6 +8477,7 @@ class PMIReportApp:
                         col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
                         col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
                         col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"])
+                        col_date = _find_col(df, ["DATE", "검사일", "검사일자", "일자"])
                         col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
                         col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
                         col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
@@ -8784,7 +8828,7 @@ class PMIReportApp:
                                     'Loc': str(row[col_loc]).strip() if col_loc is not None else "",
                                     'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
                                     'Grade': final_grade, 'Dwg': curr_dwg,
-                                    'Date': sheet_level_date,
+                                    'Date': curr_date or sheet_level_date,
                                     'selected': True,
                                     'order_index': len(self.extracted_data) + len(all_extracted_data)
                                 }
@@ -8872,9 +8916,11 @@ class PMIReportApp:
                 total_count = len(self.pt_extracted_data)
             else:
                 self.extracted_data.extend(all_extracted_data)
-                self.update_date_listbox("PMI")
                 self.pmi_sort_col = "" # [NEW] Force Ascending
                 self.sort_by_column("Dwg", mode="PMI")
+                # Refresh after sorting/populating so the visible PMI sidebar is
+                # updated last and cannot be left with its initial empty state.
+                self.update_date_listbox("PMI")
                 total_count = len(self.extracted_data)
             
             self.progress['value'] = 100
@@ -9419,6 +9465,19 @@ class PMIReportApp:
                         except: pass
 
             ws = wb.worksheets[data_sheet_id]
+            def apply_pmi_variable_header(sheet):
+                """Apply PMI fields that repeat on every data-sheet page."""
+                self.safe_set_value(sheet, 'M5', self.gapji_customer.get().strip())
+                self.safe_set_value(sheet, 'M8', self.gapji_report_no.get().strip())
+                for col_idx, var in enumerate(self.pmi_chem_elements, start=8):
+                    self.safe_set_value(
+                        sheet, sheet.cell(row=15, column=col_idx).coordinate,
+                        var.get().strip(), align='center'
+                    )
+                for row_idx, var in enumerate(self.pmi_chem_specs, start=16):
+                    self.safe_set_value(sheet, f'H{row_idx}', var.get().strip())
+
+            apply_pmi_variable_header(ws)
             # Preserve a pristine copy of the PMI data-sheet header. Additional
             # pages are copied from a sheet whose data area has already been
             # unmerged/rebuilt, which can corrupt the large merged header blocks.
