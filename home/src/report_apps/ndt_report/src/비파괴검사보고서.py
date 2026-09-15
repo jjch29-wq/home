@@ -8272,16 +8272,20 @@ class PMIReportApp:
         
         def _find_col(df, keywords, exclude=None):
             cleaned_keywords = [re.sub(r'\s+', '', k).upper() for k in keywords]
-            for col in df.columns:
-                c_clean = re.sub(r'\s+', '', str(col)).upper()
-                if exclude and any(re.sub(r'\s+', '', ex).upper() in c_clean for ex in exclude): continue
-                if any(k == c_clean for k in cleaned_keywords): return col
-            for col in df.columns:
-                c_clean = re.sub(r'\s+', '', str(col)).upper()
-                if exclude and any(re.sub(r'\s+', '', ex).upper() in c_clean for ex in exclude): continue
-                if any(k in c_clean for k in cleaned_keywords):
-                    if "NI" in keywords and ("UNIT" in c_clean or "LINE" in c_clean): continue
-                    return col
+            # 1. Exact match by keyword priority
+            for k in cleaned_keywords:
+                for col in df.columns:
+                    c_clean = re.sub(r'\s+', '', str(col)).upper()
+                    if exclude and any(re.sub(r'\s+', '', ex).upper() in c_clean for ex in exclude): continue
+                    if k == c_clean: return col
+            # 2. Substring match by keyword priority
+            for k in cleaned_keywords:
+                for col in df.columns:
+                    c_clean = re.sub(r'\s+', '', str(col)).upper()
+                    if exclude and any(re.sub(r'\s+', '', ex).upper() in c_clean for ex in exclude): continue
+                    if k in c_clean:
+                        if "NI" in keywords and ("UNIT" in c_clean or "LINE" in c_clean): continue
+                        return col
             return None
 
         def _get_kw(k): 
@@ -8493,7 +8497,7 @@ class PMIReportApp:
                             if col_joint is None and len(df.columns) > 1: col_joint = df.columns[1]
                             if col_size is None and len(df.columns) > 4: col_size = df.columns[4]
                     elif mode == "PT":
-                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"])
+                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT"])
                         col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
                         col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
                         if not col_joint:
@@ -8509,7 +8513,7 @@ class PMIReportApp:
                     else:
                         col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
                         col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
-                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"])
+                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT"])
                         col_date = _find_col(df, ["DATE", "검사일", "검사일자", "일자"])
                         col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
                         col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
@@ -8741,9 +8745,18 @@ class PMIReportApp:
                 else:
                     # ===== 표준 모드 (RT, PT, PMI) =====
                     for _, row in df.iterrows():
-                        v_raw_no = clean_v(row[col_no]) if col_no is not None else str(_+1)
-                        if col_no is not None and (not v_raw_no or v_raw_no == "nan"):
+                        v_raw_no = clean_v(row[col_no]) if col_no is not None else ""
+                        raw_dwg = clean_v(row[col_dwg]) if col_dwg is not None else ""
+                        raw_joint = clean_v(row[col_joint]) if col_joint is not None else ""
+                        
+                        # 행의 주요 데이터가 모두 비어있으면 빈 행으로 간주하여 건너뜀
+                        if not v_raw_no and not raw_dwg and not raw_joint:
                             continue
+                            
+                        # 주요 데이터는 있는데 순번만 비어있으면 자동 부여
+                        if not v_raw_no or v_raw_no == "nan":
+                            v_raw_no = str(len(all_extracted_data) + 1)
+                            
                         if target_no_list and v_raw_no not in target_no_list: continue
 
                         extract_key = self.rt_extract_keyword.get().strip().lower()
