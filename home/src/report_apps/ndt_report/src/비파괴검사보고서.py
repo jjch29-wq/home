@@ -8397,17 +8397,29 @@ class PMIReportApp:
                         # [KOGAS] 14~25행 데이터 추출 (인덱스 4~15)
                         df = df.iloc[4:16].reset_index(drop=True)
                     else:
-                        # [STANDARD] 기존 자동 보정 로직 (두 줄 헤더 등)
-                        row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)])
-                        if any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
-                            self.log(f"   ℹ️ [자동보정] 두 줄 헤더 감지됨 (시트: {sheet_name})")
+                        # [STANDARD] 다중 헤더 병합 (최대 2행까지 지원)
+                        row0_str = " ".join([str(x).upper() for x in df.iloc[0] if pd.notna(x)]) if len(df) > 0 else ""
+                        row1_str = " ".join([str(x).upper() for x in df.iloc[1] if pd.notna(x)]) if len(df) > 1 else ""
+                        
+                        merge_count = 0
+                        if any(k in row1_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
+                            merge_count = 2
+                        elif any(k in row0_str for k in ["ORIGIN", "FACTOR", "WELDER1"]):
+                            merge_count = 1
+                            
+                        if merge_count > 0:
+                            self.log(f"   ℹ️ [자동] 다중 헤더 병합 ({merge_count}행) (시트: {sheet_name})")
                             new_cols = []
-                            for col, val in zip(df.columns, df.iloc[0]):
+                            for c_idx, col in enumerate(df.columns):
                                 c_txt = str(col) if pd.notna(col) and "Unnamed" not in str(col) else ""
-                                v_txt = str(val) if pd.notna(val) else ""
+                                v_parts = []
+                                for r in range(merge_count):
+                                    v = df.iloc[r, c_idx]
+                                    if pd.notna(v) and "Unnamed" not in str(v): v_parts.append(str(v).strip())
+                                v_txt = " ".join(v_parts)
                                 new_cols.append(f"{c_txt} {v_txt}".strip())
                             df.columns = new_cols
-                            df = df.iloc[1:].reset_index(drop=True)
+                            df = df.iloc[merge_count:].reset_index(drop=True)
 
                     # --- Column Identification for THIS sheet ---
                     col_date = None
