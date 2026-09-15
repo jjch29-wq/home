@@ -595,14 +595,16 @@ class PMIReportApp:
                                 insert_at = 5
                             self.pt_column_keys.insert(insert_at, "Thk.")
                     
-                    if "NPS" not in self.pt_column_keys:
-                        try:
-                            self.pt_column_keys.insert(self.pt_column_keys.index("Joint") + 1, "NPS")
-                        except ValueError:
-                            self.pt_column_keys.insert(5, "NPS")
-                            
-                    if "No" not in self.pt_column_keys:
-                        self.pt_column_keys.insert(1, "No")
+                    if "No" in self.pt_column_keys:
+                        self.pt_column_keys.remove("No")
+                    self.pt_column_keys.insert(1, "No")
+
+                    if "NPS" in self.pt_column_keys:
+                        self.pt_column_keys.remove("NPS")
+                    try:
+                        self.pt_column_keys.insert(self.pt_column_keys.index("Joint") + 1, "NPS")
+                    except ValueError:
+                        self.pt_column_keys.insert(5, "NPS")
                     if 'mt_column_keys' in saved_data:
                         self.mt_column_keys = list(saved_data['mt_column_keys'])
                     if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
