@@ -289,7 +289,7 @@ class PMIReportApp:
         self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
         self.rt_column_keys = ["selected", "No", "Date", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
-        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
+        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Thk.", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.mt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.paut_column_keys = ["selected", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
         
@@ -2346,9 +2346,9 @@ class PMIReportApp:
         tk.Label(header_info, textvariable=self.file_info_vars['PT'], background="#ffffff", 
                  foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
 
-        self.pt_display_cols = ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
+        self.pt_display_cols = ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Thk.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
         saved_widths = self.config.get("PT_COL_WIDTHS", {})
-        default_widths = {"V": 40, "No": 50, "Date": 90, "ISO/Dwg": 300, "Joint No.": 120, "Material": 100, "Test Item": 100, "Result": 80, "Welder No": 100}
+        default_widths = {"V": 40, "No": 50, "Date": 90, "ISO/Dwg": 300, "Joint No.": 120, "Thk.": 70, "Material": 100, "Test Item": 100, "Result": 80, "Welder No": 100}
 
         tree_frame = tk.Frame(container, background="#f9fafb")
         self.pt_preview_tree = ttk.Treeview(tree_frame, columns=self.pt_display_cols, show='headings', height=10, selectmode='extended')
@@ -8809,6 +8809,13 @@ class PMIReportApp:
                             else:
                                 all_extracted_data.append(item_data)
                         elif mode == "PT":
+                            # 헤더 행 방어: Dwg/Joint 값이 컬럼 키워드이면 스킵
+                            _dwg_up = curr_dwg.upper().strip()
+                            _jnt_up = curr_joint.upper().strip()
+                            _header_dwg = {"ISO", "LINE", "DWG", "DWG NO", "DWG.", "DRAWING", "ISO/DWG", "ISO NO"}
+                            _header_jnt = {"JOINT", "JOINT NO", "JOINT NO.", "JOINT NUMBER", "WELD", "WELD NO"}
+                            if _dwg_up in _header_dwg and _jnt_up in _header_jnt:
+                                continue
                             res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
                             if any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"]):
                                 item_row = {
