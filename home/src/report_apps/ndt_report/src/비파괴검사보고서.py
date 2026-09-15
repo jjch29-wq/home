@@ -8541,12 +8541,13 @@ class PMIReportApp:
                         # 만약 문자열이고 날짜 형식인 경우 시간 정보(00:00:00) 제거
                         ret_str = str(v).strip()
                         if len(ret_str) >= 10:
-                            if ret_str[4] == '-' and ret_str[7] == '-':
-                                ret_str = ret_str[:10]
-                            elif ret_str[4] == '.' and ret_str[7] == '.':
-                                ret_str = ret_str[:10]
-                            elif ret_str[4] == '/' and ret_str[7] == '/':
-                                ret_str = ret_str[:10]
+                            if ret_str[:4].isdigit() and ret_str[5:7].isdigit() and ret_str[8:10].isdigit():
+                                if ret_str[4] == '-' and ret_str[7] == '-':
+                                    ret_str = ret_str[:10]
+                                elif ret_str[4] == '.' and ret_str[7] == '.':
+                                    ret_str = ret_str[:10]
+                                elif ret_str[4] == '/' and ret_str[7] == '/':
+                                    ret_str = ret_str[:10]
                         return ret_str
 
                     def process_welder_string(w_str):
