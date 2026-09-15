@@ -587,6 +587,13 @@ class PMIReportApp:
                         self.kogas_column_keys = list(saved_data['kogas_column_keys'])
                     if 'pt_column_keys' in saved_data and isinstance(saved_data['pt_column_keys'], list):
                         self.pt_column_keys = list(saved_data['pt_column_keys'])
+                        # [마이그레이션] 구버전 config에 Thk.가 없으면 Joint 뒤에 삽입
+                        if "Thk." not in self.pt_column_keys:
+                            try:
+                                insert_at = self.pt_column_keys.index("Joint") + 1
+                            except ValueError:
+                                insert_at = 5
+                            self.pt_column_keys.insert(insert_at, "Thk.")
                     if 'mt_column_keys' in saved_data:
                         self.mt_column_keys = list(saved_data['mt_column_keys'])
                     if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
