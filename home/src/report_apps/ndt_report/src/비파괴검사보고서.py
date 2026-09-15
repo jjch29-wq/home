@@ -8509,7 +8509,7 @@ class PMIReportApp:
                             if col_joint is None and len(df.columns) > 1: col_joint = df.columns[1]
                             if col_size is None and len(df.columns) > 4: col_size = df.columns[4]
                     elif mode == "PT":
-                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT"])
+                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT", "ORIGIN"])
                         col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
                         col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
                         if not col_joint:
@@ -8525,7 +8525,7 @@ class PMIReportApp:
                     else:
                         col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
                         col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
-                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT"])
+                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT", "ORIGIN"])
                         col_date = _find_col(df, ["DATE", "검사일", "검사일자", "일자"])
                         col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
                         col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
