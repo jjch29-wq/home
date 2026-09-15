@@ -8325,29 +8325,31 @@ class PMIReportApp:
                     # [지능형 시트 내 도면번호 추출]
                     # 의뢰서의 C5, C6 셀(머지된 영역)을 직접 파싱하여
                     # 해당 시트의 기본 도면번호(sheet_level_dwg)로 활용합니다.
+                    # PT/MT 모드는 의뢰서 고정 헤더 구조가 아니므로 건너뜁니다.
                     sheet_level_dwg = ""
-                    try:
-                        for r_pos in [4, 5]: # 0-indexed 4=5행, 5=6행
-                            for c_pos in [2, 1, 3]: # 2=C열, 1=B열, 3=D열
-                                if r_pos < len(temp_df) and c_pos < len(temp_df.columns):
-                                    val = temp_df.iloc[r_pos, c_pos]
-                                    if pd.notna(val):
-                                        val_str = str(val).strip()
-                                        if val_str and val_str.lower() != 'nan' and len(val_str) > 2:
-                                            # "도면번호", "도면", "DWG" 같은 라벨 텍스트는 제외
-                                            if val_str in ["도면번호", "도면", "DWG", "DWG NO", "DWG.NO", "도면 NO", "도면 NO."]:
-                                                continue
-                                            # "SEOUL INSPECTION...", 회사명 혹은 주소 등 공백이 너무 많은 텍스트 제외
-                                            val_upper = val_str.upper()
-                                            if any(k in val_upper for k in ["CO.", "LTD", "INSPECTION", "TESTING", "CORP", "INC", "SEOUL", "주식회사"]):
-                                                continue
-                                            if val_str.count(" ") > 2:
-                                                continue
-                                            sheet_level_dwg = val_str
-                                            break
-                            if sheet_level_dwg: break
-                    except: pass
-                    
+                    if mode not in ["PT", "MT"]:
+                        try:
+                            for r_pos in [4, 5]: # 0-indexed 4=5행, 5=6행
+                                for c_pos in [2, 1, 3]: # 2=C열, 1=B열, 3=D열
+                                    if r_pos < len(temp_df) and c_pos < len(temp_df.columns):
+                                        val = temp_df.iloc[r_pos, c_pos]
+                                        if pd.notna(val):
+                                            val_str = str(val).strip()
+                                            if val_str and val_str.lower() != 'nan' and len(val_str) > 2:
+                                                # "도면번호", "도면", "DWG" 같은 라벨 텍스트는 제외
+                                                if val_str in ["도면번호", "도면", "DWG", "DWG NO", "DWG.NO", "도면 NO", "도면 NO."]:
+                                                    continue
+                                                # "SEOUL INSPECTION...", 회사명 혹은 주소 등 공백이 너무 많은 텍스트 제외
+                                                val_upper = val_str.upper()
+                                                if any(k in val_upper for k in ["CO.", "LTD", "INSPECTION", "TESTING", "CORP", "INC", "SEOUL", "주식회사"]):
+                                                    continue
+                                                if val_str.count(" ") > 2:
+                                                    continue
+                                                sheet_level_dwg = val_str
+                                                break
+                                if sheet_level_dwg: break
+                        except: pass
+
                     if sheet_level_dwg:
                         self.log(f"   📐 의뢰서 헤더(C5/C6 셀)에서 도면번호 파싱 성공: {sheet_level_dwg}")
                     
