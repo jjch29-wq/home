@@ -6627,7 +6627,6 @@ class PMIReportApp:
                     if k == "selected": row_vals.append(v_mark)
                     else: 
                         val = str(item.get(k, "")).strip()
-                        if (k in ["Dwg", "ISO"] and item.get('is_merged_iso')) or (k == "Joint" and item.get('is_merged_joint')): val = ""
                         row_vals.append(val)
             elif mode == "PAUT":
                 # PAUT use paut_column_keys
