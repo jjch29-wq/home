@@ -7551,7 +7551,7 @@ class PMIReportApp:
             return
 
         headers = ["NI", "CR", "MO"]
-        data_font = Font(size=9); header_row = self.config.get('START_ROW', 10)
+        data_font = Font(size=9); header_row = int(self.config.get('START_ROW', 10))
         for i, val in enumerate(headers):
             col = 8 + i
             cell = ws.cell(row=header_row, column=col)
