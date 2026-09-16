@@ -7205,13 +7205,13 @@ class PMIReportApp:
         except:
             is_first_sheet = is_cover
 
-        # [FIX] Never clear existing images on the Cover sheet (Gapji) or in RT mode to preserve template diagrams (e.g. Shooting Sketches)
-        if is_first_sheet or is_cover or mode == "RT":
+        # [FIX] Never clear existing images on the Cover sheet (Gapji) or in RT/PT mode to preserve template diagrams
+        if is_first_sheet or is_cover or mode in ["RT", "PT"]:
             clear_existing = False
 
-        # [NEW] If RT mode and images already exist, skip adding logos to preserve the template perfectly
-        if mode == "RT" and getattr(ws, '_images', None):
-            self.log(f"   ℹ️ [RT] 시트에 이미 그림(도면)이 있어 추가 로고 삽입을 건너뜁니다.")
+        # [NEW] If RT/PT mode and images already exist, skip adding logos to preserve the template perfectly
+        if mode in ["RT", "PT"] and getattr(ws, '_images', None):
+            self.log(f"   [INFO] 시트에 이미 그림(도면/로고)이 있어 추가 로고 삽입을 건너뜁니다.")
             return
 
         if clear_existing:
@@ -7395,8 +7395,6 @@ class PMIReportApp:
                     if end_r > 0:
                         if mode == "PAUT":
                             ws.print_area = f'A1:AH{end_r}'
-                        elif mode == "PT":
-                            ws.print_area = f'A1:S{end_r}'
                         else:
                             ws.print_area = f'A1:M{end_r}'
             
@@ -7408,7 +7406,7 @@ class PMIReportApp:
 
             ws.page_setup.paperSize = 9
             # PAUT 갑지와 을지는 모두 A4 세로 방향으로 출력한다.
-            if mode in ("PMI", "PAUT", "PT"):
+            if mode in ("PMI", "PAUT"):
                 ws.page_setup.orientation = 'portrait'
             elif context == "DATA" or mode == "RT":
                 ws.page_setup.orientation = 'landscape'
@@ -7496,10 +7494,8 @@ class PMIReportApp:
                 for part in row_range_str.split(','):
                     part = part.strip()
                     if not part: continue
-                    if '-' in part or '~' in part or ':' in part:
-                        if '-' in part: sep = '-'
-                        elif '~' in part: sep = '~'
-                        else: sep = ':'
+                    if '-' in part or '~' in part:
+                        sep = '-' if '-' in part else '~'
                         start, end = map(int, part.split(sep))
                         for r in range(start, end + 1):
                             ws.row_dimensions[r].height = height
@@ -9550,136 +9546,79 @@ class PMIReportApp:
                 for row_idx, var in enumerate(self.pmi_chem_specs, start=16):
                     self.safe_set_value(sheet, f'H{row_idx}', var.get().strip())
 
-            # 을지 (Data) - PT 템플릿은 이미 을지 로고가 포함되어 있으므로 로고 삽입 생략
-            data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
+            apply_pmi_variable_header(ws)
+            # Preserve a pristine copy of the PMI data-sheet header. Additional
+            # pages are copied from a sheet whose data area has already been
+            # unmerged/rebuilt, which can corrupt the large merged header blocks.
+            pmi_start_row = int(self.config.get('START_ROW', 17))
+            header_end_row = max(1, pmi_start_row - 1)
+            header_cells = {}
+            for header_row in range(1, header_end_row + 1):
+                for header_col in range(1, 21):
+                    source_cell = ws.cell(row=header_row, column=header_col)
+                    header_cells[(header_row, header_col)] = {
+                        'value': source_cell.value,
+                        'style': copy.copy(source_cell._style),
+                        'hyperlink': copy.copy(getattr(source_cell, 'hyperlink', None)),
+                        'comment': copy.copy(getattr(source_cell, 'comment', None)),
+                    }
+            header_merges = [
+                str(merged_range)
+                for merged_range in ws.merged_cells.ranges
+                if merged_range.max_row <= header_end_row
+            ]
+            header_row_heights = {
+                row_idx: ws.row_dimensions[row_idx].height
+                for row_idx in range(1, header_end_row + 1)
+            }
 
-            # 헤더 감지 및 시작 행 결정
-            start_row = int(self.config.get('PT_START_ROW', 18))
-            end_row = int(self.config.get('PT_END_ROW', 38))
+            def restore_pmi_header(sheet):
+                # Remove the copied header merges first so every source cell can
+                # receive its original value and style safely.
+                for merged_range in list(sheet.merged_cells.ranges):
+                    if merged_range.min_row <= header_end_row:
+                        try:
+                            sheet.unmerge_cells(str(merged_range))
+                        except Exception:
+                            pass
+                for (header_row, header_col), snapshot in header_cells.items():
+                    target_cell = sheet.cell(row=header_row, column=header_col)
+                    target_cell.value = snapshot['value']
+                    target_cell._style = copy.copy(snapshot['style'])
+                    target_cell.hyperlink = copy.copy(snapshot['hyperlink'])
+                    target_cell.comment = copy.copy(snapshot['comment'])
+                for row_idx, row_height in header_row_heights.items():
+                    sheet.row_dimensions[row_idx].height = row_height
+                for merged_ref in header_merges:
+                    sheet.merge_cells(merged_ref)
+
+            clear_merges_in_range(ws, int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 20)
+            ws.add_data_validation(dv_q)
+
+            # [DYNAMIC ELEMENTS] Identify newly appended chemical elements
+            custom_elements = [k for k in self.column_keys if k not in ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Grade", "order_index", "V", "ST", "Ni", "Cr", "Mo"]]
             
-            # 스타일 설정
-            thin_side = Side(style='thin')
-            thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-
-            # [Smart Detection] 갑지/을지 중 어느 시트에 데이터 헤더가 있는지 자동 감지
-            detected_start = -1
-            iso_col_idx = 2  # 기본값 B컬럼
+            # [NEW] Dynamic Column Mapping for Elements
+            ni_col = self.col_to_num(self.config.get('PMI_COL_NI', '8'))
+            cr_col = self.col_to_num(self.config.get('PMI_COL_CR', '9'))
+            mo_col = self.col_to_num(self.config.get('PMI_COL_MO', '10'))
             
-            def _detect_header(sheet):
-                for r in range(1, 45):
-                    line_cells = [str(sheet.cell(row=r, column=c).value).upper() for c in range(1, 20)]
-                    line_str = "".join(line_cells)
-                    if (("JOINT" in line_str or "WELD" in line_str) and ("ISO" in line_str or "LINE" in line_str or "DWG" in line_str)) or ("DWG" in line_str and "RESULT" in line_str) or ("NO." in line_str and "JOINT" in line_str):
-                        return r + 1  # 헤더 다음 행이 데이터 시작
-                return -1
+            print_elements = [('Ni', ni_col), ('Cr', cr_col), ('Mo', mo_col)]
+            if len(custom_elements) > 0: print_elements.append((custom_elements[0], 11))
+            if len(custom_elements) > 1: print_elements.append((custom_elements[1], 12))
 
-            # 1) 갑지(첫 번째 시트)에서 먼저 감지
-            detected_on_cover = _detect_header(ws0)
-            if detected_on_cover > 0:
-                data_sheet_id = 0  # 갑지에 데이터 쓰기
-                ws = ws0
-                detected_start = detected_on_cover
-                self.log(f"[PT] 갑지(1번 시트) {detected_start}행에서 데이터 시작 감지")
-            else:
-                # 2) 을지(두 번째 시트)에서 감지
-                ws = wb.worksheets[data_sheet_id]
-                detected_start_data = _detect_header(ws)
-                if detected_start_data > 0:
-                    detected_start = detected_start_data
-                    self.log(f"[PT] 을지(2번 시트) {detected_start}행에서 데이터 시작 감지")
-
-            ws.title = f"{ws.title[:20]}_001"
-                # 을지/갑지 자동 감지 - 헤더가 있는 시트에 데이터 기입
-            data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
-
-            # 기본값 설정
-            cover_start_row = int(self.config.get('PT_START_ROW', 13))   # 갑지 데이터 시작행
-            cover_end_row   = int(self.config.get('PT_COVER_END_ROW', 37)) # 갑지 마지막 데이터행
-            data_start_row  = int(self.config.get('PT_DATA_START_ROW', 10)) # 001시트 데이터 시작행
-            data_end_row    = int(self.config.get('PT_END_ROW', 38))        # 001시트 마지막 데이터행
-            template_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
-
-            # 스타일 설정
-            thin_side = Side(style='thin')
-            thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-
-            def _detect_pt_header(sheet):
-                """시트에서 데이터 헤더 행을 찾아 데이터 시작 행 반환"""
-                for r in range(1, 45):
-                    vals = [str(sheet.cell(row=r, column=c).value).upper() for c in range(1, 22)]
-                    s = "".join(vals)
-                    if ("JOINT" in s or "WELD" in s) and ("ISO" in s or "DWG" in s or "LINE" in s):
-                        return r + 1
-                    if "DWG" in s and "RESULT" in s:
-                        return r + 1
-                    if "NO." in s and "JOINT" in s and ("ACC" in s or "REJ" in s):
-                        return r + 1
-                return -1
-
-            # 1) 갑지(1번 시트) 헤더 감지
-            d_cover = _detect_pt_header(ws0)
-            if d_cover > 0 and d_cover <= cover_end_row:
-                data_sheet_id = 0
-                ws = ws0
-                cover_start_row = d_cover
-                self.log(f"[PT] 갑지 {cover_start_row}행~{cover_end_row}행에 기입")
-            else:
-                self.log(f"[PT] 갑지 헤더 미감지(d={d_cover}) → 기본 start_row={cover_start_row} 사용")
-                ws = wb.worksheets[data_sheet_id]
-
-            # 2) 001시트(2번 시트) 헤더 감지 - 갑지와 별도로
-            if len(wb.worksheets) >= 2:
-                ws_001_tpl = wb.worksheets[1]
-                d_data = _detect_pt_header(ws_001_tpl)
-                if d_data > 0 and d_data <= data_end_row:
-                    data_start_row = d_data
-                    self.log(f"[PT] 001시트 {data_start_row}행~{data_end_row}행에 기입")
-
-            ws.title = f"{ws.title[:20]}_001"
-            self.force_print_settings(ws, context="DATA")
-
-            # 갑지에 쓰는 경우 end_row를 커버용으로 분리
-            on_cover = (data_sheet_id == 0)
-            start_row     = cover_start_row if on_cover else data_start_row
-            current_end_row = cover_end_row if on_cover else data_end_row
-
-            current_row = start_row
-            current_page = 1
-            data_ptr = 0
-            
-            while data_ptr < len(final_list):
-                if current_row > current_end_row:
-                    current_page += 1
-                    # 항상 001시트(2번째 시트 원본)를 복사해서 다음 페이지 생성
-                    ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
-                    current_row = data_start_row  # 001시트는 감지된 data_start_row 사용
-                    current_end_row = data_end_row
-                    on_cover = False
+            current_row = int(self.config.get('START_ROW', 17)); current_page = 1; data_ptr = 0
+            while data_ptr < len(all_extracted_data):
+                # 가용 행 수 계산 (DATA_END_ROW까지만 채움)
+                rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
                 
-                item = final_list[data_ptr]
-                
-                # PT 고정 열 하드코딩 (원본 병합셀 보호)
-                self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('Dwg', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=4).coordinate, item.get('Joint', ''))
-                
-                res_val = str(item.get('Result', 'Acc')).strip().upper()
-                is_acc = (res_val in ['ACC', 'ACCEPT', 'PASS', '합격', 'O', 'OK', 'V', ''])
-                
-                if is_acc:
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=5).coordinate, 'V')
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=8).coordinate, 'NO RECORDABLE INDICATION')
-                else:
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=6).coordinate, 'V')
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=8).coordinate, res_val)
-                
-                self.safe_set_value(ws, ws.cell(row=current_row, column=18).coordinate, item.get('Welder', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=19).coordinate, item.get('NPS', ''))
-                
-                # 스타일링 생략 (병합셀 손상 방지)
-
-                data_ptr += 1
-                current_row += 1
-                self.progress['value'] = (data_ptr / len(final_list)) * 95
+                # 만약 공간이 전혀 없으면 새 시트로 전환
+                if rows_left <= 0:
+                    current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="PMI")
+                    restore_pmi_header(ws)
+                    clear_merges_in_range(ws, int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 20)
+                    current_row = int(self.config.get('START_ROW', 17)); ws.add_data_validation(dv_q)
+                    rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
 
                 # [NEW] Dynamically print headers for the new elements precisely on the first row of each sheet
                 if current_row == int(self.config.get('START_ROW', 17)) and len(print_elements) > 3:
@@ -9978,112 +9917,145 @@ class PMIReportApp:
         self.log(f"🚀 PT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=False)
+            wb = openpyxl.load_workbook(template_path, keep_vba=True)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
-            # 갑지 (Cover) - PT 템플릿은 이미 갑지 로고가 포함되어 있으므로 로고 삽입 생략
+            # 갑지 (Cover)
             ws0 = wb.worksheets[0]
-            # self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="PT")  # 템플릿 원본 유지
+            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="PT")
             self._write_gapji_metadata(ws0, mode="PT")
             self.force_print_settings(ws0, context="COVER")
             self.apply_custom_dimensions(ws0, "COVER")
 
-            # 을지/갑지 자동 감지 - 헤더가 있는 시트에 데이터 기입
+            # 을지 (Data)
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
+            ws = wb.worksheets[data_sheet_id]
+            ws.title = f"{ws.title[:20]}_001"
+            # [FIX] Do NOT clear existing images if data sheet is the same as cover
+            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="PT")
+            self.force_print_settings(ws, context="DATA")
 
             # 헤더 감지 및 시작 행 결정
             start_row = int(self.config.get('PT_START_ROW', 18))
-            end_row = int(self.config.get('PT_END_ROW', 38))
+            end_row = int(self.config.get('PT_END_ROW', 37))
             
             # 스타일 설정
             thin_side = Side(style='thin')
             thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
-
-            def _detect_pt_header(sheet):
-                """시트에서 데이터 헤더 행을 찾아 데이터 시작 행 반환"""
-                for r in range(1, 45):
-                    vals = [str(sheet.cell(row=r, column=c).value).upper() for c in range(1, 22)]
-                    s = "".join(vals)
-                    if ("JOINT" in s or "WELD" in s) and ("ISO" in s or "DWG" in s or "LINE" in s):
-                        return r + 1
-                    if "DWG" in s and "RESULT" in s:
-                        return r + 1
-                    if "NO." in s and "JOINT" in s and ("ACC" in s or "REJ" in s):
-                        return r + 1
-                return -1
-
-            # 1) 갑지(첫 번째 시트)에서 먼저 헤더 감지
-            d_cover = _detect_pt_header(ws0)
-            if d_cover > 0:
-                data_sheet_id = 0
-                ws = ws0
-                start_row = d_cover
-                self.log(f"[PT] 갑지(1번 시트) {start_row}행에서 데이터 헤더 감지 → 갑지에 기입")
-            else:
-                # 2) 을지(두 번째 시트)에서 감지
-                ws = wb.worksheets[data_sheet_id]
-                d_data = _detect_pt_header(ws)
-                if d_data > 0:
-                    start_row = d_data
-                    self.log(f"[PT] 을지(2번 시트) {start_row}행에서 데이터 헤더 감지 → 을지에 기입")
-                else:
-                    self.log(f"[PT] 헤더 자동 감지 실패 → 기본 start_row={start_row} 사용")
-
-            ws.title = f"{ws.title[:20]}_001"
-            self.force_print_settings(ws, context="DATA")
-
-            # 갑지는 38행이 Sketch 고정행이므로 37행까지만 데이터 기입
-            # 001시트(을지)는 10~38행까지 데이터 기입
-            cover_end_row = int(self.config.get('PT_COVER_END_ROW', 37))  # 갑지 마지막 데이터행
-            data_end_row = int(self.config.get('PT_END_ROW', 38))          # 001시트 마지막 데이터행
-            # 001시트 원본은 항상 index=1 (갑지=0에 데이터를 쓰는 경우에도 복사 원본은 2번째 시트)
-            template_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
-
-            # 갑지에 쓰는 경우 end_row를 커버용으로 분리
-            on_cover = (data_sheet_id == 0)
-            current_end_row = cover_end_row if on_cover else data_end_row
+            
+            # [Smart Detection] 템플릿에서 헤더를 찾아 시작 행 자동 보정
+            detected_start = -1
+            iso_col_idx = 2 # 기본값 B컬럼
+            is_new_pt_template = False
+            for r in range(1, 40):
+                line_cells = [str(ws.cell(row=r, column=c).value).upper() for c in range(1, 15)]
+                line_str = "".join(line_cells)
+                
+                if "IDENTIFICATION" in line_str or "ACC" in line_cells or "REJ" in line_cells:
+                    is_new_pt_template = True
+                    
+                if (("JOINT" in line_str or "WELD" in line_str) and ("ISO" in line_str or "LINE" in line_str or "IDENTIFICATION" in line_str)) or ("DWG" in line_str and "RESULT" in line_str):
+                    detected_start = r + 1
+                    # ISO 컬럼 위치 동적 확인
+                    for c_idx, val in enumerate(line_cells):
+                        if any(k in val for k in ["ISO", "LINE", "DWG", "DRAWING", "IDENTIFICATION"]) and not any(k in val for k in ["JOINT", "WELD"]):
+                            iso_col_idx = c_idx + 1
+                            break
+                    break
+            if detected_start > 0: start_row = detected_start
 
             current_row = start_row
             current_page = 1
             data_ptr = 0
             
             while data_ptr < len(final_list):
-                if current_row > current_end_row:
+                if current_row > end_row:
                     current_page += 1
-                    # 항상 001시트(2번째 시트 원본)를 복사해서 다음 페이지 생성
-                    ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
+                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="PT")
                     current_row = start_row
-                    current_end_row = data_end_row  # 001시트는 38행까지
-                    on_cover = False
                 
                 item = final_list[data_ptr]
                 
-                # PT 고정 열 하드코딩 (원본 병합셀 보호)
-                self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('Dwg', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=4).coordinate, item.get('Joint', ''))
-                
-                res_val = str(item.get('Result', 'Acc')).strip().upper()
-                is_acc = (res_val in ['ACC', 'ACCEPT', 'PASS', '합격', 'O', 'OK', 'V', ''])
-                
-                if is_acc:
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=5).coordinate, 'V')
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=8).coordinate, 'NO RECORDABLE INDICATION')
+                if is_new_pt_template:
+                    # 신규 템플릿 (서울검사 등 Acc, Rej 분리 양식)
+                    dwg_col = self.col_to_num(self.config.get('PT_COL_DWG', str(iso_col_idx)))
+                    if dwg_col >= 1:
+                        iso_cell = ws.cell(row=current_row, column=dwg_col)
+                        self.safe_set_value(ws, iso_cell.coordinate, item.get('Dwg', ''))
+                        # 템플릿에 이미 병합되어 있으므로 중복 병합 금지 (파일 손상 원인)
+                    
+                    joint_col = self.col_to_num(self.config.get('PT_COL_JOINT', '4'))
+                    if joint_col >= 1:
+                        self.safe_set_value(ws, ws.cell(row=current_row, column=joint_col).coordinate, item.get('Joint', ''))
+                        
+                    acc_col = self.col_to_num(self.config.get('PT_COL_ACC', '5'))
+                    rej_col = self.col_to_num(self.config.get('PT_COL_REJ', '6'))
+                    interp_col = self.col_to_num(self.config.get('PT_COL_INTERP', '8'))
+                    
+                    res_val = str(item.get('Result', 'Acc')).strip().upper()
+                    is_acc = (res_val in ['ACC', 'ACCEPT', 'PASS', '합격', 'O', 'OK'])
+                    
+                    if is_acc:
+                        if acc_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=acc_col).coordinate, "V")
+                        if interp_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=interp_col).coordinate, "NO RECORDABLE INDICATION")
+                    else:
+                        if rej_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rej_col).coordinate, "V")
+                        if interp_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=interp_col).coordinate, res_val)
+                        
+                    # 템플릿에 이미 폰트/정렬이 지정되어 있으므로, 병합된 셀의 서식 훼손(손상)을 막기 위해 
+                    # 스타일 덮어쓰기 로직(Alignment, Font)은 생략합니다.
+                            
                 else:
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=6).coordinate, 'V')
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=8).coordinate, res_val)
-                
-                self.safe_set_value(ws, ws.cell(row=current_row, column=18).coordinate, item.get('Welder', ''))
-                self.safe_set_value(ws, ws.cell(row=current_row, column=19).coordinate, item.get('NPS', ''))
-                
-                # 스타일링 생략 (병합셀 손상 방지)
+                    # 기존 템플릿 (NPS, Thk, Material 등 포함 양식)
+                    no_col = self.col_to_num(self.config.get('PT_COL_NO', '1'))
+                    if no_col >= 1:
+                        self.safe_set_value(ws, ws.cell(row=current_row, column=no_col).coordinate, item.get('No', ''))
+                    
+                    # ISO Drawing No. (병합된 칸 반영)
+                    dwg_col = self.col_to_num(self.config.get('PT_COL_DWG', str(iso_col_idx)))
+                    if dwg_col >= 1:
+                        iso_cell = ws.cell(row=current_row, column=dwg_col)
+                        self.safe_set_value(ws, iso_cell.coordinate, item.get('Dwg', ''))
+                        # Preserve original 3-column merge if using default or close to it
+                        if dwg_col == iso_col_idx:
+                            self.safe_merge_cells(ws, current_row, dwg_col, current_row, dwg_col + 2)
+                    
+                    joint_col = self.col_to_num(self.config.get('PT_COL_JOINT', '5'))
+                    if joint_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=joint_col).coordinate, item.get('Joint', ''))
+                    
+                    nps_col = self.col_to_num(self.config.get('PT_COL_NPS', '6'))
+                    if nps_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=nps_col).coordinate, item.get('NPS', ''))
+                    
+                    thk_col = self.col_to_num(self.config.get('PT_COL_THK', '7'))
+                    if thk_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=thk_col).coordinate, item.get('Thk.', ''))
+                    
+                    mat_col = self.col_to_num(self.config.get('PT_COL_MAT', '8'))
+                    if mat_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=mat_col).coordinate, item.get('Material', ''))
+                    
+                    wld_col = self.col_to_num(self.config.get('PT_COL_WELDER', '9'))
+                    if wld_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=wld_col).coordinate, item.get('Welder', ''))
+                    
+                    typ_col = self.col_to_num(self.config.get('PT_COL_TYPE', '10'))
+                    if typ_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=typ_col).coordinate, item.get('WType', ''))
+                    
+                    res_col = self.col_to_num(self.config.get('PT_COL_RES', '11'))
+                    if res_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=res_col).coordinate, item.get('Result', 'Acc'))
+                    
+                    # 스타일링
+                    for c in range(1, 12):
+                        cell = ws.cell(row=current_row, column=c)
+                        cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+                        cell.font = Font(name='바탕', size=9)
+                        cell.border = thin_border
 
                 data_ptr += 1
                 current_row += 1
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
 
             total_p = len(wb.worksheets)
-            # 서식 정리 (병합셀 손상 방지로 제거)
+            # 서식 정리(유령선 제거) 로직은 병합된 셀이 포함된 템플릿에서 엑셀 파일 손상을 유발하므로 완전히 제거합니다.
+            
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
                 # 페이지 번호 기입
