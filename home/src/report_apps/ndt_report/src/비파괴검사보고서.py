@@ -7589,36 +7589,68 @@ class PMIReportApp:
         source_sheet = wb.worksheets[source_sheet_idx]; new_sheet = wb.copy_worksheet(source_sheet) 
         current_mode = mode or getattr(self, 'current_mode', '')
         
-        # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them for RT to preserve Shooting Sketches.
-        if current_mode == "RT":
-            try:
-                import io
-                import copy
-                from openpyxl.drawing.image import Image as OpenpyxlImage
-                for idx, img in enumerate(source_sheet._images):
-                    try:
-                        img_bytes = img._data()
-                        
-                        # Fix original image
-                        fixed_orig = OpenpyxlImage(io.BytesIO(img_bytes))
-                        if hasattr(img, 'anchor'): fixed_orig.anchor = copy.copy(img.anchor)
-                        source_sheet._images[idx] = fixed_orig
-                        
-                        # Add to new sheet
-                        new_img = OpenpyxlImage(io.BytesIO(img_bytes))
-                        if hasattr(img, 'anchor'): new_img.anchor = copy.copy(img.anchor)
-                        new_sheet.add_image(new_img)
-                    except: pass
-            except: pass
+        # [FIX] openpyxl's copy_worksheet does not copy images. Manually copy them for ALL modes to preserve template logos.
+        try:
+            import io
+            import copy
+            from openpyxl.drawing.image import Image as OpenpyxlImage
+            for idx, img in enumerate(source_sheet._images):
+                try:
+                    img_bytes = img._data()
+                    
+                    # Fix original image
+                    fixed_orig = OpenpyxlImage(io.BytesIO(img_bytes))
+                    if hasattr(img, 'anchor'): fixed_orig.anchor = copy.copy(img.anchor)
+                    source_sheet._images[idx] = fixed_orig
+                    
+                    # Add to new sheet
+                    new_img = OpenpyxlImage(io.BytesIO(img_bytes))
+                    if hasattr(img, 'anchor'): new_img.anchor = copy.copy(img.anchor)
+                    new_sheet.add_image(new_img)
+                except: pass
+        except: pass
+
+        # 병합된 셀 명시적으로 다시 복사 (openpyxl 버그 방지)
+        try:
+            for merged_cell_range in source_sheet.merged_cells.ranges:
+                new_sheet.merge_cells(str(merged_cell_range))
+        except: pass
+
+        # 인쇄 설정 완벽 복사 (여백, 페이지 설정, 프린트 옵션)
+        try:
+            import copy
+            new_sheet.page_setup = copy.copy(source_sheet.page_setup)
+            new_sheet.page_margins = copy.copy(source_sheet.page_margins)
+            new_sheet.print_options = copy.copy(source_sheet.print_options)
+            if hasattr(source_sheet, 'sheet_format') and source_sheet.sheet_format:
+                new_sheet.sheet_format = copy.copy(source_sheet.sheet_format)
+            # 열 너비와 행 높이를 A~Z, 1~60행까지 강제 복사하여 여백 불일치 원천 차단
+            from openpyxl.utils import get_column_letter
+            
+            def_col_w = source_sheet.sheet_format.defaultColWidth if (hasattr(source_sheet, 'sheet_format') and source_sheet.sheet_format and source_sheet.sheet_format.defaultColWidth) else 8.38
+            for i in range(1, 27):
+                col_letter = get_column_letter(i)
+                if col_letter in source_sheet.column_dimensions and source_sheet.column_dimensions[col_letter].width:
+                    new_sheet.column_dimensions[col_letter].width = source_sheet.column_dimensions[col_letter].width
+                else:
+                    new_sheet.column_dimensions[col_letter].width = def_col_w
+                    
+            def_row_h = source_sheet.sheet_format.defaultRowHeight if (hasattr(source_sheet, 'sheet_format') and source_sheet.sheet_format and source_sheet.sheet_format.defaultRowHeight) else 15.0
+            for r in range(1, 60):
+                if r in source_sheet.row_dimensions and source_sheet.row_dimensions[r].height:
+                    new_sheet.row_dimensions[r].height = source_sheet.row_dimensions[r].height
+                else:
+                    new_sheet.row_dimensions[r].height = def_row_h
+        except: pass
             
         base_title = source_sheet.title.split('_')[0]; new_sheet.title = f"{base_title[:20]}_{page_num:03d}"
         self.force_print_settings(new_sheet, context="DATA")
         
         # [FIX] Only add logos if they weren't already copied from the source sheet
-        if current_mode != "RT" or not new_sheet._images:
+        if not new_sheet._images:
             self.add_logos_to_sheet(new_sheet, is_cover=False, mode=current_mode or None)
         self.apply_custom_dimensions(new_sheet, "DATA")
-        for col_letter, col_dim in source_sheet.column_dimensions.items(): new_sheet.column_dimensions[col_letter].width = col_dim.width
+        # [REMOVED] Second column width overwrite removed because we already enforced it powerfully above.
         data_font = Font(size=9); grade_font = Font(size=8.5)
         for r in range(int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 1):
             rd = new_sheet.row_dimensions[r] # [REMOVED] Hardcoded 20.55 override
@@ -7633,28 +7665,48 @@ class PMIReportApp:
         elif current_mode == "KOGAS":
             start_row = int(self.config.get('KOGAS_START_ROW', 14))
             end_row = int(self.config.get('KOGAS_DATA_END_ROW', 25))
+        elif current_mode == "PT":
+            start_row = int(self.config.get('PT_START_ROW', 10))
+            end_row = int(self.config.get('PT_DATA_END_ROW', 38))
             
         # Unmerge the copied data area before clearing it. Clearing through
         # safe_set_value while cells are still merged repeatedly targets only
         # the merge anchor and can leave copied values in the later rows.
         merged_to_clear = [rng for rng in new_sheet.merged_cells.ranges if rng.min_row >= start_row and rng.max_row <= end_row]
+        # Keep a copy of the string ranges to restore them later
+        ranges_to_restore = [str(rng) for rng in merged_to_clear]
+        
         for rng in merged_to_clear:
-            new_sheet.unmerge_cells(str(rng))
+            try: new_sheet.unmerge_cells(str(rng))
+            except: pass
 
         for r in range(start_row, end_row + 1):
-            for c in range(1, 14):
+            # Clear up to column 26 (Z) to ensure H~Q and others are fully cleared
+            for c in range(1, 26):
                 cell = new_sheet.cell(row=r, column=c)
                 cell.value = None
-                cell.font = grade_font if c == 13 else data_font
+                if c < 14:
+                    cell.font = grade_font if c == 13 else data_font
+                    
+        # [FIX] Restore the merges that were unmerged for clearing
+        # This fixes the H19~Q38 and A19~C38 merging issues for empty rows
+        for rng_str in ranges_to_restore:
+            try: new_sheet.merge_cells(rng_str)
+            except: pass
         
         # [FIX] 갑지 데이터 수식으로 연결 (첫번째 시트 참조)
         try:
             ws0 = wb.worksheets[0]
             if len(wb.worksheets) > 1:
-                # 엑셀 수식을 사용하여 갑지의 값이 바뀌면 자동으로 바뀌게 설정
-                self.safe_set_value(new_sheet, 'K5', f"='{ws0.title}'!L5")
-                self.safe_set_value(new_sheet, 'M5', f"='{ws0.title}'!N5")
-                self.safe_set_value(new_sheet, 'M8', f"='{ws0.title}'!N8")
+                if current_mode == "PT":
+                    # PT 모드는 P4, P6에 텍스트를 직접 꽂아줌 (수식 오류로 0 표기 방지)
+                    self.safe_set_value(new_sheet, 'P4', self.gapji_customer.get().strip())
+                    self.safe_set_value(new_sheet, 'P6', self.gapji_report_no.get().strip())
+                else:
+                    # 엑셀 수식을 사용하여 갑지의 값이 바뀌면 자동으로 바뀌게 설정
+                    self.safe_set_value(new_sheet, 'K5', f"='{ws0.title}'!L5")
+                    self.safe_set_value(new_sheet, 'M5', f"='{ws0.title}'!N5")
+                    self.safe_set_value(new_sheet, 'M8', f"='{ws0.title}'!N8")
                 # [FIX] K5:M10 범위 글씨체 바탕, 크기 9 적용
                 for r_idx in range(5, 11):
                     for c_idx in range(11, 14): # K(11) ~ M(13)
@@ -9504,6 +9556,29 @@ class PMIReportApp:
             ws = wb.worksheets[data_sheet_id]; ws.title = f"{ws.title[:20]}_001"
             # 을지 기본 설정
             self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="PMI")
+            
+            # [FIX] openpyxl loses default dimensions when copying worksheets.
+            # We explicitly lock down ALL unset columns (A~S) and rows (10~40) on the original template
+            # BEFORE copying, so the copied sheets get the exact same dimensions.
+            try:
+                from openpyxl.utils import get_column_letter
+                # Determine standard PT defaults
+                pt_def_col_w = 11.5
+                pt_def_row_h = 18.0
+                
+                # Lock columns A to S
+                for c_idx in range(1, 20):
+                    col_let = get_column_letter(c_idx)
+                    if col_let not in ws.column_dimensions or ws.column_dimensions[col_let].width is None:
+                        ws.column_dimensions[col_let].width = pt_def_col_w
+                
+                # Lock rows 10 to 45
+                for r_idx in range(10, 46):
+                    if r_idx not in ws.row_dimensions or ws.row_dimensions[r_idx].height is None:
+                        ws.row_dimensions[r_idx].height = pt_def_row_h
+            except Exception as e:
+                self.log(f"Dimension lock error: {e}")
+            
             self.force_print_settings(ws, context="DATA"); self.set_eulji_headers(ws)
             # self.apply_custom_dimensions(ws, "DATA") # [MOVED] To the end of process
             
@@ -9637,6 +9712,12 @@ class PMIReportApp:
 
             ws.title = f"{ws.title[:20]}_001"
             self.force_print_settings(ws, context="DATA")
+            
+            # [FIX] PT 001 시트에도 고객사, 리포트 번호 명시적 주입
+            try:
+                self.safe_set_value(ws, 'P4', self.gapji_customer.get().strip())
+                self.safe_set_value(ws, 'P6', self.gapji_report_no.get().strip())
+            except: pass
 
             # 갑지에 쓰는 경우 end_row를 커버용으로 분리
             on_cover = (data_sheet_id == 0)
@@ -9660,6 +9741,8 @@ class PMIReportApp:
                 
                 # PT 고정 열 하드코딩 (원본 병합셀 보호)
                 self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('Dwg', ''))
+                try: self.safe_merge_cells(ws, start_row=current_row, start_column=1, end_row=current_row, end_column=3)
+                except: pass
                 self.safe_set_value(ws, ws.cell(row=current_row, column=4).coordinate, item.get('Joint', ''))
                 
                 res_val = str(item.get('Result', 'Acc')).strip().upper()
@@ -10032,6 +10115,12 @@ class PMIReportApp:
 
             ws.title = f"{ws.title[:20]}_001"
             self.force_print_settings(ws, context="DATA")
+            
+            # [FIX] PT 001 시트에도 고객사, 리포트 번호 명시적 주입
+            try:
+                self.safe_set_value(ws, 'P4', self.gapji_customer.get().strip())
+                self.safe_set_value(ws, 'P6', self.gapji_report_no.get().strip())
+            except: pass
 
             # 갑지는 38행이 Sketch 고정행이므로 37행까지만 데이터 기입
             # 001시트(을지)는 10~38행까지 데이터 기입
@@ -10051,16 +10140,26 @@ class PMIReportApp:
             while data_ptr < len(final_list):
                 if current_row > current_end_row:
                     current_page += 1
-                    # 항상 001시트(2번째 시트 원본)를 복사해서 다음 페이지 생성
-                    ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
-                    current_row = start_row
-                    current_end_row = data_end_row  # 001시트는 38행까지
+                    if on_cover and len(wb.worksheets) >= 2:
+                        ws = wb.worksheets[1]
+                        ws.title = f"{ws.title[:20]}_{current_page:03d}"
+                        try:
+                            self.force_print_settings(ws, context="DATA")
+                            self.apply_custom_dimensions(ws, "DATA")
+                        except: pass
+                    else:
+                        ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
+                    
+                    current_row = int(self.config.get('PT_START_ROW', 10))
+                    current_end_row = int(self.config.get('PT_DATA_END_ROW', 38))
                     on_cover = False
                 
                 item = final_list[data_ptr]
                 
                 # PT 고정 열 하드코딩 (원본 병합셀 보호)
                 self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, item.get('Dwg', ''))
+                try: self.safe_merge_cells(ws, start_row=current_row, start_column=1, end_row=current_row, end_column=3)
+                except: pass
                 self.safe_set_value(ws, ws.cell(row=current_row, column=4).coordinate, item.get('Joint', ''))
                 
                 res_val = str(item.get('Result', 'Acc')).strip().upper()
@@ -10086,11 +10185,16 @@ class PMIReportApp:
             # 서식 정리 (병합셀 손상 방지로 제거)
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
+                # 인쇄 영역 설정 (갑지는 A1:S47, 을지는 A1:S40)
+                if p_idx == 0:
+                    s.print_area = 'A1:S47'
+                else:
+                    s.print_area = 'A1:S40'
                 # 페이지 번호 기입
                 try:
                     p_text = f"Page    {page_num}    of    {total_p}"
-                    # if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
-                    if p_idx > 0: self.safe_set_value(s, 'V3', p_text)
+                    if p_idx > 0: self.safe_set_value(s, 'P3', p_text)
+                    else: self.safe_set_value(s, 'P3', p_text)
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -10218,11 +10322,16 @@ class PMIReportApp:
                             except: pass
                 
                 page_num = p_idx + 1
+                # 인쇄 영역 설정 (갑지는 A1:S47, 을지는 A1:S40)
+                if p_idx == 0:
+                    s.print_area = 'A1:S47'
+                else:
+                    s.print_area = 'A1:S40'
                 # 페이지 번호 기입
                 try:
                     p_text = f"Page    {page_num}    of    {total_p}"
-                    # if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
-                    if p_idx > 0: self.safe_set_value(s, 'V3', p_text)
+                    if p_idx > 0: self.safe_set_value(s, 'P3', p_text)
+                    else: self.safe_set_value(s, 'P3', p_text)
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

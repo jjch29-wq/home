@@ -6598,7 +6598,7 @@ class PMIReportApp:
         if getattr(self, 'current_mode', "") != "RT" or not new_sheet._images:
             self.add_logos_to_sheet(new_sheet, is_cover=False)
         self.apply_custom_dimensions(new_sheet, "DATA")
-        for col_letter, col_dim in source_sheet.column_dimensions.items(): new_sheet.column_dimensions[col_letter].width = col_dim.width
+        # [REMOVED] Second column width overwrite removed because we already enforced it powerfully above.
         data_font = Font(size=9); grade_font = Font(size=8.5)
         for r in range(int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 1):
             rd = new_sheet.row_dimensions[r] # [REMOVED] Hardcoded 20.55 override
@@ -6614,6 +6614,9 @@ class PMIReportApp:
         elif current_mode == "KOGAS":
             start_row = int(self.config.get('KOGAS_START_ROW', 14))
             end_row = int(self.config.get('KOGAS_DATA_END_ROW', 25))
+        elif current_mode == "PT":
+            start_row = int(self.config.get('PT_START_ROW', 10))
+            end_row = int(self.config.get('PT_DATA_END_ROW', 38))
             
         for r in range(start_row, end_row + 1):
             for c in range(1, 14):
@@ -6628,10 +6631,15 @@ class PMIReportApp:
         try:
             ws0 = wb.worksheets[0]
             if len(wb.worksheets) > 1:
-                # 엑셀 수식을 사용하여 갑지의 값이 바뀌면 자동으로 바뀌게 설정
-                self.safe_set_value(new_sheet, 'K5', f"='{ws0.title}'!L5")
-                self.safe_set_value(new_sheet, 'M5', f"='{ws0.title}'!N5")
-                self.safe_set_value(new_sheet, 'M8', f"='{ws0.title}'!N8")
+                if current_mode == "PT":
+                    # PT 모드는 P4, P6에 텍스트를 직접 꽂아줌 (수식 오류로 0 표기 방지)
+                    self.safe_set_value(new_sheet, 'P4', self.gapji_customer.get().strip())
+                    self.safe_set_value(new_sheet, 'P6', self.gapji_report_no.get().strip())
+                else:
+                    # 엑셀 수식을 사용하여 갑지의 값이 바뀌면 자동으로 바뀌게 설정
+                    self.safe_set_value(new_sheet, 'K5', f"='{ws0.title}'!L5")
+                    self.safe_set_value(new_sheet, 'M5', f"='{ws0.title}'!N5")
+                    self.safe_set_value(new_sheet, 'M8', f"='{ws0.title}'!N8")
                 # [FIX] K5:M10 범위 글씨체 바탕, 크기 9 적용
                 for r_idx in range(5, 11):
                     for c_idx in range(11, 14): # K(11) ~ M(13)
@@ -8103,6 +8111,29 @@ class PMIReportApp:
             ws = wb.worksheets[data_sheet_id]; ws.title = f"{ws.title[:20]}_001"
             # 을지 기본 설정
             self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="PMI")
+            
+            # [FIX] openpyxl loses default dimensions when copying worksheets.
+            # We explicitly lock down ALL unset columns (A~S) and rows (10~40) on the original template
+            # BEFORE copying, so the copied sheets get the exact same dimensions.
+            try:
+                from openpyxl.utils import get_column_letter
+                # Determine standard PT defaults
+                pt_def_col_w = 11.5
+                pt_def_row_h = 18.0
+                
+                # Lock columns A to S
+                for c_idx in range(1, 20):
+                    col_let = get_column_letter(c_idx)
+                    if col_let not in ws.column_dimensions or ws.column_dimensions[col_let].width is None:
+                        ws.column_dimensions[col_let].width = pt_def_col_w
+                
+                # Lock rows 10 to 45
+                for r_idx in range(10, 46):
+                    if r_idx not in ws.row_dimensions or ws.row_dimensions[r_idx].height is None:
+                        ws.row_dimensions[r_idx].height = pt_def_row_h
+            except Exception as e:
+                self.log(f"Dimension lock error: {e}")
+            
             self.force_print_settings(ws, context="DATA"); self.set_eulji_headers(ws)
             # self.apply_custom_dimensions(ws, "DATA") # [MOVED] To the end of process
             
@@ -8478,8 +8509,8 @@ class PMIReportApp:
             self.force_print_settings(ws, context="DATA")
 
             # 헤더 감지 및 시작 행 결정
-            start_row = int(self.config.get('PT_START_ROW', 18))
-            end_row = int(self.config.get('PT_END_ROW', 37))
+            start_row = int(self.config.get('PT_START_ROW', 10))
+            end_row = int(self.config.get('PT_DATA_END_ROW', 38))
             
             # 스타일 설정
             thin_side = Side(style='thin')
@@ -8570,11 +8601,16 @@ class PMIReportApp:
                             except: pass
                 
                 page_num = p_idx + 1
+                # 인쇄 영역 설정 (갑지는 A1:S47, 을지는 A1:S40)
+                if p_idx == 0:
+                    s.print_area = 'A1:S47'
+                else:
+                    s.print_area = 'A1:S40'
                 # 페이지 번호 기입
                 try:
                     p_text = f"Page    {page_num}    of    {total_p}"
-                    # if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
-                    if p_idx > 0: self.safe_set_value(s, 'V3', p_text)
+                    if p_idx > 0: self.safe_set_value(s, 'P3', p_text)
+                    else: self.safe_set_value(s, 'P3', p_text)
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
