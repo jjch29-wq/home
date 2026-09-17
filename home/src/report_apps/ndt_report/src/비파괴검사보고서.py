@@ -7576,6 +7576,35 @@ class PMIReportApp:
         except Exception as e:
             self.log(f"   ⚠️ 셀 병합 실패 ({start_row},{start_column}): {e}")
 
+    def _write_pt_total_summary(self, ws, summary_row, items):
+        """마지막 PT 을지에 TOTAL/Acc/Rej/BLANK 요약 두 행을 기록한다."""
+        accepted_values = {'ACC', 'ACCEPT', 'PASS', '합격', 'O', 'OK', 'V', ''}
+        accepted_count = sum(
+            1 for item in items
+            if str(item.get('Result', 'Acc')).strip().upper() in accepted_values
+        )
+        rejected_count = max(0, len(items) - accepted_count)
+
+        # PT 을지 열 구조: A:C Identification, D Joint, E Acc, F Rej,
+        # G Step, H:Q Interpretation, R Welder, S NPS.
+        self.safe_merge_cells(ws, summary_row, 1, summary_row, 3)
+        self.safe_merge_cells(ws, summary_row, 8, summary_row, 17)
+        self.safe_merge_cells(ws, summary_row + 1, 1, summary_row + 1, 3)
+        self.safe_merge_cells(ws, summary_row + 1, 8, summary_row + 1, 17)
+
+        values = {
+            (summary_row, 1): 'TOTAL',
+            (summary_row, 5): 'Acc',
+            (summary_row, 6): 'Rej',
+            (summary_row, 8): 'B  L  A  N  K',
+            (summary_row + 1, 5): f'{accepted_count}P',
+            (summary_row + 1, 6): rejected_count,
+        }
+        for (row_idx, col_idx), value in values.items():
+            cell = ws.cell(row=row_idx, column=col_idx)
+            self.safe_set_value(ws, cell.coordinate, value, align='center')
+            cell.font = Font(name='바탕', size=9, bold=False)
+
     def set_eulji_headers(self, ws):
         # [FIX] RT 모드일 때는 헤더를 자동으로 쓰지 않음 (템플릿 보존)
         if getattr(self, 'current_mode', "") == "RT":
@@ -10228,6 +10257,14 @@ class PMIReportApp:
                 data_ptr += 1
                 current_row += 1
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
+
+            # 마지막 을지의 데이터 다음 두 행에 TOTAL 요약을 추가한다.
+            pt_print_end_row = int(self.config.get('PT_PRINT_END_ROW', 40))
+            if current_row + 1 > pt_print_end_row:
+                current_page += 1
+                ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
+                current_row = int(self.config.get('PT_START_ROW', 10))
+            self._write_pt_total_summary(ws, current_row, final_list)
 
             total_p = len(wb.worksheets)
             # 서식 정리 (병합셀 손상 방지로 제거)
