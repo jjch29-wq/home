@@ -7432,6 +7432,17 @@ class PMIReportApp:
                 ws.page_setup.fitToWidth = None
                 ws.page_setup.fitToHeight = None
                 ws.page_setup.scale = 87
+            elif mode == "PT":
+                # PT의 S(Scale) 입력값을 실제 Excel 인쇄 배율로 적용한다.
+                # fitToPage가 켜져 있으면 scale 값이 무시되므로 함께 해제한다.
+                try:
+                    pt_scale = max(10, min(400, int(float(scale_val))))
+                except (TypeError, ValueError):
+                    pt_scale = 95
+                ws.sheet_properties.pageSetUpPr.fitToPage = False
+                ws.page_setup.fitToWidth = None
+                ws.page_setup.fitToHeight = None
+                ws.page_setup.scale = pt_scale
             else:
                 # 그 외 시트는 기존 한 페이지 맞춤을 유지한다.
                 ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -9712,6 +9723,8 @@ class PMIReportApp:
 
             ws.title = f"{ws.title[:20]}_001"
             self.force_print_settings(ws, context="DATA")
+            # 원본 001 시트에도 복제 시트와 동일한 을지 행/열 설정을 적용한다.
+            self.apply_custom_dimensions(ws, "DATA")
             
             # [FIX] PT 001 시트에도 고객사, 리포트 번호 명시적 주입
             try:
@@ -10115,6 +10128,8 @@ class PMIReportApp:
 
             ws.title = f"{ws.title[:20]}_001"
             self.force_print_settings(ws, context="DATA")
+            # 원본 001 시트와 이후 복제 시트에 동일한 을지 조절값을 적용한다.
+            self.apply_custom_dimensions(ws, "DATA")
             
             # [FIX] PT 001 시트에도 고객사, 리포트 번호 명시적 주입
             try:
@@ -10185,11 +10200,11 @@ class PMIReportApp:
             # 서식 정리 (병합셀 손상 방지로 제거)
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
-                # 인쇄 영역 설정 (갑지는 A1:S47, 을지는 A1:S40)
-                if p_idx == 0:
-                    s.print_area = 'A1:S47'
-                else:
-                    s.print_area = 'A1:S40'
+                # 최종 저장 직전 모든 PT 시트에 UI 설정을 동일하게 재적용한다.
+                # Area가 비어 있으면 force_print_settings의 PT 기본 영역을 사용한다.
+                ctx = "COVER" if p_idx == 0 else "DATA"
+                self.force_print_settings(s, context=ctx)
+                self.apply_custom_dimensions(s, ctx)
                 # 페이지 번호 기입
                 try:
                     p_text = f"Page    {page_num}    of    {total_p}"
