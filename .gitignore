@@ -29,10 +29,12 @@ coverage.xml
 
 # Environments
 .venv
+.venv*/
 venv/
 ENV/
 env/
 python/
+tmp/
 
 # Large binaries and archives
 *.zip
