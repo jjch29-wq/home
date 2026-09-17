@@ -9726,9 +9726,11 @@ class PMIReportApp:
                     self.log(f"[PT] 001시트 {data_start_row}행~{data_end_row}행에 기입")
 
             ws.title = f"{ws.title[:20]}_001"
-            self.force_print_settings(ws, context="DATA")
-            # 원본 001 시트에도 복제 시트와 동일한 을지 행/열 설정을 적용한다.
-            self.apply_custom_dimensions(ws, "DATA")
+            # 갑지에서 데이터 헤더가 감지된 경우에도 을지(DATA) 설정을 갑지에
+            # 적용하지 않는다. 갑지는 COVER 설정만 유지한다.
+            if ws is not ws0:
+                self.force_print_settings(ws, context="DATA")
+                self.apply_custom_dimensions(ws, "DATA")
             
             # [FIX] PT 001 시트에도 고객사, 리포트 번호 명시적 주입
             try:
@@ -10131,9 +10133,11 @@ class PMIReportApp:
                     self.log(f"[PT] 헤더 자동 감지 실패 → 기본 start_row={start_row} 사용")
 
             ws.title = f"{ws.title[:20]}_001"
-            self.force_print_settings(ws, context="DATA")
-            # 원본 001 시트와 이후 복제 시트에 동일한 을지 조절값을 적용한다.
-            self.apply_custom_dimensions(ws, "DATA")
+            # 갑지에 데이터가 기록되더라도 을지의 여백/배율/행·열 설정이
+            # 갑지로 새어 들어가지 않도록 설정 컨텍스트를 완전히 분리한다.
+            if ws is not ws0:
+                self.force_print_settings(ws, context="DATA")
+                self.apply_custom_dimensions(ws, "DATA")
 
             # PT 을지 원본(두 번째 시트)의 실제 레이아웃을 저장한다.
             # openpyxl 복제 과정에서 암시적 기본 행/열 크기가 달라지는 것을 막기 위해
