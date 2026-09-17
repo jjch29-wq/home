@@ -7386,6 +7386,8 @@ class PMIReportApp:
                     
                     if mode == "PAUT" and end_r > 0:
                         ws.print_area = f'A1:AJ{end_r}'
+                    elif mode == "PT" and end_r > 0:
+                        ws.print_area = f'A1:S{end_r}'
                     elif end_r > 0:
                         ws.print_area = f'A1:T{end_r}'
                 else:
@@ -7432,7 +7434,7 @@ class PMIReportApp:
                 ws.page_setup.fitToWidth = None
                 ws.page_setup.fitToHeight = None
                 ws.page_setup.scale = 87
-            elif mode == "PT":
+            elif mode == "PT" and context == "DATA":
                 # PT의 S(Scale) 입력값을 실제 Excel 인쇄 배율로 적용한다.
                 # fitToPage가 켜져 있으면 scale 값이 무시되므로 함께 해제한다.
                 try:
@@ -7450,6 +7452,8 @@ class PMIReportApp:
                 ws.page_setup.fitToHeight = (
                     0 if mode == "RT" and context == "COVER" else 1
                 )
+                if mode == "PT" and context == "COVER":
+                    ws.page_setup.scale = None
             
             def _margin(name, default):
                 return float(
@@ -10130,6 +10134,31 @@ class PMIReportApp:
             self.force_print_settings(ws, context="DATA")
             # 원본 001 시트와 이후 복제 시트에 동일한 을지 조절값을 적용한다.
             self.apply_custom_dimensions(ws, "DATA")
+
+            # PT 을지 원본(두 번째 시트)의 실제 레이아웃을 저장한다.
+            # openpyxl 복제 과정에서 암시적 기본 행/열 크기가 달라지는 것을 막기 위해
+            # A~S 열과 1~47행의 유효 크기를 모든 후속 을지에 명시적으로 재적용한다.
+            pt_layout_source = wb.worksheets[1] if len(wb.worksheets) >= 2 else ws
+            self.force_print_settings(pt_layout_source, context="DATA")
+            self.apply_custom_dimensions(pt_layout_source, "DATA")
+            pt_default_col_width = pt_layout_source.sheet_format.defaultColWidth or 8.38
+            pt_default_row_height = pt_layout_source.sheet_format.defaultRowHeight or 15.0
+            pt_column_widths = {}
+            for col_idx in range(1, 20):
+                col_letter = openpyxl.utils.get_column_letter(col_idx)
+                if col_letter in pt_layout_source.column_dimensions:
+                    pt_column_widths[col_letter] = pt_layout_source.column_dimensions[col_letter].width
+                else:
+                    pt_column_widths[col_letter] = pt_default_col_width
+            pt_row_heights = {
+                row_idx: (
+                    pt_layout_source.row_dimensions[row_idx].height
+                    if row_idx in pt_layout_source.row_dimensions
+                    and pt_layout_source.row_dimensions[row_idx].height is not None
+                    else pt_default_row_height
+                )
+                for row_idx in range(1, 48)
+            }
             
             # [FIX] PT 001 시트에도 고객사, 리포트 번호 명시적 주입
             try:
@@ -10205,6 +10234,11 @@ class PMIReportApp:
                 ctx = "COVER" if p_idx == 0 else "DATA"
                 self.force_print_settings(s, context=ctx)
                 self.apply_custom_dimensions(s, ctx)
+                if p_idx > 0:
+                    for col_letter, width in pt_column_widths.items():
+                        s.column_dimensions[col_letter].width = width
+                    for row_idx, height in pt_row_heights.items():
+                        s.row_dimensions[row_idx].height = height
                 # 페이지 번호 기입
                 try:
                     p_text = f"Page    {page_num}    of    {total_p}"
