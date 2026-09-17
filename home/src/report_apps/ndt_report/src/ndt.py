@@ -9937,8 +9937,8 @@ class PMIReportApp:
             self.force_print_settings(ws, context="DATA")
 
             # 헤더 감지 및 시작 행 결정
-            start_row = int(self.config.get('PT_START_ROW', 18))
-            end_row = int(self.config.get('PT_END_ROW', 37))
+            start_row = int(self.config.get('PT_START_ROW', 10))
+            end_row = int(self.config.get('PT_DATA_END_ROW', 38))
             
             # 스타일 설정
             thin_side = Side(style='thin')
@@ -10058,11 +10058,17 @@ class PMIReportApp:
             
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
+                # 인쇄 영역 설정 (갑지는 A1:S47, 을지는 A1:S40)
+                if p_idx == 0:
+                    s.print_area = 'A1:S47'
+                else:
+                    s.print_area = 'A1:S40'
                 # 페이지 번호 기입
                 try:
                     p_text = f"Page    {page_num}    of    {total_p}"
-                    # if p_idx == 0: self.safe_set_value(s, 'O35', p_text)
-                    if p_idx > 0: self.safe_set_value(s, 'V3', p_text)
+                    # 모든 시트에 P3 위치에 기입 (갑지 포함 시 조건부 처리 가능하나 현재 양식에 맞춤)
+                    if p_idx > 0: self.safe_set_value(s, 'P3', p_text)
+                    else: self.safe_set_value(s, 'P3', p_text) # 갑지에도 기입
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
