@@ -66,6 +66,87 @@ warnings.simplefilter("ignore")
 NAN_PATTERN = re.compile(r'^nan(\.0+)?$|^none$|^null$|^0\.0+|-0\.0+$', re.IGNORECASE)
 DOT_ZERO_PATTERN = re.compile(r'\.0$')
 
+
+def find_exact_column(df, keywords):
+    """Return a column only when its header exactly matches a keyword.
+
+    PT source files often contain headers such as ``Spool No`` and
+    ``Request No`` even when they do not have an independent sequence-number
+    column.  A substring match for ``NO`` therefore maps unrelated identifiers
+    into the preview's No field.
+    """
+    normalized_keywords = {
+        re.sub(r'\s+', '', str(keyword)).upper() for keyword in keywords
+    }
+    for column in df.columns:
+        normalized_column = re.sub(r'\s+', '', str(column)).upper()
+        for keyword in normalized_keywords:
+            # Multi-row Excel headers can repeat the same label when the
+            # header rows are combined (for example,
+            # "Request Date Request Date").  Treat only repetitions of the
+            # complete keyword as exact; unrelated names such as Spool No
+            # must still not match NO.
+            if normalized_column == keyword:
+                return column
+            if keyword and len(normalized_column) > len(keyword):
+                repeat_count, remainder = divmod(len(normalized_column), len(keyword))
+                if remainder == 0 and repeat_count > 1 and normalized_column == keyword * repeat_count:
+                    return column
+    return None
+
+
+def format_thickness_range(items):
+    """Format the minimum and maximum numeric PT thickness values."""
+    thicknesses = []
+    for item in items:
+        raw_value = item.get("Thk.", "") if isinstance(item, dict) else ""
+        if isinstance(raw_value, (int, float)) and not pd.isna(raw_value):
+            thicknesses.append(float(raw_value))
+            continue
+        match = re.fullmatch(
+            r'\s*(\d+(?:\.\d+)?)\s*(?:mm|t)?\s*',
+            str(raw_value),
+            re.IGNORECASE,
+        )
+        if match:
+            thicknesses.append(float(match.group(1)))
+
+    if not thicknesses:
+        return ""
+
+    def _display(value):
+        return f"{value:.10f}".rstrip("0").rstrip(".")
+
+    return f"{_display(min(thicknesses))} ~ {_display(max(thicknesses))}mm"
+
+
+def first_report_date(items):
+    """Return the first valid extracted report date as a date value."""
+    for item in items:
+        raw_value = item.get("Date", "") if isinstance(item, dict) else ""
+        if isinstance(raw_value, pd.Timestamp):
+            return raw_value.to_pydatetime()
+        if isinstance(raw_value, datetime.datetime):
+            return raw_value
+        if isinstance(raw_value, datetime.date):
+            return datetime.datetime.combine(raw_value, datetime.time.min)
+
+        text = str(raw_value).strip()
+        for date_format in ("%Y-%m-%d", "%Y.%m.%d", "%Y/%m/%d", "%Y%m%d"):
+            try:
+                return datetime.datetime.strptime(text[:10], date_format)
+            except ValueError:
+                continue
+    return None
+
+
+def remove_unused_report_sheets(workbook, used_sheets):
+    """Remove template sheets that were not used by the generated report."""
+    used_ids = {id(sheet) for sheet in used_sheets}
+    for sheet in list(workbook.worksheets):
+        if id(sheet) not in used_ids:
+            workbook.remove(sheet)
+
 # [PT] SCH -> 두께(mm) 변환 테이블
 SCH_TO_THK = {
     "1/2": {"5S": 1.65, "10S": 2.11, "40": 2.77, "80": 3.73, "160": 4.75, "XXS": 7.47},
@@ -412,7 +493,8 @@ class PMIReportApp:
 
         # 검사방법별 기본정보를 저장하고 사진대장 정보에도 즉시 반영한다.
         for var in (
-            self.gapji_customer, self.gapji_report_no, self.gapji_exam_date
+            self.gapji_project, self.gapji_customer, self.gapji_item,
+            self.gapji_material, self.gapji_report_no, self.gapji_exam_date,
         ):
             var.trace_add("write", lambda *_args: self._on_report_info_changed())
         
@@ -1176,17 +1258,21 @@ class PMIReportApp:
 
     def _initialize_report_info_by_mode(self):
         """기존 공통정보를 마이그레이션하여 검사방법별 정보로 준비한다."""
-        common_report_no = str(self.config.get('GAPJI_REPORT_NO', '')).strip()
-        common_exam_date = str(self.config.get('GAPJI_EXAM_DATE', '')).strip()
+        common_values = {
+            'project': str(self.config.get('GAPJI_PROJECT', '')).strip(),
+            'customer': str(self.config.get('GAPJI_CUSTOMER', '')).strip(),
+            'item': str(self.config.get('GAPJI_ITEM', '')).strip(),
+            'material': str(self.config.get('GAPJI_MATERIAL', '')).strip(),
+            'report_no': str(self.config.get('GAPJI_REPORT_NO', '')).strip(),
+            'exam_date': str(self.config.get('GAPJI_EXAM_DATE', '')).strip(),
+        }
         self.report_info_by_mode = {}
         for mode in self._report_info_modes():
             self.report_info_by_mode[mode] = {
-                'report_no': str(self.config.get(
-                    f'{mode}_REPORT_NO', common_report_no
-                )).strip(),
-                'exam_date': str(self.config.get(
-                    f'{mode}_EXAM_DATE', common_exam_date
-                )).strip(),
+                key: str(self.config.get(
+                    f'{mode}_{key.upper()}', common_value
+                )).strip()
+                for key, common_value in common_values.items()
             }
         self._report_info_loading = False
 
@@ -1197,16 +1283,20 @@ class PMIReportApp:
             or getattr(self, '_report_info_loading', False)
         ):
             return
-        report_no = self.gapji_report_no.get().strip()
-        exam_date = self.gapji_exam_date.get().strip()
-        self.report_info_by_mode[mode] = {
-            'report_no': report_no, 'exam_date': exam_date
+        info = {
+            'project': self.gapji_project.get().strip(),
+            'customer': self.gapji_customer.get().strip(),
+            'item': self.gapji_item.get().strip(),
+            'material': self.gapji_material.get().strip(),
+            'report_no': self.gapji_report_no.get().strip(),
+            'exam_date': self.gapji_exam_date.get().strip(),
         }
-        self.config[f'{mode}_REPORT_NO'] = report_no
-        self.config[f'{mode}_EXAM_DATE'] = exam_date
+        self.report_info_by_mode[mode] = info
+        for key, value in info.items():
+            self.config[f'{mode}_{key.upper()}'] = value
         # 현재 탭의 성적서 생성 함수가 사용하는 공통 키도 함께 맞춘다.
-        self.config['GAPJI_REPORT_NO'] = report_no
-        self.config['GAPJI_EXAM_DATE'] = exam_date
+        for key, value in info.items():
+            self.config[f'GAPJI_{key.upper()}'] = value
 
     def _load_report_info_for_mode(self, mode):
         if mode not in self._report_info_modes() or not hasattr(self, 'report_info_by_mode'):
@@ -1214,13 +1304,14 @@ class PMIReportApp:
         info = self.report_info_by_mode[mode]
         self._report_info_loading = True
         try:
-            self.gapji_customer.set(str(self.config.get(
-                'GAPJI_CUSTOMER', "한국지역난방공사 중앙지사"
-            )))
+            self.gapji_project.set(info['project'])
+            self.gapji_customer.set(info['customer'])
+            self.gapji_item.set(info['item'])
+            self.gapji_material.set(info['material'])
             self.gapji_report_no.set(info['report_no'])
             self.gapji_exam_date.set(info['exam_date'])
-            self.config['GAPJI_REPORT_NO'] = info['report_no']
-            self.config['GAPJI_EXAM_DATE'] = info['exam_date']
+            for key, value in info.items():
+                self.config[f'GAPJI_{key.upper()}'] = value
         finally:
             self._report_info_loading = False
 
@@ -2114,11 +2205,11 @@ class PMIReportApp:
         self.pt_tab_notebook.add(pt_tab_rows, text="행 설정")
         self.pt_tab_notebook.add(pt_tab_cols, text="컬럼 설정")
 
-        # [ALIGNED] Mode-specific context for logo grid
+        # PT templates already contain their required logos and footer images.
+        # Keep only metadata and print/layout controls in the PT tabs; exposing
+        # separate image-path/position fields here was redundant and confusing.
         self._create_gapji_meta_ui(pt_tab_cover, use_pack=False, mode="PT")
         self.pt_tab_notebook.bind("<<NotebookTabChanged>>", self._update_gapji_preview_current)
-        next_row_pt_cover = self._create_setting_grid(pt_tab_cover, "PT_COVER")
-        next_row_pt_data = self._create_setting_grid(pt_tab_data, "PT_DATA")
         self._create_margin_settings(pt_tab_cover, "PT_COVER", use_pack=False)
         self._create_margin_settings(pt_tab_data, "PT_DATA", use_pack=False)
         self._create_row_settings(pt_tab_rows, mode="PT")
@@ -4125,8 +4216,10 @@ class PMIReportApp:
         
         for lbl, var, r, c in fields:
             tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
-            fixed_field = lbl == "품명:" or (
-                mode != "PMI" and lbl in ("공사명:", "발주처:")
+            # PT cover metadata varies by report, so project, customer and
+            # item-name fields must all allow direct editing.
+            fixed_field = (mode != "PT" and lbl == "품명:") or (
+                mode not in ("PMI", "PT") and lbl == "발주처:"
             )
             ent = ttk.Entry(
                 block, textvariable=var, width=15,
@@ -8831,7 +8924,13 @@ class PMIReportApp:
                             if col_joint is None and len(df.columns) > 1: col_joint = df.columns[1]
                             if col_size is None and len(df.columns) > 4: col_size = df.columns[4]
                     elif mode == "PT":
-                        col_no = _find_col(df, ["NO.", "NO", "SEQ", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT", "ORIGIN"])
+                        # PT requires an exact standalone sequence header.
+                        # Do not treat Spool No / Request No / Film No as No.
+                        # If absent, the row loop below assigns 1, 2, 3, ... .
+                        col_no = find_exact_column(df, ["NO.", "NO", "SEQ", "ITEM", "순번"])
+                        # Use the request date from each PT source row instead
+                        # of the file name/header-level fallback date.
+                        col_date = find_exact_column(df, ["REQUEST DATE"])
                         col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
                         col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
                         if not col_joint:
@@ -9192,7 +9291,7 @@ class PMIReportApp:
                             res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
                             if any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"]):
                                 item_row = {
-                                    'No': v_raw_no, 'Date': sheet_level_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
+                                    'No': v_raw_no, 'Date': curr_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
                                     'NPS': str(row[col_size]).strip() if col_size is not None else "", 'Thk.': convert_sch_to_thk(str(row[col_size]).strip() if col_size is not None else "", str(row[col_thk]).strip() if col_thk is not None else ""),
                                     'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "", 'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
                                     'WType': str(row[col_wtype]).strip() if col_wtype is not None else "", 'Result': "Acc", 'selected': True,
@@ -10299,8 +10398,19 @@ class PMIReportApp:
 
             # 갑지 (Cover) - PT 템플릿은 이미 갑지 로고가 포함되어 있으므로 로고 삽입 생략
             ws0 = wb.worksheets[0]
+            used_pt_sheets = [ws0]
             # self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="PT")  # 템플릿 원본 유지
             self._write_gapji_metadata(ws0, mode="PT")
+            thickness_range = format_thickness_range(final_list)
+            if thickness_range:
+                self.safe_set_value(ws0, 'D11', thickness_range)
+            exam_date = first_report_date([{"Date": self.gapji_exam_date.get()}])
+            if exam_date:
+                # PT cover: Date of Examination comes from the editable
+                # 검사일자 field, not from the source file's Request Date.
+                # Keep it as an Excel date so the template's Korean date
+                # display format is retained.
+                self.safe_set_value(ws0, 'J40', exam_date)
             self.force_print_settings(ws0, context="COVER")
             self.apply_custom_dimensions(ws0, "COVER")
 
@@ -10344,6 +10454,9 @@ class PMIReportApp:
                     self.log(f"[PT] 을지(2번 시트) {start_row}행에서 데이터 헤더 감지 → 을지에 기입")
                 else:
                     self.log(f"[PT] 헤더 자동 감지 실패 → 기본 start_row={start_row} 사용")
+
+            if ws not in used_pt_sheets:
+                used_pt_sheets.append(ws)
 
             ws.title = f"{ws.title[:20]}_001"
             # 갑지에 데이터가 기록되더라도 을지의 여백/배율/행·열 설정이
@@ -10410,6 +10523,8 @@ class PMIReportApp:
                         except: pass
                     else:
                         ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
+                    if ws not in used_pt_sheets:
+                        used_pt_sheets.append(ws)
                     
                     current_row = int(self.config.get('PT_START_ROW', 10))
                     current_end_row = int(self.config.get('PT_DATA_END_ROW', 38))
@@ -10447,9 +10562,15 @@ class PMIReportApp:
             if current_row + 1 > pt_print_end_row:
                 current_page += 1
                 ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
+                if ws not in used_pt_sheets:
+                    used_pt_sheets.append(ws)
                 current_row = int(self.config.get('PT_START_ROW', 10))
             self._write_pt_total_summary(ws, current_row, final_list)
 
+            # The PT template contains a ready-made data sheet.  When all
+            # records fit on the cover, that sheet remains unused and must not
+            # inflate the page count or appear as a blank second page.
+            remove_unused_report_sheets(wb, used_pt_sheets)
             total_p = len(wb.worksheets)
             # 서식 정리 (병합셀 손상 방지로 제거)
             for p_idx, s in enumerate(wb.worksheets):
@@ -10473,11 +10594,33 @@ class PMIReportApp:
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             output_name = f"PT_Report_{now_str}.xlsx"
-            save_path = os.path.join(os.path.dirname(template_path), output_name)
+            remembered_dir = str(self.config.get('PT_LAST_SAVE_DIR', '')).strip()
+            initial_dir = (
+                remembered_dir
+                if remembered_dir and os.path.isdir(remembered_dir)
+                else os.path.dirname(template_path)
+            )
+            save_path = filedialog.asksaveasfilename(
+                parent=self.root,
+                title="PT 성적서 저장 위치 선택",
+                initialdir=initial_dir,
+                initialfile=output_name,
+                defaultextension=".xlsx",
+                filetypes=[("Excel Workbook", "*.xlsx")],
+            )
+            if not save_path:
+                self.log("PT 성적서 저장이 취소되었습니다.")
+                return
+
+            self.config['PT_LAST_SAVE_DIR'] = os.path.dirname(save_path)
+            self.save_settings()
             wb.save(save_path)
             self.progress['value'] = 100
-            self.log(f"✨ PT 완료! 저장됨: {output_name}")
-            messagebox.showinfo("성공", f"PT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
+            self.log(f"✨ PT 완료! 저장됨: {os.path.basename(save_path)}")
+            messagebox.showinfo(
+                "성공",
+                f"PT 성적서 생성이 완료되었습니다.\n경로: {save_path}",
+            )
         except Exception as e:
             self.log(f"❌ PT 생성 오류: {e}")
             traceback.print_exc()
