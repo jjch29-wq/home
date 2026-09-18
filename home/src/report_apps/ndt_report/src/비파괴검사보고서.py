@@ -300,6 +300,8 @@ class PMIReportApp:
         self.rt_date_listbox = None
         self.mt_date_listbox = None
         self.paut_date_listbox = None
+        self.paut_line_listbox = None
+        self.paut_size_listbox = None
         self.kogas_date_listbox = None
 
         # [NEW] Add traces for Template-Linked Config Auto-Load
@@ -3288,7 +3290,13 @@ class PMIReportApp:
             messagebox.showwarning("파일 미선택", "PAUT 성적서 양식 파일을 선택해주세요.")
             return
 
-        final_list = [d for d in self.paut_extracted_data if d.get('selected', True) and d.get('date_filtered', True)]
+        final_list = [
+            d for d in self.paut_extracted_data
+            if d.get('selected', True)
+            and d.get('date_filtered', True)
+            and d.get('line_filtered', True)
+            and d.get('size_filtered', True)
+        ]
         if not final_list:
             messagebox.showwarning("항목 미선택", "선택된 데이터가 없습니다.")
             return
@@ -3297,7 +3305,13 @@ class PMIReportApp:
         self.progress['value'] = 0
         
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            # keep_vba=True forces openpyxl to write a macro-enabled workbook
+            # content type.  When the selected template is a normal .xlsx file,
+            # saving that workbook with an .xlsx extension makes Excel reject it
+            # as an extension/format mismatch.
+            template_ext = os.path.splitext(template_path)[1].lower()
+            keep_vba = template_ext == '.xlsm'
+            wb = openpyxl.load_workbook(template_path, keep_vba=keep_vba)
             
             # [NEW] Find "을" sheet for data entry
             target_ws = None
@@ -3578,7 +3592,8 @@ class PMIReportApp:
                 self.apply_custom_dimensions(s, ctx)
                 self.force_print_settings(s, ctx)
 
-            out_name = f"PAUT_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            output_ext = '.xlsm' if keep_vba else '.xlsx'
+            out_name = f"PAUT_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}{output_ext}"
             out_path = os.path.join(BASE_DIR, "output", out_name) if os.path.exists(os.path.join(BASE_DIR, "output")) else os.path.join(BASE_DIR, out_name)
             
             if not os.path.exists(os.path.dirname(out_path)): os.makedirs(os.path.dirname(out_path))
@@ -3602,7 +3617,10 @@ class PMIReportApp:
 
         selected_count = sum(
             1 for item in getattr(self, "paut_extracted_data", [])
-            if item.get("selected", True) and item.get("date_filtered", True)
+            if item.get("selected", True)
+            and item.get("date_filtered", True)
+            and item.get("line_filtered", True)
+            and item.get("size_filtered", True)
         )
         start_row = int(self.config.get("PAUT_START_ROW", 11))
         end_row = int(self.config.get("PAUT_DATA_END_ROW", 40))
@@ -3659,6 +3677,8 @@ class PMIReportApp:
                 
                 # [FIX] Ensure mandatory attributes for UI filtering
                 if 'date_filtered' not in clean_dict: clean_dict['date_filtered'] = True
+                if 'line_filtered' not in clean_dict: clean_dict['line_filtered'] = True
+                if 'size_filtered' not in clean_dict: clean_dict['size_filtered'] = True
                 if 'selected' not in clean_dict: clean_dict['selected'] = True
                 if 'order_index' not in clean_dict: clean_dict['order_index'] = i
                 
@@ -4985,6 +5005,86 @@ class PMIReportApp:
             self.populate_preview(data, switch_tab=False, mode=m)
             
         ttk.Button(sticky_top_frame, text="날짜 적용", command=_apply_date_filter).pack(fill='x', pady=(0, 5))
+
+        # PAUT can be narrowed independently by line number and pipe size.
+        # Keep these flags separate from date_filtered so changing one filter
+        # never destroys the user's selections in another filter.
+        if mode == "PAUT":
+            ttk.Label(
+                sticky_top_frame, text="라인 / 관경 필터",
+                font=("Malgun Gothic", 8, "bold")
+            ).pack(pady=(2, 1))
+
+            paut_filter_frame = tk.Frame(sticky_top_frame, background="#f1f5f9")
+            paut_filter_frame.pack(fill='x', pady=2)
+
+            for column, title in enumerate(("Line No.", "Size")):
+                column_frame = tk.Frame(paut_filter_frame, background="#f1f5f9")
+                column_frame.grid(row=0, column=column, sticky='nsew', padx=(0, 2) if column == 0 else (2, 0))
+                paut_filter_frame.grid_columnconfigure(column, weight=1)
+                ttk.Label(column_frame, text=title, font=("Malgun Gothic", 7)).pack()
+                filter_listbox = tk.Listbox(
+                    column_frame, selectmode='single', height=5,
+                    exportselection=False, font=("Malgun Gothic", 7)
+                )
+                filter_listbox.pack(fill='both', expand=True)
+                if column == 0:
+                    self.paut_line_listbox = filter_listbox
+                else:
+                    self.paut_size_listbox = filter_listbox
+
+            def _toggle_paut_filter(event):
+                lb = event.widget
+                idx = lb.nearest(event.y)
+                if idx < 0 or idx >= lb.size():
+                    return
+                value = lb.get(idx)
+                prefix = "[ ] " if value.startswith("[v] ") else "[v] "
+                value = value.replace("[v] ", "").replace("[ ] ", "")
+                lb.delete(idx)
+                lb.insert(idx, prefix + value)
+                lb.selection_clear(0, tk.END)
+
+            self.paut_line_listbox.bind("<ButtonRelease-1>", _toggle_paut_filter)
+            self.paut_size_listbox.bind("<ButtonRelease-1>", _toggle_paut_filter)
+
+            def _set_all_paut_filters(state):
+                for lb in (self.paut_line_listbox, self.paut_size_listbox):
+                    for idx in range(lb.size()):
+                        value = lb.get(idx).replace("[v] ", "").replace("[ ] ", "")
+                        lb.delete(idx)
+                        lb.insert(idx, ("[v] " if state else "[ ] ") + value)
+
+            def _apply_paut_filters():
+                selected_lines = {
+                    self.paut_line_listbox.get(i).replace("[v] ", "")
+                    for i in range(self.paut_line_listbox.size())
+                    if self.paut_line_listbox.get(i).startswith("[v] ")
+                }
+                selected_sizes = {
+                    self.paut_size_listbox.get(i).replace("[v] ", "")
+                    for i in range(self.paut_size_listbox.size())
+                    if self.paut_size_listbox.get(i).startswith("[v] ")
+                }
+                for item in self.paut_extracted_data:
+                    item['line_filtered'] = str(item.get('Line No.', '') or '').strip() in selected_lines
+                    item['size_filtered'] = str(item.get('Size', '') or '').strip() in selected_sizes
+                self.populate_preview(self.paut_extracted_data, switch_tab=False, mode="PAUT")
+                self._sync_paut_photo_page_numbers()
+
+            paut_filter_buttons = tk.Frame(sticky_top_frame, background="#f1f5f9")
+            paut_filter_buttons.pack(fill='x', pady=(0, 2))
+            ttk.Button(
+                paut_filter_buttons, text="전체",
+                command=lambda: _set_all_paut_filters(True)
+            ).pack(side='left', fill='x', expand=True)
+            ttk.Button(
+                paut_filter_buttons, text="해제",
+                command=lambda: _set_all_paut_filters(False)
+            ).pack(side='left', fill='x', expand=True, padx=2)
+            ttk.Button(
+                paut_filter_buttons, text="적용", command=_apply_paut_filters
+            ).pack(side='left', fill='x', expand=True)
         
         # [NEW] Multi-Select Test Location Filter (PMI Only)
         if mode == "PMI":
@@ -5365,7 +5465,7 @@ class PMIReportApp:
             all_keys = list(getattr(self, keys_attr))
             
         # 내부 관리용 키 제외
-        exclude = ["selected", "date_filtered", "order_index", "visual_group_joint", "is_merged_iso", "is_merged_joint"]
+        exclude = ["selected", "date_filtered", "line_filtered", "size_filtered", "order_index", "visual_group_joint", "is_merged_iso", "is_merged_joint"]
         display_keys = [k for k in all_keys if k not in exclude]
         
         # 스크롤 가능한 영역
@@ -5651,6 +5751,43 @@ class PMIReportApp:
         )
         if mode == "PMI":
             self.update_pmi_loc_listbox()
+        elif mode == "PAUT":
+            self.update_paut_filter_listboxes()
+
+    def update_paut_filter_listboxes(self):
+        """Refresh PAUT Line No./Size choices while preserving check states."""
+        line_listbox = getattr(self, 'paut_line_listbox', None)
+        size_listbox = getattr(self, 'paut_size_listbox', None)
+        if not line_listbox or not size_listbox:
+            return
+        if not line_listbox.winfo_exists() or not size_listbox.winfo_exists():
+            return
+
+        def refresh(listbox, key, flag):
+            previous = {}
+            for idx in range(listbox.size()):
+                text = listbox.get(idx)
+                value = text.replace("[v] ", "").replace("[ ] ", "")
+                previous[value] = text.startswith("[v] ")
+
+            values = sorted({
+                str(item.get(key, '') or '').strip()
+                for item in self.paut_extracted_data
+                if str(item.get(key, '') or '').strip()
+            })
+            listbox.delete(0, tk.END)
+            active_values = set()
+            for value in values:
+                checked = previous.get(value, True)
+                listbox.insert(tk.END, ("[v] " if checked else "[ ] ") + value)
+                if checked:
+                    active_values.add(value)
+            for item in self.paut_extracted_data:
+                item_value = str(item.get(key, '') or '').strip()
+                item[flag] = item_value in active_values
+
+        refresh(line_listbox, 'Line No.', 'line_filtered')
+        refresh(size_listbox, 'Size', 'size_filtered')
 
     def _get_mode_info(self, mode):
         """Helper to get core UI/Data objects for a specific module mode."""
@@ -5980,7 +6117,10 @@ class PMIReportApp:
         else: data = self.extracted_data
         
         for item in data:
-            if item.get('date_filtered', True):
+            if (item.get('date_filtered', True)
+                    and (mode != "PAUT" or (
+                        item.get('line_filtered', True)
+                        and item.get('size_filtered', True)))):
                 item['selected'] = True
         self.populate_preview(data, switch_tab=False, mode=mode)
 
@@ -5992,7 +6132,10 @@ class PMIReportApp:
         else: data = self.extracted_data
         
         for item in data:
-            if item.get('date_filtered', True):
+            if (item.get('date_filtered', True)
+                    and (mode != "PAUT" or (
+                        item.get('line_filtered', True)
+                        and item.get('size_filtered', True)))):
                 item['selected'] = False
         self.populate_preview(data, switch_tab=False, mode=mode)
 
@@ -6257,7 +6400,13 @@ class PMIReportApp:
 
         # 1. 엑셀에 저장할 대상 데이터 필터링
         filter_enabled = self.show_selected_only.get()
-        final_list = [d for d in data if d.get('date_filtered', True) and (not filter_enabled or d.get('selected', True))]
+        final_list = [
+            d for d in data
+            if d.get('date_filtered', True)
+            and (mode != "PAUT" or (
+                d.get('line_filtered', True) and d.get('size_filtered', True)))
+            and (not filter_enabled or d.get('selected', True))
+        ]
         
         if not final_list:
             messagebox.showinfo("알림", f"{mode} 현재 조건에 맞는 데이터가 없습니다.")
@@ -6533,6 +6682,10 @@ class PMIReportApp:
         
         for idx, item in enumerate(data_list):
             if not item.get('date_filtered', True):
+                continue
+            if mode == "PAUT" and not (
+                    item.get('line_filtered', True)
+                    and item.get('size_filtered', True)):
                 continue
             
             is_selected = item.get('selected', True)
@@ -6873,6 +7026,10 @@ class PMIReportApp:
                 # [NEW] Check for sidebar visibility (Date & Loc)
                 if match and only_visible_var.get():
                     if not item.get('date_filtered', True):
+                        match = False
+                    if match and mode == "PAUT" and not (
+                            item.get('line_filtered', True)
+                            and item.get('size_filtered', True)):
                         match = False
                     
                     if match and mode == "PMI" and hasattr(self, 'pmi_loc_listbox'):
@@ -9462,7 +9619,13 @@ class PMIReportApp:
             else: data = self.extracted_data
             
         # [NEW] 체크된 항목만 필터링 (기본값은 True)
-        final_list = [d for d in data if d.get('selected', True) and d.get('date_filtered', True)]
+        final_list = [
+            d for d in data
+            if d.get('selected', True)
+            and d.get('date_filtered', True)
+            and (mode != "PAUT" or (
+                d.get('line_filtered', True) and d.get('size_filtered', True)))
+        ]
         if not final_list:
             messagebox.showwarning("항목 미선택", f"선택된 {mode} 데이터가 없습니다. 미리보기에서 항목을 체크해주세요.")
             return
