@@ -1169,8 +1169,49 @@ class DailyWorkLogTab(ttk.Frame):
     def save_history(self, history):
         with open(self.history_path, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=4)
+        self._refresh_ndt_history_choices(history)
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
+
+    def _refresh_ndt_history_choices(self, history=None):
+        """Refresh NDT combobox choices immediately after saving new rows."""
+        if not hasattr(self, 'ndt_grid_entries'):
+            return
+        if history is None:
+            history = self.load_history()
+
+        sections = set()
+        lines = set()
+        companies = set()
+        welders = set(self.welder_names)
+        for day_data in history.values():
+            for row in day_data.get('ndt_results', []):
+                section = str(row.get('구간', '') or '').strip()
+                line_no = str(row.get('라인번호', '') or '').strip()
+                company = str(row.get('업체', '') or '').strip()
+                welder = self._normalize_welder_id(row.get('용접사', ''))
+                if section:
+                    sections.add(section)
+                if line_no:
+                    lines.add(line_no)
+                if company:
+                    companies.add(company)
+                if welder:
+                    welders.add(welder)
+
+        self.history_sections = [''] + sorted(sections)
+        self.history_lines = [''] + sorted(lines)
+        self.history_companies = [''] + sorted(companies)
+        self.history_welders = [''] + [
+            self._format_welder_display(welder_id)
+            for welder_id in sorted(welders)
+        ]
+
+        for row_entries in self.ndt_grid_entries:
+            row_entries['구간'].configure(values=self.history_sections)
+            row_entries['라인번호'].configure(values=self.history_lines)
+            row_entries['업체'].configure(values=self.history_companies)
+            row_entries['용접사'].configure(values=self.history_welders)
 
     def _refresh_saved_date_markers(self, history=None):
         """달력 팝업에서 작업일보가 저장된 날짜를 녹색으로 강조한다."""
