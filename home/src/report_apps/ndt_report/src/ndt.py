@@ -58,7 +58,7 @@ from openpyxl.styles import Alignment, Font, Border, Side
 from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.utils.units import pixels_to_EMU
-from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
+from openpyxl.utils.cell import coordinate_from_string, coordinate_to_tuple, column_index_from_string
 # Ignore library warnings
 warnings.simplefilter("ignore")
 
@@ -7328,9 +7328,28 @@ class PMIReportApp:
             # self.log(f"   [FAIL] '{prefix}' 로고를 어디에서도 찾을 수 없습니다.")
             return None
 
-        # 1. SITCO
+        def _has_image_at(cell_ref):
+            """Return True when the template already has an image at cell_ref."""
+            try:
+                target = coordinate_to_tuple(str(cell_ref))
+                for existing_image in getattr(ws, '_images', []):
+                    anchor = getattr(existing_image, 'anchor', None)
+                    if isinstance(anchor, str):
+                        if coordinate_to_tuple(anchor) == target:
+                            return True
+                        continue
+                    marker = getattr(anchor, '_from', None)
+                    if marker and (marker.row + 1, marker.col + 1) == target:
+                        return True
+            except Exception:
+                pass
+            return False
+
+        # 1. SITCO - preserve a logo already embedded in the cover template.
+        sitco_anchor = _get_val("SITCO", "_ANCHOR", "A1")
         p = _get_effective_path("SITCO", ["SITCO"])
-        if p: self.place_image_freely(ws, p, _get_val("SITCO", "_ANCHOR", "A1"), float(_get_val("SITCO", "_W", 100)), float(_get_val("SITCO", "_H", 50)), float(_get_val("SITCO", "_X", 0)), float(_get_val("SITCO", "_Y", 0)))
+        if p and not (is_first_sheet and _has_image_at(sitco_anchor)):
+            self.place_image_freely(ws, p, sitco_anchor, float(_get_val("SITCO", "_W", 100)), float(_get_val("SITCO", "_H", 50)), float(_get_val("SITCO", "_X", 0)), float(_get_val("SITCO", "_Y", 0)))
         
         # 2. SEOUL
         p = _get_effective_path("SEOUL", ["서울검사"])
@@ -7422,7 +7441,10 @@ class PMIReportApp:
             scale_val = (_cfg_str(f'PRINT_SCALE_{full_context}') or
                          _cfg_str(f'PRINT_SCALE_{context}') or
                          str(default_scale))
-            ws.print_options.horizontalCentered = True; ws.print_options.verticalCentered = True
+            ws.print_options.horizontalCentered = True
+            # Keep cover and data sheets visually aligned within the same A4
+            # margins. PMI page sizing is handled by the explicit scale below.
+            ws.print_options.verticalCentered = True
             
             if mode == "RT" and context == "DATA":
                 # 을지는 갑지보다 약 4% 크게 출력되므로 고정 87%로 축소한다.
@@ -7430,6 +7452,17 @@ class PMIReportApp:
                 ws.page_setup.fitToWidth = None
                 ws.page_setup.fitToHeight = None
                 ws.page_setup.scale = 87
+            elif mode == "PMI" and context == "DATA":
+                # Apply the configured scale directly. One-page fitting shrinks
+                # the PMI table vertically and creates excessive blank space.
+                try:
+                    pmi_scale = max(10, min(400, int(float(scale_val))))
+                except (TypeError, ValueError):
+                    pmi_scale = 95
+                ws.sheet_properties.pageSetUpPr.fitToPage = False
+                ws.page_setup.fitToWidth = None
+                ws.page_setup.fitToHeight = None
+                ws.page_setup.scale = pmi_scale
             else:
                 # 그 외 시트는 기존 한 페이지 맞춤을 유지한다.
                 ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -8243,6 +8276,18 @@ class PMIReportApp:
         else:
             self.log(f"📅 파일 날짜 인식 성공: {extracted_date}")
 
+        def _is_date_like_dwg(value):
+            """Reject timestamps that can be mistaken for a drawing number."""
+            if value is None or pd.isna(value):
+                return False
+            if isinstance(value, (datetime.datetime, datetime.date, pd.Timestamp)):
+                return True
+            text = str(value).strip()
+            return bool(re.fullmatch(
+                r'\d{4}[-./]\d{1,2}[-./]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?',
+                text,
+            ))
+
         self.progress['value'] = 0
         all_extracted_data = []
 
@@ -8351,25 +8396,38 @@ class PMIReportApp:
                     sheet_level_dwg = ""
                     if mode not in ["PT", "MT"]:
                         try:
-                            for r_pos in [4, 5]: # 0-indexed 4=5행, 5=6행
-                                for c_pos in [2, 1, 3]: # 2=C열, 1=B열, 3=D열
-                                    if r_pos < len(temp_df) and c_pos < len(temp_df.columns):
-                                        val = temp_df.iloc[r_pos, c_pos]
-                                        if pd.notna(val):
-                                            val_str = str(val).strip()
-                                            if val_str and val_str.lower() != 'nan' and len(val_str) > 2:
-                                                # "도면번호", "도면", "DWG" 같은 라벨 텍스트는 제외
-                                                if val_str in ["도면번호", "도면", "DWG", "DWG NO", "DWG.NO", "도면 NO", "도면 NO."]:
+                            # C5/C6 is a valid fixed drawing-number area only
+                            # when a nearby cell explicitly labels it as such.
+                            nearby_text = " ".join(
+                                str(temp_df.iloc[r_pos, c_pos]).strip().upper()
+                                for r_pos in range(3, min(7, len(temp_df)))
+                                for c_pos in range(0, min(5, len(temp_df.columns)))
+                                if pd.notna(temp_df.iloc[r_pos, c_pos])
+                            )
+                            has_dwg_label = any(
+                                label in nearby_text
+                                for label in ["DWG", "DRAWING", "도면번호", "도면 NO", "도면NO"]
+                            )
+                            if has_dwg_label:
+                                for r_pos in [4, 5]: # 0-indexed 4=5행, 5=6행
+                                    for c_pos in [2, 1, 3]: # 2=C열, 1=B열, 3=D열
+                                        if r_pos < len(temp_df) and c_pos < len(temp_df.columns):
+                                            val = temp_df.iloc[r_pos, c_pos]
+                                            if pd.notna(val):
+                                                if _is_date_like_dwg(val):
                                                     continue
-                                                # "SEOUL INSPECTION...", 회사명 혹은 주소 등 공백이 너무 많은 텍스트 제외
-                                                val_upper = val_str.upper()
-                                                if any(k in val_upper for k in ["CO.", "LTD", "INSPECTION", "TESTING", "CORP", "INC", "SEOUL", "주식회사"]):
-                                                    continue
-                                                if val_str.count(" ") > 2:
-                                                    continue
-                                                sheet_level_dwg = val_str
-                                                break
-                                if sheet_level_dwg: break
+                                                val_str = str(val).strip()
+                                                if val_str and val_str.lower() != 'nan' and len(val_str) > 2:
+                                                    if val_str.upper() in ["도면번호", "도면", "DWG", "DWG NO", "DWG.NO", "도면 NO", "도면 NO."]:
+                                                        continue
+                                                    val_upper = val_str.upper()
+                                                    if any(k in val_upper for k in ["CO.", "LTD", "INSPECTION", "TESTING", "CORP", "INC", "SEOUL", "주식회사"]):
+                                                        continue
+                                                    if val_str.count(" ") > 2:
+                                                        continue
+                                                    sheet_level_dwg = val_str
+                                                    break
+                                    if sheet_level_dwg: break
                         except: pass
 
                     if sheet_level_dwg:
@@ -8526,7 +8584,10 @@ class PMIReportApp:
                         col_cr = _find_col(df, ["CR", "CHROMIUM"]); col_ni = _find_col(df, ["NI", "NICKEL"])
                         col_mo = _find_col(df, ["MO", "MOLYBDENUM"]); col_mn = _find_col(df, ["MN", "MANGANESE"])
                         col_no = _find_col(df, ["NO.", "NO", "SEQ", "NUM", "POS", "ITEM"], exclude=["REPORT", "DWG", "DRAWING", "LINE", "WELD", "JOINT", "ORIGIN"])
-                        col_date = _find_col(df, ["DATE", "검사일", "검사일자", "일자"])
+                        col_date = _find_col(
+                            df,
+                            ["DATE/TIME", "DATETIME", "DATE", "TIME", "검사일", "검사일자", "측정시간", "일자"],
+                        )
                         col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
                         col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
                         col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
@@ -8759,6 +8820,8 @@ class PMIReportApp:
                     for _, row in df.iterrows():
                         v_raw_no = clean_v(row[col_no]) if col_no is not None else ""
                         raw_dwg = clean_v(row[col_dwg]) if col_dwg is not None else ""
+                        if _is_date_like_dwg(raw_dwg):
+                            raw_dwg = ""
                         raw_joint = clean_v(row[col_joint]) if col_joint is not None else ""
                         
                         # 행의 주요 데이터가 모두 비어있으면 빈 행으로 간주하여 건너뜀
@@ -8778,7 +8841,9 @@ class PMIReportApp:
                             if extract_key not in row_str:
                                 continue
 
-                        curr_dwg = sheet_level_dwg if sheet_level_dwg else (clean_v(row[col_dwg]) if col_dwg is not None else '')
+                        curr_dwg = sheet_level_dwg if sheet_level_dwg else raw_dwg
+                        if _is_date_like_dwg(curr_dwg):
+                            curr_dwg = ''
                         if (not curr_dwg or curr_dwg == 'nan'):
                             curr_dwg = last_dwg if last_dwg else ''
                         if curr_dwg and curr_dwg != 'nan': last_dwg = curr_dwg
@@ -9389,13 +9454,13 @@ class PMIReportApp:
                 if line_no:
                     self.safe_set_value(ws, 'L9', line_no)
         else:
-            # Default mapping: Project: B5, Customer: B6, Item: B7, Material: B8, Date: B9, Report No: B10
+            # PMI templates already contain their own date field. Do not use B9
+            # as a fallback because it belongs to the cover logo/header area.
             mapping = [
                 ('GAPJI_PROJECT', 'B5'),
                 ('GAPJI_CUSTOMER', 'B6'),
                 ('GAPJI_ITEM', 'B7'),
                 ('GAPJI_MATERIAL', 'B8'),
-                ('GAPJI_EXAM_DATE', 'B9'),
                 ('GAPJI_REPORT_NO', 'B10')
             ]
             
@@ -9403,6 +9468,12 @@ class PMIReportApp:
                 val = self.config.get(cfg_key, "")
                 if val:
                     self.safe_set_value(ws, self.config.get(f"{cfg_key}_CELL", coord), val)
+
+            # Write the date only when an explicit template coordinate is set.
+            exam_date_cell = str(self.config.get('GAPJI_EXAM_DATE_CELL', '')).strip()
+            exam_date = self.config.get('GAPJI_EXAM_DATE', '')
+            if exam_date_cell and exam_date:
+                self.safe_set_value(ws, exam_date_cell, exam_date)
 
     def _run_pmi_process(self, final_list, template_path):
         self.save_settings() # Ensure UI -> config sync
@@ -9572,6 +9643,23 @@ class PMIReportApp:
                 for row_idx in range(1, header_end_row + 1)
             }
 
+            # Snapshot the pristine second-sheet data area before writing page 2.
+            # Later pages are copied from that sheet after it has been populated,
+            # so the snapshot is required to remove copied page-2 values safely.
+            pmi_data_end_row = int(self.config.get('DATA_END_ROW', 45))
+            data_cells = {}
+            for data_row in range(pmi_start_row, pmi_data_end_row + 1):
+                for data_col in range(1, 14):
+                    source_cell = ws.cell(row=data_row, column=data_col)
+                    data_cells[(data_row, data_col)] = {
+                        'value': source_cell.value,
+                        'style': copy.copy(source_cell._style),
+                    }
+            data_row_heights = {
+                row_idx: ws.row_dimensions[row_idx].height
+                for row_idx in range(pmi_start_row, pmi_data_end_row + 1)
+            }
+
             def restore_pmi_header(sheet):
                 # Remove the copied header merges first so every source cell can
                 # receive its original value and style safely.
@@ -9592,7 +9680,19 @@ class PMIReportApp:
                 for merged_ref in header_merges:
                     sheet.merge_cells(merged_ref)
 
-            clear_merges_in_range(ws, int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 20)
+            def reset_pmi_data_area(sheet):
+                clear_merges_in_range(sheet, pmi_start_row, pmi_data_end_row)
+                for (data_row, data_col), snapshot in data_cells.items():
+                    target_cell = sheet.cell(row=data_row, column=data_col)
+                    # Preserve the template style only. The template may still
+                    # contain sample/previous report values, which must never
+                    # appear below the last row on a partially filled page.
+                    target_cell.value = None
+                    target_cell._style = copy.copy(snapshot['style'])
+                for row_idx, row_height in data_row_heights.items():
+                    sheet.row_dimensions[row_idx].height = row_height
+
+            reset_pmi_data_area(ws)
             ws.add_data_validation(dv_q)
 
             # [DYNAMIC ELEMENTS] Identify newly appended chemical elements
@@ -9616,7 +9716,7 @@ class PMIReportApp:
                 if rows_left <= 0:
                     current_page += 1; ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="PMI")
                     restore_pmi_header(ws)
-                    clear_merges_in_range(ws, int(self.config.get('START_ROW', 17)), int(self.config.get('DATA_END_ROW', 45)) + 20)
+                    reset_pmi_data_area(ws)
                     current_row = int(self.config.get('START_ROW', 17)); ws.add_data_validation(dv_q)
                     rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
 
@@ -9665,7 +9765,9 @@ class PMIReportApp:
                 batch = all_extracted_data[data_ptr : data_ptr + this_block_size]
                 
                 # 테두리 및 서식 적용
-                d_height = float(self.config.get('ROW_HEIGHT_DATA', 20.55))
+                # Keep the PMI data page's vertical footprint aligned with the
+                # cover while preserving the same horizontal print scale.
+                d_height = float(self.config.get('ROW_HEIGHT_DATA', 19.5))
                 for r_offset in range(actual_block_rows):
                     r = current_row + r_offset
                     rd = ws.row_dimensions[r]; rd.height = d_height
@@ -9750,7 +9852,7 @@ class PMIReportApp:
             except: pass
 
             # [RE-NC] 데이터가 없는 빈 칸도 45열까지 3개 행 블록 단위로 테두리/병합 적용
-            d_height = float(self.config.get('ROW_HEIGHT_DATA', 20.55))
+            d_height = float(self.config.get('ROW_HEIGHT_DATA', 19.5))
             while current_row <= int(self.config.get('DATA_END_ROW', 45)):
                 rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
                 this_block_size = min(3, rows_left)
