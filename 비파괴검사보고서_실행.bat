@@ -2,12 +2,15 @@
 setlocal
 cd /d "%~dp0"
 
-if not exist ".venv\Scripts\pythonw.exe" (
-    echo [ERROR] Python virtual environment was not found.
-    echo Open this project in VS Code and check the Python environment.
+set PYTHONW=%~dp0.venv\Scripts\pythonw.exe
+set SCRIPT=%~dp0home\src\run_ndt.py
+
+if not exist "%PYTHONW%" (
+    echo [ERROR] Python not found: %PYTHONW%
     pause
     exit /b 1
 )
 
-start "" ".venv\Scripts\pythonw.exe" "home\src\비파괴검사보고서.py"
+start "" "%PYTHONW%" "%SCRIPT%"
 endlocal
+

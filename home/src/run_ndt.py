@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Launcher for the NDT report app.
-
-The application code lives under report_apps/ndt_report so report-specific
-modules can be changed without mixing them with site app code.
+"""ASCII-named entry point for 비파괴검사보고서 app.
+CMD/bat 파일에서 한글 파일명 인코딩 문제를 우회하기 위한 런처.
 """
 from pathlib import Path
 import runpy
 import sys
 import traceback
-import os
 
 APP_SRC = Path(__file__).resolve().parent / "report_apps" / "ndt_report" / "src"
 SRC_ROOT = Path(__file__).resolve().parent
@@ -25,7 +22,8 @@ except Exception as e:
         traceback.print_exc(file=f)
     raise
 except SystemExit as e:
-    with open(CRASH_LOG, "w", encoding="utf-8") as f:
-        f.write(f"[SystemExit] code={e.code}\n")
-        traceback.print_exc(file=f)
+    if e.code not in (0, None):
+        with open(CRASH_LOG, "w", encoding="utf-8") as f:
+            f.write(f"[SystemExit] code={e.code}\n")
+            traceback.print_exc(file=f)
     raise
