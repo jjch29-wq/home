@@ -135,6 +135,26 @@ class PtColumnDetectionTests(unittest.TestCase):
         self.assertEqual(app.gapji_exam_date.get(), "2026-07-30")
         self.assertEqual(app.config["PT_PROJECT"], "PT Project")
 
+    def test_pt_total_summary_uses_one_row_and_preserves_next_row(self):
+        workbook = openpyxl.Workbook()
+        workbook.active.title = "Cover"
+        sheet = workbook.create_sheet("Data")
+        sheet["A11"] = "FIXED ROW"
+        app = MODULE.PMIReportApp.__new__(MODULE.PMIReportApp)
+        app.log = lambda *_args: None
+
+        app._write_pt_total_summary(
+            sheet,
+            10,
+            [{"Result": "Acc"}, {"Result": "Acc"}, {"Result": "Reject"}],
+        )
+
+        self.assertEqual(sheet["A10"].value, "TOTAL")
+        self.assertEqual(sheet["E10"].value, "2P")
+        self.assertEqual(sheet["F10"].value, 1)
+        self.assertEqual(sheet["H10"].value, "B  L  A  N  K")
+        self.assertEqual(sheet["A11"].value, "FIXED ROW")
+
 
 if __name__ == "__main__":
     unittest.main()

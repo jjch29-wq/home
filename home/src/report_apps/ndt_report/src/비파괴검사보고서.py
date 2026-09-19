@@ -7860,7 +7860,7 @@ class PMIReportApp:
             self.log(f"   ⚠️ 셀 병합 실패 ({start_row},{start_column}): {e}")
 
     def _write_pt_total_summary(self, ws, summary_row, items):
-        """마지막 PT 을지에 TOTAL/Acc/Rej/BLANK 요약 두 행을 기록한다."""
+        """마지막 PT 빈 행 하나에 TOTAL/Acc/Rej/BLANK 요약을 기록한다."""
         accepted_values = {'ACC', 'ACCEPT', 'PASS', '합격', 'O', 'OK', 'V', ''}
         accepted_count = sum(
             1 for item in items
@@ -7872,16 +7872,12 @@ class PMIReportApp:
         # G Step, H:Q Interpretation, R Welder, S NPS.
         self.safe_merge_cells(ws, summary_row, 1, summary_row, 3)
         self.safe_merge_cells(ws, summary_row, 8, summary_row, 17)
-        self.safe_merge_cells(ws, summary_row + 1, 1, summary_row + 1, 3)
-        self.safe_merge_cells(ws, summary_row + 1, 8, summary_row + 1, 17)
 
         values = {
             (summary_row, 1): 'TOTAL',
-            (summary_row, 5): 'Acc',
-            (summary_row, 6): 'Rej',
+            (summary_row, 5): f'{accepted_count}P',
+            (summary_row, 6): rejected_count,
             (summary_row, 8): 'B  L  A  N  K',
-            (summary_row + 1, 5): f'{accepted_count}P',
-            (summary_row + 1, 6): rejected_count,
         }
         for (row_idx, col_idx), value in values.items():
             cell = ws.cell(row=row_idx, column=col_idx)
@@ -10557,9 +10553,11 @@ class PMIReportApp:
                 current_row += 1
                 self.progress['value'] = (data_ptr / len(final_list)) * 95
 
-            # 마지막 을지의 데이터 다음 두 행에 TOTAL 요약을 추가한다.
+            # 마지막 데이터 다음 빈 행 하나에 TOTAL 요약을 추가한다.
+            # 갑지 38행은 Sketch/Attached 고정행이므로 절대 덮어쓰지 않는다.
             pt_print_end_row = int(self.config.get('PT_PRINT_END_ROW', 40))
-            if current_row + 1 > pt_print_end_row:
+            summary_end_row = cover_end_row if on_cover else pt_print_end_row
+            if current_row > summary_end_row:
                 current_page += 1
                 ws = self.prepare_next_sheet(wb, template_sheet_id, current_page, mode="PT")
                 if ws not in used_pt_sheets:
@@ -10575,6 +10573,9 @@ class PMIReportApp:
             # 서식 정리 (병합셀 손상 방지로 제거)
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
+                # Keep the current cover metadata consistent on every PT
+                # continuation sheet, including template and copied sheets.
+                self.safe_set_value(s, 'P6', self.gapji_report_no.get().strip())
                 # 최종 저장 직전 모든 PT 시트에 UI 설정을 동일하게 재적용한다.
                 # Area가 비어 있으면 force_print_settings의 PT 기본 영역을 사용한다.
                 ctx = "COVER" if p_idx == 0 else "DATA"
