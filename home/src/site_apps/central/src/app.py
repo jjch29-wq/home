@@ -10390,11 +10390,23 @@ class MaterialManager:
                 try:
                     # Normalize date for comparison
                     check_date = pd.to_datetime(date_val).date()
+                    # One date can contain separate NDT rows for different pipe
+                    # sizes.  A different quantity must not be offered as an
+                    # overwrite of the previously saved row.
+                    current_usage = to_f(self.ent_daily_test_amount)
+                    stored_usage = pd.to_numeric(
+                        self.daily_usage_df.get(
+                            'Usage',
+                            pd.Series(index=self.daily_usage_df.index, dtype=float),
+                        ),
+                        errors='coerce',
+                    ).fillna(0.0)
                     # Ensure MaterialID is matched correctly (exact string match)
                     existing = self.daily_usage_df[
                         (pd.to_datetime(self.daily_usage_df['Date']).dt.date == check_date) & 
                         (self.daily_usage_df['Site'] == site) & 
                         (self.daily_usage_df['MaterialID'] == mat_id) &
+                        ((stored_usage - current_usage).abs() < 1e-9) &
                         (self.daily_usage_df['검사품명'].astype(str).str.strip() == self.ent_daily_inspection_item.get().strip()) &
                         (self.daily_usage_df['적용코드'].astype(str).str.strip() == self.ent_daily_applied_code.get().strip())
                     ]

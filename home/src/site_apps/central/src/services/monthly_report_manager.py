@@ -497,7 +497,9 @@ class MonthlyReportManager:
                 break
         return 8 + block_rows
 
-    def _first_print_overflow_row(self, ws, start_row, row_count):
+    def _first_print_overflow_row(
+        self, ws, start_row, row_count, scale_override=None
+    ):
         """Return the first data row that falls onto the next printed page."""
         break_ids = sorted(int(brk.id) for brk in ws.row_breaks.brk)
         previous_breaks = [row for row in break_ids if row < start_row]
@@ -505,7 +507,10 @@ class MonthlyReportManager:
 
         # A4 portrait printable height, adjusted by the template's print scale.
         margins = ws.page_margins
-        scale = float(ws.page_setup.scale or 100) / 100.0
+        scale = float(
+            scale_override if scale_override is not None
+            else (ws.page_setup.scale or 100)
+        ) / 100.0
         usable_inches = 11.69 - float(margins.top or 0) \
             - float(margins.bottom or 0) - float(margins.footer or 0)
         capacity_points = usable_inches * 72.0 / scale
@@ -521,6 +526,43 @@ class MonthlyReportManager:
                 return row
             used_points += row_height
         return None
+
+    def _compact_blank_spacers_before_table(self, ws, page_start, table_header_row):
+        """Reclaim only unused spacer height without changing data rows."""
+        merged_rows = set()
+        for merged in ws.merged_cells.ranges:
+            merged_rows.update(range(merged.min_row, merged.max_row + 1))
+
+        image_rows = set()
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if hasattr(anchor, '_from'):
+                image_rows.add(anchor._from.row + 1)
+
+        compacted = 0
+        for row in range(page_start, table_header_row):
+            if row in merged_rows or row in image_rows:
+                continue
+            if any(
+                str(ws.cell(row=row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 24) + 1)
+            ):
+                continue
+            current_height = float(
+                ws.row_dimensions[row].height
+                or ws.sheet_format.defaultRowHeight
+                or 15
+            )
+            if current_height > 1.0:
+                ws.row_dimensions[row].height = 1.0
+                compacted += 1
+
+        # Keep the visual top/bottom whitespace balanced while reclaiming
+        # enough printable height for the PAUT detail table.
+        if compacted:
+            ws.page_margins.top = 0.35
+            ws.page_margins.bottom = 0.35
+        return compacted
 
     def _find_next_document_header(self, ws, after_row, search_rows=80):
         """Locate the next real monthly-report header instead of assuming an offset."""
@@ -580,6 +622,7 @@ class MonthlyReportManager:
         the break directly above that row.  This also avoids mistaking the
         table-of-contents entries for real page headers.
         """
+        import copy
         from openpyxl.worksheet.pagebreak import Break
 
         section_titles = (
@@ -591,6 +634,7 @@ class MonthlyReportManager:
             '7.0사진대지',
         )
         required_breaks = set()
+        obsolete_breaks = set()
         for row in range(1, ws.max_row + 1):
             row_text = ''.join(
                 str(ws.cell(row=row, column=col).value or '')
@@ -611,9 +655,41 @@ class MonthlyReportManager:
                     header_start = candidate
                     break
             if header_start and header_start > 1:
-                required_breaks.add(header_start - 1)
+                # Hidden spacer rows inside the seven-row report header make
+                # Excel suppress their cell borders. Keep them at minimum
+                # height instead and explicitly continue the outer frame.
+                for spacer_row in range(header_start + 5, header_start + 7):
+                    if not ws.row_dimensions[spacer_row].hidden:
+                        continue
+                    ws.row_dimensions[spacer_row].hidden = False
+                    ws.row_dimensions[spacer_row].height = 1.0
 
-        existing = {int(brk.id): brk for brk in ws.row_breaks.brk}
+                    left_cell = ws.cell(row=spacer_row, column=2)
+                    left_border = copy.copy(left_cell.border)
+                    left_border.left = copy.copy(
+                        ws.cell(row=header_start, column=2).border.left
+                    )
+                    left_cell.border = left_border
+
+                    right_cell = ws.cell(row=spacer_row, column=23)
+                    right_border = copy.copy(right_cell.border)
+                    right_border.right = copy.copy(
+                        ws.cell(row=header_start, column=23).border.right
+                    )
+                    right_cell.border = right_border
+
+                break_id = header_start - 1
+                # The page boundary belongs directly above the visible report
+                # header. Remove the former one-row-early break when a hidden
+                # spacer precedes that header (e.g. break after 564 for a
+                # header beginning at row 565).
+                obsolete_breaks.add(header_start - 2)
+                required_breaks.add(break_id)
+
+        existing = {
+            int(brk.id): brk for brk in ws.row_breaks.brk
+            if int(brk.id) not in obsolete_breaks
+        }
         for break_id in required_breaks:
             existing.setdefault(break_id, Break(id=break_id))
         ws.row_breaks.brk = [existing[key] for key in sorted(existing)]
@@ -675,11 +751,10 @@ class MonthlyReportManager:
                 if hasattr(anchor, 'to'):
                     anchor.to.row += padding_rows
 
-            spacer_height = (
-                ws.row_dimensions[next_start - 1].height
-                or ws.sheet_format.defaultRowHeight
-                or 15
-            )
+            # Keep every padding row visible through the intended row-564
+            # boundary, while staying short enough to prevent Excel from
+            # inserting an automatic break around row 558.
+            spacer_height = 13.5
             for spacer_row in range(next_start, next_start + padding_rows):
                 ws.row_dimensions[spacer_row].height = spacer_height
 
@@ -917,9 +992,453 @@ class MonthlyReportManager:
                 not str(ws.cell(row=spacer_row, column=col).value or '').strip()
                 for col in range(1, min(ws.max_column, 23) + 1)
             )
-            if is_blank and spacer_row not in image_rows:
+            previous_is_blank = spacer_row > 1 and all(
+                not str(ws.cell(row=spacer_row - 1, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if (
+                is_blank
+                and not previous_is_blank
+                and spacer_row not in image_rows
+            ):
                 ws.row_dimensions[spacer_row].height = 0
                 ws.row_dimensions[spacer_row].hidden = True
+
+    def _move_mt_criteria_to_page6(self, ws):
+        """Place the MT criteria block on page 6 before the page-7 header."""
+        import copy
+        from openpyxl.worksheet.pagebreak import Break
+
+        header_start, header_end = 230, 236
+        mt_start, mt_end = 237, 242
+        break_ids = {int(brk.id) for brk in ws.row_breaks.brk}
+        if 229 not in break_ids:
+            return
+
+        # Swap [page-7 header][MT criteria] into [MT criteria][page-7 header]
+        # without changing any downstream row numbers.
+        source_order = list(range(mt_start, mt_end + 1)) + list(
+            range(header_start, header_end + 1)
+        )
+        target_rows = list(range(header_start, mt_end + 1))
+        row_map = dict(zip(source_order, target_rows))
+        max_col = ws.max_column
+
+        cells = {}
+        dimensions = {}
+        for source_row in range(header_start, mt_end + 1):
+            dimensions[source_row] = (
+                ws.row_dimensions[source_row].height,
+                ws.row_dimensions[source_row].hidden,
+            )
+            cells[source_row] = []
+            for col in range(1, max_col + 1):
+                cell = ws.cell(row=source_row, column=col)
+                cells[source_row].append((
+                    cell.value,
+                    copy.copy(cell._style),
+                    cell.number_format,
+                ))
+
+        affected_merges = [
+            merged for merged in list(ws.merged_cells.ranges)
+            if merged.min_row >= header_start and merged.max_row <= mt_end
+        ]
+        merge_snapshots = [
+            (merged.min_row, merged.min_col, merged.max_row, merged.max_col)
+            for merged in affected_merges
+        ]
+        for merged in affected_merges:
+            ws.unmerge_cells(str(merged))
+
+        for source_row in source_order:
+            target_row = row_map[source_row]
+            height, hidden = dimensions[source_row]
+            ws.row_dimensions[target_row].height = height
+            ws.row_dimensions[target_row].hidden = hidden
+            for col, (value, style, number_format) in enumerate(
+                cells[source_row], start=1
+            ):
+                cell = ws.cell(row=target_row, column=col)
+                cell.value = value
+                cell._style = copy.copy(style)
+                cell.number_format = number_format
+
+        for min_row, min_col, max_row, max_col_idx in merge_snapshots:
+            ws.merge_cells(
+                start_row=row_map[min_row],
+                start_column=min_col,
+                end_row=row_map[max_row],
+                end_column=max_col_idx,
+            )
+
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            image_row = anchor._from.row + 1
+            if image_row not in row_map:
+                continue
+            shift = row_map[image_row] - image_row
+            anchor._from.row += shift
+            if hasattr(anchor, 'to'):
+                anchor.to.row += shift
+
+        # Page 6 now includes the six MT rows and ends immediately before the
+        # relocated page-7 document header at row 236.
+        ws.row_breaks.brk = [
+            brk for brk in ws.row_breaks.brk if int(brk.id) != 229
+        ]
+        ws.row_breaks.append(Break(id=235))
+        ws.row_breaks.brk = sorted(
+            ws.row_breaks.brk, key=lambda brk: int(brk.id)
+        )
+
+    def _merge_pages7_and8(self, ws):
+        """Combine the two sparse final pages of section 1.0."""
+        import copy
+
+        break_ids = {int(brk.id) for brk in ws.row_breaks.brk}
+        if not {235, 278, 325}.issubset(break_ids):
+            return
+
+        # The second page repeats the seven-row common report header. Remove
+        # that duplicate, move its body upward, and keep drawings aligned.
+        delete_start, delete_count = 279, 7
+        delete_end = delete_start + delete_count - 1
+        retained_images = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                retained_images.append(image)
+                continue
+            image_row = anchor._from.row + 1
+            if delete_start <= image_row <= delete_end:
+                continue
+            if image_row > delete_end:
+                anchor._from.row -= delete_count
+                if hasattr(anchor, 'to'):
+                    anchor.to.row -= delete_count
+            retained_images.append(image)
+        ws._images = retained_images
+
+        self._delete_rows_safely(ws, delete_start, delete_count)
+        for key, marker_row in self.table_markers.items():
+            if marker_row > delete_end:
+                self.table_markers[key] -= delete_count
+
+        # The equipment-specification image below item "거." is vertically
+        # compressed in the template. Keep its width and extend it slightly
+        # into the following blank row for better legibility.
+        for image in ws._images:
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            image_row = anchor._from.row + 1
+            if 290 <= image_row <= 300 and float(image.width) > 500:
+                image.height = float(image.height) * 1.20
+                if hasattr(anchor, 'to'):
+                    anchor.to.row += 4
+                break
+
+        # Move the three-line paragraph beginning with item "너." below the
+        # enlarged image. Keep one blank row between the image and paragraph.
+        paragraph_start = None
+        for row in range(300, 315):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if 'Raw Data' in row_text:
+                paragraph_start = row
+                break
+        if paragraph_start is not None:
+            paragraph_rows = list(range(paragraph_start, paragraph_start + 3))
+            target_rows = list(range(paragraph_start + 4, paragraph_start + 7))
+            if all(
+                not str(ws.cell(row=row, column=col).value or '').strip()
+                for row in target_rows
+                for col in range(1, min(ws.max_column, 23) + 1)
+            ):
+                source_order = target_rows + paragraph_rows
+                destination_order = paragraph_rows + target_rows
+                row_map = dict(zip(source_order, destination_order))
+                affected_rows = set(source_order)
+                max_col = ws.max_column
+
+                cells = {}
+                dimensions = {}
+                for source_row in source_order:
+                    dimensions[source_row] = (
+                        ws.row_dimensions[source_row].height,
+                        ws.row_dimensions[source_row].hidden,
+                    )
+                    cells[source_row] = [
+                        (
+                            ws.cell(source_row, col).value,
+                            copy.copy(ws.cell(source_row, col)._style),
+                            ws.cell(source_row, col).number_format,
+                        )
+                        for col in range(1, max_col + 1)
+                    ]
+
+                affected_merges = [
+                    merged for merged in list(ws.merged_cells.ranges)
+                    if merged.min_row in affected_rows
+                    and merged.max_row in affected_rows
+                ]
+                merge_snapshots = [
+                    (
+                        merged.min_row, merged.min_col,
+                        merged.max_row, merged.max_col,
+                    )
+                    for merged in affected_merges
+                ]
+                for merged in affected_merges:
+                    ws.unmerge_cells(str(merged))
+
+                for source_row in source_order:
+                    target_row = row_map[source_row]
+                    height, hidden = dimensions[source_row]
+                    ws.row_dimensions[target_row].height = height
+                    ws.row_dimensions[target_row].hidden = hidden
+                    for col, (value, style, number_format) in enumerate(
+                        cells[source_row], start=1
+                    ):
+                        cell = ws.cell(target_row, col)
+                        cell.value = value
+                        cell._style = copy.copy(style)
+                        cell.number_format = number_format
+
+                for min_row, min_col, max_row, max_col_idx in merge_snapshots:
+                    ws.merge_cells(
+                        start_row=row_map[min_row], start_column=min_col,
+                        end_row=row_map[max_row], end_column=max_col_idx,
+                    )
+
+        # Remove the former boundary between pages 7 and 8. The old row-325
+        # boundary has already shifted to row 318 during deletion.
+        ws.row_breaks.brk = [
+            brk for brk in ws.row_breaks.brk if int(brk.id) != 278
+        ]
+
+        # Preserve all text-row heights. Compress only truly empty, unmerged
+        # spacer rows so both bodies fit legibly on one printed page.
+        merged_rows = set()
+        for merged in ws.merged_cells.ranges:
+            merged_rows.update(range(merged.min_row, merged.max_row + 1))
+        image_rows = {
+            image.anchor._from.row + 1
+            for image in ws._images
+            if hasattr(getattr(image, 'anchor', None), '_from')
+        }
+        for row in range(236, 319):
+            if row in merged_rows or row in image_rows:
+                continue
+            is_blank = all(
+                not str(ws.cell(row=row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            if is_blank:
+                ws.row_dimensions[row].height = 7.0
+
+        # Section 1.0 now contains five pages instead of six.
+        page_cells = []
+        for row in range(80, 319):
+            value = str(ws.cell(row=row, column=16).value or '')
+            if 'of' in value.lower():
+                page_cells.append(ws.cell(row=row, column=16))
+        total_pages = len(page_cells)
+        for page_number, cell in enumerate(page_cells, start=1):
+            cell.value = (
+                f"  \ucabd  \ubc88  \ud638 :      {page_number}     "
+                f"of     {total_pages}"
+            )
+
+    def _widen_weld_defect_table(self, ws):
+        """Extend the section-4 weld-defect table through column W."""
+        import copy
+
+        header_row = None
+        merge_keys = {
+            (merged.min_col, merged.max_col, merged.min_row, merged.max_row)
+            for merged in ws.merged_cells.ranges
+        }
+        for row in range(1, ws.max_row):
+            if str(ws.cell(row=row + 1, column=2).value or '').strip().upper() != 'ID':
+                continue
+            if all((col, col, row, row + 1) in merge_keys for col in (16, 17, 18)):
+                header_row = row
+                break
+        if header_row is None:
+            return
+
+        total_row = None
+        for row in range(header_row + 2, min(ws.max_row, header_row + 80) + 1):
+            if '\ucd1d\uacc4' in str(ws.cell(row=row, column=2).value or ''):
+                total_row = row
+                break
+        if total_row is None:
+            return
+
+        # Expand the three summary columns into the unused P:W area.
+        source_columns = (16, 17, 18)
+        target_ranges = ((16, 17), (18, 20), (21, 23))
+        header_snapshots = []
+        for col in source_columns:
+            cell = ws.cell(row=header_row, column=col)
+            header_snapshots.append((cell.value, copy.copy(cell._style)))
+            ws.unmerge_cells(
+                start_row=header_row, start_column=col,
+                end_row=header_row + 1, end_column=col,
+            )
+
+        for (value, style), (min_col, max_col) in zip(
+            header_snapshots, target_ranges
+        ):
+            for row in range(header_row, header_row + 2):
+                for col in range(min_col, max_col + 1):
+                    ws.cell(row=row, column=col)._style = copy.copy(style)
+            anchor = ws.cell(row=header_row, column=min_col)
+            anchor.value = value
+            ws.merge_cells(
+                start_row=header_row, start_column=min_col,
+                end_row=header_row + 1, end_column=max_col,
+            )
+
+        # Extend an optional "no inspection records" row from B:R to B:W.
+        for merged in list(ws.merged_cells.ranges):
+            if (
+                header_row + 2 <= merged.min_row <= total_row
+                and merged.min_row == merged.max_row
+                and merged.min_col == 2 and merged.max_col == 18
+            ):
+                no_data_row = merged.min_row
+                ws.unmerge_cells(str(merged))
+                source_style = copy.copy(ws.cell(no_data_row, 2)._style)
+                for col in range(2, 24):
+                    ws.cell(no_data_row, col)._style = copy.copy(source_style)
+                ws.merge_cells(
+                    start_row=no_data_row, start_column=2,
+                    end_row=no_data_row, end_column=23,
+                )
+
+        # Re-map summary values and styles on actual data and TOTAL rows.
+        for row in range(header_row + 2, total_row + 1):
+            if any(
+                merged.min_row == row and merged.min_col == 2
+                and merged.max_col == 23
+                for merged in ws.merged_cells.ranges
+            ):
+                continue
+            snapshots = [
+                (ws.cell(row, col).value, copy.copy(ws.cell(row, col)._style))
+                for col in source_columns
+            ]
+            if not any(value is not None for value, _style in snapshots) and row != total_row:
+                continue
+            for col in range(16, 24):
+                ws.cell(row, col).value = None
+            for (value, style), (min_col, max_col) in zip(
+                snapshots, target_ranges
+            ):
+                for col in range(min_col, max_col + 1):
+                    ws.cell(row, col)._style = copy.copy(style)
+                ws.cell(row, min_col).value = value
+                ws.merge_cells(
+                    start_row=row, start_column=min_col,
+                    end_row=row, end_column=max_col,
+                )
+
+        # Apply the same expansion to subsequent defect tables on the page
+        # (notably the lower PAUT table). The first implementation stopped
+        # after the upper table, leaving the two table widths inconsistent.
+        remaining_headers = []
+        current_merges = {
+            (merged.min_col, merged.max_col, merged.min_row, merged.max_row)
+            for merged in ws.merged_cells.ranges
+        }
+        for row in range(header_row + 1, ws.max_row):
+            if str(ws.cell(row=row + 1, column=2).value or '').strip().upper() != 'ID':
+                continue
+            if all((col, col, row, row + 1) in current_merges for col in (16, 17, 18)):
+                remaining_headers.append(row)
+
+        for next_header in remaining_headers:
+            next_total = None
+            for row in range(next_header + 2, min(ws.max_row, next_header + 80) + 1):
+                if '\ucd1d\uacc4' in str(ws.cell(row=row, column=2).value or ''):
+                    next_total = row
+                    break
+            if next_total is None:
+                continue
+
+            next_header_snapshots = []
+            for col in source_columns:
+                cell = ws.cell(row=next_header, column=col)
+                next_header_snapshots.append((cell.value, copy.copy(cell._style)))
+                ws.unmerge_cells(
+                    start_row=next_header, start_column=col,
+                    end_row=next_header + 1, end_column=col,
+                )
+            for (value, style), (min_col, max_col) in zip(
+                next_header_snapshots, target_ranges
+            ):
+                for row in range(next_header, next_header + 2):
+                    for col in range(min_col, max_col + 1):
+                        ws.cell(row=row, column=col)._style = copy.copy(style)
+                ws.cell(next_header, min_col).value = value
+                ws.merge_cells(
+                    start_row=next_header, start_column=min_col,
+                    end_row=next_header + 1, end_column=max_col,
+                )
+
+            for row in range(next_header + 2, next_total + 1):
+                snapshots = [
+                    (ws.cell(row, col).value, copy.copy(ws.cell(row, col)._style))
+                    for col in source_columns
+                ]
+                if not any(value is not None for value, _style in snapshots) and row != next_total:
+                    continue
+                for col in range(16, 24):
+                    ws.cell(row, col).value = None
+                for (value, style), (min_col, max_col) in zip(
+                    snapshots, target_ranges
+                ):
+                    for col in range(min_col, max_col + 1):
+                        ws.cell(row, col)._style = copy.copy(style)
+                    ws.cell(row, min_col).value = value
+                    ws.merge_cells(
+                        start_row=row, start_column=min_col,
+                        end_row=row, end_column=max_col,
+                    )
+
+        # Column widths are sheet-wide in Excel, so rebalance B:O while
+        # preserving their combined width. This widens ID/name on both the
+        # upper and lower defect tables and proportionally narrows the twelve
+        # defect-detail columns without changing the printed table width.
+        detail_columns = [
+            openpyxl.utils.get_column_letter(col) for col in range(4, 16)
+        ]
+        original_id = float(ws.column_dimensions['B'].width or 8.43)
+        original_name = float(ws.column_dimensions['C'].width or 8.43)
+        original_detail_widths = {
+            col: float(ws.column_dimensions[col].width or 8.43)
+            for col in detail_columns
+        }
+        original_total = (
+            original_id + original_name + sum(original_detail_widths.values())
+        )
+        new_id_width = 11.5
+        new_name_width = 7.0
+        remaining_detail_width = original_total - new_id_width - new_name_width
+        detail_scale = remaining_detail_width / sum(
+            original_detail_widths.values()
+        )
+        ws.column_dimensions['B'].width = new_id_width
+        ws.column_dimensions['C'].width = new_name_width
+        for col, width in original_detail_widths.items():
+            ws.column_dimensions[col].width = width * detail_scale
 
     def _keep_iuc_euc_headers_single_line(self, ws):
         """Keep the narrow IUC/EUC column headers on a single line."""
@@ -3452,12 +3971,34 @@ class MonthlyReportManager:
                 previous_section_breaks[-1] + 1
                 if previous_section_breaks else 1
             )
+            if section_key == 'paut_2':
+                self._compact_blank_spacers_before_table(
+                    ws, document_header_row, header_row
+                )
             while remaining_count > 0:
+                measured_rows = remaining_count + (
+                    1 if section_key == 'paut_2' else 0
+                )
                 continuation_row = self._first_print_overflow_row(
-                    ws, remaining_start, remaining_count
+                    ws,
+                    remaining_start,
+                    measured_rows,
+                    # Excel's fit-to-width print scale accommodates 40 PAUT
+                    # lines plus TOTAL while keeping row 41 on the next page.
+                    scale_override=73 if section_key == 'paut_2' else None,
                 )
                 if continuation_row is None:
                     break
+
+                # Keep the PAUT TOTAL row with at least the final data row.
+                # If only TOTAL crosses the page, move that last data row to
+                # the continuation page as well.
+                if (
+                    section_key == 'paut_2'
+                    and continuation_row >= remaining_start + remaining_count
+                    and remaining_count > 1
+                ):
+                    continuation_row = remaining_start + remaining_count - 1
 
                 rows_on_current_page = continuation_row - remaining_start
                 if section_key == 'rt_2' and rt_uses_page13_blanks:
@@ -3839,6 +4380,8 @@ class MonthlyReportManager:
         self._fill_repeated_header_document_numbers(ws, doc_num)
         self._fix_ndt_section_labels(ws)
         self._ensure_cover_cell_elements(ws, create_date)
+        self._move_mt_criteria_to_page6(ws)
+        self._merge_pages7_and8(ws)
         # Page-title placeholders have now been replaced, so repeated 3.0
         # headers can be located reliably.  Pad continuation pages only after
         # every later section/photo has been populated; inserted blank rows
@@ -3853,6 +4396,7 @@ class MonthlyReportManager:
         self._renumber_ndt_status_pages(ws)
         self._keep_iuc_euc_headers_single_line(ws)
         self._clear_broken_reference_placeholders(ws)
+        self._widen_weld_defect_table(ws)
 
         # Preserve the visible right edge of merged template boxes and headers.
         for sheet in wb.worksheets:
@@ -3866,10 +4410,15 @@ class MonthlyReportManager:
         ws.page_setup.fitToHeight = 0
         ws.page_setup.scale = None
 
-        # Hide the original trailing spacer rows only while they are still
-        # blank. Dynamic continuation pages may move real content into these
-        # coordinates, which must never be hidden.
-        for blank_row in range(570, 573):
+        for visible_row in (570, 571):
+            ws.row_dimensions[visible_row].hidden = False
+            if not ws.row_dimensions[visible_row].height:
+                ws.row_dimensions[visible_row].height = 1.0
+
+        # Rows 570-571 belong to the visible report frame and must remain
+        # present even when blank; hiding them suppresses the outer border.
+        # Only the original final trailing spacer (row 572) may be collapsed.
+        for blank_row in range(572, 573):
             is_blank = all(
                 not str(ws.cell(row=blank_row, column=col).value or '').strip()
                 for col in range(1, min(ws.max_column, 23) + 1)
