@@ -1669,6 +1669,18 @@ class MonthlyReportManager:
                 if 'SPETION' in cell.value:
                     cell.value = cell.value.replace('SPETION', 'SECTION')
 
+    def _fix_pt_summary_bottom_border(self, ws):
+        """Match the B:C bottom edge of the PT summary to row 390."""
+        import copy
+
+        row = 390
+        reference_side = copy.copy(ws.cell(row=row, column=4).border.bottom)
+        for col in (2, 3):
+            cell = ws.cell(row=row, column=col)
+            border = copy.copy(cell.border)
+            border.bottom = copy.copy(reference_side)
+            cell.border = border
+
     def _ensure_cover_cell_elements(self, ws, create_date):
         """Use cell-native cover elements that survive openpyxl save cycles."""
         import copy
@@ -3856,6 +3868,12 @@ class MonthlyReportManager:
                     horizontal='center', vertical='center',
                     wrap_text=False, shrink_to_fit=True
                 )
+                # Keep complete Section values such as Sec.12-3 visible in
+                # the merged D:E area instead of clipping the final digit.
+                ws.cell(row=current_row, column=4).alignment = Alignment(
+                    horizontal='center', vertical='center',
+                    wrap_text=False, shrink_to_fit=True
+                )
                 # 규격은 좁은 N:O 병합 영역에서도 두 줄로 나뉘지 않게 한다.
                 ws.cell(row=current_row, column=14).alignment = Alignment(
                     horizontal='center', vertical='center',
@@ -4314,6 +4332,22 @@ class MonthlyReportManager:
                         val_str = str(cell.value)
                         
                         if isinstance(cell.value, str):
+                            # Normalize the current central-branch contract
+                            # wording even when the template already contains
+                            # a non-placeholder 2026 title.
+                            central_branch = '2026\ub144 \uc911\uc559\uc9c0\uc0ac'
+                            ndt_contract = '\ube44\ud30c\uad34\uac80\uc0ac\uc6a9\uc5ed \ub2e8\uac00\uacc4\uc57d'
+                            heat_pipe = '\uc5f4\ubc30\uad00'
+                            heat_transport_pipe = '\uc5f4\uc218\uc1a1\uad00'
+                            if (
+                                central_branch in val_str
+                                and ndt_contract in val_str
+                                and heat_pipe in val_str
+                            ):
+                                cell.value = val_str.replace(
+                                    heat_pipe, heat_transport_pipe
+                                )
+                                val_str = str(cell.value)
                             for k, v in replacements.items():
                                 if k in val_str:
                                     cell.value = val_str.replace(k, str(v))
@@ -4379,6 +4413,7 @@ class MonthlyReportManager:
         self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
         self._fill_repeated_header_document_numbers(ws, doc_num)
         self._fix_ndt_section_labels(ws)
+        self._fix_pt_summary_bottom_border(ws)
         self._ensure_cover_cell_elements(ws, create_date)
         self._move_mt_criteria_to_page6(ws)
         self._merge_pages7_and8(ws)
