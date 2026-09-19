@@ -1658,6 +1658,10 @@ class MonthlyReportManager:
             # anchor is deliberately left intact and is recalculated later.
             section_cell = ws.cell(row=section_row, column=6)
             section_cell.value = section_text
+            section_cell.alignment = Alignment(
+                horizontal='center', vertical='center',
+                wrap_text=False, shrink_to_fit=True,
+            )
             normalized_headers.add(header_row)
 
     def _fix_ndt_section_labels(self, ws):
@@ -1675,11 +1679,48 @@ class MonthlyReportManager:
 
         row = 390
         reference_side = copy.copy(ws.cell(row=row, column=4).border.bottom)
+        # B389:C390 is a merged range. Excel derives its visible perimeter
+        # from the B389 anchor, so the anchor must carry the same bottom side.
+        anchor = ws.cell(row=row - 1, column=2)
+        anchor_border = copy.copy(anchor.border)
+        anchor_border.bottom = copy.copy(reference_side)
+        anchor.border = anchor_border
         for col in (2, 3):
             cell = ws.cell(row=row, column=col)
             border = copy.copy(cell.border)
             border.bottom = copy.copy(reference_side)
             cell.border = border
+
+    def _fit_long_section_headers(self, ws):
+        """Keep long section captions fully visible in their merged cells."""
+        import copy
+
+        radiation_title = (
+            '\ubc29\uc0ac\uc120\uc548\uc804\uad00\ub9ac'
+            '\ud1b5\ud569\uc815\ubcf4\ub9dd\ubcf4\uace0\uc790\ub8cc'
+        )
+        for row in ws.iter_rows():
+            for cell in row:
+                if not isinstance(cell.value, str):
+                    continue
+                compact = ''.join(cell.value.split())
+                if radiation_title not in compact:
+                    continue
+                alignment = copy.copy(cell.alignment)
+                # The chapter caption in the repeated report header needs to
+                # fit its box, but the numbered subsection (for example B713)
+                # is a normal left-aligned heading and must not be shrunk into
+                # the width of column B alone.
+                is_numbered_subsection = bool(
+                    re.match(r'^\s*\d+\.', cell.value)
+                ) and cell.column == 2
+                alignment.horizontal = (
+                    'left' if is_numbered_subsection else 'center'
+                )
+                alignment.vertical = 'center'
+                alignment.wrap_text = False
+                alignment.shrink_to_fit = not is_numbered_subsection
+                cell.alignment = alignment
 
     def _ensure_cover_cell_elements(self, ws, create_date):
         """Use cell-native cover elements that survive openpyxl save cycles."""
@@ -2159,6 +2200,33 @@ class MonthlyReportManager:
             brk for brk in ws.row_breaks.brk
             if int(brk.id) < last_page_end
         ]
+
+    def _trim_print_area_after_last_process_photo(self, ws):
+        """End printing at the page containing the final real process photo."""
+        photo_rows = []
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            image_row = anchor._from.row + 1
+            # Report-header logos are about 186x50. Process photos are much
+            # larger; ignore logos on otherwise empty trailing photo pages.
+            if (
+                image_row >= 600
+                and float(image.width) >= 250
+                and float(image.height) >= 150
+            ):
+                photo_rows.append(image_row)
+        if not photo_rows:
+            return
+
+        last_photo_row = max(photo_rows)
+        following_breaks = sorted(
+            int(brk.id) for brk in ws.row_breaks.brk
+            if int(brk.id) >= last_photo_row
+        )
+        if following_breaks:
+            self._set_print_area_end(ws, following_breaks[0])
 
     def _rt_reject_defects(self, row):
         """Return reject-grade RT defects encoded as ``grade/defect``."""
@@ -4413,7 +4481,6 @@ class MonthlyReportManager:
         self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
         self._fill_repeated_header_document_numbers(ws, doc_num)
         self._fix_ndt_section_labels(ws)
-        self._fix_pt_summary_bottom_border(ws)
         self._ensure_cover_cell_elements(ws, create_date)
         self._move_mt_criteria_to_page6(ws)
         self._merge_pages7_and8(ws)
@@ -4426,6 +4493,7 @@ class MonthlyReportManager:
         self._normalize_all_report_header_logos(ws)
         self._collapse_blank_rows_before_report_headers(ws)
         self._normalize_repeated_report_header_text(ws, doc_num)
+        self._fit_long_section_headers(ws)
         self._rebalance_toc_page_layout(ws)
         self._align_report_breaks_to_repeated_headers(ws)
         self._renumber_ndt_status_pages(ws)
@@ -4436,6 +4504,7 @@ class MonthlyReportManager:
         # Preserve the visible right edge of merged template boxes and headers.
         for sheet in wb.worksheets:
             self._repair_merged_right_borders(sheet)
+        self._fix_pt_summary_bottom_border(ws)
 
         # Prevent blank right-side pages caused by the widened V:W remarks area.
         # Keep vertical pagination automatic while fitting the report to one
@@ -4463,6 +4532,7 @@ class MonthlyReportManager:
                 ws.row_dimensions[blank_row].hidden = True
 
         self._trim_trailing_blank_print_pages(ws)
+        self._trim_print_area_after_last_process_photo(ws)
 
         return self._save_workbook_with_fallback(wb, output_path)
 
@@ -4670,7 +4740,6 @@ class MonthlyReportManager:
         found_files = glob.glob(search_pattern)
         if found_files:
             try:
-                import openpyxl
                 temp_wb = openpyxl.load_workbook(found_files[0], data_only=True)
                 for sheet_name in temp_wb.sheetnames:
                     if '안전관리교육 총괄표' in sheet_name or '총괄표' in sheet_name:
@@ -4692,7 +4761,97 @@ class MonthlyReportManager:
             total_months = 1
         
         training_logs = []
-        if total_months > 0:
+        # Prefer the actual workbook produced by 지역난방_안전관리교육.py.
+        # Its 교육현황 sheet contains the authoritative date, category,
+        # content, duration, instructor, and location entered by the user.
+        search_roots = [
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
+            os.path.join(os.path.expanduser('~'), 'Desktop'),
+            os.path.join(
+                'G:\\', '내 드라이브', '01_업무_및_회사', 'Office', '착공',
+                '2026년 중앙지사 열수송관 비파괴검사 단가계약', '교육일지',
+            ),
+        ]
+        target_months = []
+        for offset in range(max(0, total_months)):
+            source_year = start_year + (start_month - 1 + offset) // 12
+            source_month = (start_month - 1 + offset) % 12 + 1
+            target_months.append((source_year, source_month))
+
+        for source_year, source_month in target_months:
+            safety_filename = (
+                f'\uc9c0\uc5ed\ub09c\ubc29_\uc548\uc804\uad00\ub9ac\uad50\uc721_'
+                f'{source_year}{source_month:02d}.xlsx'
+            )
+            safety_files = []
+            for search_root in search_roots:
+                safety_files.extend(glob.glob(
+                    os.path.join(search_root, '**', safety_filename),
+                    recursive=True,
+                ))
+            if not safety_files:
+                continue
+
+            newest_safety_file = max(set(safety_files), key=os.path.getmtime)
+            try:
+                safety_wb = openpyxl.load_workbook(
+                    newest_safety_file, data_only=True
+                )
+                summary_name = '\uad50\uc721\ud604\ud669'
+                summary_ws = safety_wb[summary_name] \
+                    if summary_name in safety_wb.sheetnames else None
+                if summary_ws is not None:
+                    target_key = f'{source_year}{source_month:02d}'
+                    for source_row in range(2, summary_ws.max_row + 1):
+                        raw_date = summary_ws.cell(source_row, 1).value
+                        if isinstance(raw_date, (datetime.datetime, datetime.date)):
+                            date_text = raw_date.strftime('%Y-%m-%d')
+                        else:
+                            date_text = str(raw_date or '').strip()
+                        date_key = re.sub(r'\D', '', date_text)[:6]
+                        if date_key != target_key:
+                            continue
+                        full_content = str(
+                            summary_ws.cell(source_row, 3).value or ''
+                        ).strip()
+                        # The education workbook keeps the full training text.
+                        # The monthly progress report only needs the two main
+                        # subjects: common safety and process-specific safety.
+                        content_parts = [
+                            part.strip() for part in full_content.split('/')
+                            if part.strip()
+                        ]
+                        representative_topics = []
+                        for section_number in ('1', '2'):
+                            for part_index, part in enumerate(content_parts):
+                                if not re.match(
+                                    rf'^{section_number}\.\s+', part
+                                ):
+                                    continue
+                                heading = re.sub(
+                                    rf'^{section_number}\.\s*', '', part
+                                ).strip()
+                                detail = content_parts[part_index + 1] \
+                                    if part_index + 1 < len(content_parts) else ''
+                                representative_topics.append(
+                                    f'{heading}: {detail}' if detail else heading
+                                )
+                                break
+                        report_content = '\n'.join(representative_topics) \
+                            if representative_topics else full_content
+                        training_logs.append({
+                            'date': date_text.split()[0],
+                            'category': str(summary_ws.cell(source_row, 2).value or '').strip(),
+                            'content': report_content,
+                            'time': str(summary_ws.cell(source_row, 4).value or '').strip(),
+                            'instructor': str(summary_ws.cell(source_row, 5).value or '').strip(),
+                            'location': str(summary_ws.cell(source_row, 6).value or '').strip(),
+                        })
+                safety_wb.close()
+            except Exception as exc:
+                print(f'[WARN] Failed to load safety training summary: {exc}')
+
+        if not training_logs and total_months > 0:
             for i in range(total_months):
                 curr_y = start_year + (start_month - 1 + i) // 12
                 curr_m = (start_month - 1 + i) % 12 + 1
@@ -4757,9 +4916,18 @@ class MonthlyReportManager:
 
         reference_row = data_row
         row_merges = []
+        record_row_span = 1
         for merged_range in list(ws.merged_cells.ranges):
-            if merged_range.min_row == reference_row and merged_range.max_row == reference_row:
-                row_merges.append((merged_range.min_col, merged_range.max_col))
+            if merged_range.min_row == reference_row:
+                record_row_span = max(
+                    record_row_span,
+                    merged_range.max_row - merged_range.min_row + 1,
+                )
+                row_merges.append((
+                    merged_range.min_col,
+                    merged_range.max_col,
+                    merged_range.max_row - merged_range.min_row,
+                ))
 
         max_rows_per_page = 7
         current_data_row = data_row
@@ -4773,28 +4941,38 @@ class MonthlyReportManager:
             
             # Copy formatting and merges for rows beyond the first one
             if current_row > reference_row:
-                for col in range(2, 24):
-                    ref_cell = ws.cell(row=reference_row, column=col)
-                    new_cell = ws.cell(row=current_row, column=col)
-                    if ref_cell.has_style:
-                        new_cell.font = copy.copy(ref_cell.font)
-                        new_cell.border = copy.copy(ref_cell.border)
-                        new_cell.fill = copy.copy(ref_cell.fill)
-                        new_cell.number_format = copy.copy(ref_cell.number_format)
-                        new_cell.alignment = copy.copy(ref_cell.alignment)
+                for row_offset in range(record_row_span):
+                    for col in range(2, 24):
+                        ref_cell = ws.cell(
+                            row=reference_row + row_offset, column=col
+                        )
+                        new_cell = ws.cell(
+                            row=current_row + row_offset, column=col
+                        )
+                        if ref_cell.has_style:
+                            new_cell.font = copy.copy(ref_cell.font)
+                            new_cell.border = copy.copy(ref_cell.border)
+                            new_cell.fill = copy.copy(ref_cell.fill)
+                            new_cell.number_format = copy.copy(ref_cell.number_format)
+                            new_cell.alignment = copy.copy(ref_cell.alignment)
                 
-                for min_col, max_col in row_merges:
+                for min_col, max_col, max_row_offset in row_merges:
                     try:
-                        ws.merge_cells(start_row=current_row, start_column=min_col, end_row=current_row, end_column=max_col)
+                        ws.merge_cells(
+                            start_row=current_row,
+                            start_column=min_col,
+                            end_row=current_row + max_row_offset,
+                            end_column=max_col,
+                        )
                     except ValueError:
                         pass
 
             ws.cell(row=current_row, column=cols.get('date', 2)).value = log['date']
-            ws.cell(row=current_row, column=cols.get('category', 4)).value = category_val
+            ws.cell(row=current_row, column=cols.get('category', 4)).value = log.get('category') or category_val
             ws.cell(row=current_row, column=cols.get('content', 8)).value = log['content']
-            ws.cell(row=current_row, column=cols.get('time', 18)).value = time_val
-            ws.cell(row=current_row, column=cols.get('instructor', 20)).value = instructor_val
-            ws.cell(row=current_row, column=cols.get('location', 22)).value = location_val
+            ws.cell(row=current_row, column=cols.get('time', 18)).value = log.get('time') or time_val
+            ws.cell(row=current_row, column=cols.get('instructor', 20)).value = log.get('instructor') or instructor_val
+            ws.cell(row=current_row, column=cols.get('location', 22)).value = log.get('location') or location_val
             
             c = ws.cell(row=current_row, column=cols.get('content', 8))
             align = copy.copy(c.alignment) if c.alignment else Alignment()
@@ -4815,4 +4993,4 @@ class MonthlyReportManager:
             estimated_height = sum(max(1, len(line)//45 + 1) for line in lines) * 20
             ws.row_dimensions[current_row].height = max(45, estimated_height)
             
-            current_data_row += 1
+            current_data_row += record_row_span
