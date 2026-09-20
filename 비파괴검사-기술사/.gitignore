@@ -1,3 +1,4 @@
 desktop/__pycache__/
 desktop/study_data.json
+desktop/settings.json
 *.pyc

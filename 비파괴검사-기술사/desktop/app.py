@@ -4,7 +4,7 @@ import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import fitz
 from PIL import Image, ImageTk
@@ -14,8 +14,10 @@ from study_content import WEEKLY_CONTENT
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_FILE = APP_DIR / "study_data.json"
+SETTINGS_FILE = APP_DIR / "settings.json"
 PROBLEM_INDEX_FILE = APP_DIR / "problem_index.json"
-SOURCE_DIR = Path(r"I:\주진철\도서\자격증\비파괴검사 기술사")
+DEFAULT_SOURCE_DIR = Path(r"I:\주진철\도서\자격증\비파괴검사 기술사")
+SOURCE_FILES = ["기술사 2022-1.pdf", "기술사 2022-2.pdf", "기술사 2022-3.pdf"]
 
 COLORS = {
     "ink": "#10231d",
@@ -103,6 +105,13 @@ def load_data() -> dict:
     return empty
 
 
+def load_settings() -> dict:
+    try:
+        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 class ScrollFrame(tk.Frame):
     def __init__(self, parent, bg: str = COLORS["paper"]):
         super().__init__(parent, bg=bg)
@@ -130,6 +139,15 @@ class StudyApp(tk.Tk):
         self.minsize(1040, 680)
         self.configure(bg=COLORS["paper"])
         self.data = load_data()
+        settings = load_settings()
+        portable_books = APP_DIR / "교재"
+        configured = Path(settings["source_dir"]) if settings.get("source_dir") else None
+        if configured and configured.exists():
+            self.source_dir = configured
+        elif portable_books.exists():
+            self.source_dir = portable_books
+        else:
+            self.source_dir = DEFAULT_SOURCE_DIR
         self.frames: dict[str, tk.Widget] = {}
         self.nav_buttons: dict[str, tk.Button] = {}
         self.timer_seconds = 1500
@@ -167,8 +185,12 @@ class StudyApp(tk.Tk):
         source = tk.Frame(sidebar, bg="#17372e", padx=16, pady=15)
         source.pack(side="bottom", fill="x", padx=18, pady=22)
         tk.Label(source, text="현재 교재", bg="#17372e", fg=COLORS["lime"], font=("맑은 고딕", 8, "bold")).pack(anchor="w")
-        tk.Label(source, text="PERFECT 2022 (1)", bg="#17372e", fg="white", font=("맑은 고딕", 10, "bold")).pack(anchor="w", pady=(5, 0))
+        tk.Label(source, text="PERFECT 2022 (1)-(3)", bg="#17372e", fg="white", font=("맑은 고딕", 10, "bold")).pack(anchor="w", pady=(5, 0))
         tk.Label(source, text=f"전체문제 {len(ALL_PROBLEMS)}개", bg="#17372e", fg="#91a49c", font=("맑은 고딕", 8)).pack(anchor="w")
+        self.source_status = tk.Label(source, text="", bg="#17372e", fg="#91a49c", font=("맑은 고딕", 8), wraplength=180, justify="left")
+        self.source_status.pack(anchor="w", pady=(5, 8))
+        tk.Button(source, text="교재 폴더 설정", command=self.choose_source_dir, bd=0, bg=COLORS["lime"], fg=COLORS["ink"], activebackground="#b7d45c", padx=10, pady=6, font=("맑은 고딕", 8, "bold")).pack(anchor="w")
+        self.update_source_status()
 
         body = tk.Frame(self, bg=COLORS["paper"])
         body.pack(side="left", fill="both", expand=True)
@@ -190,6 +212,30 @@ class StudyApp(tk.Tk):
     def close_app(self):
         self.save()
         self.destroy()
+
+    def source_files_ready(self, directory=None):
+        folder = Path(directory) if directory else self.source_dir
+        return all((folder / name).exists() for name in SOURCE_FILES)
+
+    def update_source_status(self):
+        if self.source_files_ready():
+            self.source_status.config(text="원문 PDF 연결됨", fg=COLORS["lime"])
+        else:
+            self.source_status.config(text="원문 PDF 미연결", fg="#e9a23b")
+
+    def choose_source_dir(self):
+        selected = filedialog.askdirectory(title="기술사 PDF 3개가 있는 폴더 선택", initialdir=str(self.source_dir) if self.source_dir.exists() else str(APP_DIR))
+        if not selected:
+            return
+        folder = Path(selected)
+        missing = [name for name in SOURCE_FILES if not (folder / name).exists()]
+        if missing:
+            messagebox.showwarning("교재 파일 확인", "선택한 폴더에 다음 파일이 없습니다.\n\n" + "\n".join(missing))
+            return
+        self.source_dir = folder
+        SETTINGS_FILE.write_text(json.dumps({"source_dir": str(folder)}, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.update_source_status()
+        messagebox.showinfo("교재 연결 완료", "원문 PDF 폴더를 저장했습니다.")
 
     def clear_host(self):
         for child in self.view_host.winfo_children():
@@ -592,10 +638,10 @@ class StudyApp(tk.Tk):
 
     def source_location(self, book_page: int):
         if book_page <= 145:
-            return SOURCE_DIR / "기술사 2022-1.pdf", max(0, book_page + 20)
+            return self.source_dir / "기술사 2022-1.pdf", max(0, book_page + 20)
         if book_page <= 300:
-            return SOURCE_DIR / "기술사 2022-2.pdf", max(0, book_page - 135)
-        return SOURCE_DIR / "기술사 2022-3.pdf", max(0, book_page - 289)
+            return self.source_dir / "기술사 2022-2.pdf", max(0, book_page - 135)
+        return self.source_dir / "기술사 2022-3.pdf", max(0, book_page - 289)
 
     def open_source_page(self, problem):
         book_page = problem.get("book_page")
