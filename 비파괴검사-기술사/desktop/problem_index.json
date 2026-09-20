@@ -1,0 +1,5365 @@
+[
+  {
+    "number": 1,
+    "title": "스마트 구조물(srnart structure)의 기능울 3가지로 분류",
+    "book_page": 1,
+    "week": 8,
+    "category": "종합·기타",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "센서·SHM·스마트검사",
+    "tags": [
+      "센서·SHM·스마트검사"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 2,
+    "title": "음항 이방성(acoustical anisotropy)",
+    "book_page": 1,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 3,
+    "title": "자기변형법",
+    "book_page": 2,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 4,
+    "title": "초음파닭상김사에 사용하는 A형 표준시청편 (STB-AI)의 용도",
+    "book_page": 2,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 탐촉자·교정"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 5,
+    "title": "적외선올 이용하 가스누설 검출 원리름 설명",
+    "book_page": 2,
+    "week": 5,
+    "category": "종합·기타",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "적외선·열화상",
+    "tags": [
+      "적외선·열화상"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 6,
+    "title": "X-ray texture tomography의 원리와 적용 특성",
+    "book_page": 3,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 7,
+    "title": "액체침투 탐상검 사에서 현상제 또는 현상방법올 선택할 때 고려사항",
+    "book_page": 4,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 8,
+    "title": "탄소합금강의 용접시 탄소당량 (carbon equivalent)의 산출식과 활용",
+    "book_page": 8,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 9,
+    "title": "스데인리스강의 예민화 (sensitization) 현상에 대해 간단히 설영",
+    "book_page": 10,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "부식·환경손상",
+    "tags": [
+      "부식·환경손상",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 10,
+    "title": "비파괴검사 신_도에 영향울 미치는 중요한 요소 5가지",
+    "book_page": 10,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 11,
+    "title": "duplex stainless steel이l란 어떤 것이다 , austenitic stainless steel과 비교하여 장점올 열거하고, 상대적으로 고온에서의 문제점과 그 이유 열화현상들 축정하기 위한 비파과적인 기법",
+    "book_page": 19,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "고온손상·크리프",
+    "tags": [
+      "고온손상·크리프"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 12,
+    "title": "음량방 줄 (acoustic ernission) 신호는 크게 연속형과 돌발형으로 나뇨 때 전형적인 돌발형 신호클 그림으로 나타번 다음 이 신호에 대한 변수름 열거하고 간락히 선명",
+    "book_page": 23,
+    "week": 5,
+    "category": "종합·기타",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "음향방출 AE",
+    "tags": [
+      "음향방출 AE"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 13,
+    "title": "원자력법 시행령 제299조제 | 항에서논 방사선작업증사 자에 대하여 건강진단운 실시하도록 규정하고 있다 . 건강진단시 검사해야 활 내용 및 건강진단을 실시하는 시기",
+    "book_page": 38,
+    "week": 11,
+    "category": "방사선투과 RT",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규",
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 14,
+    "title": "표면 결합검출올 목적으로 한 시험법올 열거하고 시험방법의 원리 , 대상재질, 검춘가능걸함 , 얻율 수 있는 결합정보",
+    "book_page": 39,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 15,
+    "title": "NRT(neutron radiographic testing)의 현재 및 장래의 이용분야",
+    "book_page": 47,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 16,
+    "title": "누선검 사법중에서 발포컵사법 (bubble test)",
+    "book_page": 51,
+    "week": 4,
+    "category": "종합·기타",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "누설검사",
+    "tags": [
+      "누설검사"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 17,
+    "title": "용접부에서 발생되는 지연균얼형 저온균열의 특징올 간락히 설명하고 이루 방지방안",
+    "book_page": 54,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 18,
+    "title": "원자력발전소와 화력발전소의 복수기(condenser , 용창기라고도 함)의 결함과 비파괴검사 방안올 기순",
+    "book_page": 65,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 19,
+    "title": "2005년 3월 31일 \"비파괴검사기순의 진름 및 관리에 관한 법률\"이 제정되없다 이 법의 목적과 비파괴검사기술 진흉계획에 포함사항",
+    "book_page": 67,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 20,
+    "title": "위상배엽 (phased array) 초음파 탐상검사의 원리와 특성들 설명",
+    "book_page": 68,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "PAUT·TOFD·유도초음파",
+    "tags": [
+      "PAUT·TOFD·유도초음파",
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 21,
+    "title": "표면복제법 (replica법)의 Replica채 취예서 관찰까지의 방법 및 절차",
+    "book_page": 70,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 22,
+    "title": "언터비드 군열 (underbead crack)의 발생원인 및 대책",
+    "book_page": 72,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접결함·균열",
+    "tags": [
+      "용접결함·균열"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 23,
+    "title": "와전류 탐상검사 (ET)에I 사용되는 시험코일의 종류들 여자(뻐때) 및 검출방법 적용방법 , 사용방법에 따라 분류하고 결합의 깊이들 예측할 수 있는 방법",
+    "book_page": 73,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 24,
+    "title": "강자성체 (Ferromagnetic Materials)",
+    "book_page": 76,
+    "week": 3,
+    "category": "종합·기타",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 25,
+    "title": "개인피폭 선랑계 종류중 장기간과 단기간속정에 유리한 것울 나누어 설영",
+    "book_page": 77,
+    "week": 11,
+    "category": "종합·기타",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 26,
+    "title": "결함의 종류",
+    "book_page": 78,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 27,
+    "title": "경화능(HARCLENABILITY)",
+    "book_page": 82,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 28,
+    "title": "고에너지 X선 투과 시험에 대하 기술하고 사용 에너지별로 사용되는 증감지",
+    "book_page": 82,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 29,
+    "title": "고온 군열 (Hot Cracking)",
+    "book_page": 84,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "고온손상·크리프",
+    "tags": [
+      "고온손상·크리프"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 30,
+    "title": "과임칭투 액 (Excessive Penetrant) 제거 방법에 따른 분류(침투 탐상시험)",
+    "book_page": 84,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 31,
+    "title": "광음항효과(Photoacoustic effect)",
+    "book_page": 85,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "계측·기타 NDT",
+    "tags": [
+      "계측·기타 NDT"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 32,
+    "title": "구조물의 용접부위의 잔류응력 제거 방법",
+    "book_page": 85,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "용접응력·PWHT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 33,
+    "title": "노치감도(notch sensitivity)",
+    "book_page": 85,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 34,
+    "title": "헬름누설검사 (Heliumn Leak Test)",
+    "book_page": 85,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "누설검사",
+    "tags": [
+      "누설검사"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 35,
+    "title": "니권-베림롭학금",
+    "book_page": 86,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 36,
+    "title": "단종 촬영법",
+    "book_page": 86,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 37,
+    "title": "모스바우어효과(Mossbauer Effect)",
+    "book_page": 86,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "계측·기타 NDT",
+    "tags": [
+      "계측·기타 NDT"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 38,
+    "title": "박하우젠잡음(Barkhausen noise)",
+    "book_page": 87,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "계측·기타 NDT",
+    "tags": [
+      "계측·기타 NDT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 39,
+    "title": "사선 중사자의 개인 피쪽 선랑계의 종류와 그 원리 및 장단점들 기술",
+    "book_page": 88,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 40,
+    "title": "방사선의 종류",
+    "book_page": 88,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 41,
+    "title": "방사선투과 시험에서 이데이장 프레이트(Imaging Plate, IP)와 화상처리",
+    "book_page": 89,
+    "week": 8,
+    "category": "방사선투과 RT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "신호처리·디지털검사",
+    "tags": [
+      "신호처리·디지털검사",
+      "방사선 물리·선원",
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 42,
+    "title": "백점 (white spot)",
+    "book_page": 91,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 43,
+    "title": "부식(Corrosion)의 종류",
+    "book_page": 91,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "부식·환경손상",
+    "tags": [
+      "부식·환경손상"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 44,
+    "title": "비드밑크열 (Under Bead Crack)",
+    "book_page": 92,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접결함·균열",
+    "tags": [
+      "용접결함·균열"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 45,
+    "title": "비접촉식 적외선 온도계의 전기설비 유지보수 적용",
+    "book_page": 92,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "적외선·열화상"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 46,
+    "title": "비파괴 검사 95 비파괴검사 장치로새의 가속기들올 열거하고 각 가속기의 원리와 에너지 Level 및 각 장치의 검사대상범위",
+    "book_page": 97,
+    "week": 2,
+    "category": "금속재료",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "파괴·피로·취성",
+      "계측·기타 NDT"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 47,
+    "title": "비파괴검사 장치로서의 가속기를 열거하고 각 가속기의 원리, 에너지 Level 및 검사대상범위를 설명",
+    "book_page": 97,
+    "week": 2,
+    "category": "금속재료",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 48,
+    "title": "산란방사선올 방지하기 위한 방법(방사선투과시험)",
+    "book_page": 97,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 49,
+    "title": "상온취성 (# ;Rla심 , {RR습물; cold shortness)",
+    "book_page": 98,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 50,
+    "title": "수하특성(용접기 전원특성) 98 51. 스튜글무니(Speckle pattern)",
+    "book_page": 99,
+    "week": 5,
+    "category": "용접",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "광학·홀로그래피",
+    "tags": [
+      "광학·홀로그래피",
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 51,
+    "title": "스펙클무늬(Speckle pattern)",
+    "book_page": 99,
+    "week": 5,
+    "category": "종합·기타",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "광학·홀로그래피",
+    "tags": [
+      "광학·홀로그래피"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 52,
+    "title": "시험체의 형상이 음파의 진행예 미치논 영향(초음파 탐상시험)",
+    "book_page": 99,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 53,
+    "title": "시험코일과 분류(와류담 상시험)",
+    "book_page": 100,
+    "week": 4,
+    "category": "종합·기타",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 54,
+    "title": "상크로트론 방사광",
+    "book_page": 101,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 55,
+    "title": "알루미늄 합금의 용접성 비교",
+    "book_page": 101,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "재료·합금·강종"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 56,
+    "title": "알파, 베타 및 감마선의 물질과의 상로작용, 특성 및 에너지 Level클 설명하고 비파괴검사 분아메서 IT 1924 Co 60올 주로 쓰는 이유",
+    "book_page": 102,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 57,
+    "title": "액체 침투 탐상시험예 사용하는 침투제에 대해 시험대상체률 오스테나이트계 스타인레스강 및 디타늄의 경우로 나누어 불순물 항유랑의 관리에 대해 기술",
+    "book_page": 104,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 58,
+    "title": "액체침투 담상시험에 사용되논 유화제 (Emulsifier) 와 과임칭투액의 제거제(Remover) 에 대하여 열거하고, 그 특징올 기술",
+    "book_page": 104,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 59,
+    "title": "액체 침투탑 상법",
+    "book_page": 104,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 60,
+    "title": "와전류 탐상시 의사 지시(fault indication)로 결합 판정이 어려움 때가 있다. 의사 지시의 발생 원인 , 특징 , 확인 방법",
+    "book_page": 106,
+    "week": 4,
+    "category": "종합·기타",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 61,
+    "title": "와전류 탐상시험의 조건 설정 106 61. 와전류 탐상에서 재료 면으로부터의 침투 깊이와 주파수 , 전기 전도물 , 투자물 사이의 상관 관계 107 와전류 탐상의 원리들 설명하고 검사 방법으로서의 장 단점 107 64. 와전류 담상 검사",
+    "book_page": 107,
+    "week": 4,
+    "category": "자분·침투 MT/PT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일",
+      "침투탐상 PT",
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 62,
+    "title": "와전류탐상에서 침투깊이와 주파수, 전기전도도, 투자율 사이의 상관관계",
+    "book_page": 107,
+    "week": 4,
+    "category": "자분·침투 MT/PT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일",
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 63,
+    "title": "와전류탐상의 원리와 검사방법으로서의 장단점",
+    "book_page": 107,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 64,
+    "title": "와전류탐상검사",
+    "book_page": 107,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 65,
+    "title": "와전류탑상 시험에서 자기비교방식 시험코일 (Differential Coil)의 극징올 표준비교 방식 시험코일과 비교하여 특징들 기술 110 요크리프팅파워시험(자눈탕상시험)",
+    "book_page": 110,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일",
+      "자분탐상 MT",
+      "고온손상·크리프"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 67,
+    "title": "요크 리프팅파워 시험(자분탐상시험)",
+    "book_page": 110,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 68,
+    "title": "용집부에 받생하는 잔류응력",
+    "book_page": 111,
+    "week": 6,
+    "category": "금속재료",
+    "week_name": "용접",
+    "study_group": "용접응력·PWHT",
+    "tags": [
+      "용접응력·PWHT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 69,
+    "title": "용접부의 걸함과 발생원인",
+    "book_page": 171,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 70,
+    "title": "용접후열 처리(PWHT)의 목적",
+    "book_page": 113,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "용접응력·PWHT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 71,
+    "title": "웨이브린 변환(Wavelet Transform, WTJOI 고속 푸리에 변환 (Fast fourier Transforrn FFT)에I 비해 우수한 점",
+    "book_page": 114,
+    "week": 8,
+    "category": "종합·기타",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "신호처리·디지털검사",
+    "tags": [
+      "신호처리·디지털검사"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 72,
+    "title": "유도초음파 (Guided Wave Larnb Wave Or Plate Wave)",
+    "book_page": 117,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "PAUT·TOFD·유도초음파",
+    "tags": [
+      "PAUT·TOFD·유도초음파",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 73,
+    "title": "유황 프린트시험(Sulphur Print Test)",
+    "book_page": 124,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 74,
+    "title": "육안검사에 포함활 사랑",
+    "book_page": 124,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 75,
+    "title": "음항방 줄 시험 (AE: Acoustic Ernission Test)",
+    "book_page": 125,
+    "week": 5,
+    "category": "종합·기타",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "음향방출 AE",
+    "tags": [
+      "음향방출 AE"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 76,
+    "title": "의사지시(Non-Relevant indication) (자분 탐상 시험)",
+    "book_page": 126,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 77,
+    "title": "이데로움(Ytterbiurn,Yb*69)의 적용성",
+    "book_page": 127,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "수명·위험도 평가",
+    "tags": [
+      "수명·위험도 평가"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 78,
+    "title": "입체 방사선 투과검사법",
+    "book_page": 127,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 79,
+    "title": "자분 담상과 침투 담상의 원리클 간단히 설명하고 장, 단점올 비교 검토",
+    "book_page": 128,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT",
+      "침투탐상 PT"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 80,
+    "title": "자분의 적용방법 (자분 탐상법)",
+    "book_page": 128,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 81,
+    "title": "잔류응력 즉정방법(X선 이용)",
+    "book_page": 129,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "용접응력·PWHT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 82,
+    "title": "저면예코방 식과 시험편방식(초음파 탐상 시험)",
+    "book_page": 130,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 83,
+    "title": "저온균얼",
+    "book_page": 131,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 84,
+    "title": "저장행크의 바닥판에 존재하는 부식(Corrosion)울 시험하기 위해 사용하는 기법 중의 하나예는 MFL(Magnetic Flux Leakage)시험",
+    "book_page": 131,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "배관·탱크·압력설비",
+    "tags": [
+      "배관·탱크·압력설비",
+      "누설검사",
+      "부식·환경손상"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 85,
+    "title": "적은 취성 (hot shortness 또는 burning)",
+    "book_page": 132,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 86,
+    "title": "전리함 영역 (I1영역) 전리함 (Ionization Chamber)",
+    "book_page": 132,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 87,
+    "title": "전리함의 기능과 사용(방사선선랑물촉정)",
+    "book_page": 133,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 88,
+    "title": "전위 차시험법",
+    "book_page": 134,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 89,
+    "title": "전이보상 (감도보정) 방법(Transfer Correction Determination)",
+    "book_page": 134,
+    "week": 1,
+    "category": "종합·기타",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 탐촉자·교정",
+    "tags": [
+      "초음파 탐상 - 탐촉자·교정"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 90,
+    "title": "전자기음향탐촉자(EMAT)에서 초음파의 생성 원리와 실제 적용상의 문제점을 기술",
+    "book_page": 138,
+    "week": 8,
+    "category": "초음파탐상 UT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 탐촉자·교정"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 91,
+    "title": "전자밤 용접과 레이저용접의 작동 원리률 각각 설명하고 두 방법의 장단점에 비교 설명",
+    "book_page": 140,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 92,
+    "title": "전자현미경 (SEM) 과 초음파 현미경(SAM)",
+    "book_page": 141,
+    "week": 8,
+    "category": "초음파탐상 UT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 93,
+    "title": "중성자 투과검사법",
+    "book_page": 144,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 94,
+    "title": "중성자 Radigraphy의 원리와 그 장치에 대하여 기술하고 , 김사재질과 그 범위",
+    "book_page": 144,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 95,
+    "title": "청열취 성 (## #습# blue shortness)",
+    "book_page": 144,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 96,
+    "title": "체례코프(Cerenkov) 효과",
+    "book_page": 144,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 97,
+    "title": "초음파 감도 축정규정",
+    "book_page": 144,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 98,
+    "title": "초음파 탐상법에서 주파수의 선정법",
+    "book_page": 146,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 탐촉자·교정",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 99,
+    "title": "초음파 탐상시험",
+    "book_page": 147,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 100,
+    "title": "초음파 탐상의 취약점",
+    "book_page": 148,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 101,
+    "title": "초음파 홀로그래피(Ultrasonic Holography)",
+    "book_page": 148,
+    "week": 8,
+    "category": "초음파탐상 UT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "광학·홀로그래피",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 102,
+    "title": "초음파의 진동양식",
+    "book_page": 148,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 103,
+    "title": "초음파 탐상 시험에서 근거리움장 한계거리(Near Field Length)",
+    "book_page": 150,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 104,
+    "title": "침투 담상시험",
+    "book_page": 150,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 105,
+    "title": "취성인성 천이온도",
+    "book_page": 151,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 106,
+    "title": "취성파괴",
+    "book_page": 151,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 107,
+    "title": "침투 탑상울 하려활 때 종사자의 안전이나 주변 환경의 오염 방지루 위해 취해야활 안전조치",
+    "book_page": 153,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 108,
+    "title": "침투 탐상검사의 세적방법",
+    "book_page": 153,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 109,
+    "title": "침투 탐상시험 및 자분 탐상시험 153 10. 권크리트 교랑에 적용할 수 엎는 비따괴 시험법",
+    "book_page": 154,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT",
+      "침투탐상 PT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 110,
+    "title": "콘크리트 교량에 적용할 수 있는 비파괴시험법",
+    "book_page": 154,
+    "week": 9,
+    "category": "금속재료",
+    "week_name": "설비·구조물 적용",
+    "study_group": "콘크리트·토목구조",
+    "tags": [
+      "콘크리트·토목구조",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 111,
+    "title": "콤크리트구조로 비파괴 시점법의 종류 및 특성",
+    "book_page": 154,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 112,
+    "title": "크리프와 응력 파괴",
+    "book_page": 156,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성",
+      "고온손상·크리프"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 113,
+    "title": "탄성파루 이용한 크그리트(concrete)의 비파괴 시험에 대하여 기술",
+    "book_page": 156,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 114,
+    "title": "탄소강의 용집 얻엉향부",
+    "book_page": 157,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 115,
+    "title": "탄소함량이 0.239이1하인 탄소강재름 용접활 때예 입열조건(용접전류 , 전압 , 속도) 이외에 예열 결정예 고려해야하는 인자",
+    "book_page": 157,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 116,
+    "title": "탈자 (R처) (자분담 상법)",
+    "book_page": 158,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 117,
+    "title": "탑상제의 보수(4가지) (침무담상 시험)",
+    "book_page": 158,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 118,
+    "title": "담상제의 점검(침투액 , 유화제 , 현상제) (침투 탐상시험)",
+    "book_page": 159,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 119,
+    "title": "필스반사법 (초음파)",
+    "book_page": 159,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 120,
+    "title": "피로파고",
+    "book_page": 160,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 121,
+    "title": "필름의 독성 곡선(characteristic curve)",
+    "book_page": 160,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 122,
+    "title": "형광 투시 검사법",
+    "book_page": 162,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 123,
+    "title": "회절 (Diffraction)과 Bragg's Law",
+    "book_page": 162,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "계측·기타 NDT",
+    "tags": [
+      "계측·기타 NDT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 124,
+    "title": "후유화성 염색집투탕상법",
+    "book_page": 163,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 125,
+    "title": "AE(Acoustic Emission) 시험법",
+    "book_page": 163,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "음향방출 AE",
+    "tags": [
+      "음향방출 AE"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 126,
+    "title": "AET 기술은 UT와 비교해 볼 때 고주파의 음향울 이용하다는 점예서 유사하다고 활 수 있다. 이 두 가지 기술울 에너지 근원 , 결합위치 평가 , 사용주파수범위 , 결함의 영상화 , 신호의 반복성 및 담상 특성의 관점에서 비교 설명",
+    "book_page": 164,
+    "week": 5,
+    "category": "초음파탐상 UT",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "음향방출 AE",
+    "tags": [
+      "음향방출 AE",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 127,
+    "title": "Bremsstrahlung",
+    "book_page": 164,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 128,
+    "title": "C1 시험편용도",
+    "book_page": 164,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 129,
+    "title": "Delayed cracking형 저온균열",
+    "book_page": 164,
+    "week": 6,
+    "category": "종합·기타",
+    "week_name": "용접",
+    "study_group": "용접결함·균열",
+    "tags": [
+      "용접결함·균열"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 130,
+    "title": "Exo-Electron Emmission에 의한 비파괴시험",
+    "book_page": 167,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 131,
+    "title": "EMAT(ELECTROMAGNETIC ACOUSTIC TRANSDUCER)",
+    "book_page": 167,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 132,
+    "title": "Flash Aadiography",
+    "book_page": 167,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 133,
+    "title": "KS A 4918(공업용 방사선투과 사진 관찰기)에 따른 관찰기의 종류름 밝기에 따라 분류하고 KS B 0845(강용접 이음부의 방사선투과 시험방법)에 따른 투과사진의 농도에 따른 적용 관찰기에 대해 설명",
+    "book_page": 168,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "방사선 물리·선원",
+      "RT 촬영·상질",
+      "용접공정·시공"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 134,
+    "title": "KS와 ASME의 종독직진성의 비교",
+    "book_page": 169,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 135,
+    "title": "Lamellar Tearing",
+    "book_page": 170,
+    "week": 6,
+    "category": "종합·기타",
+    "week_name": "용접",
+    "study_group": "용접결함·균열",
+    "tags": [
+      "용접결함·균열"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 136,
+    "title": "Lamninagraphy",
+    "book_page": 171,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 137,
+    "title": "LEAKY LAMB WAVE",
+    "book_page": 171,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "PAUT·TOFD·유도초음파",
+    "tags": [
+      "PAUT·TOFD·유도초음파",
+      "누설검사"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 138,
+    "title": "Notch 탈성",
+    "book_page": 171,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 139,
+    "title": "PE관의 맞대기 이름예서 발생함 수 있는 결합",
+    "book_page": 171,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 140,
+    "title": "PVDF압전재료",
+    "book_page": 172,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 141,
+    "title": "RBI(Risk Based Inspection) 위험기반기술",
+    "book_page": 173,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "수명·위험도 평가",
+    "tags": [
+      "수명·위험도 평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 142,
+    "title": "Sivert (방사선 단위)",
+    "book_page": 176,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 143,
+    "title": "STB-A2와 RB-4의 비교",
+    "book_page": 176,
+    "week": 1,
+    "category": "종합·기타",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 탐촉자·교정",
+    "tags": [
+      "초음파 탐상 - 탐촉자·교정"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 144,
+    "title": "TMCP(제어압연강)의 특징",
+    "book_page": 176,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 145,
+    "title": "TOFD(TIME OF DIFFRACTION FLIGHT)",
+    "book_page": 176,
+    "week": 8,
+    "category": "종합·기타",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "PAUT·TOFD·유도초음파",
+    "tags": [
+      "PAUT·TOFD·유도초음파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 146,
+    "title": "Ultrasonic Phased Array Probe기범에 대해 기술하고 장점",
+    "book_page": 177,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "PAUT·TOFD·유도초음파",
+    "tags": [
+      "PAUT·TOFD·유도초음파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 147,
+    "title": "UT-Phased Array Technique",
+    "book_page": 178,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "PAUT·TOFD·유도초음파",
+    "tags": [
+      "PAUT·TOFD·유도초음파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 148,
+    "title": "X선 필름의 입상성에 영향울 주는 것",
+    "book_page": 181,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 149,
+    "title": "방사선 안전관리에 있어서 ALARA 개념",
+    "book_page": 181,
+    "week": 11,
+    "category": "방사선투과 RT",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규",
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 150,
+    "title": "용체화 (고용화) 열처리름 선명",
+    "book_page": 182,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 151,
+    "title": "원격장 와류탕상 시험(Rernote Field Eddy Current Testing RFECT)",
+    "book_page": 182,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 152,
+    "title": "Heel Effect",
+    "book_page": 182,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 153,
+    "title": "오스템퍼 구상 특연 주천품(ADI)의 재료 특성과 조직",
+    "book_page": 183,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 154,
+    "title": "저항선 스트레인게이지의 게이지물(Gauge Factor)",
+    "book_page": 185,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "부식·환경손상",
+    "tags": [
+      "부식·환경손상",
+      "계측·기타 NDT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 155,
+    "title": "중성자 특수(Neutron Absorption)",
+    "book_page": 186,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 156,
+    "title": "초음파 탐상이에 이용되논 크리핑파(Creeping wave)",
+    "book_page": 187,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 157,
+    "title": "X-선 발생 장치",
+    "book_page": 187,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 158,
+    "title": "방사선의 단위",
+    "book_page": 188,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 159,
+    "title": "레이다 (RADAR)",
+    "book_page": 189,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "계측·기타 NDT",
+    "tags": [
+      "계측·기타 NDT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 160,
+    "title": "강의 열처리",
+    "book_page": 189,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 161,
+    "title": "FBG(Fiber Bragg Grating) 센서의 특징과 적용 예",
+    "book_page": 193,
+    "week": 8,
+    "category": "종합·기타",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "센서·SHM·스마트검사",
+    "tags": [
+      "센서·SHM·스마트검사"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 162,
+    "title": "MIG 동접에서의 천이(임계) 전류",
+    "book_page": 193,
+    "week": 10,
+    "category": "종합·기타",
+    "week_name": "건전성·수명평가",
+    "study_group": "파괴역학·결함평가",
+    "tags": [
+      "파괴역학·결함평가",
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 163,
+    "title": "광단성 (Photoelasticity)에 의한 응력족정 기법의 원리",
+    "book_page": 194,
+    "week": 5,
+    "category": "금속재료",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "광학·홀로그래피",
+    "tags": [
+      "광학·홀로그래피"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 164,
+    "title": "서브머지드아크용접 (SAW) 용가제 (FIux)의 종류와 제조방법",
+    "book_page": 194,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 165,
+    "title": "직접육안검사 , 간접육안검사 및 투시육안검사 적용기법",
+    "book_page": 195,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 166,
+    "title": "SMAW 아크용접의 결합중류와 방지대책",
+    "book_page": 195,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 167,
+    "title": "탄소강의 인장시험에서 응력-변형곡선과 물리적성질",
+    "book_page": 196,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 168,
+    "title": "현장에서 용접 접합부의 피로강도록 증가시키는 방법",
+    "book_page": 197,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 169,
+    "title": "와전류 탐상 시험의 충진물(Fill-factor)과 침투깊이(depth of penetration)",
+    "book_page": 197,
+    "week": 4,
+    "category": "자분·침투 MT/PT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일",
+      "침투탐상 PT",
+      "부식·환경손상"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 170,
+    "title": "비파괴 시험에 의해 검출되는 지시(indication) 3가지",
+    "book_page": 198,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 171,
+    "title": "카이저 효과(Kaiser effect) 및 펼리시터 효과(Felicity effect)",
+    "book_page": 198,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "음향방출 AE",
+    "tags": [
+      "음향방출 AE"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 172,
+    "title": "국제 방사선 방호위원회(ICRP)에서 권고되어 현재 국내 원자력번에 개정 반영된 방사선 작업중사자의 피목선랑한도",
+    "book_page": 199,
+    "week": 11,
+    "category": "방사선투과 RT",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규",
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 173,
+    "title": "자분 탐상 시험의 종합적인 시스템 감도와 성능올 비교 평가하기 위한 시험편과 지시계률 5가지 이상 나열하고 용도 및 형태적 특징",
+    "book_page": 199,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 174,
+    "title": "누설 시험시 사용되논 열전도 진공게이지(thermal conductivity vacuum gage) 와 이온화진공게이지 (ionization vacuum gage)",
+    "book_page": 201,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "누설검사",
+    "tags": [
+      "누설검사"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 175,
+    "title": "ASME B & PV code Sec. 배II Div 1예서 규정하는 압력용기에 대한 전길이 방사선투과시험 (full-radiography)올 해야하는 조건",
+    "book_page": 210,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "배관·탱크·압력설비",
+      "방사선 물리·선원",
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 176,
+    "title": "침투 탐상검사 중에 부품온도가 10 ~ 520의 표준온도클 유지하지 못할 경우의 검사기법 인정요건",
+    "book_page": 214,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 177,
+    "title": "탄소당량 (Carbon Equivalent)",
+    "book_page": 215,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 178,
+    "title": "슈미트 해머(Schmidt Hamnmer)클 사용하여 굳크리트의 압축강도록 축정할 경우 대표적인 강도 추정식 2가지와 반발경도 보정방법",
+    "book_page": 215,
+    "week": 9,
+    "category": "종합·기타",
+    "week_name": "설비·구조물 적용",
+    "study_group": "콘크리트·토목구조",
+    "tags": [
+      "콘크리트·토목구조"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 179,
+    "title": "방사선 투과사진인ASTM E-186, 280, 446들 적용 두께별로 구분",
+    "book_page": 219,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "RT 촬영·상질"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 180,
+    "title": "저온용 강의 종류와 특성",
+    "book_page": 220,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 181,
+    "title": "과학기술부 법률 7426호 \"비파괴검사 기술의 진용 및 관리에 관한 법률\"에 따른 비파괴 검사업의 등록기준율 기술인력과 적용장비",
+    "book_page": 220,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "파괴·피로·취성",
+      "계측·기타 NDT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 182,
+    "title": "재료의 연화- 손상의 비파괴평가",
+    "book_page": 221,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 183,
+    "title": "초음파을 이용한 굳그리트 군얼깊이 즉정방법",
+    "book_page": 225,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 184,
+    "title": "XRD예I 의한 X선 회점 분석법 (X-Ray Diffractometry , XRD)",
+    "book_page": 227,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "계측·기타 NDT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 185,
+    "title": "테라혜로프파(T-Ray)의 비파괴검사적 웅용 예",
+    "book_page": 230,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성",
+      "계측·기타 NDT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 186,
+    "title": "초음파 프래로그래피 (Fractography)의 비파괴검사적 몸용 예",
+    "book_page": 232,
+    "week": 1,
+    "category": "금속재료",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 187,
+    "title": "응력동결 (Stress Freezing)의 비파괴검사적 응몽 예",
+    "book_page": 232,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 188,
+    "title": "정재초음파 (Ultrasonic Standing Wave)의 비파괴감사적 응용 예",
+    "book_page": 232,
+    "week": 1,
+    "category": "금속재료",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 189,
+    "title": "이태르늄(Y5-169)란 무엇이다 , 비파괴검사적 응용 예",
+    "book_page": 233,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 190,
+    "title": "모아래(Moire)간섭의 비파괴검사적 용용 예",
+    "book_page": 233,
+    "week": 5,
+    "category": "금속재료",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "광학·홀로그래피",
+    "tags": [
+      "광학·홀로그래피",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 191,
+    "title": "가속크리프시험에 의한 잔여수명실흑법",
+    "book_page": 234,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "수명·위험도 평가",
+    "tags": [
+      "수명·위험도 평가",
+      "고온손상·크리프"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 192,
+    "title": "등온변태곡선(TTT:Timne-Temnperature-Transformation Curve) 및 연속냉각번태곡선 (CCT Continuous Cooling Transformation Diagram)",
+    "book_page": 234,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 193,
+    "title": "모델(Monel) 및 인코번(Inconel)의 특성과 용접독성",
+    "book_page": 235,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 194,
+    "title": "응력 확대계수와 임계음력확대계수",
+    "book_page": 236,
+    "week": 10,
+    "category": "금속재료",
+    "week_name": "건전성·수명평가",
+    "study_group": "파괴역학·결함평가",
+    "tags": [
+      "파괴역학·결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 195,
+    "title": "자분 탐상검 사의 건식 자분과 습식 자분 장점 및 단점",
+    "book_page": 238,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 196,
+    "title": "자분 탐상검 사에서 습식자분 탐상용 계면활성제가 철가된 물 분산매의 성질",
+    "book_page": 239,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 197,
+    "title": "아크용접에서 수하 특성과 정전압 특성",
+    "book_page": 241,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 198,
+    "title": "방사선투시검사에서 불무망(blooming)",
+    "book_page": 242,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 199,
+    "title": "씨네-래디오그라피(cine-radiography)",
+    "book_page": 243,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 200,
+    "title": "고주파용점 (High Frequency Welding)",
+    "book_page": 246,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 201,
+    "title": "응력과 변청률 선도",
+    "book_page": 250,
+    "week": 12,
+    "category": "금속재료",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 202,
+    "title": "ISO 9712(최신판)의 실기시험용 시험편종합보고서(specimen master report)",
+    "book_page": 251,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 203,
+    "title": "X선 후방산란법(x-ray backscattering method)의 시험원리와 적용성",
+    "book_page": 253,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 204,
+    "title": "적외선 응력록정법(IR strain reasurement)의 시험원리와 적용성",
+    "book_page": 254,
+    "week": 5,
+    "category": "금속재료",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "적외선·열화상",
+    "tags": [
+      "적외선·열화상"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 205,
+    "title": "주강품에 발생되는 결함",
+    "book_page": 256,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 206,
+    "title": "FAC(Flow Accelerated Corrosion, 부동가속 부식)",
+    "book_page": 256,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "부식·환경손상",
+    "tags": [
+      "부식·환경손상"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 207,
+    "title": "깊(Roentgen equivalent man rem)",
+    "book_page": 260,
+    "week": 11,
+    "category": "종합·기타",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 208,
+    "title": "렌트렌 (Roentgen",
+    "book_page": 260,
+    "week": 11,
+    "category": "종합·기타",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 209,
+    "title": "금속재료의 강화기구 5가지",
+    "book_page": 260,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 210,
+    "title": "재료의 취성-연성파괴 천이온도(transition temperature from brittle to ductile fracture)",
+    "book_page": 261,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 211,
+    "title": "용집부 덧살(reinforcement)의 크기가 피로강도에 미치는 영향",
+    "book_page": 262,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 212,
+    "title": "방사선방호의 원직과 방사선의 영향",
+    "book_page": 263,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 213,
+    "title": "WPS와 PQR",
+    "book_page": 264,
+    "week": 6,
+    "category": "종합·기타",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 214,
+    "title": "용접기호",
+    "book_page": 270,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 215,
+    "title": "갈바니 부식(galvanic corrosion)의 기구와 사례",
+    "book_page": 273,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "부식·환경손상",
+    "tags": [
+      "부식·환경손상"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 216,
+    "title": "육안검사(VT)와 관련하여 명소시(photopic vision)와 암소시(scotopic vision)",
+    "book_page": 274,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 217,
+    "title": "선형파괴역학에서 만하는 파괴모드(fracture mnode) ! II I률 그립으로 그려 구분하고 모드 I이 가장 중요한 이유",
+    "book_page": 274,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "파괴역학·결함평가",
+    "tags": [
+      "파괴역학·결함평가",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 218,
+    "title": "현미경 조직시험율 위한 시험편 제작순서와 표면복제 시험 순서",
+    "book_page": 276,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 219,
+    "title": "최근 산업계에서 요구되고 있는 기량검증(performance demonstration), 기랑에 근거한 자격인정 (performance-based qualification)과 기존 자격인정의 차이점",
+    "book_page": 277,
+    "week": 11,
+    "category": "건전성 평가",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "POD·검사신뢰성"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 220,
+    "title": "방사선투과시험에서 촬영방번에 따른 의사결함의 판별방법",
+    "book_page": 279,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 221,
+    "title": "유안검사 (VT)에서 조명과 검사표면에 서의 입체각의 의미, 광속(lurninance flux; 단위 lumen[Im])과 조명도(lumninance)의 단위름 주어진 기본단위(cd, sr, m)클 사용하여 표시",
+    "book_page": 280,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 222,
+    "title": "액상 접촉매질 (couplant) 없이 초음파 탐상들 위한 초음파 발생법",
+    "book_page": 283,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 223,
+    "title": "중성자루과검사(NRT)의 유용성올 방사선투과검사(RT)와 비교",
+    "book_page": 284,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 224,
+    "title": "초음파 범의 감쇠(Attenuation) 원인",
+    "book_page": 285,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 225,
+    "title": "용접법 중 ESW의 점확한 용어명과 특징 및 적용분야",
+    "book_page": 286,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 226,
+    "title": "한국산업규격의 SM4gOYB-Z25에서 각각의 기호와 숫자가 의미",
+    "book_page": 287,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 227,
+    "title": "자기이력 곡선에서 루프의 폭이 넓고 좁들이 의미하는 것과 루프의 폭과 전도성의 관계",
+    "book_page": 287,
+    "week": 3,
+    "category": "종합·기타",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 228,
+    "title": "초음파 탐상검사에서 결합크기 축정기법 중의 하나인 TOFD(Tirne of Flight Diffraction)법",
+    "book_page": 288,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "PAUT·TOFD·유도초음파",
+    "tags": [
+      "PAUT·TOFD·유도초음파",
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 229,
+    "title": "초음파 탐상 시험(UT)의 결합 길이 축정방법으로 이용되논 6dB drop법과 20d8 drop법",
+    "book_page": 290,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 230,
+    "title": "결혼의 유해성에 관련되논 응력집중계수와 노치계수에 대해 설명하고, 두 계수간의 차이점",
+    "book_page": 292,
+    "week": 10,
+    "category": "금속재료",
+    "week_name": "건전성·수명평가",
+    "study_group": "파괴역학·결함평가",
+    "tags": [
+      "파괴역학·결함평가",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 231,
+    "title": "응력부식군열 (Stress Corrosion Cracking SCC)에I 영향울 미치논 인자와 응력부식군열 저항성 시험기법",
+    "book_page": 293,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "부식·환경손상",
+    "tags": [
+      "부식·환경손상"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 232,
+    "title": "F-N(Freauency Nurnber) Curve",
+    "book_page": 297,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 233,
+    "title": "내연합금의 종류인 Inconel 713C에 나타나는 용접균열의 원인과 방지법",
+    "book_page": 298,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "용접결함·균열",
+      "재료·합금·강종"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 234,
+    "title": "게이트(gate)별브, 글로브(Globe)탤브 및 스원 체a(Swing check)벌브의 부위별 육안검사방법(VT)",
+    "book_page": 299,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 235,
+    "title": "스테인리스강의 용접에서 심각한 문제가 되는 용접 분과(weld decay)의 원인과 방지방법 2g9 236 Narrow Gap Welding",
+    "book_page": 301,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "부식·환경손상",
+      "재료·합금·강종"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 236,
+    "title": "Narrow Gap Welding",
+    "book_page": 301,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 237,
+    "title": "비파괴검사(NDT)와 구조 건전성 모니터림(Structural Health Monitoring; SHM)의 차이점",
+    "book_page": 305,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "수명·위험도 평가",
+    "tags": [
+      "수명·위험도 평가",
+      "센서·SHM·스마트검사",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 238,
+    "title": "용접이용의 피로강도올 향상시키기 위해 기본적으로 취해야 할 조치와 대책 3060",
+    "book_page": 306,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 239,
+    "title": "마이크로 크택 인성화(micro crack toughening)의 의미와 원리",
+    "book_page": 306,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 240,
+    "title": "열 형광 선랑계 (Therrno-Luminescence Dosimeter)",
+    "book_page": 306,
+    "week": 11,
+    "category": "종합·기타",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 241,
+    "title": "자분 탐상검 사(MT)예서 사용하는 자속관동법 장비의 원리클 설명(그림)",
+    "book_page": 307,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 242,
+    "title": "조사취화(irradiation embrittlement)",
+    "book_page": 308,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "고온손상·크리프",
+    "tags": [
+      "고온손상·크리프"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 243,
+    "title": "용접부 검사에 사용하는 캠브리지 게이지(Cambridge gauge)의 용도록 6가지",
+    "book_page": 309,
+    "week": 5,
+    "category": "용접",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT",
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 244,
+    "title": "자왜효과 (magnetostrictive effect)에l 의한 초음파의 발생 메카니종",
+    "book_page": 310,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 245,
+    "title": "용접의 열영향부(HAZ)",
+    "book_page": 310,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 246,
+    "title": "비파괴검사물 통해 구조물에서 코열이 컴출되없다고 합 때 , 파괴역학 등올 이용하여 어떤 판단과 조치름 취해야 활 지 설명",
+    "book_page": 311,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "파괴역학·결함평가",
+    "tags": [
+      "파괴역학·결함평가",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 247,
+    "title": "접촉 음향 비선형성 (Contact Acoustic Nonlinearity)ol 무엇인지 쓰고 이률 함용하 초음파 검사법이 달히 코월 검춘에 사용월 수 는 원리",
+    "book_page": 312,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 248,
+    "title": "원자로 헤드물 관동하는 관통관과 그 주변 용접부에 대한 비파괴 체적검사시 적용 가능한 비파괴검사 방법과 적용 한계",
+    "book_page": 313,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비",
+      "배관·탱크·압력설비",
+      "용접공정·시공",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 249,
+    "title": "전류관통법 (Central Conductor Method)으로 배관의 중앙에 위치한 중심전도체 (Central Conductor)에l 흐르는 전류에 의해 생성되는 자계분포도름 배관 수직인 단면도에 그러 설명",
+    "book_page": 313,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "배관·탱크·압력설비",
+    "tags": [
+      "배관·탱크·압력설비"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 250,
+    "title": "음항방출검 사(AT)에서 관찰되는 신호파형의 종류와 급속재료에서 소성변형 (Plastic deformation)에 의한 음항방 출의 발생 패문과 극징적 현상",
+    "book_page": 314,
+    "week": 5,
+    "category": "종합·기타",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "음향방출 AE",
+    "tags": [
+      "음향방출 AE",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 251,
+    "title": "ISO 9712 2012(E)에 따른 Level 3 자격인정 시험 과목 및 합격점수(일반사항 , 기본시험 주 검사법 시험)에 대한 규정",
+    "book_page": 315,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 252,
+    "title": "KS D 0213 철강 재료의 자분담 상 시험방법 및 자분모양의 분류예서 규정하는 A형 표준시롭편의 용도와 B형 대비시험편의 형상과 치수 , 용도",
+    "book_page": 316,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "자분탐상 MT",
+      "초음파 탐상 - 탐촉자·교정",
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 253,
+    "title": "발전설비의 보일러 뉴브 및 배관의 사용 중 결합의 종류와 발생원인과 적용 가능한 비파괴검사 방법의 종류와 특징 , 적용 한계",
+    "book_page": 318,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비",
+      "배관·탱크·압력설비",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 254,
+    "title": "적외선 얼화상 비파괴검사의 기본 원리와 장점들 설명하고 수동적 기법과 능동적 기법의 차이",
+    "book_page": 319,
+    "week": 5,
+    "category": "금속재료",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "적외선·열화상",
+    "tags": [
+      "적외선·열화상",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 255,
+    "title": "원자력 밭전소에서논 합금강 60O(Alloy 600 또는 Inconel 600) 재료가 원전에서 사용되는 부위 3가지클 들고, 응력부식코열이 발생되없올 때 부위별로 대처방법",
+    "book_page": 320,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비",
+      "부식·환경손상",
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 256,
+    "title": "손상히용설계 (damage-tolerant design)라 무엇이다 비파괴검사와 관계",
+    "book_page": 321,
+    "week": 7,
+    "category": "건전성 평가",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 257,
+    "title": "통합피로수명 (total fatigue life)의 개념은 무엇이다 비파괴검사는 언제(어느 단계) 어떻계 구조물의 수명예측에 기여할 수 있논지클 설명 322 즉에",
+    "book_page": 322,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "수명·위험도 평가",
+    "tags": [
+      "수명·위험도 평가",
+      "용접공정·시공",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 258,
+    "title": "위상속도(phase velocity)와 군속도(group velocity)는 어떻게 다르머 어떤 조건하에서 같아지논지 설명",
+    "book_page": 323,
+    "week": 1,
+    "category": "종합·기타",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 259,
+    "title": "응력 집중이 구조물에 미치는 엉향과 용접구조물의 운력집중 요소클 분류하고 각각에 대하여 방지방안",
+    "book_page": 324,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 260,
+    "title": "20인치 이상의 파이프룹 제조할 때 일반적으로 적용하는 용접방법 2가지름 문고 용접범의 특징",
+    "book_page": 325,
+    "week": 9,
+    "category": "용접",
+    "week_name": "설비·구조물 적용",
+    "study_group": "배관·탱크·압력설비",
+    "tags": [
+      "배관·탱크·압력설비",
+      "용접공정·시공"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 261,
+    "title": "SPATE(Stress Pattern Analysis by Thermal Ernission)의 원리와 비파괴검사로서의 장점",
+    "book_page": 327,
+    "week": 5,
+    "category": "금속재료",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "음향방출 AE",
+    "tags": [
+      "음향방출 AE",
+      "적외선·열화상",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 262,
+    "title": "SM 570은 어떠한 재질이며 등급분류의 기준 및 적용",
+    "book_page": 327,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 263,
+    "title": "방진기 종류별 육안점검항목 및 예상가능한 결합원인",
+    "book_page": 330,
+    "week": 9,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비",
+      "육안검사 VT"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 264,
+    "title": "등가선량 / 예탁선량/ 유표선랑/ 인정하도 참고준위",
+    "book_page": 331,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 265,
+    "title": "초음파 탐상검사의 신회도록 평가하기 위한 기랑검종(performance demonstration)",
+    "book_page": 332,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 266,
+    "title": "ADC 과정에서 Nyquist theoremlor frequency)이락 무엇이다 신호의 왜곡(aliasing)올 방지하기 위한 대책",
+    "book_page": 333,
+    "week": 8,
+    "category": "종합·기타",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "신호처리·디지털검사",
+    "tags": [
+      "신호처리·디지털검사"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 267,
+    "title": "Larson-Miller 파라미터들 이용하여 응력올 발는 합금 구조물의 고온크리프 수명올 예측하는 원리",
+    "book_page": 333,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "수명·위험도 평가",
+    "tags": [
+      "수명·위험도 평가",
+      "재료·합금·강종",
+      "고온손상·크리프"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 268,
+    "title": "Snell's law에l 따라 경사각으로 입사된 초음파(증파) 범에 대한 제 1임계각과 제 2임계각을 아는 것은 초음파람삼에서 매우 중요하다 . 그 이유",
+    "book_page": 334,
+    "week": 10,
+    "category": "초음파탐상 UT",
+    "week_name": "건전성·수명평가",
+    "study_group": "파괴역학·결함평가",
+    "tags": [
+      "파괴역학·결함평가",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 269,
+    "title": "Thomson scattering과 Compton effect",
+    "book_page": 335,
+    "week": 2,
+    "category": "종합·기타",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 279,
+    "title": "오스테나이트계 스테인레스강 구조물올 용접하는 경우 , 용접부 부근의 열영향부 (HAZ)논 500-800C 온도범위에 장시간 노출되 결과로 내식성이 저하되논 원인과 방지대책",
+    "book_page": 337,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 280,
+    "title": "대형용기나 저장 행크의 누설검사에 적용되는 가입법의 원리 및 특징",
+    "book_page": 337,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "배관·탱크·압력설비",
+    "tags": [
+      "배관·탱크·압력설비",
+      "누설검사"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 281,
+    "title": "에너지원에 따라 용접법들 5가지로 분류하고 특징",
+    "book_page": 338,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 282,
+    "title": "초음파원 자현미경 (Ultrasonic AFM UAFM)OI 가지고 F는 장점과 기본원리",
+    "book_page": 340,
+    "week": 8,
+    "category": "초음파탐상 UT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 283,
+    "title": "KS-B-0816 액체침투 탐상검사(PT)에서 기호의미와 담상순서",
+    "book_page": 341,
+    "week": 11,
+    "category": "자분·침투 MT/PT",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 284,
+    "title": "용접에 의한 변형(스트레인)움 감소히기 위해 고려해야 활 사랑",
+    "book_page": 342,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "용접응력·PWHT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 285,
+    "title": "냉간가공과 열간가공",
+    "book_page": 344,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 286,
+    "title": "용접에서 가접(Tack Welding)시 주의사항",
+    "book_page": 346,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 287,
+    "title": "전기저함 스트레인시험의 원리와 스트레인게이지(Strain Gage) 부학순서",
+    "book_page": 346,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "계측·기타 NDT",
+    "tags": [
+      "계측·기타 NDT"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 288,
+    "title": "액체침투 탐상검 사(PT)예I서 직심성(Wettability) 과 모세관현상",
+    "book_page": 350,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 289,
+    "title": "비파과검 사에서 순회시하(Round Robin Test RRT)의 실시목적과 결합검출확률 (Probability of Detection POD) 곡선올 그림으로 예시하고 설명",
+    "book_page": 351,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "POD·검사신뢰성",
+    "tags": [
+      "POD·검사신뢰성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 290,
+    "title": "비접촉(Noncontact) 초음파비파괴평가 기법의 종류 3가지 원리와 특징올 비교",
+    "book_page": 352,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "초음파 탐상 - 파동·전파",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 291,
+    "title": "가속수명 시i(Accelerated Life Test)",
+    "book_page": 353,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "수명·위험도 평가",
+    "tags": [
+      "수명·위험도 평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 292,
+    "title": "피닐(Peening)기술과 비파괴적인 품질평가방법",
+    "book_page": 355,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 293,
+    "title": "초음파현미경 (Scanning Acoustic Microscopy SAM)에I 잘용되고 엎는 누설탄성표연파 (Leaky Surface Acoustic Wave LSAW)의 발생 메카니증과 V(z) 곡선올 설명하고 활용 예",
+    "book_page": 356,
+    "week": 8,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "누설검사",
+      "초음파 탐상 - 파동·전파",
+      "용접공정·시공",
+      "부식·환경손상"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 294,
+    "title": "금속현미경 검사시 조직관찰용 시험편의 준비과정 5가지",
+    "book_page": 357,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 295,
+    "title": "국제 표준화 관련하여 ISO TC 135 SC 7가지",
+    "book_page": 358,
+    "week": 11,
+    "category": "종합·기타",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 296,
+    "title": "밀릿용접부의 각부명칭",
+    "book_page": 358,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 297,
+    "title": "출로그래피 간섭법(holography interferometry)",
+    "book_page": 359,
+    "week": 5,
+    "category": "종합·기타",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "광학·홀로그래피",
+    "tags": [
+      "광학·홀로그래피"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 298,
+    "title": "방사선 차페벽 설계시 고려해야할 사랑",
+    "book_page": 360,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 299,
+    "title": "고장력강 후판 용접 시공에서 단종용접 (one pass)과 다종용점 (rnulti pass)물 비교할 때 다종용접의 아금학적 효과와 용접 시공활 때 주의사항",
+    "book_page": 361,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 300,
+    "title": "저합금강 압력용기클 용접시공 활 때 아크 스트라이크(arc strikes)",
+    "book_page": 361,
+    "week": 9,
+    "category": "용접",
+    "week_name": "설비·구조물 적용",
+    "study_group": "배관·탱크·압력설비",
+    "tags": [
+      "배관·탱크·압력설비",
+      "용접공정·시공",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 301,
+    "title": "와전류검사(ECT)에I서 특성주파수(characteristic frequency)",
+    "book_page": 362,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 302,
+    "title": "와전류검사(ECT)에서 리프트오프(lift-off) 효과",
+    "book_page": 362,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 303,
+    "title": "단조제품에 비해 주조제품은 일반적으로 초음파 탐상검사로 걸함울 찾기가 어려문 이유",
+    "book_page": 363,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 304,
+    "title": "복합 재료 적중판 (laminates)과 하니컴(honeycomb)샌드위치구조에 초음파담 상검 사클 실시활 때 결합 담지부위",
+    "book_page": 364,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 305,
+    "title": "프괜지 두께 4Omm, 복부판 두께 2Omm의 부재클 완전용입 T이음시 경제성 , 용접품질 , 구조적 축면 등음 고려한 용접법과 용접시공법울 용접기 호름 표시하고 설명",
+    "book_page": 364,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 306,
+    "title": "비파괴검사기술의 진홍 및 관리에 관한 법률의 비파괴검사업무 수행절차 및 검사자교육",
+    "book_page": 366,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 307,
+    "title": "강재의 DBTT(ductile-to-brittle transition temperature)",
+    "book_page": 366,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 308,
+    "title": "음향 임피터스(acoustic impedance)라 무엇이다 , 초음파 탐상검사 할 때 경계면에서 올항 임피 던스가 잘 매 치되는 것이 왜 중요한지 설명",
+    "book_page": 367,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 309,
+    "title": "포켓 도시미터 (pocket dosimeter)의 특성과 주의사함",
+    "book_page": 368,
+    "week": 11,
+    "category": "종합·기타",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 310,
+    "title": "X선과 CT, 초음파 CT 비교 설명",
+    "book_page": 368,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 311,
+    "title": "냉간압연된 금속판재에서 집학조직(texture Or preferred orientation)에l 형성된 정도클 비파괴 평가방법적으로 평가하는 방법",
+    "book_page": 370,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 312,
+    "title": "고장력강 및 저합금강 용접부의 용접부 군염 종류 및 특성 / 용접 투엌 처리(post weld heat treatment)틀 신시활 때 발생하는 군열 및 특성/ 비파괴검사 적용 방법과 시기",
+    "book_page": 371,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공",
+      "파괴·피로·취성",
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 313,
+    "title": "ASME B31.1(power piping)발전설비 배관의 용접부에서 사용조건에 따른 비파괴검사 중목 및 요구 조건",
+    "book_page": 374,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "원전·발전설비",
+      "배관·탱크·압력설비",
+      "용접공정·시공",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 314,
+    "title": "비파과적 연속 압입시험의 원리 , 방법 , 특성 및 적용분야",
+    "book_page": 376,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 315,
+    "title": "POD(probability of detection)은 어떻게 정 해지논지 , 특히 걸함의 크기에 따라 달라지논 관계름 POD 곡선올 그려서 설명",
+    "book_page": 378,
+    "week": 10,
+    "category": "건전성 평가",
+    "week_name": "건전성·수명평가",
+    "study_group": "POD·검사신뢰성",
+    "tags": [
+      "POD·검사신뢰성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 316,
+    "title": "배관의 맛대기 용접부(Butt Weld)의 명칭",
+    "book_page": 379,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "배관·탱크·압력설비",
+    "tags": [
+      "배관·탱크·압력설비",
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 317,
+    "title": "오차(Error)와 불확도(Uncertainty)/ 계동오차 (Systematic Error)와 무작위 오자(Random Error)의 차이점과 발생원인",
+    "book_page": 380,
+    "week": 10,
+    "category": "고급 초음파",
+    "week_name": "건전성·수명평가",
+    "study_group": "POD·검사신뢰성",
+    "tags": [
+      "POD·검사신뢰성",
+      "비접촉·고급 초음파"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 318,
+    "title": "결함 특성 화 (Flaw Characterization)와 암페이-팀(Ampere-Turn)",
+    "book_page": 380,
+    "week": 10,
+    "category": "종합·기타",
+    "week_name": "건전성·수명평가",
+    "study_group": "파괴역학·결함평가",
+    "tags": [
+      "파괴역학·결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 319,
+    "title": "시각 (Visual Angle)올 정의하고 안과에서 축정한 시력(Visual Acuity)ol 0.5 또는 이이라는 수치가 무엇올 의미하는지 설명",
+    "book_page": 381,
+    "week": 5,
+    "category": "종합·기타",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 320,
+    "title": "강(Steel)의 연성파괴 , 취성파괴 , 피로파과의 특성",
+    "book_page": 382,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 321,
+    "title": "KS B 0550.2016에 명시된 피시 아이(Fish Eye)와 너릿(Nugget)의 용어",
+    "book_page": 382,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 322,
+    "title": "원자력안전법 시행규칙어 서 정의하는 표면방 사선량물과 액분열 성물질 용어 설명",
+    "book_page": 383,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 323,
+    "title": "자장강도의 적정성 검중방법 3가지클 구분하여 설명",
+    "book_page": 383,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 324,
+    "title": "표면 시험의 금속조직 레플리카기법(KSB 1S03057:2013)의 준비요건과 니스 및 시트재료들 사용하 복제과정 및 시험절차",
+    "book_page": 385,
+    "week": 3,
+    "category": "종합·기타",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "표면검사 비교·선정",
+    "tags": [
+      "표면검사 비교·선정",
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 325,
+    "title": "레이저 초음파검사 (Laser Based Ultrasonic LBU)기술의 대표적 기법",
+    "book_page": 386,
+    "week": 8,
+    "category": "고급 초음파",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "비접촉·고급 초음파",
+    "tags": [
+      "비접촉·고급 초음파",
+      "초음파 탐상 - 파동·전파"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 326,
+    "title": "자분 탐상검사 시 누설자속에 영향울 미치는 요소",
+    "book_page": 386,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 327,
+    "title": "강 용접부의 방사선투과검사예서 계조계의 사용목적과 그 이유",
+    "book_page": 387,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "RT 촬영·상질",
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 328,
+    "title": "한국산업표준에서 침투액 / 유화 제 | 현상 제의 점검방법들 설명",
+    "book_page": 388,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 329,
+    "title": "SM4SOC , SM45C에서 (1) S\"의 정확한 명칭 , (2) 숫자와 기호 0가 나타내는 의미 , (3) 재료적 특성에 대하여 설영",
+    "book_page": 388,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 330,
+    "title": "예A의 (1) 정확한 용어명과 (2) GMA버에I 속하는 용접법의 특성",
+    "book_page": 389,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 331,
+    "title": "초음파 탐상김사에서 담축자의 성능들 나타내는 항목 7가지",
+    "book_page": 389,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 332,
+    "title": "원자력안전법 시행령에서 규정하는 선랑한도(유표선랑 , 등가신량) 틀 증사자별로 구분하여 설명",
+    "book_page": 390,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 333,
+    "title": "강 용접 이름부의 방사선투과시험 방법(KS B 0845)의 촬영방법 및 투과사진의 필요조건에서 규정한 촬영버치름 그리고 상질 A급 및 B굽에 대한 선원과 필름 간의 최소 거리클 계수 미값",
+    "book_page": 390,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "방사선 물리·선원",
+      "RT 촬영·상질",
+      "용접공정·시공"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 334,
+    "title": "ASNE SecV Art.8 와전류 탐상검사의 관능홀 신호와 204 평저공 신호",
+    "book_page": 392,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "와전류 원리·코일",
+    "tags": [
+      "와전류 원리·코일"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 335,
+    "title": "용접 입열(Heat Input)에 대하여 설명",
+    "book_page": 392,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 336,
+    "title": "청투담상시험 방법 및 침투지시 모양의 분류 (KS B 0816)에 따른 대비시험편 사용방법",
+    "book_page": 392,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "침투탐상 PT",
+      "초음파 탐상 - 탐촉자·교정"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 337,
+    "title": "방사선 투과 검사 (RT)예서 투과도계름 사용하는 목적",
+    "book_page": 393,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 338,
+    "title": "금속의 소성변형의 기구 중 인발가공과 압줄가공",
+    "book_page": 393,
+    "week": 12,
+    "category": "종합·기타",
+    "week_name": "종합·실전",
+    "study_group": "종합·기타",
+    "tags": [
+      "종합·기타"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 339,
+    "title": "단조제품에 비해 주조제품은 일반적으로 초음파 탐상검사로 결함울 찾기 어려운 이유",
+    "book_page": 395,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 340,
+    "title": "국제방 사선방토위원회( ICPP)의 권고 사항의 개념과 방사선 방어 3원칙이 어떠한 의미로 사용되논지루 설명",
+    "book_page": 395,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 341,
+    "title": "초음파 탐상검사(UT) 대비시험편 제작 시 유의할 점",
+    "book_page": 396,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 탐촉자·교정",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 342,
+    "title": "방사선투과검사 (RT)의 필름 검토 (Review) 시 점검 및 확인사항",
+    "book_page": 396,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "RT 촬영·상질"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 343,
+    "title": "원자력안전법 시행령에 따라 방사선관리구역에 업무상 출입하는 수시출입자에 대한 규정에 대하여 설명하고 방사선작업종사 자등에 대한 선랑한도름 표로 설명",
+    "book_page": 397,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규",
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 344,
+    "title": "CR(Computed Radiography)의 원리와 특징",
+    "book_page": 398,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "RT 촬영·상질",
+    "tags": [
+      "RT 촬영·상질"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 345,
+    "title": "비파괴검사-육안검사의 보조기구 저배문확대경의 선택(KS B ISO 3508)에 규정되 육안검사(VT) 보조기구인 저배문 확대경 표준",
+    "book_page": 398,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "육안검사 VT",
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 346,
+    "title": "오스데나이트계 스테인리스강의 입계부식( Intergranular Corrosion)의 특성과 방지대책",
+    "book_page": 398,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "부식·환경손상",
+    "tags": [
+      "부식·환경손상",
+      "재료·합금·강종"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 347,
+    "title": "자분 탐상검 사(MT)예 사용되는 KS 표준시험 면 (A형 , (형)",
+    "book_page": 399,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "자분탐상 MT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 348,
+    "title": "침투 탐상시험 방법 및 침투지시 모양의 분류(KS B 0816)에 따라 침투액의 종류 , 임여 침투액의 제거방법 및 현상방법에 따라 시험방법올 표로 분류하고 FA-D, VC-S, FO N 기호의 시험명과 시험순서",
+    "book_page": 400,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "침투탐상 PT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 349,
+    "title": "ASME Sec.V Art.10 누설 시험(LT) 진공상 자법의 시험절차",
+    "book_page": 401,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "누설검사"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 350,
+    "title": "산일용 발전소 보일러 압력부(Tube Header )의 주요 손상기구틀 4가지로 분류하고 손상원인과 현상",
+    "book_page": 401,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비",
+      "배관·탱크·압력설비"
+    ],
+    "answer_type": "원인·대책형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 351,
+    "title": "초음파 탐상검 사이서 접촉매질 (couplant)의 사용목적과 선정 시 고려인자 4가지루 설영",
+    "book_page": 403,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 352,
+    "title": "방사선투과검사에서 중사자의 방사선 피쪽 방호하 위한 원칙",
+    "book_page": 404,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 353,
+    "title": "자분탕 상검사 시 교류자 화에서의 표피효과(skin effect)",
+    "book_page": 406,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 354,
+    "title": "침투탕 상검사에서 침투액의 적심성 (wettability)",
+    "book_page": 406,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "침투탐상 PT",
+    "tags": [
+      "침투탐상 PT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 355,
+    "title": "방사선투과검사에서 X선 투과사진과 비교하여 감마신 ( 8 선) 투과사진의 장-단점",
+    "book_page": 406,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "RT 촬영·상질"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 356,
+    "title": "18wCr-BqNi 스테인리스강 용접 열영향부의 입계부식",
+    "book_page": 407,
+    "week": 8,
+    "category": "용접",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "센서·SHM·스마트검사",
+    "tags": [
+      "센서·SHM·스마트검사",
+      "용접공정·시공",
+      "부식·환경손상",
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 357,
+    "title": "X선 발생장치에서 X선의 출력들 결정하는 주요 인자 2가지",
+    "book_page": 407,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 358,
+    "title": "서브머지드 아크용접에 대해 설명하고 , 용접 시 발생활 수 있는 군열",
+    "book_page": 408,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 359,
+    "title": "디지털 방사선투과검사의 원리와 특징",
+    "book_page": 409,
+    "week": 8,
+    "category": "방사선투과 RT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "신호처리·디지털검사",
+    "tags": [
+      "신호처리·디지털검사",
+      "방사선 물리·선원"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 360,
+    "title": "원자로시설 등의 기술기준 규칙에 가둥중검사에 관한 규정에서 가동중검사의 정의 , 가입경수로 형 원전의 검사기준과 새로운 검사주기에 유출하게 적용되논 가동중 검사 기술기주의 유표연도",
+    "book_page": 410,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 361,
+    "title": "Se-75 신원올 사용하여 방사선투과검사클 활 경우 장점과 단점",
+    "book_page": 411,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 362,
+    "title": "용접부에 대한 방사선투과김사에서 편름 판독 시 코염 , 언디럿 , 용입불량 및 기공 결항에서 나 타나는 독징",
+    "book_page": 411,
+    "week": 2,
+    "category": "방사선투과 RT",
+    "week_name": "RT 기초",
+    "study_group": "방사선 물리·선원",
+    "tags": [
+      "방사선 물리·선원",
+      "용접공정·시공",
+      "용접결함·균열"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 363,
+    "title": "주강품의 특징과 주강품이 단조품보다 초올파탑상감사 기법울 적용하기 어려운 이유",
+    "book_page": 412,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 364,
+    "title": "원자로시설 등의 기술기준 규칙에 따른 원자로격날건물 기밀시험 방법울 분류하고 , 종합누설률 시험 방법과 허용기준춘",
+    "book_page": 413,
+    "week": 9,
+    "category": "설비 적용",
+    "week_name": "설비·구조물 적용",
+    "study_group": "원전·발전설비",
+    "tags": [
+      "원전·발전설비"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 365,
+    "title": "금속의 용접에서 걸함종류어 대한 대표적인 검사 방법",
+    "book_page": 414,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 366,
+    "title": "제 4차 산업력명에서 요구하는 대표 기술 4가지루 등고 비파괴김사 분야에 활용합 수 엎는 가능성과 직용 예 한 가지름 설명",
+    "book_page": 414,
+    "week": 7,
+    "category": "금속재료",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 367,
+    "title": "와전류 탐상검 사 (ECT)에서 신호대 잡음비(Signal to Noise Ratio)어 대한 정의와 개선방법 415 368 Quantitative Nondestructive luation(QNDE) /Nondestructive Testing(NDT)과 Structural Health Monitoring(Sl)의 차이점/Acoustoelastic Effect의 용어설명",
+    "book_page": 415,
+    "week": 8,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "신호처리·디지털검사",
+    "tags": [
+      "신호처리·디지털검사",
+      "센서·SHM·스마트검사",
+      "와전류 원리·코일"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 368,
+    "title": "QNDE, NDT와 SHM의 차이점 및 Acoustoelastic Effect",
+    "book_page": 415,
+    "week": 8,
+    "category": "종합·기타",
+    "week_name": "고급 NDT·신호처리",
+    "study_group": "센서·SHM·스마트검사",
+    "tags": [
+      "센서·SHM·스마트검사"
+    ],
+    "answer_type": "비교형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 369,
+    "title": "암모니아 누설검사",
+    "book_page": 416,
+    "week": 4,
+    "category": "와전류·누설 ET/LT",
+    "week_name": "ET·LT 전자기·누설",
+    "study_group": "누설검사",
+    "tags": [
+      "누설검사"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 370,
+    "title": "PHI 기술이란 무엇이다 , 비파괴검사 기술과 다른 점",
+    "book_page": 416,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "파괴·피로·취성",
+    "tags": [
+      "파괴·피로·취성"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 371,
+    "title": "표면파(Surface Mave)의 특징",
+    "book_page": 417,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "부식·환경손상"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 372,
+    "title": "KS 0 0213(강자성체 재료의 자분 탐상검사 방법 및 자분모양의 분류)예서 규정하 자화방법의 종류 (기호) 클 나열하고 자화방법",
+    "book_page": 417,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "자분탐상 MT",
+      "재료·합금·강종"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 373,
+    "title": "강괴 (Steel Ingot) 클 킬드강(Killed Steel) , 림드강(Rimmed Steel) , 세미킬드강 (Semi Killed Steel)으로 구분하여 설명",
+    "book_page": 418,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "재료·합금·강종",
+    "tags": [
+      "재료·합금·강종"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "응용"
+  },
+  {
+    "number": 374,
+    "title": "육안검사의 기본요소 중 검사자 / 피사체 | 조명",
+    "book_page": 418,
+    "week": 5,
+    "category": "육안·음향방출 VT/AE",
+    "week_name": "VT·AE·열·광학",
+    "study_group": "육안검사 VT",
+    "tags": [
+      "육안검사 VT"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 375,
+    "title": "국내 원전 분야에시 수행중인 한국형 기량검중(Korean Performance Demonstration; KPD)의 정의 / 다른 비파괴검사 자격제도와 다른 점 |현재 수행중인 초음파 탐상김사 (UT) 기량검증",
+    "book_page": 419,
+    "week": 11,
+    "category": "설비 적용",
+    "week_name": "법규·규격·안전",
+    "study_group": "표준·자격·품질체계",
+    "tags": [
+      "표준·자격·품질체계",
+      "POD·검사신뢰성",
+      "원전·발전설비",
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "심화"
+  },
+  {
+    "number": 376,
+    "title": "Fe-FesC 상태도록 그리고 주요 온도 상 , 반응 (포정 , 공정 , 공석 ) 올 표시하고 설명",
+    "book_page": 420,
+    "week": 7,
+    "category": "종합·기타",
+    "week_name": "재료·부식·파괴",
+    "study_group": "금속조직·열처리",
+    "tags": [
+      "금속조직·열처리"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 377,
+    "title": "불활성가스텅스템이크용접 (TIG) 과 불서 성가스금속아크용접 (MIG)의 원리와 두 용접법의 특성",
+    "book_page": 422,
+    "week": 6,
+    "category": "용접",
+    "week_name": "용접",
+    "study_group": "용접공정·시공",
+    "tags": [
+      "용접공정·시공"
+    ],
+    "answer_type": "원리형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 378,
+    "title": "원자력안전법에서 규정하는 방사신 /방사선관리구역 /방사선작업종사자 / 선랑한도",
+    "book_page": 423,
+    "week": 11,
+    "category": "법규·규격",
+    "week_name": "법규·규격·안전",
+    "study_group": "방사선 안전·법규",
+    "tags": [
+      "방사선 안전·법규",
+      "방사선 물리·선원"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 379,
+    "title": "초음파 탐상검사(UT)에서 반사신6가 감쇄되는 경우 4가지",
+    "book_page": 424,
+    "week": 1,
+    "category": "초음파탐상 UT",
+    "week_name": "초음파 탐상검사(UT) 기초",
+    "study_group": "초음파 탐상 - 파동·전파",
+    "tags": [
+      "초음파 탐상 - 파동·전파",
+      "초음파 탐상 - 결함평가"
+    ],
+    "answer_type": "용어·설명형",
+    "difficulty": "기본"
+  },
+  {
+    "number": 380,
+    "title": "자분 탐상검 사에서 틀소자루 이용하 자기족청법의 원리 , 적용방법 및 특성 425 1. 과년도 출제문제 Eva",
+    "book_page": 425,
+    "week": 3,
+    "category": "자분·침투 MT/PT",
+    "week_name": "MT·PT 표면검사",
+    "study_group": "자분탐상 MT",
+    "tags": [
+      "자분탐상 MT"
+    ],
+    "answer_type": "절차·적용형",
+    "difficulty": "기본"
+  }
+]
