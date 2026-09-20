@@ -83,6 +83,7 @@ def normalize_title(title: str, number: int) -> str:
         "초음파탕상": "초음파 탐상",
         "초음파람상": "초음파 탐상",
         "초음파팀상": "초음파 탐상",
+        "초음파닭상": "초음파 탐상",
         "초음파 탑상": "초음파 탐상",
         "초음파 담상": "초음파 탐상",
         "초음파 탕상": "초음파 탐상",
@@ -98,9 +99,12 @@ def normalize_title(title: str, number: int) -> str:
         "비파과검사": "비파괴검사",
         "비파과 검사": "비파괴검사",
         "비피과": "비파괴",
+        "김사": "검사",
     }
     for wrong, correct in replacements.items():
         title = title.replace(wrong, correct)
+    if number == 4:
+        return "초음파탐상검사에 사용하는 A형 표준시험편(STB-A1)의 용도"
     if number == 90:
         return "전자기음향탐촉자(EMAT)에서 초음파의 생성 원리와 실제 적용상의 문제점을 기술"
     if number == 145:

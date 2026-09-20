@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
 import tkinter as tk
@@ -10,6 +11,8 @@ import fitz
 from PIL import Image, ImageTk
 
 from study_content import WEEKLY_CONTENT
+from glossary_data import GLOSSARY
+from problem_summary_data import summary_for_problem
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -93,8 +96,21 @@ def load_problem_index() -> list[dict]:
 ALL_PROBLEMS = load_problem_index()
 
 
+def question_category_badge(category: str) -> str:
+    """답안연습 목록에서는 검사명 중복을 피하고 표준 약어만 표시한다."""
+    badges = {
+        "초음파탐상 UT": "UT",
+        "방사선투과 RT": "RT",
+        "자분·침투 MT/PT": "MT/PT",
+        "와전류·누설 ET/LT": "ET/LT",
+        "육안·음향방출 VT/AE": "VT/AE",
+        "고급 초음파": "UT-고급",
+    }
+    return badges.get(category, category)
+
+
 def load_data() -> dict:
-    empty = {"weeks": [], "questions": [], "tasks": [], "answers": {}, "mistakes": []}
+    empty = {"weeks": [], "questions": [], "tasks": [], "answers": {}, "mistakes": [], "glossary_understood": [], "glossary_review": [], "glossary_history": []}
     if not DATA_FILE.exists():
         return empty
     try:
@@ -153,6 +169,7 @@ class StudyApp(tk.Tk):
         self.timer_seconds = 1500
         self.timer_running = False
         self.timer_job = None
+        self.pending_glossary_term = None
         self._configure_styles()
         self._build_shell()
         self.show_view("dashboard")
@@ -176,7 +193,7 @@ class StudyApp(tk.Tk):
         tk.Label(brand_text, text="NDT 기술사", bg=COLORS["ink"], fg="white", font=("맑은 고딕", 14, "bold")).pack(anchor="w")
         tk.Label(brand_text, text="STUDY WORKSPACE", bg=COLORS["ink"], fg="#91a49c", font=("Arial", 8)).pack(anchor="w")
 
-        items = [("dashboard", "01   대시보드"), ("plan", "02   12주 학습계획"), ("theory", "03   주차별 학습답안"), ("questions", "04   문제은행"), ("answer", "05   답안연습"), ("mistakes", "06   오답노트")]
+        items = [("dashboard", "01   대시보드"), ("plan", "02   12주 학습계획"), ("theory", "03   주차별 학습답안"), ("questions", "04   문제은행"), ("answer", "05   답안연습"), ("mistakes", "06   오답노트"), ("glossary", "07   용어사전")]
         for key, label in items:
             button = tk.Button(sidebar, text=label, anchor="w", padx=24, pady=12, bd=0, bg=COLORS["ink"], fg="#b7c3be", activebackground="#1d3931", activeforeground="white", font=("맑은 고딕", 10), command=lambda k=key: self.show_view(k))
             button.pack(fill="x", padx=12, pady=2)
@@ -242,7 +259,7 @@ class StudyApp(tk.Tk):
             child.destroy()
 
     def show_view(self, name: str):
-        titles = {"dashboard": "학습 대시보드", "plan": "12주 학습계획", "theory": "주차별 학습답안", "questions": "문제은행", "answer": "답안연습", "mistakes": "오답노트"}
+        titles = {"dashboard": "학습 대시보드", "plan": "12주 학습계획", "theory": "주차별 학습답안", "questions": "문제은행", "answer": "답안연습", "mistakes": "오답노트", "glossary": "핵심용어 사전"}
         self.page_title.config(text=titles[name])
         for key, button in self.nav_buttons.items():
             button.config(bg="#1d3931" if key == name else COLORS["ink"], fg="white" if key == name else "#b7c3be")
@@ -291,7 +308,7 @@ class StudyApp(tk.Tk):
             self.label(box, value, 18, COLORS["ink"], True).pack(anchor="w", pady=(4, 0))
 
         tasks = self.card(root, fill="x")
-        self.label(tasks, "이번 주 · 초음파탐상 UT", 14, bold=True).pack(anchor="w", pady=(0, 8))
+        self.label(tasks, "이번 주 · 초음파탐상검사(UT)", 14, bold=True).pack(anchor="w", pady=(0, 8))
         for task_id, text in [("ut-theory", "파동과 음향임피던스"), ("ut-nearfield", "근거리음장과 감쇠"), ("ut-probe", "탐촉자와 주파수 선정"), ("ut-paut", "PAUT 원리와 특성")]:
             var = tk.BooleanVar(value=task_id in self.data["tasks"])
             cb = tk.Checkbutton(tasks, text=text, variable=var, bg=COLORS["white"], activebackground=COLORS["white"], anchor="w", font=("맑은 고딕", 10), command=lambda t=task_id, v=var: self.toggle_list("tasks", t, v.get(), refresh=False))
@@ -452,6 +469,7 @@ class StudyApp(tk.Tk):
         self.theory_text.configure(yscrollcommand=answer_scroll.set)
         self.theory_text.pack(side="left", fill="both", expand=True)
         answer_scroll.pack(side="right", fill="y")
+        self.theory_text.bind("<Button-3>", self.show_glossary_context_menu)
         self.theory_lesson_list.bind("<<ListboxSelect>>", self.show_theory_lesson)
         self.theory_lesson_list.selection_set(0)
         self.theory_lesson_list.activate(0)
@@ -483,10 +501,8 @@ class StudyApp(tk.Tk):
         self.theory_problem_meta.pack(anchor="w")
         self.theory_problem_title = self.label(detail_frame, "전체 관련문제", 14, bold=True, wraplength=620, justify="left")
         self.theory_problem_title.pack(anchor="w", pady=(5, 12))
-        self.theory_problem_tags = self.label(detail_frame, "왼쪽에서 핵심원리와 문제를 선택하면 상세정보가 표시됩니다.", 9, COLORS["muted"], wraplength=620, justify="left")
-        self.theory_problem_tags.pack(anchor="w")
         action_bar = tk.Frame(detail_frame, bg=COLORS["white"])
-        action_bar.pack(anchor="w", pady=(18, 0))
+        action_bar.pack(side="bottom", fill="x", pady=(12, 0))
         self.full_problem_pane = problem_pane
         self.full_tree_frame = tree_frame
         self.full_detail_frame = detail_frame
@@ -494,11 +510,19 @@ class StudyApp(tk.Tk):
         self.full_list_toggle.pack(side="left", padx=(0, 8))
         self.action_button(action_bar, "원문 해설 보기", self.open_selected_theory_source).pack(side="left")
         self.action_button(action_bar, "이 문제 답안연습", self.open_selected_theory_answer, primary=False).pack(side="left", padx=8)
+        summary_frame = tk.Frame(detail_frame, bg=COLORS["white"])
+        summary_frame.pack(fill="both", expand=True)
+        self.theory_problem_summary = tk.Text(summary_frame, wrap="word", state="disabled", cursor="xterm", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 10), padx=2, pady=4, spacing1=3, spacing3=7)
+        summary_scroll = ttk.Scrollbar(summary_frame, orient="vertical", command=self.theory_problem_summary.yview)
+        self.theory_problem_summary.configure(yscrollcommand=summary_scroll.set)
+        self.theory_problem_summary.pack(side="left", fill="both", expand=True)
+        summary_scroll.pack(side="right", fill="y")
+        self.theory_problem_summary.bind("<Button-3>", self.show_glossary_context_menu)
+        self.theory_problem_summary.bind("<Control-c>", self.copy_selected_text)
         def resize_detail(event):
             width = max(260, event.width - 38)
             self.theory_problem_meta.config(wraplength=width)
             self.theory_problem_title.config(wraplength=width)
-            self.theory_problem_tags.config(wraplength=width)
         detail_frame.bind("<Configure>", resize_detail)
         self.theory_problem_tree.bind("<<TreeviewSelect>>", self.show_theory_problem)
         first_problem = next(iter(self.theory_problem_map), None)
@@ -574,6 +598,253 @@ class StudyApp(tk.Tk):
         text.config(state="disabled")
         text.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
+        text.bind("<Button-3>", self.show_glossary_context_menu)
+
+    def glossary_entry_for(self, query):
+        query = (query or "").strip().strip(".,:;!?()[]{}<>‘’“”'\"")
+        if not query:
+            return None
+        lowered = query.casefold()
+        for entry in GLOSSARY:
+            names = [entry["term"], *entry.get("aliases", [])]
+            if any(lowered == str(name).casefold() for name in names):
+                return entry
+        for entry in GLOSSARY:
+            names = [entry["term"], *entry.get("aliases", [])]
+            if any(str(name).casefold() in lowered or lowered in str(name).casefold() for name in names):
+                return entry
+        return None
+
+    def show_glossary_context_menu(self, event):
+        widget = event.widget
+        try:
+            query = widget.get("sel.first", "sel.last").strip()
+        except tk.TclError:
+            index = widget.index(f"@{event.x},{event.y}")
+            query = widget.get(f"{index} wordstart", f"{index} wordend").strip()
+        entry = self.glossary_entry_for(query)
+        menu = tk.Menu(self, tearoff=False)
+        if entry:
+            menu.add_command(label=f'“{entry["term"]}” 용어 설명창 열기', command=lambda: self.show_glossary_popup(entry))
+        else:
+            menu.add_command(label="선택한 용어가 사전에 없습니다", state="disabled")
+        if query:
+            menu.add_separator()
+            menu.add_command(label="선택 내용 복사", command=lambda: self.copy_text_to_clipboard(query))
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def copy_text_to_clipboard(self, text):
+        self.clipboard_clear()
+        self.clipboard_append(text)
+
+    def copy_selected_text(self, event):
+        try:
+            text = event.widget.get("sel.first", "sel.last")
+        except tk.TclError:
+            return "break"
+        self.copy_text_to_clipboard(text)
+        return "break"
+
+    def show_glossary_popup(self, entry):
+        previous = getattr(self, "glossary_popup", None)
+        if previous and previous.winfo_exists():
+            previous.destroy()
+
+        popup = tk.Toplevel(self)
+        self.glossary_popup = popup
+        popup.title(f'핵심용어 · {entry["term"]}')
+        popup.geometry("560x600")
+        popup.minsize(440, 420)
+        popup.configure(bg=COLORS["paper"])
+        popup.transient(self)
+
+        self.update_idletasks()
+        width, height = 560, 600
+        root_x, root_y = self.winfo_rootx(), self.winfo_rooty()
+        right_space = popup.winfo_screenwidth() - (root_x + self.winfo_width())
+        x = root_x + self.winfo_width() + 8 if right_space >= width + 8 else max(0, root_x + self.winfo_width() - width - 24)
+        y = max(0, root_y + 90)
+        popup.geometry(f"{width}x{height}+{x}+{y}")
+
+        header = tk.Frame(popup, bg=COLORS["green"], padx=24, pady=18)
+        header.pack(fill="x")
+        self.label(header, entry["category"], 9, COLORS["lime"], True, COLORS["green"]).pack(anchor="w")
+        self.label(header, entry["term"], 20, "white", True, COLORS["green"]).pack(anchor="w", pady=(4, 0))
+        aliases = ", ".join(entry.get("aliases", []))
+        if aliases:
+            self.label(header, f"별칭: {aliases}", 8, "#c4d5ce", bg=COLORS["green"]).pack(anchor="w", pady=(4, 0))
+
+        text_frame = tk.Frame(popup, bg=COLORS["white"])
+        text_frame.pack(fill="both", expand=True, padx=18, pady=(18, 8))
+        text = tk.Text(text_frame, wrap="word", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 10), padx=18, pady=16, spacing1=3, spacing3=8)
+        scroll = ttk.Scrollbar(text_frame, orient="vertical", command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        sections = [
+            ("정의", entry.get("definition", "")),
+            ("현재 답안과의 관계", entry.get("relation", "")),
+            ("핵심 식·포인트", entry.get("formula", "")),
+            ("관련 용어", " · ".join(entry.get("related", []))),
+            ("관련 문제", "\n".join(f"• {q}" for q in entry.get("questions", []))),
+        ]
+        text.insert("1.0", "\n\n".join(f"[{title}]\n{value}" for title, value in sections if value))
+        text.config(state="disabled")
+        text.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+
+        buttons = tk.Frame(popup, bg=COLORS["paper"])
+        buttons.pack(fill="x", padx=18, pady=(0, 16))
+        self.action_button(buttons, "전체 용어사전", lambda: (popup.destroy(), self.open_glossary_term(entry["term"])), primary=False).pack(side="left")
+        self.action_button(buttons, "닫기", popup.destroy).pack(side="right")
+
+        history = self.data.setdefault("glossary_history", [])
+        if entry["term"] in history:
+            history.remove(entry["term"])
+        history.insert(0, entry["term"])
+        del history[20:]
+        self.save()
+
+    def open_glossary_term(self, query):
+        entry = self.glossary_entry_for(query)
+        self.pending_glossary_term = entry["term"] if entry else query
+        self.show_view("glossary")
+
+    def build_glossary(self):
+        root = tk.Frame(self.view_host, bg=COLORS["paper"])
+        root.pack(fill="both", expand=True)
+
+        tools = tk.Frame(root, bg=COLORS["paper"])
+        tools.pack(fill="x", pady=(0, 12))
+        self.glossary_search_var = tk.StringVar()
+        search = tk.Entry(tools, textvariable=self.glossary_search_var, font=("맑은 고딕", 10), relief="solid", bd=1)
+        search.pack(side="left", fill="x", expand=True, ipady=8)
+        categories = ["전체"] + sorted({entry["category"] for entry in GLOSSARY})
+        self.glossary_category_var = tk.StringVar(value="전체")
+        category = ttk.Combobox(tools, textvariable=self.glossary_category_var, values=categories, state="readonly", width=16)
+        category.pack(side="left", padx=(10, 0))
+
+        pane = tk.PanedWindow(root, orient="horizontal", bg=COLORS["paper"], sashwidth=5, sashrelief="flat")
+        pane.pack(fill="both", expand=True)
+        list_card = tk.Frame(pane, bg=COLORS["white"], highlightbackground=COLORS["line"], highlightthickness=1, padx=12, pady=12)
+        detail = tk.Frame(pane, bg=COLORS["white"], highlightbackground=COLORS["line"], highlightthickness=1, padx=24, pady=20)
+        pane.add(list_card, minsize=240, width=300)
+        pane.add(detail, minsize=500)
+
+        self.glossary_count = self.label(list_card, "", 9, COLORS["muted"])
+        self.glossary_count.pack(anchor="w", pady=(0, 8))
+        list_frame = tk.Frame(list_card, bg=COLORS["white"])
+        list_frame.pack(fill="both", expand=True)
+        self.glossary_list = tk.Listbox(list_frame, bd=0, highlightthickness=0, selectbackground=COLORS["green"], selectforeground="white", activestyle="none", font=("맑은 고딕", 10))
+        list_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.glossary_list.yview)
+        self.glossary_list.configure(yscrollcommand=list_scroll.set)
+        self.glossary_list.pack(side="left", fill="both", expand=True)
+        list_scroll.pack(side="right", fill="y")
+
+        self.glossary_meta = self.label(detail, "", 9, COLORS["green2"], True)
+        self.glossary_meta.pack(anchor="w")
+        self.glossary_title = self.label(detail, "용어를 선택하세요", 21, bold=True)
+        self.glossary_title.pack(anchor="w", pady=(5, 12))
+        text_frame = tk.Frame(detail, bg=COLORS["white"])
+        text_frame.pack(fill="both", expand=True)
+        self.glossary_text = tk.Text(text_frame, wrap="word", state="disabled", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 11), padx=2, pady=2, spacing1=3, spacing3=9)
+        detail_scroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.glossary_text.yview)
+        self.glossary_text.configure(yscrollcommand=detail_scroll.set)
+        self.glossary_text.pack(side="left", fill="both", expand=True)
+        detail_scroll.pack(side="right", fill="y")
+        actions = tk.Frame(detail, bg=COLORS["white"])
+        actions.pack(fill="x", pady=(12, 0))
+        self.glossary_understood_button = self.action_button(actions, "이해 완료", self.toggle_glossary_understood)
+        self.glossary_understood_button.pack(side="left")
+        self.glossary_review_button = self.action_button(actions, "복습 표시", self.toggle_glossary_review, primary=False)
+        self.glossary_review_button.pack(side="left", padx=8)
+
+        self.glossary_list.bind("<<ListboxSelect>>", self.show_glossary_detail)
+        self.glossary_search_var.trace_add("write", lambda *_: self.refresh_glossary_list())
+        self.glossary_category_var.trace_add("write", lambda *_: self.refresh_glossary_list())
+        self.refresh_glossary_list()
+        search.focus_set()
+
+    def refresh_glossary_list(self):
+        query = self.glossary_search_var.get().strip().casefold()
+        category = self.glossary_category_var.get()
+        entries = []
+        for entry in GLOSSARY:
+            haystack = " ".join([entry["term"], *entry.get("aliases", []), entry.get("definition", ""), entry.get("relation", "")]).casefold()
+            if query and query not in haystack:
+                continue
+            if category != "전체" and entry["category"] != category:
+                continue
+            entries.append(entry)
+        self.filtered_glossary = entries
+        self.glossary_list.delete(0, "end")
+        understood = set(self.data.get("glossary_understood", []))
+        review = set(self.data.get("glossary_review", []))
+        for entry in entries:
+            mark = "✓ " if entry["term"] in understood else ("★ " if entry["term"] in review else "")
+            self.glossary_list.insert("end", mark + entry["term"])
+        self.glossary_count.config(text=f"검색 결과 {len(entries)}개 · ✓ 이해 완료 · ★ 복습")
+        target = self.pending_glossary_term
+        index = next((i for i, entry in enumerate(entries) if entry["term"] == target), 0) if entries else None
+        self.pending_glossary_term = None
+        if index is not None:
+            self.glossary_list.selection_set(index)
+            self.glossary_list.activate(index)
+            self.glossary_list.see(index)
+            self.show_glossary_detail()
+
+    def show_glossary_detail(self, *_args):
+        selection = self.glossary_list.curselection()
+        if not selection or selection[0] >= len(self.filtered_glossary):
+            return
+        entry = self.filtered_glossary[selection[0]]
+        self.current_glossary_entry = entry
+        self.glossary_meta.config(text=f'{entry["category"]} · 별칭: {", ".join(entry.get("aliases", [])) or "없음"}')
+        self.glossary_title.config(text=entry["term"])
+        sections = [
+            ("정의", entry.get("definition", "")),
+            ("현재 답안과의 관계", entry.get("relation", "")),
+            ("핵심 식·포인트", entry.get("formula", "")),
+            ("관련 용어", " · ".join(entry.get("related", []))),
+            ("관련 문제", "\n".join(f"• {q}" for q in entry.get("questions", []))),
+        ]
+        content = "\n\n".join(f"[{title}]\n{text}" for title, text in sections if text)
+        self.glossary_text.config(state="normal")
+        self.glossary_text.delete("1.0", "end")
+        self.glossary_text.insert("1.0", content)
+        self.glossary_text.config(state="disabled")
+        history = self.data.setdefault("glossary_history", [])
+        if entry["term"] in history:
+            history.remove(entry["term"])
+        history.insert(0, entry["term"])
+        del history[20:]
+        self.save()
+        self.update_glossary_buttons()
+
+    def update_glossary_buttons(self):
+        term = self.current_glossary_entry["term"]
+        understood = term in self.data.get("glossary_understood", [])
+        review = term in self.data.get("glossary_review", [])
+        self.glossary_understood_button.config(text="✓ 이해 완료됨" if understood else "이해 완료")
+        self.glossary_review_button.config(text="★ 복습 중" if review else "복습 표시")
+
+    def toggle_glossary_understood(self):
+        if not hasattr(self, "current_glossary_entry"):
+            return
+        term = self.current_glossary_entry["term"]
+        values = self.data.setdefault("glossary_understood", [])
+        values.remove(term) if term in values else values.append(term)
+        self.save()
+        self.pending_glossary_term = term
+        self.refresh_glossary_list()
+
+    def toggle_glossary_review(self):
+        if not hasattr(self, "current_glossary_entry"):
+            return
+        term = self.current_glossary_entry["term"]
+        values = self.data.setdefault("glossary_review", [])
+        values.remove(term) if term in values else values.append(term)
+        self.save()
+        self.pending_glossary_term = term
+        self.refresh_glossary_list()
 
     def selected_theory_problem(self):
         selection = self.theory_problem_tree.selection() if hasattr(self, "theory_problem_tree") else ()
@@ -585,8 +856,55 @@ class StudyApp(tk.Tk):
             return
         self.theory_problem_meta.config(text=f'{problem["week"]:02d}주 · {problem["study_group"]} · {problem["answer_type"]} · {problem["difficulty"]} · 교재 p.{problem["book_page"]}')
         self.theory_problem_title.config(text=f'{problem["number"]}. {problem["title"]}')
-        related = " · ".join(problem["tags"])
-        self.theory_problem_tags.config(text=f"연관 원리: {related}\n\n원문 해설을 열어 교재 답안을 확인하거나, 답안연습으로 이동해 직접 작성할 수 있습니다.")
+        content = self.problem_study_summary(problem)
+        self.theory_problem_summary.config(state="normal")
+        self.theory_problem_summary.delete("1.0", "end")
+        self.theory_problem_summary.insert("1.0", content)
+        self.theory_problem_summary.see("1.0")
+        self.theory_problem_summary.config(state="disabled")
+
+    def related_core_lesson(self, problem):
+        week = next((item for item in WEEKLY_CONTENT if item["week"] == problem["week"]), None)
+        if not week:
+            return None
+        source = " ".join([problem["title"], problem.get("study_group", ""), *problem.get("tags", [])]).lower()
+        source_words = set(re.findall(r"[가-힣a-zA-Z0-9]{2,}", source))
+        best, best_score = None, -1
+        for lesson in week["lessons"]:
+            lesson_words = set(re.findall(r"[가-힣a-zA-Z0-9]{2,}", (lesson["title"] + " " + lesson["answer"]).lower()))
+            score = len(source_words & lesson_words)
+            if score > best_score:
+                best, best_score = lesson, score
+        return best
+
+    def problem_study_summary(self, problem):
+        intent_by_type = {
+            "용어·설명형": "정확한 정의를 먼저 쓰고 원리, 특징, 적용 및 한계를 핵심어 중심으로 설명하는 문제이다.",
+            "원리형": "작동 원리와 물리적 근거를 공식 또는 개념도와 연결해 설명하는 문제이다.",
+            "절차·적용형": "선정 기준과 수행 절차를 순서대로 제시하고 현장 적용 시 주의사항을 설명하는 문제이다.",
+            "비교형": "공통 비교기준을 세운 뒤 원리, 성능, 적용범위와 장단점을 표로 구분하는 문제이다.",
+            "원인·대책형": "발생 원인과 영향인자를 분류하고 각각에 대응하는 예방·관리대책을 연결하는 문제이다.",
+        }
+        outlines = {
+            "용어·설명형": "① 정의  ② 원리  ③ 주요 특징  ④ 적용  ⑤ 한계·주의사항",
+            "원리형": "① 개요  ② 원리·공식  ③ 구성 또는 신호  ④ 영향인자  ⑤ 적용",
+            "절차·적용형": "① 목적  ② 선정기준  ③ 수행절차  ④ 품질관리  ⑤ 적용·주의사항",
+            "비교형": "① 비교 목적  ② 공통 원리  ③ 항목별 비교표  ④ 선정기준  ⑤ 결론",
+            "원인·대책형": "① 현상  ② 발생원인  ③ 영향  ④ 검출·평가  ⑤ 방지대책",
+        }
+        lesson = self.related_core_lesson(problem)
+        summary, summary_basis = summary_for_problem(problem)
+        linked = lesson["title"] if lesson else "주차별 종합답안"
+        keywords = " · ".join(problem.get("tags", [])[:4]) or problem.get("study_group", "")
+        answer_type = problem.get("answer_type", "용어·설명형")
+        return (
+            f"[출제 의도]\n{intent_by_type.get(answer_type, intent_by_type['용어·설명형'])}\n\n"
+            f"[핵심용어]\n{keywords}\n\n"
+            f"[핵심요약 · {summary_basis}]\n{summary}\n\n"
+            f"[권장 답안 구성]\n{outlines.get(answer_type, outlines['용어·설명형'])}\n\n"
+            f"[연계 필수답안]\n{linked}\n\n"
+            "※ 아래 ‘원문 해설 보기’에서 교재 해당 페이지를 확인해 최종 답안을 보완하세요."
+        )
 
     def open_selected_theory_source(self):
         problem = self.selected_theory_problem()
@@ -725,7 +1043,7 @@ class StudyApp(tk.Tk):
         editor.pack(side="left", fill="both", expand=True)
         self.label(editor, "연습문제", 9, bold=True).pack(anchor="w")
         self.answer_question_var = tk.StringVar()
-        display = [f"[{q[1]}] {q[2]}" for q in QUESTIONS]
+        display = [f"[{question_category_badge(q[1])}] {q[2]}" for q in QUESTIONS]
         self.answer_combo = ttk.Combobox(editor, values=display, state="readonly", textvariable=self.answer_question_var)
         self.answer_combo.pack(fill="x", pady=(5, 12))
         qid = getattr(self, "pending_question", QUESTIONS[0][0])
