@@ -8,9 +8,9 @@
         "V": 40,
         "No": 50,
         "Date": 90,
-        "Drawing No.": 400,
-        "Joint No.": 200,
-        "Location": 300,
+        "Drawing No.": 202,
+        "Joint No.": 126,
+        "Location": 127,
         "Ni": 60,
         "Cr": 60,
         "Mo": 60,
@@ -149,7 +149,7 @@
     "RT_DATA_END_ROW": "36",
     "RT_PRINT_END_ROW": "36",
     "PHOTO_SASH_RATIO": 0.4758656873032529,
-    "GAPJI_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
+    "GAPJI_CUSTOMER": "\ub86f\ub370\uac74\uc124\u321c",
     "KOGAS_COL_WIDTHS": {
         "selected": 40,
         "No": 50,
@@ -181,11 +181,11 @@
         "Welder": 100,
         "Remarks": 120
     },
-    "WINDOW_GEOMETRY": "1920x1009+-2179+7",
+    "WINDOW_GEOMETRY": "1920x1009+-11+53",
     "WINDOW_STATE": "zoomed",
-    "ACTIVE_TAB": 2,
-    "PMI_TARGET_PATH": "",
-    "PMI_TEMPLATE_PATH": "",
+    "ACTIVE_TAB": 0,
+    "PMI_TARGET_PATH": "F:/\ub0b4 \ub4dc\ub77c\uc774\ube0c/01_\uc5c5\ubb34_\ubc0f_\ud68c\uc0ac/Office/\ucc29\uacf5/Project PROVIDENCE \uc911 \ube44\ud30c\uad34\uac80\uc0ac/\ubcf4\uace0\uc11c/PMI/260915/XL2-200983.xls",
+    "PMI_TEMPLATE_PATH": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/PMI \ud15c\ud50c\ub9bf \ubcf4\uace0\uc11c.xlsm",
     "RT_TARGET_PATH": "",
     "RT_TEMPLATE_PATH": "C:/Users/jjch2/Desktop/\uc9c0\uc5ed\ub09c\ubc29 RT.xlsx",
     "PT_TARGET_PATH": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/NDEPTMTApprove JHC PT 0031.xlsx",
@@ -279,32 +279,7 @@
         "shift_x": "4",
         "shift_y": "1",
         "dpi": "96",
-        "selected_files": [
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R03_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R04_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R05_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R06_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R07_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R08_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R09_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R10_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_R11_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S03_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S04_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S05_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S06_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S07_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S08_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S09_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S10_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-1-700A_S11_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-3-200A_R01_270_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-3-200A_R01_90_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-3-200A_S01_270_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-3-200A_S01_90_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-3-200A_S02_270_capture.png",
-            "C:\\Users\\jjch2\\Desktop\\captuer\\JA2026-013-012-0-3-200A_S02_90_capture.png"
-        ],
+        "selected_files": [],
         "item_metadata": {},
         "last_save_dir": "C:/Users/-/OneDrive/\ubc14\ud0d5 \ud654\uba74/captuer"
     },
@@ -422,7 +397,7 @@
         "Evaluation",
         "Remarks"
     ],
-    "GAPJI_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
+    "GAPJI_PROJECT": "Project PROVIDENCE (K1)",
     "GAPJI_ITEM": "PIPE",
     "GAPJI_MATERIAL": "",
     "GAPJI_REPORT_NO": "",
@@ -937,13 +912,13 @@
     "PMI_FILTERS": [
         {
             "key": "Cr",
-            "min": "",
-            "max": ""
+            "min": "18",
+            "max": "20"
         },
         {
             "key": "Ni",
-            "min": "",
-            "max": ""
+            "min": "8",
+            "max": "11"
         },
         {
             "key": "Mo",
@@ -1071,7 +1046,19 @@
     "PMI_CHEM_ELEMENT_3": "Mo",
     "PMI_CHEM_ELEMENT_4": "-",
     "PMI_CHEM_ELEMENT_5": "-",
-    "PMI_CHEM_SPEC_1": "A312- Ni:10.0 ~ 14.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
-    "PMI_CHEM_SPEC_2": "ER316L- Ni:11.0 ~ 14.0%, Cr:18.0 ~ 20.0%, Mo:2.0 ~ 3.0%",
-    "PMI_CHEM_SPEC_3": "A182-Ni:10.0 ~ 15.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%"
+    "PMI_CHEM_SPEC_1": "A403- Ni:8.0 ~ 11.0%, Cr:18.0 ~ 20.0%",
+    "PMI_CHEM_SPEC_2": "A312- Ni:10.0 ~ 14.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
+    "PMI_CHEM_SPEC_3": "ER316- Ni:11.0 ~ 14.0%, Cr:18.0 ~ 20.0%, Mo:2.0 ~ 3.0%",
+    "PMI_PROJECT": "Project PROVIDENCE (K1)",
+    "PMI_CUSTOMER": "\ub86f\ub370\uac74\uc124\u321c",
+    "PMI_ITEM": "PIPE",
+    "PMI_MATERIAL": "",
+    "RT_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
+    "RT_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
+    "RT_ITEM": "PIPE",
+    "RT_MATERIAL": "",
+    "PAUT_PROJECT": "2026\ub144 \uc911\uc559\uc9c0\uc0ac \uc5f4\uc218\uc1a1\uad00 \ube44\ud30c\uad34\uac80\uc0ac \ub2e8\uac00\uacc4\uc57d",
+    "PAUT_CUSTOMER": "\ud55c\uad6d\uc9c0\uc5ed\ub09c\ubc29\uacf5\uc0ac \uc911\uc559\uc9c0\uc0ac",
+    "PAUT_ITEM": "PIPE",
+    "PAUT_MATERIAL": ""
 }
