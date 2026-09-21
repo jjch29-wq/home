@@ -36,6 +36,61 @@ COLORS = {
     "red": "#c95d51",
 }
 
+
+def calculate_near_field_values(diameter_mm, frequency_mhz, velocity_mm_us, test_distance_mm=None):
+    """원형 진동자의 파장과 근거리음장 한계거리를 mm 단위로 계산한다."""
+    try:
+        diameter_mm = float(diameter_mm)
+        frequency_mhz = float(frequency_mhz)
+        velocity_mm_us = float(velocity_mm_us)
+        distance_mm = None if test_distance_mm in (None, "") else float(test_distance_mm)
+    except (TypeError, ValueError):
+        raise ValueError("숫자를 올바르게 입력하세요.") from None
+    if diameter_mm <= 0 or frequency_mhz <= 0 or velocity_mm_us <= 0:
+        raise ValueError("진동자 직경, 주파수와 음속은 0보다 커야 합니다.")
+
+    wavelength_mm = velocity_mm_us / frequency_mhz
+    near_field_mm = diameter_mm**2 / (4 * wavelength_mm)
+    zone = None
+    if distance_mm is not None:
+        if distance_mm < 0:
+            raise ValueError("탐상거리는 0 이상이어야 합니다.")
+        zone = "근거리음장 내부" if distance_mm <= near_field_mm else "원거리음장 영역"
+    return wavelength_mm, near_field_mm, distance_mm, zone
+
+
+def rectangular_near_field_factor(short_side_mm, long_side_mm):
+    """직사각형 진동자의 단변/장변 비율에 가장 가까운 형상 보정계수를 반환한다."""
+    ratio = short_side_mm / long_side_mm
+    factors = {0.3: 0.99, 0.4: 1.00, 0.5: 1.01, 0.6: 1.04, 0.7: 1.09, 0.8: 1.15, 0.9: 1.25, 1.0: 1.37}
+    if ratio <= 0.3:
+        return ratio, 0.3, factors[0.3]
+    nearest_ratio = min(factors, key=lambda value: abs(value - ratio))
+    return ratio, nearest_ratio, factors[nearest_ratio]
+
+
+def calculate_rectangular_near_field_values(side_a_mm, side_b_mm, frequency_mhz, velocity_mm_us, test_distance_mm=None):
+    """직사각형 진동자의 형상 보정계수를 적용해 근거리음장을 계산한다."""
+    try:
+        side_a_mm = float(side_a_mm)
+        side_b_mm = float(side_b_mm)
+        frequency_mhz = float(frequency_mhz)
+        velocity_mm_us = float(velocity_mm_us)
+        distance_mm = None if test_distance_mm in (None, "") else float(test_distance_mm)
+    except (TypeError, ValueError):
+        raise ValueError("숫자를 올바르게 입력하세요.") from None
+    if side_a_mm <= 0 or side_b_mm <= 0 or frequency_mhz <= 0 or velocity_mm_us <= 0:
+        raise ValueError("진동자 크기, 주파수와 음속은 0보다 커야 합니다.")
+    if distance_mm is not None and distance_mm < 0:
+        raise ValueError("탐상거리는 0 이상이어야 합니다.")
+
+    short_side_mm, long_side_mm = sorted((side_a_mm, side_b_mm))
+    ratio, reference_ratio, factor = rectangular_near_field_factor(short_side_mm, long_side_mm)
+    wavelength_mm = velocity_mm_us / frequency_mhz
+    near_field_mm = factor * long_side_mm**2 / (4 * wavelength_mm)
+    zone = None if distance_mm is None else ("근거리음장 내부" if distance_mm <= near_field_mm else "원거리음장 영역")
+    return wavelength_mm, near_field_mm, distance_mm, zone, short_side_mm, long_side_mm, ratio, reference_ratio, factor
+
 WEEKS = [
     ("초음파 탐상검사 UT", "파동, 음향임피던스, 근거리음장, 감쇠, 탐촉자"),
     ("방사선투과 RT", "X선·감마선, 투과도계, 필름, CR·DR, 방사선 방호"),
@@ -458,6 +513,7 @@ class StudyApp(tk.Tk):
         self.core_list_toggle = self.action_button(core_controls, "필수답안 목록 접기 ◀", self.toggle_core_list, primary=False)
         self.core_list_toggle.pack(side="right")
         self.action_button(core_controls, "답안 크게 보기", self.open_core_answer_large).pack(side="right", padx=6)
+        self.near_field_button = self.action_button(core_controls, "근거리음장 계산기", self.open_near_field_calculator)
         self.theory_source = self.label(answer_frame, "", 8, COLORS["green2"], True)
         self.theory_source.pack(anchor="w")
         self.theory_title = self.label(answer_frame, "", 15, bold=True)
@@ -541,12 +597,102 @@ class StudyApp(tk.Tk):
         source_label = lesson["source"].replace("(1)", "교재")
         self.theory_source.config(text=f'교재 위치: {source_label}')
         self.theory_title.config(text=lesson["title"])
+        if lesson["title"] == "근거리음장과 감쇠":
+            self.near_field_button.pack(side="left")
+        else:
+            self.near_field_button.pack_forget()
         self.theory_text.config(state="normal")
         self.theory_text.delete("1.0", "end")
         self.theory_text.insert("1.0", lesson["answer"])
         self.theory_text.see("1.0")
         self.theory_text.config(state="disabled")
         self.theory_panel.update_idletasks()
+
+    def open_near_field_calculator(self):
+        calculator = tk.Toplevel(self)
+        calculator.title("근거리음장 자동 계산기")
+        calculator.geometry("590x720")
+        calculator.minsize(520, 650)
+        calculator.configure(bg=COLORS["paper"])
+        calculator.transient(self)
+
+        header = tk.Frame(calculator, bg=COLORS["green"], padx=26, pady=20)
+        header.pack(fill="x")
+        self.label(header, "초음파탐상검사 · UT", 9, COLORS["lime"], True, COLORS["green"]).pack(anchor="w")
+        self.label(header, "근거리음장 자동 계산기", 20, "white", True, COLORS["green"]).pack(anchor="w", pady=(4, 0))
+        self.label(header, "원형과 직사각형 진동자의 근거리음장을 계산합니다.", 9, "#c4d5ce", bg=COLORS["green"]).pack(anchor="w", pady=(5, 0))
+
+        form = tk.Frame(calculator, bg=COLORS["white"], padx=26, pady=22, highlightbackground=COLORS["line"], highlightthickness=1)
+        form.pack(fill="x", padx=22, pady=(20, 10))
+        shape_var = tk.StringVar(value="직사각형")
+        self.label(form, "진동자 형상", 10, bold=True, bg=COLORS["white"]).grid(row=0, column=0, sticky="w", pady=7)
+        shape_combo = ttk.Combobox(form, textvariable=shape_var, values=["원형", "직사각형"], state="readonly", font=("맑은 고딕", 10))
+        shape_combo.grid(row=0, column=1, sticky="ew", padx=(18, 8), pady=7, ipady=4)
+
+        values = [
+            ("직경 D / 변 A", "8", "mm"),
+            ("변 B (직사각형)", "9", "mm"),
+            ("주파수 f", "5", "MHz"),
+            ("음속 c", "3.2", "mm/μs"),
+            ("탐상거리 (선택)", "", "mm"),
+        ]
+        variables = []
+        first_entry = None
+        for row, (label, default, unit) in enumerate(values, 1):
+            self.label(form, label, 10, bold=True, bg=COLORS["white"]).grid(row=row, column=0, sticky="w", pady=7)
+            variable = tk.StringVar(value=default)
+            entry = tk.Entry(form, textvariable=variable, font=("맑은 고딕", 11), relief="solid", bd=1, justify="right")
+            entry.grid(row=row, column=1, sticky="ew", padx=(18, 8), pady=7, ipady=7)
+            self.label(form, unit, 9, COLORS["muted"], bg=COLORS["white"]).grid(row=row, column=2, sticky="w")
+            variables.append(variable)
+            if first_entry is None:
+                first_entry = entry
+        form.grid_columnconfigure(1, weight=1)
+
+        result = tk.Frame(calculator, bg=COLORS["soft"], padx=24, pady=18)
+        result.pack(fill="both", expand=True, padx=22, pady=(0, 10))
+        result_title = self.label(result, "값을 입력하고 계산하세요.", 12, bold=True, bg=COLORS["soft"])
+        result_title.pack(anchor="w")
+        result_text = self.label(result, "원형: N = D²/(4λ)\n직사각형: N = kL²/(4λ)", 11, bg=COLORS["soft"], justify="left", anchor="nw")
+        result_text.pack(fill="both", expand=True, anchor="w", pady=(10, 0))
+
+        def calculate(_event=None):
+            try:
+                raw = [value.get().strip().replace(",", ".") for value in variables]
+                if shape_var.get() == "직사각형":
+                    result_values = calculate_rectangular_near_field_values(raw[0], raw[1], raw[2], raw[3], raw[4])
+                    wavelength, near_field, distance, zone, short_side, long_side, ratio, reference_ratio, factor = result_values
+                else:
+                    wavelength, near_field, distance, zone = calculate_near_field_values(raw[0], raw[2], raw[3], raw[4])
+            except ValueError as error:
+                messagebox.showwarning("입력값 확인", str(error) if str(error) else "숫자를 올바르게 입력하세요.", parent=calculator)
+                return
+            result_title.config(text="계산 결과")
+            lines = [f"파장  λ = {wavelength:.3f} mm", f"근거리음장 길이  N = {near_field:.2f} mm", ""]
+            if shape_var.get() == "직사각형":
+                lines.extend([
+                    f"크기: {short_side:g} × {long_side:g} mm  (단변/장변={ratio:.3f})",
+                    f"표 선택: {ratio:.3f} ≈ {reference_ratio:.1f} → k = {factor:.2f}",
+                    "※ k는 치수로 직접 계산하지 않고 형상비 표에서 선택",
+                    f"계산: N = {factor:.2f} × {long_side:g}² / (4 × {wavelength:.3f})",
+                ])
+            else:
+                lines.extend([
+                    f"계산: λ = {raw[3]} / {raw[2]} = {wavelength:.3f} mm",
+                    f"계산: N = {raw[0]}² / (4 × {wavelength:.3f}) = {near_field:.2f} mm",
+                ])
+            if distance is not None:
+                comparison = "≤" if distance <= near_field else ">"
+                lines.extend(["", f"판정: {distance:g} mm {comparison} {near_field:.2f} mm", f"→ {zone}"])
+            result_text.config(text="\n".join(lines))
+
+        buttons = tk.Frame(calculator, bg=COLORS["paper"])
+        buttons.pack(fill="x", padx=22, pady=(0, 18))
+        self.action_button(buttons, "계산하기", calculate).pack(side="left")
+        self.action_button(buttons, "닫기", calculator.destroy, primary=False).pack(side="right")
+        calculator.bind("<Return>", calculate)
+        first_entry.focus_set()
+        first_entry.selection_range(0, "end")
 
     def toggle_theory_week_list(self):
         if self.theory_selector.winfo_manager():
