@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#12372f">
+  <title>Carom Lab · 당구 경로 연습</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">3-CUSHION PATH TRAINER</p>
+        <h1>Carom Lab</h1>
+        <p class="subtitle">공을 배치하고, 경로를 설계하고, 결과를 확인하세요.</p>
+      </div>
+      <div class="header-actions">
+        <button id="randomBtn" class="button button-secondary" type="button">랜덤 배치</button>
+        <button id="resetBtn" class="button button-secondary" type="button">초기화</button>
+      </div>
+    </header>
+
+    <section class="workspace" aria-label="당구 경로 설계">
+      <div class="table-panel">
+        <div class="status-row" aria-live="polite">
+          <span id="statusBadge" class="status-badge">설계 중</span>
+          <span id="statusText">공을 드래그하거나 빈 곳을 눌러 조준하세요.</span>
+        </div>
+        <div id="tableWrap" class="table-wrap">
+          <canvas id="tableCanvas" width="1200" height="650" aria-label="3쿠션 당구대 시뮬레이션"></canvas>
+        </div>
+        <div class="legend" aria-label="공 범례">
+          <span><i class="ball-dot cue"></i>수구</span>
+          <span><i class="ball-dot yellow"></i>제1적구</span>
+          <span><i class="ball-dot red"></i>제2적구</span>
+          <span><i class="path-line"></i>예상 경로</span>
+        </div>
+      </div>
+
+      <aside class="control-panel">
+        <section class="control-section">
+          <div class="section-heading">
+            <h2>샷 설계</h2>
+            <output id="angleValue">0°</output>
+          </div>
+          <label for="angleInput">진행 각도</label>
+          <input id="angleInput" type="range" min="-180" max="180" step="1" value="0">
+
+          <div class="section-heading compact">
+            <label for="powerInput">세기</label>
+            <output id="powerValue">55%</output>
+          </div>
+          <input id="powerInput" type="range" min="10" max="100" step="1" value="55">
+
+          <label>당점</label>
+          <div class="spin-control">
+            <div id="spinPad" class="spin-pad" role="application" aria-label="당점 선택 영역">
+              <span class="spin-axis horizontal"></span>
+              <span class="spin-axis vertical"></span>
+              <span id="spinMarker" class="spin-marker"></span>
+            </div>
+            <div class="spin-values">
+              <span>좌우 <strong id="sideSpinValue">0</strong></span>
+              <span>상하 <strong id="verticalSpinValue">0</strong></span>
+            </div>
+          </div>
+
+          <label for="cushionInput">예측 쿠션 수</label>
+          <select id="cushionInput">
+            <option value="1">1쿠션</option>
+            <option value="2">2쿠션</option>
+            <option value="3" selected>3쿠션</option>
+            <option value="4">4쿠션</option>
+            <option value="5">5쿠션</option>
+          </select>
+          <button id="shootBtn" class="button button-primary button-block" type="button">샷 실행</button>
+        </section>
+
+        <section class="control-section stats-section">
+          <div class="section-heading">
+            <h2>연습 기록</h2>
+            <button id="clearStatsBtn" class="text-button" type="button">기록 초기화</button>
+          </div>
+          <div class="stats-grid">
+            <div><span>시도</span><strong id="attemptCount">0</strong></div>
+            <div><span>성공</span><strong id="successCount">0</strong></div>
+            <div><span>성공률</span><strong id="successRate">0%</strong></div>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-heading"><h2>배치 저장</h2></div>
+          <div class="save-row">
+            <input id="layoutName" type="text" maxlength="24" placeholder="배치 이름">
+            <button id="saveBtn" class="button button-secondary" type="button">저장</button>
+          </div>
+          <select id="savedLayouts" aria-label="저장된 배치">
+            <option value="">저장된 배치 선택</option>
+          </select>
+          <div class="layout-actions">
+            <button id="loadBtn" class="button button-secondary" type="button">불러오기</button>
+            <button id="deleteBtn" class="button button-danger" type="button">삭제</button>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="help-strip">
+      <strong>사용법</strong>
+      <span>① 공 드래그로 배치</span>
+      <span>② 빈 곳 클릭 또는 각도 조절</span>
+      <span>③ 세기·당점 선택</span>
+      <span>④ 예상 경로 확인 후 샷 실행</span>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
