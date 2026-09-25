@@ -28,6 +28,7 @@
   let successPath = null;
   let solving = false;
   let demoPosition = null;
+  let solveRunId = 0;
 
   const angleInput = document.getElementById("angleInput");
   const powerInput = document.getElementById("powerInput");
@@ -307,7 +308,7 @@
   }
 
   canvas.addEventListener("pointerdown", (event) => {
-    if (running) return;
+    if (running || solving) return;
     const point = pointerPosition(event);
     const selected = ballAt(point);
     if (selected) {
@@ -671,12 +672,19 @@
   }
 
   function solveSuccessRoute() {
-    if (running || solving) return;
-    solving = true;
-    clearSuccessPath();
+    if (running) return;
     const solveButton = document.getElementById("solveBtn");
-    solveButton.disabled = true;
-    solveButton.textContent = "경로 계산 중…";
+    if (solving) {
+      solving = false;
+      solveRunId++;
+      solveButton.textContent = "3쿠션 성공 경로 찾기";
+      setStatus("", "탐색 취소", "경로 계산을 중단했습니다. 공 위치와 조건을 다시 조정할 수 있습니다.");
+      return;
+    }
+    solving = true;
+    const currentRunId = ++solveRunId;
+    clearSuccessPath();
+    solveButton.textContent = "탐색 취소";
     setStatus("", "계산 중", `${firstBallId === "yellow" ? "노란공" : "빨간공"}을 먼저 맞히는 3쿠션 경로를 탐색합니다.`);
     render();
 
@@ -687,26 +695,34 @@
     const powers = [72, 88, 58, 100, 44];
     const spins = [0, -.5, .5, -1, 1];
     let angleIndex = 0;
+    let powerIndex = 0;
+    let spinIndex = 0;
+    let testedCount = 0;
+    const totalCandidates = angles.length * powers.length * spins.length;
     let found = null;
 
     function searchBatch() {
-      const batchEnd = Math.min(angleIndex + 18, angles.length);
-      for (; angleIndex < batchEnd && !found; angleIndex++) {
-        for (const testPower of powers) {
-          for (const testSpin of spins) {
-            found = simulateRoute(angles[angleIndex], testPower, testSpin);
-            if (found) break;
-          }
-          if (found) break;
+      if (!solving || currentRunId !== solveRunId) return;
+      const batchStartedAt = performance.now();
+      while (!found && angleIndex < angles.length && performance.now() - batchStartedAt < 10) {
+        found = simulateRoute(angles[angleIndex], powers[powerIndex], spins[spinIndex]);
+        testedCount++;
+        spinIndex++;
+        if (spinIndex >= spins.length) {
+          spinIndex = 0;
+          powerIndex++;
+        }
+        if (powerIndex >= powers.length) {
+          powerIndex = 0;
+          angleIndex++;
         }
       }
       if (!found && angleIndex < angles.length) {
-        document.getElementById("statusText").textContent = `성공 경로 탐색 ${Math.round(angleIndex / angles.length * 100)}%`;
+        document.getElementById("statusText").textContent = `성공 경로 탐색 ${Math.round(testedCount / totalCandidates * 100)}% · 필요하면 탐색을 취소할 수 있습니다.`;
         setTimeout(searchBatch, 0);
         return;
       }
       solving = false;
-      solveButton.disabled = false;
       solveButton.textContent = "3쿠션 성공 경로 찾기";
       if (found) {
         found = simulateRoute(found.angle, found.power, found.spin, true) || found;
