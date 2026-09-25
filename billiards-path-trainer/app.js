@@ -608,6 +608,11 @@
         }
       });
 
+      if (Math.hypot(simBalls[1].x - simBalls[2].x, simBalls[1].y - simBalls[2].y) < ballRadius * 2) {
+        invalid = true;
+        break;
+      }
+
       for (let i = 0; i < simBalls.length; i++) {
         for (let j = i + 1; j < simBalls.length; j++) {
           const a = simBalls[i], b = simBalls[j];
@@ -616,6 +621,12 @@
           const pairKey = `${a.id}:${b.id}`;
           if (distance >= ballRadius * 2) { touching.delete(pairKey); continue; }
           if (!distance) continue;
+          // 학습용 성공 경로에서는 적구끼리 먼저 충돌해 목표 위치가
+          // 바뀌는 우회 해법을 제외하고 수구의 직접 접촉만 인정한다.
+          if (a.id !== "cue" && b.id !== "cue") {
+            invalid = true;
+            continue;
+          }
           const nx = dx / distance, ny = dy / distance;
           const overlap = ballRadius * 2 - distance;
           a.x -= nx * overlap / 2; a.y -= ny * overlap / 2;
