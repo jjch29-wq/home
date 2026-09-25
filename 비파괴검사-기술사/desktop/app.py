@@ -165,7 +165,7 @@ def question_category_badge(category: str) -> str:
 
 
 def load_data() -> dict:
-    empty = {"weeks": [], "questions": [], "tasks": [], "answers": {}, "mistakes": [], "glossary_understood": [], "glossary_review": [], "glossary_history": []}
+    empty = {"weeks": [], "questions": [], "tasks": [], "answers": {}, "mistakes": [], "question_notes": [], "glossary_understood": [], "glossary_review": [], "glossary_history": []}
     if not DATA_FILE.exists():
         return empty
     try:
@@ -198,8 +198,15 @@ class ScrollFrame(tk.Frame):
         self.canvas.bind_all("<MouseWheel>", self._wheel)
 
     def _wheel(self, event):
-        if self.winfo_ismapped():
-            self.canvas.yview_scroll(int(-event.delta / 120), "units")
+        # bind_all 콜백은 화면 전환으로 이 프레임이 파괴된 직후에도
+        # 큐에 남은 MouseWheel 이벤트를 한 번 전달할 수 있다.
+        try:
+            if event.state & 0x0004:  # Ctrl+휠은 질문노트 글자 확대/축소에 사용
+                return
+            if self.winfo_exists() and self.winfo_ismapped():
+                self.canvas.yview_scroll(int(-event.delta / 120), "units")
+        except tk.TclError:
+            return
 
 
 class StudyApp(tk.Tk):
@@ -224,9 +231,13 @@ class StudyApp(tk.Tk):
         self.timer_seconds = 1500
         self.timer_running = False
         self.timer_job = None
+        self.question_note_zoom = 100
+        self.theory_zoom = 100
+        self.theory_zoom_labels = []
         self.pending_glossary_term = None
         self._configure_styles()
         self._build_shell()
+        self.bind_all("<Control-MouseWheel>", self.zoom_question_notes)
         self.show_view("dashboard")
         self.protocol("WM_DELETE_WINDOW", self.close_app)
 
@@ -248,7 +259,7 @@ class StudyApp(tk.Tk):
         tk.Label(brand_text, text="NDT 기술사", bg=COLORS["ink"], fg="white", font=("맑은 고딕", 14, "bold")).pack(anchor="w")
         tk.Label(brand_text, text="STUDY WORKSPACE", bg=COLORS["ink"], fg="#91a49c", font=("Arial", 8)).pack(anchor="w")
 
-        items = [("dashboard", "01   대시보드"), ("plan", "02   12주 학습계획"), ("theory", "03   주차별 학습답안"), ("questions", "04   문제은행"), ("answer", "05   답안연습"), ("mistakes", "06   오답노트"), ("glossary", "07   용어사전")]
+        items = [("dashboard", "01   대시보드"), ("plan", "02   12주 학습계획"), ("theory", "03   주차별 학습답안"), ("questions", "04   문제은행"), ("answer", "05   답안연습"), ("mistakes", "06   오답노트"), ("question_notes", "07   질문노트"), ("glossary", "08   용어사전")]
         for key, label in items:
             button = tk.Button(sidebar, text=label, anchor="w", padx=24, pady=12, bd=0, bg=COLORS["ink"], fg="#b7c3be", activebackground="#1d3931", activeforeground="white", font=("맑은 고딕", 10), command=lambda k=key: self.show_view(k))
             button.pack(fill="x", padx=12, pady=2)
@@ -314,7 +325,10 @@ class StudyApp(tk.Tk):
             child.destroy()
 
     def show_view(self, name: str):
-        titles = {"dashboard": "학습 대시보드", "plan": "12주 학습계획", "theory": "주차별 학습답안", "questions": "문제은행", "answer": "답안연습", "mistakes": "오답노트", "glossary": "핵심용어 사전"}
+        titles = {"dashboard": "학습 대시보드", "plan": "12주 학습계획", "theory": "주차별 학습답안", "questions": "문제은행", "answer": "답안연습", "mistakes": "오답노트", "question_notes": "질문노트", "glossary": "핵심용어 사전"}
+        if getattr(self, "text_find_popup", None):
+            self.close_text_finder()
+        self.current_view = name
         self.page_title.config(text=titles[name])
         for key, button in self.nav_buttons.items():
             button.config(bg="#1d3931" if key == name else COLORS["ink"], fg="white" if key == name else "#b7c3be")
@@ -322,7 +336,10 @@ class StudyApp(tk.Tk):
         getattr(self, f"build_{name}")()
 
     def label(self, parent, text, size=10, color=None, bold=False, bg=None, **kwargs):
-        return tk.Label(parent, text=text, bg=bg or parent.cget("bg"), fg=color or COLORS["ink"], font=("맑은 고딕", size, "bold" if bold else "normal"), **kwargs)
+        widget = tk.Label(parent, text=text, bg=bg or parent.cget("bg"), fg=color or COLORS["ink"], font=("맑은 고딕", size, "bold" if bold else "normal"), **kwargs)
+        widget._base_font_size = size
+        widget._font_bold = bold
+        return widget
 
     def card(self, parent, bg=None, **pack):
         frame = tk.Frame(parent, bg=bg or COLORS["white"], highlightbackground=COLORS["line"], highlightthickness=1, padx=22, pady=18)
@@ -445,7 +462,7 @@ class StudyApp(tk.Tk):
         self.theory_selector = selector
         self.theory_body = body
         self.label(selector, "12주 답안 목록", 12, bold=True).pack(anchor="w", pady=(0, 10))
-        self.theory_week_list = tk.Listbox(selector, bd=0, highlightthickness=1, highlightbackground=COLORS["line"], selectbackground=COLORS["green"], selectforeground="white", font=("맑은 고딕", 10), activestyle="none")
+        self.theory_week_list = tk.Listbox(selector, bd=0, highlightthickness=1, highlightbackground=COLORS["line"], selectbackground=COLORS["green"], selectforeground="white", font=("맑은 고딕", 10), activestyle="none", exportselection=False)
         self.theory_week_list.pack(fill="both", expand=True)
         for item in WEEKLY_CONTENT:
             self.theory_week_list.insert("end", f'{item["week"]:02d}주  {item["theme"]}')
@@ -474,6 +491,7 @@ class StudyApp(tk.Tk):
             return
         item = WEEKLY_CONTENT[selection[0]]
         self.current_theory_item = item
+        self.theory_zoom_labels = []
         self.pending_theory_week = item["week"]
         header_line = tk.Frame(self.theory_panel, bg=COLORS["paper"])
         header_line.pack(fill="x")
@@ -501,7 +519,7 @@ class StudyApp(tk.Tk):
         core_pane.add(lesson_frame, minsize=230, width=290)
         core_pane.add(answer_frame, minsize=480)
         self.label(lesson_frame, "필수답안 목록", 10, bold=True, bg=COLORS["white"]).pack(anchor="w", padx=14, pady=(14, 8))
-        self.theory_lesson_list = tk.Listbox(lesson_frame, bd=0, highlightthickness=0, selectbackground=COLORS["green"], selectforeground="white", activestyle="none", font=("맑은 고딕", 10))
+        self.theory_lesson_list = tk.Listbox(lesson_frame, bd=0, highlightthickness=0, selectbackground=COLORS["green"], selectforeground="white", activestyle="none", font=("맑은 고딕", 10), exportselection=False)
         self.theory_lesson_list.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         for number, lesson_name in enumerate(lesson_names, 1):
             self.theory_lesson_list.insert("end", f"{number}. {lesson_name}")
@@ -513,6 +531,9 @@ class StudyApp(tk.Tk):
         self.core_list_toggle = self.action_button(core_controls, "필수답안 목록 접기 ◀", self.toggle_core_list, primary=False)
         self.core_list_toggle.pack(side="right")
         self.action_button(core_controls, "답안 크게 보기", self.open_core_answer_large).pack(side="right", padx=6)
+        self.build_theory_zoom_controls(core_controls).pack(side="right", padx=(0, 6))
+        self.question_note_button = self.action_button(core_controls, "+ 질문 기록", self.add_question_note_from_theory)
+        self.question_note_button.pack(side="left", padx=(0, 6))
         self.near_field_button = self.action_button(core_controls, "근거리음장 계산기", self.open_near_field_calculator)
         self.theory_source = self.label(answer_frame, "", 8, COLORS["green2"], True)
         self.theory_source.pack(anchor="w")
@@ -520,12 +541,13 @@ class StudyApp(tk.Tk):
         self.theory_title.pack(anchor="w", pady=(3, 10))
         answer_text_frame = tk.Frame(answer_frame, bg=COLORS["white"])
         answer_text_frame.pack(fill="both", expand=True)
-        self.theory_text = tk.Text(answer_text_frame, wrap="word", state="disabled", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 10), padx=2, pady=2, spacing1=3, spacing3=7)
+        self.theory_text = tk.Text(answer_text_frame, wrap="word", state="disabled", cursor="xterm", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 10), padx=2, pady=2, spacing1=3, spacing3=7, selectbackground="#2b78c5", selectforeground="white")
         answer_scroll = ttk.Scrollbar(answer_text_frame, orient="vertical", command=self.theory_text.yview)
         self.theory_text.configure(yscrollcommand=answer_scroll.set)
         self.theory_text.pack(side="left", fill="both", expand=True)
         answer_scroll.pack(side="right", fill="y")
-        self.theory_text.bind("<Button-3>", self.show_glossary_context_menu)
+        self.enable_text_tools(self.theory_text)
+        self.theory_text.bind("<Control-MouseWheel>", self.zoom_theory_with_wheel)
         self.theory_lesson_list.bind("<<ListboxSelect>>", self.show_theory_lesson)
         self.theory_lesson_list.selection_set(0)
         self.theory_lesson_list.activate(0)
@@ -566,15 +588,16 @@ class StudyApp(tk.Tk):
         self.full_list_toggle.pack(side="left", padx=(0, 8))
         self.action_button(action_bar, "원문 해설 보기", self.open_selected_theory_source).pack(side="left")
         self.action_button(action_bar, "이 문제 답안연습", self.open_selected_theory_answer, primary=False).pack(side="left", padx=8)
+        self.build_theory_zoom_controls(action_bar).pack(side="right")
         summary_frame = tk.Frame(detail_frame, bg=COLORS["white"])
         summary_frame.pack(fill="both", expand=True)
-        self.theory_problem_summary = tk.Text(summary_frame, wrap="word", state="disabled", cursor="xterm", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 10), padx=2, pady=4, spacing1=3, spacing3=7)
+        self.theory_problem_summary = tk.Text(summary_frame, wrap="word", state="disabled", cursor="xterm", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 10), padx=2, pady=4, spacing1=3, spacing3=7, selectbackground="#2b78c5", selectforeground="white")
         summary_scroll = ttk.Scrollbar(summary_frame, orient="vertical", command=self.theory_problem_summary.yview)
         self.theory_problem_summary.configure(yscrollcommand=summary_scroll.set)
         self.theory_problem_summary.pack(side="left", fill="both", expand=True)
         summary_scroll.pack(side="right", fill="y")
-        self.theory_problem_summary.bind("<Button-3>", self.show_glossary_context_menu)
-        self.theory_problem_summary.bind("<Control-c>", self.copy_selected_text)
+        self.enable_text_tools(self.theory_problem_summary)
+        self.theory_problem_summary.bind("<Control-MouseWheel>", self.zoom_theory_with_wheel)
         def resize_detail(event):
             width = max(260, event.width - 38)
             self.theory_problem_meta.config(wraplength=width)
@@ -587,6 +610,46 @@ class StudyApp(tk.Tk):
             self.theory_problem_tree.focus(first_problem)
             self.theory_problem_tree.see(first_problem)
             self.show_theory_problem()
+        self.apply_theory_zoom()
+
+    def build_theory_zoom_controls(self, parent):
+        box = tk.Frame(parent, bg=parent.cget("bg"))
+        tk.Button(box, text="−", command=lambda: self.adjust_theory_zoom(-10), bd=0, width=3, bg=COLORS["soft"], font=("맑은 고딕", 9, "bold")).pack(side="left")
+        value = self.label(box, f"{self.theory_zoom}%", 8, COLORS["muted"], bg=parent.cget("bg"), width=6)
+        value.pack(side="left")
+        self.theory_zoom_labels.append(value)
+        tk.Button(box, text="+", command=lambda: self.adjust_theory_zoom(10), bd=0, width=3, bg=COLORS["soft"], font=("맑은 고딕", 9, "bold")).pack(side="left")
+        return box
+
+    def zoom_theory_with_wheel(self, event):
+        self.adjust_theory_zoom(10 if event.delta > 0 else -10)
+        return "break"
+
+    def adjust_theory_zoom(self, delta):
+        self.theory_zoom = max(70, min(180, self.theory_zoom + delta))
+        self.apply_theory_zoom()
+
+    def apply_theory_zoom(self):
+        for label in getattr(self, "theory_zoom_labels", []):
+            try:
+                if label.winfo_exists():
+                    label.config(text=f"{self.theory_zoom}%")
+            except tk.TclError:
+                pass
+        size = max(7, round(10 * self.theory_zoom / 100))
+        for name in ("theory_text", "theory_problem_summary"):
+            widget = getattr(self, name, None)
+            try:
+                if widget and widget.winfo_exists():
+                    widget.config(font=("맑은 고딕", size))
+            except tk.TclError:
+                pass
+        large = getattr(self, "large_theory_text", None)
+        try:
+            if large and large.winfo_exists():
+                large.config(font=("맑은 고딕", max(8, round(12 * self.theory_zoom / 100))))
+        except tk.TclError:
+            pass
 
     def show_theory_lesson(self, *_args):
         if not hasattr(self, "theory_lesson_list") or not self.theory_lesson_list.winfo_exists():
@@ -606,7 +669,29 @@ class StudyApp(tk.Tk):
         self.theory_text.insert("1.0", lesson["answer"])
         self.theory_text.see("1.0")
         self.theory_text.config(state="disabled")
+        note_count = sum(
+            1 for note in self.data["question_notes"]
+            if note.get("week") == self.current_theory_item["week"] and note.get("lesson_title") == lesson["title"]
+        )
+        self.question_note_button.config(text=f"+ 질문 기록 ({note_count})" if note_count else "+ 질문 기록")
         self.theory_panel.update_idletasks()
+
+    def current_theory_context(self):
+        selection = self.theory_lesson_list.curselection() if hasattr(self, "theory_lesson_list") else ()
+        if not selection or not hasattr(self, "current_theory_item"):
+            return None
+        lesson = self.current_theory_item["lessons"][selection[0]]
+        return {
+            "week": self.current_theory_item["week"],
+            "theme": self.current_theory_item["theme"],
+            "lesson_title": lesson["title"],
+            "source": lesson["source"].replace("(1)", "교재"),
+        }
+
+    def add_question_note_from_theory(self):
+        context = self.current_theory_context()
+        if context:
+            self.open_question_note_dialog(context=context)
 
     def open_near_field_calculator(self):
         calculator = tk.Toplevel(self)
@@ -622,7 +707,11 @@ class StudyApp(tk.Tk):
         self.label(header, "근거리음장 자동 계산기", 20, "white", True, COLORS["green"]).pack(anchor="w", pady=(4, 0))
         self.label(header, "원형과 직사각형 진동자의 근거리음장을 계산합니다.", 9, "#c4d5ce", bg=COLORS["green"]).pack(anchor="w", pady=(5, 0))
 
-        form = tk.Frame(calculator, bg=COLORS["white"], padx=26, pady=22, highlightbackground=COLORS["line"], highlightthickness=1)
+        content_scroll = ScrollFrame(calculator)
+        content_scroll.pack(fill="both", expand=True)
+        content = content_scroll.content
+
+        form = tk.Frame(content, bg=COLORS["white"], padx=26, pady=22, highlightbackground=COLORS["line"], highlightthickness=1)
         form.pack(fill="x", padx=22, pady=(20, 10))
         shape_var = tk.StringVar(value="직사각형")
         self.label(form, "진동자 형상", 10, bold=True, bg=COLORS["white"]).grid(row=0, column=0, sticky="w", pady=7)
@@ -649,7 +738,7 @@ class StudyApp(tk.Tk):
                 first_entry = entry
         form.grid_columnconfigure(1, weight=1)
 
-        result = tk.Frame(calculator, bg=COLORS["soft"], padx=24, pady=18)
+        result = tk.Frame(content, bg=COLORS["soft"], padx=24, pady=18)
         result.pack(fill="both", expand=True, padx=22, pady=(0, 10))
         result_title = self.label(result, "값을 입력하고 계산하세요.", 12, bold=True, bg=COLORS["soft"])
         result_title.pack(anchor="w")
@@ -685,8 +774,10 @@ class StudyApp(tk.Tk):
                 comparison = "≤" if distance <= near_field else ">"
                 lines.extend(["", f"판정: {distance:g} mm {comparison} {near_field:.2f} mm", f"→ {zone}"])
             result_text.config(text="\n".join(lines))
+            calculator.update_idletasks()
+            content_scroll.canvas.yview_moveto(1.0)
 
-        buttons = tk.Frame(calculator, bg=COLORS["paper"])
+        buttons = tk.Frame(content, bg=COLORS["paper"])
         buttons.pack(fill="x", padx=22, pady=(0, 18))
         self.action_button(buttons, "계산하기", calculate).pack(side="left")
         self.action_button(buttons, "닫기", calculator.destroy, primary=False).pack(side="right")
@@ -737,14 +828,17 @@ class StudyApp(tk.Tk):
         self.label(top, title, 20, "white", True, COLORS["green"], wraplength=1000, justify="left").pack(anchor="w", pady=(5, 0))
         text_frame = tk.Frame(viewer, bg=COLORS["white"])
         text_frame.pack(fill="both", expand=True, padx=24, pady=20)
-        text = tk.Text(text_frame, wrap="word", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 12), padx=24, pady=20, spacing1=4, spacing3=10)
+        large_size = max(8, round(12 * self.theory_zoom / 100))
+        text = tk.Text(text_frame, wrap="word", cursor="xterm", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", large_size), padx=24, pady=20, spacing1=4, spacing3=10, selectbackground="#2b78c5", selectforeground="white")
         scroll = ttk.Scrollbar(text_frame, orient="vertical", command=text.yview)
         text.configure(yscrollcommand=scroll.set)
         text.insert("1.0", content)
         text.config(state="disabled")
         text.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
-        text.bind("<Button-3>", self.show_glossary_context_menu)
+        self.enable_text_tools(text)
+        text.bind("<Control-MouseWheel>", self.zoom_theory_with_wheel)
+        self.large_theory_text = text
 
     def glossary_entry_for(self, query):
         query = (query or "").strip().strip(".,:;!?()[]{}<>‘’“”'\"")
@@ -772,8 +866,10 @@ class StudyApp(tk.Tk):
         menu = tk.Menu(self, tearoff=False)
         if entry:
             menu.add_command(label=f'“{entry["term"]}” 용어 설명창 열기', command=lambda: self.show_glossary_popup(entry))
+        elif query:
+            menu.add_command(label=f'“{query}” 용어사전에서 검색', command=lambda: self.open_glossary_term(query))
         else:
-            menu.add_command(label="선택한 용어가 사전에 없습니다", state="disabled")
+            menu.add_command(label="검색할 단어를 선택하세요", state="disabled")
         if query:
             menu.add_separator()
             menu.add_command(label="선택 내용 복사", command=lambda: self.copy_text_to_clipboard(query))
@@ -791,9 +887,170 @@ class StudyApp(tk.Tk):
         self.copy_text_to_clipboard(text)
         return "break"
 
+    def enable_text_tools(self, widget, glossary=True):
+        """Text 위젯에 본문 찾기와 용어사전 바로 찾기를 공통 적용한다."""
+        widget.bind("<Control-f>", lambda event: self.open_text_finder(event.widget), add="+")
+        widget.bind("<Control-F>", lambda event: self.open_text_finder(event.widget), add="+")
+        widget.bind("<Control-c>", self.copy_selected_text, add="+")
+        widget.bind("<Control-C>", self.copy_selected_text, add="+")
+        if str(widget.cget("state")) == "disabled":
+            # Windows의 disabled Text는 테마/실행환경에 따라 기본 드래그 선택이
+            # 동작하지 않을 수 있어 읽기 전용 위젯에 선택 동작을 명시한다.
+            widget.bind("<Button-1>", self.start_readonly_text_selection, add="+")
+            widget.bind("<B1-Motion>", self.extend_readonly_text_selection, add="+")
+        if glossary:
+            widget.bind("<Button-3>", self.show_glossary_context_menu, add="+")
+            widget.bind("<Double-Button-1>", self.open_glossary_from_word, add="+")
+
+    def start_readonly_text_selection(self, event):
+        widget = event.widget
+        try:
+            index = widget.index(f"@{event.x},{event.y}")
+            widget.focus_set()
+            widget.mark_set("readonly_selection_anchor", index)
+            widget.tag_remove("sel", "1.0", "end")
+            widget.tag_add("sel", index, index)
+        except tk.TclError:
+            pass
+        return "break"
+
+    def extend_readonly_text_selection(self, event):
+        widget = event.widget
+        try:
+            anchor = widget.index("readonly_selection_anchor")
+            current = widget.index(f"@{event.x},{event.y}")
+            start, end = (anchor, current) if widget.compare(anchor, "<=", current) else (current, anchor)
+            widget.tag_remove("sel", "1.0", "end")
+            widget.tag_add("sel", start, end)
+            widget.see(current)
+        except tk.TclError:
+            pass
+        return "break"
+
+    def open_glossary_from_word(self, event):
+        widget = event.widget
+        try:
+            index = widget.index(f"@{event.x},{event.y}")
+            query = widget.get(f"{index} wordstart", f"{index} wordend").strip()
+        except tk.TclError:
+            return
+        entry = self.glossary_entry_for(query)
+        if entry:
+            self.after_idle(lambda: self.show_glossary_popup(entry))
+
+    def open_text_finder(self, widget):
+        """현재 Text 위젯을 대상으로 일치 항목 강조와 이전/다음 이동을 제공한다."""
+        previous = getattr(self, "text_find_popup", None)
+        if previous and previous.winfo_exists():
+            if getattr(self, "text_find_widget", None) == widget:
+                self.text_find_entry.focus_set()
+                self.text_find_entry.selection_range(0, "end")
+                return "break"
+            self.close_text_finder()
+
+        popup = tk.Toplevel(self)
+        self.text_find_popup = popup
+        self.text_find_widget = widget
+        self.text_find_matches = []
+        self.text_find_position = -1
+        popup.title("본문 찾기")
+        popup.geometry("440x112")
+        popup.resizable(False, False)
+        popup.configure(bg=COLORS["paper"])
+        popup.transient(widget.winfo_toplevel())
+        popup.protocol("WM_DELETE_WINDOW", self.close_text_finder)
+
+        row = tk.Frame(popup, bg=COLORS["paper"], padx=14, pady=12)
+        row.pack(fill="both", expand=True)
+        query_var = tk.StringVar()
+        entry = tk.Entry(row, textvariable=query_var, font=("맑은 고딕", 10), relief="solid", bd=1)
+        entry.pack(fill="x", ipady=6)
+        self.text_find_entry = entry
+        controls = tk.Frame(row, bg=COLORS["paper"])
+        controls.pack(fill="x", pady=(9, 0))
+        status = self.label(controls, "검색어를 입력하세요", 8, COLORS["muted"], bg=COLORS["paper"])
+        status.pack(side="left")
+        self.text_find_status = status
+        self.action_button(controls, "닫기", self.close_text_finder, primary=False).pack(side="right")
+        self.action_button(controls, "다음", lambda: self.move_text_find(1), primary=False).pack(side="right", padx=(6, 0))
+        self.action_button(controls, "이전", lambda: self.move_text_find(-1), primary=False).pack(side="right")
+
+        query_var.trace_add("write", lambda *_: self.refresh_text_find(query_var.get()))
+        entry.bind("<Return>", lambda _event: self.move_text_find(1))
+        entry.bind("<Shift-Return>", lambda _event: self.move_text_find(-1))
+        popup.bind("<Escape>", lambda _event: self.close_text_finder())
+        widget.tag_configure("text_find_match", background="#fff1a8", foreground=COLORS["ink"])
+        widget.tag_configure("text_find_current", background=COLORS["amber"], foreground=COLORS["ink"])
+        entry.focus_set()
+        return "break"
+
+    def refresh_text_find(self, query):
+        widget = getattr(self, "text_find_widget", None)
+        if not widget or not widget.winfo_exists():
+            self.close_text_finder()
+            return
+        widget.tag_remove("text_find_match", "1.0", "end")
+        widget.tag_remove("text_find_current", "1.0", "end")
+        self.text_find_matches = []
+        self.text_find_position = -1
+        query = query.strip()
+        if not query:
+            self.text_find_status.config(text="검색어를 입력하세요")
+            return
+        start = "1.0"
+        count = tk.IntVar(master=widget)
+        while True:
+            index = widget.search(query, start, stopindex="end", nocase=True, count=count)
+            if not index or count.get() <= 0:
+                break
+            end = f"{index}+{count.get()}c"
+            self.text_find_matches.append((index, end))
+            widget.tag_add("text_find_match", index, end)
+            start = end
+        if self.text_find_matches:
+            self.text_find_position = 0
+            self.show_text_find_position()
+        else:
+            self.text_find_status.config(text="일치하는 내용 없음")
+
+    def move_text_find(self, direction):
+        if not getattr(self, "text_find_matches", None):
+            return "break"
+        self.text_find_position = (self.text_find_position + direction) % len(self.text_find_matches)
+        self.show_text_find_position()
+        return "break"
+
+    def show_text_find_position(self):
+        widget = self.text_find_widget
+        widget.tag_remove("text_find_current", "1.0", "end")
+        start, end = self.text_find_matches[self.text_find_position]
+        widget.tag_add("text_find_current", start, end)
+        widget.tag_raise("text_find_current")
+        widget.see(start)
+        self.text_find_status.config(text=f"{self.text_find_position + 1} / {len(self.text_find_matches)}")
+
+    def close_text_finder(self):
+        widget = getattr(self, "text_find_widget", None)
+        if widget:
+            try:
+                widget.tag_remove("text_find_match", "1.0", "end")
+                widget.tag_remove("text_find_current", "1.0", "end")
+            except tk.TclError:
+                pass
+        popup = getattr(self, "text_find_popup", None)
+        if popup:
+            try:
+                popup.destroy()
+            except tk.TclError:
+                pass
+        self.text_find_popup = None
+        self.text_find_widget = None
+
     def show_glossary_popup(self, entry):
         previous = getattr(self, "glossary_popup", None)
         if previous and previous.winfo_exists():
+            if getattr(self, "text_find_widget", None):
+                self.close_text_finder()
             previous.destroy()
 
         popup = tk.Toplevel(self)
@@ -834,6 +1091,7 @@ class StudyApp(tk.Tk):
         ]
         text.insert("1.0", "\n\n".join(f"[{title}]\n{value}" for title, value in sections if value))
         text.config(state="disabled")
+        self.enable_text_tools(text)
         text.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
 
@@ -853,6 +1111,8 @@ class StudyApp(tk.Tk):
         entry = self.glossary_entry_for(query)
         self.pending_glossary_term = entry["term"] if entry else query
         self.show_view("glossary")
+        if not entry and query and hasattr(self, "glossary_search_var"):
+            self.glossary_search_var.set(query)
 
     def build_glossary(self):
         root = tk.Frame(self.view_host, bg=COLORS["paper"])
@@ -879,7 +1139,7 @@ class StudyApp(tk.Tk):
         self.glossary_count.pack(anchor="w", pady=(0, 8))
         list_frame = tk.Frame(list_card, bg=COLORS["white"])
         list_frame.pack(fill="both", expand=True)
-        self.glossary_list = tk.Listbox(list_frame, bd=0, highlightthickness=0, selectbackground=COLORS["green"], selectforeground="white", activestyle="none", font=("맑은 고딕", 10))
+        self.glossary_list = tk.Listbox(list_frame, bd=0, highlightthickness=0, selectbackground=COLORS["green"], selectforeground="white", activestyle="none", font=("맑은 고딕", 10), exportselection=False)
         list_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.glossary_list.yview)
         self.glossary_list.configure(yscrollcommand=list_scroll.set)
         self.glossary_list.pack(side="left", fill="both", expand=True)
@@ -894,6 +1154,7 @@ class StudyApp(tk.Tk):
         self.glossary_text = tk.Text(text_frame, wrap="word", state="disabled", bg=COLORS["white"], fg=COLORS["ink"], relief="flat", font=("맑은 고딕", 11), padx=2, pady=2, spacing1=3, spacing3=9)
         detail_scroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.glossary_text.yview)
         self.glossary_text.configure(yscrollcommand=detail_scroll.set)
+        self.enable_text_tools(self.glossary_text)
         self.glossary_text.pack(side="left", fill="both", expand=True)
         detail_scroll.pack(side="right", fill="y")
         actions = tk.Frame(detail, bg=COLORS["white"])
@@ -914,7 +1175,11 @@ class StudyApp(tk.Tk):
         category = self.glossary_category_var.get()
         entries = []
         for entry in GLOSSARY:
-            haystack = " ".join([entry["term"], *entry.get("aliases", []), entry.get("definition", ""), entry.get("relation", "")]).casefold()
+            haystack = " ".join([
+                entry["term"], *entry.get("aliases", []), entry.get("category", ""),
+                entry.get("definition", ""), entry.get("relation", ""), entry.get("formula", ""),
+                *entry.get("related", []), *entry.get("questions", []),
+            ]).casefold()
             if query and query not in haystack:
                 continue
             if category != "전체" and entry["category"] != category:
@@ -1198,6 +1463,7 @@ class StudyApp(tk.Tk):
         self.answer_combo.bind("<<ComboboxSelected>>", lambda _e: self.load_selected_answer())
         self.label(editor, "답안 작성", 9, bold=True).pack(anchor="w")
         self.answer_text = tk.Text(editor, wrap="word", undo=True, font=("맑은 고딕", 10), relief="solid", bd=1, padx=12, pady=12, spacing1=3, spacing3=5)
+        self.enable_text_tools(self.answer_text)
         self.answer_text.pack(fill="both", expand=True, pady=(5, 12))
         footer = tk.Frame(editor, bg=COLORS["white"])
         footer.pack(fill="x")
@@ -1250,6 +1516,357 @@ class StudyApp(tk.Tk):
         self.timer_seconds = 1500
         self.timer_label.config(text="25:00")
 
+    def build_question_notes(self):
+        top = tk.Frame(self.view_host, bg=COLORS["paper"])
+        top.pack(fill="x", pady=(0, 12))
+        self.label(top, f'저장된 질문 {len(self.data["question_notes"])}개', 10, COLORS["muted"]).pack(side="left")
+        self.action_button(top, "+ 새 질문", lambda: self.open_question_note_dialog()).pack(side="right")
+        self.question_note_outline_toggle = self.action_button(top, "목차 접기 ◀", self.toggle_question_note_outline, primary=False)
+        self.question_note_outline_toggle.pack(side="right", padx=(0, 8))
+
+        filters = tk.Frame(self.view_host, bg=COLORS["white"], padx=14, pady=10, highlightbackground=COLORS["line"], highlightthickness=1)
+        filters.pack(fill="x", pady=(0, 10))
+        self.question_note_search_var = tk.StringVar()
+        search = tk.Entry(filters, textvariable=self.question_note_search_var, font=("맑은 고딕", 10), relief="solid", bd=1)
+        search.pack(side="left", fill="x", expand=True, ipady=7)
+        self.question_note_filter_var = tk.StringVar(value="전체 상태")
+        status_filter = ttk.Combobox(filters, textvariable=self.question_note_filter_var, values=["전체 상태", "답변 필요", "다시 보기", "이해함"], state="readonly", width=12)
+        status_filter.pack(side="left", padx=(10, 0))
+        zoom_box = tk.Frame(filters, bg=COLORS["white"])
+        zoom_box.pack(side="right", padx=(12, 0))
+        tk.Button(zoom_box, text="−", command=lambda: self.adjust_question_note_zoom(-10), bd=0, width=3, bg=COLORS["soft"], font=("맑은 고딕", 10, "bold")).pack(side="left")
+        self.question_note_zoom_label = self.label(zoom_box, f"{self.question_note_zoom}%", 9, COLORS["muted"], bg=COLORS["white"], width=7)
+        self.question_note_zoom_label.pack(side="left")
+        tk.Button(zoom_box, text="+", command=lambda: self.adjust_question_note_zoom(10), bd=0, width=3, bg=COLORS["soft"], font=("맑은 고딕", 10, "bold")).pack(side="left")
+
+        pane = tk.PanedWindow(self.view_host, orient="horizontal", bg=COLORS["paper"], sashwidth=5, sashrelief="flat")
+        pane.pack(fill="both", expand=True)
+        outline = tk.Frame(pane, bg=COLORS["white"], highlightbackground=COLORS["line"], highlightthickness=1, padx=10, pady=10)
+        self.question_note_scroll = ScrollFrame(pane)
+        pane.add(outline, minsize=230, width=300)
+        pane.add(self.question_note_scroll, minsize=480)
+        self.question_note_pane = pane
+        self.question_note_outline_frame = outline
+        self.label(outline, "질문 목차", 11, bold=True, bg=COLORS["white"]).pack(anchor="w", padx=4, pady=(2, 9))
+        tree_box = tk.Frame(outline, bg=COLORS["white"])
+        tree_box.pack(fill="both", expand=True)
+        self.question_note_outline = ttk.Treeview(tree_box, show="tree", selectmode="browse")
+        outline_scroll = ttk.Scrollbar(tree_box, orient="vertical", command=self.question_note_outline.yview)
+        self.question_note_outline.configure(yscrollcommand=outline_scroll.set)
+        self.question_note_outline.pack(side="left", fill="both", expand=True)
+        outline_scroll.pack(side="right", fill="y")
+        self.question_note_scope = ("all", None)
+        self.refresh_question_note_outline()
+        self.question_note_outline.bind("<<TreeviewSelect>>", self.on_question_note_outline_selected)
+        self.question_note_search_var.trace_add("write", lambda *_: self.render_question_notes())
+        status_filter.bind("<<ComboboxSelected>>", lambda _event: self.render_question_notes())
+        self.render_question_notes()
+        search.focus_set()
+
+    def refresh_question_note_outline(self):
+        if not hasattr(self, "question_note_outline") or not self.question_note_outline.winfo_exists():
+            return
+        tree = self.question_note_outline
+        selected_scope = getattr(self, "question_note_scope", ("all", None))
+        children = tree.get_children()
+        if children:
+            tree.delete(*children)
+        notes = self.data["question_notes"]
+        important_count = sum(bool(note.get("important")) for note in notes)
+        unanswered_count = sum(note.get("status") == "답변 필요" or not note.get("answer", "").strip() for note in notes)
+        free_count = sum(not note.get("week") for note in notes)
+        tree.insert("", "end", iid="scope-all", text=f"전체 질문 ({len(notes)})")
+        tree.insert("", "end", iid="scope-important", text=f"★ 중요 질문 ({important_count})")
+        tree.insert("", "end", iid="scope-unanswered", text=f"답변 필요 ({unanswered_count})")
+        if free_count:
+            tree.insert("", "end", iid="scope-free", text=f"자유 질문 ({free_count})")
+        self.question_note_outline_map = {
+            "scope-all": ("all", None), "scope-important": ("important", None),
+            "scope-unanswered": ("unanswered", None), "scope-free": ("free", None),
+        }
+        for item in WEEKLY_CONTENT:
+            week = item["week"]
+            week_notes = [note for note in notes if note.get("week") == week]
+            if not week_notes:
+                continue
+            week_id = f"scope-week-{week}"
+            tree.insert("", "end", iid=week_id, text=f'{week:02d}주 {item["theme"]} ({len(week_notes)})', open=True)
+            self.question_note_outline_map[week_id] = ("week", week)
+            lesson_titles = []
+            for lesson in item["lessons"]:
+                title = lesson["title"]
+                count = sum(note.get("lesson_title") == title for note in week_notes)
+                if count:
+                    lesson_titles.append((title, count))
+            linked_titles = {title for title, _count in lesson_titles}
+            other_count = sum(note.get("lesson_title", "") not in linked_titles for note in week_notes)
+            for index, (title, count) in enumerate(lesson_titles):
+                lesson_id = f"scope-lesson-{week}-{index}"
+                tree.insert(week_id, "end", iid=lesson_id, text=f"{title} ({count})")
+                self.question_note_outline_map[lesson_id] = ("lesson", (week, title))
+            if other_count:
+                other_id = f"scope-other-{week}"
+                tree.insert(week_id, "end", iid=other_id, text=f"기타 질문 ({other_count})")
+                self.question_note_outline_map[other_id] = ("other", (week, linked_titles))
+        selected_id = next((iid for iid, scope in self.question_note_outline_map.items() if scope == selected_scope), "scope-all")
+        if tree.exists(selected_id):
+            tree.selection_set(selected_id)
+            tree.focus(selected_id)
+            tree.see(selected_id)
+
+    def on_question_note_outline_selected(self, _event=None):
+        selection = self.question_note_outline.selection()
+        if not selection:
+            return
+        self.question_note_scope = self.question_note_outline_map.get(selection[0], ("all", None))
+        self.render_question_notes()
+
+    def toggle_question_note_outline(self):
+        panes = [str(pane) for pane in self.question_note_pane.panes()]
+        outline_path = str(self.question_note_outline_frame)
+        if outline_path in panes:
+            self.question_note_pane.forget(self.question_note_outline_frame)
+            self.question_note_outline_toggle.config(text="목차 펼치기 ▶")
+        else:
+            self.question_note_pane.add(self.question_note_outline_frame, before=self.question_note_scroll, minsize=230, width=300)
+            self.question_note_outline_toggle.config(text="목차 접기 ◀")
+
+    def selectable_question_note_text(self, parent, content, size=9, bold=False, bg=None, color=None, padx=0, pady=0):
+        """질문노트 내용을 드래그 선택할 수 있는 읽기 전용 텍스트로 표시한다."""
+        content = str(content or "")
+        estimated_lines = sum(max(1, (len(line) + 84) // 85) for line in content.splitlines() or [""])
+        widget = tk.Text(
+            parent, height=max(1, estimated_lines), wrap="word", state="normal", cursor="xterm",
+            bg=bg or parent.cget("bg"), fg=color or COLORS["ink"], relief="flat", bd=0,
+            highlightthickness=0, padx=padx, pady=pady, spacing1=1, spacing3=2,
+            selectbackground="#2b78c5", selectforeground="white",
+            font=("맑은 고딕", size, "bold" if bold else "normal"),
+        )
+        widget.insert("1.0", content)
+        widget.config(state="disabled")
+        widget._base_font_size = size
+        widget._font_bold = bold
+        widget._base_text_height = max(1, estimated_lines)
+        self.enable_text_tools(widget)
+        widget.bind("<MouseWheel>", self.on_question_note_text_wheel)
+        return widget
+
+    def on_question_note_text_wheel(self, event):
+        if event.state & 0x0004:
+            self.zoom_question_notes(event)
+        else:
+            self.question_note_scroll._wheel(event)
+        return "break"
+
+    def render_question_notes(self):
+        if not hasattr(self, "question_note_scroll") or not self.question_note_scroll.winfo_exists():
+            return
+        root = self.question_note_scroll.content
+        for child in root.winfo_children():
+            child.destroy()
+        query = self.question_note_search_var.get().strip().casefold()
+        status = self.question_note_filter_var.get()
+        scope_type, scope_value = getattr(self, "question_note_scope", ("all", None))
+        notes = []
+        for note in self.data["question_notes"]:
+            if scope_type == "important" and not note.get("important"):
+                continue
+            if scope_type == "unanswered" and note.get("status") != "답변 필요" and note.get("answer", "").strip():
+                continue
+            if scope_type == "free" and note.get("week"):
+                continue
+            if scope_type == "week" and note.get("week") != scope_value:
+                continue
+            if scope_type == "lesson" and (note.get("week"), note.get("lesson_title")) != scope_value:
+                continue
+            if scope_type == "other":
+                week, linked_titles = scope_value
+                if note.get("week") != week or note.get("lesson_title", "") in linked_titles:
+                    continue
+            haystack = " ".join(str(note.get(key, "")) for key in ("theme", "lesson_title", "source", "question", "answer", "summary")).casefold()
+            if query and query not in haystack:
+                continue
+            if status != "전체 상태" and note.get("status", "다시 보기") != status:
+                continue
+            notes.append(note)
+        notes.sort(key=lambda item: item.get("updated_at", item.get("created_at", "")), reverse=True)
+        if not notes:
+            empty = self.card(root, fill="x", pady=6)
+            self.label(empty, "조건에 맞는 질문이 없습니다.", 13, bold=True).pack(pady=(18, 3))
+            self.label(empty, "학습답안의 ‘+ 질문 기록’에서 궁금한 내용을 저장해보세요.", 9, COLORS["muted"]).pack(pady=(0, 18))
+            self.apply_question_note_zoom()
+            return
+        for note in notes:
+            card = tk.Frame(root, bg=COLORS["white"], highlightbackground=COLORS["line"], highlightthickness=1, padx=20, pady=16)
+            card.pack(fill="x", pady=5)
+            if note.get("week"):
+                meta = f'{note["week"]}주차 · {note.get("theme", "")} · {note.get("lesson_title") or "관련 답안 없음"}'
+            else:
+                meta = "자유 질문"
+            if note.get("source"):
+                meta += f' · {note["source"]}'
+            self.label(card, meta, 8, COLORS["green2"], True, wraplength=900, justify="left").pack(anchor="w")
+            marker = "★ " if note.get("important") else ""
+            question_text = self.selectable_question_note_text(card, f'{marker}Q. {note.get("question", "")}', 12, bold=True)
+            question_text.pack(fill="x", pady=(6, 7))
+            if note.get("summary"):
+                summary = tk.Frame(card, bg=COLORS["soft"], padx=12, pady=8)
+                summary.pack(fill="x", pady=(0, 8))
+                summary_text = self.selectable_question_note_text(summary, f'한 줄 정리 · {note["summary"]}', 9, bold=True, bg=COLORS["soft"])
+                summary_text.pack(fill="x")
+            answer_text = note.get("answer", "") or "아직 답변을 기록하지 않았습니다."
+            answer_widget = self.selectable_question_note_text(card, answer_text, 9, color=COLORS["muted"])
+            answer_widget.pack(fill="x")
+            controls = tk.Frame(card, bg=COLORS["white"])
+            controls.pack(fill="x", pady=(12, 0))
+            note_id = note["id"]
+            current_status = note.get("status", "다시 보기")
+            self.label(controls, current_status, 8, COLORS["green2"] if current_status == "이해함" else COLORS["amber"], True).pack(side="left")
+            tk.Button(controls, text="삭제", bd=0, bg=COLORS["white"], fg=COLORS["red"], command=lambda nid=note_id: self.delete_question_note(nid)).pack(side="right", padx=(8, 0))
+            self.action_button(controls, "수정", lambda nid=note_id: self.edit_question_note(nid), primary=False).pack(side="right", padx=(8, 0))
+            if note.get("week") and note.get("lesson_title"):
+                self.action_button(controls, "관련 답안 보기", lambda nid=note_id: self.open_question_note_source(nid), primary=False).pack(side="right", padx=(8, 0))
+            toggle_text = "다시 보기로" if current_status == "이해함" else "이해함으로"
+            self.action_button(controls, toggle_text, lambda nid=note_id: self.toggle_question_note_status(nid), primary=False).pack(side="right")
+        self.apply_question_note_zoom()
+
+    def zoom_question_notes(self, event):
+        if getattr(self, "current_view", None) != "question_notes":
+            return
+        self.adjust_question_note_zoom(10 if event.delta > 0 else -10)
+        return "break"
+
+    def adjust_question_note_zoom(self, delta):
+        self.question_note_zoom = max(70, min(180, self.question_note_zoom + delta))
+        self.apply_question_note_zoom()
+
+    def apply_question_note_zoom(self):
+        if hasattr(self, "question_note_zoom_label") and self.question_note_zoom_label.winfo_exists():
+            self.question_note_zoom_label.config(text=f"{self.question_note_zoom}%")
+        if not hasattr(self, "question_note_scroll") or not self.question_note_scroll.winfo_exists():
+            return
+        scale = self.question_note_zoom / 100
+
+        def resize(widget):
+            for child in widget.winfo_children():
+                if hasattr(child, "_base_font_size"):
+                    size = max(7, round(child._base_font_size * scale))
+                    child.config(font=("맑은 고딕", size, "bold" if child._font_bold else "normal"))
+                    if hasattr(child, "_base_text_height"):
+                        child.config(height=max(1, round(child._base_text_height * scale)))
+                resize(child)
+
+        resize(self.question_note_scroll.content)
+
+    def open_question_note_dialog(self, context=None, note=None):
+        editing = note is not None
+        context = context or ({} if note is None else note)
+        dialog = tk.Toplevel(self)
+        dialog.title("질문노트 수정" if editing else "새 질문 기록")
+        dialog.geometry("680x690")
+        dialog.minsize(580, 600)
+        dialog.configure(bg=COLORS["paper"])
+        dialog.transient(self)
+        dialog.grab_set()
+        frame = tk.Frame(dialog, bg=COLORS["paper"], padx=26, pady=22)
+        frame.pack(fill="both", expand=True)
+        location = f'{context.get("week", "-")}주차 · {context.get("theme", "자유 질문")} · {context.get("lesson_title", "관련 답안 없음")}'
+        self.label(frame, location, 9, COLORS["green2"], True, wraplength=620, justify="left").pack(anchor="w", pady=(0, 3))
+        self.label(frame, context.get("source", ""), 8, COLORS["muted"]).pack(anchor="w", pady=(0, 14))
+        self.label(frame, "질문", 9, bold=True).pack(anchor="w")
+        question = tk.Text(frame, height=4, font=("맑은 고딕", 10), relief="solid", bd=1, padx=8, pady=8, wrap="word")
+        self.enable_text_tools(question)
+        question.pack(fill="x", pady=(5, 12))
+        self.label(frame, "답변 또는 찾아본 내용", 9, bold=True).pack(anchor="w")
+        answer = tk.Text(frame, height=11, font=("맑은 고딕", 10), relief="solid", bd=1, padx=8, pady=8, wrap="word")
+        self.enable_text_tools(answer)
+        answer.pack(fill="both", expand=True, pady=(5, 12))
+        self.label(frame, "한 줄 정리 (선택)", 9, bold=True).pack(anchor="w")
+        summary_var = tk.StringVar(value=note.get("summary", "") if note else "")
+        summary = tk.Entry(frame, textvariable=summary_var, font=("맑은 고딕", 10), relief="solid", bd=1)
+        summary.pack(fill="x", ipady=7, pady=(5, 12))
+        options = tk.Frame(frame, bg=COLORS["paper"])
+        options.pack(fill="x")
+        important_var = tk.BooleanVar(value=bool(note.get("important")) if note else False)
+        tk.Checkbutton(options, text="중요 질문", variable=important_var, bg=COLORS["paper"], activebackground=COLORS["paper"], font=("맑은 고딕", 9)).pack(side="left")
+        status_var = tk.StringVar(value=note.get("status", "답변 필요") if note else "답변 필요")
+        ttk.Combobox(options, textvariable=status_var, values=["답변 필요", "다시 보기", "이해함"], state="readonly", width=11).pack(side="right")
+        if note:
+            question.insert("1.0", note.get("question", ""))
+            answer.insert("1.0", note.get("answer", ""))
+
+        def submit():
+            question_value = question.get("1.0", "end").strip()
+            answer_value = answer.get("1.0", "end").strip()
+            if not question_value:
+                messagebox.showwarning("입력 확인", "질문을 입력하세요.", parent=dialog)
+                return
+            if not answer_value:
+                status_var.set("답변 필요")
+            now = datetime.now().isoformat(timespec="seconds")
+            values = {
+                "week": context.get("week"), "theme": context.get("theme", "자유 질문"),
+                "lesson_title": context.get("lesson_title", ""), "source": context.get("source", ""),
+                "question": question_value, "answer": answer_value, "summary": summary_var.get().strip(),
+                "important": important_var.get(), "status": status_var.get(), "updated_at": now,
+            }
+            if editing:
+                note.update(values)
+            else:
+                values.update({"id": datetime.now().strftime("qn-%Y%m%d%H%M%S%f"), "created_at": now})
+                self.data["question_notes"].insert(0, values)
+            self.save()
+            dialog.destroy()
+            if self.current_view == "question_notes":
+                self.show_view("question_notes")
+            elif self.current_view == "theory" and hasattr(self, "theory_lesson_list"):
+                self.show_theory_lesson()
+
+        buttons = tk.Frame(frame, bg=COLORS["paper"])
+        buttons.pack(fill="x", pady=(16, 0))
+        self.action_button(buttons, "취소", dialog.destroy, primary=False).pack(side="right")
+        self.action_button(buttons, "변경 저장" if editing else "질문 저장", submit).pack(side="right", padx=(0, 8))
+        question.focus_set()
+
+    def question_note_by_id(self, note_id):
+        return next((note for note in self.data["question_notes"] if note.get("id") == note_id), None)
+
+    def edit_question_note(self, note_id):
+        note = self.question_note_by_id(note_id)
+        if note:
+            self.open_question_note_dialog(note=note)
+
+    def toggle_question_note_status(self, note_id):
+        note = self.question_note_by_id(note_id)
+        if not note:
+            return
+        note["status"] = "다시 보기" if note.get("status") == "이해함" else "이해함"
+        note["updated_at"] = datetime.now().isoformat(timespec="seconds")
+        self.save()
+        self.refresh_question_note_outline()
+        self.render_question_notes()
+
+    def delete_question_note(self, note_id):
+        if not messagebox.askyesno("삭제", "이 질문 기록을 삭제할까요?"):
+            return
+        self.data["question_notes"] = [note for note in self.data["question_notes"] if note.get("id") != note_id]
+        self.save()
+        self.show_view("question_notes")
+
+    def open_question_note_source(self, note_id):
+        note = self.question_note_by_id(note_id)
+        if not note or not note.get("week"):
+            return
+        self.pending_theory_week = int(note["week"])
+        self.show_view("theory")
+        for index, lesson in enumerate(self.current_theory_item["lessons"]):
+            if lesson["title"] == note.get("lesson_title"):
+                self.theory_lesson_list.selection_clear(0, "end")
+                self.theory_lesson_list.selection_set(index)
+                self.theory_lesson_list.see(index)
+                self.show_theory_lesson()
+                break
+
     def build_mistakes(self):
         top = tk.Frame(self.view_host, bg=COLORS["paper"])
         top.pack(fill="x", pady=(0, 12))
@@ -1286,6 +1903,7 @@ class StudyApp(tk.Tk):
         topic.pack(fill="x", ipady=7, pady=(5, 14))
         self.label(frame, "틀린 내용과 정확한 개념", 9, bold=True).pack(anchor="w")
         note = tk.Text(frame, height=8, font=("맑은 고딕", 10), relief="solid", bd=1, padx=8, pady=8)
+        self.enable_text_tools(note)
         note.pack(fill="both", expand=True, pady=(5, 14))
         review = ttk.Combobox(frame, values=["1일 후", "7일 후", "30일 후"], state="readonly")
         review.current(1)
