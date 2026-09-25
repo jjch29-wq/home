@@ -382,17 +382,15 @@
     if (!successPath?.frames?.length || running || solving) return;
     const solved = successPath;
     const frames = solved.frames;
-    const duration = Math.max(1800, Math.min(7000, frames.length * (1000 / 60)));
-    const startedAt = performance.now();
+    const frameStep = Math.max(1, Math.ceil(frames.length / 420));
+    let frameIndex = 0;
     running = true;
     stats.attempts++;
     updateStats();
-    setStatus("", "실제 샷 실행", "경로 탐색과 동일한 고정시간 물리 계산을 재현하고 있습니다.");
+    setStatus("", "실제 샷 실행", "고정시간 물리 계산 재생 0%");
 
-    function animateSolvedShot(now) {
-      const progress = Math.min(1, (now - startedAt) / duration);
-      const index = Math.min(frames.length - 1, Math.floor(progress * frames.length));
-      const frame = frames[index];
+    const playbackTimer = window.setInterval(() => {
+      const frame = frames[Math.min(frameIndex, frames.length - 1)];
       balls.forEach((ball, ballIndex) => {
         ball.x = frame[ballIndex].x;
         ball.y = frame[ballIndex].y;
@@ -400,10 +398,13 @@
         ball.vy = frame[ballIndex].vy;
       });
       render();
-      if (progress < 1) {
-        requestAnimationFrame(animateSolvedShot);
+      frameIndex += frameStep;
+      const progress = Math.min(100, Math.round(frameIndex / frames.length * 100));
+      document.getElementById("statusText").textContent = `고정시간 물리 계산 재생 ${progress}%`;
+      if (frameIndex < frames.length) {
         return;
       }
+      window.clearInterval(playbackTimer);
       running = false;
       balls.forEach((ball) => { ball.vx = 0; ball.vy = 0; });
       stats.successes++;
@@ -411,8 +412,7 @@
       setStatus("success", "실제 샷 성공", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · 두 번째 적구 전 ${solved.cushions}쿠션`);
       clearSuccessPath();
       render();
-    }
-    requestAnimationFrame(animateSolvedShot);
+    }, 1000 / 60);
   }
 
   function playSuccessRoute() {
