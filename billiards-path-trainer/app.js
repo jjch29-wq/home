@@ -27,6 +27,7 @@
   let firstBallId = "yellow";
   let successPath = null;
   let solving = false;
+  let demoPosition = null;
 
   const angleInput = document.getElementById("angleInput");
   const powerInput = document.getElementById("powerInput");
@@ -53,6 +54,12 @@
     badge.className = `status-badge${kind ? ` ${kind}` : ""}`;
     badge.textContent = title;
     document.getElementById("statusText").textContent = message;
+  }
+
+  function clearSuccessPath() {
+    successPath = null;
+    demoPosition = null;
+    document.getElementById("shootBtn").textContent = "현재 설정으로 실행";
   }
 
   function updateControls() {
@@ -280,7 +287,10 @@
     ctx.clearRect(0, 0, W, H);
     drawTable();
     drawPrediction();
-    balls.forEach(drawBall);
+    balls.forEach((ball) => {
+      if (ball.id === "cue" && demoPosition) drawBall({ ...ball, x: demoPosition.x, y: demoPosition.y });
+      else drawBall(ball);
+    });
   }
 
   function pointerPosition(event) {
@@ -302,12 +312,12 @@
     const selected = ballAt(point);
     if (selected) {
       draggingBall = selected;
-      successPath = null;
+      clearSuccessPath();
       canvas.setPointerCapture(event.pointerId);
     } else {
       const cue = balls[0];
       angle = Math.atan2(point.y - cue.y, point.x - cue.x) * 180 / Math.PI;
-      successPath = null;
+      clearSuccessPath();
       updateControls();
       render();
     }
@@ -328,9 +338,9 @@
   canvas.addEventListener("pointerup", () => { draggingBall = null; });
   canvas.addEventListener("pointercancel", () => { draggingBall = null; });
 
-  angleInput.addEventListener("input", () => { angle = Number(angleInput.value); successPath = null; updateControls(); render(); });
-  powerInput.addEventListener("input", () => { power = Number(powerInput.value); successPath = null; updateControls(); });
-  cushionInput.addEventListener("change", () => { previewCushions = Number(cushionInput.value); successPath = null; render(); });
+  angleInput.addEventListener("input", () => { angle = Number(angleInput.value); clearSuccessPath(); updateControls(); render(); });
+  powerInput.addEventListener("input", () => { power = Number(powerInput.value); clearSuccessPath(); updateControls(); });
+  cushionInput.addEventListener("change", () => { previewCushions = Number(cushionInput.value); clearSuccessPath(); render(); });
 
   function setSpin(event) {
     const rect = spinPad.getBoundingClientRect();
@@ -340,7 +350,7 @@
     const scale = length > 1 ? 1 / length : 1;
     sideSpin = Math.round(x * scale * 10) / 10;
     verticalSpin = Math.round(y * scale * 10) / 10;
-    successPath = null;
+    clearSuccessPath();
     updateControls();
     render();
   }
@@ -349,6 +359,10 @@
 
   function shoot() {
     if (running || solving) return;
+    if (successPath) {
+      playSuccessRoute();
+      return;
+    }
     const speed = 290 + power * 5.1;
     const radians = angle * Math.PI / 180;
     balls.forEach((b) => { b.vx = 0; b.vy = 0; b.hit = false; });
@@ -361,6 +375,53 @@
     updateStats();
     setStatus("", "진행 중", "공의 실제 경로를 계산하고 있습니다.");
     requestAnimationFrame(step);
+  }
+
+  function playSuccessRoute() {
+    if (!successPath || running || solving) return;
+    const route = successPath;
+    const segments = [];
+    let totalLength = 0;
+    for (let i = 1; i < route.points.length; i++) {
+      const from = route.points[i - 1];
+      const to = route.points[i];
+      const length = Math.hypot(to.x - from.x, to.y - from.y);
+      if (length > .1) {
+        segments.push({ from, to, length, start: totalLength });
+        totalLength += length;
+      }
+    }
+    if (!segments.length) return;
+
+    running = true;
+    stats.attempts++;
+    updateStats();
+    const duration = Math.max(1800, Math.min(6500, totalLength / (360 + route.power * 2.4) * 1000));
+    const startedAt = performance.now();
+    setStatus("", "경로 재생", `${firstBallId === "yellow" ? "노란공" : "빨간공"}을 먼저 맞히는 ${route.cushions}쿠션 성공 경로입니다.`);
+
+    function animateDemo(now) {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const traveled = totalLength * (1 - (1 - progress) ** 1.35);
+      const segment = segments.find((item) => traveled <= item.start + item.length) || segments[segments.length - 1];
+      const local = Math.max(0, Math.min(1, (traveled - segment.start) / segment.length));
+      demoPosition = {
+        x: segment.from.x + (segment.to.x - segment.from.x) * local,
+        y: segment.from.y + (segment.to.y - segment.from.y) * local,
+      };
+      render();
+      if (progress < 1) {
+        requestAnimationFrame(animateDemo);
+        return;
+      }
+      running = false;
+      demoPosition = null;
+      stats.successes++;
+      updateStats();
+      setStatus("success", "경로 재생 완료", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · ${route.cushions}쿠션 성공 경로`);
+      render();
+    }
+    requestAnimationFrame(animateDemo);
   }
 
   function step(now) {
@@ -435,7 +496,7 @@
 
   function randomize() {
     if (running || solving) return;
-    successPath = null;
+    clearSuccessPath();
     balls.forEach((ball, index) => {
       let x, y, tries = 0;
       do {
@@ -452,7 +513,7 @@
   function reset() {
     if (running || solving) return;
     balls = cloneBalls(initial);
-    successPath = null;
+    clearSuccessPath();
     angle = 0; power = 55; sideSpin = 0; verticalSpin = 0; previewCushions = 3;
     setStatus("", "설계 중", "공을 드래그하거나 빈 곳을 눌러 조준하세요.");
     updateControls();
@@ -462,7 +523,7 @@
   function selectFirstBall(id) {
     if (running || solving) return;
     firstBallId = id;
-    successPath = null;
+    clearSuccessPath();
     const yellowButton = document.getElementById("firstYellowBtn");
     const redButton = document.getElementById("firstRedBtn");
     yellowButton.classList.toggle("selected", id === "yellow");
@@ -560,7 +621,7 @@
   function solveSuccessRoute() {
     if (running || solving) return;
     solving = true;
-    successPath = null;
+    clearSuccessPath();
     const solveButton = document.getElementById("solveBtn");
     solveButton.disabled = true;
     solveButton.textContent = "경로 계산 중…";
@@ -603,8 +664,10 @@
         verticalSpin = 0;
         previewCushions = Math.min(5, Math.max(3, found.cushions));
         updateControls();
+        document.getElementById("shootBtn").textContent = "성공 경로 실행";
         setStatus("success", "경로 발견", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · ${found.cushions}쿠션 · 각도 ${Math.round(found.angle)}° · 세기 ${found.power}%`);
       } else {
+        document.getElementById("shootBtn").textContent = "현재 설정으로 실행";
         setStatus("fail", "경로 없음", "현재 배치에서는 계산 범위 안의 성공 경로를 찾지 못했습니다. 공 위치를 조금 바꾸거나 다시 시도하세요.");
       }
       render();
@@ -646,7 +709,7 @@
     balls.forEach((ball, i) => Object.assign(ball, layout.balls[i], { vx: 0, vy: 0 }));
     ({ angle, power, sideSpin, verticalSpin, previewCushions } = layout);
     selectFirstBall(layout.firstBallId || "yellow");
-    successPath = null;
+    clearSuccessPath();
     updateControls(); render();
     setStatus("", "불러옴", `“${layout.name}” 배치를 불러왔습니다.`);
   });
