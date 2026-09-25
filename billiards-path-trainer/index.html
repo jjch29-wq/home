@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#12372f">
   <title>Carom Lab · 당구 경로 연습</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <main class="app-shell">
@@ -80,7 +80,8 @@
             <button id="firstRedBtn" class="first-ball-button" type="button" aria-pressed="false"><i class="ball-dot red"></i>빨간공 먼저</button>
           </div>
           <button id="solveBtn" class="button button-solve button-block" type="button">3쿠션 성공 경로 찾기</button>
-          <button id="shootBtn" class="button button-primary button-block" type="button">샷 실행</button>
+          <button id="successShootBtn" class="button button-secondary button-block" type="button" disabled>성공 경로 재생</button>
+          <button id="shootBtn" class="button button-primary button-block" type="button">실제 샷 실행</button>
         </section>
 
         <section class="control-section stats-section">
@@ -120,6 +121,6 @@
       <span>④ 예상 경로 확인 후 샷 실행</span>
     </section>
   </main>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

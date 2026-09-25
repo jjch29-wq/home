@@ -59,7 +59,7 @@
   function clearSuccessPath() {
     successPath = null;
     demoPosition = null;
-    document.getElementById("shootBtn").textContent = "현재 설정으로 실행";
+    document.getElementById("successShootBtn").disabled = true;
   }
 
   function updateControls() {
@@ -359,10 +359,7 @@
 
   function shoot() {
     if (running || solving) return;
-    if (successPath) {
-      playSuccessRoute();
-      return;
-    }
+    clearSuccessPath();
     const speed = 290 + power * 5.1;
     const radians = angle * Math.PI / 180;
     balls.forEach((b) => { b.vx = 0; b.vy = 0; b.hit = false; });
@@ -664,10 +661,10 @@
         verticalSpin = 0;
         previewCushions = Math.min(5, Math.max(3, found.cushions));
         updateControls();
-        document.getElementById("shootBtn").textContent = "성공 경로 실행";
+        document.getElementById("successShootBtn").disabled = false;
         setStatus("success", "경로 발견", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · ${found.cushions}쿠션 · 각도 ${Math.round(found.angle)}° · 세기 ${found.power}%`);
       } else {
-        document.getElementById("shootBtn").textContent = "현재 설정으로 실행";
+        document.getElementById("successShootBtn").disabled = true;
         setStatus("fail", "경로 없음", "현재 배치에서는 계산 범위 안의 성공 경로를 찾지 못했습니다. 공 위치를 조금 바꾸거나 다시 시도하세요.");
       }
       render();
@@ -722,6 +719,7 @@
   });
 
   document.getElementById("shootBtn").addEventListener("click", shoot);
+  document.getElementById("successShootBtn").addEventListener("click", playSuccessRoute);
   document.getElementById("solveBtn").addEventListener("click", solveSuccessRoute);
   document.getElementById("firstYellowBtn").addEventListener("click", () => selectFirstBall("yellow"));
   document.getElementById("firstRedBtn").addEventListener("click", () => selectFirstBall("red"));

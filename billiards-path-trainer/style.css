@@ -60,6 +60,7 @@ select { margin: 2px 0 14px; }
 
 .button { border: 1px solid var(--line); border-radius: 9px; padding: 10px 14px; color: var(--text); background: var(--panel-2); font-weight: 700; }
 .button:hover { filter: brightness(1.1); }
+.button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .button-primary { color: #102016; background: var(--accent); border-color: var(--accent); }
 .button-solve { color: #dff7ff; background: #174d5d; border-color: #2b8097; }
 .button-danger { color: var(--danger); background: transparent; border-color: #79453f; }
