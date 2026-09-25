@@ -359,6 +359,10 @@
 
   function shoot() {
     if (running || solving) return;
+    if (successPath?.frames?.length) {
+      playSolvedPhysicsShot();
+      return;
+    }
     clearSuccessPath();
     const speed = 290 + power * 5.1;
     const radians = angle * Math.PI / 180;
@@ -372,6 +376,43 @@
     updateStats();
     setStatus("", "진행 중", "공의 실제 경로를 계산하고 있습니다.");
     requestAnimationFrame(step);
+  }
+
+  function playSolvedPhysicsShot() {
+    if (!successPath?.frames?.length || running || solving) return;
+    const solved = successPath;
+    const frames = solved.frames;
+    const duration = Math.max(1800, Math.min(7000, frames.length * (1000 / 60)));
+    const startedAt = performance.now();
+    running = true;
+    stats.attempts++;
+    updateStats();
+    setStatus("", "실제 샷 실행", "경로 탐색과 동일한 고정시간 물리 계산을 재현하고 있습니다.");
+
+    function animateSolvedShot(now) {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const index = Math.min(frames.length - 1, Math.floor(progress * frames.length));
+      const frame = frames[index];
+      balls.forEach((ball, ballIndex) => {
+        ball.x = frame[ballIndex].x;
+        ball.y = frame[ballIndex].y;
+        ball.vx = frame[ballIndex].vx;
+        ball.vy = frame[ballIndex].vy;
+      });
+      render();
+      if (progress < 1) {
+        requestAnimationFrame(animateSolvedShot);
+        return;
+      }
+      running = false;
+      balls.forEach((ball) => { ball.vx = 0; ball.vy = 0; });
+      stats.successes++;
+      updateStats();
+      setStatus("success", "실제 샷 성공", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · 두 번째 적구 전 ${solved.cushions}쿠션`);
+      clearSuccessPath();
+      render();
+    }
+    requestAnimationFrame(animateSolvedShot);
   }
 
   function playSuccessRoute() {
@@ -531,7 +572,7 @@
     render();
   }
 
-  function simulateRoute(candidateAngle, candidatePower, candidateSpin) {
+  function simulateRoute(candidateAngle, candidatePower, candidateSpin, captureFrames = false) {
     const simBalls = cloneBalls(balls);
     const radians = candidateAngle * Math.PI / 180;
     const speed = 290 + candidatePower * 5.1;
@@ -546,6 +587,7 @@
     let lastRecorded = route[0];
     const touching = new Set();
     const dt = 1 / 120;
+    const frames = captureFrames ? [simBalls.map(({ x, y, vx, vy }) => ({ x, y, vx, vy }))] : null;
 
     for (let frame = 0; frame < 1800; frame++) {
       simBalls.forEach((ball) => {
@@ -594,7 +636,8 @@
               else firstTouched = true;
             } else if (hitId === targetSecond && cushions >= 3 && !invalid) {
               route.push({ x: cue.x, y: cue.y });
-              return { angle: candidateAngle, power: candidatePower, spin: candidateSpin, cushions, points: route, events };
+              if (frames) frames.push(simBalls.map(({ x, y, vx, vy }) => ({ x, y, vx, vy })));
+              return { angle: candidateAngle, power: candidatePower, spin: candidateSpin, cushions, points: route, events, frames };
             }
           }
           touching.add(pairKey);
@@ -606,6 +649,7 @@
         lastRecorded = { x: cue.x, y: cue.y };
         route.push(lastRecorded);
       }
+      if (frames && frame % 2 === 0) frames.push(simBalls.map(({ x, y, vx, vy }) => ({ x, y, vx, vy })));
       if (invalid || simBalls.every((ball) => Math.hypot(ball.vx, ball.vy) < 5)) break;
     }
     return null;
@@ -654,6 +698,7 @@
       solveButton.disabled = false;
       solveButton.textContent = "3쿠션 성공 경로 찾기";
       if (found) {
+        found = simulateRoute(found.angle, found.power, found.spin, true) || found;
         successPath = found;
         angle = found.angle;
         power = found.power;
