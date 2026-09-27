@@ -23,12 +23,14 @@
   let draggingBall = null;
   let running = false;
   let lastTime = 0;
+  let physicsAccumulator = 0;
   let shot = null;
   let firstBallId = "yellow";
   let successPath = null;
   let solving = false;
   let demoPosition = null;
   let solveRunId = 0;
+  let lastShotSetup = null;
 
   const angleInput = document.getElementById("angleInput");
   const powerInput = document.getElementById("powerInput");
@@ -39,6 +41,19 @@
 
   function cloneBalls(source) {
     return source.map((b) => ({ ...b, vx: 0, vy: 0, hit: false }));
+  }
+
+  function captureShotSetup(path = null) {
+    return {
+      balls: cloneBalls(balls),
+      successPath: path,
+      angle,
+      power,
+      sideSpin,
+      verticalSpin,
+      previewCushions,
+      firstBallId,
+    };
   }
 
   function loadJSON(key, fallback) {
@@ -57,10 +72,38 @@
     document.getElementById("statusText").textContent = message;
   }
 
-  function clearSuccessPath() {
+  function clearSuccessPath(preserveRetry = false) {
     successPath = null;
     demoPosition = null;
     document.getElementById("successShootBtn").disabled = true;
+    updateFirstHitGuide(null);
+    if (!preserveRetry) {
+      lastShotSetup = null;
+      document.getElementById("retryShotBtn").disabled = true;
+    }
+  }
+
+  function updateFirstHitGuide(path) {
+    const event = path?.events?.find((item) => item.kind === "ball");
+    const ball = document.getElementById("firstHitBall");
+    const marker = document.getElementById("firstHitMarker");
+    const thicknessText = document.getElementById("firstHitThickness");
+    const directionText = document.getElementById("firstHitDirection");
+    ball.classList.toggle("yellow", firstBallId === "yellow");
+    ball.classList.toggle("red", firstBallId === "red");
+    if (!event) {
+      marker.hidden = true;
+      thicknessText.textContent = "경로를 먼저 찾아주세요";
+      directionText.textContent = "점이 표시된 곳을 맞히세요";
+      return;
+    }
+    const thickness = event.thickness ?? 1;
+    const eighths = Math.max(0, Math.min(8, Math.round(thickness * 8)));
+    marker.hidden = false;
+    marker.style.left = `${50 + (event.contactX ?? 0) * 38}%`;
+    marker.style.top = `${50 + (event.contactY ?? 0) * 38}%`;
+    thicknessText.textContent = `${event.label}공 ${eighths}/8 두께 (${Math.round(thickness * 100)}%)`;
+    directionText.textContent = "파란 점 위치를 수구로 맞히세요";
   }
 
   function updateControls() {
@@ -223,6 +266,37 @@
     ctx.stroke();
     ctx.setLineDash([]);
     successPath.events.forEach((event) => {
+      if (event.kind === "ball") {
+        const labelOnLeft = event.x > bounds.right - 90;
+        const labelX = event.x + (labelOnLeft ? -60 : 60);
+        const labelY = Math.max(bounds.top + 12, Math.min(bounds.bottom - 12, event.y + 25));
+
+        // 목적구를 맞히는 순간의 수구 위치와 두께를 보여 주는 고스트볼.
+        ctx.beginPath();
+        ctx.arc(event.x, event.y, ballRadius, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff4d";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffffcc";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.beginPath();
+        ctx.roundRect(labelX - 44, labelY - 10, 88, 20, 10);
+        ctx.fillStyle = "#082f27dd";
+        ctx.fill();
+        ctx.strokeStyle = "#7de8ffaa";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "700 10px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const thickness = event.thickness ?? 1;
+        const eighths = Math.max(0, Math.min(8, Math.round(thickness * 8)));
+        ctx.fillText(`${event.label} 두께 ${eighths}/8 (${Math.round(thickness * 100)}%)`, labelX, labelY + .5);
+      }
       ctx.beginPath();
       ctx.arc(event.x, event.y, 12, 0, Math.PI * 2);
       ctx.fillStyle = event.kind === "ball" ? "#ffffff" : "#7de8ff";
@@ -365,14 +439,16 @@
       return;
     }
     clearSuccessPath();
+    lastShotSetup = captureShotSetup();
     const speed = 290 + power * 5.1;
     const radians = angle * Math.PI / 180;
     balls.forEach((b) => { b.vx = 0; b.vy = 0; b.hit = false; });
     balls[0].vx = Math.cos(radians) * speed;
     balls[0].vy = Math.sin(radians) * speed;
-    shot = { cushionCount: 0, touched: new Set(), invalidOrder: false, secondTouchedAtCushions: null };
+    shot = { cushionCount: 0, touched: new Set(), invalidOrder: false, secondTouchedAtCushions: null, scored: false };
     running = true;
     lastTime = performance.now();
+    physicsAccumulator = 0;
     stats.attempts++;
     updateStats();
     setStatus("", "진행 중", "공의 실제 경로를 계산하고 있습니다.");
@@ -382,6 +458,8 @@
   function playSolvedPhysicsShot() {
     if (!successPath?.frames?.length || running || solving) return;
     const solved = successPath;
+    lastShotSetup = captureShotSetup(solved);
+    document.getElementById("retryShotBtn").disabled = true;
     const frames = solved.frames;
     const frameStep = Math.max(1, Math.ceil(frames.length / 420));
     let frameIndex = 0;
@@ -411,7 +489,8 @@
       stats.successes++;
       updateStats();
       setStatus("success", "실제 샷 성공", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · 두 번째 적구 전 ${solved.cushions}쿠션`);
-      clearSuccessPath();
+      clearSuccessPath(true);
+      document.getElementById("retryShotBtn").disabled = false;
       render();
     }, 1000 / 60);
   }
@@ -465,10 +544,14 @@
 
   function step(now) {
     if (!running) return;
-    const dt = Math.min((now - lastTime) / 1000, .025);
+    const dt = Math.min((now - lastTime) / 1000, .05);
     lastTime = now;
-    const substeps = 3;
-    for (let s = 0; s < substeps; s++) simulate(dt / substeps);
+    const fixedStep = 1 / 120;
+    physicsAccumulator += dt;
+    while (physicsAccumulator >= fixedStep) {
+      simulate(fixedStep);
+      physicsAccumulator -= fixedStep;
+    }
     render();
     const moving = balls.some((b) => Math.hypot(b.vx, b.vy) > 5);
     if (moving) requestAnimationFrame(step);
@@ -513,16 +596,23 @@
       if (shot.touched.size === 0 && hitId !== firstBallId) shot.invalidOrder = true;
       shot.touched.add(hitId);
       const secondId = firstBallId === "yellow" ? "red" : "yellow";
-      if (hitId === secondId && shot.touched.has(firstBallId)) shot.secondTouchedAtCushions = shot.cushionCount;
+      if (hitId === secondId && shot.touched.has(firstBallId)) {
+        shot.secondTouchedAtCushions = shot.cushionCount;
+        if (!shot.invalidOrder && shot.secondTouchedAtCushions >= 3) {
+          shot.scored = true;
+          stats.successes++;
+          updateStats();
+          setStatus("success", "득점", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · 두 번째 적구 전 쿠션 ${shot.secondTouchedAtCushions}회`);
+        }
+      }
     }
   }
 
   function finishShot() {
     running = false;
     balls.forEach((b) => { b.vx = 0; b.vy = 0; });
-    const success = !shot.invalidOrder && shot.touched.size === 2 && shot.secondTouchedAtCushions >= 3;
+    const success = shot.scored;
     if (success) {
-      stats.successes++;
       setStatus("success", "득점", `${firstBallId === "yellow" ? "노란공" : "빨간공"} 먼저 · 두 번째 적구 전 쿠션 ${shot.secondTouchedAtCushions}회`);
     } else {
       const hitText = shot.touched.size === 0 ? "적구 미접촉" : shot.touched.size === 1 ? "적구 1개 접촉" : "두 적구 접촉";
@@ -530,6 +620,30 @@
       setStatus("fail", "실패", reason);
     }
     updateStats();
+    document.getElementById("retryShotBtn").disabled = !lastShotSetup;
+    render();
+  }
+
+  function retryLastShot() {
+    if (!lastShotSetup || running || solving) return;
+    balls = cloneBalls(lastShotSetup.balls);
+    successPath = lastShotSetup.successPath;
+    angle = lastShotSetup.angle;
+    power = lastShotSetup.power;
+    sideSpin = lastShotSetup.sideSpin;
+    verticalSpin = lastShotSetup.verticalSpin;
+    previewCushions = lastShotSetup.previewCushions;
+    firstBallId = lastShotSetup.firstBallId;
+    demoPosition = null;
+    document.getElementById("successShootBtn").disabled = !successPath;
+    document.getElementById("retryShotBtn").disabled = true;
+    updateFirstHitGuide(successPath);
+    document.getElementById("firstYellowBtn").classList.toggle("selected", firstBallId === "yellow");
+    document.getElementById("firstRedBtn").classList.toggle("selected", firstBallId === "red");
+    document.getElementById("firstYellowBtn").setAttribute("aria-pressed", String(firstBallId === "yellow"));
+    document.getElementById("firstRedBtn").setAttribute("aria-pressed", String(firstBallId === "red"));
+    updateControls();
+    setStatus("", "다시 하기 준비", "샷 실행 전의 공 배치와 경로를 복원했습니다.");
     render();
   }
 
@@ -585,6 +699,8 @@
     let cushions = 0;
     let firstTouched = false;
     let invalid = false;
+    let scored = false;
+    let scoredCushions = null;
     let lastRecorded = route[0];
     const touching = new Set();
     const dt = 1 / 120;
@@ -609,7 +725,7 @@
         }
       });
 
-      if (Math.hypot(simBalls[1].x - simBalls[2].x, simBalls[1].y - simBalls[2].y) < ballRadius * 2) {
+      if (!scored && Math.hypot(simBalls[1].x - simBalls[2].x, simBalls[1].y - simBalls[2].y) < ballRadius * 2) {
         invalid = true;
         break;
       }
@@ -624,7 +740,7 @@
           if (!distance) continue;
           // 학습용 성공 경로에서는 적구끼리 먼저 충돌해 목표 위치가
           // 바뀌는 우회 해법을 제외하고 수구의 직접 접촉만 인정한다.
-          if (a.id !== "cue" && b.id !== "cue") {
+          if (!scored && a.id !== "cue" && b.id !== "cue") {
             invalid = true;
             continue;
           }
@@ -632,24 +748,44 @@
           const overlap = ballRadius * 2 - distance;
           a.x -= nx * overlap / 2; a.y -= ny * overlap / 2;
           b.x += nx * overlap / 2; b.y += ny * overlap / 2;
+          const cueBall = a.id === "cue" ? a : b;
+          const targetBall = a.id === "cue" ? b : a;
+          const incomingSpeed = Math.hypot(cueBall.vx, cueBall.vy);
+          const incomingX = incomingSpeed ? cueBall.vx / incomingSpeed : nx;
+          const incomingY = incomingSpeed ? cueBall.vy / incomingSpeed : ny;
+          const targetDx = targetBall.x - cueBall.x;
+          const targetDy = targetBall.y - cueBall.y;
+          const lateralOffset = Math.abs(targetDx * -incomingY + targetDy * incomingX);
+          const hitThickness = Math.max(0, Math.min(1, 1 - lateralOffset / (ballRadius * 2)));
           const relative = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
           if (relative > 0) {
             const impulse = relative * .96;
             a.vx -= impulse * nx; a.vy -= impulse * ny;
             b.vx += impulse * nx; b.vy += impulse * ny;
           }
-          if (!touching.has(pairKey) && (a.id === "cue" || b.id === "cue")) {
+          if (!scored && !touching.has(pairKey) && (a.id === "cue" || b.id === "cue")) {
             const hitId = a.id === "cue" ? b.id : a.id;
             const cue = simBalls[0];
             route.push({ x: cue.x, y: cue.y });
-            events.push({ x: cue.x, y: cue.y, kind: "ball", label: hitId === "yellow" ? "Y" : "R" });
+            const contactDistance = Math.hypot(cue.x - targetBall.x, cue.y - targetBall.y) || 1;
+            events.push({
+              x: cue.x,
+              y: cue.y,
+              kind: "ball",
+              label: hitId === "yellow" ? "Y" : "R",
+              thickness: hitThickness,
+              contactX: (cue.x - targetBall.x) / contactDistance,
+              contactY: (cue.y - targetBall.y) / contactDistance,
+            });
             if (!firstTouched) {
               if (hitId !== firstBallId) invalid = true;
               else firstTouched = true;
             } else if (hitId === targetSecond && cushions >= 3 && !invalid) {
               route.push({ x: cue.x, y: cue.y });
               if (frames) frames.push(simBalls.map(({ x, y, vx, vy }) => ({ x, y, vx, vy })));
-              return { angle: candidateAngle, power: candidatePower, spin: candidateSpin, cushions, points: route, events, frames };
+              if (!captureFrames) return { angle: candidateAngle, power: candidatePower, spin: candidateSpin, cushions, points: route, events, frames };
+              scored = true;
+              scoredCushions = cushions;
             }
           }
           touching.add(pairKey);
@@ -664,7 +800,9 @@
       if (frames && frame % 2 === 0) frames.push(simBalls.map(({ x, y, vx, vy }) => ({ x, y, vx, vy })));
       if (invalid || simBalls.every((ball) => Math.hypot(ball.vx, ball.vy) < 5)) break;
     }
-    return null;
+    return scored
+      ? { angle: candidateAngle, power: candidatePower, spin: candidateSpin, cushions: scoredCushions, points: route, events, frames }
+      : null;
   }
 
   function angleDistance(a, b) {
@@ -727,6 +865,7 @@
       if (found) {
         found = simulateRoute(found.angle, found.power, found.spin, true) || found;
         successPath = found;
+        updateFirstHitGuide(found);
         angle = found.angle;
         power = found.power;
         sideSpin = found.spin;
@@ -792,6 +931,7 @@
 
   document.getElementById("shootBtn").addEventListener("click", shoot);
   document.getElementById("successShootBtn").addEventListener("click", playSuccessRoute);
+  document.getElementById("retryShotBtn").addEventListener("click", retryLastShot);
   document.getElementById("solveBtn").addEventListener("click", solveSuccessRoute);
   document.getElementById("firstYellowBtn").addEventListener("click", () => selectFirstBall("yellow"));
   document.getElementById("firstRedBtn").addEventListener("click", () => selectFirstBall("red"));

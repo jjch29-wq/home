@@ -79,9 +79,24 @@
             <button id="firstYellowBtn" class="first-ball-button selected" type="button" aria-pressed="true"><i class="ball-dot yellow"></i>노란공 먼저</button>
             <button id="firstRedBtn" class="first-ball-button" type="button" aria-pressed="false"><i class="ball-dot red"></i>빨간공 먼저</button>
           </div>
+          <div class="first-hit-guide" aria-live="polite">
+            <span class="first-hit-title">1적구 맞춤</span>
+            <div class="first-hit-content">
+              <div id="firstHitBall" class="first-hit-ball yellow">
+                <span class="first-hit-axis horizontal"></span>
+                <span class="first-hit-axis vertical"></span>
+                <span id="firstHitMarker" class="first-hit-marker" hidden></span>
+              </div>
+              <div class="first-hit-values">
+                <strong id="firstHitThickness">경로를 먼저 찾아주세요</strong>
+                <span id="firstHitDirection">점이 표시된 곳을 맞히세요</span>
+              </div>
+            </div>
+          </div>
           <button id="solveBtn" class="button button-solve button-block" type="button">3쿠션 성공 경로 찾기</button>
           <button id="successShootBtn" class="button button-secondary button-block" type="button" disabled>성공 경로 재생</button>
           <button id="shootBtn" class="button button-primary button-block" type="button">실제 샷 실행</button>
+          <button id="retryShotBtn" class="button button-secondary button-block" type="button" disabled>같은 배치 다시 하기</button>
         </section>
 
         <section class="control-section stats-section">
@@ -121,6 +136,6 @@
       <span>④ 예상 경로 확인 후 샷 실행</span>
     </section>
   </main>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
