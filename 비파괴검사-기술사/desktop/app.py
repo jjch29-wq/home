@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -12,11 +13,13 @@ from PIL import Image, ImageTk
 
 from study_content import WEEKLY_CONTENT
 from glossary_data import GLOSSARY
-from problem_summary_data import summary_for_problem
+from problem_summary_data import EXACT_SUMMARIES, summary_for_problem
+from standard_references import references_for_problem
 
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_FILE = APP_DIR / "study_data.json"
+DATA_BACKUP_FILE = APP_DIR / "study_data.backup.json"
 SETTINGS_FILE = APP_DIR / "settings.json"
 PROBLEM_INDEX_FILE = APP_DIR / "problem_index.json"
 DEFAULT_SOURCE_DIR = Path(r"I:\주진철\도서\자격증\비파괴검사 기술사")
@@ -35,6 +38,44 @@ COLORS = {
     "amber": "#e9a23b",
     "red": "#c95d51",
 }
+
+REVIEW_FILTERS = ["전체 검토상태", "검토 완료", "규격 확인 필요", "원문 확인 필요", "초안", "미검토"]
+SOURCE_CHECK_PROBLEMS = {35, 128, 138, 189, 318, 370}
+
+
+def problem_review_status(problem):
+    """요약 작성 근거와 규격 메타데이터를 사용자용 검토상태로 변환한다."""
+    _summary, basis = summary_for_problem(problem)
+    references = references_for_problem(problem)
+    if problem.get("number") in SOURCE_CHECK_PROBLEMS:
+        return "원문 확인 필요"
+    if any("확인 필요" in reference for reference in references):
+        return "규격 확인 필요"
+    if basis == "문제별 검토":
+        return "검토 완료"
+    if basis.startswith("제목 핵심어"):
+        return "초안"
+    return "미검토"
+
+
+def content_review_counts():
+    counts = {status: 0 for status in REVIEW_FILTERS[1:]}
+    for problem in ALL_PROBLEMS:
+        counts[problem_review_status(problem)] += 1
+    return counts
+
+
+def question_note_problem_number(note):
+    """새 메타데이터를 우선하고 기존 메모는 출처 앞 번호로 연결한다."""
+    number = note.get("problem_number")
+    if isinstance(number, int):
+        return number
+    match = re.match(r"\s*(\d+)\.", str(note.get("source", "")))
+    return int(match.group(1)) if match else None
+
+
+def question_notes_for_problem(notes, problem_number):
+    return [note for note in notes if question_note_problem_number(note) == problem_number]
 
 
 def calculate_near_field_values(diameter_mm, frequency_mhz, velocity_mm_us, test_distance_mm=None):
@@ -166,13 +207,17 @@ def question_category_badge(category: str) -> str:
 
 def load_data() -> dict:
     empty = {"weeks": [], "questions": [], "tasks": [], "answers": {}, "mistakes": [], "question_notes": [], "glossary_understood": [], "glossary_review": [], "glossary_history": []}
-    if not DATA_FILE.exists():
+    if not DATA_FILE.exists() and not DATA_BACKUP_FILE.exists():
         return empty
-    try:
-        saved = json.loads(DATA_FILE.read_text(encoding="utf-8"))
-        empty.update(saved)
-    except (OSError, json.JSONDecodeError):
-        pass
+    candidates = (DATA_FILE, DATA_BACKUP_FILE)
+    for candidate in candidates:
+        try:
+            saved = json.loads(candidate.read_text(encoding="utf-8"))
+            if isinstance(saved, dict):
+                empty.update(saved)
+                break
+        except (OSError, json.JSONDecodeError):
+            continue
     return empty
 
 
@@ -217,7 +262,11 @@ class StudyApp(tk.Tk):
         self.minsize(1040, 680)
         self.configure(bg=COLORS["paper"])
         self.data = load_data()
+        self.restore_saved_book_questions()
         settings = load_settings()
+        self.settings = settings
+        configured_offsets = settings.get("pdf_page_offsets", [20, -135, -289])
+        self.pdf_page_offsets = configured_offsets if isinstance(configured_offsets, list) and len(configured_offsets) == 3 and all(isinstance(value, int) for value in configured_offsets) else [20, -135, -289]
         portable_books = APP_DIR / "교재"
         configured = Path(settings["source_dir"]) if settings.get("source_dir") else None
         if configured and configured.exists():
@@ -240,6 +289,17 @@ class StudyApp(tk.Tk):
         self.bind_all("<Control-MouseWheel>", self.zoom_question_notes)
         self.show_view("dashboard")
         self.protocol("WM_DELETE_WINDOW", self.close_app)
+
+    def restore_saved_book_questions(self):
+        known = {qid for qid, _category, _title in QUESTIONS}
+        problem_by_number = {str(problem["number"]): problem for problem in ALL_PROBLEMS}
+        for qid in self.data.get("answers", {}):
+            if not qid.startswith("book-") or qid in known:
+                continue
+            problem = problem_by_number.get(qid.removeprefix("book-"))
+            if problem:
+                QUESTIONS.append((qid, problem["category"], problem["title"]))
+                known.add(qid)
 
     def _configure_styles(self):
         style = ttk.Style(self)
@@ -273,6 +333,7 @@ class StudyApp(tk.Tk):
         self.source_status = tk.Label(source, text="", bg="#17372e", fg="#91a49c", font=("맑은 고딕", 8), wraplength=180, justify="left")
         self.source_status.pack(anchor="w", pady=(5, 8))
         tk.Button(source, text="교재 폴더 설정", command=self.choose_source_dir, bd=0, bg=COLORS["lime"], fg=COLORS["ink"], activebackground="#b7d45c", padx=10, pady=6, font=("맑은 고딕", 8, "bold")).pack(anchor="w")
+        tk.Button(source, text="PDF 페이지 보정", command=self.configure_pdf_page_offsets, bd=0, bg="#d9e3df", fg=COLORS["ink"], activebackground="#ffffff", padx=10, pady=6, font=("맑은 고딕", 8, "bold")).pack(anchor="w", pady=(6, 0))
         self.update_source_status()
 
         body = tk.Frame(self, bg=COLORS["paper"])
@@ -290,9 +351,55 @@ class StudyApp(tk.Tk):
         self.view_host.pack(fill="both", expand=True, padx=38, pady=(0, 32))
 
     def save(self):
-        DATA_FILE.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload = json.dumps(self.data, ensure_ascii=False, indent=2)
+        temp_file = DATA_FILE.with_suffix(".json.tmp")
+        temp_file.write_text(payload, encoding="utf-8")
+        json.loads(temp_file.read_text(encoding="utf-8"))
+        if DATA_FILE.exists():
+            try:
+                current = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+                if isinstance(current, dict):
+                    shutil.copy2(DATA_FILE, DATA_BACKUP_FILE)
+            except (OSError, json.JSONDecodeError):
+                pass
+        temp_file.replace(DATA_FILE)
+
+    def export_study_data(self):
+        target = filedialog.asksaveasfilename(
+            title="학습기록 내보내기",
+            defaultextension=".json",
+            filetypes=[("JSON 파일", "*.json")],
+            initialfile=f'ndt-study-{date.today().strftime("%Y%m%d")}.json',
+        )
+        if not target:
+            return
+        Path(target).write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        messagebox.showinfo("내보내기 완료", "학습기록을 저장했습니다.")
+
+    def import_study_data(self):
+        source = filedialog.askopenfilename(title="학습기록 가져오기", filetypes=[("JSON 파일", "*.json")])
+        if not source:
+            return
+        try:
+            imported = json.loads(Path(source).read_text(encoding="utf-8"))
+            required = {"weeks", "questions", "tasks", "answers", "mistakes", "question_notes"}
+            if not isinstance(imported, dict) or not required.issubset(imported):
+                raise ValueError("학습기록 형식이 아닙니다.")
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            messagebox.showerror("가져오기 실패", str(error))
+            return
+        if not messagebox.askyesno("학습기록 가져오기", "현재 기록을 백업하고 선택한 기록으로 교체할까요?"):
+            return
+        self.save()
+        base = load_data()
+        base.update(imported)
+        self.data = base
+        self.save()
+        self.show_view("dashboard")
+        messagebox.showinfo("가져오기 완료", "학습기록을 불러왔습니다.")
 
     def close_app(self):
+        self.save_current_answer_draft()
         self.save()
         self.destroy()
 
@@ -316,9 +423,46 @@ class StudyApp(tk.Tk):
             messagebox.showwarning("교재 파일 확인", "선택한 폴더에 다음 파일이 없습니다.\n\n" + "\n".join(missing))
             return
         self.source_dir = folder
-        SETTINGS_FILE.write_text(json.dumps({"source_dir": str(folder)}, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.settings["source_dir"] = str(folder)
+        SETTINGS_FILE.write_text(json.dumps(self.settings, ensure_ascii=False, indent=2), encoding="utf-8")
         self.update_source_status()
         messagebox.showinfo("교재 연결 완료", "원문 PDF 폴더를 저장했습니다.")
+
+    def configure_pdf_page_offsets(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("PDF 페이지 보정")
+        dialog.geometry("480x330")
+        dialog.resizable(False, False)
+        dialog.configure(bg=COLORS["paper"])
+        dialog.transient(self)
+        dialog.grab_set()
+        frame = tk.Frame(dialog, bg=COLORS["paper"], padx=24, pady=22)
+        frame.pack(fill="both", expand=True)
+        self.label(frame, "교재 페이지 → PDF 페이지 보정값", 13, bold=True).pack(anchor="w")
+        self.label(frame, "PDF 표지나 목차 쪽수가 바뀐 경우에만 수정하세요.", 9, COLORS["muted"]).pack(anchor="w", pady=(4, 14))
+        variables = []
+        for index, name in enumerate(SOURCE_FILES):
+            row = tk.Frame(frame, bg=COLORS["paper"])
+            row.pack(fill="x", pady=5)
+            self.label(row, name, 9).pack(side="left")
+            value = tk.StringVar(value=str(self.pdf_page_offsets[index]))
+            tk.Entry(row, textvariable=value, width=10, justify="right").pack(side="right")
+            variables.append(value)
+
+        def submit():
+            try:
+                offsets = [int(value.get()) for value in variables]
+            except ValueError:
+                messagebox.showwarning("입력값 확인", "보정값은 정수로 입력하세요.", parent=dialog)
+                return
+            self.pdf_page_offsets = offsets
+            self.settings["pdf_page_offsets"] = offsets
+            SETTINGS_FILE.write_text(json.dumps(self.settings, ensure_ascii=False, indent=2), encoding="utf-8")
+            dialog.destroy()
+            messagebox.showinfo("저장 완료", "PDF 페이지 보정값을 저장했습니다.")
+
+        self.action_button(frame, "저장", submit).pack(side="right", pady=(16, 0))
+        self.action_button(frame, "취소", dialog.destroy, primary=False).pack(side="right", padx=8, pady=(16, 0))
 
     def clear_host(self):
         for child in self.view_host.winfo_children():
@@ -328,6 +472,10 @@ class StudyApp(tk.Tk):
         titles = {"dashboard": "학습 대시보드", "plan": "12주 학습계획", "theory": "주차별 학습답안", "questions": "문제은행", "answer": "답안연습", "mistakes": "오답노트", "question_notes": "질문노트", "glossary": "핵심용어 사전"}
         if getattr(self, "text_find_popup", None):
             self.close_text_finder()
+        previous_view = getattr(self, "current_view", None)
+        if previous_view == "answer" and name != "answer":
+            self.save_current_answer_draft()
+            self.pause_timer()
         self.current_view = name
         self.page_title.config(text=titles[name])
         for key, button in self.nav_buttons.items():
@@ -379,12 +527,43 @@ class StudyApp(tk.Tk):
             self.label(box, title, 8, COLORS["muted"]).pack(anchor="w")
             self.label(box, value, 18, COLORS["ink"], True).pack(anchor="w", pady=(4, 0))
 
+        review = self.card(root, fill="x")
+        review_header = tk.Frame(review, bg=COLORS["white"])
+        review_header.pack(fill="x", pady=(0, 10))
+        self.label(review_header, "콘텐츠 점검 현황", 12, bold=True, bg=COLORS["white"]).pack(side="left")
+        self.label(review_header, f"개별요약 {len(EXACT_SUMMARIES)} / {len(ALL_PROBLEMS)}", 9, COLORS["green2"], True, COLORS["white"]).pack(side="right")
+        review_counts = content_review_counts()
+        review_grid = tk.Frame(review, bg=COLORS["white"])
+        review_grid.pack(fill="x")
+        review_items = [
+            ("검토 완료", "바로 학습할 수 있는 문제"),
+            ("규격 확인 필요", "최신 법령·표준 대조 필요"),
+            ("원문 확인 필요", "OCR 훼손 제목 확인 필요"),
+        ]
+        for column, (status, description) in enumerate(review_items):
+            box = tk.Frame(review_grid, bg=COLORS["soft"], padx=14, pady=11)
+            box.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 5, 0))
+            review_grid.grid_columnconfigure(column, weight=1)
+            self.label(box, f'{status}  {review_counts[status]}개', 10, bold=True, bg=COLORS["soft"]).pack(anchor="w")
+            self.label(box, description, 8, COLORS["muted"], bg=COLORS["soft"]).pack(anchor="w", pady=(3, 7))
+            self.action_button(box, "목록 보기", lambda value=status: self.open_review_queue(value), primary=False).pack(anchor="w")
+
+        data_tools = self.card(root, fill="x")
+        self.label(data_tools, "학습기록 보호", 11, bold=True).pack(side="left")
+        self.action_button(data_tools, "기록 가져오기", self.import_study_data, primary=False).pack(side="right")
+        self.action_button(data_tools, "기록 내보내기", self.export_study_data, primary=False).pack(side="right", padx=8)
+
         tasks = self.card(root, fill="x")
         self.label(tasks, "이번 주 · 초음파탐상검사(UT)", 14, bold=True).pack(anchor="w", pady=(0, 8))
         for task_id, text in [("ut-theory", "파동과 음향임피던스"), ("ut-nearfield", "근거리음장과 감쇠"), ("ut-probe", "탐촉자와 주파수 선정"), ("ut-paut", "PAUT 원리와 특성")]:
             var = tk.BooleanVar(value=task_id in self.data["tasks"])
             cb = tk.Checkbutton(tasks, text=text, variable=var, bg=COLORS["white"], activebackground=COLORS["white"], anchor="w", font=("맑은 고딕", 10), command=lambda t=task_id, v=var: self.toggle_list("tasks", t, v.get(), refresh=False))
             cb.pack(fill="x", pady=5)
+
+    def open_review_queue(self, status):
+        self.show_view("questions")
+        self.review_status_var.set(status)
+        self.render_question_list()
 
     def build_plan(self):
         scroll = ScrollFrame(self.view_host)
@@ -408,6 +587,7 @@ class StudyApp(tk.Tk):
         self.study_week_var = tk.StringVar(value="전체 주차")
         self.study_group_var = tk.StringVar(value="전체 원리")
         self.answer_type_var = tk.StringVar(value="전체 유형")
+        self.review_status_var = tk.StringVar(value="전체 검토상태")
         search = tk.Entry(top, textvariable=self.search_var, font=("맑은 고딕", 10), relief="solid", bd=1)
         search.pack(side="left", fill="x", expand=True, ipady=8)
         week_values = ["전체 주차"] + [f'{week:02d}주 {name}' for week, name in sorted({(p["week"], p["week_name"]) for p in ALL_PROBLEMS})]
@@ -420,11 +600,14 @@ class StudyApp(tk.Tk):
         type_values = ["전체 유형"] + sorted({p["answer_type"] for p in ALL_PROBLEMS})
         type_combo = ttk.Combobox(filters, textvariable=self.answer_type_var, values=type_values, state="readonly", width=18)
         type_combo.pack(side="left", padx=(10, 0))
-        self.label(filters, "주차 → 핵심원리 → 답안유형 순으로 좁혀서 공부하세요.", 9, COLORS["muted"]).pack(side="left", padx=14)
+        status_combo = ttk.Combobox(filters, textvariable=self.review_status_var, values=REVIEW_FILTERS, state="readonly", width=16)
+        status_combo.pack(side="left", padx=(10, 0))
+        self.label(filters, "검토 완료는 바로 학습, 초안·미검토는 원문 확인이 필요합니다.", 9, COLORS["muted"]).pack(side="left", padx=14)
         self.search_var.trace_add("write", lambda *_: self.render_question_list())
         week_combo.bind("<<ComboboxSelected>>", lambda _e: self.on_week_filter_changed())
         self.group_combo.bind("<<ComboboxSelected>>", lambda _e: self.render_question_list())
         type_combo.bind("<<ComboboxSelected>>", lambda _e: self.render_question_list())
+        status_combo.bind("<<ComboboxSelected>>", lambda _e: self.render_question_list())
         self.refresh_group_options()
         self.question_scroll = ScrollFrame(self.view_host)
         self.question_scroll.pack(fill="both", expand=True)
@@ -451,6 +634,7 @@ class StudyApp(tk.Tk):
         self.refresh_group_options()
         self.study_group_var.set(problem["study_group"])
         self.answer_type_var.set("전체 유형")
+        self.review_status_var.set("전체 검토상태")
         self.render_question_list()
 
     def build_theory(self):
@@ -559,22 +743,50 @@ class StudyApp(tk.Tk):
         detail_frame = tk.Frame(problem_pane, bg=COLORS["white"], highlightbackground=COLORS["line"], highlightthickness=1, padx=18, pady=16)
         problem_pane.add(tree_frame, minsize=355, width=430)
         problem_pane.add(detail_frame, minsize=360)
+        theory_filter_bar = tk.Frame(tree_frame, bg=COLORS["white"], padx=8, pady=8)
+        theory_filter_bar.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.label(theory_filter_bar, "검토상태", 8, COLORS["muted"], bg=COLORS["white"]).pack(side="left", padx=(0, 6))
+        self.theory_review_status_var = tk.StringVar(value="전체 검토상태")
+        theory_status_combo = ttk.Combobox(theory_filter_bar, textvariable=self.theory_review_status_var, values=REVIEW_FILTERS, state="readonly", width=16)
+        theory_status_combo.pack(side="left")
         self.theory_problem_tree = ttk.Treeview(tree_frame, show="tree", selectmode="browse")
         tree_scroll = ttk.Scrollbar(tree_frame, orient="vertical", command=self.theory_problem_tree.yview)
         tree_xscroll = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.theory_problem_tree.xview)
         self.theory_problem_tree.configure(yscrollcommand=tree_scroll.set, xscrollcommand=tree_xscroll.set)
-        self.theory_problem_tree.grid(row=0, column=0, sticky="nsew")
-        tree_scroll.grid(row=0, column=1, sticky="ns")
-        tree_xscroll.grid(row=1, column=0, sticky="ew")
-        tree_frame.grid_rowconfigure(0, weight=1)
+        self.theory_problem_tree.grid(row=1, column=0, sticky="nsew")
+        tree_scroll.grid(row=1, column=1, sticky="ns")
+        tree_xscroll.grid(row=2, column=0, sticky="ew")
+        tree_frame.grid_rowconfigure(1, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
-        groups = {}
-        for problem in week_problems:
-            group = problem["study_group"]
-            if group not in groups:
-                groups[group] = self.theory_problem_tree.insert("", "end", text=f"{group}", open=True)
-            self.theory_problem_tree.insert(groups[group], "end", iid=f'problem-{problem["number"]}', text=f'{problem["number"]}. {problem["title"]}')
-        self.theory_problem_map = {f'problem-{p["number"]}': p for p in week_problems}
+        self.theory_problem_map = {}
+
+        def populate_theory_problems(*_args):
+            self.theory_problem_tree.delete(*self.theory_problem_tree.get_children())
+            selected_status = self.theory_review_status_var.get()
+            visible_problems = [
+                problem for problem in week_problems
+                if selected_status == "전체 검토상태" or problem_review_status(problem) == selected_status
+            ]
+            groups = {}
+            self.theory_problem_map = {f'problem-{p["number"]}': p for p in visible_problems}
+            for problem in visible_problems:
+                group = problem["study_group"]
+                if group not in groups:
+                    groups[group] = self.theory_problem_tree.insert("", "end", text=group, open=True)
+                status = problem_review_status(problem)
+                self.theory_problem_tree.insert(groups[group], "end", iid=f'problem-{problem["number"]}', text=f'[{status}] {problem["number"]}. {problem["title"]}')
+            first = next(iter(self.theory_problem_map), None)
+            if first:
+                self.theory_problem_tree.selection_set(first)
+                self.theory_problem_tree.focus(first)
+                self.theory_problem_tree.see(first)
+                self.show_theory_problem()
+            else:
+                self.theory_problem_meta.config(text="선택한 검토상태에 해당하는 문제가 없습니다.")
+                self.theory_problem_title.config(text="전체 관련문제")
+                self.theory_problem_summary.config(state="normal")
+                self.theory_problem_summary.delete("1.0", "end")
+                self.theory_problem_summary.config(state="disabled")
         self.theory_problem_meta = self.label(detail_frame, "문제를 선택하세요.", 8, COLORS["green2"], True, wraplength=620, justify="left")
         self.theory_problem_meta.pack(anchor="w")
         self.theory_problem_title = self.label(detail_frame, "전체 관련문제", 14, bold=True, wraplength=620, justify="left")
@@ -588,6 +800,9 @@ class StudyApp(tk.Tk):
         self.full_list_toggle.pack(side="left", padx=(0, 8))
         self.action_button(action_bar, "원문 해설 보기", self.open_selected_theory_source).pack(side="left")
         self.action_button(action_bar, "이 문제 답안연습", self.open_selected_theory_answer, primary=False).pack(side="left", padx=8)
+        self.action_button(action_bar, "+ 질문·내용 기록", self.add_question_note_from_selected_problem, primary=False).pack(side="left")
+        self.problem_question_notes_button = self.action_button(action_bar, "관련 질문 0개", self.open_selected_problem_question_notes, primary=False)
+        self.problem_question_notes_button.pack(side="left", padx=(8, 0))
         self.build_theory_zoom_controls(action_bar).pack(side="right")
         summary_frame = tk.Frame(detail_frame, bg=COLORS["white"])
         summary_frame.pack(fill="both", expand=True)
@@ -604,12 +819,8 @@ class StudyApp(tk.Tk):
             self.theory_problem_title.config(wraplength=width)
         detail_frame.bind("<Configure>", resize_detail)
         self.theory_problem_tree.bind("<<TreeviewSelect>>", self.show_theory_problem)
-        first_problem = next(iter(self.theory_problem_map), None)
-        if first_problem:
-            self.theory_problem_tree.selection_set(first_problem)
-            self.theory_problem_tree.focus(first_problem)
-            self.theory_problem_tree.see(first_problem)
-            self.show_theory_problem()
+        theory_status_combo.bind("<<ComboboxSelected>>", populate_theory_problems)
+        populate_theory_problems()
         self.apply_theory_zoom()
 
     def build_theory_zoom_controls(self, parent):
@@ -1265,8 +1476,14 @@ class StudyApp(tk.Tk):
         problem = self.selected_theory_problem()
         if not problem:
             return
-        self.theory_problem_meta.config(text=f'{problem["week"]:02d}주 · {problem["study_group"]} · {problem["answer_type"]} · {problem["difficulty"]} · 교재 p.{problem["book_page"]}')
+        self.theory_problem_meta.config(text=f'{problem["week"]:02d}주 · {problem["study_group"]} · {problem["answer_type"]} · {problem["difficulty"]} · {problem_review_status(problem)} · 교재 p.{problem["book_page"]}')
         self.theory_problem_title.config(text=f'{problem["number"]}. {problem["title"]}')
+        notes = question_notes_for_problem(self.data["question_notes"], problem["number"])
+        unresolved = sum(note.get("status") != "이해함" or not note.get("answer", "").strip() for note in notes)
+        note_label = f"관련 질문 {len(notes)}개"
+        if unresolved:
+            note_label += f" · 미해결 {unresolved}개"
+        self.problem_question_notes_button.config(text=note_label, state="normal" if notes else "disabled")
         content = self.problem_study_summary(problem)
         self.theory_problem_summary.config(state="normal")
         self.theory_problem_summary.delete("1.0", "end")
@@ -1308,12 +1525,18 @@ class StudyApp(tk.Tk):
         linked = lesson["title"] if lesson else "주차별 종합답안"
         keywords = " · ".join(problem.get("tags", [])[:4]) or problem.get("study_group", "")
         answer_type = problem.get("answer_type", "용어·설명형")
+        references = references_for_problem(problem)
+        review_status = problem_review_status(problem)
+        reference_section = ""
+        if references:
+            reference_section = "\n\n[규격·판본 확인]\n" + "\n".join(f"• {item}" for item in references)
         return (
+            f"[검토상태]\n{review_status}\n\n"
             f"[출제 의도]\n{intent_by_type.get(answer_type, intent_by_type['용어·설명형'])}\n\n"
             f"[핵심용어]\n{keywords}\n\n"
             f"[핵심요약 · {summary_basis}]\n{summary}\n\n"
             f"[권장 답안 구성]\n{outlines.get(answer_type, outlines['용어·설명형'])}\n\n"
-            f"[연계 필수답안]\n{linked}\n\n"
+            f"[연계 필수답안]\n{linked}{reference_section}\n\n"
             "※ 아래 ‘원문 해설 보기’에서 교재 해당 페이지를 확인해 최종 답안을 보완하세요."
         )
 
@@ -1327,6 +1550,30 @@ class StudyApp(tk.Tk):
         if problem:
             self.open_book_answer(problem)
 
+    def add_question_note_from_selected_problem(self):
+        problem = self.selected_theory_problem()
+        if not problem:
+            return
+        week = next((item for item in WEEKLY_CONTENT if item["week"] == problem["week"]), None)
+        lesson = self.related_core_lesson(problem)
+        context = {
+            "problem_number": problem["number"],
+            "week": problem["week"],
+            "theme": week["theme"] if week else problem.get("study_group", ""),
+            "lesson_title": lesson["title"] if lesson else problem["title"],
+            "source": f'{problem["number"]}. {problem["title"]} · 교재 p.{problem["book_page"]}',
+            "default_question": f'{problem["title"]}에서 궁금한 점: ',
+        }
+        self.open_question_note_dialog(context=context)
+
+    def open_selected_problem_question_notes(self):
+        problem = self.selected_theory_problem()
+        if not problem:
+            return
+        self.show_view("question_notes")
+        self.question_note_scope = ("problem", problem["number"])
+        self.render_question_notes()
+
     def render_question_list(self):
         root = self.question_scroll.content
         for child in root.winfo_children():
@@ -1335,7 +1582,8 @@ class StudyApp(tk.Tk):
         week = self.selected_study_week()
         group = self.study_group_var.get()
         answer_kind = self.answer_type_var.get()
-        visible = [q for q in ALL_PROBLEMS if (week is None or q["week"] == week) and (group == "전체 원리" or q["study_group"] == group) and (answer_kind == "전체 유형" or q["answer_type"] == answer_kind) and term in (q["title"] + " " + " ".join(q["tags"])).lower()]
+        review_status = self.review_status_var.get()
+        visible = [q for q in ALL_PROBLEMS if (week is None or q["week"] == week) and (group == "전체 원리" or q["study_group"] == group) and (answer_kind == "전체 유형" or q["answer_type"] == answer_kind) and (review_status == "전체 검토상태" or problem_review_status(q) == review_status) and term in (q["title"] + " " + " ".join(q["tags"])).lower()]
         self.label(root, f"{len(visible)}개의 문제 · 유사 원리끼리 순서대로 표시", 10, COLORS["muted"]).pack(anchor="w", pady=(0, 8))
         for problem in visible:
             qid = f'book-{problem["number"]}'
@@ -1347,7 +1595,8 @@ class StudyApp(tk.Tk):
             info = tk.Frame(row, bg=COLORS["white"])
             info.pack(side="left", fill="x", expand=True, padx=8)
             page_text = f' · 교재 p.{problem["book_page"]}' if problem.get("book_page") else " · 페이지 확인 필요"
-            meta = f'{problem["number"]}. {problem["week"]:02d}주 · {problem["study_group"]} · {problem["answer_type"]} · {problem["difficulty"]}{page_text}'
+            status = problem_review_status(problem)
+            meta = f'{problem["number"]}. {problem["week"]:02d}주 · {problem["study_group"]} · {problem["answer_type"]} · {problem["difficulty"]} · {status}{page_text}'
             self.label(info, meta, 8, COLORS["green2"], True).pack(anchor="w")
             self.label(info, question, 10, wraplength=690, justify="left").pack(anchor="w")
             if len(problem["tags"]) > 1:
@@ -1367,10 +1616,10 @@ class StudyApp(tk.Tk):
 
     def source_location(self, book_page: int):
         if book_page <= 145:
-            return self.source_dir / "기술사 2022-1.pdf", max(0, book_page + 20)
+            return self.source_dir / "기술사 2022-1.pdf", max(0, book_page + self.pdf_page_offsets[0])
         if book_page <= 300:
-            return self.source_dir / "기술사 2022-2.pdf", max(0, book_page - 135)
-        return self.source_dir / "기술사 2022-3.pdf", max(0, book_page - 289)
+            return self.source_dir / "기술사 2022-2.pdf", max(0, book_page + self.pdf_page_offsets[1])
+        return self.source_dir / "기술사 2022-3.pdf", max(0, book_page + self.pdf_page_offsets[2])
 
     def open_source_page(self, problem):
         book_page = problem.get("book_page")
@@ -1460,7 +1709,7 @@ class StudyApp(tk.Tk):
         qid = getattr(self, "pending_question", QUESTIONS[0][0])
         index = next((i for i, q in enumerate(QUESTIONS) if q[0] == qid), 0)
         self.answer_combo.current(index)
-        self.answer_combo.bind("<<ComboboxSelected>>", lambda _e: self.load_selected_answer())
+        self.answer_combo.bind("<<ComboboxSelected>>", self.change_selected_answer)
         self.label(editor, "답안 작성", 9, bold=True).pack(anchor="w")
         self.answer_text = tk.Text(editor, wrap="word", undo=True, font=("맑은 고딕", 10), relief="solid", bd=1, padx=12, pady=12, spacing1=3, spacing3=5)
         self.enable_text_tools(self.answer_text)
@@ -1480,6 +1729,25 @@ class StudyApp(tk.Tk):
         self.answer_text.delete("1.0", "end")
         self.answer_text.insert("1.0", self.data["answers"].get(qid, {}).get("text", "1. 개요\n\n2. 원리\n\n3. 특징 및 적용\n"))
         self.answer_status.config(text="저장된 답안" if qid in self.data["answers"] else "새 답안")
+        self.active_answer_qid = qid
+
+    def change_selected_answer(self, _event=None):
+        self.save_current_answer_draft()
+        self.load_selected_answer()
+
+    def save_current_answer_draft(self):
+        widget = getattr(self, "answer_text", None)
+        qid = getattr(self, "active_answer_qid", None)
+        try:
+            if not widget or not widget.winfo_exists() or not qid:
+                return
+            text = widget.get("1.0", "end").rstrip()
+        except tk.TclError:
+            return
+        existing = self.data["answers"].get(qid, {}).get("text")
+        if text and text != existing:
+            self.data["answers"][qid] = {"text": text, "updated": datetime.now().isoformat(timespec="seconds")}
+            self.save()
 
     def save_answer(self):
         qid = self.selected_qid()
@@ -1496,8 +1764,17 @@ class StudyApp(tk.Tk):
             self.after_cancel(self.timer_job)
             self.timer_job = None
 
+    def pause_timer(self):
+        self.timer_running = False
+        if self.timer_job:
+            self.after_cancel(self.timer_job)
+            self.timer_job = None
+
     def tick_timer(self):
         if not self.timer_running:
+            return
+        if not hasattr(self, "timer_label") or not self.timer_label.winfo_exists():
+            self.pause_timer()
             return
         mins, secs = divmod(self.timer_seconds, 60)
         self.timer_label.config(text=f"{mins:02d}:{secs:02d}")
@@ -1679,11 +1956,13 @@ class StudyApp(tk.Tk):
                 continue
             if scope_type == "lesson" and (note.get("week"), note.get("lesson_title")) != scope_value:
                 continue
+            if scope_type == "problem" and question_note_problem_number(note) != scope_value:
+                continue
             if scope_type == "other":
                 week, linked_titles = scope_value
                 if note.get("week") != week or note.get("lesson_title", "") in linked_titles:
                     continue
-            haystack = " ".join(str(note.get(key, "")) for key in ("theme", "lesson_title", "source", "question", "answer", "summary")).casefold()
+            haystack = " ".join(str(note.get(key, "")) for key in ("theme", "lesson_title", "source", "reference", "question", "answer", "summary")).casefold()
             if query and query not in haystack:
                 continue
             if status != "전체 상태" and note.get("status", "다시 보기") != status:
@@ -1693,7 +1972,7 @@ class StudyApp(tk.Tk):
         if not notes:
             empty = self.card(root, fill="x", pady=6)
             self.label(empty, "조건에 맞는 질문이 없습니다.", 13, bold=True).pack(pady=(18, 3))
-            self.label(empty, "학습답안의 ‘+ 질문 기록’에서 궁금한 내용을 저장해보세요.", 9, COLORS["muted"]).pack(pady=(0, 18))
+            self.label(empty, "학습답안의 ‘+ 질문 기록’ 또는 관련문제의 ‘+ 질문·내용 기록’에서 저장해보세요.", 9, COLORS["muted"]).pack(pady=(0, 18))
             self.apply_question_note_zoom()
             return
         for note in notes:
@@ -1717,6 +1996,9 @@ class StudyApp(tk.Tk):
             answer_text = note.get("answer", "") or "아직 답변을 기록하지 않았습니다."
             answer_widget = self.selectable_question_note_text(card, answer_text, 9, color=COLORS["muted"])
             answer_widget.pack(fill="x")
+            if note.get("reference"):
+                reference_widget = self.selectable_question_note_text(card, f'근거·출처 · {note["reference"]}', 8, color=COLORS["green2"])
+                reference_widget.pack(fill="x", pady=(8, 0))
             controls = tk.Frame(card, bg=COLORS["white"])
             controls.pack(fill="x", pady=(12, 0))
             note_id = note["id"]
@@ -1763,7 +2045,7 @@ class StudyApp(tk.Tk):
         context = context or ({} if note is None else note)
         dialog = tk.Toplevel(self)
         dialog.title("질문노트 수정" if editing else "새 질문 기록")
-        dialog.geometry("680x690")
+        dialog.geometry("680x750")
         dialog.minsize(580, 600)
         dialog.configure(bg=COLORS["paper"])
         dialog.transient(self)
@@ -1781,6 +2063,10 @@ class StudyApp(tk.Tk):
         answer = tk.Text(frame, height=11, font=("맑은 고딕", 10), relief="solid", bd=1, padx=8, pady=8, wrap="word")
         self.enable_text_tools(answer)
         answer.pack(fill="both", expand=True, pady=(5, 12))
+        self.label(frame, "근거·출처와 판본 (선택)", 9, bold=True).pack(anchor="w")
+        reference_var = tk.StringVar(value=note.get("reference", "") if note else context.get("reference", ""))
+        reference = tk.Entry(frame, textvariable=reference_var, font=("맑은 고딕", 10), relief="solid", bd=1)
+        reference.pack(fill="x", ipady=7, pady=(5, 12))
         self.label(frame, "한 줄 정리 (선택)", 9, bold=True).pack(anchor="w")
         summary_var = tk.StringVar(value=note.get("summary", "") if note else "")
         summary = tk.Entry(frame, textvariable=summary_var, font=("맑은 고딕", 10), relief="solid", bd=1)
@@ -1794,6 +2080,9 @@ class StudyApp(tk.Tk):
         if note:
             question.insert("1.0", note.get("question", ""))
             answer.insert("1.0", note.get("answer", ""))
+        else:
+            question.insert("1.0", context.get("default_question", ""))
+            answer.insert("1.0", context.get("default_answer", ""))
 
         def submit():
             question_value = question.get("1.0", "end").strip()
@@ -1807,7 +2096,8 @@ class StudyApp(tk.Tk):
             values = {
                 "week": context.get("week"), "theme": context.get("theme", "자유 질문"),
                 "lesson_title": context.get("lesson_title", ""), "source": context.get("source", ""),
-                "question": question_value, "answer": answer_value, "summary": summary_var.get().strip(),
+                "problem_number": context.get("problem_number"),
+                "question": question_value, "answer": answer_value, "reference": reference_var.get().strip(), "summary": summary_var.get().strip(),
                 "important": important_var.get(), "status": status_var.get(), "updated_at": now,
             }
             if editing:
@@ -1821,12 +2111,14 @@ class StudyApp(tk.Tk):
                 self.show_view("question_notes")
             elif self.current_view == "theory" and hasattr(self, "theory_lesson_list"):
                 self.show_theory_lesson()
+                self.show_theory_problem()
 
         buttons = tk.Frame(frame, bg=COLORS["paper"])
         buttons.pack(fill="x", pady=(16, 0))
         self.action_button(buttons, "취소", dialog.destroy, primary=False).pack(side="right")
         self.action_button(buttons, "변경 저장" if editing else "질문 저장", submit).pack(side="right", padx=(0, 8))
         question.focus_set()
+        question.mark_set("insert", "end-1c")
 
     def question_note_by_id(self, note_id):
         return next((note for note in self.data["question_notes"] if note.get("id") == note_id), None)

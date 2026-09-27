@@ -33,6 +33,21 @@ GLOSSARY.append({
     "questions": ["음향임피던스와 경계면에서의 반사·투과 관계", "음압 반사계수와 강도 반사율의 차이"],
 })
 
+GLOSSARY.extend([
+    {"term": "투과도계", "aliases": ["IQI", "image quality indicator"], "category": "RT", "definition": "방사선투과영상에서 요구 상질이 확보되었는지를 확인하는 지시계이다.", "relation": "선형 또는 유공형 투과도계를 원칙적으로 선원측에 배치하며, 결함 크기를 직접 측정하는 도구는 아니다.", "formula": "식별 최소 선지름·구멍 → 촬영기법의 상질 확인", "related": ["방사선투과검사", "상질", "기하학적 불선명도"], "questions": ["투과도계의 사용목적과 배치"]},
+    {"term": "기하학적 불선명도", "aliases": ["geometric unsharpness", "Ug"], "category": "RT", "definition": "선원의 유한한 크기 때문에 영상 경계가 흐려지는 정도이다.", "relation": "선원 크기와 시험체-검출기 거리가 커질수록 증가하고 선원-시험체 거리가 커질수록 감소한다.", "formula": "Ug = Fd/D", "related": ["투과도계", "선원크기", "상질"], "questions": ["기하학적 불선명도의 영향인자"]},
+    {"term": "누설자속", "aliases": ["magnetic flux leakage", "MFL"], "category": "MT", "definition": "자화된 강자성체의 불연속부에서 자속 일부가 시험체 밖으로 새어 나오는 현상이다.", "relation": "표면 또는 표면직하 결함에서 누설자장이 형성되고 자분이 집적되어 지시를 만든다.", "formula": "결함 방향 ⟂ 자속 방향 → 검출감도 증가", "related": ["자화", "자분", "탈자"], "questions": ["자분탐상검사의 원리"]},
+    {"term": "A형 표준시험편", "aliases": ["MT A형 표준시험편", "A type shim"], "category": "MT", "definition": "자분탐상에서 시험면에 밀착하여 유효자계의 방향과 세기 및 탐상조건의 적정성을 확인하는 얇은 시험편이다.", "relation": "인공홈이 있는 면을 시험면에 밀착시키고 실제 탐상조건에서 자분모양의 형성을 확인한다.", "formula": "자분모양 형성 → 자화방향·유효자계·탐상조건 확인", "related": ["누설자속", "자화", "B형 대비시험편"], "questions": ["A형 표준시험편의 용도"]},
+    {"term": "모세관현상", "aliases": ["capillary action"], "category": "PT", "definition": "좁은 틈에서 표면장력과 젖음성에 의해 액체가 외력 없이 침투하거나 이동하는 현상이다.", "relation": "침투액이 표면개구 결함 안으로 들어가고 현상 과정에서 다시 표면으로 나오는 침투탐상의 기본 원리이다.", "formula": "양호한 적심성·낮은 접촉각 → 침투성 증가", "related": ["적심성", "침투액", "현상제"], "questions": ["침투탐상의 원리"]},
+    {"term": "유화제", "aliases": ["emulsifier"], "category": "PT", "definition": "후유화성 침투탐상에서 잉여 침투액을 물로 제거할 수 있도록 유화시키는 재료이다.", "relation": "유화시간이 짧으면 세척 부족, 길면 결함 속 침투액까지 제거되는 과세척이 발생할 수 있다.", "formula": "적정 유화시간 관리 → 배경 제거와 결함감도 확보", "related": ["침투액", "세척", "현상제"], "questions": ["후유화성 침투탐상 절차"]},
+    {"term": "표준침투깊이", "aliases": ["skin depth", "standard depth of penetration", "δ"], "category": "ET", "definition": "와전류 밀도가 표면값의 약 37%로 감소하는 깊이이다.", "relation": "주파수·투자율·전도도가 증가할수록 얕아지며 검사주파수 선정의 기준이 된다.", "formula": "δ = 1/√(πfμσ)", "related": ["와전류", "주파수", "리프트오프"], "questions": ["와전류 표준침투깊이"]},
+    {"term": "리프트오프", "aliases": ["lift-off"], "category": "ET", "definition": "와전류 코일과 시험체 표면 사이 거리가 변하면서 코일 임피던스가 변하는 현상이다.", "relation": "도막·표면요철·프로브 흔들림이 의사지시를 만들며 위상분리와 일정한 주사로 억제한다.", "formula": "코일-시험체 거리 증가 → 결합 감소", "related": ["표준침투깊이", "임피던스평면", "충진율"], "questions": ["리프트오프 효과와 대책"]},
+    {"term": "카이저 효과", "aliases": ["Kaiser effect"], "category": "AE", "definition": "재하 이력이 있는 재료에서 이전 최대하중을 넘기 전까지 의미 있는 음향방출이 거의 발생하지 않는 현상이다.", "relation": "재료의 하중이력과 손상 진행을 평가하며 펠리시티 효과와 비교한다.", "formula": "이전 최대하중 이하 → AE 재발생 억제", "related": ["음향방출", "펠리시티 효과"], "questions": ["카이저 효과와 펠리시티 효과"]},
+    {"term": "헬륨누설시험", "aliases": ["helium leak test"], "category": "LT", "definition": "헬륨을 추적가스로 사용하고 질량분석기로 누설을 검출하는 고감도 누설시험이다.", "relation": "진공법과 가압법으로 구분하며 누설 위치 또는 총누설률을 평가한다.", "formula": "누설률 단위 예: Pa·m³/s", "related": ["추적가스", "질량분석기", "진공"], "questions": ["헬륨누설시험의 원리와 특징"]},
+    {"term": "열영향부", "aliases": ["HAZ", "heat affected zone"], "category": "용접·재료", "definition": "용융되지는 않았지만 용접 열사이클로 조직과 기계적 성질이 변한 모재 영역이다.", "relation": "결정립 조대화·경화·연화·인성저하와 수소균열 등이 발생할 수 있어 입열과 냉각속도를 관리한다.", "formula": "입열·냉각속도·탄소당량 → HAZ 조직과 성질", "related": ["용접입열", "예열", "PWHT"], "questions": ["용접 열영향부의 조직과 결함"]},
+    {"term": "검출확률", "aliases": ["POD", "probability of detection"], "category": "건전성", "definition": "주어진 크기의 결함을 검사시스템이 검출할 확률이다.", "relation": "결함 크기와 검출 결과의 통계관계로 검사 신뢰도를 평가하며 검사자·장비·절차·표면조건을 함께 반영한다.", "formula": "POD(a), a90/95: 95% 신뢰수준에서 90% 검출확률 크기", "related": ["기량검증", "신뢰도", "결함크기"], "questions": ["POD 곡선의 의미와 결정방법"]},
+])
+
 GLOSSARY.append({
     "term": "파동",
     "aliases": ["wave", "초음파 파동", "탄성파"],
