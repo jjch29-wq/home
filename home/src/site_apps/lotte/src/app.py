@@ -9227,15 +9227,46 @@ class MaterialManager:
                 merged_v_check.append(v_check_str)
                 merged_v_remarks.append(v_remarks)
 
-        # 동일 날짜/현장에 이미 저장된 차량은 검사공법별 기록에 다시
-        # 저장하지 않는다. 여러 차량 중 신규 차량이 있으면 신규 차량만 유지한다.
+        # 현재 저장 건 안에서 동일 차량 입력을 정리한다.
         def normalize_vehicle_no(value):
             return re.sub(r'\s+', '', str(value)).upper()
 
+        def normalize_work_value(value):
+            cleaned = str(value).strip()
+            return '' if cleaned.lower() in ('', 'nan', 'none', 'nat') else cleaned
+
+        def worker_time_signature(record):
+            """작업자와 작업시간이 같은 저장 건인지 비교하는 서명."""
+            signature = []
+            for worker_idx in range(1, 11):
+                user_key = 'User' if worker_idx == 1 else f'User{worker_idx}'
+                time_key = 'WorkTime' if worker_idx == 1 else f'WorkTime{worker_idx}'
+                signature.append((
+                    normalize_work_value(record.get(user_key, '')),
+                    normalize_work_value(record.get(time_key, '')),
+                ))
+            return tuple(signature)
+
+        unique_vehicle_rows = []
+        seen_vehicle_nos = set()
+        for vehicle_row in zip(
+            merged_v_no, merged_v_mileage, merged_v_check, merged_v_remarks
+        ):
+            normalized = normalize_vehicle_no(vehicle_row[0])
+            if normalized and normalized != 'NAN':
+                if normalized in seen_vehicle_nos:
+                    continue
+                seen_vehicle_nos.add(normalized)
+            unique_vehicle_rows.append(vehicle_row)
+
+        # 같은 날짜/현장에 작업자 구성과 작업시간까지 동일한 기록이 있으면
+        # 같은 차량의 주행거리·점검정보를 다시 저장하지 않는다. 작업시간이
+        # 다르면 동일 차량이어도 별도 운행 기록으로 유지한다.
         existing_vehicle_nos = set()
         if not self.daily_usage_df.empty and '차량번호' in self.daily_usage_df.columns:
             try:
                 target_date = pd.to_datetime(date_val).date()
+                current_signature = worker_time_signature(common_data)
                 stored_dates = pd.to_datetime(
                     self.daily_usage_df['Date'], errors='coerce'
                 ).dt.date
@@ -9243,32 +9274,26 @@ class MaterialManager:
                     (stored_dates == target_date)
                     & (self.daily_usage_df['Site'].astype(str).str.strip() == site)
                 ]
-                for raw_vehicle_nos in same_day_site['차량번호'].fillna(''):
-                    for stored_no in str(raw_vehicle_nos).split('||'):
+                for _, stored_row in same_day_site.iterrows():
+                    if worker_time_signature(stored_row) != current_signature:
+                        continue
+                    for stored_no in str(stored_row.get('차량번호', '')).split('||'):
                         normalized = normalize_vehicle_no(stored_no)
                         if normalized and normalized != 'NAN':
                             existing_vehicle_nos.add(normalized)
             except (KeyError, TypeError, ValueError, AttributeError) as exc:
-                print(f"DEBUG: 차량 중복 검사 실패: {exc}")
+                print(f"DEBUG: 차량 작업조 중복 검사 실패: {exc}")
 
         if existing_vehicle_nos:
             unique_vehicle_rows = [
-                (v_no, mileage, check, remarks)
-                for v_no, mileage, check, remarks in zip(
-                    merged_v_no, merged_v_mileage, merged_v_check, merged_v_remarks
-                )
-                if not v_no or normalize_vehicle_no(v_no) not in existing_vehicle_nos
+                row for row in unique_vehicle_rows
+                if not row[0] or normalize_vehicle_no(row[0]) not in existing_vehicle_nos
             ]
-            suppressed_count = len(merged_v_no) - len(unique_vehicle_rows)
-            if suppressed_count:
-                print(
-                    f"INFO: {date_val} {site} 차량 중복 {suppressed_count}건의 "
-                    "차량정보 저장을 생략했습니다."
-                )
-            merged_v_no = [row[0] for row in unique_vehicle_rows]
-            merged_v_mileage = [row[1] for row in unique_vehicle_rows]
-            merged_v_check = [row[2] for row in unique_vehicle_rows]
-            merged_v_remarks = [row[3] for row in unique_vehicle_rows]
+
+        merged_v_no = [row[0] for row in unique_vehicle_rows]
+        merged_v_mileage = [row[1] for row in unique_vehicle_rows]
+        merged_v_check = [row[2] for row in unique_vehicle_rows]
+        merged_v_remarks = [row[3] for row in unique_vehicle_rows]
         
         final_v_no = " || ".join(merged_v_no)
         final_v_mileage = " || ".join(merged_v_mileage)
