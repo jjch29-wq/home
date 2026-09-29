@@ -176,31 +176,36 @@ def export_daily_work_report_impl(self):
         if not site_records.empty:
             pipe_col = next((c for c in ('관경(Inch)', '관경') if c in site_records.columns), '')
             joint_col = next((c for c in ('조인트수', 'POINT', 'Point') if c in site_records.columns), '')
+            method_col = next((c for c in ('검사방법', 'Method', 'NDT') if c in site_records.columns), '')
             if pipe_col:
                 detail_groups = {}
                 for _, row in site_records.iterrows():
                     pipe_size = _clean_str(row.get(pipe_col, '')).upper()
                     if not pipe_size:
                         continue
-                    detail = detail_groups.setdefault(pipe_size, {'points': 0.0, 'length': 0.0})
+                    method = _clean_str(row.get(method_col, '')).upper() if method_col else ''
+                    group_key = (method, pipe_size)
+                    detail = detail_groups.setdefault(group_key, {'points': 0.0, 'quantity': 0.0})
                     if joint_col:
                         point_value = pd.to_numeric(row.get(joint_col, 0), errors='coerce')
                         if pd.notna(point_value):
                             detail['points'] += float(point_value)
-                    length_value = pd.to_numeric(row.get('Usage', 0), errors='coerce')
-                    if pd.notna(length_value):
-                        detail['length'] += float(length_value)
+                    quantity_value = pd.to_numeric(row.get('Usage', 0), errors='coerce')
+                    if pd.notna(quantity_value):
+                        detail['quantity'] += float(quantity_value)
 
                 def _pipe_sort_key(item):
-                    match = re.search(r'\d+(?:\.\d+)?', item[0])
-                    return float(match.group()) if match else -1
+                    method, pipe_size = item[0]
+                    match = re.search(r'\d+(?:\.\d+)?', pipe_size)
+                    return (method, -(float(match.group()) if match else -1))
 
-                for pipe_size, detail in sorted(detail_groups.items(), key=_pipe_sort_key, reverse=True):
+                for (method, pipe_size), detail in sorted(detail_groups.items(), key=_pipe_sort_key):
                     points = detail['points']
                     data['inspection_details'].append({
+                        'method': method,
                         'pipe_size': pipe_size,
                         'points': int(points) if points.is_integer() else points,
-                        'length': detail['length'],
+                        'quantity': detail['quantity'],
                     })
 
         # 작업자 및 O/T (간소화 버전)

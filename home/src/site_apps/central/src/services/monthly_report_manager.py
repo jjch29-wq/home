@@ -680,10 +680,14 @@ class MonthlyReportManager:
 
                 break_id = header_start - 1
                 # The page boundary belongs directly above the visible report
-                # header. Remove the former one-row-early break when a hidden
-                # spacer precedes that header (e.g. break after 564 for a
-                # header beginning at row 565).
+                # header. Remove both the former one-row-early break and every
+                # stale break left *inside* the seven-row header.  Otherwise a
+                # header beginning at row 483 can retain the old break at 487,
+                # creating a page that contains only rows 483~487.
                 obsolete_breaks.add(header_start - 2)
+                obsolete_breaks.update(
+                    range(header_start, header_start + 7)
+                )
                 required_breaks.add(break_id)
 
         existing = {
@@ -739,6 +743,33 @@ class MonthlyReportManager:
                 index += 1
                 continue
 
+            # Size the padding from the *printable height*, not from a fixed
+            # row height.  A fixed 13.5pt spacer can push the last few rows
+            # onto an automatic Excel page (for example rows 483~487) while
+            # the next report header still has its manual break at row 487.
+            # That combination creates a nearly blank extra page.
+            default_height = float(ws.sheet_format.defaultRowHeight or 15)
+            existing_points = sum(
+                float(ws.row_dimensions[row].height or default_height)
+                for row in range(page_start, next_start)
+            )
+            margins = ws.page_margins
+            scale = float(ws.page_setup.scale or 100) / 100.0
+            usable_inches = (
+                11.69
+                - float(margins.top or 0)
+                - float(margins.bottom or 0)
+                - float(margins.footer or 0)
+            )
+            capacity_points = usable_inches * 72.0 / scale
+            available_padding_points = max(
+                float(padding_rows), capacity_points - existing_points
+            )
+            spacer_height = max(
+                1.0,
+                min(13.5, available_padding_points / padding_rows),
+            )
+
             self._insert_rows_safely(ws, next_start, padding_rows)
 
             # insert_rows() does not move drawings; keep every later logo and
@@ -751,10 +782,8 @@ class MonthlyReportManager:
                 if hasattr(anchor, 'to'):
                     anchor.to.row += padding_rows
 
-            # Keep every padding row visible through the intended row-564
-            # boundary, while staying short enough to prevent Excel from
-            # inserting an automatic break around row 558.
-            spacer_height = 13.5
+            # Keep every padding row visible while fitting the complete block
+            # before the next manual report-header boundary on one page.
             for spacer_row in range(next_start, next_start + padding_rows):
                 ws.row_dimensions[spacer_row].height = spacer_height
 
@@ -4069,10 +4098,22 @@ class MonthlyReportManager:
                     ws,
                     remaining_start,
                     measured_rows,
-                    # Excel's fit-to-width print scale accommodates 40 PAUT
-                    # lines plus TOTAL while keeping row 41 on the next page.
-                    scale_override=73 if section_key == 'paut_2' else None,
+                    scale_override=None,
                 )
+                if section_key == 'paut_2' and remaining_count > 35:
+                    # Excel's actual print preview fits 35 PAUT detail rows on
+                    # this template page.  The former 73% estimate allowed 40
+                    # rows, so records 36~40 fell onto a headerless five-row
+                    # page before the continuation header at record 41.
+                    # Start every PAUT continuation no later than row 36.
+                    max_rows_on_page = 35
+                    forced_continuation = remaining_start + max_rows_on_page
+                    if continuation_row is None:
+                        continuation_row = forced_continuation
+                    else:
+                        continuation_row = min(
+                            continuation_row, forced_continuation
+                        )
                 if continuation_row is None:
                     break
 

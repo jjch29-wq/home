@@ -423,8 +423,12 @@ class DailyWorkLogTab(ttk.Frame):
         # Draw Headers
         for col_idx, c in enumerate(self.ndt_cols):
             ttk.Label(grid_frame, text=c, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
-            if c in ('구간정보', '라인번호'):
+            if c == '구간정보':
+                grid_frame.grid_columnconfigure(col_idx, weight=3, minsize=180)
+            elif c == '라인번호':
                 grid_frame.grid_columnconfigure(col_idx, weight=3)
+            elif c == '업체':
+                grid_frame.grid_columnconfigure(col_idx, weight=2, minsize=145)
             elif c == '규격':
                 grid_frame.grid_columnconfigure(col_idx, weight=2, minsize=105)
             else:
@@ -443,7 +447,8 @@ class DailyWorkLogTab(ttk.Frame):
                 if c == '규격': w = 13
                 elif c == '근무구분': w = 7
                 elif c in ('검사방법', '결과', '관경', '두께'): w = 6
-                elif c in ('구간', '업체'): w = 10
+                elif c == '업체': w = 16
+                elif c == '구간': w = 10
                 elif c == '용접사': w = 23
                 elif c == '라인번호': w = 25
                 elif c == 'Joint No.': w = 12
@@ -459,17 +464,31 @@ class DailyWorkLogTab(ttk.Frame):
                     frame.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     entries = []
                     for i in range(4):
-                        e = ttk.Entry(frame, width=3, justify='center')
+                        e = ttk.Entry(frame, width=5, justify='center')
                         e.pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
                         entries.append(e)
                     frame.entries = entries
+                    def apply_layout(ents=entries, r_dict=row_entries):
+                        method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
+                        if method in ['PAUT', 'PT', 'MT']:
+                            ents[0].configure(justify='left')
+                            for i in range(1, 4):
+                                ents[i].pack_forget()
+                        else:
+                            ents[0].configure(justify='center')
+                            for i in range(1, 4):
+                                if not ents[i].winfo_manager():
+                                    ents[i].pack(
+                                        side='left', fill='x', expand=True,
+                                        padx=(0, 1 if i < 3 else 0)
+                                    )
                     def get_val(ents=entries, r_dict=row_entries):
                         method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
                         if method in ['PAUT', 'PT', 'MT']:
                             return ents[0].get()
                         parts = [e.get().strip() for e in ents]
                         return ','.join([p for p in parts if p])
-                    def set_val(val, ents=entries, r_dict=row_entries):
+                    def set_val(val, ents=entries, r_dict=row_entries, layout_fn=apply_layout):
                         for e in ents: e.delete(0, tk.END)
                         method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
                         if method in ['PAUT', 'PT', 'MT']:
@@ -478,6 +497,7 @@ class DailyWorkLogTab(ttk.Frame):
                             parts = val.split(',') if val else []
                             for i, p in enumerate(parts):
                                 if i < len(ents): ents[i].insert(0, p)
+                        layout_fn()
                     def delete_val(first, last, ents=entries):
                         for e in ents: e.delete(first, last)
                     def insert_val(idx, val, ents=entries):
@@ -486,6 +506,7 @@ class DailyWorkLogTab(ttk.Frame):
                     frame.set = set_val
                     frame.delete = delete_val
                     frame.insert = insert_val
+                    frame.apply_layout = apply_layout
                     row_entries[c] = frame
                 elif c == '관경':
                     ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(SIZE_LENGTH.keys()), justify='center')
@@ -577,14 +598,7 @@ class DailyWorkLogTab(ttk.Frame):
                         
                 # Update '구간정보' display based on method
                 if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
-                    if method in ['PAUT', 'PT', 'MT']:
-                        r['구간정보'].entries[0].configure(justify='left')
-                        for i in range(1, 4):
-                            r['구간정보'].entries[i].pack_forget()
-                    else:
-                        r['구간정보'].entries[0].configure(justify='center')
-                        for i in range(1, 4):
-                            r['구간정보'].entries[i].pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
+                    r['구간정보'].apply_layout()
                             
                 # Update '규격' values based on method
                 if '규격' in r and hasattr(r['규격'], 'configure'):

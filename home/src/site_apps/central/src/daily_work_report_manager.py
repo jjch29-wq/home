@@ -426,20 +426,23 @@ class DailyWorkReportManager:
 
         inspection_lines = []
         for detail in data.get('inspection_details', []):
+            method = str(detail.get('method', '')).strip().upper()
             pipe_size = str(detail.get('pipe_size', '')).strip()
             points = detail.get('points', 0)
-            length = detail.get('length', 0)
+            quantity = detail.get('quantity', detail.get('length', 0))
             try:
                 point_text = f"{float(points):g}"
             except (TypeError, ValueError):
                 point_text = str(points)
             try:
-                length_text = f"{float(length):.4f}".rstrip('0').rstrip('.')
+                quantity_text = f"{float(quantity):.4f}".rstrip('0').rstrip('.')
             except (TypeError, ValueError):
-                length_text = str(length)
+                quantity_text = str(quantity)
             if pipe_size:
+                quantity_label = '검사매수' if method == 'RT' else '검사길이'
+                quantity_unit = '매' if method == 'RT' else 'M'
                 inspection_lines.append(
-                    f"• {pipe_size}: {point_text} POINT / 검사길이 {length_text} M"
+                    f"• {pipe_size}: {point_text} POINT / {quantity_label} {quantity_text} {quantity_unit}"
                 )
 
         detail_text = "검사 상세\n" + "\n".join(inspection_lines) if inspection_lines else ""
