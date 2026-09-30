@@ -1313,6 +1313,17 @@ class MonthlyReportManager:
         # Expand the three summary columns into the unused P:W area.
         source_columns = (16, 17, 18)
         target_ranges = ((16, 17), (18, 20), (21, 23))
+
+        def clear_summary_merges(row):
+            """Remove stale P:W merges before rebuilding one body row."""
+            for merged in list(ws.merged_cells.ranges):
+                if (
+                    merged.min_row <= row <= merged.max_row
+                    and merged.min_col <= 23
+                    and merged.max_col >= 16
+                ):
+                    ws.unmerge_cells(str(merged))
+
         header_snapshots = []
         for col in source_columns:
             cell = ws.cell(row=header_row, column=col)
@@ -1364,8 +1375,7 @@ class MonthlyReportManager:
                 (ws.cell(row, col).value, copy.copy(ws.cell(row, col)._style))
                 for col in source_columns
             ]
-            if not any(value is not None for value, _style in snapshots) and row != total_row:
-                continue
+            clear_summary_merges(row)
             for col in range(16, 24):
                 ws.cell(row, col).value = None
             for (value, style), (min_col, max_col) in zip(
@@ -1427,8 +1437,7 @@ class MonthlyReportManager:
                     (ws.cell(row, col).value, copy.copy(ws.cell(row, col)._style))
                     for col in source_columns
                 ]
-                if not any(value is not None for value, _style in snapshots) and row != next_total:
-                    continue
+                clear_summary_merges(row)
                 for col in range(16, 24):
                     ws.cell(row, col).value = None
                 for (value, style), (min_col, max_col) in zip(
@@ -2422,6 +2431,51 @@ class MonthlyReportManager:
                     ws.cell(row=row, column=col)._style = copy.copy(style)
             total_row += extra_rows
 
+        # Keep every body row on the same horizontal grid as the first data
+        # row.  The template contains a few reserved blank rows whose styles
+        # are correct but whose wide summary cells are not merged.  Likewise,
+        # dynamically inserted rows above TOTAL only receive cell styles.
+        # Those rows expose internal column lines (notably on the RT summary
+        # page) unless the reference row's single-row merges are replicated.
+        table_end_col = defect_rate_col or original_count_col or retest_col
+        if table_end_col is None:
+            table_end_col = max(
+                [id_col] + [col for col in header_cols.values() if col is not None]
+            )
+        for merged in list(ws.merged_cells.ranges):
+            if (
+                merged.min_row == data_start
+                and merged.max_row == data_start
+                and merged.min_col <= table_end_col <= merged.max_col
+            ):
+                table_end_col = merged.max_col
+                break
+        reference_merges = [
+            (merged.min_col, merged.max_col)
+            for merged in list(ws.merged_cells.ranges)
+            if merged.min_row == data_start
+            and merged.max_row == data_start
+            and merged.min_col >= id_col
+            and merged.max_col <= table_end_col
+        ]
+        if reference_merges:
+            for row in range(data_start + 1, total_row):
+                for merged in list(ws.merged_cells.ranges):
+                    if (
+                        merged.min_row == row
+                        and merged.max_row == row
+                        and merged.min_col <= table_end_col
+                        and merged.max_col >= id_col
+                    ):
+                        ws.unmerge_cells(str(merged))
+                for min_col, max_col in reference_merges:
+                    ws.merge_cells(
+                        start_row=row,
+                        start_column=min_col,
+                        end_row=row,
+                        end_column=max_col,
+                    )
+
         defect_columns = {
             code: header_cols.get(code)
             for code in {code for counts in defects_by_welder.values() for code in counts}
@@ -2898,10 +2952,26 @@ class MonthlyReportManager:
                     )
                     ws.add_image(image)
 
+                    joint_no = str(photo.get('joint_no', '') or '').strip()
+                    location = str(photo.get('location', '') or '').strip()
+                    section = str(photo.get('section', '') or '').strip()
+                    line_no = str(photo.get('line_no', '') or '').strip()
+                    # Older photo records used Joint No. as the location when
+                    # the section was blank, producing captions such as
+                    # "S01 / S01".  Prefer a distinct section and then the
+                    # line number for the location portion of the caption.
+                    if not location or location.casefold() == joint_no.casefold():
+                        location = next(
+                            (
+                                value for value in (section, line_no)
+                                if value and value.casefold() != joint_no.casefold()
+                            ),
+                            location,
+                        )
                     caption = ' / '.join(filter(None, [
                         str(photo.get('date', '')),
-                        str(photo.get('location', '')),
-                        str(photo.get('joint_no', '')),
+                        location,
+                        joint_no,
                         str(photo.get('description', '')),
                     ]))
                     for merged in list(ws.merged_cells.ranges):
@@ -3573,7 +3643,30 @@ class MonthlyReportManager:
             # 월간 보고서는 해당 월 사진만 사용한다. 전체누적 보고서는
             # 누적 시작일부터 종료 월까지 등록된 공정사진을 모두 포함한다.
             if report_scope == "cumulative" or str(d)[:7] == target_ym:
-                process_photos.extend(day_data.get('process_photos', []))
+                ndt_rows = day_data.get('ndt_results', [])
+                for stored_photo in day_data.get('process_photos', []):
+                    photo = dict(stored_photo)
+                    joint_no = str(photo.get('joint_no', '') or '').strip()
+                    location = str(photo.get('location', '') or '').strip()
+                    section = str(photo.get('section', '') or '').strip()
+                    if not section or not location or location.casefold() == joint_no.casefold():
+                        photo_method = str(photo.get('process', '') or '').strip().upper()
+                        photo_line = str(photo.get('line_no', '') or '').strip().casefold()
+                        for ndt_row in ndt_rows:
+                            if (
+                                str(ndt_row.get('검사방법', '') or '').strip().upper() == photo_method
+                                and str(ndt_row.get('라인번호', '') or '').strip().casefold() == photo_line
+                                and str(ndt_row.get('Joint No.', '') or '').strip().casefold() == joint_no.casefold()
+                            ):
+                                matched_section = str(
+                                    ndt_row.get('구간', '') or ''
+                                ).strip()
+                                if matched_section:
+                                    photo['section'] = matched_section
+                                    if not location or location.casefold() == joint_no.casefold():
+                                        photo['location'] = matched_section
+                                break
+                    process_photos.append(photo)
             for key, val in day_data.get('qty_data', {}).items():
                 if key not in qty_summary:
                     qty_summary[key] = {'예상량': val.get('예상량', ''), '전월누계': '0', '금월작업': 0.0, '총누계': '0', '공정률': '', '불량': 0, '불량률': ''}
@@ -4753,7 +4846,6 @@ class MonthlyReportManager:
             import os
             from openpyxl.styles import Alignment
             
-            import site_apps.central.src.지역난방_안전관리교육 as safety
         except Exception:
             return
 
@@ -4762,37 +4854,6 @@ class MonthlyReportManager:
         except:
             return
 
-        # Find active processes
-        active_processes = []
-        for p in ('PAUT', 'MT', 'RT', 'PT'):
-            if ndt_groups.get(p) and sum(v.get('qty', 0) for v in ndt_groups[p].values()) > 0:
-                active_processes.append(p)
-                
-        if not active_processes:
-            active_processes = ['PAUT'] # Default if no data to ensure table isn't empty
-
-        # 1. 실제 작업 시작일(착공일)을 기본값으로 사용
-        if target_dates:
-            date_val = min(target_dates)
-        else:
-            date_val = f"{year}-{month:02d}-01"
-        search_pattern = os.path.join(os.path.dirname(os.path.dirname(__file__)), f"지역난방_안전관리_{year}{month:02d}*.xlsx")
-        import glob
-        found_files = glob.glob(search_pattern)
-        if found_files:
-            try:
-                temp_wb = openpyxl.load_workbook(found_files[0], data_only=True)
-                for sheet_name in temp_wb.sheetnames:
-                    if '안전관리교육 총괄표' in sheet_name or '총괄표' in sheet_name:
-                        temp_ws = temp_wb[sheet_name]
-                        # Typically the date is in row 2, col 1
-                        date_cell = str(temp_ws.cell(row=2, column=1).value or '')
-                        if date_cell and '-' in date_cell:
-                            date_val = date_cell.split()[0] # YYYY-MM-DD
-                        break
-            except:
-                pass
-            
         # Create training contents based on report_scope
         if report_scope == "cumulative":
             start_year, start_month = 2026, 8
@@ -4805,14 +4866,13 @@ class MonthlyReportManager:
         # Prefer the actual workbook produced by 지역난방_안전관리교육.py.
         # Its 교육현황 sheet contains the authoritative date, category,
         # content, duration, instructor, and location entered by the user.
-        search_roots = [
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
-            os.path.join(os.path.expanduser('~'), 'Desktop'),
-            os.path.join(
-                'G:\\', '내 드라이브', '01_업무_및_회사', 'Office', '착공',
-                '2026년 중앙지사 열수송관 비파괴검사 단가계약', '교육일지',
-            ),
-        ]
+        # 교육 원본은 사용자가 지정한 교육일지 폴더만 신뢰한다.
+        # 프로그램 폴더나 바탕화면의 복사본을 함께 검색하면 더 최근에
+        # 수정된 임시 PAUT 파일이 지정 폴더의 RT 원본을 덮어쓸 수 있다.
+        safety_training_dir = os.path.join(
+            'F:\\', '내 드라이브', '01_업무_및_회사', 'Office', '착공',
+            '2026년 중앙지사 열수송관 비파괴검사 단가계약', '교육일지',
+        )
         target_months = []
         for offset in range(max(0, total_months)):
             source_year = start_year + (start_month - 1 + offset) // 12
@@ -4824,13 +4884,14 @@ class MonthlyReportManager:
                 f'\uc9c0\uc5ed\ub09c\ubc29_\uc548\uc804\uad00\ub9ac\uad50\uc721_'
                 f'{source_year}{source_month:02d}.xlsx'
             )
-            safety_files = []
-            for search_root in search_roots:
-                safety_files.extend(glob.glob(
-                    os.path.join(search_root, '**', safety_filename),
-                    recursive=True,
-                ))
+            safety_files = glob.glob(
+                os.path.join(safety_training_dir, safety_filename)
+            )
             if not safety_files:
+                print(
+                    '[WARN] Safety training source not found in designated '
+                    f'folder: {os.path.join(safety_training_dir, safety_filename)}'
+                )
                 continue
 
             newest_safety_file = max(set(safety_files), key=os.path.getmtime)
@@ -4892,28 +4953,27 @@ class MonthlyReportManager:
             except Exception as exc:
                 print(f'[WARN] Failed to load safety training summary: {exc}')
 
-        if not training_logs and total_months > 0:
-            for i in range(total_months):
-                curr_y = start_year + (start_month - 1 + i) // 12
-                curr_m = (start_month - 1 + i) % 12 + 1
-                
-                for p in active_processes:
-                    common_topic = safety.COMMON_MONTHLY_TOPICS[curr_m - 1]
-                    process_topic = safety.PROCESS_MONTHLY_TOPICS.get(p, safety.PROCESS_MONTHLY_TOPICS['PAUT'])[curr_m - 1]
-                    content = f"{curr_m}월 공통 안전교육({common_topic}) 및 {p} 공정 중점교육({process_topic}) 실시"
-                    
-                    if curr_y == year and curr_m == month:
-                        m_date = date_val
-                    elif curr_y == 2026 and curr_m == 8:
-                        m_date = "2026-08-04"
-                    else:
-                        m_date = f"{curr_y}-{curr_m:02d}-01"
-                        
-                    training_logs.append({
-                        'date': m_date,
-                        'content': content
-                    })
-        
+        # A safety workbook can contain the same education record more than
+        # once (for example after copying or regenerating its summary sheet).
+        # Keep the first occurrence, but preserve genuinely different classes
+        # held on the same date.
+        if training_logs:
+            unique_training_logs = []
+            seen_training_logs = set()
+            for log in training_logs:
+                duplicate_key = tuple(
+                    ' '.join(str(log.get(field, '') or '').split()).casefold()
+                    for field in (
+                        'date', 'category', 'content', 'time',
+                        'instructor', 'location',
+                    )
+                )
+                if duplicate_key in seen_training_logs:
+                    continue
+                seen_training_logs.add(duplicate_key)
+                unique_training_logs.append(log)
+            training_logs = unique_training_logs
+
         category_val = "월간안전교육"
         time_val = "1시간"
         instructor_val = "현장소장"

@@ -751,7 +751,11 @@ class DailyWorkLogTab(ttk.Frame):
                 'line_no': row['라인번호'].get().strip(),
                 'joint_no': joint,
                 'welder': self._normalize_welder_id(row['용접사'].get()),
-                'location': row['구간'].get().strip() or joint,
+                'location': (
+                    row['구간'].get().strip()
+                    or row['라인번호'].get().strip()
+                    or joint
+                ),
                 'description': description.strip(),
                 'file_path': os.path.relpath(target_path, os.path.dirname(self.history_path)),
             })
