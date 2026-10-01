@@ -315,7 +315,7 @@ def _font(size: int = 14, bold: bool = False):
     return ImageFont.load_default()
 
 
-def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, height=430) -> None:
+def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, height=360) -> None:
     """입력값을 기반으로 개략적인 양측 주사/반사 경로 그림을 만든다."""
     settings.validate()
     image = Image.new("RGB", (width, height), "white")
@@ -324,7 +324,10 @@ def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, heig
     small = _font(12)
 
     left, right = 70, width - 70
-    top, bottom = 170, 330
+    # Keep the drawing vertically compact.  The previous large blank band above
+    # the plate pushed the lower beam paths outside Excel's printable image area
+    # for some printer/PDF drivers.
+    top, bottom = 110, 270
     center = (left + right) / 2
     plate_height = bottom - top
     draw.rectangle((left, top, right, bottom), outline="#263238", width=2, fill="#FAFAFA")
@@ -371,9 +374,9 @@ def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, heig
         f"{settings.probe_model} | {settings.wave_type} | "
         f"{settings.min_angle_deg:g}°~{settings.max_angle_deg:g}° | {settings.scan_direction}"
     )
-    draw.text((width / 2, 28), title, fill="#111827", font=_font(18, True), anchor="ma")
+    draw.text((width / 2, 20), title, fill="#111827", font=_font(18, True), anchor="ma")
     draw.text(
-        (width / 2, height - 35),
+        (width / 2, height - 24),
         "개략도: 실제 적용 전 웨지 출사점, 용접부 형상 및 교정시험편으로 커버리지를 확인할 것",
         fill="#B91C1C", font=small, anchor="ma",
     )
@@ -382,7 +385,7 @@ def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, heig
         f"First {item.first_element}, TD {item.focal_depth_mm:g}"
         for item in settings.apertures
     )
-    draw.text((width / 2, 58), legend, fill="#334155", font=small, anchor="ma")
+    draw.text((width / 2, 48), legend, fill="#334155", font=small, anchor="ma")
     image.save(output_path, format="PNG")
 
 
@@ -450,7 +453,9 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
          "오프셋 부호", "우측 + / 좌측 -", "거리 출처", "BeamTool: Beam Exit to Weld",
          "보정 기준", "좌측 +오프셋 / 우측 -오프셋"),
     ]
-    for r, row_data in enumerate(basic, start=5):
+    # Keep legacy correction metadata in the settings model, but omit its
+    # explanatory row from the field setup workbook.
+    for r, row_data in enumerate(basic[:2], start=5):
         for label_col, value_col, label, value in (
             (1, 2, row_data[0], row_data[1]), (4, 5, row_data[2], row_data[3]),
             (7, 8, row_data[4], row_data[5]), (10, 11, row_data[6], row_data[7]),
@@ -463,6 +468,9 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
                 ws.cell(r, col).border = border
                 ws.cell(r, col).alignment = center
                 ws.cell(r, col).font = Font(name="맑은 고딕", size=10, bold=(col == label_col))
+
+    ws.row_dimensions[7].height = 0
+    ws.row_dimensions[7].hidden = True
 
     max_index_count = max(len(aperture.index_display_values()) for aperture in settings.apertures)
     headers = ["Probe", "Wave type", "Law config.", "Focus type", "Active aperture",
@@ -559,11 +567,33 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         make_beam_diagram(settings, diagram_path)
         diagram = XLImage(diagram_path)
         diagram.width = 1000
-        diagram.height = 384
+        # Preserve the source aspect ratio so the whole drawing is visible and
+        # the lower beam paths are not cropped or vertically distorted.
+        diagram.height = round(diagram.width * 360 / 1120)
         ws.add_image(diagram, f"A{diagram_start_row}")
-        diagram_end_row = diagram_start_row + 20
+        # Excel row heights are points while image dimensions are pixels.
+        # Reserve the converted image height plus a small print-driver margin.
+        diagram_row_count = math.ceil((diagram.height * 0.75) / 16) + 3
+        diagram_end_row = diagram_start_row + diagram_row_count
         for row in range(diagram_start_row, diagram_end_row):
             ws.row_dimensions[row].height = 16
+
+        # The workbook is a field setup sheet, so stop after the scan-plan
+        # diagram.  Beam-path, true-depth, and bevel-intersection calculations
+        # remain available in the application preview and validation logic but
+        # are intentionally omitted from the exported deliverable.
+        # Floating images do not extend Excel's print area when users move them.
+        # Keep several blank rows inside the print area so the diagram can be
+        # moved downward without its lower portion being clipped in print/PDF.
+        diagram_move_margin_rows = 10
+        print_end_row = diagram_end_row + diagram_move_margin_rows
+        for row in range(diagram_end_row, print_end_row + 1):
+            ws.row_dimensions[row].height = 16
+        ws.print_area = f"A1:K{print_end_row}"
+        wb.calculation.fullCalcOnLoad = True
+        wb.calculation.forceFullCalc = True
+        wb.save(output)
+        return str(output)
 
         calc_section_row = diagram_end_row + 1
         section(calc_section_row, "4. 빔 경로 계산 및 검토사항")
@@ -812,7 +842,11 @@ class PautScanPlanApp(tk.Tk):
         for title, items in groups:
             box = ttk.LabelFrame(form, text=title, style="Section.TLabelframe", padding=10)
             box.pack(fill="x", pady=5)
-            for row, (key, label) in enumerate(items):
+            visible_items = [
+                item for item in items
+                if item[0] != "weld_center_to_root_offset_mm"
+            ]
+            for row, (key, label) in enumerate(visible_items):
                 ttk.Label(box, text=label, width=20).grid(row=row, column=0, sticky="w", pady=3)
                 var = tk.StringVar()
                 self.vars[key] = var
@@ -827,6 +861,7 @@ class PautScanPlanApp(tk.Tk):
 
         aperture_box = ttk.LabelFrame(form, text="활성소자 설정", style="Section.TLabelframe", padding=10)
         aperture_box.pack(fill="x", pady=5)
+        self.vars["weld_center_to_root_offset_mm"] = tk.StringVar(value="0")
         columns = ("probe", "beamset", "side", "active", "first", "focal", "indices", "exit")
         self.aperture_tree = ttk.Treeview(aperture_box, columns=columns, show="headings", height=4)
         headings = (("probe", "탐촉자 ID"), ("beamset", "Beamset"),
@@ -840,6 +875,7 @@ class PautScanPlanApp(tk.Tk):
         aperture_scroll = ttk.Scrollbar(aperture_box, orient="horizontal", command=self.aperture_tree.xview)
         aperture_scroll.grid(row=1, column=0, columnspan=4, sticky="ew")
         self.aperture_tree.configure(xscrollcommand=aperture_scroll.set)
+        self.aperture_tree.configure(displaycolumns=columns[:-1])
         self.aperture_tree.bind("<<TreeviewSelect>>", self._select_aperture)
 
         editors = (("probe_id", "탐촉자 ID"), ("beamset_id", "Beamset ID"),
@@ -851,7 +887,15 @@ class PautScanPlanApp(tk.Tk):
                    ("beam_exit_measurements", "공통 각도:BeamTool 용접 중심거리"),
                    ("left_beam_exit_measurements", "좌측 각도:BeamTool 용접 중심거리"),
                    ("right_beam_exit_measurements", "우측 각도:BeamTool 용접 중심거리"))
-        for row, (key, label) in enumerate(editors, 2):
+        hidden_editor_keys = {
+            "beam_exit_measurements",
+            "left_beam_exit_measurements",
+            "right_beam_exit_measurements",
+        }
+        visible_editors = [
+            item for item in editors if item[0] not in hidden_editor_keys
+        ]
+        for row, (key, label) in enumerate(visible_editors, 2):
             ttk.Label(aperture_box, text=label).grid(row=row, column=0, sticky="w", pady=2)
             var = tk.StringVar()
             self.aperture_vars[key] = var
@@ -861,7 +905,9 @@ class PautScanPlanApp(tk.Tk):
             else:
                 widget = ttk.Entry(aperture_box, textvariable=var, width=22)
             widget.grid(row=row, column=1, columnspan=3, sticky="ew", pady=2)
-        button_row = len(editors) + 2
+        for key in hidden_editor_keys:
+            self.aperture_vars[key] = tk.StringVar(value="")
+        button_row = len(visible_editors) + 2
         ttk.Button(aperture_box, text="추가", command=self.add_aperture).grid(row=button_row, column=0, pady=7)
         ttk.Button(aperture_box, text="선택 수정", command=self.update_aperture).grid(row=button_row, column=1, pady=7)
         ttk.Button(aperture_box, text="선택 삭제", command=self.delete_aperture).grid(row=button_row, column=2, pady=7)
@@ -881,7 +927,7 @@ class PautScanPlanApp(tk.Tk):
         self.preview.bind("<Configure>", lambda _e: self.refresh_preview())
 
         calc_box = ttk.LabelFrame(preview_outer, text="빔 경로 계산", padding=8)
-        calc_box.pack(fill="x", pady=(8, 0))
+        calc_box.pack_forget()
         ttk.Label(calc_box, text="항목", anchor="center").grid(row=0, column=0, sticky="ew")
         ttk.Label(calc_box, text="최소각", anchor="center").grid(row=0, column=1, sticky="ew")
         ttk.Label(calc_box, text="최대각", anchor="center").grid(row=0, column=2, sticky="ew")
@@ -934,8 +980,21 @@ class PautScanPlanApp(tk.Tk):
     def _set_values(self, settings: ScanSettings):
         for item in fields(settings):
             if item.name != "apertures":
-                self.vars[item.name].set(str(getattr(settings, item.name)))
-        self.apertures = [ApertureConfig(**asdict(item)) for item in settings.apertures]
+                value = (
+                    0 if item.name == "weld_center_to_root_offset_mm"
+                    else getattr(settings, item.name)
+                )
+                self.vars[item.name].set(str(value))
+        self.apertures = []
+        for item in settings.apertures:
+            aperture_data = asdict(item)
+            for key in (
+                "beam_exit_measurements",
+                "left_beam_exit_measurements",
+                "right_beam_exit_measurements",
+            ):
+                aperture_data[key] = ""
+            self.apertures.append(ApertureConfig(**aperture_data))
         self._refresh_aperture_tree()
         self._clear_aperture_editor()
 
@@ -1267,6 +1326,13 @@ def self_test(output_path: str) -> None:
     assert sheet.column_dimensions["K"].width == 34
     assert sheet.row_dimensions[14].height == 34
     assert sheet["K14"].alignment.wrap_text is True
+    assert sheet["A39"].value is None
+    assert sheet.print_options.horizontalCentered is True
+    assert sheet.page_margins.left == sheet.page_margins.right == 0.25
+    assert len(sheet._images) == 1
+    assert sheet.print_area.endswith("$A$1:$K$47")
+    check.close()
+    return
     assert "D40:K40" in {str(cell_range) for cell_range in sheet.merged_cells.ranges}
     assert "D41:K41" in {str(cell_range) for cell_range in sheet.merged_cells.ranges}
     assert "D42:K42" in {str(cell_range) for cell_range in sheet.merged_cells.ranges}
