@@ -1156,22 +1156,23 @@ class MonthlyReportManager:
             if marker_row > delete_end:
                 self.table_markers[key] -= delete_count
 
-        # The equipment-specification image below item "거." is vertically
-        # compressed in the template. Keep its width and extend it slightly
-        # into the following blank row for better legibility.
+        # Keep the equipment-specification table image.  Its anchor is shifted
+        # with the merged page above; the spacer compaction below must preserve
+        # every row covered by the image, not only its starting row.
         for image in ws._images:
             anchor = getattr(image, 'anchor', None)
             if not hasattr(anchor, '_from'):
                 continue
             image_row = anchor._from.row + 1
             if 290 <= image_row <= 300 and float(image.width) > 500:
-                image.height = float(image.height) * 1.20
+                image.height = 180
                 if hasattr(anchor, 'to'):
-                    anchor.to.row += 4
+                    anchor.to.row = anchor._from.row + 7
+                    anchor.to.rowOff = 0
                 break
 
-        # Move the three-line paragraph beginning with item "너." below the
-        # enlarged image. Keep one blank row between the image and paragraph.
+        # Keep the three-line paragraph beginning with item "너." below the
+        # real equipment-specification table, with one blank row between them.
         paragraph_start = None
         for row in range(300, 315):
             row_text = ''.join(
@@ -1251,16 +1252,24 @@ class MonthlyReportManager:
             brk for brk in ws.row_breaks.brk if int(brk.id) != 278
         ]
 
-        # Preserve all text-row heights. Compress only truly empty, unmerged
-        # spacer rows so both bodies fit legibly on one printed page.
+        # Preserve all text-row heights. Collapse only truly empty, unmerged
+        # spacer rows.  Seven-point spacers still left rows 312-313 on an
+        # automatically-created eighth page, so keep just a one-point gap.
         merged_rows = set()
         for merged in ws.merged_cells.ranges:
             merged_rows.update(range(merged.min_row, merged.max_row + 1))
-        image_rows = {
-            image.anchor._from.row + 1
-            for image in ws._images
-            if hasattr(getattr(image, 'anchor', None), '_from')
-        }
+        image_rows = set()
+        for image in ws._images:
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                continue
+            image_start = anchor._from.row + 1
+            image_end = (
+                anchor.to.row + 1
+                if hasattr(anchor, 'to')
+                else image_start
+            )
+            image_rows.update(range(image_start, image_end + 1))
         for row in range(236, 319):
             if row in merged_rows or row in image_rows:
                 continue
@@ -1269,7 +1278,47 @@ class MonthlyReportManager:
                 for col in range(1, min(ws.max_column, 23) + 1)
             )
             if is_blank:
-                ws.row_dimensions[row].height = 7.0
+                ws.row_dimensions[row].height = 1.0
+
+        # Rows 314-318 are the unused tail of the former eighth page.  Remove
+        # them only when they contain no values, merges, or drawings, then end
+        # page 7 at row 313.  All following report content moves up intact.
+        trailing_start, trailing_end = 314, 318
+        trailing_rows = set(range(trailing_start, trailing_end + 1))
+        trailing_is_blank = all(
+            not str(ws.cell(row=row, column=col).value or '').strip()
+            for row in trailing_rows
+            for col in range(1, ws.max_column + 1)
+        )
+        trailing_has_merge = any(
+            merged.min_row <= trailing_end and merged.max_row >= trailing_start
+            for merged in ws.merged_cells.ranges
+        )
+        trailing_has_image = any(
+            hasattr(getattr(image, 'anchor', None), '_from')
+            and trailing_start <= image.anchor._from.row + 1 <= trailing_end
+            for image in ws._images
+        )
+        if trailing_is_blank and not trailing_has_merge and not trailing_has_image:
+            for image in ws._images:
+                anchor = getattr(image, 'anchor', None)
+                if not hasattr(anchor, '_from') or anchor._from.row + 1 <= trailing_end:
+                    continue
+                anchor._from.row -= len(trailing_rows)
+                if hasattr(anchor, 'to'):
+                    anchor.to.row -= len(trailing_rows)
+
+            self._delete_rows_safely(ws, trailing_start, len(trailing_rows))
+            for key, marker_row in self.table_markers.items():
+                if marker_row > trailing_end:
+                    self.table_markers[key] -= len(trailing_rows)
+
+            from openpyxl.worksheet.pagebreak import Break
+            if not any(int(brk.id) == 313 for brk in ws.row_breaks.brk):
+                ws.row_breaks.append(Break(id=313))
+            ws.row_breaks.brk = sorted(
+                ws.row_breaks.brk, key=lambda brk: int(brk.id)
+            )
 
         # Section 1.0 now contains five pages instead of six.
         page_cells = []
@@ -1712,22 +1761,35 @@ class MonthlyReportManager:
                     cell.value = cell.value.replace('SPETION', 'SECTION')
 
     def _fix_pt_summary_bottom_border(self, ws):
-        """Match the B:C bottom edge of the PT summary to row 390."""
+        """Match merged PT/MT label bottom edges to their adjacent tables."""
         import copy
 
-        row = 390
-        reference_side = copy.copy(ws.cell(row=row, column=4).border.bottom)
-        # B389:C390 is a merged range. Excel derives its visible perimeter
-        # from the B389 anchor, so the anchor must carry the same bottom side.
-        anchor = ws.cell(row=row - 1, column=2)
-        anchor_border = copy.copy(anchor.border)
-        anchor_border.bottom = copy.copy(reference_side)
-        anchor.border = anchor_border
-        for col in (2, 3):
-            cell = ws.cell(row=row, column=col)
-            border = copy.copy(cell.border)
-            border.bottom = copy.copy(reference_side)
-            cell.border = border
+        # Dynamic row insertion moves the summary table, so a fixed row such
+        # as 390 eventually targets the wrong cells.  Locate every vertically
+        # merged PT label and copy the actual bottom-table edge from column D.
+        for merged in list(ws.merged_cells.ranges):
+            if not (
+                merged.min_col == 2
+                and merged.max_col == 3
+                and merged.max_row > merged.min_row
+            ):
+                continue
+            anchor = ws.cell(row=merged.min_row, column=2)
+            if str(anchor.value or '').strip().upper() not in {'PT', 'MT'}:
+                continue
+
+            bottom_row = merged.max_row
+            reference_side = copy.copy(
+                ws.cell(row=bottom_row, column=4).border.bottom
+            )
+            anchor_border = copy.copy(anchor.border)
+            anchor_border.bottom = copy.copy(reference_side)
+            anchor.border = anchor_border
+            for col in (2, 3):
+                cell = ws.cell(row=bottom_row, column=col)
+                border = copy.copy(cell.border)
+                border.bottom = copy.copy(reference_side)
+                cell.border = border
 
     def _fit_long_section_headers(self, ws):
         """Keep long section captions fully visible in their merged cells."""
@@ -2821,13 +2883,17 @@ class MonthlyReportManager:
                     continue
 
                 photo_slots = (
-                    ('C', layout['image_row'], 3, 12, layout['image_row'] + 16),
-                    ('M', layout['image_row'], 13, 23, layout['image_row'] + 16),
-                    ('C', layout['image_row'] + 21, 3, 12, layout['image_row'] + 37),
-                    ('M', layout['image_row'] + 21, 13, 23, layout['image_row'] + 37),
-                    ('C', layout['image_row'] + 42, 3, 12, layout['image_row'] + 58),
-                    ('M', layout['image_row'] + 42, 13, 23, layout['image_row'] + 58),
+                    ('C', layout['image_row'], 3, 10, layout['image_row'] + 16),
+                    ('L', layout['image_row'], 12, 20, layout['image_row'] + 16),
+                    ('C', layout['image_row'] + 21, 3, 10, layout['image_row'] + 37),
+                    ('L', layout['image_row'] + 21, 12, 20, layout['image_row'] + 37),
+                    ('C', layout['image_row'] + 42, 3, 10, layout['image_row'] + 58),
+                    ('L', layout['image_row'] + 42, 12, 20, layout['image_row'] + 58),
                 )
+
+                # C:J and L:T center the ledger inside the B:W document frame.
+                # Their pixel widths differ by only three pixels; column K is
+                # retained as a consistent gutter between the two photos.
 
                 # dynamically copy styles from the second row to the third row
                 import copy
@@ -2870,6 +2936,22 @@ class MonthlyReportManager:
                 for mr in new_merges:
                     ws.merge_cells(start_row=mr[0], start_column=mr[1], end_row=mr[2], end_column=mr[3])
 
+                # Center the two-column ledger within the B:W document frame
+                # and use part of the former bottom whitespace for the photos.
+                # A modest four-percent height increase keeps the page inside
+                # its existing manual boundary while improving vertical balance.
+                default_row_height = ws.sheet_format.defaultRowHeight or 15
+                for frame_offset in (0, 21, 42):
+                    frame_start = layout['image_row'] + frame_offset
+                    frame_end = frame_start + 15
+                    for frame_row in range(frame_start, frame_end + 1):
+                        current_height = (
+                            ws.row_dimensions[frame_row].height
+                            or default_row_height
+                        )
+                        ws.row_dimensions[frame_row].height = (
+                            float(current_height) * 1.04
+                        )
 
                 for index, photo in enumerate(page_photos):
                     (
@@ -2897,8 +2979,12 @@ class MonthlyReportManager:
                     )
                     # Keep a clear gap above the caption separator; drawings
                     # render over cell borders when they touch the boundary.
-                    max_width = max(1, min(340, frame_width - 20))
-                    max_height = max(1, min(255, frame_height - 20))
+                    # Use the same six-pixel inset on every side.  Each source
+                    # photo is center-cropped to this inner rectangle, so the
+                    # frame has equal top, bottom, left, and right whitespace.
+                    frame_inset = 6
+                    max_width = max(1, frame_width - frame_inset * 2)
+                    max_height = max(1, frame_height - frame_inset * 2)
 
                     # Respect phone-camera EXIF orientation, then fill the
                     # landscape photo slot with a centered crop.  Portrait
@@ -2927,16 +3013,15 @@ class MonthlyReportManager:
                     image.width *= scale
                     image.height *= scale
 
-                    # Excel's rendered column widths differ slightly from the
-                    # width-to-pixel estimate.  Apply the measured visual
-                    # correction so the picture is centered in the output.
-                    horizontal_correction = 11 if caption_col == 3 else 8
-                    offset_x = max(
-                        0,
-                        (frame_width - image.width) / 2
-                        + horizontal_correction,
+                    # Excel renders column widths a few pixels differently
+                    # from the width used for the drawing extent.  Apply the
+                    # measured per-column correction so the printed margins,
+                    # rather than only the calculated margins, are centered.
+                    horizontal_render_correction = (
+                        8 if caption_col == 3 else 3
                     )
-                    offset_y = max(0, (frame_height - image.height) / 2 - 7)
+                    offset_x = frame_inset + horizontal_render_correction
+                    offset_y = max(0, frame_inset - 2)
                     marker = AnchorMarker(
                         col=caption_col - 1,
                         colOff=pixels_to_EMU(offset_x),
@@ -4947,7 +5032,7 @@ class MonthlyReportManager:
                             'content': report_content,
                             'time': str(summary_ws.cell(source_row, 4).value or '').strip(),
                             'instructor': str(summary_ws.cell(source_row, 5).value or '').strip(),
-                            'location': str(summary_ws.cell(source_row, 6).value or '').strip(),
+                            'location': '서울검사 사무실',
                         })
                 safety_wb.close()
             except Exception as exc:
@@ -5073,7 +5158,7 @@ class MonthlyReportManager:
             ws.cell(row=current_row, column=cols.get('content', 8)).value = log['content']
             ws.cell(row=current_row, column=cols.get('time', 18)).value = log.get('time') or time_val
             ws.cell(row=current_row, column=cols.get('instructor', 20)).value = log.get('instructor') or instructor_val
-            ws.cell(row=current_row, column=cols.get('location', 22)).value = log.get('location') or location_val
+            ws.cell(row=current_row, column=cols.get('location', 22)).value = '서울검사 사무실'
             
             c = ws.cell(row=current_row, column=cols.get('content', 8))
             align = copy.copy(c.alignment) if c.alignment else Alignment()
