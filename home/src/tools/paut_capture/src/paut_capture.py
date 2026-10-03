@@ -18,6 +18,33 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 from pathlib import Path
 import json
+import re
+
+
+PROFILE_LABELS = {
+    "opd_single": "OPD Single (파일명 끝 90/270)",
+    "opd_dual": "OPD Dual",
+    "nde": "NDE",
+}
+
+
+def classify_capture_profile(path):
+    """Return the capture profile key for an OmniPC data file."""
+    path = Path(path)
+    if path.suffix.lower() == ".nde":
+        return "nde"
+    if re.search(r"(?:^|\D)(?:90|270)$", path.stem):
+        return "opd_single"
+    return "opd_dual"
+
+
+def click_steps_for_profile(profile_key):
+    """Return the configured click steps that apply to a capture layout."""
+    if profile_key == "opd_single":
+        return (2, 3)
+    if profile_key == "opd_dual":
+        return (1, 2, 3)
+    return ()
 
 class SnippingToolOverlay:
     def __init__(self, parent, callback):
@@ -91,6 +118,7 @@ class AutoCaptureApp:
             "region": [0, 0, 0, 0] # x, y, w, h
         }
         self.load_config()
+        self.ensure_capture_profiles()
         self.resolve_omnipc_path()
         self.create_widgets()
         
@@ -109,6 +137,29 @@ class AutoCaptureApp:
                     self.config.update(loaded)
             except:
                 pass
+
+    def ensure_capture_profiles(self):
+        """Migrate the old shared settings to per-file-type profiles."""
+        legacy = {
+            "use_click": self.config.get("use_click", True),
+            "click1_x": self.config.get("click1_x", 0),
+            "click1_y": self.config.get("click1_y", 0),
+            "click2_x": self.config.get("click2_x", 0),
+            "click2_y": self.config.get("click2_y", 0),
+            "click3_x": self.config.get("click3_x", 0),
+            "click3_y": self.config.get("click3_y", 0),
+            "use_region": self.config.get("use_region", False),
+            "region": self.config.get("region", [0, 0, 0, 0]),
+        }
+        profiles = self.config.setdefault("capture_profiles", {})
+        for key in PROFILE_LABELS:
+            profiles.setdefault(key, dict(legacy))
+        self.active_profile_key = self.config.get("active_profile", "opd_dual")
+        if self.active_profile_key not in PROFILE_LABELS:
+            self.active_profile_key = "opd_dual"
+
+    def current_profile(self):
+        return self.config["capture_profiles"][self.active_profile_key]
 
     def resolve_omnipc_path(self):
         """Replace a stale machine-specific OmniPC path with a local install."""
@@ -136,19 +187,52 @@ class AutoCaptureApp:
         self.config["capture_dir"] = self.capture_var.get()
         self.config["shortcut"] = self.shortcut_var.get()
         self.config["delay"] = self.delay_var.get()
-        self.config["use_click"] = self.use_click_var.get()
-        self.config["click1_x"] = self.c1_x.get()
-        self.config["click1_y"] = self.c1_y.get()
-        self.config["click2_x"] = self.c2_x.get()
-        self.config["click2_y"] = self.c2_y.get()
-        self.config["click3_x"] = self.c3_x.get()
-        self.config["click3_y"] = self.c3_y.get()
-        self.config["use_region"] = self.use_region_var.get()
+        self.save_profile_fields()
+        self.config["active_profile"] = self.active_profile_key
         try:
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=4)
         except Exception as e:
             print("설정 저장 실패:", e)
+
+    def save_profile_fields(self):
+        if not hasattr(self, "use_click_var"):
+            return
+        profile = self.current_profile()
+        profile["use_click"] = self.use_click_var.get()
+        profile["click1_x"] = self.c1_x.get()
+        profile["click1_y"] = self.c1_y.get()
+        profile["click2_x"] = self.c2_x.get()
+        profile["click2_y"] = self.c2_y.get()
+        profile["click3_x"] = self.c3_x.get()
+        profile["click3_y"] = self.c3_y.get()
+        profile["use_region"] = self.use_region_var.get()
+
+    def change_profile(self, *_):
+        self.save_profile_fields()
+        selected_label = self.profile_var.get()
+        self.active_profile_key = next(
+            key for key, label in PROFILE_LABELS.items() if label == selected_label
+        )
+        profile = self.current_profile()
+        self.use_region_var.set(profile.get("use_region", False))
+        self.use_click_var.set(profile.get("use_click", True))
+        for var, field in (
+            (self.c1_x, "click1_x"), (self.c1_y, "click1_y"),
+            (self.c2_x, "click2_x"), (self.c2_y, "click2_y"),
+            (self.c3_x, "click3_x"), (self.c3_y, "click3_y"),
+        ):
+            var.set(profile.get(field, 0))
+        self.region_label.config(text=self.format_region_text())
+        self.update_profile_controls()
+        self.save_config()
+
+    def update_profile_controls(self):
+        """Disable controls that are not used by the selected layout."""
+        state = "disabled" if self.active_profile_key == "opd_single" else "normal"
+        self.c1_x_entry.config(state=state)
+        self.c1_y_entry.config(state=state)
+        self.c1_pos_button.config(state=state)
 
     def create_widgets(self):
         # --- Data Directory ---
@@ -183,11 +267,21 @@ class AutoCaptureApp:
         tk.Entry(frame4, textvariable=self.delay_var, width=5).pack(side="left")
         tk.Label(frame4, text=" (파일 열고 캡처할 때까지 대기)").pack(side="left")
         
+        pf = tk.Frame(self.root)
+        pf.pack(fill="x", padx=10, pady=(0, 5))
+        tk.Label(pf, text="화면 설정 유형: ").pack(side="left")
+        self.profile_var = tk.StringVar(value=PROFILE_LABELS[self.active_profile_key])
+        tk.OptionMenu(
+            pf, self.profile_var, *PROFILE_LABELS.values(), command=self.change_profile
+        ).pack(side="left", fill="x", expand=True)
+        tk.Label(pf, text="파일명으로 자동 적용").pack(side="left", padx=5)
+
         # --- Capture Region Settings Frame ---
         rf = tk.LabelFrame(self.root, text="캡처 영역 설정")
         rf.pack(fill="x", padx=10, pady=5)
         
-        self.use_region_var = tk.BooleanVar(value=self.config.get("use_region", False))
+        profile = self.current_profile()
+        self.use_region_var = tk.BooleanVar(value=profile.get("use_region", False))
         tk.Checkbutton(rf, text="전체 화면 대신 지정된 영역만 캡처", variable=self.use_region_var).grid(row=0, column=0, columnspan=2, sticky="w", padx=5)
         
         tk.Button(rf, text="영역 드래그로 선택하기", command=self.start_region_select, bg="#ffdddd").grid(row=1, column=0, padx=10, pady=5)
@@ -198,32 +292,38 @@ class AutoCaptureApp:
         lf = tk.LabelFrame(self.root, text="자동 클릭 위치 설정 (캡처 전 메뉴 조작)")
         lf.pack(fill="x", padx=10, pady=5)
         
-        self.use_click_var = tk.BooleanVar(value=self.config["use_click"])
+        self.use_click_var = tk.BooleanVar(value=profile.get("use_click", True))
         tk.Checkbutton(lf, text="캡처 전 자동 클릭 기능 사용", variable=self.use_click_var).grid(row=0, column=0, columnspan=4, sticky="w", padx=5)
         
         # Click 1
-        tk.Label(lf, text="1. Single/Multiple 토글:").grid(row=1, column=0, sticky="e", padx=5)
-        self.c1_x = tk.IntVar(value=self.config["click1_x"])
-        self.c1_y = tk.IntVar(value=self.config["click1_y"])
-        tk.Entry(lf, textvariable=self.c1_x, width=5).grid(row=1, column=1)
-        tk.Entry(lf, textvariable=self.c1_y, width=5).grid(row=1, column=2)
-        tk.Button(lf, text="위치 지정(7초)", command=lambda: self.get_pos(self.c1_x, self.c1_y)).grid(row=1, column=3, padx=5, pady=2)
+        tk.Label(lf, text="1. Single/Multiple 토글 (Dual 전용):").grid(row=1, column=0, sticky="e", padx=5)
+        self.c1_x = tk.IntVar(value=profile.get("click1_x", 0))
+        self.c1_y = tk.IntVar(value=profile.get("click1_y", 0))
+        self.c1_x_entry = tk.Entry(lf, textvariable=self.c1_x, width=5)
+        self.c1_x_entry.grid(row=1, column=1)
+        self.c1_y_entry = tk.Entry(lf, textvariable=self.c1_y, width=5)
+        self.c1_y_entry.grid(row=1, column=2)
+        self.c1_pos_button = tk.Button(
+            lf, text="위치 지정(7초)", command=lambda: self.get_pos(self.c1_x, self.c1_y)
+        )
+        self.c1_pos_button.grid(row=1, column=3, padx=5, pady=2)
         
         # Click 2
         tk.Label(lf, text="2. Layouts 메뉴 클릭:").grid(row=2, column=0, sticky="e", padx=5)
-        self.c2_x = tk.IntVar(value=self.config["click2_x"])
-        self.c2_y = tk.IntVar(value=self.config["click2_y"])
+        self.c2_x = tk.IntVar(value=profile.get("click2_x", 0))
+        self.c2_y = tk.IntVar(value=profile.get("click2_y", 0))
         tk.Entry(lf, textvariable=self.c2_x, width=5).grid(row=2, column=1)
         tk.Entry(lf, textvariable=self.c2_y, width=5).grid(row=2, column=2)
         tk.Button(lf, text="위치 지정(7초)", command=lambda: self.get_pos(self.c2_x, self.c2_y)).grid(row=2, column=3, padx=5, pady=2)
         
         # Click 3
         tk.Label(lf, text="3. A-C-S (PA) 항목 클릭:").grid(row=3, column=0, sticky="e", padx=5)
-        self.c3_x = tk.IntVar(value=self.config["click3_x"])
-        self.c3_y = tk.IntVar(value=self.config["click3_y"])
+        self.c3_x = tk.IntVar(value=profile.get("click3_x", 0))
+        self.c3_y = tk.IntVar(value=profile.get("click3_y", 0))
         tk.Entry(lf, textvariable=self.c3_x, width=5).grid(row=3, column=1)
         tk.Entry(lf, textvariable=self.c3_y, width=5).grid(row=3, column=2)
         tk.Button(lf, text="위치 지정(7초)", command=lambda: self.get_pos(self.c3_x, self.c3_y)).grid(row=3, column=3, padx=5, pady=2)
+        self.update_profile_controls()
         
         # --- Start Button ---
         self.start_btn = tk.Button(self.root, text="▶ 자동 캡처 시작", bg="lightblue", font=("Arial", 11, "bold"), command=self.start_capture_thread)
@@ -235,7 +335,7 @@ class AutoCaptureApp:
         self.log_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
     def format_region_text(self):
-        r = self.config.get("region", [0,0,0,0])
+        r = self.current_profile().get("region", [0,0,0,0])
         if r == [0,0,0,0]:
             return "지정되지 않음 (전체 화면)"
         return f"현재 영역: {r[2]}x{r[3]} (시작: {r[0]},{r[1]})"
@@ -245,7 +345,7 @@ class AutoCaptureApp:
         SnippingToolOverlay(self.root, self.on_region_selected)
         
     def on_region_selected(self, rect):
-        self.config["region"] = rect
+        self.current_profile()["region"] = rect
         self.use_region_var.set(True)
         self.region_label.config(text=self.format_region_text())
         self.save_config()
@@ -342,6 +442,9 @@ class AutoCaptureApp:
                 return
 
             for idx, target_file in enumerate(all_files, 1):
+                profile_key = classify_capture_profile(target_file)
+                profile = self.config["capture_profiles"][profile_key]
+                self.log(f"  -> 자동 분류: {PROFILE_LABELS[profile_key]}")
                 self.log(f"[{idx}/{len(all_files)}] {target_file.name} 처리 중...")
                 
                 try:
@@ -357,10 +460,8 @@ class AutoCaptureApp:
                         time.sleep(1)
 
                     # 3. 자동 클릭 수행 (체크된 경우이고 .opd 파일일 때만)
-                    is_opd = target_file.suffix.lower() == '.opd'
-                    
-                    if self.use_click_var.get():
-                        if is_opd:
+                    if profile.get("use_click", False):
+                        if target_file.suffix.lower() == '.opd':
                             self.log("  -> 창을 최대화하고 설정된 메뉴 위치를 클릭합니다 (.opd 파일)")
                             
                             # 창 최대화 보장
@@ -377,25 +478,21 @@ class AutoCaptureApp:
                                 self.log(f"  -> 창 상태 변경 실패 (무시됨): {e}")
 
                             # 클릭 과정이 눈에 보이도록 마우스를 부드럽게 이동
-                            pyautogui.moveTo(self.c1_x.get(), self.c1_y.get(), duration=0.5)
-                            pyautogui.click()
-                            time.sleep(1.0)
-                            
-                            pyautogui.moveTo(self.c2_x.get(), self.c2_y.get(), duration=0.5)
-                            pyautogui.click()
-                            time.sleep(1.0)
-                            
-                            pyautogui.moveTo(self.c3_x.get(), self.c3_y.get(), duration=0.5)
-                            pyautogui.click()
-                            time.sleep(1.0)
+                            for click_number in click_steps_for_profile(profile_key):
+                                x = profile.get(f"click{click_number}_x", 0)
+                                y = profile.get(f"click{click_number}_y", 0)
+                                if x or y:
+                                    pyautogui.moveTo(x, y, duration=0.5)
+                                    pyautogui.click()
+                                    time.sleep(1.0)
                         else:
                             self.log("  -> .nde 파일이므로 자동 클릭 과정을 생략합니다.")
                         
                     # 4. 캡처
                     screenshot_path = capture_dir / f"{target_file.stem}_capture.png"
                     
-                    if self.use_region_var.get() and self.config.get("region") != [0,0,0,0]:
-                        reg = self.config["region"]
+                    if profile.get("use_region", False) and profile.get("region") != [0,0,0,0]:
+                        reg = profile["region"]
                         pyautogui.screenshot(str(screenshot_path), region=(reg[0], reg[1], reg[2], reg[3]))
                         self.log(f"  -> 📸 지정된 영역 캡처 완료: {screenshot_path.name}")
                     else:
