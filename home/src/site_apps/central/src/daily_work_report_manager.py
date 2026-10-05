@@ -595,7 +595,15 @@ class DailyWorkReportManager:
 
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
         sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
-        for r in range(1, 12): sheet.row_dimensions[r].height = 15
+        for r in range(1, 12):
+            if r == 9:
+                car_str = str(data.get('car_no', ''))
+                if len(car_str) > 22 or '\n' in car_str:
+                    sheet.row_dimensions[r].height = 30
+                else:
+                    sheet.row_dimensions[r].height = 15
+            else:
+                sheet.row_dimensions[r].height = 15
         for t_row in [12, 26, 31, 37, 42]:
             try: sheet.row_dimensions[t_row + method_offset].height = 20
             except: pass

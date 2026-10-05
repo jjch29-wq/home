@@ -377,10 +377,21 @@ class VehicleInspectionWidget(ttk.Frame):
         ttk.Button(btn_photo_f, text="🗑️ 사진 삭제", command=self.clear_photo).pack(side='left', expand=True, fill='x', padx=2)
 
     def _ensure_exclusive(self, var, current_val):
-        """Helper to ensure only one value is selected if needed (though StringVar handles it naturally)"""
-        # This is primarily to handle clicking an already selected check to uncheck it if desired,
-        # but ttk.Checkbutton with variable already does this for on/off values.
-        pass
+        """Helper to ensure only one value is selected if needed (though StringVar handles it naturally)
+           Also mirrors 'out' (출차시) selection to 'in' (입차시) automatically."""
+        # Find which key this variable belongs to
+        target_key = None
+        for k, v in self.vars.items():
+            if v == var:
+                target_key = k
+                break
+                
+        if target_key and target_key.startswith('out_'):
+            # It's an 'out' variable, mirror to 'in' variable
+            in_key = 'in_' + target_key[4:]
+            if in_key in self.vars:
+                # Mirror the value
+                self.vars[in_key].set(var.get())
 
     def trigger_save(self):
         """Invoke the save callback provided by MaterialManager"""
