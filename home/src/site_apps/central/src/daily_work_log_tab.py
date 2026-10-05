@@ -428,7 +428,7 @@ class DailyWorkLogTab(ttk.Frame):
         for col_idx, c in enumerate(self.ndt_cols):
             ttk.Label(grid_frame, text=c, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
             if c == '구간정보':
-                grid_frame.grid_columnconfigure(col_idx, weight=3, minsize=180)
+                grid_frame.grid_columnconfigure(col_idx, weight=5, minsize=260)
             elif c == '라인번호':
                 grid_frame.grid_columnconfigure(col_idx, weight=3)
             elif c == '업체':
@@ -456,7 +456,7 @@ class DailyWorkLogTab(ttk.Frame):
                 elif c == '용접사': w = 23
                 elif c == '라인번호': w = 25
                 elif c == 'Joint No.': w = 12
-                elif c == '구간정보': w = 20
+                elif c == '구간정보': w = 35
                 else: w = 8
                 
                 if c == '검사방법':
