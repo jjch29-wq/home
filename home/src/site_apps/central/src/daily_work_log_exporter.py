@@ -111,7 +111,8 @@ class DailyWorkLogExporter:
             set_cell(f'{col_letter}8', header, font=self.font_bold, fill=self.fill_header, align=self.align_nowrap)
 
         qty_rows = [
-            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '200A'), ('PAUT', '200A-야간'), ('PAUT', '소계'),
+            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '200A'), ('PAUT', '200A-야간'), 
+            ('PAUT', '150A~125A'), ('PAUT', '150A~125A-야간'), ('PAUT', '100A이하'), ('PAUT', '100A이하-야간'), ('PAUT', '소계'),
             ('RT', '150A~100A'), ('RT', '150A~100A-야간'), ('RT', '80A이하'), ('RT', '80A이하-야간'), ('RT', '소계'),
             ('MT', '전체(주간)'), ('MT', '전체(야간)'),
             ('PT', '전체(주간)'), ('PT', '전체(야간)')
@@ -159,10 +160,10 @@ class DailyWorkLogExporter:
             
             row_idx += 1
             
-        ws.merge_cells('A9:A14') # PAUT
-        ws.merge_cells('A15:A19') # RT
-        ws.merge_cells('A20:A21') # MT
-        ws.merge_cells('A22:A23') # PT
+        ws.merge_cells('A9:A18') # PAUT
+        ws.merge_cells('A19:A23') # RT
+        ws.merge_cells('A24:A25') # MT
+        ws.merge_cells('A26:A27') # PT
 
         # =========================================================================
         # RIGHT SIDE SECTION: Equipment and Personnel (L7:P23)
@@ -205,39 +206,39 @@ class DailyWorkLogExporter:
 
         # Remarks (특이사항 및 작업계획)
         merge_and_set('L15:R15', '특이사항 및 작업계획', font=self.font_bold, fill=self.fill_header)
-        merge_and_set('L16:R23', data.get('remarks', ''), align=Alignment(horizontal='left', vertical='top', wrap_text=True))
+        merge_and_set('L16:R27', data.get('remarks', ''), align=Alignment(horizontal='left', vertical='top', wrap_text=True))
 
         # =========================================================================
-        # SECTION 2: 비파괴검사결과서 (A26:Y...)
+        # SECTION 2: 비파괴검사결과서 (A29:Y...)
         # =========================================================================
-        merge_and_set('A25:F25', "2. 비파괴검사결과서", font=self.font_bold, align=self.align_left, border=None)
+        merge_and_set('A29:F29', "2. 비파괴검사결과서", font=self.font_bold, align=self.align_left, border=None)
         
         # Main Headers
         headers_ndt = [
-            ('A26:A27', '순번'), ('B26:B27', '업체'), ('C26:C27', '검사방법'), ('D26:D27', '구간(Sec.No)'), ('E26:E27', '라인번호'),
-            ('F26:F27', 'Joint No.'), ('G26:G27', '관경'), ('H26:H27', '두께'), ('I26:I27', '용접사'), 
-            ('N26:N27', '결과'), ('O26:O27', '규격')
+            ('A30:A31', '순번'), ('B30:B31', '업체'), ('C30:C31', '검사방법'), ('D30:D31', '구간(Sec.No)'), ('E30:E31', '라인번호'),
+            ('F30:F31', 'Joint No.'), ('G30:G31', '관경'), ('H30:H31', '두께'), ('I30:I31', '용접사'), 
+            ('N30:N31', '결과'), ('O30:O31', '규격')
         ]
         for rng, text in headers_ndt:
             merge_and_set(rng, text, font=self.font_small, fill=self.fill_header, align=self.align_nowrap)
             
-        merge_and_set('J26:M26', '구간정보(Start/Length)', font=self.font_small, fill=self.fill_header)
-        set_cell('J27', '1', font=self.font_small, fill=self.fill_header)
-        set_cell('K27', '2', font=self.font_small, fill=self.fill_header)
-        set_cell('L27', '3', font=self.font_small, fill=self.fill_header)
-        set_cell('M27', '4', font=self.font_small, fill=self.fill_header)
+        merge_and_set('J30:M30', '구간정보(Start/Length)', font=self.font_small, fill=self.fill_header)
+        set_cell('J31', '1', font=self.font_small, fill=self.fill_header)
+        set_cell('K31', '2', font=self.font_small, fill=self.fill_header)
+        set_cell('L31', '3', font=self.font_small, fill=self.fill_header)
+        set_cell('M31', '4', font=self.font_small, fill=self.fill_header)
             
-        merge_and_set('P26:Q26', 'RT매수', font=self.font_small, fill=self.fill_header)
-        set_cell('P27', 'OR', font=self.font_small, fill=self.fill_header)
-        set_cell('Q27', 'RE', font=self.font_small, fill=self.fill_header)
+        merge_and_set('P30:Q30', 'RT매수', font=self.font_small, fill=self.fill_header)
+        set_cell('P31', 'OR', font=self.font_small, fill=self.fill_header)
+        set_cell('Q31', 'RE', font=self.font_small, fill=self.fill_header)
         
-        merge_and_set('R26:R27', 'PAUT(m)', font=self.font_small, fill=self.fill_header)
-        merge_and_set('S26:S27', 'MT(m)', font=self.font_small, fill=self.fill_header)
-        merge_and_set('T26:T27', 'PT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('R30:R31', 'PAUT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('S30:S31', 'MT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('T30:T31', 'PT(m)', font=self.font_small, fill=self.fill_header)
         
         # Populate NDT Results
         ndt_results = data.get('ndt_results', [])
-        start_row = 28
+        start_row = 32
         total_rows = max(10, len(ndt_results) + 1)
         for i in range(total_rows): # minimum 10 empty rows for good look
             row_idx = start_row + i
@@ -265,13 +266,17 @@ class DailyWorkLogExporter:
             sec_info = sec_info_raw.split(',')
             sec_info += [''] * (4 - len(sec_info)) # Pad to 4
             
-            set_cell(f'J{row_idx}', sec_info[0])
-            set_cell(f'K{row_idx}', sec_info[1] if method not in ['PAUT', 'PT', 'MT'] and sec_info_raw != "관련지시 없음" else '')
-            set_cell(f'L{row_idx}', sec_info[2] if method not in ['PAUT', 'PT', 'MT'] and sec_info_raw != "관련지시 없음" else '')
-            set_cell(f'M{row_idx}', sec_info[3] if method not in ['PAUT', 'PT', 'MT'] and sec_info_raw != "관련지시 없음" else '')
-            
             if method in ['PAUT', 'PT', 'MT'] or sec_info_raw == "관련지시 없음":
+                set_cell(f'J{row_idx}', sec_info_raw)
+                set_cell(f'K{row_idx}', '')
+                set_cell(f'L{row_idx}', '')
+                set_cell(f'M{row_idx}', '')
                 ws.merge_cells(f'J{row_idx}:M{row_idx}')
+            else:
+                set_cell(f'J{row_idx}', sec_info[0])
+                set_cell(f'K{row_idx}', sec_info[1])
+                set_cell(f'L{row_idx}', sec_info[2])
+                set_cell(f'M{row_idx}', sec_info[3])
             
             spec_val = res.get('규격', '')
             shift_val = res.get('근무구분', '')
@@ -298,7 +303,7 @@ class DailyWorkLogExporter:
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
         ws.sheet_properties.pageSetUpPr.fitToPage = True
-        ws.print_title_rows = '26:27'
+        ws.print_title_rows = '30:31'
         
         # Header/Footer (Auto Page Numbering)
         ws.oddHeader.right.text = "Page &P of &N"
