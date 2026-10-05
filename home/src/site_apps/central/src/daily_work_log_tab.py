@@ -997,7 +997,7 @@ class DailyWorkLogTab(ttk.Frame):
             
         self.save_current_history()
         # Save File Dialog
-        default_name = f"{self.date_entry.get().replace('-', '')}_작업일보.xlsx"
+        default_name = f"{self.date_entry.get().replace('-', '')}_작업_감독일보.xlsx"
         file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             initialfile=default_name,
