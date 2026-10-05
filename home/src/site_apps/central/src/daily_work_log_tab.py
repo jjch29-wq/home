@@ -228,7 +228,8 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Label(mid_frame, text=h, font=('맑은 고딕', 9, 'bold')).grid(row=0, column=col, padx=1, pady=2)
             
         self.qty_rows = [
-            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '200A'), ('PAUT', '200A-야간'), ('PAUT', '소계'),
+            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '200A'), ('PAUT', '200A-야간'), 
+            ('PAUT', '150A~125A'), ('PAUT', '150A~125A-야간'), ('PAUT', '100A이하'), ('PAUT', '100A이하-야간'), ('PAUT', '소계'),
             ('RT', '150A~100A'), ('RT', '150A~100A-야간'), ('RT', '80A이하'), ('RT', '80A이하-야간'), ('RT', '소계'),
             ('MT', '전체(주간)'), ('MT', '전체(야간)'),
             ('PT', '전체(주간)'), ('PT', '전체(야간)')
@@ -238,7 +239,10 @@ class DailyWorkLogTab(ttk.Frame):
         self.default_qty = {
             ('PAUT', '300A이상'): '121', ('PAUT', '300A이상-야간'): '584',
             ('PAUT', '250A'): '4', ('PAUT', '200A'): '4',
-            ('PAUT', '200A-야간'): '2', ('PAUT', '소계'): '715',
+            ('PAUT', '200A-야간'): '2', 
+            ('PAUT', '150A~125A'): '0', ('PAUT', '150A~125A-야간'): '0',
+            ('PAUT', '100A이하'): '0', ('PAUT', '100A이하-야간'): '0',
+            ('PAUT', '소계'): '715',
             ('RT', '150A~100A'): '293', ('RT', '150A~100A-야간'): '43',
             ('RT', '80A이하'): '105', ('RT', '80A이하-야간'): '49',
             ('RT', '소계'): '490', ('MT', '전체(주간)'): '26',
@@ -559,7 +563,9 @@ class DailyWorkLogTab(ttk.Frame):
                 thk_mapping = {
                     "1100": "11.1", "1000": "11.1", "900": "10.3", "850": "10.3", "800": "9.5",
                     "750": "8.7", "700": "8.7", "650": "8.7", "600": "9.5", "550": "9.5",
-                    "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4", "150": "4.5", "100": "4.5", "80": "4.5"
+                    "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4", 
+                    "150": "5.5", "125": "5.1", "100": "4.9", "80": "4.5", "65": "4.5", "50": "3.9", 
+                    "40": "3.7", "32": "3.6", "25": "3.4", "20": "2.9"
                 }
                 lookup_size = str(pipe).replace("A", "").strip()
                 if lookup_size in thk_mapping:
@@ -1494,7 +1500,7 @@ class DailyWorkLogTab(ttk.Frame):
                 return f"{v:.4f}"
             return f"{v:.1f}" if v % 1 else f"{int(v)}"
             
-        paut_keys = ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간']
+        paut_keys = ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간', '150A~125A', '150A~125A-야간', '100A이하', '100A이하-야간']
         paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in paut_keys)
         paut_prev = sum(float(self.qty_entries[f"PAUT_{s}"]['전일누계'].get() or 0) for s in paut_keys)
         paut_today = sum(float(self.qty_entries[f"PAUT_{s}"]['금일작업'].get() or 0) for s in paut_keys)
@@ -1573,7 +1579,10 @@ class DailyWorkLogTab(ttk.Frame):
                     spec_key = '200A'
                     if size_val >= 300: spec_key = '300A이상'
                     elif size_val == 250: spec_key = '250A'
-                    if shift_str == '야간' and spec_key in ['300A이상', '200A']:
+                    elif size_val == 200: spec_key = '200A'
+                    elif 125 <= size_val <= 150: spec_key = '150A~125A'
+                    elif size_val <= 100: spec_key = '100A이하'
+                    if shift_str == '야간' and spec_key in ['300A이상', '200A', '150A~125A', '100A이하']:
                         spec_key += '-야간'
                     comp = f"PAUT_{spec_key}"
                     if comp in today_qty: today_qty[comp] += val
