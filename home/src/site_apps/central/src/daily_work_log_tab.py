@@ -228,7 +228,7 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Label(mid_frame, text=h, font=('맑은 고딕', 9, 'bold')).grid(row=0, column=col, padx=1, pady=2)
             
         self.qty_rows = [
-            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '200A'), ('PAUT', '200A-야간'), 
+            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '250A-야간'), ('PAUT', '200A'), ('PAUT', '200A-야간'), 
             ('PAUT', '150A~125A'), ('PAUT', '150A~125A-야간'), ('PAUT', '100A이하'), ('PAUT', '100A이하-야간'), ('PAUT', '소계'),
             ('RT', '150A~100A'), ('RT', '150A~100A-야간'), ('RT', '80A이하'), ('RT', '80A이하-야간'), ('RT', '소계'),
             ('MT', '전체(주간)'), ('MT', '전체(야간)'),
@@ -237,17 +237,17 @@ class DailyWorkLogTab(ttk.Frame):
         
         self.qty_entries = {}
         self.default_qty = {
-            ('PAUT', '300A이상'): '121', ('PAUT', '300A이상-야간'): '584',
-            ('PAUT', '250A'): '4', ('PAUT', '200A'): '4',
+            ('PAUT', '300A이상'): '129', ('PAUT', '300A이상-야간'): '624',
+            ('PAUT', '250A'): '4', ('PAUT', '250A-야간'): '1', ('PAUT', '200A'): '4',
             ('PAUT', '200A-야간'): '2', 
-            ('PAUT', '150A~125A'): '0', ('PAUT', '150A~125A-야간'): '0',
-            ('PAUT', '100A이하'): '0', ('PAUT', '100A이하-야간'): '0',
-            ('PAUT', '소계'): '715',
+            ('PAUT', '150A~125A'): '1', ('PAUT', '150A~125A-야간'): '1',
+            ('PAUT', '100A이하'): '1', ('PAUT', '100A이하-야간'): '1',
+            ('PAUT', '소계'): '768',
             ('RT', '150A~100A'): '293', ('RT', '150A~100A-야간'): '43',
             ('RT', '80A이하'): '105', ('RT', '80A이하-야간'): '49',
             ('RT', '소계'): '490', ('MT', '전체(주간)'): '26',
-            ('MT', '전체(야간)'): '0', ('PT', '전체(주간)'): '26',
-            ('PT', '전체(야간)'): '0',
+            ('MT', '전체(야간)'): '1', ('PT', '전체(주간)'): '26',
+            ('PT', '전체(야간)'): '1',
         }
         for row_idx, (method, spec) in enumerate(self.qty_rows, start=1):
             ttk.Label(mid_frame, text=method).grid(row=row_idx, column=0, padx=1, pady=2)
@@ -1373,17 +1373,12 @@ class DailyWorkLogTab(ttk.Frame):
             for field in ['예상량', '금일작업', '총누계', '공정률', '불량', '불량률', '비고']:
                 entries[field].delete(0, tk.END)
                 current_value = curr_qty.get(field, '')
-                if field == '예상량' and not str(current_value).strip():
-                    previous_value = (
-                        prev_data.get('qty_data', {})
-                        .get(comp_key, {})
-                        .get('예상량', '')
-                    )
-                    if str(previous_value).strip():
-                        current_value = previous_value
-                    else:
-                        method, spec = comp_key.split('_', 1)
-                        current_value = self.default_qty.get((method, spec), '')
+                
+                # [FIX] Force expected volume (예상량) to ALWAYS load from updated defaults
+                if field == '예상량':
+                    method, spec = comp_key.split('_', 1)
+                    current_value = self.default_qty.get((method, spec), '')
+                    
                 if not has_current_data:
                     if field == '금일작업':
                         current_value = ''
@@ -1393,14 +1388,21 @@ class DailyWorkLogTab(ttk.Frame):
                         current_value = prev_qty.get(field, '')
                     elif field == '공정률':
                         previous_total = prev_qty.get('총누계', '0') or '0'
-                        expected_value = curr_qty.get('예상량', '')
-                        if not str(expected_value).strip():
-                            expected_value = prev_qty.get('예상량', '')
-                        if not str(expected_value).strip():
-                            method, spec = comp_key.split('_', 1)
-                            expected_value = self.default_qty.get((method, spec), '')
+                        method, spec = comp_key.split('_', 1)
+                        expected_value = self.default_qty.get((method, spec), '')
                         try:
                             total_num = float(str(previous_total).replace(',', ''))
+                            expected_num = float(str(expected_value).replace(',', ''))
+                            current_value = f"{(total_num / expected_num) * 100:.1f}" if expected_num > 0 else ''
+                        except (TypeError, ValueError):
+                            current_value = ''
+                else:
+                    if field == '공정률':
+                        current_total = curr_qty.get('총누계', '0') or '0'
+                        method, spec = comp_key.split('_', 1)
+                        expected_value = self.default_qty.get((method, spec), '')
+                        try:
+                            total_num = float(str(current_total).replace(',', ''))
                             expected_num = float(str(expected_value).replace(',', ''))
                             current_value = f"{(total_num / expected_num) * 100:.1f}" if expected_num > 0 else ''
                         except (TypeError, ValueError):
@@ -1500,7 +1502,7 @@ class DailyWorkLogTab(ttk.Frame):
                 return f"{v:.4f}"
             return f"{v:.1f}" if v % 1 else f"{int(v)}"
             
-        paut_keys = ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간', '150A~125A', '150A~125A-야간', '100A이하', '100A이하-야간']
+        paut_keys = ['300A이상', '300A이상-야간', '250A', '250A-야간', '200A', '200A-야간', '150A~125A', '150A~125A-야간', '100A이하', '100A이하-야간']
         paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in paut_keys)
         paut_prev = sum(float(self.qty_entries[f"PAUT_{s}"]['전일누계'].get() or 0) for s in paut_keys)
         paut_today = sum(float(self.qty_entries[f"PAUT_{s}"]['금일작업'].get() or 0) for s in paut_keys)
@@ -1652,7 +1654,7 @@ class DailyWorkLogTab(ttk.Frame):
                 entries['공정률'].insert(0, f"{progress:.1f}")
 
         # Subtotals for Qty
-        paut_keys = ['300A이상', '300A이상-야간', '250A', '200A', '200A-야간']
+        paut_keys = ['300A이상', '300A이상-야간', '250A', '250A-야간', '200A', '200A-야간', '150A~125A', '150A~125A-야간', '100A이하', '100A이하-야간']
         paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in paut_keys)
         paut_prev = sum(float(self.qty_entries[f"PAUT_{s}"]['전일누계'].get() or 0) for s in paut_keys)
         paut_today = sum(float(self.qty_entries[f"PAUT_{s}"]['금일작업'].get() or 0) for s in paut_keys)

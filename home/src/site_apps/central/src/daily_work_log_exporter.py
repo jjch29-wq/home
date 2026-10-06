@@ -111,7 +111,7 @@ class DailyWorkLogExporter:
             set_cell(f'{col_letter}8', header, font=self.font_bold, fill=self.fill_header, align=self.align_nowrap)
 
         qty_rows = [
-            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '200A'), ('PAUT', '200A-야간'), 
+            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '250A-야간'), ('PAUT', '200A'), ('PAUT', '200A-야간'), 
             ('PAUT', '150A~125A'), ('PAUT', '150A~125A-야간'), ('PAUT', '100A이하'), ('PAUT', '100A이하-야간'), ('PAUT', '소계'),
             ('RT', '150A~100A'), ('RT', '150A~100A-야간'), ('RT', '80A이하'), ('RT', '80A이하-야간'), ('RT', '소계'),
             ('MT', '전체(주간)'), ('MT', '전체(야간)'),

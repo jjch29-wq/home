@@ -669,7 +669,7 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="전체 선택", command=self.select_all_records).pack(side=tk.RIGHT, padx=5)
 
-        self.subtotal_var = tk.StringVar(value="[소계] 총 실물량: 0.0  |  총 공급가액: 0 원")
+        self.subtotal_var = tk.StringVar(value="[소계] 길이 검사: 0.0000 M  |  포인트 검사: 0 매/Point  |  총 공급가액: 0 원")
         subtotal_lbl = ttk.Label(bottom_frame, textvariable=self.subtotal_var, font=("Arial", 11, "bold"), foreground="blue")
         subtotal_lbl.pack(side=tk.BOTTOM, anchor=tk.E, pady=(5, 5))
 
@@ -1089,16 +1089,23 @@ class NDTCalculatorTab(ttk.Frame):
         for k in self.contract_vars:
             self.contract_vars[k]["curr_qty"].set("0")
             
-        total_qty = 0.0
+        total_meters = 0.0
+        total_points = 0.0
         total_amt = 0
             
         for rec in self.records:
-            total_qty += float(rec.get("qty", 0.0))
+            qty = float(rec.get("qty", 0.0))
+            ndt_type = rec.get("ndt_type", "")
+            
+            if "PAUT" in ndt_type or "UT" in ndt_type:
+                total_meters += qty
+            else:
+                total_points += qty
+                
             total_amt += int(rec.get("subtotal", 0))
             
             loc = "플랜트(관리소)" if "관리소" in rec["loc"] or "플랜트" in rec.get("loc_type", rec["loc"]) else "열배관"
             t_time = rec.get("work_time", "일반")
-            ndt_type = rec["ndt_type"]
             mat = ""
             mat = f"{rec['ndt_type']}_{rec['material_type']}"
                 
@@ -1110,7 +1117,7 @@ class NDTCalculatorTab(ttk.Frame):
                     self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
                     
         if hasattr(self, 'subtotal_var'):
-            self.subtotal_var.set(f"[소계] 총 실물량: {total_qty:,.4f}  |  총 공급가액: {total_amt:,} 원")
+            self.subtotal_var.set(f"[소계] 길이 검사: {total_meters:,.4f} M  |  포인트 검사: {int(total_points):,} 매/Point  |  총 공급가액: {total_amt:,} 원")
                     
         self.export_billing_data()
 
@@ -2354,7 +2361,8 @@ class NDTCalculatorTab(ttk.Frame):
                             pipe_size = str(nr.get("관경", "")).strip()
                             
                             size_matched = True
-                            if m_type and pipe_size:
+                            # [FIX] RT의 경우 m_type이 필름 사이즈(예: 3 1/3 x 6")이므로 관경 크기 비교를 생략해야 함
+                            if m_type and pipe_size and any(x in n_type for x in ["PAUT", "UT"]):
                                 import re
                                 m1 = re.search(r'(\d+)', pipe_size)
                                 m2_all = re.findall(r'(\d+)', m_type)
@@ -2401,7 +2409,11 @@ class NDTCalculatorTab(ttk.Frame):
                                 try: sub_groups[sg_key]["length"] += float(nr.get("PAUT", 0) or 0)
                                 except: pass
                             elif "RT" in method:
-                                try: sub_groups[sg_key]["length"] += float(nr.get("RT", 0) or 0)
+                                try:
+                                    rt_qty = nr.get("RT_OR", "")
+                                    if not rt_qty: rt_qty = nr.get("RT_RE", "")
+                                    if not rt_qty: rt_qty = "1"
+                                    sub_groups[sg_key]["length"] += float(rt_qty)
                                 except: pass
                             elif "PT" in method:
                                 try: sub_groups[sg_key]["length"] += float(nr.get("PT", 0) or 0)
@@ -2441,8 +2453,8 @@ class NDTCalculatorTab(ttk.Frame):
                 sum_row += 1
                 start_data_row = sum_row
                 
-                # 정렬: 섹션 -> 라인번호 -> 규격
-                sorted_keys = sorted(work_summary.keys(), key=lambda x: (x[0], x[1], x[2]))
+                # [FIX] 정렬: 규격(검사방법) -> 섹션 -> 라인번호 (검사 방법별로 그룹화)
+                sorted_keys = sorted(work_summary.keys(), key=lambda x: (x[2], x[0], x[1]))
                 
                 # 단수 조정(Fraction Adjustment): 규격별로 수량을 합산하여 총 금액을 구한 뒤, 각 행에 분배하여 1원 단위 오차 방지
                 spec_totals = {}
@@ -2467,66 +2479,79 @@ class NDTCalculatorTab(ttk.Frame):
                             totals["allocated_amt"] += row_amt
                         work_summary[key]["calculated_amt"] = row_amt
                 
-                for key in sorted_keys:
-                    data = work_summary[key]
-                    sec, l_no, spec, unit, c_price = key
-                    calculated_amt = data.get("calculated_amt", 0)
+                from itertools import groupby
+                for unit_val, keys_group in groupby(sorted_keys, key=lambda x: x[3]):
+                    keys_group = list(keys_group)
                     
-                    if data["qty"] == 0 and calculated_amt == 0: continue
+                    start_data_row = sum_row
+                    has_data = False
+                    for key in keys_group:
+                        data = work_summary[key]
+                        sec, l_no, spec, unit, c_price = key
+                        calculated_amt = data.get("calculated_amt", 0)
+                        
+                        if data["qty"] == 0 and calculated_amt == 0: continue
+                        has_data = True
+                        
+                        ws_summary.Cells(sum_row, 1).Value = sec
+                        ws_summary.Cells(sum_row, 2).Value = l_no
+                        ws_summary.Cells(sum_row, 3).Value = f"{spec} ({unit})"
+                        ws_summary.Cells(sum_row, 4).Value = int(data["places"])
+                        
+                        ws_summary.Cells(sum_row, 5).Value = int(c_price)
+                        ws_summary.Cells(sum_row, 5).NumberFormat = "#,##0"
+                        
+                        if unit == "M":
+                            ws_summary.Cells(sum_row, 6).Value = round(data["qty"], 4)
+                            ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
+                        else:
+                            ws_summary.Cells(sum_row, 6).Value = int(data["qty"])
+                            ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0;-#,##0;"-"'
+                            
+                        ws_summary.Cells(sum_row, 7).Value = calculated_amt
+                        ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
+                        
+                        for col in range(1, 8):
+                            cell = ws_summary.Cells(sum_row, col)
+                            cell.Borders.LineStyle = 1
+                            if col in (1, 2, 4): 
+                                cell.HorizontalAlignment = -4108
+                            elif col == 3: 
+                                cell.HorizontalAlignment = -4131
+                        
+                        sum_row += 1
+                        
+                    if not has_data: continue
+                        
+                    # 소계 렌더링
+                    ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 5)).Merge()
+                    ws_summary.Cells(sum_row, 1).Value = f"소 계 ({unit_val})"
+                    ws_summary.Cells(sum_row, 1).HorizontalAlignment = -4108
+                    ws_summary.Cells(sum_row, 1).Font.Bold = True
+                    ws_summary.Cells(sum_row, 1).Interior.Color = 15987699
                     
-                    ws_summary.Cells(sum_row, 1).Value = sec
-                    ws_summary.Cells(sum_row, 2).Value = l_no
-                    ws_summary.Cells(sum_row, 3).Value = f"{spec} ({unit})"
-                    ws_summary.Cells(sum_row, 4).Value = int(data["places"])
-                    
-                    ws_summary.Cells(sum_row, 5).Value = int(c_price)
-                    ws_summary.Cells(sum_row, 5).NumberFormat = "#,##0"
-                    
-                    if unit == "M":
-                        ws_summary.Cells(sum_row, 6).Value = round(data["qty"], 4)
+                    qty_sum_formula = f"=SUM(F{start_data_row}:F{sum_row-1})" if sum_row > start_data_row else "0"
+                    ws_summary.Cells(sum_row, 6).Formula = qty_sum_formula
+                    if unit_val == "M":
                         ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
                     else:
-                        ws_summary.Cells(sum_row, 6).Value = int(data["qty"])
                         ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0;-#,##0;"-"'
-                        
-                    ws_summary.Cells(sum_row, 7).Value = calculated_amt
+                    ws_summary.Cells(sum_row, 6).Font.Bold = True
+                    ws_summary.Cells(sum_row, 6).Interior.Color = 15987699
+                    
+                    sum_formula = f"=SUM(G{start_data_row}:G{sum_row-1})" if sum_row > start_data_row else "0"
+                    ws_summary.Cells(sum_row, 7).Formula = sum_formula
                     ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
+                    ws_summary.Cells(sum_row, 7).Font.Bold = True
+                    ws_summary.Cells(sum_row, 7).Interior.Color = 15987699
                     
                     for col in range(1, 8):
-                        cell = ws_summary.Cells(sum_row, col)
-                        cell.Borders.LineStyle = 1
-                        if col in (1, 2, 4): 
-                            cell.HorizontalAlignment = -4108
-                        elif col == 3: 
-                            cell.HorizontalAlignment = -4131
-                    
+                        ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
+    
+                    company_subtotal_rows.append(sum_row)
                     sum_row += 1
                     
-                # 소계 렌더링
-                ws_summary.Range(ws_summary.Cells(sum_row, 1), ws_summary.Cells(sum_row, 5)).Merge()
-                ws_summary.Cells(sum_row, 1).Value = "소 계"
-                ws_summary.Cells(sum_row, 1).HorizontalAlignment = -4108
-                ws_summary.Cells(sum_row, 1).Font.Bold = True
-                ws_summary.Cells(sum_row, 1).Interior.Color = 15987699
-                
-
-                qty_sum_formula = f"=SUM(F{start_data_row}:F{sum_row-1})" if sum_row > start_data_row else "0"
-                ws_summary.Cells(sum_row, 6).Formula = qty_sum_formula
-                ws_summary.Cells(sum_row, 6).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
-                ws_summary.Cells(sum_row, 6).Font.Bold = True
-                ws_summary.Cells(sum_row, 6).Interior.Color = 15987699
-                sum_formula = f"=SUM(G{start_data_row}:G{sum_row-1})" if sum_row > start_data_row else "0"
-                ws_summary.Cells(sum_row, 7).Formula = sum_formula
-                ws_summary.Cells(sum_row, 7).NumberFormat = '#,##0;-#,##0;"-"'
-                ws_summary.Cells(sum_row, 7).Font.Bold = True
-                ws_summary.Cells(sum_row, 7).Interior.Color = 15987699
-                
-                for col in range(1, 8):
-                    ws_summary.Cells(sum_row, col).Borders.LineStyle = 1
-
-                company_subtotal_rows.append(sum_row)
-                    
-                sum_row += 3
+                sum_row += 2
             
             # --- 전체 공급가액 / 부가가치세 / 합계 ---
             supply_row = sum_row
@@ -2645,93 +2670,140 @@ class NDTCalculatorTab(ttk.Frame):
             total_points = 0
             total_meters = 0.0
             
+            from itertools import groupby
+            
             data_start_row = cont_row  # 데이터 시작 행 기록
             idx_cont = 1
-            for r in all_ndt_results:
-                if not str(r.get("업체", "")).strip() and not str(r.get("Joint No.", "")).strip():
-                    continue
-                    
-                ws_cont.Cells(cont_row, 1).Value = idx_cont
-                ws_cont.Cells(cont_row, 2).Value = r.get("업체", "")
-                ws_cont.Cells(cont_row, 3).Value = r.get("검사방법", "")
-                ws_cont.Cells(cont_row, 4).Value = r.get("구간", "")
-                ws_cont.Cells(cont_row, 5).Value = r.get("라인번호", "")
-                ws_cont.Cells(cont_row, 6).Value = r.get("Joint No.", "")
-                ws_cont.Cells(cont_row, 7).Value = r.get("관경", "")
-                ws_cont.Cells(cont_row, 8).Value = r.get("두께", "")
-                ws_cont.Cells(cont_row, 9).Value = r.get("용접사", "")
+            for (comp, method), group_iter in groupby(all_ndt_results, key=lambda x: (str(x.get("업체", "")).strip(), str(x.get("검사방법", "")).strip())):
+                if not comp: continue
+                group = list(group_iter)
                 
-                m_type = str(r.get("검사방법", "")).strip()
-                if "PAUT" in m_type:
-                    qty = r.get("PAUT", "")
-                elif "RT" in m_type:
-                    qty = r.get("RT_OR", "")
-                    if not qty: qty = r.get("RT_RE", "")
-                    if not qty: qty = "1"
-                elif "MT" in m_type:
-                    qty = r.get("MT", "")
-                elif "PT" in m_type:
-                    qty = r.get("PT", "")
-                else:
-                    qty = r.get(m_type, "")
-                    
-                try:
-                    q_val = float(qty) if str(qty).strip() else 0.0
-                except ValueError:
-                    q_val = 0.0
-                    
-                if "PAUT" in m_type or "UT" in m_type:
-                    total_meters += q_val
-                else:
-                    total_points += q_val
-                
-                # [FIX] 수량을 숫자로 저장해야 SUBTOTAL 수식이 작동함
-                ws_cont.Cells(cont_row, 10).Value = q_val if q_val != 0.0 else (qty if str(qty).strip() else "")
-                ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
-                ws_cont.Cells(cont_row, 11).Value = r.get("결과", "")
-                
-                for c in range(1, 12):
-                    cell = ws_cont.Cells(cont_row, c)
-                    cell.Borders.LineStyle = 1
-                    cell.HorizontalAlignment = -4108
-                
-                idx_cont += 1
+                ws_cont.Cells(cont_row, 1).Value = f"■ {comp} - {method}"
+                ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 11)).Merge()
+                ws_cont.Cells(cont_row, 1).Font.Bold = True
+                ws_cont.Cells(cont_row, 1).Interior.Color = 15132390
+                ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
+                for c in range(1, 12): ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
                 cont_row += 1
-            
-            data_end_row = cont_row - 1  # 데이터 마지막 행
                 
-            if all_ndt_results:
-                ws_cont.Cells(cont_row, 1).Value = "총 누적 물량"
+                start_group_row = cont_row
+                for r in group:
+                    if not str(r.get("업체", "")).strip() and not str(r.get("Joint No.", "")).strip():
+                        continue
+                        
+                    ws_cont.Cells(cont_row, 1).Value = idx_cont
+                    ws_cont.Cells(cont_row, 2).Value = comp
+                    ws_cont.Cells(cont_row, 3).Value = method
+                    ws_cont.Cells(cont_row, 4).Value = r.get("구간", "")
+                    ws_cont.Cells(cont_row, 5).Value = r.get("라인번호", "")
+                    ws_cont.Cells(cont_row, 6).Value = r.get("Joint No.", "")
+                    ws_cont.Cells(cont_row, 7).Value = r.get("관경", "")
+                    ws_cont.Cells(cont_row, 8).Value = r.get("두께", "")
+                    ws_cont.Cells(cont_row, 9).Value = r.get("용접사", "")
+                    
+                    m_type = method
+                    if "PAUT" in m_type:
+                        qty = r.get("PAUT", "")
+                    elif "RT" in m_type:
+                        qty = r.get("RT_OR", "")
+                        if not qty: qty = r.get("RT_RE", "")
+                        if not qty: qty = "1"
+                    elif "MT" in m_type:
+                        qty = r.get("MT", "")
+                    elif "PT" in m_type:
+                        qty = r.get("PT", "")
+                    else:
+                        qty = r.get(m_type, "")
+                        
+                    try:
+                        q_val = float(qty) if str(qty).strip() else 0.0
+                    except ValueError:
+                        q_val = 0.0
+                        
+                    if "PAUT" in m_type or "UT" in m_type:
+                        total_meters += q_val
+                    else:
+                        total_points += q_val
+                    
+                    # [FIX] 수량을 숫자로 저장해야 SUBTOTAL 수식이 작동함
+                    ws_cont.Cells(cont_row, 10).Value = q_val if q_val != 0.0 else (qty if str(qty).strip() else "")
+                    ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0.0000;-#,##0.0000;"-"' if ("PAUT" in m_type or "UT" in m_type) else '#,##0;-#,##0;"-"'
+                    ws_cont.Cells(cont_row, 11).Value = r.get("결과", "")
+                    
+                    for c in range(1, 12):
+                        cell = ws_cont.Cells(cont_row, c)
+                        cell.Borders.LineStyle = 1
+                        cell.HorizontalAlignment = -4108
+                    
+                    idx_cont += 1
+                    cont_row += 1
+                
+                end_group_row = cont_row - 1
+                
+                unit_str = "m" if ("PAUT" in method or "UT" in method) else ("매" if "RT" in method else "Point")
+                format_str = '#,##0.0000;-#,##0.0000;"-"' if unit_str == "m" else '#,##0;-#,##0;"-"'
+                
+                ws_cont.Cells(cont_row, 1).Value = f"{comp} {method} 소계"
                 ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
                 ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
                 ws_cont.Cells(cont_row, 1).Font.Bold = True
                 ws_cont.Cells(cont_row, 1).Interior.Color = 14277081
                 
-                # [FIX] 필터 시 자동 합산: SUBTOTAL(103)=COUNTA(가시행), SUBTOTAL(9)=SUM(가시행)
-                # 셀 10: 개소 수 (필터된 행 수)
-                ws_cont.Cells(cont_row, 10).Formula = (
-                    f'=TEXT(SUBTOTAL(9,J{data_start_row}:J{data_end_row}),"0.0000") & " m"'
-                )
+                ws_cont.Cells(cont_row, 10).Formula = f'=SUBTOTAL(9, J{start_group_row}:J{end_group_row})'
+                ws_cont.Cells(cont_row, 10).NumberFormat = format_str
                 ws_cont.Cells(cont_row, 10).Font.Bold = True
-                ws_cont.Cells(cont_row, 10).Font.Color = 255
-                ws_cont.Cells(cont_row, 10).HorizontalAlignment = -4108
                 ws_cont.Cells(cont_row, 10).Interior.Color = 14277081
                 ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
                 
-                # 셀 11: 검사량 합계 (필터된 수량 합)
-                ws_cont.Cells(cont_row, 11).Formula = (
-                    f'=""'
-                )
+                ws_cont.Cells(cont_row, 11).Value = unit_str
                 ws_cont.Cells(cont_row, 11).Font.Bold = True
-                ws_cont.Cells(cont_row, 11).Font.Color = 255
                 ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
                 ws_cont.Cells(cont_row, 11).Interior.Color = 14277081
                 ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
                 
                 for c in range(1, 10):
                     ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
-                    if c < 10:
-                        ws_cont.Cells(cont_row, c).Interior.Color = 14277081
+                    
+                cont_row += 1
+            
+            if all_ndt_results:
+                ws_cont.Cells(cont_row, 1).Value = "총 누적 물량 (길이 검사)"
+                ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
+                ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
+                ws_cont.Cells(cont_row, 1).Font.Bold = True
+                ws_cont.Cells(cont_row, 1).Interior.Color = 10066329
+                ws_cont.Cells(cont_row, 1).Font.Color = 16777215
+                
+                ws_cont.Cells(cont_row, 10).Value = total_meters
+                ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0.0000;-#,##0.0000;"-"'
+                ws_cont.Cells(cont_row, 10).Font.Bold = True
+                ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
+                
+                ws_cont.Cells(cont_row, 11).Value = "m"
+                ws_cont.Cells(cont_row, 11).Font.Bold = True
+                ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
+                ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
+                for c in range(1, 10): ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
+                
+                cont_row += 1
+                
+                ws_cont.Cells(cont_row, 1).Value = "총 누적 물량 (포인트 검사)"
+                ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
+                ws_cont.Cells(cont_row, 1).HorizontalAlignment = -4108
+                ws_cont.Cells(cont_row, 1).Font.Bold = True
+                ws_cont.Cells(cont_row, 1).Interior.Color = 10066329
+                ws_cont.Cells(cont_row, 1).Font.Color = 16777215
+                
+                ws_cont.Cells(cont_row, 10).Value = int(total_points)
+                ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0;-#,##0;"-"'
+                ws_cont.Cells(cont_row, 10).Font.Bold = True
+                ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
+                
+                ws_cont.Cells(cont_row, 11).Value = "매/Point"
+                ws_cont.Cells(cont_row, 11).Font.Bold = True
+                ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
+                ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
+                for c in range(1, 10): ws_cont.Cells(cont_row, c).Borders.LineStyle = 1
                 
                 cont_row += 1
             

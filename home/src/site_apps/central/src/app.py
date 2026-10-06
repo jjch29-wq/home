@@ -2244,13 +2244,20 @@ class MaterialManager:
             
         combobox.bind('<<ComboboxSelected>>', _on_selected, add='+')
         
-        # [NEW] Restore full list when user clicks anywhere on the combobox (including dropdown arrow)
-        def _on_click(e=None):
+        # [FIX] Use postcommand instead of <ButtonPress-1> to restore the full list.
+        # Modifying values during <ButtonPress-1> can break Tkinter dropdown selection (관경 선택 불가능 현상 수정).
+        def _on_post():
             if not getattr(combobox, '_auto_opening', False):
                 try:
-                    combobox['values'] = source_getter()
+                    new_vals = source_getter()
+                    # Only update if changed to prevent breaking selection internally
+                    if list(combobox['values']) != list(new_vals):
+                        combobox['values'] = new_vals
                 except: pass
-        combobox.bind('<ButtonPress-1>', _on_click, add='+')
+        if isinstance(combobox, ttk.Combobox):
+            try:
+                combobox.config(postcommand=_on_post)
+            except Exception: pass
 
     def update_registration_combos(self):
         """Update registration comboboxes with unique values from database and centralized list"""
