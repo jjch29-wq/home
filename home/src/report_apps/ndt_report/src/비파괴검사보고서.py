@@ -343,12 +343,12 @@ class PMIReportApp:
         self.kogas_extracted_data = []
         
         # --- Column Keys Initialization ---
-        self.column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Result"]
-        self.rt_column_keys = ["selected", "No", "Date", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
+        self.column_keys = ["selected", "No", "Date", "Report No", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Result"]
+        self.rt_column_keys = ["selected", "No", "Date", "Report No", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Deg", "Acc", "Rej", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Result", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
-        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
-        self.mt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
-        self.paut_column_keys = ["selected", "No", "Date", "ISO", "Joint", "Size", "Loc", "T", "Acc", "Rej", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
+        self.pt_column_keys = ["selected", "No", "Date", "Report No", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
+        self.mt_column_keys = ["selected", "No", "Date", "Report No", "Dwg", "Joint", "Loc", "T", "Mat", "Deg", "Result", "Welder", "Remarks"]
+        self.paut_column_keys = ["selected", "No", "Date", "Report No", "ISO", "Joint", "Size", "Loc", "T", "Acc", "Rej", "Mat", "Grade", "Nature", "Type", "a/l", "a/t", "Evaluation", "Remarks"]
         
         # --- PT State Variables ---
         self.pt_target_file_path = tk.StringVar(value=self.config.get('PT_TARGET_PATH', ""))
@@ -367,12 +367,12 @@ class PMIReportApp:
         self.kogas_item_idx_map = []
         
         # [REFINED] Column Keys Mapping (Must match Treeview column count and order)
-        self.column_keys = ["_status", "selected", "No", "Date", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
-        self.rt_column_keys = ["selected", "No", "Date", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
+        self.column_keys = ["_status", "selected", "No", "Date", "Report No", "Dwg", "Joint", "Loc", "Ni", "Cr", "Mo", "Grade"]
+        self.rt_column_keys = ["selected", "No", "Date", "Report No", "Sec", "Dwg", "Joint", "Loc", "T", "Mat", "Size", "Acc", "Rej", "Deg", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "Welder", "Remarks"]
         self.kogas_column_keys = list(self.rt_column_keys)
-        self.pt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "NPS", "Thk.", "Material", "TestItem", "Result", "Welder", "Remarks"]
-        self.mt_column_keys = ["selected", "No", "Date", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
-        self.paut_column_keys = ["selected", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
+        self.pt_column_keys = ["selected", "No", "Date", "Report No", "Dwg", "Joint", "NPS", "Thk.", "Material", "TestItem", "Result", "Welder", "Remarks"]
+        self.mt_column_keys = ["selected", "No", "Date", "Report No", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
+        self.paut_column_keys = ["selected", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
         
         self.date_listbox = None
     
@@ -662,15 +662,27 @@ class PMIReportApp:
                     # [NEW] Restore custom column layouts if they exist
                     if 'column_keys' in saved_data and isinstance(saved_data['column_keys'], list):
                         self.column_keys = list(saved_data['column_keys'])
+                        if "Report No" not in self.column_keys:
+                            try: self.column_keys.insert(self.column_keys.index("Date") + 1, "Report No")
+                            except: self.column_keys.insert(3, "Report No")
                     if 'rt_column_keys' in saved_data and isinstance(saved_data['rt_column_keys'], list):
                         self.rt_column_keys = list(saved_data['rt_column_keys'])
+                        if "Report No" not in self.rt_column_keys:
+                            try: self.rt_column_keys.insert(self.rt_column_keys.index("Date") + 1, "Report No")
+                            except: self.rt_column_keys.insert(3, "Report No")
                         if "Sec" not in self.rt_column_keys:
-                            insert_at = self.rt_column_keys.index("Date") + 1 if "Date" in self.rt_column_keys else 3
+                            insert_at = self.rt_column_keys.index("Date") + 2 if "Date" in self.rt_column_keys else 4
                             self.rt_column_keys.insert(insert_at, "Sec")
                     if 'kogas_column_keys' in saved_data and isinstance(saved_data['kogas_column_keys'], list):
                         self.kogas_column_keys = list(saved_data['kogas_column_keys'])
+                        if "Report No" not in self.kogas_column_keys:
+                            try: self.kogas_column_keys.insert(self.kogas_column_keys.index("Date") + 1, "Report No")
+                            except: self.kogas_column_keys.insert(3, "Report No")
                     if 'pt_column_keys' in saved_data and isinstance(saved_data['pt_column_keys'], list):
                         self.pt_column_keys = list(saved_data['pt_column_keys'])
+                        if "Report No" not in self.pt_column_keys:
+                            try: self.pt_column_keys.insert(self.pt_column_keys.index("Date") + 1, "Report No")
+                            except: self.pt_column_keys.insert(3, "Report No")
                         # [마이그레이션] 구버전 config에 Thk.가 없으면 Joint 뒤에 삽입
                         if "Thk." not in self.pt_column_keys:
                             try:
@@ -688,13 +700,16 @@ class PMIReportApp:
                     try:
                         self.pt_column_keys.insert(self.pt_column_keys.index("Joint") + 1, "NPS")
                     except ValueError:
-                        self.pt_column_keys.insert(5, "NPS")
+                        self.pt_column_keys.insert(6, "NPS")
                     if 'mt_column_keys' in saved_data:
                         self.mt_column_keys = list(saved_data['mt_column_keys'])
+                        if "Report No" not in self.mt_column_keys:
+                            try: self.mt_column_keys.insert(self.mt_column_keys.index("Date") + 1, "Report No")
+                            except: self.mt_column_keys.insert(3, "Report No")
                     if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
                         loaded_paut_keys = list(saved_data['paut_column_keys'])
                         # [FIX] Ensure new columns are added even if loading from old config
-                        default_paut_keys = ["selected", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
+                        default_paut_keys = ["selected", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
                         for dk in default_paut_keys:
                             if dk not in loaded_paut_keys:
                                 insert_idx = default_paut_keys.index(dk)
@@ -2457,7 +2472,7 @@ class PMIReportApp:
         tk.Label(header_info, textvariable=self.file_info_vars['PT'], background="#ffffff", 
                  foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
 
-        self.pt_display_cols = ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Size", "Thk.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
+        self.pt_display_cols = ["V", "No", "Date", "Report No", "ISO/Dwg", "Joint No.", "Size", "Thk.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
         saved_widths = self.config.get("PT_COL_WIDTHS", {})
         default_widths = {"V": 40, "No": 50, "Date": 90, "ISO/Dwg": 300, "Joint No.": 120, "Size": 60, "Thk.": 70, "Material": 100, "Test Item": 100, "Result": 80, "Welder No": 100}
 
@@ -2466,6 +2481,7 @@ class PMIReportApp:
         for col in self.pt_preview_tree["columns"]:
             name_key = f"PT_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').upper()}"
             if col == "Date": name_key = "PT_NAME_DATE"
+            elif col == "Report No": name_key = "PT_NAME_REPORTNO"
             elif col == "ISO/Dwg": name_key = "PT_NAME_DWG"
             elif col == "Joint No.": name_key = "PT_NAME_JOINT"
             elif col == "Material": name_key = "PT_NAME_MAT"
@@ -2514,6 +2530,7 @@ class PMIReportApp:
         for col in self.mt_preview_tree["columns"]:
             name_key = f"MT_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').upper()}"
             if col == "Date": name_key = "MT_NAME_DATE"
+            elif col == "Report No": name_key = "MT_NAME_REPORTNO"
             elif col == "ISO/Dwg": name_key = "MT_NAME_DWG"
             elif col == "Joint No.": name_key = "MT_NAME_JOINT"
             elif col == "Material": name_key = "MT_NAME_MAT"
@@ -6976,16 +6993,19 @@ class PMIReportApp:
 
     def _browse_file(self, var, types):
         current = var.get()
-        init_dir = os.path.dirname(current) if current and os.path.exists(current) else BASE_DIR
-        path = filedialog.askopenfilename(initialdir=init_dir, filetypes=types)
-        if path: 
-            var.set(path)
+        first_current = current.split('|')[0] if current else ""
+        init_dir = os.path.dirname(first_current) if first_current and os.path.exists(first_current) else BASE_DIR
+        paths = filedialog.askopenfilenames(initialdir=init_dir, filetypes=types)
+        if paths: 
+            var.set("|".join(paths))
             # Find which mode this belongs to and update info
             for mode, m_var in [('PMI', self.target_file_path), ('RT', self.rt_target_file_path), 
                                ('KOGAS', self.kogas_target_file_path), ('PT', self.pt_target_file_path), ('MT', self.mt_target_file_path), 
                                ('PAUT', self.paut_target_file_path)]:
                 if var == m_var:
-                    self._update_file_info(mode, path)
+                    try: first_path = paths[0]
+                    except: first_path = paths
+                    self._update_file_info(mode, first_path)
                     break 
 
     def show_bulk_update_dialog(self, mode="PMI"):
@@ -8593,21 +8613,36 @@ class PMIReportApp:
             mode = "PMI"
 
         if mode == "PT":
-            target_file = self.pt_target_file_path.get()
+            target_file_str = self.pt_target_file_path.get()
         elif mode == "MT":
-            target_file = self.mt_target_file_path.get()
+            target_file_str = self.mt_target_file_path.get()
         elif mode == "PAUT":
-            target_file = self.paut_target_file_path.get()
+            target_file_str = self.paut_target_file_path.get()
         elif mode == "RT":
-            target_file = self.rt_target_file_path.get()
+            target_file_str = self.rt_target_file_path.get()
         elif mode == "KOGAS":
-            target_file = self.kogas_target_file_path.get()
+            target_file_str = self.kogas_target_file_path.get()
         else:
-            target_file = self.target_file_path.get()
-        if not target_file:
+            target_file_str = self.target_file_path.get()
+            
+        if not target_file_str:
             messagebox.showwarning("파일 미선택", f"{mode} 데이터 파일을 선택해주세요.")
             return False
             
+        target_files = target_file_str.split('|') if '|' in target_file_str else [target_file_str]
+        
+        if not target_files: return False
+        
+        success_count = 0
+        for i, tf in enumerate(target_files):
+            if not tf.strip(): continue
+            is_last = (i == len(target_files) - 1)
+            if self._extract_single_file(mode, tf.strip(), show_msg=(show_msg and is_last)):
+                success_count += 1
+                
+        return success_count > 0
+
+    def _extract_single_file(self, mode, target_file, show_msg=True):
         self.log(f"🔍 {mode} 데이터 추출 시작: {os.path.basename(target_file)}")
         
         # [NEW] Extract date from filename
@@ -8926,7 +8961,8 @@ class PMIReportApp:
                         col_no = find_exact_column(df, ["NO.", "NO", "SEQ", "ITEM", "순번"])
                         # Use the request date from each PT source row instead
                         # of the file name/header-level fallback date.
-                        col_date = find_exact_column(df, ["REQUEST DATE"])
+                        col_date = _find_col(df, ["TEST DATE", "REQUEST DATE", "DATE", "검사일자", "일자"])
+                        col_report_no = _find_col(df, ["REPORT NO", "REPORT"])
                         col_dwg = _find_col(df, ["ISO", "LINE", "DWG", "DRAWING"], exclude=["JOINT", "WELD"]) 
                         col_joint = _find_col(df, ["JOINT NO", "JOINT NUMBER"], exclude=["ISO", "LINE", "ITEM"])
                         if not col_joint:
@@ -8950,6 +8986,7 @@ class PMIReportApp:
                         col_joint = _find_col(df, ["JOINT", "J/N", "JOINT NO", "PUNCH", "WELD NO"])
                         col_loc = _find_col(df, ["LOCATION", "TEST POSITION", "POINT", "AREA", "POSITION"])
                         col_dwg = _find_col(df, ["ISO", "DWG", "DRAWING", "LINE"])
+                        col_report_no = _find_col(df, ["REPORT NO", "REPORT"])
                         col_grade_orig = _find_col(df, ["GRADE", "MATERIAL", "SPEC", "TYPE"])
                         
                         # [DYNAMIC] Scan for dynamically added filter elements (e.g., C, P, S)
@@ -9072,6 +9109,11 @@ class PMIReportApp:
                         if (not curr_date or curr_date.lower() == 'nan') and last_date: curr_date = last_date
                         if curr_date and curr_date.lower() != 'nan': last_date = curr_date
                         elif not curr_date or curr_date.lower() == 'nan': curr_date = sheet_level_date if sheet_level_date else ''
+
+                        v_report = clean_v(row_top[col_report_no]) if col_report_no is not None else ''
+                        if (not v_report or v_report == 'nan') and getattr(self, 'last_report', ''): v_report = self.last_report
+                        if v_report and v_report != 'nan': self.last_report = v_report
+                        elif not v_report or v_report == 'nan': v_report = ''
 
                         # 5. 규격 (Size) 및 촬영 매수 (Shots)
                         raw_size = str(row_top[col_size]).strip() if col_size is not None else ''
@@ -9217,6 +9259,11 @@ class PMIReportApp:
                         if curr_date and curr_date.lower() != 'nan': last_date = curr_date
                         elif not curr_date or curr_date.lower() == 'nan': curr_date = sheet_level_date if sheet_level_date else ''
 
+                        v_report = clean_v(row[col_report_no]) if col_report_no is not None else ''
+                        if (not v_report or v_report == 'nan') and getattr(self, 'last_report', ''): v_report = self.last_report
+                        if v_report and v_report != 'nan': self.last_report = v_report
+                        elif not v_report or v_report == 'nan': v_report = ''
+
                         if mode == 'RT':
                             raw_size = str(row[col_size]).strip() if col_size is not None else ''
                             s_match = re.search(r'(\d+\.?\d*)', raw_size)
@@ -9230,7 +9277,7 @@ class PMIReportApp:
                             v_date = curr_date
 
                             item_data = {
-                                'No': v_raw_no, 'Date': v_date,
+                                'No': v_raw_no, 'Date': v_date, 'Report No': v_report,
                                 'Dwg': curr_dwg, 'Joint': curr_joint, 'Loc': '-',
                                 'Acc': clean_v(row[col_acc]) if col_acc is not None else '',
                                 'Rej': clean_v(row[col_rej]) if col_rej is not None else '',
@@ -9287,7 +9334,7 @@ class PMIReportApp:
                             res_str = str(row[col_result]).upper() if col_result is not None else "ACC"
                             if any(k in res_str for k in ["ACC", "OK", "ACCEPT", "합격"]):
                                 item_row = {
-                                    'No': v_raw_no, 'Date': curr_date, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
+                                    'No': v_raw_no, 'Date': curr_date, 'Report No': v_report, 'Dwg': curr_dwg, 'Joint': self.force_two_digit(curr_joint),
                                     'NPS': str(row[col_size]).strip() if col_size is not None else "", 'Thk.': convert_sch_to_thk(str(row[col_size]).strip() if col_size is not None else "", str(row[col_thk]).strip() if col_thk is not None else ""),
                                     'Material': self.fix_material_name(row[col_mat]) if col_mat is not None else "", 'Welder': str(row[col_welder]).strip() if col_welder is not None else "",
                                     'WType': str(row[col_wtype]).strip() if col_wtype is not None else "", 'Result': "Acc", 'selected': True,
@@ -9319,6 +9366,7 @@ class PMIReportApp:
                                     'Cr': v_cr, 'Ni': v_ni, 'Mo': v_mo, 'Mn': v_mn,
                                     'Grade': final_grade, 'Dwg': curr_dwg,
                                     'Date': curr_date or sheet_level_date,
+                                    'Report No': v_report,
                                     'selected': True,
                                     'order_index': len(self.extracted_data) + len(all_extracted_data)
                                 }
