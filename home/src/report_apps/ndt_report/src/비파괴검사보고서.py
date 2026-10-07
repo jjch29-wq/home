@@ -2521,9 +2521,9 @@ class PMIReportApp:
         tk.Label(header_info, textvariable=self.file_info_vars['PT'], background="#ffffff", 
                  foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
 
-        self.mt_display_cols = ["V", "No", "Date", "ISO/Dwg", "Joint No.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
+        self.mt_display_cols = ["V", "No", "Date", "Report No", "ISO/Dwg", "Joint No.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
         saved_widths = self.config.get("MT_COL_WIDTHS", {})
-        default_widths = {"V": 40, "No": 50, "Date": 90, "ISO/Dwg": 300, "Joint No.": 120, "Material": 100, "Test Item": 100, "Result": 80, "Welder No": 100}
+        default_widths = {"V": 40, "No": 50, "Date": 90, "Report No": 100, "ISO/Dwg": 300, "Joint No.": 120, "Material": 100, "Test Item": 100, "Result": 80, "Welder No": 100}
 
         tree_frame = tk.Frame(container, background="#f9fafb")
         self.mt_preview_tree = ttk.Treeview(tree_frame, columns=self.mt_display_cols, show='headings', height=10, selectmode='extended')
@@ -2914,17 +2914,18 @@ class PMIReportApp:
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
         
-        cols = ("V", "No", "Date", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks")
+        cols = ("V", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks")
         self.paut_preview_tree = ttk.Treeview(tree_frame, columns=cols, show='headings', height=10, selectmode='extended')
         
         saved_widths = self.config.get("PAUT_COL_WIDTHS", {})
-        default_widths = {"V": 40, "No": 50, "Line No.": 250, "Joint No.": 120, "Size": 80, "Th'k(mm)": 60, "Acc": 50, "Rej": 50, "Start": 60, "End": 60, "Length(mm)": 80, "Upper": 60, "Lower": 60, "Height(mm)": 80, "Type of Flaw": 100, "a/l": 60, "a/t": 60, "Welder": 80, "Tested Length": 100, "Evaluation": 80, "Remarks": 150}
+        default_widths = {"V": 40, "No": 50, "Report No": 100, "Line No.": 250, "Joint No.": 120, "Size": 80, "Th'k(mm)": 60, "Acc": 50, "Rej": 50, "Start": 60, "End": 60, "Length(mm)": 80, "Upper": 60, "Lower": 60, "Height(mm)": 80, "Type of Flaw": 100, "a/l": 60, "a/t": 60, "Welder": 80, "Tested Length": 100, "Evaluation": 80, "Remarks": 150}
         
         for col in self.paut_preview_tree["columns"]:
             # Use dynamic names from config for headings
             name_key = f"PAUT_NAME_{col.split('(')[0].replace(' ', '').replace('.', '').replace('/', '').upper()}"
             default_name = col
             if col == "No": name_key = "PAUT_COL_NO_NAME"
+            elif col == "Report No": name_key = "PAUT_NAME_REPORT_NO"
             elif col == "Line No.": name_key = "PAUT_NAME_LINE"
             elif col == "Joint No.": name_key = "PAUT_NAME_JOINT"
             elif col == "Size": name_key = "PAUT_NAME_SIZE"
@@ -4848,14 +4849,14 @@ class PMIReportApp:
                        command=lambda: self.populate_preview(self.extracted_data, switch_tab=False)).pack(side='left')
 
         tree_frame = tk.Frame(container, background="#f9fafb")
-        self.preview_tree = ttk.Treeview(tree_frame, columns=("ST", "V", "No", "Date", "Drawing No.", "Joint No.", "Location", "Ni", "Cr", "Mo", "Result"), show='headings', height=10, selectmode='extended')
+        self.preview_tree = ttk.Treeview(tree_frame, columns=("ST", "V", "No", "Date", "Report No", "Drawing No.", "Joint No.", "Location", "Ni", "Cr", "Mo", "Result"), show='headings', height=10, selectmode='extended')
         # [NEW] Highlight tags
         self.preview_tree.tag_configure("deficient", background="#fee2e2", foreground="#991b1b") # Light red
         self.preview_tree.tag_configure("group_even", background="#ffffff")
         self.preview_tree.tag_configure("group_odd", background="#f3f4f6")
         
         saved_widths = self.config.get("PMI_COL_WIDTHS", {})
-        default_widths = {"ST": 40, "V": 40, "No": 50, "Date": 90, "Drawing No.": 400, "Joint No.": 200, "Location": 300, "Ni": 60, "Cr": 60, "Mo": 60, "Result": 150}
+        default_widths = {"ST": 40, "V": 40, "No": 50, "Date": 90, "Report No": 100, "Drawing No.": 400, "Joint No.": 200, "Location": 300, "Ni": 60, "Cr": 60, "Mo": 60, "Result": 150}
         
         for col in self.preview_tree["columns"]:
             # Use dynamic names from config for headings
