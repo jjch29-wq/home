@@ -641,11 +641,13 @@ class DailyWorkLogTab(ttk.Frame):
                             next_num = str(int(num_str) + 1).zfill(len(num_str))
                             r['Joint No.'].insert(0, prefix + next_num)
                 
-                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '결과', '규격', '근무구분']:
+                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
                     if not r[col].get().strip():
                         prev_val = prev_row[col].get().strip()
                         if prev_val:
-                            if isinstance(r[col], ttk.Combobox):
+                            if col == '구간정보':
+                                r[col].set(prev_val)
+                            elif isinstance(r[col], ttk.Combobox):
                                 r[col].set(prev_val)
                             else:
                                 r[col].delete(0, tk.END)

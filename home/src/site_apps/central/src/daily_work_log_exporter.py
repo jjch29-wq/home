@@ -160,10 +160,10 @@ class DailyWorkLogExporter:
             
             row_idx += 1
             
-        ws.merge_cells('A9:A18') # PAUT
-        ws.merge_cells('A19:A23') # RT
-        ws.merge_cells('A24:A25') # MT
-        ws.merge_cells('A26:A27') # PT
+        ws.merge_cells('A9:A19') # PAUT
+        ws.merge_cells('A20:A24') # RT
+        ws.merge_cells('A25:A26') # MT
+        ws.merge_cells('A27:A28') # PT
 
         # =========================================================================
         # RIGHT SIDE SECTION: Equipment and Personnel (L7:P23)
@@ -284,7 +284,7 @@ class DailyWorkLogExporter:
                 spec_val = f"{spec_val}({shift_val})" if spec_val else shift_val
                 
             set_cell(f'N{row_idx}', res.get('결과', ''))
-            set_cell(f'O{row_idx}', spec_val)
+            set_cell(f'O{row_idx}', spec_val, align=self.align_nowrap)
             set_cell(f'P{row_idx}', res.get('RT_OR', ''))
             set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
             set_cell(f'R{row_idx}', res.get('PAUT', ''))

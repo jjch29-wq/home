@@ -278,7 +278,7 @@ class KogasDailyWorkLogExporter:
                 spec_val = f"{spec_val}({shift_val})" if spec_val else shift_val
                 
             set_cell(f'N{row_idx}', res.get('결과', ''))
-            set_cell(f'O{row_idx}', spec_val)
+            set_cell(f'O{row_idx}', spec_val, align=self.align_nowrap)
             set_cell(f'P{row_idx}', res.get('RT_OR', ''))
             set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
             set_cell(f'R{row_idx}', res.get('UT', ''))

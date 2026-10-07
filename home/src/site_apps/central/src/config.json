@@ -309,6 +309,26 @@
             "subtotal": 583855,
             "vat": 58385,
             "total_amount": 642240
+        },
+        {
+            "date": "2026-10-06",
+            "company": "한국지역난방공사 중앙지사",
+            "loc": "[열배관] 중앙지사_Pipe",
+            "ndt_type": "RT",
+            "work_time": "야간",
+            "material_type": "3 1/3 x 12\"",
+            "qty": 60.0,
+            "unit": "매",
+            "corr": 1.0,
+            "adjusted_qty": 60.0,
+            "unit_price": 205412,
+            "mat_cost": 556440,
+            "lab_cost": 4669980,
+            "overhead": 5136978,
+            "tech": 1961322,
+            "subtotal": 12324720,
+            "vat": 1232472,
+            "total_amount": 13557192
         }
     ]
 }

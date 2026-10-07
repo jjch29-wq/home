@@ -306,6 +306,32 @@ class EconomicDashboard:
         thread.start()
         
     def _run_simulation(self, window, stock_name):
+        def show_error(message):
+            if not window.winfo_exists():
+                return
+            for child in window.winfo_children():
+                child.destroy()
+            ttk.Label(
+                window, text=f"분석 결과를 표시하지 못했습니다.\n\n{message}",
+                font=('Malgun Gothic', 11), wraplength=800, justify='left'
+            ).pack(padx=20, pady=30)
+
+        def display_result(render):
+            if not window.winfo_exists():
+                return
+            try:
+                render()
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                show_error(str(exc))
+
+        try:
+            self._prepare_simulation(window, stock_name, show_error, display_result)
+        except Exception as exc:
+            self.root.after(0, lambda message=str(exc): show_error(message))
+
+    def _prepare_simulation(self, window, stock_name, show_error, display_result):
         import yfinance as yf
         import numpy as np
         from datetime import datetime, timedelta
@@ -326,7 +352,7 @@ class EconomicDashboard:
                 ticker = custom[clean_name]['ticker']
                 
         if not ticker:
-            self.root.after(0, lambda: ttk.Label(window, text="티커 정보를 찾을 수 없습니다.").pack())
+            self.root.after(0, lambda: show_error("티커 정보를 찾을 수 없습니다."))
             return
             
         try:
@@ -342,11 +368,11 @@ class EconomicDashboard:
             is_korea = '.KS' in ticker or '.KQ' in ticker
             
             def update_ui():
+                from matplotlib.figure import Figure
+                from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
                 for widget in window.winfo_children():
                     widget.destroy()
-                    
-                import matplotlib.pyplot as plt
-                from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
                 
                 main_frame = ttk.Frame(window)
                 main_frame.pack(expand=True, fill='both', padx=10, pady=10)
@@ -362,10 +388,12 @@ class EconomicDashboard:
                 desc_frame = ttk.LabelFrame(mid_frame, text=" 💡 종목 분석 ", padding=10)
                 desc_frame.pack(side='right', fill='y', padx=(10, 0))
                 
-                plt.rcParams['font.family'] = 'Malgun Gothic'
-                plt.rcParams['axes.unicode_minus'] = False
-                
-                fig, ax = plt.subplots(figsize=(5, 3))
+                import matplotlib as mpl
+                mpl.rcParams['font.family'] = 'Malgun Gothic'
+                mpl.rcParams['axes.unicode_minus'] = False
+
+                fig = Figure(figsize=(5, 3))
+                ax = fig.add_subplot(111)
                 ax.plot(hist.index, hist['Close'], label='종가', color='#1f77b4', linewidth=2)
                 ax.plot(hist.index, hist['Close'].rolling(20).mean(), label='20일선', color='#d62728', linestyle='--')
                 ax.plot(hist.index, hist['Close'].rolling(60).mean(), label='60일선', color='#2ca02c', linestyle='-.')
@@ -446,11 +474,11 @@ class EconomicDashboard:
                 ttk.Label(main_frame, text="※ 본 데이터는 과거 1년 변동성을 기반으로 한 통계적 예측으로 실제와 다를 수 있습니다.", 
                          font=('Malgun Gothic', 9), foreground='gray').pack(pady=5)
                          
-            self.root.after(0, update_ui)
+            self.root.after(0, lambda: display_result(update_ui))
             
         except Exception as e:
             error_msg = str(e)
-            self.root.after(0, lambda msg=error_msg: ttk.Label(window, text=f"오류 발생: {msg}").pack())
+            self.root.after(0, lambda msg=error_msg: show_error(msg))
             
 
     def open_my_advice_window(self):
