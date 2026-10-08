@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
 import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 import json
 import win32com.client as win32
 from tkcalendar import DateEntry
@@ -978,6 +979,7 @@ class NDTCalculatorTab(ttk.Frame):
         try:
             import pandas as pd
             import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
             db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Material_Inventory.xlsx')
             if not os.path.exists(db_path):
                 messagebox.showerror("오류", "DB 파일을 찾을 수 없습니다.")
@@ -1125,6 +1127,7 @@ class NDTCalculatorTab(ttk.Frame):
         try:
             import json
             import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
             data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
             os.makedirs(data_dir, exist_ok=True)
             export_path = os.path.join(data_dir, 'billing_export.json')
@@ -1498,6 +1501,7 @@ class NDTCalculatorTab(ttk.Frame):
         import subprocess
         import sys
         import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
         hub_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "문서_통합_관리_허브.py")
         if os.path.exists(hub_path):
             subprocess.Popen([sys.executable, hub_path])
@@ -2255,7 +2259,7 @@ class NDTCalculatorTab(ttk.Frame):
             # target_records의 'company'가 '한국지역난방공사' 등으로 일괄 지정되어 있으므로,
             # daily_work_history.json의 ndt_results에서 해당 일자/검사방법의 실제 업체를 찾아 매핑합니다.
             import json
-            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            history_path = get_history_path()
             history_data = {}
             if os.path.exists(history_path):
                 try:
@@ -2651,7 +2655,7 @@ class NDTCalculatorTab(ttk.Frame):
             cont_row = 5
             
             import json
-            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            history_path = get_history_path()
             history_data = {}
             if os.path.exists(history_path):
                 try:

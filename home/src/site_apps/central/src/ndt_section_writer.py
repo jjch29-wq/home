@@ -1,3 +1,4 @@
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 import openpyxl
 import copy
 import math
@@ -479,7 +480,7 @@ if __name__ == '__main__':
     sys.path.insert(0, r'c:\Users\jjch2\Desktop\PMI\home\src')
     from site_apps.central.src.paut_writer import find_paut_section, write_paut_data
 
-    history_path = r'c:\Users\jjch2\Desktop\PMI\home\src\daily_work_history.json'
+    history_path = get_history_path()
     with open(history_path, 'r', encoding='utf-8') as f:
         history = json.load(f)
 

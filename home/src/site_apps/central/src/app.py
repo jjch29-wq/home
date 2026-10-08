@@ -1,6 +1,7 @@
 ### VERSION: BUDGET_SYNC_FIXED_FINAL_V8_1WON_BALANCED ###
 import mimetypes
 import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 # [OPTIMIZATION] Prevent slow Windows registry scan for mimetypes
 if os.name == 'nt':
     mimetypes.init(files=[])
@@ -10,6 +11,7 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 import sys
 import subprocess
 import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 import time
 import datetime
 import json
@@ -12218,6 +12220,7 @@ class MaterialManager:
         from openpyxl import Workbook
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
         import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
         
         top = tk.Toplevel(self.root)
         top.title("주간 업무보고서 출력")
@@ -12274,7 +12277,7 @@ class MaterialManager:
                 messagebox.showerror("오류", "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)")
                 return
                 
-            history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+            history_path = get_history_path()
             if not os.path.exists(history_path):
                 messagebox.showinfo("알림", "저장된 작업일보 데이터가 없습니다.")
                 return
@@ -12719,6 +12722,7 @@ class MaterialManager:
                 import openpyxl
                 from openpyxl.utils import get_column_letter
                 import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
                 
                 save_path = filepath
                 wb = openpyxl.load_workbook(save_path)
@@ -12863,7 +12867,7 @@ class MaterialManager:
                         
                 history = {}
                 import json, os
-                history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+                history_path = get_history_path()
                 if os.path.exists(history_path):
                     with open(history_path, 'r', encoding='utf-8') as f:
                         history = json.load(f)
@@ -12874,13 +12878,15 @@ class MaterialManager:
                 log(f"\n🎉 저장 완료: {save_path}")
                 messagebox.showinfo("완료", f"월간 진도보고서 비파괴검사 현황이 업데이트되었습니다.\n{save_path}")
                 import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
                 os.startfile(os.path.dirname(save_path))
                 
             
                 # --- 4.5 NDT 결과서 섹션 태그 기반 자동 기입 ---
                 try:
                     import sys as _sys
-                    import os as _os
+                    import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir as _os
                     _src = _os.path.dirname(_os.path.abspath(__file__))
                     if _src not in _sys.path:
                         _sys.path.insert(0, _src)

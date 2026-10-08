@@ -1,6 +1,7 @@
 import openpyxl
 import json
 import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 
 def find_paut_section(ws):
     """
@@ -159,7 +160,7 @@ def write_paut_data(ws, paut_records, header_row, data_start, col_map):
 # 테스트 실행
 # ====================
 if __name__ == '__main__':
-    history_path = r'c:\Users\jjch2\Desktop\PMI\home\src\daily_work_history.json'
+    history_path = get_history_path()
     template_path = r'C:\Users\jjch2\Desktop\템플릿_최종완성본_V74.xlsx'
     output_path = r'C:\Users\jjch2\Desktop\Test_HeaderBased.xlsx'
     target_month = '2026-08'

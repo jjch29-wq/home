@@ -6,6 +6,7 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 from tkcalendar import DateEntry
 from datetime import datetime
 import os
+from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 import sys
 import json
 import shutil
@@ -38,12 +39,9 @@ class DailyWorkLogTab(ttk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.parent = parent
-        self.history_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'daily_work_history.json')
+        self.history_path = get_history_path()
         self._migrate_legacy_welder_ids()
-        self.photo_root = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'data', 'process_photos'
-        )
+        self.photo_root = get_process_photos_dir()
         self.selected_ndt_row = None
         self.welder_names = dict(MonthlyReportManager.WELDER_NAMES)
         self.welder_ids_by_name = {
