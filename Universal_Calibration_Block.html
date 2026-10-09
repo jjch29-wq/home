@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Universal Calibration Block</title>
+    <style>
+        body {
+            background-color: #2b2b2b;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        svg {
+            background-color: #333333;
+            border: 1px solid #555;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .instruction {
+            margin-bottom: 20px;
+            font-size: 16px;
+            color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h2>Universal Calibration Block (Ø2.5 & Ø3.0)</h2>
+    <div class="instruction">
+        아래 그림을 캡처 도구(캡처 단축키: Win + Shift + S)로 캡처하여 엑셀이나 절차서에 붙여넣어 사용하세요.
+    </div>
+
+    <svg width="800" height="400" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+        <!-- Grid/Background -->
+        <rect width="800" height="400" fill="#333333" />
+
+        <!-- Block Shape -->
+        <!-- M 100,280 L 100,230 A 50,50 0 0,1 150,180 L 150,150 L 600,150 L 700,280 Z -->
+        <!-- Let's make it look like the user's drawing: flat bottom, angled right, curved left -->
+        <path d="M 100,280 A 70,70 0 0,1 170,120 L 170,150 A 40,40 0 0,0 130,210 L 130,280 Z" fill="#dddddd" stroke="black" stroke-width="2"/>
+        <path d="M 130,210 A 40,40 0 0,1 170,150 L 600,150 L 720,280 L 100,280 Z" fill="#b4c7dc" stroke="black" stroke-width="2"/>
+
+        <!-- Left Holes (Ø2.5) -->
+        <g fill="black">
+            <circle cx="300" cy="170" r="4"/>
+            <circle cx="300" cy="195" r="4"/>
+            <circle cx="300" cy="220" r="4"/>
+            <circle cx="300" cy="245" r="4"/>
+            <circle cx="300" cy="270" r="4"/>
+        </g>
+        
+        <!-- Left Annotation -->
+        <path d="M 230,160 L 290,170" stroke="yellow" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <text x="220" y="150" fill="yellow" font-size="14" font-weight="bold" text-anchor="middle">5-SDH Ø2.5</text>
+        <text x="220" y="168" fill="yellow" font-size="12" font-weight="bold" text-anchor="middle">(T ≤ 25.4mm)</text>
+        <text x="220" y="185" fill="yellow" font-size="12" font-weight="bold" text-anchor="middle">Pitch: 8</text>
+
+        <!-- Right Holes (Ø3.0) -->
+        <g fill="black">
+            <circle cx="500" cy="170" r="4.5"/>
+            <circle cx="500" cy="195" r="4.5"/>
+            <circle cx="500" cy="220" r="4.5"/>
+            <circle cx="500" cy="245" r="4.5"/>
+            <circle cx="500" cy="270" r="4.5"/>
+        </g>
+
+        <!-- Right Annotation -->
+        <path d="M 570,160 L 510,170" stroke="yellow" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <text x="580" y="150" fill="yellow" font-size="14" font-weight="bold" text-anchor="middle">5-SDH Ø3.0</text>
+        <text x="580" y="168" fill="yellow" font-size="12" font-weight="bold" text-anchor="middle">(T > 25.4mm)</text>
+        <text x="580" y="185" fill="yellow" font-size="12" font-weight="bold" text-anchor="middle">Pitch: 8</text>
+
+        <!-- Dimensions lines -->
+        <line x1="100" y1="310" x2="720" y2="310" stroke="white" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+        <text x="410" y="305" fill="white" font-size="14" font-weight="bold" text-anchor="middle">L = 300</text>
+
+        <line x1="70" y1="280" x2="70" y2="120" stroke="white" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+        <text x="60" y="200" fill="white" font-size="14" font-weight="bold" text-anchor="end">H = 50</text>
+        
+        <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="white" />
+            </marker>
+        </defs>
+
+    </svg>
+</body>
+</html>

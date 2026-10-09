@@ -1,0 +1,48 @@
+{
+  "probe_model": "5L64-A2",
+  "frequency_mhz": 5.0,
+  "total_elements": 64,
+  "pitch_mm": 0.6,
+  "elevation_mm": 10.0,
+  "thickness_mm": 28.55,
+  "bevel_angle_deg": 37.5,
+  "bevel_tolerance_deg": 2.5,
+  "weld_center_to_root_offset_mm": 0.0,
+  "min_angle_deg": 40.0,
+  "max_angle_deg": 70.0,
+  "angle_step_deg": 1.0,
+  "wave_type": "SW",
+  "law_config": "Sectorial",
+  "focus_type": "True depth",
+  "scan_direction": "양측 주사",
+  "apertures": [
+    {
+      "probe_id": "P1",
+      "beamset_id": "A1",
+      "scan_side": "양측",
+      "active_elements": 32,
+      "first_element": 5,
+      "focal_depth_mm": 35.0,
+      "index_offsets": "42",
+      "left_index_offsets": "",
+      "right_index_offsets": "",
+      "beam_exit_measurements": "",
+      "left_beam_exit_measurements": "",
+      "right_beam_exit_measurements": ""
+    },
+    {
+      "probe_id": "P1",
+      "beamset_id": "A2",
+      "scan_side": "양측",
+      "active_elements": 32,
+      "first_element": 33,
+      "focal_depth_mm": 54.0,
+      "index_offsets": "42",
+      "left_index_offsets": "",
+      "right_index_offsets": "",
+      "beam_exit_measurements": "",
+      "left_beam_exit_measurements": "",
+      "right_beam_exit_measurements": ""
+    }
+  ]
+}
