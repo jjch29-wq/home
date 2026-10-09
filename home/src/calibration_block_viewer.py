@@ -36,6 +36,7 @@ class CalibrationBlockApp(ctk.CTk):
         row_idx = 1
         self.add_input_field("Total Length (L) [mm]", "length", "297", row_idx); row_idx += 1
         self.add_input_field("Total Height (H) [mm]", "height", "50", row_idx); row_idx += 1
+        self.add_input_field("Total Width (W) [mm]", "width", "50", row_idx); row_idx += 1
         self.add_input_field("Top Edge (from 1mm hole Y)", "y_top", "35", row_idx); row_idx += 1
         self.add_input_field("Bevel Angle [deg]", "bevel", "45", row_idx); row_idx += 1
         
@@ -44,6 +45,8 @@ class CalibrationBlockApp(ctk.CTk):
         self.add_input_field("1st Hole Y (from bottom)", "sdh_start_y", "10", row_idx); row_idx += 1
         self.add_input_field("Hole Pitch [mm]", "sdh_pitch", "8", row_idx); row_idx += 1
         self.add_input_field("Hole Diameter [mm]", "sdh_diameter", "3", row_idx); row_idx += 1
+        self.add_input_field("SDH2 X Position", "sdh2_x", "100", row_idx); row_idx += 1
+        self.add_input_field("Hole2 Diameter [mm]", "sdh2_diameter", "2.5", row_idx); row_idx += 1
         self.add_input_field("1mm Hole X pos", "hole_1mm_x", "37", row_idx); row_idx += 1
         self.add_input_field("1mm Hole Y pos", "hole_1mm_y", "30", row_idx); row_idx += 1
         
@@ -99,12 +102,15 @@ class CalibrationBlockApp(ctk.CTk):
             return {
                 "L": float(self.inputs["length"].get()),
                 "H": float(self.inputs["height"].get()),
+                "W": float(self.inputs["width"].get()),
                 "y_top": float(self.inputs["y_top"].get()),
                 "bevel": float(self.inputs["bevel"].get()),
                 "sdh_x": float(self.inputs["sdh_x"].get()),
                 "sdh_start_y": float(self.inputs["sdh_start_y"].get()),
                 "sdh_pitch": float(self.inputs["sdh_pitch"].get()),
                 "sdh_diameter": float(self.inputs["sdh_diameter"].get()),
+                "sdh2_x": float(self.inputs["sdh2_x"].get()),
+                "sdh2_diameter": float(self.inputs["sdh2_diameter"].get()),
                 "hole_1mm_x": float(self.inputs["hole_1mm_x"].get()),
                 "hole_1mm_y": float(self.inputs["hole_1mm_y"].get())
             }
@@ -171,14 +177,42 @@ class CalibrationBlockApp(ctk.CTk):
             cy = y_first_sdh + i * vals["sdh_pitch"]
             cx = vals["sdh_x"] if self.flip_var.get() else -vals["sdh_x"]
             self.ax.add_patch(patches.Circle((cx, cy), vals["sdh_diameter"]/2, facecolor='black', edgecolor='none', zorder=3))
+            
+            # Second SDH group (Back side)
+            cx2 = vals["sdh2_x"] if self.flip_var.get() else -vals["sdh2_x"]
+            self.ax.add_patch(patches.Circle((cx2, cy), vals["sdh2_diameter"]/2, facecolor='#b0c4de', edgecolor='black', linestyle='--', linewidth=1.5, zorder=3))
+
+        # --- Top View ---
+        y_top_view = vals["H"] + 40
+        x_min_real = -r50 if self.flip_var.get() else x_left_bottom
+        
+        # Block outline (Top View)
+        self.ax.add_patch(patches.Rectangle((x_min_real, y_top_view), vals["L"], vals["W"], facecolor='#aaaaaa', edgecolor='white', lw=1.5))
+        self.ax.annotate("TOP VIEW", xy=(x_min_real, y_top_view + vals["W"] + 15), color='white', fontweight='bold', ha='left', va='bottom')
+        
+        # Bbox style for text readability
+        text_bbox = dict(boxstyle='round,pad=0.2', fc='#2b2b2b', ec='none', alpha=0.8)
+        
+        # 1mm hole (Through-hole)
+        self.ax.add_patch(patches.Rectangle((cx_hole - 0.5, y_top_view), 1, vals["W"], facecolor='red', edgecolor='darkred'))
+        
+        # SDHs (Front Face)
+        cx_sdh = vals["sdh_x"] if self.flip_var.get() else -vals["sdh_x"]
+        self.ax.add_patch(patches.Rectangle((cx_sdh - vals["sdh_diameter"]/2, y_top_view), vals["sdh_diameter"], 25, facecolor='yellow', edgecolor='black'))
+        self.ax.annotate("Front Face\n(Depth 25)", xy=(cx_sdh, y_top_view - 5), color='yellow', ha='center', va='top', fontsize=9, bbox=text_bbox)
+        
+        # SDHs 2 (Back Face)
+        cx2_sdh = vals["sdh2_x"] if self.flip_var.get() else -vals["sdh2_x"]
+        self.ax.add_patch(patches.Rectangle((cx2_sdh - vals["sdh2_diameter"]/2, y_top_view + vals["W"] - 25), vals["sdh2_diameter"], 25, facecolor='cyan', edgecolor='black'))
+        self.ax.annotate("Back Face\n(Depth 25)", xy=(cx2_sdh, y_top_view + vals["W"] + 5), color='cyan', ha='center', va='bottom', fontsize=9, bbox=text_bbox)
 
         self.ax.set_aspect('equal')
         if self.flip_var.get():
             self.ax.set_xlim(-80, -x_left_bottom + 20)
         else:
             self.ax.set_xlim(x_left_bottom - 20, 80)
-        self.ax.set_ylim(-15, vals["H"] + 15)
-        self.ax.set_title("Calibration Block Schematic", color='white', fontweight='bold')
+        self.ax.set_ylim(-15, y_top_view + vals["W"] + 40)
+        self.ax.set_title("Calibration Block Schematic (Side & Top View)", color='white', fontweight='bold')
         
         # Draw dimensions if checked
         if getattr(self, 'show_dim_var', None) and self.show_dim_var.get():
@@ -201,17 +235,25 @@ class CalibrationBlockApp(ctk.CTk):
             
             # 1mm hole
             self.ax.annotate(f'1mm Hole\n(X:{vals["hole_1mm_x"]:g}, Y:{vals["hole_1mm_y"]:g})', 
-                             xy=(cx_hole, cy_hole), xytext=(20 if self.flip_var.get() else -20, 15),
+                             xy=(cx_hole, cy_hole), xytext=(-30 if self.flip_var.get() else 30, 20),
                              textcoords='offset points', color='yellow', arrowprops=dict(arrowstyle='->', color='yellow', lw=1.5),
-                             ha='left' if self.flip_var.get() else 'right', fontweight='bold')
+                             ha='right' if self.flip_var.get() else 'left', fontweight='bold', bbox=text_bbox)
                              
             # SDHs
             mid_sdh_y = y_first_sdh + 2 * vals["sdh_pitch"]
             cx_sdh = vals["sdh_x"] if self.flip_var.get() else -vals["sdh_x"]
-            self.ax.annotate(f'5-SDH Ø{vals["sdh_diameter"]:g}\nPitch: {vals["sdh_pitch"]:g}\nX: {vals["sdh_x"]:g}', 
+            self.ax.annotate(f'5-SDH Ø{vals["sdh_diameter"]:g}\n(T > 25.4mm)\n(Front Face, Depth 25mm)', 
                              xy=(cx_sdh, mid_sdh_y), xytext=(20 if self.flip_var.get() else -20, 0),
                              textcoords='offset points', color='yellow', arrowprops=dict(arrowstyle='->', color='yellow', lw=1.5),
-                             ha='left' if self.flip_var.get() else 'right', va='center', fontweight='bold')
+                             ha='left' if self.flip_var.get() else 'right', va='center', fontweight='bold', bbox=text_bbox)
+                             
+            # SDHs 2
+            cx2_sdh = vals["sdh2_x"] if self.flip_var.get() else -vals["sdh2_x"]
+            top_sdh_y = y_first_sdh + 4 * vals["sdh_pitch"]
+            self.ax.annotate(f'5-SDH Ø{vals["sdh2_diameter"]:g}\n(T ≤ 25.4mm)\n(Back Face, Depth 25mm)', 
+                             xy=(cx2_sdh, top_sdh_y), xytext=(0, 30),
+                             textcoords='offset points', color='cyan', arrowprops=dict(arrowstyle='->', color='cyan', lw=1.5),
+                             ha='center', va='bottom', fontweight='bold', bbox=text_bbox)
                              
             # Curves
             self.ax.annotate('R50', xy=(-r50 * 0.707 if self.flip_var.get() else r50 * 0.707, r50 * 0.707), 
