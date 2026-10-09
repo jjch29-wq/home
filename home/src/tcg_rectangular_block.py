@@ -6,6 +6,10 @@ import matplotlib.patches as patches
 import ezdxf
 import math
 import os
+import csv
+import openpyxl
+from openpyxl.drawing.image import Image as OpenpyxlImage
+from openpyxl.styles import Font, Alignment
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -57,6 +61,9 @@ class TCGBlockApp(ctk.CTk):
         
         self.btn_dxf = ctk.CTkButton(self.sidebar_frame, text="Export DXF", fg_color="forestgreen", hover_color="darkgreen", command=self.export_dxf)
         self.btn_dxf.grid(row=row_idx, column=0, padx=20, pady=10); row_idx += 1
+        
+        self.btn_excel = ctk.CTkButton(self.sidebar_frame, text="Export Excel (XLSX)", fg_color="#107c41", hover_color="#0c5e31", command=self.export_excel)
+        self.btn_excel.grid(row=row_idx, column=0, padx=20, pady=10); row_idx += 1
 
         # --- Main Area ---
         self.main_frame = ctk.CTkFrame(self)
@@ -150,9 +157,10 @@ class TCGBlockApp(ctk.CTk):
 
         # 4. Axes limits and Dimensions
         self.ax.set_aspect('equal')
-        self.ax.set_xlim(x_min - 20, x_max + 20)
-        self.ax.set_ylim(-15, y_top_view + vals["W"] + 40)
+        self.ax.set_xlim(x_min - 60 if self.flip_var.get() else x_min - 20, x_max + 20 if self.flip_var.get() else x_max + 60)
+        self.ax.set_ylim(-20, y_top_view + vals["W"] + 40)
         self.ax.set_title("Rectangular TCG Block Schematic (Side & Top View)", color='white', fontweight='bold')
+        self.ax.yaxis.set_visible(False) # Hide Y-axis numbers to prevent overlap
         
         if getattr(self, 'show_dim_var', None) and self.show_dim_var.get():
             def draw_dim(x1, y1, x2, y2, text, text_offset_x=0, text_offset_y=5, ha='center', va='center'):
@@ -161,11 +169,13 @@ class TCGBlockApp(ctk.CTk):
                 self.ax.annotate('', xy=(x1, y1), xytext=(x2, y2), arrowprops=dict(arrowstyle='<->', color='white', lw=1.5))
                                  
             # L
-            draw_dim(x_min, -8, x_max, -8, f'L = {vals["L"]:g}', text_offset_y=-10, va='top')
+            draw_dim(x_min, -12, x_max, -12, f'L = {vals["L"]:g}', text_offset_y=-10, va='top')
             # H
-            x_h = x_min - 15 if self.flip_var.get() else x_max + 15
+            x_h = x_min - 30 if self.flip_var.get() else x_max + 30
             ha_h = 'right' if self.flip_var.get() else 'left'
             draw_dim(x_h, 0, x_h, vals["H"], f'H = {vals["H"]:g}', text_offset_x=-20 if self.flip_var.get() else 20, text_offset_y=0, ha=ha_h)
+            # W
+            draw_dim(x_h, y_top_view, x_h, y_top_view + vals["W"], f'W = {vals["W"]:g}', text_offset_x=-20 if self.flip_var.get() else 20, text_offset_y=0, ha=ha_h)
             
             # Annotations for holes
             mid_sdh_y = y_first_sdh + 2 * vals["sdh_pitch"]
@@ -218,6 +228,120 @@ class TCGBlockApp(ctk.CTk):
             
         except Exception as e:
             messagebox.showerror("Export Failed", f"An error occurred:\n{str(e)}")
+
+    def export_excel(self):
+        vals = self.get_values()
+        if not vals: return
+        filename = "TCG_Rectangular_Block.xlsx"
+        img_temp = "temp_plot.png"
+        try:
+            # Save the current plot as an image
+            self.fig.savefig(img_temp, dpi=150, bbox_inches='tight', facecolor=self.fig.get_facecolor())
+            
+            # Create a new Excel workbook and select the active worksheet
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Block Data"
+            
+            # Left table: Parameters (Row 1-11)
+            params = [
+                ["Parameter", "Value", "Unit"],
+                ["Total Length (L)", vals["L"], "mm"],
+                ["Total Height (H)", vals["H"], "mm"],
+                ["Total Width (W)", vals["W"], "mm"],
+                ["Hole Depth", vals["sdh_depth"], "mm"],
+                ["SDH1 X Position (Front)", vals["sdh_x"], "mm"],
+                ["SDH1 Diameter", vals["sdh_diameter"], "mm"],
+                ["1st Hole Y (bottom)", vals["sdh_start_y"], "mm"],
+                ["Hole Pitch", vals["sdh_pitch"], "mm"],
+                ["SDH2 X Position (Back)", vals["sdh2_x"], "mm"],
+                ["SDH2 Diameter", vals["sdh2_diameter"], "mm"]
+            ]
+            
+            # Right table: Hole ID (Row 1-11)
+            holes = [["Hole ID", "X Position", "Y Position", "Diameter", "Face", "Depth"]]
+            cx_sdh = -vals["sdh_x"] if self.flip_var.get() else vals["sdh_x"]
+            y_first_sdh = vals["sdh_start_y"]
+            for i in range(5):
+                cy = y_first_sdh + i * vals["sdh_pitch"]
+                holes.append([f"SDH1-{i+1}", cx_sdh, cy, vals["sdh_diameter"], "Front", vals["sdh_depth"]])
+                
+            cx2_sdh = -vals["sdh2_x"] if self.flip_var.get() else vals["sdh2_x"]
+            for i in range(5):
+                cy = y_first_sdh + i * vals["sdh_pitch"]
+                holes.append([f"SDH2-{i+1}", cx2_sdh, cy, vals["sdh2_diameter"], "Back", vals["sdh_depth"]])
+                
+            # Now insert them row by row side-by-side
+            for r in range(max(len(params), len(holes))):
+                row_data = []
+                if r < len(params):
+                    row_data.extend(params[r])
+                else:
+                    row_data.extend(["", "", ""])
+                    
+                row_data.append("") # Empty spacer column D
+                
+                if r < len(holes):
+                    row_data.extend(holes[r])
+                    
+                ws.append(row_data)
+                
+            # Adjust column widths for better visibility
+            ws.column_dimensions['A'].width = 35
+            ws.column_dimensions['B'].width = 18
+            ws.column_dimensions['C'].width = 18
+            ws.column_dimensions['D'].width = 5   # spacer
+            ws.column_dimensions['E'].width = 18
+            ws.column_dimensions['F'].width = 18
+            ws.column_dimensions['G'].width = 18
+            ws.column_dimensions['H'].width = 18
+            ws.column_dimensions['I'].width = 18
+            ws.column_dimensions['J'].width = 18
+            
+            # Increase font size and center text for all data cells
+            large_font = Font(size=18)
+            bold_font = Font(size=18, bold=True)
+            for row in ws.iter_rows(min_row=1, max_row=11, min_col=1, max_col=10):
+                for cell in row:
+                    if cell.value is not None:
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
+                        if cell.row == 1:
+                            cell.font = bold_font
+                        else:
+                            cell.font = large_font
+                
+            # Insert the plot image into the Excel sheet below the data
+            img = OpenpyxlImage(img_temp)
+            # Increase scale to 0.9 to fill more horizontal space
+            scale = 0.9
+            img.width = int(img.width * scale)
+            img.height = int(img.height * scale)
+            ws.add_image(img, "A14")
+            
+            # Set up Page Layout for A4 printing (Fit to 1 page wide)
+            ws.page_setup.paperSize = ws.PAPERSIZE_A4
+            ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+            ws.page_setup.fitToPage = True
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 1
+            
+            # Center the content horizontally and vertically on the printed page
+            ws.print_options.horizontalCentered = True
+            ws.print_options.verticalCentered = True
+            
+            # Save the workbook
+            wb.save(filename)
+            
+            # Clean up the temporary image
+            if os.path.exists(img_temp):
+                os.remove(img_temp)
+                
+            messagebox.showinfo("Export Successful", f"Saved Excel (XLSX) with Image to:\n{os.path.abspath(filename)}")
+            
+        except Exception as e:
+            messagebox.showerror("Export Failed", f"An error occurred:\n{str(e)}")
+            if os.path.exists(img_temp):
+                os.remove(img_temp)
 
 if __name__ == "__main__":
     app = TCGBlockApp()
