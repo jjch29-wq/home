@@ -529,6 +529,10 @@ class VehicleInspectionWidget(ttk.Frame):
             self.cb_vehicle_info.focus_set()
         except: pass
         
+    def clear(self):
+        """Alias for reset_fields"""
+        self.reset_fields()
+        
     def set_data(self, data):
         if not data: return
         for key, val in data.items():

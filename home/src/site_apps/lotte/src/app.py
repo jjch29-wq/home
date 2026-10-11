@@ -425,6 +425,7 @@ class MaterialManager:
         self.style.configure(".", font=('Malgun Gothic', 12))
         self.style.configure("Treeview.Heading", font=('Malgun Gothic', 12, 'bold'))
         self.style.configure("Treeview", font=('Malgun Gothic', 12), rowheight=35) # Increased row height for "boxed" look
+        self.style.configure("Vertical.TScrollbar", width=16, arrowsize=14)
         
         # Detect system background color for tk widgets (Canvas, Text)
         self.theme_bg = self.root.cget('bg')
@@ -1160,8 +1161,23 @@ class MaterialManager:
         """Extract depreciation defaults from settings_df"""
         try:
             from site_apps.lotte.src.services.lotte_planned_budget import load_planned_budget
-            return [(r['item'], r['spec'], r['life'], r['qty'], r['days'], float(r['rate']))
+            defaults = [(r['item'], r['spec'], r['life'], r['qty'], r['days'], float(r['rate']))
                     for r in load_planned_budget()['expense']['depreciation']]
+            
+            # [FIX] Add PMI and UT equipment which are missing from the baseline JSON
+            items = [str(d[0]).strip() for d in defaults]
+            insert_idx = len(defaults)
+            for i, name in enumerate(items):
+                if "현상용 탑차" in name or "스타렉스" in name:
+                    insert_idx = i
+                    break
+                    
+            if "UT 장비" not in items:
+                defaults.insert(insert_idx, ("UT 장비", "", 5, 1, 0, 7778))
+            if "PMI 장비" not in items:
+                defaults.insert(insert_idx, ("PMI 장비", "", 5, 1, 0, 12778))
+                
+            return defaults
         except:
             return []
 
@@ -6119,6 +6135,12 @@ class MaterialManager:
         self.btn_daily_save_list = ttk.Button(btn_row2, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
         self.btn_daily_save_list.pack(side='left', padx=10)
 
+        # Quick Jump Buttons to quickly view top or bottom (summary/totals)
+        btn_jump_bottom = ttk.Button(btn_row2, text="⬇️ 맨 아래로 (누계)", command=lambda: self.daily_usage_tree.yview_moveto(1.0))
+        btn_jump_bottom.pack(side='right', padx=5)
+        btn_jump_top = ttk.Button(btn_row2, text="⬆️ 맨 위로", command=lambda: self.daily_usage_tree.yview_moveto(0.0))
+        btn_jump_top.pack(side='right', padx=5)
+
         # Bindings
         filter_widgets = [
             self.cb_daily_filter_site, self.cb_daily_filter_company, self.cb_daily_filter_material, 
@@ -6238,36 +6260,21 @@ class MaterialManager:
         # Selection binding to update detail area
         self.daily_usage_tree.bind('<<TreeviewSelect>>', self._on_daily_usage_select)
         
-        # Optimize treeview scroll region to prevent unnecessary scrollbars
-        def optimize_treeview_scroll_region():
+        # Fast mouse wheel and keyboard navigation for large record sets
+        def _on_tree_mousewheel(event):
             try:
-                if hasattr(self, 'daily_usage_tree'):
-                    self.daily_usage_tree.update_idletasks()
-                    
-                    # Get treeview content dimensions
-                    total_items = len(self.daily_usage_tree.get_children())
-                    if total_items > 0:
-                        # Calculate approximate content height
-                        item_height = 25  # Approximate height per row
-                        content_height = total_items * item_height + 50  # Add some padding
-                        
-                        # Get treeview dimensions
-                        tree_width = self.daily_usage_tree.winfo_width()
-                        tree_height = self.daily_usage_tree.winfo_height()
-                        
-                        # Set scroll region to content size if smaller than treeview
-                        if content_height < tree_height:
-                            self.daily_usage_tree.configure(yscrollcommand=(0, 0, tree_width, content_height))
-                            print(f"Treeview scroll region optimized: (0, 0, {tree_width}, {content_height})")
-                        else:
-                            # Use full treeview dimensions
-                            self.daily_usage_tree.configure(yscrollcommand=(0, 0, tree_width, tree_height))
-                            print(f"Treeview scroll region set to full size: (0, 0, {tree_width}, {tree_height})")
-            except Exception as e:
-                print(f"Error optimizing treeview scroll region: {e}")
-        
-        # Apply optimization after a short delay
-        self.root.after(500, optimize_treeview_scroll_region)
+                # event.delta is typically +/- 120 on Windows
+                steps = int(-1 * (event.delta / 120) * 5)
+                self.daily_usage_tree.yview_scroll(steps, "units")
+            except Exception:
+                pass
+            return "break"
+
+        self.daily_usage_tree.bind("<MouseWheel>", _on_tree_mousewheel)
+        self.daily_usage_tree.bind("<Prior>", lambda e: (self.daily_usage_tree.yview_scroll(-1, "pages"), "break")[1]) # Page Up
+        self.daily_usage_tree.bind("<Next>", lambda e: (self.daily_usage_tree.yview_scroll(1, "pages"), "break")[1])   # Page Down
+        self.daily_usage_tree.bind("<Home>", lambda e: (self.daily_usage_tree.yview_moveto(0.0), "break")[1])         # Home (Top)
+        self.daily_usage_tree.bind("<End>", lambda e: (self.daily_usage_tree.yview_moveto(1.0), "break")[1])           # End (Bottom)
 
 
     def _on_daily_usage_select(self, *args, **kwargs):
@@ -6461,15 +6468,30 @@ class MaterialManager:
         # Pop-out button
         ttk.Button(top_btn_frame, text="🔍 팝업창으로 열기", command=self.open_detached_budget_view).pack(side='left', padx=15)
         
+        # Toggle bottom pane button
+        self.budget_bottom_hidden = False
+        def _toggle_budget_bottom():
+            if self.budget_bottom_hidden:
+                self.main_paned_budget.add(self.bottom_container_budget, weight=3)
+                self.btn_toggle_budget_bottom.config(text="🔽 하부 프레임 숨기기")
+                self.budget_bottom_hidden = False
+            else:
+                self.main_paned_budget.forget(self.bottom_container_budget)
+                self.btn_toggle_budget_bottom.config(text="🔼 하부 프레임 나타내기")
+                self.budget_bottom_hidden = True
+                
+        self.btn_toggle_budget_bottom = ttk.Button(top_btn_frame, text="🔽 하부 프레임 숨기기", command=_toggle_budget_bottom)
+        self.btn_toggle_budget_bottom.pack(side='left', padx=5)
+        
         ttk.Button(top_btn_frame, text="사정원가 출력", command=self.export_budget_estimation).pack(side='right', padx=10)
         ttk.Button(top_btn_frame, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
 
-        main_paned = ttk.PanedWindow(self.tab_budget, orient='vertical')
-        main_paned.pack(fill='both', expand=True, padx=10, pady=(0, 5))
+        self.main_paned_budget = ttk.PanedWindow(self.tab_budget, orient='vertical')
+        self.main_paned_budget.pack(fill='both', expand=True, padx=10, pady=(0, 5))
         
         # --- 상단: Scrollable Form area ---
-        top_container = ttk.Frame(main_paned)
-        main_paned.add(top_container, weight=2)
+        top_container = ttk.Frame(self.main_paned_budget)
+        self.main_paned_budget.add(top_container, weight=2)
         
         canvas = tk.Canvas(top_container, highlightthickness=0)
         v_scroll = ttk.Scrollbar(top_container, orient="vertical", command=canvas.yview)
@@ -6711,11 +6733,11 @@ class MaterialManager:
         # ===============================================================
         # --- 하단: 현장별 일일사용량 조회 프레임 ---
         # ===============================================================
-        bottom_container = ttk.Frame(main_paned)
-        main_paned.add(bottom_container, weight=3)
+        self.bottom_container_budget = ttk.Frame(self.main_paned_budget)
+        self.main_paned_budget.add(self.bottom_container_budget, weight=3)
 
         # 필터 영역
-        bottom_filter = ttk.Frame(bottom_container)
+        bottom_filter = ttk.Frame(self.bottom_container_budget)
         bottom_filter.pack(fill='x', pady=(5, 2))
 
         ttk.Label(bottom_filter, text="현장별 실적 조회", font=('Malgun Gothic', 10, 'bold')).pack(side='left', padx=(0, 15))
@@ -6748,7 +6770,7 @@ class MaterialManager:
 
         # KPI 요약 행 제거 (예산입력 5번 영업이익률로 대체)
         # Treeview (일일사용량 코럼)
-        tree_outer = ttk.Frame(bottom_container)
+        tree_outer = ttk.Frame(self.bottom_container_budget)
         tree_outer.pack(fill='both', expand=True)
 
         # 전체 컬럼: 기본 표시 컬럼 + 사용자가 "추가" 할 수 있는 숨김 기본 컬럼 + 사용자정의 컬럼
@@ -9119,7 +9141,7 @@ class MaterialManager:
             'Date': date_val,
             'Site': site,
             'MaterialID': mat_id,
-            '장비명': self.cb_daily_equip.get().strip(),
+            '장비명': "" if self.cb_daily_test_method.get().strip().upper() == 'PT' else self.cb_daily_equip.get().strip(),
             '검사방법': self.cb_daily_test_method.get().strip(),
             '검사품명': self.ent_daily_inspection_item.get().strip(),
             '적용코드': self.ent_daily_applied_code.get().strip(),
@@ -9355,7 +9377,11 @@ class MaterialManager:
                             row_record[ot_k] = ""
                         for k in rtk_data: row_record[k] = 0.0
                     else:
-                        for k, v in rtk_data.items(): row_record[k] = v
+                        is_rt_method = (str(common_data.get('검사방법', '')).strip().upper() == 'RT')
+                        if is_rt_method:
+                            for k, v in rtk_data.items(): row_record[k] = v
+                        else:
+                            for k in rtk_data: row_record[k] = 0.0
 
                     if not cd['is_primary']:
                         for k in ['Usage', '검사량', '단가', '출장비', '검사비', '일식', 'FilmCount']:
@@ -10240,7 +10266,8 @@ class MaterialManager:
                 self.ent_daily_applied_code.insert(0, self.clean_nan(record['적용코드']))
             if '장비명' in record:
                 self.cb_daily_equip.delete(0, tk.END)
-                self.cb_daily_equip.insert(0, self.clean_nan(record['장비명']))
+                if self.clean_nan(record.get('검사방법', '')).upper() != 'PT':
+                    self.cb_daily_equip.insert(0, self.clean_nan(record['장비명']))
             if '성적서번호' in record:
                 self.ent_daily_report_no.delete(0, tk.END)
                 self.ent_daily_report_no.insert(0, self.clean_nan(record['성적서번호']))
@@ -10568,9 +10595,428 @@ class MaterialManager:
                 group.ent_worktime.set('')
                 group.ent_ot.delete(0, tk.END)
 
-    def add_daily_usage_entry(self):
+    def open_multi_material_dialog(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("다중 품목 추가")
+        dlg.geometry("520x540")
+        dlg.minsize(480, 480)
+        dlg.resizable(True, True)
+        dlg.transient(self.root)
+        dlg.grab_set()
+        
+        added_items = getattr(self, '_multi_materials', [])
+        
+        main_f = ttk.Frame(dlg, padding=10)
+        main_f.pack(fill='both', expand=True)
+        
+        # 1. Top Input Area
+        input_f = ttk.Frame(main_f)
+        input_f.pack(side='top', fill='x', pady=(0, 10))
+        
+        ttk.Label(input_f, text="품목:").grid(row=0, column=0, padx=5, pady=3, sticky='e')
+        cb_mat = ttk.Combobox(input_f, width=22)
+        cb_mat['values'] = getattr(self.cb_daily_material, 'cget', lambda x: [])('values') if isinstance(self.cb_daily_material, ttk.Combobox) else [self.get_material_display_name(r['MaterialID']) for _, r in self.materials_df.iterrows() if r.get('Active', 1) == 1]
+        cb_mat.grid(row=0, column=1, padx=5, pady=3, sticky='w')
+        
+        ttk.Label(input_f, text="방법:").grid(row=1, column=0, padx=5, pady=3, sticky='e')
+        cb_method = ttk.Combobox(input_f, width=12, values=[' ', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'])
+        if hasattr(self, 'cb_daily_test_method'):
+            cb_method.set(self.cb_daily_test_method.get())
+        cb_method.grid(row=1, column=1, padx=5, pady=3, sticky='w')
+
+        ttk.Label(input_f, text="장비:").grid(row=2, column=0, padx=5, pady=3, sticky='e')
+        cb_equip = ttk.Combobox(input_f, width=22)
+        equip_candidates = self._get_equipment_candidates(include_all=False) if hasattr(self, '_get_equipment_candidates') else getattr(self, 'equipments', [])
+        cb_equip['values'] = equip_candidates
+        if hasattr(self, 'cb_daily_equip'):
+            cb_equip.set(self.cb_daily_equip.get().strip())
+        cb_equip.grid(row=2, column=1, padx=5, pady=3, sticky='w')
+
+        ttk.Label(input_f, text="수량:").grid(row=3, column=0, padx=5, pady=3, sticky='e')
+        ent_qty = ttk.Entry(input_f, width=12)
+        ent_qty.grid(row=3, column=1, padx=5, pady=3, sticky='w')
+        
+        ttk.Label(input_f, text="단가:").grid(row=4, column=0, padx=5, pady=3, sticky='e')
+        ent_price = ttk.Entry(input_f, width=12)
+        if hasattr(self, 'ent_daily_unit_price'):
+            ent_price.insert(0, self.ent_daily_unit_price.get())
+        ent_price.grid(row=4, column=1, padx=5, pady=3, sticky='w')
+        
+        def _on_method_change(e=None):
+            m = cb_method.get().strip()
+            prices = {'PT': 4200, 'MT': 4200, 'RT': 25500, 'PAUT': 18500, 'PMI': 14300, 'UT': 9300}
+            if m in prices:
+                ent_price.delete(0, tk.END)
+                ent_price.insert(0, f"{prices[m]:,}")
+            
+            # Filter materials based on method
+            all_mats = getattr(self, 'materials_display_list', [])
+            if not all_mats:
+                all_mats = [self.get_material_display_name(r['MaterialID']) for _, r in self.materials_df.iterrows() if r.get('Active', 1) == 1]
+            if m in ['PT', 'MT', 'PMI', 'UT', 'PAUT']:
+                # PT, MT, PMI, UT, PAUT는 메인 폼의 자재소모품(NDT 약품) 또는 장비를 사용하므로 품목 선택 비활성화
+                cb_mat.set('')
+                cb_mat['values'] = ['']
+                cb_mat.config(state='disabled')
+                if m == 'PT':
+                    cb_equip.set('')  # PT는 별도 장비 불필요
+            elif m == 'RT':
+                cb_mat.config(state='normal')
+                filtered = [mat for mat in all_mats if self._is_consumable_material(mat.split('[')[0].split('-')[0].strip(), m)]
+                cb_mat['values'] = filtered if filtered else all_mats
+            else:
+                cb_mat.config(state='normal')
+                cb_mat['values'] = all_mats
+                
+        cb_method.bind('<<ComboboxSelected>>', _on_method_change)
+        # Trigger once to set initial filtered list
+        _on_method_change()
+        
+        def _add():
+            m = cb_mat.get().strip() if str(cb_mat.cget('state')) != 'disabled' else ''
+            meth = cb_method.get().strip()
+            eq = cb_equip.get().strip()
+            q = ent_qty.get().strip()
+            p = ent_price.get().strip()
+            if not meth:
+                messagebox.showwarning("입력 확인", "검사방법(RT, PT, PMI 등)을 선택해주세요.", parent=dlg)
+                return
+            if not q:
+                messagebox.showwarning("입력 확인", "수량을 입력해주세요.", parent=dlg)
+                return
+            tv.insert('', 'end', values=(m, meth, eq, q, p))
+            if str(cb_mat.cget('state')) != 'disabled':
+                cb_mat.set('')
+            ent_qty.delete(0, tk.END)
+            # Don't clear price or equip, as they might be reused
+                
+        ttk.Button(input_f, text="추가", command=_add).grid(row=0, column=2, rowspan=5, padx=10, sticky='nsew')
+        input_f.grid_columnconfigure(2, weight=1)
+
+        # 2. Bottom Action Area (Pack with side='bottom' FIRST so it is ALWAYS visible and never clipped)
+        bottom_f = ttk.Frame(main_f)
+        bottom_f.pack(side='bottom', fill='x', pady=(10, 0))
+        
+        def _save():
+            items = []
+            for child in tv.get_children():
+                v = tv.item(child, 'values')
+                items.append({
+                    'name': v[0],
+                    'method': v[1],
+                    'equip': v[2] if len(v) > 2 else '',
+                    'qty': v[3] if len(v) > 3 else '',
+                    'price': v[4] if len(v) > 4 else ''
+                })
+            if not items:
+                messagebox.showwarning("입력 확인", "추가된 품목이 없습니다. 상단에서 품목 정보를 입력 후 [추가]를 눌러주세요.", parent=dlg)
+                return
+            self._multi_materials = items
+            if len(items) > 1:
+                self.cb_daily_material.delete(0, tk.END)
+                self.cb_daily_material.insert(0, f"[다중 품목] {len(items)}건 (저장시 분할됨)")
+                self.ent_daily_test_amount.delete(0, tk.END)
+                self.ent_daily_test_amount.insert(0, sum(float(x['qty']) for x in items if x['qty'].replace('.','',1).isdigit()))
+
+                # RT 품목 포함 시 RTK 분류 패널 자동 표시 (RTK 수량 입력을 위함)
+                has_rt_item = any(str(x.get('method', '')).strip().upper() == 'RT' for x in items)
+                if hasattr(self, 'rtk_grid'):
+                    if has_rt_item:
+                        self.rtk_grid.grid()
+                        self.rtk_grid.lift()
+                    else:
+                        self.rtk_grid.grid_remove()
+
+                # NDT 관련 품목 포함 시 NDT 계산 패널 표시
+                has_ndt_item = any(str(x.get('method', '')).strip().upper() in ['RT', 'UT', 'PT', 'PAUT', 'MT'] for x in items)
+                if hasattr(self, 'ndt_calc_frame'):
+                    if has_ndt_item:
+                        self.ndt_calc_frame.grid()
+                        self.ndt_calc_frame.lift()
+            elif len(items) == 1:
+                self.cb_daily_material.delete(0, tk.END)
+                self.cb_daily_material.insert(0, items[0]['name'])
+                if hasattr(self, 'cb_daily_test_method') and items[0].get('method'):
+                    self.cb_daily_test_method.set(items[0]['method'])
+                if hasattr(self, 'cb_daily_equip') and items[0].get('equip'):
+                    if hasattr(self.cb_daily_equip, 'delete') and hasattr(self.cb_daily_equip, 'insert'):
+                        self.cb_daily_equip.delete(0, tk.END)
+                        self.cb_daily_equip.insert(0, items[0]['equip'])
+                self.ent_daily_test_amount.delete(0, tk.END)
+                self.ent_daily_test_amount.insert(0, items[0]['qty'])
+                if hasattr(self, 'ent_daily_unit_price') and items[0].get('price'):
+                    self.ent_daily_unit_price.delete(0, tk.END)
+                    self.ent_daily_unit_price.insert(0, items[0]['price'])
+            else:
+                if hasattr(self, 'cb_daily_material') and self.cb_daily_material.get().startswith("[다중 품목]"):
+                    self.cb_daily_material.delete(0, tk.END)
+            dlg.destroy()
+
+        btn_apply = tk.Button(bottom_f, text="확인 (적용)", font=('Malgun Gothic', 10, 'bold'),
+                              bg='#0078d7', fg='white', activebackground='#005a9e', activeforeground='white',
+                              relief='raised', cursor='hand2', padx=15, pady=4, command=_save)
+        btn_apply.pack(side='right', padx=5)
+
+        btn_close = ttk.Button(bottom_f, text="닫기", command=dlg.destroy)
+        btn_close.pack(side='right', padx=5)
+
+        def _clear_all():
+            for child in tv.get_children():
+                tv.delete(child)
+
+        btn_clear = ttk.Button(bottom_f, text="전체 비우기", command=_clear_all)
+        btn_clear.pack(side='left', padx=3)
+
+        # 3. Middle List Area (Treeview with vertical scrollbar fills remaining space)
+        tv_f = ttk.Frame(main_f)
+        tv_f.pack(side='top', fill='both', expand=True, pady=5)
+        
+        tv = ttk.Treeview(tv_f, columns=('mat', 'method', 'equip', 'qty', 'price'), show='headings', height=7)
+        tv.heading('mat', text='품목명')
+        tv.heading('method', text='방법')
+        tv.heading('equip', text='장비명')
+        tv.heading('qty', text='수량')
+        tv.heading('price', text='단가')
+        tv.column('mat', width=130, anchor='w')
+        tv.column('method', width=50, anchor='center')
+        tv.column('equip', width=90, anchor='w')
+        tv.column('qty', width=45, anchor='center')
+        tv.column('price', width=65, anchor='e')
+        
+        sb_y = ttk.Scrollbar(tv_f, orient='vertical', command=tv.yview)
+        tv.configure(yscrollcommand=sb_y.set)
+        
+        tv.pack(side='left', fill='both', expand=True)
+        sb_y.pack(side='left', fill='y')
+        
+        def _del():
+            for sel in tv.selection():
+                tv.delete(sel)
+        ttk.Button(tv_f, text="삭제", command=_del).pack(side='left', padx=5, anchor='n')
+        
+        for item in added_items:
+            tv.insert('', 'end', values=(item.get('name', ''), item.get('method', ''), item.get('equip', ''), item.get('qty', ''), item.get('price', '')))
+
+    def add_daily_usage_entry(self, is_multi_loop=False):
         """현장별 일일 사용량 단일 등록 (리팩토링 버전)"""
         try:
+            if not is_multi_loop and hasattr(self, '_multi_materials') and len(self._multi_materials) > 1 and self.cb_daily_material.get().startswith("[다중 품목]"):
+                items = self._multi_materials.copy()
+                
+                # 기본 정보 사전 유효성 검사
+                date_val = self.ent_daily_date.get_date()
+                site = self.cb_daily_site.get().strip()
+                if not site:
+                    messagebox.showwarning("입력 오류", "현장명을 입력해주세요.")
+                    return
+
+                # 다중 품목 공통 필드 보존
+                saved_company = self.cb_daily_company.get().strip()
+                saved_site = site
+                saved_insp_item = self.ent_daily_inspection_item.get().strip()
+                saved_applied_code = self.ent_daily_applied_code.get().strip()
+                saved_report_no = self.ent_daily_report_no.get().strip()
+                saved_unit = self.cb_daily_unit.get().strip()
+                saved_travel_cost = self.ent_daily_travel_cost.get().strip()
+                saved_meal_cost = self.ent_daily_meal_cost.get().strip()
+                saved_test_fee = self.ent_daily_test_fee.get().strip()
+                saved_note = self.ent_daily_note.get().strip()
+                saved_equip = self.cb_daily_equip.get().strip()
+
+                def _safe_set(w, val):
+                    if w is None: return
+                    val_str = str(val) if val is not None else ''
+                    if isinstance(w, ttk.Combobox):
+                        try:
+                            w.set(val_str)
+                            return
+                        except Exception: pass
+                    if hasattr(w, 'delete') and hasattr(w, 'insert'):
+                        try:
+                            w.delete(0, tk.END)
+                            if val_str:
+                                w.insert(0, val_str)
+                            return
+                        except Exception: pass
+                    if hasattr(w, 'set'):
+                        try:
+                            w.set(val_str)
+                        except Exception: pass
+
+                # NDT 자재소모품 스냅샷 보존 (PT/MT 품목에 정확히 배분하기 위함)
+                saved_ndt_snapshots = []
+                if hasattr(self, 'ndt_company_entries'):
+                    for company_entries in self.ndt_company_entries:
+                        c_dict = {'_company': company_entries['_company'].get().strip() if '_company' in company_entries else ''}
+                        for mat, ent in company_entries.items():
+                            if mat != '_company' and hasattr(ent, 'get'):
+                                c_dict[mat] = ent.get().strip()
+                        saved_ndt_snapshots.append(c_dict)
+
+                # RTK 데이터 스냅샷 보존 (RT 품목에 정확히 배분하기 위함)
+                saved_rtk_snapshots = {}
+                if hasattr(self, 'rtk_entries'):
+                    for cat, ent in self.rtk_entries.items():
+                        if cat == "총계": continue
+                        try:
+                            val_str = ent.get().replace(',', '').strip() if hasattr(ent, 'get') else str(ent).replace(',', '').strip()
+                            saved_rtk_snapshots[cat] = val_str
+                        except:
+                            saved_rtk_snapshots[cat] = ''
+
+                has_pt_item = any(str(it.get('method', '')).strip().upper() == 'PT' for it in items)
+                has_mt_item = any(str(it.get('method', '')).strip().upper() == 'MT' for it in items)
+                has_rt_item = any(str(it.get('method', '')).strip().upper() == 'RT' for it in items)
+
+                for i, item in enumerate(items):
+                    # 공통 필드 복원 (다중 저장 시 누락 방지)
+                    _safe_set(self.cb_daily_site, saved_site)
+                    _safe_set(self.cb_daily_company, saved_company)
+                    _safe_set(self.ent_daily_inspection_item, saved_insp_item)
+                    _safe_set(self.ent_daily_applied_code, saved_applied_code)
+                    _safe_set(self.ent_daily_report_no, saved_report_no)
+                    _safe_set(self.cb_daily_unit, saved_unit)
+                    
+                    current_item_method = str(item.get('method', '')).strip().upper()
+                    if current_item_method == 'PT':
+                        item_equip = '' # PT는 장비 없음
+                        _safe_set(self.cb_daily_equip, '')
+                        _safe_set(self.cb_daily_material, '')
+                    else:
+                        item_equip = str(item.get('equip', '')).strip()
+                        _safe_set(self.cb_daily_equip, item_equip if item_equip else saved_equip)
+                        _safe_set(self.cb_daily_material, item.get('name', ''))
+                    _safe_set(self.ent_daily_note, saved_note)
+
+                    # 경비는 첫 번째 행에만 반영
+                    _safe_set(self.ent_daily_travel_cost, saved_travel_cost if i == 0 else "")
+                    _safe_set(self.ent_daily_meal_cost, saved_meal_cost if i == 0 else "")
+
+                    # 개별 품목 검사방법 설정
+                    if item.get('method'):
+                        _safe_set(self.cb_daily_test_method, item['method'])
+
+                    # 수량 설정
+                    item_qty_str = str(item.get('qty', '')).replace(',', '').strip()
+                    _safe_set(self.ent_daily_test_amount, item_qty_str)
+                    if hasattr(self, 'ndt_ori_qty_var'):
+                        try: self.ndt_ori_qty_var.set(item_qty_str)
+                        except: pass
+
+                    # 단가 설정 (품목에 지정된 단가 또는 검사방법별 기본 단가)
+                    item_price_str = str(item.get('price', '')).replace(',', '').strip()
+                    default_prices = {'PT': 4200.0, 'MT': 4200.0, 'RT': 25500.0, 'PAUT': 18500.0, 'PMI': 14300.0, 'UT': 9300.0}
+                    if (not item_price_str or item_price_str == '0') and current_item_method in default_prices:
+                        item_price_str = str(int(default_prices[current_item_method]))
+
+                    if hasattr(self, 'ent_daily_unit_price'):
+                        _safe_set(self.ent_daily_unit_price, item_price_str)
+
+                    # 품목별 검사비 자동 계산: (수량 * 단가) + (첫 번째 행 출장비)
+                    try:
+                        f_qty = float(item_qty_str) if item_qty_str else 0.0
+                    except:
+                        f_qty = 0.0
+                    try:
+                        f_price = float(item_price_str) if item_price_str else 0.0
+                    except:
+                        f_price = 0.0
+                    try:
+                        f_travel = float(str(saved_travel_cost).replace(',', '').strip()) if (i == 0 and saved_travel_cost) else 0.0
+                    except:
+                        f_travel = 0.0
+
+                    if f_qty > 0 and f_price > 0:
+                        item_calc_fee = (f_qty * f_price) + f_travel
+                        _safe_set(self.ent_daily_test_fee, f"{item_calc_fee:,.0f}")
+                    elif i == 0 and saved_test_fee:
+                        _safe_set(self.ent_daily_test_fee, saved_test_fee)
+                    else:
+                        _safe_set(self.ent_daily_test_fee, "")
+
+                    # NDT 자재소모품 스마트 배분:
+                    # 1) PT 품목에는 PT 약품(침투/현상/세척 등)을 배정
+                    # 2) MT 품목에는 MT 약품(자화/페인트 등)을 배정
+                    # 3) PT/MT가 목록에 없는 경우 첫 번째 항목(i==0)에만 보존, 그 외 항목은 NDT 약품 0으로 처리
+                    pt_chemicals = ["침투", "현상", "세척", "형광침투", "침투제", "세척제", "현상제", "형광침투제"]
+                    mt_chemicals = ["자화", "형광자화", "페인트", "형광자분", "흑색자분", "백색페인트"]
+
+                    if hasattr(self, 'ndt_company_entries'):
+                        for c_idx, company_entries in enumerate(self.ndt_company_entries):
+                            snapshot = saved_ndt_snapshots[c_idx] if c_idx < len(saved_ndt_snapshots) else {}
+                            for mat, ent in company_entries.items():
+                                if mat == '_company':
+                                    continue
+                                if hasattr(ent, 'delete') and hasattr(ent, 'insert'):
+                                    ent.delete(0, tk.END)
+                                    val = snapshot.get(mat, '')
+                                    if val:
+                                        if current_item_method == 'PT' and mat in pt_chemicals:
+                                            ent.insert(0, val)
+                                        elif current_item_method == 'MT' and mat in mt_chemicals:
+                                            ent.insert(0, val)
+                                        elif not has_pt_item and not has_mt_item and i == 0:
+                                            ent.insert(0, val)
+
+                    # RTK 데이터 스마트 배분:
+                    # RT 품목인 경우에만 메인 폼의 RTK 입력값을 복원하고, RT가 아닌 품목은 0으로 비움
+                    if hasattr(self, 'rtk_entries'):
+                        for cat, ent in self.rtk_entries.items():
+                            if cat == "총계": continue
+                            if hasattr(ent, 'delete') and hasattr(ent, 'insert'):
+                                ent.delete(0, tk.END)
+                                if current_item_method == 'RT':
+                                    val = saved_rtk_snapshots.get(cat, '')
+                                    if val: ent.insert(0, val)
+                        if hasattr(self, 'calculate_rtk_total'):
+                            try: self.calculate_rtk_total()
+                            except: pass
+                    
+                    if i > 0:
+                        # 2번째 행부터는 작업자/차량 중복 방지 초기화
+                        for w_idx in range(1, 11):
+                            grp = getattr(self, f'worker_group{w_idx}', None)
+                            if grp:
+                                try: grp.cb_name.set('')
+                                except: pass
+                                try: grp.ent_worktime.set('')
+                                except: pass
+                                try: grp.ent_ot.delete(0, tk.END)
+                                except: pass
+                        if hasattr(self, 'worker_groups'):
+                            for wg in self.worker_groups:
+                                if hasattr(wg, 'clear'): wg.clear()
+                                elif hasattr(wg, 'cb_name'):
+                                    try: wg.cb_name.set('')
+                                    except: pass
+                        if hasattr(self, 'fixed_vehicle_widget'):
+                            try: self.fixed_vehicle_widget.reset_fields()
+                            except: pass
+                        if hasattr(self, 'vehicle_widget'):
+                            try:
+                                if hasattr(self.vehicle_widget, 'reset_fields'):
+                                    self.vehicle_widget.reset_fields()
+                                elif hasattr(self.vehicle_widget, 'clear'):
+                                    self.vehicle_widget.clear()
+                            except: pass
+                        if hasattr(self, 'vehicle_boxes'):
+                            for vb in self.vehicle_boxes:
+                                try: vb.reset_fields()
+                                except: pass
+
+                    self.add_daily_usage_entry(is_multi_loop=True)
+                
+                self._multi_materials = []
+                self.clear_daily_usage_form_all(keep_date=True)
+                self.update_daily_usage_view()
+                self.update_recent_entries_view()
+                self.refresh_inquiry_filters()
+                self.update_stock_view()
+                if hasattr(self, 'daily_usage_tree'):
+                    self.daily_usage_tree.yview_moveto(1.0)
+                messagebox.showinfo("저장 완료", f"{len(items)}건의 다중 품목이 성공적으로 분할 저장되었습니다.")
+                return
+
             # 1. 기본 정보 및 유효성 검사
             date_val = self.ent_daily_date.get_date()
             site = self.cb_daily_site.get().strip()
@@ -10578,40 +11024,41 @@ class MaterialManager:
                 messagebox.showwarning("입력 오류", "현장명을 입력해주세요.")
                 return
 
-            # [NEW VALIDATION START]
-            # 1-1. 차량 운행 유효성 검사
-            if hasattr(self, 'vehicle_widget'):
-                veh_data = self.vehicle_widget.get_data()
-                if veh_data.get('vehicle_info'):
-                    if not veh_data.get('mileage'):
-                        if not messagebox.askyesno("입력 확인", "차량 정보는 선택되었으나 주행거리가 입력되지 않았습니다.\n이대로 저장하시겠습니까?"):
-                            return
+            if not is_multi_loop:
+                # [NEW VALIDATION START]
+                # 1-1. 차량 운행 유효성 검사
+                if hasattr(self, 'vehicle_widget'):
+                    veh_data = self.vehicle_widget.get_data()
+                    if veh_data.get('vehicle_info'):
+                        if not veh_data.get('mileage'):
+                            if not messagebox.askyesno("입력 확인", "차량 정보는 선택되었으나 주행거리가 입력되지 않았습니다.\n이대로 저장하시겠습니까?"):
+                                return
 
-            # 1-2. 투입 인원 대비 검사 물량 검사
-            has_workers = False
-            if hasattr(self, 'worker_groups'):
-                for wg in self.worker_groups:
-                    if wg.get_worker() and wg.get_time():
-                        has_workers = True
-                        break
-            
-            has_ndt_qty = False
-            if hasattr(self, 'ndt_company_entries'):
-                for comp_dict in self.ndt_company_entries:
-                    for mat, entry_widget in comp_dict.items():
-                        if mat == '_company': continue
-                        try:
-                            qty = float(entry_widget.get().strip() or 0)
-                            if qty > 0:
-                                has_ndt_qty = True
-                                break
-                        except: pass
-                    if has_ndt_qty: break
+                # 1-2. 투입 인원 대비 검사 물량 검사
+                has_workers = False
+                if hasattr(self, 'worker_groups'):
+                    for wg in self.worker_groups:
+                        if wg.get_worker() and wg.get_time():
+                            has_workers = True
+                            break
+                
+                has_ndt_qty = False
+                if hasattr(self, 'ndt_company_entries'):
+                    for comp_dict in self.ndt_company_entries:
+                        for mat, entry_widget in comp_dict.items():
+                            if mat == '_company': continue
+                            try:
+                                qty = float(entry_widget.get().strip() or 0)
+                                if qty > 0:
+                                    has_ndt_qty = True
+                                    break
+                            except: pass
+                        if has_ndt_qty: break
 
-            if has_workers and not has_ndt_qty:
-                if not messagebox.askyesno("입력 확인", "투입된 인원(작업시간)은 있으나 검사 물량(NDT 수량)이 모두 0입니다.\n결측치일 가능성이 있습니다. 이대로 저장하시겠습니까?"):
-                    return
-            # [NEW VALIDATION END]
+                if has_workers and not has_ndt_qty:
+                    if not messagebox.askyesno("입력 확인", "투입된 인원(작업시간)은 있으나 검사 물량(NDT 수량)이 모두 0입니다.\n결측치일 가능성이 있습니다. 이대로 저장하시겠습니까?"):
+                        return
+                # [NEW VALIDATION END]
 
             # 2. 품목 ID 확인 (디스플레이 명칭 기반 매칭)
             mat_display = self.cb_daily_material.get().strip()
@@ -10637,22 +11084,35 @@ class MaterialManager:
                         # For equipment or non-consumables, just store the name as ID (skips stock tracking)
                         mat_id = mat_display
 
-            # 3. 중복 저장 방지 체크
-            if not self.daily_usage_df.empty:
+            # 3. 중복 저장 방지 체크 (다중 품목 루프 중에는 스킵하고 단일 저장 시에만 검사, 검사방법도 반드시 일치해야 중복 처리)
+            if not is_multi_loop and not self.daily_usage_df.empty:
                 try:
                     # Normalize date for comparison
                     check_date = pd.to_datetime(date_val).date()
-                    # Ensure MaterialID is matched correctly (exact string match)
+                    current_method = self.cb_daily_test_method.get().strip()
+                    method_mask = (self.daily_usage_df['검사방법'].astype(str).str.strip() == current_method) if '검사방법' in self.daily_usage_df.columns else True
+                    
+                    equip_mask = True
+                    if not mat_id:
+                        current_equip = self.cb_daily_equip.get().strip()
+                        if '장비명' in self.daily_usage_df.columns and current_equip:
+                            equip_mask = (self.daily_usage_df['장비명'].astype(str).str.strip() == current_equip)
+                    
+                    mat_mask = (self.daily_usage_df['MaterialID'].astype(str).str.strip() == str(mat_id).strip())
+
                     existing = self.daily_usage_df[
                         (pd.to_datetime(self.daily_usage_df['Date']).dt.date == check_date) & 
                         (self.daily_usage_df['Site'] == site) & 
-                        (self.daily_usage_df['MaterialID'] == mat_id) &
+                        method_mask &
+                        equip_mask &
+                        mat_mask &
                         (self.daily_usage_df['검사품명'].astype(str).str.strip() == self.ent_daily_inspection_item.get().strip()) &
                         (self.daily_usage_df['적용코드'].astype(str).str.strip() == self.ent_daily_applied_code.get().strip())
                     ]
                     if not existing.empty:
+                        disp_desc = f"{mat_display} ({current_method})" if mat_display else f"[{current_method}]"
                         answer = messagebox.askyesnocancel("중복 확인", 
-                            f"이미 {date_val} 날짜에 '{site}' 현장의 '{mat_display}' 품목 기록이 {len(existing)}건 존재합니다.\n\n"
+                            f"이미 {date_val} 날짜에 '{site}' 현장의 '{disp_desc}' 품목 기록이 {len(existing)}건 존재합니다.\n\n"
                             "기존 기록을 덮어쓰시겠습니까?\n\n"
                             "'예(Y)': 기존 기록 덮어쓰기 (수정)\n"
                             "'아니오(N)': 새로운 기록으로 추가 저장\n"
@@ -10706,66 +11166,58 @@ class MaterialManager:
                         self.ent_daily_end_date.set_date(date_val)
                 except: pass
                 
-                # 성공 시 필드 초기화 및 뷰 갱신
-                if hasattr(self, 'ndt_company_entries'):
-                    for company_entries in self.ndt_company_entries:
-                        for name in self.ndt_materials_all:
-                            if name in company_entries:
-                                company_entries[name].delete(0, tk.END)
-                
-                # RTK 필드 초기화
-                for cat, ent in self.rtk_entries.items():
-                    if cat != "총계":
-                        ent.delete(0, tk.END)
-                self.rtk_entries["총계"].config(state='normal')
-                self.rtk_entries["총계"].delete(0, tk.END)
-                self.rtk_entries["총계"].config(state='readonly')
-                
-                # [V13_RESET_REQUESTED] Clearing fields after successful entry based on user request
-                # [FIX] Keep the current date for consecutive entries on the same day
-                self.clear_daily_usage_form_all(keep_date=True)
+                if not is_multi_loop:
+                    # 성공 시 필드 초기화 및 뷰 갱신
+                    if hasattr(self, 'ndt_company_entries'):
+                        for company_entries in self.ndt_company_entries:
+                            for name in self.ndt_materials_all:
+                                if name in company_entries:
+                                    company_entries[name].delete(0, tk.END)
+                    
+                    # RTK 필드 초기화
+                    for cat, ent in self.rtk_entries.items():
+                        if cat != "총계":
+                            ent.delete(0, tk.END)
+                    self.rtk_entries["총계"].config(state='normal')
+                    self.rtk_entries["총계"].delete(0, tk.END)
+                    self.rtk_entries["총계"].config(state='readonly')
+                    
+                    # [V13_RESET_REQUESTED] Clearing fields after successful entry based on user request
+                    # [FIX] Keep the current date for consecutive entries on the same day
+                    self.clear_daily_usage_form_all(keep_date=True)
 
-                # Reset focus to first logical field (Company)
-                self.cb_daily_company.focus_set()
+                    # Reset focus to first logical field (Company)
+                    self.cb_daily_company.focus_set()
 
-                # [V13.1] Keep workers too for consecutive entries
-                # for i in range(1, 11):
-                #     group = getattr(self, f'worker_group{i}', None)
-                #     if group:
-                #         group.cb_name.set('')
-                #         group.cb_shift.set('')
-                #         group.ent_worktime.set('')
-                #         group.ent_ot.delete(0, tk.END)
+                    # NDT 섹션 초기화
+                    if hasattr(self, 'ndt_company_entries'):
+                        while len(self.ndt_company_entries) > 1:
+                            self.remove_last_ndt_company()
+                        if self.ndt_company_entries:
+                            first = self.ndt_company_entries[0]
+                            first['_company'].set('')
+                            for k in self.ndt_materials_all:
+                                if k in first: first[k].delete(0, tk.END)
 
-                # NDT 섹션 초기화
-                if hasattr(self, 'ndt_company_entries'):
-                    while len(self.ndt_company_entries) > 1:
-                        self.remove_last_ndt_company()
-                    if self.ndt_company_entries:
-                        first = self.ndt_company_entries[0]
-                        first['_company'].set('')
-                        for k in self.ndt_materials_all:
-                            if k in first: first[k].delete(0, tk.END)
+                    # 차량 점검 필드 초기화 (safeguarded)
+                    # [NEW] 현장별 저장 시 차량, 목록, 메모 레이블창 자동 닫기 (User request)
+                    for key in list(getattr(self, 'vehicle_inspections', {}).keys()):
+                        self.remove_box(key)
+                    for key in list(getattr(self, 'checklists', {}).keys()):
+                        self.remove_box(key)
+                    for key in list(getattr(self, 'memos', {}).keys()):
+                        self.remove_box(key)
 
-                # 차량 점검 필드 초기화 (safeguarded)
-                # [NEW] 현장별 저장 시 차량, 목록, 메모 레이블창 자동 닫기 (User request)
-                for key in list(getattr(self, 'vehicle_inspections', {}).keys()):
-                    self.remove_box(key)
-                for key in list(getattr(self, 'checklists', {}).keys()):
-                    self.remove_box(key)
-                for key in list(getattr(self, 'memos', {}).keys()):
-                    self.remove_box(key)
-
-                self.update_daily_usage_view()
-                self.update_recent_entries_view()
-                self.refresh_inquiry_filters()
-                self.update_stock_view()
-                
-                # [NEW] Scroll to the bottom to see new entries
-                if hasattr(self, 'daily_usage_tree'):
-                    self.daily_usage_tree.yview_moveto(1.0)
-                
-                messagebox.showinfo("성공", f"{saved_count}건의 기록이 안전하게 저장되었습니다.")
+                    self.update_daily_usage_view()
+                    self.update_recent_entries_view()
+                    self.refresh_inquiry_filters()
+                    self.update_stock_view()
+                    
+                    # [NEW] Scroll to the bottom to see new entries
+                    if hasattr(self, 'daily_usage_tree'):
+                        self.daily_usage_tree.yview_moveto(1.0)
+                    
+                    messagebox.showinfo("성공", f"{saved_count}건의 기록이 안전하게 저장되었습니다.")
         except Exception as e:
             messagebox.showerror("오류", f"기록 저장 중 오류 발생: {e}")
 

@@ -196,10 +196,14 @@ def setup_daily_usage_tab_impl(self):
     btn_material_mgr = tk.Button(mat_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                 command=lambda: self.open_list_management_dialog('materials', target_cb=self.cb_daily_material))
     btn_material_mgr.pack(side='left', padx=(2, 0))
+    
+    btn_multi_material = tk.Button(mat_container, text="[+] 다중 품목", font=('Malgun Gothic', 8, 'bold'), bd=0, bg=self.theme_bg, fg='red', cursor='hand2',
+                                  command=lambda: getattr(self, 'open_multi_material_dialog', lambda: None)())
+    btn_multi_material.pack(side='left', padx=(5, 0))
 
     # Row 3: 방법, 검사품명
     ttk.Label(form_content, text="방법:").grid(row=3, column=0, padx=(5, 0), pady=1, sticky='e')
-    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=[' ', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
+    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=[' ', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'])
     self.cb_daily_test_method.grid(row=3, column=1, padx=(2, 10), pady=1, sticky='w')
     
     ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
@@ -512,6 +516,19 @@ def setup_daily_usage_tab_impl(self):
                 self.empty_guide_frame.grid_remove() # Hide guide
             except:
                 pass
+            if method == "PT":
+                # PT 검사는 별도 장비를 사용하지 않으므로 장비명 자동 초기화
+                try:
+                    self.ent_daily_equip.delete(0, 'end')
+                except Exception:
+                    pass
+                # PT 검사는 자재소모품 패널(침투제/세척제/현상제)에서 직접 관리하므로 단독 품목명 초기화
+                try:
+                    cur_mat = self.cb_daily_material.get().strip()
+                    if not cur_mat.startswith("[다중 품목]"):
+                        self.cb_daily_material.delete(0, 'end')
+                except Exception:
+                    pass
         else:
             try:
                 self.ndt_frame.grid_remove()
@@ -820,6 +837,15 @@ def setup_daily_usage_tab_impl(self):
     self.tv_recent.column("rej_count", width=60, minwidth=60, stretch=False, anchor='center')
     self.tv_recent.column("pipe_size", width=80, minwidth=80, stretch=False, anchor='center')
     
+    vsb = ttk.Scrollbar(self.recent_frame, orient="vertical", command=self.tv_recent.yview)
+    hsb = ttk.Scrollbar(self.recent_frame, orient="horizontal", command=self.tv_recent.xview)
+    self.tv_recent.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+    self.tv_recent.grid(row=0, column=0, sticky='nsew')
+    vsb.grid(row=0, column=1, sticky='ns')
+    hsb.grid(row=1, column=0, sticky='ew')
+    self.recent_frame.grid_rowconfigure(0, weight=1)
+    self.recent_frame.grid_columnconfigure(0, weight=1)
+    
     # Bind click to load record and delete
     self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
     self.tv_recent.bind('<Delete>', self.delete_recent_entry)
@@ -837,14 +863,7 @@ def setup_daily_usage_tab_impl(self):
             
     self.tv_recent.bind("<Button-3>", show_recent_menu)
     
-    recent_hsb = ttk.Scrollbar(self.recent_frame, orient="horizontal", command=self.tv_recent.xview)
-    recent_hsb.pack(side='bottom', fill='x')
-    
-    self.tv_recent.pack(side='left', fill='both', expand=True, padx=2, pady=2)
-    
-    recent_vsb = ttk.Scrollbar(self.recent_frame, orient="vertical", command=self.tv_recent.yview)
-    recent_vsb.pack(side='right', fill='y')
-    self.tv_recent.configure(yscrollcommand=recent_vsb.set, xscrollcommand=recent_hsb.set)
+    # Scrollbars and layout for tv_recent are now handled by grid() above.
     
     # 2. Middle: Vehicle Inspection (Fixed)
     self.fixed_vehicle_frame = ttk.LabelFrame(self.bottom_dashboard, text="차량점검 (상시 패널)")
@@ -1184,11 +1203,9 @@ def update_daily_usage_view_impl(self):
         
         content_key = (n_date, n_site, c_worktime, n_method, t_key, mat_id, n_insp, n_code)
         
-        # Record is duplicate split IF (Timestamp matches) AND (Content matches)
-        # [FIX] Changed to OR but because t_key is in content_key, separate saves will always be unique.
-        is_duplicate_split = (t_key and t_key in seen_entry_times) or (content_key in seen_contents)
+        # Record is duplicate split only if the exact same item content (date, site, worktime, method, entrytime, item) was already processed
+        is_duplicate_split = (content_key in seen_contents)
         
-        if t_key: seen_entry_times.add(t_key)
         seen_contents.add(content_key)
 
         # Metadata formatting (re-mapped for display later)

@@ -526,8 +526,16 @@ class VehicleInspectionWidget(ttk.Frame):
             except Exception as e: print(f"Error clearing var: {e}")
 
         try:
+            self.clear_photo()
+        except: pass
+
+        try:
             self.cb_vehicle_info.focus_set()
         except: pass
+
+    def clear(self):
+        """Alias for reset_fields to safely support .clear() calls"""
+        self.reset_fields()
 
     def set_data(self, data):
         if not data: return
