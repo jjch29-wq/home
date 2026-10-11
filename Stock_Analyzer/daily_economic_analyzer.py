@@ -551,27 +551,59 @@ def save_custom_stock(name, ticker, qty=0, avg_price=0):
 
 def delete_custom_stock(stock_name):
     custom = load_custom_stocks()
+    if not stock_name:
+        return
+        
+    clean_target = str(stock_name).replace('🔥', '').replace('(사용자 추가)', '').split('(')[0].strip()
     
-    # 기본 포트폴리오 종목인지 확인
-    is_default = False
-    default_ticker = None
-    for full_name, ticker in PORTFOLIO.items():
-        clean_name = full_name.split('(')[0].strip()
-        if clean_name == stock_name:
-            is_default = True
-            default_ticker = ticker
-            break
+    # 대상 종목의 티커 코드(숫자 6자리 등) 및 이름 후보 수집
+    target_codes = set()
+    
+    # 1) 기본 포트폴리오에서 검색
+    for full_name, t in PORTFOLIO.items():
+        c_name = full_name.split('(')[0].strip()
+        if c_name.lower() == clean_target.lower():
+            target_codes.add(t.split('.')[0].upper())
             
-    if is_default:
-        # 기본 종목이면 수량을 0으로 덮어씀
-        custom[stock_name] = {"ticker": default_ticker, "qty": 0}
-    else:
-        # 순수 사용자 추가 종목이면 완전 삭제 (키가 다를 수도 있으므로 이름 부분 매치)
-        keys_to_delete = []
-        for k in custom.keys():
-            if stock_name in k:
-                keys_to_delete.append(k)
-        for k in keys_to_delete:
+    # 2) 사용자 포트폴리오에서 티커 코드 검색
+    for k, v in custom.items():
+        c_k = k.replace('🔥', '').replace('(사용자 추가)', '').split('(')[0].strip()
+        if c_k.lower() == clean_target.lower() or clean_target.lower() in c_k.lower() or c_k.lower() in clean_target.lower():
+            if isinstance(v, dict) and 'ticker' in v:
+                target_codes.add(str(v['ticker']).split('.')[0].upper())
+                
+    # 삭제할 키 수집
+    keys_to_delete = set()
+    for k, v in custom.items():
+        c_k = k.replace('🔥', '').replace('(사용자 추가)', '').split('(')[0].strip()
+        
+        # 이름 완전 일치
+        if c_k.lower() == clean_target.lower():
+            keys_to_delete.add(k)
+            continue
+            
+        # 부분 일치 (2글자 이상)
+        if len(clean_target) >= 2 and (clean_target.lower() in c_k.lower() or c_k.lower() in clean_target.lower()):
+            keys_to_delete.add(k)
+            continue
+            
+        # 티커 코드 일치 (시노펙트 025320, sk텔레콤 017670 등 별칭/오타/대소문자 차이 일괄 삭제)
+        if isinstance(v, dict) and 'ticker' in v:
+            code = str(v['ticker']).split('.')[0].upper()
+            if code in target_codes:
+                keys_to_delete.add(k)
+                continue
+                
+        # 수량이 0 이하인 비활성 항목 자동 정리
+        if isinstance(v, dict):
+            try:
+                if float(v.get('qty', 0)) <= 0:
+                    keys_to_delete.add(k)
+            except Exception:
+                pass
+
+    for k in keys_to_delete:
+        if k in custom:
             del custom[k]
             
     with open(CUSTOM_PORT_FILE, 'w', encoding='utf-8') as f:
@@ -630,20 +662,41 @@ def get_portfolio_data(market_df=None):
                 
         if existing_name:
             # 이미 있는 종목이면 수량 및 매수 단가 업데이트
-            if info.get('qty', 0) >= 0:
-                current_owned[existing_name] = info['qty']
-                current_owned[PORTFOLIO[existing_name]] = info['qty'] 
-                if info.get('avg_price', 0) > 0:
-                    current_avg_price[existing_name] = info['avg_price']
-                    current_avg_price[PORTFOLIO[existing_name]] = info['avg_price']
+            try:
+                qty_val = float(info.get('qty', 0))
+            except:
+                qty_val = 0
+            if qty_val > 0:
+                current_owned[existing_name] = qty_val
+                current_owned[PORTFOLIO[existing_name]] = qty_val 
+                try:
+                    p_val = float(info.get('avg_price', 0))
+                except:
+                    p_val = 0
+                if p_val > 0:
+                    current_avg_price[existing_name] = p_val
+                    current_avg_price[PORTFOLIO[existing_name]] = p_val
+            else:
+                current_owned.pop(existing_name, None)
+                current_owned.pop(PORTFOLIO[existing_name], None)
+                current_avg_price.pop(existing_name, None)
+                current_avg_price.pop(PORTFOLIO[existing_name], None)
         else:
             # 새로운 종목이면 (사용자 추가) 꼬리표 달고 새로 등록
-            display_name = f"{name} (사용자 추가)"
-            current_portfolio[display_name] = info['ticker']
-            if info.get('qty', 0) > 0:
-                current_owned[display_name] = info['qty']
-            if info.get('avg_price', 0) > 0:
-                current_avg_price[display_name] = info['avg_price']
+            try:
+                qty_val = float(info.get('qty', 0))
+            except:
+                qty_val = 0
+            if qty_val > 0:
+                display_name = f"{name} (사용자 추가)"
+                current_portfolio[display_name] = info['ticker']
+                current_owned[display_name] = qty_val
+                try:
+                    p_val = float(info.get('avg_price', 0))
+                except:
+                    p_val = 0
+                if p_val > 0:
+                    current_avg_price[display_name] = p_val
             
     try:
         vix = yf.Ticker("^VIX").history(period="1d")['Close'].iloc[-1]

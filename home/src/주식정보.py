@@ -219,6 +219,19 @@ class EconomicDashboard:
         self.tv_port.bind("<Double-1>", self.open_prediction_window)
         self.tv_rec.bind("<Double-1>", self.open_prediction_window)
         self.tv_my.bind("<Double-1>", self.open_prediction_window)
+        self.tv_my.bind("<Delete>", lambda e: self.delete_selected_stock())
+        
+        # 보유 주식 우클릭 메뉴
+        self.menu_my = tk.Menu(self.root, tearoff=0)
+        self.menu_my.add_command(label="🗑️ 선택 종목 삭제", command=self.delete_selected_stock)
+        self.menu_my.add_command(label="📊 AI 정밀 진단 및 5일 예측", command=lambda: self.open_prediction_window(None))
+        
+        def show_my_menu(event):
+            item = self.tv_my.identify_row(event.y)
+            if item:
+                self.tv_my.selection_set(item)
+                self.menu_my.post(event.x_root, event.y_root)
+        self.tv_my.bind("<Button-3>", show_my_menu)
         
         # 색상 태그 설정 (상승=빨강, 하락=파랑)
         self.tv_news.tag_configure('pos', foreground='red')
@@ -284,8 +297,8 @@ class EconomicDashboard:
             link = self.tv_news.item(item[0], 'values')[4]
             webbrowser.open(link)
             
-    def open_prediction_window(self, event):
-        widget = event.widget
+    def open_prediction_window(self, event=None):
+        widget = event.widget if event is not None else self.tv_my
         item = widget.selection()
         if not item: return
         
@@ -619,17 +632,53 @@ class EconomicDashboard:
         text_widget.config(state='disabled')
         
     def delete_selected_stock(self):
-        item = self.tv_my.selection()
-        if not item:
+        selection = self.tv_my.selection()
+        if not selection:
             messagebox.showwarning("선택 안 됨", "삭제할 종목을 목록에서 클릭하여 선택해주세요.")
             return
             
-        stock_name = self.tv_my.item(item[0], 'values')[0]
+        stock_names = []
+        for item_id in selection:
+            vals = self.tv_my.item(item_id, 'values')
+            if vals:
+                name = str(vals[0]).replace('🔥', '').replace('(사용자 추가)', '').split('(')[0].strip()
+                stock_names.append(name)
+                
+        if not stock_names:
+            return
+            
+        names_disp = ", ".join(stock_names)
+        confirm_msg = f"정말로 '{names_disp}' 종목을 보유 목록에서 삭제하시겠습니까?" if len(stock_names) == 1 else f"선택한 {len(stock_names)}개 종목({names_disp})을\n보유 목록에서 모두 삭제하시겠습니까?"
         
-        if messagebox.askyesno("종목 삭제", f"정말로 '{stock_name}' 종목을 보유 목록에서 삭제하시겠습니까?"):
+        if not messagebox.askyesno("종목 삭제", confirm_msg):
+            return
+            
+        for item_id, stock_name in zip(selection, stock_names):
             analyzer.delete_custom_stock(stock_name)
-            messagebox.showinfo("삭제 완료", f"'{stock_name}' 종목이 삭제되었습니다.\n데이터를 다시 불러오기 위해 [갱신]을 진행합니다.")
-            self.refresh_data()
+            try:
+                self.tv_my.delete(item_id)
+            except Exception:
+                pass
+                
+            # 추천 포트폴리오(tv_port)의 '보유' 컬럼을 '-'로 즉시 업데이트
+            if hasattr(self, 'tv_port'):
+                for p_item in self.tv_port.get_children():
+                    vals = list(self.tv_port.item(p_item, 'values'))
+                    if vals and len(vals) > 1 and stock_name in vals[0]:
+                        vals[1] = '-'
+                        self.tv_port.item(p_item, values=vals)
+                        
+            # 내부 캐시(latest_portfolio_df)에서도 보유 상태 해제
+            if hasattr(self, 'latest_portfolio_df') and self.latest_portfolio_df is not None and not self.latest_portfolio_df.empty:
+                try:
+                    mask = self.latest_portfolio_df['추천 종목'].str.contains(stock_name, na=False)
+                    self.latest_portfolio_df.loc[mask, '보유'] = '-'
+                    self.latest_portfolio_df.loc[mask, '일간 변동금액'] = 0
+                except Exception:
+                    pass
+                    
+        self.lbl_status.config(text=f"'{names_disp}' 종목이 보유 목록에서 완전히 삭제되었습니다.", foreground="darkgreen")
+        messagebox.showinfo("삭제 완료", f"'{names_disp}' 종목이 보유 목록에서 완전히 삭제되었습니다.")
 
 
     def open_add_stock_window(self):
