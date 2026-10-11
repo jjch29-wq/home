@@ -543,6 +543,10 @@ def update_monthly_usage_view_impl(self):
         travel_cost = entry.get('출장비', 0.0)
         meal_cost = entry.get('일식', 0.0)
         test_fee = entry.get('검사비', 0.0)
+        
+        # [FIX] 단가가 단순 합산(sum)되어 왜곡되는 현상 방지: 유효 단가 = (검사비 - 출장비) / 검사량
+        if test_amount > 0 and (test_fee - travel_cost) > 0:
+            unit_price = (test_fee - travel_cost) / test_amount
         overhead_cost = entry.get('제경비', 0.0)
         tech_fee = entry.get('기술료', 0.0)
         conv_qty = entry.get('환산물량', 0.0)
