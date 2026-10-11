@@ -414,14 +414,16 @@ def update_monthly_usage_view_impl(self):
                         a_sum += a_p
                     except: pass
 
-        # 2. Deduping Key (Date, Site, WorkTime, Material)
-        # [REFINED] Exclude workers from the key to correctly catch records split across rows.
+        # 2. Deduping Key (Date, Site, WorkTime, Method, EntryTime, Material, Inspection, Code)
+        # [PARITY] Consistent with daily_usage_view_lotte.py: include Method, Item, Code, and EntryTime in key.
+        # This prevents separate inspection records (e.g., RT and PT/PMI) saved at the same time from being zeroed out.
         n_date = self._safe_format_datetime(row.get('Date', ''), '%Y-%m-%d')
         n_site = str(row.get('Site', '')).strip()
         c_worktime = str(row.get('WorkTime', '')).strip()
-        n_mat = str(row.get('MaterialID', ''))
-        
-        content_key = (n_date, n_site, c_worktime, n_mat)
+        n_method = str(row.get('검사방법', '')).strip()
+        n_insp = str(row.get('검사품명', '')).strip()
+        n_code = str(row.get('적용코드', '')).strip()
+        n_mat = str(row.get('MaterialID', '')).strip()
         
         e_t_raw = row.get('EntryTime', '')
         try:
@@ -431,10 +433,11 @@ def update_monthly_usage_view_impl(self):
                 t_key = str(e_t_raw).split('.')[0].strip() if e_t_raw else ""
         except: t_key = ""
         
-        is_dup = (t_key and t_key in seen_m_times) or (content_key in seen_m_contents)
+        content_key = (n_date, n_site, c_worktime, n_method, t_key, n_mat, n_insp, n_code)
+        
+        is_dup = (content_key in seen_m_contents)
         
         if not is_dup:
-            if t_key: seen_m_times.add(t_key)
             seen_m_contents.add(content_key)
             
             # Primary row: return full values
@@ -442,6 +445,7 @@ def update_monthly_usage_view_impl(self):
         else:
             # Duplicate row: Zero out quantitative impact for aggregation
             return pd.Series([0.0, 0, 0, True])
+
 
     # Apply calculation and marking
     calc_results = df.apply(sync_dedup_and_calc_ot, axis=1)

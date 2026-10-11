@@ -6285,67 +6285,171 @@ class MaterialManager:
     
 
     def export_budget_estimation(self):
-        """Export the estimated budget details to Excel"""
-        site = self.cb_budget_site.get()
-        if not site:
-            messagebox.showwarning("현장 미선택", "사정원가를 내보낼 현장을 선택하거나 입력해주세요.")
-            return
-            
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".xlsx",
-            filetypes=[("Excel files", "*.xlsx")],
-            initialfile=f"사정예산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        )
-        if not file_path:
-            return
-            
-        # Collect Summary Data
-        summary_data = {
-            'site': site,
-            'period': getattr(self, 'ent_budget_period').get() if hasattr(self, 'ent_budget_period') else "",
-            'revenue': getattr(self, 'ent_budget_revenue').get() if hasattr(self, 'ent_budget_revenue') else "",
-            'unitprice': getattr(self, 'ent_budget_unit_price').get() if hasattr(self, 'ent_budget_unit_price') else "",
-            'labor': getattr(self, 'ent_budget_labor').get() if hasattr(self, 'ent_budget_labor') else "",
-            'material': getattr(self, 'ent_budget_material').get() if hasattr(self, 'ent_budget_material') else "",
-            'expense': getattr(self, 'ent_budget_expense').get() if hasattr(self, 'ent_budget_expense') else "",
-            'outsource': getattr(self, 'ent_budget_outsource').get() if hasattr(self, 'ent_budget_outsource') else "",
-            'profit': getattr(self, 'ent_budget_profit').get() if hasattr(self, 'ent_budget_profit') else "",
-            'margin': getattr(self, 'ent_budget_margin').get() if hasattr(self, 'ent_budget_margin') else ""
-        }
-        
-        # Details
-        labor_data = self.labor_detail_widget.get_data() if hasattr(self, 'labor_detail_widget') else {}
-        
-        # Material Details - need to augment with name/spec/unit from default_items
-        raw_mat = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
-        material_data = []
-        defaults = self.material_detail_widget.default_items if hasattr(self, 'material_detail_widget') else []
-        for i, row in enumerate(raw_mat):
-            if i < len(defaults):
-                name, spec, unit, _ = defaults[i]
-                row['name'] = name
-                row['spec'] = spec
-                row['unit'] = unit
-                material_data.append(row)
-                
-        expense_data = self.expense_detail_widget.get_data() if hasattr(self, 'expense_detail_widget') else {}
-        
+        """Export the estimated budget details (Planned and Actual) to Excel"""
         try:
+            site = self.cb_budget_site.get().strip() if hasattr(self, 'cb_budget_site') else ""
+            if not site and hasattr(self, 'cb_budget_view_site'):
+                v_site = self.cb_budget_view_site.get().strip()
+                if v_site and v_site != '전체':
+                    site = v_site
+            if not site and hasattr(self, 'budget_df') and not self.budget_df.empty and 'Site' in self.budget_df.columns:
+                valid_sites = [s for s in self.budget_df['Site'].dropna().unique() if str(s).strip() and str(s).strip() != '전체']
+                if valid_sites:
+                    site = str(valid_sites[0]).strip()
+            if not site and hasattr(self, 'sites') and self.sites:
+                valid_sites = [s for s in self.sites if str(s).strip() and str(s).strip() != '전체']
+                if valid_sites:
+                    site = str(valid_sites[0]).strip()
+            if not site:
+                site = "롯데건설 바이오"
+
+            if hasattr(self, 'cb_budget_site'):
+                self.cb_budget_site.set(site)
+
+            # If form has not been loaded yet, populate it silently first
+            cur_rev = getattr(self, 'ent_budget_revenue').get().strip() if hasattr(self, 'ent_budget_revenue') else ""
+            if not cur_rev and hasattr(self, '_load_budget_to_form'):
+                self._load_budget_to_form(site, silent=True)
+
+            file_path = filedialog.asksaveasfilename(
+                parent=self.root,
+                defaultextension=".xlsx",
+                filetypes=[("Excel files", "*.xlsx")],
+                initialfile=f"공사실행예산서_{site}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
+            if not file_path:
+                return
+
+            # 1. Collect Summary Data (Planned / 사전예산)
+            summary_data = {
+                'site': site,
+                'period': getattr(self, 'ent_budget_period').get() if hasattr(self, 'ent_budget_period') else "",
+                'revenue': getattr(self, 'ent_budget_revenue').get() if hasattr(self, 'ent_budget_revenue') else "",
+                'unitprice': getattr(self, 'ent_budget_unit_price').get() if hasattr(self, 'ent_budget_unit_price') else "",
+                'labor': getattr(self, 'ent_budget_labor').get() if hasattr(self, 'ent_budget_labor') else "",
+                'material': getattr(self, 'ent_budget_material').get() if hasattr(self, 'ent_budget_material') else "",
+                'expense': getattr(self, 'ent_budget_expense').get() if hasattr(self, 'ent_budget_expense') else "",
+                'outsource': getattr(self, 'ent_budget_outsource').get() if hasattr(self, 'ent_budget_outsource') else "",
+                'profit': getattr(self, 'ent_budget_profit').get() if hasattr(self, 'ent_budget_profit') else "",
+                'margin': getattr(self, 'ent_budget_margin').get() if hasattr(self, 'ent_budget_margin') else ""
+            }
+
+            # Details (Planned / 사전예산)
+            labor_data = self.labor_detail_widget.get_data() if hasattr(self, 'labor_detail_widget') else {}
+
+            raw_mat = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
+            material_data = []
+            defaults = self.material_detail_widget.default_items if hasattr(self, 'material_detail_widget') else []
+            for i, row in enumerate(raw_mat):
+                row_copy = dict(row)
+                if i < len(defaults):
+                    d = defaults[i]
+                    if len(d) >= 5:
+                        name, spec, _, unit = d[0], d[1], d[2], d[3]
+                    elif len(d) == 4:
+                        name, spec, unit = d[0], d[1], d[2]
+                    elif len(d) >= 2:
+                        name, spec, unit = d[0], d[1], ""
+                    else:
+                        name, spec, unit = str(d[0]), "", ""
+                    row_copy['name'] = name
+                    row_copy['spec'] = spec
+                    row_copy['unit'] = unit
+                material_data.append(row_copy)
+
+            expense_data = self.expense_detail_widget.get_data() if hasattr(self, 'expense_detail_widget') else {}
+
+            # 2. Collect Summary Data (Actual / 사후원가 실적)
+            actual_period = getattr(self, 'ent_budget_actual_period').get() if hasattr(self, 'ent_budget_actual_period') else ""
+            if not actual_period:
+                actual_period = summary_data.get('period', '')
+
+            actual_summary_data = {
+                'site': site,
+                'period': actual_period,
+                'revenue': getattr(self, 'ent_budget_actual_revenue').get() if hasattr(self, 'ent_budget_actual_revenue') else "",
+                'unitprice': getattr(self, 'ent_budget_actual_unit_price').get() if hasattr(self, 'ent_budget_actual_unit_price') else "",
+                'labor': getattr(self, 'ent_budget_actual_labor').get() if hasattr(self, 'ent_budget_actual_labor') else "",
+                'material': getattr(self, 'ent_budget_actual_material').get() if hasattr(self, 'ent_budget_actual_material') else "",
+                'expense': getattr(self, 'ent_budget_actual_expense').get() if hasattr(self, 'ent_budget_actual_expense') else "",
+                'outsource': getattr(self, 'ent_budget_actual_outsource').get() if hasattr(self, 'ent_budget_actual_outsource') else "",
+                'profit': getattr(self, 'ent_budget_actual_profit').get() if hasattr(self, 'ent_budget_actual_profit') else "",
+                'margin': getattr(self, 'ent_budget_actual_margin').get() if hasattr(self, 'ent_budget_actual_margin') else ""
+            }
+
+            # Details (Actual / 사후원가 실적)
+            actual_labor_data = self.actual_labor_detail_widget.get_data() if hasattr(self, 'actual_labor_detail_widget') else {}
+
+            raw_act_mat = self.actual_material_detail_widget.get_data() if hasattr(self, 'actual_material_detail_widget') else []
+            actual_material_data = []
+            act_defaults = self.actual_material_detail_widget.default_items if hasattr(self, 'actual_material_detail_widget') else []
+            for i, row in enumerate(raw_act_mat):
+                row_copy = dict(row)
+                if i < len(act_defaults):
+                    d = act_defaults[i]
+                    if len(d) >= 5:
+                        name, spec, _, unit = d[0], d[1], d[2], d[3]
+                    elif len(d) == 4:
+                        name, spec, unit = d[0], d[1], d[2]
+                    elif len(d) >= 2:
+                        name, spec, unit = d[0], d[1], ""
+                    else:
+                        name, spec, unit = str(d[0]), "", ""
+                    row_copy['name'] = name
+                    row_copy['spec'] = spec
+                    row_copy['unit'] = unit
+                actual_material_data.append(row_copy)
+
+            actual_expense_data = self.actual_expense_detail_widget.get_data() if hasattr(self, 'actual_expense_detail_widget') else {}
+
+            # 3. Collect site records from daily_usage_df for supporting evidence sheets
+            site_daily_df = pd.DataFrame()
+            if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
+                if site != '전체' and 'Site' in self.daily_usage_df.columns:
+                    matched = self.daily_usage_df[self.daily_usage_df['Site'].astype(str).str.strip() == site].copy()
+                    if not matched.empty:
+                        site_daily_df = matched
+                    else:
+                        # Fallback: DB might store site as 'K1 PJT' while budget uses '롯데건설 바이오'
+                        site_daily_df = self.daily_usage_df.copy()
+                else:
+                    site_daily_df = self.daily_usage_df.copy()
+
             from site_apps.lotte.src.utils.export_helper import export_budget_estimation_to_excel
-            if export_budget_estimation_to_excel(file_path, summary_data, labor_data, material_data, expense_data):
-                messagebox.showinfo("내보내기 완료", f"사정예산서가 성공적으로 저장되었습니다.\n{file_path}")
+            success = export_budget_estimation_to_excel(
+                file_path, 
+                summary_data, labor_data, material_data, expense_data,
+                actual_summary_data=actual_summary_data,
+                actual_labor_data=actual_labor_data,
+                actual_material_data=actual_material_data,
+                actual_expense_data=actual_expense_data,
+                raw_df=site_daily_df
+            )
+            if success:
+                try:
+                    import os
+                    os.startfile(file_path)
+                except Exception as open_err:
+                    print(f"Could not auto-open file: {open_err}")
+
+                messagebox.showinfo(
+                    "출력 완료", 
+                    f"공사실행예산서 (사전/사후 보고서 및 항목별 증빙 5개 시트 패키지)가 정상 출력되었습니다.\n파일이 자동으로 열립니다:\n{file_path}",
+                    parent=self.root
+                )
         except Exception as e:
             import traceback
             traceback.print_exc()
-            messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다.\n{e}")
+            messagebox.showerror("출력 오류", f"공사실행예산서 출력 중 오류가 발생했습니다.\n{e}", parent=self.root)
 
     def export_budget_sales_status(self):
         """Export the currently filtered budget sales status to Excel"""
         if not hasattr(self, 'budget_view_tree') or not self.budget_view_tree.get_children():
-            messagebox.showwarning("데이터 없음", "내보낼 데이터가 없습니다. 먼저 조회를 해주세요.")
+            messagebox.showwarning("데이터 없음", "내보낼 데이터가 없습니다. 먼저 조회를 해주세요.", parent=self.root)
             return
 
         file_path = filedialog.asksaveasfilename(
+            parent=self.root,
             defaultextension=".xlsx",
             filetypes=[("Excel files", "*.xlsx")],
             initialfile=f"매출현황_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -6399,9 +6503,15 @@ class MaterialManager:
                     max_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
                     worksheet.column_dimensions[chr(65 + i)].width = max_len
             
-            messagebox.showinfo("내보내기 완료", "매출현황이 엑셀로 저장되었습니다.")
+            try:
+                import os
+                os.startfile(file_path)
+            except Exception as open_err:
+                print(f"Could not auto-open file: {open_err}")
+
+            messagebox.showinfo("내보내기 완료", f"매출현황이 엑셀로 저장되었습니다.\n{file_path}", parent=self.root)
         except Exception as e:
-            messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다: {e}")
+            messagebox.showerror("오류", f"엑셀 저장 중 오류가 발생했습니다: {e}", parent=self.root)
 
     def setup_ndt_billing_tab(self):
         # [NEW] Popout Control Frame
@@ -6483,7 +6593,7 @@ class MaterialManager:
         self.btn_toggle_budget_bottom = ttk.Button(top_btn_frame, text="🔽 하부 프레임 숨기기", command=_toggle_budget_bottom)
         self.btn_toggle_budget_bottom.pack(side='left', padx=5)
         
-        ttk.Button(top_btn_frame, text="사정원가 출력", command=self.export_budget_estimation).pack(side='right', padx=10)
+        ttk.Button(top_btn_frame, text="사전/사후원가 출력", command=self.export_budget_estimation).pack(side='right', padx=10)
         ttk.Button(top_btn_frame, text="엑셀 내보내기", command=self.export_budget_sales_status).pack(side='right', padx=10)
 
         self.main_paned_budget = ttk.PanedWindow(self.tab_budget, orient='vertical')
@@ -6568,6 +6678,24 @@ class MaterialManager:
             # 포커스 이동은 폼 로드 완료 후에 (after로 지연)
             self.root.after(50, self.ent_budget_revenue.focus_set)
         self.cb_budget_site.bind('<<ComboboxSelected>>', _on_budget_site_selected)
+
+        # Auto-initialize cb_budget_site with default site
+        def _init_budget_default_site():
+            try:
+                curr = self.cb_budget_site.get().strip()
+                if not curr:
+                    vals = list(self.cb_budget_site['values']) if hasattr(self, 'cb_budget_site') else []
+                    chosen = '롯데건설 바이오'
+                    for v in vals:
+                        if v and v != '전체':
+                            chosen = v
+                            break
+                    self.cb_budget_site.set(chosen)
+                    if hasattr(self, '_load_budget_to_form'):
+                        self._load_budget_to_form(chosen, silent=True)
+            except Exception as err:
+                print(f"Error initializing budget default site: {err}")
+        self.root.after(300, _init_budget_default_site)
 
         # 1.5. 상세 탭 컨테이너 분리 (사전예산 / 사후원가)
         self.detail_notebook = ttk.Notebook(form_scrollable)

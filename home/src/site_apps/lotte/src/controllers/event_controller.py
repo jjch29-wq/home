@@ -437,6 +437,16 @@ def on_tab_changed_impl(self, event=None):
         elif tab_text == '공사실행예산서':
             print("Construction budget tab selected - refreshing view")
             self.update_budget_site_view()
+            if hasattr(self, 'cb_budget_site') and not self.cb_budget_site.get().strip():
+                vals = list(self.cb_budget_site['values']) if hasattr(self, 'cb_budget_site') else []
+                chosen = '롯데건설 바이오'
+                for v in vals:
+                    if v and v != '전체':
+                        chosen = v
+                        break
+                self.cb_budget_site.set(chosen)
+                if hasattr(self, '_load_budget_to_form'):
+                    self._load_budget_to_form(chosen, silent=True)
         elif tab_text == '입출고 관리':
             print("In/Out Management tab selected - refreshing history")
             self.refresh_inout_history()

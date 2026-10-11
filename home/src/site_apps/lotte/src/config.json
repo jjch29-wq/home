@@ -32,15 +32,15 @@
         "UT_UT": 88
     },
     "TREE_WIDTHS": {
-        "date": 173,
-        "loc": 211,
-        "type": 131,
-        "time": 131,
-        "mat": 192,
-        "qty": 143,
-        "unit": 140,
-        "unit_price": 132,
-        "total_amt": 190
+        "date": 164,
+        "loc": 202,
+        "type": 122,
+        "time": 122,
+        "mat": 183,
+        "qty": 134,
+        "unit": 131,
+        "unit_price": 123,
+        "total_amt": 181
     },
     "SASH_POS": 394,
     "BILLING_RECORDS": [

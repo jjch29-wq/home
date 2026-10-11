@@ -102,11 +102,11 @@ class DraggableMessagebox:
         root.wait_window(dialog)
 
     @staticmethod
-    def showerror(title, message): DraggableMessagebox._show("error", title, message)
+    def showerror(title, message, *args, **kwargs): DraggableMessagebox._show("error", title, message)
     @staticmethod
-    def showwarning(title, message): DraggableMessagebox._show("warning", title, message)
+    def showwarning(title, message, *args, **kwargs): DraggableMessagebox._show("warning", title, message)
     @staticmethod
-    def showinfo(title, message): DraggableMessagebox._show("info", title, message)
+    def showinfo(title, message, *args, **kwargs): DraggableMessagebox._show("info", title, message)
 
 
 class WorkerCompositeWidget(ttk.Frame):
