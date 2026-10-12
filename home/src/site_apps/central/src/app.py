@@ -11,7 +11,6 @@ from tkinter import ttk, messagebox, filedialog, simpledialog
 import sys
 import subprocess
 import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 import time
 import datetime
 import json
@@ -8956,17 +8955,17 @@ class MaterialManager:
             '출장비': to_f(self.ent_daily_travel_cost),
             '업체명': self.cb_daily_company.get().strip(),
             'Unit': self.cb_daily_unit.get().strip(),
-            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
-            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT','PAUT'] else ""),
+            '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else "",
+            '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT','PAUT','MT'] else ""),
             '조건2': self.ndt_thickness_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT'] else "",
-            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
-            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
-            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 1.0,
-            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0.0,
-            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
-            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else 0,
+            '제경비': getattr(self, '_last_ndt_overhead', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0,
+            '기술료': getattr(self, '_last_ndt_tech', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0,
+            '보정계수': getattr(self, '_last_ndt_factor', 1.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 1.0,
+            '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0.0,
+            '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0,
+            '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0,
             '검사구분': "ORI",
-            '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
+            '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else "",
             '조인트수': "",
             '불량수': "",
             '관경(Inch)': getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip(),
@@ -9014,7 +9013,7 @@ class MaterialManager:
             **worker_data_map
         })
 
-        is_ndt = self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT']
+        is_ndt = self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT']
         record_types = []
         if is_ndt:
             ori_j = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
@@ -12220,7 +12219,6 @@ class MaterialManager:
         from openpyxl import Workbook
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
         import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
         
         top = tk.Toplevel(self.root)
         top.title("주간 업무보고서 출력")
@@ -12648,7 +12646,7 @@ from site_apps.central.src.data_sync import get_history_path, get_process_photos
                     
                     for _, row in site_df.iterrows():
                         method = str(row.get('검사방법', '')).strip().upper()
-                        if method not in ['RT', 'UT', 'PT', 'PAUT']:
+                        if method not in ['RT', 'UT', 'PT', 'PAUT', 'MT']:
                             continue
                         
                         work_type = str(row.get('작업형태', '주간')).strip()
@@ -12722,7 +12720,6 @@ from site_apps.central.src.data_sync import get_history_path, get_process_photos
                 import openpyxl
                 from openpyxl.utils import get_column_letter
                 import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
                 
                 save_path = filepath
                 wb = openpyxl.load_workbook(save_path)
@@ -12878,15 +12875,13 @@ from site_apps.central.src.data_sync import get_history_path, get_process_photos
                 log(f"\n🎉 저장 완료: {save_path}")
                 messagebox.showinfo("완료", f"월간 진도보고서 비파괴검사 현황이 업데이트되었습니다.\n{save_path}")
                 import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
                 os.startfile(os.path.dirname(save_path))
                 
             
                 # --- 4.5 NDT 결과서 섹션 태그 기반 자동 기입 ---
                 try:
                     import sys as _sys
-                    import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir as _os
+                    import os as _os
                     _src = _os.path.dirname(_os.path.abspath(__file__))
                     if _src not in _sys.path:
                         _sys.path.insert(0, _src)

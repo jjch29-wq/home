@@ -979,7 +979,6 @@ class NDTCalculatorTab(ttk.Frame):
         try:
             import pandas as pd
             import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
             db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Material_Inventory.xlsx')
             if not os.path.exists(db_path):
                 messagebox.showerror("오류", "DB 파일을 찾을 수 없습니다.")
@@ -1011,7 +1010,7 @@ from site_apps.central.src.data_sync import get_history_path, get_process_photos
                 except Exception as e:
                     print(f"Date filter applying error: {e}")
                 
-            ndt_df = df[df['검사방법'].isin(['RT', 'UT', 'PT', 'PAUT'])]
+            ndt_df = df[df['검사방법'].isin(['RT', 'UT', 'PT', 'PAUT', 'MT'])]
             if ndt_df.empty:
                 messagebox.showinfo("안내", "연동할 NDT 작업 기록이 없습니다.")
                 return
@@ -1127,7 +1126,6 @@ from site_apps.central.src.data_sync import get_history_path, get_process_photos
         try:
             import json
             import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
             data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
             os.makedirs(data_dir, exist_ok=True)
             export_path = os.path.join(data_dir, 'billing_export.json')
@@ -1501,7 +1499,6 @@ from site_apps.central.src.data_sync import get_history_path, get_process_photos
         import subprocess
         import sys
         import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
         hub_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "문서_통합_관리_허브.py")
         if os.path.exists(hub_path):
             subprocess.Popen([sys.executable, hub_path])

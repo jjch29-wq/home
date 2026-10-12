@@ -63,10 +63,10 @@ def export_daily_work_report_impl(self):
             try:
                 df_copy = self.daily_usage_df.copy()
                 
-                # [SMART SELECTION] 리스트에서 여러 개를 선택했는지 확인
+                # [SMART SELECTION] 리스트에서 선택했는지 확인
                 selection = self.daily_usage_tree.selection()
-                if len(selection) > 1:
-                    # 여러 개 선택된 경우, 선택된 항목들만 모아서 출력
+                if len(selection) >= 1:
+                    # 선택된 항목들 모아서 출력
                     selected_indices = []
                     for item in selection:
                         tags = self.daily_usage_tree.item(item, 'tags')
@@ -81,7 +81,7 @@ def export_daily_work_report_impl(self):
                         if 'Date' in site_records.columns: date_val = pd.to_datetime(site_records.iloc[0]['Date']).date()
                     
                 if site_records.empty:
-                    # 하나만 선택되었거나 선택이 없는 경우: 현재 폼의 날짜/현장 기준으로 전체 합산
+                    # 선택이 없는 경우: 현재 폼의 날짜/현장 기준으로 전체 합산
                     # [ROBUST MATCHING] 날짜와 현장명 비교 시 공백 등 무시하여 정확도 향상
                     check_date = pd.to_datetime(date_val).date()
                     site_col = 'Site' if 'Site' in df_copy.columns else '현장' if '현장' in df_copy.columns else ''
@@ -94,7 +94,7 @@ def export_daily_work_report_impl(self):
                             (df_copy[site_col].astype(str).str.strip().str.upper() == str(site).strip().upper())
                         ]
                 
-                # [NEW] site_records에서 장비명 및 업체명 집계 업데이트
+                # [NEW] site_records에서 장비명, 업체명 및 검사품명 집계 업데이트
                 if not site_records.empty:
                     if '장비명' in site_records.columns:
                         equips = [_clean_str(x) for x in site_records['장비명'].dropna().unique() if _clean_str(x)]
@@ -104,6 +104,11 @@ def export_daily_work_report_impl(self):
                     if comp_col:
                         comps = [_clean_str(x) for x in site_records[comp_col].dropna().unique() if _clean_str(x)]
                         if comps: data['company'] = comps[0] # 첫 번째 유효한 업체명 사용
+                    
+                    if '검사품명' in site_records.columns:
+                        items = [_clean_str(x) for x in site_records['검사품명'].dropna().unique() if _clean_str(x)]
+                        if items and not data['inspection_item']:
+                            data['inspection_item'] = items[0]
             except Exception as e:
                 print(f"[DEBUG] Site Records Collection Error: {e}")
                 pass
@@ -201,12 +206,47 @@ def export_daily_work_report_impl(self):
 
                 for (method, pipe_size), detail in sorted(detail_groups.items(), key=_pipe_sort_key):
                     points = detail['points']
+                    # [FALLBACK] 기존 데이터에 조인트수가 누락되었거나 0인 경우, 관경별 단위길이로 조인트수 자동 복원
+                    if points == 0 and detail['quantity'] > 0 and method in ['MT', 'PT', 'PAUT']:
+                        size_lookup = getattr(self, 'SIZE_LENGTH', {})
+                        p_key = pipe_size if pipe_size.endswith('A') else f"{pipe_size}A"
+                        unit_len = size_lookup.get(p_key, 0)
+                        if unit_len > 0:
+                            calc_pts = detail['quantity'] / unit_len
+                            if abs(calc_pts - round(calc_pts)) < 0.05:
+                                points = round(calc_pts)
                     data['inspection_details'].append({
                         'method': method,
                         'pipe_size': pipe_size,
                         'points': int(points) if points.is_integer() else points,
                         'quantity': detail['quantity'],
                     })
+
+        # [FALLBACK] site_records가 없거나 inspection_details가 비어있는 경우 화면 입력값 기반 복원
+        if not data.get('inspection_details') and hasattr(self, 'cb_daily_test_method'):
+            u_method = self.cb_daily_test_method.get().strip().upper()
+            u_pipe = getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip().upper()
+            if u_pipe:
+                u_pts = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
+                try: pts_val = float(u_pts.replace(',', '')) if u_pts else 0.0
+                except: pts_val = 0.0
+                u_qty = getattr(self, 'ent_daily_test_amount', None)
+                try: qty_val = float(u_qty.get().replace(',', '')) if u_qty and u_qty.get() else 0.0
+                except: qty_val = 0.0
+                if pts_val == 0 and qty_val > 0 and u_method in ['MT', 'PT', 'PAUT']:
+                    size_lookup = getattr(self, 'SIZE_LENGTH', {})
+                    p_key = u_pipe if u_pipe.endswith('A') else f"{u_pipe}A"
+                    unit_len = size_lookup.get(p_key, 0)
+                    if unit_len > 0:
+                        calc_pts = qty_val / unit_len
+                        if abs(calc_pts - round(calc_pts)) < 0.05:
+                            pts_val = round(calc_pts)
+                data['inspection_details'].append({
+                    'method': u_method,
+                    'pipe_size': u_pipe,
+                    'points': int(pts_val) if pts_val.is_integer() else pts_val,
+                    'quantity': qty_val,
+                })
 
         # 작업자 및 O/T (간소화 버전)
         # [NEW] 작업자 / OT 정보 DB에서 집계 (현장 탭 기록 기준)
@@ -233,6 +273,13 @@ def export_daily_work_report_impl(self):
                     ot_key  = 'OT'       if i == 1 else f'OT{i}'
 
                     name = str(row.get(u_key, '')).strip()
+                    if not name or name == 'nan':
+                        if i == 1:
+                            for alt_k in ['검사자', '작업자', '(Full작업자)']:
+                                alt_v = str(row.get(alt_k, '')).strip()
+                                if alt_v and alt_v != 'nan':
+                                    name = alt_v
+                                    break
                     if not name or name == 'nan': continue
 
                     if name not in inspectors:
@@ -259,12 +306,23 @@ def export_daily_work_report_impl(self):
                     if name not in ot_groups[key]['names']:
                         ot_groups[key]['names'].append(name)
 
-        # Inspector display (titles always stripped)
-        disp_insp = [_clean_name(n) for n in inspectors]
+        # [FALLBACK] site_records에서 작업자를 찾지 못한 경우 UI의 worker_group에서 수집
+        if not inspectors:
+            for i in range(1, 11):
+                group = getattr(self, f'worker_group{i}', None)
+                if group:
+                    w_name = group.get_worker().strip() if hasattr(group, 'get_worker') else group.cb_name.get().strip()
+                    if w_name and w_name not in inspectors:
+                        inspectors.append(w_name)
+
+        # Inspector display (titles always stripped for header)
+        disp_insp = [_clean_name(n) for n in inspectors if _clean_name(n)]
         if len(disp_insp) > 3:
             data['inspector'] = ', '.join(disp_insp[:3]) + f" 외 {len(disp_insp) - 3}명"
-        else:
+        elif disp_insp:
             data['inspector'] = ', '.join(disp_insp)
+        elif hasattr(self, 'users') and self.users:
+            data['inspector'] = _clean_name(self.users[0])
 
         # Build ot_status list
         data['ot_status'] = []
@@ -295,17 +353,19 @@ def export_daily_work_report_impl(self):
             for i in range(1, 11):
                 group = getattr(self, f'worker_group{i}', None)
                 if group:
-                    w_name = group.cb_name.get().strip()
-                    w_wt = group.ent_worktime.get().strip()
-                    w_ot = group.ent_ot.get().strip()
-                    if w_name and (w_wt or w_ot):
+                    w_name = group.get_worker().strip() if hasattr(group, 'get_worker') else group.cb_name.get().strip()
+                    w_wt = group.get_time().strip() if hasattr(group, 'get_time') else group.ent_worktime.get().strip()
+                    w_ot = group.get_ot().strip() if hasattr(group, 'get_ot') else group.ent_ot.get().strip()
+                    if w_name:
                         data['ot_status'].append({
-                            'names':      _clean_name(w_name),
+                            'names':      w_name,
                             'ot_hours':   w_wt,
                             'ot_amount':  w_ot,
                             'company':    data.get('company', ''),
                             'method':     method,
                         })
+                        if not data['inspector']:
+                            data['inspector'] = _clean_name(w_name)
 
         
 

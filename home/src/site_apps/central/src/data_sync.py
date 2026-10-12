@@ -9,8 +9,16 @@ def get_data_dir():
             with open(config_file, "r", encoding="utf-8") as f:
                 config = json.load(f)
                 custom_dir = config.get("data_dir")
-                if custom_dir and os.path.exists(custom_dir):
-                    return custom_dir
+                if custom_dir:
+                    if os.path.exists(custom_dir):
+                        return custom_dir
+                    # PC마다 구글 드라이브 드라이브 문자(예: G:, F:)가 다를 경우 자동 탐색
+                    _, path_without_drive = os.path.splitdrive(custom_dir)
+                    path_without_drive = path_without_drive.lstrip(r'\/')
+                    for drive in 'CDEFGHIJK':
+                        alt_path = f"{drive}:\\{path_without_drive}"
+                        if os.path.exists(alt_path):
+                            return alt_path
         except Exception:
             pass
     return base_dir

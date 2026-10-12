@@ -117,10 +117,28 @@ class DailyWorkReportManager:
         # 담당 결재란 서명 삽입
         # safe_write('L3', '주진철', is_bold=True)
 
+        # [AUTO-RECOVERY] 검사자가 비어있는 경우 ot_status 등에서 자동 복구
+        if not data.get('inspector'):
+            for ot_item in data.get('ot_status', []):
+                ot_name = str(ot_item.get('names', '')).strip()
+                if ot_name:
+                    clean_n = ot_name
+                    titles = ['부장', '차장', '과장', '대리', '주임', '기사', '선임', '수석', '책임',
+                              '팀장', '이사', '본부장', '실장', '소장', '직장', '반장', '팀원', '계장']
+                    for t in titles:
+                        clean_n = _re.sub(r'[\s/(\[]*' + t + r'[\s)\]]*$', '', clean_n)
+                        clean_n = _re.sub(r'^[\s/(\[]*' + t + r'[\s)\]]*', '', clean_n)
+                    if clean_n.strip():
+                        data['inspector'] = clean_n.strip()
+                        break
+
         gen_map = mapping.get('general', {})
         for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no', 'inspector_n8']:
             val_key = 'inspector' if key == 'inspector_n8' else key
-            safe_write(gen_map.get(key), data.get(val_key, ''))
+            val = data.get(val_key, '')
+            if key == 'inspection_item' and not val:
+                continue
+            safe_write(gen_map.get(key), val)
 
         # 2. Methods (Dynamic Offset)
         methods_data = data.get('methods', {})
