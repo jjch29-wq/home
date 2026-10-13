@@ -753,6 +753,8 @@ def setup_daily_usage_tab_impl(self):
         
     # Handle Date Changes globally for recalculations
     def on_date_change(e=None):
+        self._loaded_daily_record_index = None
+        self.update_recent_entries_view()
         # Recalculate OT for all workers when date changes (weekend vs weekday rates)
         for i in range(1, 11):
             group = getattr(self, f'worker_group{i}', None)
@@ -803,7 +805,7 @@ def setup_daily_usage_tab_impl(self):
     self.entry_inner_frame.grid_rowconfigure(1, weight=1)
 
     # 1. Left: Recent Entries Mini-table
-    self.recent_frame = ttk.LabelFrame(self.bottom_dashboard, text="오늘의 입력 내역 (최근 기록)")
+    self.recent_frame = ttk.LabelFrame(self.bottom_dashboard, text="선택한 날짜의 저장 기록 · 선택하면 입력란에 불러오기")
     self.bottom_dashboard.add(self.recent_frame, weight=9)
     
     # Create Treeview for recent entries
@@ -818,7 +820,7 @@ def setup_daily_usage_tab_impl(self):
     self.tv_recent.heading("inspection_item", text="검사품명")
     self.tv_recent.heading("material", text="품목명")
     self.tv_recent.heading("qty", text="수량")
-    self.tv_recent.heading("worker", text="작업자(첫번째)")
+    self.tv_recent.heading("worker", text="담당 작업자")
     self.tv_recent.heading("insp_type", text="검사구분")
     self.tv_recent.heading("joint_count", text="조인트수")
     self.tv_recent.heading("rej_count", text="불량수")
@@ -877,7 +879,11 @@ def setup_daily_usage_tab_impl(self):
     btn_manage.pack(side='right')
     btn_manage.config(command=lambda: self.open_list_management_dialog('차량 목록 관리', getattr(self, 'vehicles', []), 'vehicles'))
 
-    self.fixed_vehicle_widget = VehicleInspectionWidget(self.fixed_vehicle_frame, theme_bg=self.theme_bg, vehicle_list=getattr(self, 'vehicles', []))
+    self.fixed_vehicle_widget = VehicleInspectionWidget(
+        self.fixed_vehicle_frame, theme_bg=self.theme_bg,
+        vehicle_list=getattr(self, 'vehicles', []),
+        method_list=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'],
+        on_save=self.save_single_vehicle_data)
     self.fixed_vehicle_widget.pack(fill='both', expand=True, padx=2, pady=2)
     # Register the vehicle widget to be saved along with standard entry
     self.vehicle_widget = self.fixed_vehicle_widget

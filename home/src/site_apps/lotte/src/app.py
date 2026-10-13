@@ -1,5 +1,6 @@
 ### VERSION: BUDGET_SYNC_FIXED_FINAL_V8_1WON_BALANCED ###
 import mimetypes
+from math import isfinite
 import os
 # [OPTIMIZATION] Prevent slow Windows registry scan for mimetypes
 if os.name == 'nt':
@@ -59,6 +60,11 @@ try:
 finally:
     builtins.open = _orig_open
 
+from site_apps.lotte.src.worker_assignment import build_worker_assignments, worker_names
+from site_apps.lotte.src.note_utils import strip_generated_rej_note
+from site_apps.lotte.src.vehicle_assignment import (
+    update_vehicle_in_record, validate_vehicle_methods, vehicle_applies_to_method,
+)
 from site_apps.lotte.src.daily_work_report_manager import DailyWorkReportManager
 from site_apps.lotte.src.ndt_billing_tab import NDTCalculatorTab
 from site_apps.lotte.src.daily_work_log_tab import DailyWorkLogTab
@@ -3073,7 +3079,9 @@ class MaterialManager:
                         if u:
                             t = self.clean_nan(entry.get('WorkTime' if i==1 else f'WorkTime{i}', ''))
                             o = self.clean_nan(entry.get('OT' if i==1 else f'OT{i}', ''))
-                            full_info.append(f"• 작업자{i}: {u} | {t} | OT: {o}")
+                            wm = self.clean_nan(entry.get('WorkerMethod' if i==1 else f'WorkerMethod{i}', ''))
+                            wm_txt = f" [{wm}]" if wm else ""
+                            full_info.append(f"• 작업자{i}: {u}{wm_txt} | {t} | OT: {o}")
                     
                     # 3. Cost Info (Hide zeros)
                     cost_info = []
@@ -5505,12 +5513,34 @@ class MaterialManager:
                 messagebox.showwarning("입력 필요", "차량번호를 입력해주세요.")
                 return
 
+            loaded_index = getattr(
+                widget, '_source_record_index',
+                getattr(self, '_loaded_daily_record_index', None))
+            if loaded_index in self.daily_usage_df.index:
+                loaded_record = self.daily_usage_df.loc[loaded_index].to_dict()
+                loaded_date = pd.to_datetime(loaded_record.get('Date'), errors='coerce')
+                current_date = pd.to_datetime(usage_date, errors='coerce')
+                same_date = pd.notna(loaded_date) and pd.notna(current_date) \
+                    and loaded_date.date() == current_date.date()
+                if same_date and update_vehicle_in_record(loaded_record, v_data):
+                    for column in ('주행거리', '차량점검', '차량비고'):
+                        self.daily_usage_df.at[loaded_index, column] = loaded_record[column]
+                    self.save_data()
+                    self.update_daily_usage_view()
+                    self.update_recent_entries_view()
+                    messagebox.showinfo(
+                        "수정 완료", f"[{v_no}] 차량 정보가 선택한 저장 기록에 반영되었습니다.")
+                    return
+
             # Confirm with user
             if not messagebox.askyesno("확인", f"[{v_no}] 차량 점검 정보만 단독으로 저장하시겠습니까?"):
                 return
 
             # 3. Create record (Everything else is zero/empty)
-            reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
+            vehicle_method = v_data.get('inspection_method', '').strip().upper()
+            if not vehicle_method:
+                vehicle_method = self.cb_daily_test_method.get().strip().upper()
+            reserved = ['inspection_method', 'vehicle_info', 'mileage', 'remarks', '_raw_mileage', 'photo_path']
             checks = "|".join([f"{k}:{v}" for k, v in v_data.items() if k not in reserved and v])
 
             record = {
@@ -5520,7 +5550,7 @@ class MaterialManager:
                 'User': "차량점검", # Visual tag in worker column
                 'WorkTime': "",
                 '장비명': self.cb_daily_equip.get().strip(),
-                '검사방법': self.cb_daily_test_method.get().strip(),
+                '검사방법': vehicle_method,
                 '회사코드': "",
                 'Usage': 0.0, '단가': 0.0, '출장비': 0.0, '검사비': 0.0,
                 '검사량': 0.0,
@@ -5546,6 +5576,7 @@ class MaterialManager:
             
             # 5. UI Updates
             self.update_daily_usage_view()
+            self.update_recent_entries_view()
             self.refresh_inquiry_filters()
             
             messagebox.showinfo("성공", f"[{v_no}] 차량 정보가 기록에 추가되었습니다.\n(실적 없이 차량 단독 기록으로 저장됨)")
@@ -5569,6 +5600,8 @@ class MaterialManager:
             manage_list_key='vehicles',
             theme_bg=getattr(self, 'theme_bg', '#f0f0f0'),
             vehicle_list=getattr(self, 'vehicles', []),
+            method_list=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'],
+            default_method=self.cb_daily_test_method.get().strip().upper(),
             on_save=self.save_single_vehicle_data
         )
         
@@ -5930,27 +5963,29 @@ class MaterialManager:
             messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
 
     def update_recent_entries_view(self):
-        """최근 현장 기록을 작업일자와 입력시간의 최신순으로 표시."""
+        """입력 폼에서 선택한 날짜의 저장 기록을 입력시간 최신순으로 표시."""
         if not hasattr(self, 'tv_recent') or getattr(self, 'daily_usage_df', None) is None:
             return
             
         for item in self.tv_recent.get_children():
             self.tv_recent.delete(item)
             
-        if self.daily_usage_df.empty:
-            return
-            
         try:
-            # Prefer today's work records, otherwise show the latest history.
-            today = datetime.datetime.now().date()
-            work_dates = pd.to_datetime(self.daily_usage_df['Date'], errors='coerce')
-            recent_df = self.daily_usage_df[work_dates.dt.date == today].copy()
-            
-            # Preserve original indices because selection/editing uses them.
-            if recent_df.empty:
-                recent_df = self.daily_usage_df.copy()
+            selected_date = self.ent_daily_date.get_date()
+            if self.daily_usage_df.empty:
+                if hasattr(self, 'recent_frame'):
+                    self.recent_frame.configure(text=f"{selected_date:%Y-%m-%d} 저장 기록 (0건)")
+                return
+            work_dates = pd.to_datetime(
+                self.daily_usage_df['Date'].map(lambda value: pd.to_datetime(value, errors='coerce')),
+                errors='coerce')
+            # 원본 인덱스는 기록 선택·수정·삭제에 사용하므로 유지한다.
+            recent_df = self.daily_usage_df[work_dates.dt.date == selected_date].copy()
+            if hasattr(self, 'recent_frame'):
+                self.recent_frame.configure(
+                    text=f"{selected_date:%Y-%m-%d} 저장 기록 ({len(recent_df)}건) · 선택하면 입력란에 불러오기")
 
-            recent_df['_recent_date'] = pd.to_datetime(recent_df['Date'], errors='coerce')
+            recent_df['_recent_date'] = work_dates.loc[recent_df.index]
             if 'EntryTime' in recent_df.columns:
                 recent_df['_recent_entry_time'] = pd.to_datetime(recent_df['EntryTime'], errors='coerce')
                 recent_df = recent_df.sort_values(
@@ -5962,19 +5997,10 @@ class MaterialManager:
                 recent_df = recent_df.sort_values(
                     by='_recent_date', ascending=False, na_position='last'
                 )
-            recent_df = recent_df.head(30)
                 
             for idx, row in recent_df.iterrows():
-                # Extract first worker
-                first_worker = str(row.get('User', '')).strip()
-                if first_worker.lower() == 'nan':
-                    first_worker = ''
-                elif first_worker:
-                    import re
-                    # Remove shift markers like (주간), (야간) if present
-                    match = re.match(r"\((주간|야간|휴일|주야간)\)\s*(.*)", first_worker)
-                    if match:
-                        first_worker = match.group(2).strip()
+                # 검사 항목에 배정된 모든 담당자를 표시한다.
+                first_worker = worker_names(row)
                         
                 date_str = str(row.get('Date', '')).split(' ')[0]
                 mat_id = row.get('MaterialID', '')
@@ -9166,6 +9192,7 @@ class MaterialManager:
             wt_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
             ot_key = 'OT' if i == 1 else f'OT{i}'
             m_key = 'Meal' if i == 1 else f'Meal{i}'
+            wm_key = 'WorkerMethod' if i == 1 else f'WorkerMethod{i}'
             
             if group:
                 name = group.get_worker().strip()
@@ -9176,12 +9203,21 @@ class MaterialManager:
                 worker_data_map[wt_key] = wt
                 worker_data_map[ot_key] = ot
                 worker_data_map[m_key] = meal
+                worker_data_map[wm_key] = group.get_method() if (name and hasattr(group, 'get_method')) else ""
                 if name: workers_list.append(name)
             else:
                 worker_data_map[u_key] = ""
                 worker_data_map[wt_key] = ""
                 worker_data_map[ot_key] = ""
                 worker_data_map[m_key] = ""
+                worker_data_map[wm_key] = ""
+
+        assignment = getattr(self, '_item_worker_assignment', None)
+        if assignment is not None:
+            worker_data_map.update(assignment)
+            workers_list = [assignment['User' if i == 1 else f'User{i}']
+                            for i in range(1, 11)
+                            if assignment['User' if i == 1 else f'User{i}']]
 
         # 동일 날짜에 이미 OT가 저장된 작업자는 새 검사 기록의 OT를 비운다.
         # 작업자명과 작업시간은 유지하므로 검사별 투입 내역은 그대로 확인할 수 있다.
@@ -9248,10 +9284,26 @@ class MaterialManager:
                 
         # 4. 업체(Company) 데이터 수집
         company_data_list = []
+        # [FIX] 검사방법에 맞지 않는 NDT 약품은 저장/재고차감에서 제외
+        #  - PT: 침투제/세척제/현상제/형광침투제, MT: 형광자분/흑색자분/백색페인트
+        #  - 그 외(RT, UT, PAUT 등): NDT 약품 사용 없음
+        try:
+            _method_now = self.cb_daily_test_method.get().strip().upper()
+        except Exception:
+            _method_now = ""
+        if 'PT' in _method_now and 'PAUT' not in _method_now:
+            _allowed_ndt = {"침투제", "세척제", "현상제", "형광침투제"}
+        elif 'MT' in _method_now:
+            _allowed_ndt = {"형광자분", "흑색자분", "백색페인트"}
+        elif _method_now:
+            _allowed_ndt = set()
+        else:
+            _allowed_ndt = None  # 검사방법 미입력 시 기존 동작 유지
         if hasattr(self, 'ndt_company_entries'):
             for company_entries in self.ndt_company_entries:
                 company_code = company_entries['_company'].get().strip()
-                ndt_data = {name: to_f(company_entries.get(name)) for name in self.ndt_materials_all}
+                ndt_data = {name: (to_f(company_entries.get(name)) if (_allowed_ndt is None or name in _allowed_ndt) else 0.0)
+                            for name in self.ndt_materials_all}
                 
                 # [REFINEMENT] Create record if there is NDT data OR it is the first entry (guaranteed row)
                 if any(v > 0 for v in ndt_data.values()) or company_entries == self.ndt_company_entries[0]:
@@ -9359,11 +9411,14 @@ class MaterialManager:
 
         for v_widget in living_boxes:
             v_data = v_widget.get_data()
+            current_method = self.cb_daily_test_method.get().strip().upper()
+            if not vehicle_applies_to_method(v_data, current_method):
+                continue
             v_no = str(v_data.get('vehicle_info', '')).strip()
             v_mileage = str(v_data.get('_raw_mileage', '')).strip()  # Use raw mileage for safety
             v_remarks = str(v_data.get('remarks', '')).strip()
             
-            reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
+            reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage', 'photo_path']
             checks_list = []
             for k, v in v_data.items():
                 if k not in reserved and v:
@@ -9423,6 +9478,8 @@ class MaterialManager:
                 same_day_site = self.daily_usage_df[
                     (stored_dates == target_date)
                     & (self.daily_usage_df['Site'].astype(str).str.strip() == site)
+                    & (self.daily_usage_df['검사방법'].astype(str).str.strip().str.upper()
+                       == self.cb_daily_test_method.get().strip().upper())
                 ]
                 for _, stored_row in same_day_site.iterrows():
                     if worker_time_signature(stored_row) != current_signature:
@@ -9470,8 +9527,6 @@ class MaterialManager:
                     base_note = self._get_merged_memo_and_note()
                     rej_count = getattr(self, 'ndt_rej_joint_var', tk.StringVar(value="")).get().strip()
                     r_common_data['불량수'] = rej_count if rej_count else "0"
-                    if rej_count and rej_count != "0":
-                        base_note = (base_note + f" [당일 불량(REJ) {rej_count}개 발생]").strip()
                     r_common_data['Note'] = base_note
                 elif r_type == 'REP':
                     r_common_data['조인트수'] = getattr(self, 'ndt_rep_joint_var', tk.StringVar(value="")).get().strip()
@@ -10531,6 +10586,8 @@ class MaterialManager:
                 
                 group.ent_meal.delete(0, tk.END)
                 group.ent_meal.insert(0, self.clean_nan(record.get(m_key, '')))
+                if hasattr(group, 'set_method'):
+                    group.set_method(self.clean_nan(record.get('WorkerMethod' if i == 1 else f'WorkerMethod{i}', '')))
 
             # 5. RTK
 
@@ -10566,6 +10623,7 @@ class MaterialManager:
                 self.fixed_vehicle_widget.reset_fields()
 
             for i in range(max_v_count):
+                v_widget = None
                 cur_no = v_no_list[i] if i < len(v_no_list) else ""
                 cur_insp = v_insp_list[i] if i < len(v_insp_list) else ""
                 cur_mileage = v_mileage_list[i] if i < len(v_mileage_list) else ""
@@ -10574,7 +10632,12 @@ class MaterialManager:
                 if not (cur_no or cur_insp or cur_mileage or cur_remarks):
                     continue
 
-                v_parsed = {'vehicle_info': cur_no, 'mileage': cur_mileage, 'remarks': cur_remarks}
+                v_parsed = {
+                    'inspection_method': self.clean_nan(record.get('검사방법', '')).upper(),
+                    'vehicle_info': cur_no,
+                    'mileage': cur_mileage,
+                    'remarks': cur_remarks,
+                }
                 if ':' in cur_insp:
                     for pair in cur_insp.split('|'):
                         if ':' in pair:
@@ -10596,6 +10659,9 @@ class MaterialManager:
                         v_widget = self.add_vehicle_inspection_box()
                         if hasattr(v_widget, 'set_data'):
                             v_widget.set_data(v_parsed)
+                if v_widget is not None:
+                    v_widget._source_record_index = getattr(
+                        self, '_loaded_daily_record_index', None)
             
             # 7. NDT Chemicals
             if hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
@@ -10626,12 +10692,13 @@ class MaterialManager:
             # 사용자가 저장한 메모를 불러오도록 복구 (과거 기록 호환성 포함)
             memo_val = self.clean_nan(record.get('DailyMemo', ''))
             if not memo_val and note_val:
-                if ' | ' in str(note_val):
-                    parts = str(note_val).split(' | ', 1)
+                note_for_memo = strip_generated_rej_note(note_val)
+                if ' | ' in note_for_memo:
+                    parts = note_for_memo.split(' | ', 1)
                     if len(parts) > 1:
                         memo_val = parts[1]
                 else:
-                    memo_val = note_val
+                    memo_val = note_for_memo
                     
             if hasattr(self, 'main_memo_text') and self.main_memo_text:
                 try:
@@ -10722,12 +10789,14 @@ class MaterialManager:
                 group.cb_shift.set('주간')
                 group.ent_worktime.set('')
                 group.ent_ot.delete(0, tk.END)
+                if hasattr(group, 'set_method'):
+                    group.set_method('')
 
     def open_multi_material_dialog(self):
         dlg = tk.Toplevel(self.root)
         dlg.title("다중 품목 추가")
-        dlg.geometry("520x540")
-        dlg.minsize(480, 480)
+        dlg.geometry("820x680")
+        dlg.minsize(720, 600)
         dlg.resizable(True, True)
         dlg.transient(self.root)
         dlg.grab_set()
@@ -10800,6 +10869,28 @@ class MaterialManager:
         # Trigger once to set initial filtered list
         _on_method_change()
         
+        worker_f = ttk.LabelFrame(input_f, text="검사 항목 담당자 (오른쪽 작업자 기록에서 등록)", padding=5)
+        worker_f.grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
+        worker_vars = {}
+        for index in range(1, 11):
+            group = getattr(self, f'worker_group{index}', None)
+            name = group.get_worker().strip() if group else ''
+            var = tk.BooleanVar(value=bool(name))
+            worker_vars[index] = var
+            ttk.Checkbutton(worker_f, text=f"{index}. {name or '(미등록)'}", variable=var,
+                            state='normal' if name else 'disabled').grid(
+                row=(index - 1) // 5, column=(index - 1) % 5, sticky='w', padx=5)
+        ttk.Label(worker_f, text="동일 인원의 시간·OT·일비는 첫 참여 항목에 한 번만 기록합니다.").grid(
+            row=2, column=0, columnspan=5, sticky='w')
+        row_workers = {}
+
+        def _selected_workers():
+            return [index for index, var in worker_vars.items() if var.get()]
+
+        def _worker_names(indices):
+            return ', '.join(getattr(self, f'worker_group{index}').get_worker().strip()
+                             for index in indices)
+
         def _add():
             m = cb_mat.get().strip() if str(cb_mat.cget('state')) != 'disabled' else ''
             meth = cb_method.get().strip()
@@ -10812,7 +10903,18 @@ class MaterialManager:
             if not q:
                 messagebox.showwarning("입력 확인", "수량을 입력해주세요.", parent=dlg)
                 return
-            tv.insert('', 'end', values=(m, meth, eq, q, p))
+            try:
+                quantity = float(q.replace(',', ''))
+                if quantity < 0 or not isfinite(quantity):
+                    raise ValueError
+                float(p.replace(',', '') or 0)
+            except ValueError:
+                messagebox.showwarning("입력 확인", "수량과 단가는 숫자로 입력해주세요. 수량은 0 이상이어야 합니다.", parent=dlg)
+                return
+            q = q.replace(',', '')
+            selected = _selected_workers()
+            row = tv.insert('', 'end', values=(m, meth, eq, q, p, _worker_names(selected)))
+            row_workers[row] = selected
             if str(cb_mat.cget('state')) != 'disabled':
                 cb_mat.set('')
             ent_qty.delete(0, tk.END)
@@ -10834,13 +10936,14 @@ class MaterialManager:
                     'method': v[1],
                     'equip': v[2] if len(v) > 2 else '',
                     'qty': v[3] if len(v) > 3 else '',
-                    'price': v[4] if len(v) > 4 else ''
+                    'price': v[4] if len(v) > 4 else '',
+                    'workers': row_workers[child]
                 })
             if not items:
                 messagebox.showwarning("입력 확인", "추가된 품목이 없습니다. 상단에서 품목 정보를 입력 후 [추가]를 눌러주세요.", parent=dlg)
                 return
             self._multi_materials = items
-            if len(items) > 1:
+            if items:
                 self.cb_daily_material.delete(0, tk.END)
                 self.cb_daily_material.insert(0, f"[다중 품목] {len(items)}건 (저장시 분할됨)")
                 self.ent_daily_test_amount.delete(0, tk.END)
@@ -10861,23 +10964,6 @@ class MaterialManager:
                     if has_ndt_item:
                         self.ndt_calc_frame.grid()
                         self.ndt_calc_frame.lift()
-            elif len(items) == 1:
-                self.cb_daily_material.delete(0, tk.END)
-                self.cb_daily_material.insert(0, items[0]['name'])
-                if hasattr(self, 'cb_daily_test_method') and items[0].get('method'):
-                    self.cb_daily_test_method.set(items[0]['method'])
-                if hasattr(self, 'cb_daily_equip') and items[0].get('equip'):
-                    if hasattr(self.cb_daily_equip, 'delete') and hasattr(self.cb_daily_equip, 'insert'):
-                        self.cb_daily_equip.delete(0, tk.END)
-                        self.cb_daily_equip.insert(0, items[0]['equip'])
-                self.ent_daily_test_amount.delete(0, tk.END)
-                self.ent_daily_test_amount.insert(0, items[0]['qty'])
-                if hasattr(self, 'ent_daily_unit_price') and items[0].get('price'):
-                    self.ent_daily_unit_price.delete(0, tk.END)
-                    self.ent_daily_unit_price.insert(0, items[0]['price'])
-            else:
-                if hasattr(self, 'cb_daily_material') and self.cb_daily_material.get().startswith("[다중 품목]"):
-                    self.cb_daily_material.delete(0, tk.END)
             dlg.destroy()
 
         btn_apply = tk.Button(bottom_f, text="확인 (적용)", font=('Malgun Gothic', 10, 'bold'),
@@ -10899,12 +10985,14 @@ class MaterialManager:
         tv_f = ttk.Frame(main_f)
         tv_f.pack(side='top', fill='both', expand=True, pady=5)
         
-        tv = ttk.Treeview(tv_f, columns=('mat', 'method', 'equip', 'qty', 'price'), show='headings', height=7)
+        tv = ttk.Treeview(tv_f, columns=('mat', 'method', 'equip', 'qty', 'price', 'workers'), show='headings', height=7)
         tv.heading('mat', text='품목명')
         tv.heading('method', text='방법')
         tv.heading('equip', text='장비명')
         tv.heading('qty', text='수량')
         tv.heading('price', text='단가')
+        tv.heading('workers', text='담당 작업자')
+        tv.column('workers', width=220, anchor='w')
         tv.column('mat', width=130, anchor='w')
         tv.column('method', width=50, anchor='center')
         tv.column('equip', width=90, anchor='w')
@@ -10922,13 +11010,74 @@ class MaterialManager:
                 tv.delete(sel)
         ttk.Button(tv_f, text="삭제", command=_del).pack(side='left', padx=5, anchor='n')
         
+        def _apply_workers():
+            for row in tv.selection():
+                indices = _selected_workers()
+                row_workers[row] = indices
+                tv.set(row, 'workers', _worker_names(indices))
+
+        def _load_workers(_event=None):
+            selection = tv.selection()
+            if selection:
+                indices = row_workers[selection[0]]
+                for index, var in worker_vars.items():
+                    var.set(index in indices)
+
+        tv.bind('<<TreeviewSelect>>', _load_workers)
+        ttk.Button(bottom_f, text="선택 항목에 담당자 적용", command=_apply_workers).pack(side='left', padx=3)
         for item in added_items:
-            tv.insert('', 'end', values=(item.get('name', ''), item.get('method', ''), item.get('equip', ''), item.get('qty', ''), item.get('price', '')))
+            indices = item.get('workers', _selected_workers())
+            indices = [index for index in indices if getattr(self, f'worker_group{index}', None)
+                       and getattr(self, f'worker_group{index}').get_worker().strip()]
+            row = tv.insert('', 'end', values=(item.get('name', ''), item.get('method', ''),
+                            item.get('equip', ''), item.get('qty', ''), item.get('price', ''),
+                            _worker_names(indices)))
+            row_workers[row] = indices
 
     def add_daily_usage_entry(self, is_multi_loop=False):
         """현장별 일일 사용량 단일 등록 (리팩토링 버전)"""
         try:
-            if not is_multi_loop and hasattr(self, '_multi_materials') and len(self._multi_materials) > 1 and self.cb_daily_material.get().startswith("[다중 품목]"):
+            # 목록에서 불러온 기존 기록의 차량 정보를 보완한 경우에는
+            # 새 작업 행을 추가하지 않고 해당 저장 행을 직접 수정한다.
+            is_multi_request = (
+                hasattr(self, '_multi_materials')
+                and len(self._multi_materials) >= 1
+                and self.cb_daily_material.get().startswith("[다중 품목]")
+            )
+            if not is_multi_loop and not is_multi_request:
+                vehicle_widgets = []
+                if hasattr(self, 'fixed_vehicle_widget'):
+                    vehicle_widgets.append(self.fixed_vehicle_widget)
+                for vehicle_widget in getattr(self, 'vehicle_boxes', []):
+                    if vehicle_widget not in vehicle_widgets:
+                        vehicle_widgets.append(vehicle_widget)
+
+                updated_index = None
+                for vehicle_widget in vehicle_widgets:
+                    source_index = getattr(vehicle_widget, '_source_record_index', None)
+                    if source_index not in self.daily_usage_df.index:
+                        continue
+                    stored = self.daily_usage_df.loc[source_index].to_dict()
+                    stored_date = pd.to_datetime(stored.get('Date'), errors='coerce')
+                    form_date = pd.to_datetime(self.ent_daily_date.get_date(), errors='coerce')
+                    if (pd.isna(stored_date) or pd.isna(form_date)
+                            or stored_date.date() != form_date.date()):
+                        continue
+                    vehicle_data = vehicle_widget.get_data()
+                    if update_vehicle_in_record(stored, vehicle_data):
+                        for column in ('주행거리', '차량점검', '차량비고'):
+                            self.daily_usage_df.at[source_index, column] = stored[column]
+                        updated_index = source_index
+
+                if updated_index is not None:
+                    self.save_data()
+                    self.update_daily_usage_view()
+                    self.update_recent_entries_view()
+                    messagebox.showinfo(
+                        "수정 완료", "선택한 저장 기록의 차량 정보가 수정되었습니다.")
+                    return
+
+            if not is_multi_loop and is_multi_request:
                 items = self._multi_materials.copy()
                 
                 # 기본 정보 사전 유효성 검사
@@ -10995,6 +11144,37 @@ class MaterialManager:
                 has_pt_item = any(str(it.get('method', '')).strip().upper() == 'PT' for it in items)
                 has_mt_item = any(str(it.get('method', '')).strip().upper() == 'MT' for it in items)
                 has_rt_item = any(str(it.get('method', '')).strip().upper() == 'RT' for it in items)
+
+                workers = {}
+                for worker_index in range(1, 11):
+                    group = getattr(self, f'worker_group{worker_index}', None)
+                    if group:
+                        workers[worker_index] = dict(name=group.get_worker().strip(),
+                            time=group.get_time().strip(), ot=group.get_ot().strip(),
+                            meal=group.get_meal().strip(), method=group.get_method())
+                for item in items:
+                    for worker_index in item.get('workers', []):
+                        if not workers.get(worker_index, {}).get('name'):
+                            messagebox.showwarning("담당자 확인", "선택한 담당자가 작업자 기록에서 비워졌습니다. 다중 품목에서 담당자를 다시 선택해주세요.")
+                            return
+                assignments = build_worker_assignments(items, workers)
+
+                item_methods = {
+                    str(item.get('method', '')).strip().upper() for item in items
+                    if str(item.get('method', '')).strip()
+                }
+                vehicle_widgets = []
+                if hasattr(self, 'fixed_vehicle_widget'):
+                    vehicle_widgets.append(self.fixed_vehicle_widget)
+                for vehicle_widget in getattr(self, 'vehicle_boxes', []):
+                    if vehicle_widget not in vehicle_widgets:
+                        vehicle_widgets.append(vehicle_widget)
+                vehicle_rows = [widget.get_data() for widget in vehicle_widgets
+                                if hasattr(widget, 'get_data')]
+                vehicle_error = validate_vehicle_methods(vehicle_rows, item_methods)
+                if vehicle_error:
+                    messagebox.showwarning("차량 검사방법 확인", vehicle_error)
+                    return
 
                 for i, item in enumerate(items):
                     # 공통 필드 복원 (다중 저장 시 누락 방지)
@@ -11100,39 +11280,11 @@ class MaterialManager:
                             try: self.calculate_rtk_total()
                             except: pass
                     
-                    if i > 0:
-                        # 2번째 행부터는 작업자/차량 중복 방지 초기화
-                        for w_idx in range(1, 11):
-                            grp = getattr(self, f'worker_group{w_idx}', None)
-                            if grp:
-                                try: grp.cb_name.set('')
-                                except: pass
-                                try: grp.ent_worktime.set('')
-                                except: pass
-                                try: grp.ent_ot.delete(0, tk.END)
-                                except: pass
-                        if hasattr(self, 'worker_groups'):
-                            for wg in self.worker_groups:
-                                if hasattr(wg, 'clear'): wg.clear()
-                                elif hasattr(wg, 'cb_name'):
-                                    try: wg.cb_name.set('')
-                                    except: pass
-                        if hasattr(self, 'fixed_vehicle_widget'):
-                            try: self.fixed_vehicle_widget.reset_fields()
-                            except: pass
-                        if hasattr(self, 'vehicle_widget'):
-                            try:
-                                if hasattr(self.vehicle_widget, 'reset_fields'):
-                                    self.vehicle_widget.reset_fields()
-                                elif hasattr(self.vehicle_widget, 'clear'):
-                                    self.vehicle_widget.clear()
-                            except: pass
-                        if hasattr(self, 'vehicle_boxes'):
-                            for vb in self.vehicle_boxes:
-                                try: vb.reset_fields()
-                                except: pass
-
-                    self.add_daily_usage_entry(is_multi_loop=True)
+                    self._item_worker_assignment = assignments[i]
+                    try:
+                        self.add_daily_usage_entry(is_multi_loop=True)
+                    finally:
+                        del self._item_worker_assignment
                 
                 self._multi_materials = []
                 self.clear_daily_usage_form_all(keep_date=True)
@@ -11538,6 +11690,7 @@ class MaterialManager:
             'test_fee': self.ent_daily_test_fee.get().strip(),
             'note': self.ent_daily_note.get().strip(),
             'main_memo': self.main_memo_text.get('1.0', 'end-1c').strip() if hasattr(self, 'main_memo_text') and self.main_memo_text else "",
+            'multi_materials': getattr(self, '_multi_materials', []),
             'workers': []
         }
         for i in range(1, 11):
@@ -11547,7 +11700,9 @@ class MaterialManager:
                     'name': group.cb_name.get().strip(),
                     'shift': group.cb_shift.get().strip(),
                     'time': group.ent_worktime.get().strip(),
-                    'ot': group.ent_ot.get().strip()
+                    'ot': group.ent_ot.get().strip(),
+                    'meal': group.get_meal().strip(),
+                    'method': group.get_method()
                 })
         data['ndt_companies'] = []
         if hasattr(self, 'ndt_company_entries'):
@@ -11600,6 +11755,7 @@ class MaterialManager:
                 if 'main_memo' in data and data['main_memo']:
                     self.main_memo_text.insert(tk.END, data['main_memo'])
             except: pass
+        self._multi_materials = data.get('multi_materials', [])
         workers = data.get('workers', [])
         for i, w_data in enumerate(workers, 1):
             group = getattr(self, f'worker_group{i}', None)
@@ -11608,6 +11764,8 @@ class MaterialManager:
                 group.cb_shift.set(w_data.get('shift', ''))
                 group.ent_worktime.set(w_data.get('time', ''))
                 group.ent_ot.delete(0, tk.END); group.ent_ot.insert(0, w_data.get('ot', ''))
+                group.set_meal(w_data.get('meal', ''))
+                group.set_method(w_data.get('method', ''))
         ndt_data = data.get('ndt_companies', [])
         while len(self.ndt_company_entries) > 1: self.remove_last_ndt_company()
         for i, co_data in enumerate(ndt_data):
@@ -11817,6 +11975,8 @@ class MaterialManager:
                     group.set_ot(self.clean_nan(ot))
                     if hasattr(group, 'set_meal'):
                         group.set_meal(self.clean_nan(meal))
+                    if hasattr(group, 'set_method'):
+                        group.set_method(self.clean_nan(first_record.get('WorkerMethod' if i == 1 else f'WorkerMethod{i}', '')))
                 
             # 2. 차량 정보 복원
             if hasattr(self, 'fixed_vehicle_widget'):
@@ -12588,6 +12748,13 @@ class MaterialManager:
             cb_name.pack(side='left', padx=2)
             worker_fields[f'name{i}'] = cb_name
             
+            # Per-worker inspection method (blank = record's 검사방법)
+            cb_wmethod = ttk.Combobox(w_frame, width=5, state='readonly',
+                                      values=["", "RT", "UT", "MT", "PT", "PAUT", "VT"])
+            cb_wmethod.set(self.clean_nan(entry_data.get('WorkerMethod' if i == 1 else f'WorkerMethod{i}', '')))
+            cb_wmethod.pack(side='left', padx=2)
+            worker_fields[f'method{i}'] = cb_wmethod
+
             # Time
             cb_time = ttk.Combobox(w_frame, width=16, values=[''] + self.worktimes)
             time_key = 'WorkTime' if i == 1 else f'WorkTime{i}'
@@ -12687,6 +12854,8 @@ class MaterialManager:
                 new_data[name_key] = worker_fields[f'name{i}'].get().strip()
                 new_data[time_key] = worker_fields[f'time{i}'].get().strip()
                 new_data[ot_key] = worker_fields[f'ot{i}'].get().strip()
+                new_data['WorkerMethod' if i == 1 else f'WorkerMethod{i}'] = (
+                    worker_fields[f'method{i}'].get().strip() if new_data[name_key] else "")
 
             # Provide immediate feedback
             btn_save_edit.config(state='disabled', text="저장 중...")

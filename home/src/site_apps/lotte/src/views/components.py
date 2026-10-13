@@ -155,6 +155,14 @@ class WorkerCompositeWidget(ttk.Frame):
         return self.cb_name[key]
 
 
+WORKER_METHOD_OPTIONS = ["", "RT", "UT", "MT", "PT", "PAUT", "VT"]
+
+
+def worker_method_key(i):
+    """Column name for worker i's inspection method (blank = record's 검사방법)."""
+    return 'WorkerMethod' if i == 1 else f'WorkerMethod{i}'
+
+
 class WorkerDataGroup(ttk.Frame):
     """
     Unified widget for a worker's record: [Name] [Shift] [WorkTime] [OT]
@@ -172,6 +180,18 @@ class WorkerDataGroup(ttk.Frame):
         )
         self.composite.pack(side='left', padx=(0, 2), fill='x', expand=True)
         self.cb_name = self.composite.cb_name
+
+        self.btn_clear = tk.Button(
+            self, text="×", width=2, height=1,
+            font=('Malgun Gothic', 8), padx=0, pady=0,
+            bd=1, relief='groove', command=self.clear,
+            takefocus=False, cursor='hand2')
+        self.btn_clear.pack(side='left', padx=(0, 2), pady=0)
+
+        # 1-1. Per-worker inspection method (blank = same as record's 검사방법)
+        self.cb_method = ttk.Combobox(self, values=WORKER_METHOD_OPTIONS, width=5, state="readonly")
+        self.cb_method.pack(side='left', padx=(1, 2))
+        self.cb_method.set("")
 
         # 2. Shift selection (Moved here from WorkerCompositeWidget)
         self.cb_shift = ttk.Combobox(self, values=["주간", "야간", "휴일", "주야간"], width=5, state="readonly")
@@ -233,6 +253,23 @@ class WorkerDataGroup(ttk.Frame):
     def set_meal(self, val):
         self.ent_meal.delete(0, tk.END)
         self.ent_meal.insert(0, val)
+
+    def get_method(self): return self.cb_method.get().strip()
+    def set_method(self, val):
+        val = str(val or '').strip()
+        if val and val not in self.cb_method['values']:
+            self.cb_method['values'] = list(self.cb_method['values']) + [val]
+        self.cb_method.set(val)
+
+    def clear(self):
+        """이 작업자 행의 이름과 근무 정보를 한 번에 비운다."""
+        self.set_worker('')
+        self.set_method('')
+        self.cb_shift.set('주간')
+        self.ent_worktime.set('')
+        self.set_ot('')
+        self.set_meal('')
+        self.cb_name.focus_set()
 
     def bind_name(self, seq, func): self.cb_name.bind(seq, func)
     def bind_time(self, seq, func):
@@ -324,19 +361,26 @@ class VehicleInspectionWidget(ttk.Frame):
         input_frame = ttk.Frame(self.scrollable_frame)
         input_frame.pack(fill='x', padx=2, pady=0)
 
-        ttk.Label(input_frame, text="차량정보:").grid(row=0, column=0, padx=2, pady=1, sticky='e')
+        ttk.Label(input_frame, text="검사방법:").grid(row=0, column=0, padx=2, pady=1, sticky='e')
+        self.cb_inspection_method = ttk.Combobox(
+            input_frame, width=15, state='readonly',
+            values=kwargs.get('method_list', ['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC']))
+        self.cb_inspection_method.grid(row=0, column=1, padx=2, pady=1, sticky='w')
+        self.cb_inspection_method.set(kwargs.get('default_method', ''))
+
+        ttk.Label(input_frame, text="차량정보:").grid(row=1, column=0, padx=2, pady=1, sticky='e')
         self.cb_vehicle_info = ttk.Combobox(input_frame, width=15)
-        self.cb_vehicle_info.grid(row=0, column=1, padx=2, pady=1, sticky='w')
+        self.cb_vehicle_info.grid(row=1, column=1, padx=2, pady=1, sticky='w')
         if vehicle_list is not None:
             self.update_vehicle_list(vehicle_list)
 
-        ttk.Label(input_frame, text="주행거리 (km):").grid(row=1, column=0, padx=2, pady=1, sticky='e')
+        ttk.Label(input_frame, text="주행거리 (km):").grid(row=2, column=0, padx=2, pady=1, sticky='e')
         self.ent_mileage = ttk.Entry(input_frame, width=15)
-        self.ent_mileage.grid(row=1, column=1, padx=2, pady=1, sticky='w')
+        self.ent_mileage.grid(row=2, column=1, padx=2, pady=1, sticky='w')
 
-        ttk.Label(input_frame, text="비고:").grid(row=2, column=0, padx=2, pady=1, sticky='e')
+        ttk.Label(input_frame, text="비고:").grid(row=3, column=0, padx=2, pady=1, sticky='e')
         self.ent_remarks = ttk.Entry(input_frame)
-        self.ent_remarks.grid(row=2, column=1, padx=2, pady=1, sticky='ew')
+        self.ent_remarks.grid(row=3, column=1, padx=2, pady=1, sticky='ew')
         input_frame.grid_columnconfigure(1, weight=1)
 
         # Focus transitions
@@ -413,6 +457,7 @@ class VehicleInspectionWidget(ttk.Frame):
     def get_data(self):
         # Collect all inspection variables
         data = {key: var.get() for key, var in self.vars.items()}
+        data['inspection_method'] = self.cb_inspection_method.get().strip().upper()
         data['vehicle_info'] = self.cb_vehicle_info.get().strip()
         data['mileage'] = self.ent_mileage.get().strip()
         data['remarks'] = self.ent_remarks.get().strip()
@@ -508,6 +553,11 @@ class VehicleInspectionWidget(ttk.Frame):
 
     def reset_fields(self):
         """Clear all input fields for the next vehicle entry and set focus"""
+        self._source_record_index = None
+        try:
+            self.cb_inspection_method.set('')
+        except Exception as e: print(f"Error clearing cb_inspection_method: {e}")
+
         try:
             self.cb_vehicle_info.set('')
         except Exception as e: print(f"Error clearing cb_vehicle_info: {e}")
@@ -542,6 +592,8 @@ class VehicleInspectionWidget(ttk.Frame):
         for key, val in data.items():
             if key in self.vars:
                 self.vars[key].set(val)
+            elif key == 'inspection_method':
+                self.cb_inspection_method.set(str(val or '').strip().upper())
             elif key == 'vehicle_info':
                 self.cb_vehicle_info.set(val)
             elif key == 'mileage':

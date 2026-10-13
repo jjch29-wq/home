@@ -244,6 +244,7 @@ def on_recent_record_click_impl(self, event):
         try:
             record_idx = int(record_id)
             if record_idx in self.daily_usage_df.index:
+                self._loaded_daily_record_index = record_idx
                 record = self.daily_usage_df.loc[record_idx].to_dict()
                 # Use existing method to populate the form
                 self.load_daily_usage_to_form(record)
@@ -269,6 +270,7 @@ def _on_daily_usage_select_impl(self, event):
     if tags and tags[0].isdigit():
         idx = int(tags[0])
         if idx in self.daily_usage_df.index:
+            self._loaded_daily_record_index = idx
             row_data = self.daily_usage_df.loc[idx].to_dict()
             self.load_daily_usage_to_form(row_data)
 

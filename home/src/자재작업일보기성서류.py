@@ -12982,10 +12982,26 @@ class MaterialManager:
 
         # 4. 업체(Company) 데이터 수집
         company_data_list = []
+        # [FIX] 검사방법에 맞지 않는 NDT 약품은 저장/재고차감에서 제외
+        #  - PT: 침투제/세척제/현상제/형광침투제만 허용
+        #  - MT: 형광자분/흑색자분/백색페인트만 허용
+        #  - 그 외(RT, UT, PAUT 등): NDT 약품 사용 없음
+        _method_now = self.cb_daily_test_method.get().strip().upper()
+        _pt_mats = {"침투제", "세척제", "현상제", "형광침투제"}
+        _mt_mats = {"형광자분", "흑색자분", "백색페인트"}
+        if 'PT' in _method_now and 'PAUT' not in _method_now:
+            _allowed_ndt = _pt_mats
+        elif 'MT' in _method_now:
+            _allowed_ndt = _mt_mats
+        elif _method_now:
+            _allowed_ndt = set()
+        else:
+            _allowed_ndt = None  # 검사방법 미입력 시 기존 동작 유지
         if hasattr(self, 'ndt_company_entries'):
             for company_entries in self.ndt_company_entries:
                 company_code = company_entries['_company'].get().strip()
-                ndt_data = {name: to_f(company_entries.get(name)) for name in self.ndt_materials_all}
+                ndt_data = {name: (to_f(company_entries.get(name)) if (_allowed_ndt is None or name in _allowed_ndt) else 0.0)
+                            for name in self.ndt_materials_all}
                 
                 # [REFINEMENT] Create record if there is NDT data OR it is the first entry (guaranteed row)
                 if any(v > 0 for v in ndt_data.values()) or company_entries == self.ndt_company_entries[0]:

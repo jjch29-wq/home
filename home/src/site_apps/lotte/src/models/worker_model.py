@@ -217,7 +217,7 @@ def _calculate_split_ot_hours_impl(self, ot_value, date_val=None):
 
 
 def sync_worker_times_impl(self):
-    """작업자 1의 설정(주야/작업시간/OT)을 모든 작업자와 동기화"""
+    """작업자 1의 검사방법과 근무 설정을 성명이 입력된 작업자에게 적용."""
     try:
         # Get values from Worker 1
         if not hasattr(self, 'worker_group1'):
@@ -228,9 +228,11 @@ def sync_worker_times_impl(self):
         ot1 = master_group.ent_ot.get().strip()
         meal1 = master_group.get_meal().strip()
         shift1 = master_group.cb_shift.get()
+        method1 = master_group.get_method()
+        has_work_details = bool(wt1 or ot1 or meal1)
         
-        if not wt1 and not ot1 and not meal1:
-            messagebox.showwarning("입력 필요", "작업자 1의 작업시간이나 OT, 또는 일비를 입력해주세요.")
+        if not has_work_details and not method1:
+            messagebox.showwarning("입력 필요", "작업자 1의 검사방법, 작업시간, OT 또는 일비를 입력해주세요.")
             return
 
         for i in range(2, 11):
@@ -247,6 +249,10 @@ def sync_worker_times_impl(self):
             if not target_name:
                 continue
 
+            target_group.set_method(method1)
+            if not has_work_details:
+                continue
+
             # Sync Shift
             target_group.cb_shift.set(shift1)
 
@@ -259,7 +265,8 @@ def sync_worker_times_impl(self):
             # Sync Meal
             target_group.set_meal(meal1)
         
-        messagebox.showinfo("완료", "작업자 1의 설정(주야/시간/OT/일비)이 성명이 입력된 모든 작업자에게 적용되었습니다.")
+        settings = "검사방법/주야/시간/OT/일비" if has_work_details else "검사방법"
+        messagebox.showinfo("완료", f"작업자 1의 설정({settings})이 성명이 입력된 모든 작업자에게 적용되었습니다.")
         
         # [FIX] Prevent RTK grid from being click-blocked after bulk apply & auto-focus
         if hasattr(self, 'rtk_grid') and self.rtk_grid.winfo_ismapped():
