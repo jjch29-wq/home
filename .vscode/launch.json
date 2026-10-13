@@ -12,6 +12,26 @@
             "justMyCode": true
         },
         {
+            "name": "한국가스공사 앱 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\site_apps\\kogas\\main.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "롯데건설 앱 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\site_apps\\lotte\\main.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "PAUT 캡처 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
