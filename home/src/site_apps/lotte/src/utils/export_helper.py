@@ -6,6 +6,47 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
+# [MULTI-EQUIP] 장비명 다중 등록 구분자 (예: "UT장비 (SN1), MT장비 (SN2)")
+EQUIP_SEPARATOR = ", "
+
+
+def split_equipments(value):
+    """장비명 문자열을 개별 장비 리스트로 분리.
+    괄호 안의 쉼표(SN 등)는 분리하지 않으며, 빈 값/nan/중복은 제거한다."""
+    if value is None:
+        return []
+    s = str(value).strip()
+    if not s or s.lower() in ('nan', 'none', '-'):
+        return []
+    parts, buf, depth = [], [], 0
+    for ch in s:
+        if ch in '([':
+            depth += 1
+        elif ch in ')]':
+            depth = max(0, depth - 1)
+        if ch == ',' and depth == 0:
+            parts.append(''.join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    parts.append(''.join(buf))
+    result = []
+    for p in parts:
+        p = p.strip()
+        if p and p.lower() not in ('nan', 'none', '-') and p not in result:
+            result.append(p)
+    return result
+
+
+def join_equipments(items):
+    """장비 리스트(또는 다중 장비 문자열 포함)를 중복 없이 하나의 문자열로 결합."""
+    result = []
+    for it in items or []:
+        for e in split_equipments(it):
+            if e not in result:
+                result.append(e)
+    return EQUIP_SEPARATOR.join(result)
+
 # Common Styles
 TITLE_FONT = Font(name='맑은 고딕', size=16, bold=True)
 HEADER_FONT = Font(name='맑은 고딕', size=11, bold=True)
@@ -445,14 +486,13 @@ def _build_proof_inspection_sheet(ws, site, raw_df):
         f = _to_f(row.get('검사비', 0))
         tr = _to_f(row.get('출장비', 0))
         ml = _to_f(row.get('일식', 0))
-        eq = str(row.get('장비명', '')).strip()
-
         method_dict[m]['count'] += 1
         method_dict[m]['qty'] += q
         method_dict[m]['fee'] += f
         method_dict[m]['travel'] += tr
         method_dict[m]['meal'] += ml
-        if eq and eq.lower() not in ('nan', 'none', '-'):
+        # [MULTI-EQUIP] 다중 장비는 개별로 집계
+        for eq in split_equipments(row.get('장비명', '')):
             method_dict[m]['equips'].add(eq)
 
     total_sum_fee = sum(v['fee'] + v['travel'] + v['meal'] for v in method_dict.values())
@@ -1411,16 +1451,33 @@ def _build_proof_materials_and_expenses_sheet(ws, site, raw_df, actual_material_
     for _, row in raw_df.iterrows():
         d_str = str(row.get('Date', ''))[:10]
         method = str(row.get('검사방법', '')).strip().upper()
-        equip = str(row.get('장비명', '')).strip().upper()
-        
-        target = None
-        if 'PAUT' in method or 'PAUT' in equip: target = "PAUT 장비"
-        elif 'PMI' in method or 'PMI' in equip: target = "PMI 장비"
-        elif 'MT' in method or 'YOKE' in equip: target = "MT (YOKE) 장비"
-        elif 'UT' in method: target = "UT 초음파탐상장비"
-        elif 'RT' in method: target = "RT 방사선투과검사장비"
+        equip_list = [e.upper() for e in split_equipments(row.get('장비명', ''))]
 
-        if target:
+        def _classify(equip):
+            if 'PAUT' in method or 'PAUT' in equip: return "PAUT 장비"
+            if 'PMI' in method or 'PMI' in equip: return "PMI 장비"
+            if 'MT' in method or 'YOKE' in equip: return "MT (YOKE) 장비"
+            if 'UT' in method: return "UT 초음파탐상장비"
+            if 'RT' in method: return "RT 방사선투과검사장비"
+            return None
+
+        targets = set()
+        if len(equip_list) > 1:
+            # [MULTI-EQUIP] 장비별로 분류 (검사방법이 아닌 장비명 기준)
+            for equip in equip_list:
+                if 'PAUT' in equip: targets.add("PAUT 장비")
+                elif 'PMI' in equip: targets.add("PMI 장비")
+                elif 'YOKE' in equip or 'MT' in equip: targets.add("MT (YOKE) 장비")
+                elif 'UT' in equip: targets.add("UT 초음파탐상장비")
+                elif 'RT' in equip: targets.add("RT 방사선투과검사장비")
+            if not targets:
+                t = _classify(' '.join(equip_list))
+                if t: targets.add(t)
+        else:
+            t = _classify(equip_list[0] if equip_list else '')
+            if t: targets.add(t)
+
+        for target in targets:
             if target not in eq_dict: eq_dict[target] = {'dates': set(), 'count': 0}
             eq_dict[target]['dates'].add(d_str)
             eq_dict[target]['count'] += 1

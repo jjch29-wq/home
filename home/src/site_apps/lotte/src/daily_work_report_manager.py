@@ -207,6 +207,8 @@ class DailyWorkReportManager:
                 ot_header_row = 37 + method_offset
 
         ot_list = data.get('ot_status', [])
+        from site_apps.lotte.src.worker_assignment import merge_worker_attendance
+        ot_list = merge_worker_attendance(ot_list)
         grouped_ot = {}
         for ot in ot_list:
             comp = str(ot.get('company', '')).strip()
@@ -680,5 +682,105 @@ class DailyWorkReportManager:
         }
         for col, width in slim_widths.items():
             sheet.column_dimensions[col].width = width
-            
+
+        # 병합 셀은 Excel 자동 행 높이가 동작하지 않으므로 직접 맞춘다.
+        equipment_coord = gen_map.get('equipment')
+        if equipment_coord and data.get('equipment'):
+            from site_apps.lotte.src.utils.export_helper import split_equipments
+            from openpyxl.utils import get_column_letter
+            import unicodedata
+
+            equipment_cell = sheet[equipment_coord]
+            equipment_range = next((area for area in sheet.merged_cells.ranges
+                                    if equipment_coord in area), None)
+            min_col = equipment_range.min_col if equipment_range else equipment_cell.column
+            max_col = equipment_range.max_col if equipment_range else equipment_cell.column
+            min_row = equipment_range.min_row if equipment_range else equipment_cell.row
+            max_row = equipment_range.max_row if equipment_range else equipment_cell.row
+            equipment_cell = sheet.cell(min_row, min_col)
+            available_width = max(8, sum(sheet.column_dimensions[get_column_letter(col)].width
+                                         for col in range(min_col, max_col + 1)) - 4)
+            lines = []
+            for equipment in split_equipments(str(data['equipment'])):
+                line, used = '', 0
+                for char in equipment:
+                    width = 2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
+                    if char == '\n' or (line and used + width > available_width):
+                        lines.append(line)
+                        line, used = '', 0
+                    if char != '\n':
+                        line += char
+                        used += width
+                if line:
+                    lines.append(line)
+            equipment_cell.value = '\n'.join(lines)
+            equipment_cell.font = Font(name='맑은 고딕', size=9)
+            equipment_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            needed_height = len(lines) * 14 + 6
+            current_height = sum(sheet.row_dimensions[row].height or 15
+                                 for row in range(min_row, max_row + 1))
+            if needed_height > current_height:
+                sheet.row_dimensions[max_row].height = (sheet.row_dimensions[max_row].height or 15) + needed_height - current_height
+
+        # MT 형광자분을 백색페인트와 별도로 출력한다.
+        fluorescent_row = 48 + total_offset
+        shifted_merges = []
+        template_merges = []
+        mt_merge = None
+        for area in list(sheet.merged_cells.ranges):
+            if area.min_row >= fluorescent_row:
+                shifted_merges.append((area.min_row + 1, area.min_col, area.max_row + 1, area.max_col))
+                sheet.unmerge_cells(area.coord)
+            elif area.min_row == fluorescent_row - 1 and area.max_row == fluorescent_row - 1:
+                template_merges.append((fluorescent_row, area.min_col, fluorescent_row, area.max_col))
+            elif area.min_col == 2 and area.max_col == 3 and area.max_row == fluorescent_row - 1:
+                mt_merge = (area.min_row, area.min_col, fluorescent_row, area.max_col)
+                sheet.unmerge_cells(area.coord)
+        sheet.insert_rows(fluorescent_row)
+        for col in range(1, 20):
+            sheet.cell(fluorescent_row, col)._style = copy(sheet.cell(fluorescent_row - 1, col)._style)
+        sheet.row_dimensions[fluorescent_row].height = 18
+        for r1, c1, r2, c2 in shifted_merges + template_merges + ([mt_merge] if mt_merge else []):
+            sheet.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+        fluorescent = next((materials_data[key] for key in ('MT FLUORESCENT', '형광자분')
+                            if key in materials_data), {})
+        safe_write(f'D{fluorescent_row}', '형광자분')
+        safe_write(f'H{fluorescent_row}', 'CAN')
+        if fluorescent:
+            safe_write(f'K{fluorescent_row}', '-')
+            safe_write(f'M{fluorescent_row}', fluorescent.get('used', 0))
+            safe_write(f'O{fluorescent_row}', fluorescent.get('in', 0))
+        # 행 삽입과 병합이 모두 끝난 뒤 표의 외곽선을 다시 연결한다.
+        material_top = 42 + base_shift
+        material_bottom = 51 + total_offset
+        for row in range(material_top, material_bottom + 1):
+            for col in range(2, 20):
+                cell = sheet.cell(row, col)
+                border = copy(cell.border)
+                if row == material_top:
+                    border.top = thin_side
+                if row == material_bottom:
+                    border.bottom = thin_side
+                if col == 2:
+                    border.left = thin_side
+                if col == 19:
+                    border.right = thin_side
+                cell.border = border
+        for area in sheet.merged_cells.ranges:
+            if area.min_row < material_top or area.max_row > material_bottom:
+                continue
+            anchor = sheet.cell(area.min_row, area.min_col)
+            border = copy(anchor.border)
+            if area.min_col == 2:
+                border.left = thin_side
+            if area.max_col == 19:
+                border.right = thin_side
+            if area.min_row == material_top:
+                border.top = thin_side
+            if area.max_row == material_bottom:
+                border.bottom = thin_side
+            anchor.border = border
+        sheet.print_area = f'A1:S{52 + total_offset}'
+        sheet.row_breaks.brk = []
+        sheet.row_breaks.append(Break(id=52 + total_offset))
         wb.save(output_path); return output_path

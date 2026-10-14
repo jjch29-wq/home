@@ -210,6 +210,7 @@ def setup_daily_usage_tab_impl(self):
     insp_container = ttk.Frame(form_content)
     insp_container.grid(row=3, column=3, padx=(2, 5), pady=1, sticky='w')
     self.ent_daily_inspection_item = ttk.Entry(insp_container, width=15)
+    self.ent_daily_inspection_item._allow_multi = True
     self.ent_daily_inspection_item.pack(side='left')
     
     btn_insp_item_mgr = tk.Button(insp_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
@@ -268,6 +269,61 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(form_content, text="검사비:").grid(row=8, column=0, padx=(5, 0), pady=1, sticky='e')
     self.ent_daily_test_fee = ttk.Entry(form_content, width=15)
     self.ent_daily_test_fee.grid(row=8, column=1, padx=(2, 10), pady=1, sticky='w')
+
+    from site_apps.lotte.src.services.company_pricing import company_conditions, get_company_price
+    company_price_frame = ttk.LabelFrame(form_content, text="업체별 단가 조건", padding=5)
+    company_price_frame.grid(row=10, column=0, columnspan=4, sticky='ew', pady=5)
+    company_price_frame.grid_remove()
+    self.company_price_condition_var = tk.StringVar(value="")
+    company_price_condition = ttk.Combobox(
+        company_price_frame, textvariable=self.company_price_condition_var,
+        state='readonly', width=28,
+    )
+    company_price_condition.pack(side='left')
+    company_price_hint = ttk.Label(company_price_frame, text="조건을 선택하세요")
+    company_price_hint.pack(side='left', padx=5)
+
+    def apply_company_price():
+        company = self.cb_daily_company.get().strip()
+        method = self.cb_daily_test_method.get().strip()
+        options = company_conditions(company, method)
+        if not options:
+            company_price_frame.grid_remove()
+            self.company_price_condition_var.set("")
+            return False
+        company_price_frame.grid()
+        company_price_condition['values'] = options
+        if self.company_price_condition_var.get() not in options:
+            self.company_price_condition_var.set(options[0] if len(options) == 1 else "")
+        condition = self.company_price_condition_var.get()
+        if not condition:
+            company_price_hint.config(text="조건을 선택하세요")
+            for entry in (self.ent_daily_unit_price, self.ent_daily_test_fee):
+                entry.delete(0, tk.END)
+            return True
+        try:
+            quantity = float(self.ent_daily_test_amount.get().replace(',', '') or 0)
+            result = get_company_price(company, method, condition, quantity)
+        except ValueError:
+            return True
+        if result is None:
+            return True
+        for entry, value in ((self.ent_daily_unit_price, result['price']),
+                             (self.ent_daily_travel_cost, result['travel']),
+                             (self.ent_daily_test_fee, result['fee'])):
+            entry.delete(0, tk.END)
+            entry.insert(0, f"{value:,.0f}")
+        self.cb_daily_unit.set(result['unit'])
+        company_price_hint.config(text="업체 단가 적용")
+        # 업체 단가에는 표준 NDT 원가 산출 내역을 붙이지 않는다.
+        for name in ('factor', 'adj_qty', 'mat_cost', 'lab_cost', 'overhead', 'tech'):
+            setattr(self, '_last_ndt_' + name, 1.0 if name == 'factor' else 0)
+        return True
+
+    self._apply_company_price = apply_company_price
+    company_price_condition.bind('<<ComboboxSelected>>', lambda e: apply_company_price())
+    for event in ('<<ComboboxSelected>>', '<FocusOut>', '<Return>'):
+        self.cb_daily_company.bind(event, lambda e: apply_company_price(), add='+')
 
     # --- NDT 자동 산출 패널 ---
     self.ndt_calc_frame = ttk.LabelFrame(form_content, text="NDT 상세 조건 및 자동 계산", padding=5)
@@ -332,6 +388,8 @@ def setup_daily_usage_tab_impl(self):
     ttk.Entry(row4, textvariable=self.ndt_rej_joint_var, width=5).pack(side='left', padx=2)
 
     def _calculate_ndt_fee():
+        if apply_company_price():
+            return
         try:
             from site_apps.lotte.src.ndt_billing_tab import MATERIAL_COST, LABOR_COST
             ndt_type = self.cb_daily_test_method.get().strip().upper()
@@ -570,6 +628,7 @@ def setup_daily_usage_tab_impl(self):
             self.rtk_grid.grid_remove() # [NEW] Hide RTK
             try: self.empty_guide_frame.grid_remove() 
             except: pass
+        apply_company_price()
         return "break" 
     self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit_logic, add='+')
     self.cb_daily_test_method.bind('<KeyRelease>', on_method_change_auto_unit_logic, add='+')
@@ -1204,7 +1263,7 @@ def update_daily_usage_view_impl(self):
         n_site = str(entry.get('Site', '')).strip()
         n_date = usage_date
         n_method = str(entry.get('검사방법', '')).strip()
-        n_insp = str(entry.get('검사품명', '')).strip()
+        n_insp = self.clean_nan(entry.get('검사품명', ''))
         n_code = str(entry.get('적용코드', '')).strip()
         
         content_key = (n_date, n_site, c_worktime, n_method, t_key, mat_id, n_insp, n_code)
@@ -1436,7 +1495,7 @@ def update_daily_usage_view_impl(self):
             entry.get('적용코드', ''),
             entry.get('Site', ''),
             entry.get('구분', ''),
-            entry.get('검사품명', ''),
+            self.clean_nan(entry.get('검사품명', '')),
             entry.get('성적서번호', ''),
             consolidated_workers, # Header: '작업자' (Index 6)
             display_worktime,     # Header: '작업시간' (Index 7)

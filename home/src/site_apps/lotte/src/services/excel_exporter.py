@@ -60,42 +60,21 @@ def export_daily_work_report_impl(self):
             try:
                 df_copy = self.daily_usage_df.copy()
                 
-                # [SMART SELECTION] 리스트에서 여러 개를 선택했는지 확인
-                selection = self.daily_usage_tree.selection()
-                if len(selection) > 1:
-                    # 여러 개 선택된 경우, 선택된 항목들만 모아서 출력
-                    selected_indices = []
-                    for item in selection:
-                        tags = self.daily_usage_tree.item(item, 'tags')
-                        if tags and tags[0].isdigit():
-                            idx = int(tags[0])
-                            if idx in df_copy.index:
-                                selected_indices.append(idx)
-                    if selected_indices:
-                        site_records = df_copy.loc[selected_indices]
-                        # 현장명/날짜는 첫 번째 선택된 항목 기준으로 업데이트 (데이터 정합성 보장)
-                        if 'Site' in site_records.columns: site = str(site_records.iloc[0]['Site']).strip()
-                        if 'Date' in site_records.columns: date_val = pd.to_datetime(site_records.iloc[0]['Date']).date()
-                    
-                if site_records.empty:
-                    # 하나만 선택되었거나 선택이 없는 경우: 현재 폼의 날짜/현장 기준으로 전체 합산
-                    # [ROBUST MATCHING] 날짜와 현장명 비교 시 공백 등 무시하여 정확도 향상
-                    check_date = pd.to_datetime(date_val).date()
-                    site_col = 'Site' if 'Site' in df_copy.columns else '현장' if '현장' in df_copy.columns else ''
-                    date_col = 'Date' if 'Date' in df_copy.columns else '날짜' if '날짜' in df_copy.columns else ''
-                    
-                    if site_col and date_col:
-                        df_copy['Date_norm'] = pd.to_datetime(df_copy[date_col], errors='coerce').dt.date
-                        site_records = df_copy[
-                            (df_copy['Date_norm'] == check_date) & 
-                            (df_copy[site_col].astype(str).str.strip().str.upper() == str(site).strip().upper())
-                        ]
+                from site_apps.lotte.src.services.daily_report_records import select_daily_report_records
+                site_records = select_daily_report_records(df_copy, date_val, site,
+                    getattr(self, '_loaded_daily_record_index', None))
                 
                 # [NEW] site_records에서 장비명 및 업체명 집계 업데이트
                 if not site_records.empty:
+                    for column, key in [('검사품명', 'inspection_item'), ('성적서번호', 'report_no'), ('적용코드', 'standard')]:
+                        if column in site_records.columns:
+                            values = list(dict.fromkeys(_clean_str(value) for value in site_records[column].dropna() if _clean_str(value)))
+                            data[key] = ', '.join(values)
                     if '장비명' in site_records.columns:
+                        from site_apps.lotte.src.utils.export_helper import join_equipments
                         equips = [_clean_str(x) for x in site_records['장비명'].dropna().unique() if _clean_str(x)]
-                        if equips: data['equipment'] = ", ".join(equips)
+                        equip_joined = join_equipments(equips)
+                        if equip_joined: data['equipment'] = equip_joined
                     
                     comp_col = '업체명' if '업체명' in site_records.columns else ''
                     if comp_col:
@@ -457,7 +436,8 @@ def export_daily_work_report_impl(self):
         # [NEW] NDT 화학약품 (MT/PT) - DB site_records에서 합산하여 수집
         # [FIX] DT_ 접두어 포함하여 매칭 확장
         chem_db_map = [
-            ('MT WHITE',     ['NDT_백색', 'NDT_백색페인트', 'NDT_형광자분', 'NDT_백색페인트_MT', 'DT_백색페인트', 'DT_형광자분']), 
+            ('MT WHITE',     ['NDT_백색', 'NDT_백색페인트', 'NDT_백색페인트_MT', 'DT_백색페인트']),
+            ('MT FLUORESCENT', ['NDT_형광자분', 'DT_형광자분']),
             ('MT 7C-BLACK',  ['NDT_흑색', 'NDT_흑색자분', 'DT_흑색자분']),
             ('PT Penetrant', ['NDT_침투', 'NDT_침투제', 'DT_침투', 'DT_침투제']),
             ('PT Cleaner',   ['NDT_세척', 'NDT_세척제', 'DT_세척', 'DT_세척제']),
@@ -518,14 +498,14 @@ def export_daily_work_report_impl(self):
             entries_dict = self.ndt_company_entries[0]
             mat_keys = [k for k in entries_dict.keys() if k != '_company']
             fallback_order = [
-                ('MT WHITE', 0), ('MT 7C-BLACK', 1), 
-                ('PT Penetrant', 3), ('PT Cleaner', 4), ('PT Developer', 5)
+                ('MT FLUORESCENT', '형광자분'), ('MT WHITE', '백색페인트'), ('MT 7C-BLACK', '흑색자분'),
+                ('PT Penetrant', '침투제'), ('PT Cleaner', '세척제'), ('PT Developer', '현상제')
             ]
-            for m_key, idx in fallback_order:
-                if idx < len(mat_keys):
+            for m_key, name in fallback_order:
+                if name in entries_dict:
                     try:
-                        val = entries_dict[mat_keys[idx]].get().strip()
-                        used = int(val) if val else 0
+                        val = entries_dict[name].get().strip()
+                        used = float(val) if val else 0
                         if used > 0: data['materials'][m_key] = {'used': used}
                     except: pass
 
@@ -583,7 +563,7 @@ def export_daily_work_report_impl(self):
                     data['ot_status'].append({
                         'names': worker_name,
                         'company': clean_val(row.get('업체명', '')),
-                        'method': clean_val(row.get('검사방법', '')),
+                        'method': clean_val(row.get('WorkerMethod' if i == 1 else f'WorkerMethod{i}', '')) or clean_val(row.get('검사방법', '')),
                         'ot_hours': ot_val,
                         'ot_amount': ot_amount
                     })
@@ -612,6 +592,8 @@ def export_daily_work_report_impl(self):
             if data['ot_status']:
                 print(f"DEBUG: Gathered {len(data['ot_status'])} OT items from UI (Fallback)")
         
+        from site_apps.lotte.src.worker_assignment import include_shared_worker_methods
+        data['ot_status'] = include_shared_worker_methods(data['ot_status'], site_records.to_dict('records'))
         print(f"DEBUG: FINAL OT Status for report: {len(data['ot_status'])} items")
 
         data['rtk'] = {}
@@ -869,7 +851,8 @@ def export_central_daily_work_report_impl(self):
         if not equips:
             equips = [_clean_str(self.cb_daily_equip.get())]
             
-        equip_str = ", ".join(filter(None, equips))
+        from site_apps.lotte.src.utils.export_helper import join_equipments
+        equip_str = join_equipments(filter(None, equips))
 
         # 인원 수집
         inspectors = []

@@ -6,10 +6,25 @@ from types import SimpleNamespace
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from site_apps.lotte.src.worker_assignment import build_worker_assignments, worker_names
+from site_apps.lotte.src.worker_assignment import build_worker_assignments, worker_names, update_work_details, apply_work_details, merge_worker_attendance
 
 
 class WorkerAssignmentTests(unittest.TestCase):
+    def test_attendance_combines_methods_without_repeating_time_or_ot(self):
+        rows = merge_worker_attendance([
+            dict(names='주진철', company='함감속기', method='UT', ot_hours='09:00~18:00', ot_amount='1'),
+            dict(names='주진철', company='함감속기', method='MT', ot_hours='', ot_amount='0'),
+            dict(names='주진철', company='함감속기', method='UT', ot_hours='09:00~18:00', ot_amount='1')])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['method'], 'UT, MT')
+        self.assertEqual(rows[0]['ot_hours'], '09:00~18:00')
+        self.assertEqual(rows[0]['ot_amount'], '1')
+
+    def test_attendance_keeps_distinct_workers_methods_separate(self):
+        rows = merge_worker_attendance([
+            dict(names='주진철', company='함감속기', method='UT'),
+            dict(names='다른담당', company='함감속기', method='MT')])
+        self.assertEqual([row['method'] for row in rows], ['UT', 'MT'])
     def setUp(self):
         self.workers = {
             1: dict(name='김검사', time='(주간) 8', ot='2', meal='10000', method=''),
@@ -47,9 +62,43 @@ class WorkerAssignmentTests(unittest.TestCase):
         self.assertEqual(row['User2'], '이검사')
         self.assertEqual(row['WorkerMethod2'], 'UT')
 
+    def test_items_created_before_workers_inherit_current_workers(self):
+        row, = build_worker_assignments([dict(method='UT', workers=[], workers_explicit=False)], self.workers)
+        self.assertEqual(row['User'], '김검사')
+        self.assertEqual(row['User2'], '')
+        empty, = build_worker_assignments([dict(method='UT', workers=[], workers_explicit=True)], self.workers)
+        self.assertEqual(empty['User'], '')
+
     def test_display_includes_workers_when_first_slot_is_empty(self):
         self.assertEqual(worker_names(dict(User='', User2='이검사', User3='nan',
                                           User4='김검사', User5='이검사')), '이검사, 김검사')
+
+    def test_loaded_record_saves_item_and_workers_without_changing_quantity(self):
+        record = dict(검사품명='', User='', User2='이전담당', Usage=6, 검사비=172000,
+                      차량번호='76마3422', 주행거리='100')
+        workers = {1: dict(name='부장 주진철', time='(주간) 09:00~18:00',
+                           ot='1', meal='10000', method='UT')}
+        self.assertTrue(update_work_details(record, 'Gear Shaft', workers))
+        self.assertEqual(record['검사품명'], 'Gear Shaft')
+        self.assertEqual(record['User'], '부장 주진철')
+        self.assertEqual(record['WorkTime'], '(주간) 09:00~18:00')
+        self.assertEqual(record['User2'], '')
+        self.assertEqual((record['Usage'], record['검사비'], record['주행거리']), (6, 172000, '100'))
+        self.assertFalse(update_work_details(record, 'Gear Shaft', workers))
+
+    def test_edit_with_numeric_empty_excel_columns(self):
+        import pandas as pd
+        frame = pd.DataFrame({'검사품명': [float('nan')], 'User': [float('nan')],
+                              'WorkTime': [float('nan')], 'OT': [0.0], 'Meal': [0.0]})
+        record = frame.loc[0].to_dict()
+        update_work_details(record, 'Gear, Shaft', {
+            1: dict(name='주진철', time='(주간) 09:00~18:00', ot='', meal='10,000', method='UT')})
+        apply_work_details(frame, 0, record)
+        self.assertEqual(frame.at[0, '검사품명'], 'Gear, Shaft')
+        self.assertEqual(frame.at[0, 'User'], '주진철')
+        self.assertEqual(frame.at[0, 'OT'], 0.0)
+        self.assertEqual(frame.at[0, 'Meal'], 10000.0)
+        self.assertEqual(frame.at[0, 'OT10'], 0.0)
 
     def test_session_preserves_item_assignments_and_worker_details(self):
         source = Path(__file__).resolve().parents[1] / 'src/site_apps/lotte/src/app.py'

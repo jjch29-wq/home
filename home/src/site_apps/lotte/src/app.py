@@ -2060,12 +2060,14 @@ class MaterialManager:
             # [NEW] Collect history of equipment names from daily usage records (Only if Active)
             history_equip = []
             if not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
+                from site_apps.lotte.src.utils.export_helper import split_equipments
                 raw_history = self.daily_usage_df['장비명'].dropna().unique().tolist()
                 for eq in raw_history:
-                    eq_str = str(eq).strip()
-                    if not eq_str or eq_str in inactive_names:
-                        continue
-                    history_equip.append(eq_str)
+                    # [MULTI-EQUIP] 다중 장비 문자열은 개별 장비로 분리
+                    for eq_str in split_equipments(eq):
+                        if eq_str in inactive_names or eq_str in history_equip:
+                            continue
+                        history_equip.append(eq_str)
                 
             # [NEW] Filter: Only include actual equipment (non-consumables) in the equipment dropdown
             equip_only_vals = []
@@ -2174,9 +2176,11 @@ class MaterialManager:
                 
         # 3. History
         if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
+            from site_apps.lotte.src.utils.export_helper import split_equipments
             unique_equip = self.daily_usage_df['장비명'].dropna().astype(str).str.strip().unique()
             for e in unique_equip:
-                if e: raw_equip.add(e)
+                for part in split_equipments(e):
+                    raw_equip.add(part)
 
         cleaned = sorted([e for e in raw_equip if e != '전체'])
         return (['전체'] + cleaned) if include_all else cleaned
@@ -4569,22 +4573,43 @@ class MaterialManager:
         search_ent.pack(side='left', fill='x', expand=True, padx=2)
         search_ent.focus_set()
 
+        multi_select = config_key in ('equipments', 'test_items') and bool(getattr(target_cb, '_allow_multi', False))
+        selected_values = set()
+        if multi_select:
+            current_text = target_cb.get().strip()
+            for item in data_list:
+                if re.search(r'(?:^|,\s*)' + re.escape(item) + r'(?=\s*,|$)', current_text):
+                    selected_values.add(item)
+            ttk.Label(frame, text='항목을 클릭하면 선택/해제됩니다. 여러 개를 고른 뒤 [선택]을 누르세요.').pack(fill='x', pady=(0, 5))
+
         # Add scrollbar
         scrollbar = ttk.Scrollbar(frame)
         scrollbar.pack(side='right', fill='y')
         
-        listbox = tk.Listbox(frame, font=('Arial', 10))
+        listbox = tk.Listbox(frame, font=('Arial', 10),
+                             selectmode=tk.MULTIPLE if multi_select else tk.BROWSE,
+                             exportselection=False)
         listbox.pack(fill='both', expand=True, side='left')
         listbox.config(yscrollcommand=scrollbar.set)
         scrollbar.config(command=listbox.yview)
         
+        def remember_selection():
+            if multi_select:
+                visible = set(listbox.get(0, 'end'))
+                selected_values.difference_update(visible)
+                selected_values.update(listbox.get(i) for i in listbox.curselection())
+
         def refresh_list(*args):
+            remember_selection()
+            selected_values.intersection_update(data_list)
             query = search_var.get().strip().lower()
             listbox.delete(0, 'end')
             # Use original data_list for filtering
             for item in sorted(data_list):
                 if not query or query in item.lower():
                     listbox.insert('end', item)
+                    if multi_select and item in selected_values:
+                        listbox.selection_set(listbox.size() - 1)
             # Trigger app-wide update of related comboboxes
             self.refresh_ui_for_list_change(config_key)
 
@@ -4592,12 +4617,16 @@ class MaterialManager:
         refresh_list()
             
         def select_and_close():
+            remember_selection()
             sel = listbox.curselection()
-            if not sel: return
-            val = listbox.get(sel[0])
+            if multi_select:
+                val = ', '.join(item for item in sorted(set(data_list)) if item in selected_values)
+            else:
+                if not sel: return
+                val = listbox.get(sel[0])
             if target_cb:
                 # [NEW] Multi-select append logic
-                if getattr(target_cb, '_allow_multi', False) and hasattr(target_cb, 'get'):
+                if not multi_select and getattr(target_cb, '_allow_multi', False) and hasattr(target_cb, 'get'):
                     last_text = target_cb.get().strip()
                     if last_text:
                         last_segment = last_text.rsplit(',', 1)[-1].strip() if ',' in last_text else last_text
@@ -4616,9 +4645,10 @@ class MaterialManager:
                 # Manually trigger any search/filter logic if needed
                 if hasattr(self, 'update_daily_usage_view'):
                     self.update_daily_usage_view()
-            dialog.destroy()
+            on_close()
 
-        listbox.bind("<Double-1>", lambda e: select_and_close())
+        if not multi_select:
+            listbox.bind("<Double-1>", lambda e: select_and_close())
             
         btn_frame = ttk.Frame(dialog, padding=5)
         btn_frame.pack(fill='x')
@@ -4641,6 +4671,9 @@ class MaterialManager:
         def edit_item():
             sel = listbox.curselection()
             if not sel: return
+            if len(sel) != 1:
+                messagebox.showinfo('수정', '수정할 항목 하나만 선택해주세요.', parent=dialog)
+                return
             idx = sel[0]
             old_val = listbox.get(idx)
             new_val = simpledialog.askstring("수정", f"[{old_val}] -> 새 이름을 입력하세요:", initialvalue=old_val)
@@ -4654,6 +4687,9 @@ class MaterialManager:
         def delete_item():
             sel = listbox.curselection()
             if not sel: return
+            if len(sel) != 1:
+                messagebox.showinfo('삭제', '삭제할 항목 하나만 선택해주세요.', parent=dialog)
+                return
             idx = sel[0]
             val = listbox.get(idx)
             if messagebox.askyesno("삭제 확인", f"'{val}'을 목록에서 삭제하시겠습니까?"):
@@ -6027,7 +6063,7 @@ class MaterialManager:
                     row.get('Site', ''),
                     loc_type,
                     row.get('검사방법', ''),
-                    row.get('검사품명', ''),
+                    '' if pd.isna(row.get('검사품명', '')) else str(row.get('검사품명', '')).strip(),
                     mat_name,
                     row.get('Usage', ''),
                     first_worker,
@@ -9155,6 +9191,9 @@ class MaterialManager:
 
     def update_daily_test_fee_calc(self, event=None):
         """Auto-calculate Inspection Fee = (Amount * Unit Price) + Travel Expense"""
+        apply_company_price = getattr(self, '_apply_company_price', None)
+        if apply_company_price and not hasattr(self, '_multi_item_pricing') and apply_company_price():
+            return
         try:
             def get_f(entry):
                 try:
@@ -9176,6 +9215,13 @@ class MaterialManager:
 
     def _add_single_usage_record_logic(self, mat_id, date_val, site, auto_save=True):
         """현장 사용량 기록 1건을 처리하는 핵심 로직 (단일/일괄 공용)"""
+        from site_apps.lotte.src.services.company_pricing import company_conditions
+        conditions = company_conditions(self.cb_daily_company.get(), self.cb_daily_test_method.get())
+        if conditions and self.company_price_condition_var.get() not in conditions:
+            messagebox.showwarning('단가 조건', '업체별 단가 조건을 먼저 선택하세요.')
+            return
+        if conditions and not hasattr(self, '_multi_item_pricing'):
+            self._apply_company_price()
         def to_f(ent):
             try:
                 # Handle both Entry widgets and raw values
@@ -9332,6 +9378,8 @@ class MaterialManager:
             '단가': to_f(self.ent_daily_unit_price),
             '출장비': to_f(self.ent_daily_travel_cost),
             '업체명': self.cb_daily_company.get().strip(),
+            '업체단가조건': self.company_price_condition_var.get().strip(),
+            '관경(mm)': getattr(self, '_multi_item_pricing', {}).get('diameter', ''),
             'Unit': self.cb_daily_unit.get().strip(),
             '작업형태': self.ndt_work_time_var.get() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT'] else "",
             '조건1': self.ndt_source_var.get() if self.cb_daily_test_method.get().strip() == 'RT' else (self.ndt_pipe_var.get() if self.cb_daily_test_method.get().strip() in ['UT','PT','PAUT'] else ""),
@@ -10063,7 +10111,7 @@ class MaterialManager:
         tree_frame.pack(fill='both', expand=True)
         
         columns = ('name', 'sn', 'model')
-        tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+        tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15, selectmode='extended')
         tree.heading('name', text='품목명')
         tree.heading('sn', text='SN')
         tree.heading('model', text='모델명')
@@ -10106,25 +10154,30 @@ class MaterialManager:
                         if not query or query in name.lower() or query in sn.lower() or query in model.lower():
                             tree.insert('', tk.END, values=(name, sn, model))
 
-        def on_select(e=None):
-            selection = tree.selection()
-            if not selection: return
-            
-            vals = tree.item(selection[0])['values']
+        def _format_equip(vals):
             name, sn, model = str(vals[0]), str(vals[1]), str(vals[2])
-            
             # Format: [Model] Name (SN)
             display_parts = []
             if model and model != 'None' and model != '': display_parts.append(model)
             if name and name != model and name != 'None' and name != '': display_parts.append(name)
             if sn and sn != 'None' and sn != '': display_parts.append(f"({sn})")
+            return " ".join(display_parts).strip()
+
+        def on_select(e=None):
+            selection = tree.selection()
+            if not selection: return
             
-            display_name = " ".join(display_parts).strip()
+            # [MULTI-EQUIP] 여러 장비 선택 지원 (Ctrl/Shift), 기존 입력값 유지 후 추가
+            from site_apps.lotte.src.utils.export_helper import join_equipments
+            new_items = [_format_equip(tree.item(s)['values']) for s in selection]
+            new_items = [x for x in new_items if x]
+            if not new_items: return
             
-            if display_name:
-                self.cb_daily_equip.delete(0, tk.END)
-                self.cb_daily_equip.insert(0, display_name)
-                dlg.destroy()
+            existing = self.cb_daily_equip.get().strip() if add_mode.get() else ''
+            combined = join_equipments([existing] + new_items)
+            self.cb_daily_equip.delete(0, tk.END)
+            self.cb_daily_equip.insert(0, combined)
+            dlg.destroy()
 
         def on_direct_entry():
             query = search_var.get().strip()
@@ -10145,6 +10198,9 @@ class MaterialManager:
 
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(pady=10)
+        add_mode = tk.BooleanVar(value=bool(self.cb_daily_equip.get().strip()))
+        ttk.Label(main_frame, text="※ Ctrl/Shift + 클릭으로 여러 장비 선택 가능 (예: UT + MT)", foreground='gray').pack(before=btn_frame)
+        ttk.Checkbutton(main_frame, text="기존 입력된 장비에 추가", variable=add_mode).pack(before=btn_frame)
         ttk.Button(btn_frame, text="선택 완료", command=on_select, width=15).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="입력 명칭으로 신규 등록", command=on_direct_entry, width=22).pack(side='left', padx=5)
         ttk.Button(btn_frame, text="취소", command=dlg.destroy, width=10).pack(side='left', padx=5)
@@ -10458,6 +10514,7 @@ class MaterialManager:
                 self.ent_daily_inspection_item.delete(0, tk.END)
                 self.ent_daily_inspection_item.insert(0, self.clean_nan(record['검사품명']))
             if '검사방법' in record:
+                self.company_price_condition_var.set(self.clean_nan(record.get('업체단가조건', '')))
                 method = self.clean_nan(record.get('검사방법', ''))
                 self.cb_daily_test_method.set(method)
                 
@@ -10793,9 +10850,11 @@ class MaterialManager:
                     group.set_method('')
 
     def open_multi_material_dialog(self):
+        from site_apps.lotte.src.services.company_pricing import company_conditions, normalize_company, resolve_item_price
+        from site_apps.lotte.src.utils.equipment_selection import equipment_method, filter_equipment_text
         dlg = tk.Toplevel(self.root)
         dlg.title("다중 품목 추가")
-        dlg.geometry("820x680")
+        dlg.geometry("1000x760")
         dlg.minsize(720, 600)
         dlg.resizable(True, True)
         dlg.transient(self.root)
@@ -10838,9 +10897,58 @@ class MaterialManager:
         if hasattr(self, 'ent_daily_unit_price'):
             ent_price.insert(0, self.ent_daily_unit_price.get())
         ent_price.grid(row=4, column=1, padx=5, pady=3, sticky='w')
+
+        ttk.Label(input_f, text="관경(mm):").grid(row=5, column=0, padx=5, pady=3, sticky='e')
+        diameter_var = tk.StringVar()
+        ent_diameter = ttk.Entry(input_f, width=12, textvariable=diameter_var)
+        ent_diameter.grid(row=5, column=1, padx=5, pady=3, sticky='w')
+        ttk.Label(input_f, text="길이/단위:").grid(row=6, column=0, padx=5, pady=3, sticky='e')
+        length_var = tk.StringVar()
+        cb_length = ttk.Combobox(input_f, width=26, textvariable=length_var, state='readonly')
+        cb_length.grid(row=6, column=1, padx=5, pady=3, sticky='w')
+        price_hint = ttk.Label(input_f, text="")
+        price_hint.grid(row=7, column=0, columnspan=3, sticky='w', padx=5)
+        ttk.Label(input_f, text='검사품명:').grid(row=8, column=0, padx=5, pady=3, sticky='e')
+        ent_item = ttk.Entry(input_f, width=26)
+        ent_item.insert(0, self.ent_daily_inspection_item.get().strip())
+        ent_item.grid(row=8, column=1, padx=5, pady=3, sticky='w')
+        ent_item._allow_multi = True
+        ttk.Button(input_f, text='검사품명 선택',
+                   command=lambda: self.open_list_management_dialog('test_items', target_cb=ent_item)).grid(
+                       row=8, column=2, padx=10, sticky='w')
+        row_specs = {}
+
+        def _refresh_price(*_args):
+            company = self.cb_daily_company.get()
+            method = cb_method.get().strip().upper()
+            options = company_conditions(company, method)
+            name = normalize_company(company)
+            length_options = options if name in ('세영정공', '한은이앤씨') else ()
+            cb_length['values'] = length_options
+            cb_length.configure(state='readonly' if length_options else 'disabled')
+            if length_var.get() and length_var.get() not in length_options:
+                length_var.set('')
+            if not options:
+                price_hint.configure(text='입력한 단가를 적용합니다.')
+                return None
+            try:
+                result = resolve_item_price(company, method, diameter_var.get(), length_var.get(), 1)
+            except ValueError as exc:
+                ent_price.delete(0, tk.END)
+                price_hint.configure(text=str(exc))
+                return None
+            ent_price.delete(0, tk.END)
+            ent_price.insert(0, f"{result['price']:,}")
+            price_hint.configure(text=f"{result['condition']} · 단가 {result['price']:,}원 · 출장비는 저장 시 한 번 적용")
+            return result
+
+        diameter_var.trace_add('write', _refresh_price)
+        length_var.trace_add('write', _refresh_price)
         
         def _on_method_change(e=None):
-            m = cb_method.get().strip()
+            m = cb_method.get().strip().upper()
+            cb_equip['values'] = [name for name in equip_candidates if equipment_method(name) in ('', m)] if m != 'PT' else []
+            cb_equip.set(filter_equipment_text(cb_equip.get(), m))
             prices = {'PT': 4200, 'MT': 4200, 'RT': 25500, 'PAUT': 18500, 'PMI': 14300, 'UT': 9300}
             if m in prices:
                 ent_price.delete(0, tk.END)
@@ -10864,13 +10972,14 @@ class MaterialManager:
             else:
                 cb_mat.config(state='normal')
                 cb_mat['values'] = all_mats
+            _refresh_price()
                 
         cb_method.bind('<<ComboboxSelected>>', _on_method_change)
         # Trigger once to set initial filtered list
         _on_method_change()
         
         worker_f = ttk.LabelFrame(input_f, text="검사 항목 담당자 (오른쪽 작업자 기록에서 등록)", padding=5)
-        worker_f.grid(row=5, column=0, columnspan=3, sticky='ew', pady=5)
+        worker_f.grid(row=9, column=0, columnspan=3, sticky='ew', pady=5)
         worker_vars = {}
         for index in range(1, 11):
             group = getattr(self, f'worker_group{index}', None)
@@ -10894,7 +11003,8 @@ class MaterialManager:
         def _add():
             m = cb_mat.get().strip() if str(cb_mat.cget('state')) != 'disabled' else ''
             meth = cb_method.get().strip()
-            eq = cb_equip.get().strip()
+            eq = filter_equipment_text(cb_equip.get(), cb_method.get())
+            cb_equip.set(eq)
             q = ent_qty.get().strip()
             p = ent_price.get().strip()
             if not meth:
@@ -10912,15 +11022,29 @@ class MaterialManager:
                 messagebox.showwarning("입력 확인", "수량과 단가는 숫자로 입력해주세요. 수량은 0 이상이어야 합니다.", parent=dlg)
                 return
             q = q.replace(',', '')
+            try:
+                dia = diameter_var.get().strip()
+                if dia and (not isfinite(float(dia)) or float(dia) <= 0):
+                    raise ValueError('관경(mm)은 0보다 큰 숫자여야 합니다.')
+                result = resolve_item_price(self.cb_daily_company.get(), meth, dia, length_var.get(), quantity)
+            except ValueError as exc:
+                messagebox.showwarning('입력 확인', str(exc), parent=dlg)
+                return
+            if result:
+                p = f"{result['price']:,}"
             selected = _selected_workers()
-            row = tv.insert('', 'end', values=(m, meth, eq, q, p, _worker_names(selected)))
+            row = tv.insert('', 'end', values=(m, meth, eq, q, p, _worker_names(selected), dia, length_var.get(), ent_item.get().strip()))
             row_workers[row] = selected
+            row_specs[row] = {'diameter': dia, 'length_condition': length_var.get(),
+                              'inspection_item': ent_item.get().strip(),
+                              'workers_explicit': any(getattr(self, f'worker_group{index}', None)
+                                  and getattr(self, f'worker_group{index}').get_worker().strip() for index in worker_vars)}
             if str(cb_mat.cget('state')) != 'disabled':
                 cb_mat.set('')
             ent_qty.delete(0, tk.END)
             # Don't clear price or equip, as they might be reused
                 
-        ttk.Button(input_f, text="추가", command=_add).grid(row=0, column=2, rowspan=5, padx=10, sticky='nsew')
+        ttk.Button(input_f, text="추가", command=_add).grid(row=0, column=2, rowspan=7, padx=10, sticky='nsew')
         input_f.grid_columnconfigure(2, weight=1)
 
         # 2. Bottom Action Area (Pack with side='bottom' FIRST so it is ALWAYS visible and never clipped)
@@ -10937,7 +11061,8 @@ class MaterialManager:
                     'equip': v[2] if len(v) > 2 else '',
                     'qty': v[3] if len(v) > 3 else '',
                     'price': v[4] if len(v) > 4 else '',
-                    'workers': row_workers[child]
+                    'workers': row_workers[child],
+                    **row_specs[child],
                 })
             if not items:
                 messagebox.showwarning("입력 확인", "추가된 품목이 없습니다. 상단에서 품목 정보를 입력 후 [추가]를 눌러주세요.", parent=dlg)
@@ -10985,7 +11110,13 @@ class MaterialManager:
         tv_f = ttk.Frame(main_f)
         tv_f.pack(side='top', fill='both', expand=True, pady=5)
         
-        tv = ttk.Treeview(tv_f, columns=('mat', 'method', 'equip', 'qty', 'price', 'workers'), show='headings', height=7)
+        tv = ttk.Treeview(tv_f, columns=('mat', 'method', 'equip', 'qty', 'price', 'workers', 'diameter', 'length', 'inspection_item'), show='headings', height=7)
+        tv.heading('inspection_item', text='검사품명')
+        tv.column('inspection_item', width=130, anchor='w')
+        tv.heading('diameter', text='관경(mm)')
+        tv.column('diameter', width=75, anchor='center')
+        tv.heading('length', text='길이/단위 조건')
+        tv.column('length', width=170, anchor='w')
         tv.heading('mat', text='품목명')
         tv.heading('method', text='방법')
         tv.heading('equip', text='장비명')
@@ -11000,7 +11131,9 @@ class MaterialManager:
         tv.column('price', width=65, anchor='e')
         
         sb_y = ttk.Scrollbar(tv_f, orient='vertical', command=tv.yview)
-        tv.configure(yscrollcommand=sb_y.set)
+        sb_x = ttk.Scrollbar(tv_f, orient='horizontal', command=tv.xview)
+        tv.configure(yscrollcommand=sb_y.set, xscrollcommand=sb_x.set)
+        sb_x.pack(side='bottom', fill='x')
         
         tv.pack(side='left', fill='both', expand=True)
         sb_y.pack(side='left', fill='y')
@@ -11014,6 +11147,7 @@ class MaterialManager:
             for row in tv.selection():
                 indices = _selected_workers()
                 row_workers[row] = indices
+                row_specs[row]['workers_explicit'] = True
                 tv.set(row, 'workers', _worker_names(indices))
 
         def _load_workers(_event=None):
@@ -11030,21 +11164,24 @@ class MaterialManager:
             indices = [index for index in indices if getattr(self, f'worker_group{index}', None)
                        and getattr(self, f'worker_group{index}').get_worker().strip()]
             row = tv.insert('', 'end', values=(item.get('name', ''), item.get('method', ''),
-                            item.get('equip', ''), item.get('qty', ''), item.get('price', ''),
-                            _worker_names(indices)))
+                            filter_equipment_text(item.get('equip', ''), item.get('method', '')), item.get('qty', ''), item.get('price', ''),
+                            _worker_names(indices), item.get('diameter', ''), item.get('length_condition', ''), item.get('inspection_item', '')))
             row_workers[row] = indices
+            row_specs[row] = {'diameter': item.get('diameter', ''), 'length_condition': item.get('length_condition', ''),
+                              'inspection_item': item.get('inspection_item', ''),
+                              'workers_explicit': item.get('workers_explicit', bool(item.get('workers')))}
 
     def add_daily_usage_entry(self, is_multi_loop=False):
         """현장별 일일 사용량 단일 등록 (리팩토링 버전)"""
         try:
-            # 목록에서 불러온 기존 기록의 차량 정보를 보완한 경우에는
-            # 새 작업 행을 추가하지 않고 해당 저장 행을 직접 수정한다.
+            # 불러온 기록의 차량 정보와 검사품명·작업자를 같은 행에 저장한다.
             is_multi_request = (
                 hasattr(self, '_multi_materials')
                 and len(self._multi_materials) >= 1
                 and self.cb_daily_material.get().startswith("[다중 품목]")
             )
             if not is_multi_loop and not is_multi_request:
+                loaded_index = getattr(self, '_loaded_daily_record_index', None)
                 vehicle_widgets = []
                 if hasattr(self, 'fixed_vehicle_widget'):
                     vehicle_widgets.append(self.fixed_vehicle_widget)
@@ -11055,6 +11192,8 @@ class MaterialManager:
                 updated_index = None
                 for vehicle_widget in vehicle_widgets:
                     source_index = getattr(vehicle_widget, '_source_record_index', None)
+                    if loaded_index in self.daily_usage_df.index and source_index != loaded_index:
+                        continue
                     if source_index not in self.daily_usage_df.index:
                         continue
                     stored = self.daily_usage_df.loc[source_index].to_dict()
@@ -11069,16 +11208,81 @@ class MaterialManager:
                             self.daily_usage_df.at[source_index, column] = stored[column]
                         updated_index = source_index
 
+                loaded_index = getattr(self, '_loaded_daily_record_index', None)
+                work_index = loaded_index if loaded_index in self.daily_usage_df.index else updated_index
+                if work_index in self.daily_usage_df.index:
+                    stored = self.daily_usage_df.loc[work_index].to_dict()
+                    stored_date = pd.to_datetime(stored.get('Date'), errors='coerce')
+                    form_date = pd.to_datetime(self.ent_daily_date.get_date(), errors='coerce')
+                    same_record = (pd.notna(stored_date) and pd.notna(form_date)
+                        and stored_date.date() == form_date.date()
+                        and (work_index == loaded_index or self.clean_nan(stored.get('Site', '')) == self.cb_daily_site.get().strip())
+                        and self.clean_nan(stored.get('검사방법', '')) == self.cb_daily_test_method.get().strip())
+                    if same_record:
+                        from site_apps.lotte.src.worker_assignment import update_work_details, apply_work_details
+                        workers = {}
+                        for index in range(1, 11):
+                            group = getattr(self, f'worker_group{index}', None)
+                            if group:
+                                workers[index] = dict(name=group.get_worker().strip(),
+                                    time=group.get_time().strip(), ot=group.get_ot().strip(),
+                                    meal=group.get_meal().strip(), method=group.get_method())
+                        if update_work_details(stored, self.ent_daily_inspection_item.get(), workers):
+                            apply_work_details(self.daily_usage_df, work_index, stored)
+                            updated_index = work_index
+                        from site_apps.lotte.src.services.ndt_record_edit import chemical_changes
+                        company_code = self.clean_nan(stored.get('회사코드', ''))
+                        company_entries = next((entries for entries in getattr(self, 'ndt_company_entries', [])
+                            if entries['_company'].get().strip() == company_code), None)
+                        if company_entries is None and len(getattr(self, 'ndt_company_entries', [])) == 1 and not company_code:
+                            company_entries = self.ndt_company_entries[0]
+                        if company_entries is not None:
+                            values = {name: entry.get() for name, entry in company_entries.items() if name != '_company'}
+                            updates, differences = chemical_changes(stored, self.cb_daily_test_method.get(), values)
+                            if updates:
+                                for column, value in updates.items():
+                                    if column not in self.daily_usage_df.columns:
+                                        self.daily_usage_df[column] = 0.0
+                                    self.daily_usage_df.at[work_index, column] = value
+                                self._auto_reconcile_and_register_ndt(self.ent_daily_date.get_date(),
+                                    self.clean_nan(stored.get('Site', '')), differences, worker_names(stored),
+                                    company_code, allow_returns=True)
+                                updated_index = work_index
+
                 if updated_index is not None:
-                    self.save_data()
+                    if self.save_data() is False:
+                        return
+                    saved_record = self.daily_usage_df.loc[updated_index]
+                    from site_apps.lotte.src.services.daily_report_records import select_daily_report_records
+                    report_records = select_daily_report_records(self.daily_usage_df,
+                        self.ent_daily_date.get_date(), saved_record.get('Site', ''), updated_index)
+                    powder_value = pd.to_numeric(report_records.get('NDT_형광자분', pd.Series(dtype=float)), errors='coerce').fillna(0).sum()
+                    report_methods = ', '.join(dict.fromkeys(str(value).strip() for value in
+                        report_records['검사방법'].dropna() if str(value).strip()))
                     self.update_daily_usage_view()
                     self.update_recent_entries_view()
                     messagebox.showinfo(
-                        "수정 완료", "선택한 저장 기록의 차량 정보가 수정되었습니다.")
+                        "수정 완료", "선택한 저장 기록의 검사품명·작업자·소모품 및 차량 정보가 저장되었습니다."
+                        f"\n작업일보 전체 ({len(report_records)}건) · 검사방법: {report_methods}"
+                        f"\n형광자분 저장량: {float(powder_value):g} (같은 날짜·현장 합계)"
+                        f"\n저장 파일: {getattr(self, 'db_path', '')}")
                     return
 
             if not is_multi_loop and is_multi_request:
+                from site_apps.lotte.src.utils.equipment_selection import filter_equipment_text
                 items = self._multi_materials.copy()
+                from site_apps.lotte.src.services.company_pricing import resolve_item_price
+                item_prices = []
+                try:
+                    for item in items:
+                        item_prices.append(resolve_item_price(
+                            self.cb_daily_company.get(), item.get('method', ''),
+                            item.get('diameter', ''), item.get('length_condition', ''),
+                            float(str(item.get('qty', '0')).replace(',', '')),
+                        ))
+                except ValueError as exc:
+                    messagebox.showwarning('업체 단가 조건', f'{exc}\n다중 품목 창에서 해당 품목을 다시 추가해주세요.')
+                    return
                 
                 # 기본 정보 사전 유효성 검사
                 date_val = self.ent_daily_date.get_date()
@@ -11099,6 +11303,10 @@ class MaterialManager:
                 saved_test_fee = self.ent_daily_test_fee.get().strip()
                 saved_note = self.ent_daily_note.get().strip()
                 saved_equip = self.cb_daily_equip.get().strip()
+                saved_company_condition = self.company_price_condition_var.get()
+                # 출장비는 다중 저장 건 전체에서 한 번만 부과한다.
+                company_travel = max((p['travel'] for p in item_prices if p), default=0)
+                travel_applied = False
 
                 def _safe_set(w, val):
                     if w is None: return
@@ -11180,7 +11388,7 @@ class MaterialManager:
                     # 공통 필드 복원 (다중 저장 시 누락 방지)
                     _safe_set(self.cb_daily_site, saved_site)
                     _safe_set(self.cb_daily_company, saved_company)
-                    _safe_set(self.ent_daily_inspection_item, saved_insp_item)
+                    _safe_set(self.ent_daily_inspection_item, item.get('inspection_item') or saved_insp_item)
                     _safe_set(self.ent_daily_applied_code, saved_applied_code)
                     _safe_set(self.ent_daily_report_no, saved_report_no)
                     _safe_set(self.cb_daily_unit, saved_unit)
@@ -11192,7 +11400,7 @@ class MaterialManager:
                         _safe_set(self.cb_daily_material, '')
                     else:
                         item_equip = str(item.get('equip', '')).strip()
-                        _safe_set(self.cb_daily_equip, item_equip if item_equip else saved_equip)
+                        _safe_set(self.cb_daily_equip, filter_equipment_text(item_equip, current_item_method))
                         _safe_set(self.cb_daily_material, item.get('name', ''))
                     _safe_set(self.ent_daily_note, saved_note)
 
@@ -11242,6 +11450,19 @@ class MaterialManager:
                     else:
                         _safe_set(self.ent_daily_test_fee, "")
 
+                    item_pricing = item_prices[i]
+                    self.company_price_condition_var.set(item_pricing['condition'] if item_pricing else '')
+                    if item_pricing:
+                        travel = company_travel if not travel_applied else 0
+                        travel_applied = True
+                        _safe_set(self.ent_daily_unit_price, item_pricing['price'])
+                        _safe_set(self.ent_daily_travel_cost, travel)
+                        _safe_set(self.ent_daily_test_fee, item_pricing['fee'] - item_pricing['travel'] + travel)
+                        _safe_set(self.cb_daily_unit, item_pricing['unit'])
+                    elif company_travel:
+                        _safe_set(self.ent_daily_travel_cost, 0)
+                        _safe_set(self.ent_daily_test_fee, f_qty * f_price)
+
                     # NDT 자재소모품 스마트 배분:
                     # 1) PT 품목에는 PT 약품(침투/현상/세척 등)을 배정
                     # 2) MT 품목에는 MT 약품(자화/페인트 등)을 배정
@@ -11281,10 +11502,13 @@ class MaterialManager:
                             except: pass
                     
                     self._item_worker_assignment = assignments[i]
+                    self._multi_item_pricing = {'diameter': item.get('diameter', '')}
                     try:
                         self.add_daily_usage_entry(is_multi_loop=True)
                     finally:
                         del self._item_worker_assignment
+                        del self._multi_item_pricing
+                        self.company_price_condition_var.set(saved_company_condition)
                 
                 self._multi_materials = []
                 self.clear_daily_usage_form_all(keep_date=True)
@@ -11685,6 +11909,7 @@ class MaterialManager:
             'unit': self.cb_daily_unit.get().strip(),
             'amount': self.ent_daily_test_amount.get().strip(),
             'unit_price': self.ent_daily_unit_price.get().strip(),
+            'company_price_condition': self.company_price_condition_var.get().strip() if hasattr(self, 'company_price_condition_var') else '',
             'travel_cost': self.ent_daily_travel_cost.get().strip(),
             'meal_cost': self.ent_daily_meal_cost.get().strip(),
             'test_fee': self.ent_daily_test_fee.get().strip(),
@@ -11742,6 +11967,7 @@ class MaterialManager:
             self.ent_daily_inspection_item.delete(0, tk.END)
             self.ent_daily_inspection_item.insert(0, data.get('inspection_item', ''))
         self.cb_daily_test_method.set(data.get('method', ''))
+        self.company_price_condition_var.set(data.get('company_price_condition', ''))
         self.cb_daily_unit.set(data.get('unit', '매'))
         self.ent_daily_test_amount.delete(0, tk.END); self.ent_daily_test_amount.insert(0, data.get('amount', ''))
         self.ent_daily_unit_price.delete(0, tk.END); self.ent_daily_unit_price.insert(0, data.get('unit_price', ''))
@@ -11944,6 +12170,7 @@ class MaterialManager:
             self.ent_daily_inspection_item.insert(0, self.clean_nan(first_record.get('검사품명', '')))
             
             _set_val(self.cb_daily_test_method, self.clean_nan(first_record.get('검사방법', '')))
+            self.company_price_condition_var.set(self.clean_nan(first_record.get('업체단가조건', '')))
             _set_val(self.cb_daily_unit, self.clean_nan(first_record.get('Unit', first_record.get('단위', ''))))
             
             self.ent_daily_unit_price.delete(0, 'end')
@@ -12018,7 +12245,7 @@ class MaterialManager:
         except Exception as e:
             messagebox.showerror("오류", f"전체 세션 불러오기 중 오류 발생: {e}")
 
-    def _auto_reconcile_and_register_ndt(self, date_val, site, ndt_data, workers, company_code=""):
+    def _auto_reconcile_and_register_ndt(self, date_val, site, ndt_data, workers, company_code="", allow_returns=False):
         """Unified helper to auto-register missing consumables and create 'OUT' transactions"""
         ndt_product_map = self._load_ndt_product_map()
         ndt_groups = self.ndt_groups
@@ -12037,7 +12264,7 @@ class MaterialManager:
         trans_date = datetime.datetime.combine(pure_date, datetime.datetime.now().time())
         
         for name, qty in ndt_data.items():
-            if qty <= 0: continue
+            if qty == 0 or (qty < 0 and not allow_returns): continue
             
             # 1. Resolve Item Name (Group) and Model
             db_item_name = ndt_product_map.get(name, '')
@@ -12079,7 +12306,7 @@ class MaterialManager:
             
             # 3. Create Transaction (Only if mat_id exists)
             if mat_id:
-                self._create_manual_stock_transaction(trans_date, mat_id, 'OUT', qty, site, workers, note)
+                self._create_manual_stock_transaction(trans_date, mat_id, 'IN' if qty < 0 else 'OUT', abs(qty), site, workers, note)
 
     def _create_manual_stock_transaction(self, date_val, mat_id, trans_type, qty, site, user, note):
         # [V23.1_WATERTIGHT_FILTER] Default to block everything unless it matches the whitelist
