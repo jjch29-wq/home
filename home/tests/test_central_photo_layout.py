@@ -1,0 +1,63 @@
+"""Check photo/caption boundaries after workbook serialization."""
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import openpyxl
+from PIL import Image
+from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor
+from openpyxl.utils.units import pixels_to_EMU
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+from site_apps.central.src.services.monthly_report_manager import MonthlyReportManager
+
+
+class PhotoLayoutTest(unittest.TestCase):
+    def test_both_corners_stay_inside_frame_above_caption(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            source = folder / 'photo.png'
+            Image.new('RGB', (480, 640), 'steelblue').save(source)
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.cell(610, 3, '1.1 위상배열초음파탐상검사(SEC.16)')
+            for row in range(600, 686):
+                sheet.row_dimensions[row].height = 2.7
+            sheet.print_area = 'B600:W685'
+            manager = MonthlyReportManager('unused.xlsx')
+            manager._history_path = str(folder / 'history.json')
+            photos = [dict(process='PAUT', file_path=str(source),
+                           date='2026-10-16', joint_no=f'S{i:02}',
+                           description='검사 공정사진', location='Sec.16')
+                      for i in range(18)]
+            manager._populate_process_photo_pages(sheet, photos)
+            output = folder / 'report.xlsx'
+            workbook.save(output)
+            checked = openpyxl.load_workbook(output).active
+            self.assertEqual(len(checked._images), 18)
+            inset = pixels_to_EMU(6)
+            for i, picture in enumerate(checked._images):
+                anchor = picture.anchor
+                self.assertIsInstance(anchor, TwoCellAnchor)
+                self.assertEqual(anchor._from.colOff, inset)
+                self.assertEqual(anchor._from.rowOff, inset)
+                self.assertEqual(anchor.to.colOff, -inset)
+                self.assertEqual(anchor.to.rowOff, -inset)
+                self.assertEqual(anchor.to.row - anchor._from.row, 16)
+                caption_row = anchor.to.row + 1
+                caption = checked.cell(caption_row, anchor._from.col + 1)
+                self.assertIn('검사 공정사진', caption.value)
+                self.assertFalse(caption.alignment.wrap_text)
+                self.assertTrue(caption.alignment.shrink_to_fit)
+                self.assertEqual(checked.row_dimensions[caption_row].height, 30)
+                if i % 2:
+                    left = checked._images[i - 1].anchor
+                    self.assertEqual(left._from.row, anchor._from.row)
+                    self.assertEqual(left.to.row, anchor.to.row)
+                    self.assertEqual(left._from.rowOff, anchor._from.rowOff)
+                    self.assertEqual(left.to.rowOff, anchor.to.rowOff)
+
+
+if __name__ == '__main__':
+    unittest.main()

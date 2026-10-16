@@ -398,7 +398,7 @@ class DailyWorkLogTab(ttk.Frame):
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.ndt_cols = ('업체', '검사방법', '구간', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
+        self.ndt_cols = ('업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
                          'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
         history = self.load_history()
         sections = set()
@@ -457,7 +457,12 @@ class DailyWorkLogTab(ttk.Frame):
                 elif c == '구간정보': w = 35
                 else: w = 8
                 
-                if c == '검사방법':
+                if c in ('작업구분', '핫태핑차수'):
+                    values = ['', '일반', '핫태핑'] if c == '작업구분' else ['', '1차', '2차']
+                    ent = ttk.Combobox(grid_frame, width=7, values=values, state='readonly')
+                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
+                    row_entries[c] = ent
+                elif c == '검사방법':
                     ent = ttk.Combobox(grid_frame, width=w, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'], justify='center')
                     ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                     row_entries[c] = ent
@@ -566,7 +571,7 @@ class DailyWorkLogTab(ttk.Frame):
                     "40": "3.7", "32": "3.6", "25": "3.4", "20": "2.9"
                 }
                 lookup_size = str(pipe).replace("A", "").strip()
-                if lookup_size in thk_mapping:
+                if lookup_size in thk_mapping and r['작업구분'].get() != '핫태핑':
                     r['두께'].delete(0, tk.END)
                     r['두께'].insert(0, thk_mapping[lookup_size])
                 # -----------------------------------
@@ -574,6 +579,21 @@ class DailyWorkLogTab(ttk.Frame):
                 if pipe and pipe.isdigit():
                     pipe += 'A'
                 
+                if r['작업구분'].get() == '핫태핑':
+                    from site_apps.central.src.hot_tapping import inspection_length
+                    try:
+                        count = int(r['핫태핑개소수'].get())
+                        if method in ('MT', 'PT') and count > 0:
+                            length = inspection_length(pipe, r['핫태핑차수'].get()) * count
+                            for col in ('RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'):
+                                r[col].delete(0, tk.END)
+                            r[method].insert(0, f'{length:.4f}')
+                    except ValueError:
+                        pass  # 미입력 조건은 저장 시 검증한다.
+                    r['구간정보'].apply_layout()
+                    self._refresh_hot_summary()
+                    return
+
                 if pipe in SIZE_LENGTH:
                     length = SIZE_LENGTH[pipe]
                     length_str = f"{length:.4f}"
@@ -613,6 +633,10 @@ class DailyWorkLogTab(ttk.Frame):
                     else:
                         r['규격']['values'] = ['']
                         
+            def on_hot_change(event=None, r=row_entries):
+                if r['작업구분'].get() == '핫태핑':
+                    self._edit_hot_tapping(r)
+            row_entries['작업구분'].bind('<<ComboboxSelected>>', on_hot_change)
             row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
             row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
             row_entries['관경'].bind('<<ComboboxSelected>>', on_ndt_change)
@@ -639,7 +663,7 @@ class DailyWorkLogTab(ttk.Frame):
                             next_num = str(int(num_str) + 1).zfill(len(num_str))
                             r['Joint No.'].insert(0, prefix + next_num)
                 
-                for col in ['업체', '검사방법', '구간', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
+                for col in ['업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
                     if not r[col].get().strip():
                         prev_val = prev_row[col].get().strip()
                         if prev_val:
@@ -670,6 +694,11 @@ class DailyWorkLogTab(ttk.Frame):
             
             self.ndt_grid_entries.append(row_entries)
 
+        hot_bar = ttk.Frame(parent)
+        hot_bar.pack(fill='x', padx=5, pady=4)
+        ttk.Button(hot_bar, text='선택 행 핫태핑 입력/수정', command=self._edit_hot_tapping).pack(side='left')
+        self.hot_summary_var = tk.StringVar()
+        ttk.Label(hot_bar, textvariable=self.hot_summary_var).pack(side='left', padx=10)
         photo_bar = ttk.LabelFrame(parent, text="선택 행 공정사진")
         photo_bar.pack(fill='x', padx=5, pady=(8, 0))
         self.photo_selection_var = tk.StringVar(value="NDT 행을 선택하세요.")
@@ -682,6 +711,99 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(
             photo_bar, text="사진 관리", command=self.manage_process_photos
         ).pack(side='left', padx=4)
+
+    def _edit_hot_tapping(self, row=None):
+        from site_apps.central.src.hot_tapping import LENGTHS, inspection_length
+        row = row if row is not None else getattr(self, 'selected_ndt_row', None)
+        if row is None:
+            messagebox.showwarning('핫태핑', '먼저 검사 행을 선택하세요.')
+            return
+        dialog = tk.Toplevel(self)
+        dialog.title('핫태핑 검사 입력')
+        dialog.transient(self.winfo_toplevel())
+        variables = {}
+        fields = [('검사방법', ['MT', 'PT'], 'MT'), ('핫태핑개소', None, ''),
+                  ('핫태핑차수', ['1차', '2차'], '1차'),
+                  ('관경', [f'{n}A' for n in LENGTHS], '600A'), ('핫태핑개소수', None, '1')]
+        for index, (key, choices, default) in enumerate(fields):
+            value = row[key].get().strip()
+            if choices and value not in choices:
+                value = default
+            variables[key] = tk.StringVar(value=value or default)
+            ttk.Label(dialog, text=key).grid(row=index, column=0, padx=12, pady=6)
+            widget = (ttk.Combobox(dialog, textvariable=variables[key], values=choices, state='readonly')
+                      if choices else ttk.Entry(dialog, textvariable=variables[key]))
+            widget.grid(row=index, column=1, padx=12, pady=6)
+        preview = tk.StringVar()
+        def update_preview(*_):
+            try:
+                count = int(variables['핫태핑개소수'].get())
+                if count <= 0:
+                    raise ValueError('개소 수는 양의 정수여야 합니다.')
+                length = inspection_length(variables['관경'].get(), variables['핫태핑차수'].get()) * count
+                preview.set(f'검사 길이: {length:.4f} m')
+                return length
+            except ValueError as exc:
+                preview.set(str(exc))
+                return None
+        for var in variables.values():
+            var.trace_add('write', update_preview)
+        ttk.Label(dialog, textvariable=preview).grid(row=5, column=0, columnspan=2, pady=8)
+        def apply():
+            length = update_preview()
+            if length is None or not variables['핫태핑개소'].get().strip():
+                messagebox.showwarning('핫태핑', '개소명/번호와 올바른 검사 조건을 입력하세요.', parent=dialog)
+                return
+            for key, var in variables.items():
+                row[key].delete(0, tk.END)
+                row[key].insert(0, var.get().strip()) if not isinstance(row[key], ttk.Combobox) else row[key].set(var.get())
+            row['작업구분'].set('핫태핑')
+            for key in ('RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'):
+                row[key].delete(0, tk.END)
+            row[variables['검사방법'].get()].insert(0, f'{length:.4f}')
+            row['구간정보'].apply_layout()
+            self._refresh_hot_summary()
+            dialog.destroy()
+        ttk.Button(dialog, text='적용', command=apply).grid(row=6, column=0, columnspan=2, pady=10)
+        update_preview()
+        dialog.grab_set()
+
+    def _refresh_hot_summary(self):
+        totals = {'MT': 0.0, 'PT': 0.0}
+        locations = set()
+        for row in self.ndt_grid_entries:
+            if row['작업구분'].get() != '핫태핑':
+                continue
+            locations.add(row['핫태핑개소'].get().strip())
+            for method in totals:
+                try:
+                    totals[method] += float(row[method].get() or 0)
+                except ValueError:
+                    pass
+        self.hot_summary_var.set(f"핫태핑: {len(locations - {''})}개소명 / MT {totals['MT']:.4f} m / PT {totals['PT']:.4f} m")
+
+    def _validate_hot_rows(self):
+        from site_apps.central.src.hot_tapping import inspection_length
+        pending = []
+        for index, row in enumerate(self.ndt_grid_entries, 1):
+            if row['작업구분'].get() != '핫태핑':
+                continue
+            try:
+                method = row['검사방법'].get().strip().upper()
+                count = int(row['핫태핑개소수'].get())
+                if method not in ('MT', 'PT') or count <= 0 or not row['핫태핑개소'].get().strip():
+                    raise ValueError('MT/PT, 개소명과 양의 정수 개소 수를 입력하세요.')
+                length = inspection_length(row['관경'].get(), row['핫태핑차수'].get()) * count
+                pending.append((row, method, length))
+            except ValueError as exc:
+                messagebox.showwarning('핫태핑 입력 확인', f'{index}행: {exc}')
+                return False
+        for row, method, length in pending:
+            for key in ('RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'):
+                row[key].delete(0, tk.END)
+            row[method].insert(0, f'{length:.4f}')
+        self._refresh_hot_summary()
+        return True
 
     def _select_ndt_row(self, row_entries):
         self.selected_ndt_row = row_entries
@@ -965,6 +1087,8 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(button_bar, text='닫기', command=window.destroy).pack(side='right', padx=4)
             
     def export_excel(self):
+        if not self._validate_hot_rows():
+            return
         # Gather all data
         data = {
             'date': self.date_entry.get(),
@@ -1293,6 +1417,8 @@ class DailyWorkLogTab(ttk.Frame):
     def save_current_history(self):
         history = self.load_history()
         current_date = self._selected_date_key()
+        if not self._validate_hot_rows():
+            return
         existing_photos = history.get(current_date, {}).get('process_photos', [])
         
         data = {
@@ -1496,6 +1622,8 @@ class DailyWorkLogTab(ttk.Frame):
                     ent.delete(0, tk.END)
                     ent.insert(0, val)
                     
+        self._refresh_hot_summary()
+
         # [NEW] Recalculate Subtotals for Qty to heal missing '금일작업' fields in UI
         def format_val(ckey, v):
             if ckey.startswith(('PAUT', 'MT', 'PT')):
@@ -1549,6 +1677,9 @@ class DailyWorkLogTab(ttk.Frame):
                 self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
 
     def auto_calculate_and_save(self):
+        if not self._validate_hot_rows():
+            return
+        self._refresh_hot_summary()
         current_date = self.date_entry.get()
         history = self.load_history()
         

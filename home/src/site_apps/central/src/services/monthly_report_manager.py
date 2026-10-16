@@ -497,6 +497,94 @@ class MonthlyReportManager:
                 break
         return 8 + block_rows
 
+    def _consume_detail_page_whitespace(self, ws, total_row, added_height):
+        """Pay for added detail rows from trailing whitespace on this page."""
+        from openpyxl.worksheet.pagebreak import Break
+
+        later_breaks = sorted(int(b.id) for b in ws.row_breaks.brk
+                              if int(b.id) > total_row)
+        if not later_breaks:
+            return 0.0
+        page_end = later_breaks[0]
+        remaining = float(added_height)
+        default_height = float(ws.sheet_format.defaultRowHeight or 15)
+        while page_end > total_row and remaining > 0.001:
+            if any(ws.cell(page_end, col).value is not None
+                   and str(ws.cell(page_end, col).value).strip()
+                   for col in range(1, ws.max_column + 1)):
+                break
+            if any(m.min_row < page_end <= m.max_row
+                   for m in ws.merged_cells.ranges):
+                break
+            occupied = False
+            for image in ws._images:
+                anchor = getattr(image, 'anchor', None)
+                if not hasattr(anchor, '_from'):
+                    continue
+                first = anchor._from.row + 1
+                last = (anchor.to.row + 1 if hasattr(anchor, 'to') else
+                        first + max(1, int(float(image.height) / 10)))
+                if first <= page_end <= last:
+                    occupied = True
+                    break
+            if occupied:
+                break
+            dimension = ws.row_dimensions[page_end]
+            height = (0.0 if dimension.hidden else
+                      float(dimension.height if dimension.height is not None
+                            else default_height))
+            if height > remaining + 0.001:
+                dimension.height = height - remaining
+                remaining = 0.0
+                break
+            deleted_row = page_end
+            self._delete_rows_safely(ws, deleted_row, 1)
+            for key, marker in self.table_markers.items():
+                if marker > deleted_row:
+                    self.table_markers[key] -= 1
+            for image in ws._images:
+                anchor = getattr(image, 'anchor', None)
+                if hasattr(anchor, '_from') and anchor._from.row + 1 > deleted_row:
+                    anchor._from.row -= 1
+                    if hasattr(anchor, 'to'):
+                        anchor.to.row -= 1
+            page_end -= 1
+            remaining = max(0.0, remaining - height)
+        # Deleting the old last spacer removes its manual break as well.
+        if not any(int(b.id) == page_end for b in ws.row_breaks.brk):
+            ws.row_breaks.append(Break(id=page_end))
+        ws.row_breaks.brk.sort(key=lambda b: int(b.id))
+        return float(added_height) - remaining
+
+    def _paut_print_scale(self, ws):
+        """Estimate the width-fit scale used by the A4 portrait report."""
+        from openpyxl.utils import get_column_letter
+        from openpyxl.worksheet.cell_range import CellRange
+
+        if ws.page_setup.scale:
+            return float(ws.page_setup.scale)
+        if not ws.page_setup.fitToWidth or not ws.print_area:
+            return 100.0
+        area = CellRange(str(ws.print_area).split('!')[-1].replace('$', ''))
+        width_points = 0.0
+        for col in range(area.min_col, area.max_col + 1):
+            dimension = ws.column_dimensions[get_column_letter(col)]
+            if dimension.hidden:
+                continue
+            width = dimension.width or ws.sheet_format.defaultColWidth or 8.43
+            width_points += (float(width) * 7 + 5) * 0.75
+        usable_width = (8.27 - float(ws.page_margins.left or 0)
+                        - float(ws.page_margins.right or 0)) * 72
+        return min(100.0, usable_width / max(width_points, 1) * 100)
+
+    def _detail_page_overflow_row(self, ws, start_row, row_count):
+        overflow = self._first_print_overflow_row(
+            ws, start_row, row_count + 1, self._paut_print_scale(ws)
+        )
+        if overflow is not None and overflow >= start_row + row_count:
+            return start_row + row_count - 1
+        return overflow
+
     def _first_print_overflow_row(
         self, ws, start_row, row_count, scale_override=None
     ):
@@ -518,10 +606,14 @@ class MonthlyReportManager:
 
         used_points = 0.0
         for row in range(page_start, start_row):
-            used_points += float(ws.row_dimensions[row].height or default_height)
+            dim = ws.row_dimensions[row]
+            if not dim.hidden:
+                used_points += float(dim.height if dim.height is not None else default_height)
 
         for row in range(start_row, start_row + row_count):
-            row_height = float(ws.row_dimensions[row].height or default_height)
+            dim = ws.row_dimensions[row]
+            row_height = (0.0 if dim.hidden else
+                          float(dim.height if dim.height is not None else default_height))
             if used_points + row_height > capacity_points:
                 return row
             used_points += row_height
@@ -770,7 +862,17 @@ class MonthlyReportManager:
                 min(13.5, available_padding_points / padding_rows),
             )
 
+            # A break before the next header belongs AFTER the new padding.
+            # The generic row inserter shifts breaks at/after next_start, but
+            # not this boundary at next_start - 1. Leaving it behind prints
+            # the inserted whitespace as a separate, completely blank page.
+            boundary_breaks = [
+                brk for brk in ws.row_breaks.brk
+                if int(brk.id) == next_start - 1
+            ]
             self._insert_rows_safely(ws, next_start, padding_rows)
+            for brk in boundary_breaks:
+                brk.id += padding_rows
 
             # insert_rows() does not move drawings; keep every later logo and
             # photo aligned with the report section it belongs to.
@@ -2642,26 +2744,22 @@ class MonthlyReportManager:
     def _populate_process_photo_pages(self, ws, process_photos, doc_num='01'):
         """Place registered process photos into the template's 7.0 pages."""
         from openpyxl.drawing.image import Image as XLImage
-        from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
-        from openpyxl.drawing.xdr import XDRPositiveSize2D
+        from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
         from openpyxl.utils import get_column_letter
         from openpyxl.utils.units import pixels_to_EMU, points_to_pixels
         from PIL import Image as PILImage, ImageOps
         from io import BytesIO
         import copy
 
-        base_dir = os.path.dirname(os.path.abspath(self._history_path))
+        from site_apps.central.src.data_sync import resolve_process_photo_path
         valid_photos = []
         for photo in process_photos:
             process = str(photo.get('process', '')).strip().upper()
             if process not in {'PAUT', 'MT', 'RT', 'PT'}:
                 continue
             stored_path = str(photo.get('file_path', '') or '')
-            image_path = (
-                stored_path if os.path.isabs(stored_path)
-                else os.path.abspath(os.path.join(base_dir, stored_path))
-            )
-            if os.path.isfile(image_path):
+            image_path = resolve_process_photo_path(self._history_path, stored_path)
+            if image_path:
                 saved_photo = dict(photo)
                 saved_photo['_resolved_path'] = image_path
                 valid_photos.append(saved_photo)
@@ -3006,33 +3104,23 @@ class MonthlyReportManager:
                     image = XLImage(image_buffer)
                     image.width, image.height = target_size
 
-                    scale = min(
-                        max_width / image.width,
-                        max_height / image.height,
-                    )
-                    image.width *= scale
-                    image.height *= scale
-
-                    # Excel renders column widths a few pixels differently
-                    # from the width used for the drawing extent.  Apply the
-                    # measured per-column correction so the printed margins,
-                    # rather than only the calculated margins, are centered.
-                    horizontal_render_correction = (
-                        8 if caption_col == 3 else 3
-                    )
-                    offset_x = frame_inset + horizontal_render_correction
-                    offset_y = max(0, frame_inset - 2)
+                    # Bind both corners to the actual cell frame. A fixed
+                    # pixel extent can cross the caption border after Excel
+                    # resolves row heights. Both columns use identical insets.
                     marker = AnchorMarker(
                         col=caption_col - 1,
-                        colOff=pixels_to_EMU(offset_x),
+                        colOff=pixels_to_EMU(frame_inset),
                         row=anchor_row - 1,
-                        rowOff=pixels_to_EMU(offset_y),
+                        rowOff=pixels_to_EMU(frame_inset),
                     )
-                    image.anchor = OneCellAnchor(
+                    image.anchor = TwoCellAnchor(
+                        editAs='twoCell',
                         _from=marker,
-                        ext=XDRPositiveSize2D(
-                            cx=pixels_to_EMU(image.width),
-                            cy=pixels_to_EMU(image.height),
+                        to=AnchorMarker(
+                            col=caption_end_col,
+                            colOff=-pixels_to_EMU(frame_inset),
+                            row=caption_row - 1,
+                            rowOff=-pixels_to_EMU(frame_inset),
                         ),
                     )
                     ws.add_image(image)
@@ -3059,6 +3147,7 @@ class MonthlyReportManager:
                         joint_no,
                         str(photo.get('description', '')),
                     ]))
+                    caption = ' '.join(caption.split())
                     for merged in list(ws.merged_cells.ranges):
                         if (
                             merged.min_row <= caption_row <= merged.max_row
@@ -3074,14 +3163,14 @@ class MonthlyReportManager:
                     caption_cell.value = caption
                     caption_cell.alignment = Alignment(
                         horizontal='center', vertical='center',
-                        wrap_text=True, shrink_to_fit=True,
+                        wrap_text=False, shrink_to_fit=True,
                     )
                     caption_cell.font = Font(name='맑은 고딕', size=8)
 
                     caption_cell.font = Font(
                         name='\ub9d1\uc740 \uace0\ub515', size=9,
                     )
-                    ws.row_dimensions[caption_row].height = 18
+                    ws.row_dimensions[caption_row].height = 30
 
                     # Make the image and its description read as one framed
                     # item.  Keep the caption inside the bottom of that frame.
@@ -3983,76 +4072,24 @@ class MonthlyReportManager:
                 rows_to_insert = num_items - existing_empty_rows
                 # 안전한 행 삽입: 아래 시트(13페이지 등) 병합 셀 구조 보존
                 self._insert_rows_safely(ws, start_row, rows_to_insert)
+                for image in ws._images:
+                    anchor = getattr(image, 'anchor', None)
+                    if hasattr(anchor, '_from') and anchor._from.row + 1 >= start_row:
+                        anchor._from.row += rows_to_insert
+                        if hasattr(anchor, 'to'):
+                            anchor.to.row += rows_to_insert
                 total_row += rows_to_insert
                 # 모든 기존 마커 업데이트 (삽입된 행 아래에 있는 마커들만 += rows_to_insert)
                 for k, v in self.table_markers.items():
                     if v >= start_row:
                         self.table_markers[k] += rows_to_insert
 
-                cleaned = 0
-                if section_key == 'rt_2' and rt_uses_page13_blanks:
-                    # RT 삽입으로 아래로 밀린 2.4 PT의 TOTAL 아래부터
-                    # 현재 수동 페이지 구분선까지 빈 행을 제거한다. 삽입/삭제
-                    # 수가 상쇄되므로 기존 14페이지 내용은 움직이지 않는다.
-                    pt_marker = self.table_markers['pt_2']
-                    later_breaks = sorted(
-                        int(brk.id) for brk in ws.row_breaks.brk
-                        if int(brk.id) >= pt_marker
+                if is_detail:
+                    for added_row in range(start_row, start_row + rows_to_insert):
+                        ws.row_dimensions[added_row].height = detail_body_row_height
+                    self._consume_detail_page_whitespace(
+                        ws, total_row, rows_to_insert * detail_body_row_height
                     )
-                    page_end = later_breaks[0] if later_breaks else None
-                    pt_total_row = None
-                    if page_end is not None:
-                        for candidate in range(pt_marker + 2, page_end + 1):
-                            if 'TOTAL' in str(
-                                ws.cell(row=candidate, column=2).value or ''
-                            ).upper():
-                                pt_total_row = candidate
-                                break
-
-                    scan_row = pt_total_row + 1 if pt_total_row else None
-                    while (
-                        scan_row is not None
-                        and page_end is not None
-                        and cleaned < rows_to_insert
-                        and scan_row <= page_end
-                    ):
-                        is_empty = all(
-                            not str(ws.cell(row=scan_row, column=c).value or '').strip()
-                            for c in range(1, 25)
-                        )
-                        if not is_empty:
-                            scan_row += 1
-                            continue
-                        self._delete_rows_safely(ws, scan_row, 1)
-                        for k, v in self.table_markers.items():
-                            if v >= scan_row:
-                                self.table_markers[k] -= 1
-                        page_end -= 1
-                        cleaned += 1
-
-                # Detail pages may reuse blank spacer rows to stay within their
-                # fixed page layout.  Summary tables on page 11 must not do
-                # this: deleting the spacer immediately after an expanded
-                # PAUT table pulls the following MT table back to its original
-                # position and makes the two sections overlap visually.
-                if is_detail and not (
-                    section_key == 'rt_2' and rt_uses_page13_blanks
-                ):
-                    scan_row = total_row + 1
-                    while cleaned < rows_to_insert:
-                        is_empty = all(
-                            not str(ws.cell(row=scan_row, column=c).value or '').strip()
-                            for c in range(1, 25)
-                        )
-                        if is_empty:
-                            self._delete_rows_safely(ws, scan_row, 1)
-                            total_row -= 1
-                            for k, v in self.table_markers.items():
-                                if v >= scan_row:
-                                    self.table_markers[k] -= 1
-                            cleaned += 1
-                        else:
-                            break
             else:
                 rows_to_insert = 0
 
@@ -4269,41 +4306,16 @@ class MonthlyReportManager:
                     ws, document_header_row, header_row
                 )
             while remaining_count > 0:
-                measured_rows = remaining_count + (
-                    1 if section_key == 'paut_2' else 0
+                # Reserve TOTAL height before choosing the page boundary.
+                # A single last record must travel with its TOTAL too.
+                continuation_row = (
+                    self._detail_page_overflow_row(ws, remaining_start, remaining_count)
+                    if is_detail else self._first_print_overflow_row(
+                        ws, remaining_start, remaining_count
+                    )
                 )
-                continuation_row = self._first_print_overflow_row(
-                    ws,
-                    remaining_start,
-                    measured_rows,
-                    scale_override=None,
-                )
-                if section_key == 'paut_2' and remaining_count > 35:
-                    # Excel's actual print preview fits 35 PAUT detail rows on
-                    # this template page.  The former 73% estimate allowed 40
-                    # rows, so records 36~40 fell onto a headerless five-row
-                    # page before the continuation header at record 41.
-                    # Start every PAUT continuation no later than row 36.
-                    max_rows_on_page = 35
-                    forced_continuation = remaining_start + max_rows_on_page
-                    if continuation_row is None:
-                        continuation_row = forced_continuation
-                    else:
-                        continuation_row = min(
-                            continuation_row, forced_continuation
-                        )
                 if continuation_row is None:
                     break
-
-                # Keep the PAUT TOTAL row with at least the final data row.
-                # If only TOTAL crosses the page, move that last data row to
-                # the continuation page as well.
-                if (
-                    section_key == 'paut_2'
-                    and continuation_row >= remaining_start + remaining_count
-                    and remaining_count > 1
-                ):
-                    continuation_row = remaining_start + remaining_count - 1
 
                 rows_on_current_page = continuation_row - remaining_start
                 if section_key == 'rt_2' and rt_uses_page13_blanks:

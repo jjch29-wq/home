@@ -28,3 +28,33 @@ def get_history_path():
 
 def get_process_photos_dir():
     return os.path.join(get_data_dir(), 'data', 'process_photos')
+
+
+def resolve_process_photo_path(history_path, stored_path):
+    """Find a registered photo after moving central history to cloud storage."""
+    if not stored_path:
+        return None
+    history_dir = os.path.dirname(os.path.abspath(history_path))
+    direct = (stored_path if os.path.isabs(stored_path)
+              else os.path.abspath(os.path.join(history_dir, stored_path)))
+    if os.path.isfile(direct):
+        return direct
+
+    # Match the original UUID filename and date folder only. Never search
+    # another site's storage or substitute a similarly named image.
+    normalized = str(stored_path).replace('\\', '/')
+    parts = normalized.rstrip('/').split('/')
+    if len(parts) < 2 or parts[-2] in ('', '.', '..'):
+        return None
+    date_folder, filename = parts[-2:]
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    roots = (
+        os.path.join(history_dir, 'data', 'process_photos'),
+        os.path.join(local_dir, '..', 'data', 'process_photos'),
+        os.path.join(local_dir, 'data', 'process_photos'),
+    )
+    for root in roots:
+        candidate = os.path.abspath(os.path.join(root, date_folder, filename))
+        if os.path.isfile(candidate):
+            return candidate
+    return None

@@ -248,7 +248,11 @@ class DailyWorkLogExporter:
             set_cell(f'B{row_idx}', res.get('업체', ''))
             set_cell(f'C{row_idx}', res.get('검사방법', ''))
             set_cell(f'D{row_idx}', res.get('구간', ''))
-            set_cell(f'E{row_idx}', res.get('라인번호', ''))
+            line_text = res.get('라인번호', '')
+            if res.get('작업구분') == '핫태핑':
+                hot_text = f"핫태핑 {res.get('핫태핑개소', '')} / {res.get('핫태핑차수', '')} / {res.get('핫태핑개소수', '1')}개소"
+                line_text = f'{line_text}\n{hot_text}'.strip()
+            set_cell(f'E{row_idx}', line_text)
             set_cell(f'F{row_idx}', res.get('Joint No.', ''))
             set_cell(f'G{row_idx}', res.get('관경', ''))
             set_cell(f'H{row_idx}', res.get('두께', ''))
@@ -296,14 +300,15 @@ class DailyWorkLogExporter:
                 ws[f'B{row_idx}'].value = "- 이 하 여 백 -"
                 ws[f'B{row_idx}'].alignment = Alignment(horizontal='center', vertical='center')
                 
-            ws.row_dimensions[row_idx].height = 20
+            ws.row_dimensions[row_idx].height = 34 if res.get('작업구분') == '핫태핑' else 20
 
-        # Print setup (Landscape, fit to one page width)
+        # Keep the complete daily work log on one A4 landscape page.
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
+        ws.page_setup.fitToHeight = 1
         ws.sheet_properties.pageSetUpPr.fitToPage = True
-        ws.print_title_rows = '30:31'
+        ws.print_area = f'A1:T{start_row + total_rows - 1}'
         
         # Header/Footer (Auto Page Numbering)
         ws.oddHeader.right.text = "Page &P of &N"
