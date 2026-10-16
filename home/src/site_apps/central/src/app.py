@@ -1,5 +1,6 @@
 ### VERSION: BUDGET_SYNC_FIXED_FINAL_V8_1WON_BALANCED ###
 import mimetypes
+import math
 import os
 from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
 # [OPTIMIZATION] Prevent slow Windows registry scan for mimetypes
@@ -578,14 +579,21 @@ class MaterialManager:
                 if pipe_val and pipe_val.isdigit():
                     pipe_val += 'A'
                     
-                if pipe_val not in self.SIZE_LENGTH: return
-                
-                length = self.SIZE_LENGTH[pipe_val]
+                if self.ndt_loc_type_var.get() == '핫태핑':
+                    if method not in ('MT', 'PT'): return
+                    from site_apps.central.src.hot_tapping import inspection_length
+                    length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get())
+                else:
+                    if pipe_val not in self.SIZE_LENGTH: return
+                    length = self.SIZE_LENGTH[pipe_val]
                 
                 # 원본 조인트수
                 ori_j = getattr(self, 'ndt_ori_joint_var').get().strip()
                 # 재촬영 조인트수
                 rep_j = getattr(self, 'ndt_rep_joint_var').get().strip()
+                if self.ndt_loc_type_var.get() == '핫태핑':
+                    if not ori_j: self.ndt_ori_qty_var.set('')
+                    if not rep_j: self.ndt_rep_qty_var.set('')
                 
                 total_joints = 0.0
                 
@@ -604,7 +612,7 @@ class MaterialManager:
                     except ValueError: pass
                     
                 # 메인 폼의 '수량' 칸(ent_daily_test_amount)에 실시간 자동 기입
-                if total_joints > 0 and hasattr(self, 'ent_daily_test_amount'):
+                if (total_joints > 0 or self.ndt_loc_type_var.get() == '핫태핑') and hasattr(self, 'ent_daily_test_amount'):
                     self.ent_daily_test_amount.delete(0, tk.END)
                     self.ent_daily_test_amount.insert(0, f"{total_joints * length:.4f}")
                     
@@ -615,6 +623,9 @@ class MaterialManager:
         getattr(self, 'ndt_report_pipe_var').trace_add('write', on_ndt_change)
         getattr(self, 'ndt_ori_joint_var').trace_add('write', on_ndt_change)
         getattr(self, 'ndt_rep_joint_var').trace_add('write', on_ndt_change)
+        for name in ('ndt_loc_type_var', 'hot_tap_stage_var', 'hot_tap_size_var'):
+            getattr(self, name).trace_add('write', on_ndt_change)
+        self._refresh_ndt_quantity = on_ndt_change
 
     def preload_config_locks(self):
         """Pre-load critical lock states synchronously before UI creation"""
@@ -6070,7 +6081,7 @@ class MaterialManager:
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
-        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)']
+        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']
         c_list = list(columns)
         for nc in new_cols:
             if nc not in c_list:
@@ -8964,6 +8975,9 @@ class MaterialManager:
             '환산물량': getattr(self, '_last_ndt_adj_qty', 0.0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0.0,
             '재료비': getattr(self, '_last_ndt_mat_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0,
             '인건비': getattr(self, '_last_ndt_lab_cost', 0) if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else 0,
+            '핫태핑차수': self.hot_tap_stage_var.get() if self.ndt_loc_type_var.get() == '핫태핑' else '',
+            '핫태핑개소': self.hot_tap_location_var.get().strip() if self.ndt_loc_type_var.get() == '핫태핑' else '',
+            '핫태핑관경': self.hot_tap_size_var.get() if self.ndt_loc_type_var.get() == '핫태핑' else '',
             '검사구분': "ORI",
             '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else "",
             '조인트수': "",
@@ -9094,6 +9108,10 @@ class MaterialManager:
             else:
                 r_common_data['검사구분'] = ""
                 r_common_data['Note'] = self._get_merged_memo_and_note()
+
+            if common_data.get('핫태핑차수'):
+                tag = f"[핫태핑 {common_data['핫태핑개소']} {common_data['핫태핑관경']} {common_data['핫태핑차수']}]"
+                r_common_data['Note'] = (str(r_common_data.get('Note', '')) + ' ' + tag).strip()
 
             for i in range(max_rows):
                 row_record = r_common_data.copy()
@@ -10045,6 +10063,9 @@ class MaterialManager:
             elif '단위' in record:
                 self.cb_daily_unit.set(self.clean_nan(record['단위']))
             
+            self.hot_tap_stage_var.set(self.clean_nan(record.get('핫태핑차수', '')) or '1차')
+            self.hot_tap_size_var.set(self.clean_nan(record.get('핫태핑관경', '')) or '600A')
+            self.hot_tap_location_var.set(self.clean_nan(record.get('핫태핑개소', '')))
             # 2. Quantities & Costs
             def set_val(ent, key):
                 val = record.get(key, 0)
@@ -10279,6 +10300,10 @@ class MaterialManager:
         self.ndt_rep_qty_var.set("")
         self.ndt_rej_joint_var.set("")
         self.ndt_report_pipe_var.set("")
+        self.ndt_loc_type_var.set('열수송관')
+        self.hot_tap_stage_var.set('1차')
+        self.hot_tap_size_var.set('600A')
+        self.hot_tap_location_var.set('')
         self.ndt_calc_frame.grid_remove()
         self.rtk_grid.grid_remove() # [NEW] Hide RTK on clear
         self.ndt_frame.grid_remove() # [NEW] Hide NDT frame on clear
@@ -10325,6 +10350,22 @@ class MaterialManager:
                 group.ent_ot.delete(0, tk.END)
 
     def add_daily_usage_entry(self):
+        if self.ndt_loc_type_var.get() == '핫태핑':
+            if self.cb_daily_test_method.get().strip().upper() not in ('MT', 'PT'):
+                messagebox.showwarning('핫태핑', '핫태핑 길이표는 MT/PT 검사에 적용됩니다.')
+                return
+            if not self.hot_tap_location_var.get().strip():
+                messagebox.showwarning('핫태핑', '1·2차 기록을 연결할 개소명/번호를 입력하세요.')
+                return
+            try:
+                counts = [float(v.get().strip().replace(',', '') or '0') for v in
+                          (self.ndt_ori_joint_var, self.ndt_rep_joint_var)]
+                if any(not math.isfinite(n) or n < 0 or not n.is_integer() for n in counts) or sum(counts) <= 0:
+                    raise ValueError
+            except ValueError:
+                messagebox.showwarning('핫태핑', 'ORI/REP 조인트수에 검사 개소 수를 양의 정수로 입력하세요.')
+                return
+            self._refresh_ndt_quantity()
         """현장별 일일 사용량 단일 등록 (리팩토링 버전)"""
         try:
             # 1. 기본 정보 및 유효성 검사
@@ -10726,6 +10767,7 @@ class MaterialManager:
             'test_fee': self.ent_daily_test_fee.get().strip(),
             'note': self.ent_daily_note.get().strip(),
             'main_memo': self.main_memo_text.get('1.0', 'end-1c').strip() if hasattr(self, 'main_memo_text') and self.main_memo_text else "",
+            'hot_tapping': {name: getattr(self, name).get() for name in ('ndt_loc_type_var', 'hot_tap_stage_var', 'hot_tap_size_var', 'hot_tap_location_var')},
             'workers': []
         }
         for i in range(1, 11):
@@ -10788,6 +10830,9 @@ class MaterialManager:
                 if 'main_memo' in data and data['main_memo']:
                     self.main_memo_text.insert(tk.END, data['main_memo'])
             except: pass
+        for name, value in data.get('hot_tapping', {}).items():
+            if name in ('ndt_loc_type_var', 'hot_tap_stage_var', 'hot_tap_size_var', 'hot_tap_location_var'):
+                getattr(self, name).set(value)
         workers = data.get('workers', [])
         for i, w_data in enumerate(workers, 1):
             group = getattr(self, f'worker_group{i}', None)

@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 SRC = Path(__file__).resolve().parents[1] / 'src'
 sys.path.insert(0, str(SRC))
@@ -78,8 +79,18 @@ class SiteIsolationTests(unittest.TestCase):
             assignment = next(n for n in ast.walk(tree) if isinstance(n, ast.Assign)
                 and any(isinstance(t, ast.Attribute) and t.attr == 'history_path' for t in n.targets))
             obj = SimpleNamespace()
-            exec(compile(ast.Module(body=[assignment], type_ignores=[]), str(tab), 'exec'),
-                 {'self': obj, 'os': os, '__file__': str(tab)})
+            context = {'self': obj, 'os': os, '__file__': str(tab)}
+            # Load the actual path helper imported by the tab, without starting its GUI.
+            helper_imports = [n for n in tree.body if isinstance(n, ast.ImportFrom)
+                              and n.module == f'site_apps.{site}.src.data_sync']
+            exec(compile(ast.Module(body=helper_imports, type_ignores=[]), str(tab), 'exec'), context)
+            if helper_imports:
+                sync = importlib.import_module(f'site_apps.{site}.src.data_sync')
+                # Test the default local path regardless of this PC's sync settings.
+                with mock.patch.object(sync.os.path, 'exists', return_value=False):
+                    exec(compile(ast.Module(body=[assignment], type_ignores=[]), str(tab), 'exec'), context)
+            else:
+                exec(compile(ast.Module(body=[assignment], type_ignores=[]), str(tab), 'exec'), context)
             expected = {'central': 'daily_work_history.json', 'kogas': 'kogas_daily_work_history.json',
                         'lotte': 'daily_work_history.json'}[site]
             self.assertEqual(Path(obj.history_path), folder / expected)
@@ -87,13 +98,17 @@ class SiteIsolationTests(unittest.TestCase):
     def test_billing_results_and_module_identity(self):
         modules = [importlib.import_module(f'site_apps.{site}.src.services.ndt_calculator') for site in SITES]
         self.assertEqual(len({id(m) for m in modules}), 3)
-        for module in modules:
+        for site, module in zip(SITES, modules):
             result = module.calculate_billing(quantity=2, adjusted_quantity=3,
                 material_key='RT_FILM', ndt_type='RT', location='plant', work_time='day',
                 material_costs={'RT_FILM': 100}, labor_costs={'plant': {'day': {'RT_FILM': 200}}},
                 overhead_rate=0.1, technical_fee_rate=0.1)
-            self.assertEqual(result, {'mat_cost': 200, 'lab_cost': 600, 'overhead': 60,
-                'tech': 66, 'subtotal': 926, 'vat': 92, 'total_amount': 1018})
+            expected = {'mat_cost': 200, 'lab_cost': 600, 'overhead': 60,
+                        'tech': 66, 'subtotal': 926, 'vat': 92, 'total_amount': 1018}
+            if site == 'central':
+                expected['unit_price'] = 463
+            with self.subTest(site=site):
+                self.assertEqual(result, expected)
 
     def test_compatibility_launchers_target_the_correct_site(self):
         entries = {'central': '한국지역난방 중앙지사.py', 'kogas': '가스공사 가산~가평.py',

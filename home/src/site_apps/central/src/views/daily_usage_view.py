@@ -288,10 +288,35 @@ def setup_daily_usage_tab_impl(self):
     row0 = ttk.Frame(self.ndt_calc_frame)
     row0.pack(fill='x', pady=2)
     ttk.Label(row0, text="구분:").pack(side='left')
-    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열수송관"], width=18, state="readonly").pack(side='left', padx=2)
+    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열수송관", "핫태핑"], width=18, state="readonly").pack(side='left', padx=2)
     ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
     for t in ["일반", "야간", "휴일"]:
         ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
+
+    from site_apps.central.src.hot_tapping import LENGTHS, STAGES, inspection_length
+    self.hot_tap_stage_var = tk.StringVar(value='1차')
+    self.hot_tap_size_var = tk.StringVar(value='600A')
+    self.hot_tap_location_var = tk.StringVar()
+    self.hot_tap_parts_var = tk.StringVar()
+    hot_row = ttk.Frame(self.ndt_calc_frame)
+    for label, var, values, width in (
+        ('검사 차수:', self.hot_tap_stage_var, list(STAGES), 5),
+        (' 관경(A):', self.hot_tap_size_var, [f'{n}A' for n in LENGTHS], 7),
+        (' 개소명/번호:', self.hot_tap_location_var, None, 14)):
+        ttk.Label(hot_row, text=label).pack(side='left')
+        widget = ttk.Combobox(hot_row, textvariable=var, values=values, state='readonly', width=width) if values else ttk.Entry(hot_row, textvariable=var, width=width)
+        widget.pack(side='left')
+    hot_parts = ttk.Label(self.ndt_calc_frame, textvariable=self.hot_tap_parts_var)
+    def update_hot_panel(*_):
+        if self.ndt_loc_type_var.get() == '핫태핑':
+            hot_row.pack(fill='x', pady=2)
+            hot_parts.pack(fill='x')
+            self.hot_tap_parts_var.set(STAGES[self.hot_tap_stage_var.get()] + ' (1개소 기준)')
+        else:
+            hot_row.pack_forget()
+            hot_parts.pack_forget()
+    self.ndt_loc_type_var.trace_add('write', update_hot_panel)
+    self.hot_tap_stage_var.trace_add('write', update_hot_panel)
 
     row1 = ttk.Frame(self.ndt_calc_frame)
     row1.pack(fill='x', pady=2)
@@ -343,6 +368,8 @@ def setup_daily_usage_tab_impl(self):
             from site_apps.central.src.ndt_billing_tab import MATERIAL_COST, LABOR_COST
             ndt_type = self.cb_daily_test_method.get().strip().upper()
             work_time = self.ndt_work_time_var.get()
+            if self.ndt_loc_type_var.get() == '핫태핑' and ndt_type not in ('MT', 'PT'):
+                raise ValueError('핫태핑 길이표는 MT/PT 검사에 적용됩니다.')
             
             # --- 수량(Usage) 자동 산출 로직 추가 ---
             if any(x in ndt_type for x in ['PAUT', 'PT', 'MT']):
@@ -351,8 +378,9 @@ def setup_daily_usage_tab_impl(self):
                     pipe_val += 'A'
                 
                 size_lookup = getattr(self, 'SIZE_LENGTH', {})
-                if pipe_val in size_lookup:
-                    length = size_lookup[pipe_val]
+                is_hot = self.ndt_loc_type_var.get() == '핫태핑'
+                if is_hot or pipe_val in size_lookup:
+                    length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get()) if is_hot else size_lookup[pipe_val]
                     total_joints = 0.0
                     
                     ori_str = getattr(self, 'ndt_ori_joint_var').get().strip().replace(',', '')
@@ -420,7 +448,7 @@ def setup_daily_usage_tab_impl(self):
             loc_type_val = self.ndt_loc_type_var.get().strip()
             # 화면 명칭은 계약 명칭인 '열수송관'으로 표시하되,
             # 기존 단가 설정 파일의 '열배관' 키와 호환한다.
-            contract_loc = {"열수송관": "열배관"}.get(loc_type_val, loc_type_val)
+            contract_loc = {"열수송관": "열배관", "핫태핑": "열배관"}.get(loc_type_val, loc_type_val)
             
             if contract_loc in LABOR_COST:
                 labor_rates = LABOR_COST[contract_loc].get(work_time, {})
@@ -1509,7 +1537,7 @@ def update_daily_usage_view_impl(self):
         while len(v_list) < len(tree_cols): v_list.append("")
         
         for c_idx, c_name in enumerate(tree_cols):
-            if c_name in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)']:
+            if c_name in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']:
                 val = entry.get(c_name, '')
                 if c_name in ['보정계수', '환산물량'] and val:
                     try: 

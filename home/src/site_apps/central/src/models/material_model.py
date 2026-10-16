@@ -78,7 +78,8 @@ def _sync_dataframe_schema_impl(self, df, sheet_name):
             'User8', 'WorkTime8', 'OT8',
             'User9', 'WorkTime9', 'OT9',
             'User10', 'WorkTime10', 'OT10',
-            '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수', '관경(Inch)'
+            '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수', '관경(Inch)',
+            '핫태핑차수', '핫태핑개소', '핫태핑관경'
         ],
         'Budget': [
             'Site', 'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 
