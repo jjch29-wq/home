@@ -39,6 +39,7 @@ def setup_daily_usage_tab_impl(self):
     # Row 1: Primary Actions
     self.btn_daily_save = ttk.Button(row1, text="💾 저장", style='Action.TButton', command=self.add_daily_usage_entry, width=8)
     self.btn_daily_save.pack(side='left', padx=2)
+    ttk.Button(row1, text='＋ 작업 담기', command=lambda: self.inspection_batch.add()).pack(side='left', padx=2)
     
     ttk.Button(row1, text="🧹 초기화", command=self.clear_daily_usage_form_all, width=10).pack(side='left', padx=2)
     
@@ -360,8 +361,9 @@ def setup_daily_usage_tab_impl(self):
     
     row4 = ttk.Frame(self.ndt_calc_frame)
     row4.pack(fill='x', pady=2)
-    ttk.Label(row4, text="당일 불량(REJ)수:").pack(side='left', padx=(0,0))
+    ttk.Label(row4, text="당일 불량(REJ)수 (RT: 매):").pack(side='left', padx=(0,0))
     ttk.Entry(row4, textvariable=self.ndt_rej_joint_var, width=5).pack(side='left', padx=2)
+    ttk.Label(row4, text='RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도').pack(side='left', padx=5)
 
     def _calculate_ndt_fee():
         try:
@@ -372,15 +374,16 @@ def setup_daily_usage_tab_impl(self):
                 raise ValueError('핫태핑 길이표는 MT/PT 검사에 적용됩니다.')
             
             # --- 수량(Usage) 자동 산출 로직 추가 ---
-            if any(x in ndt_type for x in ['PAUT', 'PT', 'MT']):
+            if ndt_type in ('PAUT', 'PT', 'MT', 'RT'):
                 pipe_val = getattr(self, 'ndt_report_pipe_var').get().strip().upper()
                 if pipe_val and pipe_val.isdigit():
                     pipe_val += 'A'
                 
                 size_lookup = getattr(self, 'SIZE_LENGTH', {})
                 is_hot = self.ndt_loc_type_var.get() == '핫태핑'
-                if is_hot or pipe_val in size_lookup:
-                    length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get()) if is_hot else size_lookup[pipe_val]
+                from site_apps.central.src.services.inspection_quantity import quantity_per_joint
+                length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get()) if is_hot else quantity_per_joint(ndt_type, pipe_val, size_lookup)
+                if length is not None:
                     total_joints = 0.0
                     
                     ori_str = getattr(self, 'ndt_ori_joint_var').get().strip().replace(',', '')
@@ -388,7 +391,7 @@ def setup_daily_usage_tab_impl(self):
                         try:
                             j = float(ori_str)
                             total_joints += j
-                            getattr(self, 'ndt_ori_qty_var').set(f"{j * length:.4f}")
+                            getattr(self, 'ndt_ori_qty_var').set(f"{j * length:g}" if ndt_type == 'RT' else f"{j * length:.4f}")
                         except ValueError: pass
                         
                     rep_str = getattr(self, 'ndt_rep_joint_var').get().strip().replace(',', '')
@@ -396,13 +399,15 @@ def setup_daily_usage_tab_impl(self):
                         try:
                             j = float(rep_str)
                             total_joints += j
-                            getattr(self, 'ndt_rep_qty_var').set(f"{j * length:.4f}")
+                            getattr(self, 'ndt_rep_qty_var').set(f"{j * length:g}" if ndt_type == 'RT' else f"{j * length:.4f}")
                         except ValueError: pass
                         
                     if total_joints > 0:
                         calculated_qty = total_joints * length
+                        if ndt_type == 'RT':
+                            calculated_qty = float(self.ndt_ori_qty_var.get() or 0)
                         self.ent_daily_test_amount.delete(0, tk.END)
-                        self.ent_daily_test_amount.insert(0, f"{calculated_qty:.4f}")
+                        self.ent_daily_test_amount.insert(0, f"{calculated_qty:g}" if ndt_type == 'RT' else f"{calculated_qty:.4f}")
             # ---------------------------------------
             
             qty_str = self.ent_daily_test_amount.get().replace(',','')
@@ -501,7 +506,22 @@ def setup_daily_usage_tab_impl(self):
         except Exception as e:
             import traceback; traceback.print_exc()
 
+    self._calculate_daily_ndt_fee = _calculate_ndt_fee
     ttk.Button(row2, text="자동 산출", command=_calculate_ndt_fee).pack(side='right', padx=5)
+
+    def on_batch_pipe_change(*_):
+        # Report diameter also determines the PAUT contract bracket.
+        if self.cb_daily_test_method.get().strip().upper() != 'PAUT':
+            return
+        pipe = self.ndt_report_pipe_var.get().strip().upper().removesuffix('A')
+        brackets = {250: '250A', 200: '200A', 150: '150A-125A', 125: '150A-125A'}
+        if pipe.isdigit():
+            size = int(pipe)
+            bracket = '300A 이상' if size >= 300 else brackets.get(size, '100A 이하' if size <= 100 else None)
+            if bracket:
+                self.ndt_pipe_var.set(f'{bracket} (1.0)')
+                _calculate_ndt_fee()
+    self.ndt_report_pipe_var.trace_add('write', on_batch_pipe_change)
 
     
     # Restore focus transitions and defaults
@@ -716,7 +736,10 @@ def setup_daily_usage_tab_impl(self):
     
     worker_hdr = ttk.Frame(workers_box_frame)
     worker_hdr.grid(row=0, column=0, sticky='ew', pady=(0, 2))
-    ttk.Label(worker_hdr, text="작업자 기록", font=('Malgun Gothic', 9, 'bold')).pack(side='left')
+    ttk.Label(worker_hdr, text="당일 작업자 명단 · 현재 검사 참여자 체크", font=('Malgun Gothic', 9, 'bold')).pack(side='left')
+    from site_apps.central.src.worker_selection import select_workers
+    ttk.Button(worker_hdr, text='전체 참여', command=lambda: select_workers(self, True), width=9).pack(side='left', padx=3)
+    ttk.Button(worker_hdr, text='전체 해제', command=lambda: select_workers(self, False), width=9).pack(side='left')
     ttk.Button(worker_hdr, text="⚙", width=2, 
                command=lambda: self.open_list_management_dialog('users')).pack(side='right')
 
@@ -728,7 +751,10 @@ def setup_daily_usage_tab_impl(self):
     def setup_worker_group(idx, row, col):
         # Each worker group is no longer individually draggable
         # Instead, they are sub-frames within the main workers_inner
-        group_frame = ttk.LabelFrame(workers_inner, text=f"작업자 {idx}")
+        group_frame = ttk.LabelFrame(workers_inner)
+        participation_var = tk.BooleanVar(value=True)
+        participation_check = ttk.Checkbutton(group_frame, text=f'참여 · 작업자 {idx}', variable=participation_var)
+        group_frame.configure(labelwidget=participation_check)
         group_frame.grid(row=row, column=col, padx=2, pady=1, sticky='ew')
         
         group = WorkerDataGroup(
@@ -737,6 +763,7 @@ def setup_daily_usage_tab_impl(self):
             time_list=self.worktimes
         )
         group.pack(fill='x', expand=True, padx=1, pady=1)
+        group.participation_var = participation_var
 
         # Store global references for all workers (1-10)
         if idx == 1:
@@ -833,8 +860,11 @@ def setup_daily_usage_tab_impl(self):
     
     # --- Bottom Dashboard (Recent Entries + Fixed Panels) ---
     self.bottom_dashboard = ttk.PanedWindow(self.entry_inner_frame, orient=tk.HORIZONTAL)
-    self.bottom_dashboard.grid(row=1, column=0, sticky='nsew', padx=5, pady=(10, 5))
-    self.entry_inner_frame.grid_rowconfigure(1, weight=1)
+    self.bottom_dashboard.grid(row=2, column=0, sticky='nsew', padx=5, pady=(10, 5))
+    from site_apps.central.src.inspection_batch import InspectionBatch
+    self.inspection_batch = InspectionBatch(self.entry_inner_frame, self)
+    self.inspection_batch.grid(row=1, column=0, sticky='ew', padx=5, pady=5)
+    self.entry_inner_frame.grid_rowconfigure(2, weight=1)
 
     # 1. Left: Recent Entries Mini-table
     self.recent_frame = ttk.LabelFrame(self.bottom_dashboard, text="오늘의 입력 내역 (최근 기록)")
@@ -1210,6 +1240,7 @@ def update_daily_usage_view_impl(self):
         # Re-calculate workers/worktime early for deduping
         import re as _re
         def clean_s(v): return self.clean_nan(v)
+        has_job_labor = bool(clean_s(entry.get('작업별인원', '')))
         raw_workers = []
         worker_time_pairs = []
         for j in range(1, 11):
@@ -1359,11 +1390,11 @@ def update_daily_usage_view_impl(self):
                             h_p = self._parse_ot_hours(ots)
                             
                         # Activity-based hours: Max of all workers in this row
-                        row_ot_hours = max(row_ot_hours, h_p)
+                        row_ot_hours = row_ot_hours + h_p if has_job_labor else max(row_ot_hours, h_p)
                         # Cost-based amounts: Always sum across all workers
                         row_ot_amount += a_p
                         
-                        if not is_duplicate_split and not is_duplicate_labor:
+                        if has_job_labor or (not is_duplicate_split and not is_duplicate_labor):
                             # Update global individual totals (primarily for column data presence/amounts)
                             total_ot_amount += a_p
                             total_indiv_ot_hours[i-1] += h_p
@@ -1384,11 +1415,22 @@ def update_daily_usage_view_impl(self):
             row_ots.append("")
 
         # Global OT Hours: Sum of per-activity maximums
-        if not is_duplicate_split and not is_duplicate_labor:
+        if has_job_labor or (not is_duplicate_split and not is_duplicate_labor):
             total_ot_hours += row_ot_hours
 
         # Global Work Hours (ONLY for primary rows)
-        if not is_duplicate_split and not is_duplicate_labor and display_worktime and '~' in str(display_worktime):
+        if has_job_labor:
+            from site_apps.central.src.inspection_batch import work_interval
+            for j in range(1, 11):
+                user_key = 'User' if j == 1 else f'User{j}'
+                if not clean_s(entry.get(user_key, '')):
+                    continue
+                if filter_worker != '전체' and clean_s(entry.get(user_key, '')) != filter_worker:
+                    continue
+                interval = work_interval(entry.get('WorkTime' if j == 1 else f'WorkTime{j}', ''))
+                if interval:
+                    total_work_hours += (interval[1] - interval[0]) / 60
+        elif not is_duplicate_split and not is_duplicate_labor and display_worktime and '~' in str(display_worktime):
             try:
                 cwt = marker_pattern.sub('', str(display_worktime)).strip()
                 if '~' in cwt:
@@ -1537,6 +1579,9 @@ def update_daily_usage_view_impl(self):
         while len(v_list) < len(tree_cols): v_list.append("")
         
         for c_idx, c_name in enumerate(tree_cols):
+            if c_name in ('원본매수', '재검사매수', '참여인원', '참여시간', '참여OT'):
+                value = entry.get(c_name, '')
+                v_list[c_idx] = '' if pd.isna(value) else value
             if c_name in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']:
                 val = entry.get(c_name, '')
                 if c_name in ['보정계수', '환산물량'] and val:

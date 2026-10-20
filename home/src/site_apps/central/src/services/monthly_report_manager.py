@@ -2436,26 +2436,15 @@ class MonthlyReportManager:
         if method != 'RT':
             return []
 
-        defects = []
-        section_info = str(row.get('구간정보', '') or '')
-        for item in re.split(r'[,;\n]+', section_info):
-            match = re.match(r'^\s*([1-4])\s*/\s*([A-Z]+)\s*$', item.upper())
-            if not match:
-                continue
-            grade = int(match.group(1))
-            if grade >= 3:
-                defects.append(match.group(2))
-        return defects
+        from site_apps.central.src.rt_quantities import film_grades, effective_section_info
+        return [defect for grade, defect in (film_grades(effective_section_info(row)) or []) if grade >= 3]
 
     def _rt_film_count(self, row):
         """Count populated RT section-info slots (one slot equals one film)."""
         if str(row.get('검사방법', '') or '').strip().upper() != 'RT':
             return 0
-        section_info = str(row.get('구간정보', '') or '')
-        return sum(
-            1 for item in re.split(r'[,;\n]+', section_info)
-            if item.strip()
-        )
+        from site_apps.central.src.rt_quantities import rt_counts
+        return rt_counts(row)[0]
 
     def _write_welder_defect_summary(
         self, ws, defects_by_welder, retests_by_welder,
@@ -3797,6 +3786,8 @@ class MonthlyReportManager:
             return spec, shift
 
         # 물량표(qty) 처리를 위해 시작일의 전일누계와 전체 금일작업 합산을 구함
+        from site_apps.central.src.rt_quantities import corrected_rt_history
+        history_data = corrected_rt_history(history_data)
         first_day_data = history_data[target_dates[0]]
         last_day_data = history_data[target_dates[-1]]
 
@@ -3871,7 +3862,8 @@ class MonthlyReportManager:
                             rt_defects_by_welder[welder][defect_code] += 1
                         joint_no = str(row.get('Joint No.', '') or '').strip().upper()
                         film_count = self._rt_film_count(row)
-                        if joint_no.endswith('R1'):
+                        from site_apps.central.src.rt_quantities import retest_parent
+                        if retest_parent(joint_no):
                             rt_retests_by_welder[welder] += film_count
                         elif joint_no:
                             rt_original_counts_by_welder[welder] += film_count
@@ -3899,26 +3891,26 @@ class MonthlyReportManager:
                 elif method == 'MT': qty_val = self._safe_float(row.get('MT'))
                 elif method == 'PT': qty_val = self._safe_float(row.get('PT'))
                 elif method == 'RT':
-                    # RT는 OR + RE 매수 합산
-                    or_val = self._safe_float(row.get('RT_OR'))
-                    re_val = self._safe_float(row.get('RT_RE'))
-                    qty_val = or_val + re_val
+                    from site_apps.central.src.rt_quantities import rt_counts
+                    qty_val, _ = rt_counts(row)
                 
                 group_key = (company, section, line_no, size, spec, work_shift)
                 ndt_groups[method][group_key]['count'] += 1
                 ndt_groups[method][group_key]['qty'] += qty_val
+                if method == 'RT':
+                    group = ndt_groups[method][group_key]
+                    group['re'] = group.get('re', 0) + rt_counts(row)[1]
 
                 # 2.x 세부현황용: 개별 레코드 저장 (날짜 포함)
                 if method == 'RT':
-                    d_ori = self._safe_float(row.get('RT_OR'))
-                    d_re  = self._safe_float(row.get('RT_RE'))
+                    d_ori, d_re = rt_counts(row)
                 else:
                     d_ori = qty_val
                     d_re  = 0.0
-                if d_ori + d_re > 0:
+                if d_ori > 0:
                     ndt_details[method].append({
                         'key': group_key,
-                        'ori': d_ori, 're': d_re, 'qty': d_ori + d_re
+                        'ori': d_ori, 're': d_re, 'qty': qty_val
                     })
 
         # 마지막 날의 총누계와 공정률을 최종 반영
@@ -4009,6 +4001,7 @@ class MonthlyReportManager:
                 current_company = None
                 sub_count = 0
                 sub_qty = 0.0
+                sub_re = 0.0
                 
                 # 업체명 기준으로 1차 정렬
                 sorted_groups = sorted(ndt_groups[method].items(), key=lambda x: str(x[0][0]))
@@ -4017,21 +4010,23 @@ class MonthlyReportManager:
                     comp = k[0]
                     if current_company is not None and comp != current_company:
                         data_items.append(
-                            ((f"[{current_company} 소계]", "", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
+                            ((f"[{current_company} 소계]", "", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': sub_re, 'is_subtotal': True})
                         )
                         sub_count = 0
                         sub_qty = 0.0
+                        sub_re = 0.0
                         
                     current_company = comp
                     data_items.append(
-                        (k, {'count': v['count'], 'qty': v['qty'], 'ori': v['qty'], 're': 0.0, 'is_subtotal': False})
+                        (k, {'count': v['count'], 'qty': v['qty'], 'ori': v['qty'], 're': v.get('re', 0), 'is_subtotal': False})
                     )
                     sub_count += v['count']
                     sub_qty += v['qty']
+                    sub_re += v.get('re', 0)
                     
                 if current_company is not None:
                     data_items.append(
-                        ((f"[{current_company} 소계]", "", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': 0.0, 'is_subtotal': True})
+                        ((f"[{current_company} 소계]", "", "", "", "", ""), {'count': sub_count, 'qty': sub_qty, 'ori': sub_qty, 're': sub_re, 'is_subtotal': True})
                     )
             num_items = len(data_items)
             section_item_counts[section_key] = num_items
@@ -4127,7 +4122,7 @@ class MonthlyReportManager:
 
                 ori_v = vals.get('ori', qty)
                 re_v  = vals.get('re', 0.0)
-                tot_v = ori_v + re_v
+                tot_v = ori_v if method == 'RT' else ori_v + re_v
 
                 def _fmt(v):
                     return f"{v:.4f}" if v % 1 != 0 else str(int(v))
@@ -4238,7 +4233,7 @@ class MonthlyReportManager:
             # TOTAL 행 값 쓰기 및 스타일 보정
             total_ori = sum(vals.get('ori', vals['qty']) for _, vals in data_items if not vals.get('is_subtotal', False))
             total_re = sum(vals.get('re', 0.0) for _, vals in data_items if not vals.get('is_subtotal', False))
-            total_qty = total_ori + total_re
+            total_qty = total_ori if method == 'RT' else total_ori + total_re
             
             # TOTAL 행의 17, 18, 19, 20 칸 배경색(파란색)을 동일하게 맞춤 (첫 번째 셀 서식 복사)
             fill_style = ws.cell(row=total_row, column=2).fill

@@ -11,6 +11,7 @@ import sys
 import json
 import shutil
 import uuid
+from site_apps.central.src.rt_quantities import rt_counts, sync_rt_widgets, widget_rt_values, resolve_rt_row, retest_parent, default_rt_copy
 
 # Import the exporter
 try:
@@ -383,8 +384,10 @@ class DailyWorkLogTab(ttk.Frame):
         # --- NDT Results Grid ---
         title_frame = ttk.Frame(parent)
         title_frame.pack(fill="x", pady=5)
-        ttk.Label(title_frame, text="2. 비파괴검사결과서 (연속 30줄 입력 가능)", font=("맑은 고딕", 12, "bold")).pack(side="left", padx=10)
+        ttk.Label(title_frame, text="2. 비파괴검사결과서 (행 추가 가능)", font=("맑은 고딕", 12, "bold")).pack(side="left", padx=10)
         
+        ttk.Button(title_frame, text="+ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).pack(side="left", padx=5)
+
         btn_export_ndt = ttk.Button(title_frame, text="NDT 누계 대장 엑셀 출력", command=self.export_ndt_summary)
         btn_export_ndt.pack(side="left", padx=10)
         
@@ -393,6 +396,11 @@ class DailyWorkLogTab(ttk.Frame):
         
         btn_weekly_report = ttk.Button(title_frame, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
         btn_weekly_report.pack(side="left", padx=10)
+
+        line_bar = ttk.Frame(parent)
+        line_bar.pack(fill='x', padx=5, pady=(0, 4))
+        ttk.Button(line_bar, text='라인번호 일괄 변경', command=self._edit_ndt_lines).pack(side='left')
+        ttk.Label(line_bar, text='현재 날짜의 같은 라인번호를 한 번에 변경합니다.').pack(side='left', padx=8)
         
         # Grid Container
         grid_frame = ttk.Frame(parent)
@@ -424,7 +432,8 @@ class DailyWorkLogTab(ttk.Frame):
         
         # Draw Headers
         for col_idx, c in enumerate(self.ndt_cols):
-            ttk.Label(grid_frame, text=c, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
+            label = {'RT_OR': 'RT_OR 전체', 'RT_RE': 'RT_RE 불량'}.get(c, c)
+            ttk.Label(grid_frame, text=label, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
             if c == '구간정보':
                 grid_frame.grid_columnconfigure(col_idx, weight=5, minsize=260)
             elif c == '라인번호':
@@ -436,263 +445,9 @@ class DailyWorkLogTab(ttk.Frame):
             else:
                 grid_frame.grid_columnconfigure(col_idx, weight=1)
             
-        # Draw 30 Rows of Entries
+        self._ndt_grid_frame = grid_frame
         self.ndt_grid_entries = []
-        for row_idx in range(1, 31):
-            row_entries = {}
-            # Row number label
-            ttk.Label(grid_frame, text=f"{row_idx}").grid(row=row_idx, column=0, sticky="w", padx=(0, 2))
-            
-            for col_idx, c in enumerate(self.ndt_cols):
-                # Adjust width for some columns
-                w = 8
-                if c == '규격': w = 13
-                elif c == '근무구분': w = 7
-                elif c in ('검사방법', '결과', '관경', '두께'): w = 6
-                elif c == '업체': w = 16
-                elif c == '구간': w = 10
-                elif c == '용접사': w = 23
-                elif c == '라인번호': w = 25
-                elif c == 'Joint No.': w = 12
-                elif c == '구간정보': w = 35
-                else: w = 8
-                
-                if c in ('작업구분', '핫태핑차수'):
-                    values = ['', '일반', '핫태핑'] if c == '작업구분' else ['', '1차', '2차']
-                    ent = ttk.Combobox(grid_frame, width=7, values=values, state='readonly')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
-                    row_entries[c] = ent
-                elif c == '검사방법':
-                    ent = ttk.Combobox(grid_frame, width=w, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'], justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '구간정보':
-                    frame = ttk.Frame(grid_frame)
-                    frame.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    entries = []
-                    for i in range(4):
-                        e = ttk.Entry(frame, width=5, justify='center')
-                        e.pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
-                        entries.append(e)
-                    frame.entries = entries
-                    def apply_layout(ents=entries, r_dict=row_entries):
-                        method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
-                        if method in ['PAUT', 'PT', 'MT']:
-                            ents[0].configure(justify='left')
-                            for i in range(1, 4):
-                                ents[i].pack_forget()
-                        else:
-                            ents[0].configure(justify='center')
-                            for i in range(1, 4):
-                                if not ents[i].winfo_manager():
-                                    ents[i].pack(
-                                        side='left', fill='x', expand=True,
-                                        padx=(0, 1 if i < 3 else 0)
-                                    )
-                    def get_val(ents=entries, r_dict=row_entries):
-                        method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
-                        if method in ['PAUT', 'PT', 'MT']:
-                            return ents[0].get()
-                        parts = [e.get().strip() for e in ents]
-                        return ','.join([p for p in parts if p])
-                    def set_val(val, ents=entries, r_dict=row_entries, layout_fn=apply_layout):
-                        for e in ents: e.delete(0, tk.END)
-                        method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
-                        if method in ['PAUT', 'PT', 'MT']:
-                            ents[0].insert(0, val)
-                        else:
-                            parts = val.split(',') if val else []
-                            for i, p in enumerate(parts):
-                                if i < len(ents): ents[i].insert(0, p)
-                        layout_fn()
-                    def delete_val(first, last, ents=entries):
-                        for e in ents: e.delete(first, last)
-                    def insert_val(idx, val, ents=entries):
-                        ents[0].insert(idx, val)
-                    frame.get = get_val
-                    frame.set = set_val
-                    frame.delete = delete_val
-                    frame.insert = insert_val
-                    frame.apply_layout = apply_layout
-                    row_entries[c] = frame
-                elif c == '관경':
-                    ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(SIZE_LENGTH.keys()), justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '결과':
-                    ent = ttk.Combobox(grid_frame, width=w, values=['', '합격', '불합격', '재촬영', '보류'], justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '규격':
-                    ent = ttk.Combobox(grid_frame, width=w, values=[''], justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '근무구분':
-                    ent = ttk.Combobox(
-                        grid_frame, width=w, values=['', '주간', '야간', '재검'],
-                        justify='center'
-                    )
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '용접사':
-                    ent = ttk.Combobox(
-                        grid_frame, width=w, values=self.history_welders,
-                        justify='center'
-                    )
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '업체':
-                    ent = ttk.Combobox(grid_frame, width=w, values=self.history_companies, justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '구간':
-                    ent = ttk.Combobox(grid_frame, width=w, values=self.history_sections, justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                elif c == '라인번호':
-                    ent = ttk.Combobox(grid_frame, width=w, values=self.history_lines, justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                else:
-                    ent = ttk.Entry(grid_frame, width=w, justify='center')
-                    ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
-                    row_entries[c] = ent
-                
-            def on_ndt_change(event, r=row_entries):
-                method = r['검사방법'].get().strip().upper()
-                pipe = r['관경'].get().strip().upper()
-                
-                # --- 관경 선택 시 두께 자동 입력 ---
-                thk_mapping = {
-                    "1100": "11.1", "1000": "11.1", "900": "10.3", "850": "10.3", "800": "9.5",
-                    "750": "8.7", "700": "8.7", "650": "8.7", "600": "9.5", "550": "9.5",
-                    "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4", 
-                    "150": "5.5", "125": "5.1", "100": "4.9", "80": "4.5", "65": "4.5", "50": "3.9", 
-                    "40": "3.7", "32": "3.6", "25": "3.4", "20": "2.9"
-                }
-                lookup_size = str(pipe).replace("A", "").strip()
-                if lookup_size in thk_mapping and r['작업구분'].get() != '핫태핑':
-                    r['두께'].delete(0, tk.END)
-                    r['두께'].insert(0, thk_mapping[lookup_size])
-                # -----------------------------------
-                
-                if pipe and pipe.isdigit():
-                    pipe += 'A'
-                
-                if r['작업구분'].get() == '핫태핑':
-                    from site_apps.central.src.hot_tapping import inspection_length
-                    try:
-                        count = int(r['핫태핑개소수'].get())
-                        if method in ('MT', 'PT') and count > 0:
-                            length = inspection_length(pipe, r['핫태핑차수'].get()) * count
-                            for col in ('RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'):
-                                r[col].delete(0, tk.END)
-                            r[method].insert(0, f'{length:.4f}')
-                    except ValueError:
-                        pass  # 미입력 조건은 저장 시 검증한다.
-                    r['구간정보'].apply_layout()
-                    self._refresh_hot_summary()
-                    return
-
-                if pipe in SIZE_LENGTH:
-                    length = SIZE_LENGTH[pipe]
-                    length_str = f"{length:.4f}"
-                    
-                    if method == 'RT':
-                        try:
-                            size_val = int(''.join(filter(str.isdigit, pipe)))
-                            if size_val <= 150:
-                                length_str = "3"
-                            else:
-                                length_str = ""
-                        except ValueError:
-                            length_str = ""
-                            
-                    target_col = None
-                    if method == 'PAUT': target_col = 'PAUT'
-                    elif method == 'RT': target_col = 'RT_OR'
-                    elif method == 'MT': target_col = 'MT'
-                    elif method == 'PT': target_col = 'PT'
-                    
-                    if target_col and not r[target_col].get().strip():
-                        # Clear other length columns if we are auto-filling
-                        for col in ['RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT']:
-                            r[col].delete(0, tk.END)
-                        r[target_col].insert(0, length_str)
-                        
-                # Update '구간정보' display based on method
-                if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
-                    r['구간정보'].apply_layout()
-                            
-                # Update '규격' values based on method
-                if '규격' in r and hasattr(r['규격'], 'configure'):
-                    if method == 'RT':
-                        r['규격']['values'] = ['', '3 1/3 X 12"', '3 1/3 X 6"']
-                    elif method in ['PAUT', 'MT', 'PT']:
-                        r['규격']['values'] = ['']
-                    else:
-                        r['규격']['values'] = ['']
-                        
-            def on_hot_change(event=None, r=row_entries):
-                if r['작업구분'].get() == '핫태핑':
-                    self._edit_hot_tapping(r)
-            row_entries['작업구분'].bind('<<ComboboxSelected>>', on_hot_change)
-            row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
-            row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
-            row_entries['관경'].bind('<<ComboboxSelected>>', on_ndt_change)
-            row_entries['관경'].bind('<FocusOut>', on_ndt_change)
-            
-            def on_joint_enter(event, r_idx=row_idx-1, r=row_entries):
-                import re
-                if r_idx == 0:
-                    if len(self.ndt_grid_entries) > 1:
-                        self.ndt_grid_entries[1]['Joint No.'].focus_set()
-                    return 'break'
-                    
-                prev_row = self.ndt_grid_entries[r_idx - 1]
-                
-                # Auto-increment Joint No.
-                curr_joint = r['Joint No.'].get().strip()
-                if not curr_joint:
-                    prev_joint = prev_row['Joint No.'].get().strip()
-                    if prev_joint:
-                        match = re.search(r'(\d+)$', prev_joint)
-                        if match:
-                            num_str = match.group(1)
-                            prefix = prev_joint[:-len(num_str)]
-                            next_num = str(int(num_str) + 1).zfill(len(num_str))
-                            r['Joint No.'].insert(0, prefix + next_num)
-                
-                for col in ['업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
-                    if not r[col].get().strip():
-                        prev_val = prev_row[col].get().strip()
-                        if prev_val:
-                            if col == '구간정보':
-                                r[col].set(prev_val)
-                            elif isinstance(r[col], ttk.Combobox):
-                                r[col].set(prev_val)
-                            else:
-                                r[col].delete(0, tk.END)
-                                r[col].insert(0, prev_val)
-                
-                on_ndt_change(None, r)
-                
-                if r_idx + 1 < len(self.ndt_grid_entries):
-                    self.ndt_grid_entries[r_idx + 1]['Joint No.'].focus_set()
-                return 'break'
-                
-            for col_name, widget in row_entries.items():
-                if hasattr(widget, 'entries'):
-                    for e in widget.entries:
-                        e.bind('<Return>', on_joint_enter)
-                        e.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
-                        e.bind('<Escape>', self._clear_ndt_selection, add='+')
-                else:
-                    widget.bind('<Return>', on_joint_enter)
-                    widget.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
-                    widget.bind('<Escape>', self._clear_ndt_selection, add='+')
-            
-            self.ndt_grid_entries.append(row_entries)
+        self._append_ndt_rows(30)
 
         hot_bar = ttk.Frame(parent)
         hot_bar.pack(fill='x', padx=5, pady=4)
@@ -711,6 +466,373 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(
             photo_bar, text="사진 관리", command=self.manage_process_photos
         ).pack(side='left', padx=4)
+
+    def _append_ndt_rows(self, count=10, focus=False):
+        first = len(self.ndt_grid_entries)
+        for row_idx in range(first + 1, first + count + 1):
+            self._create_ndt_row(row_idx)
+        if focus and count:
+            self._focus_ndt_joint(first)
+
+    def _ensure_ndt_capacity(self, required):
+        missing = required - len(self.ndt_grid_entries)
+        if missing > 0:
+            self._append_ndt_rows(((missing + 9) // 10) * 10)
+
+    def _focus_ndt_joint(self, index):
+        entry = self.ndt_grid_entries[index]['Joint No.']
+        entry.focus_set()
+        self.update_idletasks()
+        y = self._ndt_grid_frame.winfo_y() + entry.winfo_y()
+        top = self.right_canvas.canvasy(0)
+        if y < top or y + entry.winfo_height() > top + self.right_canvas.winfo_height():
+            self.right_canvas.yview_moveto(y / max(1, self.right_frame.winfo_height()))
+
+    def _create_ndt_row(self, row_idx):
+        grid_frame = self._ndt_grid_frame
+        row_entries = {}
+        # Row number label
+        ttk.Label(grid_frame, text=f"{row_idx}").grid(row=row_idx, column=0, sticky="w", padx=(0, 2))
+
+        for col_idx, c in enumerate(self.ndt_cols):
+            # Adjust width for some columns
+            w = 8
+            if c == '규격': w = 13
+            elif c == '근무구분': w = 7
+            elif c in ('검사방법', '결과', '관경', '두께'): w = 6
+            elif c == '업체': w = 16
+            elif c == '구간': w = 10
+            elif c == '용접사': w = 23
+            elif c == '라인번호': w = 25
+            elif c == 'Joint No.': w = 12
+            elif c == '구간정보': w = 35
+            else: w = 8
+
+            if c in ('작업구분', '핫태핑차수'):
+                values = ['', '일반', '핫태핑'] if c == '작업구분' else ['', '1차', '2차']
+                ent = ttk.Combobox(grid_frame, width=7, values=values, state='readonly')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
+                row_entries[c] = ent
+            elif c == '검사방법':
+                ent = ttk.Combobox(grid_frame, width=w, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'], justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '구간정보':
+                frame = ttk.Frame(grid_frame)
+                frame.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                entries = []
+                for i in range(4):
+                    e = ttk.Entry(frame, width=5, justify='center')
+                    e.pack(side='left', fill='x', expand=True, padx=(0, 1 if i<3 else 0))
+                    entries.append(e)
+                frame.entries = entries
+                def update_rt_films(event=None, r=row_entries):
+                    try:
+                        sync_rt_widgets(r, from_details=True, all_rows=self._rt_context())
+                    except ValueError:
+                        pass  # Allow an incomplete value while typing; validate before save.
+                for entry in entries:
+                    entry.bind('<KeyRelease>', update_rt_films, add='+')
+                    entry.bind('<FocusOut>', update_rt_films, add='+')
+                def apply_layout(ents=entries, r_dict=row_entries):
+                    method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
+                    if method in ['PAUT', 'PT', 'MT']:
+                        ents[0].configure(justify='left')
+                        for i in range(1, 4):
+                            ents[i].pack_forget()
+                    else:
+                        ents[0].configure(justify='center')
+                        for i in range(1, 4):
+                            if not ents[i].winfo_manager():
+                                ents[i].pack(
+                                    side='left', fill='x', expand=True,
+                                    padx=(0, 1 if i < 3 else 0)
+                                )
+                def get_val(ents=entries, r_dict=row_entries):
+                    method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
+                    if method in ['PAUT', 'PT', 'MT']:
+                        return ents[0].get()
+                    parts = [e.get().strip() for e in ents]
+                    return ','.join(parts).rstrip(',') if method == 'RT' else ','.join([p for p in parts if p])
+                def set_val(val, ents=entries, r_dict=row_entries, layout_fn=apply_layout):
+                    for e in ents: e.delete(0, tk.END)
+                    method = r_dict['검사방법'].get().strip().upper() if '검사방법' in r_dict else ''
+                    if method in ['PAUT', 'PT', 'MT']:
+                        ents[0].insert(0, val)
+                    else:
+                        parts = val.split(',') if val else []
+                        for i, p in enumerate(parts):
+                            if i < len(ents): ents[i].insert(0, p)
+                    layout_fn()
+                    try:
+                        sync_rt_widgets(r_dict, all_rows=self._rt_context())
+                    except ValueError:
+                        pass
+                def delete_val(first, last, ents=entries):
+                    for e in ents: e.delete(first, last)
+                def insert_val(idx, val, ents=entries):
+                    ents[0].insert(idx, val)
+                frame.get = get_val
+                frame.set = set_val
+                frame.delete = delete_val
+                frame.insert = insert_val
+                frame.apply_layout = apply_layout
+                row_entries[c] = frame
+            elif c == '관경':
+                ent = ttk.Combobox(grid_frame, width=w, values=[''] + list(SIZE_LENGTH.keys()), justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '결과':
+                ent = ttk.Combobox(grid_frame, width=w, values=['', '합격', '불합격', '재촬영', '보류'], justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '규격':
+                ent = ttk.Combobox(grid_frame, width=w, values=[''], justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '근무구분':
+                ent = ttk.Combobox(
+                    grid_frame, width=w, values=['', '주간', '야간', '재검'],
+                    justify='center'
+                )
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '용접사':
+                ent = ttk.Combobox(
+                    grid_frame, width=w, values=self.history_welders,
+                    justify='center'
+                )
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '업체':
+                ent = ttk.Combobox(grid_frame, width=w, values=self.history_companies, justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '구간':
+                ent = ttk.Combobox(grid_frame, width=w, values=self.history_sections, justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '라인번호':
+                ent = ttk.Combobox(grid_frame, width=w, values=self.history_lines, justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            else:
+                ent = ttk.Entry(grid_frame, width=w, justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+
+        def on_ndt_change(event, r=row_entries):
+            method = r['검사방법'].get().strip().upper()
+            pipe = r['관경'].get().strip().upper()
+            self._sync_ndt_spec(r)
+
+            # --- 관경 선택 시 두께 자동 입력 ---
+            thk_mapping = {
+                "1100": "11.1", "1000": "11.1", "900": "10.3", "850": "10.3", "800": "9.5",
+                "750": "8.7", "700": "8.7", "650": "8.7", "600": "9.5", "550": "9.5",
+                "500": "6.4", "450": "6.4", "400": "6.4", "350": "6.4", "300": "6.4", "250": "6.4", "200": "6.4",
+                "150": "5.5", "125": "5.1", "100": "4.9", "80": "4.5", "65": "4.5", "50": "3.9",
+                "40": "3.7", "32": "3.6", "25": "3.4", "20": "2.9"
+            }
+            lookup_size = str(pipe).replace("A", "").strip()
+            if lookup_size in thk_mapping and r['작업구분'].get() != '핫태핑':
+                r['두께'].delete(0, tk.END)
+                r['두께'].insert(0, thk_mapping[lookup_size])
+            # -----------------------------------
+
+            if pipe and pipe.isdigit():
+                pipe += 'A'
+
+            if r['작업구분'].get() == '핫태핑':
+                from site_apps.central.src.hot_tapping import inspection_length
+                try:
+                    count = int(r['핫태핑개소수'].get())
+                    if method in ('MT', 'PT') and count > 0:
+                        length = inspection_length(pipe, r['핫태핑차수'].get()) * count
+                        for col in ('RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT'):
+                            r[col].delete(0, tk.END)
+                        r[method].insert(0, f'{length:.4f}')
+                except ValueError:
+                    pass  # 미입력 조건은 저장 시 검증한다.
+                r['구간정보'].apply_layout()
+                self._refresh_hot_summary()
+                return
+
+            if pipe in SIZE_LENGTH:
+                length = SIZE_LENGTH[pipe]
+                length_str = f"{length:.4f}"
+
+                if method == 'RT':
+                    try:
+                        size_val = int(''.join(filter(str.isdigit, pipe)))
+                        if size_val <= 150 and not retest_parent(r['Joint No.'].get()):
+                            length_str = "3"
+                        else:
+                            length_str = ""
+                    except ValueError:
+                        length_str = ""
+
+                target_col = None
+                if method == 'PAUT': target_col = 'PAUT'
+                elif method == 'RT': target_col = 'RT_OR'
+                elif method == 'MT': target_col = 'MT'
+                elif method == 'PT': target_col = 'PT'
+
+                if target_col and not r[target_col].get().strip():
+                    # Clear other length columns if we are auto-filling
+                    for col in ['RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT']:
+                        r[col].delete(0, tk.END)
+                    r[target_col].insert(0, length_str)
+
+            # Update '구간정보' display based on method
+            if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
+                r['구간정보'].apply_layout()
+
+
+        def on_hot_change(event=None, r=row_entries):
+            if r['작업구분'].get() == '핫태핑':
+                self._edit_hot_tapping(r)
+        row_entries['작업구분'].bind('<<ComboboxSelected>>', on_hot_change)
+        row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
+        row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
+        row_entries['관경'].bind('<<ComboboxSelected>>', on_ndt_change)
+        row_entries['관경'].bind('<FocusOut>', on_ndt_change)
+        row_entries['Joint No.'].bind('<FocusOut>', lambda event, r=row_entries: self._sync_rt_row(r), add='+')
+
+        def on_joint_enter(event, r_idx=row_idx-1, r=row_entries):
+            import re
+            if r_idx == 0:
+                if len(self.ndt_grid_entries) > 1:
+                    self.ndt_grid_entries[1]['Joint No.'].focus_set()
+                return 'break'
+
+            prev_row = self.ndt_grid_entries[r_idx - 1]
+
+            # Auto-increment Joint No.
+            curr_joint = r['Joint No.'].get().strip()
+            if not curr_joint:
+                prev_joint = prev_row['Joint No.'].get().strip()
+                if prev_joint:
+                    match = re.search(r'(\d+)$', prev_joint)
+                    if match:
+                        num_str = match.group(1)
+                        prefix = prev_joint[:-len(num_str)]
+                        next_num = str(int(num_str) + 1).zfill(len(num_str))
+                        r['Joint No.'].insert(0, prefix + next_num)
+
+            for col in ['업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
+                if col == '규격' and r['검사방법'].get().strip().upper() != prev_row['검사방법'].get().strip().upper():
+                    continue
+                if col in ('구간정보', '결과') and (r['검사방법'].get().strip().upper() == 'RT' or prev_row['검사방법'].get().strip().upper() == 'RT'):
+                    continue
+                if not r[col].get().strip():
+                    prev_val = prev_row[col].get().strip()
+                    if prev_val:
+                        if col == '구간정보':
+                            r[col].set(prev_val)
+                        elif isinstance(r[col], ttk.Combobox):
+                            r[col].set(prev_val)
+                        else:
+                            r[col].delete(0, tk.END)
+                            r[col].insert(0, prev_val)
+
+            on_ndt_change(None, r)
+            defaults = default_rt_copy(widget_rt_values(r), self._rt_context())
+            if defaults.get('구간정보', '') != r['구간정보'].get():
+                r['구간정보'].set(defaults['구간정보'])
+            self._sync_rt_row(r)
+
+            if r_idx + 1 == len(self.ndt_grid_entries):
+                self._append_ndt_rows(10)
+            if r_idx + 1 < len(self.ndt_grid_entries):
+                self._focus_ndt_joint(r_idx + 1)
+            return 'break'
+
+        for col_name, widget in row_entries.items():
+            if hasattr(widget, 'entries'):
+                for e in widget.entries:
+                    e.bind('<Return>', on_joint_enter)
+                    e.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
+                    e.bind('<Escape>', self._clear_ndt_selection, add='+')
+            else:
+                widget.bind('<Return>', on_joint_enter)
+                widget.bind('<Button-1>', lambda event, r=row_entries: self._select_ndt_row(r), add='+')
+                widget.bind('<Escape>', self._clear_ndt_selection, add='+')
+
+        self.ndt_grid_entries.append(row_entries)
+
+
+    def _replace_ndt_line(self, old_line, new_line):
+        old_line, new_line = old_line.strip(), new_line.strip()
+        if not old_line or not new_line:
+            raise ValueError('기존 라인번호와 새 라인번호를 입력하세요.')
+        if old_line == new_line:
+            raise ValueError('새 라인번호가 기존 번호와 같습니다.')
+        targets = [row for row in self.ndt_grid_entries if row['라인번호'].get().strip() == old_line]
+        for row in targets:
+            row['라인번호'].set(new_line)
+        if targets:
+            choices = sorted({line for line in self.history_lines if line} | {new_line})
+            self.history_lines = [''] + choices
+            for row in self.ndt_grid_entries:
+                row['라인번호']['values'] = self.history_lines
+        return len(targets)
+
+    def _edit_ndt_lines(self):
+        lines = sorted({row['라인번호'].get().strip() for row in self.ndt_grid_entries
+                        if row['라인번호'].get().strip()})
+        if not lines:
+            messagebox.showinfo('라인번호 일괄 변경', '변경할 라인번호가 없습니다.')
+            return
+        selected = getattr(self, 'selected_ndt_row', None)
+        initial = selected['라인번호'].get().strip() if selected is not None else lines[0]
+        dialog = tk.Toplevel(self)
+        dialog.title('라인번호 일괄 변경')
+        dialog.transient(self.winfo_toplevel())
+        dialog.resizable(False, False)
+        body = ttk.Frame(dialog, padding=15)
+        body.pack(fill='both', expand=True)
+        old = tk.StringVar(value=initial if initial in lines else lines[0])
+        new = tk.StringVar()
+        preview = tk.StringVar()
+        ttk.Label(body, text=f'현재 날짜: {self.date_entry.get()}').grid(row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
+        ttk.Label(body, text='기존 라인번호').grid(row=1, column=0, sticky='w', padx=(0, 10))
+        ttk.Combobox(body, textvariable=old, values=lines, state='readonly', width=42).grid(row=1, column=1, pady=4)
+        ttk.Label(body, text='새 라인번호').grid(row=2, column=0, sticky='w')
+        entry = ttk.Entry(body, textvariable=new, width=45)
+        entry.grid(row=2, column=1, pady=4)
+        ttk.Label(body, textvariable=preview).grid(row=3, column=0, columnspan=2, sticky='w', pady=10)
+        ttk.Label(body, text='변경 후 상단 저장 버튼을 눌러 주세요.').grid(row=4, column=0, columnspan=2, sticky='w')
+
+        def update_preview(*args):
+            count = sum(row['라인번호'].get().strip() == old.get() for row in self.ndt_grid_entries)
+            preview.set(f'변경 대상: {count}행 (기존 라인번호가 일치하는 행)')
+
+        def apply():
+            try:
+                count = self._replace_ndt_line(old.get(), new.get())
+            except ValueError as error:
+                messagebox.showwarning('라인번호 일괄 변경', str(error), parent=dialog)
+                return
+            dialog.destroy()
+            messagebox.showinfo('라인번호 일괄 변경', f'{count}행을 변경했습니다. 상단 저장 버튼을 눌러 주세요.')
+
+        old.trace_add('write', update_preview)
+        update_preview()
+        buttons = ttk.Frame(body)
+        buttons.grid(row=5, column=0, columnspan=2, sticky='e', pady=(12, 0))
+        ttk.Button(buttons, text='변경 적용', command=apply).pack(side='left', padx=4)
+        ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='left')
+        dialog.grab_set()
+        entry.focus_set()
+
+    def _sync_ndt_spec(self, row):
+        import re
+        method = row['검사방법'].get().strip().upper()
+        spec = row['규격']
+        spec['values'] = ['', '3 1/3 X 12"', '3 1/3 X 6"'] if method == 'RT' else ['']
+        if method and method != 'RT' and re.fullmatch(r'3\s*1\s*/\s*3\s*[X×]\s*(?:12|6)\s*["”″]?', spec.get().strip(), re.IGNORECASE):
+            spec.set('')
 
     def _edit_hot_tapping(self, row=None):
         from site_apps.central.src.hot_tapping import LENGTHS, inspection_length
@@ -889,6 +1011,28 @@ class DailyWorkLogTab(ttk.Frame):
             })
         self.save_history(history)
         messagebox.showinfo('완료', f'공정사진 {len(files)}장을 등록했습니다.')
+
+    def _rt_context(self):
+        return list(getattr(self, '_rt_parent_history', [])) + [widget_rt_values(row) for row in self.ndt_grid_entries]
+
+    def _sync_rt_row(self, row):
+        try:
+            sync_rt_widgets(row, all_rows=self._rt_context())
+        except ValueError:
+            pass
+
+    def _validate_rt_rows(self):
+        try:
+            context = self._rt_context()
+            for row in self.ndt_grid_entries:
+                if row['검사방법'].get().strip().upper() == 'RT':
+                    rt_counts(resolve_rt_row(widget_rt_values(row), context))
+            for row in self.ndt_grid_entries:
+                sync_rt_widgets(row, all_rows=context)
+            return True
+        except ValueError as exc:
+            messagebox.showwarning('RT 매수 확인', str(exc))
+            return False
 
     def save_current_history(self):
         date_str = self.date_entry.get()
@@ -1087,8 +1231,11 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(button_bar, text='닫기', command=window.destroy).pack(side='right', padx=4)
             
     def export_excel(self):
+        if not self._validate_rt_rows():
+            return
         if not self._validate_hot_rows():
             return
+        self.auto_calculate_and_save(show_completion=False)
         # Gather all data
         data = {
             'date': self.date_entry.get(),
@@ -1310,7 +1457,9 @@ class DailyWorkLogTab(ttk.Frame):
     def load_history(self):
         try:
             with open(self.history_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                history = json.load(f)
+            self._rt_parent_history = [row for day in sorted(history) for row in history[day].get('ndt_results', [])]
+            return history
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
@@ -1415,6 +1564,8 @@ class DailyWorkLogTab(ttk.Frame):
             return value
 
     def save_current_history(self):
+        if not self._validate_rt_rows():
+            return
         history = self.load_history()
         current_date = self._selected_date_key()
         if not self._validate_hot_rows():
@@ -1447,6 +1598,7 @@ class DailyWorkLogTab(ttk.Frame):
                     if col == '용접사':
                         val = self._normalize_welder_id(val)
                     row_dict[col] = str(val) if val else ""
+            row_dict.update(getattr(row_entries.get('구간정보'), '_rt_retake_meta', {}))
             data['ndt_results'].append(row_dict)
             
         with open('debug_save.txt', 'w', encoding='utf-8') as debug_f:
@@ -1587,6 +1739,7 @@ class DailyWorkLogTab(ttk.Frame):
             
         # Update NDT Results
         curr_ndt = curr_data.get('ndt_results', [])
+        self._ensure_ndt_capacity(len(curr_ndt))
 
         def split_legacy_spec(row_data):
             spec = str(row_data.get('규격', '') or '').strip()
@@ -1622,6 +1775,12 @@ class DailyWorkLogTab(ttk.Frame):
                     ent.delete(0, tk.END)
                     ent.insert(0, val)
                     
+        for widgets in self.ndt_grid_entries:
+            self._sync_ndt_spec(widgets)
+            try:
+                sync_rt_widgets(widgets, all_rows=self._rt_context())
+            except ValueError:
+                pass  # Keep the saved inputs available for correction before saving.
         self._refresh_hot_summary()
 
         # [NEW] Recalculate Subtotals for Qty to heal missing '금일작업' fields in UI
@@ -1676,7 +1835,9 @@ class DailyWorkLogTab(ttk.Frame):
             if rt_expected > 0:
                 self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
 
-    def auto_calculate_and_save(self):
+    def auto_calculate_and_save(self, show_completion=True):
+        if not self._validate_rt_rows():
+            return
         if not self._validate_hot_rows():
             return
         self._refresh_hot_summary()
@@ -1685,6 +1846,7 @@ class DailyWorkLogTab(ttk.Frame):
         
         # 1. Aggregate NDT Results -> 금일작업
         today_qty = {comp_key: 0.0 for comp_key in self.qty_entries.keys()}
+        today_rejects = {comp_key: 0 for comp_key in self.qty_entries.keys()}
         
         for row_entries in self.ndt_grid_entries:
             if not hasattr(row_entries['검사방법'], 'get'): continue
@@ -1699,12 +1861,14 @@ class DailyWorkLogTab(ttk.Frame):
             size_val = int(size_match.group()) if size_match else 0
             
             if method == 'RT':
-                val = float(row_entries['RT_OR'].get() or 0) + float(row_entries['RT_RE'].get() or 0)
+                val, rejects = rt_counts({key: row_entries[key].get() for key in ('RT_OR', 'RT_RE', '구간정보')})
                 if val > 0:
                     spec_key = '80A이하' if size_val <= 80 else '150A~100A'
                     if shift_str == '야간': spec_key += '-야간'
                     comp = f"RT_{spec_key}"
-                    if comp in today_qty: today_qty[comp] += val
+                    if comp in today_qty:
+                        today_qty[comp] += val
+                        today_rejects[comp] += rejects
             
             elif method == 'PAUT':
                 val = float(row_entries['PAUT'].get() or 0)
@@ -1831,6 +1995,20 @@ class DailyWorkLogTab(ttk.Frame):
             if rt_expected > 0:
                 self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
                 
+        # RT_RE is a subset of the inspected films, shown separately as defects.
+        today_rejects['RT_소계'] = sum(value for key, value in today_rejects.items() if key.startswith('RT_') and key != 'RT_소계')
+        for key, entries in self.qty_entries.items():
+            if not key.startswith('RT_'):
+                continue
+            total = float(entries['금일작업'].get() or 0)
+            defects = today_rejects.get(key, 0)
+            if '불량' in entries:
+                entries['불량'].delete(0, tk.END)
+                entries['불량'].insert(0, str(defects))
+            if '불량률' in entries:
+                entries['불량률'].delete(0, tk.END)
+                entries['불량률'].insert(0, f'{defects / total * 100:.1f}' if total else '')
+
         # Equip
         for eq, entries in self.equip_entries.items():
             prev_total_str = prev_data.get('equip_data', {}).get(eq, {}).get('누계', '0') or '0'
@@ -1865,7 +2043,8 @@ class DailyWorkLogTab(ttk.Frame):
         # Save to history
         self.save_current_history()
         
-        messagebox.showinfo("완료", "자동 집계 및 데이터 저장이 완료되었습니다.")
+        if show_completion:
+            messagebox.showinfo("완료", "자동 집계 및 데이터 저장이 완료되었습니다.")
 
 if __name__ == "__main__":
     root = tk.Tk()

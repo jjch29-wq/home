@@ -1569,7 +1569,8 @@ class CodebookApp:
             # 2.5 기성정산 연동 데이터 입력
             try:
                 import json
-                billing_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'billing_export.json')
+                from site_apps.central.src.data_sync import get_business_data_dir
+                billing_json_path = os.path.join(get_business_data_dir(), 'billing_export.json')
                 if os.path.exists(billing_json_path):
                     with open(billing_json_path, 'r', encoding='utf-8') as f:
                         b_data = json.load(f)

@@ -68,8 +68,9 @@
         "RT AA400": "44",
         "MT WHITE": "46",
         "MT 7C-BLACK": "47",
-        "PT Penetrant": "48",
-        "PT Cleaner": "49",
-        "PT Developer": "50"
+        "MT FLUORESCENT": "48",
+        "PT Penetrant": "49",
+        "PT Cleaner": "50",
+        "PT Developer": "51"
     }
 }

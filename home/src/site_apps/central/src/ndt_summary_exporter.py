@@ -4,7 +4,8 @@ from openpyxl.utils import get_column_letter
 
 class NDTSummaryExporter:
     def __init__(self, history):
-        self.history = history
+        from site_apps.central.src.rt_quantities import corrected_rt_history
+        self.history = corrected_rt_history(history)
         self.font_normal = Font(name='맑은 고딕', size=10)
         self.font_bold = Font(name='맑은 고딕', size=10, bold=True)
         
@@ -98,8 +99,8 @@ class NDTSummaryExporter:
                 summary_dict[key]['count'] += 1
                 
                 if method == 'RT':
-                    or_val = str(r.get('RT_OR', '')).strip()
-                    re_val = str(r.get('RT_RE', '')).strip()
+                    from site_apps.central.src.rt_quantities import rt_counts
+                    or_val, re_val = rt_counts(r)
                     try: summary_dict[key]['rt_or'] += int(float(or_val)) if or_val else 0
                     except ValueError: pass
                     try: summary_dict[key]['rt_re'] += int(float(re_val)) if re_val else 0
@@ -148,7 +149,7 @@ class NDTSummaryExporter:
         
         # Quantity headers
         if method == 'RT':
-            qty_headers = ['RT_OR(매)', 'RT_RE(매)']
+            qty_headers = ['RT_OR 전체(매)', 'RT_RE 불량(매)']
         else:
             qty_headers = ['물량(m)']
             

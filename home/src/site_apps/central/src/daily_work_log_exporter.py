@@ -22,6 +22,8 @@ class DailyWorkLogExporter:
         self.fill_header = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
 
     def generate_excel(self, data, output_path):
+        from site_apps.central.src.rt_quantities import corrected_rt_history
+        data = corrected_rt_history({'day': data})['day']
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "작업감독일보"
@@ -289,8 +291,14 @@ class DailyWorkLogExporter:
                 
             set_cell(f'N{row_idx}', res.get('결과', ''))
             set_cell(f'O{row_idx}', spec_val, align=self.align_nowrap)
-            set_cell(f'P{row_idx}', res.get('RT_OR', ''))
-            set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
+            if str(res.get('검사방법', '')).strip().upper() == 'RT':
+                from site_apps.central.src.rt_quantities import rt_counts
+                rt_total, rt_rejects = rt_counts(res)
+                set_cell(f'P{row_idx}', rt_total)
+                set_cell(f'Q{row_idx}', rt_rejects)
+            else:
+                set_cell(f'P{row_idx}', res.get('RT_OR', ''))
+                set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
             set_cell(f'R{row_idx}', res.get('PAUT', ''))
             set_cell(f'S{row_idx}', res.get('MT', ''))
             set_cell(f'T{row_idx}', res.get('PT', ''))
@@ -302,13 +310,15 @@ class DailyWorkLogExporter:
                 
             ws.row_dimensions[row_idx].height = 34 if res.get('작업구분') == '핫태핑' else 20
 
-        # Keep the complete daily work log on one A4 landscape page.
+        # Fit the table width; additional inspection rows continue on new pages.
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 1
+        ws.page_setup.fitToHeight = 0
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.print_area = f'A1:T{start_row + total_rows - 1}'
+        ws.print_title_rows = '30:31'
+        ws.print_options.horizontalCentered = True
         
         # Header/Footer (Auto Page Numbering)
         ws.oddHeader.right.text = "Page &P of &N"

@@ -8,6 +8,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 from site_apps.central.src.utils.helpers import normalize_id
+from site_apps.central.src.worker_selection import worker_is_selected
 import json
 import re
 import sys
@@ -177,50 +178,9 @@ def export_daily_work_report_impl(self):
                     'total': float(total_val.replace(',', '')) if total_val else 0
                 }
 
-        # 2. 검사업무현황 아래에 표시할 관경별 상세(POINT / 검사길이)
-        if not site_records.empty:
-            pipe_col = next((c for c in ('관경(Inch)', '관경') if c in site_records.columns), '')
-            joint_col = next((c for c in ('조인트수', 'POINT', 'Point') if c in site_records.columns), '')
-            method_col = next((c for c in ('검사방법', 'Method', 'NDT') if c in site_records.columns), '')
-            if pipe_col:
-                detail_groups = {}
-                for _, row in site_records.iterrows():
-                    pipe_size = _clean_str(row.get(pipe_col, '')).upper()
-                    if not pipe_size:
-                        continue
-                    method = _clean_str(row.get(method_col, '')).upper() if method_col else ''
-                    group_key = (method, pipe_size)
-                    detail = detail_groups.setdefault(group_key, {'points': 0.0, 'quantity': 0.0})
-                    if joint_col:
-                        point_value = pd.to_numeric(row.get(joint_col, 0), errors='coerce')
-                        if pd.notna(point_value):
-                            detail['points'] += float(point_value)
-                    quantity_value = pd.to_numeric(row.get('Usage', 0), errors='coerce')
-                    if pd.notna(quantity_value):
-                        detail['quantity'] += float(quantity_value)
-
-                def _pipe_sort_key(item):
-                    method, pipe_size = item[0]
-                    match = re.search(r'\d+(?:\.\d+)?', pipe_size)
-                    return (method, -(float(match.group()) if match else -1))
-
-                for (method, pipe_size), detail in sorted(detail_groups.items(), key=_pipe_sort_key):
-                    points = detail['points']
-                    # [FALLBACK] 기존 데이터에 조인트수가 누락되었거나 0인 경우, 관경별 단위길이로 조인트수 자동 복원
-                    if points == 0 and detail['quantity'] > 0 and method in ['MT', 'PT', 'PAUT']:
-                        size_lookup = getattr(self, 'SIZE_LENGTH', {})
-                        p_key = pipe_size if pipe_size.endswith('A') else f"{pipe_size}A"
-                        unit_len = size_lookup.get(p_key, 0)
-                        if unit_len > 0:
-                            calc_pts = detail['quantity'] / unit_len
-                            if abs(calc_pts - round(calc_pts)) < 0.05:
-                                points = round(calc_pts)
-                    data['inspection_details'].append({
-                        'method': method,
-                        'pipe_size': pipe_size,
-                        'points': int(points) if points.is_integer() else points,
-                        'quantity': detail['quantity'],
-                    })
+        # Original RT points and reject films; REP is a separate record.
+        from site_apps.central.src.services.report_inspection import collect_inspection_details
+        data['inspection_details'] = collect_inspection_details(site_records, getattr(self, 'SIZE_LENGTH', {}))
 
         # [FALLBACK] site_records가 없거나 inspection_details가 비어있는 경우 화면 입력값 기반 복원
         if not data.get('inspection_details') and hasattr(self, 'cb_daily_test_method'):
@@ -246,6 +206,7 @@ def export_daily_work_report_impl(self):
                     'pipe_size': u_pipe,
                     'points': int(pts_val) if pts_val.is_integer() else pts_val,
                     'quantity': qty_val,
+                    'reject_films': float(self.ndt_rej_joint_var.get().replace(',', '') or 0) if u_method == 'RT' else 0,
                 })
 
         # 작업자 및 O/T (간소화 버전)
@@ -311,6 +272,7 @@ def export_daily_work_report_impl(self):
             for i in range(1, 11):
                 group = getattr(self, f'worker_group{i}', None)
                 if group:
+                    if not worker_is_selected(group): continue
                     w_name = group.get_worker().strip() if hasattr(group, 'get_worker') else group.cb_name.get().strip()
                     if w_name and w_name not in inspectors:
                         inspectors.append(w_name)
@@ -353,6 +315,7 @@ def export_daily_work_report_impl(self):
             for i in range(1, 11):
                 group = getattr(self, f'worker_group{i}', None)
                 if group:
+                    if not worker_is_selected(group): continue
                     w_name = group.get_worker().strip() if hasattr(group, 'get_worker') else group.cb_name.get().strip()
                     w_wt = group.get_time().strip() if hasattr(group, 'get_time') else group.ent_worktime.get().strip()
                     w_ot = group.get_ot().strip() if hasattr(group, 'get_ot') else group.ent_ot.get().strip()
@@ -553,80 +516,9 @@ def export_daily_work_report_impl(self):
                         except: used = 0
                         data['materials'][m_key] = {'used': used}
 
-        # [NEW] NDT 화학약품 (MT/PT) - DB site_records에서 합산하여 수집
-        # [FIX] DT_ 접두어 포함하여 매칭 확장
-        chem_db_map = [
-            ('MT WHITE',     ['NDT_백색', 'NDT_백색페인트', 'NDT_형광자분', 'NDT_백색페인트_MT', 'DT_백색페인트', 'DT_형광자분']), 
-            ('MT 7C-BLACK',  ['NDT_흑색', 'NDT_흑색자분', 'DT_흑색자분']),
-            ('PT Penetrant', ['NDT_침투', 'NDT_침투제', 'DT_침투', 'DT_침투제']),
-            ('PT Cleaner',   ['NDT_세척', 'NDT_세척제', 'DT_세척', 'DT_세척제']),
-            ('PT Developer', ['NDT_현상', 'NDT_현상제', 'DT_현상', 'DT_현상제']),
-        ]
-        
-        db_chem_found = False
-        if not site_records.empty:
-            # [FIX] DB 컬럼명에 공백이 있을 경우를 대비해 유연하게 매칭 (Normalization)
-            actual_cols = list(site_records.columns)
-            
-            for m_key, db_cols in chem_db_map:
-                val_sum = 0
-                # [NEW] Check if any rows in site_records have a Material name matching this chemical
-                # and if so, sum up their 'Usage' or '수량' columns if they look like chemicals
-                for idx, row in site_records.iterrows():
-                    m_name = str(row.get('Material', row.get('품목명', ''))).upper()
-                    # Check if this row's material matches any of our chemical patterns
-                    is_match = False
-                    for col_pattern in db_cols:
-                        pattern_norm = col_pattern.replace('NDT_', '').replace('DT_', '').replace(' ', '').upper()
-                        if pattern_norm in m_name.replace(' ', ''):
-                            is_match = True
-                            break
-                    
-                    if is_match:
-                        # If it matches, try 'Usage' first, then '수량' if it looks small (like cans)
-                        u_val = pd.to_numeric(row.get('Usage'), errors='coerce')
-                        if pd.isna(u_val): u_val = 0
-                        val_sum += u_val
-                        db_chem_found = True
-
-                # Also check specific columns if they exist as fallback/alternative
-                for col_pattern in db_cols:
-                    pattern_norm = col_pattern.replace(' ', '').upper()
-                    found_col = None
-                    for actual_col in actual_cols:
-                        if str(actual_col).replace(' ', '').upper() == pattern_norm:
-                            found_col = actual_col
-                            break
-                    
-                    if found_col:
-                        try:
-                            val_sum += int(pd.to_numeric(site_records[found_col], errors='coerce').fillna(0).sum())
-                            db_chem_found = True
-                        except: pass
-                
-                if val_sum > 0:
-                    # [FIX] Use float for chemical quantities
-                    data['materials'][m_key] = {'used': float(val_sum)}
-                    db_chem_found = True
-        
-        # Debug gathered materials data
-        print(f"DEBUG: Gathered Materials Data for Report: {data['materials']}")
-        
-        # DB에 데이터가 없으면 UI 위젯에서 읽기 (Fallback)
-        if not db_chem_found and hasattr(self, 'ndt_company_entries') and self.ndt_company_entries:
-            entries_dict = self.ndt_company_entries[0]
-            mat_keys = [k for k in entries_dict.keys() if k != '_company']
-            fallback_order = [
-                ('MT WHITE', 0), ('MT 7C-BLACK', 1), 
-                ('PT Penetrant', 3), ('PT Cleaner', 4), ('PT Developer', 5)
-            ]
-            for m_key, idx in fallback_order:
-                if idx < len(mat_keys):
-                    try:
-                        val = entries_dict[mat_keys[idx]].get().strip()
-                        used = int(val) if val else 0
-                        if used > 0: data['materials'][m_key] = {'used': used}
-                    except: pass
+        from site_apps.central.src.services.report_materials import collect_chemical_usage
+        data['materials'].update(collect_chemical_usage(
+            site_records, getattr(self, 'ndt_company_entries', [])))
 
         # 2.5 OT Status Gathering
         data['ot_status'] = []
@@ -653,16 +545,17 @@ def export_daily_work_report_impl(self):
                     
                     worker_name = clean_val(row.get(u_key, row.get('작업자' if i==1 else f'작업자{i}', '')))
                     if not worker_name or worker_name == "": continue
+                    has_job_labor = bool(clean_val(row.get('작업별인원', '')))
                     
                     ot_val = clean_val(row.get(wt_key, ''))
-                    if not ot_val:
+                    if not ot_val and not has_job_labor:
                         ot_val = clean_val(row.get('작업시간' if i==1 else f'작업시간{i}', ''))
                     
                     # Fallback for WorkTime: If specific UserX's WorkTime is missing, try general WorkTime column
-                    if not ot_val:
+                    if not ot_val and not has_job_labor:
                         ot_val = clean_val(row.get('WorkTime', row.get('작업시간', '')))
                     
-                    if not ot_val:
+                    if not ot_val and not has_job_labor:
                         # Scan all columns for time-like strings if explicit names fail
                         for col_name in row.index:
                             potential_val = str(row[col_name])
@@ -670,12 +563,12 @@ def export_daily_work_report_impl(self):
                                 ot_val = potential_val.strip()
                                 break
                     
-                    if not ot_val:
+                    if not ot_val and not has_job_labor:
                         ot_val = clean_val(row.get('OT시간' if i==1 else f'OT시간{i}', ''))
                         
                     # For amount, 'OT' seems to have it in this DB
                     ot_amount = clean_val(row.get(oa_key, row.get('OT금액' if i==1 else f'OT금액{i}', '')))
-                    if not ot_amount and i > 1:
+                    if not ot_amount and i > 1 and not has_job_labor:
                         # Fallback to general OT column if specific one is empty
                         ot_amount = clean_val(row.get('OT', row.get('OT금액', '')))
                     
@@ -694,6 +587,7 @@ def export_daily_work_report_impl(self):
                 group = getattr(self, f'worker_group{i}', None)
                 if group:
                     try:
+                        if not worker_is_selected(group): continue
                         name = group.get_worker().strip()
                         if name and name.lower() != 'nan':
                             ot_val = ""
@@ -1019,6 +913,7 @@ def export_central_daily_work_report_impl(self):
             for i in range(1, 11):
                 group = getattr(self, f'worker_group{i}', None)
                 if group:
+                    if not worker_is_selected(group): continue
                     w_name = _clean_name(group.get_worker().strip())
                     if w_name and w_name not in inspectors: inspectors.append(w_name)
 

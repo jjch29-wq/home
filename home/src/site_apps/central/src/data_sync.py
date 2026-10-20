@@ -26,6 +26,19 @@ def get_data_dir():
 def get_history_path():
     return os.path.join(get_data_dir(), 'daily_work_history.json')
 
+
+def get_business_data_dir():
+    """Use cloud business files when configured, otherwise the site's data folder."""
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    root = get_data_dir()
+    if os.path.normcase(os.path.abspath(root)) == os.path.normcase(local_dir):
+        return os.path.abspath(os.path.join(local_dir, '..', 'data'))
+    return os.path.join(root, 'data')
+
+
+def get_submission_dir():
+    return os.path.join(get_data_dir(), '중앙지사_제출자료')
+
 def get_process_photos_dir():
     return os.path.join(get_data_dir(), 'data', 'process_photos')
 

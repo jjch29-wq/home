@@ -1126,7 +1126,8 @@ class NDTCalculatorTab(ttk.Frame):
         try:
             import json
             import os
-            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
+            from site_apps.central.src.data_sync import get_business_data_dir
+            data_dir = get_business_data_dir()
             os.makedirs(data_dir, exist_ok=True)
             export_path = os.path.join(data_dir, 'billing_export.json')
             
@@ -2412,8 +2413,7 @@ class NDTCalculatorTab(ttk.Frame):
                             elif "RT" in method:
                                 try:
                                     rt_qty = nr.get("RT_OR", "")
-                                    if not rt_qty: rt_qty = nr.get("RT_RE", "")
-                                    if not rt_qty: rt_qty = "1"
+                                    if not rt_qty: rt_qty = "0"
                                     sub_groups[sg_key]["length"] += float(rt_qty)
                                 except: pass
                             elif "PT" in method:
@@ -2707,8 +2707,7 @@ class NDTCalculatorTab(ttk.Frame):
                         qty = r.get("PAUT", "")
                     elif "RT" in m_type:
                         qty = r.get("RT_OR", "")
-                        if not qty: qty = r.get("RT_RE", "")
-                        if not qty: qty = "1"
+                        if not qty: qty = "0"
                     elif "MT" in m_type:
                         qty = r.get("MT", "")
                     elif "PT" in m_type:

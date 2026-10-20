@@ -3,6 +3,7 @@ from openpyxl.styles import Alignment, Border, Side, Font
 from openpyxl.cell.cell import MergedCell, Cell
 import os
 import datetime
+from site_apps.central.src.services.report_materials import numeric
 
 class DailyWorkReportManager:
     def __init__(self, template_path):
@@ -34,8 +35,8 @@ class DailyWorkReportManager:
             },
             'materials': {
                 'RT T200': 43, 'RT AA400': 44, 'RT Other': 45,
-                'MT WHITE': 46, 'MT 7C-BLACK': 47,
-                'PT Penetrant': 48, 'PT Cleaner': 49, 'PT Developer': 50
+                'MT WHITE': 46, 'MT 7C-BLACK': 47, 'MT FLUORESCENT': 48,
+                'PT Penetrant': 49, 'PT Cleaner': 50, 'PT Developer': 51
             },
             'vehicles': {
                 'row_start': 26, 
@@ -328,12 +329,12 @@ class DailyWorkReportManager:
         rt_extra = max(0, rt_count - base_rt_limit)
         
         if rt_extra > 0:
-            sheet.insert_rows(46, rt_extra)
-            for r_new in range(46, 46 + rt_extra):
+            sheet.insert_rows(46 + base_shift, rt_extra)
+            for r_new in range(46 + base_shift, 46 + base_shift + rt_extra):
                 sheet.row_dimensions[r_new].height = 30
                 for col in range(1, 20):
                     try:
-                        source_cell = sheet.cell(row=45, column=col)
+                        source_cell = sheet.cell(row=45 + base_shift, column=col)
                         target_cell = sheet.cell(row=r_new, column=col)
                         if source_cell.has_style:
                             target_cell.font = copy(source_cell.font)
@@ -344,6 +345,14 @@ class DailyWorkReportManager:
                     except: pass
         
         total_offset = base_shift + rt_extra
+        # Reserve a third MT row before PT, including when RT/OT sections expand.
+        sheet.insert_rows(48 + total_offset)
+        for column in range(1, 20):
+            source = sheet.cell(row=47 + total_offset, column=column)
+            target = sheet.cell(row=48 + total_offset, column=column)
+            if source.has_style:
+                target._style = copy(source._style)
+
         def safe_merge(sheet, s_row, s_col, e_row, e_col, value):
             for m_range in list(sheet.merged_cells.ranges):
                 if not (e_row < m_range.min_row or s_row > m_range.max_row or 
@@ -362,13 +371,13 @@ class DailyWorkReportManager:
         rt_end_row = (rt_start_row - 1) + rt_display_count
         
         safe_merge(sheet, rt_start_row, 2, rt_end_row, 3, "RT") 
-        safe_merge(sheet, 46 + total_offset, 2, 47 + total_offset, 3, "MT")
-        safe_merge(sheet, 48 + total_offset, 2, 50 + total_offset, 3, "PT")
+        safe_merge(sheet, 46 + total_offset, 2, 48 + total_offset, 3, "MT")
+        safe_merge(sheet, 49 + total_offset, 2, 51 + total_offset, 3, "PT")
 
         sheet.column_dimensions['D'].width = 12
         sheet.column_dimensions['E'].width = 12
 
-        for r in range(43 + base_shift, 52 + total_offset):
+        for r in range(43 + base_shift, 53 + total_offset):
             try:
                 for m_range in list(sheet.merged_cells.ranges):
                     if m_range.min_row == r and m_range.max_row == r and (m_range.min_col >= 4 and m_range.max_col <= 7):
@@ -397,7 +406,7 @@ class DailyWorkReportManager:
 
         for idx, m in enumerate(active_rt):
             r = mat_start + idx
-            if r > 46 + rt_extra: break
+            if r >= 46 + total_offset: break
             display_name = strip_brand(m.get('name', ''))
             safe_write(f'D{r}', display_name)
             cell_name = sheet.cell(row=r, column=4)
@@ -459,9 +468,13 @@ class DailyWorkReportManager:
             if pipe_size:
                 quantity_label = '검사매수' if method == 'RT' else '검사길이'
                 quantity_unit = '매' if method == 'RT' else 'M'
-                inspection_lines.append(
-                    f"• {pipe_size}: {point_text} POINT / {quantity_label} {quantity_text} {quantity_unit}"
-                )
+                if method == 'RT':
+                    rejects = float(detail.get('reject_films', 0) or 0)
+                    inspection_lines.append(f"• {pipe_size}: {point_text}P / REJ {rejects:g}매 / 검사매수 {quantity_text}매")
+                else:
+                    inspection_lines.append(
+                        f"• {pipe_size}: {point_text} POINT / {quantity_label} {quantity_text} {quantity_unit}"
+                    )
 
         detail_text = "검사 상세\n" + "\n".join(inspection_lines) if inspection_lines else ""
         memo_text = str(data.get('note', '') or '').strip()
@@ -505,18 +518,19 @@ class DailyWorkReportManager:
                 safe_write(f'K{r}', '-'); safe_write(f'M{r}', '매'); safe_write(f'O{r}', '0 매')
             
         synonyms = {
-            'MT WHITE': ['MT WHITE', '백색', '백색자분', 'WHITE'],
+            'MT WHITE': ['MT WHITE', '백색페인트', '백색', '백색자분', 'WHITE'],
+            'MT FLUORESCENT': ['MT FLUORESCENT', '형광자분'],
             'MT 7C-BLACK': ['MT 7C-BLACK', '7C', '자분', 'BLACK', '7C-BLACK'],
             'PT Penetrant': ['PT Penetrant', '침투', '침투액', 'Penetrant'],
             'PT Cleaner': ['PT Cleaner', '세척', '세척액', 'Cleaner'],
             'PT Developer': ['PT Developer', '현상', '현상액', '현상제', 'Developer']
         }
         mat_map = {
-            'MT WHITE': 46 + total_offset, 'MT 7C-BLACK': 47 + total_offset, 
-            'PT Penetrant': 48 + total_offset, 'PT Cleaner': 49 + total_offset, 'PT Developer': 50 + total_offset
+            'MT WHITE': 46 + total_offset, 'MT 7C-BLACK': 47 + total_offset, 'MT FLUORESCENT': 48 + total_offset,
+            'PT Penetrant': 49 + total_offset, 'PT Cleaner': 50 + total_offset, 'PT Developer': 51 + total_offset
         }
         display_names = {
-            'MT WHITE': '백색페인트', 'MT 7C-BLACK': '흑색자분', 
+            'MT WHITE': '백색페인트', 'MT 7C-BLACK': '흑색자분', 'MT FLUORESCENT': '형광자분',
             'PT Penetrant': '침투액', 'PT Cleaner': '세척액', 'PT Developer': '현상액'
         }
         
@@ -535,11 +549,11 @@ class DailyWorkReportManager:
                 m_d = data.get('materials', {}).get(syn)
                 if m_d: break
             if m_d:
-                safe_write(f'K{r}', '-'); safe_write(f'M{r}', int(m_d.get('used', 0)))
-                safe_write(f'O{r}', int(m_d.get('in', 0)))
+                safe_write(f'K{r}', '-'); safe_write(f'M{r}', numeric(m_d.get('used', 0)))
+                safe_write(f'O{r}', numeric(m_d.get('in', 0)))
 
         thin = Side(style='thin')
-        for r in range(41 + base_shift, 51 + total_offset):
+        for r in range(41 + base_shift, 53 + total_offset):
             for col in range(2, 20):
                 cell = sheet.cell(row=r, column=col)
                 cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -547,7 +561,7 @@ class DailyWorkReportManager:
         
         # [CLEANUP] Explicitly remove borders from the row after the table
         for col in range(1, 21):
-            sheet.cell(row=51 + total_offset, column=col).border = Border()
+            sheet.cell(row=52 + total_offset, column=col).border = Border()
 
         for m_key, r in mat_map.items():
             display_name = display_names.get(m_key, m_key)
@@ -560,12 +574,12 @@ class DailyWorkReportManager:
                 m_d = data.get('materials', {}).get(syn)
                 if m_d: break
             if m_d:
-                safe_write(f'K{r}', '-'); safe_write(f'M{r}', int(m_d.get('used', 0)))
-                safe_write(f'O{r}', int(m_d.get('in', 0)))
+                safe_write(f'K{r}', '-'); safe_write(f'M{r}', numeric(m_d.get('used', 0)))
+                safe_write(f'O{r}', numeric(m_d.get('in', 0)))
 
-        sheet.row_breaks.brk = []; sheet.print_area = f'A1:S{51 + total_offset}'
+        sheet.row_breaks.brk = []; sheet.print_area = f'A1:S{52 + total_offset}'
         from openpyxl.worksheet.pagebreak import Break
-        sheet.row_breaks.append(Break(id=51 + total_offset))
+        sheet.row_breaks.append(Break(id=52 + total_offset))
         sheet.page_setup.orientation = sheet.ORIENTATION_PORTRAIT
         sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
         sheet.page_setup.fitToWidth = 1; sheet.page_setup.fitToHeight = 1
@@ -628,7 +642,7 @@ class DailyWorkReportManager:
         for v_row in [27, 28, 29, 30]: 
             try: sheet.row_dimensions[v_row + method_offset].height = 32
             except: pass
-        for r in range(41 + base_shift, 52 + total_offset): sheet.row_dimensions[r].height = 18
+        for r in range(41 + base_shift, 53 + total_offset): sheet.row_dimensions[r].height = 18
         compact_height = 10
         for r in [5, 10, 17, 26 + method_offset, 31 + method_offset, 35 + method_offset, 40 + base_shift]:
             try: sheet.row_dimensions[r].height = compact_height
@@ -642,7 +656,7 @@ class DailyWorkReportManager:
         sheet.page_setup.horizontalCentered = True
         sheet.page_setup.verticalCentered = False
         sheet.page_margins.top = 0.6; sheet.page_margins.bottom = 0.1
-        sheet.print_area = "A1:S51"
+        sheet.print_area = f"A1:S{52 + total_offset}"
         
         rt_start_final = 43 + base_shift; rt_end_final = (rt_start_final - 1) + max(1, rt_count)
         thin_side = Side(style='thin'); thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
@@ -659,8 +673,8 @@ class DailyWorkReportManager:
         
         merge_plan = [
             (rt_start_final, 2, rt_end_final, 3, "RT"), 
-            (46 + total_offset, 2, 47 + total_offset, 3, "MT"), 
-            (48 + total_offset, 2, 50 + total_offset, 3, "PT")
+            (46 + total_offset, 2, 48 + total_offset, 3, "MT"),
+            (49 + total_offset, 2, 51 + total_offset, 3, "PT")
         ]
         for s_row, s_col, e_row, e_col, label in merge_plan:
             for r in range(s_row, e_row + 1):
@@ -712,7 +726,7 @@ class DailyWorkReportManager:
             top_border = c.border.top if c.border else Side(style=None)
             c.border = Border(top=top_border, bottom=Side(style=None), left=Side(style=None), right=Side(style=None))
         apply_section_style(sheet, ot_header_row, 2, ot_header_row + 2 + ot_extra, 19, 'thin')
-        apply_section_style(sheet, 43 + base_shift, 2, 50 + total_offset, 19, 'thin')
+        apply_section_style(sheet, 43 + base_shift, 2, 51 + total_offset, 19, 'thin')
         for c in range(1, 20):
             # 자재수불현황 제목행(41+base_shift)은 윗선을 포함한 모든 선을 완전히 제거
             sheet.cell(row=41 + base_shift, column=c).border = Border()

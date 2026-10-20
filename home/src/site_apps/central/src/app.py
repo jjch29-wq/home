@@ -459,6 +459,12 @@ class MaterialManager:
             # exe 실행 모드: exe와 같은 폴더에 DB 저장 (어디서 실행해도 동일)
             self.db_path = os.path.join(self.app_dir, 'Material_Inventory.xlsx')
 
+        # 중앙지사에서 선택한 클라우드 재고 파일을 우선 사용한다.
+        from site_apps.central.src.data_sync import get_business_data_dir
+        cloud_inventory = os.path.join(get_business_data_dir(), 'Material_Inventory.xlsx')
+        if os.path.isfile(cloud_inventory):
+            self.db_path = cloud_inventory
+
         # db_path 확정
         
         self.sites = [] # Initialize site list
@@ -560,7 +566,7 @@ class MaterialManager:
     def _init_ndt_vars_and_traces(self):
         """NDT 관련 변수(관경, 조인트수)를 생성하고 자동계산 이벤트를 바인딩합니다."""
         # 동적 바인딩에 대비해 명시적으로 StringVar 초기화
-        for var_name in ['ndt_report_pipe_var', 'ndt_ori_joint_var', 'ndt_rep_joint_var', 'ndt_ori_qty_var', 'ndt_rep_qty_var', 'ndt_inspection_type_var']:
+        for var_name in ['ndt_report_pipe_var', 'ndt_ori_joint_var', 'ndt_rep_joint_var', 'ndt_ori_qty_var', 'ndt_rep_qty_var', 'ndt_rej_joint_var', 'ndt_inspection_type_var']:
             if not hasattr(self, var_name):
                 setattr(self, var_name, tk.StringVar(value=""))
 
@@ -570,8 +576,7 @@ class MaterialManager:
                 if not hasattr(self, 'cb_daily_test_method'): return
                 method = self.cb_daily_test_method.get().strip().upper()
                 
-                # PAUT, PT, MT 공정만 자동 계산
-                if not any(x in method for x in ['PAUT', 'PT', 'MT']): return
+                if method not in ('PAUT', 'PT', 'MT', 'RT'): return
                 
                 pipe_val = getattr(self, 'ndt_report_pipe_var').get().strip().upper()
                 
@@ -584,14 +589,15 @@ class MaterialManager:
                     from site_apps.central.src.hot_tapping import inspection_length
                     length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get())
                 else:
-                    if pipe_val not in self.SIZE_LENGTH: return
-                    length = self.SIZE_LENGTH[pipe_val]
+                    from site_apps.central.src.services.inspection_quantity import quantity_per_joint
+                    length = quantity_per_joint(method, pipe_val, self.SIZE_LENGTH)
+                    if length is None: return
                 
                 # 원본 조인트수
                 ori_j = getattr(self, 'ndt_ori_joint_var').get().strip()
                 # 재촬영 조인트수
                 rep_j = getattr(self, 'ndt_rep_joint_var').get().strip()
-                if self.ndt_loc_type_var.get() == '핫태핑':
+                if self.ndt_loc_type_var.get() == '핫태핑' or method == 'RT':
                     if not ori_j: self.ndt_ori_qty_var.set('')
                     if not rep_j: self.ndt_rep_qty_var.set('')
                 
@@ -601,20 +607,25 @@ class MaterialManager:
                     try:
                         joints = float(ori_j.replace(',', ''))
                         total_joints += joints
-                        getattr(self, 'ndt_ori_qty_var').set(f"{joints * length:.4f}")
+                        getattr(self, 'ndt_ori_qty_var').set(f"{joints * length:g}" if method == 'RT' else f"{joints * length:.4f}")
                     except ValueError: pass
                     
                 if rep_j:
                     try:
                         joints = float(rep_j.replace(',', ''))
                         total_joints += joints
-                        getattr(self, 'ndt_rep_qty_var').set(f"{joints * length:.4f}")
+                        getattr(self, 'ndt_rep_qty_var').set(f"{joints * length:g}" if method == 'RT' else f"{joints * length:.4f}")
                     except ValueError: pass
                     
                 # 메인 폼의 '수량' 칸(ent_daily_test_amount)에 실시간 자동 기입
-                if (total_joints > 0 or self.ndt_loc_type_var.get() == '핫태핑') and hasattr(self, 'ent_daily_test_amount'):
+                if (total_joints > 0 or self.ndt_loc_type_var.get() == '핫태핑' or method == 'RT') and hasattr(self, 'ent_daily_test_amount'):
+                    total_qty = total_joints * length
+                    if method == 'RT':
+                        total_qty = float(self.ndt_ori_qty_var.get() or 0)
                     self.ent_daily_test_amount.delete(0, tk.END)
-                    self.ent_daily_test_amount.insert(0, f"{total_joints * length:.4f}")
+                    self.ent_daily_test_amount.insert(0, f"{total_qty:g}" if method == 'RT' else f"{total_qty:.4f}")
+                    if method == 'RT' and hasattr(self, '_calculate_daily_ndt_fee'):
+                        self._calculate_daily_ndt_fee()
                     
             except Exception as e:
                 print(f"NDT auto-calc error: {e}")
@@ -623,6 +634,7 @@ class MaterialManager:
         getattr(self, 'ndt_report_pipe_var').trace_add('write', on_ndt_change)
         getattr(self, 'ndt_ori_joint_var').trace_add('write', on_ndt_change)
         getattr(self, 'ndt_rep_joint_var').trace_add('write', on_ndt_change)
+        self.ndt_rej_joint_var.trace_add('write', on_ndt_change)
         for name in ('ndt_loc_type_var', 'hot_tap_stage_var', 'hot_tap_size_var'):
             getattr(self, name).trace_add('write', on_ndt_change)
         self._refresh_ndt_quantity = on_ndt_change
@@ -6082,6 +6094,7 @@ class MaterialManager:
         
         # [NEW NDT COLUMNS] Add dynamically
         new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']
+        new_cols += ['원본매수', '재검사매수', '참여인원', '참여시간', '참여OT']
         c_list = list(columns)
         for nc in new_cols:
             if nc not in c_list:
@@ -8875,7 +8888,7 @@ class MaterialManager:
         except:
             pass
 
-    def _add_single_usage_record_logic(self, mat_id, date_val, site, auto_save=True):
+    def _add_single_usage_record_logic(self, mat_id, date_val, site, auto_save=True, prepare_only=False):
         """현장 사용량 기록 1건을 처리하는 핵심 로직 (단일/일괄 공용)"""
         def to_f(ent):
             try:
@@ -8885,6 +8898,10 @@ class MaterialManager:
             except: return 0.0
 
         # 1. 작업자 목록 및 시간 데이터 구성
+        if self.cb_daily_test_method.get().strip().upper() == 'RT':
+            from site_apps.central.src.rt_quantities import rt_counts
+            rt_counts({'RT_OR': self.ent_daily_test_amount.get(), 'RT_RE': self.ndt_rej_joint_var.get()})
+        from site_apps.central.src.worker_selection import worker_is_selected
         workers_list = []
         worker_data_map = {}
         for i in range(1, 11):
@@ -8894,7 +8911,7 @@ class MaterialManager:
             ot_key = 'OT' if i == 1 else f'OT{i}'
             m_key = 'Meal' if i == 1 else f'Meal{i}'
             
-            if group:
+            if group and worker_is_selected(group):
                 name = group.get_worker().strip()
                 wt = group.get_time().strip()
                 ot = group.get_ot().strip()
@@ -8985,22 +9002,6 @@ class MaterialManager:
             '관경(Inch)': getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip(),
         }
 
-        # [NEW] Auto-save new unit, equipment, and site (with improved duplicate check)
-        new_unit = common_data['Unit'].strip()
-        if new_unit and not any(u.strip() == new_unit for u in self.daily_units):
-            self.daily_units.append(new_unit)
-            self.refresh_ui_for_list_change('daily_units')
-
-        new_equip = common_data['장비명'].strip()
-        if new_equip and not any(e.strip() == new_equip for e in self.equipments):
-            self.equipments.append(new_equip)
-            self.refresh_ui_for_list_change('equipments')
-
-        new_site = common_data['Site'].strip()
-        if new_site and not any(s.strip() == new_site for s in self.sites):
-            self.sites.append(new_site)
-            self.refresh_ui_for_list_change('sites')
-
         total_meal_worker = sum(to_f(worker_data_map.get(f'Meal{i}' if i > 1 else 'Meal', 0)) for i in range(1, 11))
         global_meal = to_f(self.ent_daily_meal_cost)
         
@@ -9090,8 +9091,12 @@ class MaterialManager:
                     base_note = self._get_merged_memo_and_note()
                     rej_count = getattr(self, 'ndt_rej_joint_var', tk.StringVar(value="")).get().strip()
                     r_common_data['불량수'] = rej_count if rej_count else "0"
+                    if common_data['검사방법'] == 'RT':
+                        r_common_data['원본매수'] = to_f(self.ndt_ori_qty_var)
+                        r_common_data['Usage'] = r_common_data['검사량'] = common_data['검사량']
                     if rej_count and rej_count != "0":
-                        base_note = (base_note + f" [당일 불량(REJ) {rej_count}개 발생]").strip()
+                        unit = '매' if common_data['검사방법'] == 'RT' else '개'
+                        base_note = (base_note + f" [당일 불량(REJ) {rej_count}{unit} 발생]").strip()
                     r_common_data['Note'] = base_note
                 elif r_type == 'REP':
                     r_common_data['조인트수'] = getattr(self, 'ndt_rep_joint_var', tk.StringVar(value="")).get().strip()
@@ -9102,6 +9107,12 @@ class MaterialManager:
                         r_common_data['검사량'] = r_qty
                     
                     r_common_data['Note'] = "(재검사 기록) " + self._get_merged_memo_and_note()
+                    if common_data['검사방법'] == 'RT':
+                        r_common_data['재검사매수'] = to_f(self.ndt_rep_qty_var)
+                        r_common_data['Usage'] = r_common_data['검사량'] = 0.0
+                        for key in ('재료비', '인건비', '제경비', '기술료', '환산물량'):
+                            r_common_data[key] = 0.0
+                        r_common_data['Note'] += f" [REP {r_common_data['재검사매수']:g}매 별도 기록 · 총 물량 제외]"
                     r_common_data['출장비'] = 0.0
                     r_common_data['일식'] = 0.0
                     r_common_data['검사비'] = 0.0 
@@ -9160,6 +9171,36 @@ class MaterialManager:
                 
                 records_to_save.append(row_record)
 
+        plan = dict(common_data=common_data, company_data_list=company_data_list,
+                    all_workers=all_workers, workers_list=workers_list, records_to_save=records_to_save)
+        if prepare_only:
+            return plan
+        return self._commit_usage_plan(plan, auto_save=auto_save)
+
+    def _commit_usage_plan(self, plan, auto_save=True):
+        """Commit a prepared inspection without reading the current entry form."""
+        common_data = plan['common_data']
+        company_data_list = plan['company_data_list']
+        all_workers = plan['all_workers']
+        workers_list = plan['workers_list']
+        records_to_save = plan['records_to_save']
+        date_val, site, mat_id = (common_data[k] for k in ('Date', 'Site', 'MaterialID'))
+        # [NEW] Auto-save new unit, equipment, and site (with improved duplicate check)
+        new_unit = common_data['Unit'].strip()
+        if new_unit and not any(u.strip() == new_unit for u in self.daily_units):
+            self.daily_units.append(new_unit)
+            self.refresh_ui_for_list_change('daily_units')
+
+        new_equip = common_data['장비명'].strip()
+        if new_equip and not any(e.strip() == new_equip for e in self.equipments):
+            self.equipments.append(new_equip)
+            self.refresh_ui_for_list_change('equipments')
+
+        new_site = common_data['Site'].strip()
+        if new_site and not any(s.strip() == new_site for s in self.sites):
+            self.sites.append(new_site)
+            self.refresh_ui_for_list_change('sites')
+
         # 7. 재고 트랜잭션 처리 (원본 로직 유지 - 출고는 실제 물량만큼 한 번만 발생)
         # [NEW] PAUT 및 장비류는 재고 차감에서 제외 (사용자 요청)
         method_raw = common_data.get('검사방법', '')
@@ -9213,7 +9254,8 @@ class MaterialManager:
             if any_list_changed:
                 self.vehicles.sort()
                 self.refresh_ui_for_list_change('vehicles') # Update UI comboboxes immediately
-                self.save_tab_config()
+                if auto_save:
+                    self.save_tab_config()
 
         if auto_save:
             res = self.save_data()
@@ -9993,6 +10035,8 @@ class MaterialManager:
 
     def load_daily_usage_to_form(self, record):
         """[NEW] Load a database record back into the input form for editing or report generation"""
+        from site_apps.central.src.inspection_batch import participation_record
+        record = participation_record(record)
         try:
             def to_f_local(v):
                 try: return float(str(v).replace(',', '')) if v else 0.0
@@ -10106,10 +10150,10 @@ class MaterialManager:
             if not insp_type: insp_type = 'ORI'
             if insp_type == 'REP':
                 self.ndt_rep_joint_var.set(self.clean_nan(record.get('조인트수', '')))
-                self.ndt_rep_qty_var.set(self.clean_nan(record.get('Usage', '')))
+                self.ndt_rep_qty_var.set(self.clean_nan(record.get('재검사매수', record.get('Usage', ''))))
             else:
                 self.ndt_ori_joint_var.set(self.clean_nan(record.get('조인트수', '')))
-                self.ndt_ori_qty_var.set(self.clean_nan(record.get('Usage', '')))
+                self.ndt_ori_qty_var.set(self.clean_nan(record.get('원본매수', record.get('Usage', ''))))
                 
             if '불량수' in record and pd.notna(record['불량수']):
                 self.ndt_rej_joint_var.set(str(record['불량수']))
@@ -10265,7 +10309,7 @@ class MaterialManager:
         except Exception as e:
             print(f"Error loading record to form: {e}")
 
-    def clear_daily_usage_form_all(self, keep_date=False):
+    def clear_daily_usage_form_all(self, keep_date=False, keep_workers=False):
         """현장별 일일 사용량 입력 폼의 모든 필드를 초기화합니다."""
         # 1. 콤보박스 선택 해제
         for cb in [self.cb_daily_company, self.cb_daily_site, 
@@ -10342,14 +10386,21 @@ class MaterialManager:
                     
         # 6. 작업자 섹션 초기화
         for i in range(1, 11):
+            if keep_workers:
+                continue
             group = getattr(self, f'worker_group{i}', None)
             if group:
+                if hasattr(group, 'participation_var'):
+                    group.participation_var.set(True)
                 group.cb_name.set('')
                 group.cb_shift.set('주간')
                 group.ent_worktime.set('')
                 group.ent_ot.delete(0, tk.END)
 
     def add_daily_usage_entry(self):
+        if hasattr(self, 'inspection_batch') and self.inspection_batch.plans:
+            self.inspection_batch.save()
+            return
         if self.ndt_loc_type_var.get() == '핫태핑':
             if self.cb_daily_test_method.get().strip().upper() not in ('MT', 'PT'):
                 messagebox.showwarning('핫태핑', '핫태핑 길이표는 MT/PT 검사에 적용됩니다.')
@@ -10387,8 +10438,9 @@ class MaterialManager:
             # 1-2. 투입 인원 대비 검사 물량 검사
             has_workers = False
             if hasattr(self, 'worker_groups'):
+                from site_apps.central.src.worker_selection import worker_is_selected
                 for wg in self.worker_groups:
-                    if wg.get_worker() and wg.get_time():
+                    if worker_is_selected(wg) and wg.get_worker() and wg.get_time():
                         has_workers = True
                         break
             
@@ -10532,7 +10584,7 @@ class MaterialManager:
                 
                 # [V13_RESET_REQUESTED] Clearing fields after successful entry based on user request
                 # [FIX] Keep the current date for consecutive entries on the same day
-                self.clear_daily_usage_form_all(keep_date=True)
+                self.clear_daily_usage_form_all(keep_date=True, keep_workers=True)
 
                 # Reset focus to first logical field (Company)
                 self.cb_daily_company.focus_set()
@@ -10603,8 +10655,8 @@ class MaterialManager:
                     'row2_name': 'B39', 'row2_hours': 'K39'
                 },
                 'materials': {
-                    'RT T200': '43', 'RT AA400': '44', 'MT WHITE': '46', 'MT 7C-BLACK': '47',
-                    'PT Penetrant': '48', 'PT Cleaner': '49', 'PT Developer': '50'
+                    'RT T200': '43', 'RT AA400': '44', 'MT WHITE': '46', 'MT 7C-BLACK': '47', 'MT FLUORESCENT': '48',
+                    'PT Penetrant': '49', 'PT Cleaner': '50', 'PT Developer': '51'
                 }
             }
         try:
@@ -10707,7 +10759,7 @@ class MaterialManager:
         tab4 = ttk.Frame(notebook, padding=10)
         notebook.add(tab4, text="자재(행)")
         mat_keys = list(mapping.get('materials', {}).keys())
-        if not mat_keys: mat_keys = ['RT T200', 'RT AA400', 'MT WHITE', 'MT 7C-BLACK', 'PT Penetrant', 'PT Cleaner', 'PT Developer']
+        if not mat_keys: mat_keys = ['RT T200', 'RT AA400', 'MT WHITE', 'MT 7C-BLACK', 'MT FLUORESCENT', 'PT Penetrant', 'PT Cleaner', 'PT Developer']
         mat_fields = [(f"{m} (행 번호)", m) for m in mat_keys]
         tab4_entries = create_entry_grid(tab4, mat_fields, mapping.get('materials', {}))
 
@@ -10777,7 +10829,8 @@ class MaterialManager:
                     'name': group.cb_name.get().strip(),
                     'shift': group.cb_shift.get().strip(),
                     'time': group.ent_worktime.get().strip(),
-                    'ot': group.ent_ot.get().strip()
+                    'ot': group.ent_ot.get().strip(),
+                    'participating': group.participation_var.get() if hasattr(group, 'participation_var') else True
                 })
         data['ndt_companies'] = []
         if hasattr(self, 'ndt_company_entries'):
@@ -10786,6 +10839,8 @@ class MaterialManager:
                 for mat in ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]:
                     co_data[mat] = entries[mat].get().strip()
                 data['ndt_companies'].append(co_data)
+        if hasattr(self, 'inspection_batch'):
+            data['inspection_batch'] = self.inspection_batch.serialize()
         data['rtk'] = {cat: ent.get().strip() for cat, ent in self.rtk_entries.items() if cat != '총계'}
         
         # [NEW] Include vehicle inspection data in session snapshot
@@ -10833,10 +10888,14 @@ class MaterialManager:
         for name, value in data.get('hot_tapping', {}).items():
             if name in ('ndt_loc_type_var', 'hot_tap_stage_var', 'hot_tap_size_var', 'hot_tap_location_var'):
                 getattr(self, name).set(value)
+        if hasattr(self, 'inspection_batch') and 'inspection_batch' in data:
+            self.inspection_batch.restore(data['inspection_batch'])
         workers = data.get('workers', [])
         for i, w_data in enumerate(workers, 1):
             group = getattr(self, f'worker_group{i}', None)
             if group:
+                if hasattr(group, 'participation_var'):
+                    group.participation_var.set(w_data.get('participating', True))
                 group.cb_name.set(w_data.get('name', ''))
                 group.cb_shift.set(w_data.get('shift', ''))
                 group.ent_worktime.set(w_data.get('time', ''))
