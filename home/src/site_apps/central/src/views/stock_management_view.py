@@ -60,7 +60,7 @@ def setup_stock_tab_impl(self):
     self.cb_filter_mfr = ttk.Combobox(filter_frame, width=15)
     self.cb_filter_mfr.grid(row=0, column=5, padx=2, pady=2)
     
-    ttk.Label(filter_frame, text="품목명:").grid(row=0, column=6, padx=2, pady=2, sticky='e')
+    ttk.Label(filter_frame, text="자재명:").grid(row=0, column=6, padx=2, pady=2, sticky='e')
     self.cb_filter_name = ttk.Combobox(filter_frame, width=25)
     self.cb_filter_name.grid(row=0, column=7, padx=2, pady=2)
     
@@ -148,7 +148,7 @@ def setup_stock_tab_impl(self):
     # Column configuration
     col_widths = [60, 80, 100, 180, 90, 90, 120, 120, 90, 120, 120, 80, 80, 80, 80, 80, 80, 80, 80, 130]
     for col, width in zip(columns, col_widths):
-        self.stock_tree.heading(col, text=col, command=lambda _col=col: self.treeview_sort_column(self.stock_tree, _col, False))
+        self.stock_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda _col=col: self.treeview_sort_column(self.stock_tree, _col, False))
         # Change stretch=True to stretch=False to allow fixed user-defined widths
         self.stock_tree.column(col, width=width, minwidth=50, stretch=False, anchor='center')
     

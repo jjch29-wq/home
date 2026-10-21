@@ -93,6 +93,16 @@ class FluorescentReportTests(unittest.TestCase):
                     workbook = openpyxl.load_workbook(output)
                     sheet = workbook.active
                     try:
+                        self.assertAlmostEqual(sheet.page_margins.left, 10 / 25.4)
+                        self.assertAlmostEqual(sheet.page_margins.right, 10 / 25.4)
+                        self.assertAlmostEqual(sheet.page_margins.top, 10 / 25.4)
+                        widths = [sheet.column_dimensions[openpyxl.utils.get_column_letter(c)].width for c in range(1, 20)]
+                        self.assertAlmostEqual(sum(w * 7 + 5 for w in widths), 190 / 25.4 * 96)
+                        height = sum(sheet.row_dimensions[r].height or 15 for r in range(1, sheet.max_row + 1)
+                                     if not sheet.row_dimensions[r].hidden)
+                        self.assertLessEqual(height, 277 / 25.4 * 72 + 0.01)
+                        self.assertTrue(sheet.print_options.horizontalCentered)
+                        self.assertFalse(sheet.print_options.verticalCentered)
                         expected = {'백색페인트': 3, '흑색자분': 5, '형광자분': 7.5, '침투액': 11, '세척액': 13, '현상액': 17}
                         rows = {sheet.cell(row, 4).value: row for row in range(40, sheet.max_row + 1)
                                 if sheet.cell(row, 4).value in expected}

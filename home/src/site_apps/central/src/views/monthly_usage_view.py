@@ -41,7 +41,7 @@ def setup_monthly_usage_tab_impl(self):
                                    command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_filter_site_monthly))
     btn_site_mgr_monthly.place(in_=self.cb_filter_site_monthly, relx=1.0, x=-18, rely=0.5, anchor='e', width=16, height=16)
     
-    ttk.Label(filter_frame, text="품목명:").pack(side='left', padx=5)
+    ttk.Label(filter_frame, text="자재명:").pack(side='left', padx=5)
     self.cb_filter_material_monthly = ttk.Combobox(filter_frame, width=25)
     self.cb_filter_material_monthly.pack(side='left', padx=5)
     self.cb_filter_material_monthly.set('전체')
@@ -96,7 +96,7 @@ def setup_monthly_usage_tab_impl(self):
     }
     
     for col in columns:
-        self.monthly_usage_tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(self.monthly_usage_tree, c, False))
+        self.monthly_usage_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(self.monthly_usage_tree, c, False))
         width = col_widths.get(col, 100)
         self.monthly_usage_tree.column(col, width=width, minwidth=20, stretch=False, anchor='center')
     
@@ -128,7 +128,7 @@ def setup_monthly_usage_tab_impl(self):
                  '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
     self.site_summary_tree = ttk.Treeview(site_frame, columns=site_cols, show='headings')
     for col in site_cols:
-        self.site_summary_tree.heading(col, text=col)
+        self.site_summary_tree.heading(col, text=("자재명" if col == "품목명" else col))
         # Adjust widths based on content
         if col in ['현장', '검사방법', '품목명']: width = 120
         elif col in ['검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비']: width = 100
@@ -158,7 +158,7 @@ def setup_monthly_usage_tab_impl(self):
         '총OT(시간)': 80, '연장(금액)': 90, '야간(금액)': 90, '휴일(금액)': 90, '총OT(금액)': 100
     }
     for col in worker_cols:
-        self.worker_summary_tree.heading(col, text=col)
+        self.worker_summary_tree.heading(col, text=("자재명" if col == "품목명" else col))
         width = worker_widths.get(col, 80)
         # Disable stretching
         self.worker_summary_tree.column(col, width=width, anchor='center', stretch=False)

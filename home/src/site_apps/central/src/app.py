@@ -1387,7 +1387,7 @@ class MaterialManager:
         fields = [
             ('회사코드', '회사코드'),
             ('관리품번', '관리품번'),
-            ('품목명', '품목명'),
+            ('자재명', '품목명'),
             ('SN', 'SN'),
             ('창고', '창고'),
             ('모델명', '모델명'),
@@ -1536,7 +1536,7 @@ class MaterialManager:
             '단가': 90, '재고하한': 80, '재고금액': 120, '상태/위치': 100, '관리품번': 120
         }
         for col in columns:
-            tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(tree, c, False))
+            tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(tree, c, False))
             tree.column(col, width=col_widths.get(col, 100), anchor='center', stretch=False)
             
         tree.grid(row=0, column=0, sticky='nsew')
@@ -1607,7 +1607,7 @@ class MaterialManager:
         self.cb_eq_code.bind('<Return>', lambda e: self.cb_item_name.focus_set())
         
         # Row 1
-        ttk.Label(reg_frame, text="품목명:").grid(row=1, column=0, padx=5, pady=2, sticky='w')
+        ttk.Label(reg_frame, text="자재명:").grid(row=1, column=0, padx=5, pady=2, sticky='w')
         item_name_container = ttk.Frame(reg_frame)
         item_name_container.grid(row=1, column=1, padx=5, pady=2, sticky='ew')
         
@@ -1808,7 +1808,7 @@ class MaterialManager:
         filter_row2 = ttk.Frame(history_ctrl_frame)
         filter_row2.pack(fill='x', pady=2)
         
-        ttk.Label(filter_row2, text="품목명 필터:").pack(side='left', padx=5)
+        ttk.Label(filter_row2, text="자재명 필터:").pack(side='left', padx=5)
         self.cb_trans_filter_mat = ttk.Combobox(filter_row2, width=35, state="readonly")
         self.cb_trans_filter_mat.pack(side='left', padx=5)
         self.cb_trans_filter_mat.bind('<<ComboboxSelected>>', lambda e: self.update_transaction_view())
@@ -1850,7 +1850,7 @@ class MaterialManager:
             'SN': 100, '규격': 100, '창고': 80, '담당자': 80, '비고': 150, '검사비': 90
         }
         for col in columns:
-            self.inout_tree.heading(col, text=col)
+            self.inout_tree.heading(col, text=("자재명" if col == "품목명" else col))
             width = col_widths.get(col, 100)
             self.inout_tree.column(col, width=width, minwidth=50, stretch=False, anchor='center')
         
@@ -2422,7 +2422,7 @@ class MaterialManager:
             return
             
         if not item_name:
-            messagebox.showwarning("입력 오류", "품목명을 입력해주세요.")
+            messagebox.showwarning("입력 오류", "자재명을 입력해주세요.")
             return
         
         # Generate MaterialID
@@ -3022,7 +3022,7 @@ class MaterialManager:
                     if amount and float(amount) > 0: full_info.append(f"• 검사량: {amount}")
                     
                     
-                    full_info.append(f"• 품목명: {self.get_material_display_name(entry.get('MaterialID'))}")
+                    full_info.append(f"• 자재명: {self.get_material_display_name(entry.get('MaterialID'))}")
                     
                     # 2. Worker Info (All 10 slots)
                     full_info.append(f"\n[작업자 및 시간 정보]")
@@ -3314,7 +3314,7 @@ class MaterialManager:
             
             # 1. Standardize column names (mapping) summerly
             col_map = {
-                '품목명': ['품목명', '품명', 'Item Name', 'Name'],
+                '품목명': ['품목명', '자재명', '품명', 'Item Name', 'Name'],
                 'SN': ['SN', 'SN번호', 'Serial Number', 'S/N'],
                 '규격': ['규격', 'Specification', 'Spec'],
                 '수량': ['수량', 'Initial Stock', 'Current Stock', 'Qty', 'Amount'],
@@ -5982,7 +5982,7 @@ class MaterialManager:
         tk.Button(filter_row, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                   command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_daily_filter_site)).pack(side='left', padx=(0, 5))
         
-        ttk.Label(filter_row, text="품목명:").pack(side='left', padx=(5, 2))
+        ttk.Label(filter_row, text="자재명:").pack(side='left', padx=(5, 2))
         self.cb_daily_filter_material = ttk.Combobox(filter_row, width=15)
         self.cb_daily_filter_material.pack(side='left', padx=2)
         self.cb_daily_filter_material.set('전체')
@@ -6110,7 +6110,7 @@ class MaterialManager:
         self.daily_usage_tree['displaycolumns'] = v_list
         
         for nc in new_cols:
-            self.daily_usage_tree.heading(nc, text=nc, command=lambda c=nc: self.treeview_sort_column(self.daily_usage_tree, c, False))
+            self.daily_usage_tree.heading(nc, text=("자재명" if nc == "품목명" else nc), command=lambda c=nc: self.treeview_sort_column(self.daily_usage_tree, c, False))
             self.daily_usage_tree.column(nc, width=100, minwidth=20, stretch=False, anchor='center')
 
         
@@ -6132,7 +6132,7 @@ class MaterialManager:
         }
         
         for col in columns:
-            self.daily_usage_tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(self.daily_usage_tree, c, False))
+            self.daily_usage_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(self.daily_usage_tree, c, False))
             width = col_widths.get(col, 100)
             self.daily_usage_tree.column(col, width=width, minwidth=20, stretch=False, anchor='center')
         
@@ -6716,7 +6716,7 @@ class MaterialManager:
         self.budget_view_builtin_head_map = {
             'Date': '날짜', 'Site': '현장', '장비명': '장비', '검사방법': '검사방법', '검사량': '수량', '단가': '단가',
             '검사단가': '매출금액', '출장비': '출장비', '일식': '일식', 'OT합계': 'OT지급액', '침투제': '침투제', '세척제': '세척제', '현상제': '현상제',
-            '자재단가': '자재단가', '합계': '합계', '비고': '비고', '작업자': '작업자', '품목명': '품목명',
+            '자재단가': '자재단가', '합계': '합계', '비고': '비고', '작업자': '작업자', '품목명': '자재명',
             '입력시간': '입력시간', '차량번호': '차량번호', '주행거리': '주행거리', '차량점검': '차량점검',
             '차량비고': '차량비고', 'MaterialID': '자재ID',
             '총기성액': '총기성액', '청구인건비': '인건비(청구)', '청구재료비': '재료비(청구)', '제경비': '제경비', '기술료': '기술료',
@@ -9448,7 +9448,7 @@ class MaterialManager:
 
         columns_r = ('name', 'sn', 'model')
         self.mat_source_tree = ttk.Treeview(right_frame, columns=columns_r, show='headings', height=15)
-        self.mat_source_tree.heading('name', text='품목명')
+        self.mat_source_tree.heading('name', text='자재명')
         self.mat_source_tree.heading('sn', text='SN')
         self.mat_source_tree.heading('model', text='모델명')
         self.mat_source_tree.column('name', width=150)
@@ -9671,7 +9671,7 @@ class MaterialManager:
         
         columns = ('name', 'sn', 'model')
         tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
-        tree.heading('name', text='품목명')
+        tree.heading('name', text='장비명')
         tree.heading('sn', text='SN')
         tree.heading('model', text='모델명')
         tree.column('name', width=200)
@@ -9785,7 +9785,7 @@ class MaterialManager:
         columns = ('id', 'name', 'model', 'sn', 'spec', 'unit', 'stock')
         tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
         tree.heading('id', text='ID')
-        tree.heading('name', text='품목명')
+        tree.heading('name', text='자재명')
         tree.heading('model', text='모델명')
         tree.heading('sn', text='SN')
         tree.heading('spec', text='규격')
@@ -9905,7 +9905,7 @@ class MaterialManager:
             f.pack(fill='both', expand=True)
 
             fields = [
-                ("품목명", "품목명"), ("모델명", "모델명"), ("SN", "SN"), 
+                ("자재명", "품목명"), ("모델명", "모델명"), ("SN", "SN"),
                 ("규격", "규격"), ("단위", "관리단위"), ("수량", "수량"), ("재고하한", "재고하한")
             ]
             entries = {}
@@ -9947,7 +9947,7 @@ class MaterialManager:
             form_f.pack(fill='both', expand=True)
 
             entries = {}
-            labels = [("품목명", "name"), ("모델명", "model"), ("SN", "sn"), ("규격", "spec"), ("단위", "unit")]
+            labels = [("자재명", "name"), ("모델명", "model"), ("SN", "sn"), ("규격", "spec"), ("단위", "unit")]
             
             for i, (label, key) in enumerate(labels):
                 ttk.Label(form_f, text=f"{label}:").grid(row=i, column=0, padx=5, pady=5, sticky='w')
@@ -9963,7 +9963,7 @@ class MaterialManager:
             def save_new():
                 data = {k: e.get().strip() for k, e in entries.items()}
                 if not data['name']:
-                    messagebox.showwarning("오류", "품목명은 필수입니다.")
+                    messagebox.showwarning("오류", "자재명은 필수입니다.")
                     return
                 
                 new_id = 10001
@@ -11671,7 +11671,7 @@ class MaterialManager:
         fields['적용코드'] = ent_code
 
         # Material
-        ttk.Label(basic_frame, text="품목명:").grid(row=2, column=0, padx=5, pady=5, sticky='w')
+        ttk.Label(basic_frame, text="자재명:").grid(row=2, column=0, padx=5, pady=5, sticky='w')
         cb_mat = ttk.Combobox(basic_frame, width=40)
         mat_options = []
         for _, m_row in self.materials_df.iterrows():
@@ -15007,7 +15007,7 @@ class MaterialManager:
         
         col_widths = {'연도': 90, '월': 70, '현장': 140, '구분': 100, '작업자': 100, '작업시간': 100, 'OT시간': 100, 'OT금액': 110, '품목명': 200, '비고': 220}
         for col in columns:
-            tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(tree, c, False))
+            tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(tree, c, False))
             tree.column(col, width=col_widths.get(col, 100), anchor='center', stretch=False)
         
         tree.grid(row=0, column=0, sticky='nsew')
@@ -15030,7 +15030,7 @@ class MaterialManager:
         site_vsb = ttk.Scrollbar(site_frame, orient="vertical", command=site_tree.yview)
         site_tree.configure(yscrollcommand=site_vsb.set)
         for col in site_cols:
-            site_tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(site_tree, c, False))
+            site_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(site_tree, c, False))
             w = 120 if col in ['현장', '검사방법', '품목명'] else (100 if col in ['검사비', '출장비', '제경비', '기술료', '재료비', '인건비'] else 80)
             site_tree.column(col, width=w, anchor='center', stretch=False)
         site_tree.pack(side='left', expand=True, fill='both')
@@ -15048,7 +15048,7 @@ class MaterialManager:
         worker_tree.configure(yscrollcommand=worker_vsb.set)
         worker_widths = {'작업자': 100, '총공수': 70, '총OT(시간)': 80, '총OT(금액)': 100}
         for col in worker_cols:
-            worker_tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(worker_tree, c, False))
+            worker_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(worker_tree, c, False))
             worker_tree.column(col, width=worker_widths.get(col, 80), anchor='center', stretch=False)
         worker_tree.pack(side='left', expand=True, fill='both')
         worker_vsb.pack(side='right', fill='y')

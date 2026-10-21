@@ -430,7 +430,7 @@ class DailyWorkReportManager:
         # [DYNAMIC HEIGHT ADJUSTMENT]
         # 위아래 여백을 일정하게 맞추기 위해, 추가된 OT, 자재, Method 행의 높이를 합산하여
         # 18~25행(비고란 버퍼)의 전체 높이에서 그만큼을 정확히 빼줍니다.
-        base_total_height = 120.0  # 기본 버퍼의 총 높이 (변경 가능)
+        base_total_height = 72.0  # 검사 상세의 불필요한 빈 공간을 줄인다.
         extra_h = (ot_extra * 18.0) + (rt_extra * 30.0) + (method_offset * 15.0)
         
         # 남은 높이를 계산하되 최소 24.0(행당 3.0)은 유지
@@ -619,14 +619,15 @@ class DailyWorkReportManager:
                                 cell.value = re.sub(pattern, f"\u25a0\\2{val}", cell.value)
                                 break # Found and checked!
 
-        sheet.page_setup.horizontalCentered = True; sheet.page_setup.verticalCentered = False 
+        sheet.print_options.horizontalCentered = True
+        sheet.print_options.verticalCentered = False
         
         # [REMOVED] B31 내용 비우기 (사용자 요청)
         rem_cell = f"B{31 + method_offset}"
         safe_write(rem_cell, "")
 
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
-        sheet.page_margins.left = 0.8; sheet.page_margins.right = 0.2
+        sheet.page_margins.left = 10 / 25.4; sheet.page_margins.right = 10 / 25.4
         for r in range(1, 12):
             if r == 9:
                 car_str = str(data.get('car_no', ''))
@@ -653,9 +654,10 @@ class DailyWorkReportManager:
         sheet.page_setup.fitToWidth = 1
         sheet.page_setup.fitToHeight = 1
         sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
-        sheet.page_setup.horizontalCentered = True
-        sheet.page_setup.verticalCentered = False
-        sheet.page_margins.top = 0.6; sheet.page_margins.bottom = 0.1
+        sheet.print_options.horizontalCentered = True
+        sheet.print_options.verticalCentered = False
+        sheet.page_margins.top = 10 / 25.4; sheet.page_margins.bottom = 10 / 25.4
+        sheet.page_setup.orientation = sheet.ORIENTATION_PORTRAIT
         sheet.print_area = f"A1:S{52 + total_offset}"
         
         rt_start_final = 43 + base_shift; rt_end_final = (rt_start_final - 1) + max(1, rt_count)
@@ -741,7 +743,23 @@ class DailyWorkReportManager:
             'I': 4, 'J': 4, 'K': 5, 'L': 4, 'M': 5, 'N': 5, 'O': 4, 
             'P': 4, 'Q': 4, 'R': 4, 'S': 5
         }
+        # Approximate Excel's default-font column widths in pixels (96 dpi).
+        # Use the full 190 mm A4 body while preserving each column's proportions.
+        body_pixels = 190 / 25.4 * 96
+        original_pixels = sum(width * 7 + 5 for width in slim_widths.values())
         for col, width in slim_widths.items():
-            sheet.column_dimensions[col].width = width
+            sheet.column_dimensions[col].width = ((width * 7 + 5) * body_pixels / original_pixels - 5) / 7
+
+        # Keep height within the printable page so fit-to-page does not shrink
+        # the widened table again. Hidden rows do not consume printed height.
+        end_row = 52 + total_offset
+        visible_rows = [sheet.row_dimensions[r] for r in range(1, end_row + 1)
+                        if not sheet.row_dimensions[r].hidden]
+        total_height = sum(row.height or sheet.sheet_format.defaultRowHeight or 15
+                           for row in visible_rows)
+        body_height = 277 / 25.4 * 72
+        if total_height > body_height:
+            for row in visible_rows:
+                row.height = (row.height or sheet.sheet_format.defaultRowHeight or 15) * body_height / total_height
             
         wb.save(output_path); return output_path

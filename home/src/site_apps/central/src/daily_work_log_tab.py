@@ -399,6 +399,10 @@ class DailyWorkLogTab(ttk.Frame):
 
         line_bar = ttk.Frame(parent)
         line_bar.pack(fill='x', padx=5, pady=(0, 4))
+        ttk.Button(line_bar, text='선택 행 삭제', command=self._delete_selected_ndt_row).pack(side='left', padx=(0, 8))
+        self.ndt_selection_vars = []
+        self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
+        ttk.Label(line_bar, textvariable=self.ndt_selection_text).pack(side='left', padx=(0, 8))
         ttk.Button(line_bar, text='라인번호 일괄 변경', command=self._edit_ndt_lines).pack(side='left')
         ttk.Label(line_bar, text='현재 날짜의 같은 라인번호를 한 번에 변경합니다.').pack(side='left', padx=8)
         
@@ -431,7 +435,8 @@ class DailyWorkLogTab(ttk.Frame):
 
         
         # Draw Headers
-        for col_idx, c in enumerate(self.ndt_cols):
+        ttk.Label(grid_frame, text='선택').grid(row=0, column=0, padx=4)
+        for col_idx, c in enumerate(self.ndt_cols, start=1):
             label = {'RT_OR': 'RT_OR 전체', 'RT_RE': 'RT_RE 불량'}.get(c, c)
             ttk.Label(grid_frame, text=label, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
             if c == '구간정보':
@@ -491,10 +496,14 @@ class DailyWorkLogTab(ttk.Frame):
     def _create_ndt_row(self, row_idx):
         grid_frame = self._ndt_grid_frame
         row_entries = {}
-        # Row number label
-        ttk.Label(grid_frame, text=f"{row_idx}").grid(row=row_idx, column=0, sticky="w", padx=(0, 2))
+        selected = tk.BooleanVar(value=False)
+        self.ndt_selection_vars.append(selected)
+        ttk.Checkbutton(
+            grid_frame, text=str(row_idx), variable=selected,
+            command=lambda: self._toggle_ndt_row(row_entries, selected)
+        ).grid(row=row_idx, column=0, sticky='w', padx=4)
 
-        for col_idx, c in enumerate(self.ndt_cols):
+        for col_idx, c in enumerate(self.ndt_cols, start=1):
             # Adjust width for some columns
             w = 8
             if c == '규격': w = 13
@@ -762,6 +771,57 @@ class DailyWorkLogTab(ttk.Frame):
         self.ndt_grid_entries.append(row_entries)
 
 
+    def _delete_selected_ndt_row(self):
+        targets = [(i, row) for i, row in enumerate(self.ndt_grid_entries)
+                   if self.ndt_selection_vars[i].get()]
+        if not targets:
+            messagebox.showwarning('행 삭제', '삭제할 행의 왼쪽 체크박스를 선택하세요.')
+            return
+        numbers = ', '.join(str(i + 1) for i, _ in targets)
+        if not messagebox.askyesno(
+            '행 삭제',
+            f'선택한 {len(targets)}개 행 ({numbers}행)의 입력 내용을 삭제하시겠습니까?\n'
+            '상단 저장 버튼을 눌러야 저장된 내역에 반영됩니다.'
+        ):
+            return
+        self._compact_ndt_rows({i for i, _ in targets})
+        self._refresh_hot_summary()
+        self._clear_ndt_selection()
+        messagebox.showinfo('행 삭제', '선택한 행을 삭제하고 나머지 행을 위로 정리했습니다. 상단 저장 버튼을 눌러 주세요.')
+
+    def _compact_ndt_rows(self, deleted_indices):
+        # Snapshot before writing: destination widgets may also be source rows.
+        remaining = []
+        for index, row in enumerate(self.ndt_grid_entries):
+            if index in deleted_indices:
+                continue
+            values = {key: widget.get() for key, widget in row.items()}
+            if any(str(value).strip() for value in values.values()):
+                metadata = dict(getattr(row.get('구간정보'), '_rt_retake_meta', {}))
+                remaining.append((values, metadata))
+        for index, row in enumerate(self.ndt_grid_entries):
+            values, metadata = remaining[index] if index < len(remaining) else ({}, {})
+            # Set the method before the detail widget chooses its layout.
+            for key, widget in row.items():
+                if key == '구간정보':
+                    continue
+                value = values.get(key, '')
+                if hasattr(widget, 'set'):
+                    widget.set(value)
+                else:
+                    widget.delete(0, tk.END)
+                    widget.insert(0, value)
+            details = row.get('구간정보')
+            if details is not None:
+                details.set(values.get('구간정보', ''))
+                details._rt_retake_meta = metadata
+            # Detail setters can recalculate RT counts; preserve the saved inputs.
+            for key in ('RT_OR', 'RT_RE'):
+                if key in row:
+                    row[key].delete(0, tk.END)
+                    row[key].insert(0, values.get(key, ''))
+            self._sync_ndt_spec(row)
+
     def _replace_ndt_line(self, old_line, new_line):
         old_line, new_line = old_line.strip(), new_line.strip()
         if not old_line or not new_line:
@@ -929,6 +989,9 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _select_ndt_row(self, row_entries):
         self.selected_ndt_row = row_entries
+        index = next(i for i, row in enumerate(self.ndt_grid_entries, 1) if row is row_entries)
+        self.ndt_selection_vars[index - 1].set(True)
+        self._refresh_ndt_selection_text()
         method = row_entries['검사방법'].get().strip() or '-'
         section = row_entries['구간'].get().strip() or '-'
         joint = row_entries['Joint No.'].get().strip() or '-'
@@ -937,8 +1000,24 @@ class DailyWorkLogTab(ttk.Frame):
             f"선택: {method} / {section} / Joint {joint} / {welder}"
         )
 
+    def _refresh_ndt_selection_text(self):
+        count = sum(bool(var.get()) for var in self.ndt_selection_vars)
+        self.ndt_selection_text.set(f'{count}개 행 선택됨' if count else '왼쪽 체크박스로 여러 행 선택 가능')
+
+    def _toggle_ndt_row(self, row, selected):
+        if selected.get():
+            self._select_ndt_row(row)
+        else:
+            if self.selected_ndt_row is row:
+                self.selected_ndt_row = None
+                self.photo_selection_var.set('NDT 행을 선택하세요.')
+            self._refresh_ndt_selection_text()
+
     def _clear_ndt_selection(self, event=None):
         self.selected_ndt_row = None
+        for var in self.ndt_selection_vars:
+            var.set(False)
+        self._refresh_ndt_selection_text()
         self.photo_selection_var.set("NDT 행을 선택하세요.")
 
     def _default_photo_description(self, method):
@@ -1609,6 +1688,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.save_history(history)
 
     def on_date_change(self, event=None):
+        self._clear_ndt_selection()
         current_date = self._selected_date_key()
         history = self.load_history()
         self._refresh_saved_date_markers(history)

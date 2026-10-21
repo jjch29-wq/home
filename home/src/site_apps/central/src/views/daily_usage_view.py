@@ -182,7 +182,7 @@ def setup_daily_usage_tab_impl(self):
     btn_equip_mgr.pack(side='left', padx=(2, 0))
 
     # Row 2: 품목명
-    ttk.Label(form_content, text="품목명:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="자재명:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
     mat_container = ttk.Frame(form_content)
     mat_container.grid(row=2, column=1, columnspan=3, padx=(2, 5), pady=1, sticky='w')
     
@@ -880,7 +880,7 @@ def setup_daily_usage_tab_impl(self):
     self.tv_recent.heading("loc_type", text="구분")
     self.tv_recent.heading("method", text="검사방법")
     self.tv_recent.heading("inspection_item", text="검사품명")
-    self.tv_recent.heading("material", text="품목명")
+    self.tv_recent.heading("material", text="자재명")
     self.tv_recent.heading("qty", text="수량")
     self.tv_recent.heading("worker", text="작업자(첫번째)")
     self.tv_recent.heading("insp_type", text="검사구분")
