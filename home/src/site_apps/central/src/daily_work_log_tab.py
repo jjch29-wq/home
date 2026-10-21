@@ -11,7 +11,7 @@ import sys
 import json
 import shutil
 import uuid
-from site_apps.central.src.rt_quantities import rt_counts, sync_rt_widgets, widget_rt_values, resolve_rt_row, retest_parent, default_rt_copy
+from site_apps.central.src.rt_quantities import rt_counts, sync_rt_widgets, widget_rt_values, resolve_rt_row, retest_parent, default_rt_copy, corrected_rt_history
 
 # Import the exporter
 try:
@@ -1690,7 +1690,8 @@ class DailyWorkLogTab(ttk.Frame):
     def on_date_change(self, event=None):
         self._clear_ndt_selection()
         current_date = self._selected_date_key()
-        history = self.load_history()
+        # 화면에서도 RT 불량과 불량률을 검사수량 누계와 같은 기준으로 표시한다.
+        history = corrected_rt_history(self.load_history())
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
         
@@ -1922,7 +1923,7 @@ class DailyWorkLogTab(ttk.Frame):
             return
         self._refresh_hot_summary()
         current_date = self.date_entry.get()
-        history = self.load_history()
+        history = corrected_rt_history(self.load_history())
         
         # 1. Aggregate NDT Results -> 금일작업
         today_qty = {comp_key: 0.0 for comp_key in self.qty_entries.keys()}
@@ -2075,19 +2076,25 @@ class DailyWorkLogTab(ttk.Frame):
             if rt_expected > 0:
                 self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
                 
-        # RT_RE is a subset of the inspected films, shown separately as defects.
+        # RT_RE is a subset of the inspected films. 불량과 불량률도 총누계 기준이다.
         today_rejects['RT_소계'] = sum(value for key, value in today_rejects.items() if key.startswith('RT_') and key != 'RT_소계')
         for key, entries in self.qty_entries.items():
             if not key.startswith('RT_'):
                 continue
-            total = float(entries['금일작업'].get() or 0)
-            defects = today_rejects.get(key, 0)
+            total = float(entries['총누계'].get() or 0)
+            previous_defects = prev_data.get('qty_data', {}).get(key, {}).get('불량', '0') or '0'
+            try:
+                previous_defects = int(float(str(previous_defects).replace(',', '')))
+            except (TypeError, ValueError):
+                previous_defects = 0
+            defects = previous_defects + today_rejects.get(key, 0)
             if '불량' in entries:
                 entries['불량'].delete(0, tk.END)
-                entries['불량'].insert(0, str(defects))
+                if defects:
+                    entries['불량'].insert(0, str(defects))
             if '불량률' in entries:
                 entries['불량률'].delete(0, tk.END)
-                entries['불량률'].insert(0, f'{defects / total * 100:.1f}' if total else '')
+                entries['불량률'].insert(0, f'{defects / total * 100:.1f}' if total and defects else '')
 
         # Equip
         for eq, entries in self.equip_entries.items():

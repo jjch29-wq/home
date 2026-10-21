@@ -177,6 +177,7 @@ def corrected_rt_history(history):
             result[day]['ndt_results'][index] = normalized
             context.append(normalized)
     previous = {}
+    previous_rejected = {}
     for day in sorted(result):
         data = result[day]
         rt_rows = [row for row in data.get('ndt_results', []) if str(row.get('검사방법', '')).strip().upper() == 'RT']
@@ -202,8 +203,10 @@ def corrected_rt_history(history):
                 before = previous.get(key, films(values.get('전일누계', 0)))
                 today = totals.get(key, 0)
                 values.update({'전일누계': str(before), '금일작업': str(today), '총누계': str(before + today)})
-                values['불량'] = str(rejected.get(key, 0))
-                values['불량률'] = f'{rejected.get(key, 0) / today * 100:.1f}' if today else ''
+                cumulative_rejected = previous_rejected.get(key, 0) + rejected.get(key, 0)
+                cumulative_total = before + today
+                values['불량'] = str(cumulative_rejected)
+                values['불량률'] = f'{cumulative_rejected / cumulative_total * 100:.1f}' if cumulative_total and cumulative_rejected else ''
                 try:
                     expected = films(values.get('예상량', 0))
                 except ValueError:
@@ -213,4 +216,9 @@ def corrected_rt_history(history):
         for key, values in quantities.items():
             if key.startswith('RT_'):
                 previous[key] = films(values.get('총누계', 0))
+                if not rt_rows:
+                    cumulative_rejected = previous_rejected.get(key, 0)
+                    values['불량'] = str(cumulative_rejected)
+                    values['불량률'] = f'{cumulative_rejected / previous[key] * 100:.1f}' if previous[key] and cumulative_rejected else ''
+                previous_rejected[key] = films(values.get('불량', 0))
     return result

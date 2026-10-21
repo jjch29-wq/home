@@ -585,6 +585,14 @@ class MonthlyReportManager:
             return start_row + row_count - 1
         return overflow
 
+    def _detail_continuation_overflow_row(self, start_row, row_count):
+        """Split NDT detail continuations within the 60-row body below the header."""
+        # The repeated document header is excluded from the 60-row body.
+        # The body itself uses four rows for its spacer, subsection caption,
+        # and two column-header rows, plus one row for TOTAL.
+        data_capacity = 60 - 4 - 1
+        return start_row + data_capacity if row_count > data_capacity else None
+
     def _first_print_overflow_row(
         self, ws, start_row, row_count, scale_override=None
     ):
@@ -1127,13 +1135,114 @@ class MonthlyReportManager:
                 not str(ws.cell(row=spacer_row - 1, column=col).value or '').strip()
                 for col in range(1, min(ws.max_column, 23) + 1)
             )
-            if (
-                is_blank
-                and not previous_is_blank
-                and spacer_row not in image_rows
+            if is_blank and not previous_is_blank and spacer_row not in image_rows:
+                ws.row_dimensions[spacer_row].height = 1.0
+                ws.row_dimensions[spacer_row].hidden = False
+
+    def _compact_weld_defect_trailing_spacers(self, ws):
+        """Compact only unused rows at the end of the 4.0 defect page."""
+        section_rows = []
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            compact = ''.join(row_text.split())
+            if '4.0' in compact and '용접' in compact and '불량' in compact:
+                section_rows.append(row)
+        if not section_rows:
+            return 0
+        section_row = section_rows[-1]
+
+        breaks = sorted(int(brk.id) for brk in ws.row_breaks.brk)
+        later_breaks = [break_id for break_id in breaks if break_id >= section_row]
+        if not later_breaks:
+            return 0
+        page_end = later_breaks[0]
+        last_content_row = page_end
+        while last_content_row > section_row and all(
+            not str(ws.cell(row=last_content_row, column=col).value or '').strip()
+            for col in range(1, min(ws.max_column, 23) + 1)
+        ):
+            last_content_row -= 1
+
+        compacted = 0
+        for row in range(last_content_row + 1, page_end + 1):
+            ws.row_dimensions[row].height = 1.0
+            ws.row_dimensions[row].hidden = False
+            compacted += 1
+        return compacted
+
+    def _compact_ndt_method_spacers(self, ws):
+        """Keep a trailing PT table with its repeated 3.0 page header."""
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            compact = ''.join(row_text.split()).upper()
+            if '2.4' not in compact or 'PT' not in compact:
+                continue
+            spacer_row = row - 1
+            while spacer_row > 1 and all(
+                not str(ws.cell(row=spacer_row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
             ):
-                ws.row_dimensions[spacer_row].height = 0
-                ws.row_dimensions[spacer_row].hidden = True
+                ws.row_dimensions[spacer_row].height = 1.0
+                ws.row_dimensions[spacer_row].hidden = False
+                spacer_row -= 1
+
+    def _ensure_pt_continuation_header(self, ws):
+        """Repeat the 3.0 document header when PT prints on a new page."""
+        from openpyxl.worksheet.pagebreak import Break
+
+        pt_title_row = None
+        for row in range(1, ws.max_row + 1):
+            row_text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            compact = ''.join(row_text.split()).upper()
+            if '2.4' in compact and 'PT' in compact:
+                pt_title_row = row
+                break
+        if pt_title_row is None:
+            return 0
+
+        pt_total_row = None
+        for row in range(pt_title_row + 1, min(pt_title_row + 10, ws.max_row) + 1):
+            if any(
+                'TOTAL' in str(ws.cell(row=row, column=col).value or '').upper()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            ):
+                pt_total_row = row
+                break
+        if pt_total_row is None:
+            return 0
+
+        breaks = sorted(int(brk.id) for brk in ws.row_breaks.brk)
+        previous = [break_id for break_id in breaks if break_id < pt_title_row]
+        document_header_row = previous[-1] + 1 if previous else 1
+        overflow = self._first_print_overflow_row(
+            ws,
+            document_header_row,
+            pt_total_row - document_header_row + 1,
+            self._paut_print_scale(ws),
+        )
+        if overflow is None or overflow > pt_total_row:
+            return 0
+
+        inserted_rows = 7
+        self._insert_continuation_header(
+            ws, pt_title_row, document_header_row, row_count=inserted_rows
+        )
+        if not any(int(brk.id) == pt_title_row - 1 for brk in ws.row_breaks.brk):
+            ws.row_breaks.append(Break(id=pt_title_row - 1))
+        ws.row_breaks.brk.sort(key=lambda brk: int(brk.id))
+        for key, marker_row in self.table_markers.items():
+            if marker_row >= pt_title_row:
+                self.table_markers[key] += inserted_rows
+        return inserted_rows
 
     def _move_mt_criteria_to_page6(self, ws):
         """Place the MT criteria block on page 6 before the page-7 header."""
@@ -4303,12 +4412,17 @@ class MonthlyReportManager:
             while remaining_count > 0:
                 # Reserve TOTAL height before choosing the page boundary.
                 # A single last record must travel with its TOTAL too.
-                continuation_row = (
-                    self._detail_page_overflow_row(ws, remaining_start, remaining_count)
-                    if is_detail else self._first_print_overflow_row(
-                        ws, remaining_start, remaining_count
+                if is_detail and remaining_start != start_row:
+                    continuation_row = self._detail_continuation_overflow_row(
+                        remaining_start, remaining_count
                     )
-                )
+                else:
+                    continuation_row = (
+                        self._detail_page_overflow_row(ws, remaining_start, remaining_count)
+                        if is_detail else self._first_print_overflow_row(
+                            ws, remaining_start, remaining_count
+                        )
+                    )
                 if continuation_row is None:
                     break
 
@@ -4717,6 +4831,9 @@ class MonthlyReportManager:
         self._pad_ndt_continuation_pages(ws)
         self._normalize_ndt_header_logos(ws)
         self._normalize_all_report_header_logos(ws)
+        self._compact_ndt_method_spacers(ws)
+        self._ensure_pt_continuation_header(ws)
+        self._compact_weld_defect_trailing_spacers(ws)
         self._collapse_blank_rows_before_report_headers(ws)
         self._normalize_repeated_report_header_text(ws, doc_num)
         self._fit_long_section_headers(ws)
@@ -4929,6 +5046,27 @@ class MonthlyReportManager:
         
         return insert_row + clone_height
 
+    def _resolve_safety_training_dir(self):
+        """Find the designated education folder on the active data drive."""
+        import ntpath
+
+        relative_parts = (
+            '내 드라이브', '01_업무_및_회사', 'Office', '착공',
+            '2026년 중앙지사 열수송관 비파괴검사 단가계약', '교육일지',
+        )
+        history_drive = ntpath.splitdrive(
+            str(getattr(self, '_history_path', '') or '')
+        )[0]
+        drives = []
+        for drive in (history_drive, 'F:', 'G:'):
+            if drive and drive.upper() not in {item.upper() for item in drives}:
+                drives.append(drive)
+        candidates = [os.path.join(drive + '\\', *relative_parts) for drive in drives]
+        return next(
+            (candidate for candidate in candidates if os.path.isdir(candidate)),
+            candidates[0] if candidates else os.path.join('F:\\', *relative_parts),
+        )
+
     def _populate_safety_training_log(self, ws, target_ym, ndt_groups, target_dates=None, report_scope="month"):
         """Populate the 2.0 Safety Management Training Status table using values from 지역난방_안전관리교육."""
         try:
@@ -4961,10 +5099,7 @@ class MonthlyReportManager:
         # 교육 원본은 사용자가 지정한 교육일지 폴더만 신뢰한다.
         # 프로그램 폴더나 바탕화면의 복사본을 함께 검색하면 더 최근에
         # 수정된 임시 PAUT 파일이 지정 폴더의 RT 원본을 덮어쓸 수 있다.
-        safety_training_dir = os.path.join(
-            'F:\\', '내 드라이브', '01_업무_및_회사', 'Office', '착공',
-            '2026년 중앙지사 열수송관 비파괴검사 단가계약', '교육일지',
-        )
+        safety_training_dir = self._resolve_safety_training_dir()
         target_months = []
         for offset in range(max(0, total_months)):
             source_year = start_year + (start_month - 1 + offset) // 12

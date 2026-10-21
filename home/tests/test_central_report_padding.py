@@ -1,6 +1,7 @@
 """Padding belongs to the preceding report page, never a blank page."""
 import sys
 import unittest
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,6 +13,29 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class ReportPaddingTest(unittest.TestCase):
+    def test_safety_training_folder_follows_history_data_drive(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        manager._history_path = (
+            r'G:\내 드라이브\07_Antigravity\PMI_Data\central'
+            r'\daily_work_history.json'
+        )
+
+        with patch.object(os.path, 'isdir', side_effect=lambda path: path.startswith('G:')):
+            folder = manager._resolve_safety_training_dir()
+
+        self.assertTrue(folder.startswith('G:'))
+        self.assertTrue(folder.endswith('교육일지'))
+
+    def test_ndt_detail_continuations_use_sixty_body_rows(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        # 반복 문서 제목 아래 본문 60행 중 4행은 표 머리글,
+        # 1행은 TOTAL이므로 검사 데이터 55행을 수용한다.
+        for method in ('PAUT', 'RT', 'MT', 'PT'):
+            with self.subTest(method=method):
+                self.assertIsNone(manager._detail_continuation_overflow_row(100, 45))
+                self.assertIsNone(manager._detail_continuation_overflow_row(100, 55))
+                self.assertEqual(manager._detail_continuation_overflow_row(100, 56), 155)
+
     def test_last_record_stays_with_total_even_with_one_record_left(self):
         manager = MonthlyReportManager('unused.xlsx')
         sheet = openpyxl.Workbook().active
@@ -102,6 +126,65 @@ class ReportPaddingTest(unittest.TestCase):
         self.assertNotIn(111, [b.id for b in sheet.row_breaks.brk])
         self.assertIn(130, [b.id for b in sheet.row_breaks.brk])
 
+    def test_pt_spacer_is_compacted_to_keep_document_header(self):
+        sheet = openpyxl.Workbook().active
+        sheet.cell(20, 2, 'RT TOTAL')
+        sheet.cell(23, 2, '2.4 비파괴검사 세부현황(PT)')
+        manager = MonthlyReportManager('unused.xlsx')
+
+        manager._compact_ndt_method_spacers(sheet)
+
+        self.assertEqual(sheet.row_dimensions[21].height, 1.0)
+        self.assertEqual(sheet.row_dimensions[22].height, 1.0)
+        self.assertFalse(sheet.row_dimensions[21].hidden)
+
+    def test_only_weld_defect_trailing_rows_are_compacted(self):
+        sheet = openpyxl.Workbook().active
+        sheet.cell(300, 6, '4.0 용접결함, 불량률 현황')
+        sheet.cell(310, 2, 'TABLE TOTAL')
+        sheet.row_breaks.append(Break(id=315))
+        manager = MonthlyReportManager('unused.xlsx')
+
+        compacted = manager._compact_weld_defect_trailing_spacers(sheet)
+
+        self.assertEqual(compacted, 5)
+        for row in range(311, 316):
+            self.assertEqual(sheet.row_dimensions[row].height, 1.0)
+            self.assertFalse(sheet.row_dimensions[row].hidden)
+
+    def test_formatted_blank_safety_rows_are_not_bulk_compacted(self):
+        sheet = openpyxl.Workbook().active
+        sheet.cell(300, 6, '월간 용역 진도 보고서')
+        sheet.cell(310, 2, '방사선안전관리 표')
+        sheet.cell(316, 6, '월간 용역 진도 보고서')
+        manager = MonthlyReportManager('unused.xlsx')
+
+        manager._collapse_blank_rows_before_report_headers(sheet)
+
+        self.assertIsNone(sheet.row_dimensions[311].height)
+        self.assertIsNone(sheet.row_dimensions[315].height)
+
+    def test_pt_overflow_gets_repeated_document_header(self):
+        sheet = openpyxl.Workbook().active
+        sheet.cell(100, 6, '월간 용역 진도 보고서')
+        sheet.cell(104, 6, '3.0 비파괴검사현황')
+        sheet.cell(120, 6, '2.4 비파괴검사 세부현황(PT)')
+        sheet.cell(124, 2, 'TOTAL')
+        sheet.row_breaks.append(Break(id=99))
+        sheet.row_breaks.append(Break(id=124))
+        manager = MonthlyReportManager('unused.xlsx')
+        manager.table_markers = {'next': 125}
+
+        with patch.object(manager, '_first_print_overflow_row', return_value=118):
+            with patch.object(manager, '_paut_print_scale', return_value=88):
+                inserted = manager._ensure_pt_continuation_header(sheet)
+
+        self.assertEqual(inserted, 7)
+        self.assertEqual(sheet.cell(120, 6).value, '월간 용역 진도 보고서')
+        self.assertEqual(sheet.cell(124, 6).value, '3.0 비파괴검사현황')
+        self.assertEqual(sheet.cell(127, 6).value, '2.4 비파괴검사 세부현황(PT)')
+        self.assertIn(119, [int(brk.id) for brk in sheet.row_breaks.brk])
+        self.assertEqual(manager.table_markers['next'], 132)
 
 if __name__ == '__main__':
     unittest.main()

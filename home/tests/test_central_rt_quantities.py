@@ -151,13 +151,16 @@ class RtQuantitiesTests(unittest.TestCase):
         self.assertEqual(corrected['2026-10-20']['ndt_results'][0]['RT_RE'], 2)
         self.assertEqual(corrected['2026-10-19']['qty_data']['RT_소계']['불량'], '1')
         self.assertEqual(corrected['2026-10-19']['qty_data']['RT_소계']['불량률'], '33.3')
+        self.assertEqual(corrected['2026-10-20']['qty_data']['RT_소계']['불량'], '3')
+        self.assertEqual(corrected['2026-10-20']['qty_data']['RT_소계']['불량률'], '33.3')
 
     def test_native_auto_calculation_counts_three_total_and_one_defect(self):
         source = ROOT / 'home/src/site_apps/central/src/daily_work_log_tab.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'DailyWorkLogTab')
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'auto_calculate_and_save')
-        namespace = {'rt_counts': rt_counts, 'tk': SimpleNamespace(END='end'), 'messagebox': Mock()}
+        namespace = {'rt_counts': rt_counts, 'corrected_rt_history': corrected_rt_history,
+                     'tk': SimpleNamespace(END='end'), 'messagebox': Mock()}
         exec(compile(ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])), '<actual auto totals>', 'exec'), namespace)
         app = SimpleNamespace(_validate_rt_rows=lambda: True, _validate_hot_rows=lambda: True,
                 _refresh_hot_summary=Mock(), date_entry=Field('2026-10-19'), load_history=lambda: {},
