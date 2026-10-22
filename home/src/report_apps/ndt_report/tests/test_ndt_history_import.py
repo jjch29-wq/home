@@ -11,10 +11,26 @@ from unittest.mock import patch
 REPORT_ROOT = Path(__file__).resolve().parents[1]
 SRC = REPORT_ROOT / 'src'
 sys.path.insert(0, str(SRC))
-from ndt_history_import import SITES, history_path, read_results
+from ndt_history_import import SITES, history_path, read_results, rt_film_findings, rt_report_quantities
 
 
 class HistoryImportTests(unittest.TestCase):
+    def test_report_quantities_use_all_selected_source_counts(self):
+        items = [
+            {'Loc': 'N/1,이물질/4,N/1', 'RT_OR': '3', 'RT_RE': '1'},
+            {'Loc': ',N/1', 'RT_OR': '1', 'RT_RE': '0'},
+            {'Loc': 'N/1,N/1,P/3', 'RT_OR': '3', 'RT_RE': '1'},
+            {'Loc': ',,N/1', 'RT_OR': '1', 'RT_RE': '0'},
+        ]
+        self.assertEqual(rt_report_quantities(items), (8, 2, 0))
+        self.assertEqual(rt_report_quantities([{'Loc': 'N/1,P/3', 'Rej': 'X'}]), (2, 1, 1))
+
+    def test_rt_film_findings_preserve_grade_and_defect(self):
+        self.assertEqual(rt_film_findings('P/2,N/1,N/1'), {'D5': '√', 'Deg': '2'})
+        self.assertEqual(rt_film_findings('N/1,N/1,N/1'), {'Deg': '1'})
+        self.assertEqual(rt_film_findings('IP/3, P/2'), {'D2': '√', 'D5': '√', 'Deg': '3'})
+        self.assertEqual(rt_film_findings('1-2,Sec.01'), {})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -38,6 +54,26 @@ class HistoryImportTests(unittest.TestCase):
         (self.base / 'daily_work_history.json').write_text('{}', encoding='utf-8')
         with self.assertRaises(FileNotFoundError):
             read_results(next(iter(SITES)), 'RT', self.base)
+
+    def test_central_reads_latest_configured_history(self):
+        site = next(iter(SITES))
+        local = self.write(site, {'2026-10-07': {'ndt_results': []}})
+        cloud = self.base / 'cloud' / 'central'
+        cloud.mkdir(parents=True)
+        latest = cloud / 'daily_work_history.json'
+        latest.write_text(json.dumps({'2026-10-21': {'ndt_results': [
+            {'검사방법': 'RT', 'Joint No.': 'R21', '재촬영구간': ['A-B']}]}}), encoding='utf-8')
+        (local.parent / 'sync_config.json').write_text(
+            json.dumps({'data_dir': str(cloud)}), encoding='utf-8')
+        before = latest.read_bytes()
+        rows = read_results(site, 'RT', self.base)
+        self.assertEqual(history_path(site, self.base), latest)
+        self.assertEqual(rows[0]['Date'], '2026-10-21')
+        self.assertEqual(rows[0]['Joint No.'], 'R21')
+        self.assertEqual(latest.read_bytes(), before)
+        latest.unlink()
+        with self.assertRaises(FileNotFoundError):
+            read_results(site, 'RT', self.base)
 
     def test_method_filter_and_read_only(self):
         site = next(iter(SITES))
@@ -109,15 +145,17 @@ class HistoryImportTests(unittest.TestCase):
         data, indices, inserted = [], [], []
         tree = SimpleNamespace(insert=lambda *args, **kw: inserted.append(kw))
         notebook = SimpleNamespace(select=lambda: 'tab', tab=lambda *args: 'RT')
-        keys = ['Date', 'Sec', 'Loc', 'Joint', 'Size', 'Result', 'ISO']
+        keys = ['Date', 'Sec', 'Loc', 'Joint', 'Size', 'Result', 'ISO', 'Deg', 'D5']
         app = SimpleNamespace(root=None, mode_notebook=notebook, rt_preview_nb=notebook,
+            _normalize_daily_photo_welder=lambda value: value,
             _get_mode_info=lambda mode: (tree, indices, data, keys), update_date_listbox=lambda **kw: None)
-        row = {'Date': '2026-09-05', '검사방법': 'RT', '구간': 'A', '구간정보': 'B',
+        row = {'Date': '2026-09-05', '검사방법': 'RT', '구간': 'A', '구간정보': 'P/2,N/1,N/1',
                'Joint No.': 'J1', '라인번호': 'L1', '결과': '합격', '_source_site': '롯데건설 바이오로직스',
                '_source_path': '/test/history.json'}
         with patch('ndt_history_import.select_history_rows', return_value=[row]):
             self.report_method()(app)
-        self.assertEqual((data[0]['Sec'], data[0]['Loc'], data[0]['Joint']), ('A', 'B', 'J1'))
+        self.assertEqual((data[0]['Sec'], data[0]['Loc'], data[0]['Joint']), ('A', 'P/2,N/1,N/1', 'J1'))
+        self.assertEqual((data[0]['D5'], data[0]['Deg']), ('√', '2'))
         self.assertEqual(data[0]['_source_site'], row['_source_site'])
         self.assertEqual(indices, [0])
         self.assertEqual(inserted[0]['tags'], ('pass',))
@@ -134,6 +172,7 @@ class HistoryImportTests(unittest.TestCase):
         notebook = SimpleNamespace(select=lambda: 'tab', tab=lambda *args: 'PT')
         keys = ['Date', 'Joint No.', "Th'k(mm)", 'Remarks', 'Result']
         app = SimpleNamespace(root=None, mode_notebook=notebook,
+            _normalize_daily_photo_welder=lambda value: value,
             _get_mode_info=lambda mode: (tree, indices, data, keys), update_date_listbox=lambda **kw: None)
         row = {'Date': '2026-09-05', '검사방법': 'PT', 'Joint No.': 'J1', '관경': '1234',
                '결과': '합격', '_source_site': '한국지역난방 중앙지사',

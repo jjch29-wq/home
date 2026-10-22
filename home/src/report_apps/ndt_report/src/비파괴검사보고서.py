@@ -435,12 +435,13 @@ class PMIReportApp:
         self.rt_film_brand = tk.StringVar(value=self.config.get('RT_FILM_BRAND', 'FUJI#80'))
         self.rt_film_type = tk.StringVar(value=self.config.get('RT_FILM_TYPE', 'I'))
         self.rt_film_size = tk.StringVar(value=self.config.get('RT_FILM_SIZE', '3⅓ X 12'))
+        self.rt_exposure_time = tk.StringVar(value=self.config.get('RT_EXPOSURE_TIME', '2 MIN 40 SEC'))
         
         # [NEW] Trace Gapji metadata for real-time preview updates
         for var in [self.gapji_project, self.gapji_customer, self.gapji_item, 
                     self.gapji_material, self.gapji_report_no, self.gapji_exam_date,
                     self.rt_isotope, self.rt_activity, self.rt_activity_unit,
-                    self.rt_film_brand, self.rt_film_type, self.rt_film_size]:
+                    self.rt_film_brand, self.rt_film_type, self.rt_film_size, self.rt_exposure_time]:
             var.trace_add("write", lambda *a: self._update_gapji_preview(getattr(self, 'current_mode', 'PMI')))
 
         # --- Photo Log State Variables ---
@@ -1463,6 +1464,9 @@ class PMIReportApp:
 
         
         # 3. THEN pack Notebook (fills all remaining space)
+        history_bar = ttk.Frame(self.root)
+        history_bar.pack(fill='x', side='top', padx=5, pady=3)
+        ttk.Button(history_bar, text="보고서 발행 이력", command=self.show_report_issue_history).pack(side='right')
         self.mode_notebook = ttk.Notebook(self.root, style="Main.TNotebook")
         self.mode_notebook.pack(fill='both', expand=True, padx=5, pady=(5, 0))
         
@@ -1845,7 +1849,10 @@ class PMIReportApp:
 
         btn_r = tk.Frame(left_pane, background="#f9fafb")
         btn_r.pack(fill='x', pady=5)
-        ttk.Button(btn_r, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(fill='x', pady=(0, 5))
+        generate_row = ttk.Frame(btn_r)
+        generate_row.pack(fill='x', pady=(0, 5))
+        ttk.Button(generate_row, text=" ✨ 성적서 생성 ", style="Action.TButton", command=self.run_process).pack(side='left', fill='x', expand=True)
+        ttk.Button(generate_row, text="발행 이력", command=self.show_report_issue_history).pack(side='left', padx=(5, 0))
         ttk.Button(btn_r, text=" 📝 데이터 추출 ", command=self.extract_only).pack(fill='x', pady=(0, 5))
         ttk.Button(btn_r, text=" 📋 일보 NDT 불러오기 ", command=self.load_daily_work_history).pack(fill='x', pady=(0, 5))
         ttk.Button(btn_r, text=" 🔄 의뢰서에 결과 반영 ", command=self.sync_results_to_request).pack(fill='x')
@@ -2076,7 +2083,10 @@ class PMIReportApp:
         
         # [DYNAMIC] 고정된 리스트 대신 사용자가 설정한 키(rt_column_keys 등)를 사용
         keys_attr = "rt_column_keys" if mode == "RT" else "kogas_column_keys"
-        current_cols = list(getattr(self, keys_attr))
+        # Keep report numbers in source records and issue history, not the RT
+        # editing layout. Use matching data/display keys so editing stays aligned.
+        current_cols = [key for key in getattr(self, keys_attr) if key != "Report No"]
+        setattr(self, keys_attr, current_cols)
             
         tree["columns"] = tuple(current_cols)
         tree["displaycolumns"] = tuple(current_cols)
@@ -3702,11 +3712,13 @@ class PMIReportApp:
                 self.force_print_settings(s, ctx)
 
             output_ext = '.xlsm' if keep_vba else '.xlsx'
-            out_name = f"PAUT_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}{output_ext}"
-            out_path = os.path.join(BASE_DIR, "output", out_name) if os.path.exists(os.path.join(BASE_DIR, "output")) else os.path.join(BASE_DIR, out_name)
+            output_dir = os.path.join(BASE_DIR, "output") if os.path.exists(os.path.join(BASE_DIR, "output")) else BASE_DIR
+            out_path = self._report_save_path(output_dir, output_ext)
+            out_name = os.path.basename(out_path)
             
             if not os.path.exists(os.path.dirname(out_path)): os.makedirs(os.path.dirname(out_path))
             wb.save(out_path)
+            self._record_report_issue('PAUT', wb, out_path, final_list)
             self.log(f"✅ PAUT 성적서 생성 완료: {out_name}")
             os.startfile(os.path.dirname(out_path))
             
@@ -4318,7 +4330,7 @@ class PMIReportApp:
         ).pack(side='left', padx=(0, 3))
         brand_combo = ttk.Combobox(
             film_frame, textvariable=self.rt_film_brand,
-            values=("FUJI#80", "CARESTREAM"), width=10
+            values=("FUJI#80", "CARESTREAM"), width=12
         )
         brand_combo.pack(side='left', padx=(0, 8))
         tk.Label(
@@ -4327,7 +4339,7 @@ class PMIReportApp:
         ).pack(side='left', padx=(0, 3))
         type_combo = ttk.Combobox(
             film_frame, textvariable=self.rt_film_type,
-            values=("I", "AA400"), width=7
+            values=("I", "T200(I)", "MX125(I)", "AA400"), width=10
         )
         type_combo.pack(side='left', padx=(0, 8))
         tk.Label(
@@ -4347,9 +4359,20 @@ class PMIReportApp:
         self.setting_vars['RT_FILM_TYPE'] = self.rt_film_type
         self.setting_vars['RT_FILM_SIZE'] = self.rt_film_size
 
+        if mode == "RT":
+            exposure_frame = ttk.Frame(block)
+            exposure_frame.grid(row=5, column=0, columnspan=4, sticky='ew', padx=2, pady=2)
+            ttk.Label(exposure_frame, text='노출 시간:').pack(side='left', padx=(0, 5))
+            exposure_entry = ttk.Entry(exposure_frame, textvariable=self.rt_exposure_time, width=22)
+            exposure_entry.pack(side='left')
+            ttk.Label(exposure_frame, text='예: 2 MIN 40 SEC').pack(side='left', padx=8)
+            exposure_entry.bind('<FocusOut>', lambda e: self.save_settings())
+            exposure_entry.bind('<Return>', lambda e: [self.root.focus_set(), self.save_settings()])
+            self.setting_vars['RT_EXPOSURE_TIME'] = self.rt_exposure_time
+
         # Add a refresh button for preview
         btn_f = tk.Frame(block, background="#ffffff")
-        btn_f.grid(row=5, column=0, columnspan=4, pady=5, sticky='ew')
+        btn_f.grid(row=6 if mode == "RT" else 5, column=0, columnspan=4, pady=5, sticky='ew')
         ttk.Button(btn_f, text="✨ 갑지 미리보기 업데이트", command=self._update_gapji_preview_current).pack(side='top', fill='x', padx=5)
 
     def _update_gapji_preview_current(self, event=None):
@@ -8011,8 +8034,8 @@ class PMIReportApp:
         end_row = int(self.config.get('DATA_END_ROW', 45))
         
         if current_mode == "RT":
-            start_row = int(self.config.get('RT_START_ROW', 17))
-            end_row = int(self.config.get('RT_END_ROW', 31))
+            start_row = int(self.config.get('RT_START_ROW', 11))
+            end_row = int(self.config.get('RT_DATA_END_ROW', 34))
         elif current_mode == "KOGAS":
             start_row = int(self.config.get('KOGAS_START_ROW', 14))
             end_row = int(self.config.get('KOGAS_DATA_END_ROW', 25))
@@ -8048,7 +8071,7 @@ class PMIReportApp:
         # [FIX] 갑지 데이터 수식으로 연결 (첫번째 시트 참조)
         try:
             ws0 = wb.worksheets[0]
-            if len(wb.worksheets) > 1:
+            if len(wb.worksheets) > 1 and current_mode not in ("RT", "KOGAS"):
                 if current_mode == "PT":
                     # PT 모드는 P4, P6에 텍스트를 직접 꽂아줌 (수식 오류로 0 표기 방지)
                     self.safe_set_value(new_sheet, 'P4', self.gapji_customer.get().strip())
@@ -8086,6 +8109,7 @@ class PMIReportApp:
         - Blueprint for extra sheets (multipage RT)
         """
         import zipfile, shutil, os, re, traceback
+        from worksheet_xml import normalize_print_options
 
         final_out = target_path + ".final"
         shutil.copy2(template_path, final_out)
@@ -8155,8 +8179,14 @@ class PMIReportApp:
             with zipfile.ZipFile(final_out, 'r') as z_tmpl:
                 blueprint_xml  = None
                 blueprint_rels = None
-                first_sheet_f  = next((f for f in z_tmpl.namelist()
-                                       if f.lower().startswith('xl/worksheets/sheet') and f.lower().endswith('.xml')), None)
+                template_sheets = sorted(
+                    (f for f in z_tmpl.namelist()
+                     if re.fullmatch(r'xl/worksheets/sheet\d+\.xml', f, re.IGNORECASE)),
+                    key=lambda f: int(re.search(r'sheet(\d+)\.xml', f, re.IGNORECASE).group(1))
+                )
+                # Continuation pages must inherit the data sheet, never the cover.
+                first_sheet_f = (template_sheets[1] if len(template_sheets) > 1
+                                 else template_sheets[0] if template_sheets else None)
                 if first_sheet_f:
                     blueprint_xml = z_tmpl.read(first_sheet_f).decode('utf-8', errors='ignore')
                     rel_p = f"xl/worksheets/_rels/{os.path.basename(first_sheet_f)}.rels"
@@ -8165,8 +8195,10 @@ class PMIReportApp:
 
                 # 템플릿 파일 맵 (소문자 경로 → 파일 내용)
                 tmpl_map = {}
+                tmpl_names = {}
                 for item in z_tmpl.infolist():
                     tmpl_map[item.filename.lower()] = z_tmpl.read(item.filename)
+                    tmpl_names[item.filename.lower()] = item.filename
 
             # ── Step 3: 출력 ZIP 구성 ────────────────────────────────────────
             with zipfile.ZipFile(temp_swap, 'w', compression=zipfile.ZIP_DEFLATED) as z_out:
@@ -8216,6 +8248,24 @@ class PMIReportApp:
                         if pn_m and pn_m.group(1) not in tmpl_parts:
                             tmpl_ct_str = tmpl_ct_str.replace('</Types>', m_ov.group(0) + '</Types>', 1)
                     merged_ct = tmpl_ct_str.encode('utf-8')
+                # The generated workbook determines the output format, even when
+                # the drawing template has a different workbook content type.
+                if merged_ct and rep_content_types:
+                    import xml.etree.ElementTree as ET
+                    merged_root = ET.fromstring(merged_ct)
+                    report_root = ET.fromstring(rep_content_types)
+                    workbook_type = next(
+                        node.attrib['ContentType'] for node in report_root
+                        if node.attrib.get('PartName') == '/xl/workbook.xml'
+                    )
+                    for node in merged_root:
+                        if node.attrib.get('PartName') == '/xl/workbook.xml':
+                            node.set('ContentType', workbook_type)
+                    if not rep_ss_data:
+                        for node in list(merged_root):
+                            if node.attrib.get('PartName', '').lower() == '/xl/sharedstrings.xml':
+                                merged_root.remove(node)
+                    merged_ct = ET.tostring(merged_root, encoding='utf-8', xml_declaration=True)
                 z_out.writestr('[Content_Types].xml', merged_ct if merged_ct else (rep_content_types or b''))
 
                 # 리포트의 workbook 메타 파일 기록
@@ -8356,13 +8406,13 @@ class PMIReportApp:
                                                 '</sheetData>', '</sheetData>' + report_merges.group(0), 1
                                             )
                                     self.log(f"   ✅ [V4] {os.path.basename(fl_lower)} 데이터 주입 (행높이 보존)")
-                            z_out.writestr(fl_lower, tmpl_sheet.encode('utf-8'))
+                            z_out.writestr(tmpl_names[fl_lower], tmpl_sheet.encode('utf-8'))
 
                         except:
-                            z_out.writestr(fl_lower, raw)
+                            z_out.writestr(tmpl_names[fl_lower], raw)
                     else:
                         # 나머지 (drawing, media, rels, etc.) → 템플릿 그대로
-                        z_out.writestr(fl_lower, raw)
+                        z_out.writestr(tmpl_names[fl_lower], raw)
                     written.add(fl_lower)
 
                 # 추가 시트 (템플릿에 없는 멀티페이지 시트) → Blueprint 적용
@@ -8434,6 +8484,7 @@ class PMIReportApp:
                                             '</sheetData>',
                                             '</sheetData>' + report_header.group(0), 1
                                         )
+                                new_xml = normalize_print_options(new_xml)
                                 z_out.writestr(fl_rep, new_xml.encode('utf-8'))
                                 if blueprint_rels:
                                     z_out.writestr(f"xl/worksheets/_rels/{os.path.basename(fl_rep)}.rels", blueprint_rels)
@@ -8507,6 +8558,9 @@ class PMIReportApp:
                 new_row['_source_site'] = r['_source_site']
                 new_row['_source_path'] = r['_source_path']
                 new_row['_source_id'] = r.get('_source_id')
+                for quantity_key in ('RT_OR', 'RT_RE'):
+                    if quantity_key in r:
+                        new_row[quantity_key] = r[quantity_key]
                 new_row["Date"] = r.get("Date", "")
 
                 # 중앙지사 작업/감독일보의 '구간'은 RT의 SEC 값이다.
@@ -8556,6 +8610,9 @@ class PMIReportApp:
                     loc = r.get("구간", "")
                 if "Loc" in keys_attr: new_row["Loc"] = loc
                 elif "Location" in keys_attr: new_row["Location"] = loc
+                if mode in ("RT", "KOGAS"):
+                    from ndt_history_import import rt_film_findings
+                    new_row.update(rt_film_findings(r.get("구간정보", "")))
                 
                 # 결과 / Result / Acc / Rej
                 res = r.get("결과", "")
@@ -9693,6 +9750,30 @@ class PMIReportApp:
         self.populate_preview(self.extracted_data, switch_tab=False)
         self.log(f"📅 날짜 필터 적용 완료: {len(selected_dates)}개 날짜 선택됨")
 
+    def show_report_issue_history(self):
+        from report_issue_history import show_history
+        show_history(self.root)
+
+    def _report_save_path(self, directory, extension):
+        from report_issue_history import report_output_path
+        return report_output_path(directory, self.gapji_report_no.get(), extension,
+                                  fallback='Report_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
+
+    def _record_report_issue(self, mode, workbook, save_path, items):
+        from report_issue_history import record_issue
+        try:
+            # Read the actual saved cover value rather than a row's imported number.
+            cell = {'RT': 'C5', 'KOGAS': 'C5', 'PT': 'P6', 'PAUT': 'AA5'}.get(mode)
+            if cell is None:
+                cell = self.config.get('GAPJI_REPORT_NO_CELL', 'B10')
+            report_no = workbook.worksheets[0][cell].value
+            record_issue(mode, report_no, save_path, items)
+            self.log(f"발행 이력 저장: {report_no or '(번호 미입력)'} · {len(items)}건")
+        except Exception as exc:
+            self.log(f"발행 이력 저장 실패: {exc}")
+            messagebox.showwarning('발행 이력 저장 실패',
+                f'보고서 파일은 생성되었으나 발행 이력을 저장하지 못했습니다.\n{save_path}\n\n{exc}')
+
     def run_process(self):
         self.save_settings() # [FIX] Ensure UI settings are saved to config before generating
         
@@ -10408,8 +10489,10 @@ class PMIReportApp:
                     self.log(f"페이지 번호 기입 실패 ({p_idx}): {e}")
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_name = f"{os.path.splitext(os.path.basename(template_path))[0]}_Unified_{now_str}{os.path.splitext(template_path)[1]}"
-            save_path = os.path.join(os.path.dirname(template_path), output_name); wb.save(save_path)
+            save_path = self._report_save_path(os.path.dirname(template_path), os.path.splitext(template_path)[1])
+            output_name = os.path.basename(save_path)
+            wb.save(save_path)
+            self._record_report_issue('PMI', wb, save_path, final_list)
             self.progress['value'] = 100; self.log(f"✨ 완료! 저장됨: {output_name}")
             messagebox.showinfo("성공", f"통합 성적서 생성이 완료되었습니다.\n\n경로: {os.path.dirname(save_path)}\n파일명: {output_name}")
         except Exception as e:
@@ -10643,7 +10726,7 @@ class PMIReportApp:
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_name = f"PT_Report_{now_str}.xlsx"
+            output_name = os.path.basename(self._report_save_path(os.path.dirname(template_path), '.xlsx'))
             remembered_dir = str(self.config.get('PT_LAST_SAVE_DIR', '')).strip()
             initial_dir = (
                 remembered_dir
@@ -10665,6 +10748,7 @@ class PMIReportApp:
             self.config['PT_LAST_SAVE_DIR'] = os.path.dirname(save_path)
             self.save_settings()
             wb.save(save_path)
+            self._record_report_issue('PT', wb, save_path, final_list)
             self.progress['value'] = 100
             self.log(f"✨ PT 완료! 저장됨: {os.path.basename(save_path)}")
             messagebox.showinfo(
@@ -10802,9 +10886,10 @@ class PMIReportApp:
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_name = f"MT_Report_{now_str}.xlsx"
-            save_path = os.path.join(os.path.dirname(template_path), output_name)
+            save_path = self._report_save_path(os.path.dirname(template_path), '.xlsx')
+            output_name = os.path.basename(save_path)
             wb.save(save_path)
+            self._record_report_issue('MT', wb, save_path, final_list)
             self.progress['value'] = 100
             self.log(f"✨ PT 완료! 저장됨: {output_name}")
             messagebox.showinfo("성공", f"MT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
@@ -10832,7 +10917,8 @@ class PMIReportApp:
         self.log(f"🚀 {mode} 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            keep_vba = os.path.splitext(template_path)[1].lower() == '.xlsm'
+            wb = openpyxl.load_workbook(template_path, keep_vba=keep_vba)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
@@ -10860,6 +10946,17 @@ class PMIReportApp:
                         )
                 if cover_thickness and cover_thickness.lower() != "nan":
                     self.safe_set_value(ws0, "E9", cover_thickness)
+                # Penetrating thickness is the double wall plus 2 mm.
+                thickness_match = re.fullmatch(
+                    r'\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*', cover_thickness, re.IGNORECASE
+                )
+                if thickness_match:
+                    penetrating_thickness = float(thickness_match.group(1)) * 2 + 2
+                    self.safe_set_value(ws0, "C16", penetrating_thickness)
+                    ws0['C16'].number_format = '0.00"mm"'
+                else:
+                    ws0['C16'] = None
+                    self.log('투과 두께 미입력: 첫 번째 검사 항목의 두께를 확인해주세요.')
 
                 raw_film_type = self.rt_film_type.get().strip() or "I"
                 base_film_type = re.sub(r"\s*\((?:I|II)\)\s*$", "", raw_film_type, flags=re.IGNORECASE)
@@ -10883,36 +10980,36 @@ class PMIReportApp:
                 self.safe_set_value(ws0, "J11", "SE-75")
                 self.safe_set_value(ws0, "K10", self.rt_activity.get().strip())
                 self.safe_set_value(ws0, "M10", self.rt_activity_unit.get().strip() or "Ci")
+                self.safe_set_value(ws0, "C24", self.rt_exposure_time.get().strip())
                 self.safe_set_value(ws0, "R20", "SIS-N-106 KDHC-JY")
 
-                # Mirror the examination date from I28 to I30 in the cover's
-                # Korean year/month/day presentation.
-                exam_date_value = ws0["I28"].value
+                # Use the current input, preserving date ranges instead of
+                # silently reducing them to their first date.
+                exam_date_value = self.gapji_exam_date.get().strip()
                 date_parts = None
                 if isinstance(exam_date_value, (datetime.datetime, datetime.date)):
                     date_parts = (
                         exam_date_value.year, exam_date_value.month, exam_date_value.day
                     )
                 else:
-                    date_match = re.search(
-                        r"(\d{4})\D+(\d{1,2})\D+(\d{1,2})",
+                    date_match = re.fullmatch(
+                        r"\s*(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\s*",
                         str(exam_date_value or "")
                     )
                     if date_match:
                         date_parts = tuple(int(part) for part in date_match.groups())
+                formatted_exam_date = str(exam_date_value or '')
                 if date_parts:
                     year, month, day = date_parts
                     formatted_exam_date = f"{year} 년   {month:02d} 월   {day:02d} 일"
-                    self.safe_set_value(ws0, "I28", formatted_exam_date)
-                    self.safe_set_value(
-                        ws0, "I30", formatted_exam_date
-                    )
-                    ws0["I28"].alignment = Alignment(
-                        horizontal='center', vertical='center', shrink_to_fit=True
-                    )
-                    ws0["I30"].alignment = Alignment(
-                        horizontal='center', vertical='center', shrink_to_fit=True
-                    )
+                self.safe_set_value(ws0, "I28", formatted_exam_date)
+                self.safe_set_value(ws0, "I30", formatted_exam_date)
+                ws0["I28"].alignment = Alignment(
+                    horizontal='center', vertical='center', shrink_to_fit=True
+                )
+                ws0["I30"].alignment = Alignment(
+                    horizontal='center', vertical='center', shrink_to_fit=True
+                )
 
                 first_sec = str(first_item.get("Sec", "")).strip()
                 first_drawing_no = str(first_item.get("Dwg", "")).strip()
@@ -10944,6 +11041,17 @@ class PMIReportApp:
                     horizontal='left', vertical='center',
                     wrap_text=True, shrink_to_fit=True
                 )
+
+                for cell_ref, label in (
+                    ('P1', 'CUSTOMER\n발주자'),
+                    ('P2', 'PROJECT\n공사명'),
+                    ('P5', 'DRAWING NO.\n도면번호'),
+                ):
+                    ws0[cell_ref] = label
+                    ws0[cell_ref].alignment = Alignment(
+                        horizontal='left', vertical='center',
+                        wrap_text=True, shrink_to_fit=True
+                    )
 
                 # 갑지에서 자동 입력되는 값 영역만 상하좌우 중앙 정렬한다.
                 for cell_ref in ("Q1", "Q2", "C5", "I5", "C10", "I28"):
@@ -11020,6 +11128,11 @@ class PMIReportApp:
             rt_summary_items = {}
             rt_film_location_counts = {}
             cover_d32_value = ws0["D32"].value if mode == "RT" else None
+            if mode == "RT":
+                from ndt_history_import import rt_report_quantities
+                report_original_count, report_repair_count, fallback_rows = rt_report_quantities(final_list)
+                if fallback_rows:
+                    self.log(f'수량 주의: {fallback_rows}개 항목에 일보 수량이 없어 구간정보로 계산했습니다. 일보를 다시 불러오면 RT_OR/RT_RE 합계가 적용됩니다.')
             
             while data_ptr < len(final_list):
                 # 페이지 넘김 체크: 가스공사는 2행 블록 기준
@@ -11191,12 +11304,11 @@ class PMIReportApp:
                     rem_col = self.col_to_num(self.config.get('RT_COL_REM', '30'))
                     if rem_col >= 1: self.safe_set_value(ws, ws.cell(row=current_row, column=rem_col).coordinate, item.get('Remarks', ''))
 
-                    # Film Location(중앙지사 구간정보)은 쉼표로 구분된 값을
-                    # 각 데이터 행의 D:K에 왼쪽부터 최대 8개까지 순차 입력한다.
+                    # Empty positions are meaningful: ,N/1 is the second film
+                    # and ,,N/1 is the third, directly under the rejected interval.
                     film_locations = [
                         value.strip()
-                        for value in re.split(r'[,;\n]+', str(item.get('Loc', '')))
-                        if value.strip()
+                        for value in re.split(r'[,;\n]', str(item.get('Loc', '')))
                     ]
                     rt_film_location_counts[ws.title] = max(
                         rt_film_location_counts.get(ws.title, 0),
@@ -11263,6 +11375,21 @@ class PMIReportApp:
                 s.oddHeader.right.size = 9
                 s.page_margins.header = 0.55
                 if p_idx > 0 and mode == "RT":
+                    # A copied/template page may contain old rows beyond the
+                    # current page's last item. Clear all unused data cells.
+                    for row_idx in range(start_row, end_row + 1):
+                        if (s.title, row_idx) not in rt_summary_items:
+                            for cell in s.iter_rows(min_row=row_idx, max_row=row_idx,
+                                                    min_col=1, max_col=22):
+                                for value_cell in cell:
+                                    if not isinstance(value_cell, openpyxl.cell.cell.MergedCell):
+                                        value_cell.value = None
+                    # Repeat the cover's report number on every continuation page.
+                    self.safe_set_value(s, "B5", ws0["C5"].value)
+                    s["B5"].alignment = Alignment(
+                        horizontal='center', vertical='center',
+                        wrap_text=True, shrink_to_fit=True
+                    )
                     # 갑지의 고정 발주처를 모든 을지 CUSTOMER 영역에 동일 적용한다.
                     self.safe_set_value(s, "O1", ws0["Q1"].value)
                     s["O1"].alignment = Alignment(
@@ -11330,31 +11457,18 @@ class PMIReportApp:
                                 return bool(text_value) and text_value.lower() not in ("nan", "none", "null", "-")
 
                             # ORIGINAL: number of populated inspection-position cells in D:K.
-                            original_count = sum(
-                                1
-                                for row_idx in sheet_data_rows
-                                for col_idx in range(4, 12)
-                                if has_summary_value(s.cell(row=row_idx, column=col_idx).value)
-                            )
+                            original_count = report_original_count
 
                             # REPAIR: only values 3 or 4 in D:K on rows checked as rejected in C.
-                            repair_count = 0
-                            for row_idx in sheet_data_rows:
-                                reject_value = s.cell(row=row_idx, column=3).value
-                                if not has_summary_value(reject_value):
-                                    continue
-                                for col_idx in range(4, 12):
-                                    interval_value = str(s.cell(row=row_idx, column=col_idx).value).strip()
-                                    if re.fullmatch(r"[34](?:\.0+)?", interval_value):
-                                        repair_count += 1
+                            repair_count = report_repair_count
 
                             total_count = original_count + repair_count
                             inspection_count = sum(
-                                1 for item in sheet_items
+                                1 for item in final_list
                                 if has_summary_value(item.get("Joint", ""))
                             )
                             sizes = []
-                            for item in sheet_items:
+                            for item in final_list:
                                 size = str(item.get("Size", "")).strip()
                                 if size and size.lower() != "nan" and size not in sizes:
                                     sizes.append(size)
@@ -11484,13 +11598,16 @@ class PMIReportApp:
             except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_name = f"RT_Report_{now_str}.xlsx"
-            save_path = os.path.join(os.path.dirname(template_path), output_name)
+            output_ext = '.xlsm' if keep_vba else '.xlsx'
+            save_path = self._report_save_path(os.path.dirname(template_path), output_ext)
+            output_name = os.path.basename(save_path)
             wb.save(save_path)
             
             # [SURGERY] openpyxl destroys complex drawings (like grouped shapes). 
             # We surgically inject the template's drawing layer back into the generated file.
             self.inject_drawing_layer(template_path, save_path)
+
+            self._record_report_issue(mode, wb, save_path, final_list)
             
             self.progress['value'] = 100
             self.log(f"✨ RT 완료! 저장됨: {output_name}")

@@ -24,7 +24,25 @@ def find_src_root(start_path=None):
 def history_path(site, source_dir=None):
     folder, filename = SITES[site]
     base = Path(source_dir) if source_dir is not None else find_src_root()
-    return base / 'site_apps' / folder / 'src' / filename
+    site_dir = base / 'site_apps' / folder / 'src'
+    # Central work logs can live in the site's configured cloud data directory.
+    # Read the configuration directly so importing reports never starts the site app.
+    config_path = site_dir / 'sync_config.json'
+    if folder == 'central' and config_path.is_file():
+        with config_path.open('r', encoding='utf-8-sig') as stream:
+            config = json.load(stream)
+        if not isinstance(config, dict):
+            raise ValueError('중앙지사 동기화 설정은 객체여야 합니다.')
+        data_dir = config.get('data_dir')
+        if data_dir:
+            if not isinstance(data_dir, str):
+                raise ValueError('중앙지사 data_dir는 경로 문자열이어야 합니다.')
+            root = Path(data_dir)
+            if not root.is_absolute():
+                root = site_dir / root
+            # An unavailable configured source must not silently show stale data.
+            return root / filename
+    return site_dir / filename
 
 
 def read_results(site, mode, source_dir=None):
@@ -41,9 +59,13 @@ def read_results(site, mode, source_dir=None):
         if not isinstance(day, dict) or not isinstance(day.get('ndt_results', []), list):
             raise ValueError(f'{date}: 일보 또는 ndt_results 형식이 올바르지 않습니다.')
         for record_index, record in enumerate(day.get('ndt_results', [])):
-            if not isinstance(record, dict) or any(isinstance(v, (dict, list)) for v in record.values()):
+            if not isinstance(record, dict) or any(
+                isinstance(v, (dict, list)) and not (k == '재촬영구간' and isinstance(v, list))
+                for k, v in record.items()
+            ):
                 raise ValueError(f'{date}: NDT 항목 형식이 올바르지 않습니다.')
-            clean = {k: str(v).strip() for k, v in record.items() if v is not None and str(v).strip()}
+            clean = {k: str(v).strip() for k, v in record.items()
+                     if not isinstance(v, (dict, list)) and v is not None and str(v).strip()}
             if not clean:
                 continue
             methods = re.findall(r'[A-Z]+', clean.get('검사방법', '').upper())
@@ -73,6 +95,50 @@ def read_results(site, mode, source_dir=None):
             clean['_source_location'] = clean.get('현장명') or day.get('현장명') or day.get('site') or ''
             rows.append(clean)
     return rows
+
+
+def rt_report_quantities(items):
+    """Sum source daily-log quantities across the selected report, not a page."""
+    original = repair = fallback_rows = 0
+    for item in items:
+        parts = re.split(r'[,;\n]', str(item.get('Loc', '')))
+        populated = [p.strip() for p in parts if p.strip()]
+        source_values = []
+        for key in ('RT_OR', 'RT_RE'):
+            text = str(item.get(key, '')).strip()
+            if re.fullmatch(r'\d+(?:\.0+)?', text):
+                source_values.append(int(float(text)))
+            else:
+                source_values.append(None)
+        if None in source_values:
+            fallback_rows += 1
+        original += source_values[0] if source_values[0] is not None else len(populated)
+        rejected = str(item.get('Rej', '')).strip() not in ('', '0', 'False')
+        repair += source_values[1] if source_values[1] is not None else (
+            sum(bool(re.search(r'/\s*[34]\s*$', p)) for p in populated) if rejected else 0
+        )
+    return original, repair, fallback_rows
+
+
+def rt_film_findings(location):
+    """Translate daily-log film findings (e.g. P/2,N/1) into RT preview fields."""
+    defect_keys = {
+        'C': 'D1', 'IP': 'D2', 'LF': 'D3', 'S': 'D4', 'P': 'D5',
+        'UC': 'D6', 'RUC': 'D7', 'BT': 'D8', 'TI': 'D9', 'CP': 'D10',
+        'RC': 'D11', 'MIS': 'D12', 'EP': 'D13', 'SD': 'D14', 'OTH': 'D15',
+    }
+    result = {}
+    grades = []
+    for code, grade in re.findall(
+        r'(?<![A-Z0-9])([A-Z]+)\s*/\s*([1-4])(?![\d.])', str(location).upper()
+    ):
+        if code == 'N' or code in defect_keys:
+            grades.append(int(grade))
+            if code in defect_keys:
+                result[defect_keys[code]] = '√'
+    if grades:
+        result['Deg'] = str(max(grades))
+    return result
 
 
 def select_history_rows(parent, mode):
@@ -121,13 +187,13 @@ def select_history_rows(parent, mode):
         tree.delete(*tree.get_children())
         import_button.configure(state='disabled')
         site = site_var.get()
-        path_var.set(str(history_path(site)))
         status_var.set('불러오는 중…')
         try:
+            path_var.set(str(history_path(site)))
             rows.extend(read_results(site, mode))
         except (OSError, ValueError) as exc:
             status_var.set('불러오기 실패 — 파일과 데이터 형식을 확인하세요.')
-            messagebox.showerror('일보 불러오기 실패', f'{site}\n{history_path(site)}\n\n{exc}', parent=dialog)
+            messagebox.showerror('일보 불러오기 실패', f'{site}\n{path_var.get()}\n\n{exc}', parent=dialog)
             return
         for index, row in enumerate(rows):
             tree.insert('', 'end', iid=str(index), values=(site, row['Date'], row['_source_location'] or '(미기록)',
