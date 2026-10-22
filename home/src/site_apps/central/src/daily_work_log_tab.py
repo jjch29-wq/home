@@ -404,7 +404,8 @@ class DailyWorkLogTab(ttk.Frame):
         self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
         ttk.Label(line_bar, textvariable=self.ndt_selection_text).pack(side='left', padx=(0, 8))
         ttk.Button(line_bar, text='라인번호 일괄 변경', command=self._edit_ndt_lines).pack(side='left')
-        ttk.Label(line_bar, text='현재 날짜의 같은 라인번호를 한 번에 변경합니다.').pack(side='left', padx=8)
+        ttk.Button(line_bar, text='구간 일괄 변경', command=self._edit_ndt_sections).pack(side='left', padx=(8, 0))
+        ttk.Label(line_bar, text='현재 날짜의 라인번호·구간을 한 번에 변경합니다.').pack(side='left', padx=8)
         
         # Grid Container
         grid_frame = ttk.Frame(parent)
@@ -837,6 +838,83 @@ class DailyWorkLogTab(ttk.Frame):
             for row in self.ndt_grid_entries:
                 row['라인번호']['values'] = self.history_lines
         return len(targets)
+
+    def _replace_ndt_section(self, old_section, new_section, selected_only=False):
+        old_section, new_section = old_section.strip(), new_section.strip()
+        if not new_section or (not selected_only and not old_section):
+            raise ValueError('기존 구간과 새 구간을 입력하세요.')
+        if not selected_only and old_section == new_section:
+            raise ValueError('새 구간이 기존 구간과 같습니다.')
+        targets = [row for i, row in enumerate(self.ndt_grid_entries)
+                   if (self.ndt_selection_vars[i].get() if selected_only
+                       else row['구간'].get().strip() == old_section)]
+        if not targets:
+            raise ValueError('변경할 행이 없습니다. 구간 또는 체크한 행을 확인하세요.')
+        for row in targets:
+            row['구간'].set(new_section)
+        self.history_sections = [''] + sorted(
+            {s for s in self.history_sections if s} | {new_section})
+        for row in self.ndt_grid_entries:
+            row['구간']['values'] = self.history_sections
+        return len(targets)
+
+    def _edit_ndt_sections(self):
+        sections = sorted({row['구간'].get().strip() for row in self.ndt_grid_entries
+                           if row['구간'].get().strip()})
+        selected = getattr(self, 'selected_ndt_row', None)
+        initial = selected['구간'].get().strip() if selected is not None else ''
+        dialog = tk.Toplevel(self)
+        dialog.title('구간 일괄 변경')
+        dialog.transient(self.winfo_toplevel())
+        dialog.resizable(False, False)
+        body = ttk.Frame(dialog, padding=15)
+        body.pack(fill='both', expand=True)
+        old = tk.StringVar(value=initial or (sections[0] if sections else ''))
+        new = tk.StringVar()
+        selected_only = tk.BooleanVar(value=False)
+        preview = tk.StringVar()
+        ttk.Label(body, text=f'현재 날짜: {self.date_entry.get()}').grid(
+            row=0, column=0, columnspan=2, sticky='w', pady=(0, 10))
+        ttk.Radiobutton(body, text='기존 구간과 같은 모든 행', variable=selected_only,
+                        value=False).grid(row=1, column=0, columnspan=2, sticky='w')
+        ttk.Radiobutton(body, text='왼쪽 체크박스로 선택한 행만', variable=selected_only,
+                        value=True).grid(row=2, column=0, columnspan=2, sticky='w')
+        ttk.Label(body, text='기존 구간').grid(row=3, column=0, sticky='w', padx=(0, 10))
+        old_entry = ttk.Combobox(body, textvariable=old, values=sections, state='readonly', width=28)
+        old_entry.grid(row=3, column=1, pady=4)
+        ttk.Label(body, text='새 구간').grid(row=4, column=0, sticky='w')
+        entry = ttk.Combobox(body, textvariable=new, values=self.history_sections, width=28)
+        entry.grid(row=4, column=1, pady=4)
+        ttk.Label(body, textvariable=preview).grid(row=5, column=0, columnspan=2, sticky='w', pady=10)
+        ttk.Label(body, text='변경 후 상단 저장 버튼을 눌러 주세요.').grid(
+            row=6, column=0, columnspan=2, sticky='w')
+
+        def update_preview(*args):
+            only = selected_only.get()
+            old_entry.configure(state='disabled' if only else 'readonly')
+            count = (sum(bool(v.get()) for v in self.ndt_selection_vars) if only else
+                     sum(row['구간'].get().strip() == old.get() for row in self.ndt_grid_entries)
+                     if old.get() else 0)
+            preview.set(f'변경 대상: {count}행')
+
+        def apply():
+            try:
+                count = self._replace_ndt_section(old.get(), new.get(), selected_only.get())
+            except ValueError as error:
+                messagebox.showwarning('구간 일괄 변경', str(error), parent=dialog)
+                return
+            dialog.destroy()
+            messagebox.showinfo('구간 일괄 변경', f'{count}행을 변경했습니다. 상단 저장 버튼을 눌러 주세요.')
+
+        old.trace_add('write', update_preview)
+        selected_only.trace_add('write', update_preview)
+        update_preview()
+        buttons = ttk.Frame(body)
+        buttons.grid(row=7, column=0, columnspan=2, sticky='e', pady=(12, 0))
+        ttk.Button(buttons, text='변경 적용', command=apply).pack(side='left', padx=4)
+        ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='left')
+        dialog.grab_set()
+        entry.focus_set()
 
     def _edit_ndt_lines(self):
         lines = sorted({row['라인번호'].get().strip() for row in self.ndt_grid_entries

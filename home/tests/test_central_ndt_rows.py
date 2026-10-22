@@ -7,6 +7,36 @@ from unittest.mock import Mock
 
 
 class NdtRowsTests(unittest.TestCase):
+    def test_section_batch_replaces_exact_matches_or_checked_rows_only(self):
+        source = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/daily_work_log_tab.py'
+        tree = ast.parse(source.read_text(encoding='utf-8'))
+        method = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+                      and node.name == '_replace_ndt_section')
+        namespace = {}
+        exec(compile(ast.Module(body=[method], type_ignores=[]), str(source), 'exec'), namespace)
+        class Section(dict):
+            def __init__(self, value):
+                self.value = value
+            def get(self):
+                return self.value
+            def set(self, value):
+                self.value = value
+        rows = [{'구간': Section(s), '라인번호': 'L1', 'Joint No.': f'S{i}', 'RT_OR': '3'}
+                for i, s in enumerate(('Sec.15', 'Sec.15', 'Sec.15-3', ''))]
+        app = SimpleNamespace(ndt_grid_entries=rows, history_sections=['', 'Sec.15', 'Sec.15-3'],
+                              ndt_selection_vars=[Section(v) for v in (False, True, True, False)])
+        replace = namespace['_replace_ndt_section']
+        self.assertEqual(replace(app, ' Sec.15 ', ' Sec.15-4 '), 2)
+        self.assertEqual([r['구간'].get() for r in rows], ['Sec.15-4', 'Sec.15-4', 'Sec.15-3', ''])
+        self.assertEqual(replace(app, '', 'Sec.16', True), 2)
+        self.assertEqual([r['구간'].get() for r in rows], ['Sec.15-4', 'Sec.16', 'Sec.16', ''])
+        self.assertEqual([r['Joint No.'] for r in rows], ['S0', 'S1', 'S2', 'S3'])
+        self.assertTrue(all(r['라인번호'] == 'L1' and r['RT_OR'] == '3' for r in rows))
+        self.assertIn('Sec.16', app.history_sections)
+        for before, after in (('', 'Sec.1'), ('Sec.16', ''), ('Sec.16', 'Sec.16'), ('missing', 'Sec.1')):
+            with self.assertRaises(ValueError):
+                replace(app, before, after)
+
     def test_line_replacement_changes_only_exact_matches_and_preserves_joint_data(self):
         source = Path(__file__).resolve().parents[1] / 'src/site_apps/central/src/daily_work_log_tab.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))

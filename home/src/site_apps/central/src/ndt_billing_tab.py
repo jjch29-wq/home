@@ -7,6 +7,7 @@ import json
 import win32com.client as win32
 from tkcalendar import DateEntry
 from site_apps.central.src.services.ndt_calculator import calculate_billing
+from site_apps.central.src.services.billing_totals import grouped_billing_totals, grouped_supply_amount
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
@@ -645,28 +646,35 @@ class NDTCalculatorTab(ttk.Frame):
             self.ent_billing_end = ttk.Entry(lbl_frame, textvariable=self.billing_end_date, width=12)
             self.ent_billing_end.pack(side=tk.LEFT)
             
-        ttk.Label(lbl_frame, text="  |  업체명(현장): ", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(lbl_frame, text="  |  시공업체: ", font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=(10, 2))
         
         # [NEW] Dropdown for site filter
         self.cb_billing_site = ttk.Combobox(lbl_frame, width=20, state='readonly')
         self.cb_billing_site.pack(side=tk.LEFT, padx=(0, 10))
         
         def _populate_sites(event=None):
-            if hasattr(self, 'main_app') and self.main_app and hasattr(self.main_app, 'sites'):
-                sites = ['전체'] + sorted([str(s).strip() for s in (self.main_app.sites or []) if str(s).strip()])
-                self.cb_billing_site['values'] = sites
-                if not self.cb_billing_site.get():
-                    self.cb_billing_site.set('전체')
+            try:
+                with open(get_history_path(), 'r', encoding='utf-8') as source:
+                    history = json.load(source)
+                sites = ['전체'] + sorted({str(row.get('업체', '') or '').strip() or '미지정'
+                                          for day in history.values()
+                                          for row in day.get('ndt_results', [])
+                                          if str(row.get('검사방법', '')).strip()})
+            except (OSError, ValueError):
+                sites = ['전체']
+            self.cb_billing_site['values'] = sites
+            if self.cb_billing_site.get() not in sites:
+                self.cb_billing_site.set('전체')
         
         # Populate initially and bind to click to ensure it's up-to-date
         _populate_sites()
         self.cb_billing_site.bind('<Button-1>', _populate_sites)
             
-        ttk.Button(lbl_frame, text="조회(데이터 연동)", command=self.import_from_daily_db).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Button(lbl_frame, text="조회(일보 연동)", command=self.import_from_work_log).pack(side=tk.LEFT, padx=(5, 0))
             
         ttk.Button(lbl_frame, text="기성청구", command=self.export_to_excel).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(lbl_frame, text="일일 장부에서 연동", command=self.import_from_daily_db).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(lbl_frame, text="작업/감독일보에서 연동", command=self.import_from_work_log).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="전체 선택", command=self.select_all_records).pack(side=tk.RIGHT, padx=5)
 
@@ -975,116 +983,43 @@ class NDTCalculatorTab(ttk.Frame):
         self.result_text.insert(tk.END, txt)
         self.result_text.config(state=tk.DISABLED)
 
-    def import_from_daily_db(self):
+    def import_from_work_log(self):
         try:
-            import pandas as pd
-            import os
-            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'Material_Inventory.xlsx')
-            if not os.path.exists(db_path):
-                messagebox.showerror("오류", "DB 파일을 찾을 수 없습니다.")
+            from site_apps.central.src.services.billing_work_log_import import build_work_log_billing_records
+            history_path = get_history_path()
+            with open(history_path, 'r', encoding='utf-8') as source:
+                history = json.load(source)
+            start = self.billing_start_date.get().strip()
+            end = self.billing_end_date.get().strip()
+            location = self.loc_type_var.get()
+            prepared = build_work_log_billing_records(
+                history, start, end, material_costs=MATERIAL_COST, labor_costs=LABOR_COST,
+                contracts=self.contract_vars, location=location,
+                overhead_rate=float(self.overhead_rate_var.get()) / 100,
+                technical_fee_rate=float(self.tech_fee_rate_var.get()) / 100,
+                company_filter=self.cb_billing_site.get().strip() or '전체',
+            )
+            if not prepared:
+                messagebox.showinfo('작업/감독일보 연동', '조회 기간에 저장된 검사결과가 없습니다.')
                 return
-            df = pd.read_excel(db_path, sheet_name='DailyUsage')
-            
-            if '검사방법' not in df.columns:
-                messagebox.showinfo("안내", "데이터베이스 형식이 맞지 않습니다.")
+            if not messagebox.askyesno(
+                '작업/감독일보 연동',
+                f'{start} ~ {end}\n저장된 작업/감독일보 기준 {len(prepared)}건을 가져옵니다.\n'
+                f'적용 구분: {location}\n기존 기성 작업기록은 교체됩니다.\n\n'
+                '일보를 수정했다면 먼저 해당 탭에서 자동 집계 및 저장을 눌러 주세요.\n진행하시겠습니까?'
+            ):
                 return
-                
-            # [NEW] 현장 탭의 조회 기간 및 현장 필터를 그대로 적용
-            if hasattr(self, 'main_app') and self.main_app:
-                try:
-                    start_str = getattr(self, "billing_start_date", self.main_app.ent_daily_start_date).get().strip()
-                    end_str = getattr(self, "billing_end_date", self.main_app.ent_daily_end_date).get().strip()
-                    
-                    # [FIX] Use the local site dropdown in the billing tab!
-                    site_filter = getattr(self, "cb_billing_site", self.main_app.cb_daily_filter_site).get().strip()
-                    
-                    if start_str or end_str:
-                        df['Date'] = pd.to_datetime(df['Date'])
-                        if start_str:
-                            df = df[df['Date'] >= pd.to_datetime(start_str)]
-                        if end_str:
-                            df = df[df['Date'] <= (pd.to_datetime(end_str) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))]
-                            
-                    if site_filter and site_filter != "전체":
-                        df = df[df['Site'] == site_filter]
-                except Exception as e:
-                    print(f"Date filter applying error: {e}")
-                
-            ndt_df = df[df['검사방법'].isin(['RT', 'UT', 'PT', 'PAUT', 'MT'])]
-            if ndt_df.empty:
-                messagebox.showinfo("안내", "연동할 NDT 작업 기록이 없습니다.")
-                return
-                
-            if not messagebox.askyesno("데이터 연동", f"일일 작업보에서 {len(ndt_df)}건의 NDT 기록을 가져오시겠습니까?\n(기존 기록은 지워집니다)"): return
-            
-            self.clear_records()
-            count = 0
-            for _, row in ndt_df.iterrows():
-                date_str = str(row.get('Date', ''))[:10]
-                site_str = str(row.get('Site', ''))
-                item_name = str(row.get('검사품명', ''))
-                if item_name and item_name != 'nan':
-                    loc_str = f"{site_str}_{item_name}"
-                else:
-                    loc_str = site_str
-                company_str = str(row.get('업체명', ''))
-                if not company_str or company_str == 'nan': company_str = ''
-                ndt_type = str(row.get('검사방법', 'RT'))
-                work_time = str(row.get('작업형태', '일반'))
-                if work_time not in ['일반', '야간', '휴일']: work_time = '일반'
-                material_type = str(row.get('Material', ''))
-                qty = float(row.get('검사량', 0.0) if not pd.isna(row.get('검사량')) else 0.0)
-                if qty == 0.0: qty = float(row.get('Usage', 0.0) if not pd.isna(row.get('Usage')) else 0.0)
-                
-                self.date_var.set(date_str)
-                self.company_var.set(company_str)
-                if '관리소' in loc_str or '플랜트' in loc_str:
-                    self.loc_type_var.set('플랜트(관리소)')
-                else:
-                    self.loc_type_var.set('열배관')
-                self.loc_var.set(loc_str)
-                self.ndt_type_var.set(ndt_type)
-                self.work_time_var.set(work_time)
-                
-                # [NEW] PAUT의 경우 관경을 우선적으로 확인하여 자동 맵핑
-                pipe_size_str = ""
-                for k in row.keys():
-                    if 'Inch' in str(k) or '관경' in str(k):
-                        pipe_size_str = str(row.get(k, '')).strip()
-                        break
-                if ndt_type == 'PAUT' and pipe_size_str and pipe_size_str != 'nan':
-                    import re
-                    m = re.search(r'(\d+)', pipe_size_str)
-                    if m:
-                        p_val = int(m.group(1))
-                        if p_val >= 300: material_type = "300A 이상"
-                        elif p_val == 250: material_type = "250A"
-                        elif p_val == 200: material_type = "200A"
-                        elif 125 <= p_val <= 150: material_type = "150A-125A"
-                        else: material_type = "100A 이하"
-
-                # trigger update_dynamic_ui to populate material values correctly
-                self.update_dynamic_ui()
-                
-                if material_type and material_type != 'nan': 
-                    self.material_var.set(material_type)
-                self.quantity_var.set(qty)
-                
-                cond1 = str(row.get('조건1', ''))
-                if cond1 and cond1 != 'nan':
-                    if ndt_type == 'RT': self.source_var.set(cond1)
-                    else: self.pipe_var.set(cond1)
-                
-                cond2 = str(row.get('조건2', ''))
-                if cond2 and cond2 != 'nan': self.thickness_var.set(cond2)
-                
-                self.add_to_record(auto_save=False)
-                count += 1
-                
+            # Finish validation/calculation before replacing any existing data.
+            self.records = prepared
             self.save_billing_records()
-            messagebox.showinfo("연동 완료", f"성공적으로 {count}건을 연동했습니다.")
-        except Exception as e:
-            messagebox.showerror("오류", f"데이터 연동 중 오류가 발생했습니다: {e}")
+            self.load_billing_records()
+            messagebox.showinfo('연동 완료', f'작업/감독일보의 업체·구간·라인별 {len(prepared)}건을 연동했습니다.')
+        except Exception as error:
+            messagebox.showerror('연동 오류', f'작업/감독일보 연동 중 오류가 발생했습니다: {error}')
+
+    def import_from_daily_db(self):
+        # Compatibility for older callbacks; the billing source is now the work log.
+        return self.import_from_work_log()
 
     def update_qty_summary(self):
         for k in self.contract_vars:
@@ -1092,7 +1027,8 @@ class NDTCalculatorTab(ttk.Frame):
             
         total_meters = 0.0
         total_points = 0.0
-        total_amt = 0
+        total_amt = grouped_supply_amount(self.records, self.contract_vars)
+        grouped = grouped_billing_totals(self.records, self.contract_vars)
             
         for rec in self.records:
             qty = float(rec.get("qty", 0.0))
@@ -1103,7 +1039,6 @@ class NDTCalculatorTab(ttk.Frame):
             else:
                 total_points += qty
                 
-            total_amt += int(rec.get("subtotal", 0))
             
             loc = "플랜트(관리소)" if "관리소" in rec["loc"] or "플랜트" in rec.get("loc_type", rec["loc"]) else "열배관"
             t_time = rec.get("work_time", "일반")
@@ -1113,9 +1048,8 @@ class NDTCalculatorTab(ttk.Frame):
             if mat:
                 key = f"{loc}_{t_time}_{mat}"
                 if key in self.contract_vars:
-                    cur_val = self.get_float(self.contract_vars[key]["curr_qty"])
-                    new_val = cur_val + rec["qty"]
-                    self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.2f}")
+                    new_val = grouped[key]['qty']
+                    self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.4f}")
                     
         if hasattr(self, 'subtotal_var'):
             self.subtotal_var.set(f"[소계] 길이 검사: {total_meters:,.4f} M  |  포인트 검사: {int(total_points):,} 매/Point  |  총 공급가액: {total_amt:,} 원")
@@ -1259,6 +1193,7 @@ class NDTCalculatorTab(ttk.Frame):
         else:
             target_records = self.records
             
+        grouped = grouped_billing_totals(target_records, self.contract_vars)
         for cat, v in self.contract_vars.items():
             p_qty = self.get_float(v["p_qty"])
             p_amt = self.get_int(v["prev"])
@@ -1277,8 +1212,10 @@ class NDTCalculatorTab(ttk.Frame):
                     c_qty += r["qty"]
                     cur_amt += r["subtotal"]
                 
+            c_qty = grouped.get(cat, {}).get('qty', 0)
+            cur_amt = grouped.get(cat, {}).get('amount', 0)
             new_p_qty = p_qty + c_qty
-            formatted_qty = f"{int(new_p_qty):,}" if float(new_p_qty).is_integer() else f"{new_p_qty:,.2f}"
+            formatted_qty = f"{int(new_p_qty):,}" if float(new_p_qty).is_integer() else f"{new_p_qty:,.4f}"
             v["p_qty"].set(formatted_qty)
             v["prev"].set(f"{p_amt + cur_amt:,}")
             
@@ -1290,7 +1227,7 @@ class NDTCalculatorTab(ttk.Frame):
             self.exp_vars[k]["prev"].set(f"{p + c:,}")
             self.exp_vars[k]["curr"].set(0)
         
-        total_sub_cur = sum(r["subtotal"] for r in target_records) + exp_curr
+        total_sub_cur = grouped_supply_amount(target_records, self.contract_vars) + exp_curr
         prev_total = self.get_int(self.total_prev_var)
         self.total_prev_var.set(f"{prev_total + total_sub_cur:,}")
 
@@ -1596,6 +1533,15 @@ class NDTCalculatorTab(ttk.Frame):
             wb = excel.Workbooks.Add()
             ws = wb.ActiveSheet
             ws.Name = "기성청구내역서"
+            ws.PageSetup.PrintTitleRows = "$1:$7"
+            ws.Activate()
+            billing_window = wb.Windows(1)
+            billing_window.FreezePanes = False
+            billing_window.SplitColumn = 0
+            billing_window.SplitRow = 7
+            billing_window.FreezePanes = True
+            billing_window.ScrollRow = 1
+            billing_window.ScrollColumn = 1
             
             # --- 상단 기본 정보 ---
             ws.Range("A1:O2").Merge()
@@ -2050,48 +1996,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cover.Range("C9:G9").Merge()
             
             # [FIX] 내역서의 '단수 조정(Fraction Adjustment)' 로직과 동일하게 total_sub 재계산
-            exact_total_sub = 0
-            companies = sorted(list(set(r.get("actual_company", "미지정") for r in target_records)))
-            if not companies: companies = ["미지정"]
-            for comp in companies:
-                spec_totals = {}
-                comp_records = [r for r in target_records if r.get("actual_company", "미지정") == comp]
-                for r in comp_records:
-                    n_type = str(r.get("ndt_type", "")).strip()
-                    m_type = str(r.get("material_type", "")).strip()
-                    w_time = str(r.get("work_time", "")).strip()
-                    r_qty = r.get("qty", 0.0)
-                    
-                    if n_type == "PAUT":
-                        spec = f"위상배열초음파검사(PAUT) {m_type.removeprefix('PAUT_')}"
-                    elif n_type == "RT":
-                        spec = f"방사선투과검사(RT) {m_type.removeprefix('RT_')}"
-                    elif n_type == "MT":
-                        spec = "자분탐상검사(MT)"
-                    else:
-                        spec = "액체침투탐상검사(PT)"
-                    if w_time == "야간":
-                        spec += " 야간"
-                        
-                    loc_type = "플랜트(관리소)" if "관리소" in r.get("loc", "") or "플랜트" in r.get("loc_type", r.get("loc", "")) else "열배관"
-                    cat_key = f"{loc_type}_{w_time}_{n_type}_{m_type}"
-                    c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
-                    
-                    if c_price == 0 and r_qty > 0:
-                        for k, v in self.contract_vars.items():
-                            if v["spec"] == spec:
-                                c_price = v["c_price"]
-                                break
-                                
-                    spec_key = (spec, c_price)
-                    if spec_key not in spec_totals:
-                        spec_totals[spec_key] = 0.0
-                    spec_totals[spec_key] += r_qty
-                    
-                for spec_key, total_qty in spec_totals.items():
-                    exact_total_sub += int(total_qty * spec_key[1])
-                    
-            total_sub = exact_total_sub
+            total_sub = grouped_supply_amount(target_records, self.contract_vars)
             
             grand_total = total_sub + extra_items_total
             vat = int(grand_total * 0.1)
@@ -2265,47 +2170,31 @@ class NDTCalculatorTab(ttk.Frame):
                         history_data = json.load(f)
                 except: pass
 
-            global_comps = {}
-            for d, d_data in history_data.items():
-                if "ndt_results" in d_data:
-                    for nr in d_data["ndt_results"]:
-                        c = str(nr.get("업체", "")).strip()
-                        if c and c != "미지정" and "지역난방공사" not in c:
-                            global_comps[c] = global_comps.get(c, 0) + 1
-            global_fallback = max(global_comps.items(), key=lambda x: x[1])[0] if global_comps else "미지정"
+            from site_apps.central.src.services.billing_summary import build_company_summaries
+            company_summaries = build_company_summaries(target_records, history_data, self.contract_vars)
 
-            for r in target_records:
-                t_date = r["date"]
-                n_type = r["ndt_type"]
-                
-                actual_comp = r.get("company", "미지정")
-                if not actual_comp or str(actual_comp).strip() == "" or "지역난방공사" in str(actual_comp):
-                    actual_comp = "미지정"
-                
-                if t_date in history_data and "ndt_results" in history_data[t_date]:
-                    comps = {}
-                    for nr in history_data[t_date]["ndt_results"]:
-                        nr_type = str(nr.get("검사방법", "")).strip()
-                        if not nr_type:
-                            continue
-                        if nr_type.startswith(n_type) or n_type.startswith(nr_type):
-                            c = nr.get("업체", "미지정")
-                            if str(c).strip() == "": c = "미지정"
-                            comps[c] = comps.get(c, 0) + 1
-                    if comps:
-                        best_comp = max(comps.items(), key=lambda x: x[1])[0]
-                        if best_comp != "미지정":
-                            actual_comp = best_comp
-                
-                if actual_comp == "미지정" and r.get("company") and str(r.get("company")).strip() != "" and "지역난방공사" not in str(r.get("company")):
-                    actual_comp = r.get("company")
-                    
-                if actual_comp == "미지정" and global_fallback != "미지정":
-                    actual_comp = global_fallback
-                    
-                r["actual_company"] = actual_comp
-
-            sum_row = 4
+            # One common header remains visible while company bands scroll.
+            headers_sum = {
+                1: "섹션", 2: "라인번호", 3: "규격", 4: "개소", 5: "단가",
+                6: "검사수량", 7: "금액"
+            }
+            for col, heading in headers_sum.items():
+                cell = ws_summary.Cells(4, col)
+                cell.Value = heading
+                cell.Font.Bold = True
+                cell.Interior.Color = 14277081
+                cell.HorizontalAlignment = -4108
+                cell.Borders.LineStyle = 1
+            ws_summary.PageSetup.PrintTitleRows = "$1:$4"
+            ws_summary.Activate()
+            summary_window = wb.Windows(1)
+            summary_window.FreezePanes = False
+            summary_window.SplitColumn = 0
+            summary_window.SplitRow = 4
+            summary_window.FreezePanes = True
+            summary_window.ScrollRow = 1
+            summary_window.ScrollColumn = 1
+            sum_row = 5
             contract_category_order = [
                 cat for cat in categories if cat in self.contract_vars
             ]
@@ -2313,173 +2202,24 @@ class NDTCalculatorTab(ttk.Frame):
                 cat: idx for idx, cat in enumerate(contract_category_order, start=1)
             }
             company_subtotal_rows = []
-            companies = sorted(list(set(r.get("actual_company", "미지정") for r in target_records)))
-            if not companies:
-                companies = ["미지정"]
-                
+            companies = sorted(company_summaries) or ["미지정"]
+
             for comp in companies:
                 ws_summary.Cells(sum_row, 1).Value = f"■ 업체명 : {comp}"
                 ws_summary.Cells(sum_row, 1).Font.Bold = True
                 ws_summary.Cells(sum_row, 1).Font.Size = 12
                 sum_row += 1
                 
-                comp_records = [r for r in target_records if r.get("actual_company", "미지정") == comp]
-                
-                # --- 통합 기성요약 표 (섹션 -> 라인번호 -> 규격) ---
-                work_summary = {}
-                for r in comp_records:
-                    t_date = str(r.get("date", ""))
-                    n_type = str(r.get("ndt_type", "")).strip()
-                    m_type = str(r.get("material_type", "")).strip()
-                    w_time = str(r.get("work_time", "")).strip()
-                    r_qty = r.get("qty", 0.0)
-                    r_amt = r.get("subtotal", 0)
-                    
-                    if n_type == "PAUT":
-                        spec = f"위상배열초음파검사(PAUT) {m_type.removeprefix('PAUT_')}"
-                    elif n_type == "RT":
-                        spec = f"방사선투과검사(RT) {m_type.removeprefix('RT_')}"
-                    elif n_type == "MT":
-                        spec = "자분탐상검사(MT)"
-                    else:
-                        spec = "액체침투탐상검사(PT)"
-                    if w_time == "야간":
-                        spec += " 야간"
-                        
-                    unit = r.get("unit", "")
-                    
-                    loc_type = "플랜트(관리소)" if "관리소" in r.get("loc", "") or "플랜트" in r.get("loc_type", r.get("loc", "")) else "열배관"
-                    cat_key = f"{loc_type}_{w_time}_{n_type}_{m_type}"
-                    c_price = self.contract_vars.get(cat_key, {}).get("c_price", 0)
-                    if c_price == 0 and r_qty > 0:
-                        c_price = r_amt / r_qty
-                    
-                    matched_results = []
-                    if t_date in history_data:
-                        for nr in history_data[t_date].get("ndt_results", []):
-                            if id(nr) in billed_nrs: continue
-                            method = str(nr.get("검사방법", "")).strip()
-                            c = str(nr.get("업체", "")).strip()
-                            pipe_size = str(nr.get("관경", "")).strip()
-                            
-                            size_matched = True
-                            # [FIX] RT의 경우 m_type이 필름 사이즈(예: 3 1/3 x 6")이므로 관경 크기 비교를 생략해야 함
-                            if m_type and pipe_size and any(x in n_type for x in ["PAUT", "UT"]):
-                                import re
-                                m1 = re.search(r'(\d+)', pipe_size)
-                                m2_all = re.findall(r'(\d+)', m_type)
-                                if m1 and m2_all:
-                                    p_val = int(m1.group(1))
-                                    t_vals = [int(x) for x in m2_all]
-                                    if "이상" in m_type:
-                                        size_matched = (p_val >= t_vals[0])
-                                    elif "미만" in m_type:
-                                        size_matched = (p_val < t_vals[0])
-                                    elif "이하" in m_type:
-                                        size_matched = (p_val <= t_vals[0])
-                                    elif len(t_vals) >= 2:
-                                        min_val = min(t_vals)
-                                        max_val = max(t_vals)
-                                        size_matched = (min_val <= p_val <= max_val)
-                                    else:
-                                        size_matched = (p_val == t_vals[0])
-                                        
-                            if method and (method.startswith(n_type) or n_type.startswith(method)) and size_matched:
-                                if c == comp or c == "미지정" or not c:
-                                    matched_results.append(nr)
-                                    billed_nrs.add(id(nr))
-                                    
-                    if not matched_results:
-                        continue  # 작업/감독일보에 매칭되는 내역이 없으면 기성청구에서 제외
-                    else:
-                        sub_groups = {}
-                        for nr in matched_results:
-                            sec = str(nr.get("구간", "")).strip() or "미지정"
-                            l_no = str(nr.get("라인번호", "")).strip() or "미지정"
-                            j_no = str(nr.get("Joint No.", "")).strip()
-                            method = str(nr.get("검사방법", "")).strip()
-                            
-                            sg_key = (sec, l_no)
-                            if sg_key not in sub_groups:
-                                sub_groups[sg_key] = {"joints": set(), "rows": 0, "length": 0.0}
-                            
-                            if j_no:
-                                sub_groups[sg_key]["joints"].add(j_no)
-                            sub_groups[sg_key]["rows"] += 1
-                            
-                            if "PAUT" in method or "UT" in method:
-                                try: sub_groups[sg_key]["length"] += float(nr.get("PAUT", 0) or 0)
-                                except: pass
-                            elif "RT" in method:
-                                try:
-                                    rt_qty = nr.get("RT_OR", "")
-                                    if not rt_qty: rt_qty = "0"
-                                    sub_groups[sg_key]["length"] += float(rt_qty)
-                                except: pass
-                            elif "PT" in method:
-                                try: sub_groups[sg_key]["length"] += float(nr.get("PT", 0) or 0)
-                                except: pass
-                            elif "MT" in method:
-                                try: sub_groups[sg_key]["length"] += float(nr.get("MT", 0) or 0)
-                                except: pass
-                                
-                        total_length = sum(sg["length"] for sg in sub_groups.values())
-                        total_places = sum(max(len(sg["joints"]), sg["rows"]) for sg in sub_groups.values())
-                        
-                        sg_items = list(sub_groups.items())
-                        for i, (sg_key, sg_data) in enumerate(sg_items):
-                            sec, l_no = sg_key
-                            group_key = (sec, l_no, spec, unit, c_price)
-                            if group_key not in work_summary:
-                                work_summary[group_key] = {"places": 0, "qty": 0.0}
-                                
-                            places = max(len(sg_data["joints"]), sg_data["rows"])
-                            work_summary[group_key]["places"] += places
-                            
-                            my_qty = sg_data["length"]
-                            work_summary[group_key]["qty"] += my_qty
+                work_summary = company_summaries.get(comp, {})
 
-                # 테이블 헤더 렌더링
-                headers_sum = {
-                    1: "섹션", 2: "라인번호", 3: "규격", 4: "개소", 5: "단가",
-                    6: "검사수량", 7: "금액"
-                }
-                for col, h in headers_sum.items():
-                    cell = ws_summary.Cells(sum_row, col)
-                    cell.Value = h
-                    cell.Font.Bold = True
-                    cell.Interior.Color = 14277081
-                    cell.HorizontalAlignment = -4108
-                    cell.Borders.LineStyle = 1
-                sum_row += 1
                 start_data_row = sum_row
                 
                 # [FIX] 정렬: 규격(검사방법) -> 섹션 -> 라인번호 (검사 방법별로 그룹화)
                 sorted_keys = sorted(work_summary.keys(), key=lambda x: (x[2], x[0], x[1]))
                 
                 # 단수 조정(Fraction Adjustment): 규격별로 수량을 합산하여 총 금액을 구한 뒤, 각 행에 분배하여 1원 단위 오차 방지
-                spec_totals = {}
-                for key in sorted_keys:
-                    sec, l_no, spec, unit, c_price = key
-                    qty = work_summary[key]["qty"]
-                    spec_key = (spec, c_price)
-                    if spec_key not in spec_totals:
-                        spec_totals[spec_key] = {"qty": 0.0, "total_amt": 0, "allocated_amt": 0, "rows": []}
-                    spec_totals[spec_key]["qty"] += qty
-                    spec_totals[spec_key]["rows"].append(key)
-                
-                for spec_key, totals in spec_totals.items():
-                    totals["total_amt"] = int(totals["qty"] * spec_key[1])
-                    rows = totals["rows"]
-                    for i, key in enumerate(rows):
-                        row_qty = work_summary[key]["qty"]
-                        if i == len(rows) - 1:
-                            row_amt = totals["total_amt"] - totals["allocated_amt"]
-                        else:
-                            row_amt = int(row_qty * spec_key[1])
-                            totals["allocated_amt"] += row_amt
-                        work_summary[key]["calculated_amt"] = row_amt
-                
+
+
                 from itertools import groupby
                 for unit_val, keys_group in groupby(sorted_keys, key=lambda x: x[3]):
                     keys_group = list(keys_group)
@@ -2497,7 +2237,9 @@ class NDTCalculatorTab(ttk.Frame):
                         ws_summary.Cells(sum_row, 1).Value = sec
                         ws_summary.Cells(sum_row, 2).Value = l_no
                         ws_summary.Cells(sum_row, 3).Value = f"{spec} ({unit})"
-                        ws_summary.Cells(sum_row, 4).Value = int(data["places"])
+                        ws_summary.Cells(sum_row, 4).Value = (
+                            int(data["places"]) if data["places"] is not None else ""
+                        )
                         
                         ws_summary.Cells(sum_row, 5).Value = int(c_price)
                         ws_summary.Cells(sum_row, 5).NumberFormat = "#,##0"
@@ -2601,6 +2343,15 @@ class NDTCalculatorTab(ttk.Frame):
             # --- 업체별 수량내역 시트 생성 ---
             ws_cont = wb.Sheets.Add(None, ws_summary)
             ws_cont.Name = "업체별 수량내역"
+            # Keep the title, column headers and first company band visible.
+            ws_cont.Activate()
+            detail_window = wb.Windows(1)
+            detail_window.FreezePanes = False
+            detail_window.SplitColumn = 0
+            detail_window.SplitRow = 5
+            detail_window.FreezePanes = True
+            detail_window.ScrollRow = 1
+            detail_window.ScrollColumn = 1
             
             # --- 페이지 가로 모드 및 폭 1장 맞춤 설정 ---
             ws_cont.PageSetup.Orientation = 2 # xlLandscape
@@ -2662,9 +2413,21 @@ class NDTCalculatorTab(ttk.Frame):
                 
             target_dates = set(r["date"] for r in target_records)
             all_ndt_results = []
+            from site_apps.central.src.rt_quantities import corrected_rt_history, rt_counts
+            history_data = corrected_rt_history(history_data)
+            source_rows = {}
+            legacy_dates = set()
+            for record in target_records:
+                if record.get('source') == 'work_log':
+                    source_rows.setdefault(record['date'], set()).update(record.get('history_rows', []))
+                else:
+                    legacy_dates.add(record['date'])
             for t_date in target_dates:
                 if t_date in history_data and "ndt_results" in history_data[t_date]:
-                    all_ndt_results.extend(history_data[t_date]["ndt_results"])
+                    all_ndt_results.extend(
+                        detail for index, detail in enumerate(history_data[t_date]['ndt_results'])
+                        if t_date in legacy_dates or index in source_rows.get(t_date, set())
+                    )
                     
             all_ndt_results.sort(key=lambda x: (str(x.get("업체", "")), str(x.get("검사방법", "")), str(x.get("구간", "")), str(x.get("라인번호", ""))))
             
@@ -2706,8 +2469,7 @@ class NDTCalculatorTab(ttk.Frame):
                     if "PAUT" in m_type:
                         qty = r.get("PAUT", "")
                     elif "RT" in m_type:
-                        qty = r.get("RT_OR", "")
-                        if not qty: qty = "0"
+                        qty = rt_counts(r)[0]
                     elif "MT" in m_type:
                         qty = r.get("MT", "")
                     elif "PT" in m_type:
@@ -2720,14 +2482,20 @@ class NDTCalculatorTab(ttk.Frame):
                     except ValueError:
                         q_val = 0.0
                         
-                    if "PAUT" in m_type or "UT" in m_type:
+                    is_length_inspection = any(
+                        name in m_type for name in ("PAUT", "UT", "MT", "PT")
+                    )
+                    if is_length_inspection:
                         total_meters += q_val
                     else:
                         total_points += q_val
                     
                     # [FIX] 수량을 숫자로 저장해야 SUBTOTAL 수식이 작동함
                     ws_cont.Cells(cont_row, 10).Value = q_val if q_val != 0.0 else (qty if str(qty).strip() else "")
-                    ws_cont.Cells(cont_row, 10).NumberFormat = '#,##0.0000;-#,##0.0000;"-"' if ("PAUT" in m_type or "UT" in m_type) else '#,##0;-#,##0;"-"'
+                    ws_cont.Cells(cont_row, 10).NumberFormat = (
+                        '#,##0.0000;-#,##0.0000;"-"'
+                        if is_length_inspection else '#,##0;-#,##0;"-"'
+                    )
                     ws_cont.Cells(cont_row, 11).Value = r.get("결과", "")
                     
                     for c in range(1, 12):
@@ -2740,8 +2508,11 @@ class NDTCalculatorTab(ttk.Frame):
                 
                 end_group_row = cont_row - 1
                 
-                unit_str = "m" if ("PAUT" in method or "UT" in method) else ("매" if "RT" in method else "Point")
-                format_str = '#,##0.0000;-#,##0.0000;"-"' if unit_str == "m" else '#,##0;-#,##0;"-"'
+                unit_str = (
+                    "M" if any(name in method for name in ("PAUT", "UT", "MT", "PT"))
+                    else "매"
+                )
+                format_str = '#,##0.0000;-#,##0.0000;"-"' if unit_str == "M" else '#,##0;-#,##0;"-"'
                 
                 ws_cont.Cells(cont_row, 1).Value = f"{comp} {method} 소계"
                 ws_cont.Range(ws_cont.Cells(cont_row, 1), ws_cont.Cells(cont_row, 9)).Merge()
@@ -2779,7 +2550,7 @@ class NDTCalculatorTab(ttk.Frame):
                 ws_cont.Cells(cont_row, 10).Font.Bold = True
                 ws_cont.Cells(cont_row, 10).Borders.LineStyle = 1
                 
-                ws_cont.Cells(cont_row, 11).Value = "m"
+                ws_cont.Cells(cont_row, 11).Value = "M"
                 ws_cont.Cells(cont_row, 11).Font.Bold = True
                 ws_cont.Cells(cont_row, 11).HorizontalAlignment = -4108
                 ws_cont.Cells(cont_row, 11).Borders.LineStyle = 1
