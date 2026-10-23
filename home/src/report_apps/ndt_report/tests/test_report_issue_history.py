@@ -11,6 +11,24 @@ from report_issue_history import record_issue, load_history, item_values, edit_i
 
 
 class IssueHistoryTests(unittest.TestCase):
+    def test_restore_only_issued_rows_and_latest_number(self):
+        from report_issue_history import restore_report_numbers
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'history.json'
+            output = Path(directory) / 'report.xlsx'
+            output.touch()
+            issued = {'_source_id': 'one', '_source_site': 'central'}
+            record_issue('PAUT', 'P-001', output, [issued], path)
+            rows = [dict(issued), {'_source_id': 'two', '_source_site': 'central'},
+                    {'_source_id': 'one', '_source_site': 'other'}]
+            restore_report_numbers('PAUT', rows, path)
+            self.assertEqual(rows[0]['Report No'], 'P-001')
+            self.assertNotIn('Report No', rows[1])
+            self.assertNotIn('Report No', rows[2])
+            record_issue('PAUT', 'P-002', output, [issued], path)
+            restore_report_numbers('PAUT', rows, path)
+            self.assertEqual(rows[0]['Report No'], 'P-002')
+
     def test_report_filename_uses_number_without_overwriting(self):
         with tempfile.TemporaryDirectory() as directory:
             first = Path(report_output_path(directory, 'SIS/GI-KDHC-JY-RT-001', '.xlsx'))

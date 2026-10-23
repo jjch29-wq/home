@@ -415,6 +415,8 @@ class PMIReportApp:
         ))
         self.gapji_item = tk.StringVar(value=self.config.get('GAPJI_ITEM', "PIPE"))
         self.gapji_material = tk.StringVar(value=self.config.get('GAPJI_MATERIAL', ""))
+        self.paut_sec = tk.StringVar(value=self.config.get('PAUT_SEC', ''))
+        self.paut_contractor = tk.StringVar(value=self.config.get('PAUT_CONTRACTOR', 'GS네오텍'))
         self.gapji_report_no = tk.StringVar(value=self.config.get('GAPJI_REPORT_NO', ""))
         self.gapji_exam_date = tk.StringVar(value=self.config.get('GAPJI_EXAM_DATE', datetime.datetime.now().strftime("%Y-%m-%d")))
         self.pmi_chem_elements = [
@@ -503,6 +505,8 @@ class PMIReportApp:
         self._initialize_report_info_by_mode()
         self._load_report_info_for_mode("PMI")
         self._sync_photo_report_info()
+        self.photo_report_no.trace_add('write', lambda *_args: self._sync_photo_output_name())
+        self._sync_photo_output_name()
         
         # [MIGRATION] Add missing keys from loaded config
         if "Size" not in self.paut_column_keys:
@@ -1345,8 +1349,19 @@ class PMIReportApp:
         mode = self.photo_inspect_type.get().strip().upper()
         info = getattr(self, 'report_info_by_mode', {}).get(mode)
         if info:
-            self.photo_report_no.set(info['report_no'])
+            report_no = info['report_no'].strip()
+            self.photo_report_no.set(f"Photo {report_no}" if report_no else "")
             self.photo_inspect_date.set(info['exam_date'])
+
+    def _sync_photo_output_name(self):
+        number = self.photo_report_no.get().strip()
+        if not number:
+            self.photo_output_name.set('Photo.xlsx')
+            return
+        if not re.match(r'^Photo(?:\s|$)', number, re.I):
+            number = 'Photo ' + number
+        number = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '-', number).rstrip(' .')
+        self.photo_output_name.set(number[:180].rstrip(' .') + '.xlsx')
 
     def create_widgets(self):
         style = ttk.Style()
@@ -3420,6 +3435,15 @@ class PMIReportApp:
             messagebox.showwarning("항목 미선택", "선택된 데이터가 없습니다.")
             return
 
+        contractors = {str(item.get('_source_contractor', '')).strip() for item in final_list
+                       if str(item.get('_source_contractor', '')).strip()}
+        if len(contractors) > 1:
+            messagebox.showwarning('시공사 확인', '여러 시공사가 포함되어 있습니다. 같은 시공사 자료만 선택해 주세요.\n' + ', '.join(sorted(contractors)))
+            return
+        if contractors:
+            self.paut_contractor.set(next(iter(contractors)))
+            self.config['PAUT_CONTRACTOR'] = self.paut_contractor.get()
+            self.save_settings()
         self.log(f"🚀 PAUT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         
@@ -3506,7 +3530,7 @@ class PMIReportApp:
                     val = str(self.config.get(localized_key, '')).strip()
                     if not val:
                         val = str(self.config.get(key, '')).strip()
-                    return val if val and val not in ['0', '0.0'] else default
+                    return val if val else default
 
                 # [NEW] Combine ACC and REJ to prevent overwriting if they map to the same column
                 acc_val = 'ACC' if item.get('Acc', '') in ['√', 'ACC'] else ''
@@ -3515,6 +3539,9 @@ class PMIReportApp:
 
                 # [NEW] Check if there is no defect
                 is_no_defect = not str(item.get('Type of Flaw', '')).strip() and not str(item.get('Height(mm)', '')).strip()
+                if active_template == '지역난방':
+                    from paut_report_layout import prepare_indication_row
+                    prepare_indication_row(ws, curr_row, not is_no_defect)
 
                 # [NEW] Respect user's UI column configuration while providing standard defaults
                 mapping = {
@@ -3531,7 +3558,8 @@ class PMIReportApp:
                     _get_col('PAUT_COL_H', 'K'): item.get('Height(mm)', ''), 
                     _get_col('PAUT_COL_WELDER', 'M'): item.get('Welder', ''),
                     _get_col('PAUT_COL_TESTED_LEN', 'N'): item.get('Tested Length', ''),
-                    _get_col('PAUT_COL_NAT', 'O'): item.get('Type of Flaw', ''), 
+                    _get_col('PAUT_COL_NAT', 'O'): item.get('Type of Flaw', '') or (
+                        item.get('Remarks', '') if active_template == '지역난방' else ''),
                     _get_col('PAUT_COL_EVAL', '0'): item.get('Evaluation', ''),
                     _get_col('PAUT_COL_REM', '0'): item.get('Remarks', '')
                 }
@@ -3713,7 +3741,9 @@ class PMIReportApp:
 
             output_ext = '.xlsm' if keep_vba else '.xlsx'
             output_dir = os.path.join(BASE_DIR, "output") if os.path.exists(os.path.join(BASE_DIR, "output")) else BASE_DIR
-            out_path = self._report_save_path(output_dir, output_ext)
+            out_path = self._report_save_path(output_dir, output_ext, mode='PAUT')
+            if not out_path:
+                return
             out_name = os.path.basename(out_path)
             
             if not os.path.exists(os.path.dirname(out_path)): os.makedirs(os.path.dirname(out_path))
@@ -4243,6 +4273,9 @@ class PMIReportApp:
             (report_label, self.gapji_report_no, 2, 0),
             (date_label, self.gapji_exam_date, 2, 2)
         ]
+        if mode == 'PAUT':
+            fields.append(('Sec.:', self.paut_sec, 3, 0))
+            fields.append(('시공사:', self.paut_contractor, 3, 2))
         
         for lbl, var, r, c in fields:
             tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
@@ -4266,6 +4299,8 @@ class PMIReportApp:
             elif "재질" in lbl: cfg_key = "GAPJI_MATERIAL"
             elif "리포트번호" in lbl or "보고서 번호" in lbl: cfg_key = "GAPJI_REPORT_NO"
             elif "검사일자" in lbl or "작성일자" in lbl: cfg_key = "GAPJI_EXAM_DATE"
+            elif lbl == 'Sec.:': cfg_key = 'PAUT_SEC'
+            elif lbl == '시공사:': cfg_key = 'PAUT_CONTRACTOR'
             self.setting_vars[cfg_key] = var
 
         if mode == "PMI":
@@ -5139,18 +5174,16 @@ class PMIReportApp:
             self.populate_preview(data, switch_tab=False, mode=m)
             
         ttk.Button(sticky_top_frame, text="날짜 적용", command=_apply_date_filter).pack(fill='x', pady=(0, 5))
+        if mode == 'PAUT':
+            for widget in sticky_top_frame.winfo_children():
+                widget.pack_forget()
+            tree.heading('Date', text='Date ▾', command=self._choose_paut_dates)
 
         # PAUT can be narrowed independently by line number and pipe size.
         # Keep these flags separate from date_filtered so changing one filter
         # never destroys the user's selections in another filter.
         if mode == "PAUT":
-            ttk.Label(
-                sticky_top_frame, text="라인 / 관경 필터",
-                font=("Malgun Gothic", 8, "bold")
-            ).pack(pady=(2, 1))
-
             paut_filter_frame = tk.Frame(sticky_top_frame, background="#f1f5f9")
-            paut_filter_frame.pack(fill='x', pady=2)
 
             for column, title in enumerate(("Line No.", "Size")):
                 column_frame = tk.Frame(paut_filter_frame, background="#f1f5f9")
@@ -5188,6 +5221,7 @@ class PMIReportApp:
                         value = lb.get(idx).replace("[v] ", "").replace("[ ] ", "")
                         lb.delete(idx)
                         lb.insert(idx, ("[v] " if state else "[ ] ") + value)
+                _apply_paut_filters()
 
             def _apply_paut_filters():
                 selected_lines = {
@@ -5206,8 +5240,69 @@ class PMIReportApp:
                 self.populate_preview(self.paut_extracted_data, switch_tab=False, mode="PAUT")
                 self._sync_paut_photo_page_numbers()
 
+            def _choose_paut_line():
+                dialog = tk.Frame(self.root, background='white', borderwidth=1, relief='solid')
+                self._position_paut_filter_dropdown(dialog, 'Line No.', 620, 420)
+                ttk.Label(dialog, text="원하는 라인을 여러 개 체크한 후 적용하세요.").pack(anchor='w', padx=12, pady=8)
+                search = tk.StringVar()
+                ttk.Entry(dialog, textvariable=search).pack(fill='x', padx=12)
+                choice_frame = ttk.Frame(dialog)
+                choice_frame.pack(fill='both', expand=True, padx=12, pady=4)
+                choices = tk.Listbox(choice_frame, font=("Malgun Gothic", 10), exportselection=False)
+                choices.pack(side='left', fill='both', expand=True)
+                scrollbar = ttk.Scrollbar(choice_frame, command=choices.yview)
+                scrollbar.pack(side='right', fill='y')
+                choices.configure(yscrollcommand=scrollbar.set)
+                states = {}
+                for i in range(self.paut_line_listbox.size()):
+                    text = self.paut_line_listbox.get(i)
+                    states[text[4:]] = text.startswith('[v] ')
+                visible = []
+                def refresh(*_args):
+                    visible[:] = [value for value in states if search.get().strip().casefold() in value.casefold()]
+                    choices.delete(0, tk.END)
+                    for value in visible:
+                        choices.insert(tk.END, ('[v] ' if states[value] else '[ ] ') + value)
+                def toggle(event):
+                    index = choices.nearest(event.y)
+                    if 0 <= index < len(visible):
+                        value = visible[index]
+                        states[value] = not states[value]
+                        refresh()
+                def set_all(state):
+                    for value in states:
+                        states[value] = state
+                    refresh()
+                def choose():
+                    lb = self.paut_line_listbox
+                    for i in range(lb.size()):
+                        value = lb.get(i)[4:]
+                        lb.delete(i)
+                        lb.insert(i, ("[v] " if states[value] else "[ ] ") + value)
+                    _apply_paut_filters()
+                    dialog.destroy()
+                choices.bind('<ButtonRelease-1>', toggle)
+                def toggle_selected(_event):
+                    selected = choices.curselection()
+                    if selected:
+                        value = visible[selected[0]]
+                        states[value] = not states[value]
+                        refresh()
+                        choices.selection_set(selected[0])
+                    return 'break'
+                choices.bind('<space>', toggle_selected)
+                search.trace_add('write', refresh)
+                refresh()
+                buttons = ttk.Frame(dialog)
+                buttons.pack(fill='x', padx=12, pady=8)
+                for label, command in [('전체 선택', lambda: set_all(True)), ('전체 해제', lambda: set_all(False)),
+                                       ('정렬', lambda: self.sort_by_column('Line No.', mode='PAUT')),
+                                       ('적용', choose), ('취소', dialog.destroy)]:
+                    ttk.Button(buttons, text=label, command=command).pack(side='left', padx=3)
+
+            self._choose_paut_line = _choose_paut_line
+
             paut_filter_buttons = tk.Frame(sticky_top_frame, background="#f1f5f9")
-            paut_filter_buttons.pack(fill='x', pady=(0, 2))
             ttk.Button(
                 paut_filter_buttons, text="전체",
                 command=lambda: _set_all_paut_filters(True)
@@ -5342,6 +5437,9 @@ class PMIReportApp:
         ttk.Button(sidebar, text="💾 현재 내용 저장", width=18, command=lambda: self.save_preview_data(mode)).pack(pady=5)
         ttk.Button(sidebar, text="📂 저장된 내용 열기", width=18, command=lambda: self.load_preview_data(mode)).pack(pady=5)
         ttk.Button(sidebar, text="📊 엑셀 파일로 추출", width=18, command=lambda: self.export_to_excel(mode)).pack(pady=(10, 2))
+        if mode == 'PAUT':
+            sidebar_outer.pack_forget()
+            self._setup_paut_preview_toolbar(container)
 
         # 3. Context Menu Config
         for t in ["evenrow", "oddrow", "group_even", "group_odd", "grouped_even", "grouped_odd", "item_even", "item_odd"]:
@@ -5349,6 +5447,47 @@ class PMIReportApp:
         tree.tag_configure('group_even', font=("Malgun Gothic", 10, "bold"))
         tree.tag_configure('group_odd', font=("Malgun Gothic", 10, "bold"))
 
+
+    def _setup_paut_preview_toolbar(self, container):
+        toolbar = ttk.Frame(container, padding=(6, 4))
+        toolbar.pack(side='top', fill='x')
+        ttk.Checkbutton(
+            toolbar, text='체크한 항목만 보기', variable=self.show_selected_only,
+            command=lambda: self.populate_preview(self.paut_extracted_data, switch_tab=False, mode='PAUT')
+        ).pack(side='left', padx=(0, 12))
+        ttk.Button(toolbar, text='일괄 변경',
+                   command=lambda: self.show_bulk_update_dialog('PAUT')).pack(side='left', padx=3)
+        edit = ttk.Menubutton(toolbar, text='행 편집 ▾')
+        edit_menu = tk.Menu(edit, tearoff=False)
+        edit_menu.add_command(label='행 추가', command=lambda: self.add_item('PAUT'))
+        edit_menu.add_command(label='선택 행 삭제', command=lambda: self.delete_item('PAUT'))
+        edit.configure(menu=edit_menu)
+        edit.pack(side='left', padx=3)
+
+        ttk.Button(toolbar, text='표 설정', command=lambda: self.manage_columns('PAUT')).pack(side='right', padx=3)
+        more = ttk.Menubutton(toolbar, text='더보기 ▾')
+        more_menu = tk.Menu(more, tearoff=False)
+        more_menu.add_command(label='전체 초기화', command=lambda: self.clear_all('PAUT'))
+        more.configure(menu=more_menu)
+        more.pack(side='right', padx=3)
+        export = ttk.Menubutton(toolbar, text='내보내기 ▾')
+        export_menu = tk.Menu(export, tearoff=False)
+        export_menu.add_command(label='엑셀 파일로 추출', command=lambda: self.export_to_excel('PAUT'))
+        export.configure(menu=export_menu)
+        export.pack(side='right', padx=3)
+        ttk.Button(toolbar, text='불러오기', command=lambda: self.load_preview_data('PAUT')).pack(side='right', padx=3)
+        ttk.Button(toolbar, text='저장', command=lambda: self.save_preview_data('PAUT')).pack(side='right', padx=3)
+        self.paut_check_menu = tk.Menu(self.paut_preview_tree, tearoff=False)
+        self.paut_check_menu.add_command(label='현재 필터 항목 전체 체크', command=lambda: self.select_all('PAUT'))
+        self.paut_check_menu.add_command(label='현재 필터 항목 체크 해제', command=lambda: self.deselect_all('PAUT'))
+        self.paut_preview_tree.heading('V', text='V ▾', command=self._show_paut_check_menu)
+
+    def _show_paut_check_menu(self):
+        tree = self.paut_preview_tree
+        try:
+            self.paut_check_menu.tk_popup(tree.winfo_pointerx(), tree.winfo_rooty() + 32)
+        finally:
+            self.paut_check_menu.grab_release()
 
     def on_tree_select(self, event):
         """항목 선택 시 체크박스 상태와 동기화 (현재는 드래그 안정성을 위해 드래그 중에는 무시)"""
@@ -5888,6 +6027,111 @@ class PMIReportApp:
         elif mode == "PAUT":
             self.update_paut_filter_listboxes()
 
+    def _position_paut_filter_dropdown(self, popup, column, width, height):
+        """Place an in-app filter panel directly below its column header."""
+        previous = getattr(self, '_paut_filter_dropdown', None)
+        if previous is not None and previous.winfo_exists():
+            previous.destroy()
+        self._paut_filter_dropdown = popup
+        tree = self.paut_preview_tree
+        columns = list(tree['displaycolumns'])
+        if columns == ['#all']:
+            columns = list(tree['columns'])
+        widths = [tree.column(key, 'width') for key in columns]
+        offset = sum(widths[:columns.index(column)]) if column in columns else 0
+        offset -= int(tree.xview()[0] * sum(widths))
+        app_width, app_height = self.root.winfo_width(), self.root.winfo_height()
+        x = max(0, min(tree.winfo_rootx() - self.root.winfo_rootx() + offset, app_width - width))
+        header_height = 32
+        found_header = False
+        for row_y in range(min(100, tree.winfo_height())):
+            region = tree.identify_region(min(20, max(1, tree.winfo_width() - 2)), row_y)
+            if region == 'heading':
+                found_header = True
+            elif found_header:
+                header_height = row_y
+                break
+        y = max(0, tree.winfo_rooty() - self.root.winfo_rooty() + header_height)
+        width, height = min(width, app_width), min(height, max(1, app_height - y))
+        def outside_click(event):
+            if not (popup.winfo_rootx() <= event.x_root < popup.winfo_rootx() + popup.winfo_width()
+                    and popup.winfo_rooty() <= event.y_root < popup.winfo_rooty() + popup.winfo_height()):
+                popup.destroy()
+                return 'break'
+        popup.bind('<ButtonPress-1>', outside_click)
+        popup.bind('<Escape>', lambda _event: popup.destroy())
+        def show_dropdown():
+            if not popup.winfo_exists():
+                return
+            popup.place(x=x, y=y, width=width, height=height)
+            popup.update_idletasks()
+            popup.lift()
+            popup.focus_force()
+            popup.grab_set()
+        # Build the contents before displaying the panel within the main window.
+        popup.after_idle(show_dropdown)
+
+    def _choose_paut_dates(self):
+        """Choose multiple dates without changing independent line/size filters."""
+        states = {}
+        for item in self.paut_extracted_data:
+            date = str(item.get('Date', '') or '').strip()
+            states.setdefault(date, bool(item.get('date_filtered', True)))
+        states = dict(sorted(states.items()))
+        tree = self.paut_preview_tree
+        dialog = tk.Frame(self.root, background='white', borderwidth=1, relief='solid')
+        self._position_paut_filter_dropdown(dialog, 'Date', 420, 440)
+        ttk.Label(dialog, text='날짜를 여러 개 체크한 후 적용하세요.').pack(anchor='w', padx=10, pady=8)
+        search = tk.StringVar()
+        entry = ttk.Entry(dialog, textvariable=search)
+        entry.pack(fill='x', padx=10)
+        frame = ttk.Frame(dialog)
+        frame.pack(fill='both', expand=True, padx=10, pady=8)
+        choices = tk.Listbox(frame, exportselection=False, font=('Malgun Gothic', 10))
+        choices.pack(side='left', fill='both', expand=True)
+        scroll = ttk.Scrollbar(frame, command=choices.yview)
+        scroll.pack(side='right', fill='y')
+        choices.configure(yscrollcommand=scroll.set)
+        visible = []
+        def refresh(*_args):
+            visible[:] = [date for date in states if search.get().strip() in date]
+            choices.delete(0, tk.END)
+            for date in visible:
+                choices.insert(tk.END, ('[v] ' if states[date] else '[ ] ') + (date or '(날짜 없음)'))
+        def toggle(event=None):
+            index = choices.nearest(event.y) if event and event.keysym != 'space' else (
+                choices.curselection()[0] if choices.curselection() else -1)
+            if 0 <= index < len(visible):
+                date = visible[index]
+                states[date] = not states[date]
+                refresh()
+                choices.selection_set(index)
+            return 'break'
+        def set_all(state):
+            for date in states:
+                states[date] = state
+            refresh()
+        def apply():
+            for item in self.paut_extracted_data:
+                item['date_filtered'] = states.get(str(item.get('Date', '') or '').strip(), False)
+            self.update_date_listbox(mode='PAUT')
+            self.populate_preview(self.paut_extracted_data, switch_tab=False, mode='PAUT')
+            self._sync_paut_photo_page_numbers()
+            dialog.destroy()
+        choices.bind('<ButtonRelease-1>', toggle)
+        choices.bind('<space>', toggle)
+        search.trace_add('write', refresh)
+        refresh()
+        buttons = ttk.Frame(dialog)
+        buttons.pack(fill='x', padx=10, pady=4)
+        for label, command in [('전체 선택', lambda: set_all(True)), ('전체 해제', lambda: set_all(False)),
+                               ('적용', apply), ('취소', dialog.destroy)]:
+            ttk.Button(buttons, text=label, command=command).pack(side='left', padx=2)
+        ttk.Button(dialog, text='날짜 정렬 ↑ / ↓',
+                   command=lambda: self.sort_by_column('Date', mode='PAUT')).pack(fill='x', padx=10, pady=(0, 8))
+        entry.focus_set()
+        dialog.bind('<Escape>', lambda _event: dialog.destroy())
+
     def update_paut_filter_listboxes(self):
         """Refresh PAUT Line No./Size choices while preserving check states."""
         line_listbox = getattr(self, 'paut_line_listbox', None)
@@ -5922,6 +6166,19 @@ class PMIReportApp:
 
         refresh(line_listbox, 'Line No.', 'line_filtered')
         refresh(size_listbox, 'Size', 'size_filtered')
+        dates = {str(item.get('Date', '') or '').strip() for item in self.paut_extracted_data}
+        active_dates = {str(item.get('Date', '') or '').strip() for item in self.paut_extracted_data
+                        if item.get('date_filtered', True)}
+        suffix = f' ({len(active_dates)}개)' if active_dates != dates else ''
+        self.paut_preview_tree.heading('Date', text='Date ▾' + suffix, command=self._choose_paut_dates)
+        if hasattr(self, 'paut_check_menu'):
+            self.paut_preview_tree.heading('V', text='V ▾', command=self._show_paut_check_menu)
+        if hasattr(self, '_choose_paut_line'):
+            checked = sum(line_listbox.get(i).startswith('[v] ') for i in range(line_listbox.size()))
+            label = self.config.get('PAUT_NAME_LINE', 'Line No.')
+            suffix = f' ({checked}개)' if checked != line_listbox.size() else ''
+            self.paut_preview_tree.heading('Line No.', text=label + ' ▾' + suffix,
+                                           command=self._choose_paut_line)
 
     def _get_mode_info(self, mode):
         """Helper to get core UI/Data objects for a specific module mode."""
@@ -6770,6 +7027,12 @@ class PMIReportApp:
 
     def populate_preview(self, data_list, switch_tab=True, mode="PMI"):
         """추출된 데이터를 미리보기 표에 채움 (필터 반영 및 그룹 색상 적용)"""
+        if mode == 'PAUT':
+            from report_issue_history import restore_report_numbers
+            try:
+                restore_report_numbers(mode, data_list)
+            except (OSError, ValueError) as exc:
+                self.log(f'보고서번호 복원 실패: {exc}')
         if mode == "RT":
             tree = self.rt_preview_tree
             self.rt_item_idx_map = []
@@ -8553,11 +8816,15 @@ class PMIReportApp:
             added_count = 0
             for r in ndt_list:
                 if r.get('_source_id') and r['_source_id'] in existing_ids:
+                    for existing in data:
+                        if existing.get('_source_id') == r['_source_id']:
+                            existing['_source_contractor'] = r.get('업체', '')
                     continue
                 new_row = {k: "" for k in keys_attr}
                 new_row['_source_site'] = r['_source_site']
                 new_row['_source_path'] = r['_source_path']
                 new_row['_source_id'] = r.get('_source_id')
+                new_row['_source_contractor'] = r.get('업체', '')
                 for quantity_key in ('RT_OR', 'RT_RE'):
                     if quantity_key in r:
                         new_row[quantity_key] = r[quantity_key]
@@ -8615,6 +8882,12 @@ class PMIReportApp:
                     new_row.update(rt_film_findings(r.get("구간정보", "")))
                 
                 # 결과 / Result / Acc / Rej
+                if mode == "PAUT":
+                    from ndt_history_import import paut_flaw_findings
+                    findings = paut_flaw_findings(r.get("구간정보", ""), thickness)
+                    if findings.get('Remarks') and new_row.get('Remarks'):
+                        findings['Remarks'] = new_row['Remarks'] + '; ' + findings['Remarks']
+                    new_row.update(findings)
                 res = r.get("결과", "")
                 if "Result" in keys_attr:
                     new_row["Result"] = res
@@ -8645,6 +8918,13 @@ class PMIReportApp:
                 added_count += 1
                 
             self.update_date_listbox(mode=mode)
+            if mode == 'PAUT':
+                companies = {row.get('업체', '').strip() for row in ndt_list if row.get('업체', '').strip()}
+                if len(companies) == 1 and hasattr(self, 'paut_contractor'):
+                    self.paut_contractor.set(next(iter(companies)))
+                    self.config['PAUT_CONTRACTOR'] = self.paut_contractor.get()
+                    self.save_settings()
+                self.populate_preview(data, switch_tab=False, mode=mode)
             messagebox.showinfo("완료", f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
             
         except Exception as e:
@@ -9754,8 +10034,20 @@ class PMIReportApp:
         from report_issue_history import show_history
         show_history(self.root)
 
-    def _report_save_path(self, directory, extension):
+    def _report_save_path(self, directory, extension, mode=None, choose_directory=True):
         from report_issue_history import report_output_path
+        if choose_directory:
+            mode = mode or getattr(self, 'current_mode', 'PMI')
+            key = f'{mode}_LAST_SAVE_DIR'
+            remembered = str(self.config.get(key, '')).strip()
+            initial = remembered if remembered and os.path.isdir(remembered) else directory
+            directory = filedialog.askdirectory(parent=self.root, title=f'{mode} 보고서 저장 폴더 선택',
+                                                initialdir=initial, mustexist=True)
+            if not directory:
+                self.log(f'{mode} 보고서 저장이 취소되었습니다.')
+                return None
+            self.config[key] = directory
+            self.save_settings()
         return report_output_path(directory, self.gapji_report_no.get(), extension,
                                   fallback='Report_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
 
@@ -9768,6 +10060,8 @@ class PMIReportApp:
                 cell = self.config.get('GAPJI_REPORT_NO_CELL', 'B10')
             report_no = workbook.worksheets[0][cell].value
             record_issue(mode, report_no, save_path, items)
+            if mode == 'PAUT':
+                self.populate_preview(self.paut_extracted_data, switch_tab=False, mode=mode)
             self.log(f"발행 이력 저장: {report_no or '(번호 미입력)'} · {len(items)}건")
         except Exception as exc:
             self.log(f"발행 이력 저장 실패: {exc}")
@@ -9877,17 +10171,19 @@ class PMIReportApp:
                 ('GAPJI_CUSTOMER', 'AA4'),
                 ('GAPJI_EXAM_DATE', 'AA6'),
                 ('GAPJI_REPORT_NO', 'AA5'),
-                ('GAPJI_ITEM', 'M35'),
+                ('PAUT_SEC', 'M35'),
                 ('GAPJI_MATERIAL', 'A35'),
             ]
             for key, default_cell in mapping:
-                val = self.config.get(key, "")
-                if val:
+                val = self.paut_sec.get().strip() if key == 'PAUT_SEC' else self.config.get(key, "")
+                if key == 'PAUT_SEC' and val:
+                    val = 'Sec.' + re.sub(r'^sec\s*\.?\s*', '', val, flags=re.I)
+                if val or key == 'PAUT_SEC':
                     self.safe_set_value(ws, default_cell, val)
 
             # PAUT 원본 양식에 남아 있는 동탄지사 문구를 중앙지사 기준으로 교체한다.
             general_information = {
-                "A9": "GS네오텍",
+                "A9": self.paut_contractor.get().strip(),
                 "G9": "중앙지사 열수송관 공사",
                 "AB9": "SIS N 264 KDHC-JY Rev.0",
                 "AA44": "한국지역난방공사 중앙지사",
@@ -10490,6 +10786,8 @@ class PMIReportApp:
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             save_path = self._report_save_path(os.path.dirname(template_path), os.path.splitext(template_path)[1])
+            if not save_path:
+                return
             output_name = os.path.basename(save_path)
             wb.save(save_path)
             self._record_report_issue('PMI', wb, save_path, final_list)
@@ -10726,7 +11024,7 @@ class PMIReportApp:
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_name = os.path.basename(self._report_save_path(os.path.dirname(template_path), '.xlsx'))
+            output_name = os.path.basename(self._report_save_path(os.path.dirname(template_path), '.xlsx', choose_directory=False))
             remembered_dir = str(self.config.get('PT_LAST_SAVE_DIR', '')).strip()
             initial_dir = (
                 remembered_dir
@@ -10886,7 +11184,9 @@ class PMIReportApp:
                 except: pass
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_path = self._report_save_path(os.path.dirname(template_path), '.xlsx')
+            save_path = self._report_save_path(os.path.dirname(template_path), '.xlsx', mode='MT')
+            if not save_path:
+                return
             output_name = os.path.basename(save_path)
             wb.save(save_path)
             self._record_report_issue('MT', wb, save_path, final_list)
@@ -11599,7 +11899,9 @@ class PMIReportApp:
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             output_ext = '.xlsm' if keep_vba else '.xlsx'
-            save_path = self._report_save_path(os.path.dirname(template_path), output_ext)
+            save_path = self._report_save_path(os.path.dirname(template_path), output_ext, mode=mode)
+            if not save_path:
+                return
             output_name = os.path.basename(save_path)
             wb.save(save_path)
             
@@ -11813,7 +12115,7 @@ class PMIReportApp:
         # File List Header
         list_header = tk.Frame(right_container, background="#f8fafc", padx=15, pady=10)
         list_header.pack(fill='x')
-        tk.Label(list_header, text="📁 선택된 사진 리스트 (파일 순차 정렬됨)", font=("Malgun Gothic", 10, "bold"), 
+        tk.Label(list_header, text="📁 선택된 사진 리스트 (목록 순서대로 출력)", font=("Malgun Gothic", 10, "bold"),
                  background="#f8fafc", foreground="#475569").pack(side='left')
         
         # Tools under header
@@ -11825,6 +12127,9 @@ class PMIReportApp:
         ).pack(side='left', padx=2)
         ttk.Button(tool_bar, text="파일 개별 추가", command=self._add_photo_files).pack(side='left', padx=2)
         ttk.Button(tool_bar, text="폴더 전체 추가", command=self._add_photo_folder).pack(side='left', padx=2)
+        ttk.Button(tool_bar, text="▲ 위로", command=lambda: self._move_photo_selected(-1)).pack(side='left', padx=2)
+        ttk.Button(tool_bar, text="▼ 아래로", command=lambda: self._move_photo_selected(1)).pack(side='left', padx=2)
+        ttk.Button(tool_bar, text="파일명 정렬", command=self._sort_photo_list).pack(side='left', padx=2)
         ttk.Button(tool_bar, text="전체 비우기", command=self._clear_photo_all).pack(side='right', padx=2)
         ttk.Button(tool_bar, text="선택 항목 제거", command=self._remove_photo_selected).pack(side='right', padx=2)
 
@@ -11843,9 +12148,7 @@ class PMIReportApp:
         
         # [RESTORED] Sync listbox if any files were loaded from settings
         if self.photo_selected_files:
-            self.photo_listbox.delete(0, tk.END)
-            for f in self.photo_selected_files:
-                self.photo_listbox.insert(tk.END, f)
+            self._refresh_photo_list()
                 
         # [NEW] Bindings for Live Preview Update
         self.photo_listbox.bind("<<ListboxSelect>>", self._update_photo_preview)
@@ -12237,6 +12540,7 @@ class PMIReportApp:
             existing_keys.add(metadata_key)
             added_count += 1
 
+        self._refresh_photo_list()
         self._update_photo_preview()
         self.save_settings()
         selected_dates_text = ", ".join(sorted(selected_dates)) or "확인 불가"
@@ -12254,20 +12558,63 @@ class PMIReportApp:
         self.log(f"[PhotoLog] 작업일보 연동: {summary.replace(chr(10), ' / ')}")
         messagebox.showinfo("작업일보 사진 불러오기", summary)
 
+    def _sort_photo_list(self):
+        from ndt_history_import import sort_photo_paths
+        self.photo_selected_files[:] = sort_photo_paths(self.photo_selected_files)
+        self._refresh_photo_list()
+        self.save_settings()
+
+    def _refresh_photo_list(self):
+        self.photo_listbox.delete(0, tk.END)
+        for path in self.photo_selected_files:
+            self.photo_listbox.insert(tk.END, path)
+
+    def _move_photo_selected(self, direction):
+        selected = set(self.photo_listbox.curselection())
+        if not selected:
+            return
+        indices = sorted(selected, reverse=direction > 0)
+        for index in indices:
+            target = index + direction
+            if 0 <= target < len(self.photo_selected_files) and target not in selected:
+                self.photo_selected_files[index], self.photo_selected_files[target] = (
+                    self.photo_selected_files[target], self.photo_selected_files[index])
+                selected.remove(index)
+                selected.add(target)
+        self._refresh_photo_list()
+        for index in sorted(selected):
+            self.photo_listbox.selection_set(index)
+        self.photo_listbox.see(min(selected))
+        self._update_photo_preview()
+        self.save_settings()
+
+    def _photo_last_folder(self):
+        for folder in (self.config.get('PHOTO_LAST_IMPORT_DIR', ''),
+                       *(os.path.dirname(path) for path in reversed(self.photo_selected_files))):
+            if folder and os.path.isdir(folder):
+                return folder
+        return os.getcwd()
+
     def _add_photo_files(self):
-        files = filedialog.askopenfilenames(filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp")])
+        files = filedialog.askopenfilenames(parent=self.root, initialdir=self._photo_last_folder(),
+                                           filetypes=[("Image files", "*.png;*.jpg;*.jpeg;*.bmp")])
         if files:
+            self.config['PHOTO_LAST_IMPORT_DIR'] = os.path.dirname(files[0])
             for f in files:
                 f_norm = os.path.normpath(f)
                 if f_norm not in self.photo_selected_files:
                     self.photo_selected_files.append(f_norm)
                     if hasattr(self, 'photo_listbox'):
                         self.photo_listbox.insert(tk.END, f_norm)
+            self._refresh_photo_list()
+            self.save_settings()
             self.log(f"[PhotoLog] {len(files)}개 파일 추가 시도")
 
     def _add_photo_folder(self):
-        folder = filedialog.askdirectory()
+        folder = filedialog.askdirectory(parent=self.root, title='사진 추가 폴더 선택',
+                                        initialdir=self._photo_last_folder(), mustexist=True)
         if folder:
+            self.config['PHOTO_LAST_IMPORT_DIR'] = folder
             added_count = 0
             for ext in ('*.png', '*.jpg', '*.jpeg', '*.bmp'):
                 for f in glob.glob(os.path.join(folder, ext)):
@@ -12277,6 +12624,8 @@ class PMIReportApp:
                         if hasattr(self, 'photo_listbox'):
                             self.photo_listbox.insert(tk.END, f_norm)
                         added_count += 1
+            self._refresh_photo_list()
+            self.save_settings()
             self.log(f"[PhotoLog] 폴더에서 {added_count}개 파일 추가 완료")
 
     def _remove_photo_selected(self):
@@ -12502,24 +12851,25 @@ class PMIReportApp:
                 image_files = target_files
             
             # [REMEMBER] Load last save dir from class variable
-            initial_folder = self.last_photo_save_dir if self.last_photo_save_dir and os.path.exists(self.last_photo_save_dir) else os.path.dirname(image_files[0])
+            initial_folder = self.last_photo_save_dir if self.last_photo_save_dir and os.path.isdir(self.last_photo_save_dir) else os.path.dirname(image_files[0])
             
+            self._sync_photo_output_name()
             default_name = self.photo_output_name.get()
             if not default_name.endswith(".xlsx"):
                 default_name += ".xlsx"
                 
-            # [NEW] Ask for save folder and filename
-            output_path = filedialog.asksaveasfilename(
-                title="사진대장 저장 위치 선택",
+            output_folder = filedialog.askdirectory(
+                parent=self.root,
+                title="사진대장 저장 폴더 선택",
                 initialdir=initial_folder,
-                initialfile=default_name,
-                defaultextension=".xlsx",
-                filetypes=[("Excel files", "*.xlsx")]
+                mustexist=True,
             )
             
-            if not output_path:
+            if not output_folder:
                 self.log("[PhotoLog] 작업을 취소했습니다.")
                 return
+            from report_issue_history import report_output_path
+            output_path = report_output_path(output_folder, os.path.splitext(default_name)[0], '.xlsx')
 
             # [REMEMBER] Update last save directory
             self.last_photo_save_dir = os.path.dirname(output_path)
@@ -12529,7 +12879,7 @@ class PMIReportApp:
             self.log("[PhotoLog] 작업을 시작합니다..")
             
             workbook = xlsxwriter.Workbook(output_path)
-            worksheet = workbook.add_worksheet()
+            worksheet = workbook.add_worksheet('사진대장')
 
             # Page Setup
             worksheet.set_paper(9) # A4

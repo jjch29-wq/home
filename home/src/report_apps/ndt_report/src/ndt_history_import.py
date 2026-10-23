@@ -141,6 +141,52 @@ def rt_film_findings(location):
     return result
 
 
+def sort_photo_paths(paths):
+    """Group file names by line and sort Joint numbers numerically."""
+    def key(path):
+        name = str(path).replace('\\', '/').rsplit('/', 1)[-1].casefold()
+        return tuple((1, int(part)) if part.isdigit() else (0, part)
+                     for part in re.split(r'(\d+)', name))
+    return sorted(paths, key=key)
+
+
+def paut_flaw_findings(section, thickness=''):
+    """Map explicitly labelled daily-log PAUT measurements to report columns."""
+    text = str(section or '').strip()
+    if not text:
+        return {}
+    result = {'Remarks': text, '_source_paut_section': text}
+    # Keep the measurements in their own columns and show the source location
+    # classification in the report's Remarks column.
+    if re.search(r'\bSubsurface\b|내부결함', text, re.I):
+        result['Remarks'] = 'Subsurface'
+    elif re.search(r'\bSurface\b|외부결함', text, re.I):
+        result['Remarks'] = 'Surface'
+    number = r'\d+(?:\.\d+)?'
+    for label, columns in [('X', ('Start', 'End')), ('D', ('Upper', 'Lower')),
+                           ('L', ('Length(mm)',)), ('H', ('Height(mm)',))]:
+        match = re.search(r'(?<![A-Za-z])' + label + r'\s*:\s*(' + number +
+                          r')(?:\s*[-~–]\s*(' + number + r'))?', text, re.I)
+        if match:
+            result[columns[0]] = match[1]
+            if len(columns) == 2 and match[2] is not None:
+                result[columns[1]] = match[2]
+    nature = re.search(r'(?:Type of Flaw|Nature|결함종류)\s*:\s*([^,;\n]+)', text, re.I)
+    if nature:
+        result['Type of Flaw'] = nature[1].strip()
+    try:
+        height = float(result.get('Height(mm)', 0))
+        length = float(result.get('Length(mm)', 0))
+        wall = float(thickness or 0)
+        if height > 0 and length > 0:
+            result['a/l'] = f'{height / length:.3f}'
+        if height > 0 and wall > 0:
+            result['a/t'] = f'{height / wall:.3f}'
+    except (ValueError, TypeError):
+        pass
+    return result
+
+
 def select_history_rows(parent, mode):
     """Modal preview. Cancel and source changes cannot modify the report."""
     import tkinter as tk

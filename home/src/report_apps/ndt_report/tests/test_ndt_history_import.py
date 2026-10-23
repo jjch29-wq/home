@@ -15,6 +15,13 @@ from ndt_history_import import SITES, history_path, read_results, rt_film_findin
 
 
 class HistoryImportTests(unittest.TestCase):
+    def test_photo_order_groups_lines_and_sorts_joint_numbers(self):
+        from ndt_history_import import sort_photo_paths
+        paths = ['G:/L1_S10_capture.png', 'G:/L2_R01.png', 'G:/L1_R10.png',
+                 'G:/L1_S2_capture.png', 'G:/L1_R02.png']
+        self.assertEqual(sort_photo_paths(paths), [paths[4], paths[2], paths[3], paths[0], paths[1]])
+        self.assertEqual(len(paths), 5)
+
     def test_report_quantities_use_all_selected_source_counts(self):
         items = [
             {'Loc': 'N/1,이물질/4,N/1', 'RT_OR': '3', 'RT_RE': '1'},
@@ -165,6 +172,34 @@ class HistoryImportTests(unittest.TestCase):
                               mt_extracted_data='data', mt_column_keys='keys')
         self.assertEqual(self.report_method('_get_mode_info')(app, 'MT'),
                          ('tree', 'idx', 'data', 'keys'))
+
+    def test_paut_daily_measurements_reach_preview_even_when_accepted(self):
+        from ndt_history_import import paut_flaw_findings
+        section = 'X:203.5-209.0,L:5.8,D:1.175~1.259,H:0.83,Surface'
+        data, indices, inserted = [], [], []
+        tree = SimpleNamespace(insert=lambda *args, **kw: inserted.append(kw))
+        notebook = SimpleNamespace(select=lambda: 'tab', tab=lambda *args: 'PAUT')
+        keys = ['Joint No.', "Th'k(mm)", 'Start', 'End', 'Length(mm)', 'Upper',
+                'Lower', 'Height(mm)', 'Type of Flaw', 'a/l', 'a/t', 'Acc', 'Evaluation', 'Remarks']
+        app = SimpleNamespace(root=None, mode_notebook=notebook,
+            _normalize_daily_photo_welder=lambda value: value,
+            _get_mode_info=lambda mode: (tree, indices, data, keys), update_date_listbox=lambda **kw: None,
+            populate_preview=lambda *args, **kw: None)
+        row = {'Joint No.': 'R01', '두께': '4.9', '구간정보': section, '결과': '합격',
+               '_source_site': '한국지역난방 중앙지사', '_source_path': '/test/history.json'}
+        with patch('ndt_history_import.select_history_rows', return_value=[row]):
+            self.report_method()(app)
+        self.assertEqual([data[0][k] for k in keys[2:8]],
+                         ['203.5', '209.0', '5.8', '1.175', '1.259', '0.83'])
+        self.assertEqual((data[0]['Acc'], data[0]['a/l'], data[0]['a/t']), ('√', '0.143', '0.169'))
+        self.assertEqual(data[0]['Remarks'], 'Surface')
+        self.assertEqual(data[0]['_source_paut_section'], section)
+        self.assertEqual(inserted[0]['values'][2], '203.5')
+        self.assertEqual(paut_flaw_findings(''), {})
+        self.assertEqual(paut_flaw_findings('관련지시 없음')['Remarks'], '관련지시 없음')
+        self.assertEqual(paut_flaw_findings(section.replace('Surface', 'Subsurface'))['Remarks'], 'Subsurface')
+        self.assertEqual(paut_flaw_findings(section.replace('Surface', 'SUBSURFACE'))['Remarks'], 'Subsurface')
+        self.assertEqual(data[0]['Type of Flaw'], '')
 
     def test_duplicate_source_id_is_not_imported_twice(self):
         data, indices, inserted = [], [], []

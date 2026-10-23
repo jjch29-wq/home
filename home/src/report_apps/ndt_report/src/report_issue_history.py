@@ -37,6 +37,31 @@ def load_history(path=DEFAULT_PATH):
     return records
 
 
+def restore_report_numbers(mode, items, path=DEFAULT_PATH):
+    """Restore the latest active issue number for the same source inspection."""
+    def identity(item):
+        if item.get('_source_id'):
+            return ('source', item.get('_source_site', ''), item['_source_id'])
+        line = item.get('Line No.') or item.get('Dwg') or item.get('ISO')
+        joint = item.get('Joint No.') or item.get('Joint')
+        if not line or not joint or not item.get('Date'):
+            return None
+        return ('inspection', item.get('_source_site', ''), item.get('_source_path', ''),
+                item['Date'], line, joint)
+    numbers = {}
+    for entry in load_history(path):
+        if entry.get('deleted_at') or entry.get('mode') != mode or not entry.get('report_no'):
+            continue
+        for item in entry['items']:
+            key = identity(item)
+            if key is not None:
+                numbers[key] = entry['report_no']
+    for item in items:
+        key = identity(item)
+        if key in numbers:
+            item['Report No'] = numbers[key]
+
+
 def record_issue(mode, report_no, output_path, items, path=DEFAULT_PATH):
     """Record only an existing output; keep a separate snapshot on reissue."""
     output = Path(output_path).resolve()
