@@ -27,53 +27,51 @@ def setup_daily_usage_tab_impl(self):
     entry_frame = ttk.LabelFrame(self.daily_usage_paned, text="현장별 일일 사용량 기입")
     entry_frame.pack(fill='both', expand=True) # Changed from add to pack
     
-    # Header area with two rows to prevent buttons from being hidden on small screens
+    # Keep routine actions visible and group secondary actions in menus.
     header_container = ttk.Frame(entry_frame)
     header_container.pack(fill='x', padx=2, pady=1)
     
     row1 = ttk.Frame(header_container)
     row1.pack(fill='x', pady=1)
-    row2 = ttk.Frame(header_container)
-    row2.pack(fill='x', pady=1)
     
     # Row 1: Primary Actions
-    self.btn_daily_save = ttk.Button(row1, text="💾 저장", style='Action.TButton', command=self.add_daily_usage_entry, width=8)
-    self.btn_daily_save.pack(side='left', padx=2)
-    ttk.Button(row1, text='＋ 작업 담기', command=lambda: self.inspection_batch.add()).pack(side='left', padx=2)
+    ttk.Label(row1, text='① 검사 입력 → ② 작업 목록 확인 → ③ 저장').pack(side='left', padx=5)
     
     ttk.Button(row1, text="🧹 초기화", command=self.clear_daily_usage_form_all, width=10).pack(side='left', padx=2)
     
-    btn_ndt_map = ttk.Button(row1, text="🧪 NDT 품목 매핑", command=self.open_ndt_product_map_dialog)
-    btn_ndt_map.pack(side='left', padx=5)
 
-    btn_sync = ttk.Button(row1, text="🔄 작업자 일괄 적용", command=self.sync_worker_times, width=20)
-    btn_sync.pack(side='left', padx=5)
 
-    btn_add_vehicle = ttk.Button(row1, text="🚙 추가 차량 점검", command=self.add_vehicle_inspection_box, width=15)
-    btn_add_vehicle.pack(side='left', padx=5)
 
-    self.btn_daily_report = ttk.Button(row1, text="📄 작업일보 출력", command=self.export_daily_work_report, width=15)
-    self.btn_daily_report.pack(side='left', padx=5)
 
-    self.btn_central_daily_report = ttk.Button(row1, text="📄 중앙지사 일보", command=self.export_central_daily_work_report, width=15)
-    self.btn_central_daily_report.pack(side='left', padx=5)
 
-    btn_report_map = ttk.Button(row1, text="⚙️ 출력 설정", command=self.open_report_mapping_dialog)
-    btn_report_map.pack(side='left', padx=5)
+    tools_button = ttk.Menubutton(row1, text='도구 / 설정')
+    tools_menu = tk.Menu(tools_button, tearoff=False)
+    for label, command in (
+        ('NDT 품목 매핑', self.open_ndt_product_map_dialog),
+        ('작업자 일괄 적용', self.sync_worker_times),
+        ('추가 차량 점검', self.add_vehicle_inspection_box),
+        ('출력 설정', self.open_report_mapping_dialog),
+        ('세션 저장', self.save_form_session),
+        ('세션 불러오기', self.load_form_session),
+    ):
+        tools_menu.add_command(label=label, command=command)
+    tools_button.configure(menu=tools_menu)
+    tools_button.pack(side='right', padx=3)
+    output_button = ttk.Menubutton(row1, text='일보 출력')
+    output_menu = tk.Menu(output_button, tearoff=False)
+    output_menu.add_command(label='작업일보 출력', command=self.export_daily_work_report)
+    output_menu.add_command(label='중앙지사 일보', command=self.export_central_daily_work_report)
+    output_button.configure(menu=output_menu)
+    output_button.pack(side='right', padx=3)
 
     # Sash lock button disabled since UI is separated
     # self.btn_sash_lock = ttk.Button(row1, text="🔒 경계 고정됨" if self.daily_usage_sash_locked else "🔓 경계 고정", command=self.toggle_sash_lock)
     # self.btn_sash_lock.pack(side='right', padx=5)
 
-    # Row 2: Secondary / Tool Actions
-    btn_save_sess = ttk.Button(row2, text="💾 세션 저장", command=self.save_form_session, width=12)
-    btn_save_sess.pack(side='left', padx=5)
     
-    btn_load_sess = ttk.Button(row2, text="📂 세션 불러오기", command=self.load_form_session, width=15)
-    btn_load_sess.pack(side='left', padx=5)
     
-    btn_load_prev = ttk.Button(row2, text="⏮️ 전일 데이터 불러오기", command=self.load_previous_day_data, width=20)
-    btn_load_prev.pack(side='left', padx=5)
+    btn_load_prev = ttk.Button(row1, text="⏮️ 전일 데이터 불러오기", command=self.load_previous_day_data, width=20)
+    btn_load_prev.pack(side='right', padx=5)
     
     # [UI REVISION] Removed dynamic add buttons (Vehicle, Checklist, Memo) 
     # as they are now permanently embedded at the bottom of the entry tab.
@@ -85,8 +83,27 @@ def setup_daily_usage_tab_impl(self):
 
     # [STABILITY FIX] Use a Canvas to hold the entry form for draggable support.
     # [REVISION] Restored scrollbar to satisfy the user request.
-    canvas_parent = ttk.Frame(entry_frame)
-    canvas_parent.pack(fill='both', expand=True, padx=2, pady=1)
+    # Reserve the footer before packing the expanding canvas.
+    self.daily_save_bar = ttk.Frame(entry_frame, padding=(8, 6))
+    self.daily_save_bar.pack(side='bottom', fill='x')
+    common_frame = ttk.LabelFrame(entry_frame, text='공통 정보', padding=5)
+    common_frame.pack(fill='x', padx=5, pady=3)
+    self.daily_work_split = tk.PanedWindow(entry_frame, orient=tk.VERTICAL,
+                                         sashwidth=7, sashrelief='raised',
+                                         borderwidth=0, bg=self.theme_bg)
+    self.daily_work_split.pack(fill='both', expand=True)
+    canvas_parent = ttk.Frame(self.daily_work_split)
+    self.daily_work_split.add(canvas_parent, minsize=220, stretch='always')
+    lower_panel = ttk.Frame(self.daily_work_split)
+    self.daily_work_split.add(lower_panel, minsize=240, stretch='always')
+    work_notebook = ttk.Notebook(lower_panel)
+    work_notebook.pack(fill='both', expand=True)
+    pending_panel = ttk.Frame(work_notebook)
+    history_panel = ttk.Frame(work_notebook)
+    work_notebook.add(pending_panel, text='등록할 작업 목록')
+    work_notebook.add(history_panel, text='최근 기록 · 차량점검 · 메모')
+    self.daily_input_actions = ttk.Frame(canvas_parent, padding=(8, 3))
+    self.daily_input_actions.pack(side='bottom', fill='x')
     
     self.entry_canvas = tk.Canvas(canvas_parent, highlightthickness=0, bg=self.theme_bg)
     entry_vsb = ttk.Scrollbar(canvas_parent, orient="vertical", command=self.entry_canvas.yview)
@@ -127,8 +144,8 @@ def setup_daily_usage_tab_impl(self):
 
     
     # Configure columns inside the master panel (Reduced minsize)
-    self.master_form_panel.columnconfigure(0, weight=0, minsize=350)
-    self.master_form_panel.columnconfigure(1, weight=1, minsize=550)
+    self.master_form_panel.columnconfigure(0, weight=1, minsize=700)
+    self.master_form_panel.columnconfigure(1, weight=1, minsize=780)
     
             # Inner content for the basic form
     form_content = ttk.Frame(self.master_form_panel, padding=10)
@@ -137,8 +154,8 @@ def setup_daily_usage_tab_impl(self):
     for c in range(4): form_content.columnconfigure(c, weight=0)
 
     # Row 0: 업체명, 현장명
-    ttk.Label(form_content, text="업체명:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
-    co_container = ttk.Frame(form_content)
+    ttk.Label(common_frame, text="업체명:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
+    co_container = ttk.Frame(common_frame)
     co_container.grid(row=0, column=1, padx=(2, 10), pady=1, sticky='w')
     self.cb_daily_company = ttk.Combobox(co_container, width=25, values=self.companies)
     self.cb_daily_company.pack(side='left')
@@ -146,8 +163,8 @@ def setup_daily_usage_tab_impl(self):
                                command=lambda: self.open_list_management_dialog('companies', target_cb=self.cb_daily_company))
     btn_company_mgr.pack(side='left', padx=(2, 0))
 
-    ttk.Label(form_content, text="현장명:").grid(row=0, column=2, padx=(5, 0), pady=1, sticky='e')
-    site_container = ttk.Frame(form_content)
+    ttk.Label(common_frame, text="현장명:").grid(row=0, column=2, padx=(5, 0), pady=1, sticky='e')
+    site_container = ttk.Frame(common_frame)
     site_container.grid(row=0, column=3, padx=(2, 5), pady=1, sticky='w')
     self.cb_daily_site = ttk.Combobox(site_container, width=25, values=self.sites)
     self.cb_daily_site.pack(side='left')
@@ -156,10 +173,10 @@ def setup_daily_usage_tab_impl(self):
     btn_site_mgr.pack(side='left', padx=(2, 0))
 
     # Row 1: 날짜, 장비명
-    ttk.Label(form_content, text="날짜:").grid(row=1, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(common_frame, text="날짜:").grid(row=0, column=4, padx=(5, 0), pady=1, sticky='e')
     from tkcalendar import DateEntry
-    self.ent_daily_date = DateEntry(form_content, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly')
-    self.ent_daily_date.grid(row=1, column=1, padx=(2, 10), pady=1, sticky='w')
+    self.ent_daily_date = DateEntry(common_frame, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly')
+    self.ent_daily_date.grid(row=0, column=5, padx=(2, 10), pady=1, sticky='w')
 
     ttk.Label(form_content, text="장비명:").grid(row=1, column=2, padx=(5, 0), pady=1, sticky='e')
     equip_container = ttk.Frame(form_content)
@@ -182,11 +199,11 @@ def setup_daily_usage_tab_impl(self):
     btn_equip_mgr.pack(side='left', padx=(2, 0))
 
     # Row 2: 품목명
-    ttk.Label(form_content, text="자재명:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="자재명:").grid(row=1, column=0, padx=(5, 0), pady=1, sticky='e')
     mat_container = ttk.Frame(form_content)
-    mat_container.grid(row=2, column=1, columnspan=3, padx=(2, 5), pady=1, sticky='w')
+    mat_container.grid(row=1, column=1, padx=(2, 5), pady=1, sticky='w')
     
-    self.cb_daily_material = ttk.Entry(mat_container, width=35)
+    self.cb_daily_material = ttk.Entry(mat_container, width=25)
     self.cb_daily_material.pack(side='left')
     
     # [MODERN] Place the search button INSIDE the entry
@@ -732,7 +749,7 @@ def setup_daily_usage_tab_impl(self):
     workers_box_frame = ttk.Frame(self.master_form_panel)
     workers_box_frame.grid(row=0, column=1, rowspan=1, sticky='nsew', padx=5, pady=5)
     workers_box_frame.columnconfigure(0, weight=1)
-    workers_box_frame.rowconfigure(1, weight=1)
+    workers_box_frame.rowconfigure(2, weight=0)
     
     worker_hdr = ttk.Frame(workers_box_frame)
     worker_hdr.grid(row=0, column=0, sticky='ew', pady=(0, 2))
@@ -743,18 +760,83 @@ def setup_daily_usage_tab_impl(self):
     ttk.Button(worker_hdr, text="⚙", width=2, 
                command=lambda: self.open_list_management_dialog('users')).pack(side='right')
 
-    workers_inner = ttk.Frame(workers_box_frame)
-    workers_inner.grid(row=1, column=0, sticky='nsew')
-    # Configure inner grid for workers (2 columns)
-    for c in range(2): workers_inner.grid_columnconfigure(c, weight=1)
-    
+    # One row per worker. Keep headers and fields aligned with shared widths.
+    crew_columns = ((150, 1), (85, 0), (210, 0), (120, 0), (140, 0))
+    crew_header = ttk.Frame(workers_box_frame)
+    crew_header.grid(row=1, column=0, sticky='ew')
+    ttk.Label(crew_header, text='참여', width=6, anchor='center').pack(side='left')
+    titles = ttk.Frame(crew_header, padding=2)
+    titles.pack(side='left', fill='x', expand=True)
+    for column, (title, (width, weight)) in enumerate(zip(
+            ('작업자', '근무구분', '작업시간', 'OT 금액 (원)', '일비 (원)'), crew_columns)):
+        titles.columnconfigure(column, minsize=width, weight=weight)
+        ttk.Label(titles, text=title, anchor='center').grid(row=0, column=column, sticky='ew')
+
+    crew_area = ttk.Frame(workers_box_frame)
+    crew_area.grid(row=2, column=0, sticky='ew')
+    crew_canvas = tk.Canvas(crew_area, height=170, highlightthickness=0, bg=self.theme_bg)
+    crew_scroll = ttk.Scrollbar(crew_area, orient='vertical', command=crew_canvas.yview)
+    crew_scroll.pack(side='right', fill='y')
+    crew_canvas.pack(side='left', fill='x', expand=True)
+    crew_canvas.configure(yscrollcommand=crew_scroll.set)
+    workers_inner = ttk.Frame(crew_canvas)
+    crew_window = crew_canvas.create_window((0, 0), window=workers_inner, anchor='nw')
+    workers_inner.columnconfigure(0, weight=1)
+    crew_canvas.bind('<Configure>', lambda event: crew_canvas.itemconfigure(crew_window, width=event.width))
+    workers_inner.bind('<Configure>', lambda event: crew_canvas.configure(scrollregion=crew_canvas.bbox('all')))
+    # Reserve the scrollbar width beside the headers too.
+    ttk.Frame(crew_header, width=crew_scroll.winfo_reqwidth()).pack(side='right', fill='y')
+
+    self.crew_summary = ttk.Label(workers_box_frame)
+    self.crew_summary.grid(row=3, column=0, sticky='w', pady=3)
+
+    def update_crew_summary(*args):
+        count, total = 0, 0.0
+        invalid = False
+        for index in range(1, 11):
+            worker = getattr(self, f'worker_group{index}', None)
+            if worker is None or not worker.participation_var.get() or not worker.get_worker():
+                continue
+            count += 1
+            try:
+                amount = float(worker.get_meal().replace(',', '').strip() or '0')
+                if not math.isfinite(amount) or amount < 0:
+                    raise ValueError
+                total += amount
+            except ValueError:
+                invalid = True
+        suffix = ' · 일비 입력 확인 필요' if invalid else ''
+        self.crew_summary.configure(text=f'참여 {count}명 · 일비 합계 {total:,.0f}원{suffix}')
+
+    def apply_crew_values():
+        source = next((getattr(self, f'worker_group{i}') for i in range(1, 11)
+                       if getattr(self, f'worker_group{i}').participation_var.get()
+                       and getattr(self, f'worker_group{i}').get_worker()), None)
+        if source is None:
+            messagebox.showinfo('일괄 적용', '참여 작업자를 먼저 선택하세요.')
+            return
+        if not messagebox.askyesno('일괄 적용',
+                f'{source.get_worker()}의 근무구분·시간·일비를 다른 참여 작업자에게 적용할까요?'):
+            return
+        for i in range(1, 11):
+            target = getattr(self, f'worker_group{i}')
+            if target is source or not target.participation_var.get() or not target.get_worker():
+                continue
+            target.cb_shift.set(source.cb_shift.get())
+            target.ent_worktime.set(source.ent_worktime.get())
+            target.set_meal(source.get_meal())
+            self.calculate_and_update_ot(target.ent_worktime.get(), target.ent_worktime)
+        update_crew_summary()
+
+    ttk.Button(worker_hdr, text='첫 참여자 기준 일괄 적용', command=apply_crew_values).pack(side='left', padx=3)
+
     def setup_worker_group(idx, row, col):
         # Each worker group is no longer individually draggable
         # Instead, they are sub-frames within the main workers_inner
-        group_frame = ttk.LabelFrame(workers_inner)
+        group_frame = ttk.Frame(workers_inner)
         participation_var = tk.BooleanVar(value=True)
-        participation_check = ttk.Checkbutton(group_frame, text=f'참여 · 작업자 {idx}', variable=participation_var)
-        group_frame.configure(labelwidget=participation_check)
+        participation_check = ttk.Checkbutton(group_frame, text=f'{idx:02d}', width=6, variable=participation_var)
+        participation_check.pack(side='left')
         group_frame.grid(row=row, column=col, padx=2, pady=1, sticky='ew')
         
         group = WorkerDataGroup(
@@ -762,7 +844,21 @@ def setup_daily_usage_tab_impl(self):
             enable_autocomplete=True,
             time_list=self.worktimes
         )
-        group.pack(fill='x', expand=True, padx=1, pady=1)
+        # Reuse the existing data widget and bindings; only change its layout.
+        fields = (group.composite, group.cb_shift, group.ent_worktime, group.ent_ot, group.ent_meal)
+        for child in group.winfo_children():
+            child.pack_forget()
+            if child not in fields:
+                child.destroy()
+        for column, (field, (width, weight)) in enumerate(zip(fields, crew_columns)):
+            group.columnconfigure(column, minsize=width, weight=weight)
+            field.grid(row=0, column=column, sticky='ew', padx=2)
+        group.cb_name.configure(width=10)
+        group.ent_worktime.configure(width=16)
+        group.ent_ot.configure(width=6, justify='right')
+        group.ent_meal.configure(width=10, justify='right')
+        group.pack(side='left', fill='x', expand=True)
+
         group.participation_var = participation_var
 
         # Store global references for all workers (1-10)
@@ -787,11 +883,28 @@ def setup_daily_usage_tab_impl(self):
         group.bind_ot('<FocusOut>', lambda e: self.auto_save_ot(e, group.ent_ot, 'ot_times'))
         group.bind_ot('<Return>', lambda e: self.auto_save_ot(e, group.ent_ot, 'ot_times'))
         
+        group.summary_vars = []
+        for widget in (group.cb_name, group.ent_meal):
+            value = tk.StringVar(value=widget.get())
+            widget.configure(textvariable=value)
+            value.trace_add('write', update_crew_summary)
+            group.summary_vars.append(value)
+        participation_var.trace_add('write', update_crew_summary)
+
+        def scroll_crew(event):
+            crew_canvas.yview_scroll(-1 if event.delta > 0 else 1, 'units')
+            return 'break'
+
+        def bind_crew_scroll(widget):
+            widget.bind('<MouseWheel>', scroll_crew)
+            for child in widget.winfo_children():
+                bind_crew_scroll(child)
+        bind_crew_scroll(group_frame)
         return group_frame, group
 
     # 5 rows x 2 cols = 10 workers rearranged inside workers_inner
-    for i in range(1, 6): setup_worker_group(i, i-1, 0)
-    for i in range(6, 11): setup_worker_group(i, i-6, 1)
+    for i in range(1, 11): setup_worker_group(i, i-1, 0)
+    update_crew_summary()
 
     # Removed draggable worker box logic
 
@@ -858,13 +971,17 @@ def setup_daily_usage_tab_impl(self):
     
     self.update_material_combo()
     
+    input_actions = self.daily_input_actions
+    self.btn_daily_add = ttk.Button(input_actions, text='＋ 작업 목록에 추가',
+                                    command=lambda: self.inspection_batch.add())
+    self.btn_daily_add.pack(side='left')
+
     # --- Bottom Dashboard (Recent Entries + Fixed Panels) ---
-    self.bottom_dashboard = ttk.PanedWindow(self.entry_inner_frame, orient=tk.HORIZONTAL)
-    self.bottom_dashboard.grid(row=2, column=0, sticky='nsew', padx=5, pady=(10, 5))
+    self.bottom_dashboard = ttk.PanedWindow(history_panel, orient=tk.HORIZONTAL)
+    self.bottom_dashboard.pack(fill='both', expand=True, padx=5, pady=5)
     from site_apps.central.src.inspection_batch import InspectionBatch
-    self.inspection_batch = InspectionBatch(self.entry_inner_frame, self)
-    self.inspection_batch.grid(row=1, column=0, sticky='ew', padx=5, pady=5)
-    self.entry_inner_frame.grid_rowconfigure(2, weight=1)
+    self.inspection_batch = InspectionBatch(pending_panel, self)
+    self.inspection_batch.pack(fill='both', expand=True, padx=5, pady=5)
 
     # 1. Left: Recent Entries Mini-table
     self.recent_frame = ttk.LabelFrame(self.bottom_dashboard, text="오늘의 입력 내역 (최근 기록)")
@@ -872,7 +989,7 @@ def setup_daily_usage_tab_impl(self):
     
     # Create Treeview for recent entries
     columns = ("id", "date", "site", "loc_type", "method", "inspection_item", "material", "qty", "worker", "insp_type", "joint_count", "rej_count", "pipe_size")
-    self.tv_recent = ttk.Treeview(self.recent_frame, columns=columns, show='headings', height=9)
+    self.tv_recent = ttk.Treeview(self.recent_frame, columns=columns, show='headings', height=5)
     self.tv_recent['displaycolumns'] = ("date", "site", "loc_type", "method", "inspection_item", "material", "qty", "worker", "insp_type", "joint_count", "rej_count", "pipe_size")
     
     self.tv_recent.heading("date", text="날짜")
@@ -958,6 +1075,30 @@ def setup_daily_usage_tab_impl(self):
     self.main_memo_text = self.fixed_memo_text
     # Store for data retrieval
     self.main_memo_text = self.fixed_memo_text
+
+    dashboard_tools = ttk.Frame(history_panel)
+    dashboard_tools.pack(side='bottom', fill='x', padx=5)
+    self.daily_aux_visible = tk.BooleanVar(value=True)
+
+    def toggle_aux_panels():
+        if self.daily_aux_visible.get():
+            self.bottom_dashboard.add(self.fixed_vehicle_frame, weight=9)
+            self.bottom_dashboard.add(self.fixed_memo_frame, weight=2)
+        else:
+            self.bottom_dashboard.forget(self.fixed_vehicle_frame)
+            self.bottom_dashboard.forget(self.fixed_memo_frame)
+        self.entry_inner_frame.after_idle(self._ensure_canvas_scroll_region)
+
+    ttk.Checkbutton(dashboard_tools, text='차량점검 · 메모 패널 표시',
+                    variable=self.daily_aux_visible, command=toggle_aux_panels).pack(side='right')
+
+    def initialize_split():
+        height = self.daily_work_split.winfo_height()
+        if height > 480:
+            list_height = max(240, self.inspection_batch.winfo_reqheight() + 35)
+            self.daily_work_split.paneconfigure(lower_panel, minsize=list_height)
+            self.daily_work_split.sash_place(0, 0, max(220, height - list_height))
+    self.root.after(100, initialize_split)
 
     # No longer clamp entry_inner_frame height
     pass

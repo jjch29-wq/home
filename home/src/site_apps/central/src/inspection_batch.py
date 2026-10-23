@@ -195,41 +195,51 @@ def commit_plans(app, plans):
 
 class InspectionBatch(ttk.LabelFrame):
     def __init__(self, parent, app):
-        super().__init__(parent, text='오늘 함께 등록할 작업', padding=5)
+        super().__init__(parent, padding=5)
         self.app = app
         self.plans = []
         self.editing = None
         bar = ttk.Frame(self)
         bar.pack(fill='x')
-        ttk.Button(bar, text='＋ 현재 작업 담기', command=self.add).pack(side='left')
         ttk.Button(bar, text='선택 작업 수정', command=self.edit).pack(side='left', padx=3)
         ttk.Button(bar, text='선택 삭제', command=self.remove).pack(side='left')
         ttk.Button(bar, text='목록 비우기', command=self.clear).pack(side='left', padx=3)
         self.summary = ttk.Label(bar)
         self.summary.pack(side='left', padx=8)
-        ttk.Label(self, text='방법·관경별 입력 → 자동 산출 또는 단가 입력 → 작업 담기 → 상단 저장. '
-                  '참여 체크된 인원·시간·OT만 작업별 보관합니다. 체크를 해제해도 명단은 유지됩니다.').pack(anchor='w', pady=3)
-        ttk.Label(self, text='겹치는 시간·OT는 중복 집계하지 않습니다. 원래 입력 내역은 참여 인원·참여 시간·참여 OT 열에서 확인하세요.').pack(anchor='w')
+        ttk.Button(bar, text='사용 안내', command=self.show_help).pack(side='right')
         cols = ('method', 'pipe', 'item', 'material', 'quantity', 'unit', 'price', 'fee', 'condition', 'workers', 'times', 'ots')
         area = ttk.Frame(self)
-        area.pack(fill='x')
-        self.tree = ttk.Treeview(area, columns=cols, show='headings', height=3, selectmode='extended')
+        area.pack(fill='both', expand=True)
+        self.tree = ttk.Treeview(area, columns=cols, show='headings', height=5, selectmode='extended')
         for key, title, width in zip(cols, ('방법', '관경', '검사품명', '품목/장비', '검사량', '단위', '단가', '검사비', '계산조건', '참여 인원', '참여 시간', '참여 OT'),
                                      (65, 75, 100, 140, 90, 75, 90, 110, 170, 160, 230, 150)):
             self.tree.heading(key, text=title)
             self.tree.column(key, width=width, minwidth=45, stretch=True)
-        self.tree.pack(side='left', fill='x', expand=True)
+        self.tree.pack(side='left', fill='both', expand=True)
         scroll = ttk.Scrollbar(area, orient='vertical', command=self.tree.yview)
         scroll.pack(side='right', fill='y')
         self.tree.configure(yscrollcommand=scroll.set)
         horizontal = ttk.Scrollbar(self, orient='horizontal', command=self.tree.xview)
         horizontal.pack(fill='x')
         self.tree.configure(xscrollcommand=horizontal.set)
+        save_bar = ttk.Frame(getattr(app, 'daily_save_bar', self))
+        save_bar.pack(fill='x', pady=(6, 0))
+        self.footer_summary = ttk.Label(save_bar)
+        self.footer_summary.pack(side='left')
+        app.btn_daily_save = ttk.Button(save_bar, command=app.add_daily_usage_entry, style='Action.TButton')
+        app.btn_daily_save.pack(side='right')
         self.tree.bind('<Double-1>', lambda event: self.edit())
         self.render()
 
     def serialize(self):
         return json_copy(self.plans)
+
+    def show_help(self):
+        messagebox.showinfo('작업 목록 사용 안내',
+            '방법·관경별 입력 → 자동 산출 또는 단가 입력 → 작업 목록에 추가 → 목록 확인 → 저장\n\n'
+            '참여 체크된 인원·시간·OT만 작업별 보관합니다. 체크를 해제해도 명단은 유지됩니다.\n'
+            '겹치는 시간·OT는 중복 집계하지 않습니다. 원래 입력값은 참여 인원·시간·OT 열에서 확인하세요.',
+            parent=self)
 
     def restore(self, plans):
         # Sessions contain staged work, never executable commands.
@@ -413,7 +423,14 @@ class InspectionBatch(ttk.LabelFrame):
                 ', '.join(n for n in names if n), times, ots))
         suffix = ' · 수정 중: 작업 담기로 반영' if self.editing is not None else ''
         self.summary.config(text=f'{len(self.plans)}개 작업 / 검사비 {total:,.0f}원 (출장비 별도){suffix}')
-        self.app.btn_daily_save.config(text='💾 일괄 저장' if self.plans else '💾 저장', width=12 if self.plans else 8)
+        footer = getattr(self, 'footer_summary', None)
+        if footer is not None:
+            footer.config(text=f'{len(self.plans)}개 작업 · 검사비 합계 {total:,.0f}원 (출장비 별도)'
+                          if self.plans else '목록이 비어 있으면 현재 입력 1건을 저장합니다.')
+        self.app.btn_daily_save.config(text='③ 목록 전체 저장' if self.plans else '③ 현재 입력 저장', width=18)
+        add_button = getattr(self.app, 'btn_daily_add', None)
+        if add_button is not None:
+            add_button.config(text='수정 내용 반영' if self.editing is not None else '＋ 작업 목록에 추가')
 
     def shared(self):
         app = self.app
