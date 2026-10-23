@@ -13,6 +13,42 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class ReportPaddingTest(unittest.TestCase):
+    def test_missing_cl_column_is_added_and_counted_without_losing_quantities(self):
+        import io
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.cell(1, 2, '1.1 방사선투과검사 불량률')
+        sheet.cell(2, 4, '발생 결함 내역')
+        sheet.merge_cells('D2:O2')
+        for col, label in ((16, '불합격부 재검사 물량(A)'),
+                           (17, '당초 시공물량(B)'),
+                           (18, '용접 불량률(A/B%)')):
+            sheet.cell(2, col, label)
+            sheet.merge_cells(start_row=2, end_row=3, start_column=col, end_column=col)
+        for col, label in enumerate(('ID', '성명', 'P', 'SI', 'LF', 'IP', 'RC',
+                                      'EC', 'EP', 'TI', 'IUC', 'EUC', 'G', 'M'), 2):
+            sheet.cell(3, col, label)
+        sheet.cell(6, 2, '총계')
+        sheet.cell(9, 16, '다른 표 보존')
+        manager._write_welder_defect_summary(
+            sheet, {'W-1': {'P': 1, 'CL': 1}}, {'W-1': 2}, {'W-1': 117},
+            '1.1', ('방사선',))
+        self.assertEqual(sheet.cell(3, 16).value, 'CL')
+        self.assertEqual(sheet.cell(4, 16).value, 1)
+        self.assertEqual(sheet.cell(6, 16).value, 1)
+        self.assertEqual(sheet.cell(4, 4).value, 1)
+        self.assertEqual(sheet.cell(9, 16).value, '다른 표 보존')
+        manager._widen_weld_defect_table(sheet)
+        buffer = io.BytesIO()
+        sheet.parent.save(buffer)
+        buffer.seek(0)
+        result = openpyxl.load_workbook(buffer).active
+        self.assertEqual(result.cell(4, 16).value, 1)
+        self.assertEqual(result.cell(4, 17).value, 2)
+        self.assertEqual(result.cell(4, 19).value, 117)
+        self.assertAlmostEqual(result.cell(4, 22).value, 2 / 117)
+        self.assertIn('D2:P2', {str(m) for m in result.merged_cells.ranges})
+
     def test_photo_frame_tail_fits_without_resizing_photos_or_caption(self):
         from types import SimpleNamespace
         manager = MonthlyReportManager('unused.xlsx')

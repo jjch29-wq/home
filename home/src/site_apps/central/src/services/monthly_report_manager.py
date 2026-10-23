@@ -1733,8 +1733,10 @@ class MonthlyReportManager:
         """Extend each section-4 table without crossing continuation headers."""
         import copy
 
-        source_columns = (16, 17, 18)
-        target_ranges = ((16, 17), (18, 20), (21, 23))
+        has_cl = any(str(ws.cell(r, 16).value or '').strip().upper() == 'CL'
+                     for r in range(1, ws.max_row + 1))
+        source_columns = (17, 18, 19) if has_cl else (16, 17, 18)
+        target_ranges = ((17, 18), (19, 21), (22, 23)) if has_cl else ((16, 17), (18, 20), (21, 23))
         merge_keys = {(m.min_col, m.max_col, m.min_row, m.max_row)
                       for m in ws.merged_cells.ranges}
         headers = [r for r in range(1, ws.max_row)
@@ -1759,9 +1761,9 @@ class MonthlyReportManager:
                     (r, r) for r in range(header + 2, end + 1)]:
                 full_row = next((m for m in ws.merged_cells.ranges
                                  if m.min_row == row == m.max_row
-                                 and m.min_col == 2 and m.max_col in (18, 23)), None)
+                                 and m.min_col == 2 and m.max_col in (source_columns[-1], 23)), None)
                 if full_row is not None:
-                    if full_row.max_col == 18:
+                    if full_row.max_col == source_columns[-1]:
                         style = copy.copy(ws.cell(row, 2)._style)
                         ws.unmerge_cells(str(full_row))
                         for col in range(2, 24):
@@ -1773,10 +1775,10 @@ class MonthlyReportManager:
                              for c in source_columns]
                 for merged in list(ws.merged_cells.ranges):
                     if (merged.min_row <= bottom and merged.max_row >= row
-                            and merged.min_col <= 23 and merged.max_col >= 16):
+                            and merged.min_col <= 23 and merged.max_col >= source_columns[0]):
                         ws.unmerge_cells(str(merged))
                 for r in range(row, bottom + 1):
-                    for c in range(16, 24):
+                    for c in range(source_columns[0], 24):
                         ws.cell(r, c).value = None
                 for (value, style), (left, right) in zip(snapshots, target_ranges):
                     for r in range(row, bottom + 1):
@@ -1791,7 +1793,7 @@ class MonthlyReportManager:
         # upper and lower defect tables and proportionally narrows the twelve
         # defect-detail columns without changing the printed table width.
         detail_columns = [
-            openpyxl.utils.get_column_letter(col) for col in range(4, 16)
+            openpyxl.utils.get_column_letter(col) for col in range(4, source_columns[0])
         ]
         original_id = float(ws.column_dimensions['B'].width or 8.43)
         original_name = float(ws.column_dimensions['C'].width or 8.43)
@@ -2732,6 +2734,38 @@ class MonthlyReportManager:
                 break
         if total_row is None:
             return
+
+        # Older templates reserve D:O for defects and omit CL. Expand only
+        # this table, keeping the worksheet's other sections in place.
+        if 'CL' not in header_cols and retest_col == 16 and original_count_col == 17 and defect_rate_col == 18:
+            start_row = title_row + 1
+            merges = [m for m in list(ws.merged_cells.ranges)
+                      if m.min_row >= start_row and m.max_row <= total_row
+                      and m.max_col >= 16 and m.min_col <= 18]
+            # The defect-group heading ends immediately before column P.
+            group_merges = [m for m in list(ws.merged_cells.ranges)
+                            if m.min_row >= start_row and m.max_row < header_row
+                            and m.min_col == 4 and m.max_col == 15]
+            for merged in merges + group_merges:
+                ws.unmerge_cells(str(merged))
+            for row in range(start_row, total_row + 1):
+                for col in range(18, 15, -1):
+                    source = ws.cell(row, col)
+                    target = ws.cell(row, col + 1)
+                    target.value = source.value
+                    target._style = copy.copy(source._style)
+                cell = ws.cell(row, 16)
+                cell.value = None
+                cell._style = copy.copy(ws.cell(row, 15)._style)
+            for merged in merges:
+                ws.merge_cells(start_row=merged.min_row, end_row=merged.max_row,
+                               start_column=merged.min_col + 1, end_column=merged.max_col + 1)
+            for merged in group_merges:
+                ws.merge_cells(start_row=merged.min_row, end_row=merged.max_row,
+                               start_column=merged.min_col, end_column=16)
+            ws.cell(header_row, 16).value = 'CL'
+            header_cols['CL'] = 16
+            retest_col, original_count_col, defect_rate_col = 17, 18, 19
 
         data_start = header_row + 1
         available_rows = total_row - data_start
@@ -4120,6 +4154,7 @@ class MonthlyReportManager:
                 if d_ori > 0:
                     ndt_details[method].append({
                         'key': group_key,
+                        'joint_no': str(row.get('Joint No.', '') or '').strip(),
                         'ori': d_ori, 're': d_re, 'qty': qty_val
                     })
 
@@ -4207,8 +4242,10 @@ class MonthlyReportManager:
             
             # 데이터 삽입: 2.x는 전체 레코드, 1.x는 요약 그룹
             if is_detail:
+                ws.cell(row=header_row, column=12).value = 'Joint No.'
                 data_items = [
-                    (rec['key'], {'count': 1, 'qty': rec['qty'], 'ori': rec['ori'], 're': rec['re']})
+                    (rec['key'], {'count': 1, 'joint_no': rec['joint_no'],
+                                  'qty': rec['qty'], 'ori': rec['ori'], 're': rec['re']})
                     for rec in ndt_details[method]
                 ]
             else:
@@ -4329,7 +4366,7 @@ class MonthlyReportManager:
                 ws.cell(row=current_row, column=4).value = sec
                 ws.cell(row=current_row, column=6).value = line
                 ws.cell(row=current_row, column=10).value = size
-                ws.cell(row=current_row, column=12).value = count
+                ws.cell(row=current_row, column=12).value = vals.get('joint_no', '') if is_detail else count
                 ws.cell(row=current_row, column=14).value = spec
                 ws.cell(row=current_row, column=16).value = unit
                 
@@ -4396,6 +4433,11 @@ class MonthlyReportManager:
                     horizontal='center', vertical='center',
                     wrap_text=False, shrink_to_fit=True
                 )
+                if is_detail:
+                    ws.cell(row=current_row, column=12).alignment = Alignment(
+                        horizontal='center', vertical='center',
+                        wrap_text=False, shrink_to_fit=True
+                    )
                 # 규격은 좁은 N:O 병합 영역에서도 두 줄로 나뉘지 않게 한다.
                 ws.cell(row=current_row, column=14).alignment = Alignment(
                     horizontal='center', vertical='center',
