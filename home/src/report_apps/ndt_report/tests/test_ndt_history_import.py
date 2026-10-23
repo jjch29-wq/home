@@ -155,7 +155,8 @@ class HistoryImportTests(unittest.TestCase):
         keys = ['Date', 'Sec', 'Loc', 'Joint', 'Size', 'Result', 'ISO', 'Deg', 'D5']
         app = SimpleNamespace(root=None, mode_notebook=notebook, rt_preview_nb=notebook,
             _normalize_daily_photo_welder=lambda value: value,
-            _get_mode_info=lambda mode: (tree, indices, data, keys), update_date_listbox=lambda **kw: None)
+            _get_mode_info=lambda mode: (tree, indices, data, keys), update_date_listbox=lambda **kw: None,
+            populate_preview=lambda *args, **kw: None)
         row = {'Date': '2026-09-05', '검사방법': 'RT', '구간': 'A', '구간정보': 'P/2,N/1,N/1',
                'Joint No.': 'J1', '라인번호': 'L1', '결과': '합격', '_source_site': '롯데건설 바이오로직스',
                '_source_path': '/test/history.json'}
@@ -172,6 +173,57 @@ class HistoryImportTests(unittest.TestCase):
                               mt_extracted_data='data', mt_column_keys='keys')
         self.assertEqual(self.report_method('_get_mode_info')(app, 'MT'),
                          ('tree', 'idx', 'data', 'keys'))
+
+    def test_mt_check_actions_only_change_matching_mt_rows(self):
+        rows = [{'selected': False}, {'selected': False, 'drawing_filtered': False},
+                {'selected': False, 'date_filtered': False}]
+        other = [{'selected': False}]
+        app = SimpleNamespace(mt_extracted_data=rows, extracted_data=other,
+                              populate_preview=lambda *args, **kw: None)
+        self.report_method('select_all')(app, 'MT')
+        self.assertEqual([r['selected'] for r in rows], [True, False, False])
+        self.assertFalse(other[0]['selected'])
+        self.report_method('deselect_all')(app, 'MT')
+        self.assertFalse(rows[0]['selected'])
+
+    def test_mt_add_row_uses_mt_columns(self):
+        rows, other = [], []
+        app = SimpleNamespace(mt_extracted_data=rows, extracted_data=other,
+                              mt_column_keys=['Dwg', 'Material', 'TestItem'],
+                              populate_preview=lambda *args, **kw: None, log=lambda *args: None)
+        self.report_method('add_item')(app, 'MT')
+        self.assertEqual(len(rows), 1)
+        self.assertIn('Material', rows[0])
+        self.assertEqual(other, [])
+
+    def test_rt_and_kogas_check_actions_respect_drawing_and_date(self):
+        for mode in ('RT', 'KOGAS'):
+            rows = [{'selected': False}, {'selected': False, 'drawing_filtered': False},
+                    {'selected': False, 'date_filtered': False}]
+            other = [{'selected': False}]
+            app = SimpleNamespace(rt_extracted_data=rows if mode == 'RT' else other,
+                                  kogas_extracted_data=rows if mode == 'KOGAS' else other,
+                                  extracted_data=other, populate_preview=lambda *args, **kw: None)
+            self.report_method('select_all')(app, mode)
+            self.assertEqual([row['selected'] for row in rows], [True, False, False])
+            self.assertFalse(other[0]['selected'])
+
+    def test_rt_and_kogas_display_report_number_after_date(self):
+        class Tree(dict):
+            def __bool__(self):
+                return True
+            def heading(self, *args, **kwargs):
+                pass
+            def column(self, *args, **kwargs):
+                pass
+        for mode in ('RT', 'KOGAS'):
+            tree = Tree()
+            app = SimpleNamespace(rt_preview_tree=tree, kogas_preview_tree=tree,
+                                  rt_column_keys=['selected', 'No', 'Date', 'Dwg'],
+                                  kogas_column_keys=['selected', 'No', 'Date', 'Dwg'],
+                                  rt_extracted_data=[], kogas_extracted_data=[], config={}, setting_vars={})
+            self.report_method('_update_rt_preview_columns')(app, mode)
+            self.assertEqual(tree['columns'][:4], ('selected', 'No', 'Date', 'Report No'))
 
     def test_paut_daily_measurements_reach_preview_even_when_accepted(self):
         from ndt_history_import import paut_flaw_findings

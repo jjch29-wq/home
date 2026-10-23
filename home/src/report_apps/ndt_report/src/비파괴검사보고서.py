@@ -417,6 +417,7 @@ class PMIReportApp:
         self.gapji_material = tk.StringVar(value=self.config.get('GAPJI_MATERIAL', ""))
         self.paut_sec = tk.StringVar(value=self.config.get('PAUT_SEC', ''))
         self.paut_contractor = tk.StringVar(value=self.config.get('PAUT_CONTRACTOR', 'GS네오텍'))
+        self.mt_surface_temp = tk.StringVar(value=self.config.get('MT_SURFACE_TEMP', ''))
         self.gapji_report_no = tk.StringVar(value=self.config.get('GAPJI_REPORT_NO', ""))
         self.gapji_exam_date = tk.StringVar(value=self.config.get('GAPJI_EXAM_DATE', datetime.datetime.now().strftime("%Y-%m-%d")))
         self.pmi_chem_elements = [
@@ -734,6 +735,9 @@ class PMIReportApp:
                     self.kogas_template_file_path.set(self.config.get('KOGAS_TEMPLATE_PATH', ""))
                     self.pt_target_file_path.set(self.config.get('PT_TARGET_PATH', ""))
                     self.pt_template_file_path.set(self.config.get('PT_TEMPLATE_PATH', ""))
+                    self.mt_target_file_path.set(self.config.get('MT_TARGET_PATH', ''))
+                    self.mt_template_file_path.set(self.config.get('MT_TEMPLATE_PATH', ''))
+                    self.mt_surface_temp.set(str(self.config.get('MT_SURFACE_TEMP', '')))
                     self.paut_target_file_path.set(self.config.get('PAUT_TARGET_PATH', ""))
                     self.paut_template_file_path.set(self.config.get('PAUT_TEMPLATE_PATH', ""))
                 self.log("[SUCCESS] 사용자 저장 설정을 모두 불러왔습니다.")
@@ -766,6 +770,7 @@ class PMIReportApp:
                 ('PMI', getattr(self, 'preview_tree', None)), 
                 ('RT', getattr(self, 'rt_preview_tree', None)), 
                 ('PT', getattr(self, 'pt_preview_tree', None)), 
+                ('MT', getattr(self, 'mt_preview_tree', None)),
                 ('PAUT', getattr(self, 'paut_preview_tree', None)),
                 ('KOGAS', getattr(self, 'kogas_preview_tree', None))
             ]
@@ -804,6 +809,8 @@ class PMIReportApp:
                 self.config['RT_TEMPLATE_PATH'] = self.rt_template_file_path.get()
                 self.config['PT_TARGET_PATH'] = self.pt_target_file_path.get()
                 self.config['PT_TEMPLATE_PATH'] = self.pt_template_file_path.get()
+                self.config['MT_TARGET_PATH'] = self.mt_target_file_path.get()
+                self.config['MT_TEMPLATE_PATH'] = self.mt_template_file_path.get()
                 self.config['PAUT_TARGET_PATH'] = self.paut_target_file_path.get()
                 self.config['PAUT_TEMPLATE_PATH'] = self.paut_template_file_path.get()
                 self.config['KOGAS_TARGET_PATH'] = self.kogas_target_file_path.get()
@@ -949,9 +956,11 @@ class PMIReportApp:
 
     def save_template_specific_config(self, mode="RT"):
         """현재 설정을 선택된 템플릿 전용 JSON 파일로 저장"""
+        self.save_settings()
         if mode == "RT": template_path = self.rt_template_file_path.get()
         elif mode == "KOGAS": template_path = self.kogas_template_file_path.get()
         elif mode == "PT": template_path = self.pt_template_file_path.get()
+        elif mode == "MT": template_path = self.mt_template_file_path.get()
         elif mode == "PAUT": template_path = self.paut_template_file_path.get()
         else: template_path = self.template_file_path.get()
         
@@ -990,6 +999,8 @@ class PMIReportApp:
         elif mode == "PT":
             keys_to_save += ["PT_START_ROW", "PT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("PT_COL_") or k.startswith("PT_NAME_")]
+        elif mode == "MT":
+            keys_to_save += [k for k in self.config if k.startswith("MT_")]
         elif mode == "PAUT":
             keys_to_save += ["PAUT_START_ROW", "PAUT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("PAUT_COL_") or k.startswith("PAUT_NAME_")]
@@ -1008,11 +1019,13 @@ class PMIReportApp:
         except Exception as e:
             messagebox.showerror("저장 실패", f"설정 저장 중 오류 발생: {e}")
 
+
     def save_template_specific_config_silent(self, mode="RT"):
         """현재 설정을 선택된 템플릿 전용 JSON 파일로 조용히(팝업 없이) 저장"""
         if mode == "RT": template_path = self.rt_template_file_path.get()
         elif mode == "KOGAS": template_path = self.kogas_template_file_path.get()
         elif mode == "PT": template_path = self.pt_template_file_path.get()
+        elif mode == "MT": template_path = self.mt_template_file_path.get()
         elif mode == "PAUT": template_path = self.paut_template_file_path.get()
         else: template_path = self.template_file_path.get()
         
@@ -1044,6 +1057,8 @@ class PMIReportApp:
         elif mode == "PT":
             keys_to_save += ["PT_START_ROW", "PT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("PT_COL_") or k.startswith("PT_NAME_")]
+        elif mode == "MT":
+            keys_to_save += [k for k in self.config if k.startswith("MT_")]
         elif mode == "PAUT":
             keys_to_save += ["PAUT_START_ROW", "PAUT_END_ROW"]
             keys_to_save += [k for k in self.config.keys() if k.startswith("PAUT_COL_") or k.startswith("PAUT_NAME_")]
@@ -1060,6 +1075,7 @@ class PMIReportApp:
             self.log(f"💾 [Auto-Save] '{os.path.basename(template_path)}' 전용 설정이 자동 저장되었습니다.")
         except Exception as e:
             self.log(f"[ERROR] 템플릿 전용 설정 자동 저장 실패: {e}")
+
 
     def save_settings(self):
         """현재 설정을 파일(JSON)에 저장"""
@@ -1122,7 +1138,7 @@ class PMIReportApp:
                 json.dump(self.config, f, indent=4, default=str)
 
             # [NEW] 모든 모드의 템플릿 전용 설정 파일도 함께 동기화(자동 저장)하여 값 덮어쓰기 방지
-            for m in ["PMI", "RT", "KOGAS", "PT", "PAUT"]:
+            for m in ["PMI", "RT", "KOGAS", "PT", "MT", "PAUT"]:
                 self.save_template_specific_config_silent(m)
 
             self.log("[SUCCESS] 모든 설정이 파일에 안전하게 저장되었습니다.")
@@ -1294,6 +1310,13 @@ class PMIReportApp:
                 )).strip()
                 for key, common_value in common_values.items()
             }
+        if self.report_info_by_mode['MT']['item'].upper() == 'HOT TEPPING':
+            self.report_info_by_mode['MT']['item'] = 'HOT TAPPING'
+            self.config['MT_ITEM'] = 'HOT TAPPING'
+        mt_material = {'PIPE': 'SPPS380', 'HOT TAPPING': 'SPPS250'}.get(self.report_info_by_mode['MT']['item'].upper())
+        if mt_material:
+            self.report_info_by_mode['MT']['material'] = mt_material
+            self.config['MT_MATERIAL'] = mt_material
         self._report_info_loading = False
 
     def _store_report_info_for_mode(self, mode):
@@ -1338,8 +1361,26 @@ class PMIReportApp:
     def _on_report_info_changed(self):
         if getattr(self, '_report_info_loading', False):
             return
+        if getattr(self, 'current_mode', '') == 'MT':
+            material = {'PIPE': 'SPPS380', 'HOT TAPPING': 'SPPS250'}.get(self.gapji_item.get().strip().upper())
+            if material and self.gapji_material.get() != material:
+                self.gapji_material.set(material)
         self._store_report_info_for_mode(getattr(self, 'current_mode', ''))
         self._sync_photo_report_info()
+
+    def _apply_mt_item_selection(self):
+        item_name = self.gapji_item.get().strip()
+        material = {'PIPE': 'SPPS380', 'HOT TAPPING': 'SPPS250'}.get(item_name)
+        if not material:
+            return
+        self.gapji_material.set(material)
+        for item in self.mt_extracted_data:
+            if (item.get('selected', True) and item.get('date_filtered', True)
+                    and item.get('drawing_filtered', True)):
+                item['TestItem'] = item_name
+                item['Material'] = material
+        self.save_settings()
+        self.populate_preview(self.mt_extracted_data, switch_tab=False, mode='MT')
 
     def _sync_photo_report_info(self):
         """사진대장에서 선택한 검사방법의 저장정보를 불러온다."""
@@ -2098,9 +2139,9 @@ class PMIReportApp:
         
         # [DYNAMIC] 고정된 리스트 대신 사용자가 설정한 키(rt_column_keys 등)를 사용
         keys_attr = "rt_column_keys" if mode == "RT" else "kogas_column_keys"
-        # Keep report numbers in source records and issue history, not the RT
-        # editing layout. Use matching data/display keys so editing stays aligned.
-        current_cols = [key for key in getattr(self, keys_attr) if key != "Report No"]
+        current_cols = list(getattr(self, keys_attr))
+        if 'Report No' not in current_cols:
+            current_cols.insert(current_cols.index('Date') + 1 if 'Date' in current_cols else 2, 'Report No')
         setattr(self, keys_attr, current_cols)
             
         tree["columns"] = tuple(current_cols)
@@ -2108,7 +2149,7 @@ class PMIReportApp:
         
         # [NEW] 기본 표시 이름 맵핑
         default_names = {
-            "selected": "V", "No": "No", "Date": "Date", "Sec": "SEC", "Dwg": "Drawing No.", 
+            "selected": "V", "No": "No", "Date": "Date", "Report No": "Report No", "Sec": "SEC", "Dwg": "Drawing No.",
             "Joint": "Film Ident. No.", "Loc": "Film Location", "T": "T", "Mat": "Mat",
             "Size": "구경",
             "Acc": "Acc", "Rej": "Rej", "Deg": "Deg", "Welder": "Welder No", "Remarks": "Remarks",
@@ -2121,6 +2162,7 @@ class PMIReportApp:
         saved_widths = self.config.get(f"{mode}_COL_WIDTHS", {})
         default_widths = {
             "selected": 40, "No": 50, "Date": 90, "Sec": 90, "Dwg": 300, "Joint": 120, "Loc": 100, 
+            "Report No": 220,
             "Acc": 40, "Rej": 40, "Deg": 40, "Welder": 100, "Remarks": 120,
             "Dwg_Sub": 200, "Welder_Sub": 100, "Mat_Sub": 100
         }
@@ -2171,6 +2213,8 @@ class PMIReportApp:
         data = self.rt_extracted_data if mode == "RT" else self.kogas_extracted_data
         if data:
             self.populate_preview(data, mode=mode, switch_tab=False)
+        elif mode in getattr(self, '_rt_check_menus', {}):
+            self._refresh_rt_filter_headers(mode)
 
     def _setup_pt_ui(self, parent):
         # [FORCE] Ensure parent (pt_mode_frame) allows expansion
@@ -2439,7 +2483,7 @@ class PMIReportApp:
         self._create_gapji_preview_ui(tab_gapji, "MT")
         self._apply_sash_ratio("MT")
         
-        self.mt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("MT"))
+        self.mt_template_file_path.trace_add("write", lambda *a: self.load_template_specific_config(self.mt_template_file_path.get(), "MT"))
 
         # Adaptive Resizing Bindings
         self.mt_pane_ratio = self.config.get('MT_SASH_RATIO', 0.5)
@@ -2543,7 +2587,7 @@ class PMIReportApp:
         # [NEW] File Info Header
         header_info = tk.Frame(container, background="#ffffff", highlightthickness=1, highlightbackground="#e5e7eb")
         header_info.pack(fill='x', pady=(0, 5))
-        tk.Label(header_info, textvariable=self.file_info_vars['PT'], background="#ffffff", 
+        tk.Label(header_info, textvariable=self.file_info_vars['MT'], background="#ffffff",
                  foreground="#4b5563", font=("Malgun Gothic", 8, "bold"), padx=10, pady=2).pack(side='left')
 
         self.mt_display_cols = ["V", "No", "Date", "Report No", "ISO/Dwg", "Joint No.", "Material", "Test Item", "Result", "Welder No", "Remarks"]
@@ -2582,6 +2626,7 @@ class PMIReportApp:
 
         self._setup_preview_sidebar(self.mt_preview_tree, container, mode="MT")
         tree_frame.pack(side="left", fill="both", expand=True)
+
 
     def _setup_paut_ui(self, parent):
         # [FORCE] Ensure parent (paut_mode_frame) allows expansion
@@ -4276,6 +4321,8 @@ class PMIReportApp:
         if mode == 'PAUT':
             fields.append(('Sec.:', self.paut_sec, 3, 0))
             fields.append(('시공사:', self.paut_contractor, 3, 2))
+        if mode == 'MT':
+            fields.append(('표면온도(℃):', self.mt_surface_temp, 3, 0))
         
         for lbl, var, r, c in fields:
             tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
@@ -4284,10 +4331,15 @@ class PMIReportApp:
             fixed_field = (mode != "PT" and lbl == "품명:") or (
                 mode not in ("PMI", "PT") and lbl == "발주처:"
             )
-            ent = ttk.Entry(
-                block, textvariable=var, width=15,
-                state="readonly" if fixed_field else "normal"
-            )
+            if mode == 'MT' and lbl == '품명:':
+                ent = ttk.Combobox(block, textvariable=var, width=15,
+                                   values=('PIPE', 'HOT TAPPING'), state='readonly')
+                ent.bind('<<ComboboxSelected>>', lambda _event: self._apply_mt_item_selection())
+            else:
+                ent = ttk.Entry(
+                    block, textvariable=var, width=15,
+                    state="readonly" if fixed_field else "normal"
+                )
             ent.grid(row=r, column=c+1, sticky='ew', padx=2, pady=2)
             ent.bind("<FocusOut>", lambda e: self.save_settings())
             ent.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
@@ -4301,6 +4353,7 @@ class PMIReportApp:
             elif "검사일자" in lbl or "작성일자" in lbl: cfg_key = "GAPJI_EXAM_DATE"
             elif lbl == 'Sec.:': cfg_key = 'PAUT_SEC'
             elif lbl == '시공사:': cfg_key = 'PAUT_CONTRACTOR'
+            elif lbl == '표면온도(℃):': cfg_key = 'MT_SURFACE_TEMP'
             self.setting_vars[cfg_key] = var
 
         if mode == "PMI":
@@ -4424,6 +4477,9 @@ class PMIReportApp:
                 mode = "PT"
                 # PT는 기존 preview_notebooks 구조 사용 가능 여부 확인
                 if hasattr(self, 'preview_notebooks'): nb_inner = self.preview_notebooks.get("PT")
+            elif 'MT' in tab_text:
+                mode = 'MT'
+                if hasattr(self, 'preview_notebooks'): nb_inner = self.preview_notebooks.get('MT')
             elif "PAUT" in tab_text:
                 mode = "PAUT"
                 if hasattr(self, 'preview_notebooks'): nb_inner = self.preview_notebooks.get("PAUT")
@@ -5174,10 +5230,11 @@ class PMIReportApp:
             self.populate_preview(data, switch_tab=False, mode=m)
             
         ttk.Button(sticky_top_frame, text="날짜 적용", command=_apply_date_filter).pack(fill='x', pady=(0, 5))
-        if mode == 'PAUT':
+        if mode in ('PAUT', 'MT', 'RT', 'KOGAS'):
             for widget in sticky_top_frame.winfo_children():
                 widget.pack_forget()
-            tree.heading('Date', text='Date ▾', command=self._choose_paut_dates)
+            if mode == 'PAUT':
+                tree.heading('Date', text='Date ▾', command=self._choose_paut_dates)
 
         # PAUT can be narrowed independently by line number and pipe size.
         # Keep these flags separate from date_filtered so changing one filter
@@ -5440,6 +5497,14 @@ class PMIReportApp:
         if mode == 'PAUT':
             sidebar_outer.pack_forget()
             self._setup_paut_preview_toolbar(container)
+        elif mode == 'MT':
+            sidebar_outer.pack_forget()
+            self._setup_mt_preview_toolbar(container)
+            self._refresh_mt_filter_headers()
+        elif mode in ('RT', 'KOGAS'):
+            sidebar_outer.pack_forget()
+            self._setup_rt_preview_toolbar(container, mode)
+            self._refresh_rt_filter_headers(mode)
 
         # 3. Context Menu Config
         for t in ["evenrow", "oddrow", "group_even", "group_odd", "grouped_even", "grouped_odd", "item_even", "item_odd"]:
@@ -5489,15 +5554,173 @@ class PMIReportApp:
         finally:
             self.paut_check_menu.grab_release()
 
+    def _setup_mt_preview_toolbar(self, container):
+        toolbar = ttk.Frame(container, padding=(6, 4))
+        toolbar.pack(side='top', fill='x')
+        ttk.Checkbutton(
+            toolbar, text='체크한 항목만 보기', variable=self.show_selected_only,
+            command=lambda: self.populate_preview(self.mt_extracted_data, switch_tab=False, mode='MT')
+        ).pack(side='left', padx=(0, 12))
+        ttk.Button(toolbar, text='일괄 변경',
+                   command=lambda: self.show_bulk_update_dialog('MT')).pack(side='left', padx=3)
+        edit = ttk.Menubutton(toolbar, text='행 편집 ▾')
+        edit_menu = tk.Menu(edit, tearoff=False)
+        edit_menu.add_command(label='행 추가', command=lambda: self.add_item('MT'))
+        edit_menu.add_command(label='선택 행 삭제', command=lambda: self.delete_item('MT'))
+        edit.configure(menu=edit_menu)
+        edit.pack(side='left', padx=3)
+
+        ttk.Button(toolbar, text='표 설정', command=lambda: self.manage_columns('MT')).pack(side='right', padx=3)
+        more = ttk.Menubutton(toolbar, text='더보기 ▾')
+        more_menu = tk.Menu(more, tearoff=False)
+        more_menu.add_command(label='전체 초기화', command=lambda: self.clear_all('MT'))
+        more.configure(menu=more_menu)
+        more.pack(side='right', padx=3)
+        export = ttk.Menubutton(toolbar, text='내보내기 ▾')
+        export_menu = tk.Menu(export, tearoff=False)
+        export_menu.add_command(label='엑셀 파일로 추출', command=lambda: self.export_to_excel('MT'))
+        export.configure(menu=export_menu)
+        export.pack(side='right', padx=3)
+        ttk.Button(toolbar, text='불러오기', command=lambda: self.load_preview_data('MT')).pack(side='right', padx=3)
+        ttk.Button(toolbar, text='저장', command=lambda: self.save_preview_data('MT')).pack(side='right', padx=3)
+        self.mt_check_menu = tk.Menu(self.mt_preview_tree, tearoff=False)
+        self.mt_check_menu.add_command(label='현재 필터 항목 전체 체크', command=lambda: self.select_all('MT'))
+        self.mt_check_menu.add_command(label='현재 필터 항목 체크 해제', command=lambda: self.deselect_all('MT'))
+        self.mt_preview_tree.heading('V', text='V ▾', command=self._show_mt_check_menu)
+
+
+    def _show_mt_check_menu(self):
+        tree = self.mt_preview_tree
+        try:
+            self.mt_check_menu.tk_popup(tree.winfo_pointerx(), tree.winfo_rooty() + 32)
+        finally:
+            self.mt_check_menu.grab_release()
+
+
+    def _setup_rt_preview_toolbar(self, container, mode):
+        if not hasattr(self, '_rt_check_menus'):
+            self._rt_check_menus = {}
+        toolbar = ttk.Frame(container, padding=(6, 4))
+        toolbar.pack(side='top', fill='x')
+        ttk.Checkbutton(
+            toolbar, text='체크한 항목만 보기', variable=self.show_selected_only,
+            command=lambda: self.populate_preview(self._get_mode_info(mode)[2], switch_tab=False, mode=mode)
+        ).pack(side='left', padx=(0, 12))
+        ttk.Button(toolbar, text='일괄 변경',
+                   command=lambda: self.show_bulk_update_dialog(mode)).pack(side='left', padx=3)
+        edit = ttk.Menubutton(toolbar, text='행 편집 ▾')
+        edit_menu = tk.Menu(edit, tearoff=False)
+        edit_menu.add_command(label='행 추가', command=lambda: self.add_item(mode))
+        edit_menu.add_command(label='선택 행 삭제', command=lambda: self.delete_item(mode))
+        edit.configure(menu=edit_menu)
+        edit.pack(side='left', padx=3)
+
+        ttk.Button(toolbar, text='표 설정', command=lambda: self.manage_columns(mode)).pack(side='right', padx=3)
+        more = ttk.Menubutton(toolbar, text='더보기 ▾')
+        more_menu = tk.Menu(more, tearoff=False)
+        more_menu.add_command(label='전체 초기화', command=lambda: self.clear_all(mode))
+        more.configure(menu=more_menu)
+        more.pack(side='right', padx=3)
+        export = ttk.Menubutton(toolbar, text='내보내기 ▾')
+        export_menu = tk.Menu(export, tearoff=False)
+        export_menu.add_command(label='엑셀 파일로 추출', command=lambda: self.export_to_excel(mode))
+        export.configure(menu=export_menu)
+        export.pack(side='right', padx=3)
+        ttk.Button(toolbar, text='불러오기', command=lambda: self.load_preview_data(mode)).pack(side='right', padx=3)
+        ttk.Button(toolbar, text='저장', command=lambda: self.save_preview_data(mode)).pack(side='right', padx=3)
+        self._rt_check_menus[mode] = tk.Menu(self._get_mode_info(mode)[0], tearoff=False)
+        self._rt_check_menus[mode].add_command(label='현재 필터 항목 전체 체크', command=lambda: self.select_all(mode))
+        self._rt_check_menus[mode].add_command(label='현재 필터 항목 체크 해제', command=lambda: self.deselect_all(mode))
+        self._get_mode_info(mode)[0].heading('selected', text='V ▾', command=lambda: self._show_rt_check_menu(mode))
+
+
+    def _show_rt_check_menu(self, mode):
+        tree = self._get_mode_info(mode)[0]
+        try:
+            self._rt_check_menus[mode].tk_popup(tree.winfo_pointerx(), tree.winfo_rooty() + 32)
+        finally:
+            self._rt_check_menus[mode].grab_release()
+
+
+    def _refresh_rt_filter_headers(self, mode):
+        tree = self._get_mode_info(mode)[0]
+        columns = list(tree['columns'])
+        for key, flag, candidates in [('Date', 'date_filtered', ('Date',)),
+                                       ('Dwg', 'drawing_filtered', ('Dwg', 'ISO/Dwg', 'ISO/DWG'))]:
+            column = next((value for value in candidates if value in columns), None)
+            if column is None:
+                continue
+            values = {str(item.get(key, '') or '').strip() for item in self._get_mode_info(mode)[2]}
+            active = {str(item.get(key, '') or '').strip() for item in self._get_mode_info(mode)[2] if item.get(flag, True)}
+            suffix = f' ({len(active)}개)' if values != active else ''
+            tree.heading(column, text=('Drawing No.' if key == 'Dwg' else key) + ' ▾' + suffix,
+                         command=lambda k=key, f=flag, c=column: self._choose_rt_filter(mode, k, f, c))
+        if mode in getattr(self, '_rt_check_menus', {}) and 'selected' in columns:
+            tree.heading('selected', text='V ▾', command=lambda: self._show_rt_check_menu(mode))
+
+
+    def _choose_rt_filter(self, mode, key, flag, column):
+        states = {}
+        for item in self._get_mode_info(mode)[2]:
+            states.setdefault(str(item.get(key, '') or '').strip(), bool(item.get(flag, True)))
+        states = dict(sorted(states.items()))
+        panel = tk.Frame(self.root, background='white', borderwidth=1, relief='solid')
+        self._position_paut_filter_dropdown(panel, column, 560 if key == 'Dwg' else 420, 420,
+                                            tree=self._get_mode_info(mode)[0])
+        ttk.Label(panel, text=f'{key} — 여러 항목 체크 후 적용').pack(anchor='w', padx=10, pady=8)
+        search = tk.StringVar()
+        ttk.Entry(panel, textvariable=search).pack(fill='x', padx=10)
+        frame = ttk.Frame(panel)
+        frame.pack(fill='both', expand=True, padx=10, pady=6)
+        choices = tk.Listbox(frame, font=('Malgun Gothic', 10), exportselection=False)
+        choices.pack(side='left', fill='both', expand=True)
+        scrollbar = ttk.Scrollbar(frame, command=choices.yview)
+        scrollbar.pack(side='right', fill='y')
+        choices.configure(yscrollcommand=scrollbar.set)
+        visible = []
+        def refresh(*_args):
+            visible[:] = [value for value in states if search.get().strip().casefold() in value.casefold()]
+            choices.delete(0, tk.END)
+            for value in visible:
+                choices.insert(tk.END, ('[v] ' if states[value] else '[ ] ') + (value or '(비어 있음)'))
+        def toggle(event):
+            index = choices.nearest(event.y) if event.keysym != 'space' else (
+                choices.curselection()[0] if choices.curselection() else -1)
+            if 0 <= index < len(visible):
+                value = visible[index]
+                states[value] = not states[value]
+                refresh()
+                choices.selection_set(index)
+            return 'break'
+        def set_all(state):
+            for value in states:
+                states[value] = state
+            refresh()
+        def apply():
+            for item in self._get_mode_info(mode)[2]:
+                item[flag] = states.get(str(item.get(key, '') or '').strip(), False)
+            self.update_date_listbox(mode=mode)
+            self.populate_preview(self._get_mode_info(mode)[2], switch_tab=False, mode=mode)
+            panel.destroy()
+        choices.bind('<ButtonRelease-1>', toggle)
+        choices.bind('<space>', toggle)
+        search.trace_add('write', refresh)
+        refresh()
+        buttons = ttk.Frame(panel)
+        buttons.pack(fill='x', padx=8, pady=6)
+        for label, command in [('전체 선택', lambda: set_all(True)), ('전체 해제', lambda: set_all(False)),
+                               ('적용', apply), ('취소', panel.destroy)]:
+            ttk.Button(buttons, text=label, command=command).pack(side='left', padx=2)
+        ttk.Button(panel, text='정렬 ↑ / ↓', command=lambda: self.sort_by_column(key, mode=mode)).pack(fill='x', padx=10, pady=4)
+
+
     def on_tree_select(self, event):
         """항목 선택 시 체크박스 상태와 동기화 (현재는 드래그 안정성을 위해 드래그 중에는 무시)"""
         pass
 
     def toggle_item_selection(self, item_id, mode="PMI"):
         """단일 항목의 체크 상태를 토글"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        tree, idx_map, data, _ = self._get_mode_info(mode)
         
         view_idx = tree.index(item_id)
         if 0 <= view_idx < len(idx_map):
@@ -5514,9 +5737,7 @@ class PMIReportApp:
 
     def toggle_selected_items(self, mode="PMI"):
         """선택된 모든 항목의 체크 상태를 토글"""
-        tree = self.rt_preview_tree if mode == "RT" else self.preview_tree
-        idx_map = self.rt_item_idx_map if mode == "RT" else self.item_idx_map
-        data = self.rt_extracted_data if mode == "RT" else self.extracted_data
+        tree, idx_map, data, _ = self._get_mode_info(mode)
         
         selected_ids = tree.selection()
         if not selected_ids: return
@@ -5666,7 +5887,7 @@ class PMIReportApp:
 
     def show_context_menu(self, event, mode="PMI"):
         """우클릭 컨텍스트 메뉴 표시 및 현재 모드에 따라 명령 구성"""
-        tree = self.paut_preview_tree if mode == "PAUT" else (self.rt_preview_tree if mode == "RT" else (self.pt_preview_tree if mode == "PT" else self.preview_tree))
+        tree = self._get_mode_info(mode)[0]
         col = tree.identify_column(event.x)
         self.last_clicked_col = col 
         item_id = tree.identify_row(event.y)
@@ -5712,6 +5933,8 @@ class PMIReportApp:
             tree, idx_map, data, keys_attr = self.kogas_preview_tree, self.kogas_item_idx_map, self.kogas_extracted_data, "kogas_column_keys"
         elif mode == "PT":
             tree, idx_map, data, keys_attr = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data, "pt_column_keys"
+        elif mode == "MT":
+            tree, idx_map, data, keys_attr = self.mt_preview_tree, self.mt_item_idx_map, self.mt_extracted_data, "mt_column_keys"
         elif mode == "PAUT":
             tree, idx_map, data, keys_attr = self.paut_preview_tree, self.paut_item_idx_map, self.paut_extracted_data, "paut_column_keys"
         else:
@@ -5980,6 +6203,7 @@ class PMIReportApp:
         ttk.Button(main_frame, text="적용 (Apply)", command=_apply).pack(pady=5)
 
 
+
     def update_date_listbox(self, mode="PMI"):
         if mode == "RT":
             listbox = self.rt_date_listbox
@@ -6026,14 +6250,18 @@ class PMIReportApp:
             self.update_pmi_loc_listbox()
         elif mode == "PAUT":
             self.update_paut_filter_listboxes()
+        elif mode == 'MT':
+            self._refresh_mt_filter_headers()
+        elif mode in ('RT', 'KOGAS'):
+            self._refresh_rt_filter_headers(mode)
 
-    def _position_paut_filter_dropdown(self, popup, column, width, height):
+    def _position_paut_filter_dropdown(self, popup, column, width, height, tree=None):
         """Place an in-app filter panel directly below its column header."""
         previous = getattr(self, '_paut_filter_dropdown', None)
         if previous is not None and previous.winfo_exists():
             previous.destroy()
         self._paut_filter_dropdown = popup
-        tree = self.paut_preview_tree
+        tree = tree if tree is not None else self.paut_preview_tree
         columns = list(tree['displaycolumns'])
         if columns == ['#all']:
             columns = list(tree['columns'])
@@ -6070,6 +6298,76 @@ class PMIReportApp:
             popup.grab_set()
         # Build the contents before displaying the panel within the main window.
         popup.after_idle(show_dropdown)
+
+    def _refresh_mt_filter_headers(self):
+        tree = self.mt_preview_tree
+        columns = list(tree['columns'])
+        for key, flag, candidates in [('Date', 'date_filtered', ('Date',)),
+                                       ('Dwg', 'drawing_filtered', ('Dwg', 'ISO/Dwg', 'ISO/DWG'))]:
+            column = next((value for value in candidates if value in columns), None)
+            if column is None:
+                continue
+            values = {str(item.get(key, '') or '').strip() for item in self.mt_extracted_data}
+            active = {str(item.get(key, '') or '').strip() for item in self.mt_extracted_data if item.get(flag, True)}
+            suffix = f' ({len(active)}개)' if values != active else ''
+            tree.heading(column, text=key + ' ▾' + suffix,
+                         command=lambda k=key, f=flag, c=column: self._choose_mt_filter(k, f, c))
+        if hasattr(self, 'mt_check_menu') and 'V' in columns:
+            tree.heading('V', text='V ▾', command=self._show_mt_check_menu)
+
+    def _choose_mt_filter(self, key, flag, column):
+        states = {}
+        for item in self.mt_extracted_data:
+            states.setdefault(str(item.get(key, '') or '').strip(), bool(item.get(flag, True)))
+        states = dict(sorted(states.items()))
+        panel = tk.Frame(self.root, background='white', borderwidth=1, relief='solid')
+        self._position_paut_filter_dropdown(panel, column, 560 if key == 'Dwg' else 420, 420,
+                                            tree=self.mt_preview_tree)
+        ttk.Label(panel, text=f'{key} — 여러 항목 체크 후 적용').pack(anchor='w', padx=10, pady=8)
+        search = tk.StringVar()
+        ttk.Entry(panel, textvariable=search).pack(fill='x', padx=10)
+        frame = ttk.Frame(panel)
+        frame.pack(fill='both', expand=True, padx=10, pady=6)
+        choices = tk.Listbox(frame, font=('Malgun Gothic', 10), exportselection=False)
+        choices.pack(side='left', fill='both', expand=True)
+        scrollbar = ttk.Scrollbar(frame, command=choices.yview)
+        scrollbar.pack(side='right', fill='y')
+        choices.configure(yscrollcommand=scrollbar.set)
+        visible = []
+        def refresh(*_args):
+            visible[:] = [value for value in states if search.get().strip().casefold() in value.casefold()]
+            choices.delete(0, tk.END)
+            for value in visible:
+                choices.insert(tk.END, ('[v] ' if states[value] else '[ ] ') + (value or '(비어 있음)'))
+        def toggle(event):
+            index = choices.nearest(event.y) if event.keysym != 'space' else (
+                choices.curselection()[0] if choices.curselection() else -1)
+            if 0 <= index < len(visible):
+                value = visible[index]
+                states[value] = not states[value]
+                refresh()
+                choices.selection_set(index)
+            return 'break'
+        def set_all(state):
+            for value in states:
+                states[value] = state
+            refresh()
+        def apply():
+            for item in self.mt_extracted_data:
+                item[flag] = states.get(str(item.get(key, '') or '').strip(), False)
+            self.update_date_listbox(mode='MT')
+            self.populate_preview(self.mt_extracted_data, switch_tab=False, mode='MT')
+            panel.destroy()
+        choices.bind('<ButtonRelease-1>', toggle)
+        choices.bind('<space>', toggle)
+        search.trace_add('write', refresh)
+        refresh()
+        buttons = ttk.Frame(panel)
+        buttons.pack(fill='x', padx=8, pady=6)
+        for label, command in [('전체 선택', lambda: set_all(True)), ('전체 해제', lambda: set_all(False)),
+                               ('적용', apply), ('취소', panel.destroy)]:
+            ttk.Button(buttons, text=label, command=command).pack(side='left', padx=2)
+        ttk.Button(panel, text='정렬 ↑ / ↓', command=lambda: self.sort_by_column(key, mode='MT')).pack(fill='x', padx=10, pady=4)
 
     def _choose_paut_dates(self):
         """Choose multiple dates without changing independent line/size filters."""
@@ -6503,32 +6801,40 @@ class PMIReportApp:
     def select_all(self, mode="PMI"):
         """모든 항목 체크"""
         if mode == "RT": data = self.rt_extracted_data
+        elif mode == "KOGAS": data = self.kogas_extracted_data
         elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "MT": data = self.mt_extracted_data
         elif mode == "PAUT": data = self.paut_extracted_data
         else: data = self.extracted_data
         
         for item in data:
-            if (item.get('date_filtered', True)
+            if (item.get('date_filtered', True) and (mode not in ('MT', 'RT', 'KOGAS') or item.get('drawing_filtered', True))
                     and (mode != "PAUT" or (
                         item.get('line_filtered', True)
                         and item.get('size_filtered', True)))):
                 item['selected'] = True
         self.populate_preview(data, switch_tab=False, mode=mode)
 
+
+
     def deselect_all(self, mode="PMI"):
         """모든 항목 체크 해제"""
         if mode == "RT": data = self.rt_extracted_data
+        elif mode == "KOGAS": data = self.kogas_extracted_data
         elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "MT": data = self.mt_extracted_data
         elif mode == "PAUT": data = self.paut_extracted_data
         else: data = self.extracted_data
         
         for item in data:
-            if (item.get('date_filtered', True)
+            if (item.get('date_filtered', True) and (mode not in ('MT', 'RT', 'KOGAS') or item.get('drawing_filtered', True))
                     and (mode != "PAUT" or (
                         item.get('line_filtered', True)
                         and item.get('size_filtered', True)))):
                 item['selected'] = False
         self.populate_preview(data, switch_tab=False, mode=mode)
+
+
 
     def select_deficient_items(self):
         """PMI: 함량 미달인 항목만 자동으로 선택(체크)"""
@@ -6596,19 +6902,23 @@ class PMIReportApp:
     def add_item(self, mode="PMI"):
         """새 데이터 행 추가"""
         if mode == "RT": data = self.rt_extracted_data
+        elif mode == "KOGAS": data = self.kogas_extracted_data
         elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "MT": data = self.mt_extracted_data
         elif mode == "PAUT": data = self.paut_extracted_data
         else: data = self.extracted_data
         
         new_item = {'selected': True, 'date_filtered': True, 'order_index': len(data)}
         # 기본 키 초기화
-        keys = self.rt_column_keys if mode == "RT" else (self.pt_column_keys if mode == "PT" else (self.paut_column_keys if mode == "PAUT" else self.column_keys))
+        keys = self.kogas_column_keys if mode == "KOGAS" else self.mt_column_keys if mode == "MT" else self.rt_column_keys if mode == "RT" else (self.pt_column_keys if mode == "PT" else (self.paut_column_keys if mode == "PAUT" else self.column_keys))
         for k in keys:
             if k not in new_item: new_item[k] = ""
             
         data.append(new_item)
         self.populate_preview(data, switch_tab=False, mode=mode)
         self.log(f"➕ {mode} 새 데이터 항목 추가 완료")
+
+
 
     def move_item(self, direction, mode="PMI"):
         """선택된 아이템의 순서를 위/아래로 이동 (필터 상태 대응)"""
@@ -6674,6 +6984,8 @@ class PMIReportApp:
             tree, idx_map, data = self.kogas_preview_tree, self.kogas_item_idx_map, self.kogas_extracted_data
         elif mode == "PT":
             tree, idx_map, data = self.pt_preview_tree, self.pt_item_idx_map, self.pt_extracted_data
+        elif mode == "MT":
+            tree, idx_map, data = self.mt_preview_tree, self.mt_item_idx_map, self.mt_extracted_data
         elif mode == "PAUT":
             tree, idx_map, data = self.paut_preview_tree, self.paut_item_idx_map, self.paut_extracted_data
         else:
@@ -6694,11 +7006,13 @@ class PMIReportApp:
         self.update_date_listbox(mode)
         self.log(f"🗑️ {mode} {len(selected_ids)}개 항목 삭제 완료")
 
+
     def save_preview_data(self, mode="PMI"):
         """현재 추출/편집된 데이터를 JSON 파일로 저장"""
         if mode == "RT": data = self.rt_extracted_data
         elif mode == "KOGAS": data = self.kogas_extracted_data
         elif mode == "PT": data = self.pt_extracted_data
+        elif mode == "MT": data = self.mt_extracted_data
         elif mode == "PAUT": data = self.paut_extracted_data
         else: data = self.extracted_data
         if not data:
@@ -6722,6 +7036,7 @@ class PMIReportApp:
                 self.log(f"❌ {mode} 저장 오류: {e}")
                 messagebox.showerror("오류", f"파일 저장 중 오류가 발생했습니다: {e}")
 
+
     def load_preview_data(self, mode="PMI"):
         """저장된 JSON 데이터를 불러와서 목록에 채움"""
         file_path = filedialog.askopenfilename(
@@ -6740,6 +7055,7 @@ class PMIReportApp:
                 if mode == "RT": data = self.rt_extracted_data
                 elif mode == "KOGAS": data = self.kogas_extracted_data
                 elif mode == "PT": data = self.pt_extracted_data
+                elif mode == "MT": data = self.mt_extracted_data
                 elif mode == "PAUT": data = self.paut_extracted_data
                 else: data = self.extracted_data
                 
@@ -6749,6 +7065,7 @@ class PMIReportApp:
                     if mode == "RT": self.rt_extracted_data = loaded_data
                     elif mode == "KOGAS": self.kogas_extracted_data = loaded_data
                     elif mode == "PT": self.pt_extracted_data = loaded_data
+                    elif mode == "MT": self.mt_extracted_data = loaded_data
                     elif mode == "PAUT": self.paut_extracted_data = loaded_data
                     else: self.extracted_data = loaded_data
                     data = loaded_data
@@ -6767,17 +7084,20 @@ class PMIReportApp:
                 self.log(f"❌ {mode} 불러오기 오류: {e}")
                 messagebox.showerror("오류", f"파일을 불러오는 중 오류가 발생했습니다: {e}")
 
+
     def clear_all(self, mode="PMI"):
         """모든 데이터 초기화"""
         if messagebox.askyesno("확인", f"모든 {mode} 데이터를 초기화하시겠습니까?"):
             if mode == "RT": self.rt_extracted_data = []
             elif mode == "KOGAS": self.kogas_extracted_data = []
             elif mode == "PT": self.pt_extracted_data = []
+            elif mode == "MT": self.mt_extracted_data = []
             elif mode == "PAUT": self.paut_extracted_data = []
             else: self.extracted_data = []
             self.update_date_listbox(mode)
             self.populate_preview([], mode=mode)
             self.log(f"🧹 모든 {mode} 데이터 초기화 완료")
+
 
     def export_to_excel(self, mode="PMI"):
         """현재 미리보기 목록(필터링/선택 반영)을 엑셀 파일로 내보냄 (서식 및 병합 시인성 유지)"""
@@ -6794,6 +7114,7 @@ class PMIReportApp:
         final_list = [
             d for d in data
             if d.get('date_filtered', True)
+            and (mode not in ('MT', 'RT', 'KOGAS') or d.get('drawing_filtered', True))
             and (mode != "PAUT" or (
                 d.get('line_filtered', True) and d.get('size_filtered', True)))
             and (not filter_enabled or d.get('selected', True))
@@ -6920,6 +7241,7 @@ class PMIReportApp:
             "RT": self.rt_extracted_data,
             "KOGAS": self.kogas_extracted_data,
             "PT": self.pt_extracted_data,
+            "MT": getattr(self, 'mt_extracted_data', []),
             "PAUT": self.paut_extracted_data
         }
         target_list = data_targets.get(mode)
@@ -7007,7 +7329,7 @@ class PMIReportApp:
         tree_map = {
             "PMI": self.preview_tree, "RT": self.rt_preview_tree,
             "KOGAS": self.kogas_preview_tree,
-            "PT": self.pt_preview_tree, "PAUT": self.paut_preview_tree
+            "PT": self.pt_preview_tree, "MT": getattr(self, 'mt_preview_tree', None), "PAUT": self.paut_preview_tree
         }
         target_tree = tree_map.get(mode)
         if target_tree:
@@ -7027,7 +7349,7 @@ class PMIReportApp:
 
     def populate_preview(self, data_list, switch_tab=True, mode="PMI"):
         """추출된 데이터를 미리보기 표에 채움 (필터 반영 및 그룹 색상 적용)"""
-        if mode == 'PAUT':
+        if mode in ('PAUT', 'MT', 'RT', 'KOGAS'):
             from report_issue_history import restore_report_numbers
             try:
                 restore_report_numbers(mode, data_list)
@@ -7041,6 +7363,10 @@ class PMIReportApp:
             tree = self.pt_preview_tree
             self.pt_item_idx_map = []
             idx_map = self.pt_item_idx_map
+        elif mode == "MT":
+            tree = self.mt_preview_tree
+            self.mt_item_idx_map = []
+            idx_map = self.mt_item_idx_map
         elif mode == "PAUT":
             tree = self.paut_preview_tree
             self.paut_item_idx_map = []
@@ -7062,6 +7388,10 @@ class PMIReportApp:
         for item in tree.get_children():
             tree.delete(item)
         
+        if mode == 'MT':
+            self._refresh_mt_filter_headers()
+        elif mode in ('RT', 'KOGAS'):
+            self._refresh_rt_filter_headers(mode)
         filter_enabled = self.show_selected_only.get()
         hidden_by_def_count = 0
         total_matched_search = 0
@@ -7085,6 +7415,8 @@ class PMIReportApp:
                     and item.get('size_filtered', True)):
                 continue
             
+            if mode in ('MT', 'RT', 'KOGAS') and not item.get('drawing_filtered', True):
+                continue
             is_selected = item.get('selected', True)
             if filter_enabled and not is_selected:
                 continue
@@ -7190,6 +7522,12 @@ class PMIReportApp:
                     else: 
                         val = str(item.get(k, "")).strip()
                         row_vals.append(val)
+            elif mode == "MT":
+                for k in self.mt_column_keys:
+                    if k == "selected": row_vals.append(v_mark)
+                    else:
+                        val = str(item.get(k, "")).strip()
+                        row_vals.append(val)
             elif mode == "PAUT":
                 # PAUT use paut_column_keys
                 for k in self.paut_column_keys:
@@ -7230,6 +7568,7 @@ class PMIReportApp:
         if mode == "PMI" and hidden_by_def_count > 0:
             sel_str = ", ".join(list(set(selected_locs_names))) if selected_locs_names else "전체"
             self.log(f"ℹ️ '{sel_str}' 결과 중 {hidden_by_def_count}건이 '함량 미달만 보기' 옵션으로 인해 숨겨져 있습니다.")
+
             
         # [REMOVED] Legacy tab switching logic (Preview is now permanently visible in splitscreen)
         # if switch_tab:
@@ -7297,7 +7636,7 @@ class PMIReportApp:
 
     def show_bulk_update_dialog(self, mode="PMI"):
         """선택된 항목들을 필터 조건에 따라 일괄 변경하는 다이얼로그 표시"""
-        target_data = self.rt_extracted_data if mode == "RT" else (self.pt_extracted_data if mode == "PT" else self.extracted_data)
+        target_data = self._get_mode_info(mode)[2]
         
         if not target_data:
             messagebox.showwarning("알림", f"{mode} 데이터가 없습니다.")
@@ -7332,6 +7671,9 @@ class PMIReportApp:
         elif mode == "PT":
             filter_cols = ["전체(필터 없음)", "ISO Drawing No.", "Joint", "NPS", "Thk.", "Material", "Welder"]
             key_map = {"ISO Drawing No.": "Dwg", "Joint": "Joint", "NPS": "NPS", "Thk.": "Thk.", "Material": "Material", "Welder": "Welder"}
+        elif mode == 'MT':
+            filter_cols = ['전체(필터 없음)', 'Dwg', 'Joint', 'Material', 'TestItem', 'Result', 'Welder']
+            key_map = {key: key for key in filter_cols[1:]}
         else: # PMI
             filter_cols = ["전체(필터 없음)", "ISO/DWG", "Joint No", "Test Location", "Ni", "Cr", "Mo", "Grade"]
             key_map = {"ISO/DWG": "Dwg", "Joint No": "Joint", "Test Location": "Loc", "Ni": "Ni", "Cr": "Cr", "Mo": "Mo", "Grade": "Grade"}
@@ -7371,6 +7713,8 @@ class PMIReportApp:
             labels = [("Dwg:", "Dwg"), ("Film Ident:", "Joint"), ("Loc:", "Loc"), ("Grade:", "Grade"), ("Welder:", "Welder"), ("Remarks:", "Remarks"), ("Date:", "Date")]
         elif mode == "PT":
             labels = [("Dwg:", "Dwg"), ("Joint:", "Joint"), ("NPS:", "NPS"), ("Thk:", "Thk."), ("Material:", "Material"), ("Welder:", "Welder"), ("Weld Type:", "WType"), ("Result:", "Result"), ("Date:", "Date")]
+        elif mode == 'MT':
+            labels = [(key + ':', key) for key in ('Dwg', 'Joint', 'Material', 'TestItem', 'Result', 'Welder', 'Remarks', 'Date')]
         else: # PMI
             labels = [("Ni (%):", "Ni"), ("Cr (%):", "Cr"), ("Mo (%):", "Mo"), ("Location:", "Loc"), ("Grade:", "Grade"), ("Date:", "Date")]
 
@@ -7425,6 +7769,8 @@ class PMIReportApp:
                 
                 # [NEW] Check for sidebar visibility (Date & Loc)
                 if match and only_visible_var.get():
+                    if mode in ('MT', 'RT', 'KOGAS') and not item.get('drawing_filtered', True):
+                        match = False
                     if not item.get('date_filtered', True):
                         match = False
                     if match and mode == "PAUT" and not (
@@ -8240,6 +8586,15 @@ class PMIReportApp:
                 except: pass
         except: pass
 
+        if current_mode == 'MT':
+            from openpyxl.cell.cell import MergedCell
+            new_sheet.title = f'MT(을)_{page_num:03}'
+            for row in new_sheet.iter_rows(min_row=10, max_row=38, max_col=24):
+                for cell in row:
+                    if not isinstance(cell, MergedCell):
+                        cell.value = None
+            return new_sheet
+
         # 병합된 셀 명시적으로 다시 복사 (openpyxl 버그 방지)
         try:
             for merged_cell_range in source_sheet.merged_cells.ranges:
@@ -8819,12 +9174,16 @@ class PMIReportApp:
                     for existing in data:
                         if existing.get('_source_id') == r['_source_id']:
                             existing['_source_contractor'] = r.get('업체', '')
+                            existing['_source_tested_length'] = r.get('검사길이', '') or r.get(mode, '')
+                            existing['_source_work_type'] = r.get('근무구분', '')
                     continue
                 new_row = {k: "" for k in keys_attr}
                 new_row['_source_site'] = r['_source_site']
                 new_row['_source_path'] = r['_source_path']
                 new_row['_source_id'] = r.get('_source_id')
                 new_row['_source_contractor'] = r.get('업체', '')
+                new_row['_source_tested_length'] = r.get('검사길이', '') or r.get(mode, '')
+                new_row['_source_work_type'] = r.get('근무구분', '')
                 for quantity_key in ('RT_OR', 'RT_RE'):
                     if quantity_key in r:
                         new_row[quantity_key] = r[quantity_key]
@@ -8924,6 +9283,8 @@ class PMIReportApp:
                     self.paut_contractor.set(next(iter(companies)))
                     self.config['PAUT_CONTRACTOR'] = self.paut_contractor.get()
                     self.save_settings()
+                self.populate_preview(data, switch_tab=False, mode=mode)
+            elif mode in ('MT', 'RT', 'KOGAS'):
                 self.populate_preview(data, switch_tab=False, mode=mode)
             messagebox.showinfo("완료", f"{ndt_list[0]['_source_site']} 작업 감독일보에서 {added_count}개의 {mode} NDT 결과를 성공적으로 불러왔습니다.")
             
@@ -10055,13 +10416,15 @@ class PMIReportApp:
         from report_issue_history import record_issue
         try:
             # Read the actual saved cover value rather than a row's imported number.
-            cell = {'RT': 'C5', 'KOGAS': 'C5', 'PT': 'P6', 'PAUT': 'AA5'}.get(mode)
+            cell = {'RT': 'C5', 'KOGAS': 'C5', 'PT': 'P6', 'MT': 'S6', 'PAUT': 'AA5'}.get(mode)
             if cell is None:
                 cell = self.config.get('GAPJI_REPORT_NO_CELL', 'B10')
             report_no = workbook.worksheets[0][cell].value
             record_issue(mode, report_no, save_path, items)
             if mode == 'PAUT':
                 self.populate_preview(self.paut_extracted_data, switch_tab=False, mode=mode)
+            elif mode in ('MT', 'RT', 'KOGAS'):
+                self.populate_preview(self._get_mode_info(mode)[2], switch_tab=False, mode=mode)
             self.log(f"발행 이력 저장: {report_no or '(번호 미입력)'} · {len(items)}건")
         except Exception as exc:
             self.log(f"발행 이력 저장 실패: {exc}")
@@ -10142,6 +10505,7 @@ class PMIReportApp:
             d for d in data
             if d.get('selected', True)
             and d.get('date_filtered', True)
+            and (mode not in ('MT', 'RT', 'KOGAS') or d.get('drawing_filtered', True))
             and (mode != "PAUT" or (
                 d.get('line_filtered', True) and d.get('size_filtered', True)))
         ]
@@ -10244,6 +10608,11 @@ class PMIReportApp:
                 line_no = first_item.get('Line No.', '') or first_item.get('Dwg', '') or first_item.get('ISO', '')
                 if line_no:
                     self.safe_set_value(ws, 'L9', line_no)
+        elif mode == 'MT':
+            for key, cell in [('GAPJI_PROJECT', 'B9'), ('GAPJI_CUSTOMER', 'S4'),
+                              ('GAPJI_ITEM', 'J9'), ('GAPJI_MATERIAL', 'B11'),
+                              ('GAPJI_REPORT_NO', 'S6')]:
+                self.safe_set_value(ws, cell, self.config.get(key, ''))
         else:
             # PMI templates already contain their own date field. Do not use B9
             # as a fallback because it belongs to the cover logo/header area.
@@ -11070,30 +11439,73 @@ class PMIReportApp:
                 except: pass
 
 
+    def _apply_mt_signatures(self, ws):
+        from openpyxl.drawing.image import Image as SignatureImage
+        from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+        from openpyxl.drawing.xdr import XDRPositiveSize2D
+        from openpyxl.utils.units import pixels_to_EMU
+        for name_cell, row in (('D39', 39), ('D42', 42)):
+            name = re.sub(r'\s+', '', str(ws[name_cell].value or ''))
+            if not name:
+                continue
+            path = os.path.join(SRC_ROOT, 'signs', name + '.png')
+            if not os.path.isfile(path):
+                self.log(f'서명 파일 없음: {name}')
+                continue
+            stream = self._white_background_to_transparent_png(path)
+            image = SignatureImage(stream)
+            image._pmi_source_stream = stream
+            scale = min(48 / image.width, 40 / image.height)
+            width, height = image.width * scale, image.height * scale
+            image.anchor = OneCellAnchor(
+                _from=AnchorMarker(col=5, row=row - 1, colOff=pixels_to_EMU(2),
+                                   rowOff=pixels_to_EMU((48 - height) / 2)),
+                ext=XDRPositiveSize2D(pixels_to_EMU(width), pixels_to_EMU(height)))
+            ws.add_image(image)
+
     def _run_mt_process(self, final_list, template_path):
         """MT 성적서 생성 (1-row-per-data 레이아웃 + ISO 병합)"""
         self.save_settings() # Ensure UI -> config sync
         self.log(f"🚀 MT 성적서 생성 시작 (총 {len(final_list)} 건)...")
         self.progress['value'] = 0
         try:
-            wb = openpyxl.load_workbook(template_path, keep_vba=True)
+            from mt_report_layout import hot_tapping_points
+            report_rows = hot_tapping_points(final_list) if self.gapji_item.get().strip().upper() == 'HOT TAPPING' else final_list
+            keep_vba = os.path.splitext(template_path)[1].lower() == '.xlsm'
+            wb = openpyxl.load_workbook(template_path, keep_vba=keep_vba)
             if len(wb.worksheets) < 1:
                 raise ValueError("선택한 템플릿 파일에 시트가 존재하지 않습니다.")
 
             # 갑지 (Cover)
             ws0 = wb.worksheets[0]
-            self.add_logos_to_sheet(ws0, is_cover=True, clear_existing=False, mode="MT")
+            from mt_report_layout import fit_equipment_labels
+            fit_equipment_labels(ws0)
             self._write_gapji_metadata(ws0, mode="MT")
-            self.force_print_settings(ws0, context="COVER")
-            self.apply_custom_dimensions(ws0, "COVER")
+            temperature = self.mt_surface_temp.get().strip()
+            if temperature:
+                try:
+                    temperature = float(temperature)
+                except ValueError:
+                    messagebox.showerror('온도 확인', '표면온도는 숫자로 입력해 주세요. 예: 25')
+                    return
+            self.safe_set_value(ws0, 'B21', temperature if temperature != '' else None)
+            ws0['B21'].alignment = Alignment(horizontal='center', vertical='center')
+            self.safe_set_value(ws0, 'D21', '■')
+            self.safe_set_value(ws0, 'D22', '□')
+            line_numbers = list(dict.fromkeys(str(item.get('Dwg', '') or '').strip()
+                                             for item in final_list if str(item.get('Dwg', '') or '').strip()))
+            self.safe_set_value(ws0, 'Q9', '\n'.join(line_numbers))
+            ws0['Q9'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            if len(line_numbers) > 1:
+                ws0.row_dimensions[9].height = max(ws0.row_dimensions[9].height or 15, 15 * len(line_numbers))
+            self.safe_set_value(ws0, 'L39', self.gapji_exam_date.get().strip())
+            ws0['L39'].alignment = Alignment(horizontal='center', vertical='center')
 
             # 을지 (Data)
             data_sheet_id = 1 if len(wb.worksheets) >= 2 else 0
             ws = wb.worksheets[data_sheet_id]
             ws.title = f"{ws.title[:20]}_001"
             # [FIX] Do NOT clear existing images if data sheet is the same as cover
-            self.add_logos_to_sheet(ws, is_cover=False, clear_existing=(ws != ws0), mode="MT")
-            self.force_print_settings(ws, context="DATA")
 
             # [NEW] 지역난방 MT 맞춤형 페이징 및 행 설정
             gapji_start_row = 29
@@ -11109,92 +11521,123 @@ class PMIReportApp:
             current_page = 1
             data_ptr = 0
             is_gapji = True
-            
-            while data_ptr < len(final_list):
-                if is_gapji and current_row > gapji_end_row:
-                    is_gapji = False
-                    current_page += 1
-                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="MT")
-                    current_row = eulji_start_row
-                elif not is_gapji and current_row > eulji_end_row:
-                    current_page += 1
-                    ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="MT")
-                    current_row = eulji_start_row
+            from mt_report_layout import mt_data_positions
+            available = 8 - len(report_rows) if len(report_rows) < 8 else 29 - ((len(report_rows) - 8) % 29)
+            summary_index = len(report_rows) + (available if available < 3 else 0)
+            positions = mt_data_positions(wb, summary_index + 3,
+                lambda page: self.prepare_next_sheet(wb, data_sheet_id, page, mode='MT'))
+            while data_ptr < len(report_rows):
+                ws, current_row = positions[data_ptr]
                 
-                item = final_list[data_ptr]
+                item = report_rows[data_ptr]
                 
-                # [MT] ISO/Joint No. 병합 기록
-                merged_iso_joint = f"{item.get('Dwg', '')}/{item.get('Joint', '')}"
+                self.safe_set_value(ws, f'B{current_row}', item.get('Joint', ''))
                 
-                if is_gapji:
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=2).coordinate, merged_iso_joint)
-                else:
-                    self.safe_set_value(ws, ws.cell(row=current_row, column=1).coordinate, merged_iso_joint)
-                
-                # [MT] Acc (Col 6), Rej (Col 8) O표시 처리
-                result_val = str(item.get('Result', 'Acc')).strip().upper()
+                # MT acceptance check and classification.
+                result_val = str(item.get('Result', '')).strip().upper()
                 acc_cell = ws.cell(row=current_row, column=6)
                 rej_cell = ws.cell(row=current_row, column=8)
-                
-                if "ACC" in result_val:
-                    self.safe_set_value(ws, acc_cell.coordinate, "O")
+                self.safe_set_value(ws, f'K{current_row}', '')
+                if result_val in ('합격', 'ACC', 'ACCEPT', 'ACCEPTED'):
+                    self.safe_set_value(ws, acc_cell.coordinate, "√")
                     self.safe_set_value(ws, rej_cell.coordinate, "")
-                elif "REJ" in result_val:
+                    self.safe_set_value(ws, f'K{current_row}', 1)
+                elif result_val in ('불합격', 'REJ', 'REJECT', 'REJECTED'):
                     self.safe_set_value(ws, acc_cell.coordinate, "")
-                    self.safe_set_value(ws, rej_cell.coordinate, "O")
+                    self.safe_set_value(ws, rej_cell.coordinate, "√")
+                else:
+                    self.safe_set_value(ws, acc_cell.coordinate, "")
+                    self.safe_set_value(ws, rej_cell.coordinate, "")
                 
-                # [MT] Interpretation (Col 12) 에는 용접사 번호
+                # Interpretation is separate from the welder identity.
                 interp_cell = ws.cell(row=current_row, column=12)
-                self.safe_set_value(ws, interp_cell.coordinate, item.get('Welder', ''))
+                interpretation = item.get('Interpretation', '')
+                if not str(interpretation or '').strip() and result_val in ('합격', 'ACC', 'ACCEPT', 'ACCEPTED'):
+                    interpretation = '관련지시 없음'
+                self.safe_set_value(ws, interp_cell.coordinate, interpretation)
                 
                 # [MT] Remarks (Col 21) 에는 비고
                 remarks_cell = ws.cell(row=current_row, column=21)
-                self.safe_set_value(ws, remarks_cell.coordinate, item.get('Remarks', ''))
+                remarks = str(item.get('Remarks', '') or '').strip()
+                welder = str(item.get('Welder', '') or '').strip()
+                self.safe_set_value(ws, remarks_cell.coordinate,
+                                    '\n'.join(value for value in (remarks, welder) if value))
+                remarks_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                if remarks and welder:
+                    ws.row_dimensions[current_row].height = max(ws.row_dimensions[current_row].height or 15, 30)
                 
                 # 스타일링 (가운데 정렬)
-                for c in [1, 2, 6, 8, 12, 21]:
+                for c in [1, 2, 6, 8, 11, 12]:
                     cell = ws.cell(row=current_row, column=c)
                     cell.alignment = Alignment(horizontal='center', vertical='center')
 
                 data_ptr += 1
                 current_row += 1
-                self.progress['value'] = (data_ptr / len(final_list)) * 95
+                self.progress['value'] = (data_ptr / len(report_rows)) * 95
 
+            marker_sheet, marker_row = positions[summary_index]
+            from mt_report_layout import mt_length_totals
+            from openpyxl.styles import PatternFill
+            original, repair, missing = mt_length_totals(final_list)
+            for offset, (label, value) in enumerate((('Original', original), ('Repair', repair), ('Total', original + repair))):
+                row = marker_row + offset
+                marker_sheet.unmerge_cells(f'L{row}:T{row}')
+                marker_sheet.merge_cells(f'L{row}:Q{row}')
+                marker_sheet.merge_cells(f'R{row}:T{row}')
+                self.safe_set_value(marker_sheet, f'R{row}', label)
+                self.safe_set_value(marker_sheet, f'U{row}', '확인 필요' if missing else float(value))
+                marker_sheet[f'U{row}'].number_format = '0.0000" M"'
+                for col in ('R', 'U'):
+                    cell = marker_sheet[f'{col}{row}']
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.font = Font(name='맑은 고딕', size=10, bold=label == 'Total')
+                for column in range(18, 25):
+                    cell = marker_sheet.cell(row, column)
+                    border = copy.copy(cell.border)
+                    if offset == 0 or label == 'Total':
+                        border.top = Side(style='thin', color='666666')
+                    if label == 'Total':
+                        border.bottom = Side(style='thin', color='666666')
+                        cell.fill = PatternFill('solid', fgColor='E7E6E6')
+                    cell.border = border
+                marker_sheet.row_dimensions[row].height = max(marker_sheet.row_dimensions[row].height or 15, 24)
+            self.safe_set_value(marker_sheet, f'L{marker_row}', '- 이 하 여 백 -')
+            marker_sheet[f'L{marker_row}'].alignment = Alignment(horizontal='center', vertical='center')
+            marker_sheet[f'L{marker_row}'].font = Font(name='맑은 고딕', size=10, bold=True)
             total_p = len(wb.worksheets)
-            # [NEW] 서식 정리 (48행 유령 선 제거용)
-            pt_data_end_row = int(float(self.config.get('MT_END_ROW', 37)))
             for p_idx, s in enumerate(wb.worksheets):
-                if p_idx > 0: # 을지
-                    for r_idx in range(pt_data_end_row + 1, pt_data_end_row + 15):
-                        for c_idx in range(1, 15):
-                            try: s.cell(row=r_idx, column=c_idx).border = Border()
-                            except: pass
-                
                 page_num = p_idx + 1
-                # 인쇄 영역 설정 (갑지는 A1:S47, 을지는 A1:S40)
-                if p_idx == 0:
-                    s.print_area = 'A1:S47'
-                else:
-                    s.print_area = 'A1:S40'
-                # 페이지 번호 기입
-                try:
-                    p_text = f"Page    {page_num}    of    {total_p}"
-                    if p_idx > 0: self.safe_set_value(s, 'P3', p_text)
-                    else: self.safe_set_value(s, 'P3', p_text)
-                except: pass
+                s.print_area = 'A1:X44' if p_idx == 0 else 'A1:X39'
+                s.page_setup.orientation = 'portrait'
+                s.page_setup.paperSize = s.PAPERSIZE_A4
+                s.page_setup.scale = None
+                s.page_setup.fitToWidth = 1
+                s.page_setup.fitToHeight = 1
+                s.sheet_properties.pageSetUpPr.fitToPage = True
+                self.safe_set_value(s, 'S4', ws0['S4'].value)
+                self.safe_set_value(s, 'S6', ws0['S6'].value)
+                # Template: Page [V3] of [X3].
+                self.safe_set_value(s, 'V3', page_num)
+                self.safe_set_value(s, 'X3', total_p)
+                for coordinate in ('V3', 'X3'):
+                    s[coordinate].alignment = Alignment(horizontal='center', vertical='center')
 
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_path = self._report_save_path(os.path.dirname(template_path), '.xlsx', mode='MT')
+            output_ext = '.xlsm' if keep_vba else '.xlsx'
+            save_path = self._report_save_path(os.path.dirname(template_path), output_ext, mode='MT')
             if not save_path:
                 return
             output_name = os.path.basename(save_path)
+            self._apply_mt_signatures(ws0)
             wb.save(save_path)
+            from mt_footer import restore_mt_footer_pictures
+            restore_mt_footer_pictures(template_path, save_path)
             self._record_report_issue('MT', wb, save_path, final_list)
             self.progress['value'] = 100
-            self.log(f"✨ PT 완료! 저장됨: {output_name}")
+            self.log(f"✨ MT 완료! 저장됨: {output_name}")
             messagebox.showinfo("성공", f"MT 성적서 생성이 완료되었습니다.\n경로: {os.path.dirname(save_path)}")
         except Exception as e:
-            self.log(f"❌ PT 생성 오류: {e}")
+            self.log(f"❌ MT 생성 오류: {e}")
             traceback.print_exc()
             messagebox.showerror("생성 실패", f"MT 성적서 생성 중 오류가 발생했습니다: {e}")
         finally:
@@ -11908,6 +12351,18 @@ class PMIReportApp:
             # [SURGERY] openpyxl destroys complex drawings (like grouped shapes). 
             # We surgically inject the template's drawing layer back into the generated file.
             self.inject_drawing_layer(template_path, save_path)
+            if mode == 'RT':
+                from report_signatures import append_rt_signatures
+                signatures = []
+                for cell, anchor in (('D32', 'E32'), ('D35', 'E35')):
+                    name = re.sub(r'\s+', '', str(ws0[cell].value or ''))
+                    path = os.path.join(SRC_ROOT, 'signs', name + '.png')
+                    if os.path.isfile(path):
+                        signatures.append((self._white_background_to_transparent_png(path), anchor, 65, 23))
+                    else:
+                        self.log(f'서명 파일 없음: {name}')
+                if signatures:
+                    append_rt_signatures(save_path, signatures)
 
             self._record_report_issue(mode, wb, save_path, final_list)
             
