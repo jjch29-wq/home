@@ -11,6 +11,24 @@ import re
 from tkcalendar import DateEntry
 import traceback
 
+def ensure_dashboard_panes_visible(dashboard):
+    """Repair collapsed panes after a hidden notebook page becomes visible."""
+    if not dashboard.winfo_ismapped():
+        return
+    width = dashboard.winfo_width()
+    count = len(dashboard.panes())
+    if count != 3 or width < 300:
+        return
+    first, second = dashboard.sashpos(0), dashboard.sashpos(1)
+    minimum = min(180, width // 5)
+    vehicle_width = min(600, int(width * 0.40))
+    if (min(first, second - first, width - second) < minimum
+            or abs(second - first - vehicle_width) > 24):
+        memo_width = max(minimum, int(width * 0.20))
+        recent_width = width - vehicle_width - memo_width
+        dashboard.sashpos(0, recent_width)
+        dashboard.sashpos(1, recent_width + vehicle_width)
+
 def setup_daily_usage_tab_impl(self):
     """Setup the daily usage entry tab"""
     # Top frame for entry form
@@ -38,6 +56,8 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(row1, text='① 검사 입력 → ② 작업 목록 확인 → ③ 저장').pack(side='left', padx=5)
     
     ttk.Button(row1, text="🧹 초기화", command=self.clear_daily_usage_form_all, width=10).pack(side='left', padx=2)
+    self.daily_save_status = ttk.Label(row1, text='')
+    self.daily_save_status.pack(side='left', padx=8)
     
 
 
@@ -177,6 +197,10 @@ def setup_daily_usage_tab_impl(self):
     from tkcalendar import DateEntry
     self.ent_daily_date = DateEntry(common_frame, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd', locale='ko_KR', state='readonly')
     self.ent_daily_date.grid(row=0, column=5, padx=(2, 10), pady=1, sticky='w')
+    from site_apps.central.src.views.calendar_work_summary import CalendarWorkSummary
+    self.daily_calendar_summary = CalendarWorkSummary(self.ent_daily_date, self)
+    ttk.Label(common_frame, text='● 초록: 저장된 작업 있음', foreground='#2E7D32').grid(
+        row=0, column=6, padx=(0, 5), pady=1, sticky='w')
 
     ttk.Label(form_content, text="장비명:").grid(row=1, column=2, padx=(5, 0), pady=1, sticky='e')
     equip_container = ttk.Frame(form_content)
@@ -925,13 +949,10 @@ def setup_daily_usage_tab_impl(self):
             self.ndt_ori_qty_var.set(quantity)
         self.update_daily_test_fee_calc()
         
-    # Handle Date Changes globally for recalculations
+    # A new date starts a new job, rather than repricing the previous job.
     def on_date_change(e=None):
-        # Recalculate OT for all workers when date changes (weekend vs weekday rates)
-        for i in range(1, 11):
-            group = getattr(self, f'worker_group{i}', None)
-            if group:
-                self.calculate_and_update_ot(group.ent_worktime.get(), group.ent_worktime)
+        from site_apps.central.src.views.daily_date_context import change_daily_date
+        change_daily_date(self)
 
     self.ent_daily_date.bind('<<DateEntrySelected>>', on_date_change, add='+')
     
@@ -984,8 +1005,18 @@ def setup_daily_usage_tab_impl(self):
     self.inspection_batch.pack(fill='both', expand=True, padx=5, pady=5)
 
     # 1. Left: Recent Entries Mini-table
-    self.recent_frame = ttk.LabelFrame(self.bottom_dashboard, text="오늘의 입력 내역 (최근 기록)")
+    self.recent_frame = ttk.LabelFrame(self.bottom_dashboard, text="최근 기록 (최신 날짜순 · 최대 30건)")
     self.bottom_dashboard.add(self.recent_frame, weight=9)
+    recent_tools = ttk.Frame(self.recent_frame)
+    recent_tools.pack(side='top', fill='x', padx=2, pady=2)
+    from site_apps.central.src.views.daily_date_context import show_recent_scope
+    ttk.Button(recent_tools, text='전체 기록',
+               command=lambda: show_recent_scope(self)).pack(side='left')
+    ttk.Button(recent_tools, text='선택일 기록',
+               command=lambda: show_recent_scope(self, selected_only=True)).pack(side='left', padx=4)
+    self.recent_scope_status = ttk.Label(recent_tools, text='최근 기록 · 조회 중',
+                                        font=('Malgun Gothic', 9, 'bold'))
+    self.recent_scope_status.pack(side='left', padx=8)
     
     # Create Treeview for recent entries
     columns = ("id", "date", "site", "loc_type", "method", "inspection_item", "material", "qty", "worker", "insp_type", "joint_count", "rej_count", "pipe_size")
@@ -1022,6 +1053,8 @@ def setup_daily_usage_tab_impl(self):
     self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
     self.tv_recent.bind('<Delete>', self.delete_recent_entry)
     self.tv_recent.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
+    self.cb_daily_site.bind('<<ComboboxSelected>>',
+                            lambda e: self.update_recent_entries_view(), add='+')
     
     # Right-click menu for deletion
     self.recent_menu = tk.Menu(self.tv_recent, tearoff=0)
@@ -1076,6 +1109,15 @@ def setup_daily_usage_tab_impl(self):
     # Store for data retrieval
     self.main_memo_text = self.fixed_memo_text
 
+    # A hidden notebook page can have width 1 while saved sashes are restored.
+    # Recheck once mapped, and after resizing, so all three panels stay usable.
+    def schedule_dashboard_layout(event=None):
+        self.bottom_dashboard.after_idle(
+            lambda: ensure_dashboard_panes_visible(self.bottom_dashboard))
+
+    self.bottom_dashboard.bind('<Map>', schedule_dashboard_layout, add='+')
+    self.bottom_dashboard.bind('<Configure>', schedule_dashboard_layout, add='+')
+
     dashboard_tools = ttk.Frame(history_panel)
     dashboard_tools.pack(side='bottom', fill='x', padx=5)
     self.daily_aux_visible = tk.BooleanVar(value=True)
@@ -1084,6 +1126,7 @@ def setup_daily_usage_tab_impl(self):
         if self.daily_aux_visible.get():
             self.bottom_dashboard.add(self.fixed_vehicle_frame, weight=9)
             self.bottom_dashboard.add(self.fixed_memo_frame, weight=2)
+            schedule_dashboard_layout()
         else:
             self.bottom_dashboard.forget(self.fixed_vehicle_frame)
             self.bottom_dashboard.forget(self.fixed_memo_frame)

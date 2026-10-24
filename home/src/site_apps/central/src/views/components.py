@@ -259,7 +259,7 @@ class VehicleInspectionWidget(ttk.Frame):
         super().__init__(parent, padding=0)
         
         # Create Canvas and Scrollbar for internal scrolling
-        self.canvas = tk.Canvas(self, highlightthickness=0, bg=theme_bg)
+        self.canvas = tk.Canvas(self, highlightthickness=0, bg=theme_bg, width=560, height=230)
         self.scrollbar_y = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.scrollbar_x = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
         self.scrollable_frame = ttk.Frame(self.canvas)

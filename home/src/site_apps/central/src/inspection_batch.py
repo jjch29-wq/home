@@ -199,6 +199,9 @@ class InspectionBatch(ttk.LabelFrame):
         self.app = app
         self.plans = []
         self.editing = None
+        self.collapsed_vehicle_boxes = {}
+        self.vehicle_reopen_button = ttk.Button(
+            app.daily_input_actions, command=self.expand_vehicle_editors)
         bar = ttk.Frame(self)
         bar.pack(fill='x')
         ttk.Button(bar, text='선택 작업 수정', command=self.edit).pack(side='left', padx=3)
@@ -332,8 +335,50 @@ class InspectionBatch(ttk.LabelFrame):
                 self.editing = None
             self.render()
             self.reset_job_fields()
+            self.collapse_vehicle_editors()
         except Exception as exc:
             messagebox.showwarning('작업 담기', str(exc))
+
+    def refresh_vehicle_editor_button(self):
+        self.collapsed_vehicle_boxes = {
+            box: placement for box, placement in self.collapsed_vehicle_boxes.items()
+            if box.winfo_exists()}
+        count = len(self.collapsed_vehicle_boxes)
+        if count:
+            self.vehicle_reopen_button.config(
+                text=f'차량점검 입력됨 ({count}대 · 미저장) · 펼치기')
+            self.vehicle_reopen_button.pack(side='left', padx=8)
+        else:
+            self.vehicle_reopen_button.pack_forget()
+
+    def collapse_vehicle_editors(self):
+        # Hide only floating editors. Their live widgets remain the source used
+        # by shared() and session snapshots until the user actually saves.
+        for key in getattr(self.app, 'vehicle_inspections', {}):
+            box = self.app.draggable_items.get(key)
+            if box is None or not box.winfo_exists():
+                continue
+            placement = box.place_info()
+            if not placement:
+                continue
+            self.collapsed_vehicle_boxes[box] = placement
+            box.place_forget()
+            if not getattr(box, '_batch_collapse_bound', False):
+                def on_destroy(event, container=box):
+                    if event.widget is container:
+                        self.collapsed_vehicle_boxes.pop(container, None)
+                        self.after_idle(self.refresh_vehicle_editor_button)
+                box.bind('<Destroy>', on_destroy, add='+')
+                box._batch_collapse_bound = True
+        self.refresh_vehicle_editor_button()
+
+    def expand_vehicle_editors(self):
+        for box, placement in list(self.collapsed_vehicle_boxes.items()):
+            if box.winfo_exists():
+                box.place(**placement)
+                box.lift()
+        self.collapsed_vehicle_boxes.clear()
+        self.refresh_vehicle_editor_button()
 
     def edit(self):
         selected = self.tree.selection()

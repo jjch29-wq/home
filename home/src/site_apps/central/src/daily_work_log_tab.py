@@ -196,6 +196,12 @@ class DailyWorkLogTab(ttk.Frame):
         self.date_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         self.date_entry.bind("<<DateEntrySelected>>", self.on_date_change)
         self.date_entry.bind("<Return>", self.on_date_change)
+        from site_apps.central.src.views.calendar_work_summary import CalendarWorkSummary
+        self.calendar_work_summary = CalendarWorkSummary(
+            self.date_entry, self,
+            site_getter=lambda: '중앙지사',
+            frame_getter=lambda: getattr(getattr(self, 'main_app', None), 'daily_usage_df', None),
+            history_getter=self.load_history)
         # self.date_entry.bind("<FocusOut>", self.on_date_change) # Removed to prevent accidental UI wipes
 
         self.date_status_label = tk.Label(
@@ -1669,6 +1675,10 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _refresh_saved_date_markers(self, history=None):
         """달력 팝업에서 작업일보가 저장된 날짜를 녹색으로 강조한다."""
+        preview = getattr(self, 'calendar_work_summary', None)
+        if preview is not None:
+            preview.refresh(history=history)
+            return
         if history is None:
             history = self.load_history()
 
@@ -2038,7 +2048,7 @@ class DailyWorkLogTab(ttk.Frame):
                     elif size_val == 200: spec_key = '200A'
                     elif 125 <= size_val <= 150: spec_key = '150A~125A'
                     elif size_val <= 100: spec_key = '100A이하'
-                    if shift_str == '야간' and spec_key in ['300A이상', '200A', '150A~125A', '100A이하']:
+                    if shift_str == '야간':
                         spec_key += '-야간'
                     comp = f"PAUT_{spec_key}"
                     if comp in today_qty: today_qty[comp] += val

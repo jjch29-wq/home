@@ -5453,18 +5453,33 @@ class MaterialManager:
 
             # 4. Append and Save
             new_df = pd.DataFrame([record])
-            self.daily_usage_df = pd.concat([self.daily_usage_df, new_df], ignore_index=True)
-            self.save_data()
+            previous_df = self.daily_usage_df
+            self.daily_usage_df = pd.concat([previous_df, new_df], ignore_index=True)
+            try:
+                if self.save_data() is False:
+                    self.daily_usage_df = previous_df
+                    return
+            except Exception:
+                self.daily_usage_df = previous_df
+                raise
+
+            # Close only the saved floating editor; keep other vehicles editable.
+            saved_key = next((key for key, value in self.vehicle_inspections.items()
+                              if value is widget), None)
+            if saved_key is not None:
+                self.remove_box(saved_key)
+            elif hasattr(widget, 'reset_fields'):
+                widget.reset_fields()
+            status = getattr(self, 'daily_save_status', None)
+            if status is not None:
+                status.config(text=f'✓ {v_no} · 차량점검 저장 완료 ({usage_date})')
             
             # 5. UI Updates
             self.update_daily_usage_view()
             self.refresh_inquiry_filters()
             
-            messagebox.showinfo("성공", f"[{v_no}] 차량 정보가 기록에 추가되었습니다.\n(실적 없이 차량 단독 기록으로 저장됨)")
-            
-            # [V12_QUICK_MULTI_VEHICLE] Reset only vehicle-specific fields for next entry
-            if hasattr(widget, 'reset_fields'):
-                widget.reset_fields()
+            if status is None:
+                messagebox.showinfo("성공", f"[{v_no}] 차량 정보가 기록에 추가되었습니다.")
             
         except Exception as e:
             messagebox.showerror("오류", f"차량 정보 저장 중 오류 발생: {e}")
@@ -5493,9 +5508,14 @@ class MaterialManager:
         if initial_data:
             widget.set_data(initial_data)
             
-        # Initial placement if new (Below the trigger button in the main entry frame)
+        # Start in the visible left side, including when the input is scrolled.
         if key not in getattr(self, '_loading_memos', []):
-            container.place(x=1450, y=50)
+            offset = 20 * min(len(self.vehicle_inspections) - 1, 4)
+            canvas = self.entry_canvas
+            container.place(x=int(canvas.canvasx(12)) + offset,
+                            y=int(canvas.canvasy(12)) + offset,
+                            width=600, height=300)
+            container.lift()
             
         return widget
 
@@ -5842,25 +5862,41 @@ class MaterialManager:
             messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
 
     def update_recent_entries_view(self):
-        """오늘 입력된 내역을 미니 테이블에 업데이트"""
+        """최신 작업일자와 입력시간 순으로 최근 기록 30건을 표시한다."""
         if not hasattr(self, 'tv_recent') or getattr(self, 'daily_usage_df', None) is None:
             return
             
         for item in self.tv_recent.get_children():
             self.tv_recent.delete(item)
             
-        if self.daily_usage_df.empty:
-            return
-            
         try:
-            # 오늘 작업일자 기록을 우선 표시하고, 없으면 전체 최근 기록을 표시한다.
-            today = datetime.datetime.now().date()
-            work_dates = pd.to_datetime(self.daily_usage_df['Date'], errors='coerce')
-            recent_df = self.daily_usage_df[work_dates.dt.date == today].copy()
-            
             # 선택/수정에서 원본 행 번호를 사용하므로 DataFrame 인덱스는 유지한다.
+            recent_df = self.daily_usage_df.copy()
+            selected_date = getattr(self, '_daily_recent_date_filter', None)
+            if selected_date is not None:
+                if not recent_df.empty:
+                    dates = pd.to_datetime(recent_df['Date'], errors='coerce').dt.date
+                    recent_df = recent_df[dates == selected_date]
+                    site = self.cb_daily_site.get().strip()
+                    if site and 'Site' in recent_df:
+                        recent_df = recent_df[recent_df['Site'].fillna('').astype(str).str.strip() == site]
+                if hasattr(self, 'recent_frame'):
+                    self.recent_frame.config(text=f'{selected_date:%Y-%m-%d} 저장 내역 · {len(recent_df)}건')
+            elif hasattr(self, 'recent_frame'):
+                self.recent_frame.config(text=(f'전체 기록 (최신 날짜순 · {len(recent_df)}건)'
+                    if getattr(self, '_daily_recent_show_all', False)
+                    else '최근 기록 (최신 날짜순 · 최대 30건)'))
+            if hasattr(self, 'recent_scope_status'):
+                if selected_date is not None:
+                    site_label = self.cb_daily_site.get().strip() or '전체 현장'
+                    scope_text = f'{selected_date:%Y-%m-%d} · {site_label} · {len(recent_df):,}건'
+                elif getattr(self, '_daily_recent_show_all', False):
+                    scope_text = f'전체 · {len(recent_df):,}건'
+                else:
+                    scope_text = f'최근 · {min(30, len(recent_df)):,}건 / 전체 {len(recent_df):,}건'
+                self.recent_scope_status.config(text=scope_text)
             if recent_df.empty:
-                recent_df = self.daily_usage_df.copy()
+                return
 
             recent_df['_recent_date'] = pd.to_datetime(recent_df['Date'], errors='coerce')
             if 'EntryTime' in recent_df.columns:
@@ -5876,7 +5912,8 @@ class MaterialManager:
                 recent_df = recent_df.sort_values(
                     by='_recent_date', ascending=False, na_position='last'
                 )
-            recent_df = recent_df.head(30)
+            if selected_date is None and not getattr(self, '_daily_recent_show_all', False):
+                recent_df = recent_df.head(30)
                 
             for idx, row in recent_df.iterrows():
                 # Extract first worker
@@ -5926,10 +5963,9 @@ class MaterialManager:
                 )
                 self.tv_recent.insert('', 'end', values=values, tags=(str(idx),))
                 
-            # Scroll to bottom
+            # Keep the newest row visible after refreshing.
             if self.tv_recent.get_children():
-                last_item = self.tv_recent.get_children()[-1]
-                self.tv_recent.see(last_item)
+                self.tv_recent.yview_moveto(0)
         except Exception as e:
             print(f"DEBUG: Error updating recent entries view: {e}")
 
@@ -10046,6 +10082,7 @@ class MaterialManager:
             if 'Date' in record:
                 try: self.ent_daily_date.set_date(pd.to_datetime(record['Date']))
                 except: pass
+            self._last_daily_date = self.ent_daily_date.get_date()
             if '업체명' in record:
                 comp_val = self.clean_nan(record['업체명']).split(' [')[0]
                 self.cb_daily_company.set(comp_val)
@@ -10322,6 +10359,7 @@ class MaterialManager:
                 self.ent_daily_date.set_date(datetime.date.today())
             except: pass
         
+        self._last_daily_date = self.ent_daily_date.get_date()
         # 3. 모든 Entry 필드 비우기
         for ent in [self.ent_daily_inspection_item, self.ent_daily_applied_code, 
                    self.ent_daily_equip, self.cb_daily_material, # Both are now Entries
@@ -10366,6 +10404,8 @@ class MaterialManager:
                     ent.config(state='readonly')
         
         # 5. 차량 점검 섹션 초기화 (중복 방지 및 고정 패널 사용)
+        for key in list(getattr(self, 'vehicle_inspections', {})):
+            self.remove_box(key)
         if hasattr(self, 'draggable_items'):
             for key, cont in list(self.draggable_items.items()):
                 w = getattr(cont, '_widget', None)
@@ -10855,6 +10895,7 @@ class MaterialManager:
         """Helper to restore Site tab entry data"""
         if not data: return
         self.ent_daily_date.set_date(data.get('date', datetime.datetime.now().strftime('%Y-%m-%d')))
+        self._last_daily_date = self.ent_daily_date.get_date()
         # [FIX] Use the dedicated Company field
         if 'applied_code' in data:
             self.ent_daily_applied_code.delete(0, tk.END)

@@ -448,6 +448,8 @@ class BatchTests(unittest.TestCase):
         app.ent_daily_date = SimpleNamespace(get_date=lambda: datetime.date(2026, 10, 20))
         batch = InspectionBatch.__new__(InspectionBatch)
         batch.app, batch.plans, batch.editing = app, [], None
+        batch.collapsed_vehicle_boxes = {}
+        batch.vehicle_reopen_button = Mock()
         batch.render = Mock()
         batch.snapshot = Mock(return_value={'method': 'PAUT', 'vehicles': [{'mileage': float('nan')}]})
         with patch('site_apps.central.src.inspection_batch.messagebox') as dialogs:
@@ -472,6 +474,41 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(batch.plans[2]['common_data']['MaterialID'], 10)
         self.assertIsNone(batch.plans[0]['editor']['vehicles'][0]['mileage'])
         app.save_data.assert_not_called()
+
+    def test_folded_vehicle_is_still_saved_and_can_be_reopened(self):
+        app = SimpleNamespace(
+            ent_daily_date=SimpleNamespace(get_date=lambda: datetime.date(2026, 10, 24)),
+            cb_daily_site=Field('중앙지사'), cb_daily_company=Field('한국지역난방공사'),
+            ent_daily_travel_cost=Field(''), ent_daily_meal_cost=Field(''))
+        vehicle_data = {'vehicle_info': '81두1580', '_raw_mileage': '60',
+                        'out_exterior': '양호', 'remarks': '확인'}
+        vehicle = Mock()
+        vehicle.get_data.return_value = vehicle_data
+        box = Mock()
+        placement = {'x': '1200', 'y': '50', 'width': '590', 'height': '300'}
+        box.place_info.return_value = placement
+        box._batch_collapse_bound = False
+        app.vehicle_inspections = {'vehicle_1': vehicle}
+        app.draggable_items = {'vehicle_1': box}
+        app.vehicle_boxes = [vehicle]
+        batch = InspectionBatch.__new__(InspectionBatch)
+        batch.app = app
+        batch.collapsed_vehicle_boxes = {}
+        batch.vehicle_reopen_button = Mock()
+        batch.collapse_vehicle_editors()
+        box.place_forget.assert_called_once()
+        batch.vehicle_reopen_button.config.assert_called_with(
+            text='차량점검 입력됨 (1대 · 미저장) · 펼치기')
+        shared = batch.shared()
+        self.assertEqual(shared['차량번호'], '81두1580')
+        self.assertEqual(shared['주행거리'], '60')
+        self.assertEqual(shared['차량점검'], 'out_exterior:양호')
+        self.assertEqual(shared['차량비고'], '확인')
+        batch.expand_vehicle_editors()
+        box.place.assert_called_once_with(**placement)
+        self.assertFalse(batch.collapsed_vehicle_boxes)
+        batch.vehicle_reopen_button.pack_forget.assert_called_once()
+        self.assertEqual(vehicle.get_data(), vehicle_data)
 
     def test_prepare_is_read_only(self):
         app = fixture()
