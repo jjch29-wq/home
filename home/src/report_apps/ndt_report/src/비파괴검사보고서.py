@@ -3763,14 +3763,8 @@ class PMIReportApp:
 
                 # Fix right border for AJ4:AJ45 (Draw solid thin line)
                 try:
-                    from openpyxl.styles import Border, Side
-                    thin_side = Side(style='thin', color='000000')
-                    for row_idx in range(4, 46):
-                        cell = s[f'AJ{row_idx}']
-                        if cell.border:
-                            cell.border = Border(left=cell.border.left, right=thin_side, top=cell.border.top, bottom=cell.border.bottom)
-                        else:
-                            cell.border = Border(right=thin_side)
+                    from paut_report_layout import solid_right_border
+                    solid_right_border(s)
                 except Exception as e:
                     self.log(f"AJ border error: {e}")
 
@@ -3779,10 +3773,14 @@ class PMIReportApp:
                 self._make_header_stamp_transparent(s)
 
             # [NEW] 최종 저장 직전 사용자의 행/열 커스텀 설정을 모든 시트에 적용
+            from paut_report_layout import align_report_heights, measure_excel_print_widths
+            from paut_report_layout import fit_height_heading
             for p_idx, s in enumerate(wb.worksheets):
                 ctx = "COVER" if p_idx == 0 else "DATA"
                 self.apply_custom_dimensions(s, ctx)
                 self.force_print_settings(s, ctx)
+                if p_idx > 0:
+                    fit_height_heading(s)
 
             output_ext = '.xlsm' if keep_vba else '.xlsx'
             output_dir = os.path.join(BASE_DIR, "output") if os.path.exists(os.path.join(BASE_DIR, "output")) else BASE_DIR
@@ -3793,6 +3791,30 @@ class PMIReportApp:
             
             if not os.path.exists(os.path.dirname(out_path)): os.makedirs(os.path.dirname(out_path))
             wb.save(out_path)
+            adjusted_path = None
+            adjusted_wb = None
+            try:
+                widths, heights = measure_excel_print_widths(
+                    out_path, wb.sheetnames, include_heights=True)
+                # Saving an image-bearing openpyxl workbook closes its image
+                # streams. Reload before saving again, and replace atomically.
+                adjusted_wb = openpyxl.load_workbook(out_path, keep_vba=keep_vba)
+                align_report_heights(adjusted_wb.worksheets, measured_widths=widths,
+                                     measured_heights=heights)
+                fd, adjusted_path = tempfile.mkstemp(
+                    prefix='paut_print_', suffix=output_ext,
+                    dir=os.path.dirname(out_path))
+                os.close(fd)
+                adjusted_wb.save(adjusted_path)
+                os.replace(adjusted_path, out_path)
+                adjusted_path = None
+            except Exception as exc:
+                self.log(f"[PAUT] 인쇄 높이 정렬 실패 — 보정 전 정상 파일 유지: {exc}")
+            finally:
+                if adjusted_wb is not None:
+                    adjusted_wb.close()
+                if adjusted_path and os.path.exists(adjusted_path):
+                    os.remove(adjusted_path)
             self._record_report_issue('PAUT', wb, out_path, final_list)
             self.log(f"✅ PAUT 성적서 생성 완료: {out_name}")
             os.startfile(os.path.dirname(out_path))
@@ -8401,6 +8423,17 @@ class PMIReportApp:
             ws.page_margins.bottom = _margin('BOTTOM', 0.2)
             ws.page_margins.left   = _margin('LEFT',   0.5)
             ws.page_margins.right  = _margin('RIGHT',  0.3)
+            if mode == "PAUT":
+                # Keep the photo log unchanged; both PAUT sheets follow its
+                # current margin controls, including restored photo settings.
+                for name, default in (("top", 0.5), ("bottom", 0.5),
+                                      ("left", 0.4), ("right", 0.4)):
+                    var = getattr(self, f"photo_margin_{name}_var", None)
+                    try:
+                        margin = float(var.get()) if var is not None else default
+                    except (TypeError, ValueError):
+                        margin = default
+                    setattr(ws.page_margins, name, margin)
             if mode == "RT":
                 ws.page_margins.top = ws.page_margins.bottom = 0.25
                 ws.page_margins.left = ws.page_margins.right = 0.25
