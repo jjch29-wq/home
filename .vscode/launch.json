@@ -2,6 +2,18 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "PAUT 이름변경 — 편집기 디버그 버튼",
+            "type": "debugpy",
+            "request": "launch",
+            "noDebug": true,
+            "purpose": ["debug-in-terminal"],
+            "program": "${workspaceFolder}\\home\\src\\paut_rename.py",
+            "python": "C:\\Users\\jjch2\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "중앙지사 앱 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
@@ -25,10 +37,11 @@
             "name": "PAUT 이름변경 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
+            "noDebug": true,
             "program": "${workspaceFolder}\\home\\src\\paut_rename.py",
-            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "python": "C:\\Users\\jjch2\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
             "cwd": "${workspaceFolder}\\home\\src",
-            "console": "externalTerminal",
+            "console": "integratedTerminal",
             "justMyCode": true
         },
         {

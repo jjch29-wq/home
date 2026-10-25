@@ -11,6 +11,6 @@ if not exist "%APP_PYTHON%" (
 )
 
 start "Central App" /D "%~dp0home\src" "%APP_PYTHON%" "%~dp0home\src\site_apps\central\main.py"
-start "PAUT Rename" /D "%~dp0home\src" "%APP_PYTHON%" "%~dp0home\src\paut_rename.py"
+start "PAUT Rename" cmd /c call "%~dp0PAUT_이름변경_독립실행.bat"
 
 endlocal
