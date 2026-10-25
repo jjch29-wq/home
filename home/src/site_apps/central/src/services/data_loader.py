@@ -247,7 +247,7 @@ def load_data_impl(self):
                     self.daily_usage_df['EntryTime'] = pd.to_datetime(self.daily_usage_df['EntryTime'])
                     
                     # Fill NaNs and clean numeric artifacts in string columns
-                    string_columns = ['Site', 'Note', '장비명', '검사방법', '업체명', '차량번호', '주행거리', '차량점검', '차량비고', '검사품명', '적용코드', '성적서번호']
+                    string_columns = ['Site', 'Note', '장비명', '보조장비', '검사방법', '업체명', '차량번호', '주행거리', '차량점검', '차량비고', '검사품명', '적용코드', '성적서번호']
                     # Add all users, worktimes and OT columns
                     for i in range(1, 11):
                         u_col = 'User' if i == 1 else f'User{i}'

@@ -210,12 +210,12 @@ class InspectionBatch(ttk.LabelFrame):
         self.summary = ttk.Label(bar)
         self.summary.pack(side='left', padx=8)
         ttk.Button(bar, text='사용 안내', command=self.show_help).pack(side='right')
-        cols = ('method', 'pipe', 'item', 'material', 'quantity', 'unit', 'price', 'fee', 'condition', 'workers', 'times', 'ots')
+        cols = ('method', 'pipe', 'item', 'material', 'quantity', 'unit', 'price', 'fee', 'condition', 'workers', 'times', 'ots', 'aux_equipment')
         area = ttk.Frame(self)
         area.pack(fill='both', expand=True)
         self.tree = ttk.Treeview(area, columns=cols, show='headings', height=5, selectmode='extended')
-        for key, title, width in zip(cols, ('방법', '관경', '검사품명', '품목/장비', '검사량', '단위', '단가', '검사비', '계산조건', '참여 인원', '참여 시간', '참여 OT'),
-                                     (65, 75, 100, 140, 90, 75, 90, 110, 170, 160, 230, 150)):
+        for key, title, width in zip(cols, ('방법', '관경', '검사품명', '품목/장비', '검사량', '단위', '단가', '검사비', '계산조건', '참여 인원', '참여 시간', '참여 OT', '보조장비'),
+                                     (65, 75, 100, 140, 90, 75, 90, 110, 170, 160, 230, 150, 220)):
             self.tree.heading(key, text=title)
             self.tree.column(key, width=width, minwidth=45, stretch=True)
         self.tree.pack(side='left', fill='both', expand=True)
@@ -465,7 +465,7 @@ class InspectionBatch(ttk.LabelFrame):
             self.tree.insert('', 'end', iid=str(i), values=(data['검사방법'], data.get('관경(Inch)', ''),
                 data['검사품명'], plan.get('material_display', ''), data['검사량'], data['Unit'],
                 f"{data['단가']:,.0f}", f'{fee:,.0f}', f"{data.get('조건1', '')} / {data.get('조건2', '')}",
-                ', '.join(n for n in names if n), times, ots))
+                ', '.join(n for n in names if n), times, ots, data.get('보조장비', '')))
         suffix = ' · 수정 중: 작업 담기로 반영' if self.editing is not None else ''
         self.summary.config(text=f'{len(self.plans)}개 작업 / 검사비 {total:,.0f}원 (출장비 별도){suffix}')
         footer = getattr(self, 'footer_summary', None)
@@ -491,7 +491,12 @@ class InspectionBatch(ttk.LabelFrame):
         if fixed is not None and fixed not in boxes:
             boxes.insert(0, fixed)
         vehicle = {key: [] for key in ('차량번호', '주행거리', '차량점검', '차량비고')}
+        panel = getattr(app, 'vehicle_panel', None)
+        if panel is not None:
+            panel.check_pending_edits()
         for box in boxes:
+            if panel is not None and box in panel.sources:
+                continue
             if not box.winfo_exists():
                 continue
             data = box.get_data()

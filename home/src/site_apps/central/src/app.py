@@ -2145,6 +2145,10 @@ class MaterialManager:
             for e in unique_equip:
                 if e: raw_equip.add(e)
 
+        if hasattr(self, 'daily_usage_df') and '보조장비' in self.daily_usage_df.columns:
+            from site_apps.central.src.aux_equipment import names
+            for text in self.daily_usage_df['보조장비'].dropna():
+                raw_equip.update(names(text))
         cleaned = sorted([e for e in raw_equip if e != '전체'])
         return (['전체'] + cleaned) if include_all else cleaned
 
@@ -3014,6 +3018,8 @@ class MaterialManager:
                     
                     equip = self.clean_nan(entry.get('장비명', ''))
                     if equip: full_info.append(f"• 장비명: {equip}")
+                    aux = self.clean_nan(entry.get("보조장비", ""))
+                    if aux: full_info.append(f"• 보조장비: {aux}")
                     
                     method = self.clean_nan(entry.get('검사방법', ''))
                     if method: full_info.append(f"• 검사방법: {method}")
@@ -3102,7 +3108,11 @@ class MaterialManager:
             root_x = tree.winfo_rootx() + x
             root_y = tree.winfo_rooty() + y
             
+            previous_popup = getattr(self, '_worker_detail_popup', None)
+            if previous_popup is not None and previous_popup.winfo_exists():
+                previous_popup.destroy()
             popup = tk.Toplevel(self.root)
+            self._worker_detail_popup = popup
             popup.overrideredirect(True)
             popup.attributes("-topmost", True)
             popup.configure(bg='white', highlightbackground="#0078d7", highlightthickness=2)
@@ -3166,8 +3176,6 @@ class MaterialManager:
             lb.configure(yscrollcommand=sb.set)
             sb.pack(side='right', fill='y')
             
-            popup.focus_set()
-            
             # --- Window Move Synchronization ---
             def reposition_popup(event=None):
                 if not popup.winfo_exists(): return
@@ -3189,15 +3197,14 @@ class MaterialManager:
             # Bind to root move/resize
             bind_id = self.root.bind("<Configure>", reposition_popup, add="+")
             
-            def close_popup(e=None):
-                if popup.winfo_exists():
-                    try: self.root.unbind("<Configure>", bind_id)
-                    except: pass
-                    popup.destroy()
-            
-            popup.bind("<FocusOut>", close_popup)
-            popup.bind("<Escape>", close_popup)
-            popup.bind("<Double-1>", close_popup)
+            def cleanup_popup():
+                try: self.root.unbind("<Configure>", bind_id)
+                except tk.TclError: pass
+                if getattr(self, '_worker_detail_popup', None) is popup:
+                    self._worker_detail_popup = None
+
+            from site_apps.central.src.views.detail_popup import DetailPopupDismissal
+            popup._dismissal = DetailPopupDismissal(self.root, popup, lb, tree, cleanup_popup)
             
             # [FIX] Removed global self.root.bind("<Button-1>") which leaked and interfered with DateEntry.
             # FocusOut is sufficient for closing the popup when clicking elsewhere.
@@ -4826,6 +4833,11 @@ class MaterialManager:
 
     def remove_box(self, key):
         """Intelligently remove a box: hide standard ones, destroy custom ones"""
+        panel = getattr(self, 'vehicle_panel', None)
+        editor = getattr(self, 'vehicle_inspections', {}).get(key)
+        if panel is not None and editor in panel.editors:
+            panel.remove(editor)
+            return
         is_dynamic = key.startswith('memo_') or key.startswith('clone_') or key.startswith('checklist_') or key.startswith('vehicle_inspection_')
         
         # Allow deletion of dynamic widgets even if layout is locked
@@ -5425,6 +5437,7 @@ class MaterialManager:
             reserved = ['vehicle_info', 'mileage', 'remarks', '_raw_mileage']
             checks = "|".join([f"{k}:{v}" for k, v in v_data.items() if k not in reserved and v])
 
+            from site_apps.central.src.aux_equipment import value as auxiliary_equipment_value
             record = {
                 'Date': usage_date,
                 '업체명': self.cb_daily_company.get().strip() or "현장기록",
@@ -5432,6 +5445,7 @@ class MaterialManager:
                 'User': "차량점검", # Visual tag in worker column
                 'WorkTime': "",
                 '장비명': self.cb_daily_equip.get().strip(),
+                '보조장비': auxiliary_equipment_value(self),
                 '검사방법': self.cb_daily_test_method.get().strip(),
                 '회사코드': "",
                 'Usage': 0.0, '단가': 0.0, '출장비': 0.0, '검사비': 0.0,
@@ -5463,10 +5477,16 @@ class MaterialManager:
                 self.daily_usage_df = previous_df
                 raise
 
-            # Close only the saved floating editor; keep other vehicles editable.
+            # Embedded tabs keep their saved values visible; legacy floating editors close.
             saved_key = next((key for key, value in self.vehicle_inspections.items()
                               if value is widget), None)
-            if saved_key is not None:
+            panel = getattr(self, 'vehicle_panel', None)
+            if panel is not None and widget in panel.editors:
+                from site_apps.central.src.vehicle_records import fingerprint
+                panel.sources[widget] = {'fingerprints': [fingerprint(self.daily_usage_df.iloc[-1])],
+                                         'slot': 0, 'date': usage_date, 'site': site}
+                panel.mark_saved(widget)
+            elif saved_key is not None:
                 self.remove_box(saved_key)
             elif hasattr(widget, 'reset_fields'):
                 widget.reset_fields()
@@ -5476,16 +5496,21 @@ class MaterialManager:
             
             # 5. UI Updates
             self.update_daily_usage_view()
+            self.update_recent_entries_view()
             self.refresh_inquiry_filters()
             
             if status is None:
                 messagebox.showinfo("성공", f"[{v_no}] 차량 정보가 기록에 추가되었습니다.")
+            return True
             
         except Exception as e:
             messagebox.showerror("오류", f"차량 정보 저장 중 오류 발생: {e}")
 
     def add_vehicle_inspection_box(self, initial_data=None, key=None):
-        """Create a new movable vehicle inspection box"""
+        """Add a vehicle tab; keep the legacy API for record/session loaders."""
+        panel = getattr(self, 'vehicle_panel', None)
+        if panel is not None:
+            return panel.add(initial_data=initial_data, key=key)
         import datetime
         if key is None:
             key = f"vehicle_inspection_{int(datetime.datetime.now().timestamp() * 1000)}"
@@ -6130,7 +6155,7 @@ class MaterialManager:
         
         # [NEW NDT COLUMNS] Add dynamically
         new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']
-        new_cols += ['원본매수', '재검사매수', '참여인원', '참여시간', '참여OT']
+        new_cols += ['보조장비', '원본매수', '재검사매수', '참여인원', '참여시간', '참여OT']
         c_list = list(columns)
         for nc in new_cols:
             if nc not in c_list:
@@ -8970,7 +8995,10 @@ class MaterialManager:
         for cat, ent in self.rtk_entries.items():
             rtk_data[f'RTK_{cat}'] = to_f(ent)
 
-        # 3. 차량 데이터 수집 (하단 고정 패널 1개 + 추가 플로팅 창)
+        # 3. 차량 데이터 수집 (하단 고정 패널 + 추가 차량 탭)
+        panel = getattr(self, 'vehicle_panel', None)
+        if panel is not None:
+            panel.check_pending_edits()
         all_v_widgets = []
         if hasattr(self, 'fixed_vehicle_widget') and self.fixed_vehicle_widget.winfo_exists():
             all_v_widgets.append(self.fixed_vehicle_widget)
@@ -8981,6 +9009,8 @@ class MaterialManager:
             
         living_boxes = []
         for b in all_v_widgets:
+            if panel is not None and b in panel.sources:
+                continue  # Existing vehicle records are updated through 수정 저장.
             if hasattr(b, 'winfo_exists') and b.winfo_exists():
                 living_boxes.append(b)
                 
@@ -9003,11 +9033,13 @@ class MaterialManager:
              company_data_list.append({'회사코드': "", 'ndt_data': {}, 'is_primary': True})
 
         # 5. 공통 레코드 데이터 구성 (기본값)
+        from site_apps.central.src.aux_equipment import value as auxiliary_equipment_value
         common_data = {
             'Date': date_val,
             'Site': site,
             'MaterialID': mat_id,
             '장비명': self.cb_daily_equip.get().strip(),
+            '보조장비': auxiliary_equipment_value(self),
             '검사방법': self.cb_daily_test_method.get().strip(),
             '검사품명': self.ent_daily_inspection_item.get().strip(),
             '적용코드': self.ent_daily_applied_code.get().strip(),
@@ -10093,6 +10125,8 @@ class MaterialManager:
             if '적용코드' in record:
                 self.ent_daily_applied_code.delete(0, tk.END)
                 self.ent_daily_applied_code.insert(0, self.clean_nan(record['적용코드']))
+            from site_apps.central.src.aux_equipment import restore
+            restore(self, record.get('보조장비', ''))
             if '장비명' in record:
                 self.cb_daily_equip.delete(0, tk.END)
                 self.cb_daily_equip.insert(0, self.clean_nan(record['장비명']))
@@ -10259,6 +10293,8 @@ class MaterialManager:
             max_v_count = max(len(v_no_list), len(v_insp_list), len(v_mileage_list), len(v_remarks_list))
             
             # 기존 플로팅 창 닫기 및 고정 패널 비우기
+            if hasattr(self, 'vehicle_panel'):
+                self.vehicle_panel.reset()
             if hasattr(self, 'draggable_items'):
                 for key, cont in list(self.draggable_items.items()):
                     w = getattr(cont, '_widget', None)
@@ -10360,6 +10396,8 @@ class MaterialManager:
             except: pass
         
         self._last_daily_date = self.ent_daily_date.get_date()
+        from site_apps.central.src.aux_equipment import restore
+        restore(self)
         # 3. 모든 Entry 필드 비우기
         for ent in [self.ent_daily_inspection_item, self.ent_daily_applied_code, 
                    self.ent_daily_equip, self.cb_daily_material, # Both are now Entries
@@ -10421,6 +10459,7 @@ class MaterialManager:
         if hasattr(self, 'fixed_vehicle_widget'):
             if hasattr(self.fixed_vehicle_widget, 'reset_fields'):
                 self.fixed_vehicle_widget.reset_fields()
+                self.fixed_vehicle_widget.clear_photo()
                 
         # 6. [REMOVED] 메모 패널 초기화 방지 (사용자 요청)
                     
@@ -10841,6 +10880,7 @@ class MaterialManager:
 
     def _get_usage_session_data(self):
         """Helper to collect Site tab entry data"""
+        from site_apps.central.src.aux_equipment import value as auxiliary_equipment_value
         data = {
             'date': str(self.ent_daily_date.get_date()),
             'site': self.cb_daily_site.get().strip(),
@@ -10848,6 +10888,7 @@ class MaterialManager:
             'applied_code': self.ent_daily_applied_code.get().strip(),
             'report_no': self.ent_daily_report_no.get().strip(),
             'equip': self.cb_daily_equip.get().strip(),
+            'aux_equipment': auxiliary_equipment_value(self),
             'material': self.cb_daily_material.get().strip(),
             'inspection_item': self.ent_daily_inspection_item.get().strip(),
             'method': self.cb_daily_test_method.get().strip(),
@@ -10883,9 +10924,11 @@ class MaterialManager:
             data['inspection_batch'] = self.inspection_batch.serialize()
         data['rtk'] = {cat: ent.get().strip() for cat, ent in self.rtk_entries.items() if cat != '총계'}
         
-        # [NEW] Include vehicle inspection data in session snapshot
+        # Include the primary vehicle and every additional tab in editor snapshots.
         data['vehicles'] = []
-        if hasattr(self, 'vehicle_boxes'):
+        if hasattr(self, 'vehicle_panel'):
+            data['vehicles'] = self.vehicle_panel.serialize()
+        elif hasattr(self, 'vehicle_boxes'):
             for box in self.vehicle_boxes:
                 data['vehicles'].append(box.get_data())
                 
@@ -10901,6 +10944,8 @@ class MaterialManager:
             self.ent_daily_applied_code.delete(0, tk.END)
             self.ent_daily_applied_code.insert(0, data.get('applied_code', ''))
         
+        from site_apps.central.src.aux_equipment import restore
+        restore(self, data.get('aux_equipment', ''))
         self.cb_daily_company.set(data.get('company', ''))
         self.cb_daily_site.set(data.get('site', ''))
         self.ent_daily_report_no.delete(0, tk.END); self.ent_daily_report_no.insert(0, data.get('report_no', ''))
@@ -10957,7 +11002,9 @@ class MaterialManager:
         
         # [NEW] Restore vehicle inspection data
         vehicle_data = data.get('vehicles', [])
-        if vehicle_data:
+        if hasattr(self, 'vehicle_panel'):
+            self.vehicle_panel.restore(vehicle_data)
+        elif vehicle_data:
             # Match current boxes or add new ones if needed
             for i, v_state in enumerate(vehicle_data):
                 if i < len(self.vehicle_boxes):
@@ -11111,6 +11158,8 @@ class MaterialManager:
 
             _set_val(self.cb_daily_company, self.clean_nan(first_record.get('업체명', '')))
             _set_val(self.cb_daily_equip, self.clean_nan(first_record.get('장비명', '')))
+            from site_apps.central.src.aux_equipment import restore
+            restore(self, first_record.get('보조장비', ''))
             
             self.ent_daily_applied_code.delete(0, 'end')
             self.ent_daily_applied_code.insert(0, self.clean_nan(first_record.get('적용코드', '')))
@@ -11756,6 +11805,11 @@ class MaterialManager:
         cb_unit.grid(row=3, column=5, padx=5, pady=5, sticky='w')
         fields['Unit'] = cb_unit
         
+        from site_apps.central.src.aux_equipment import add_selector, names
+        aux_var = tk.StringVar(value='; '.join(names(entry_data.get('보조장비', ''))))
+        ttk.Label(basic_frame, text='보조장비:').grid(row=5, column=0, padx=5, pady=5, sticky='w')
+        add_selector(basic_frame, self, aux_var).grid(row=5, column=1, columnspan=5, padx=5, pady=5, sticky='w')
+
         # Inspection Item
         ttk.Label(basic_frame, text="검사품명:").grid(row=4, column=0, padx=5, pady=5, sticky='w')
         ent_item = ttk.Entry(basic_frame, width=40)
@@ -11979,6 +12033,7 @@ class MaterialManager:
             new_data['Material'] = full_mat_name
             new_data['MaterialID'] = found_id if found_id is not None else entry_data.get('MaterialID')
             
+            new_data['보조장비'] = '; '.join(names(aux_var.get()))
             new_data['장비명'] = cb_equip.get().strip()
             new_data['검사방법'] = cb_method.get().strip()
             new_data['Unit'] = cb_unit.get().strip() # [V13_FIX] Save Unit field

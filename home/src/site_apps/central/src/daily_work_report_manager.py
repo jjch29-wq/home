@@ -4,6 +4,7 @@ from openpyxl.cell.cell import MergedCell, Cell
 import os
 import datetime
 from site_apps.central.src.services.report_materials import numeric
+from site_apps.central.src.vehicle_records import format_vehicle_numbers
 
 class DailyWorkReportManager:
     def __init__(self, template_path):
@@ -134,12 +135,24 @@ class DailyWorkReportManager:
                         break
 
         gen_map = mapping.get('general', {})
+        car_text = format_vehicle_numbers(data.get('car_no', ''))
+        car_row = sheet[gen_map.get('car_no') or 'N9'].row
         for key in ['company', 'project_name', 'standard', 'equipment', 'report_no', 'inspection_item', 'inspector', 'car_no', 'inspector_n8']:
             val_key = 'inspector' if key == 'inspector_n8' else key
             val = data.get(val_key, '')
+            if key == 'car_no':
+                val = car_text
             if key == 'inspection_item' and not val:
                 continue
             safe_write(gen_map.get(key), val)
+            if key == 'car_no' and gen_map.get(key):
+                car_cell = sheet[gen_map[key]]
+                if isinstance(car_cell, MergedCell):
+                    for merged in sheet.merged_cells.ranges:
+                        if car_cell.coordinate in merged:
+                            car_cell = sheet.cell(merged.min_row, merged.min_col)
+                            break
+                car_cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
         # 2. Methods (Dynamic Offset)
         methods_data = data.get('methods', {})
@@ -173,7 +186,7 @@ class DailyWorkReportManager:
         for idx, m_name in enumerate(current_methods):
             if idx < len(method_base_rows):
                 r = method_base_rows[idx]; m = methods_data[m_name]
-                safe_write(f'B{r}', m_name); safe_write(f'E{r}', m.get('unit', ''))
+                safe_write(f'B{r}', m.get('label', m_name)); safe_write(f'E{r}', m.get('unit', ''))
                 safe_write(f'H{r}', m.get('qty', 0)); safe_write(f'K{r}', m.get('price', 0), is_currency=True)
                 safe_write(f'N{r}', m.get('travel', 0), is_currency=True); safe_write(f'Q{r}', m.get('total', 0), is_currency=True)
 
@@ -454,6 +467,8 @@ class DailyWorkReportManager:
         inspection_lines = []
         for detail in data.get('inspection_details', []):
             method = str(detail.get('method', '')).strip().upper()
+            shift = str(detail.get('shift', '')).strip()
+            label = f"{method}({shift})" if shift else method
             pipe_size = str(detail.get('pipe_size', '')).strip()
             points = detail.get('points', 0)
             quantity = detail.get('quantity', detail.get('length', 0))
@@ -470,10 +485,10 @@ class DailyWorkReportManager:
                 quantity_unit = '매' if method == 'RT' else 'M'
                 if method == 'RT':
                     rejects = float(detail.get('reject_films', 0) or 0)
-                    inspection_lines.append(f"• {pipe_size}: {point_text}P / REJ {rejects:g}매 / 검사매수 {quantity_text}매")
+                    inspection_lines.append(f"• {label} {pipe_size}: {point_text}P / REJ {rejects:g}매 / 검사매수 {quantity_text}매")
                 else:
                     inspection_lines.append(
-                        f"• {pipe_size}: {point_text} POINT / {quantity_label} {quantity_text} {quantity_unit}"
+                        f"• {label} {pipe_size}: {point_text} POINT / {quantity_label} {quantity_text} {quantity_unit}"
                     )
 
         detail_text = "검사 상세\n" + "\n".join(inspection_lines) if inspection_lines else ""
@@ -483,16 +498,16 @@ class DailyWorkReportManager:
             start_cell = sheet.cell(row=note_range_start, column=2)
             start_cell.value = note_text
             
-            # [DYNAMIC FONT SIZE]
-            # Reduce font size if the buffer area is squeezed, or if the text is very long
+            # Keep detail text readable; grow its rows instead of shrinking to 5–6 pt.
+            import math
+            import unicodedata
             font_size = 10
-            if total_buffer < 120.0:
-                font_size = max(6, int(10 * (total_buffer / 120.0)))
-                
-            est_lines = note_text.count('\n') + 1 + (len(note_text) // 40)
-            if est_lines > (total_buffer / 15.0):
-                ratio = (total_buffer / 15.0) / est_lines
-                font_size = min(font_size, max(5, int(10 * ratio)))
+            est_lines = sum(max(1, math.ceil(sum(
+                2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
+                for char in line) / 90)) for line in note_text.split('\n'))
+            total_buffer = max(total_buffer, est_lines * 15.0 + 8.0)
+            for row in range(note_range_start, note_range_end + 1):
+                sheet.row_dimensions[row].height = total_buffer / (note_range_end - note_range_start + 1)
                 
             start_cell.font = Font(name='맑은 고딕', size=font_size)
             start_cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
@@ -629,14 +644,9 @@ class DailyWorkReportManager:
         sheet.page_margins.top = 0.4; sheet.page_margins.bottom = 0.4
         sheet.page_margins.left = 10 / 25.4; sheet.page_margins.right = 10 / 25.4
         for r in range(1, 12):
-            if r == 9:
-                car_str = str(data.get('car_no', ''))
-                if len(car_str) > 22 or '\n' in car_str:
-                    sheet.row_dimensions[r].height = 30
-                else:
-                    sheet.row_dimensions[r].height = 15
-            else:
-                sheet.row_dimensions[r].height = 15
+            sheet.row_dimensions[r].height = 15
+        car_height = max(15, len(car_text.splitlines()) * 15 + 4) if car_text else 15
+        sheet.row_dimensions[car_row].height = car_height
         for t_row in [12, 26, 31, 37, 42]:
             try: sheet.row_dimensions[t_row + method_offset].height = 20
             except: pass
@@ -759,7 +769,16 @@ class DailyWorkReportManager:
                            for row in visible_rows)
         body_height = 277 / 25.4 * 72
         if total_height > body_height:
-            for row in visible_rows:
-                row.height = (row.height or sheet.sheet_format.defaultRowHeight or 15) * body_height / total_height
+            protected_rows = set(range(note_range_start, note_range_end + 1)) | {car_row}
+            protected_height = sum(row.height or 15 for row in visible_rows if row.index in protected_rows)
+            other_rows = [row for row in visible_rows if row.index not in protected_rows]
+            other_height = sum(row.height or sheet.sheet_format.defaultRowHeight or 15 for row in other_rows)
+            if protected_height < body_height and other_height:
+                ratio = (body_height - protected_height) / other_height
+                for row in other_rows:
+                    row.height = (row.height or sheet.sheet_format.defaultRowHeight or 15) * ratio
+            else:
+                # Exceptionally long notes can continue rather than becoming unreadable.
+                sheet.page_setup.fitToHeight = 0
             
         wb.save(output_path); return output_path

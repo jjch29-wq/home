@@ -9,6 +9,7 @@ from openpyxl.styles import Alignment, Border, Side, PatternFill, Font
 from openpyxl.utils import get_column_letter
 from site_apps.central.src.utils.helpers import normalize_id
 from site_apps.central.src.worker_selection import worker_is_selected
+from site_apps.central.src.vehicle_records import format_vehicle_numbers
 import json
 import re
 import sys
@@ -98,7 +99,8 @@ def export_daily_work_report_impl(self):
                 # [NEW] site_records에서 장비명, 업체명 및 검사품명 집계 업데이트
                 if not site_records.empty:
                     if '장비명' in site_records.columns:
-                        equips = [_clean_str(x) for x in site_records['장비명'].dropna().unique() if _clean_str(x)]
+                        from site_apps.central.src.aux_equipment import report_names
+                        equips = report_names(site_records)
                         if equips: data['equipment'] = ", ".join(equips)
                     
                     comp_col = '업체명' if '업체명' in site_records.columns else ''
@@ -123,7 +125,7 @@ def export_daily_work_report_impl(self):
             for v in site_records['차량번호'].dropna().unique():
                 v_str = str(v).strip()
                 if v_str and v_str not in all_vehicles: all_vehicles.append(v_str)
-        data['car_no'] = ", ".join(all_vehicles)
+        data['car_no'] = format_vehicle_numbers(all_vehicles)
 
         note_texts = []
         # [FIX] A18:S25 메모 영역에는 '비고'가 아닌 '상시 패널(메모)' 내용만 입력되도록 수정
@@ -140,26 +142,8 @@ def export_daily_work_report_impl(self):
         method_col = '검사방법' if '검사방법' in site_records.columns else 'TestMethod' if 'TestMethod' in site_records.columns else ''
         
         if not site_records.empty and method_col:
-            for m_name, m_group in site_records.groupby(method_col):
-                if not m_name or str(m_name).lower() == 'nan': continue
-                m_name_str = str(m_name)
-                
-                qty_sum = pd.to_numeric(m_group['Usage'], errors='coerce').fillna(0).sum()
-                price_max = pd.to_numeric(m_group['단가'], errors='coerce').fillna(0).max()
-                travel_sum = pd.to_numeric(m_group['출장비'], errors='coerce').fillna(0).sum()
-                total_sum = pd.to_numeric(m_group['검사비'], errors='coerce').fillna(0).sum()
-                
-                # 단위 정보 찾기 (Unit 또는 단위 컬럼)
-                unit_col = 'Unit' if 'Unit' in m_group.columns else '단위' if '단위' in m_group.columns else ''
-                unit_val = str(m_group.iloc[0].get(unit_col, '매')) if unit_col else '매'
-                
-                data['methods'][m_name_str] = {
-                    'unit': unit_val,
-                    'qty': qty_sum,
-                    'price': price_max,
-                    'travel': travel_sum,
-                    'total': total_sum
-                }
+            from site_apps.central.src.services.report_inspection import collect_method_totals
+            data['methods'] = collect_method_totals(site_records)
         else:
             # Fallback to UI values if DB is empty or column missing
             method = self.cb_daily_test_method.get().strip()
@@ -170,7 +154,10 @@ def export_daily_work_report_impl(self):
             total_val = self.ent_daily_test_fee.get().strip()
             
             if method:
-                data['methods'][method] = {
+                from site_apps.central.src.services.report_inspection import inspection_method_shift
+                method, shift = inspection_method_shift({'검사방법': method,
+                    '작업형태': self.ndt_work_time_var.get() if hasattr(self, 'ndt_work_time_var') else ''})
+                data['methods'][f'{method}({shift})'] = {
                     'unit': unit_val,
                     'qty': float(qty_val.replace(',', '')) if qty_val else 0,
                     'price': float(price_val.replace(',', '')) if price_val else 0,
@@ -179,7 +166,7 @@ def export_daily_work_report_impl(self):
                 }
 
         # Original RT points and reject films; REP is a separate record.
-        from site_apps.central.src.services.report_inspection import collect_inspection_details
+        from site_apps.central.src.services.report_inspection import collect_inspection_details, inspection_method_shift
         data['inspection_details'] = collect_inspection_details(site_records, getattr(self, 'SIZE_LENGTH', {}))
 
         # [FALLBACK] site_records가 없거나 inspection_details가 비어있는 경우 화면 입력값 기반 복원
@@ -203,6 +190,8 @@ def export_daily_work_report_impl(self):
                             pts_val = round(calc_pts)
                 data['inspection_details'].append({
                     'method': u_method,
+                    'shift': inspection_method_shift({'검사방법': u_method,
+                        '작업형태': self.ndt_work_time_var.get() if hasattr(self, 'ndt_work_time_var') else ''})[1],
                     'pipe_size': u_pipe,
                     'points': int(pts_val) if pts_val.is_integer() else pts_val,
                     'quantity': qty_val,
@@ -383,7 +372,7 @@ def export_daily_work_report_impl(self):
             if v_no:
                 car_no_list.append(v_no)
         if car_no_list:
-            data['car_no'] = ", ".join(car_no_list)
+            data['car_no'] = format_vehicle_numbers(car_no_list)
 
         # 자재 정보 수집 (NDT 섹션)
         data['selected_material'] = self.cb_daily_material.get().strip()
@@ -886,7 +875,8 @@ def export_central_daily_work_report_impl(self):
         # 장비 수집
         equips = []
         if not today_records.empty and '장비명' in today_records.columns:
-            equips = [_clean_str(x) for x in today_records['장비명'].dropna().unique() if _clean_str(x)]
+            from site_apps.central.src.aux_equipment import report_names
+            equips = report_names(today_records)
         if not equips:
             equips = [_clean_str(self.cb_daily_equip.get())]
             

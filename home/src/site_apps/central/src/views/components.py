@@ -1,5 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, simpledialog
+from tkinter import ttk, simpledialog, filedialog, messagebox
+import os
+import time
+from PIL import Image, ImageTk
 import pandas as pd
 from tkcalendar import DateEntry
 import traceback
@@ -354,9 +357,10 @@ class VehicleInspectionWidget(ttk.Frame):
         # [NEW] Add Standalone Save Button
         self.on_save_callback = kwargs.get('on_save')
         if self.on_save_callback:
-            btn_save = ttk.Button(self.scrollable_frame, text="🚗 차량 정보만 개별 저장", 
+            btn_save = ttk.Button(self.scrollable_frame, text="이 차량 저장",
                                  command=self.trigger_save, style='Accent.TButton' if 'Accent.TButton' in getattr(parent, 'style_names', []) else 'TButton')
             btn_save.pack(fill='x', padx=5, pady=5)
+            self.save_button = btn_save
             
         # 3. Photo Section [NEW]
         photo_frame = ttk.LabelFrame(self.scrollable_frame, text="차량 사진 (클릭 시 크게 보기)")
@@ -442,7 +446,8 @@ class VehicleInspectionWidget(ttk.Frame):
         
         try:
             # Create directory if missing
-            photo_dir = r"c:\Users\-\OneDrive\바탕 화면\home\data\vehicle_photos"
+            from site_apps.central.src.data_sync import get_business_data_dir
+            photo_dir = os.path.join(get_business_data_dir(), 'vehicle_photos')
             if not os.path.exists(photo_dir):
                 os.makedirs(photo_dir)
                 
@@ -465,6 +470,7 @@ class VehicleInspectionWidget(ttk.Frame):
             # Update and display
             self.photo_path = new_path
             self.display_photo()
+            self.event_generate('<<VehiclePhotoChanged>>')
             
         except Exception as e:
             messagebox.showerror("오류", f"사진을 저장하는 중 오류가 발생했습니다: {e}")
@@ -516,6 +522,7 @@ class VehicleInspectionWidget(ttk.Frame):
         self.photo_path = ""
         self.photo_image = None
         self.photo_canvas.config(image='', text="사진 없음")
+        self.event_generate('<<VehiclePhotoChanged>>')
 
     def reset_fields(self):
         """Clear all input fields for the next vehicle entry and set focus"""
@@ -556,6 +563,7 @@ class VehicleInspectionWidget(ttk.Frame):
             elif key == 'photo_path':
                 self.photo_path = val
                 self.display_photo()
+                self.event_generate('<<VehiclePhotoChanged>>')
 
 
 class LaborCostDetailWidget(ttk.Frame):

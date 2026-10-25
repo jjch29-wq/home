@@ -120,6 +120,8 @@ def setup_daily_usage_tab_impl(self):
     work_notebook.pack(fill='both', expand=True)
     pending_panel = ttk.Frame(work_notebook)
     history_panel = ttk.Frame(work_notebook)
+    self.daily_work_notebook = work_notebook
+    self.daily_history_panel = history_panel
     work_notebook.add(pending_panel, text='등록할 작업 목록')
     work_notebook.add(history_panel, text='최근 기록 · 차량점검 · 메모')
     self.daily_input_actions = ttk.Frame(canvas_parent, padding=(8, 3))
@@ -202,7 +204,7 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(common_frame, text='● 초록: 저장된 작업 있음', foreground='#2E7D32').grid(
         row=0, column=6, padx=(0, 5), pady=1, sticky='w')
 
-    ttk.Label(form_content, text="장비명:").grid(row=1, column=2, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="주 장비:").grid(row=1, column=2, padx=(5, 0), pady=1, sticky='e')
     equip_container = ttk.Frame(form_content)
     equip_container.grid(row=1, column=3, padx=(2, 5), pady=1, sticky='w')
     
@@ -222,6 +224,12 @@ def setup_daily_usage_tab_impl(self):
                              command=lambda: self.open_list_management_dialog('equipments', target_cb=self.ent_daily_equip))
     btn_equip_mgr.pack(side='left', padx=(2, 0))
 
+    from site_apps.central.src.aux_equipment import add_selector
+    self.daily_aux_equipment_var = tk.StringVar(value='')
+    ttk.Label(form_content, text="보조장비:").grid(row=2, column=2, padx=(5, 0), pady=1, sticky='e')
+    add_selector(form_content, self, self.daily_aux_equipment_var, width=25).grid(
+        row=2, column=3, padx=(2, 5), pady=1, sticky='w')
+
     # Row 2: 품목명
     ttk.Label(form_content, text="자재명:").grid(row=1, column=0, padx=(5, 0), pady=1, sticky='e')
     mat_container = ttk.Frame(form_content)
@@ -240,10 +248,10 @@ def setup_daily_usage_tab_impl(self):
                                 command=lambda: self.open_list_management_dialog('materials', target_cb=self.cb_daily_material))
     btn_material_mgr.pack(side='left', padx=(2, 0))
 
-    # Row 3: 방법, 검사품명
-    ttk.Label(form_content, text="방법:").grid(row=3, column=0, padx=(5, 0), pady=1, sticky='e')
+    # Left column stays consecutive; the right column groups the two equipment fields.
+    ttk.Label(form_content, text="방법:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
     self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=[' ', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
-    self.cb_daily_test_method.grid(row=3, column=1, padx=(2, 10), pady=1, sticky='w')
+    self.cb_daily_test_method.grid(row=2, column=1, padx=(2, 10), pady=1, sticky='w')
     
     ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
     insp_container = ttk.Frame(form_content)
@@ -256,9 +264,9 @@ def setup_daily_usage_tab_impl(self):
     btn_insp_item_mgr.pack(side='left', padx=(2, 0))
 
     # Row 4: 수량, 단위
-    ttk.Label(form_content, text="수량:").grid(row=4, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="수량:").grid(row=3, column=0, padx=(5, 0), pady=1, sticky='e')
     self.ent_daily_test_amount = ttk.Entry(form_content, width=15)
-    self.ent_daily_test_amount.grid(row=4, column=1, padx=(2, 10), pady=1, sticky='w')
+    self.ent_daily_test_amount.grid(row=3, column=1, padx=(2, 10), pady=1, sticky='w')
     
     ttk.Label(form_content, text="단위:").grid(row=4, column=2, padx=(5, 0), pady=1, sticky='e')
     unit_container = ttk.Frame(form_content)
@@ -271,18 +279,18 @@ def setup_daily_usage_tab_impl(self):
     btn_unit_mgr.pack(side='left', padx=(2, 0))
 
     # Row 5: 단가, 출장비
-    ttk.Label(form_content, text="단가:").grid(row=5, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="단가:").grid(row=4, column=0, padx=(5, 0), pady=1, sticky='e')
     self.ent_daily_unit_price = ttk.Entry(form_content, width=15)
-    self.ent_daily_unit_price.grid(row=5, column=1, padx=(2, 10), pady=1, sticky='w')
+    self.ent_daily_unit_price.grid(row=4, column=1, padx=(2, 10), pady=1, sticky='w')
 
     ttk.Label(form_content, text="출장비:").grid(row=5, column=2, padx=(5, 0), pady=1, sticky='e')
     self.ent_daily_travel_cost = ttk.Entry(form_content, width=15)
     self.ent_daily_travel_cost.grid(row=5, column=3, padx=(2, 5), pady=1, sticky='w')
 
     # Row 6: 적용코드, 성적서번호
-    ttk.Label(form_content, text="적용코드:").grid(row=6, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="적용코드:").grid(row=5, column=0, padx=(5, 0), pady=1, sticky='e')
     app_container = ttk.Frame(form_content)
-    app_container.grid(row=6, column=1, padx=(2, 10), pady=1, sticky='w')
+    app_container.grid(row=5, column=1, padx=(2, 10), pady=1, sticky='w')
     self.ent_daily_applied_code = ttk.Entry(app_container, width=20)
     self.ent_daily_applied_code.pack(side='left')
     
@@ -295,18 +303,18 @@ def setup_daily_usage_tab_impl(self):
     self.ent_daily_report_no.grid(row=6, column=3, padx=(2, 5), pady=1, sticky='w')
 
     # Row 7: 비고, 일식
-    ttk.Label(form_content, text="비고:").grid(row=7, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="비고:").grid(row=6, column=0, padx=(5, 0), pady=1, sticky='e')
     self.ent_daily_note = ttk.Entry(form_content, width=15)
-    self.ent_daily_note.grid(row=7, column=1, padx=(2, 10), pady=1, sticky='w')
+    self.ent_daily_note.grid(row=6, column=1, padx=(2, 10), pady=1, sticky='w')
 
     ttk.Label(form_content, text="일식:").grid(row=7, column=2, padx=(5, 0), pady=1, sticky='e')
     self.ent_daily_meal_cost = ttk.Entry(form_content, width=15)
     self.ent_daily_meal_cost.grid(row=7, column=3, padx=(2, 5), pady=1, sticky='w')
 
             # Row 8: 검사비
-    ttk.Label(form_content, text="검사비:").grid(row=8, column=0, padx=(5, 0), pady=1, sticky='e')
+    ttk.Label(form_content, text="검사비:").grid(row=7, column=0, padx=(5, 0), pady=1, sticky='e')
     self.ent_daily_test_fee = ttk.Entry(form_content, width=15)
-    self.ent_daily_test_fee.grid(row=8, column=1, padx=(2, 10), pady=1, sticky='w')
+    self.ent_daily_test_fee.grid(row=7, column=1, padx=(2, 10), pady=1, sticky='w')
 
     # --- NDT 자동 산출 패널 ---
     self.ndt_calc_frame = ttk.LabelFrame(form_content, text="NDT 상세 조건 및 자동 계산", padding=5)
@@ -1081,18 +1089,9 @@ def setup_daily_usage_tab_impl(self):
     self.fixed_vehicle_frame = ttk.LabelFrame(self.bottom_dashboard, text="차량점검 (상시 패널)")
     self.bottom_dashboard.add(self.fixed_vehicle_frame, weight=9)
     
-    header_f = ttk.Frame(self.fixed_vehicle_frame)
-    header_f.pack(fill='x', padx=2, pady=(2, 0))
-    
-    # [NEW] Add Manage Button safely using pack instead of place
-    btn_manage = ttk.Button(header_f, text="⚙️ 차량 목록 설정", cursor='hand2')
-    btn_manage.pack(side='right')
-    btn_manage.config(command=lambda: self.open_list_management_dialog('차량 목록 관리', getattr(self, 'vehicles', []), 'vehicles'))
-
-    self.fixed_vehicle_widget = VehicleInspectionWidget(self.fixed_vehicle_frame, theme_bg=self.theme_bg, vehicle_list=getattr(self, 'vehicles', []))
-    self.fixed_vehicle_widget.pack(fill='both', expand=True, padx=2, pady=2)
-    # Register the vehicle widget to be saved along with standard entry
-    self.vehicle_widget = self.fixed_vehicle_widget
+    from site_apps.central.src.views.vehicle_panel import VehiclePanel
+    self.vehicle_panel = VehiclePanel(self.fixed_vehicle_frame, self)
+    self.vehicle_panel.pack(fill='both', expand=True)
 
     # 3. Right: Memo (Fixed)
     self.fixed_memo_frame = ttk.LabelFrame(self.bottom_dashboard, text="메모 (상시 패널)")
@@ -1296,8 +1295,11 @@ def update_daily_usage_view_impl(self):
             if col in filtered_df.columns:
                 mask |= filtered_df[col].astype(str).str.contains(filter_worker, case=False, na=False, regex=False)
         filtered_df = filtered_df[mask]
-        # Support partial match for equipment
-        filtered_df = filtered_df[filtered_df['장비명'].astype(str).str.contains(filter_equipment, na=False, case=False, regex=False)]
+        # Search both main and auxiliary equipment.
+        equipment_text = filtered_df['장비명'].fillna('').astype(str)
+        if '보조장비' in filtered_df.columns:
+            equipment_text = equipment_text + '; ' + filtered_df['보조장비'].fillna('').astype(str)
+        filtered_df = filtered_df[equipment_text.str.contains(filter_equipment, na=False, case=False, regex=False)]
     
     if filter_vehicle != '전체' and '차량번호' in filtered_df.columns:
         # Support partial match for vehicle number
@@ -1763,7 +1765,7 @@ def update_daily_usage_view_impl(self):
         while len(v_list) < len(tree_cols): v_list.append("")
         
         for c_idx, c_name in enumerate(tree_cols):
-            if c_name in ('원본매수', '재검사매수', '참여인원', '참여시간', '참여OT'):
+            if c_name in ('보조장비', '원본매수', '재검사매수', '참여인원', '참여시간', '참여OT'):
                 value = entry.get(c_name, '')
                 v_list[c_idx] = '' if pd.isna(value) else value
             if c_name in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']:
