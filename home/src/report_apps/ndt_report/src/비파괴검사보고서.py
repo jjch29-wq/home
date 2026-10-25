@@ -372,7 +372,7 @@ class PMIReportApp:
         self.kogas_column_keys = list(self.rt_column_keys)
         self.pt_column_keys = ["selected", "No", "Date", "Report No", "Dwg", "Joint", "NPS", "Thk.", "Material", "TestItem", "Result", "Welder", "Remarks"]
         self.mt_column_keys = ["selected", "No", "Date", "Report No", "Dwg", "Joint", "Material", "TestItem", "Result", "Welder", "Remarks"]
-        self.paut_column_keys = ["selected", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
+        self.paut_column_keys = ["selected", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "TCG MAX(%)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
         
         self.date_listbox = None
     
@@ -715,7 +715,7 @@ class PMIReportApp:
                     if 'paut_column_keys' in saved_data and isinstance(saved_data['paut_column_keys'], list):
                         loaded_paut_keys = list(saved_data['paut_column_keys'])
                         # [FIX] Ensure new columns are added even if loading from old config
-                        default_paut_keys = ["selected", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
+                        default_paut_keys = ["selected", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "TCG MAX(%)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks"]
                         for dk in default_paut_keys:
                             if dk not in loaded_paut_keys:
                                 insert_idx = default_paut_keys.index(dk)
@@ -2822,6 +2822,7 @@ class PMIReportApp:
             ("합격(Acc):", "PAUT_COL_ACC", 0, "PAUT_NAME_ACC", "Acc", "Acc"),
             ("불합격(Rej):", "PAUT_COL_REJ", 0, "PAUT_NAME_REJ", "Rej", "Rej"),
             ("결함높이(H):", "PAUT_COL_H", 5, "PAUT_NAME_H", "Height(mm)", "Height(mm)"),
+            ("TCG MAX(%):", "PAUT_COL_TCG", 0, "PAUT_NAME_TCG", "TCG MAX(%)", "TCG MAX(%)"),
             ("결함길이(L):", "PAUT_COL_L", 6, "PAUT_NAME_L", "Length(mm)", "Length(mm)"),
             ("결함깊이(D):", "PAUT_COL_UP", 7, "PAUT_NAME_UP", "Upper", "Upper"),
             ("하부깊이(Low):", "PAUT_COL_LOW", 0, "PAUT_NAME_LOW", "Lower", "Lower"),
@@ -2848,7 +2849,8 @@ class PMIReportApp:
             for item in paut_items:
                 col_key = item[1].replace("PAUT_", f"PAUT_{template_name}_")
                 name_key = item[3].replace("PAUT_", f"PAUT_{template_name}_")
-                localized_items.append((item[0], col_key, item[2], name_key, item[4], item[5]))
+                default_col = (23 if template_name == "지역난방" else 0) if item[1] == "PAUT_COL_TCG" else item[2]
+                localized_items.append((item[0], col_key, default_col, name_key, item[4], item[5]))
                 
             self._create_column_mapping_ui(frame, f"PAUT_{template_name}", localized_items)
 
@@ -2984,11 +2986,11 @@ class PMIReportApp:
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
         
-        cols = ("V", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks")
+        cols = ("V", "No", "Date", "Report No", "Line No.", "Joint No.", "Size", "Th'k(mm)", "Acc", "Rej", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "TCG MAX(%)", "Type of Flaw", "a/l", "a/t", "Welder", "Tested Length", "Evaluation", "Remarks")
         self.paut_preview_tree = ttk.Treeview(tree_frame, columns=cols, show='headings', height=10, selectmode='extended')
         
         saved_widths = self.config.get("PAUT_COL_WIDTHS", {})
-        default_widths = {"V": 40, "No": 50, "Report No": 100, "Line No.": 250, "Joint No.": 120, "Size": 80, "Th'k(mm)": 60, "Acc": 50, "Rej": 50, "Start": 60, "End": 60, "Length(mm)": 80, "Upper": 60, "Lower": 60, "Height(mm)": 80, "Type of Flaw": 100, "a/l": 60, "a/t": 60, "Welder": 80, "Tested Length": 100, "Evaluation": 80, "Remarks": 150}
+        default_widths = {"V": 40, "No": 50, "Report No": 100, "Line No.": 250, "Joint No.": 120, "Size": 80, "Th'k(mm)": 60, "Acc": 50, "Rej": 50, "Start": 60, "End": 60, "Length(mm)": 80, "Upper": 60, "Lower": 60, "Height(mm)": 80, "TCG MAX(%)": 95, "Type of Flaw": 100, "a/l": 60, "a/t": 60, "Welder": 80, "Tested Length": 100, "Evaluation": 80, "Remarks": 150}
         
         for col in self.paut_preview_tree["columns"]:
             # Use dynamic names from config for headings
@@ -3003,6 +3005,7 @@ class PMIReportApp:
             elif col == "Acc": name_key = "PAUT_NAME_ACC"
             elif col == "Rej": name_key = "PAUT_NAME_REJ"
             elif col == "Height(mm)": name_key = "PAUT_NAME_H"
+            elif col == "TCG MAX(%)": name_key = "PAUT_NAME_TCG"
             elif col == "Length(mm)": name_key = "PAUT_NAME_L"
             elif col == "Upper": name_key = "PAUT_NAME_UP"
             elif col == "Lower": name_key = "PAUT_NAME_LOW"
@@ -3387,6 +3390,8 @@ class PMIReportApp:
                 # [NEW] 원본 엑셀의 모든 컬럼 데이터를 유지하여 '컬럼 관리'에서 활용 가능하게 함
                 item_full = row.to_dict()
                 item_full.update(item)
+                from paut_fields import normalize_tcg
+                normalize_tcg(item_full)
                 # [NEW] 수동 추가된 컬럼(Remark 등)이 추출 시 증발하지 않도록 초기화
                 for k in self.paut_column_keys:
                     if k not in item_full and k != "selected":
@@ -3583,10 +3588,14 @@ class PMIReportApp:
                 acc_rej_combined = acc_val if acc_val else rej_val
 
                 # [NEW] Check if there is no defect
-                is_no_defect = not str(item.get('Type of Flaw', '')).strip() and not str(item.get('Height(mm)', '')).strip()
+                from paut_fields import normalize_tcg
+                normalize_tcg(item)
+                is_no_defect = (not str(item.get('Type of Flaw', '')).strip()
+                                and not str(item.get('Height(mm)', '')).strip())
                 if active_template == '지역난방':
                     from paut_report_layout import prepare_indication_row
-                    prepare_indication_row(ws, curr_row, not is_no_defect)
+                    prepare_indication_row(ws, curr_row, not is_no_defect,
+                                           has_tcg=str(item.get('TCG MAX(%)', '')).strip() != '')
 
                 # [NEW] Respect user's UI column configuration while providing standard defaults
                 mapping = {
@@ -3601,6 +3610,7 @@ class PMIReportApp:
                     _get_col('PAUT_COL_L', 'I'): item.get('Length(mm)', ''),
                     _get_col('PAUT_COL_UP', 'J'): item.get('Upper', ''), 
                     _get_col('PAUT_COL_H', 'K'): item.get('Height(mm)', ''), 
+                    _get_col('PAUT_COL_TCG', 'W' if active_template == '지역난방' else 'L'): item.get('TCG MAX(%)', ''),
                     _get_col('PAUT_COL_WELDER', 'M'): item.get('Welder', ''),
                     _get_col('PAUT_COL_TESTED_LEN', 'N'): item.get('Tested Length', ''),
                     _get_col('PAUT_COL_NAT', 'O'): item.get('Type of Flaw', '') or (
@@ -5812,7 +5822,7 @@ class PMIReportApp:
         actual_idx = idx_map[view_idx]
         
         curr_val = data_list[actual_idx].get(key, "")
-        numeric_keys = ["Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "a/l", "a/t"]
+        numeric_keys = ["Th'k(mm)", "Start", "End", "Length(mm)", "Upper", "Lower", "Height(mm)", "TCG MAX(%)", "a/l", "a/t"]
         if (key in numeric_keys or (key not in ["No", "Joint No.", "Line No.", "Joint", "Loc", "Grade", "Date", "Dwg", "ISO", "ISO/DWG", "Type of Flaw", "Evaluation", "Remarks", "Result", "Location", "Nature", "selected", "_status", "ST", "V"])) and self.to_float(curr_val) > 0:
             curr_val = f"{self.to_float(curr_val):.2f}"
             
@@ -5985,6 +5995,8 @@ class PMIReportApp:
         # 내부 관리용 키 제외
         exclude = ["selected", "date_filtered", "line_filtered", "size_filtered", "order_index", "visual_group_joint", "is_merged_iso", "is_merged_joint"]
         display_keys = [k for k in all_keys if k not in exclude]
+        if mode == "PAUT" and "TCG MAX(%)" not in display_keys:
+            display_keys.append("TCG MAX(%)")
         
         # 스크롤 가능한 영역
         scroll_frame = ttk.Frame(main_frame)
@@ -7371,6 +7383,10 @@ class PMIReportApp:
 
     def populate_preview(self, data_list, switch_tab=True, mode="PMI"):
         """추출된 데이터를 미리보기 표에 채움 (필터 반영 및 그룹 색상 적용)"""
+        if mode == "PAUT":
+            from paut_fields import normalize_tcg
+            for item in data_list:
+                normalize_tcg(item)
         if mode in ('PAUT', 'MT', 'RT', 'KOGAS'):
             from report_issue_history import restore_report_numbers
             try:

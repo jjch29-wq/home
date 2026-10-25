@@ -156,6 +156,10 @@ def paut_flaw_findings(section, thickness=''):
     if not text:
         return {}
     result = {'Remarks': text, '_source_paut_section': text}
+    from paut_fields import tcg_from_text, TCG_MAX
+    tcg = tcg_from_text(text)
+    if tcg != '':
+        result[TCG_MAX] = tcg
     # Keep the measurements in their own columns and show the source location
     # classification in the report's Remarks column.
     if re.search(r'\bSubsurface\b|내부결함', text, re.I):

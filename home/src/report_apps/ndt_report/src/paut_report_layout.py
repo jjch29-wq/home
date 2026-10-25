@@ -145,13 +145,16 @@ def measure_excel_print_widths(path, sheet_names, include_heights=False):
             pythoncom.CoUninitialize()
 
 
-def prepare_indication_row(ws, row, has_indication):
+def prepare_indication_row(ws, row, has_indication, has_tcg=False):
     for merged in list(ws.merged_cells.ranges):
         if merged.min_row == merged.max_row == row and merged.min_col >= 14 and merged.max_col <= 24:
             ws.unmerge_cells(str(merged))
     if has_indication:
         for first, last in ((14, 15), (16, 17), (18, 19), (20, 21), (23, 24)):
             ws.merge_cells(start_row=row, end_row=row, start_column=first, end_column=last)
+    elif has_tcg:
+        ws.merge_cells(start_row=row, end_row=row, start_column=14, end_column=22)
+        ws.merge_cells(start_row=row, end_row=row, start_column=23, end_column=24)
     else:
         ws.merge_cells(start_row=row, end_row=row, start_column=14, end_column=24)
     if not has_indication:
