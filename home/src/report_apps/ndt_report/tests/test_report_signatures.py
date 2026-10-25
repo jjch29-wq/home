@@ -25,14 +25,22 @@ class SignatureTests(unittest.TestCase):
             book.active.add_image(Image(png()), 'A1')
             book.active['D32'] = '우명광'
             book.active['D35'] = '주진철'
+            book.create_sheet('을지')
+            book.create_sheet('추가 을지')
             book.save(path)
             with zipfile.ZipFile(path) as archive:
                 original_logo = archive.read('xl/media/image1.png')
             append_rt_signatures(path, [(png(), 'E32', 65, 23), (png(), 'E35', 65, 23)])
+            for sheet_index in (1, 2):
+                append_rt_signatures(path, [(png(), 'G1', 72, 72)], sheet_index=sheet_index)
             with zipfile.ZipFile(path) as archive:
                 self.assertEqual(archive.read('xl/media/image1.png'), original_logo)
                 self.assertIsNone(archive.testzip())
             result = openpyxl.load_workbook(path)
             self.assertEqual(len(result.active._images), 3)
+            for sheet in result.worksheets[1:]:
+                self.assertEqual(len(sheet._images), 1)
+                self.assertEqual(sheet._images[0].anchor._from.col, 6)
+                self.assertEqual(sheet._images[0].anchor._from.row, 0)
             self.assertEqual(result.active['D32'].value, '우명광')
             result.close()

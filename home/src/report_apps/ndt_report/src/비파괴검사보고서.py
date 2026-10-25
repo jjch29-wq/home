@@ -11643,8 +11643,7 @@ class PMIReportApp:
                 for column in range(18, 25):
                     cell = marker_sheet.cell(row, column)
                     border = copy.copy(cell.border)
-                    if offset == 0 or label == 'Total':
-                        border.top = Side(style='thin', color='666666')
+                    border.top = Side(style='thin', color='666666')
                     if label == 'Total':
                         border.bottom = Side(style='thin', color='666666')
                         cell.fill = PatternFill('solid', fgColor='E7E6E6')
@@ -11678,6 +11677,12 @@ class PMIReportApp:
                 return
             output_name = os.path.basename(save_path)
             self._apply_mt_signatures(ws0)
+            stamp_data = self._get_photo_log_stamp()
+            if stamp_data:
+                from mt_report_layout import apply_header_stamp
+                apply_header_stamp(ws0, stamp_data)
+            else:
+                self.log('⚠️ MT 직인 삽입 실패: PAUT 양식의 직인을 확인해 주세요.')
             wb.save(save_path)
             from mt_footer import restore_mt_footer_pictures
             restore_mt_footer_pictures(template_path, save_path)
@@ -11723,6 +11728,8 @@ class PMIReportApp:
             self.apply_custom_dimensions(ws0, f"{mode}_COVER")
 
             if mode == "RT":
+                from rt_report_layout import fit_film_headings
+                fit_film_headings(ws0)
                 first_item = final_list[0] if final_list else {}
                 # Cover inspection/film information.
                 cover_size = str(first_item.get("Size", "")).strip()
@@ -11795,7 +11802,9 @@ class PMIReportApp:
                     year, month, day = date_parts
                     formatted_exam_date = f"{year} 년   {month:02d} 월   {day:02d} 일"
                 self.safe_set_value(ws0, "I28", formatted_exam_date)
-                self.safe_set_value(ws0, "I30", formatted_exam_date)
+                from rt_report_layout import report_date_from_exam_period
+                self.safe_set_value(ws0, "I30", report_date_from_exam_period(exam_date_value)
+                                    if not date_parts else formatted_exam_date)
                 ws0["I28"].alignment = Alignment(
                     horizontal='center', vertical='center', shrink_to_fit=True
                 )
@@ -12403,6 +12412,13 @@ class PMIReportApp:
             if mode == 'RT':
                 from report_signatures import append_rt_signatures
                 signatures = []
+                stamp_data = self._get_photo_log_stamp()
+                if stamp_data:
+                    from rt_report_layout import header_stamp_anchor
+                    stamp_anchor = header_stamp_anchor(ws0)
+                    signatures.append((io.BytesIO(stamp_data), stamp_anchor, 72, 72))
+                else:
+                    self.log('⚠️ RT 직인 삽입 실패: PAUT 양식의 직인을 확인해 주세요.')
                 for cell, anchor in (('D32', 'E32'), ('D35', 'E35')):
                     name = re.sub(r'\s+', '', str(ws0[cell].value or ''))
                     path = os.path.join(SRC_ROOT, 'signs', name + '.png')
@@ -12412,6 +12428,13 @@ class PMIReportApp:
                         self.log(f'서명 파일 없음: {name}')
                 if signatures:
                     append_rt_signatures(save_path, signatures)
+                if stamp_data:
+                    for sheet_index in range(1, len(wb.worksheets)):
+                        append_rt_signatures(
+                            save_path,
+                            [(io.BytesIO(stamp_data), header_stamp_anchor(wb.worksheets[sheet_index]), 72, 72)],
+                            sheet_index=sheet_index,
+                        )
 
             self._record_report_issue(mode, wb, save_path, final_list)
             

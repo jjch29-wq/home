@@ -10,7 +10,7 @@ from openpyxl.drawing.image import Image
 from mt_footer import resolve, MAIN, REL, DOCREL, CONTENT
 
 
-def append_rt_signatures(output, signatures):
+def append_rt_signatures(output, signatures, sheet_index=0):
     """signatures contains (PNG stream, anchor, maximum width, height)."""
     temporary_book = Workbook()
     for stream, anchor, max_width, max_height in signatures:
@@ -24,9 +24,9 @@ def append_rt_signatures(output, signatures):
         added = {name: archive.read(name) for name in archive.namelist()}
     with zipfile.ZipFile(output) as archive:
         parts = {name: archive.read(name) for name in archive.namelist()}
-    sheet_path = 'xl/worksheets/sheet1.xml'
+    sheet_path = f'xl/worksheets/sheet{sheet_index + 1}.xml'
     sheet = ET.fromstring(parts[sheet_path])
-    sheet_rels_path = 'xl/worksheets/_rels/sheet1.xml.rels'
+    sheet_rels_path = f'xl/worksheets/_rels/sheet{sheet_index + 1}.xml.rels'
     sheet_rels = ET.fromstring(parts[sheet_rels_path]) if sheet_rels_path in parts else ET.Element(f'{{{REL}}}Relationships', nsmap={None: REL})
     drawing_link = next((link for link in sheet_rels if link.get('Type') == DOCREL + '/drawing'), None)
     if drawing_link is None:
@@ -34,7 +34,7 @@ def append_rt_signatures(output, signatures):
         while any(link.get('Id') == identifier for link in sheet_rels):
             identifier += '_'
         drawing_link = ET.SubElement(sheet_rels, f'{{{REL}}}Relationship', Id=identifier,
-                                    Type=DOCREL + '/drawing', Target='../drawings/rt_signatures.xml')
+                                    Type=DOCREL + '/drawing', Target=f'../drawings/rt_signatures_{sheet_index + 1}.xml')
         drawing = ET.SubElement(sheet, f'{{{MAIN}}}drawing')
         drawing.set(f'{{{DOCREL}}}id', identifier)
     drawing_path = resolve(sheet_path, drawing_link.get('Target'))
@@ -54,7 +54,7 @@ def append_rt_signatures(output, signatures):
             if embed:
                 source_link = next(link for link in new_relationships if link.get('Id') == embed)
                 media_source = resolve('xl/drawings/drawing1.xml', source_link.get('Target'))
-                media_path = f'xl/media/rt_signature_{index}.png'
+                media_path = f'xl/media/rt_signature_sheet{sheet_index + 1}_{index}.png'
                 parts[media_path] = added[media_source]
                 identifier = f'rIdRTSignature{index}'
                 while any(link.get('Id') == identifier for link in relationships):

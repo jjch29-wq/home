@@ -22,7 +22,7 @@ class ReportHeightTests(unittest.TestCase):
         original_width = ws.column_dimensions['V'].width
         fit_height_heading(ws)
         self.assertEqual(ws['V7'].value, '높이\n(mm)')
-        self.assertEqual(ws['V7'].font.sz, 8)
+        self.assertEqual(ws['V7'].font.sz, 9)
         self.assertEqual(ws['T7'].font.sz, 11)
         self.assertEqual(ws.column_dimensions['V'].width, original_width)
 

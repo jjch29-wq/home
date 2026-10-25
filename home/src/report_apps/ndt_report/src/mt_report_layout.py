@@ -4,6 +4,32 @@ from openpyxl.styles import Alignment
 import re
 
 
+def apply_header_stamp(ws, png_data):
+    """Place the company seal beside the MT company information."""
+    import io
+    from openpyxl.drawing.image import Image
+    from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+    from openpyxl.drawing.xdr import XDRPositiveSize2D
+    from openpyxl.utils.units import pixels_to_EMU
+
+    retained = []
+    for image in ws._images:
+        marker = getattr(image.anchor, '_from', None)
+        if (marker is not None and 12 <= marker.col <= 17
+                and 3 <= marker.row <= 6
+                and 0.65 <= image.width / max(image.height, 1) <= 1.35):
+            continue
+        retained.append(image)
+    ws._images = retained
+    stream = io.BytesIO(png_data)
+    image = Image(stream)
+    image._pmi_source_stream = stream
+    image.anchor = OneCellAnchor(
+        _from=AnchorMarker(col=15, row=3),
+        ext=XDRPositiveSize2D(pixels_to_EMU(64), pixels_to_EMU(64)))
+    ws.add_image(image)
+
+
 def hot_tapping_points(items):
     """Combine daily work lengths for the same line and tapping point."""
     groups = {}

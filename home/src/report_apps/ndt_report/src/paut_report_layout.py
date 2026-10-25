@@ -36,7 +36,7 @@ def fit_height_heading(ws):
                 continue
             cell.value = '높이\n(mm)'
             font = copy(cell.font)
-            font.sz = min(font.sz or 10, 8)
+            font.sz = 9
             cell.font = font
             alignment = copy(cell.alignment)
             alignment.wrapText = True
