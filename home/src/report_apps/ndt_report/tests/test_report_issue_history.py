@@ -4,13 +4,65 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SRC = Path(__file__).resolve().parents[1] / 'src'
 sys.path.insert(0, str(SRC))
+import report_issue_history as history
 from report_issue_history import record_issue, load_history, item_values, edit_issue, delete_selections, report_output_path
 
 
 class IssueHistoryTests(unittest.TestCase):
+    def test_drive_migration_backs_up_and_merges_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            local = root / 'local.json'
+            cloud = root / 'cloud'
+            cloud.mkdir()
+            config = root / 'sync.json'
+            config.write_text(json.dumps({'data_dir': str(cloud)}), encoding='utf-8')
+            one = {'id': 'one', 'issued_at': '2026-10-01', 'items': []}
+            two = {'id': 'two', 'issued_at': '2026-10-02', 'items': []}
+            local.write_text(json.dumps([one]), encoding='utf-8')
+            original = local.read_bytes()
+            history.save_history([two], cloud / 'report_issue_history.json')
+            with patch.object(history, 'DEFAULT_PATH', local), patch.object(history, 'SYNC_CONFIG', config):
+                self.assertEqual(history.load_history(), [one, two])
+                self.assertEqual(history.load_history(), [one, two])
+            self.assertFalse(local.exists())
+            backups = list(root.glob('report_issue_history.backup-*.json'))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_bytes(), original)
+
+    def test_unavailable_drive_does_not_fall_back_to_local(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / 'sync.json'
+            config.write_text(json.dumps({'data_dir': str(root / 'offline')}), encoding='utf-8')
+            local = root / 'local.json'
+            local.write_text('[]', encoding='utf-8')
+            with patch.object(history, 'DEFAULT_PATH', local), patch.object(history, 'SYNC_CONFIG', config):
+                with self.assertRaises(OSError):
+                    history.load_history()
+            self.assertEqual(local.read_text(), '[]')
+
+    def test_migration_conflict_preserves_both_histories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            local = root / 'local.json'
+            cloud = root / 'cloud'
+            cloud.mkdir()
+            target = cloud / 'report_issue_history.json'
+            config = root / 'sync.json'
+            config.write_text(json.dumps({'data_dir': str(cloud)}), encoding='utf-8')
+            history.save_history([{'id': 'same', 'items': [], 'report_no': 'A'}], local)
+            history.save_history([{'id': 'same', 'items': [], 'report_no': 'B'}], target)
+            before = (local.read_bytes(), target.read_bytes())
+            with patch.object(history, 'DEFAULT_PATH', local), patch.object(history, 'SYNC_CONFIG', config):
+                with self.assertRaises(ValueError):
+                    history.load_history()
+            self.assertEqual((local.read_bytes(), target.read_bytes()), before)
+
     def test_restore_only_issued_rows_and_latest_number(self):
         from report_issue_history import restore_report_numbers
         with tempfile.TemporaryDirectory() as directory:

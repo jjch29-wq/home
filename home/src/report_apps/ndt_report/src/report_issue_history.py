@@ -9,6 +9,37 @@ import uuid
 
 
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / 'data' / 'report_issue_history.json'
+SYNC_CONFIG = Path(__file__).resolve().parents[1] / 'sync_config.json'
+
+
+def resolve_history_path(path=None):
+    if path is not None:
+        return Path(path)
+    if not SYNC_CONFIG.exists():
+        return DEFAULT_PATH
+    config = json.loads(SYNC_CONFIG.read_text(encoding='utf-8'))
+    directory = Path(config['data_dir'])
+    if not directory.is_absolute() or not directory.is_dir():
+        raise OSError(f'발행 이력 동기화 폴더에 연결할 수 없습니다: {directory}')
+    target = directory / 'report_issue_history.json'
+    if DEFAULT_PATH.exists() and DEFAULT_PATH.resolve() != target.resolve():
+        local = load_history(DEFAULT_PATH)
+        shared = load_history(target)
+        by_id = {entry['id']: entry for entry in shared}
+        for entry in local:
+            previous = by_id.get(entry['id'])
+            if previous is not None and previous != entry:
+                raise ValueError('로컬·드라이브에 서로 다른 동일 발행 이력이 있습니다. 병합 확인이 필요합니다.')
+            if previous is None:
+                shared.append(entry)
+                by_id[entry['id']] = entry
+        # Preserve the original before publishing the merged history.
+        backup = DEFAULT_PATH.with_name(f'report_issue_history.backup-{uuid.uuid4().hex}.json')
+        backup.write_bytes(DEFAULT_PATH.read_bytes())
+        shared.sort(key=lambda entry: entry.get('issued_at', ''))
+        save_history(shared, target)
+        DEFAULT_PATH.unlink()
+    return target
 
 
 def report_output_path(directory, report_no, extension, fallback='Report'):
@@ -25,8 +56,8 @@ def report_output_path(directory, report_no, extension, fallback='Report'):
     return str(candidate)
 
 
-def load_history(path=DEFAULT_PATH):
-    path = Path(path)
+def load_history(path=None):
+    path = resolve_history_path(path)
     if not path.exists():
         return []
     records = json.loads(path.read_text(encoding='utf-8'))
@@ -37,7 +68,7 @@ def load_history(path=DEFAULT_PATH):
     return records
 
 
-def restore_report_numbers(mode, items, path=DEFAULT_PATH):
+def restore_report_numbers(mode, items, path=None):
     """Restore the latest active issue number for the same source inspection."""
     def identity(item):
         if item.get('_source_id'):
@@ -62,11 +93,12 @@ def restore_report_numbers(mode, items, path=DEFAULT_PATH):
             item['Report No'] = numbers[key]
 
 
-def record_issue(mode, report_no, output_path, items, path=DEFAULT_PATH):
+def record_issue(mode, report_no, output_path, items, path=None):
     """Record only an existing output; keep a separate snapshot on reissue."""
     output = Path(output_path).resolve()
     if not output.is_file():
         raise FileNotFoundError(output)
+    path = resolve_history_path(path)
     records = load_history(path)
     snapshot = json.loads(json.dumps(items, ensure_ascii=False, default=str))
     entry = {
@@ -80,8 +112,8 @@ def record_issue(mode, report_no, output_path, items, path=DEFAULT_PATH):
     return entry
 
 
-def save_history(records, path=DEFAULT_PATH):
-    path = Path(path)
+def save_history(records, path=None):
+    path = resolve_history_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -96,8 +128,9 @@ def save_history(records, path=DEFAULT_PATH):
 
 
 def edit_issue(issue_id, item_index=None, fields=None, item_fields=None,
-               delete=False, path=DEFAULT_PATH, expected=None):
+               delete=False, path=None, expected=None):
     """Edit one issue atomically, retaining previous values for recovery."""
+    path = resolve_history_path(path)
     records = load_history(path)
     entry = next((r for r in records if r['id'] == issue_id), None)
     if entry is None or entry.get('deleted_at'):
@@ -144,8 +177,9 @@ def item_values(entry, item):
     )
 
 
-def delete_selections(selections, whole_issue=False, path=DEFAULT_PATH):
+def delete_selections(selections, whole_issue=False, path=None):
     """Validate all selections before atomically deleting any of them."""
+    path = resolve_history_path(path)
     records = load_history(path)
     grouped = {}
     for expected, index in selections:
@@ -169,7 +203,7 @@ def delete_selections(selections, whole_issue=False, path=DEFAULT_PATH):
     save_history(records, path)
 
 
-def show_history(parent, path=DEFAULT_PATH):
+def show_history(parent, path=None):
     import tkinter as tk
     from tkinter import ttk, messagebox
     window = tk.Toplevel(parent)
