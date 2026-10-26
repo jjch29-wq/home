@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 APP_TITLE = "PAUT 검사설정표 생성기"
-APP_VERSION = "1.11.0"
+APP_VERSION = "1.12.0"
 CONFIG_PATH = Path(__file__).with_name("paut_scan_plan_settings.json")
 PROBE_SOURCE = "https://ims.evidentscientific.com/en/products/u8330072/u8330072"
 
@@ -127,6 +127,25 @@ class ApertureConfig:
         return measurements
 
 
+INSTRUMENT_FIELDS = [
+    ("net_digitizing", "Net digitizing frequency (MHz), points and compression"),
+    ("dynamic_range", "Instrument dynamic range setting"),
+    ("pulser_voltage", "Pulser voltage (V)"),
+    ("pulse_type_width", "Pulse type and width (ns)"),
+    ("filters_smoothing", "Filters and smoothing / averaging"),
+    ("prf", "Pulse repetition frequency (Hz/kHz), Auto/Manual"),
+    ("maximum_range", "Maximum range setting: start, range, unit and basis"),
+    ("digital_gain", "Use of digital gain: status, value and application stage"),
+]
+
+
+def english(value):
+    for original, translated in (("양측 주사", "Both sides"), ("단측 주사", "Single side"),
+                                  ("양측", "Both sides"), ("좌측", "Left"), ("우측", "Right")):
+        value = str(value).replace(original, translated)
+    return value
+
+
 @dataclass
 class ScanSettings:
     probe_model: str = "5L64-A2"
@@ -145,6 +164,15 @@ class ScanSettings:
     law_config: str = "Sectorial"
     focus_type: str = "True depth"
     scan_direction: str = "양측 주사"
+    instrument_identification: str = "OmniScan X3 - configuration / serial / MXU: TO BE CONFIRMED"
+    net_digitizing: str = ""
+    dynamic_range: str = ""
+    pulser_voltage: str = ""
+    pulse_type_width: str = ""
+    filters_smoothing: str = ""
+    prf: str = ""
+    maximum_range: str = ""
+    digital_gain: str = ""
     apertures: list[ApertureConfig] = field(
         default_factory=lambda: [ApertureConfig()]
     )
@@ -201,6 +229,9 @@ class ScanSettings:
     def validate(self) -> None:
         if not self.probe_model.strip():
             raise ValueError("탐촉자 모델을 입력하세요.")
+        nominal = {"5L64-A2": 5.0, "2.25L64-A2": 2.25}.get(self.probe_model.strip())
+        if nominal is not None and not math.isclose(self.frequency_mhz, nominal):
+            raise ValueError(f"{self.probe_model}의 공칭 주파수는 {nominal:g} MHz입니다. 주파수 입력값을 확인하세요.")
         positive = {
             "주파수": self.frequency_mhz,
             "총 소자 수": self.total_elements,
@@ -372,12 +403,12 @@ def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, heig
     draw.text((10, (top + bottom) / 2 - 8), f"t={settings.thickness_mm:g} mm", fill="#2E7D32", font=font)
     title = (
         f"{settings.probe_model} | {settings.wave_type} | "
-        f"{settings.min_angle_deg:g}°~{settings.max_angle_deg:g}° | {settings.scan_direction}"
+        f"{settings.min_angle_deg:g}°~{settings.max_angle_deg:g}° | {english(settings.scan_direction)}"
     )
     draw.text((width / 2, 20), title, fill="#111827", font=_font(18, True), anchor="ma")
     draw.text(
         (width / 2, height - 24),
-        "개략도: 실제 적용 전 웨지 출사점, 용접부 형상 및 교정시험편으로 커버리지를 확인할 것",
+        "SCHEMATIC ONLY: Verify coverage using actual wedge exit, weld geometry and qualification blocks.",
         fill="#B91C1C", font=small, anchor="ma",
     )
     legend = " | ".join(
@@ -396,7 +427,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "PAUT 설정표"
+    ws.title = "PAUT Setup"
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A8"
     ws.print_area = "A1:K42"
@@ -428,7 +459,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         ws.column_dimensions[get_column_letter(col)].width = width
 
     ws.merge_cells("A1:K2")
-    ws["A1"] = "PAUT 검사 설정 및 빔 방향 검토표"
+    ws["A1"] = "PAUT Inspection Setup and Beam Direction Review Sheet"
     ws["A1"].font = Font(name="맑은 고딕", size=18, bold=True, color=white)
     ws["A1"].fill = PatternFill("solid", fgColor=navy)
     ws["A1"].alignment = center
@@ -443,12 +474,12 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         for col in range(1, 12):
             ws.cell(row, col).border = outer
 
-    section(4, "1. 기본 입력조건")
+    section(4, "1. Basic Input Parameters")
     basic = [
-        ("부재 두께 (mm)", settings.thickness_mm, "공칭 개선각 (°)", settings.bevel_angle_deg,
-         "개선각 공차 (±°)", settings.bevel_tolerance_deg, "Angle step (°)", settings.angle_step_deg),
-        ("최소 빔각 (°)", settings.min_angle_deg, "최대 빔각 (°)", settings.max_angle_deg,
-         "검사 방향", settings.scan_direction, "Wave type", settings.wave_type),
+        ("Thickness (mm)", settings.thickness_mm, "Bevel angle (°)", settings.bevel_angle_deg,
+         "Bevel tolerance (±°)", settings.bevel_tolerance_deg, "Angle step (°)", settings.angle_step_deg),
+        ("Min. beam angle (°)", settings.min_angle_deg, "Max. beam angle (°)", settings.max_angle_deg,
+         "Scan direction", english(settings.scan_direction), "Wave type", settings.wave_type),
         ("용접 중심→루트 중심 오프셋 (mm)", settings.weld_center_to_root_offset_mm,
          "오프셋 부호", "우측 + / 좌측 -", "거리 출처", "BeamTool: Beam Exit to Weld",
          "보정 기준", "좌측 +오프셋 / 우측 -오프셋"),
@@ -496,7 +527,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
     for offset, aperture in enumerate(settings.apertures):
         row = 9 + offset
         indices = aperture.index_display_values()
-        values = [f"{settings.probe_model}\n{aperture.probe_id}-{aperture.beamset_id} ({aperture.scan_side})",
+        values = [f"{settings.probe_model}\n{aperture.probe_id}-{aperture.beamset_id} ({english(aperture.scan_side)})",
                   settings.wave_type,
                   settings.law_config, settings.focus_type,
                   None, f"{settings.min_angle_deg:g}°~{settings.max_angle_deg:g}°", None,
@@ -524,12 +555,12 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         ws.row_dimensions[row].height = 32
 
     probe_section_row = max(12, 10 + len(settings.apertures))
-    section(probe_section_row, "2. 탐촉자 및 Focal Law 정보")
+    section(probe_section_row, "2. Probe and Focal Law Information")
     probe_header_row = probe_section_row + 1
     probe_data_start = probe_header_row + 1
-    probe_headers = ["탐촉자 형식", "주파수 (MHz)", "진동자 수", "Total aperture (mm)",
+    probe_headers = ["Probe model", "Frequency (MHz)", "Total elements", "Total aperture (mm)",
                      "Pitch (mm)", "Active elements", "First Element", "Focusing Type",
-                     "True depth (unfolded)", "Index", "비고"]
+                     "True depth (unfolded)", "Index", "Remarks"]
     for col, value in enumerate(probe_headers, 1):
         cell = ws.cell(probe_header_row, col, value)
         cell.fill = PatternFill("solid", fgColor=navy)
@@ -538,7 +569,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         cell.border = border
     for offset, aperture in enumerate(settings.apertures):
         row = probe_data_start + offset
-        probe_values = [f"{settings.probe_model}\n{aperture.probe_id}-{aperture.beamset_id} ({aperture.scan_side})",
+        probe_values = [f"{settings.probe_model}\n{aperture.probe_id}-{aperture.beamset_id} ({english(aperture.scan_side)})",
                         settings.frequency_mhz, settings.total_elements, None,
                         settings.pitch_mm, aperture.active_elements, aperture.first_element,
                         settings.focus_type, aperture.focal_depth_mm,
@@ -551,6 +582,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         ws.cell(row, 4, f"=C{row}*E{row}")
         ws.cell(row, 11, f'=F{row}&" elements × "&TEXT(E{row},"0.00")&" mm = "&TEXT(F{row}*E{row},"0.00")&" mm"')
         ws.cell(row, 4).number_format = '0.00" mm"'
+        ws.cell(row, 2).number_format = '0.00'
         ws.cell(row, 1).comment = Comment(f"Manufacturer source: {PROBE_SOURCE}", "User")
         ws.row_dimensions[row].height = 34
 
@@ -559,24 +591,24 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         ws.cell(9 + offset, 5, f"=F{probe_data_start + offset}*E{probe_data_start + offset}")
 
     scan_section_row = probe_data_start + len(settings.apertures) + 1
-    section(scan_section_row, "3. PAUT Scan Plan")
+    section(scan_section_row, "3. PAUT Scan Plan - Schematic, Coverage Not Qualified")
     diagram_start_row = scan_section_row + 1
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
         diagram_path = temp_file.name
     try:
         make_beam_diagram(settings, diagram_path)
         diagram = XLImage(diagram_path)
-        diagram.width = 1000
+        diagram.width = 680
         # Preserve the source aspect ratio so the whole drawing is visible and
         # the lower beam paths are not cropped or vertically distorted.
         diagram.height = round(diagram.width * 360 / 1120)
         ws.add_image(diagram, f"A{diagram_start_row}")
         # Excel row heights are points while image dimensions are pixels.
         # Reserve the converted image height plus a small print-driver margin.
-        diagram_row_count = math.ceil((diagram.height * 0.75) / 16) + 3
+        diagram_row_count = max(10, math.ceil((diagram.height * 0.75) / 25))
         diagram_end_row = diagram_start_row + diagram_row_count
         for row in range(diagram_start_row, diagram_end_row):
-            ws.row_dimensions[row].height = 16
+            ws.row_dimensions[row].height = 25
 
         # The workbook is a field setup sheet, so stop after the scan-plan
         # diagram.  Beam-path, true-depth, and bevel-intersection calculations
@@ -585,11 +617,82 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         # Floating images do not extend Excel's print area when users move them.
         # Keep several blank rows inside the print area so the diagram can be
         # moved downward without its lower portion being clipped in print/PDF.
-        diagram_move_margin_rows = 10
+        diagram_move_margin_rows = 0
         print_end_row = diagram_end_row + diagram_move_margin_rows
         for row in range(diagram_end_row, print_end_row + 1):
             ws.row_dimensions[row].height = 16
         ws.print_area = f"A1:K{print_end_row}"
+        # Keep the full setup in one worksheet, directly below the scan plan.
+        review = ws
+        review_base = diagram_end_row + 1
+
+        def review_row(row, label, value, height=22):
+            if 6 <= row <= 13:
+                # Instrument requirements sit beside the diagram, not below it.
+                row = diagram_start_row + 1 + row - 6
+                label_start, label_end, value_start, value_end = 7, 8, 9, 11
+                height = max(height, 34)
+            else:
+                if row >= 15:
+                    row -= 9
+                row += review_base
+                label_start, label_end, value_start, value_end = 1, 3, 4, 11
+            review.merge_cells(start_row=row, start_column=label_start, end_row=row, end_column=label_end)
+            review.merge_cells(start_row=row, start_column=value_start, end_row=row, end_column=value_end)
+            review.cell(row, label_start, label)
+            review.cell(row, value_start, value)
+            review.row_dimensions[row].height = height
+            for col in range(label_start, value_end + 1):
+                cell = review.cell(row, col)
+                cell.border = border
+                cell.alignment = Alignment(vertical="center", wrap_text=True)
+                cell.font = Font(name="Arial", size=10)
+                cell.fill = PatternFill("solid", fgColor=pale if col <= label_end else input_fill)
+
+        ws.merge_cells(start_row=diagram_start_row, start_column=7,
+                       end_row=diagram_start_row, end_column=11)
+        instrument_heading = ws.cell(diagram_start_row, 7, "4. Instrument Settings")
+        instrument_heading.fill = PatternFill("solid", fgColor=navy)
+        instrument_heading.font = Font(name="Arial", size=11, bold=True, color=white)
+        instrument_heading.alignment = center
+        section(review_base + 1, "5. Setup Identification and Examination Volume")
+        missing = [label for key, label in INSTRUMENT_FIELDS
+                   if not getattr(settings, key).strip() or any(
+                       token in getattr(settings, key).upper()
+                       for token in ("TO BE CONFIRMED", "REFERENCE ONLY"))]
+        review_row(3, "Review status", "DRAFT - UNCONFIRMED SETTINGS" if missing else
+                   "ENTERED SETTINGS - SUBJECT TO PROCEDURE APPROVAL")
+        identification = english(settings.instrument_identification)
+        review_row(4, "Instrument / setup identification", identification.split(" / Reference:")[0], 25)
+        review.cell(review_base + 4, 4).comment = Comment(identification, "User")
+        review_row(5, "Applicability", "PDF values: reference only (6.40 mm, PA-2/GR-2). Verify for current setup.")
+        short_labels = ["Net digitizing frequency / points / compression", "Instrument dynamic range",
+                        "Pulser voltage", "Pulse type / width", "Filters / smoothing / averaging",
+                        "Pulse repetition frequency (PRF)", "Acquisition start / maximum range", "Digital gain"]
+        for row, (key, label) in enumerate(INSTRUMENT_FIELDS, 6):
+            full_value = english(getattr(settings, key).strip()) or "TO BE CONFIRMED"
+            value = full_value
+            if value.startswith("REFERENCE ONLY (PA-2 GR-2, t=6.40 mm): "):
+                value = "REF: " + value.split(": ", 1)[1]
+            for suffix in (" TO BE CONFIRMED for current setup.",
+                           " TO BE CONFIRMED for current thickness and coverage.",
+                           " (source PA-2 GR-2). Verify for current setup.",
+                           " - source PA-2 GR-2; verify for current setup."):
+                value = value.replace(suffix, " [verify]")
+            if value.startswith("TO BE CONFIRMED -"):
+                value = "TO BE CONFIRMED"
+            review_row(row, f"{row - 5}. {short_labels[row - 6]}", value, 25)
+            review.cell(diagram_start_row + 1 + row - 6, 9).comment = Comment(full_value, "User")
+        review_row(15, "Required examination volume - project comment basis",
+                   "Weld + each side: min(t, 25 mm) if t <= 200 mm; 50 mm if t > 200 mm. Basis: project comment, specification 2.2.", 25)
+        extra = min(settings.thickness_mm, 25.0) if settings.thickness_mm <= 200 else 50.0
+        review_row(16, "Additional width on EACH side", f"{extra:g} mm beyond the weld boundary; not measured from the weld centreline.")
+        review_row(17, "Actual HAZ width", "NOT ESTABLISHED; no assumed 5 mm HAZ.")
+        review_row(18, "Reduced-volume alternative", "Actual HAZ + 6 mm each side: measured/documented HAZ and project conditions required.")
+        review_row(19, "Coverage verification", "NOT DEMONSTRATED. Attach validated scan plan and coverage evidence.")
+        review_row(20, "Setting evidence / approval", "Retain source setup report and qualified procedure; reference values require verification.")
+        ws.page_setup.fitToHeight = 1
+        ws.print_area = f"A1:K{review_base + 11}"
         wb.calculation.fullCalcOnLoad = True
         wb.calculation.forceFullCalc = True
         wb.save(output)
@@ -832,6 +935,8 @@ class PautScanPlanApp(tk.Tk):
                 ("angle_step_deg", "Angle step (°)"), ("wave_type", "Wave type"),
                 ("law_config", "Law config."), ("focus_type", "Focus type"),
             ]),
+            ("장비 설정 - 실제 값 및 근거 입력 (미입력: 미확정)",
+             [("instrument_identification", "장비 / 버전 / 설정 ID")] + INSTRUMENT_FIELDS),
         ]
         combo_values = {
             "scan_direction": ("양측 주사", "단측 주사"),
@@ -842,19 +947,29 @@ class PautScanPlanApp(tk.Tk):
         for title, items in groups:
             box = ttk.LabelFrame(form, text=title, style="Section.TLabelframe", padding=10)
             box.pack(fill="x", pady=5)
+            stacked = any(key == "instrument_identification" for key, _ in items)
             visible_items = [
                 item for item in items
                 if item[0] != "weld_center_to_root_offset_mm"
             ]
             for row, (key, label) in enumerate(visible_items):
-                ttk.Label(box, text=label, width=20).grid(row=row, column=0, sticky="w", pady=3)
+                if stacked:
+                    caption = ttk.Label(box, text=label, wraplength=480, justify="left")
+                    caption.grid(row=row * 2, column=0, columnspan=2, sticky="ew", pady=(6, 2))
+                    caption.bind("<Configure>", lambda event: event.widget.configure(
+                        wraplength=max(1, event.width)))
+                else:
+                    ttk.Label(box, text=label, width=20).grid(row=row, column=0, sticky="w", pady=3)
                 var = tk.StringVar()
                 self.vars[key] = var
                 if key in combo_values:
                     widget = ttk.Combobox(box, textvariable=var, values=combo_values[key], state="readonly", width=22)
                 else:
                     widget = ttk.Entry(box, textvariable=var, width=25)
-                widget.grid(row=row, column=1, sticky="ew", pady=3)
+                if stacked:
+                    widget.grid(row=row * 2 + 1, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+                else:
+                    widget.grid(row=row, column=1, sticky="ew", pady=3)
                 widget.bind("<FocusOut>", lambda _e: self.refresh_preview())
                 widget.bind("<Return>", lambda _e: self.refresh_preview())
             box.columnconfigure(1, weight=1)
@@ -1315,7 +1430,7 @@ def self_test(output_path: str) -> None:
     ])
     created = create_workbook(settings, output_path)
     check = openpyxl.load_workbook(created, data_only=False)
-    sheet = check["PAUT 설정표"]
+    sheet = check["PAUT Setup"]
     assert sheet["B5"].value == 15.87
     assert sheet["E9"].value == "=F14*E14"
     assert sheet["E10"].value == "=F15*E15"
@@ -1326,11 +1441,21 @@ def self_test(output_path: str) -> None:
     assert sheet.column_dimensions["K"].width == 34
     assert sheet.row_dimensions[14].height == 34
     assert sheet["K14"].alignment.wrap_text is True
-    assert sheet["A39"].value is None
     assert sheet.print_options.horizontalCentered is True
     assert sheet.page_margins.left == sheet.page_margins.right == 0.25
     assert len(sheet._images) == 1
-    assert sheet.print_area.endswith("$A$1:$K$47")
+    assert check.sheetnames == ["PAUT Setup"]
+    review_values = {sheet.cell(row, 1).value: sheet.cell(row, 4).value
+                     for row in range(1, sheet.max_row + 1)}
+    assert review_values["Review status"] == "DRAFT - UNCONFIRMED SETTINGS"
+    assert review_values["Additional width on EACH side"].startswith("15.87 mm")
+    assert sheet.page_setup.fitToHeight == 1
+    assert sheet.print_area.endswith(f"$A$1:$K${sheet.max_row}")
+    for page in check:
+        for row in page:
+            for cell in row:
+                if isinstance(cell.value, str):
+                    assert not any('\uac00' <= char <= '\ud7a3' for char in cell.value), cell.coordinate
     check.close()
     return
     assert "D40:K40" in {str(cell_range) for cell_range in sheet.merged_cells.ranges}

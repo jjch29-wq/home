@@ -1,6 +1,6 @@
 {
   "probe_model": "2.25L64-A2",
-  "frequency_mhz": 2.0,
+  "frequency_mhz": 2.25,
   "total_elements": 64,
   "pitch_mm": 0.6,
   "elevation_mm": 10.0,
@@ -15,6 +15,15 @@
   "law_config": "Sectorial",
   "focus_type": "True depth",
   "scan_direction": "양측 주사",
+  "instrument_identification": "OmniScan X3 64 / 64:128PR / S/N: QC-0093084 / MXU: 5.18.0 / Reference: 034-2024-JW-03-200A-01_R19, PA-2 GR-2, t=6.40 mm, 5L64-A2; verify for current setup",
+  "net_digitizing": "REFERENCE ONLY (PA-2 GR-2, t=6.40 mm): Net 25 MHz; effective 100 MHz; compression 4; 604 points. TO BE CONFIRMED for current setup.",
+  "dynamic_range": "TO BE CONFIRMED - not specified in source PDF; receiver gain is not instrument dynamic range.",
+  "pulser_voltage": "80 Vpp - source PA-2 GR-2; verify for current setup.",
+  "pulse_type_width": "Width: 100 ns (source PA-2 GR-2); pulse type: TO BE CONFIRMED. Verify for current setup.",
+  "filters_smoothing": "Filter: None; Video Filter: On; Averaging Factor: 1 (source PA-2 GR-2). Verify for current setup.",
+  "prf": "TO BE CONFIRMED - source acquisition rate 120 Hz is not confirmed PRF.",
+  "maximum_range": "REFERENCE ONLY (PA-2 GR-2, t=6.40 mm): Start 0 mm; Sound Path Range 39.35 mm; True Depth Range 30.14 mm. TO BE CONFIRMED for current thickness and coverage.",
+  "digital_gain": "TO BE CONFIRMED - use/status/value/application stage not specified in source PDF.",
   "apertures": [
     {
       "probe_id": "P1",
