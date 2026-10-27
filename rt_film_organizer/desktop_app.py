@@ -4,17 +4,17 @@ import sys
 from pathlib import Path
 
 import cv2
-import easyocr
 from PySide6.QtCore import QObject, QPoint, QRect, Qt, QThread, Signal, QSettings
 from PySide6.QtGui import QAction, QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QHeaderView,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar, QPushButton,
     QSplitter, QStatusBar, QTableWidget, QTableWidgetItem, QToolBar,
-    QVBoxLayout, QWidget, QRubberBand, QDialog, QInputDialog, QCheckBox, QMenu, QToolButton,
+    QVBoxLayout, QWidget, QRubberBand, QDialog, QInputDialog, QCheckBox, QMenu, QToolButton, QSizePolicy,
 )
 from report_link import load_reports
 from report_dialog import ReportDialog
+from ocr_analysis import analyze_marking
 
 from core import (
     FilmRecord, assign_sequences, clamp_rect, crop_image, detect_film_rect, export_records,
@@ -30,9 +30,11 @@ UI_SETTINGS_PATH = APP_DIR.parent / ".work-sync" / "rt-film-ui.ini"
 
 
 class OcrWorker(QObject):
+    reader = None
     progress = Signal(int, int, object)
     completed = Signal()
     failed = Signal(str)
+    stage = Signal(str)
 
     def __init__(self, records, rect, indices):
         super().__init__()
@@ -40,23 +42,16 @@ class OcrWorker(QObject):
 
     def run(self):
         try:
-            reader = easyocr.Reader(["en"], gpu=False, verbose=False,
-                                    model_storage_directory=str(MODEL_DIR))
+            if OcrWorker.reader is None:
+                import easyocr
+                OcrWorker.reader = easyocr.Reader(["en"], gpu=False, verbose=False,
+                                        model_storage_directory=str(MODEL_DIR))
+            reader = OcrWorker.reader
             for position, index in enumerate(self.indices, 1):
                 record = self.records[index]
                 cropped = crop_image(imread(record.source), record.crop_rect or self.rect)
-                detected_section = recognize_film_section(reader, cropped)
-                candidates = []
-                for variant in prepare_for_ocr(cropped):
-                    found = reader.readtext(
-                        variant, detail=1, paragraph=False,
-                        allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-/",
-                    )
-                    text = " ".join(item[1] for item in found)
-                    confidence = sum(float(item[2]) for item in found) / max(len(found), 1)
-                    candidates.append((len(text) * max(confidence, .15), text, confidence))
-                _, text, confidence = max(candidates, default=(0, "", 0))
-                parsed = parse_marking(text)
+                self.stage.emit(f"OCR {position}/{len(self.indices)} · {Path(record.source).name} · 빠른 검사 / 필요 시 정밀 검사")
+                text, confidence, parsed, detected_section, _ = analyze_marking(reader, cropped)
                 record.raw_text, record.confidence = text, confidence
                 if record.report_item:
                     differences = [label for field, label in (("line_no", "라인"), ("joint_no", "JOINT"), ("welder_no", "용접사"))
@@ -89,6 +84,7 @@ class ImageLabel(QLabel):
         super().__init__("사진을 불러오세요")
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(360, 300)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.setStyleSheet("background:#111820;color:#aab7c4;border-radius:8px;")
         self.original_pixmap = None
         self.selection_enabled = False
@@ -198,10 +194,13 @@ class MainWindow(QMainWindow):
         UI_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
         self.path_settings = QSettings(str(UI_SETTINGS_PATH), QSettings.IniFormat)
         self.setWindowTitle("RT 필름 영상화 정리기")
-        self.resize(1540, 900)
-        self.setMinimumSize(1120, 850)
+        self.setMinimumSize(960, 640)
         self.build_ui()
         self.apply_style()
+        screen = self.screen().availableGeometry()
+        self.resize(min(1400, screen.width() - 40), min(900, screen.height() - 60))
+        self.move(screen.x() + (screen.width() - self.width()) // 2,
+                  screen.y() + (screen.height() - self.height()) // 2)
 
     def build_ui(self):
         toolbar = QToolBar("주요 기능")
@@ -218,6 +217,7 @@ class MainWindow(QMainWindow):
         toggle = QAction("원본/크롭 보기", self); toggle.triggered.connect(self.toggle_preview); toolbar.addAction(toggle)
         self.more_menu = QMenu(self)
         for text, callback in [("OCR 분석 (보조 검증)", self.start_ocr),
+                               ("선택 사진만 OCR 검사", lambda: self.start_ocr(selected_only=True)),
                                ("현재 영역에서 더 자르기", self.refine_target_crop),
                                ("공통 자르기 되돌리기 (최초 지정)", self.restore_initial_crop),
                                ("원본 이름으로 잘라 저장", self.batch_crop)]:
@@ -541,14 +541,18 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.error(str(exc))
 
-    def start_ocr(self):
+    def start_ocr(self, checked=False, *, selected_only=False):
+        if self.processing or (self.ocr_thread and self.ocr_thread.isRunning()): return
         if not self.records: return self.error("먼저 사진을 불러오세요.")
-        if self.rect is None and any(r.crop_rect is None for r in self.records):
-            try: self.set_common_crop(detect_film_rect(imread(self.records[0].source)))
+        indices = sorted({item.row() for item in self.table.selectionModel().selectedRows()}) if selected_only else list(range(len(self.records)))
+        if not indices: return self.error("표에서 검사할 사진을 선택하세요. Ctrl·Shift로 여러 장을 선택할 수 있습니다.")
+        if self.rect is None and any(self.records[i].crop_rect is None for i in indices):
+            try: self.set_common_crop(detect_film_rect(imread(self.records[indices[0]].source)))
             except Exception as exc: return self.error(str(exc))
-        self.set_busy(True); self.progress.setRange(0, len(self.records)); self.progress.setValue(0)
+        self.set_busy(True); self.progress.setRange(0, len(indices)); self.progress.setValue(0)
         self.status_label.setText("OCR 모델을 준비하고 있습니다...")
-        self.ocr_thread = QThread(); self.worker = OcrWorker(self.records, self.rect, list(range(len(self.records))))
+        self.ocr_thread = QThread(); self.worker = OcrWorker(self.records, self.rect, indices)
+        self.worker.stage.connect(self.status_label.setText)
         self.worker.moveToThread(self.ocr_thread); self.ocr_thread.started.connect(self.worker.run)
         self.worker.progress.connect(self.ocr_progress); self.worker.completed.connect(self.ocr_complete); self.worker.failed.connect(self.ocr_failed)
         self.worker.completed.connect(self.ocr_thread.quit); self.worker.failed.connect(self.ocr_thread.quit)
