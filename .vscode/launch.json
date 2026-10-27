@@ -40,6 +40,19 @@
             "cwd": "${workspaceFolder}\\home\\src",
             "console": "externalTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "RT 필름 영상화 정리기 (Run/Debug)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\rt_film_organizer\\desktop_app.py",
+            "python": "${workspaceFolder}\\.venv-rt-film\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\rt_film_organizer",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONUTF8": "1"
+            }
         }
     ]
 }

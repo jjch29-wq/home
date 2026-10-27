@@ -1,0 +1,6 @@
+easyocr==1.7.2
+opencv-python-headless==5.0.0.93
+pillow==13.0.0
+pyside6==6.12.0
+debugpy==1.8.22
+
