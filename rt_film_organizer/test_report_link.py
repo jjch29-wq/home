@@ -2,7 +2,7 @@ import json
 import unittest
 import tempfile
 from pathlib import Path
-from report_link import load_reports, suggested_count, build_slots, map_photos
+from report_link import load_reports, suggested_count, build_slots, map_photos, ReportBatch
 from core import render_filename
 
 
@@ -65,3 +65,50 @@ class ReportLinkTests(unittest.TestCase):
     def test_one_two_four_shots_require_manual_sections(self):
         for count in [1, 2, 4]:
             assert not any(s['section'] for s in build_slots(report(), [count, 0]))
+
+    def make_batch(self, counts):
+        batch = ReportBatch([f'{i+1:03}.jpg' for i in range(sum(counts))])
+        for index, count in enumerate(counts):
+            batch.add({'id': str(index), 'mode': 'RT', 'report_no': f'RT-{index+1}',
+                       'items': [{'Dwg': f'LINE-{index+1}', 'Joint': 'R01', 'RT_OR': str(count)}]})
+        return batch
+
+    def test_six_reports_follow_requested_order_and_boundaries(self):
+        batch = self.make_batch([9,6,12,3,9,6])
+        batch.move(5, -1)
+        batch.generate_all()
+        self.assertEqual(len(batch.records()), 45)
+        self.assertEqual(batch.entries[0].assignments, list(range(9)))
+        self.assertEqual(batch.entries[1].assignments, list(range(9,15)))
+        self.assertEqual(batch.entries[4].report['report_no'], 'RT-6')
+        self.assertEqual(batch.records()[-1].report_no, 'RT-5')
+
+    def test_local_missing_and_count_change_do_not_shift_other_reports(self):
+        batch = self.make_batch([3,3,3]); batch.generate_all()
+        before = list(batch.entries[1].assignments)
+        batch.entries[0].assignments[1] = None
+        self.assertEqual(batch.entries[1].assignments, before)
+        batch.entries[0].counts[0] = 2; batch.entries[0].dirty = True
+        with self.assertRaises(ValueError): batch.records()
+        batch.generate(0)
+        self.assertEqual(batch.entries[1].assignments, before)
+        self.assertEqual(len(batch.records()), 8)
+
+    def test_cross_report_duplicate_photo_is_rejected(self):
+        batch = self.make_batch([3,3]); batch.generate_all()
+        batch.entries[1].assignments[0] = 0
+        with self.assertRaises(ValueError): batch.records()
+
+    def test_move_keeps_manual_assignment_and_remove_does_not_shift_others(self):
+        batch = self.make_batch([3,3,3]); batch.generate_all()
+        entry = batch.entries[0]; entry.assignments[1] = None
+        batch.move(0,1)
+        self.assertIs(batch.entries[1],entry)
+        self.assertEqual(entry.assignments,[0,None,2])
+        del batch.entries[1]
+        self.assertEqual(batch.entries[1].assignments,[6,7,8])
+        self.assertEqual(len(batch.records()),6)
+
+    def test_same_report_cannot_be_added_twice(self):
+        batch = self.make_batch([3])
+        with self.assertRaises(ValueError): batch.add(batch.entries[0].report)
