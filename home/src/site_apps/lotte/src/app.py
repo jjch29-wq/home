@@ -7351,6 +7351,7 @@ class MaterialManager:
             sys_total_tech = 0.0
             sys_total_expense_cost = 0.0
             sys_total_profit = 0.0
+            daily_method_revenue = {}
 
             import re as _re
             
@@ -7399,7 +7400,10 @@ class MaterialManager:
                 e_date = str(row.get('Date', '')).split(' ')[0]
                 e_site = str(row.get('Site', '')).strip()
                 raw_time = str(row.get('EntryTime', '')).strip()
-                e_time = raw_time[:16] if len(raw_time) > 16 else raw_time
+                # Keep the complete timestamp.  Truncating to the minute treated
+                # separate entries saved a few seconds apart as duplicates and
+                # omitted their inspection fees from the budget total.
+                e_time = raw_time
                 e_uid = f"{e_date}|{e_site}|{e_time}"
                 
                 if e_uid in processed_entry_ids:
@@ -7478,6 +7482,12 @@ class MaterialManager:
                 row_revenue = nd_labor + nd_mat + nd_overhead + nd_tech
                 if row_revenue <= 0:
                     row_revenue = net
+
+                method_key = str(row.get('검사방법', '')).strip().upper()
+                if method_key:
+                    daily_method_revenue[method_key] = (
+                        daily_method_revenue.get(method_key, 0.0) + row_revenue
+                    )
 
                 row_expense_cost = travel + meal + ot_sum + mat_cost
                 row_profit = row_revenue - row_expense_cost
@@ -7577,6 +7587,44 @@ class MaterialManager:
                         equip_dates_map[equip_name].add(date_key)
                 except Exception:
                     pass
+
+            # K1 PJT의 공식 누계기성 매출과 작업일보 검사방법별 합계의
+            # 차액을 사후원가 매출에 별도 보정한다. 작업일보는 변경하지 않는다.
+            normalized_site = str(site).upper().replace('-', '').replace(' ', '')
+            if normalized_site == 'K1PJT':
+                official_revenue = {
+                    'RT': 256632000.0,
+                    'PAUT': 36741000.0,
+                    'PT': 25913160.0,
+                    'PMI': 9581000.0,
+                    'UT': 818400.0,
+                }
+                for method, official_amount in official_revenue.items():
+                    adjustment = official_amount - daily_method_revenue.get(method, 0.0)
+                    if abs(adjustment) < 0.5:
+                        continue
+
+                    total_net_revenue += adjustment
+                    total_income += adjustment
+                    total_sum += adjustment
+                    sys_total_revenue += adjustment
+                    sys_total_profit += adjustment
+
+                    adjustment_row = {
+                        'Date': f'[{method} 보정]',
+                        'Site': site,
+                        '검사방법': method,
+                        '검사단가': f'{adjustment:,.0f}',
+                        '합계': f'{adjustment:,.0f}',
+                        '비고': f'공식 {method} 누계기성 {official_amount:,.0f}원 기준 매출 보정',
+                        '총기성액': f'{adjustment:,.0f}',
+                        '예상이윤': f'{adjustment:,.0f}',
+                    }
+                    self.budget_view_tree.insert(
+                        '', tk.END,
+                        values=tuple(adjustment_row.get(col, '') for col in self.budget_view_cols),
+                        tags=('adjustment',),
+                    )
 
             # --- 합계 행 추가 ---
             if df.shape[0] > 0:
@@ -7935,6 +7983,24 @@ class MaterialManager:
                 else:
                     widget.reset()
 
+        # 저장된 사후원가에는 예전 자체 필름 수량(5,996매)이 남아 있을 수 있다.
+        # K1 PJT는 확정 누계 RT 10,064매에서 외주 5,022매를 뺀 5,042매를
+        # 자체 촬영 재료비 기준으로 사용하며, 관련 약품 수량도 함께 보정한다.
+        normalized_site = str(site).upper().replace('-', '').replace(' ', '')
+        if normalized_site == 'K1PJT' and hasattr(self, 'actual_material_detail_widget'):
+            actual_material_data = self.actual_material_detail_widget.get_data()
+            own_film_qty = 10064.0 - (3918.0 + 651.0 + 453.0)
+            corrected_quantities = {
+                5: own_film_qty,
+                7: own_film_qty / 250.0,
+                8: own_film_qty / 250.0,
+                9: own_film_qty / 500.0,
+            }
+            for index, quantity in corrected_quantities.items():
+                if index < len(actual_material_data):
+                    actual_material_data[index]['qty'] = f'{int(quantity + 0.5)}'
+            self.actual_material_detail_widget.set_data(actual_material_data)
+
         if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
         # [STABILITY] Update KPI summary after load
         self._update_budget_kpis()
@@ -7979,6 +8045,7 @@ class MaterialManager:
             except: return 0.0
 
         total_net_revenue = 0.0 # 검사비
+        daily_method_revenue = {}
         total_travel = 0.0
         total_meal = 0.0
         lab_total = 0.0
@@ -8080,6 +8147,11 @@ class MaterialManager:
             if row_revenue <= 0:
                 row_revenue = _f(row.get('검사비', 0))
             total_net_revenue += row_revenue
+            method_key = str(row.get('검사방법', '')).strip().upper()
+            if method_key:
+                daily_method_revenue[method_key] = (
+                    daily_method_revenue.get(method_key, 0.0) + row_revenue
+                )
 
             # 외주 행은 매출과 외주비에만 반영한다. 내부 자재·경비·장비에는 반영하지 않는다.
             if not has_worker:
@@ -8090,9 +8162,11 @@ class MaterialManager:
 
             # [NEW] Identify logically unique entries (shared save event)
             # STRATEGIC FIX: Remove 'Note' from UID because split-rows often have different notes like '(차량 추가 기록)'
-            # relying only on Date + Site + EntryTime (minute level) for grouping
+            # relying only on Date + Site + the complete EntryTime for grouping
             raw_time = str(row.get('EntryTime', '')).strip()
-            e_time = raw_time[:16] if len(raw_time) > 16 else raw_time
+            # Deduplicate only rows from the exact same save event.  Entries
+            # created within the same minute are independent work records.
+            e_time = raw_time
             e_site = str(row.get('Site', '')).strip()
             
             # UID composite - date_val is already YYYY-MM-DD
@@ -8434,6 +8508,22 @@ class MaterialManager:
                                 material_usage_sums[0] += usage
                         total_mat_cost += usage * float(mat_id_cost_map.get(m_id, 0))
 
+        # K1 PJT 공식 누계기성 매출로 검사방법별 자동 보정한다. 작업일보에
+        # 누락분이 추가되면 각 차액이 자동으로 줄어 중복 반영되지 않는다.
+        normalized_site = str(site).upper().replace('-', '').replace(' ', '')
+        if normalized_site == 'K1PJT':
+            official_revenue = {
+                'RT': 256632000.0,
+                'PAUT': 36741000.0,
+                'PT': 25913160.0,
+                'PMI': 9581000.0,
+                'UT': 818400.0,
+            }
+            total_net_revenue += sum(
+                official_amount - daily_method_revenue.get(method, 0.0)
+                for method, official_amount in official_revenue.items()
+            )
+
         # 3. 폼에 입력 및 [5. 영업이익] '실행(실적)' 줄에 표시 결과 연동
         # Update Special Unit Prices if LaborCostDetailWidget is available to compute correct revenue
         ot_revenue = 0.0
@@ -8512,6 +8602,29 @@ class MaterialManager:
         if hasattr(self, 'actual_material_detail_widget'):
             current_mat_data = self.actual_material_detail_widget.get_data()
             planned_mat_data = self.material_detail_widget.get_data() if hasattr(self, 'material_detail_widget') else []
+
+            # K1 PJT의 RT 필름은 최종 누계기성 물량에서 외주 RT 물량을
+            # 제외한 자체 촬영분만 재료비로 반영한다.
+            #   최종 RT 10,064매 - 외주 5,022매 = 자체 촬영 5,042매
+            normalized_site = str(site).upper().replace('-', '').replace(' ', '')
+            if normalized_site == 'K1PJT':
+                final_rt_qty = 10064.0
+                outsource_rt_qty = 0.0
+                if hasattr(self, 'actual_expense_detail_widget'):
+                    expense_data = self.actual_expense_detail_widget.get_data()
+                    for out_row in expense_data.get('outsource', []):
+                        work = str(out_row.get('work', '')).upper().replace(' ', '')
+                        if '방사선투과' in work or 'RT' in work:
+                            outsource_rt_qty += _f(out_row.get('count', 0))
+
+                # 저장된 상세값이 없을 때도 롯데 확정 외주 물량을 적용한다.
+                if outsource_rt_qty <= 0:
+                    outsource_rt_qty = 3918.0 + 651.0 + 453.0
+
+                total_film_count = max(0.0, final_rt_qty - outsource_rt_qty)
+                if len(material_usage_sums) > 5:
+                    material_usage_sums[5] = total_film_count
+
             film_chem_qty = (total_film_count / 250.0) if total_film_count > 0 else 0.0
             anti_drop_qty = (total_film_count / 500.0) if total_film_count > 0 else 0.0
             if len(material_usage_sums) > 7:
@@ -8523,7 +8636,7 @@ class MaterialManager:
 
             for i, qty in enumerate(material_usage_sums):
                 if i < len(current_mat_data):
-                    current_mat_data[i]['qty'] = f"{qty:g}" if qty > 0 else ""
+                    current_mat_data[i]['qty'] = f"{max(1, int(qty + 0.5))}" if qty > 0 else ""
                     # [FIX] 사전예산 단가 복사
                     if i < len(planned_mat_data):
                         current_mat_data[i]['price'] = planned_mat_data[i].get('price', '')

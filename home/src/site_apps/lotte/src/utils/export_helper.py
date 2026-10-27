@@ -9,6 +9,15 @@ from openpyxl.utils import get_column_letter
 # [MULTI-EQUIP] 장비명 다중 등록 구분자 (예: "UT장비 (SN1), MT장비 (SN2)")
 EQUIP_SEPARATOR = ", "
 
+# K1 PJT 공식 누계기성(제8회 기성내역서 '26.10) 검사방법별 (최종 수량, 금액)
+K1_OFFICIAL_CUMULATIVE = {
+    'RT': (10064.0, 256632000.0),
+    'PAUT': (1986.0, 36741000.0),
+    'PT': (6170.0, 25913160.0),
+    'PMI': (670.0, 9581000.0),
+    'UT': (88.0, 818400.0),
+}
+
 
 def split_equipments(value):
     """장비명 문자열을 개별 장비 리스트로 분리.
@@ -103,7 +112,7 @@ def _write_table(ws, start_row, title, headers, data_rows, total_label=None, tot
             c.font = NORMAL_FONT
             c.border = BORDER_ALL
             if isinstance(val, (int, float)):
-                c.number_format = '#,##0' if isinstance(val, int) or val % 1 == 0 else '#,##0.0'
+                c.number_format = '#,##0'
                 c.alignment = RIGHT_ALIGN
             elif isinstance(val, str) and val.replace(',', '').replace('.', '').replace('-', '').isdigit():
                 c.number_format = '#,##0'
@@ -452,7 +461,7 @@ def _build_proof_inspection_sheet(ws, site, raw_df):
     # Set Column Widths
     col_widths = {
         'A': 6, 'B': 13, 'C': 11, 'D': 18, 'E': 14, 
-        'F': 15, 'G': 25, 'H': 10, 'I': 12, 'J': 11, 
+        'F': 15, 'G': 25, 'H': 15, 'I': 12, 'J': 11,
         'K': 11, 'L': 15, 'M': 20
     }
     for col, width in col_widths.items():
@@ -461,7 +470,7 @@ def _build_proof_inspection_sheet(ws, site, raw_df):
     # Title
     ws.merge_cells('A1:M1')
     c = ws['A1']
-    c.value = f"[{site}] 사후원가 증빙 1 - 검사 실적 및 매출 증빙 내역 (방법별 요약 및 상세)"
+    c.value = f"[{site}] 사후원가 증빙 1 - 검사 실적 및 매출 증빙 내역 (방법별 요약)"
     c.font = Font(name='맑은 고딕', size=16, bold=True)
     c.alignment = CENTER_ALIGN
     ws.row_dimensions[1].height = 28
@@ -494,6 +503,13 @@ def _build_proof_inspection_sheet(ws, site, raw_df):
         # [MULTI-EQUIP] 다중 장비는 개별로 집계
         for eq in split_equipments(row.get('장비명', '')):
             method_dict[m]['equips'].add(eq)
+
+    # K1 PJT는 건수는 실적 그대로 두고, 검사수량·검사금액은 공식 누계기성(최종) 값으로 보정한다.
+    if str(site).upper().replace('-', '').replace(' ', '') == 'K1PJT':
+        for m_key, (off_qty, off_fee) in K1_OFFICIAL_CUMULATIVE.items():
+            if m_key in method_dict:
+                method_dict[m_key]['qty'] = off_qty
+                method_dict[m_key]['fee'] = off_fee
 
     total_sum_fee = sum(v['fee'] + v['travel'] + v['meal'] for v in method_dict.values())
 
@@ -582,7 +598,7 @@ def _build_proof_inspection_sheet(ws, site, raw_df):
 
     s_totals = [
         (3, sum_tot_cnt, '#,##0'),
-        (4, sum_tot_qty, '#,##0.00' if sum_tot_qty % 1 != 0 else '#,##0'),
+        (4, sum_tot_qty, '#,##0'),
         (5, sum_tot_fee, '#,##0'),
         (6, sum_tot_trv, '#,##0'),
         (7, sum_tot_meal, '#,##0'),
@@ -606,96 +622,48 @@ def _build_proof_inspection_sheet(ws, site, raw_df):
         ws.cell(row=r, column=c_i).border = BORDER_ALL
         ws.cell(row=r, column=c_i).fill = YELLOW_FILL
 
-    # --- 2. 일자별 검사 실적 및 매출 증빙 상세 내역 (총 N건) ---
-    r += 3
-    headers = ["No", "검사일자", "검사방법", "검사품명", "적용코드", "장비명", "투입작업자", "수량", "단가", "출장비", "일식", "검사비", "비고"]
-    ws.cell(row=r, column=1, value=f"2) 일자별 검사 실적 및 매출 증빙 상세 내역 (총 {len(raw_df):,}건)").font = HEADER_FONT
-    ws.cell(row=r, column=1).fill = BLUE_FILL
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=len(headers))
-    for c_i in range(1, len(headers) + 1):
-        ws.cell(row=r, column=c_i).border = BORDER_ALL
 
-    r += 1
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=r, column=col, value=h)
-        cell.font = BOLD_FONT
-        cell.fill = SUB_FILL
-        cell.border = BORDER_ALL
-        cell.alignment = CENTER_ALIGN
 
-    total_qty = 0.0
-    total_travel = 0.0
-    total_meal = 0.0
-    total_fee = 0.0
 
-    r += 1
-    for idx, row in raw_df.reset_index(drop=True).iterrows():
-        date_str = str(row.get('Date', ''))[:10]
-        method = str(row.get('검사방법', '')).strip()
-        item = str(row.get('검사품명', '')).strip()
-        code = str(row.get('적용코드', '')).strip()
-        if code.lower() in ('nan', 'none', ''):
-            code = "-"
-        equip = str(row.get('장비명', '')).strip()
-        if equip.lower() in ('nan', 'none', ''):
-            equip = "-"
-        
-        workers = []
-        for i in range(1, 11):
-            col_name = 'User' if i == 1 else f'User{i}'
-            w = str(row.get(col_name, '')).strip()
-            if w and w not in ('nan', '0.0', 'None', ''):
-                workers.append(w)
-        worker_str = ', '.join(workers) if workers else "-"
-        
-        qty = _to_f(row.get('검사량', 0) or row.get('수량', 0))
-        price = _to_f(row.get('단가', 0))
-        travel = _to_f(row.get('출장비', 0))
-        meal = _to_f(row.get('일식', 0))
-        fee = _to_f(row.get('검사비', 0))
-        note = str(row.get('Note', '')).strip() if pd.notna(row.get('Note')) else ""
-        if note.lower() in ('nan', 'none'):
-            note = ""
+# 사후원가 보고서(app.py)와 동일한 OT 분류 함수를 재사용한다.
+# (연장 18~22시 / 야간 22시~ / 휴일: 주말, 금요일 자정 이후)
+try:
+    from site_apps.lotte.src.models.worker_model import (
+        _parse_ot_hours_impl, _calculate_split_ot_hours_impl, _calculate_ot_from_worktime_impl,
+    )
+    from site_apps.lotte.src.utils.helpers import MARKER_PATTERN as _MARKER_PATTERN
+except Exception:  # pragma: no cover - 패키지 경로가 다른 환경 대비
+    _parse_ot_hours_impl = _calculate_split_ot_hours_impl = _calculate_ot_from_worktime_impl = None
+    _MARKER_PATTERN = re.compile(r'\[.*?\]')
 
-        total_qty += qty
-        total_travel += travel
-        total_meal += meal
-        total_fee += fee
+DEFAULT_OT_RATES = {'day': 4000.0, 'night': 5000.0, 'holiday': 7500.0}
 
-        row_vals = [idx + 1, date_str, method, item, code, equip, worker_str, qty, price, travel, meal, fee, note]
-        for col_idx, val in enumerate(row_vals, 1):
-            cell = ws.cell(row=r, column=col_idx, value=val)
-            cell.font = NORMAL_FONT
-            cell.border = BORDER_ALL
-            if col_idx in (8, 9, 10, 11, 12):
-                cell.number_format = '#,##0'
-                cell.alignment = RIGHT_ALIGN
-            elif col_idx in (1, 2, 3, 5):
-                cell.alignment = CENTER_ALIGN
-            else:
-                cell.alignment = LEFT_ALIGN
-        r += 1
 
-    # Total Row for Details
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=7)
-    tot_lbl = ws.cell(row=r, column=1, value=f"검사실적 상세 전체 합계 (총 {len(raw_df):,}건)")
-    tot_lbl.font = BOLD_FONT
-    tot_lbl.fill = YELLOW_FILL
-    tot_lbl.border = BORDER_ALL
-    tot_lbl.alignment = CENTER_ALIGN
-    for c_i in range(2, 8):
-        ws.cell(row=r, column=c_i).border = BORDER_ALL
-        ws.cell(row=r, column=c_i).fill = YELLOW_FILL
+class _OtCalc:
+    """worker_model의 *_impl 함수가 요구하는 self 대체 객체."""
+    def _parse_ot_hours(self, value):
+        return _parse_ot_hours_impl(self, value)
 
-    totals_map = {8: total_qty, 9: "", 10: total_travel, 11: total_meal, 12: total_fee, 13: ""}
-    for c_i, t_val in totals_map.items():
-        cell = ws.cell(row=r, column=c_i, value=t_val)
-        cell.font = BOLD_FONT
-        cell.fill = YELLOW_FILL
-        cell.border = BORDER_ALL
-        if isinstance(t_val, (int, float)):
-            cell.number_format = '#,##0'
-            cell.alignment = RIGHT_ALIGN
+
+def _split_ot_hours_like_report(ot_raw, wt_raw, date_val):
+    """보고서와 동일하게 (연장, 야간, 휴일) 시간을 반환한다. 계산 불가 시 None."""
+    if _calculate_split_ot_hours_impl is None:
+        return None
+    calc = _OtCalc()
+    try:
+        dt = pd.to_datetime(date_val)
+    except Exception:
+        dt = date_val
+    ot_compact = ot_raw.replace(',', '')
+    if ot_compact.isdigit() and int(ot_compact) > 100:
+        ot_hours, _ = _calculate_ot_from_worktime_impl(calc, wt_raw, dt)
+        split_source = f"{ot_hours}시간 ({ot_raw}원)"
+        clean_wt = _MARKER_PATTERN.sub('', wt_raw).strip()
+        if '~' in clean_wt:
+            split_source = f"{clean_wt.split('~')[0]}~{ot_hours}시간 ({ot_raw}원)"
+    else:
+        split_source = ot_raw
+    return _calculate_split_ot_hours_impl(calc, split_source, dt)
 
 
 def _calc_ot_hours_val(time_str):
@@ -740,10 +708,10 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
 
     # Column widths (18 columns for Person x Month matrix)
     col_widths = {
-        'A': 6, 'B': 12, 'C': 11,
-        'D': 12, 'E': 14, 'F': 16, 'G': 10, 'H': 10, 'I': 10,
+        'A': 6, 'B': 12, 'C': 12,
+        'D': 18, 'E': 18, 'F': 18, 'G': 13, 'H': 18, 'I': 12,
         'J': 10, 'K': 10, 'L': 10, 'M': 10, 'N': 10, 'O': 10,
-        'P': 13, 'Q': 16, 'R': 12
+        'P': 13, 'Q': 18, 'R': 12
     }
     for col, width in col_widths.items():
         ws.column_dimensions[col].width = width
@@ -774,6 +742,11 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
     worker_dates = {}
     ot_records = []
     processed_ot = set()
+    ot_rates = dict(DEFAULT_OT_RATES)
+    for _k, _t in (('day', '연장근무'), ('night', '야간근무'), ('holiday', '휴일근무')):
+        _p = _to_f((actual_labor_data or {}).get(_t, {}).get('unit_price', 0))
+        if _p > 0:
+            ot_rates[_k] = _p
 
     for _, row in raw_df.iterrows():
         d_str = str(row.get('Date', ''))[:10]
@@ -798,15 +771,21 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
                 worker_dates[key] = set()
             worker_dates[key].add(d_str)
 
-            # OT
+            # OT (사후원가 보고서와 동일 기준: 작업자·일자당 최초 1건만, 시간×단가로 산정)
             ot_raw = str(row.get(f'OT{suffix}', '')).strip()
             wt_raw = str(row.get(f'WorkTime{suffix}', '')).strip()
-            if ot_raw and ot_raw not in ('nan', '0', '0.0', 'none', 'null', ''):
-                ot_key = (d_str, w_name, ot_raw)
+            if ot_raw.casefold() not in ('', '0', '0.0', 'nan', 'none', 'null'):
+                ot_key = (d_str, w_name.strip().casefold())
                 if ot_key not in processed_ot:
                     processed_ot.add(ot_key)
-                    ot_amt = _to_f(ot_raw)
-                    ot_records.append((d_str, rank, w_name, wt_raw, ot_raw, ot_amt))
+                    split = _split_ot_hours_like_report(ot_raw, wt_raw, row.get('Date'))
+                    if split is None:
+                        split = (0.0, 0.0, 0.0)
+                    h_day, h_night, h_hol = split
+                    ot_amt = (h_day * ot_rates['day'] + h_night * ot_rates['night']
+                              + h_hol * ot_rates['holiday'])
+                    ot_records.append((d_str, rank, w_name, wt_raw, ot_raw, ot_amt,
+                                       h_day, h_night, h_hol))
 
     # Table 1: Regular Work Days
     r = 4
@@ -895,126 +874,14 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
 
     r += 3
 
-    # Table 2: 인월별 특별근무(OT) 총 투입시간 실적 집계 (Person x Month Overtime Matrix)
-    sorted_months = sorted(list(set(x[0][:7] for x in ot_records)))
-    headers_matrix = ["No", "직급", "작업자명"] + [f"{m[2:4]}.{m[5:7]}월" for m in sorted_months] + ["총 시간(h)", "지급 OT총액(원)", "비중(%)"]
-
-    ws.cell(row=r, column=1, value="2) 인월별 특별근무(OT) 총 투입시간 실적 집계 (Person × Month Overtime Matrix)").font = HEADER_FONT
-    ws.cell(row=r, column=1).fill = ORANGE_FILL
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=len(headers_matrix))
-    for c_i in range(1, len(headers_matrix) + 1):
-        ws.cell(row=r, column=c_i).border = BORDER_ALL
-
-    r += 1
-    for c_i, h in enumerate(headers_matrix, 1):
-        cell = ws.cell(row=r, column=c_i, value=h)
-        cell.font = BOLD_FONT
-        cell.fill = SUB_FILL
-        cell.border = BORDER_ALL
-        cell.alignment = CENTER_ALIGN
-
-    # Group OT by worker and month
-    ot_matrix = {}
-    for d_str, rank, w_name, wt_str, ot_str, ot_amt in ot_records:
-        m_str = d_str[:7]
-        h = _calc_ot_hours_val(wt_str)
-        key = (rank, w_name)
-        if key not in ot_matrix:
-            ot_matrix[key] = {'monthly_hours': {}, 'total_hours': 0.0, 'total_amt': 0.0, 'count': 0}
-        ot_matrix[key]['monthly_hours'][m_str] = ot_matrix[key]['monthly_hours'].get(m_str, 0.0) + h
-        ot_matrix[key]['total_hours'] += h
-        ot_matrix[key]['total_amt'] += ot_amt
-        ot_matrix[key]['count'] += 1
-
-    total_all_ot_amt = sum(v['total_amt'] for v in ot_matrix.values())
-    total_all_ot_hours = sum(v['total_hours'] for v in ot_matrix.values())
-
-    sorted_matrix_workers = sorted(ot_matrix.items(), key=lambda x: x[1]['total_hours'], reverse=True)
-
-    r += 1
-    monthly_totals = {m: 0.0 for m in sorted_months}
-
-    for idx, ((rank, w_name), info) in enumerate(sorted_matrix_workers, 1):
-        row_vals = [idx, rank, w_name]
-        for m in sorted_months:
-            m_h = info['monthly_hours'].get(m, 0.0)
-            monthly_totals[m] += m_h
-            row_vals.append(round(m_h, 1) if m_h > 0 else "-")
-        
-        share = (info['total_amt'] / total_all_ot_amt * 100) if total_all_ot_amt > 0 else 0.0
-        row_vals.append(round(info['total_hours'], 1))
-        row_vals.append(info['total_amt'])
-        row_vals.append(f"{share:.1f}%")
-
-        for c_i, val in enumerate(row_vals, 1):
-            cell = ws.cell(row=r, column=c_i, value=val)
-            cell.font = NORMAL_FONT
-            cell.border = BORDER_ALL
-            if c_i in (1, 2):
-                cell.alignment = CENTER_ALIGN
-            elif c_i == 3:
-                cell.alignment = LEFT_ALIGN
-            elif c_i == len(row_vals):
-                cell.alignment = CENTER_ALIGN
-            else:
-                if isinstance(val, (int, float)):
-                    cell.number_format = '#,##0.0' if c_i <= len(row_vals)-2 and c_i != len(row_vals)-1 else '#,##0'
-                    cell.alignment = RIGHT_ALIGN
-                else:
-                    cell.alignment = CENTER_ALIGN
-        r += 1
-
-    # Total Row for Matrix
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
-    c_tot_mat = ws.cell(row=r, column=1, value=f"월별 총 시간 합계 (총 {len(sorted_matrix_workers)}명)")
-    c_tot_mat.font = BOLD_FONT
-    c_tot_mat.fill = YELLOW_FILL
-    c_tot_mat.border = BORDER_ALL
-    c_tot_mat.alignment = CENTER_ALIGN
-    for c_i in range(2, 4):
-        ws.cell(row=r, column=c_i).border = BORDER_ALL
-        ws.cell(row=r, column=c_i).fill = YELLOW_FILL
-
-    col_idx = 4
-    for m in sorted_months:
-        cell = ws.cell(row=r, column=col_idx, value=monthly_totals[m])
-        cell.font = BOLD_FONT
-        cell.fill = YELLOW_FILL
-        cell.border = BORDER_ALL
-        cell.number_format = '#,##0.0'
-        cell.alignment = RIGHT_ALIGN
-        col_idx += 1
-
-    # Total Hours
-    cell_tot_h = ws.cell(row=r, column=col_idx, value=total_all_ot_hours)
-    cell_tot_h.font = BOLD_FONT
-    cell_tot_h.fill = YELLOW_FILL
-    cell_tot_h.border = BORDER_ALL
-    cell_tot_h.number_format = '#,##0.0'
-    cell_tot_h.alignment = RIGHT_ALIGN
-    col_idx += 1
-
-    # Total Amt
-    cell_tot_a = ws.cell(row=r, column=col_idx, value=total_all_ot_amt)
-    cell_tot_a.font = BOLD_FONT
-    cell_tot_a.fill = YELLOW_FILL
-    cell_tot_a.border = BORDER_ALL
-    cell_tot_a.number_format = '#,##0'
-    cell_tot_a.alignment = RIGHT_ALIGN
-    col_idx += 1
-
-    # 100%
-    cell_tot_p = ws.cell(row=r, column=col_idx, value="100.0%")
-    cell_tot_p.font = BOLD_FONT
-    cell_tot_p.fill = YELLOW_FILL
-    cell_tot_p.border = BORDER_ALL
-    cell_tot_p.alignment = CENTER_ALIGN
-
-    r += 3
+    # 인월별 매트릭스(구 2번 표)는 요약 성격에 맞지 않아 출력하지 않는다.
+    # 합계/비중 계산에 필요한 값만 유지한다.
+    total_all_ot_amt = sum(rec[5] for rec in ot_records)
+    total_all_ot_hours = sum(rec[6] + rec[7] + rec[8] for rec in ot_records)
 
     # Table 3: Worker Summary by OT Work Type (Person x Work Type Matrix)
     headers_type_summary = ["No", "직급", "작업자명", "야간근무(시간)", "주간연장(시간)", "휴일근무(시간)", "총 시간(h)", "지급 OT총액(원)", "비중(%)"]
-    ws.cell(row=r, column=1, value="3) 작업자별 특별근무(야간/주간/휴일) 시간 및 금액 집계 요약 (Person × OT Type Matrix)").font = HEADER_FONT
+    ws.cell(row=r, column=1, value="2) 작업자별 특별근무(야간/주간/휴일) 시간 및 금액 집계 요약 (Person × OT Type Matrix)").font = HEADER_FONT
     ws.cell(row=r, column=1).fill = ORANGE_FILL
     ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=len(headers_type_summary))
     for c_i in range(1, len(headers_type_summary) + 1):
@@ -1030,7 +897,7 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
 
     # Aggregate by worker and work type
     worker_ot_summary = {}
-    for d_str, rank, w_name, wt_str, ot_str, ot_amt in ot_records:
+    for d_str, rank, w_name, wt_str, ot_str, ot_amt, h_day, h_night, h_hol in ot_records:
         key = (rank, w_name)
         if key not in worker_ot_summary:
             worker_ot_summary[key] = {
@@ -1039,22 +906,15 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
                 'holiday_hours': 0.0, 'holiday_amt': 0.0,
                 'total_hours': 0.0, 'total_amt': 0.0
             }
-        
-        h = _calc_ot_hours_val(wt_str)
-        fmt = _format_ot_hours(wt_str)
-        
-        worker_ot_summary[key]['total_hours'] += h
-        worker_ot_summary[key]['total_amt'] += ot_amt
-        
-        if '휴일' in fmt:
-            worker_ot_summary[key]['holiday_hours'] += h
-            worker_ot_summary[key]['holiday_amt'] += ot_amt
-        elif '주간' in fmt:
-            worker_ot_summary[key]['day_hours'] += h
-            worker_ot_summary[key]['day_amt'] += ot_amt
-        else:
-            worker_ot_summary[key]['night_hours'] += h
-            worker_ot_summary[key]['night_amt'] += ot_amt
+        info_ws = worker_ot_summary[key]
+        info_ws['night_hours'] += h_night
+        info_ws['night_amt'] += h_night * ot_rates['night']
+        info_ws['day_hours'] += h_day
+        info_ws['day_amt'] += h_day * ot_rates['day']
+        info_ws['holiday_hours'] += h_hol
+        info_ws['holiday_amt'] += h_hol * ot_rates['holiday']
+        info_ws['total_hours'] += h_day + h_night + h_hol
+        info_ws['total_amt'] += ot_amt
 
     sorted_worker_ot = sorted(worker_ot_summary.items(), key=lambda x: x[1]['total_hours'], reverse=True)
 
@@ -1082,7 +942,7 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
             if c_i in (1, 2):
                 cell.alignment = CENTER_ALIGN
             elif c_i == 3:
-                cell.alignment = LEFT_ALIGN
+                cell.alignment = CENTER_ALIGN
             elif c_i in (4, 5, 6, 7):
                 if isinstance(val, (int, float)):
                     cell.number_format = '#,##0.0'
@@ -1137,118 +997,6 @@ def _build_proof_labor_sheet(ws, site, raw_df, actual_labor_data):
     c_tp.font = BOLD_FONT; c_tp.fill = YELLOW_FILL; c_tp.border = BORDER_ALL
     c_tp.alignment = CENTER_ALIGN
 
-    r += 3
-
-    # Table 4: OT Details Categorized by Work Type
-    headers_ot = ["No", "근무일자", "직급", "작업자명", "근무시간/형태", "지급 OT금액(원)"]
-    ws.cell(row=r, column=1, value=f"4) 특별근무 발생 일자별 상세 내역 (근무형태별 분류 - 총 {len(ot_records):,}건)").font = HEADER_FONT
-    ws.cell(row=r, column=1).fill = ORANGE_FILL
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=len(headers_ot))
-    for c_i in range(1, len(headers_ot)+1): ws.cell(row=r, column=c_i).border = BORDER_ALL
-    r += 2
-
-    # Group records by work type
-    ot_by_type = {'야간근무': [], '주간연장': [], '휴일근무': []}
-    for item in ot_records:
-        wt_val = item[3]
-        fmt_wt = _format_ot_hours(wt_val)
-        if '휴일' in fmt_wt:
-            ot_by_type['휴일근무'].append(item)
-        elif '주간' in fmt_wt:
-            ot_by_type['주간연장'].append(item)
-        else:
-            ot_by_type['야간근무'].append(item)
-
-    type_configs = [
-        ("4-1) 야간근무 상세 내역", "야간근무", "야간근무 소계", BLUE_FILL),
-        ("4-2) 주간연장근무 상세 내역", "주간연장", "주간연장근무 소계", GREEN_FILL),
-        ("4-3) 휴일근무 상세 내역", "휴일근무", "휴일근무 소계", ORANGE_FILL)
-    ]
-
-    grand_total_ot_amt = 0.0
-    grand_total_ot_cnt = 0
-
-    for sub_title, t_key, sub_label, fill_color in type_configs:
-        recs = ot_by_type.get(t_key, [])
-        if not recs:
-            continue
-
-        t_sub_amt = sum(x[5] for x in recs)
-        grand_total_ot_amt += t_sub_amt
-        grand_total_ot_cnt += len(recs)
-
-        # Sub-table title
-        ws.cell(row=r, column=1, value=f"{sub_title} (총 {len(recs):,}건 | 소계: {t_sub_amt:,.0f}원)").font = HEADER_FONT
-        ws.cell(row=r, column=1).fill = fill_color
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=len(headers_ot))
-        for c_i in range(1, len(headers_ot) + 1):
-            ws.cell(row=r, column=c_i).border = BORDER_ALL
-        r += 1
-
-        # Table headers
-        for c_i, h in enumerate(headers_ot, 1):
-            cell = ws.cell(row=r, column=c_i, value=h)
-            cell.font = BOLD_FONT
-            cell.fill = SUB_FILL
-            cell.border = BORDER_ALL
-            cell.alignment = CENTER_ALIGN
-        r += 1
-
-        # Table data rows sorted by date descending
-        recs_sorted = sorted(recs, key=lambda x: x[0], reverse=True)
-        for idx, (d_str, rank, w_name, wt_str, ot_str, ot_amt) in enumerate(recs_sorted, 1):
-            formatted_wt = _format_ot_hours(wt_str)
-            row_vals = [idx, d_str, rank, w_name, formatted_wt, ot_amt]
-            for c_i, val in enumerate(row_vals, 1):
-                cell = ws.cell(row=r, column=c_i, value=val)
-                cell.font = NORMAL_FONT
-                cell.border = BORDER_ALL
-                if c_i == 6:
-                    cell.number_format = '#,##0'
-                    cell.alignment = RIGHT_ALIGN
-                elif c_i in (1, 2, 3, 5):
-                    cell.alignment = CENTER_ALIGN
-                else:
-                    cell.alignment = LEFT_ALIGN
-            r += 1
-
-        # Subtotal row for this work type
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
-        c_sub_tot = ws.cell(row=r, column=1, value=f"{sub_label} (총 {len(recs):,}건)")
-        c_sub_tot.font = BOLD_FONT
-        c_sub_tot.fill = YELLOW_FILL
-        c_sub_tot.border = BORDER_ALL
-        c_sub_tot.alignment = CENTER_ALIGN
-        for c_i in range(2, 6):
-            ws.cell(row=r, column=c_i).border = BORDER_ALL
-            ws.cell(row=r, column=c_i).fill = YELLOW_FILL
-
-        cell_sub_amt = ws.cell(row=r, column=6, value=t_sub_amt)
-        cell_sub_amt.font = BOLD_FONT
-        cell_sub_amt.fill = YELLOW_FILL
-        cell_sub_amt.border = BORDER_ALL
-        cell_sub_amt.number_format = '#,##0'
-        cell_sub_amt.alignment = RIGHT_ALIGN
-
-        r += 2
-
-    # Grand Total Row for All OT
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
-    c_grand = ws.cell(row=r, column=1, value=f"특별근무(OT) 상세 전체 합계 (총 {grand_total_ot_cnt:,}건)")
-    c_grand.font = BOLD_FONT
-    c_grand.fill = YELLOW_FILL
-    c_grand.border = BORDER_ALL
-    c_grand.alignment = CENTER_ALIGN
-    for c_i in range(2, 6):
-        ws.cell(row=r, column=c_i).border = BORDER_ALL
-        ws.cell(row=r, column=c_i).fill = YELLOW_FILL
-
-    cell_grand_amt = ws.cell(row=r, column=6, value=grand_total_ot_amt)
-    cell_grand_amt.font = BOLD_FONT
-    cell_grand_amt.fill = YELLOW_FILL
-    cell_grand_amt.border = BORDER_ALL
-    cell_grand_amt.number_format = '#,##0'
-    cell_grand_amt.alignment = RIGHT_ALIGN
 
 
 def _build_proof_materials_and_expenses_sheet(ws, site, raw_df, actual_material_data, actual_expense_data):
@@ -1259,7 +1007,7 @@ def _build_proof_materials_and_expenses_sheet(ws, site, raw_df, actual_material_
     ws.page_setup.orientation = 'landscape'
     ws.page_setup.paperSize = 9
 
-    col_widths = {'A': 6, 'B': 18, 'C': 16, 'D': 10, 'E': 14, 'F': 14, 'G': 18, 'H': 25}
+    col_widths = {'A': 6, 'B': 24, 'C': 18, 'D': 18, 'E': 24, 'F': 28, 'G': 18, 'H': 25}
     for col, width in col_widths.items():
         ws.column_dimensions[col].width = width
 
@@ -1350,7 +1098,7 @@ def _build_proof_materials_and_expenses_sheet(ws, site, raw_df, actual_material_
     r += 3
 
     # --- 2. Vehicles Table ---
-    headers_veh = ["No", "차량번호", "운행기록건수(건)", "고유운행일수(일)", "최근기록 주행거리(km)", "운행기간", "비고"]
+    headers_veh = ["No", "차량번호", "운행기록건수(건)", "고유운행일수(일)", "누계 주행거리(km)", "운행기간", "비고"]
     ws.cell(row=r, column=1, value="2) 차량 운행 일지 실적 집계").font = HEADER_FONT
     ws.cell(row=r, column=1).fill = GREEN_FILL
     ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=len(headers_veh))
@@ -1385,12 +1133,14 @@ def _build_proof_materials_and_expenses_sheet(ws, site, raw_df, actual_material_
 
     r += 1
     tot_veh_days = 0
+    tot_veh_km = 0.0
     for idx, (v_no, info) in enumerate(sorted(veh_dict.items(), key=lambda x: -len(x[1]['dates'])), 1):
         u_days = len(info['dates'])
         tot_veh_days += u_days
         dates_s = sorted(list(info['dates']))
         period_str = f"{dates_s[0]} ~ {dates_s[-1]}" if dates_s else ""
-        max_km = f"{max(info['kms']):,.0f}" if info['kms'] else "-"
+        max_km = sum(info['kms']) if info['kms'] else "-"
+        tot_veh_km += sum(info['kms'])
 
         car_type = "스타렉스" if "스타렉스" in v_no else ("탑차" if "탑차" in v_no else "현장차량")
 
@@ -1399,25 +1149,31 @@ def _build_proof_materials_and_expenses_sheet(ws, site, raw_df, actual_material_
             cell = ws.cell(row=r, column=c_i, value=val)
             cell.font = NORMAL_FONT
             cell.border = BORDER_ALL
-            if c_i in (3, 4):
+            if c_i in (3, 4, 5):
                 cell.number_format = '#,##0'
-                cell.alignment = RIGHT_ALIGN
-            elif c_i in (1, 6, 7):
+                cell.alignment = RIGHT_ALIGN if isinstance(val, (int, float)) else CENTER_ALIGN
+            elif c_i in (1, 2, 6, 7):
                 cell.alignment = CENTER_ALIGN
             else:
                 cell.alignment = LEFT_ALIGN
         r += 1
 
     # Total Row for Vehicles
-    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
     c_totv = ws.cell(row=r, column=1, value=f"차량 운행 총계 (총 {len(veh_dict)}대)")
     c_totv.font = BOLD_FONT
     c_totv.fill = YELLOW_FILL
     c_totv.border = BORDER_ALL
     c_totv.alignment = CENTER_ALIGN
-    for c_i in range(2, 4):
-        ws.cell(row=r, column=c_i).border = BORDER_ALL
-        ws.cell(row=r, column=c_i).fill = YELLOW_FILL
+    ws.cell(row=r, column=2).border = BORDER_ALL
+    ws.cell(row=r, column=2).fill = YELLOW_FILL
+
+    cell_tot_vcnt = ws.cell(row=r, column=3, value=sum(i['count'] for i in veh_dict.values()))
+    cell_tot_vcnt.font = BOLD_FONT
+    cell_tot_vcnt.fill = YELLOW_FILL
+    cell_tot_vcnt.border = BORDER_ALL
+    cell_tot_vcnt.number_format = '#,##0'
+    cell_tot_vcnt.alignment = RIGHT_ALIGN
 
     cell_tot_vdays = ws.cell(row=r, column=4, value=tot_veh_days)
     cell_tot_vdays.font = BOLD_FONT
@@ -1429,6 +1185,10 @@ def _build_proof_materials_and_expenses_sheet(ws, site, raw_df, actual_material_
     for c_i in range(5, 8):
         ws.cell(row=r, column=c_i).border = BORDER_ALL
         ws.cell(row=r, column=c_i).fill = YELLOW_FILL
+    cell_tot_vkm = ws.cell(row=r, column=5, value=tot_veh_km)
+    cell_tot_vkm.font = BOLD_FONT
+    cell_tot_vkm.number_format = '#,##0'
+    cell_tot_vkm.alignment = RIGHT_ALIGN
 
     r += 3
 
