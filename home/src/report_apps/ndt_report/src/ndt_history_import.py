@@ -40,8 +40,19 @@ def history_path(site, source_dir=None):
             root = Path(data_dir)
             if not root.is_absolute():
                 root = site_dir / root
+            target = root / filename
+            # Google Drive Desktop can mount the same My Drive folder under a
+            # different drive letter on each PC. Keep the configured relative
+            # path, but discover an available drive when that mount is absent.
+            root_text = str(root)
+            if not target.is_file() and re.match(r'^[A-Za-z]:[\\/]', root_text):
+                relative_drive_path = root_text[2:]
+                for drive_letter in 'CDEFGHIJKLMNOPQRSTUVWXYZ':
+                    alternate = Path(f'{drive_letter}:{relative_drive_path}') / filename
+                    if alternate.is_file():
+                        return alternate
             # An unavailable configured source must not silently show stale data.
-            return root / filename
+            return target
     return site_dir / filename
 
 
