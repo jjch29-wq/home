@@ -46,7 +46,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}\\rt_film_organizer\\desktop_app.py",
-            "python": "${workspaceFolder}\\.venv-rt-film\\Scripts\\python.exe",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
             "cwd": "${workspaceFolder}\\rt_film_organizer",
             "console": "integratedTerminal",
             "justMyCode": true,

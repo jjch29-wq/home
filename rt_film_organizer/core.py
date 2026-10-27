@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 import shutil
 from collections import defaultdict
@@ -28,6 +29,11 @@ class FilmRecord:
     output_name: str = ""
     confidence: float = 0.0
     status: str = "대기"
+    report_no: str = ""
+    report_item: str = ""
+    size: str = ""
+    exam_date: str = ""
+    crop_rect: tuple[int, int, int, int] | None = None
 
 
 def imread(path: str | Path) -> np.ndarray:
@@ -266,6 +272,9 @@ def render_filename(template: str, record: FilmRecord) -> str:
         "section": safe_component(record.section, "구간미확인"),
         "seq": str(record.sequence),
         "original": safe_component(Path(record.source).stem, "IMAGE"),
+        "report": safe_component(record.report_no, "보고서미확인"),
+        "size": safe_component(record.size, "구경미확인"),
+        "date": safe_component(record.exam_date, "날짜미확인"),
     }
     name = template
     for key, value in values.items():
@@ -385,19 +394,58 @@ def export_records(
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
-    for record in records:
-        image = imread(record.source)
-        cropped = crop_image(image, rect)
-        record.output_name = render_filename(template, record)
-        destination = unique_path(output / record.output_name)
-        imwrite_jpg(destination, cropped, jpeg_quality)
-        written.append(destination)
-
-    log_path = output / "영상화_작업기록.csv"
-    with log_path.open("w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(asdict(records[0]).keys()) if records else [])
+    log_path = unique_path(output / "영상화_작업기록.csv")
+    with log_path.open("x", newline="", encoding="utf-8-sig") as handle:
+        writer = csv.DictWriter(handle, fieldnames=[*asdict(records[0]).keys(), 'applied_crop'] if records else [])
         if records:
             writer.writeheader()
-            writer.writerows(asdict(record) for record in records)
+        for record in records:
+            image = imread(record.source)
+            applied_crop = clamp_rect(record.crop_rect or rect, image.shape[1], image.shape[0])
+            cropped = crop_image(image, applied_crop)
+            line_folder = output / safe_component(record.line_no, "라인미확인")
+            line_folder.mkdir(parents=True, exist_ok=True)
+            destination = unique_path(line_folder / render_filename(template, record))
+            imwrite_jpg(destination, cropped, jpeg_quality)
+            record.output_name = destination.relative_to(output).as_posix()
+            written.append(destination)
+            writer.writerow(dict(asdict(record), applied_crop=applied_crop))
+            handle.flush()
     return written
+
+
+def save_project(path, records, **settings):
+    data = dict(version=1, records=[asdict(r) for r in records], **settings)
+    destination = Path(path)
+    temporary = destination.with_suffix(destination.suffix + '.tmp')
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+    temporary.replace(destination)
+
+
+def load_project(path):
+    data = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    if not isinstance(data, dict) or data.get('version') != 1 or not isinstance(data.get('records'), list):
+        raise ValueError('지원하지 않는 작업 파일입니다.')
+    def rectangle(value):
+        if value is None: return None
+        if (not isinstance(value, (list, tuple)) or len(value) != 4
+                or any(type(v) is not int for v in value)
+                or min(value[:2]) < 0 or min(value[2:]) <= 0):
+            raise ValueError('자르기 좌표가 올바르지 않습니다.')
+        return tuple(value)
+    records = []
+    for row in data['records']:
+        record = FilmRecord(**row)
+        record.crop_rect = rectangle(record.crop_rect)
+        if not Path(record.source).is_file():
+            raise ValueError(f'원본 사진을 찾을 수 없습니다: {record.source}')
+        records.append(record)
+    data['records'] = records
+    data['common_rect'] = rectangle(data.get('common_rect'))
+    data['initial_rect'] = rectangle(data.get('initial_rect'))
+    sources = data.get('source_photos', [r.source for r in records])
+    if not isinstance(sources, list) or any(not isinstance(p, str) or not Path(p).is_file() for p in sources):
+        raise ValueError('원본 사진 목록의 경로를 확인하세요.')
+    data['source_photos'] = sources
+    return data
 
