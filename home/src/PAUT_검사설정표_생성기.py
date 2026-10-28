@@ -135,13 +135,85 @@ INSTRUMENT_FIELDS = [
     ("filters_smoothing", "Filters and smoothing / averaging"),
     ("prf", "Pulse repetition frequency (Hz/kHz), Auto/Manual"),
     ("maximum_range", "Maximum range setting: start, range, unit and basis"),
-    ("digital_gain", "Use of digital gain: status, value and application stage"),
+    ("digital_gain", "Receiver gain and amplification method"),
 ]
+
+INSTRUMENT_UI_LABELS = {
+    "instrument_identification": "장비 / 버전 / 설정 ID",
+    "net_digitizing": "디지타이징 주파수 / 포인트 / 압축",
+    "dynamic_range": "장비 다이내믹 레인지",
+    "pulser_voltage": "펄서 전압 (V)",
+    "pulse_type_width": "펄스 형식 / 폭 (ns)",
+    "filters_smoothing": "필터 / 스무딩 / 평균화",
+    "prf": "펄스 반복 주파수 (PRF)",
+    "maximum_range": "시작점 / 최대 범위",
+    "digital_gain": "Receiver gain / 증폭 방식",
+}
+
+INSTRUMENT_UI_NOTES = {
+    "instrument_identification": "실제 장비의 모델, 채널 구성, S/N, MXU 버전과 설정 ID를 입력하세요.",
+    "net_digitizing": "참고(PA-2 GR-2, t=6.40 mm): Net 25 MHz / Effective 100 MHz / 604 points / Compression 4",
+    "dynamic_range": "OmniScan X3 공식 ISO 사양: 76 dB. 실제 Receiver gain과는 다른 장비 성능값입니다.",
+    "pulser_voltage": "참고(PA-2 GR-2): 80 Vpp — 현재 설정에서 확인 필요",
+    "pulse_type_width": "참고(PA-2 GR-2): Width 100 ns / Pulse type 미기재",
+    "filters_smoothing": "참고(PA-2 GR-2): Filter None / Video Filter On / Averaging 1",
+    "prf": "근거 PDF의 Acquisition rate 120 Hz를 PRF로 단정할 수 없습니다.",
+    "maximum_range": "참고(t=6.40 mm): Start 0 mm / Sound path 39.35 mm / True depth 30.14 mm",
+    "digital_gain": "사진의 실제 Gain은 20.0 dB. 공식 사양상 아날로그·디지털 결합 증폭이며 별도 Digital gain 설정은 없습니다.",
+}
+
+THICKNESS_PRESETS = {
+    15.87: {
+        "setup_id": "SL15.87_I15.oset", "probe_model": "5L64-A2", "frequency_mhz": "5.0",
+        "net_digitizing": "Net 25 MHz / Effective 100 MHz / 1448 points / Compression 4",
+        "filters_smoothing": "BP 5.25 MHz / Rectifier FW / Video Filter Off / Averaging 1 / Reject 0%",
+        "prf": "Acquisition rate 120.0 Hz / PRF not confirmed",
+        "maximum_range": "Start 0.00 mm / True Depth Range 59.05 mm / Velocity 3240.0 m/s",
+    },
+    22.23: {
+        "setup_id": "SL22.23_I30.oset", "probe_model": "5L64-A2", "frequency_mhz": "5.0",
+        "net_digitizing": "Net 25 MHz / Effective 100 MHz / 2034 points / Compression 4",
+        "filters_smoothing": "BP 5.25 MHz / Rectifier FW / Video Filter Off / Averaging 1 / Reject 0%",
+        "prf": "Acquisition rate 117.5 Hz / PRF not confirmed",
+        "maximum_range": "Start 3.00 mm / True Depth Range 46.19 mm / Velocity 3240.0 m/s",
+    },
+    25.48: {
+        "setup_id": "S25.48_I32.oset", "probe_model": "5L64-A2", "frequency_mhz": "5.0",
+        "net_digitizing": "Net 25 MHz / Effective 100 MHz / 2004 points / Compression 4",
+        "filters_smoothing": "BP 5.25 MHz / Rectifier FW / Video Filter Off / Averaging 1 / Reject 0%",
+        "prf": "Acquisition rate 117.6 Hz / PRF not confirmed",
+        "maximum_range": "Start 3.00 mm / True Depth Range 46.19 mm / Velocity 3240.0 m/s",
+    },
+    28.55: {
+        "setup_id": "S28.55_I42.oset", "probe_model": "5L64-A2", "frequency_mhz": "5.0",
+        "net_digitizing": "Net 25 MHz / Effective 100 MHz / 2040 points / Compression 4",
+        "filters_smoothing": "BP 5.25 MHz / Rectifier FW / Video Filter Off / Averaging 1 / Reject 0%",
+        "prf": "Acquisition rate 111.4 Hz / PRF not confirmed",
+        "maximum_range": "Start 1.63 mm / True Depth Range 45.21 mm / Velocity 3240.0 m/s",
+    },
+    42.88: {
+        "setup_id": "S42.88_I74.oset", "probe_model": "2.25L64-A2", "frequency_mhz": "2.25",
+        "net_digitizing": "Net 12 MHz / Effective 100 MHz / 1788 points / Compression 8",
+        "filters_smoothing": "BP 2.25 MHz / Rectifier FW / Video Filter Off / Averaging 1 / Reject 0%",
+        "prf": "Acquisition rate 77.9 Hz / PRF not confirmed",
+        "maximum_range": "Start 6.72 mm / True Depth Range 177.51 mm / Velocity 3240.0 m/s",
+    },
+}
+
+COMMON_PHOTO_SETTINGS = {
+    "dynamic_range": "76 dB (OmniScan X3 instrument specification)",
+    "pulser_voltage": "80 Vpp (Bipolar)",
+    "pulse_type_width": "Pulse type Bipolar / PW Auto",
+    "digital_gain": "Receiver gain 20.0 dB / Combined analog and digital amplification / Separate digital gain: N/A",
+}
 
 
 def english(value):
-    for original, translated in (("양측 주사", "Both sides"), ("단측 주사", "Single side"),
-                                  ("양측", "Both sides"), ("좌측", "Left"), ("우측", "Right")):
+    for original, translated in (
+        ("양측 주사", "Both sides"), ("단측 주사", "Single side"),
+        ("양측", "Both sides"), ("좌측", "Left"), ("우측", "Right"),
+        ("미확정", "not confirmed"), ("설정 ID", "Setup ID"), ("설정", "Setup"),
+    ):
         value = str(value).replace(original, translated)
     return value
 
@@ -334,6 +406,11 @@ def physical_focus_depth(thickness_mm: float, unfolded_depth_mm: float) -> tuple
     return None, "1 skip 초과"
 
 
+def required_examination_extension_mm(thickness_mm: float) -> float:
+    """Return the RLNG Section 2.2 extension required on each weld side."""
+    return min(thickness_mm, 25.0) if thickness_mm <= 200.0 else 50.0
+
+
 def _font(size: int = 14, bold: bool = False):
     candidates = [
         r"C:\Windows\Fonts\malgun.ttf",
@@ -364,12 +441,34 @@ def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, heig
     draw.rectangle((left, top, right, bottom), outline="#263238", width=2, fill="#FAFAFA")
 
     bevel_px = max(18, min(75, plate_height / math.tan(math.radians(settings.bevel_angle_deg))))
+    scale = plate_height / settings.thickness_mm
+    extension_mm = required_examination_extension_mm(settings.thickness_mm)
+    extension_px = extension_mm * scale * 0.72
+    # Required examination extension is measured outward from the weld boundary.
+    # It is not an assumed HAZ width.
+    draw.polygon(
+        [
+            (center - bevel_px - extension_px, top),
+            (center - bevel_px, top),
+            (center, bottom),
+            (center - extension_px, bottom),
+        ],
+        fill="#D9EAF7", outline="#4F81BD",
+    )
+    draw.polygon(
+        [
+            (center + bevel_px, top),
+            (center + bevel_px + extension_px, top),
+            (center + extension_px, bottom),
+            (center, bottom),
+        ],
+        fill="#D9EAF7", outline="#4F81BD",
+    )
     draw.polygon(
         [(center - bevel_px, top), (center, bottom), (center + bevel_px, top)],
         fill="#ECEFF1", outline="#455A64",
     )
 
-    scale = plate_height / settings.thickness_mm
     colors = ["#00A651", "#F4C20D", "#D81B60", "#1565C0", "#EF6C00", "#7C3AED"]
     probe_y = top - 48
 
@@ -401,6 +500,11 @@ def make_beam_diagram(settings: ScanSettings, output_path: str, width=1120, heig
     draw.line((left, bottom, left - 22, bottom), fill="#2E7D32", width=2)
     draw.line((left - 15, top, left - 15, bottom), fill="#2E7D32", width=2)
     draw.text((10, (top + bottom) / 2 - 8), f"t={settings.thickness_mm:g} mm", fill="#2E7D32", font=font)
+    draw.text(
+        (width / 2, bottom + 13),
+        f"Required examination extension: {extension_mm:g} mm each side (not assumed HAZ)",
+        fill="#1F4E78", font=small, anchor="ma",
+    )
     title = (
         f"{settings.probe_model} | {settings.wave_type} | "
         f"{settings.min_angle_deg:g}°~{settings.max_angle_deg:g}° | {english(settings.scan_direction)}"
@@ -436,10 +540,10 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_margins.left = 0.25
-    ws.page_margins.right = 0.25
-    ws.page_margins.top = 0.35
-    ws.page_margins.bottom = 0.35
+    ws.page_margins.left = 0.10
+    ws.page_margins.right = 0.10
+    ws.page_margins.top = 0.20
+    ws.page_margins.bottom = 0.20
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = False
 
@@ -460,7 +564,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
 
     ws.merge_cells("A1:K2")
     ws["A1"] = "PAUT Inspection Setup and Beam Direction Review Sheet"
-    ws["A1"].font = Font(name="맑은 고딕", size=18, bold=True, color=white)
+    ws["A1"].font = Font(name="맑은 고딕", size=22, bold=True, color=white)
     ws["A1"].fill = PatternFill("solid", fgColor=navy)
     ws["A1"].alignment = center
     ws.row_dimensions[1].height = 30
@@ -469,7 +573,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=11)
         cell = ws.cell(row, 1, text)
         cell.fill = PatternFill("solid", fgColor=blue)
-        cell.font = Font(name="맑은 고딕", size=12, bold=True, color="17365D")
+        cell.font = Font(name="맑은 고딕", size=15, bold=True, color="17365D")
         cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         for col in range(1, 12):
             ws.cell(row, col).border = outer
@@ -498,7 +602,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
             for col in (label_col, value_col):
                 ws.cell(r, col).border = border
                 ws.cell(r, col).alignment = center
-                ws.cell(r, col).font = Font(name="맑은 고딕", size=10, bold=(col == label_col))
+                ws.cell(r, col).font = Font(name="맑은 고딕", size=12, bold=(col == label_col))
 
     ws.row_dimensions[7].height = 0
     ws.row_dimensions[7].hidden = True
@@ -520,7 +624,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
     for col in range(1, 12):
         cell = ws.cell(8, col)
         cell.fill = PatternFill("solid", fgColor=navy)
-        cell.font = Font(name="맑은 고딕", size=9, bold=True, color=white)
+        cell.font = Font(name="맑은 고딕", size=11, bold=True, color=white)
         cell.alignment = center
         cell.border = border
     ws.row_dimensions[8].height = 31
@@ -548,7 +652,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
         for col in range(1, 12):
             ws.cell(row, col).alignment = center
             ws.cell(row, col).border = border
-            ws.cell(row, col).font = Font(name="맑은 고딕", size=10)
+            ws.cell(row, col).font = Font(name="맑은 고딕", size=12)
         ws.cell(row, 7, "=INT((E6-B6)/K5)+1")
         ws.cell(row, 5).number_format = '0.00" mm"'
         ws.cell(row, 7).number_format = '0" laws"'
@@ -564,7 +668,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
     for col, value in enumerate(probe_headers, 1):
         cell = ws.cell(probe_header_row, col, value)
         cell.fill = PatternFill("solid", fgColor=navy)
-        cell.font = Font(name="맑은 고딕", size=9, bold=True, color=white)
+        cell.font = Font(name="맑은 고딕", size=11, bold=True, color=white)
         cell.alignment = center
         cell.border = border
     for offset, aperture in enumerate(settings.apertures):
@@ -578,7 +682,7 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
             ws.cell(row, col, value)
             ws.cell(row, col).alignment = center
             ws.cell(row, col).border = border
-            ws.cell(row, col).font = Font(name="맑은 고딕", size=10)
+            ws.cell(row, col).font = Font(name="맑은 고딕", size=12)
         ws.cell(row, 4, f"=C{row}*E{row}")
         ws.cell(row, 11, f'=F{row}&" elements × "&TEXT(E{row},"0.00")&" mm = "&TEXT(F{row}*E{row},"0.00")&" mm"')
         ws.cell(row, 4).number_format = '0.00" mm"'
@@ -646,29 +750,47 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
                 cell = review.cell(row, col)
                 cell.border = border
                 cell.alignment = Alignment(vertical="center", wrap_text=True)
-                cell.font = Font(name="Arial", size=10)
+                cell.font = Font(name="Arial", size=12)
                 cell.fill = PatternFill("solid", fgColor=pale if col <= label_end else input_fill)
 
         ws.merge_cells(start_row=diagram_start_row, start_column=7,
                        end_row=diagram_start_row, end_column=11)
         instrument_heading = ws.cell(diagram_start_row, 7, "4. Instrument Settings")
         instrument_heading.fill = PatternFill("solid", fgColor=navy)
-        instrument_heading.font = Font(name="Arial", size=11, bold=True, color=white)
+        instrument_heading.font = Font(name="Arial", size=13, bold=True, color=white)
         instrument_heading.alignment = center
         section(review_base + 1, "5. Setup Identification and Examination Volume")
         missing = [label for key, label in INSTRUMENT_FIELDS
                    if not getattr(settings, key).strip() or any(
                        token in getattr(settings, key).upper()
-                       for token in ("TO BE CONFIRMED", "REFERENCE ONLY"))]
-        review_row(3, "Review status", "DRAFT - UNCONFIRMED SETTINGS" if missing else
-                   "ENTERED SETTINGS - SUBJECT TO PROCEDURE APPROVAL")
+                        for token in ("TO BE CONFIRMED", "NOT CONFIRMED", "REFERENCE ONLY", "미확정"))]
+        photo_documented = ".oset" in settings.instrument_identification.lower()
+        if missing:
+            review_status = (
+                "PHOTO-DOCUMENTED - SOME SETTINGS UNCONFIRMED"
+                if photo_documented else "DRAFT - UNCONFIRMED SETTINGS"
+            )
+        else:
+            review_status = "ENTERED SETTINGS - SUBJECT TO PROCEDURE APPROVAL"
+        review_row(3, "Review status", review_status)
         identification = english(settings.instrument_identification)
         review_row(4, "Instrument / setup identification", identification.split(" / Reference:")[0], 25)
         review.cell(review_base + 4, 4).comment = Comment(identification, "User")
-        review_row(5, "Applicability", "PDF values: reference only (6.40 mm, PA-2/GR-2). Verify for current setup.")
+        if photo_documented:
+            applicability = (
+                f"OmniScan X3 screen-photo settings for {settings.thickness_mm:g} mm. "
+                "Verify against the saved .oset file and approved procedure before examination."
+            )
+        else:
+            applicability = (
+                f"Entered settings for {settings.thickness_mm:g} mm. "
+                "Verify against the source setup and approved procedure before examination."
+            )
+        review_row(5, "Applicability", applicability, 25)
         short_labels = ["Net digitizing frequency / points / compression", "Instrument dynamic range",
                         "Pulser voltage", "Pulse type / width", "Filters / smoothing / averaging",
-                        "Pulse repetition frequency (PRF)", "Acquisition start / maximum range", "Digital gain"]
+                        "Pulse repetition frequency (PRF)", "Acquisition start / maximum range",
+                        "Receiver gain / amplification method"]
         for row, (key, label) in enumerate(INSTRUMENT_FIELDS, 6):
             full_value = english(getattr(settings, key).strip()) or "TO BE CONFIRMED"
             value = full_value
@@ -683,14 +805,27 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
                 value = "TO BE CONFIRMED"
             review_row(row, f"{row - 5}. {short_labels[row - 6]}", value, 25)
             review.cell(diagram_start_row + 1 + row - 6, 9).comment = Comment(full_value, "User")
-        review_row(15, "Required examination volume - project comment basis",
-                   "Weld + each side: min(t, 25 mm) if t <= 200 mm; 50 mm if t > 200 mm. Basis: project comment, specification 2.2.", 25)
-        extra = min(settings.thickness_mm, 25.0) if settings.thickness_mm <= 200 else 50.0
-        review_row(16, "Additional width on EACH side", f"{extra:g} mm beyond the weld boundary; not measured from the weld centreline.")
-        review_row(17, "Actual HAZ width", "NOT ESTABLISHED; no assumed 5 mm HAZ.")
+        review_row(15, "Required examination volume - RLNG Section 2.2",
+                   "Weld + each side: lesser of WT or 25 mm if WT <= 200 mm; 50 mm if WT > 200 mm. Basis: RLNG-000-MT-SP-6313/6314, Section 2.2.", 25)
+        extra = required_examination_extension_mm(settings.thickness_mm)
+        width_basis = "one WT" if settings.thickness_mm <= 25.0 else "25 mm limit"
+        review_row(16, "Required extension on EACH side",
+                   f"{extra:g} mm ({width_basis}) beyond the weld boundary; this is not an assumed HAZ width.", 25)
+        review_row(
+            17,
+            "Actual HAZ width (reduced-volume alternative only)",
+            "NOT ESTABLISHED. The default examination extension is based on WT; no assumed HAZ width is used.",
+            25,
+        )
         review_row(18, "Reduced-volume alternative", "Actual HAZ + 6 mm each side: measured/documented HAZ and project conditions required.")
         review_row(19, "Coverage verification", "NOT DEMONSTRATED. Attach validated scan plan and coverage evidence.")
-        review_row(20, "Setting evidence / approval", "Retain source setup report and qualified procedure; reference values require verification.")
+        evidence = (
+            "Source: OmniScan X3 screen photos and official instrument specifications. "
+            "Retain the matching .oset file and approved procedure."
+            if photo_documented else
+            "Retain the source setup report and approved procedure; entered values require verification."
+        )
+        review_row(20, "Setting evidence / approval", evidence, 25)
         ws.page_setup.fitToHeight = 1
         ws.print_area = f"A1:K{review_base + 11}"
         wb.calculation.fullCalcOnLoad = True
@@ -935,10 +1070,12 @@ class PautScanPlanApp(tk.Tk):
                 ("angle_step_deg", "Angle step (°)"), ("wave_type", "Wave type"),
                 ("law_config", "Law config."), ("focus_type", "Focus type"),
             ]),
-            ("장비 설정 - 실제 값 및 근거 입력 (미입력: 미확정)",
+            ("장비 설정 - 실제 설정값 입력 (미입력: 미확정)",
              [("instrument_identification", "장비 / 버전 / 설정 ID")] + INSTRUMENT_FIELDS),
         ]
         combo_values = {
+            "thickness_mm": tuple(f"{value:.2f}" for value in THICKNESS_PRESETS),
+            "probe_model": ("5L64-A2", "2.25L64-A2"),
             "scan_direction": ("양측 주사", "단측 주사"),
             "wave_type": ("SW", "LW"),
             "law_config": ("Sectorial", "Linear"),
@@ -954,8 +1091,11 @@ class PautScanPlanApp(tk.Tk):
             ]
             for row, (key, label) in enumerate(visible_items):
                 if stacked:
+                    label = INSTRUMENT_UI_LABELS.get(key, label)
+                if stacked:
                     caption = ttk.Label(box, text=label, wraplength=480, justify="left")
-                    caption.grid(row=row * 2, column=0, columnspan=2, sticky="ew", pady=(6, 2))
+                    base_row = row * 3
+                    caption.grid(row=base_row, column=0, columnspan=2, sticky="ew", pady=(8, 2))
                     caption.bind("<Configure>", lambda event: event.widget.configure(
                         wraplength=max(1, event.width)))
                 else:
@@ -963,15 +1103,31 @@ class PautScanPlanApp(tk.Tk):
                 var = tk.StringVar()
                 self.vars[key] = var
                 if key in combo_values:
-                    widget = ttk.Combobox(box, textvariable=var, values=combo_values[key], state="readonly", width=22)
+                    state = "normal" if key == "thickness_mm" else "readonly"
+                    widget = ttk.Combobox(box, textvariable=var, values=combo_values[key], state=state, width=22)
                 else:
                     widget = ttk.Entry(box, textvariable=var, width=25)
                 if stacked:
-                    widget.grid(row=row * 2 + 1, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+                    widget.grid(row=base_row + 1, column=0, columnspan=2, sticky="ew", pady=(0, 2))
+                    note = ttk.Label(
+                        box,
+                        text=INSTRUMENT_UI_NOTES.get(key, ""),
+                        foreground="#64748B",
+                        wraplength=480,
+                        justify="left",
+                    )
+                    note.grid(row=base_row + 2, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+                    note.bind("<Configure>", lambda event: event.widget.configure(
+                        wraplength=max(1, event.width)))
                 else:
                     widget.grid(row=row, column=1, sticky="ew", pady=3)
-                widget.bind("<FocusOut>", lambda _e: self.refresh_preview())
-                widget.bind("<Return>", lambda _e: self.refresh_preview())
+                if key == "thickness_mm":
+                    widget.bind("<FocusOut>", self._on_thickness_entered)
+                    widget.bind("<Return>", self._on_thickness_entered)
+                    widget.bind("<<ComboboxSelected>>", self._on_thickness_entered)
+                else:
+                    widget.bind("<FocusOut>", lambda _e: self.refresh_preview())
+                    widget.bind("<Return>", lambda _e: self.refresh_preview())
             box.columnconfigure(1, weight=1)
 
         aperture_box = ttk.LabelFrame(form, text="활성소자 설정", style="Section.TLabelframe", padding=10)
@@ -1091,6 +1247,37 @@ class PautScanPlanApp(tk.Tk):
             except Exception:
                 pass
         return ScanSettings()
+
+    def _on_thickness_entered(self, _event=None):
+        try:
+            thickness = float(self.vars["thickness_mm"].get().strip())
+        except ValueError:
+            self.refresh_preview()
+            return
+        preset_key = next(
+            (value for value in THICKNESS_PRESETS if abs(value - thickness) < 0.005),
+            None,
+        )
+        if preset_key is None:
+            self.refresh_preview()
+            self.status.set(
+                f"{thickness:g} mm: 등록된 사진 설정이 없어 장비 설정값은 변경하지 않았습니다."
+            )
+            return
+        preset = THICKNESS_PRESETS[preset_key]
+        for key, value in COMMON_PHOTO_SETTINGS.items():
+            self.vars[key].set(value)
+        for key, value in preset.items():
+            if key != "setup_id":
+                self.vars[key].set(value)
+        base_id = "OmniScan X3 64 / MXU 5.18.1"
+        self.vars["instrument_identification"].set(
+            f"{base_id} / Setup {preset['setup_id']}"
+        )
+        self.refresh_preview()
+        self.status.set(
+            f"사진 근거 설정 적용 완료 | 두께 {preset_key:.2f} mm | {preset['setup_id']}"
+        )
 
     def _set_values(self, settings: ScanSettings):
         for item in fields(settings):
@@ -1448,7 +1635,7 @@ def self_test(output_path: str) -> None:
     review_values = {sheet.cell(row, 1).value: sheet.cell(row, 4).value
                      for row in range(1, sheet.max_row + 1)}
     assert review_values["Review status"] == "DRAFT - UNCONFIRMED SETTINGS"
-    assert review_values["Additional width on EACH side"].startswith("15.87 mm")
+    assert review_values["Required extension on EACH side"].startswith("15.87 mm")
     assert sheet.page_setup.fitToHeight == 1
     assert sheet.print_area.endswith(f"$A$1:$K${sheet.max_row}")
     for page in check:

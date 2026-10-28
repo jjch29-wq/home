@@ -2,6 +2,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "PAUT 검사설정표 생성기 실행",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\PAUT_검사설정표_생성기.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "중앙지사 앱 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
