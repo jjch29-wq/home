@@ -40,6 +40,26 @@
             "cwd": "${workspaceFolder}\\home",
             "console": "externalTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "PAUT 검사설정표 생성기 실행",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\PAUT_검사설정표_생성기.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "PAUT 용접부 개선각 위치 계산기 실행",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\PAUT 개선각 위치계산.py",
+            "python": "${workspaceFolder}\\.venv-paut\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
         }
     ],
     "compounds": [
