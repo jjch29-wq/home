@@ -117,6 +117,22 @@ class MonthlyReportManager:
                     new_breaks.append(brk)
             ws.row_breaks.brk = new_breaks
 
+        # Keep the print area aligned with rows removed below it. Without this
+        # adjustment, deleted 3.0 headers leave the old lower boundary behind
+        # and Excel prints trailing template/photo-header pages with no data.
+        if ws.print_area:
+            try:
+                from openpyxl.worksheet.cell_range import CellRange
+                area = CellRange(str(ws.print_area).replace('$', ''))
+                if area.max_row >= delete_idx + amount:
+                    area.max_row -= amount
+                    ws.print_area = str(area)
+                elif area.max_row >= delete_idx:
+                    area.max_row = max(area.min_row, delete_idx - 1)
+                    ws.print_area = str(area)
+            except Exception:
+                pass
+
         # 6. 인쇄 영역(print_area) 보정
         if ws.print_area:
             try:
@@ -176,6 +192,29 @@ class MonthlyReportManager:
                 elif brk.id < delete_idx:
                     new_breaks.append(brk)
             ws.row_breaks.brk = new_breaks
+
+        # Keep drawings aligned with the rows that remain. Repeated report
+        # headers contain copied logos, so drawings wholly inside the deleted
+        # block must disappear with that header.
+        kept_images = []
+        delete_end = delete_idx + amount - 1
+        for image in list(ws._images):
+            anchor = getattr(image, 'anchor', None)
+            if not hasattr(anchor, '_from'):
+                kept_images.append(image)
+                continue
+            image_start = anchor._from.row + 1
+            image_end = (
+                anchor.to.row + 1 if hasattr(anchor, 'to') else image_start
+            )
+            if image_start >= delete_idx and image_end <= delete_end:
+                continue
+            if image_start >= delete_idx + amount:
+                anchor._from.row -= amount
+                if hasattr(anchor, 'to'):
+                    anchor.to.row -= amount
+            kept_images.append(image)
+        ws._images = kept_images
 
     def _repair_merged_right_borders(self, ws):
         """Restore outer edges that openpyxl can drop from merged cells.
@@ -417,7 +456,10 @@ class MonthlyReportManager:
         for col in range(1, max_col + 1):
             cell = ws.cell(row=table_insert_row, column=col)
             if str(cell.value or '').strip():
-                cell.value = f"{cell.value} (계속)"
+                base_title = re.sub(
+                    r'(?:\s*\(계속\))+$', '', str(cell.value)
+                ).rstrip()
+                cell.value = f"{base_title} (계속)"
                 break
 
         return 11
@@ -577,6 +619,35 @@ class MonthlyReportManager:
                         - float(ws.page_margins.right or 0)) * 72
         return min(100.0, usable_width / max(width_points, 1) * 100)
 
+    def _report_height_scale(self, ws):
+        """Return the calibrated Excel width-fit scale for vertical paging.
+
+        Excel's rendered width-fit pagination is about nine percent less than
+        the scale estimated from OOXML column widths.  A five-percent
+        correction split the first 3.0 page after only two RT rows even though
+        the exported PDF still had room above the bottom margin.  This general
+        calibration keeps the taller detail pages within Excel's print area;
+        the shorter first 3.0 summary page has its own tighter calibration.
+        """
+        return self._paut_print_scale(ws) * 0.91
+
+    def _ndt_reflow_height_scale(self, ws, page_number=1):
+        """Return the 3.0 reflow scale for a summary or detail page.
+
+        The first 3.0 page can safely include the RT subcontract subtotal and
+        TOTAL: the exported PDF leaves 28.9 points below the final line versus
+        a 25.2-point bottom margin. Applying that tighter limit to every detail
+        page makes Excel add automatic breaks, so only the first page uses it.
+        """
+        if page_number == 1:
+            return self._paut_print_scale(ws) * 0.88
+        if page_number == 2:
+            # Excel normalizes saved column widths slightly, raising the
+            # effective scale from about 88.14% to 88.47%. This small second-
+            # page correction keeps PAUT record 39 and its TOTAL together.
+            return self._paut_print_scale(ws) * 0.905
+        return self._report_height_scale(ws)
+
     def _compact_ndt_summary_page(self, ws):
         """Reclaim blank summary spacing before creating continuation pages."""
         first = self.table_markers['qty']
@@ -635,7 +706,12 @@ class MonthlyReportManager:
                     ws.row_dimensions[r].height = current - (current - 2) * ratio
 
     def _enforce_final_ndt_body_limit(self, ws):
-        """Recheck completed NDT blocks after every operation that moves rows."""
+        """Recheck completed NDT blocks against the actual printable height.
+
+        Row counts are not a reliable page limit because summary/detail rows can
+        have very different heights. Using a fixed 58-row boundary left a large
+        blank area on mixed summary/PAUT pages even though more records fit.
+        """
         from openpyxl.worksheet.pagebreak import Break
 
         def text(row):
@@ -648,24 +724,50 @@ class MonthlyReportManager:
             end = ends[0] if ends else ws.max_row
             is_ndt = any('3.0비파괴검사현황' in text(r)
                          for r in range(start, min(end, start + 6) + 1))
-            if not is_ndt or end - start + 1 <= 58:
+            if not is_ndt:
                 start = end + 1
                 continue
-            split = start + 58  # First row outside a full 58-row page.
+            split = self._first_print_overflow_row(
+                ws, start, end - start + 1,
+                self._report_height_scale(ws),
+            )
+            if split is None:
+                start = end + 1
+                continue
             # Locate the actual two-row table heading above the overflow.
-            headers = [r for r in range(start + 7, split)
-                       if 'LINENO' in text(r).replace('.', '').upper()]
-            if not headers:
+            all_headers = [
+                r for r in range(start + 7, end)
+                if 'LINENO' in ''.join(text(r).split()).replace('.', '').upper()
+            ]
+            if not all_headers:
                 start = end + 1
                 continue
-            header = headers[-1]
+            preceding_headers = [r for r in all_headers if r < split]
+            # When the height boundary falls in the gap before a table, move
+            # that whole table instead of ignoring the overflow.
+            header = preceding_headers[-1] if preceding_headers else all_headers[0]
             # A completed/empty table followed by template whitespace must not
             # generate a continuation containing only its copied heading.
-            next_headers = [r for r in range(header + 2, end)
-                            if 'LINENO' in text(r).replace('.', '').upper()]
+            next_headers = [
+                r for r in range(header + 2, end)
+                if 'LINENO' in ''.join(text(r).split()).replace('.', '').upper()
+            ]
             table_end = next_headers[0] - 2 if next_headers else end
             total = next((r for r in range(header + 2, table_end + 1)
                           if 'TOTAL' in text(r).upper()), table_end + 1)
+            # When the printable boundary falls after a completed table but
+            # before the following one, move the following table as a whole.
+            # Otherwise the completed table is selected and the overflow is
+            # incorrectly ignored, leaving a large blank area on this page.
+            if split > total and next_headers:
+                header = next_headers[0]
+                later_headers = [
+                    r for r in range(header + 2, end)
+                    if 'LINENO' in ''.join(text(r).split()).replace('.', '').upper()
+                ]
+                table_end = later_headers[0] - 2 if later_headers else end
+                total = next((r for r in range(header + 2, table_end + 1)
+                              if 'TOTAL' in text(r).upper()), table_end + 1)
             def is_record(row):
                 return any(str(ws.cell(row, c).value or '').strip().isdigit()
                            for c in (2, 3))
@@ -679,7 +781,7 @@ class MonthlyReportManager:
             if split <= header + 2:
                 split = header - 1
             if split <= start + 7:
-                raise ValueError('검사현황 표 머리글이 제목 포함 58행 범위를 초과합니다.')
+                raise ValueError('검사현황 표 머리글이 인쇄 가능 높이를 초과합니다.')
             # Keep the final inspection record with its TOTAL.
             if 'TOTAL' in text(split).upper():
                 split -= 1
@@ -697,24 +799,331 @@ class MonthlyReportManager:
                     self.table_markers[key] += inserted
             start = split
 
+    def _stale_ndt_continuation_blocks(self, ws, start_row, end_row):
+        """Return copied table-heading blocks that must be rebuilt.
+
+        Template versions are inconsistent: some fixed continuation pages add
+        ``(계속)`` to the subsection title and others repeat the original title
+        unchanged.  Delete a heading only when the same normalized subsection
+        was already seen.  If the first surviving heading temporarily carries
+        ``(계속)``, keep it and remove only that suffix.
+        """
+        stale_blocks = []
+        first_continuation_titles = []
+        seen_titles = set()
+        max_column = min(ws.max_column, 23)
+
+        for row in range(start_row, end_row):
+            title = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, max_column + 1)
+            ).strip()
+            if not title:
+                continue
+
+            # A subsection caption is immediately followed by the first
+            # column-heading row. Looking two rows ahead incorrectly treats a
+            # repeated parent caption such as ``2.0 비파괴검사세부현황`` as the
+            # table title and deletes the real MT caption plus both headings.
+            table_header_row = row + 1
+            if table_header_row >= end_row:
+                continue
+            header_text = ''.join(
+                str(ws.cell(row=table_header_row, column=col).value or '')
+                for col in range(1, max_column + 1)
+            )
+            if 'LINENO' not in ''.join(header_text.split()).replace('.', '').upper():
+                continue
+
+            normalized = re.sub(
+                r'(?:\s*\(계속(?:\s+\d+)?\))+$', '', title
+            ).strip()
+            normalized_key = ''.join(normalized.split()).upper()
+            is_explicit_continuation = '(계속' in title
+            if normalized_key in seen_titles:
+                stale_blocks.append((row, table_header_row - row + 2))
+            else:
+                seen_titles.add(normalized_key)
+                if is_explicit_continuation:
+                    for col in range(1, max_column + 1):
+                        cell = ws.cell(row=row, column=col)
+                        value = str(cell.value or '').strip()
+                        if not value:
+                            continue
+                        cleaned = re.sub(
+                            r'(?:\s*\(계속(?:\s+\d+)?\))+$', '', value
+                        ).rstrip()
+                        first_continuation_titles.append((row, col, cleaned))
+                        break
+
+        return stale_blocks, first_continuation_titles
+
+    def _compact_ndt_summary_title_rows(self, ws, start_row, end_row):
+        """Reclaim first-page height from summary captions, not data rows."""
+        compact_height = 13.75
+        for row in range(start_row, end_row):
+            text = ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+            compact = ''.join(text.split())
+            if not re.match(r'^1\.(?:0|1|2)', compact):
+                continue
+            current = float(
+                ws.row_dimensions[row].height
+                or ws.sheet_format.defaultRowHeight
+                or 15
+            )
+            # Only compact the 16.5-point caption rows. Table headings and
+            # records use different heights and must remain untouched.
+            if compact_height < current <= 17.0:
+                ws.row_dimensions[row].height = compact_height
+
+    def _reflow_ndt_section(self, ws):
+        """Flow all 3.0 tables through available space before section 4.0.
+
+        The template owns several fixed 3.0 pages. After dynamic rows are
+        written those copied headers and manual breaks can strand PAUT/MT on
+        one page and RT/PT on the next even though the first page has room.
+        Remove only the repeated 3.0 document headers, keep the first header,
+        clear the internal template breaks, and retain a hard boundary before
+        4.0. ``_enforce_final_ndt_body_limit`` then repaginates the continuous
+        3.0 body by actual printable height and inserts continuation headers
+        only where data really overflows.
+        """
+        from openpyxl.worksheet.pagebreak import Break
+
+        def row_text(row):
+            return ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+
+        def section_header_starts(section_token):
+            starts = []
+            for row in range(1, ws.max_row + 1):
+                # Real report section captions are anchored in column F. The
+                # table of contents repeats the same words in another column
+                # and must not be mistaken for a printable section header.
+                compact = ''.join(
+                    str(ws.cell(row=row, column=6).value or '').split()
+                )
+                if section_token not in compact:
+                    continue
+                for candidate in range(max(1, row - 6), row + 1):
+                    candidate_text = ''.join(row_text(candidate).split())
+                    if '월간용역진도보고서' in candidate_text:
+                        starts.append(candidate)
+                        break
+            return sorted(set(starts))
+
+        ndt_headers = section_header_starts('3.0비파괴검사현황')
+        if not ndt_headers:
+            return
+
+        # Delete bottom-up so every stored row remains valid. Each common
+        # report header is exactly seven rows; subsection/table headings below
+        # it remain and join the continuous 3.0 body.
+        for header_start in reversed(ndt_headers[1:]):
+            self._delete_rows_safely(ws, header_start, 7)
+
+        # Remove continuation captions/table headers inherited from the fixed
+        # template pages. The continuous body must contain records only;
+        # pagination below will insert a fresh continuation block exactly at
+        # each real page boundary. Keeping the old blocks creates empty or
+        # duplicated headings in the middle of a printed page.
+        current_defects = section_header_starts('4.0용접결함,불량')
+        stale_scan_end = current_defects[0] if current_defects else ws.max_row + 1
+        stale_continuations, first_continuation_titles = (
+            self._stale_ndt_continuation_blocks(
+            ws, ndt_headers[0], stale_scan_end
+            )
+        )
+        # A table can be moved as a whole before reflow, making its only
+        # surviving heading look like a continuation. Preserve that heading
+        # and normalize its caption before row deletions shift its position.
+        for row, col, cleaned_title in first_continuation_titles:
+            ws.cell(row=row, column=col).value = cleaned_title
+        for start_row, row_count in reversed(stale_continuations):
+            self._delete_rows_safely(ws, start_row, row_count)
+
+        first_ndt = section_header_starts('3.0비파괴검사현황')[0]
+        # Templates in circulation use both "불량율" and "불량률".
+        defect_headers = section_header_starts('4.0용접결함,불량')
+        if not defect_headers:
+            return
+        first_defect = defect_headers[0]
+
+        # The summary captions have generous vertical padding. Reducing only
+        # those caption rows lets the RT subcontract subtotal and TOTAL stay on
+        # page 10 without shrinking records or crossing the bottom margin.
+        self._compact_ndt_summary_title_rows(
+            ws, first_ndt + 7, first_defect
+        )
+
+        # Template spacer rows used to pad fixed pages still consume printable
+        # height after their repeated headers are removed. Collapse only truly
+        # empty, non-merged, image-free rows inside 3.0 so the next table can
+        # use every remaining part of the current page.
+        merged_rows = {
+            row
+            for merged in ws.merged_cells.ranges
+            for row in range(merged.min_row, merged.max_row + 1)
+        }
+        image_rows = {
+            image.anchor._from.row + 1
+            for image in ws._images
+            if hasattr(getattr(image, 'anchor', None), '_from')
+        }
+        for row in range(first_ndt + 7, first_defect):
+            if row in merged_rows or row in image_rows:
+                continue
+            if any(
+                str(ws.cell(row=row, column=col).value or '').strip()
+                for col in range(1, min(ws.max_column, 23) + 1)
+            ):
+                continue
+            ws.row_dimensions[row].hidden = False
+            ws.row_dimensions[row].height = 2.0
+
+        retained = [
+            brk for brk in ws.row_breaks.brk
+            if int(brk.id) < first_ndt or int(brk.id) >= first_defect - 1
+        ]
+        if not any(int(brk.id) == first_defect - 1 for brk in retained):
+            retained.append(Break(id=first_defect - 1))
+        ws.row_breaks.brk = sorted(retained, key=lambda brk: int(brk.id))
+
+        # A copied continuation caption may already contain the suffix. The
+        # repagination step is free to copy it again, so normalize it once.
+        for row in range(first_ndt, first_defect):
+            for col in range(1, min(ws.max_column, 23) + 1):
+                cell = ws.cell(row=row, column=col)
+                if isinstance(cell.value, str):
+                    while '(계속) (계속)' in cell.value:
+                        cell.value = cell.value.replace('(계속) (계속)', '(계속)')
+
+    def _paginate_reflowed_ndt(self, ws):
+        """Paginate the continuous 3.0 body and repeat only needed headers."""
+        from openpyxl.worksheet.pagebreak import Break
+
+        def text(row):
+            return ''.join(
+                str(ws.cell(row=row, column=col).value or '')
+                for col in range(1, min(ws.max_column, 23) + 1)
+            )
+
+        def title_row(token):
+            for row in range(1, ws.max_row + 1):
+                compact = ''.join(
+                    str(ws.cell(row=row, column=6).value or '').split()
+                )
+                if token in compact:
+                    for candidate in range(max(1, row - 6), row + 1):
+                        if '월간용역진도보고서' in ''.join(
+                            text(candidate).split()
+                        ):
+                            return candidate
+            return None
+
+        first_ndt = title_row('3.0비파괴검사현황')
+        if first_ndt is None:
+            return
+
+        for _ in range(50):
+            first_defect = title_row('4.0용접결함,불량')
+            if first_defect is None:
+                return
+            internal_breaks = sorted(
+                int(brk.id) for brk in ws.row_breaks.brk
+                if first_ndt <= int(brk.id) < first_defect - 1
+            )
+            page_start = first_ndt
+            page_number = 1
+            changed = False
+            for page_end in internal_breaks + [first_defect - 1]:
+                overflow = self._first_print_overflow_row(
+                    ws, page_start, page_end - page_start + 1,
+                    self._ndt_reflow_height_scale(
+                        ws, page_number=page_number
+                    ),
+                )
+                if overflow is None:
+                    page_start = page_end + 1
+                    page_number += 1
+                    continue
+
+                headers = [
+                    row for row in range(page_start + 7, page_end)
+                    if 'LINENO' in ''.join(text(row).split()).replace('.', '').upper()
+                ]
+                if not headers:
+                    raise ValueError(
+                        '검사현황 표 머리글을 찾을 수 없어 페이지를 나눌 수 없습니다. '
+                        f'(페이지 {page_start}~{page_end}, 넘침 행 {overflow})'
+                    )
+                following = [row for row in headers if row > overflow]
+                preceding = [row for row in headers if row <= overflow]
+                header = (
+                    following[0] if following and (
+                        not preceding or overflow >= following[0] - 1
+                    ) else preceding[-1] if preceding else headers[0]
+                )
+
+                move_whole_table = overflow <= header + 2
+                split = header - 1 if move_whole_table else overflow
+                if 'TOTAL' in text(split).upper():
+                    split -= 1
+                if split <= page_start + 7:
+                    raise ValueError(
+                        '검사 표의 제목 높이가 인쇄 가능 영역을 초과합니다. '
+                        '양식의 제목 행 높이와 인쇄 여백을 확인해 주세요.'
+                    )
+
+                if move_whole_table:
+                    inserted = 7
+                    self._insert_continuation_header(
+                        ws, split, first_ndt, row_count=7
+                    )
+                else:
+                    inserted = self._insert_table_continuation(
+                        ws, split, first_ndt, header
+                    )
+                ws.row_breaks.append(Break(id=split - 1))
+                ws.row_breaks.brk.sort(key=lambda brk: int(brk.id))
+                for key, marker_row in self.table_markers.items():
+                    if marker_row >= split:
+                        self.table_markers[key] += inserted
+                changed = True
+                break
+            if not changed:
+                return
+        raise ValueError('검사현황 페이지 분할이 50회를 초과했습니다.')
+
     def _detail_page_overflow_row(self, ws, start_row, row_count):
         overflow = self._first_print_overflow_row(
-            ws, start_row, row_count + 1, self._paut_print_scale(ws) * 1.03
+            ws, start_row, row_count + 1, self._report_height_scale(ws)
         )
-        # The 58-row page includes seven title rows and a 51-row body.
-        # Continuations use all 58 rows. Only the final page needs TOTAL;
-        # if TOTAL alone overflows, move the last record with it below.
-        previous = [int(b.id) for b in ws.row_breaks.brk if int(b.id) < start_row]
-        page_start = max(previous, default=0) + 1
-        body_end = page_start + 58
-        if start_row + row_count >= body_end:
-            overflow = body_end if overflow is None else min(overflow, body_end)
+        # Reserve TOTAL using the real printable height. If TOTAL alone
+        # overflows, move the last record with it to the following page.
         if overflow is not None and overflow >= start_row + row_count:
             return start_row + row_count - 1
         return overflow
 
+    def _remove_stale_table_breaks(self, ws, start_row, total_row):
+        """Remove template breaks owned by a table that has been rewritten.
+
+        The template also places breaks on TOTAL rows. Keeping those boundaries
+        forced every short summary/detail table onto a separate page and left
+        most of the following page blank.
+        """
+        ws.row_breaks.brk = [
+            brk for brk in ws.row_breaks.brk
+            if not start_row <= int(brk.id) <= total_row
+        ]
+
     def _detail_continuation_overflow_row(self, ws, start_row, row_count):
-        """Apply the 58-row total limit and actual height on continuations."""
+        """Apply the actual printable-height limit on continuations."""
         return self._detail_page_overflow_row(ws, start_row, row_count)
 
     def _first_print_overflow_row(
@@ -1226,6 +1635,48 @@ class MonthlyReportManager:
             )
         ]
 
+    def _normalize_report_header_top_borders(self, ws):
+        """Use one thin top edge across every repeated document header.
+
+        One legacy 3.0 title block in the template uses a medium top border
+        while its left and right header blocks use thin borders.  Excel keeps
+        that mismatch when the header is copied, making only the contract
+        title above ``2026`` look darker.  Detect the document-header geometry
+        instead of matching localized text so this remains stable for future
+        report years and title wording.
+        """
+        import copy
+
+        thin = Side(style='thin', color='000000')
+        merged_ranges = list(ws.merged_cells.ranges)
+        for title_block in merged_ranges:
+            if not (
+                title_block.min_row >= 300
+                and title_block.min_col == 6
+                and title_block.max_col == 15
+                and title_block.max_row - title_block.min_row + 1 >= 3
+            ):
+                continue
+
+            # A real document header always has the document-number block
+            # immediately to its right.  This excludes similarly sized table
+            # merges elsewhere in the report body.
+            has_document_number_block = any(
+                block.min_row == title_block.min_row
+                and block.min_col == 16
+                and block.max_col == 23
+                and block.max_row <= title_block.max_row
+                for block in merged_ranges
+            )
+            if not has_document_number_block:
+                continue
+
+            for column in range(title_block.min_col, title_block.max_col + 1):
+                cell = ws.cell(title_block.min_row, column)
+                border = copy.copy(cell.border)
+                border.top = copy.copy(thin)
+                cell.border = border
+
     def _collapse_blank_rows_before_report_headers(self, ws):
         """Prevent a blank row becoming a one-row printed page.
 
@@ -1304,7 +1755,7 @@ class MonthlyReportManager:
         ends = sorted({int(b.id) for b in ws.row_breaks.brk if int(b.id) < print_end}
                       | {print_end})
         default = float(ws.sheet_format.defaultRowHeight or 15)
-        scale = self._paut_print_scale(ws) * 1.03 / 100
+        scale = self._report_height_scale(ws) / 100
         margins = ws.page_margins
         capacity = (11.69 - float(margins.top or 0) - float(margins.bottom or 0)
                     - float(margins.footer or 0)) * 72 / scale
@@ -2634,7 +3085,7 @@ class MonthlyReportManager:
 
     def _compact_weld_defect_table_gap(self, ws, page_start, title_row, total_row):
         """Reclaim the empty gap between defect tables before splitting data."""
-        scale = self._paut_print_scale(ws) * 1.03
+        scale = self._report_height_scale(ws)
         if self._first_print_overflow_row(ws, page_start,
                                           total_row - page_start + 1, scale) is None:
             return
@@ -2956,7 +3407,7 @@ class MonthlyReportManager:
         self._compact_weld_defect_table_gap(ws, document_header_row, title_row, total_row)
         while remaining_count > 0:
             continuation_row = self._first_print_overflow_row(
-                ws, remaining_start, remaining_count, self._paut_print_scale(ws) * 1.03
+                ws, remaining_start, remaining_count, self._report_height_scale(ws)
             )
             if continuation_row is None:
                 break
@@ -4542,6 +4993,12 @@ class MonthlyReportManager:
             # continue it on a real new page. Repeat both the seven-row document
             # header and the subsection/table header.  Repeat as many times as
             # necessary; following MT/RT/PT/4.0 content moves down as a block.
+            # The template contains fixed manual breaks for placeholder row
+            # counts, including breaks on TOTAL rows. Once real records are
+            # written, those boundaries can force an early split even when the
+            # calculation below allows the following table on the same page.
+            self._remove_stale_table_breaks(ws, start_row, total_row)
+
             remaining_start = start_row
             remaining_count = num_items
             if not is_detail:
@@ -4576,7 +5033,12 @@ class MonthlyReportManager:
                     break
 
                 rows_on_current_page = continuation_row - remaining_start
-                if rows_on_current_page <= 0:
+                # The first table attempt can legitimately have no room when
+                # earlier tables already consumed the current page.  In that
+                # case the normal continuation insertion below moves the whole
+                # table to a fresh page.  If it still cannot fit one record on
+                # that fresh page, the repeated headings really are too tall.
+                if rows_on_current_page <= 0 and remaining_start != start_row:
                     raise ValueError(
                         '검사 표의 제목 높이가 인쇄 가능 영역을 초과합니다. '
                         '양식의 제목 행 높이와 인쇄 여백을 확인해 주세요.'
@@ -4737,7 +5199,7 @@ class MonthlyReportManager:
         }
 
         # [FIX] Dynamically recalculate subtotals (소계) to ensure accuracy even if daily JSON records are missing subtotal values
-        paut_keys = ['PAUT_300A이상', 'PAUT_300A이상-야간', 'PAUT_250A', 'PAUT_200A', 'PAUT_200A-야간', 'PAUT_150A~125A', 'PAUT_150A~125A-야간', 'PAUT_100A이하', 'PAUT_100A이하-야간', 'PAUT_불가']
+        paut_keys = ['PAUT_300A이상', 'PAUT_300A이상-야간', 'PAUT_250A', 'PAUT_250A-야간', 'PAUT_200A', 'PAUT_200A-야간', 'PAUT_150A~125A', 'PAUT_150A~125A-야간', 'PAUT_100A이하', 'PAUT_100A이하-야간', 'PAUT_불가']
         rt_keys = ['RT_150A~100A', 'RT_150A~100A-야간', 'RT_80A이하', 'RT_80A이하-야간', 'RT_불가']
         
         for sub_key, keys_to_sum in [('PAUT_소계', paut_keys), ('RT_소계', rt_keys)]:
@@ -4972,7 +5434,6 @@ class MonthlyReportManager:
         )
         self._populate_safety_training_log(ws, target_ym, ndt_groups, target_dates, report_scope)
         self._populate_owner_report_rows(ws, target_ym, owner_report_path)
-        self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
         self._fill_repeated_header_document_numbers(ws, doc_num)
         self._fix_ndt_section_labels(ws)
         self._ensure_cover_cell_elements(ws, create_date)
@@ -5026,14 +5487,20 @@ class MonthlyReportManager:
                 ws.row_dimensions[blank_row].hidden = True
 
         self._trim_trailing_blank_print_pages(ws)
-        self._trim_print_area_after_last_process_photo(ws)
-
-        self._enforce_final_ndt_body_limit(ws)
+        self._reflow_ndt_section(ws)
+        self._paginate_reflowed_ndt(ws)
+        # Build photo pages only after every dynamic 3.0 row operation. Images
+        # are drawing anchors rather than cells; creating them earlier makes
+        # later row deletion/insertion detach them from their page headers.
+        self._populate_process_photo_pages(ws, process_photos, doc_num=doc_num)
         self._renumber_ndt_status_pages(ws)
         self._normalize_ndt_header_logos(ws)
+        self._normalize_all_report_header_logos(ws)
+        self._normalize_report_header_top_borders(ws)
         self._fill_repeated_header_document_numbers(ws, doc_num)
 
         self._fit_photo_page_trailing_rows(ws)
+        self._trim_print_area_after_last_process_photo(ws)
         return self._save_workbook_with_fallback(wb, output_path)
 
     def _save_workbook_with_fallback(self, wb, output_path):

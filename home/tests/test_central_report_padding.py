@@ -1,4 +1,5 @@
 """Padding belongs to the preceding report page, never a blank page."""
+import ast
 import sys
 import unittest
 import os
@@ -13,6 +14,108 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class ReportPaddingTest(unittest.TestCase):
+    def test_ndt_summary_compacts_titles_without_shrinking_records(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.cell(10, 2, '1.0 Summary')
+        sheet.cell(11, 3, '1.2.1 PAUT')
+        sheet.cell(12, 2, 'Contractor')
+        for row in range(10, 13):
+            sheet.row_dimensions[row].height = 16.5
+
+        manager._compact_ndt_summary_title_rows(sheet, 10, 13)
+
+        self.assertEqual(sheet.row_dimensions[10].height, 13.75)
+        self.assertEqual(sheet.row_dimensions[11].height, 13.75)
+        self.assertEqual(sheet.row_dimensions[12].height, 16.5)
+
+    def test_unmarked_duplicate_ndt_heading_is_rebuilt_as_continuation(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+
+        # The parent section caption is two rows above the table heading and
+        # must not be mistaken for the subsection caption.
+        sheet.cell(4, 3, '2.0 Details (계속)')
+        sheet.cell(5, 3, '2.2 MT (계속)')
+        sheet.cell(6, 6, 'Line No.')
+        sheet.cell(10, 3, '2.3 RT')
+        sheet.cell(11, 6, 'Line No.')
+        sheet.cell(20, 3, '2.3 RT')
+        sheet.cell(21, 6, 'Line No.')
+        sheet.cell(30, 3, '2.3 RT (계속)')
+        sheet.cell(31, 6, 'Line No.')
+        sheet.cell(40, 3, '2.4 PT')
+        sheet.cell(41, 6, 'Line No.')
+
+        stale, first_continuations = (
+            manager._stale_ndt_continuation_blocks(sheet, 1, 50)
+        )
+
+        self.assertEqual(stale, [(20, 3), (30, 3)])
+        self.assertEqual(first_continuations, [(5, 3, '2.2 MT')])
+
+    def test_report_height_scale_matches_excel_pdf_calibration(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+
+        self.assertAlmostEqual(
+            manager._report_height_scale(sheet),
+            manager._paut_print_scale(sheet) * 0.91,
+        )
+        self.assertAlmostEqual(
+            manager._ndt_reflow_height_scale(sheet, page_number=1),
+            manager._paut_print_scale(sheet) * 0.88,
+        )
+        self.assertAlmostEqual(
+            manager._ndt_reflow_height_scale(sheet, page_number=2),
+            manager._paut_print_scale(sheet) * 0.905,
+        )
+        self.assertAlmostEqual(
+            manager._ndt_reflow_height_scale(sheet, page_number=3),
+            manager._report_height_scale(sheet),
+        )
+
+    def test_report_header_contract_title_uses_thin_top_border(self):
+        from openpyxl.styles import Border, Side
+
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        medium = Side(style='medium')
+        sheet.merge_cells('F301:O304')
+        sheet.merge_cells('P301:W302')
+        for column in range(6, 16):
+            sheet.cell(301, column).border = Border(top=medium)
+
+        # Similar body geometry without the document-number block must remain
+        # untouched.
+        sheet.merge_cells('F320:O323')
+        sheet.cell(320, 6).border = Border(top=medium)
+
+        manager._normalize_report_header_top_borders(sheet)
+
+        self.assertTrue(all(
+            sheet.cell(301, column).border.top.style == 'thin'
+            for column in range(6, 16)
+        ))
+        self.assertEqual(sheet.cell(320, 6).border.top.style, 'medium')
+
+    def test_monthly_paut_subtotal_includes_250a_night_shift(self):
+        source = Path(
+            'home/src/site_apps/central/src/services/monthly_report_manager.py'
+        )
+        tree = ast.parse(source.read_text(encoding='utf-8'))
+        paut_keys = next(
+            ast.literal_eval(node.value)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == 'paut_keys'
+                for target in node.targets
+            )
+        )
+
+        self.assertIn('PAUT_250A-야간', paut_keys)
+
     def test_missing_cl_column_is_added_and_counted_without_losing_quantities(self):
         import io
         manager = MonthlyReportManager('unused.xlsx')
@@ -60,14 +163,15 @@ class ReportPaddingTest(unittest.TestCase):
         sheet.cell(5, 6, '6.0 사진대지')
         sheet.cell(41, 2, '사진 설명')
         for r in range(1, 46):
-            sheet.row_dimensions[r].height = 16
+            sheet.row_dimensions[r].height = 18
         anchor = SimpleNamespace(_from=SimpleNamespace(row=10), to=SimpleNamespace(row=39))
         sheet._images.append(SimpleNamespace(anchor=anchor))
         sheet.row_breaks.append(Break(id=45))
-        self.assertIsNotNone(manager._first_print_overflow_row(sheet, 1, 45, 103))
+        scale = manager._report_height_scale(sheet)
+        self.assertIsNotNone(manager._first_print_overflow_row(sheet, 1, 45, scale))
         manager._fit_photo_page_trailing_rows(sheet)
-        self.assertIsNone(manager._first_print_overflow_row(sheet, 1, 45, 103))
-        self.assertTrue(all(sheet.row_dimensions[r].height == 16 for r in range(1, 42)))
+        self.assertIsNone(manager._first_print_overflow_row(sheet, 1, 45, scale))
+        self.assertTrue(all(sheet.row_dimensions[r].height == 18 for r in range(1, 42)))
         self.assertEqual(sheet.cell(41, 2).value, '사진 설명')
         self.assertEqual((anchor._from.row, anchor.to.row), (10, 39))
         self.assertEqual([b.id for b in sheet.row_breaks.brk], [45])
@@ -77,7 +181,7 @@ class ReportPaddingTest(unittest.TestCase):
         sheet = openpyxl.Workbook().active
         sheet.page_setup.scale = 100
         for r in range(1, 39):
-            sheet.row_dimensions[r].height = 18
+            sheet.row_dimensions[r].height = 20
         sheet.cell(15, 2, 'MT TOTAL')
         sheet.cell(20, 2, '2.3 비파괴검사 세부현황(RT)')
         sheet.cell(21, 6, 'Line No.')
@@ -89,7 +193,7 @@ class ReportPaddingTest(unittest.TestCase):
         self.assertIsNone(manager._detail_page_overflow_row(sheet, 23, 15))
         self.assertEqual([sheet.row_dimensions[r].height for r in range(16, 20)], [2] * 4)
         for r in (15, 20, 21, 22, 23, 37, 38):
-            self.assertEqual(sheet.row_dimensions[r].height, 18)
+            self.assertEqual(sheet.row_dimensions[r].height, 20)
         self.assertEqual(sheet.cell(37, 3).value, 15)
         self.assertEqual(sheet.cell(38, 2).value, 'TOTAL')
         self.assertFalse(sheet.row_breaks.brk)
@@ -111,7 +215,8 @@ class ReportPaddingTest(unittest.TestCase):
         originals = {f'W-{i}': 100 for i in range(8)}
         manager._write_welder_defect_summary(sheet, {}, {}, originals, '1.2', ('PAUT',))
         self.assertEqual([b.id for b in sheet.row_breaks.brk], [47])
-        self.assertIsNone(manager._first_print_overflow_row(sheet, 1, 47, 103))
+        self.assertIsNone(manager._first_print_overflow_row(
+            sheet, 1, 47, manager._report_height_scale(sheet)))
         self.assertEqual(sheet.row_dimensions[20].height, 2)
         for r in (1, 5, 14, 35, 38, 39, 46, 47):
             self.assertEqual(sheet.row_dimensions[r].height, 20)
@@ -149,7 +254,7 @@ class ReportPaddingTest(unittest.TestCase):
         self.assertEqual(sheet.cell(65, 3).value, 1)
         self.assertEqual([b.id for b in sheet.row_breaks.brk], [54, 66])
 
-    def test_final_limit_repairs_late_insertions_and_survives_save(self):
+    def test_final_limit_uses_print_height_and_survives_save(self):
         import io
         manager = MonthlyReportManager('unused.xlsx')
         sheet = openpyxl.Workbook().active
@@ -169,11 +274,15 @@ class ReportPaddingTest(unittest.TestCase):
         sheet.parent.save(buffer)
         buffer.seek(0)
         result = openpyxl.load_workbook(buffer).active
-        self.assertEqual(min(b.id for b in result.row_breaks.brk), 58)
-        start = 1
+        # Short records fit beyond the old fixed 58-row boundary before the
+        # continuation is needed.
+        self.assertGreater(min(b.id for b in result.row_breaks.brk), 58)
+        page_start = 1
         for end in sorted(b.id for b in result.row_breaks.brk):
-            self.assertLessEqual(end - start + 1, 58)
-            start = end + 1
+            self.assertIsNone(manager._first_print_overflow_row(
+                result, page_start, end - page_start + 1,
+                manager._report_height_scale(result)))
+            page_start = end + 1
         records = [result.cell(r, 2).value for r in range(1, result.max_row + 1)
                    if isinstance(result.cell(r, 2).value, int)]
         self.assertEqual(records, list(range(1, 59)))
@@ -272,19 +381,19 @@ class ReportPaddingTest(unittest.TestCase):
         records = [sheet.cell(r, 2).value for r in range(1, sheet.max_row + 1)
                    if isinstance(sheet.cell(r, 2).value, int)]
         self.assertEqual(records, list(range(1, 161)))
-        self.assertEqual(counts[1], 47)
+        self.assertGreater(counts[1], 47)
         self.assertLess(counts[0], counts[1])
         page_start = 1
         for end in sorted(b.id for b in sheet.row_breaks.brk):
-            self.assertLessEqual(end - page_start + 1, 58)
             self.assertIsNone(manager._first_print_overflow_row(
-                sheet, page_start, end - page_start + 1, 103))
+                sheet, page_start, end - page_start + 1,
+                manager._report_height_scale(sheet)))
             page_start = end + 1
         for r in range(1, sheet.max_row + 1):
             if isinstance(sheet.cell(r, 2).value, int):
                 self.assertEqual(sheet.row_dimensions[r].height, 9)
 
-    def test_body_limit_excludes_seven_title_rows_and_reserves_total(self):
+    def test_print_height_allows_more_than_58_short_rows(self):
         manager = MonthlyReportManager('unused.xlsx')
         sheet = openpyxl.Workbook().active
         sheet.page_setup.scale = 100
@@ -293,10 +402,18 @@ class ReportPaddingTest(unittest.TestCase):
         # Page 101:107 is the title, 108:111 is the table heading.
         sheet.row_breaks.append(Break(id=100))
         self.assertIsNone(manager._detail_page_overflow_row(sheet, 112, 46))
-        self.assertEqual(manager._detail_page_overflow_row(sheet, 112, 47), 158)
-        # With more records following, use the 58th row for data instead
-        # of leaving it empty for a TOTAL that belongs on the final page.
-        self.assertEqual(manager._detail_page_overflow_row(sheet, 112, 48), 159)
+        self.assertIsNone(manager._detail_page_overflow_row(sheet, 112, 47))
+        self.assertIsNone(manager._detail_page_overflow_row(sheet, 112, 48))
+
+    def test_rewritten_table_discards_template_break_through_total_row(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        for row in (100, 124, 158, 180, 200):
+            sheet.row_breaks.append(Break(id=row))
+
+        manager._remove_stale_table_breaks(sheet, 112, 180)
+
+        self.assertEqual([brk.id for brk in sheet.row_breaks.brk], [100, 200])
 
     def test_last_record_stays_with_total_even_with_one_record_left(self):
         manager = MonthlyReportManager('unused.xlsx')
