@@ -634,17 +634,16 @@ class MonthlyReportManager:
     def _ndt_reflow_height_scale(self, ws, page_number=1):
         """Return the 3.0 reflow scale for a summary or detail page.
 
-        The first 3.0 page can safely include the RT subcontract subtotal and
-        TOTAL: the exported PDF leaves 28.9 points below the final line versus
-        a 25.2-point bottom margin. Applying that tighter limit to every detail
-        page makes Excel add automatic breaks, so only the first page uses it.
+        Use the same calibrated boundary on the first two 3.0 pages.  Giving
+        the first page a looser boundary let its final record and TOTAL extend
+        visibly lower than the continuation page.  A shared scale moves that
+        final record and TOTAL together when they do not fit, so adjacent
+        pages finish on the same printable baseline.
         """
-        if page_number == 1:
-            return self._paut_print_scale(ws) * 0.88
-        if page_number == 2:
+        if page_number in (1, 2):
             # Excel normalizes saved column widths slightly, raising the
             # effective scale from about 88.14% to 88.47%. This small second-
-            # page correction keeps PAUT record 39 and its TOTAL together.
+            # page correction also provides a consistent first-page boundary.
             return self._paut_print_scale(ws) * 0.905
         return self._report_height_scale(ws)
 

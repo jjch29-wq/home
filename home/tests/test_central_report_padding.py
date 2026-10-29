@@ -64,7 +64,7 @@ class ReportPaddingTest(unittest.TestCase):
         )
         self.assertAlmostEqual(
             manager._ndt_reflow_height_scale(sheet, page_number=1),
-            manager._paut_print_scale(sheet) * 0.88,
+            manager._paut_print_scale(sheet) * 0.905,
         )
         self.assertAlmostEqual(
             manager._ndt_reflow_height_scale(sheet, page_number=2),
@@ -73,6 +73,15 @@ class ReportPaddingTest(unittest.TestCase):
         self.assertAlmostEqual(
             manager._ndt_reflow_height_scale(sheet, page_number=3),
             manager._report_height_scale(sheet),
+        )
+
+    def test_first_two_ndt_pages_use_same_bottom_boundary(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+
+        self.assertEqual(
+            manager._ndt_reflow_height_scale(sheet, page_number=1),
+            manager._ndt_reflow_height_scale(sheet, page_number=2),
         )
 
     def test_report_header_contract_title_uses_thin_top_border(self):
