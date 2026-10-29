@@ -74,6 +74,20 @@ class MonthlyReportManager:
         thin = Side(style='thin')
         self.border_thin = Border(left=thin, right=thin, top=thin, bottom=thin)
 
+    @staticmethod
+    def _keep_single_lower_horizontal_border(cell):
+        """Draw an internal row boundary from the upper row only.
+
+        Excel/PDF renderers can separate coincident bottom and top borders by
+        a pixel after scaling.  Detail rows therefore keep their bottom edge
+        and omit the top edge; the preceding row supplies the one shared line.
+        """
+        import copy
+
+        border = copy.copy(cell.border)
+        border.top = Side(style=None)
+        cell.border = border
+
     def _insert_rows_safely(self, ws, insert_idx, amount):
         """
         openpyxl의 병합 셀 깨집 버그를 우회하여 안전하게 행을 삽입합니다.
@@ -4871,6 +4885,7 @@ class MonthlyReportManager:
                         c_cell.font = self.font_normal
                         c_cell.alignment = self.align_center
                     c_cell.border = self.border_thin
+                    self._keep_single_lower_horizontal_border(c_cell)
 
                 # Keep long Line No. values on one line inside the widened F:I area.
                 ws.cell(row=current_row, column=6).alignment = Alignment(
@@ -4936,6 +4951,7 @@ class MonthlyReportManager:
                 for c_idx in range(2, 24):
                     cell = ws.cell(row=r, column=c_idx)
                     cell.border = self.border_thin
+                    self._keep_single_lower_horizontal_border(cell)
 
             # TOTAL 행 값 쓰기 및 스타일 보정
             total_ori = sum(vals.get('ori', vals['qty']) for _, vals in data_items if not vals.get('is_subtotal', False))
@@ -4952,6 +4968,10 @@ class MonthlyReportManager:
                         c.fill = copy.copy(fill_style)
 
             safe_merge(total_row, 22, total_row, 23) # 비고
+            for c_idx in range(2, 24):
+                self._keep_single_lower_horizontal_border(
+                    ws.cell(row=total_row, column=c_idx)
+                )
             if total_row >= 401:
                 ws.row_dimensions[total_row].height = detail_body_row_height
 

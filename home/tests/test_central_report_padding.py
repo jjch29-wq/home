@@ -14,6 +14,23 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class ReportPaddingTest(unittest.TestCase):
+    def test_detail_rows_use_one_horizontal_border_per_boundary(self):
+        from openpyxl.styles import Border, Side
+
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        thin = Side(style='thin')
+        upper = sheet.cell(10, 2)
+        lower = sheet.cell(11, 2)
+        upper.border = Border(top=thin, bottom=thin)
+        lower.border = Border(top=thin, bottom=thin)
+
+        manager._keep_single_lower_horizontal_border(lower)
+
+        self.assertEqual(upper.border.bottom.style, 'thin')
+        self.assertIsNone(lower.border.top.style)
+        self.assertEqual(lower.border.bottom.style, 'thin')
+
     def test_ndt_summary_compacts_titles_without_shrinking_records(self):
         manager = MonthlyReportManager('unused.xlsx')
         sheet = openpyxl.Workbook().active
