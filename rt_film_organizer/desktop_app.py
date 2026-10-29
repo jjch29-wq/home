@@ -715,7 +715,7 @@ class MainWindow(QMainWindow):
         if not self.output_edit.text().strip(): return self.error("출력 폴더를 지정하세요.")
         if any(r.report_item for r in self.records):
             if any(not r.section or not r.line_no or not r.joint_no or not r.report_no or r.sequence < 1 for r in self.records):
-                return self.error("보고서 배정 사진의 보고서번호·라인·JOINT·구간·순번을 모두 확인하세요. 보수구간은 직접 선택해야 합니다.")
+                return self.error("보고서 배정 사진의 보고서번호·라인·JOINT·구간·순번을 모두 확인하세요. 저장된 구간이 없거나 매수가 맞지 않는 항목은 구간을 직접 확인하세요.")
             mismatches = sum("OCR불일치" in r.status for r in self.records)
             if QMessageBox.question(self, "보고서와 사진 최종 확인", f"{len(self.records)}장의 사진과 보고서 항목 연결을 모두 확인했나요?\nOCR 불일치 표시: {mismatches}장\n확인한 배정과 현재 파일명으로 저장합니다.", QMessageBox.Yes|QMessageBox.No, QMessageBox.No) != QMessageBox.Yes: return
         if any(not r.joint_no for r in self.records):

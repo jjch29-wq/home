@@ -16,10 +16,15 @@ class ReportDialog(QDialog):
         self.slots = []
         self.rendering = False
         self.setWindowTitle('여러 RT 보고서 → 촬영 순서별 사진 배정')
-        self.resize(1250, 900)
+        available = self.screen().availableGeometry()
+        self.resize(min(1250, available.width()), min(850, available.height() - 80))
         layout = QVBoxLayout(self)
         hint = QLabel('① 보고서 추가·순서 변경 → ② 전체 순서 배정 → ③ 보고서별 첫·마지막 사진과 누락 확인')
         hint.setWordWrap(True); layout.addWidget(hint)
+        actions = QHBoxLayout()
+        self.add_button(actions, '전체 배정 적용 후 사진 확인', self.apply_mapping)
+        self.add_button(actions, '취소', self.reject)
+        layout.addLayout(actions)
         source_row = QHBoxLayout()
         self.report_combo = QComboBox(); self.fill_catalog()
         source_row.addWidget(self.report_combo, 1)
@@ -63,9 +68,6 @@ class ReportDialog(QDialog):
         split.addWidget(detail_panel); split.setSizes([340, 870]); layout.addWidget(split, 1)
         self.summary = QLabel('매수 정보가 없는 원촬영은 3장, 보수는 0장 제안입니다. 실제 매수를 확인하세요.')
         self.summary.setWordWrap(True); layout.addWidget(self.summary)
-        footer = QHBoxLayout()
-        self.add_button(footer, '전체 배정 적용 후 사진 확인', self.apply_mapping)
-        self.add_button(footer, '취소', self.reject); layout.addLayout(footer)
         self.queue.currentRowChanged.connect(self.show_report)
         if self.reports: self.add_report()
 

@@ -11,7 +11,11 @@ def load_reports(path):
     if not isinstance(data, list):
         raise ValueError("보고서 이력 또는 RT 미리보기 JSON 목록을 선택하세요.")
     if data and all(isinstance(row, dict) and "Joint" in row for row in data):
-        data = [{"mode": "RT", "report_no": "", "items": data}]
+        # Preview saves include hidden rows as well as the visible line/date.
+        # Apply their saved filters only here; issued snapshots are authoritative.
+        visible = [row for row in data if all(row.get(flag, True)
+                   for flag in ('drawing_filtered', 'date_filtered', 'line_filtered'))]
+        data = [{"mode": "RT", "report_no": "", "items": visible}]
     reports = []
     for report in data:
         if not isinstance(report, dict) or report.get("mode") != "RT" or report.get("deleted_at"):
@@ -30,15 +34,42 @@ def load_reports(path):
 
 def suggested_count(item):
     repair = str(item.get("Joint", "")).upper().endswith("R")
-    value = item.get("RT_RE" if repair else "RT_OR")
-    if value is not None and str(value).strip():
+    # Repair rows can store their own shot count in RT_OR with RT_RE=0.
+    # Keep their repair identity, but use that saved count when RT_RE has none.
+    fields = ('RT_RE', 'RT_OR') if repair else ('RT_OR',)
+    zero = False
+    for field_name in fields:
+        value = item.get(field_name)
+        if value is None or not str(value).strip():
+            continue
         try:
             count = int(str(value))
             if 0 <= count <= 100:
-                return count
+                if count or not repair:
+                    return count
+                zero = True
         except ValueError:
             pass
+    if zero:
+        return 0
     return 0 if repair else 3
+
+
+def saved_sections(item, count):
+    """Comma positions in Film Location identify the three film sections.
+
+    Preserve empty positions: ',N/1' is the second section, not the first.
+    A count mismatch cannot safely identify which photos belong to which section.
+    """
+    location = item.get('Loc')
+    if location is None or not str(location).strip():
+        return None
+    parts = str(location).split(',')
+    sections = ('(1-2)', '(2-3)', '(3-1)')
+    if len(parts) > len(sections):
+        return [''] * count
+    occupied = [sections[index] for index, value in enumerate(parts) if value.strip()]
+    return occupied if len(occupied) == count else [''] * count
 
 
 def build_slots(report, counts):
@@ -53,12 +84,16 @@ def build_slots(report, counts):
         if count and (not joint or not line):
             raise ValueError(f"항목 {index}: 라인번호와 JOINT를 확인하세요.")
         repair = joint.upper().endswith("R")
+        saved = saved_sections(item, count)
         for seq in range(1, count + 1):
-            section = ("(1-2)", "(2-3)", "(3-1)")[seq - 1] if count == 3 and not repair else ""
+            section = (saved[seq - 1] if saved is not None else
+                       ("(1-2)", "(2-3)", "(3-1)")[seq - 1] if count == 3 and not repair else "")
             slots.append(dict(report_no=str(item.get("Report No") or report.get("report_no") or "").strip(),
                               report_item=str(index), line_no=line, joint_no=joint,
                               welder_no=str(item.get("Welder") or ""), size=str(item.get("Size") or ""),
-                              exam_date=str(item.get("Date") or ""), sequence=seq, section=section))
+                              exam_date=str(item.get("Date") or ""), sequence=seq, section=section,
+                              section_source=('보고서 저장 구간' if saved is not None else '보고서순서')
+                              if section else '확인필요(구간 선택)'))
     return slots
 
 
@@ -71,7 +106,7 @@ def map_photos(slots, sources, assignments):
         raise ValueError("같은 사진을 두 항목에 중복 배정할 수 없습니다.")
     if any(not isinstance(i, int) or not 0 <= i < len(sources) for i in used):
         raise ValueError("유효하지 않은 사진 배정입니다.")
-    return [FilmRecord(source=str(sources[i]), **slot, section_source="보고서순서" if slot["section"] else "확인필요(구간 선택)",
+    return [FilmRecord(source=str(sources[i]), **slot,
                        status="보고서 배정·검토필요") for slot, i in zip(slots, assignments) if i is not None]
 
 

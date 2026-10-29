@@ -44,6 +44,51 @@ class ReportLinkTests(unittest.TestCase):
         assert [s['section'] for s in slots] == ['(1-2)', '(2-3)', '(3-1)', '']
         assert slots[-1]['joint_no'] == 'R06R'
 
+    def test_repair_row_uses_saved_count_without_becoming_original(self):
+        item = {'Dwg': 'LINE-A', 'Joint': 'R10R', 'RT_OR': '1', 'RT_RE': '0'}
+        self.assertEqual(suggested_count(item), 1)
+        slots = build_slots({'items': [item]}, [suggested_count(item)])
+        self.assertEqual(len(slots), 1)
+        self.assertEqual(slots[0]['joint_no'], 'R10R')
+        self.assertEqual(slots[0]['section'], '')
+        self.assertEqual(suggested_count(dict(item, RT_RE='2')), 2)
+        self.assertEqual(suggested_count(dict(item, RT_OR='0')), 0)
+
+    def test_preview_import_respects_saved_line_and_date_filters(self):
+        path = self.tmp_path / 'preview.json'
+        rows = [dict(report()['items'][0], drawing_filtered=True),
+                dict(report()['items'][1], drawing_filtered=False),
+                dict(report()['items'][0], date_filtered=False),
+                dict(report()['items'][0], selected=False)]
+        path.write_text(json.dumps(rows), encoding='utf-8')
+        self.assertEqual(load_reports(path)[0]['items'], rows[:1])
+        path.write_text(json.dumps([dict(report(), items=[rows[1]])]), encoding='utf-8')
+        self.assertEqual(load_reports(path)[0]['items'], [rows[1]])
+
+    def test_preview_with_no_visible_rows_is_rejected(self):
+        path = self.tmp_path / 'empty.json'
+        path.write_text(json.dumps([dict(report()['items'][0], drawing_filtered=False)]), encoding='utf-8')
+        with self.assertRaises(ValueError):
+            load_reports(path)
+
+    def test_saved_repair_sections_preserve_line_joint_and_photo_order(self):
+        rows = [dict(Dwg='LINE-A', Joint='R06R', Loc=',N/1', RT_OR='1', RT_RE='0'),
+                dict(Dwg='LINE-A', Joint='R10R', Loc=',,N/1', RT_OR='1', RT_RE='0')]
+        slots = build_slots({'report_no': 'RT-002', 'items': rows}, [1, 1])
+        records = map_photos(slots, ['first.jpg', 'second.jpg'], [0, 1])
+        self.assertEqual([(r.source, r.line_no, r.joint_no, r.section) for r in records],
+                         [('first.jpg', 'LINE-A', 'R06R', '(2-3)'),
+                          ('second.jpg', 'LINE-A', 'R10R', '(3-1)')])
+        self.assertTrue(all(r.section_source == '보고서 저장 구간' for r in records))
+        self.assertEqual(render_filename('{joint}{section}', records[1]), 'R10R(3-1).JPG')
+
+    def test_saved_sections_support_two_shots_and_reject_count_mismatch(self):
+        row = dict(Dwg='LINE-A', Joint='R01R', Loc='N/1,,N/1')
+        slots = build_slots({'items': [row]}, [2])
+        self.assertEqual([s['section'] for s in slots], ['(1-2)', '(3-1)'])
+        slots = build_slots({'items': [row]}, [3])
+        self.assertEqual([s['section'] for s in slots], ['', '', ''])
+
 
     def test_missing_middle_photo_does_not_shift_manual_assignment(self):
         slots = build_slots(report(), [3, 1])
