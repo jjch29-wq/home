@@ -46,6 +46,10 @@ class AttributeExportTests(unittest.TestCase):
         rows = load_history(history)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['용접부특성'], 'O')
+        connections = self.root / 'connections.json'
+        connections.write_text(json.dumps({'version': 3, 'rows': []}), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, '연결정보'):
+            load_history(connections)
         path = self.root / 'RT_Data.json'
         path.write_text(json.dumps([{'Date': '2026/10/17', 'Joint': 'S01', 'Dwg': 'DWG-01'},
                                     {'Joint': 'S02', 'selected': False}]), encoding='utf-8')

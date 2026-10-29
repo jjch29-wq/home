@@ -100,6 +100,8 @@ def load_history(path):
         history = json.load(stream)
     if not isinstance(history, dict):
         raise ValueError('중앙지사 이력은 날짜별 객체 형식이어야 합니다.')
+    if 'version' in history and 'rows' in history:
+        raise ValueError('선택한 파일은 검사 이력이 아닌 속성정보 연결정보입니다. 검사 이력에는 daily_work_history.json을 선택하세요.')
     rows = []
     for date, day in history.items():
         if not isinstance(day, dict):
@@ -296,7 +298,7 @@ def contained_path(root, value):
 def inventory(root):
     root = Path(root).resolve()
     bases = [root / method for method in METHODS]
-    bases += [root / '보고서', root / 'PAUT DATA', root / '영상화장비사진' / '중앙지사' / '영상화_결과']
+    bases += [root / '보고서', root / 'PAUT DATA', root / 'RT영상화', root / '영상화장비사진' / '중앙지사' / '영상화_결과']
     return sorted(path for base in bases if base.is_dir()
                   for path in base.rglob('*')
                   if path.is_file() and path.resolve().is_relative_to(root) and not path.name.startswith('~$'))
@@ -823,10 +825,24 @@ def main():
         refresh()
 
     def load():
-        loaded = load_history(history_var.get())
+        selected_path = Path(history_var.get())
+        with selected_path.open(encoding='utf-8-sig') as stream:
+            selected_data = json.load(stream)
+        saved_connections = None
+        if isinstance(selected_data, dict) and 'version' in selected_data and 'rows' in selected_data:
+            saved_connections = read_connections(selected_path)
+            selected_path = Path(os.environ.get('CENTRAL_ATTRIBUTE_HISTORY') or get_history_path())
+            if selected_path.resolve() == Path(history_var.get()).resolve():
+                raise ValueError('중앙지사 이력에서 daily_work_history.json을 선택한 후 연결정보 불러오기를 사용하세요.')
+        loaded = load_history(selected_path)
         persist()
         state['history'] = loaded
+        history_var.set(str(selected_path))
         rebuild()
+        if saved_connections is not None:
+            state['rows'] = restore_connections(state['rows'], saved_connections)
+            persist()
+            refresh()
         if (Path(root_var.get()) / '보고서').is_dir():
             connect_files()
 

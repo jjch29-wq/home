@@ -19,6 +19,7 @@ def method_roots(root, method, field):
     elif method == 'PAUT' and field == '데이터':
         bases.append(root / 'PAUT DATA')
     elif method == 'RT':
+        bases.append(root / 'RT영상화')
         bases.append(root / '영상화장비사진' / '중앙지사' / '영상화_결과')
     return bases
 
@@ -62,7 +63,9 @@ def connect_contract(rows, root, issue_path=None):
                     reports[(method, report_key(path.stem))].append(path)
 
     images = defaultdict(list)
-    image_root = root / '영상화장비사진' / '중앙지사' / '영상화_결과'
+    image_root = root / 'RT영상화'
+    if not image_root.is_dir():
+        image_root = root / '영상화장비사진' / '중앙지사' / '영상화_결과'
     if image_root.is_dir():
         for log in image_root.glob('영상화_작업기록*.csv'):
             with log.open(encoding='utf-8-sig', newline='') as stream:

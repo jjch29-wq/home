@@ -10,6 +10,21 @@ import shutil
 PARTS = ('보고서', 'PAUT DATA', '영상화장비사진/중앙지사/영상화_결과')
 
 
+def submission_path(value):
+    prefix = PARTS[2]
+    return 'RT영상화' + value[len(prefix):] if value == prefix or value.startswith(prefix + '/') else value
+
+
+def remap_connections(value):
+    if isinstance(value, str):
+        return submission_path(value)
+    if isinstance(value, list):
+        return [remap_connections(item) for item in value]
+    if isinstance(value, dict):
+        return {key: remap_connections(item) for key, item in value.items()}
+    return value
+
+
 def digest(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -34,7 +49,7 @@ def main():
                 continue
             if not path.resolve().is_relative_to(source):
                 raise ValueError('Source escapes the contract folder')
-            relative = path.relative_to(source)
+            relative = Path(submission_path(path.relative_to(source).as_posix()))
             target = (destination / relative).resolve()
             if not target.is_relative_to(destination):
                 raise ValueError('Target escapes the submission folder')
@@ -70,7 +85,7 @@ def main():
             print(f'Verified {index}/{len(plan)} files', flush=True)
     source_cache = source / '.central_attribute_connections.json'
     if source_cache.is_file():
-        data = json.loads(source_cache.read_text(encoding='utf-8-sig'))
+        data = remap_connections(json.loads(source_cache.read_text(encoding='utf-8-sig')))
         # All file links remain relative to the same three preserved subtrees.
         for row in [*data.get('rows', []), *data.get('unresolved', [])]:
             links = [row.get(field) for field in ('보고서', '필름영상화', '데이터')]
@@ -87,7 +102,7 @@ def main():
             backup = cache.with_name(cache.name + '.backup-' + stamp)
             shutil.copy2(cache, backup)
         temporary = cache.with_name(cache.name + '.tmp-' + stamp)
-        shutil.copy2(source_cache, temporary)
+        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
         temporary.replace(cache)
     report = destination / ('자료복사_검증기록_' + stamp + '.json')
     report.write_text(json.dumps(dict(source=str(source), destination=str(destination),

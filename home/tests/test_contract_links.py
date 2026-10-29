@@ -34,6 +34,10 @@ class ContractLinksTests(unittest.TestCase):
             self.assertTrue(allowed(root, reports / 'SIS-RT-002.xlsx', 'RT', '보고서'))
             self.assertFalse(allowed(root, reports / 'SIS-RT-002.xlsx', 'PAUT', '보고서'))
             self.assertNotIn('보고서번호', row)
+            images.rename(root / 'RT영상화')
+            updated = connect_contract([row], root, issue)[0]
+            self.assertEqual(updated['RT영상']['3-1'], ['RT영상화/LINE/R10R(3-1).JPG'])
+            self.assertTrue(allowed(root, root / updated['RT영상']['3-1'][0], 'RT', '필름영상화'))
 
     def test_paut_uses_exact_line_and_joint_and_preserves_multiple_files(self):
         with tempfile.TemporaryDirectory() as directory:
