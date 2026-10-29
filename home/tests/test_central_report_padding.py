@@ -14,6 +14,24 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class ReportPaddingTest(unittest.TestCase):
+    def test_only_ndt_header_spacer_is_increased(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.sheet_format.defaultRowHeight = 15
+
+        sheet.cell(10, 6, '월간용역진도보고서')
+        sheet.cell(14, 6, '3.0 비파괴검사현황')
+        sheet.cell(30, 6, '월간용역진도보고서')
+        sheet.cell(34, 6, '4.0 용접결함, 불량률 현황')
+        sheet.row_dimensions[16].height = 13.5
+        sheet.row_dimensions[36].height = 13.5
+
+        spacer_row = manager._lower_ndt_page_titles(sheet)
+
+        self.assertEqual(spacer_row, 16)
+        self.assertEqual(sheet.row_dimensions[16].height, 18.5)
+        self.assertEqual(sheet.row_dimensions[36].height, 13.5)
+
     def test_detail_rows_use_one_horizontal_border_per_boundary(self):
         from openpyxl.styles import Border, Side
 

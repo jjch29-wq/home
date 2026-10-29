@@ -661,6 +661,45 @@ class MonthlyReportManager:
             return self._paut_print_scale(ws) * 0.905
         return self._report_height_scale(ws)
 
+    def _lower_ndt_page_titles(self, ws, extra_height=5.0):
+        """Lower only 3.0 page content by enlarging its header spacer.
+
+        The seven-row document header is copied to every continuation page.
+        Increasing its final blank row before pagination moves each 3.0 title
+        and table down equally, without changing pages in sections 1, 2, or 4.
+        """
+        max_column = min(ws.max_column, 23)
+
+        def row_text(row):
+            return ''.join(
+                str(ws.cell(row=row, column=column).value or '')
+                for column in range(1, max_column + 1)
+            )
+
+        for title_row in range(1, ws.max_row + 1):
+            title = ''.join(
+                str(ws.cell(row=title_row, column=6).value or '').split()
+            )
+            if '3.0비파괴검사현황' not in title:
+                continue
+
+            for header_start in range(max(1, title_row - 6), title_row + 1):
+                if '월간용역진도보고서' not in ''.join(
+                    row_text(header_start).split()
+                ):
+                    continue
+                spacer_row = header_start + 6
+                current_height = float(
+                    ws.row_dimensions[spacer_row].height
+                    or ws.sheet_format.defaultRowHeight
+                    or 15
+                )
+                ws.row_dimensions[spacer_row].height = (
+                    current_height + float(extra_height)
+                )
+                return spacer_row
+        return None
+
     def _compact_ndt_summary_page(self, ws):
         """Reclaim blank summary spacing before creating continuation pages."""
         first = self.table_markers['qty']
@@ -5507,6 +5546,7 @@ class MonthlyReportManager:
 
         self._trim_trailing_blank_print_pages(ws)
         self._reflow_ndt_section(ws)
+        self._lower_ndt_page_titles(ws)
         self._paginate_reflowed_ndt(ws)
         # Build photo pages only after every dynamic 3.0 row operation. Images
         # are drawing anchors rather than cells; creating them earlier makes
