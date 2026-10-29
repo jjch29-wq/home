@@ -2,6 +2,21 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "중앙지사 속성정보 생성",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "site_apps.central.src.attribute_export",
+            "env": {
+                "CENTRAL_ATTRIBUTE_ROOT": "G:/내 드라이브/07_Antigravity/PMI_Data/central/중앙지사_제출자료",
+                "CENTRAL_ATTRIBUTE_HISTORY": "G:/내 드라이브/07_Antigravity/PMI_Data/central/daily_work_history.json",
+                "CENTRAL_ATTRIBUTE_ISSUES": "G:/내 드라이브/07_Antigravity/PMI_Data/ndt_report/report_issue_history.json"
+            },
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "중앙지사 앱 실행 (독립 창)",
             "type": "debugpy",
             "request": "launch",
