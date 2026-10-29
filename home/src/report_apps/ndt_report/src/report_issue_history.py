@@ -70,6 +70,16 @@ def load_history(path=None):
 
 def restore_report_numbers(mode, items, path=None):
     """Restore the latest active issue number for the same source inspection."""
+    def inspection(item):
+        site = str(item.get('_source_site') or '').strip()
+        source = str(item.get('_source_path') or '').strip().replace('\\', '/').casefold()
+        line = str(item.get('Line No.') or item.get('Dwg') or item.get('ISO') or '').strip()
+        joint = str(item.get('Joint No.') or item.get('Joint') or '').strip()
+        date = str(item.get('Date') or '').strip()
+        if not (site or source) or not all((line, joint, date)):
+            return None
+        return (('site', site) if site else ('path', source), date, line, joint)
+
     def identity(item):
         if item.get('_source_id'):
             return ('source', item.get('_source_site', ''), item['_source_id'])
@@ -80,6 +90,7 @@ def restore_report_numbers(mode, items, path=None):
         return ('inspection', item.get('_source_site', ''), item.get('_source_path', ''),
                 item['Date'], line, joint)
     numbers = {}
+    inspection_numbers = {}
     for entry in load_history(path):
         if entry.get('deleted_at') or entry.get('mode') != mode or not entry.get('report_no'):
             continue
@@ -87,10 +98,17 @@ def restore_report_numbers(mode, items, path=None):
             key = identity(item)
             if key is not None:
                 numbers[key] = entry['report_no']
+            fallback = inspection(item)
+            if fallback is not None:
+                inspection_numbers.setdefault(fallback, set()).add(entry['report_no'])
     for item in items:
         key = identity(item)
         if key in numbers:
             item['Report No'] = numbers[key]
+        elif not str(item.get('Report No') or '').strip():
+            candidates = inspection_numbers.get(inspection(item), set())
+            if len(candidates) == 1:
+                item['Report No'] = next(iter(candidates))
 
 
 def record_issue(mode, report_no, output_path, items, path=None):

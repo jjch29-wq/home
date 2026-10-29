@@ -91,6 +91,33 @@ class IssueHistoryTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), b'keep')
             self.assertEqual(Path(report_output_path(directory, 'CON', '.xlsm')).name, '_CON.xlsm')
 
+    def test_restore_changed_source_id_without_crossing_inspections(self):
+        issued = {'_source_id': 'old', '_source_site': 'central',
+                  'Date': '2026-10-19', 'Dwg': 'L1', 'Joint': 'R06'}
+        rows = [dict(issued, _source_id='new'),
+                dict(issued, _source_id='new', Joint='R06R'),
+                dict(issued, _source_id='new', Date='2026-10-20'),
+                dict(issued, _source_id='new', _source_site='other'),
+                dict(issued, _source_id='new', **{'Report No': 'MANUAL'})]
+        entries = [{'mode': 'RT', 'report_no': 'RT-002', 'items': [issued]}]
+        with patch.object(history, 'load_history', return_value=entries):
+            history.restore_report_numbers('RT', rows)
+        self.assertEqual(rows[0]['Report No'], 'RT-002')
+        for row in rows[1:4]:
+            self.assertNotIn('Report No', row)
+        self.assertEqual(rows[4]['Report No'], 'MANUAL')
+
+    def test_ambiguous_fallback_does_not_assign_number(self):
+        issued = {'_source_id': 'old', '_source_site': 'central',
+                  'Date': '2026-10-19', 'Dwg': 'L1', 'Joint': 'R06'}
+        entries = [{'mode': 'RT', 'report_no': number, 'items': [issued]}
+                   for number in ('RT-002', 'RT-003')]
+        rows = [dict(issued, _source_id='new'), dict(issued)]
+        with patch.object(history, 'load_history', return_value=entries):
+            history.restore_report_numbers('RT', rows)
+        self.assertNotIn('Report No', rows[0])
+        self.assertEqual(rows[1]['Report No'], 'RT-003')
+
     def test_bulk_delete_same_issue_and_other_issue_is_atomic(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'history.json'
