@@ -14,6 +14,28 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class PhotoLayoutTest(unittest.TestCase):
+    def test_sec16_marker_is_retained_after_photo_layout(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            source = folder / 'photo.png'
+            Image.new('RGB', (320, 240), 'steelblue').save(source)
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.cell(610, 3, '1.1 위상배열초음파탐상검사(SEC.16)')
+            for row in range(600, 686):
+                sheet.row_dimensions[row].height = 2.7
+            sheet.print_area = 'B600:W685'
+            manager = MonthlyReportManager('unused.xlsx')
+            manager._history_path = str(folder / 'history.json')
+
+            manager._populate_process_photo_pages(sheet, [dict(
+                process='PAUT', file_path=str(source), date='2026-10-16',
+                joint_no='S01', description='검사 공정사진', location='Sec.03',
+            )])
+
+            self.assertEqual(len(sheet._images), 1)
+            self.assertIn('SEC.16', str(sheet.cell(610, 3).value).upper())
+
     def test_both_corners_stay_inside_frame_above_caption(self):
         with tempfile.TemporaryDirectory() as folder:
             folder = Path(folder)
@@ -36,6 +58,7 @@ class PhotoLayoutTest(unittest.TestCase):
             workbook.save(output)
             checked = openpyxl.load_workbook(output).active
             self.assertEqual(len(checked._images), 18)
+            self.assertIn('SEC.16', str(checked.cell(610, 3).value).upper())
             inset = pixels_to_EMU(6)
             for i, picture in enumerate(checked._images):
                 anchor = picture.anchor
