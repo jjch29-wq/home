@@ -1153,7 +1153,14 @@ class MonthlyReportManager:
         raise ValueError('검사현황 페이지 분할이 50회를 초과했습니다.')
 
     def _insert_fixed_ndt_top_spacers(self, ws, spacer_height=10.0):
-        """Insert a small blank row above each paginated 3.0 header."""
+        """Add space inside each existing paginated 3.0 header.
+
+        Do not insert a row here.  Pagination has already completed, and a
+        structural insertion at a page boundary can detach the manual break
+        from its copied continuation header.  The seventh header row is the
+        template's blank spacer, so enlarging it moves the body down without
+        changing row numbers, merges, drawings, or page breaks.
+        """
         max_column = min(ws.max_column, 23)
 
         def row_text(row):
@@ -1176,24 +1183,17 @@ class MonthlyReportManager:
                     header_starts.append(candidate)
                     break
 
-        for header_start in reversed(sorted(set(header_starts))):
-            self._insert_rows_safely(ws, header_start, 1)
-            ws.row_dimensions[header_start].height = float(spacer_height)
-            ws.row_dimensions[header_start].hidden = False
-
-            # openpyxl moves cells but not drawings when rows are inserted.
-            for image in list(ws._images):
-                anchor = getattr(image, 'anchor', None)
-                if not hasattr(anchor, '_from'):
-                    continue
-                if anchor._from.row + 1 >= header_start:
-                    anchor._from.row += 1
-                    if hasattr(anchor, 'to'):
-                        anchor.to.row += 1
-
-            for key, marker_row in self.table_markers.items():
-                if marker_row >= header_start:
-                    self.table_markers[key] += 1
+        for header_start in sorted(set(header_starts)):
+            spacer_row = header_start + 6
+            current_height = float(
+                ws.row_dimensions[spacer_row].height
+                or ws.sheet_format.defaultRowHeight
+                or 15
+            )
+            ws.row_dimensions[spacer_row].height = (
+                current_height + float(spacer_height)
+            )
+            ws.row_dimensions[spacer_row].hidden = False
 
         return len(set(header_starts))
 
@@ -5591,7 +5591,11 @@ class MonthlyReportManager:
 
         self._trim_trailing_blank_print_pages(ws)
         self._reflow_ndt_section(ws)
-        self._lower_ndt_page_titles(ws)
+        # Reserve the requested top breathing room before pagination.  Adding
+        # rows after pagination shifts Excel's manual page boundaries and can
+        # leave alternating continuation pages without the common header or
+        # the ``2.0 비파괴검사 세부현황`` block.
+        self._lower_ndt_page_titles(ws, extra_height=15.0)
         self._paginate_reflowed_ndt(ws)
         self._insert_fixed_ndt_top_spacers(ws)
         # Build photo pages only after every dynamic 3.0 row operation. Images

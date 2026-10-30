@@ -24,8 +24,8 @@ class PhotoLayoutTest(unittest.TestCase):
         inserted = manager._insert_fixed_ndt_top_spacers(sheet)
 
         self.assertEqual(inserted, 1)
-        self.assertEqual(sheet.row_dimensions[100].height, 10.0)
-        self.assertEqual(sheet.cell(101, 2).value, '월간 용역 진도 보고서')
+        self.assertEqual(sheet.row_dimensions[106].height, 25.0)
+        self.assertEqual(sheet.cell(100, 2).value, '월간 용역 진도 보고서')
 
     def test_sec16_marker_is_retained_after_photo_layout(self):
         with tempfile.TemporaryDirectory() as folder:
