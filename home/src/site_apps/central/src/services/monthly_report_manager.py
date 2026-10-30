@@ -1152,6 +1152,51 @@ class MonthlyReportManager:
                 return
         raise ValueError('검사현황 페이지 분할이 50회를 초과했습니다.')
 
+    def _insert_fixed_ndt_top_spacers(self, ws, spacer_height=10.0):
+        """Insert a small blank row above each paginated 3.0 header."""
+        max_column = min(ws.max_column, 23)
+
+        def row_text(row):
+            return ''.join(
+                str(ws.cell(row=row, column=column).value or '')
+                for column in range(1, max_column + 1)
+            )
+
+        header_starts = []
+        for title_row in range(1, ws.max_row + 1):
+            title = ''.join(
+                str(ws.cell(row=title_row, column=6).value or '').split()
+            )
+            if '3.0비파괴검사현황' not in title:
+                continue
+            for candidate in range(max(1, title_row - 6), title_row + 1):
+                if '월간용역진도보고서' in ''.join(
+                    row_text(candidate).split()
+                ):
+                    header_starts.append(candidate)
+                    break
+
+        for header_start in reversed(sorted(set(header_starts))):
+            self._insert_rows_safely(ws, header_start, 1)
+            ws.row_dimensions[header_start].height = float(spacer_height)
+            ws.row_dimensions[header_start].hidden = False
+
+            # openpyxl moves cells but not drawings when rows are inserted.
+            for image in list(ws._images):
+                anchor = getattr(image, 'anchor', None)
+                if not hasattr(anchor, '_from'):
+                    continue
+                if anchor._from.row + 1 >= header_start:
+                    anchor._from.row += 1
+                    if hasattr(anchor, 'to'):
+                        anchor.to.row += 1
+
+            for key, marker_row in self.table_markers.items():
+                if marker_row >= header_start:
+                    self.table_markers[key] += 1
+
+        return len(set(header_starts))
+
     def _detail_page_overflow_row(self, ws, start_row, row_count):
         overflow = self._first_print_overflow_row(
             ws, start_row, row_count + 1, self._report_height_scale(ws)
@@ -5548,6 +5593,7 @@ class MonthlyReportManager:
         self._reflow_ndt_section(ws)
         self._lower_ndt_page_titles(ws)
         self._paginate_reflowed_ndt(ws)
+        self._insert_fixed_ndt_top_spacers(ws)
         # Build photo pages only after every dynamic 3.0 row operation. Images
         # are drawing anchors rather than cells; creating them earlier makes
         # later row deletion/insertion detach them from their page headers.

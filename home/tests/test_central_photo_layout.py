@@ -14,6 +14,19 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class PhotoLayoutTest(unittest.TestCase):
+    def test_fixed_ndt_top_spacer_uses_ten_points(self):
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.cell(100, 2, '월간 용역 진도 보고서')
+        sheet.cell(104, 6, '3.0 비파괴검사현황')
+        manager = MonthlyReportManager('unused.xlsx')
+
+        inserted = manager._insert_fixed_ndt_top_spacers(sheet)
+
+        self.assertEqual(inserted, 1)
+        self.assertEqual(sheet.row_dimensions[100].height, 10.0)
+        self.assertEqual(sheet.cell(101, 2).value, '월간 용역 진도 보고서')
+
     def test_sec16_marker_is_retained_after_photo_layout(self):
         with tempfile.TemporaryDirectory() as folder:
             folder = Path(folder)
