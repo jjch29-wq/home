@@ -197,6 +197,33 @@ class RtQuantitiesTests(unittest.TestCase):
             self.assertEqual(eval(expression, dict(values, method='RT')), 3)
             self.assertEqual(eval(expression, dict(values, method='PAUT')), 4)
 
+    def test_native_monthly_rt_detail_total_writes_re_cumulative(self):
+        source = ROOT / 'home/src/site_apps/central/src/services/monthly_report_manager.py'
+        tree = ast.parse(source.read_text(encoding='utf-8'))
+        generate = next(
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == 'generate_report'
+        )
+        detail_branch = next(
+            node for node in ast.walk(generate)
+            if isinstance(node, ast.If)
+            and isinstance(node.test, ast.Name)
+            and node.test.id == 'is_detail'
+            and any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id == '_write_safe'
+                and len(call.args) >= 2
+                and isinstance(call.args[1], ast.Constant)
+                and call.args[1].value == 18
+                for call in ast.walk(node)
+            )
+        )
+        self.assertTrue(any(
+            isinstance(name, ast.Name) and name.id == 'total_re'
+            for name in ast.walk(detail_branch)
+        ))
+
     def test_native_daily_save_records_rt_or_3_and_rt_re_1_and_keeps_photos(self):
         source = ROOT / 'home/src/site_apps/central/src/daily_work_log_tab.py'
         tree = ast.parse(source.read_text(encoding='utf-8'))

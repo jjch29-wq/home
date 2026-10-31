@@ -14,6 +14,198 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class ReportPaddingTest(unittest.TestCase):
+    def test_whole_detail_table_moves_with_parent_without_orphan_title(self):
+        sheet = openpyxl.Workbook().active
+        sheet.cell(1, 6, '월간 용역 진도 보고서')
+        sheet.cell(5, 6, '3.0 비파괴검사현황')
+        sheet.cell(19, 2, '2.0 비파괴검사 세부현황')
+        sheet.cell(20, 3, '2.1 비파괴검사 세부현황(PAUT)')
+        sheet.cell(21, 2, '업체')
+        sheet.cell(23, 2, 'DATA')
+        manager = MonthlyReportManager('unused.xlsx')
+        inserted = manager._move_table_to_continuation(sheet, 20, 1, 21)
+        self.assertEqual(inserted, 9)
+        self.assertIsNone(sheet.cell(19, 2).value)
+        self.assertEqual(sheet.cell(28, 2).value, '2.0 비파괴검사 세부현황')
+        self.assertEqual(sheet.cell(29, 3).value, '2.1 비파괴검사 세부현황(PAUT)')
+        self.assertEqual(sheet.cell(30, 2).value, '업체')
+        self.assertEqual(sheet.cell(32, 2).value, 'DATA')
+
+    def test_real_toc_is_kept_and_general_and_photo_headers_are_corrected(self):
+        sheet = openpyxl.Workbook().active
+        for start in (1, 30, 60, 90):
+            sheet.merge_cells(start_row=start, start_column=6,
+                              end_row=start + 3, end_column=15)
+        sheet.cell(5, 6, '목 차')
+        sheet.cell(9, 2, 'Section Title')
+        sheet.cell(34, 6, '목 차')
+        sheet.cell(38, 2, '1. 용역명')
+        sheet.cell(64, 6, '6.0 사진대지')
+        sheet.cell(94, 6, '6.0 사진대지')
+        sheet.print_area = 'B1:W89'
+        manager = MonthlyReportManager('unused.xlsx')
+        manager._fix_report_section_header_labels(sheet)
+        self.assertEqual(sheet.cell(5, 6).value, '목 차')
+        self.assertEqual(sheet.cell(34, 6).value, '1.0 용역업무일반')
+        self.assertEqual(sheet.cell(64, 6).value, '7.0 사진대지')
+        self.assertIn('1     of     1', sheet.cell(64, 16).value)
+        self.assertIsNone(sheet.cell(94, 16).value)
+
+    def test_continuation_parent_uses_first_page_header_gap(self):
+        sheet = openpyxl.Workbook().active
+        for start in (1, 50):
+            sheet.cell(start, 6, '월간 용역 진도 보고서')
+        sheet.cell(9, 2, '1.0 비파괴검사사용량 집계표')
+        sheet.row_dimensions[8].height = 5
+        sheet.cell(58, 2, '1.2 SECTION별 검사현황')
+        sheet.row_dimensions[57].height = 20
+        sheet.cell(59, 3, '1.2.3 방사선투과검사 (계속)')
+        manager = MonthlyReportManager('unused.xlsx')
+        manager._align_ndt_parent_top_gaps(sheet)
+        reference_gap = sum(
+            sheet.row_dimensions[row].height or sheet.sheet_format.defaultRowHeight
+            for row in (7, 8)
+        )
+        continuation_gap = sum(
+            sheet.row_dimensions[row].height or sheet.sheet_format.defaultRowHeight
+            for row in (56, 57)
+        )
+        self.assertAlmostEqual(continuation_gap, reference_gap)
+        self.assertTrue(all(sheet.row_dimensions[row].height > 0
+                            for row in (56, 57)))
+        self.assertEqual(sheet.cell(59, 3).value, '1.2.3 방사선투과검사 (계속)')
+
+    def test_continuation_gap_includes_last_blank_header_row(self):
+        sheet = openpyxl.Workbook().active
+        for start in (1, 50):
+            sheet.cell(start, 6, '월간 용역 진도 보고서')
+        sheet.cell(8, 2, '1.0 비파괴검사사용량 집계표')
+        sheet.row_dimensions[7].height = 22.5
+        sheet.cell(59, 2, '1.2 SECTION별 검사현황')
+        sheet.row_dimensions[56].height = 28.5
+        sheet.row_dimensions[57].height = 13.5
+        sheet.row_dimensions[58].height = 13.5
+        manager = MonthlyReportManager('unused.xlsx')
+        manager._align_ndt_parent_top_gaps(sheet)
+        heights = [sheet.row_dimensions[row].height for row in (56, 57, 58)]
+        self.assertAlmostEqual(sum(heights), 22.5)
+        self.assertTrue(all(value > 0 for value in heights))
+        self.assertFalse(any(sheet.row_dimensions[row].hidden
+                             for row in (56, 57, 58)))
+
+    def test_section_parent_matches_summary_title_font_and_left_edge(self):
+        from copy import copy
+        from openpyxl.styles import Font, Alignment
+        sheet = openpyxl.Workbook().active
+        reference = sheet.cell(10, 2, '1.0 비파괴검사사용량 집계표')
+        reference.font = Font(name='Arial', size=10, bold=True)
+        reference.alignment = Alignment(horizontal='left', vertical='top')
+        sheet.cell(30, 3, '1.2 SECTION별 검사현황')
+        sheet.merge_cells('C30:W30')
+        sheet.cell(31, 3, '1.2.1 PAUT')
+        manager = MonthlyReportManager('unused.xlsx')
+        manager._normalize_ndt_parent_caption_style(sheet)
+        title = sheet.cell(30, 2)
+        self.assertEqual(title.value, '1.2 SECTION별 검사현황')
+        self.assertEqual(copy(title.font), copy(reference.font))
+        self.assertEqual(copy(title.alignment), copy(reference.alignment))
+        self.assertIsNone(sheet.cell(30, 3).value)
+        self.assertIn('B30:W30', {str(m) for m in sheet.merged_cells.ranges})
+        self.assertEqual(sheet.cell(31, 3).value, '1.2.1 PAUT')
+
+    def test_last_rt_page_repeats_detail_parent_and_keeps_pt(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.cell(1, 6, '월간 용역 진도 보고서')
+        sheet.cell(5, 6, '3.0 비파괴검사현황')
+        sheet.cell(10, 3, '2.3 비파괴검사 세부현황(RT) (계속)')
+        sheet.cell(11, 2, '업체')
+        sheet.cell(20, 2, 'RT 68')
+        sheet.cell(21, 2, 'TOTAL')
+        sheet.cell(22, 3, '2.4 비파괴검사 세부현황(PT)')
+        sheet.cell(40, 2, '2.0 비파괴검사 세부현황')
+        inserted = manager._insert_table_continuation(sheet, 20, 1, 11)
+        self.assertEqual(inserted, 12)
+        self.assertEqual(sheet.cell(28, 2).value, '2.0 비파괴검사 세부현황')
+        self.assertEqual(sheet.cell(29, 3).value,
+                         '2.3 비파괴검사 세부현황(RT) (계속)')
+        self.assertEqual(sheet.cell(32, 2).value, 'RT 68')
+        self.assertEqual(sheet.cell(33, 2).value, 'TOTAL')
+        self.assertEqual(sheet.cell(34, 3).value, '2.4 비파괴검사 세부현황(PT)')
+
+    def test_detail_parent_repeats_above_paut_not_between_paut_and_mt(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.cell(1, 6, '월간 용역 진도 보고서')
+        sheet.cell(5, 6, '3.0 비파괴검사현황')
+        sheet.cell(10, 2, '2.0 비파괴검사 세부현황')
+        sheet.cell(11, 3, '2.1 비파괴검사 세부현황(PAUT)')
+        sheet.cell(12, 2, '업체')
+        sheet.cell(30, 2, 'PAUT DATA')
+        sheet.cell(31, 2, 'TOTAL')
+        sheet.cell(32, 2, '2.0 비파괴검사 세부현황')
+        sheet.cell(33, 3, '2.2 비파괴검사 세부현황(MT)')
+        manager._remove_duplicate_ndt_detail_captions(sheet, 1, 40)
+        inserted = manager._insert_table_continuation(sheet, 30, 1, 12)
+        self.assertEqual(inserted, 12)
+        self.assertEqual(sheet.cell(38, 2).value, '2.0 비파괴검사 세부현황')
+        self.assertEqual(sheet.cell(39, 3).value,
+                         '2.1 비파괴검사 세부현황(PAUT) (계속)')
+        self.assertEqual(sheet.cell(42, 2).value, 'PAUT DATA')
+        self.assertIsNone(sheet.cell(44, 2).value)
+        self.assertEqual(sheet.cell(45, 3).value, '2.2 비파괴검사 세부현황(MT)')
+
+    def test_section_parent_is_repeated_above_rt_continuation(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.cell(1, 6, '월간 용역 진도 보고서')
+        sheet.cell(5, 6, '3.0 비파괴검사현황')
+        sheet.cell(10, 3, '1.2 SECTION별 검사현황')
+        sheet.row_dimensions[10].height = 18
+        sheet.merge_cells('C10:H10')
+        sheet.cell(20, 3, '1.2.3 방사선투과검사')
+        sheet.cell(21, 2, '업체')
+        sheet.cell(30, 2, 'TOTAL')
+
+        inserted = manager._insert_table_continuation(sheet, 30, 1, 21)
+
+        self.assertEqual(inserted, 12)
+        self.assertEqual(sheet.cell(38, 3).value, '1.2 SECTION별 검사현황')
+        self.assertEqual(sheet.row_dimensions[38].height, 18)
+        self.assertIn('C38:H38', {str(m) for m in sheet.merged_cells.ranges})
+        self.assertEqual(sheet.cell(39, 3).value, '1.2.3 방사선투과검사 (계속)')
+        self.assertEqual(sheet.cell(42, 2).value, 'TOTAL')
+
+    def test_summary_caption_moves_up_without_moving_quantity_table(self):
+        sheet = openpyxl.Workbook().active
+        sheet.row_dimensions[10].height = 20
+        sheet.row_dimensions[11].height = 14
+        sheet.cell(11, 2, '1.0 비파괴검사사용량 집계표')
+        sheet.cell(12, 3, '1.1 비파괴검사 물량표')
+        sheet.cell(13, 2, '방법')
+        sheet.row_dimensions[20].height = 10
+        sheet.row_dimensions[21].height = 14
+        sheet.cell(21, 3, '1.2 SECTION별 검사현황')
+        sheet.cell(22, 3, '1.2.1 위상배열초음파탐상검사')
+        sheet.row_breaks.append(Break(id=60))
+        manager = MonthlyReportManager('unused.xlsx')
+
+        self.assertTrue(manager._space_ndt_summary_caption(sheet))
+
+        self.assertEqual(sheet.row_dimensions[10].height, 14)
+        self.assertEqual(sheet.row_dimensions[11].height, 20)
+        self.assertEqual(sheet.cell(11, 2).alignment.vertical, 'top')
+        self.assertEqual(sheet.cell(12, 3).value, '1.1 비파괴검사 물량표')
+        self.assertEqual(sheet.cell(13, 2).value, '방법')
+        self.assertEqual(sheet.row_dimensions[20].height, 10)
+        self.assertEqual(sheet.row_dimensions[21].height, 14)
+        manager._space_ndt_section_caption(sheet)
+        self.assertEqual(sheet.row_dimensions[20].height, 10)
+        self.assertEqual(sheet.row_dimensions[21].height, 18)
+        self.assertEqual(sheet.cell(21, 3).alignment.vertical, 'top')
+        self.assertEqual(sheet.cell(22, 3).value, '1.2.1 위상배열초음파탐상검사')
+        self.assertEqual([b.id for b in sheet.row_breaks.brk], [60])
+
     def test_only_ndt_header_spacer_is_increased(self):
         manager = MonthlyReportManager('unused.xlsx')
         sheet = openpyxl.Workbook().active
@@ -48,6 +240,102 @@ class ReportPaddingTest(unittest.TestCase):
         self.assertEqual(upper.border.bottom.style, 'thin')
         self.assertIsNone(lower.border.top.style)
         self.assertEqual(lower.border.bottom.style, 'thin')
+
+    def test_tiny_blank_rows_between_detail_records_bridge_vertical_grid(self):
+        from openpyxl.styles import Border, Side
+
+        sheet = openpyxl.Workbook().active
+        sheet.cell(10, 3, 47)
+        sheet.cell(13, 3, 48)
+        sheet.row_dimensions[11].height = 1.95
+        sheet.row_dimensions[12].height = 1.95
+        thin = Side(style='thin')
+        medium = Side(style='medium')
+        sheet.cell(10, 2).border = Border(left=medium, right=thin, bottom=thin)
+        sheet.cell(10, 3).border = Border(left=thin, right=thin, bottom=thin)
+
+        bridged = MonthlyReportManager._bridge_blank_detail_row_borders(sheet)
+
+        self.assertEqual(bridged, [11, 12])
+        for row in (11, 12):
+            self.assertEqual(sheet.cell(row, 2).border.left.style, 'medium')
+            self.assertEqual(sheet.cell(row, 2).border.right.style, 'thin')
+            self.assertEqual(sheet.cell(row, 3).border.left.style, 'thin')
+            self.assertEqual(sheet.cell(row, 3).border.right.style, 'thin')
+            self.assertIsNone(sheet.cell(row, 2).border.top.style)
+        self.assertIsNone(sheet.cell(11, 2).border.bottom.style)
+        self.assertEqual(sheet.cell(12, 2).border.bottom.style, 'thin')
+
+    def test_merged_general_pages_place_equipment_table_below_heading(self):
+        from types import SimpleNamespace
+
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        for break_id in (235, 278, 325):
+            sheet.row_breaks.append(Break(id=break_id))
+        sheet.cell(306, 2, '거. PAUT 검사장비 최소사양')
+        anchor = SimpleNamespace(
+            _from=SimpleNamespace(row=306, col=2),
+            to=SimpleNamespace(row=318, col=20, rowOff=1),
+        )
+        image = SimpleNamespace(anchor=anchor, width=686.0, height=294.0)
+        sheet._images = [image]
+
+        manager._merge_pages7_and8(sheet)
+
+        # Deleting the repeated header moves row 306 to 299. The table then
+        # starts on the following blank row 300 instead of covering paragraphs.
+        self.assertEqual(image.anchor._from.row + 1, 300)
+        self.assertEqual(image.anchor.to.row + 1, 307)
+        self.assertEqual(image.height, 180)
+
+    def test_rt_summary_total_uses_free_row_on_previous_page(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.row_breaks.append(Break(id=20))
+        sheet.row_breaks.append(Break(id=50))
+        sheet.cell(25, 2, '1.2 SECTION별 검사현황')
+        sheet.cell(26, 3, '1.2.3 방사선투과검사 (계속)')
+        sheet.cell(27, 6, 'Line No.')
+        sheet.cell(28, 17, "ORI'")
+        sheet.cell(29, 2, 'TOTAL')
+        sheet.cell(29, 17, 281)
+        sheet.merge_cells('B29:P29')
+        sheet.cell(32, 3, '1.2.4 침투탐상검사')
+
+        changed = manager._pull_rt_summary_total_to_previous_page(sheet)
+
+        self.assertTrue(changed)
+        self.assertEqual(sheet.cell(21, 2).value, 'TOTAL')
+        self.assertEqual(sheet.cell(21, 17).value, 281)
+        self.assertIn('B21:P21', {str(merged) for merged in sheet.merged_cells.ranges})
+        self.assertEqual([brk.id for brk in sheet.row_breaks.brk], [21, 47])
+        self.assertEqual(sheet.cell(29, 3).value, '1.2.4 침투탐상검사')
+        self.assertFalse(any(
+            '(계속' in ''.join(
+                str(sheet.cell(row=row, column=col).value or '')
+                for col in range(1, 24)
+            )
+            for row in range(1, 40)
+        ))
+
+    def test_equipment_table_anchor_is_fixed_without_korean_text_matching(self):
+        from types import SimpleNamespace
+
+        sheet = openpyxl.Workbook().active
+        sheet.cell(299, 2, '7. PAUT minimum specification')
+        anchor = SimpleNamespace(
+            _from=SimpleNamespace(row=292, col=2),
+            to=SimpleNamespace(row=304, col=20),
+        )
+        image = SimpleNamespace(anchor=anchor, width=686.0, height=180.0)
+        sheet._images = [image]
+
+        target = MonthlyReportManager._place_general_equipment_table_image(sheet)
+
+        self.assertEqual(target, 300)
+        self.assertEqual(image.anchor._from.row + 1, 300)
+        self.assertEqual(image.anchor.to.row + 1, 312)
 
     def test_ndt_summary_compacts_titles_without_shrinking_records(self):
         manager = MonthlyReportManager('unused.xlsx')
@@ -118,6 +406,40 @@ class ReportPaddingTest(unittest.TestCase):
             manager._ndt_reflow_height_scale(sheet, page_number=1),
             manager._ndt_reflow_height_scale(sheet, page_number=2),
         )
+
+    def test_header_only_ndt_page_is_removed(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.cell(11, 6, '3.0 鍮꾪뙆愿닿??ы쁽??')
+        sheet.cell(15, 2, '1.2 SECTION')
+        sheet.cell(21, 6, '3.0 鍮꾪뙆愿닿??ы쁽??')
+        sheet.cell(25, 6, 'Line No.')
+        sheet.cell(27, 3, 1)
+        sheet.row_breaks.append(Break(id=10))
+        sheet.row_breaks.append(Break(id=20))
+        sheet.row_breaks.append(Break(id=30))
+
+        removed = manager._remove_header_only_ndt_pages(sheet)
+
+        self.assertEqual(removed, 1)
+        self.assertEqual(sorted({b.id for b in sheet.row_breaks.brk}), [10, 20])
+        self.assertIn('3.0', str(sheet.cell(11, 6).value))
+        self.assertEqual(sheet.cell(17, 3).value, 1)
+
+    def test_ndt_reflow_uses_bottom_margin_without_double_footer_gap(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet.page_margins.top = sheet.page_margins.bottom = 0.35
+        sheet.page_margins.footer = 0.3
+        for row in range(1, 110):
+            sheet.row_dimensions[row].height = 9
+        previous = manager._first_print_overflow_row(sheet, 1, 109, 90.5)
+        expanded = manager._first_print_overflow_row(
+            sheet, 1, 109, 90.5, reserve_footer=False)
+        self.assertGreater(expanded, previous)
+        capacity = (11.69 - 0.35 - 0.35) * 72 / 0.905
+        self.assertLessEqual((expanded - 1) * 9, capacity)
+        self.assertGreater(expanded * 9, capacity)
 
     def test_report_header_contract_title_uses_thin_top_border(self):
         from openpyxl.styles import Border, Side
@@ -459,14 +781,14 @@ class ReportPaddingTest(unittest.TestCase):
 
         self.assertEqual([brk.id for brk in sheet.row_breaks.brk], [100, 200])
 
-    def test_last_record_stays_with_total_even_with_one_record_left(self):
+    def test_total_can_overflow_without_moving_last_record(self):
         manager = MonthlyReportManager('unused.xlsx')
         sheet = openpyxl.Workbook().active
         with patch.object(manager, '_paut_print_scale', return_value=100):
             for count in (1, 4):
                 with patch.object(manager, '_first_print_overflow_row', return_value=20 + count):
                     self.assertEqual(manager._detail_page_overflow_row(sheet, 20, count),
-                                     20 + count - 1)
+                                     20 + count)
 
     def test_four_added_rows_consume_padding_without_moving_next_header(self):
         sheet = openpyxl.Workbook().active
