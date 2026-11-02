@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, simpledialog
 import fitz  # PyMuPDF
 from PIL import Image, ImageTk
 import os
@@ -66,6 +66,7 @@ class PDFEditor:
         rot_frame.pack(fill=tk.X, pady=5)
         ttk.Button(rot_frame, text="↺ 왼쪽으로 회전", command=lambda: self.rotate_selected(-90)).pack(side=tk.LEFT, padx=5)
         ttk.Button(rot_frame, text="↻ 오른쪽으로 회전", command=lambda: self.rotate_selected(90)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(rot_frame, text="✂ 문구 지우기", command=self.remove_text).pack(side=tk.LEFT, padx=5)
         
         ttk.Button(rot_frame, text="🔍 줌 인(+)", command=self.zoom_in).pack(side=tk.RIGHT, padx=5)
         ttk.Button(rot_frame, text="🔍 줌 아웃(-)", command=self.zoom_out).pack(side=tk.RIGHT, padx=5)
@@ -233,6 +234,66 @@ class PDFEditor:
             self.pages[idx]['rotation'] = (self.pages[idx]['rotation'] + angle) % 360
         self.update_preview()
             
+    def remove_text(self):
+        """Find a phrase and permanently remove it (redaction) from target pages.
+        Targets = selected pages, or all pages if nothing is selected.
+        Changes apply to the in-memory documents; original files stay untouched until saved."""
+        if not self.pages:
+            messagebox.showwarning("경고", "먼저 PDF를 열어주세요.")
+            return
+
+        text = simpledialog.askstring("문구 지우기", "지울 문구를 정확히 입력하세요 (예: (SEC.16))", parent=self.root)
+        if not text:
+            return
+
+        selection = self.listbox.curselection()
+        indices = list(selection) if selection else list(range(len(self.pages)))
+        scope = f"선택한 {len(indices)}개 페이지" if selection else f"전체 {len(indices)}개 페이지"
+
+        # Collect hits (dedupe same physical page)
+        hits = []  # (page, [rects])
+        seen = set()
+        for idx in indices:
+            info = self.pages[idx]
+            key = (id(info['doc']), info['page_num'])
+            if key in seen:
+                continue
+            seen.add(key)
+            page = info['doc'].load_page(info['page_num'])
+            rects = page.search_for(text)
+            if rects:
+                hits.append((page, rects))
+
+        total = sum(len(r) for _, r in hits)
+        if total == 0:
+            messagebox.showinfo("문구 지우기", f"{scope}에서 '{text}' 문구를 찾지 못했습니다.\n"
+                                "(문구가 이미지로 되어 있으면 검색되지 않습니다)")
+            return
+
+        if not messagebox.askyesno("문구 지우기",
+                                   f"{scope}에서 '{text}' 문구를 {len(hits)}개 페이지, 총 {total}곳 찾았습니다.\n"
+                                   "모두 지울까요?\n\n* 저장하기 전까지 원본 파일은 바뀌지 않습니다."):
+            return
+
+        try:
+            for page, rects in hits:
+                for r in rects:
+                    # fill=False: no box drawn, only the text is removed
+                    page.add_redact_annot(r, fill=False)
+                try:
+                    # Keep photos and lines/borders intact; remove text only
+                    page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE,
+                                          graphics=fitz.PDF_REDACT_LINE_ART_NONE)
+                except (TypeError, AttributeError):
+                    # Older PyMuPDF without 'graphics' option
+                    page.apply_redactions(images=fitz.PDF_REDACT_IMAGE_NONE)
+        except Exception as e:
+            messagebox.showerror("오류", f"문구 삭제 중 오류가 발생했습니다:\n{e}")
+            return
+
+        self.update_preview()
+        messagebox.showinfo("문구 지우기", f"총 {total}곳의 '{text}' 문구를 지웠습니다.\n결과를 확인한 뒤 '저장하기'를 눌러주세요.")
+
     def zoom_in(self):
         self.zoom_level += 0.2
         self.zoom_label.config(text=f"{int(self.zoom_level * 100)}%")
