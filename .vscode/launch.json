@@ -60,6 +60,16 @@
             "cwd": "${workspaceFolder}\\home",
             "console": "externalTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "PDF 편집기 실행 (독립 창)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}\\home\\src\\pdf편잡_editor.py",
+            "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+            "cwd": "${workspaceFolder}\\home\\src",
+            "console": "externalTerminal",
+            "justMyCode": true
         }
     ],
     "compounds": [
