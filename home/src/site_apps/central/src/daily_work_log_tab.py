@@ -397,7 +397,7 @@ class DailyWorkLogTab(ttk.Frame):
         btn_export_ndt = ttk.Button(title_frame, text="NDT 누계 대장 엑셀 출력", command=self.export_ndt_summary)
         btn_export_ndt.pack(side="left", padx=10)
         
-        btn_export_monthly = ttk.Button(title_frame, text="누적진도보고서 출력", command=self.export_monthly_report)
+        btn_export_monthly = ttk.Button(title_frame, text="월간진도보고서 출력", command=self.export_monthly_report)
         btn_export_monthly.pack(side="left", padx=10)
         
         btn_weekly_report = ttk.Button(title_frame, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
@@ -1477,14 +1477,14 @@ class DailyWorkLogTab(ttk.Frame):
     def export_monthly_report(self):
         # 1. 설정 다이얼로그
         top = tk.Toplevel(self)
-        top.title("누적 진도보고서 엑셀 출력")
+        top.title("월간진도보고서 엑셀 출력")
         # Allow enough vertical space for all fields and the generate button.
         top.geometry("620x430")
         top.minsize(620, 430)
         top.transient(self)
         top.grab_set()
         
-        ttk.Label(top, text="📊 누적 진도보고서 자동 생성", font=('맑은 고딕', 12, 'bold')).pack(pady=10)
+        ttk.Label(top, text="📊 월간진도보고서 자동 생성", font=('맑은 고딕', 12, 'bold')).pack(pady=10)
         
         # 년/월 선택
         f_date = ttk.Frame(top)
@@ -1578,7 +1578,7 @@ class DailyWorkLogTab(ttk.Frame):
             save_path = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
                 initialfile=(
-                    f"누적진도보고서_{ym.replace('-', '')}_"
+                    f"월간진도보고서_{ym.replace('-', '')}_"
                     f"{'월간' if scope_var.get() == 'month' else '전체누적'}.xlsx"
                 ),
                 title="저장 위치 선택",
@@ -1599,7 +1599,7 @@ class DailyWorkLogTab(ttk.Frame):
                     report_scope=scope_var.get(),
                 )
                 if result_path:
-                    messagebox.showinfo("성공", f"누적 진도보고서가 생성되었습니다.\n{result_path}")
+                    messagebox.showinfo("성공", f"월간진도보고서가 생성되었습니다.\n{result_path}")
                     os.startfile(result_path)
                     top.destroy()
                 else:

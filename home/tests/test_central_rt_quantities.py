@@ -194,7 +194,7 @@ class RtQuantitiesTests(unittest.TestCase):
             assignment = next(n for n in ast.walk(tree) if isinstance(n, ast.Assign)
                               and any(isinstance(t, ast.Name) and t.id == target for t in n.targets))
             expression = compile(ast.Expression(assignment.value), '<actual monthly total>', 'eval')
-            self.assertEqual(eval(expression, dict(values, method='RT')), 3)
+            self.assertEqual(eval(expression, dict(values, method='RT')), 4)
             self.assertEqual(eval(expression, dict(values, method='PAUT')), 4)
 
     def test_native_monthly_rt_detail_total_writes_re_cumulative(self):

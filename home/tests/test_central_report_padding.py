@@ -1077,5 +1077,94 @@ class ReportPaddingTest(unittest.TestCase):
         self.assertIn(119, [int(brk.id) for brk in sheet.row_breaks.brk])
         self.assertEqual(manager.table_markers['next'], 132)
 
+    def test_qty_table_includes_all_paut_specs_and_uses_final_cumulative_defects(self):
+        import json
+        import tempfile
+        template_path = Path('tmp/template_current.xlsx')
+        if not template_path.exists():
+            self.skipTest('template_current.xlsx not available')
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            history_path = folder / 'history.json'
+            history = {
+                '2026-10-19': {
+                    'qty_data': {
+                        'PAUT_300A이상-야간': {'예상량': '624', '전일누계': '0', '금일작업': '8.9369', '총누계': '8.9369', '공정률': '1.4', '불량': '', '불량률': ''},
+                        'PAUT_250A': {'예상량': '4', '전일누계': '0', '금일작업': '0', '총누계': '0', '공정률': '', '불량': '', '불량률': ''},
+                        'PAUT_250A-야간': {'예상량': '1', '전일누계': '0', '금일작업': '3.3604', '총누계': '3.3604', '공정률': '336.0', '불량': '', '불량률': ''},
+                        'PAUT_100A이하': {'예상량': '1', '전일누계': '0', '금일작업': '2.1546', '총누계': '2.1546', '공정률': '215.5', '불량': '', '불량률': ''},
+                        'RT_150A~100A-야간': {'예상량': '43', '전일누계': '0', '금일작업': '194', '총누계': '194', '공정률': '451.2', '불량': '2', '불량률': '1.0'},
+                    },
+                    'ndt_results': [
+                        {'업체': 'GS네오텍', '검사방법': 'RT', '구간': 'Sec.15-3', '라인번호': 'L1', 'Joint No.': 'R06', '관경': '100A', '규격': '3 1/3 X 12"', '근무구분': '야간', 'RT_OR': '192', 'RT_RE': '2', '구간정보': 'P/3,CL/3,N/1'},
+                        {'업체': 'GS네오텍', '검사방법': 'RT', '구간': 'Sec.15-3', '라인번호': 'L1', 'Joint No.': 'R06R', '관경': '100A', '규격': '3 1/3 X 12"', '근무구분': '야간', 'RT_OR': '2', 'RT_RE': '0', '구간정보': 'N/1,N/1,'},
+                    ],
+                    'process_photos': [
+                        {'process': 'RT', 'date': '2026-10-19', 'section': '', 'line_no': 'B-87-80-23', 'joint_no': 'R06', 'location': 'R06', 'description': '방사선투과검사'},
+                    ],
+                },
+                '2026-10-24': {
+                    'qty_data': {
+                        'PAUT_300A이상-야간': {'예상량': '624', '전일누계': '8.9369', '금일작업': '0', '총누계': '8.9369', '공정률': '1.4', '불량': '', '불량률': ''},
+                        'PAUT_250A': {'예상량': '4', '전일누계': '0', '금일작업': '6.7208', '총누계': '6.7208', '공정률': '168.0', '불량': '', '불량률': ''},
+                        'PAUT_250A-야간': {'예상량': '1', '전일누계': '3.3604', '금일작업': '11.7614', '총누계': '15.1218', '공정률': '1512.2', '불량': '', '불량률': ''},
+                        'PAUT_100A이하': {'예상량': '1', '전일누계': '2.1546', '금일작업': '0', '총누계': '2.1546', '공정률': '215.5', '불량': '', '불량률': ''},
+                        'RT_150A~100A-야간': {'예상량': '43', '전일누계': '194', '금일작업': '45', '총누계': '239', '공정률': '555.8', '불량': '2', '불량률': '0.8'},
+                    },
+                    'ndt_results': [
+                        {'업체': 'GS네오텍', '검사방법': 'RT', '구간': 'Sec.15-4', '라인번호': 'L2', 'Joint No.': 'S01', '관경': '100A', '규격': '3 1/3 X 12"', '근무구분': '야간', 'RT_OR': '45', 'RT_RE': '0', '구간정보': 'N/1,N/1,N/1'},
+                    ],
+                },
+            }
+            history_path.write_text(json.dumps(history, ensure_ascii=False), encoding='utf-8')
+            output_path = folder / 'out.xlsx'
+            manager = MonthlyReportManager(str(template_path))
+            captured_photos = []
+            orig_populate_photos = manager._populate_process_photo_pages
+            def spy_populate_photos(ws_arg, photos_arg, *a, **kw):
+                captured_photos.extend(photos_arg)
+                return orig_populate_photos(ws_arg, [], *a, **kw)
+            with patch.object(manager, '_populate_safety_training_log'), patch.object(manager, '_populate_process_photo_pages', side_effect=spy_populate_photos):
+                manager.generate_report(str(history_path), '2026-10', str(output_path), doc_num='03')
+            self.assertEqual(len(captured_photos), 1)
+            self.assertEqual(captured_photos[0]['section'], 'Sec.15-3')
+            self.assertEqual(captured_photos[0]['location'], 'Sec.15-3')
+            self.assertEqual(captured_photos[0]['line_no'], 'L1')
+            ws = openpyxl.load_workbook(output_path).active
+            rows_by_spec = {}
+            for r in range(375, 425):
+                spec = str(ws.cell(r, 4).value or '').strip()
+                if spec:
+                    rows_by_spec[spec] = r
+            self.assertIn('250A-야간', rows_by_spec)
+            self.assertIn('100A이하', rows_by_spec)
+            self.assertAlmostEqual(float(ws.cell(rows_by_spec['250A-야간'], 11).value), 15.1218)
+            self.assertAlmostEqual(float(ws.cell(rows_by_spec['100A이하'], 11).value), 2.1546)
+            self.assertEqual(ws.cell(rows_by_spec['150A~100A-야간'], 17).value, 2)
+            self.assertEqual(str(ws.cell(rows_by_spec['150A~100A-야간'], 19).value), '0.8')
+            paut_cell = ws.cell(rows_by_spec['300A이상'], 2)
+            self.assertEqual(paut_cell.value, 'PAUT')
+            self.assertEqual(paut_cell.alignment.horizontal, 'center')
+            self.assertEqual(paut_cell.alignment.vertical, 'center')
+            sec_rows = [
+                r for r in range(410, ws.max_row + 1)
+                if str(ws.cell(r, 4).value or '').strip() == 'Sec.15-3'
+                and str(ws.cell(r, 12).value or '').strip() not in ('', 'R06', 'R06R')
+            ]
+            self.assertTrue(sec_rows)
+            self.assertEqual(str(ws.cell(sec_rows[0], 17).value), '192')
+            self.assertEqual(str(ws.cell(sec_rows[0], 18).value), '2')
+            self.assertEqual(str(ws.cell(sec_rows[0], 20).value), '194')
+            r06_row = next(r for r in range(440, ws.max_row + 1) if str(ws.cell(r, 12).value or '').strip() == 'R06')
+            r06r_row = next(r for r in range(440, ws.max_row + 1) if str(ws.cell(r, 12).value or '').strip() == 'R06R')
+            self.assertEqual(
+                (str(ws.cell(r06_row, 17).value or ''), str(ws.cell(r06_row, 18).value or ''), str(ws.cell(r06_row, 20).value or '')),
+                ('192', '', '192'),
+            )
+            self.assertEqual(
+                (str(ws.cell(r06r_row, 17).value or ''), str(ws.cell(r06r_row, 18).value or ''), str(ws.cell(r06r_row, 20).value or '')),
+                ('', '2', '2'),
+            )
+
 if __name__ == '__main__':
     unittest.main()

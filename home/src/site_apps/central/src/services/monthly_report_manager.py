@@ -243,10 +243,11 @@ class MonthlyReportManager:
         # 6. 인쇄 영역(print_area) 보정
         if ws.print_area:
             try:
-                pa = CellRange(str(ws.print_area).replace('$', ''))
+                raw_pa = str(ws.print_area).split('!')[-1].replace('$', '')
+                pa = CellRange(raw_pa)
                 if pa.max_row >= insert_idx:
                     pa.max_row += amount
-                    ws.print_area = str(pa)
+                    ws.print_area = f"$B$1:$W${pa.max_row}"
             except Exception:
                 pass
     def _delete_rows_safely(self, ws, delete_idx, amount):
@@ -328,13 +329,14 @@ class MonthlyReportManager:
         # boundary behind and Excel can print a trailing blank page.
         if ws.print_area:
             try:
-                area = CellRange(str(ws.print_area).replace('$', ''))
+                raw_area = str(ws.print_area).split('!')[-1].replace('$', '')
+                area = CellRange(raw_area)
                 if area.max_row >= delete_idx + amount:
                     area.max_row -= amount
-                    ws.print_area = str(area)
+                    ws.print_area = f"$B$1:$W${area.max_row}"
                 elif area.max_row >= delete_idx:
                     area.max_row = max(area.min_row, delete_idx - 1)
-                    ws.print_area = str(area)
+                    ws.print_area = f"$B$1:$W${area.max_row}"
             except Exception:
                 pass
 
@@ -3566,6 +3568,53 @@ class MonthlyReportManager:
                 alignment.shrink_to_fit = not is_numbered_subsection
                 cell.alignment = alignment
 
+    def _fit_inspector_qualification_rows(self, ws):
+        """Expand the qualification rows on Page 5 using only blank spacer rows."""
+        default_height = float(ws.sheet_format.defaultRowHeight or 15.0)
+        target_height = 100.0
+        rt_target_height = 118.0
+        for row in range(1, ws.max_row + 1):
+            role_text = ''.join(str(ws.cell(row=row, column=3).value or '').split())
+            criteria_text = str(ws.cell(row=row, column=7).value or '')
+            if '현장대리인' not in role_text or '다음 각 호중' not in criteria_text:
+                continue
+            current_height = float(ws.row_dimensions[row].height or default_height)
+            needed = max(0.0, target_height - current_height)
+
+            rt_row = None
+            for candidate in range(row + 1, min(ws.max_row + 1, row + 8)):
+                cand_spec = ''.join(str(ws.cell(row=candidate, column=5).value or '').split())
+                cand_basis = str(ws.cell(row=candidate, column=20).value or '')
+                if cand_spec == 'RT' and '제58조' in cand_basis:
+                    rt_row = candidate
+                    break
+            if rt_row is not None:
+                rt_current = float(ws.row_dimensions[rt_row].height or default_height)
+                if rt_current < rt_target_height:
+                    needed += rt_target_height - rt_current
+
+            if needed <= 0:
+                continue
+
+            for spacer_row in range(row - 1, max(0, row - 16), -1):
+                if needed <= 0:
+                    break
+                if any(
+                    str(ws.cell(row=spacer_row, column=col).value or '').strip()
+                    for col in range(1, min(ws.max_column, 23) + 1)
+                ):
+                    continue
+                spacer_height = float(ws.row_dimensions[spacer_row].height or default_height)
+                reclaim = min(needed, max(0.0, spacer_height - 10.0))
+                if reclaim > 0:
+                    ws.row_dimensions[spacer_row].height = spacer_height - reclaim
+                    needed -= reclaim
+
+            if current_height < target_height:
+                ws.row_dimensions[row].height = target_height
+            if rt_row is not None and float(ws.row_dimensions[rt_row].height or default_height) < rt_target_height:
+                ws.row_dimensions[rt_row].height = rt_target_height
+
     def _ensure_cover_cell_elements(self, ws, create_date):
         """Use cell-native cover elements that survive openpyxl save cycles."""
         import copy
@@ -3897,7 +3946,7 @@ class MonthlyReportManager:
                     _text(source_ws.cell(row, 2).value),
                     _text(source_ws.cell(row, 3).value),
                     _text(source_ws.cell(row, 4).value),
-                    _text(source_ws.cell(row, 5).value),
+                    self._clean_owner_workplace_name(_text(source_ws.cell(row, 5).value)),
                     source_ws.cell(row, 6).value or '',
                     _text(source_ws.cell(row, 7).value),
                     _text(source_ws.cell(row, 8).value),
@@ -3934,7 +3983,7 @@ class MonthlyReportManager:
             horizontal='center', vertical='center',
             wrap_text=False, shrink_to_fit=True,
         )
-        workplace_font = Font(name='맑은 고딕', size=8)
+        workplace_font = Font(name='맑은 고딕', size=6)
         workplace_alignment = Alignment(
             horizontal='center', vertical='center',
             wrap_text=True, shrink_to_fit=False,
@@ -4001,6 +4050,7 @@ class MonthlyReportManager:
             page_starts.append(body_start)
             insert_row = body_start + rows_per_page
 
+        thin_bottom = Side(style='thin')
         for body_start, page in zip(page_starts, pages):
             for offset, (record, height) in enumerate(page):
                 target_row = body_start + offset
@@ -4021,6 +4071,15 @@ class MonthlyReportManager:
                 visible = offset < visible_empty and remaining_height > 0
                 dimension.height = remaining_height / visible_empty if visible else 0
                 dimension.hidden = not visible
+            visible_rows = len(page) + (visible_empty if remaining_height > 0 else 0)
+            for row_offset in range(visible_rows):
+                row_idx = body_start + row_offset
+                for column in range(2, 24):
+                    cell = ws.cell(row=row_idx, column=column)
+                    border = copy.copy(cell.border) if cell.border else Border()
+                    if border.bottom is None or border.bottom.style is None:
+                        border.bottom = copy.copy(thin_bottom)
+                        cell.border = border
 
     @staticmethod
     def _owner_is_empty_work_row(ws, row):
@@ -4046,22 +4105,33 @@ class MonthlyReportManager:
         return True
 
     @staticmethod
+    def _clean_owner_workplace_name(name):
+        """Strip the redundant branch prefix when location details follow."""
+        text = str(name or '').strip()
+        cleaned = re.sub(
+            r'^한국지역난방공사\s*(?:중앙지사)?\s*',
+            '',
+            text,
+        ).strip()
+        return cleaned or text
+
+    @staticmethod
     def _owner_workplace_row_height(ws, name, minimum):
-        """Fit the complete workplace name at 8pt without shrinking its text."""
+        """Fit the complete workplace name at 6pt without shrinking its text."""
         import unicodedata
 
         digit_width = 8 if ws.parent._fonts[0].name in (
             '굴림', '굴림체', '돋움', '돋움체') else 7
         width_pixels = float(ws.column_dimensions['F'].width or 8.43) * digit_width + 5
-        available_points = max(8.0, (width_pixels - 8) * 0.75)
+        available_points = max(6.0, (width_pixels - 8) * 0.75)
         lines, used = 1, 0.0
         for character in str(name or ''):
-            width = 8.0 if unicodedata.east_asian_width(character) in ('W', 'F') else 4.5
+            width = 6.0 if unicodedata.east_asian_width(character) in ('W', 'F') else 3.5
             if used and used + width > available_points:
                 lines += 1
                 used = 0.0
             used += width
-        return max(float(minimum), lines * 12.0 + 4.0)
+        return max(float(minimum), lines * 9.5 + 3.0)
 
     def _trim_trailing_blank_print_pages(self, ws):
         """Stop printing at the end of the last page containing real content.
@@ -4899,11 +4969,12 @@ class MonthlyReportManager:
                     location = str(photo.get('location', '') or '').strip()
                     section = str(photo.get('section', '') or '').strip()
                     line_no = str(photo.get('line_no', '') or '').strip()
-                    # Older photo records used Joint No. as the location when
-                    # the section was blank, producing captions such as
-                    # "S01 / S01".  Prefer a distinct section and then the
-                    # line number for the location portion of the caption.
-                    if not location or location.casefold() == joint_no.casefold():
+                    # Always prefer the 2.x detail table's Section (구간) for
+                    # the caption location slot; fall back to location or line
+                    # number only when section is absent.
+                    if section and section.casefold() != joint_no.casefold():
+                        location = section
+                    elif not location or location.casefold() == joint_no.casefold():
                         location = next(
                             (
                                 value for value in (section, line_no)
@@ -5166,18 +5237,55 @@ class MonthlyReportManager:
         """Set the vertical print limit and discard later manual breaks."""
         from openpyxl.worksheet.cell_range import CellRange
 
-        if not ws.print_area:
-            return
+        target_end = max(1, int(end_row))
         try:
-            print_range = CellRange(str(ws.print_area).replace('$', ''))
-            print_range.max_row = max(print_range.min_row, int(end_row))
-            ws.print_area = str(print_range)
+            if ws.print_area:
+                raw_range = str(ws.print_area).split('!')[-1].replace('$', '')
+                print_range = CellRange(raw_range)
+                if (
+                    print_range.min_row != 1
+                    or print_range.min_col != 2
+                    or print_range.max_col != 23
+                ):
+                    print_range = CellRange(f"B1:W{target_end}")
+                else:
+                    print_range.max_row = max(print_range.min_row, target_end)
+            else:
+                print_range = CellRange(f"B1:W{target_end}")
+            ws.print_area = f"$B$1:$W${print_range.max_row}"
             ws.row_breaks.brk = [
                 brk for brk in ws.row_breaks.brk
                 if int(brk.id) < print_range.max_row
             ]
         except Exception:
+            ws.print_area = f"$B$1:$W${target_end}"
+
+    def _ensure_valid_print_area(self, ws):
+        """Restore a valid $B$1:$W$<end_row> print area if missing or corrupted."""
+        try:
+            for view in ws.views.sheetView:
+                for sel in getattr(view, 'selection', ()) or ():
+                    if getattr(sel, 'activeCell', None) and str(sel.activeCell).startswith(('Y', 'Z')):
+                        sel.activeCell = 'B1'
+                        sel.sqref = 'B1'
+        except Exception:
             pass
+        pa_text = str(ws.print_area or '').upper()
+        pa_match = re.search(
+            r"\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)",
+            pa_text,
+        )
+        if (
+            pa_match
+            and pa_match.group(1) == 'B'
+            and int(pa_match.group(2)) == 1
+            and pa_match.group(3) == 'W'
+            and int(pa_match.group(4)) >= 100
+        ):
+            ws.print_area = f"$B$1:$W${int(pa_match.group(4))}"
+            return
+        last_row = max(ws.max_row, 838)
+        ws.print_area = f"$B$1:$W${last_row}"
 
     def _remove_empty_process_photo_pages(self, ws, processes_with_photos):
         """Delete complete template pages for processes without photos."""
@@ -5595,23 +5703,37 @@ class MonthlyReportManager:
                     joint_no = str(photo.get('joint_no', '') or '').strip()
                     location = str(photo.get('location', '') or '').strip()
                     section = str(photo.get('section', '') or '').strip()
-                    if not section or not location or location.casefold() == joint_no.casefold():
-                        photo_method = str(photo.get('process', '') or '').strip().upper()
-                        photo_line = str(photo.get('line_no', '') or '').strip().casefold()
-                        for ndt_row in ndt_rows:
-                            if (
-                                str(ndt_row.get('검사방법', '') or '').strip().upper() == photo_method
-                                and str(ndt_row.get('라인번호', '') or '').strip().casefold() == photo_line
+                    photo_method = str(photo.get('process', '') or '').strip().upper()
+                    photo_line = str(photo.get('line_no', '') or '').strip().casefold()
+                    matched_row = next(
+                        (
+                            ndt_row for ndt_row in ndt_rows
+                            if str(ndt_row.get('검사방법', '') or '').strip().upper() == photo_method
+                            and str(ndt_row.get('라인번호', '') or '').strip().casefold() == photo_line
+                            and str(ndt_row.get('Joint No.', '') or '').strip().casefold() == joint_no.casefold()
+                        ),
+                        None,
+                    )
+                    if matched_row is None and joint_no:
+                        matched_row = next(
+                            (
+                                ndt_row for ndt_row in ndt_rows
+                                if str(ndt_row.get('검사방법', '') or '').strip().upper() == photo_method
                                 and str(ndt_row.get('Joint No.', '') or '').strip().casefold() == joint_no.casefold()
-                            ):
-                                matched_section = str(
-                                    ndt_row.get('구간', '') or ''
-                                ).strip()
-                                if matched_section:
-                                    photo['section'] = matched_section
-                                    if not location or location.casefold() == joint_no.casefold():
-                                        photo['location'] = matched_section
-                                break
+                            ),
+                            None,
+                        )
+                    if matched_row is not None:
+                        matched_section = str(matched_row.get('구간', '') or '').strip()
+                        matched_line = str(matched_row.get('라인번호', '') or '').strip()
+                        if matched_line:
+                            photo['line_no'] = matched_line
+                        if matched_section:
+                            photo['section'] = matched_section
+                            photo['location'] = matched_section
+                        elif not location or location.casefold() == joint_no.casefold():
+                            if matched_line:
+                                photo['location'] = matched_line
                     process_photos.append(photo)
             for key, val in day_data.get('qty_data', {}).items():
                 if key not in qty_summary:
@@ -5620,13 +5742,6 @@ class MonthlyReportManager:
                 try:
                     today_work = float(str(val.get('금일작업', '0')).replace(',', '') or 0)
                     qty_summary[key]['금월작업'] += today_work
-                except ValueError:
-                    pass
-                
-                # 불량(결함) 수량도 누적 (숫자일 경우)
-                try:
-                    defect = float(str(val.get('불량', '0')).replace(',', '') or 0)
-                    qty_summary[key]['불량'] += defect
                 except ValueError:
                     pass
 
@@ -5677,29 +5792,40 @@ class MonthlyReportManager:
                 
                 group_key = (company, section, line_no, size, spec, work_shift)
                 ndt_groups[method][group_key]['count'] += 1
-                ndt_groups[method][group_key]['qty'] += qty_val
                 if method == 'RT':
+                    from site_apps.central.src.rt_quantities import retest_parent
                     group = ndt_groups[method][group_key]
-                    group['re'] = group.get('re', 0) + rt_counts(row)[1]
-
-                # 2.x 세부현황용: 개별 레코드 저장 (날짜 포함)
-                if method == 'RT':
-                    d_ori, d_re = rt_counts(row)
+                    joint_str = str(row.get('Joint No.', '') or '').strip().upper()
+                    if retest_parent(joint_str):
+                        d_ori, d_re = 0, qty_val
+                        group['re'] = group.get('re', 0) + qty_val
+                    else:
+                        d_ori, d_re = qty_val, 0
+                        ndt_groups[method][group_key]['qty'] += qty_val
                 else:
+                    ndt_groups[method][group_key]['qty'] += qty_val
                     d_ori = qty_val
                     d_re  = 0.0
-                if d_ori > 0:
+
+                # 2.x 세부현황용: 개별 레코드 저장 (날짜 포함)
+                if (d_ori + d_re) > 0:
                     ndt_details[method].append({
                         'key': group_key,
                         'joint_no': str(row.get('Joint No.', '') or '').strip(),
                         'ori': d_ori, 're': d_re, 'qty': qty_val
                     })
 
-        # 마지막 날의 총누계와 공정률을 최종 반영
+        # 마지막 날의 총누계, 공정률, 누적 불량 및 불량률을 최종 반영
         for key, val in last_day_data.get('qty_data', {}).items():
             if key in qty_summary:
                 qty_summary[key]['총누계'] = val.get('총누계', '0')
                 qty_summary[key]['공정률'] = val.get('공정률', '')
+                try:
+                    qty_summary[key]['불량'] = float(
+                        str(val.get('불량', '0')).replace(',', '') or 0
+                    )
+                except ValueError:
+                    qty_summary[key]['불량'] = 0
                 if val.get('불량률'):
                     qty_summary[key]['불량률'] = val.get('불량률', '')
 
@@ -5719,6 +5845,7 @@ class MonthlyReportManager:
             
         # [표지] 시트의 병합 셀이 openpyxl 저장 시 풀리는 버그 방지를 위한 백업
         ws = wb.active
+        self._ensure_valid_print_area(ws)
 
         # Use the saved report's width-fit scale while choosing page boundaries.
         ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -5911,7 +6038,7 @@ class MonthlyReportManager:
 
                 ori_v = vals.get('ori', qty)
                 re_v  = vals.get('re', 0.0)
-                tot_v = ori_v if method == 'RT' else ori_v + re_v
+                tot_v = ori_v + re_v
 
                 def _fmt(v):
                     return f"{v:.4f}" if v % 1 != 0 else str(int(v))
@@ -5919,8 +6046,8 @@ class MonthlyReportManager:
                 _write_safe(current_row, 17, _fmt(ori_v) if ori_v > 0 else '')
                 if re_v > 0:
                     _write_safe(current_row, 18, _fmt(re_v))  # RE' 앵커(col18)
-                # PAUT는 항상 TOTAL, 세부현황도 TOTAL 표시
-                if method == 'PAUT' or is_detail:
+                # PAUT/RT 및 세부현황 모두 TOTAL(ORI'+RE') 표시
+                if method in ('PAUT', 'RT') or is_detail:
                     _write_safe(current_row, 20, _fmt(tot_v) if tot_v > 0 else '')
                 
                 # 병합 처리 (템플릿 양식에 맞춤)
@@ -6029,7 +6156,7 @@ class MonthlyReportManager:
             # TOTAL 행 값 쓰기 및 스타일 보정
             total_ori = sum(vals.get('ori', vals['qty']) for _, vals in data_items if not vals.get('is_subtotal', False))
             total_re = sum(vals.get('re', 0.0) for _, vals in data_items if not vals.get('is_subtotal', False))
-            total_qty = total_ori if method == 'RT' else total_ori + total_re
+            total_qty = total_ori + total_re
             
             # TOTAL 행의 17, 18, 19, 20 칸 배경색(파란색)을 동일하게 맞춤 (첫 번째 셀 서식 복사)
             fill_style = ws.cell(row=total_row, column=2).fill
@@ -6067,13 +6194,26 @@ class MonthlyReportManager:
                     _write_safe(total_row, 20, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
                     ws.cell(row=total_row, column=20).alignment = shrink_align
                 else:
-                    _write_safe(total_row, 17, f"{total_qty:.4f}" if total_qty % 1 != 0 else str(int(total_qty)))
+                    _write_safe(total_row, 17, f"{total_ori:.4f}" if total_ori % 1 != 0 else str(int(total_ori)))
                     ws.cell(row=total_row, column=17).alignment = shrink_align
+                    safe_merge(total_row, 18, total_row, 19)
+                    if total_re > 0:
+                        _write_safe(
+                            total_row,
+                            18,
+                            f"{total_re:.4f}"
+                            if total_re % 1 != 0 else str(int(total_re)),
+                        )
+                        ws.cell(row=total_row, column=18).alignment = shrink_align
+                    safe_merge(total_row, 20, total_row, 21)
+                    _write_safe(
+                        total_row,
+                        20,
+                        f"{total_qty:.4f}"
+                        if total_qty % 1 != 0 else str(int(total_qty)),
+                    )
+                    ws.cell(row=total_row, column=20).alignment = shrink_align
                     if is_detail:
-                        # Detail tables display ORI', RE' and TOTAL in
-                        # separate columns. RT keeps TOTAL equal to ORI
-                        # because retests are a subset, while RE' shows its
-                        # own cumulative count.
                         safe_merge(total_row, 18, total_row, 19)
                         if total_re > 0:
                             _write_safe(
@@ -6083,14 +6223,6 @@ class MonthlyReportManager:
                                 if total_re % 1 != 0 else str(int(total_re)),
                             )
                             ws.cell(row=total_row, column=18).alignment = shrink_align
-                        safe_merge(total_row, 20, total_row, 21)
-                        _write_safe(
-                            total_row,
-                            20,
-                            f"{total_qty:.4f}"
-                            if total_qty % 1 != 0 else str(int(total_qty)),
-                        )
-                        ws.cell(row=total_row, column=20).alignment = shrink_align
 
             # When either a 1.2 summary table or a 2.x detail table overflows,
             # continue it on a real new page. Repeat both the seven-row document
@@ -6279,26 +6411,87 @@ class MonthlyReportManager:
         ws.cell(row=qty_header_row, column=9).value = '\uc804\uc6d4 \ub204\uacc4'
         ws.cell(row=qty_header_row, column=11).value = '\uae08\uc6d4 \uc791\uc5c5'
         qty_start_row = self.table_markers['qty'] + 1
+        paut_spec_rows = [
+            ('PAUT_300A이상', '300A이상', '129'),
+            ('PAUT_300A이상-야간', '300A이상-야간', '624'),
+            ('PAUT_250A', '250A', '4'),
+            ('PAUT_250A-야간', '250A-야간', '1'),
+            ('PAUT_200A', '200A', '4'),
+            ('PAUT_200A-야간', '200A-야간', '2'),
+            ('PAUT_150A~125A', '150A~125A', '1'),
+            ('PAUT_150A~125A-야간', '150A~125A-야간', '1'),
+            ('PAUT_100A이하', '100A이하', '1'),
+            ('PAUT_100A이하-야간', '100A이하-야간', '1'),
+            ('PAUT_소계', '소계', '768'),
+        ]
+        import copy as _copy
+        rt_start_offset = next(
+            (
+                offset for offset in range(1, 15)
+                if str(ws.cell(qty_start_row + offset, 2).value or '').strip().upper() == 'RT'
+            ),
+            6,
+        )
+        extra_paut_rows = len(paut_spec_rows) - rt_start_offset
+        if extra_paut_rows > 0:
+            paut_top_b_style = _copy.copy(ws.cell(qty_start_row, 2)._style)
+            paut_top_c_style = _copy.copy(ws.cell(qty_start_row, 3)._style)
+            spec_styles = [
+                _copy.copy(ws.cell(qty_start_row + 2, col)._style)
+                for col in range(1, 24)
+            ]
+            sub_styles = [
+                _copy.copy(ws.cell(qty_start_row + rt_start_offset - 1, col)._style)
+                for col in range(1, 24)
+            ]
+            insert_at = qty_start_row + rt_start_offset - 1
+            self._insert_rows_safely(ws, insert_at, extra_paut_rows)
+            for image in ws._images:
+                anchor = getattr(image, 'anchor', None)
+                if hasattr(anchor, '_from') and anchor._from.row + 1 >= insert_at:
+                    anchor._from.row += extra_paut_rows
+                    if hasattr(anchor, 'to'):
+                        anchor.to.row += extra_paut_rows
+            for k, v in self.table_markers.items():
+                if k != 'qty' and v >= insert_at:
+                    self.table_markers[k] += extra_paut_rows
+            for offset, (spec_key, spec_label, default_exp) in enumerate(paut_spec_rows):
+                r_idx = qty_start_row + offset
+                row_styles = sub_styles if offset == len(paut_spec_rows) - 1 else spec_styles
+                for col_idx in range(2, 24):
+                    ws.cell(r_idx, col_idx)._style = _copy.copy(row_styles[col_idx - 1])
+                for sc, ec in ((4, 6), (7, 8), (9, 10), (11, 12), (13, 14),
+                               (15, 16), (17, 18), (19, 20), (21, 23)):
+                    safe_merge(r_idx, sc, r_idx, ec)
+                for clear_col in (7, 9, 11, 13, 15, 17, 19, 21):
+                    _write_safe(r_idx, clear_col, None)
+                _write_safe(r_idx, 4, spec_label)
+                if spec_key not in qty_summary:
+                    qty_summary[spec_key] = {
+                        '예상량': default_exp, '전월누계': '0', '금월작업': 0.0,
+                        '총누계': '0', '공정률': '', '불량': 0, '불량률': '',
+                    }
+            ws.cell(qty_start_row, 2)._style = paut_top_b_style
+            ws.cell(qty_start_row, 3)._style = paut_top_c_style
+            safe_merge(qty_start_row, 2, qty_start_row + len(paut_spec_rows) - 1, 3)
+            _write_safe(qty_start_row, 2, 'PAUT')
+            ws.cell(qty_start_row, 2).alignment = self.align_center
+
+        rt_base = qty_start_row + len(paut_spec_rows)
         qty_mapping = {
-            'PAUT_300A이상': qty_start_row,
-            'PAUT_300A이상-야간': qty_start_row + 1,
-            'PAUT_250A': qty_start_row + 2,
-            'PAUT_200A': qty_start_row + 3,
-            'PAUT_200A-야간': qty_start_row + 4,
-            'PAUT_소계': qty_start_row + 5,
-            
-            'RT_150A~100A': qty_start_row + 6,
-            'RT_150A~100A-야간': qty_start_row + 7,
-            'RT_80A이하': qty_start_row + 8,
-            'RT_80A이하-야간': qty_start_row + 9,
-            'RT_소계': qty_start_row + 10,
-            
-            'MT_전체(주간)': qty_start_row + 11,
-            'MT_전체(야간)': qty_start_row + 12,
-            
-            'PT_전체(주간)': qty_start_row + 13,
-            'PT_전체(야간)': qty_start_row + 14,
+            **{key: qty_start_row + idx for idx, (key, _, _) in enumerate(paut_spec_rows)},
+            'RT_150A~100A': rt_base,
+            'RT_150A~100A-야간': rt_base + 1,
+            'RT_80A이하': rt_base + 2,
+            'RT_80A이하-야간': rt_base + 3,
+            'RT_소계': rt_base + 4,
+            'MT_전체(주간)': rt_base + 5,
+            'MT_전체(야간)': rt_base + 6,
+            'PT_전체(주간)': rt_base + 7,
+            'PT_전체(야간)': rt_base + 8,
         }
+        for r_idx in range(qty_start_row, qty_start_row + len(qty_mapping)):
+            ws.row_dimensions[r_idx].height = 12.4
 
         # [FIX] Dynamically recalculate subtotals (소계) to ensure accuracy even if daily JSON records are missing subtotal values
         paut_keys = ['PAUT_300A이상', 'PAUT_300A이상-야간', 'PAUT_250A', 'PAUT_250A-야간', 'PAUT_200A', 'PAUT_200A-야간', 'PAUT_150A~125A', 'PAUT_150A~125A-야간', 'PAUT_100A이하', 'PAUT_100A이하-야간', 'PAUT_불가']
@@ -6306,7 +6499,7 @@ class MonthlyReportManager:
         
         for sub_key, keys_to_sum in [('PAUT_소계', paut_keys), ('RT_소계', rt_keys)]:
             if sub_key not in qty_summary:
-                qty_summary[sub_key] = {'예상량': '0', '전월': '0', '금월작업': 0.0, '총누계': '0', '공정률': '', '불량': 0, '불량률': ''}
+                qty_summary[sub_key] = {'예상량': '0', '전월': '0', '전월누계': '0', '금월작업': 0.0, '총누계': '0', '공정률': '', '불량': 0, '불량률': ''}
             
             qty_summary[sub_key]['금월작업'] = 0.0
             total_expected = 0.0
@@ -6333,6 +6526,7 @@ class MonthlyReportManager:
             
             qty_summary[sub_key]['예상량'] = str(total_expected)
             qty_summary[sub_key]['전월'] = str(total_prev)
+            qty_summary[sub_key]['전월누계'] = str(total_prev)
             qty_summary[sub_key]['총누계'] = str(total_accum)
             qty_summary[sub_key]['불량'] = str(total_defect)
             # 실적이 전혀 없는 공정은 0.0%로 표시하지 않는다. 0.0은
@@ -6341,6 +6535,10 @@ class MonthlyReportManager:
                 qty_summary[sub_key]['공정률'] = str(round((total_accum / total_expected) * 100, 1))
             else:
                 qty_summary[sub_key]['공정률'] = ''
+            if total_accum > 0 and total_defect > 0:
+                qty_summary[sub_key]['불량률'] = str(round((total_defect / total_accum) * 100, 1))
+            else:
+                qty_summary[sub_key]['불량률'] = ''
 
 
         for key, r_idx in qty_mapping.items():
@@ -6415,7 +6613,7 @@ class MonthlyReportManager:
                 
         # 1. 상단 물량표 외곽선 교정
         if self.table_markers['qty'] > 0:
-            qty_last_row = self.table_markers['qty'] + 15
+            qty_last_row = self.table_markers['qty'] + len(qty_mapping)
             apply_outer_borders(
                 self.table_markers['qty'],
                 qty_last_row,
@@ -6551,6 +6749,7 @@ class MonthlyReportManager:
         self._collapse_blank_rows_before_report_headers(ws)
         self._normalize_repeated_report_header_text(ws, doc_num)
         self._fit_long_section_headers(ws)
+        self._fit_inspector_qualification_rows(ws)
         self._rebalance_toc_page_layout(ws)
         self._align_report_breaks_to_repeated_headers(ws)
         self._renumber_ndt_status_pages(ws)
@@ -6615,6 +6814,7 @@ class MonthlyReportManager:
         # Normalize after every row-height and top-spacer adjustment.
         self._normalize_all_report_header_logos(ws, reference_toc=True)
         self._center_enlarge_report_logos(ws)
+        self._ensure_valid_print_area(ws)
         return self._save_workbook_with_fallback(wb, output_path)
 
     def _complete_ndt_quantity_totals(self, ws):
@@ -6640,13 +6840,13 @@ class MonthlyReportManager:
             if method is None or not isinstance(target, Cell) or target.value not in (None, ''):
                 continue
             try:
-                original = float(str(ws.cell(row, 17).value).replace(',', ''))
+                original = self._safe_float(ws.cell(row, 17).value)
                 retest = self._safe_float(ws.cell(row, 18).value)
             except (TypeError, ValueError):
                 continue
-            # Preserve the app's existing RT counting convention; this fills
-            # omissions without changing the source ORI/RE measurements.
-            target.value = original if method == 'RT' else original + retest
+            if original == 0 and retest == 0:
+                continue
+            target.value = int(original + retest) if method == 'RT' else original + retest
             target.number_format = '0' if method == 'RT' else '0.0000'
             target.alignment = self.align_center
 
