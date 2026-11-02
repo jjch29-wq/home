@@ -14,6 +14,152 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class ReportPaddingTest(unittest.TestCase):
+    def test_rebuild_removes_stranded_duplicate_caption_but_keeps_complete_table(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet['C5'] = '2.1 비파괴검사 세부현황(PAUT)'
+        sheet['C20'] = '2.1 비파괴검사 세부현황(PAUT) (계속)'
+        sheet['F21'] = 'Line No.'
+        sheet['C30'] = '2.2 비파괴검사 세부현황(MT)'
+        manager._remove_orphan_ndt_subsection_captions(sheet, 1, 35)
+        self.assertIsNone(sheet['C5'].value)
+        self.assertTrue(sheet.row_dimensions[5].hidden)
+        self.assertIsNotNone(sheet['C20'].value)
+        self.assertIsNotNone(sheet['C30'].value)
+
+    def test_height_boundary_after_total_does_not_repeat_completed_table(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        for row in range(1, 125):
+            sheet.row_dimensions[row].height = 10
+        sheet['F1'] = '월간 용역 진도 보고서'
+        sheet['F5'] = '3.0 비파괴검사현황'
+        sheet['C9'] = '1.2.1 PAUT'
+        sheet['F10'] = 'Line No.'
+        sheet['B95'] = 'TOTAL'
+        sheet['C101'] = '1.2.2 MT'
+        sheet['F102'] = 'Line No.'
+        sheet['B104'] = 'MT 검사'
+        sheet['B110'] = 'TOTAL'
+        sheet['F111'] = '월간 용역 진도 보고서'
+        sheet['F115'] = '4.0 용접결함,불량률 현황'
+        sheet.row_breaks.append(Break(id=110))
+        manager._paginate_reflowed_ndt(sheet)
+        self.assertEqual(min(b.id for b in sheet.row_breaks.brk), 99)
+        self.assertEqual(sum(sheet.cell(r, 3).value == '1.2.1 PAUT'
+                             for r in range(1, sheet.max_row + 1)), 1)
+        self.assertEqual(sum(sheet.cell(r, 2).value == 'MT 검사'
+                             for r in range(1, sheet.max_row + 1)), 1)
+
+    def test_first_ndt_page_keeps_title_heading_and_first_record_together(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        for row in range(1, 130):
+            sheet.row_dimensions[row].height = 10
+        sheet['F1'] = '월간 용역 진도 보고서'
+        sheet['F5'] = '3.0 비파괴검사현황'
+        sheet['C9'] = '1.2.1 PAUT'
+        sheet['F10'] = 'Line No.'
+        for row in range(12, 96):
+            sheet.cell(row, 2, f'앞 표 {row}')
+        sheet['B96'] = 'TOTAL'
+        sheet['B97'] = '1.2 SECTION별 검사현황'
+        sheet['C98'] = '1.2.2 MT'
+        sheet['F99'] = 'Line No.'
+        sheet.merge_cells('B99:B100')
+        sheet['B99'] = '업체'
+        sheet['Q100'] = "ORI'"
+        for row in range(101, 120):
+            sheet.cell(row, 2, f'MT 검사 {row}')
+        sheet['B120'] = 'TOTAL'
+        sheet['F121'] = '월간 용역 진도 보고서'
+        sheet['F125'] = '4.0 용접결함,불량률 현황'
+        sheet.row_breaks.append(Break(id=120))
+
+        manager._paginate_reflowed_ndt(sheet)
+
+        self.assertEqual(min(b.id for b in sheet.row_breaks.brk), 96)
+        self.assertNotEqual(sheet['B97'].value, '1.2 SECTION별 검사현황')
+        self.assertNotEqual(sheet['F99'].value, 'Line No.')
+        self.assertEqual([sheet.cell(r, 2).value
+                          for r in range(1, sheet.max_row + 1)
+                          if str(sheet.cell(r, 2).value or '').startswith('MT 검사')],
+                         [f'MT 검사 {r}' for r in range(101, 120)])
+        self.assertFalse(any(m.min_row < 98 <= m.max_row
+                             for m in sheet.merged_cells.ranges))
+        self.assertEqual(sum(sheet.cell(r, 17).value == "ORI'"
+                             for r in range(98, sheet.max_row + 1)), 1)
+
+    def test_review_totals_and_overrun_note_preserve_source_quantities(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        sheet['F1'] = '3.0 비파괴검사현황'
+        sheet['G3'], sheet['M3'] = 4, 7.4745
+        sheet['U3'] = '변경검토'
+        sheet['B5'] = '1.2 SECTION별 검사현황'
+        sheet['F7'], sheet['Q7'] = 'Line No.', '촬영매수'
+        sheet['Q9'], sheet['R9'] = '6', ''
+        sheet['B10'], sheet['Q10'] = '[소계]', 6
+        sheet['B11'], sheet['Q11'] = 'TOTAL', 6
+        sheet['F13'], sheet['Q13'] = 'Line No.', 'MT 길이'
+        sheet['Q15'], sheet['R15'] = '1.5', 0.25
+        sheet['F17'] = '4.0 용접결함,불량률 현황'
+        sheet['Q18'] = 999
+        manager._complete_ndt_quantity_totals(sheet)
+        manager._annotate_ndt_overruns(sheet)
+        self.assertEqual([sheet[f'T{r}'].value for r in (9,10,11)], [6,6,6])
+        self.assertEqual(sheet['T15'].value, 1.75)
+        self.assertEqual(sheet['Q9'].value, '6')
+        self.assertIsNone(sheet['T18'].value)
+        self.assertEqual(sheet['U3'].value, '변경검토 / 예상량 초과')
+        manager._annotate_ndt_overruns(sheet)
+        self.assertEqual(sheet['U3'].value, '변경검토 / 예상량 초과')
+
+    def test_shared_ndt_capacity_flows_text_subtotals_and_different_tables(self):
+        manager = MonthlyReportManager('unused.xlsx')
+        sheet = openpyxl.Workbook().active
+        for row in range(1, 228):
+            sheet.row_dimensions[row].height = 10
+        sheet['F1'] = '월간 용역 진도 보고서'
+        sheet['F5'] = '3.0 비파괴검사현황'
+        sheet['C9'] = '1.2.1 PAUT'
+        sheet['F10'] = 'Line No.'
+        sheet['Q10'] = 'PAUT 길이'
+        originals = []
+        for row in range(12, 80):
+            value = f'문자 식별자 {row}'
+            sheet.cell(row, 2, value)
+            originals.append(value)
+        sheet['B80'] = '소계'
+        sheet['B81'] = 'TOTAL'
+        sheet['C82'] = '1.2.2 MT'
+        sheet['F83'] = 'Line No.'
+        sheet['Q83'] = 'MT 길이'
+        for row in range(85, 220):
+            value = f'순번 없는 검사내용 {row}'
+            sheet.cell(row, 2, value)
+            originals.append(value)
+        sheet['B220'] = 'TOTAL'
+        sheet['F221'] = '월간 용역 진도 보고서'
+        sheet['F225'] = '4.0 용접결함,불량률 현황'
+        sheet.row_breaks.append(Break(id=220))
+        manager._paginate_reflowed_ndt(sheet)
+        self.assertEqual(manager.NDT_PAGE_HEIGHT, 990)
+        found = [sheet.cell(row, 2).value for row in range(1, sheet.max_row + 1)
+                 if sheet.cell(row, 2).value in originals]
+        self.assertEqual(found, originals)
+        self.assertEqual(sum(sheet.cell(row, 2).value == 'TOTAL'
+                             for row in range(1, sheet.max_row + 1)), 2)
+        breaks = sorted(b.id for b in sheet.row_breaks.brk)
+        # All full pages consume the same capacity despite a change of method
+        # and records without numeric sequence fields.
+        for start, end in zip([1] + [r + 1 for r in breaks], breaks):
+            height = sum(sheet.row_dimensions[r].height or 15
+                         for r in range(start, end + 1))
+            self.assertLessEqual(height, 990)
+            if end != breaks[-1]:
+                self.assertGreaterEqual(height, 980)
+
     def test_whole_detail_table_moves_with_parent_without_orphan_title(self):
         sheet = openpyxl.Workbook().active
         sheet.cell(1, 6, '월간 용역 진도 보고서')

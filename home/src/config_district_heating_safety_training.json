@@ -1,10 +1,10 @@
 {
-  "location": "한국지역난방공사 중앙지사 현장",
+  "location": "사무실",
   "instructor": "주진철",
   "processes": {
-    "RT": true,
+    "RT": false,
     "PAUT": false,
     "PT": false,
-    "MT": false
+    "MT": true
   }
 }

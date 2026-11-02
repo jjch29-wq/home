@@ -14,6 +14,27 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 
 
 class PhotoLayoutTest(unittest.TestCase):
+    def test_save_orders_continuation_breaks_before_existing_photo_pages(self):
+        from openpyxl.worksheet.pagebreak import Break
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        # The MT/RT template boundaries precede appended PAUT continuations
+        # in the serialized list, despite occurring after them on the sheet.
+        for row in (939, 1015, 1319, 1091, 1167, 1243, 1167):
+            sheet.row_breaks.append(Break(id=row, min=1, max=22))
+        sheet['C1102'] = '1.1 위상배열초음파탐상검사(SEC.16) (계속 3)'
+        manager = MonthlyReportManager('unused.xlsx')
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'report.xlsx'
+            manager._save_workbook_with_fallback(workbook, str(output))
+            checked = openpyxl.load_workbook(output).active
+            self.assertEqual([b.id for b in checked.row_breaks.brk],
+                             [939, 1015, 1091, 1167, 1243, 1319])
+            self.assertTrue(all(b.man for b in checked.row_breaks.brk))
+            self.assertTrue(all((b.min, b.max) == (1, 22)
+                                for b in checked.row_breaks.brk))
+            self.assertEqual(checked['C1102'].value, sheet['C1102'].value)
+
     def test_enlarged_logo_centers_artwork_without_white_asset_padding(self):
         from io import BytesIO
         from PIL import ImageDraw
@@ -213,9 +234,11 @@ class PhotoLayoutTest(unittest.TestCase):
                       for i in range(18)]
             manager._populate_process_photo_pages(sheet, photos)
             output = folder / 'report.xlsx'
-            workbook.save(output)
+            manager._save_workbook_with_fallback(workbook, str(output))
             checked = openpyxl.load_workbook(output).active
             self.assertEqual(len(checked._images), 18)
+            break_rows = [b.id for b in checked.row_breaks.brk]
+            self.assertEqual(break_rows, sorted(set(break_rows)))
             self.assertIn('SEC.16', str(checked.cell(610, 3).value).upper())
             inset = pixels_to_EMU(6)
             for i, picture in enumerate(checked._images):

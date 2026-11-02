@@ -14,6 +14,9 @@ from collections import defaultdict
 import re
 
 class MonthlyReportManager:
+    # Worksheet row-height points, including the common document header.
+    # Monthly and cumulative reports differ in records, never page capacity.
+    NDT_PAGE_HEIGHT = 990.0
     WELDER_NAMES = {
         'W-2024-A-03': '김진철',
         'W-2026-A-03': '김충환',
@@ -871,7 +874,7 @@ class MonthlyReportManager:
             ws.add_image(new_image)
 
     def _insert_table_continuation(self, ws, insert_row, document_header_row,
-                                   table_header_row):
+                                   table_header_row, split_heading=False):
         """Start a continuation page with the document and table headers.
 
         ``table_header_row`` is the first of the table's two column-header
@@ -943,6 +946,18 @@ class MonthlyReportManager:
                     row_offsets[merged.min_row], merged.min_col,
                     row_offsets[merged.max_row], merged.max_col,
                 ))
+
+        if split_heading:
+            # A height boundary may fall between the two heading rows. Keep
+            # the upper fragment on this page; the complete heading snapshot
+            # above is repeated on the next page. Never extend a merge across
+            # the newly inserted document header.
+            for merged in list(ws.merged_cells.ranges):
+                if merged.min_row < insert_row <= merged.max_row:
+                    top, left, right = merged.min_row, merged.min_col, merged.max_col
+                    ws.unmerge_cells(str(merged))
+                    ws.merge_cells(start_row=top, start_column=left,
+                                   end_row=insert_row - 1, end_column=right)
 
         self._insert_continuation_header(
             ws, insert_row, document_header_row, row_count=7
@@ -1444,10 +1459,11 @@ class MonthlyReportManager:
     def _compact_ndt_summary_title_rows(self, ws, start_row, end_row):
         """Reclaim first-page height from summary captions, not data rows."""
         compact_height = 13.75
+        max_column = min(ws.max_column, 23)
         for row in range(start_row, end_row):
             text = ''.join(
                 str(ws.cell(row=row, column=col).value or '')
-                for col in range(1, min(ws.max_column, 23) + 1)
+                for col in range(1, max_column + 1)
             )
             compact = ''.join(text.split())
             if not re.match(r'^1\.(?:0|1|2)', compact):
@@ -1461,6 +1477,34 @@ class MonthlyReportManager:
             # records use different heights and must remain untouched.
             if compact_height < current <= 17.0:
                 ws.row_dimensions[row].height = compact_height
+
+    @staticmethod
+    def _remove_orphan_ndt_subsection_captions(ws, start_row, end_row):
+        """Remove old stranded captions only when a complete copy also exists."""
+        max_col = min(ws.max_column, 23)
+        captions = []
+        complete = set()
+        for row in range(start_row, end_row):
+            title = ''.join(str(ws.cell(row, col).value or '')
+                            for col in range(1, max_col + 1)).strip()
+            if not re.match(r'^(?:1\.2\.\d+|2\.[1-9]\d*)\s', title):
+                continue
+            normalized = re.sub(r'(?:\s*\(계속(?:\s+\d+)?\))+$', '', title).strip()
+            key = ''.join(normalized.split()).upper()
+            following = ''.join(str(ws.cell(row + 1, col).value or '')
+                                for col in range(1, max_col + 1))
+            has_heading = 'LINENO' in ''.join(following.split()).replace('.', '').upper()
+            captions.append((row, key, has_heading))
+            if has_heading:
+                complete.add(key)
+        for row, key, has_heading in captions:
+            if has_heading or key not in complete:
+                continue
+            for cell in ws[row]:
+                if isinstance(cell, Cell):
+                    cell.value = None
+            ws.row_dimensions[row].height = 0
+            ws.row_dimensions[row].hidden = True
 
     def _reflow_ndt_section(self, ws):
         """Flow all 3.0 tables through available space before section 4.0.
@@ -1536,6 +1580,7 @@ class MonthlyReportManager:
         if not defect_headers:
             return
         first_defect = defect_headers[0]
+        self._remove_orphan_ndt_subsection_captions(ws, first_ndt, first_defect)
         self._remove_duplicate_ndt_detail_captions(ws, first_ndt, first_defect)
 
         # The summary captions have generous vertical padding. Reducing only
@@ -1590,11 +1635,12 @@ class MonthlyReportManager:
     def _paginate_reflowed_ndt(self, ws):
         """Paginate the continuous 3.0 body and repeat only needed headers."""
         from openpyxl.worksheet.pagebreak import Break
+        max_column = min(ws.max_column, 23)
 
         def text(row):
             return ''.join(
                 str(ws.cell(row=row, column=col).value or '')
-                for col in range(1, min(ws.max_column, 23) + 1)
+                for col in range(1, max_column + 1)
             )
 
         def title_row(token):
@@ -1628,10 +1674,8 @@ class MonthlyReportManager:
             for page_end in internal_breaks + [first_defect - 1]:
                 overflow = self._first_print_overflow_row(
                     ws, page_start, page_end - page_start + 1,
-                    self._ndt_reflow_height_scale(
-                        ws, page_number=page_number
-                    ),
                     reserve_footer=False,
+                    capacity_points=self.NDT_PAGE_HEIGHT,
                 )
                 if overflow is None:
                     page_start = page_end + 1
@@ -1655,20 +1699,56 @@ class MonthlyReportManager:
                     ) else preceding[-1] if preceding else headers[0]
                 )
 
-                move_whole_table = overflow <= header + 2
-                split = header - 1 if move_whole_table else overflow
+                split = overflow
+                heading_group = None
+                for candidate in headers:
+                    caption = candidate - 1
+                    group_start = caption
+                    # A parent SECTION/2.0 title belongs with the table too;
+                    # otherwise it can be stranded at the preceding foot.
+                    for previous in range(caption - 1, max(page_start + 6, caption - 4), -1):
+                        compact = ''.join(text(previous).split()).upper()
+                        if not compact:
+                            continue
+                        if compact.startswith(('1.2SECTION', '2.0비파괴검사세부현황')):
+                            group_start = previous
+                        break
+                    first_record = candidate + 2
+                    while first_record < page_end and not text(first_record).strip():
+                        first_record += 1
+                    if group_start <= overflow <= first_record:
+                        heading_group = (candidate, group_start, caption)
+                        header, split = candidate, group_start
+                        break
                 if split <= page_start + 7:
                     raise ValueError(
                         '검사 표의 제목 높이가 인쇄 가능 영역을 초과합니다. '
                         '양식의 제목 행 높이와 인쇄 여백을 확인해 주세요.'
                     )
 
-                if move_whole_table:
-                    inserted = self._move_table_to_continuation(
-                        ws, split, first_ndt, header)
+                table_complete = any(
+                    str(ws.cell(row, 2).value or '').strip().upper() == 'TOTAL'
+                    for row in range(header + 2, split)
+                )
+                if heading_group:
+                    if split < heading_group[2]:
+                        # The original parent and complete table heading move
+                        # together. Copy only the report frame, no duplicates.
+                        inserted = 7
+                        self._insert_continuation_header(
+                            ws, split, first_ndt, row_count=inserted)
+                    else:
+                        inserted = self._move_table_to_continuation(
+                            ws, split, first_ndt, header)
+                elif split <= header - 1 or table_complete:
+                    # The complete next table is still below the boundary.
+                    # Its original caption/headings move with it unchanged.
+                    inserted = 7
+                    self._insert_continuation_header(
+                        ws, split, first_ndt, row_count=inserted)
                 else:
                     inserted = self._insert_table_continuation(
-                        ws, split, first_ndt, header
+                        ws, split, first_ndt, header,
                     )
                 ws.row_breaks.append(Break(id=split - 1))
                 ws.row_breaks.brk.sort(key=lambda brk: int(brk.id))
@@ -1958,7 +2038,7 @@ class MonthlyReportManager:
 
     def _first_print_overflow_row(
         self, ws, start_row, row_count, scale_override=None,
-        reserve_footer=True,
+        reserve_footer=True, capacity_points=None,
     ):
         """Return the first data row that falls onto the next printed page."""
         break_ids = sorted(int(brk.id) for brk in ws.row_breaks.brk)
@@ -1977,7 +2057,8 @@ class MonthlyReportManager:
             - float(margins.bottom or 0)
         if reserve_footer:
             usable_inches -= float(margins.footer or 0)
-        capacity_points = usable_inches * 72.0 / scale
+        if capacity_points is None:
+            capacity_points = usable_inches * 72.0 / scale
         default_height = float(ws.sheet_format.defaultRowHeight or 15)
 
         used_points = 0.0
@@ -3789,7 +3870,11 @@ class MonthlyReportManager:
                         return ''
                     if isinstance(value, (datetime.datetime, datetime.date)):
                         return value.strftime('%Y-%m-%d')
-                    return str(value).strip()
+                    # Owner-export cells may contain hard line breaks as well
+                    # as Excel's visual wrapping (e.g. "2946\n81" or a name).
+                    # Join those fragments without corrupting codes/leading
+                    # zeros or removing meaningful ordinary spaces.
+                    return re.sub(r'[\r\n\u2028\u2029]+', '', str(value)).strip()
 
                 def _clock(value):
                     text = _text(value)
@@ -3804,6 +3889,8 @@ class MonthlyReportManager:
                     year_month = _text(source_ws.cell(row, 1).value)
                     year_month = re.sub(r'\D', '', year_month)[:6]
                     if target_key and year_month != target_key:
+                        continue
+                    if self._owner_is_empty_work_row(source_ws, row):
                         continue
                     record = [
                     year_month,
@@ -3845,7 +3932,12 @@ class MonthlyReportManager:
         body_font = Font(name='맑은 고딕', size=6)
         body_alignment = Alignment(
             horizontal='center', vertical='center',
-            wrap_text=True, shrink_to_fit=True,
+            wrap_text=False, shrink_to_fit=True,
+        )
+        workplace_font = Font(name='맑은 고딕', size=8)
+        workplace_alignment = Alignment(
+            horizontal='center', vertical='center',
+            wrap_text=True, shrink_to_fit=False,
         )
 
         # 첫 페이지의 43개 행을 모두 사용한 뒤에는 16페이지 형식의
@@ -3854,8 +3946,27 @@ class MonthlyReportManager:
         from openpyxl.worksheet.pagebreak import Break
 
         rows_per_page = data_end - data_start + 1
-        target_rows = list(range(data_start, data_start + min(len(records), rows_per_page)))
-        remaining = len(records) - len(target_rows)
+        default_height = float(ws.sheet_format.defaultRowHeight or 15)
+        reference_heights = [
+            float(ws.row_dimensions[row].height
+                  if ws.row_dimensions[row].height is not None else default_height)
+            for row in range(data_start, data_end + 1)
+        ]
+        page_capacity = sum(reference_heights)
+        base_height = reference_heights[0]
+        pages = [[]]
+        used_height = 0.0
+        for record in records:
+            height = self._owner_workplace_row_height(ws, record[4], base_height)
+            if height > page_capacity:
+                raise ValueError('작업장명이 발주자 보고 한 페이지 높이를 초과합니다.')
+            if pages[-1] and (len(pages[-1]) >= rows_per_page
+                              or used_height + height > page_capacity + 0.01):
+                pages.append([])
+                used_height = 0.0
+            pages[-1].append((record, height))
+            used_height += height
+        page_starts = [data_start]
         insert_row = data_end + 1
         previous_breaks = sorted(
             int(brk.id) for brk in ws.row_breaks.brk if int(brk.id) < title_row
@@ -3867,9 +3978,7 @@ class MonthlyReportManager:
             copy.copy(ws.cell(data_start, col)._style)
             for col in range(1, ws.max_column + 1)
         ]
-        reference_height = ws.row_dimensions[data_start].height
-
-        while remaining > 0:
+        for _ in pages[1:]:
             inserted_header_rows = self._insert_status_continuation(
                 ws, insert_row, document_header_row, title_row, table_header_end
             )
@@ -3883,23 +3992,76 @@ class MonthlyReportManager:
                 if hasattr(anchor, 'to'):
                     anchor.to.row += rows_per_page
             for row in range(body_start, body_start + rows_per_page):
-                ws.row_dimensions[row].height = reference_height
+                ws.row_dimensions[row].height = base_height
                 for col, style in enumerate(reference_styles, 1):
                     ws.cell(row, col)._style = copy.copy(style)
             if not any(int(brk.id) == insert_row - 1 for brk in ws.row_breaks.brk):
                 ws.row_breaks.append(Break(id=insert_row - 1))
 
-            rows_this_page = min(remaining, rows_per_page)
-            target_rows.extend(range(body_start, body_start + rows_this_page))
-            remaining -= rows_this_page
+            page_starts.append(body_start)
             insert_row = body_start + rows_per_page
 
-        for target_row, record in zip(target_rows, records):
-            for column, value in enumerate(record, start=2):
-                cell = ws.cell(row=target_row, column=column)
-                cell.value = value
-                cell.font = body_font
-                cell.alignment = body_alignment
+        for body_start, page in zip(page_starts, pages):
+            for offset, (record, height) in enumerate(page):
+                target_row = body_start + offset
+                ws.row_dimensions[target_row].height = height
+                ws.row_dimensions[target_row].hidden = False
+                for column, value in enumerate(record, start=2):
+                    cell = ws.cell(row=target_row, column=column)
+                    cell.value = value
+                    cell.font = workplace_font if column == 6 else body_font
+                    cell.alignment = workplace_alignment if column == 6 else body_alignment
+            # Growing name cells must consume the reserved blank table rows,
+            # rather than push the following photos off their printed page.
+            remaining_height = max(0.0, page_capacity - sum(h for _, h in page))
+            empty_count = rows_per_page - len(page)
+            visible_empty = min(empty_count, max(1, int(remaining_height / base_height)))
+            for offset in range(empty_count):
+                dimension = ws.row_dimensions[body_start + len(page) + offset]
+                visible = offset < visible_empty and remaining_height > 0
+                dimension.height = remaining_height / visible_empty if visible else 0
+                dimension.hidden = not visible
+
+    @staticmethod
+    def _owner_is_empty_work_row(ws, row):
+        """Skip explicit zero-work placeholders, preserving genuine zero-qty work."""
+        quantity = ws.cell(row, 17).value
+        try:
+            if quantity in (None, '') or float(str(quantity).replace(',', '')) != 0:
+                return False
+        except (TypeError, ValueError):
+            return False
+        # Registration metadata and 09:00~09:01 timestamps alone do not prove
+        # inspection work. A crew, subject, source/device or remark does.
+        for col in list(range(9, 15)) + list(range(18, 33)):
+            value = ws.cell(row, col).value
+            if value is None or str(value).strip() == '':
+                continue
+            try:
+                if float(str(value).strip()) == 0:
+                    continue
+            except (TypeError, ValueError):
+                pass
+            return False
+        return True
+
+    @staticmethod
+    def _owner_workplace_row_height(ws, name, minimum):
+        """Fit the complete workplace name at 8pt without shrinking its text."""
+        import unicodedata
+
+        digit_width = 8 if ws.parent._fonts[0].name in (
+            '굴림', '굴림체', '돋움', '돋움체') else 7
+        width_pixels = float(ws.column_dimensions['F'].width or 8.43) * digit_width + 5
+        available_points = max(8.0, (width_pixels - 8) * 0.75)
+        lines, used = 1, 0.0
+        for character in str(name or ''):
+            width = 8.0 if unicodedata.east_asian_width(character) in ('W', 'F') else 4.5
+            if used and used + width > available_points:
+                lines += 1
+                used = 0.0
+            used += width
+        return max(float(minimum), lines * 12.0 + 4.0)
 
     def _trim_trailing_blank_print_pages(self, ws):
         """Stop printing at the end of the last page containing real content.
@@ -6427,38 +6589,9 @@ class MonthlyReportManager:
                 ws.row_dimensions[blank_row].hidden = True
 
         self._trim_trailing_blank_print_pages(ws)
-        self._reflow_ndt_section(ws)
-        # Reserve 15pt below the header and 20pt above the logo before
-        # pagination, then transfer the latter into an actual blank row.
-        self._lower_ndt_page_titles(ws, extra_height=35.0)
-        self._normalize_ndt_parent_caption_style(ws)
-        self._space_ndt_section_caption(ws)
-        self._paginate_reflowed_ndt(ws)
-        self._insert_fixed_ndt_top_spacers(ws, reserved_height=20.0)
-        self._space_ndt_summary_caption(ws)
-        self._pull_rt_summary_total_to_previous_page(ws)
-        # A move changes both page boundaries and the free height on the next
-        # pass.  Continue until no leading continuation row fits, so pages
-        # 10-14 behave as one continuous flow instead of stopping after the
-        # first batch (for example at PAUT row 38 while row 39 still fits).
-        for _ in range(50):
-            if not self._pull_complete_ndt_tail_to_previous_page(
-                ws, bottom_reserve=45.0
-            ):
-                break
-        else:
-            raise ValueError('3.0 연속 페이지 채움이 50회를 초과했습니다.')
-        self._remove_header_only_ndt_pages(ws)
-        self._align_ndt_parent_top_gaps(ws)
-        # Re-evaluate after gap normalization using the same 45px target.
-        for _ in range(50):
-            if not self._pull_complete_ndt_tail_to_previous_page(
-                ws, bottom_reserve=45.0
-            ):
-                break
-        else:
-            raise ValueError('3.0 하단 45px 채움이 50회를 초과했습니다.')
-        self._align_ndt_parent_top_gaps(ws)
+        self._complete_ndt_quantity_totals(ws)
+        self._annotate_ndt_overruns(ws)
+        self._layout_ndt_pages(ws)
         # Build photo pages only after every dynamic 3.0 row operation. Images
         # are drawing anchors rather than cells; creating them earlier makes
         # later row deletion/insertion detach them from their page headers.
@@ -6483,6 +6616,81 @@ class MonthlyReportManager:
         self._normalize_all_report_header_logos(ws, reference_toc=True)
         self._center_enlarge_report_logos(ws)
         return self._save_workbook_with_fallback(wb, output_path)
+
+    def _complete_ndt_quantity_totals(self, ws):
+        """Fill missing TOTAL cells in summary/detail and subcontract subtotals."""
+        active, method = False, None
+        max_col = min(ws.max_column, 23)
+        for row in range(1, ws.max_row + 1):
+            section = ''.join(str(ws.cell(row, 6).value or '').split())
+            if section.startswith('3.0'):
+                active = True
+            elif active and section.startswith('4.0'):
+                break
+            if not active:
+                continue
+            label = ''.join(str(ws.cell(row, col).value or '')
+                            for col in range(1, max_col + 1))
+            if 'LINENO' in ''.join(label.split()).replace('.', '').upper():
+                qty_label = str(ws.cell(row, 17).value or '').upper()
+                method = next((m for m in ('PAUT', 'MT', 'PT') if m in qty_label),
+                              'RT' if '촬영' in qty_label else None)
+                continue
+            target = ws.cell(row, 20)
+            if method is None or not isinstance(target, Cell) or target.value not in (None, ''):
+                continue
+            try:
+                original = float(str(ws.cell(row, 17).value).replace(',', ''))
+                retest = self._safe_float(ws.cell(row, 18).value)
+            except (TypeError, ValueError):
+                continue
+            # Preserve the app's existing RT counting convention; this fills
+            # omissions without changing the source ORI/RE measurements.
+            target.value = original if method == 'RT' else original + retest
+            target.number_format = '0' if method == 'RT' else '0.0000'
+            target.alignment = self.align_center
+
+    def _annotate_ndt_overruns(self, ws):
+        """Expose exceeded estimates without inventing change-order reasons."""
+        active = False
+        for row in range(1, ws.max_row + 1):
+            section = ''.join(str(ws.cell(row, 6).value or '').split())
+            if section.startswith('3.0'):
+                active = True
+            if not active:
+                continue
+            if str(ws.cell(row, 2).value or '').replace(' ', '').startswith('1.2SECTION'):
+                break
+            try:
+                expected = float(str(ws.cell(row, 7).value).replace(',', ''))
+                cumulative = float(str(ws.cell(row, 13).value).replace(',', ''))
+            except (TypeError, ValueError):
+                continue
+            if expected > 0 and cumulative > expected + 0.0000001:
+                note = ws.cell(row, 21)
+                existing = str(note.value or '').strip()
+                if isinstance(note, Cell) and '예상량 초과' not in existing:
+                    note.value = f'{existing} / 예상량 초과' if existing else '예상량 초과'
+                    note.alignment = Alignment(horizontal='center', vertical='center',
+                                               wrap_text=False, shrink_to_fit=True)
+
+    def _layout_ndt_pages(self, ws):
+        """Rebuild the complete 3.0 body to one shared height for both scopes.
+
+        Remove template page boundaries before filling pages in source order.
+        A subtotal, TOTAL, empty-result message or change of inspection method
+        must not prevent the following content from using available space.
+        Only the document/table headings needed at an actual split repeat.
+        """
+        self._reflow_ndt_section(ws)
+        # Reserve 15pt below the header and 20pt above the logo before
+        # pagination, then transfer the latter into an actual blank row.
+        self._lower_ndt_page_titles(ws, extra_height=35.0)
+        self._normalize_ndt_parent_caption_style(ws)
+        self._space_ndt_section_caption(ws)
+        self._paginate_reflowed_ndt(ws)
+        self._insert_fixed_ndt_top_spacers(ws, reserved_height=20.0)
+        self._space_ndt_summary_caption(ws)
 
     def _center_enlarge_report_logos(self, ws, factor=1.5):
         """Center visible logo artwork above the branch label, enlarged 1.5x."""
@@ -6636,6 +6844,19 @@ class MonthlyReportManager:
         that case keep the user's selected folder and save a timestamped copy.
         A second PermissionError means the folder itself is not writable.
         """
+        # Continuation photo pages are inserted before the template's existing
+        # MT/RT pages, so their new breaks can be appended out of row order.
+        # Excel ignores those later out-of-order boundaries and splits the
+        # following header between two printed pages. Normalize only after all
+        # row insertions and spacing adjustments, including the fallback save.
+        for sheet in wb.worksheets:
+            breaks_by_row = {}
+            for page_break in sheet.row_breaks.brk:
+                page_break.man = True
+                breaks_by_row[int(page_break.id)] = page_break
+            sheet.row_breaks.brk = [
+                breaks_by_row[row] for row in sorted(breaks_by_row)
+            ]
         output_path = os.path.abspath(output_path)
         try:
             wb.save(output_path)
