@@ -47,19 +47,19 @@ class UTProbeConfig:
 class UTScanPlanSettings:
     """UT 검사설정표 및 스캔플랜 종합 설정."""
     # 관리 정보
-    project_name: str = "한국지역난방공사 중앙지사 열수송관 공사"
+    project_name: str = "North Field South Project (QatarEnergy LNG)"
     report_title: str = "초음파탐상시험(UT) 검사설정표 및 스캔플랜"
-    applicable_spec: str = "KS B 0896 / ASME Sec.V Art.4"
-    acceptance_criteria: str = "KS B 0896 2류 / ASME B31.1"
+    applicable_spec: str = "ASME Sec.V Art.4 / WPS-GTSM11-021"
+    acceptance_criteria: str = "ASME Sec.VIII Div.1 / B31.3 (PWHT UT)"
     inspection_date: str = "2026-11-03"
     inspector_name: str = "비파괴검사원"
     inspector_cert: str = "UT Level II"
 
     # 시험체 정보
-    component_name: str = "열배관 현장 원주 용접부 (Circumferential Weld)"
-    material_spec: str = "SPPS 380 / Carbon Steel"
-    thickness_mm: float = 15.87
-    pipe_od_mm: float = 318.5                   # 배관 외경 (0 또는 음수이면 평판)
+    component_name: str = '24" Restriction Orifice Plate (C.W.S-1~2)'
+    material_spec: str = "A516 Gr.60 / A350LF2 CL.1"
+    thickness_mm: float = 30.97
+    pipe_od_mm: float = 609.6                   # 24인치 배관 외경 (0 또는 음수이면 평판)
     bevel_type: str = "Compound Bevel (복합 베벨)"
     bevel_angle_deg: float = 37.5               # 하부 홈 편각 (19T까지 37.5°)
     bevel_transition_mm: float = 19.0           # 개선각 전환 높이 (19 mm)

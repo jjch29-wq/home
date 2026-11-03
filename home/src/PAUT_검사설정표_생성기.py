@@ -1630,9 +1630,9 @@ class PautScanPlanApp(tk.Tk):
         mg_box = ttk.LabelFrame(form, text="1. 관리 및 적용 규격", style="Section.TLabelframe", padding=8)
         mg_box.pack(fill="x", pady=4)
         mg_fields = [
-            ("project_name", "공사명", "한국지역난방공사 중앙지사 열수송관 공사"),
-            ("applicable_spec", "적용 규격", "KS B 0896 / ASME Sec.V Art.4"),
-            ("acceptance_criteria", "합격 기준", "KS B 0896 2류 / ASME B31.1"),
+            ("project_name", "공사명", "North Field South Project (QatarEnergy LNG)"),
+            ("applicable_spec", "적용 규격 / WPS", "ASME Sec.V Art.4 / WPS-GTSM11-021"),
+            ("acceptance_criteria", "합격 기준", "ASME Sec.VIII Div.1 / B31.3 (PWHT UT)"),
             ("inspector_name", "검사원", "비파괴검사원 (UT Level II)"),
         ]
         for row, (k, lbl, default_val) in enumerate(mg_fields):
@@ -1661,6 +1661,7 @@ class PautScanPlanApp(tk.Tk):
 
         # 기본 변수 초기화
         for k, v in [
+            ("component_name", '24" Restriction Orifice Plate (C.W.S-1~2)'),
             ("thickness_mm", "30.97"), ("pipe_od_mm", "609.6"),
             ("material_spec", "A516 Gr.60 / A350LF2 CL.1"),
             ("bevel_preset", "복합 베벨: 19T까지 37.5° / 상부 10°"),
@@ -1676,6 +1677,22 @@ class PautScanPlanApp(tk.Tk):
                 self.ut_vars[k] = tk.StringVar(value=v)
 
         r = 0
+        # ★ 부품 / 구간명 (사용자가 직접 자유롭게 수정 가능 & 다이어그램/엑셀 실시간 반영)
+        ttk.Label(joint_box, text="부품 / 구간명", width=22, font=("맑은 고딕", 9, "bold")).grid(row=r, column=0, sticky="w", pady=2)
+        comp_presets = (
+            '24" Restriction Orifice Plate (C.W.S-1~2)',
+            '24" 배관 원주 용접부 (Circumferential Weld)',
+            '압력용기 원주 용접부 (Pressure Vessel C-Seam)',
+            '열배관 현장 원주 용접부 (Circumferential Weld)',
+            '배관 길이방향 용접부 (Longitudinal Weld)',
+        )
+        comp_cb = ttk.Combobox(joint_box, textvariable=self.ut_vars["component_name"], values=comp_presets, width=25)
+        comp_cb.grid(row=r, column=1, sticky="ew", pady=2)
+        comp_cb.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
+        comp_cb.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+        comp_cb.bind("<Return>", lambda _e: self.refresh_ut_preview())
+        r += 1
+
         # 두께
         ttk.Label(joint_box, text="모재 두께 T (mm)", width=22).grid(row=r, column=0, sticky="w", pady=2)
         thickness_presets = ("6.40", "7.11", "8.18", "9.53", "12.70", "15.87", "17.48", "19.05", "21.44", "25.40", "30.97", "38.10")
@@ -1868,6 +1885,7 @@ class PautScanPlanApp(tk.Tk):
 
         return UTScanPlanSettings(
             project_name=self.ut_vars.get("project_name", tk.StringVar()).get(),
+            component_name=self.ut_vars.get("component_name", tk.StringVar(value='24" Restriction Orifice Plate (C.W.S-1~2)')).get(),
             applicable_spec=self.ut_vars.get("applicable_spec", tk.StringVar()).get(),
             acceptance_criteria=self.ut_vars.get("acceptance_criteria", tk.StringVar()).get(),
             inspector_name=self.ut_vars.get("inspector_name", tk.StringVar()).get(),
