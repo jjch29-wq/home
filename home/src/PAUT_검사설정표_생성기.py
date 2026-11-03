@@ -1651,6 +1651,7 @@ class PautScanPlanApp(tk.Tk):
 
         # 배관 규격 프리셋 정의 (NPS, 외경 OD mm, Schedule, 두께 t mm)
         self.pipe_presets = {
+            '30" (OD 762.0mm) | t=22.23mm (도면 사양)': {"od": 762.0, "t": 22.23},
             '24" (OD 609.6mm) | Sch 80 (t=30.97mm)': {"od": 609.6, "t": 30.97},
             '24" (OD 609.6mm) | Sch 40 / STD (t=17.48mm)': {"od": 609.6, "t": 17.48},
             '24" (OD 609.6mm) | Sch 20 (t=12.70mm)': {"od": 609.6, "t": 12.70},
@@ -1709,6 +1710,7 @@ class PautScanPlanApp(tk.Tk):
         # ★ 부품 / 구간명 (사용자가 직접 자유롭게 수정 가능 & 다이어그램/엑셀 실시간 반영)
         ttk.Label(joint_box, text="부품 / 구간명", width=22, font=("맑은 고딕", 9, "bold")).grid(row=r, column=0, sticky="w", pady=2)
         comp_presets = (
+            '30" Restriction Orifice Plate (C.W.S-1~2)',
             '24" Restriction Orifice Plate (C.W.S-1~2)',
             '24" 배관 원주 용접부 (Circumferential Weld)',
             '압력용기 원주 용접부 (Pressure Vessel C-Seam)',
@@ -1734,7 +1736,7 @@ class PautScanPlanApp(tk.Tk):
 
         # 모재 두께 T (자동 입력 및 직접 수정 가능)
         ttk.Label(joint_box, text="모재 두께 T (mm)", width=22).grid(row=r, column=0, sticky="w", pady=2)
-        thickness_presets = ("6.02", "7.11", "8.18", "9.27", "9.53", "10.31", "11.13", "12.70", "15.09", "15.87", "17.48", "19.05", "21.44", "23.83", "26.19", "30.97", "38.10")
+        thickness_presets = ("6.02", "7.11", "8.18", "9.27", "9.53", "10.31", "11.13", "12.70", "15.09", "15.87", "17.48", "19.05", "21.44", "22.23", "23.83", "26.19", "30.97", "38.10")
         t_cb = ttk.Combobox(joint_box, textvariable=self.ut_vars["thickness_mm"], values=thickness_presets, width=25)
         t_cb.grid(row=r, column=1, sticky="ew", pady=2)
         t_cb.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
@@ -1744,7 +1746,7 @@ class PautScanPlanApp(tk.Tk):
 
         # 배관 외경 OD (자동 입력 및 직접 수정 가능)
         ttk.Label(joint_box, text="배관 외경 OD (mm, 0=평판)", width=22).grid(row=r, column=0, sticky="w", pady=2)
-        od_presets = ("60.3", "88.9", "114.3", "168.3", "219.1", "273.0", "318.5", "323.8", "355.6", "406.4", "457.2", "508.0", "609.6", "0.0")
+        od_presets = ("60.3", "88.9", "114.3", "168.3", "219.1", "273.0", "318.5", "323.8", "355.6", "406.4", "457.2", "508.0", "609.6", "762.0", "0.0")
         od_cb = ttk.Combobox(joint_box, textvariable=self.ut_vars["pipe_od_mm"], values=od_presets, width=25)
         od_cb.grid(row=r, column=1, sticky="ew", pady=2)
         od_cb.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
@@ -1755,6 +1757,8 @@ class PautScanPlanApp(tk.Tk):
         # 재질 (Material)
         ttk.Label(joint_box, text="재질 (Material)", width=22).grid(row=r, column=0, sticky="w", pady=2)
         mat_presets = (
+            "304SS / 304LSS (P-No. 8, Gr. 1)",
+            "316SS / 316LSS (P-No. 8, Gr. 1)",
             "A516 Gr.60 / A350LF2 CL.1",
             "SPPS 380 / Carbon Steel",
             "A106 Gr.B / Carbon Steel",
