@@ -20,6 +20,19 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from PIL import Image, ImageDraw, ImageFont
 
+import sys
+_SRC_DIR = str(Path(__file__).resolve().parent)
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
+from ut_scan_plan import (
+    UTProbeConfig,
+    UTScanPlanSettings,
+    calculate_ut_geometry,
+    create_ut_workbook,
+    make_ut_beam_diagram,
+)
+
 
 APP_TITLE = "PAUT 검사설정표 생성기"
 APP_VERSION = "1.12.0"
@@ -1018,28 +1031,44 @@ def create_workbook(settings: ScanSettings, output_path: str) -> str:
 class PautScanPlanApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"{APP_TITLE} v{APP_VERSION}")
-        self.geometry("1080x760")
-        self.minsize(980, 700)
+        self.title("초음파 검사설정표 & 스캔플랜 생성기 (PAUT / Conventional UT)")
+        self.geometry("1140x820")
+        self.minsize(1020, 720)
         self.vars: dict[str, tk.StringVar] = {}
         self.aperture_vars: dict[str, tk.StringVar] = {}
         self.apertures: list[ApertureConfig] = []
+        self.ut_vars: dict[str, tk.StringVar] = {}
+        self.ut_probe_vars: list[dict[str, tk.Variable]] = []
+        self.ut_settings = UTScanPlanSettings()
         self._build_ui()
         self._set_values(self._load_default_settings())
+        self._set_ut_values(self.ut_settings)
         self.after(150, self.refresh_preview)
+        self.after(250, self.refresh_ut_preview)
 
     def _build_ui(self):
         style = ttk.Style(self)
-        style.configure("Title.TLabel", font=("맑은 고딕", 16, "bold"))
+        style.configure("Title.TLabel", font=("맑은 고딕", 15, "bold"))
         style.configure("Section.TLabelframe.Label", font=("맑은 고딕", 10, "bold"))
 
-        header = ttk.Frame(self, padding=(16, 12))
+        header = ttk.Frame(self, padding=(16, 10))
         header.pack(fill="x")
-        ttk.Label(header, text="PAUT 검사설정표 생성기", style="Title.TLabel").pack(side="left")
-        ttk.Label(header, text="입력 → 검증 → 빔 경로 확인 → Excel 생성").pack(side="left", padx=18)
+        ttk.Label(header, text="초음파(UT / PAUT) 검사설정표 & 스캔플랜 생성기", style="Title.TLabel").pack(side="left")
+        ttk.Label(header, text="기법 선택 (PAUT / 일반 UT) → 제원 입력 → 빔 경로 확인 → Excel 생성",
+                  foreground="#475569").pack(side="left", padx=16)
 
-        body = ttk.Panedwindow(self, orient="horizontal")
-        body.pack(fill="both", expand=True, padx=12, pady=(0, 10))
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+
+        paut_tab = ttk.Frame(self.notebook)
+        ut_tab = ttk.Frame(self.notebook)
+        self.notebook.add(paut_tab, text="  PAUT 위상배열 스캔플랜  ")
+        self.notebook.add(ut_tab, text="  일반 UT 스캔플랜 (사각/수직)  ")
+
+        self._build_ut_ui(ut_tab)
+
+        body = ttk.Panedwindow(paut_tab, orient="horizontal")
+        body.pack(fill="both", expand=True, padx=4, pady=4)
         form_outer = ttk.Frame(body, padding=4)
         preview_outer = ttk.Frame(body, padding=4)
         body.add(form_outer, weight=2)
@@ -1576,6 +1605,297 @@ class PautScanPlanApp(tk.Tk):
         except Exception as exc:
             messagebox.showerror("생성 오류", str(exc), parent=self)
 
+    # ==========================================================================
+    # 일반 UT (Conventional UT) UI 및 동작 로직
+    # ==========================================================================
+    def _build_ut_ui(self, parent):
+        body = ttk.Panedwindow(parent, orient="horizontal")
+        body.pack(fill="both", expand=True, padx=4, pady=4)
+
+        form_outer = ttk.Frame(body, padding=4)
+        preview_outer = ttk.Frame(body, padding=4)
+        body.add(form_outer, weight=2)
+        body.add(preview_outer, weight=3)
+
+        canvas = tk.Canvas(form_outer, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(form_outer, orient="vertical", command=canvas.yview)
+        form = ttk.Frame(canvas)
+        form.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=form, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # 1. 관리 정보 그룹
+        mg_box = ttk.LabelFrame(form, text="1. 관리 및 적용 규격", style="Section.TLabelframe", padding=8)
+        mg_box.pack(fill="x", pady=4)
+        mg_fields = [
+            ("project_name", "공사명", "한국지역난방공사 중앙지사 열수송관 공사"),
+            ("applicable_spec", "적용 규격", "KS B 0896 / ASME Sec.V Art.4"),
+            ("acceptance_criteria", "합격 기준", "KS B 0896 2류 / ASME B31.1"),
+            ("inspector_name", "검사원", "비파괴검사원 (UT Level II)"),
+        ]
+        for row, (k, lbl, default_val) in enumerate(mg_fields):
+            ttk.Label(mg_box, text=lbl, width=16).grid(row=row, column=0, sticky="w", pady=2)
+            var = tk.StringVar(value=default_val)
+            self.ut_vars[k] = var
+            e = ttk.Entry(mg_box, textvariable=var, width=28)
+            e.grid(row=row, column=1, sticky="ew", pady=2)
+            e.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            e.bind("<Return>", lambda _e: self.refresh_ut_preview())
+        mg_box.columnconfigure(1, weight=1)
+
+        # 2. 시험체 및 용접부 제원 그룹
+        joint_box = ttk.LabelFrame(form, text="2. 시험체 및 용접부 제원", style="Section.TLabelframe", padding=8)
+        joint_box.pack(fill="x", pady=4)
+        joint_fields = [
+            ("thickness_mm", "모재 두께 T (mm)", "15.87"),
+            ("pipe_od_mm", "배관 외경 OD (mm, 0=평판)", "318.5"),
+            ("material_spec", "재질 (Material)", "SPPS 380 / Carbon Steel"),
+            ("bevel_type", "홈 형상", "Single-V (V형 맞대기)"),
+            ("bevel_angle_deg", "홈 편각 Bevel Angle (°)", "35.0"),
+            ("root_gap_mm", "루트 간격 Root Gap (mm)", "3.0"),
+            ("root_face_mm", "루트 면 Root Face (mm)", "1.5"),
+            ("cap_width_mm", "비드 폭 Weld Width (mm)", "20.0"),
+            ("cap_height_mm", "덧살 높이 Cap Height (mm)", "2.0"),
+            ("haz_width_mm", "열영향부 여유 HAZ (mm)", "10.0"),
+        ]
+        thickness_presets = ("6.40", "7.11", "8.18", "9.53", "12.70", "15.87", "17.48", "19.05", "21.44", "25.40")
+        for row, (k, lbl, default_val) in enumerate(joint_fields):
+            ttk.Label(joint_box, text=lbl, width=22).grid(row=row, column=0, sticky="w", pady=2)
+            var = tk.StringVar(value=default_val)
+            self.ut_vars[k] = var
+            if k == "thickness_mm":
+                w = ttk.Combobox(joint_box, textvariable=var, values=thickness_presets, width=25)
+                w.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
+            else:
+                w = ttk.Entry(joint_box, textvariable=var, width=27)
+            w.grid(row=row, column=1, sticky="ew", pady=2)
+            w.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            w.bind("<Return>", lambda _e: self.refresh_ut_preview())
+        joint_box.columnconfigure(1, weight=1)
+
+        # 3. 탐촉자 제원 그룹 (사각 45/60/70 및 수직 0)
+        probe_box = ttk.LabelFrame(form, text="3. 초음파 탐촉자 (사각 및 수직)", style="Section.TLabelframe", padding=8)
+        probe_box.pack(fill="x", pady=4)
+
+        probe_cols = ("선택", "구분", "굴절각", "주파수", "진동자", "입사점(mm)")
+        for c_idx, col_name in enumerate(probe_cols):
+            ttk.Label(probe_box, text=col_name, font=("맑은 고딕", 9, "bold")).grid(row=0, column=c_idx, padx=4, pady=2)
+
+        default_probes_data = [
+            (True, "사각", 45.0, 4.0, "10×10", 10.0),
+            (True, "사각", 60.0, 4.0, "10×10", 11.0),
+            (True, "사각", 70.0, 4.0, "10×10", 12.0),
+            (True, "수직", 0.0, 4.0, "Φ10", 0.0),
+        ]
+        self.ut_probe_vars.clear()
+        for p_idx, (act, p_type, ang, freq, sz, idx_off) in enumerate(default_probes_data):
+            p_row = p_idx + 1
+            act_var = tk.BooleanVar(value=act)
+            ang_var = tk.DoubleVar(value=ang)
+            freq_var = tk.DoubleVar(value=freq)
+            sz_var = tk.StringVar(value=sz)
+            idx_var = tk.DoubleVar(value=idx_off)
+            type_var = tk.StringVar(value=p_type)
+
+            self.ut_probe_vars.append({
+                "active": act_var, "type": type_var, "angle": ang_var,
+                "freq": freq_var, "size": sz_var, "index": idx_var
+            })
+
+            cb = ttk.Checkbutton(probe_box, variable=act_var, command=self.refresh_ut_preview)
+            cb.grid(row=p_row, column=0, padx=4, pady=2)
+
+            ttk.Label(probe_box, text=p_type).grid(row=p_row, column=1, padx=4, pady=2)
+            ttk.Label(probe_box, text=f"{ang:g}°", font=("맑은 고딕", 9, "bold")).grid(row=p_row, column=2, padx=4, pady=2)
+
+            f_ent = ttk.Entry(probe_box, textvariable=freq_var, width=6, justify="center")
+            f_ent.grid(row=p_row, column=3, padx=2, pady=2)
+            f_ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+
+            sz_ent = ttk.Entry(probe_box, textvariable=sz_var, width=8, justify="center")
+            sz_ent.grid(row=p_row, column=4, padx=2, pady=2)
+            sz_ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+
+            i_ent = ttk.Entry(probe_box, textvariable=idx_var, width=6, justify="center")
+            i_ent.grid(row=p_row, column=5, padx=2, pady=2)
+            i_ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+
+        # 4. 장비 및 교정 조건 그룹
+        cal_box = ttk.LabelFrame(form, text="4. 장비 및 교정 조건", style="Section.TLabelframe", padding=8)
+        cal_box.pack(fill="x", pady=4)
+        cal_fields = [
+            ("instrument_name", "탐상기 모델명", "EPOCH 650 (Olympus)"),
+            ("couplant", "접촉매질", "초음파 탐상 전용 글리세린 / 페이스트"),
+            ("cal_block", "대비 시험편", "STB-A1 / IIW Type 1 & ASME Basic Block"),
+            ("cal_method", "교정 기법", "DAC (거리진폭보정곡선)"),
+            ("reference_level", "기준 감도", "DAC 100% (기준감도 H선)"),
+            ("scan_level", "검사 감도", "기준감도(DAC) + 6 dB"),
+            ("transfer_correction_db", "전송 보정 (dB)", "2.0"),
+        ]
+        for row, (k, lbl, default_val) in enumerate(cal_fields):
+            ttk.Label(cal_box, text=lbl, width=16).grid(row=row, column=0, sticky="w", pady=2)
+            var = tk.StringVar(value=default_val)
+            self.ut_vars[k] = var
+            e = ttk.Entry(cal_box, textvariable=var, width=28)
+            e.grid(row=row, column=1, sticky="ew", pady=2)
+            e.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            e.bind("<Return>", lambda _e: self.refresh_ut_preview())
+        cal_box.columnconfigure(1, weight=1)
+
+        # 5. 계산 결과 실시간 요약 카드 (Treeview)
+        calc_box = ttk.LabelFrame(form, text="5. 스캔플랜 계산 결과 요약", style="Section.TLabelframe", padding=8)
+        calc_box.pack(fill="x", pady=4)
+
+        tree_cols = ("angle", "skip05", "skip10", "sp10", "scan_range")
+        self.ut_calc_tree = ttk.Treeview(calc_box, columns=tree_cols, show="headings", height=4)
+        self.ut_calc_tree.heading("angle", text="굴절각")
+        self.ut_calc_tree.heading("skip05", text="0.5 Skip")
+        self.ut_calc_tree.heading("skip10", text="1.0 Skip")
+        self.ut_calc_tree.heading("sp10", text="Sound Path")
+        self.ut_calc_tree.heading("scan_range", text="주사 범위(Xmin~Xmax)")
+
+        self.ut_calc_tree.column("angle", width=55, anchor="center")
+        self.ut_calc_tree.column("skip05", width=65, anchor="center")
+        self.ut_calc_tree.column("skip10", width=65, anchor="center")
+        self.ut_calc_tree.column("sp10", width=75, anchor="center")
+        self.ut_calc_tree.column("scan_range", width=140, anchor="center")
+        self.ut_calc_tree.pack(fill="x", pady=2)
+
+        # 우측 미리보기 패널 (Preview)
+        preview_box = ttk.LabelFrame(preview_outer, text="UT 스캔플랜 빔 다이어그램", style="Section.TLabelframe", padding=8)
+        preview_box.pack(fill="both", expand=True)
+
+        self.ut_preview_label = ttk.Label(preview_box, anchor="center")
+        self.ut_preview_label.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # 버튼 영역
+        btn_bar = ttk.Frame(preview_outer, padding=(0, 6))
+        btn_bar.pack(fill="x")
+        ttk.Button(btn_bar, text="빔 다이어그램 새로고침", command=self.refresh_ut_preview).pack(side="left", padx=4)
+        ttk.Button(btn_bar, text="UT 기본값 복원", command=self._reset_ut_defaults).pack(side="left", padx=4)
+        ttk.Button(btn_bar, text="UT 검사설정표 Excel 생성 (.xlsx)", style="Accent.TButton" if "Accent.TButton" in ttk.Style().theme_names() else "TButton",
+                   command=self.export_ut_excel).pack(side="right", padx=6)
+
+    def _get_ut_settings(self) -> UTScanPlanSettings:
+        probes = []
+        for p_idx, p_data in enumerate(self.ut_probe_vars):
+            act = p_data["active"].get()
+            ang = float(p_data["angle"].get())
+            freq = float(p_data["freq"].get())
+            sz = str(p_data["size"].get())
+            idx_off = float(p_data["index"].get())
+            p_type = str(p_data["type"].get())
+
+            wave = "LW (종파)" if (ang == 0.0 or p_type == "수직") else "SW (횡파)"
+            v = 5920.0 if (ang == 0.0 or p_type == "수직") else 3240.0
+            p_name = f"{int(freq)}Z{sz.replace('×','x')}N" if ang == 0.0 else f"{int(freq)}Z{sz.replace('×','x')}A{int(ang)}"
+
+            probes.append(UTProbeConfig(
+                probe_id=f"P{p_idx+1}",
+                probe_type=f"{p_type} ({'Straight' if ang == 0 else 'Angle'})",
+                angle_deg=ang,
+                frequency_mhz=freq,
+                crystal_size_mm=sz,
+                wave_type=wave,
+                velocity_ms=v,
+                index_offset_mm=idx_off,
+                probe_model=p_name,
+                is_active=act,
+            ))
+
+        return UTScanPlanSettings(
+            project_name=self.ut_vars.get("project_name", tk.StringVar()).get(),
+            applicable_spec=self.ut_vars.get("applicable_spec", tk.StringVar()).get(),
+            acceptance_criteria=self.ut_vars.get("acceptance_criteria", tk.StringVar()).get(),
+            inspector_name=self.ut_vars.get("inspector_name", tk.StringVar()).get(),
+            material_spec=self.ut_vars.get("material_spec", tk.StringVar()).get(),
+            thickness_mm=float(self.ut_vars.get("thickness_mm", tk.StringVar(value="15.87")).get() or 15.87),
+            pipe_od_mm=float(self.ut_vars.get("pipe_od_mm", tk.StringVar(value="318.5")).get() or 0.0),
+            bevel_type=self.ut_vars.get("bevel_type", tk.StringVar()).get(),
+            bevel_angle_deg=float(self.ut_vars.get("bevel_angle_deg", tk.StringVar(value="35.0")).get() or 35.0),
+            root_gap_mm=float(self.ut_vars.get("root_gap_mm", tk.StringVar(value="3.0")).get() or 3.0),
+            root_face_mm=float(self.ut_vars.get("root_face_mm", tk.StringVar(value="1.5")).get() or 1.5),
+            cap_width_mm=float(self.ut_vars.get("cap_width_mm", tk.StringVar(value="20.0")).get() or 20.0),
+            cap_height_mm=float(self.ut_vars.get("cap_height_mm", tk.StringVar(value="2.0")).get() or 2.0),
+            haz_width_mm=float(self.ut_vars.get("haz_width_mm", tk.StringVar(value="10.0")).get() or 10.0),
+            instrument_name=self.ut_vars.get("instrument_name", tk.StringVar()).get(),
+            couplant=self.ut_vars.get("couplant", tk.StringVar()).get(),
+            cal_block=self.ut_vars.get("cal_block", tk.StringVar()).get(),
+            cal_method=self.ut_vars.get("cal_method", tk.StringVar()).get(),
+            reference_level=self.ut_vars.get("reference_level", tk.StringVar()).get(),
+            scan_level=self.ut_vars.get("scan_level", tk.StringVar()).get(),
+            transfer_correction_db=float(self.ut_vars.get("transfer_correction_db", tk.StringVar(value="2.0")).get() or 2.0),
+            probes=probes,
+        )
+
+    def _set_ut_values(self, settings: UTScanPlanSettings):
+        for k, var in self.ut_vars.items():
+            if hasattr(settings, k):
+                var.set(str(getattr(settings, k)))
+
+    def _reset_ut_defaults(self):
+        default_s = UTScanPlanSettings()
+        self._set_ut_values(default_s)
+        self.refresh_ut_preview()
+
+    def refresh_ut_preview(self):
+        try:
+            settings = self._get_ut_settings()
+            results = calculate_ut_geometry(settings)
+
+            # 계산 트리뷰 업데이트
+            if hasattr(self, "ut_calc_tree"):
+                for row in self.ut_calc_tree.get_children():
+                    self.ut_calc_tree.delete(row)
+                for res in results:
+                    s05 = f"{res.skip_05_mm:.1f} mm" if res.angle_deg > 0 else "-"
+                    s10 = f"{res.skip_10_mm:.1f} mm" if res.angle_deg > 0 else "-"
+                    sp = f"{res.sound_path_10_mm:.1f} mm"
+                    scan = f"{res.scan_min_mm:.1f} ~ {res.scan_max_mm:.1f} mm"
+                    self.ut_calc_tree.insert("", "end", values=(f"{res.angle_deg:g}°", s05, s10, sp, scan))
+
+            # 다이어그램 이미지 임시 생성 및 미리보기 표시
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                make_ut_beam_diagram(settings, tmp_path, width=720, height=360)
+                img = Image.open(tmp_path)
+                from PIL import ImageTk
+                self._ut_preview_img = ImageTk.PhotoImage(img)
+                if hasattr(self, "ut_preview_label"):
+                    self.ut_preview_label.configure(image=self._ut_preview_img)
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+        except Exception as exc:
+            pass
+
+    def export_ut_excel(self):
+        try:
+            settings = self._get_ut_settings()
+        except Exception as exc:
+            messagebox.showerror("입력 오류", str(exc), parent=self)
+            return
+
+        default_name = f"UT_검사설정표_{settings.thickness_mm:g}mm_Bevel{settings.bevel_angle_deg:g}도.xlsx"
+        path = filedialog.asksaveasfilename(
+            parent=self, title="UT 검사설정표 Excel 저장", defaultextension=".xlsx",
+            initialfile=default_name, filetypes=[("Excel", "*.xlsx")],
+        )
+        if not path:
+            return
+        try:
+            create_ut_workbook(settings, path)
+            messagebox.showinfo("완료", f"UT 검사설정표를 생성했습니다.\n{path}", parent=self)
+        except Exception as exc:
+            messagebox.showerror("생성 오류", str(exc), parent=self)
+
+
 
 def self_test(output_path: str) -> None:
     focus_20, region_20 = physical_focus_depth(15.87, 20.0)
@@ -1629,7 +1949,7 @@ def self_test(output_path: str) -> None:
     assert sheet.row_dimensions[14].height == 34
     assert sheet["K14"].alignment.wrap_text is True
     assert sheet.print_options.horizontalCentered is True
-    assert sheet.page_margins.left == sheet.page_margins.right == 0.25
+    assert sheet.page_margins.left == sheet.page_margins.right == 0.10
     assert len(sheet._images) == 1
     assert check.sheetnames == ["PAUT Setup"]
     review_values = {sheet.cell(row, 1).value: sheet.cell(row, 4).value
@@ -1663,7 +1983,7 @@ def self_test(output_path: str) -> None:
     assert sheet["I49"].value.startswith("=(2*$B$5*TAN")
     assert "ABS(E49-(90-$E$5))<=6" in sheet["J49"].value
     assert sheet.print_options.horizontalCentered is True
-    assert sheet.page_margins.left == sheet.page_margins.right == 0.25
+    assert sheet.page_margins.left == sheet.page_margins.right == 0.10
     assert len(sheet._images) == 1
     assert sheet.print_area == "'PAUT 설정표'!$A$1:$K$52"
     check.close()
