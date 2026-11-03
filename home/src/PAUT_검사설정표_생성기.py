@@ -1649,15 +1649,17 @@ class PautScanPlanApp(tk.Tk):
         joint_box = ttk.LabelFrame(form, text="2. 시험체 및 용접부 제원", style="Section.TLabelframe", padding=8)
         joint_box.pack(fill="x", pady=4)
         joint_fields = [
-            ("thickness_mm", "모재 두께 T (mm)", "15.87"),
-            ("pipe_od_mm", "배관 외경 OD (mm, 0=평판)", "318.5"),
-            ("material_spec", "재질 (Material)", "SPPS 380 / Carbon Steel"),
-            ("bevel_type", "홈 형상", "Single-V (V형 맞대기)"),
-            ("bevel_angle_deg", "홈 편각 Bevel Angle (°)", "35.0"),
-            ("root_gap_mm", "루트 간격 Root Gap (mm)", "3.0"),
+            ("thickness_mm", "모재 두께 T (mm)", "30.97"),
+            ("pipe_od_mm", "배관 외경 OD (mm, 0=평판)", "609.6"),
+            ("material_spec", "재질 (Material)", "A516 Gr.60 / A350LF2 CL.1"),
+            ("bevel_type", "홈 형상", "Compound Bevel (복합 베벨)"),
+            ("bevel_angle_deg", "하부 홈 각도 (19T까지, °)", "37.5"),
+            ("bevel_transition_mm", "개선 전환 깊이 (mm)", "19.0"),
+            ("bevel_angle_upper_deg", "상부 홈 각도 (19T이상, °)", "10.0"),
+            ("root_gap_mm", "루트 간격 Root Gap (mm)", "2.5"),
             ("root_face_mm", "루트 면 Root Face (mm)", "1.5"),
-            ("cap_width_mm", "비드 폭 Weld Width (mm)", "20.0"),
-            ("cap_height_mm", "덧살 높이 Cap Height (mm)", "2.0"),
+            ("cap_width_mm", "비드 폭 Weld Width (mm)", "36.0"),
+            ("cap_height_mm", "덧살 높이 Cap Height (mm)", "2.5"),
             ("haz_width_mm", "열영향부 여유 HAZ (mm)", "10.0"),
         ]
         thickness_presets = ("6.40", "7.11", "8.18", "9.53", "12.70", "15.87", "17.48", "19.05", "21.44", "25.40")
@@ -1814,8 +1816,10 @@ class PautScanPlanApp(tk.Tk):
             thickness_mm=float(self.ut_vars.get("thickness_mm", tk.StringVar(value="15.87")).get() or 15.87),
             pipe_od_mm=float(self.ut_vars.get("pipe_od_mm", tk.StringVar(value="318.5")).get() or 0.0),
             bevel_type=self.ut_vars.get("bevel_type", tk.StringVar()).get(),
-            bevel_angle_deg=float(self.ut_vars.get("bevel_angle_deg", tk.StringVar(value="35.0")).get() or 35.0),
-            root_gap_mm=float(self.ut_vars.get("root_gap_mm", tk.StringVar(value="3.0")).get() or 3.0),
+            bevel_angle_deg=float(self.ut_vars.get("bevel_angle_deg", tk.StringVar(value="37.5")).get() or 37.5),
+            bevel_transition_mm=float(self.ut_vars.get("bevel_transition_mm", tk.StringVar(value="19.0")).get() or 19.0),
+            bevel_angle_upper_deg=float(self.ut_vars.get("bevel_angle_upper_deg", tk.StringVar(value="10.0")).get() or 10.0),
+            root_gap_mm=float(self.ut_vars.get("root_gap_mm", tk.StringVar(value="2.5")).get() or 2.5),
             root_face_mm=float(self.ut_vars.get("root_face_mm", tk.StringVar(value="1.5")).get() or 1.5),
             cap_width_mm=float(self.ut_vars.get("cap_width_mm", tk.StringVar(value="20.0")).get() or 20.0),
             cap_height_mm=float(self.ut_vars.get("cap_height_mm", tk.StringVar(value="2.0")).get() or 2.0),

@@ -60,9 +60,11 @@ class UTScanPlanSettings:
     material_spec: str = "SPPS 380 / Carbon Steel"
     thickness_mm: float = 15.87
     pipe_od_mm: float = 318.5                   # 배관 외경 (0 또는 음수이면 평판)
-    bevel_type: str = "Single-V (V형 맞대기)"
-    bevel_angle_deg: float = 35.0               # V홈 편각 (포함각 70°)
-    root_gap_mm: float = 3.0                    # 루트 간격
+    bevel_type: str = "Compound Bevel (복합 베벨)"
+    bevel_angle_deg: float = 37.5               # 하부 홈 편각 (19T까지 37.5°)
+    bevel_transition_mm: float = 19.0           # 개선각 전환 높이 (19 mm)
+    bevel_angle_upper_deg: float = 10.0         # 상부 홈 편각 (19T 초과 10°)
+    root_gap_mm: float = 2.5                    # 루트 간격 (도면: 2.5 mm)
     root_face_mm: float = 1.5                   # 루트 면
     cap_width_mm: float = 20.0                  # 비드 폭
     cap_height_mm: float = 2.0                  # 덧살 높이
@@ -340,14 +342,27 @@ def make_ut_beam_diagram(
     cap_h_px = cap_h * scale_y
     haz_px = haz_w * scale_x
 
-    bevel_tan = math.tan(math.radians(bevel_deg))
-    bevel_w_px = (t - root_face) * bevel_tan * scale_x
-    groove_top_half_px = rg_half_px + bevel_w_px
+    # 복합 베벨(Compound Bevel) 판정: 19T 전이 깊이 적용
+    is_compound = getattr(settings, "bevel_transition_mm", 0.0) > 0.0 and getattr(settings, "bevel_angle_upper_deg", 0.0) > 0.0
+    h_trans = getattr(settings, "bevel_transition_mm", 19.0) if is_compound else t
+    upper_angle = getattr(settings, "bevel_angle_upper_deg", bevel_deg) if is_compound else bevel_deg
 
-    # HAZ(열영향부) 채색 (좌/우)
+    h_trans = min(t, max(root_face, h_trans))
+    h1 = h_trans - root_face
+    w1_px = h1 * math.tan(math.radians(bevel_deg)) * scale_x
+    h1_px = h1 * scale_y
+    trans_y = plate_bottom - rf_px - h1_px
+
+    h2 = max(0.0, t - h_trans)
+    w2_px = h2 * math.tan(math.radians(upper_angle)) * scale_x
+    groove_top_half_px = rg_half_px + w1_px + w2_px
+    trans_half_px = rg_half_px + w1_px
+
+    # HAZ(열영향부) 채색 (복합 베벨 꺾임 반영)
     haz_poly_left = [
         (center_x - groove_top_half_px - haz_px, plate_top),
         (center_x - groove_top_half_px, plate_top),
+        (center_x - trans_half_px, trans_y),
         (center_x - rg_half_px, plate_bottom - rf_px),
         (center_x - rg_half_px, plate_bottom),
         (center_x - rg_half_px - haz_px, plate_bottom),
@@ -358,29 +373,40 @@ def make_ut_beam_diagram(
         (center_x + rg_half_px + haz_px, plate_bottom),
         (center_x + rg_half_px, plate_bottom),
         (center_x + rg_half_px, plate_bottom - rf_px),
+        (center_x + trans_half_px, trans_y),
     ]
     draw.polygon(haz_poly_left, fill=(255, 245, 230), outline=None)
     draw.polygon(haz_poly_right, fill=(255, 245, 230), outline=None)
 
-    # 용접 비드 및 개선부 채색
+    # 용접 비드 및 복합 개선부 채색
     weld_poly = [
         (center_x - cap_half_px, plate_top),
         (center_x, plate_top - cap_h_px),
         (center_x + cap_half_px, plate_top),
         (center_x + groove_top_half_px, plate_top),
+        (center_x + trans_half_px, trans_y),
         (center_x + rg_half_px, plate_bottom - rf_px),
         (center_x + rg_half_px, plate_bottom),
         (center_x, plate_bottom + (cap_h_px * 0.6)),
         (center_x - rg_half_px, plate_bottom),
         (center_x - rg_half_px, plate_bottom - rf_px),
+        (center_x - trans_half_px, trans_y),
         (center_x - groove_top_half_px, plate_top),
     ]
     draw.polygon(weld_poly, fill=(230, 238, 248), outline=(80, 105, 140))
 
-    draw.line([(center_x - groove_top_half_px, plate_top), (center_x - rg_half_px, plate_bottom - rf_px),
-               (center_x - rg_half_px, plate_bottom)], fill=(70, 95, 130), width=2)
-    draw.line([(center_x + groove_top_half_px, plate_top), (center_x + rg_half_px, plate_bottom - rf_px),
-               (center_x + rg_half_px, plate_bottom)], fill=(70, 95, 130), width=2)
+    # 복합 개선면 외곽선 (꺾임 2단)
+    draw.line([(center_x - groove_top_half_px, plate_top), (center_x - trans_half_px, trans_y),
+               (center_x - rg_half_px, plate_bottom - rf_px), (center_x - rg_half_px, plate_bottom)],
+              fill=(70, 95, 130), width=2)
+    draw.line([(center_x + groove_top_half_px, plate_top), (center_x + trans_half_px, trans_y),
+               (center_x + rg_half_px, plate_bottom - rf_px), (center_x + rg_half_px, plate_bottom)],
+              fill=(70, 95, 130), width=2)
+
+    # 19T 전이선 점선 및 각도 라벨
+    if is_compound:
+        draw.line([(center_x - trans_half_px, trans_y), (center_x + trans_half_px, trans_y)], fill=(150, 170, 190), width=1)
+        draw.text((center_x + trans_half_px + 8, trans_y - 8), f"19T 전이점 (하부 37.5° / 상부 10°)", fill=(70, 90, 130), font=font_small)
 
     draw.line([(center_x - cap_half_px, plate_top), (center_x, plate_top - cap_h_px), (center_x + cap_half_px, plate_top)],
               fill=(50, 80, 120), width=2)
@@ -699,7 +725,9 @@ def create_ut_workbook(settings: UTScanPlanSettings, output_path: str) -> str:
     joint_info = [
         ("부품 / 구간", settings.component_name, "재 질 (Material)", settings.material_spec),
         ("모재 두께 (T)", f"{settings.thickness_mm:g} mm", "배관 외경 / 형태", pipe_desc),
-        ("홈 형상 (Bevel)", settings.bevel_type, "홈 편각 (Angle)", f"{settings.bevel_angle_deg:g}° (포함각 {settings.bevel_angle_deg*2:g}°)"),
+        ("홈 형상 (Bevel)", settings.bevel_type, "홈 각도 (Bevel Angle)",
+          f"하부 19T: {settings.bevel_angle_deg:g}° (포함 75°) / 상부: {getattr(settings, 'bevel_angle_upper_deg', 10.0):g}° (포함 20°)"
+          if getattr(settings, 'bevel_transition_mm', 0) > 0 else f"{settings.bevel_angle_deg:g}° (포함각 {settings.bevel_angle_deg*2:g}°)"),
         ("루트 간격 (Gap)", f"{settings.root_gap_mm:g} mm", "루트 면 (Root Face)", f"{settings.root_face_mm:g} mm"),
         ("비드 폭 (Width)", f"{settings.cap_width_mm:g} mm", "덧살 높이 (Cap)", f"{settings.cap_height_mm:g} mm"),
         ("열영향부 (HAZ)", f"비드 양단 + {settings.haz_width_mm:g} mm", "표면 가공 상태", "쇼트 블라스트 / 그라인딩"),
