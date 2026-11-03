@@ -342,10 +342,13 @@ def make_ut_beam_diagram(
     cap_h_px = cap_h * scale_y
     haz_px = haz_w * scale_x
 
-    # 복합 베벨(Compound Bevel) 판정: 19T 전이 깊이 적용
-    is_compound = getattr(settings, "bevel_transition_mm", 0.0) > 0.0 and getattr(settings, "bevel_angle_upper_deg", 0.0) > 0.0
-    h_trans = getattr(settings, "bevel_transition_mm", 19.0) if is_compound else t
-    upper_angle = getattr(settings, "bevel_angle_upper_deg", bevel_deg) if is_compound else bevel_deg
+    # 복합 베벨 판정: 전환 깊이가 0보다 크고 두께보다 작으며, 상부 각도가 하부 각도와 다를 때만 적용
+    trans_val = getattr(settings, "bevel_transition_mm", 0.0)
+    upper_val = getattr(settings, "bevel_angle_upper_deg", bevel_deg)
+    is_compound = (trans_val > 0.0) and (trans_val < t) and (abs(upper_val - bevel_deg) > 0.1)
+
+    h_trans = trans_val if is_compound else t
+    upper_angle = upper_val if is_compound else bevel_deg
 
     h_trans = min(t, max(root_face, h_trans))
     h1 = h_trans - root_face

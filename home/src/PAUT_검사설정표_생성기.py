@@ -1648,34 +1648,93 @@ class PautScanPlanApp(tk.Tk):
         # 2. 시험체 및 용접부 제원 그룹
         joint_box = ttk.LabelFrame(form, text="2. 시험체 및 용접부 제원", style="Section.TLabelframe", padding=8)
         joint_box.pack(fill="x", pady=4)
-        joint_fields = [
-            ("thickness_mm", "모재 두께 T (mm)", "30.97"),
-            ("pipe_od_mm", "배관 외경 OD (mm, 0=평판)", "609.6"),
-            ("material_spec", "재질 (Material)", "A516 Gr.60 / A350LF2 CL.1"),
-            ("bevel_type", "홈 형상", "Compound Bevel (복합 베벨)"),
-            ("bevel_angle_deg", "하부 홈 각도 (19T까지, °)", "37.5"),
-            ("bevel_transition_mm", "개선 전환 깊이 (mm)", "19.0"),
-            ("bevel_angle_upper_deg", "상부 홈 각도 (19T이상, °)", "10.0"),
-            ("root_gap_mm", "루트 간격 Root Gap (mm)", "2.5"),
-            ("root_face_mm", "루트 면 Root Face (mm)", "1.5"),
-            ("cap_width_mm", "비드 폭 Weld Width (mm)", "36.0"),
-            ("cap_height_mm", "덧살 높이 Cap Height (mm)", "2.5"),
-            ("haz_width_mm", "열영향부 여유 HAZ (mm)", "10.0"),
-        ]
-        thickness_presets = ("6.40", "7.11", "8.18", "9.53", "12.70", "15.87", "17.48", "19.05", "21.44", "25.40")
-        for row, (k, lbl, default_val) in enumerate(joint_fields):
-            ttk.Label(joint_box, text=lbl, width=22).grid(row=row, column=0, sticky="w", pady=2)
-            var = tk.StringVar(value=default_val)
-            self.ut_vars[k] = var
-            if k == "thickness_mm":
-                w = ttk.Combobox(joint_box, textvariable=var, values=thickness_presets, width=25)
-                w.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
-            else:
-                w = ttk.Entry(joint_box, textvariable=var, width=27)
-            w.grid(row=row, column=1, sticky="ew", pady=2)
-            w.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
-            w.bind("<Return>", lambda _e: self.refresh_ut_preview())
+
+        # 개선 조건 드롭다운 프리셋 정의
+        self.bevel_presets = {
+            "단일 V형: 30.0° (포함 60°)": {"type": "Single-V (단일 V홈)", "lower": 30.0, "trans": 0.0, "upper": 30.0},
+            "단일 V형: 35.0° (포함 70°)": {"type": "Single-V (단일 V홈)", "lower": 35.0, "trans": 0.0, "upper": 35.0},
+            "단일 V형: 37.5° (포함 75°)": {"type": "Single-V (단일 V홈)", "lower": 37.5, "trans": 0.0, "upper": 37.5},
+            "단일 V형: 45.0° (포함 90°)": {"type": "Single-V (단일 V홈)", "lower": 45.0, "trans": 0.0, "upper": 45.0},
+            "복합 베벨: 19T까지 37.5° / 상부 10°": {"type": "Compound Bevel (복합 베벨)", "lower": 37.5, "trans": 19.0, "upper": 10.0},
+            "사용자 직접 입력 (Custom)": None,
+        }
+
+        # 기본 변수 초기화
+        for k, v in [
+            ("thickness_mm", "30.97"), ("pipe_od_mm", "609.6"),
+            ("material_spec", "A516 Gr.60 / A350LF2 CL.1"),
+            ("bevel_preset", "복합 베벨: 19T까지 37.5° / 상부 10°"),
+            ("bevel_type", "Compound Bevel (복합 베벨)"),
+            ("bevel_angle_deg", "37.5"),
+            ("bevel_transition_mm", "19.0"),
+            ("bevel_angle_upper_deg", "10.0"),
+            ("root_gap_mm", "2.5"), ("root_face_mm", "1.5"),
+            ("cap_width_mm", "36.0"), ("cap_height_mm", "2.5"),
+            ("haz_width_mm", "10.0"),
+        ]:
+            if k not in self.ut_vars:
+                self.ut_vars[k] = tk.StringVar(value=v)
+
+        r = 0
+        # 두께
+        ttk.Label(joint_box, text="모재 두께 T (mm)", width=22).grid(row=r, column=0, sticky="w", pady=2)
+        thickness_presets = ("6.40", "7.11", "8.18", "9.53", "12.70", "15.87", "17.48", "19.05", "21.44", "25.40", "30.97", "38.10")
+        t_cb = ttk.Combobox(joint_box, textvariable=self.ut_vars["thickness_mm"], values=thickness_presets, width=25)
+        t_cb.grid(row=r, column=1, sticky="ew", pady=2)
+        t_cb.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
+        t_cb.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+        r += 1
+
+        # 외경 & 재질
+        for k, lbl in [("pipe_od_mm", "배관 외경 OD (mm, 0=평판)"), ("material_spec", "재질 (Material)")]:
+            ttk.Label(joint_box, text=lbl, width=22).grid(row=r, column=0, sticky="w", pady=2)
+            e = ttk.Entry(joint_box, textvariable=self.ut_vars[k], width=27)
+            e.grid(row=r, column=1, sticky="ew", pady=2)
+            e.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            r += 1
+
+        # ★ 개선각 / 홈 조건 선택 드롭다운 (Combobox)
+        ttk.Label(joint_box, text="홈 형상 / 개선각 조건", width=22, font=("맑은 고딕", 9, "bold")).grid(row=r, column=0, sticky="w", pady=(6, 2))
+        self.bevel_preset_cb = ttk.Combobox(
+            joint_box, textvariable=self.ut_vars["bevel_preset"],
+            values=list(self.bevel_presets.keys()), state="readonly", width=25
+        )
+        self.bevel_preset_cb.grid(row=r, column=1, sticky="ew", pady=(6, 2))
+        self.bevel_preset_cb.bind("<<ComboboxSelected>>", self._on_bevel_preset_selected)
+        r += 1
+
+        # 세부 개선 각도 및 전이깊이 (드롭다운 선택 시 자동 동기화 & 활성/비활성화)
+        self.bevel_detail_entries = {}
+        for k, lbl in [
+            ("bevel_angle_deg", "  └ 기본/하부 각도 (°)"),
+            ("bevel_transition_mm", "  └ 전환 깊이 (mm, 0=단일)"),
+            ("bevel_angle_upper_deg", "  └ 상부 협개선 각도 (°)"),
+        ]:
+            ttk.Label(joint_box, text=lbl, width=22).grid(row=r, column=0, sticky="w", pady=1)
+            ent = ttk.Entry(joint_box, textvariable=self.ut_vars[k], width=27)
+            ent.grid(row=r, column=1, sticky="ew", pady=1)
+            ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            ent.bind("<Return>", lambda _e: self.refresh_ut_preview())
+            self.bevel_detail_entries[k] = ent
+            r += 1
+
+        # 루트 간격, 루트면, 비드폭, 덧살높이, HAZ
+        for k, lbl in [
+            ("root_gap_mm", "루트 간격 Root Gap (mm)"),
+            ("root_face_mm", "루트 면 Root Face (mm)"),
+            ("cap_width_mm", "비드 폭 Weld Width (mm)"),
+            ("cap_height_mm", "덧살 높이 Cap Height (mm)"),
+            ("haz_width_mm", "열영향부 여유 HAZ (mm)"),
+        ]:
+            ttk.Label(joint_box, text=lbl, width=22).grid(row=r, column=0, sticky="w", pady=2)
+            e = ttk.Entry(joint_box, textvariable=self.ut_vars[k], width=27)
+            e.grid(row=r, column=1, sticky="ew", pady=2)
+            e.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            e.bind("<Return>", lambda _e: self.refresh_ut_preview())
+            r += 1
+
         joint_box.columnconfigure(1, weight=1)
+        self._update_bevel_entries_state()
 
         # 3. 탐촉자 제원 그룹 (사각 45/60/70 및 수직 0)
         probe_box = ttk.LabelFrame(form, text="3. 초음파 탐촉자 (사각 및 수직)", style="Section.TLabelframe", padding=8)
@@ -1885,6 +1944,27 @@ class PautScanPlanApp(tk.Tk):
                         pass
         except Exception as exc:
             pass
+
+    def _on_bevel_preset_selected(self, _event=None):
+        selected = self.ut_vars.get("bevel_preset", tk.StringVar()).get()
+        preset = self.bevel_presets.get(selected)
+        if preset:
+            self.ut_vars["bevel_type"].set(preset["type"])
+            self.ut_vars["bevel_angle_deg"].set(f"{preset['lower']:g}")
+            self.ut_vars["bevel_transition_mm"].set(f"{preset['trans']:g}")
+            self.ut_vars["bevel_angle_upper_deg"].set(f"{preset['upper']:g}")
+        self._update_bevel_entries_state()
+        self.refresh_ut_preview()
+
+    def _update_bevel_entries_state(self):
+        selected = self.ut_vars.get("bevel_preset", tk.StringVar()).get()
+        is_compound = "복합" in selected or "Custom" in selected
+        if hasattr(self, "bevel_detail_entries"):
+            state = "normal" if is_compound else "disabled"
+            if "bevel_transition_mm" in self.bevel_detail_entries:
+                self.bevel_detail_entries["bevel_transition_mm"].configure(state=state)
+            if "bevel_angle_upper_deg" in self.bevel_detail_entries:
+                self.bevel_detail_entries["bevel_angle_upper_deg"].configure(state=state)
 
     def export_ut_excel(self):
         try:
