@@ -60,6 +60,34 @@ class TestUTScanPlan(unittest.TestCase):
         self.assertEqual(res_0.sound_path_05_mm, 15.87)
         self.assertEqual(res_0.sound_path_10_mm, 31.74)
 
+    def test_sus_direct_mode(self):
+        """SUS(오스테나이트계 스테인리스강) 0.5 Skip 직사 전담 모드 검증."""
+        sus_settings = UTScanPlanSettings(
+            material_spec="304SS / 304LSS (P-No. 8, Gr. 1)",
+            thickness_mm=22.23,
+            pipe_od_mm=762.0,
+            cap_width_mm=30.0,
+            haz_width_mm=10.0,
+        )
+        results = calculate_ut_geometry(sus_settings)
+        r_map = {r.angle_deg: r for r in results}
+
+        # 45도 SUS 직사 주사 범위 검증: 1.0 Skip 배제, 0.5S 직사 전담
+        res_45 = r_map[45.0]
+        self.assertIn("0.5S 직사", res_45.scan_range_desc)
+        self.assertIn("SUS", res_45.coverage_target)
+
+        # SUS 다이어그램 생성 검증
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            make_ut_beam_diagram(sus_settings, tmp_path, width=1200, height=500)
+            self.assertTrue(os.path.exists(tmp_path))
+            self.assertGreater(os.path.getsize(tmp_path), 5000)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
     def test_make_ut_beam_diagram(self):
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             tmp_path = tmp.name
@@ -85,4 +113,3 @@ class TestUTScanPlan(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
