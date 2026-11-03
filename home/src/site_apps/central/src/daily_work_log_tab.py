@@ -6,7 +6,12 @@ from site_apps.central.src.services.monthly_report_manager import MonthlyReportM
 from tkcalendar import DateEntry
 from datetime import datetime
 import os
-from site_apps.central.src.data_sync import get_history_path, get_process_photos_dir
+from site_apps.central.src.data_sync import (
+    SharedDataUnavailableError,
+    get_data_connection_error,
+    get_history_path,
+    get_process_photos_dir,
+)
 import sys
 import json
 import shutil
@@ -43,12 +48,21 @@ class DailyWorkLogTab(ttk.Frame):
         self.history_path = get_history_path()
         self._migrate_legacy_welder_ids()
         self.photo_root = get_process_photos_dir()
+        self.data_connection_error = get_data_connection_error()
         self.selected_ndt_row = None
         self.welder_names = dict(MonthlyReportManager.WELDER_NAMES)
         self.welder_ids_by_name = {
             name: welder_id for welder_id, name in self.welder_names.items()
         }
         self.setup_ui()
+        if self.data_connection_error:
+            self.after_idle(
+                lambda: messagebox.showerror(
+                    "공유 작업자료 연결 오류",
+                    self.data_connection_error,
+                    parent=self.winfo_toplevel(),
+                )
+            )
 
     def _normalize_welder_id(self, value):
         """화면 표시값 또는 이름을 최신 용접사 번호 형식으로 변환한다."""
@@ -1627,8 +1641,21 @@ class DailyWorkLogTab(ttk.Frame):
             return {}
 
     def save_history(self, history):
-        with open(self.history_path, 'w', encoding='utf-8') as f:
+        connection_error = get_data_connection_error()
+        if connection_error:
+            messagebox.showerror(
+                "작업일보 저장 중단",
+                connection_error,
+                parent=self.winfo_toplevel(),
+            )
+            raise SharedDataUnavailableError(connection_error)
+
+        if os.path.isfile(self.history_path):
+            shutil.copy2(self.history_path, self.history_path + '.backup.json')
+        temp_path = self.history_path + '.tmp'
+        with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=4)
+        os.replace(temp_path, self.history_path)
         self._refresh_ndt_history_choices(history)
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
