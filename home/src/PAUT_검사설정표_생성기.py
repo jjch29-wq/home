@@ -1856,14 +1856,21 @@ class PautScanPlanApp(tk.Tk):
                     scan = f"{res.scan_min_mm:.1f} ~ {res.scan_max_mm:.1f} mm"
                     self.ut_calc_tree.insert("", "end", values=(f"{res.angle_deg:g}°", s05, s10, sp, scan))
 
-            # 다이어그램 이미지 임시 생성 및 미리보기 표시
+            # 다이어그램 고해상도 생성 및 가용 영역 맞춤 미리보기
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 tmp_path = tmp.name
             try:
-                make_ut_beam_diagram(settings, tmp_path, width=720, height=360)
-                img = Image.open(tmp_path)
+                make_ut_beam_diagram(settings, tmp_path, width=1200, height=500)
+                full_img = Image.open(tmp_path)
+                
+                lbl_w = self.ut_preview_label.winfo_width() if hasattr(self, "ut_preview_label") else 0
+                lbl_h = self.ut_preview_label.winfo_height() if hasattr(self, "ut_preview_label") else 0
+                target_w = max(680, lbl_w - 20 if lbl_w > 100 else 740)
+                target_h = max(300, min(550, int(target_w * 500 / 1200)))
+                
+                resized_img = full_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
                 from PIL import ImageTk
-                self._ut_preview_img = ImageTk.PhotoImage(img)
+                self._ut_preview_img = ImageTk.PhotoImage(resized_img)
                 if hasattr(self, "ut_preview_label"):
                     self.ut_preview_label.configure(image=self._ut_preview_img)
             finally:

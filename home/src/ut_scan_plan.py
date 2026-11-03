@@ -278,11 +278,11 @@ def calculate_ut_geometry(settings: UTScanPlanSettings) -> List[UTCalculationRes
 def make_ut_beam_diagram(
     settings: UTScanPlanSettings,
     output_path: str,
-    width: int = 1160,
-    height: int = 360,
+    width: int = 1200,
+    height: int = 500,
 ) -> None:
-    """모재 단면, 용접부, 사각/수직 탐촉자 빔 경로를 도식화한 이미지를 생성한다."""
-    img = Image.new("RGB", (width, height), (255, 255, 255))
+    """모재 단면, 용접부, 사각(0.5/1.0 Skip) 및 수직 탐촉자 빔 경로를 정밀 도식화한다."""
+    img = Image.new("RGBA", (width, height), (255, 255, 255, 255))
     draw = ImageDraw.Draw(img)
 
     def get_font(size: int = 12, bold: bool = False):
@@ -303,143 +303,283 @@ def make_ut_beam_diagram(
     font_normal = get_font(10, bold=False)
     font_small = get_font(9, bold=False)
 
-    margin_left = 110
-    margin_right = 90
-    plate_top = 115
     t = float(settings.thickness_mm)
+    bevel_deg = float(settings.bevel_angle_deg)
+    root_gap = float(settings.root_gap_mm)
+    root_face = float(settings.root_face_mm)
+    cap_w = float(settings.cap_width_mm)
+    cap_h = float(settings.cap_height_mm)
+    haz_w = float(settings.haz_width_mm)
 
-    # 1.0 Skip 최대 거리를 감안한 스케일 계산
-    max_span_mm = max(90.0, t * math.tan(math.radians(70.0)) * 2.1 + float(settings.cap_width_mm) + 25.0)
-    avail_width = width - margin_left - margin_right
-    scale = avail_width / (max_span_mm * 1.3)
-    plate_bottom = plate_top + max(30, int(t * scale))
+    # 1. 상단 타이틀 바
+    draw.rectangle([10, 8, width - 10, 42], fill=(240, 245, 252), outline=(180, 205, 235), width=1)
+    pipe_str = f"배관 OD {settings.pipe_od_mm:g}mm" if settings.pipe_od_mm > 0 else "평판"
+    title_text = f"초음파탐상(UT) 스캔플랜 다이어그램  |  {settings.component_name} (두께 T={t:g}mm, {pipe_str}, 홈각도 {bevel_deg:g}°)"
+    draw.text((22, 14), title_text, fill=(20, 50, 110), font=font_title)
 
-    # 용접 중심선 x좌표
-    center_x = margin_left + int(avail_width * 0.40)
+    # 2. 모재 단면 배치 (중앙 기준)
+    center_x = width // 2
+    plate_top = 135
+    plate_height_px = 75
+    scale_y = plate_height_px / t  # px per mm
+    scale_x = scale_y  # 1:1 종횡비
 
-    # 1. 배경 타이틀 바
-    draw.rectangle([8, 8, width - 8, 38], fill=(240, 244, 250), outline=(180, 200, 225), width=1)
-    pipe_info = f"Pipe OD {settings.pipe_od_mm:g}mm" if settings.pipe_od_mm > 0 else "Plate"
-    title_text = f"UT Scan Plan Diagram  |  {settings.component_name} (T={t:g}mm, {pipe_info}, Bevel {settings.bevel_angle_deg:g}°)"
-    draw.text((20, 14), title_text, fill=(20, 50, 100), font=font_title)
+    plate_bottom = plate_top + plate_height_px
 
-    # 2. 모재 및 용접부 단면
-    left_x = margin_left - 25
-    right_x = width - margin_right + 25
-    draw.rectangle([left_x, plate_top, right_x, plate_bottom], fill=(248, 249, 250), outline=(120, 130, 140), width=2)
+    plate_half_len_mm = max(110.0, t * math.tan(math.radians(70.0)) * 2.0 + haz_w + 35.0)
+    plate_half_len_px = int(plate_half_len_mm * scale_x)
 
-    half_cap = (float(settings.cap_width_mm) / 2.0) * scale
-    half_root_gap = (float(settings.root_gap_mm) / 2.0) * scale
-    root_face = float(settings.root_face_mm) * scale
-    cap_height = float(settings.cap_height_mm) * scale
-    haz_px = float(settings.haz_width_mm) * scale
+    left_x = max(25, center_x - plate_half_len_px)
+    right_x = min(width - 25, center_x + plate_half_len_px)
 
-    weld_poly = [
-        (center_x - half_cap, plate_top),
-        (center_x, plate_top - cap_height),
-        (center_x + half_cap, plate_top),
-        (center_x + half_root_gap, plate_bottom - root_face),
-        (center_x + half_root_gap, plate_bottom),
-        (center_x - half_root_gap, plate_bottom),
-        (center_x - half_root_gap, plate_bottom - root_face),
+    draw.rectangle([left_x, plate_top, right_x, plate_bottom], fill=(248, 250, 252), outline=(130, 140, 150), width=2)
+
+    rg_half_px = (root_gap / 2.0) * scale_x
+    rf_px = root_face * scale_y
+    cap_half_px = (cap_w / 2.0) * scale_x
+    cap_h_px = cap_h * scale_y
+    haz_px = haz_w * scale_x
+
+    bevel_tan = math.tan(math.radians(bevel_deg))
+    bevel_w_px = (t - root_face) * bevel_tan * scale_x
+    groove_top_half_px = rg_half_px + bevel_w_px
+
+    # HAZ(열영향부) 채색 (좌/우)
+    haz_poly_left = [
+        (center_x - groove_top_half_px - haz_px, plate_top),
+        (center_x - groove_top_half_px, plate_top),
+        (center_x - rg_half_px, plate_bottom - rf_px),
+        (center_x - rg_half_px, plate_bottom),
+        (center_x - rg_half_px - haz_px, plate_bottom),
     ]
-    draw.polygon(weld_poly, fill=(235, 238, 245), outline=(90, 110, 140))
-    draw.line([(center_x - half_cap, plate_top), (center_x, plate_top - cap_height), (center_x + half_cap, plate_top)],
-              fill=(70, 90, 120), width=2)
+    haz_poly_right = [
+        (center_x + groove_top_half_px, plate_top),
+        (center_x + groove_top_half_px + haz_px, plate_top),
+        (center_x + rg_half_px + haz_px, plate_bottom),
+        (center_x + rg_half_px, plate_bottom),
+        (center_x + rg_half_px, plate_bottom - rf_px),
+    ]
+    draw.polygon(haz_poly_left, fill=(255, 245, 230), outline=None)
+    draw.polygon(haz_poly_right, fill=(255, 245, 230), outline=None)
 
-    # HAZ 점선
-    haz_left = center_x - half_cap - haz_px
-    haz_right = center_x + half_cap + haz_px
-    for y in range(plate_top, plate_bottom, 5):
-        draw.line([(haz_left, y), (haz_left, min(y + 2, plate_bottom))], fill=(190, 160, 120), width=1)
-        draw.line([(haz_right, y), (haz_right, min(y + 2, plate_bottom))], fill=(190, 160, 120), width=1)
+    # 용접 비드 및 개선부 채색
+    weld_poly = [
+        (center_x - cap_half_px, plate_top),
+        (center_x, plate_top - cap_h_px),
+        (center_x + cap_half_px, plate_top),
+        (center_x + groove_top_half_px, plate_top),
+        (center_x + rg_half_px, plate_bottom - rf_px),
+        (center_x + rg_half_px, plate_bottom),
+        (center_x, plate_bottom + (cap_h_px * 0.6)),
+        (center_x - rg_half_px, plate_bottom),
+        (center_x - rg_half_px, plate_bottom - rf_px),
+        (center_x - groove_top_half_px, plate_top),
+    ]
+    draw.polygon(weld_poly, fill=(230, 238, 248), outline=(80, 105, 140))
+
+    draw.line([(center_x - groove_top_half_px, plate_top), (center_x - rg_half_px, plate_bottom - rf_px),
+               (center_x - rg_half_px, plate_bottom)], fill=(70, 95, 130), width=2)
+    draw.line([(center_x + groove_top_half_px, plate_top), (center_x + rg_half_px, plate_bottom - rf_px),
+               (center_x + rg_half_px, plate_bottom)], fill=(70, 95, 130), width=2)
+
+    draw.line([(center_x - cap_half_px, plate_top), (center_x, plate_top - cap_h_px), (center_x + cap_half_px, plate_top)],
+              fill=(50, 80, 120), width=2)
 
     # 용접 중심선
-    for y in range(plate_top - 25, plate_bottom + 30, 7):
-        draw.line([(center_x, y), (center_x, y + 4)], fill=(220, 60, 60), width=1)
-    draw.text((center_x - 28, plate_bottom + 32), "용접 중심선", fill=(200, 40, 40), font=font_small)
+    for y in range(plate_top - 30, plate_bottom + 35, 7):
+        draw.line([(center_x, y), (center_x, y + 4)], fill=(220, 50, 50), width=1)
+    draw.text((center_x - 30, plate_bottom + 38), "용접 중심선", fill=(200, 30, 30), font=font_small)
 
     # 두께 치수선
-    dim_x = left_x + 12
+    dim_x = left_x + 16
     draw.line([(dim_x, plate_top), (dim_x, plate_bottom)], fill=(80, 80, 80), width=1)
     draw.line([(dim_x - 3, plate_top), (dim_x + 3, plate_top)], fill=(80, 80, 80), width=1)
     draw.line([(dim_x - 3, plate_bottom), (dim_x + 3, plate_bottom)], fill=(80, 80, 80), width=1)
-    draw.text((dim_x - 55, (plate_top + plate_bottom) // 2 - 6), f"T={t:g}mm", fill=(50, 50, 50), font=font_bold)
+    draw.text((dim_x - 55, (plate_top + plate_bottom) // 2 - 7), f"T={t:g}mm", fill=(50, 50, 50), font=font_bold)
 
-    # 3. 빔 경로 및 주사 범위
+    # 3. 초음파 빔 경로 및 탐촉자
     calculations = calculate_ut_geometry(settings)
-    colors = [
-        (30, 100, 220),   # 45도 파랑
-        (30, 160, 70),    # 60도 초록
-        (220, 110, 20),   # 70도 주황
-        (150, 50, 180),   # 0도 보라
-    ]
-    calc_by_angle = {res.angle_deg: res for res in calculations}
+    calc_map = {res.angle_deg: res for res in calculations}
 
-    # 범례 박스
-    legend_y = height - 85
-    draw.rectangle([left_x, legend_y - 6, right_x, height - 10], fill=(250, 250, 252), outline=(210, 215, 220), width=1)
-    draw.text((left_x + 10, legend_y - 2), "[범례 및 계산 결과 요약]", fill=(40, 40, 40), font=font_bold)
+    color_45 = (25, 110, 220)
+    color_60 = (20, 160, 65)
+    color_70 = (230, 110, 15)
+    color_0  = (140, 50, 180)
 
-    angle_list = [45.0, 60.0, 70.0, 0.0]
-    drawn_count = 0
-    for idx, angle in enumerate(angle_list):
-        if angle not in calc_by_angle:
+    # A. 0.5 Skip 빔 (우측 45도 탐촉자 -> 루트 직접 타격)
+    if 45.0 in calc_map:
+        c45 = calc_map[45.0]
+        s05_px = int(c45.skip_05_mm * scale_x)
+        idx_x = center_x + s05_px
+
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        ov_draw = ImageDraw.Draw(overlay)
+        beam_poly_05 = [
+            (idx_x - 6, plate_top),
+            (idx_x + 6, plate_top),
+            (center_x + rg_half_px + 10, plate_bottom),
+            (center_x - rg_half_px - 8, plate_bottom),
+        ]
+        ov_draw.polygon(beam_poly_05, fill=(*color_45, 45))
+        img = Image.alpha_composite(img, overlay)
+        draw = ImageDraw.Draw(img)
+
+        draw.line([(idx_x, plate_top), (center_x, plate_bottom)], fill=color_45, width=3)
+        w_poly = [(idx_x - 4, plate_top), (idx_x + 22, plate_top), (idx_x + 22, plate_top - 18), (idx_x + 2, plate_top - 18)]
+        draw.polygon(w_poly, fill=(240, 245, 255), outline=color_45, width=2)
+        draw.text((idx_x + 4, plate_top - 32), "45° (0.5S)", fill=color_45, font=font_bold)
+
+        y_d = plate_top - 36
+        draw.line([(center_x, y_d), (idx_x, y_d)], fill=color_45, width=1)
+        draw.line([(center_x, y_d - 2), (center_x, y_d + 2)], fill=color_45, width=1)
+        draw.line([(idx_x, y_d - 2), (idx_x, y_d + 2)], fill=color_45, width=1)
+        draw.text(((center_x + idx_x) // 2 - 25, y_d - 13), f"0.5S={c45.skip_05_mm:.1f}mm", fill=color_45, font=font_small)
+
+    # B. 1.0 Skip 빔 (우측 60도 탐촉자 -> 바닥 반사 후 상부 개선면/비드 타격)
+    if 60.0 in calc_map:
+        c60 = calc_map[60.0]
+        s10_px = int(c60.skip_10_mm * scale_x)
+        s05_px = int(c60.skip_05_mm * scale_x)
+        idx_x = center_x + s10_px
+        refl_x = center_x + s05_px
+
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        ov_draw = ImageDraw.Draw(overlay)
+        ov_draw.polygon([(idx_x - 7, plate_top), (idx_x + 7, plate_top),
+                         (refl_x + 12, plate_bottom), (refl_x - 12, plate_bottom)], fill=(*color_60, 40))
+        ov_draw.polygon([(refl_x + 12, plate_bottom), (refl_x - 12, plate_bottom),
+                         (center_x - groove_top_half_px - haz_px, plate_top),
+                         (center_x + groove_top_half_px, plate_top)], fill=(*color_60, 40))
+        img = Image.alpha_composite(img, overlay)
+        draw = ImageDraw.Draw(img)
+
+        draw.line([(idx_x, plate_top), (refl_x, plate_bottom)], fill=color_60, width=3)
+        draw.line([(refl_x, plate_bottom), (center_x, plate_top)], fill=color_60, width=3)
+
+        w_poly = [(idx_x - 4, plate_top), (idx_x + 24, plate_top), (idx_x + 24, plate_top - 18), (idx_x + 3, plate_top - 18)]
+        draw.polygon(w_poly, fill=(240, 255, 245), outline=color_60, width=2)
+        draw.text((idx_x + 5, plate_top - 32), "60° (1.0S)", fill=color_60, font=font_bold)
+
+        y_d = plate_top - 54
+        draw.line([(center_x, y_d), (idx_x, y_d)], fill=color_60, width=1)
+        draw.line([(center_x, y_d - 2), (center_x, y_d + 2)], fill=color_60, width=1)
+        draw.line([(refl_x, y_d - 2), (refl_x, y_d + 2)], fill=color_60, width=1)
+        draw.line([(idx_x, y_d - 2), (idx_x, y_d + 2)], fill=color_60, width=1)
+        draw.text(((center_x + idx_x) // 2 - 25, y_d - 13), f"1.0S={c60.skip_10_mm:.1f}mm", fill=color_60, font=font_small)
+
+    # C. 좌측 주사 (70도 탐촉자)
+    if 70.0 in calc_map:
+        c70 = calc_map[70.0]
+        s10_px = int(c70.skip_10_mm * scale_x)
+        s05_px = int(c70.skip_05_mm * scale_x)
+        idx_x = center_x - s10_px
+        refl_x = center_x - s05_px
+
+        overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        ov_draw = ImageDraw.Draw(overlay)
+        ov_draw.polygon([(idx_x - 8, plate_top), (idx_x + 8, plate_top),
+                         (refl_x + 14, plate_bottom), (refl_x - 14, plate_bottom)], fill=(*color_70, 35))
+        ov_draw.polygon([(refl_x + 14, plate_bottom), (refl_x - 14, plate_bottom),
+                         (center_x - groove_top_half_px, plate_top),
+                         (center_x + groove_top_half_px + haz_px, plate_top)], fill=(*color_70, 35))
+        img = Image.alpha_composite(img, overlay)
+        draw = ImageDraw.Draw(img)
+
+        draw.line([(idx_x, plate_top), (refl_x, plate_bottom)], fill=color_70, width=3)
+        draw.line([(refl_x, plate_bottom), (center_x, plate_top)], fill=color_70, width=3)
+
+        w_poly = [(idx_x + 4, plate_top), (idx_x - 24, plate_top), (idx_x - 24, plate_top - 18), (idx_x - 3, plate_top - 18)]
+        draw.polygon(w_poly, fill=(255, 248, 240), outline=color_70, width=2)
+        draw.text((idx_x - 48, plate_top - 32), "70° (좌측)", fill=color_70, font=font_bold)
+
+        y_d = plate_top - 46
+        draw.line([(idx_x, y_d), (center_x, y_d)], fill=color_70, width=1)
+        draw.line([(idx_x, y_d - 2), (idx_x, y_d + 2)], fill=color_70, width=1)
+        draw.line([(center_x, y_d - 2), (center_x, y_d + 2)], fill=color_70, width=1)
+        draw.text(((idx_x + center_x) // 2 - 25, y_d - 13), f"1.0S={c70.skip_10_mm:.1f}mm", fill=color_70, font=font_small)
+
+    # D. 수직 탐촉자 (0도)
+    if 0.0 in calc_map:
+        c0 = calc_map[0.0]
+        str_x = center_x - int((haz_w + cap_w / 2.0 + 35.0) * scale_x)
+        probe_w_px = 22
+        probe_h_px = 18
+
+        draw.rectangle([str_x - probe_w_px // 2, plate_top - probe_h_px, str_x + probe_w_px // 2, plate_top],
+                       fill=(245, 235, 255), outline=color_0, width=2)
+        draw.text((str_x - 24, plate_top - probe_h_px - 14), "0° 수직탐상", fill=color_0, font=font_bold)
+
+        draw.line([(str_x, plate_top), (str_x, plate_bottom)], fill=color_0, width=3)
+        draw.line([(str_x - 4, plate_bottom - 7), (str_x, plate_bottom), (str_x + 4, plate_bottom - 7)], fill=color_0, width=2)
+        draw.text((str_x - 22, plate_bottom + 10), "모재 라미네이션", fill=color_0, font=font_small)
+
+    # 4. 주사 범위 화살표
+    y_scan = plate_bottom + 20
+    if 60.0 in calc_map:
+        c60 = calc_map[60.0]
+        scan_min_px = center_x + int(c60.scan_min_mm * scale_x)
+        scan_max_px = center_x + int(c60.scan_max_mm * scale_x)
+
+        draw.line([(scan_min_px, y_scan), (scan_max_px, y_scan)], fill=(40, 80, 160), width=2)
+        draw.line([(scan_min_px + 5, y_scan - 3), (scan_min_px, y_scan), (scan_min_px + 5, y_scan + 3)], fill=(40, 80, 160), width=2)
+        draw.line([(scan_max_px - 5, y_scan - 3), (scan_max_px, y_scan), (scan_max_px - 5, y_scan + 3)], fill=(40, 80, 160), width=2)
+        draw.text(((scan_min_px + scan_max_px) // 2 - 50, y_scan + 4), f"주사범위: {c60.scan_min_mm:.1f} ~ {c60.scan_max_mm:.1f} mm",
+                  fill=(20, 60, 140), font=font_bold)
+
+    # 5. 하단 범례 테이블
+    legend_top = height - 122
+    draw.rectangle([10, legend_top, width - 10, height - 8], fill=(252, 253, 255), outline=(205, 215, 230), width=1)
+    draw.rectangle([10, legend_top, width - 10, legend_top + 22], fill=(235, 242, 252), outline=(205, 215, 230), width=1)
+    draw.text((20, legend_top + 4), "[스캔플랜 기하학 계산 및 검출 대상 영역 요약표]", fill=(20, 45, 95), font=font_bold)
+
+    headers = [("탐촉자 구분", 110), ("굴절각", 65), ("0.5 Skip", 85), ("1.0 Skip", 85),
+               ("Sound Path", 95), ("주사 범위(Xmin~Xmax)", 170), ("주요 검출 대상 영역", 380)]
+    cur_x = 20
+    row_y = legend_top + 28
+    for h_name, w_px in headers:
+        draw.text((cur_x, row_y), h_name, fill=(60, 70, 85), font=font_bold)
+        cur_x += w_px
+
+    row_y += 18
+    draw.line([(15, row_y), (width - 15, row_y)], fill=(220, 225, 235), width=1)
+    row_y += 4
+
+    p_colors = {45.0: color_45, 60.0: color_60, 70.0: color_70, 0.0: color_0}
+    for angle in [45.0, 60.0, 70.0, 0.0]:
+        if angle not in calc_map:
             continue
-        c_res = calc_by_angle[angle]
-        color = colors[idx % len(colors)]
+        res = calc_map[angle]
+        clr = p_colors.get(angle, (50, 50, 50))
 
-        col_x = left_x + 10 + (drawn_count % 2) * 460
-        row_y = legend_y + 18 + (drawn_count // 2) * 28
-        drawn_count += 1
+        cur_x = 20
+        draw.rectangle([cur_x, row_y + 2, cur_x + 10, row_y + 11], fill=clr)
+        draw.text((cur_x + 16, row_y), res.probe_type, fill=(30, 30, 30), font=font_normal)
+        cur_x += 110
 
-        draw.rectangle([col_x, row_y + 2, col_x + 14, row_y + 12], fill=color)
-        if angle == 0.0:
-            leg_txt = f"수직 0°: Sound Path={c_res.sound_path_05_mm:.1f}mm | 주사범위: {c_res.scan_range_desc}"
-        else:
-            leg_txt = (f"사각 {angle:g}°: 0.5S={c_res.skip_05_mm:.1f}mm, 1.0S={c_res.skip_10_mm:.1f}mm | "
-                       f"SP={c_res.sound_path_10_mm:.1f}mm | 주사: {c_res.scan_min_mm:.1f}~{c_res.scan_max_mm:.1f}mm")
-        draw.text((col_x + 20, row_y), leg_txt, fill=(40, 40, 40), font=font_normal)
+        draw.text((cur_x, row_y), f"{res.angle_deg:g}°", fill=clr, font=font_bold)
+        cur_x += 65
 
-        if angle == 0.0:
-            str_probe_x = center_x - half_cap - haz_px - int(22.0 * scale)
-            probe_w, probe_h = 20, 16
-            draw.rectangle([str_probe_x - probe_w // 2, plate_top - probe_h, str_probe_x + probe_w // 2, plate_top],
-                           fill=(230, 220, 245), outline=color, width=2)
-            draw.line([(str_probe_x, plate_top), (str_probe_x, plate_bottom)], fill=color, width=2)
-            draw.text((str_probe_x - 16, plate_top - probe_h - 14), "0° 수직", fill=color, font=font_small)
-            draw.line([(str_probe_x - 3, plate_bottom - 5), (str_probe_x, plate_bottom), (str_probe_x + 3, plate_bottom - 5)], fill=color, width=2)
-        else:
-            rad = math.radians(angle)
-            skip_05_px = int(c_res.skip_05_mm * scale)
-            skip_10_px = int(c_res.skip_10_mm * scale)
+        s05_str = f"{res.skip_05_mm:.1f} mm" if res.angle_deg > 0 else "-"
+        draw.text((cur_x, row_y), s05_str, fill=(40, 40, 40), font=font_normal)
+        cur_x += 85
 
-            index_x = center_x + skip_10_px
-            refl_x = center_x + skip_05_px
+        s10_str = f"{res.skip_10_mm:.1f} mm" if res.angle_deg > 0 else "-"
+        draw.text((cur_x, row_y), s10_str, fill=(40, 40, 40), font=font_normal)
+        cur_x += 85
 
-            draw.line([(index_x, plate_top), (refl_x, plate_bottom)], fill=color, width=2)
-            draw.line([(refl_x, plate_bottom), (center_x, plate_top)], fill=color, width=2)
+        sp_str = f"{res.sound_path_10_mm:.1f} mm"
+        draw.text((cur_x, row_y), sp_str, fill=(40, 40, 40), font=font_normal)
+        cur_x += 95
 
-            wedge_w = 22
-            wedge_h = 15
-            wedge_poly = [
-                (index_x - 5, plate_top),
-                (index_x + wedge_w, plate_top),
-                (index_x + wedge_w, plate_top - wedge_h),
-                (index_x + 3, plate_top - wedge_h),
-            ]
-            draw.polygon(wedge_poly, fill=(245, 245, 250), outline=color, width=2)
-            draw.text((index_x + 5, plate_top - wedge_h - 13), f"{angle:g}°", fill=color, font=font_bold)
+        scan_str = f"{res.scan_min_mm:.1f} ~ {res.scan_max_mm:.1f} mm"
+        draw.text((cur_x, row_y), scan_str, fill=(40, 40, 40), font=font_bold)
+        cur_x += 170
 
-            y_dim = plate_top - 28 - int(idx * 14)
-            draw.line([(center_x, y_dim), (index_x, y_dim)], fill=color, width=1)
-            draw.line([(center_x, y_dim - 2), (center_x, y_dim + 2)], fill=color, width=1)
-            draw.line([(refl_x, y_dim - 2), (refl_x, y_dim + 2)], fill=color, width=1)
-            draw.line([(index_x, y_dim - 2), (index_x, y_dim + 2)], fill=color, width=1)
-            draw.text((refl_x - 16, y_dim - 12), f"0.5S={c_res.skip_05_mm:.1f}", fill=color, font=font_small)
-            draw.text((index_x - 18, y_dim - 12), f"1.0S={c_res.skip_10_mm:.1f}", fill=color, font=font_small)
+        draw.text((cur_x, row_y), res.coverage_target, fill=(70, 75, 85), font=font_small)
+        row_y += 18
 
-    img.save(output_path, "PNG")
+    # RGBA -> RGB 변환 저장
+    img.convert("RGB").save(output_path, "PNG")
 
 
 def create_ut_workbook(settings: UTScanPlanSettings, output_path: str) -> str:
@@ -705,16 +845,16 @@ def create_ut_workbook(settings: UTScanPlanSettings, output_path: str) -> str:
         tmp_img_path = tmp.name
 
     try:
-        make_ut_beam_diagram(settings, tmp_img_path, width=1160, height=360)
+        make_ut_beam_diagram(settings, tmp_img_path, width=1200, height=500)
         xl_img = XLImage(tmp_img_path)
         xl_img.width = 750
-        xl_img.height = 232
+        xl_img.height = 312
         ws.add_image(xl_img, f"B{current_row}")
     finally:
         pass
 
     # 다이어그램 아래 빈 행들 높이 지정
-    for offset in range(13):
+    for offset in range(17):
         ws.row_dimensions[current_row + offset].height = 18
 
     # 인쇄 설정 (A4 가로 1페이지 강제 맞춤)
@@ -737,7 +877,7 @@ def create_ut_workbook(settings: UTScanPlanSettings, output_path: str) -> str:
     ws.print_options.verticalCentered = True
 
     # 인쇄 영역 확정
-    ws.print_area = f"$B$2:$L${current_row + 12}"
+    ws.print_area = f"$B$2:$L${current_row + 16}"
 
     wb.save(output_path)
     return output_path
