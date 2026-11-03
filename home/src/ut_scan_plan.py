@@ -294,7 +294,7 @@ def make_ut_beam_diagram(
     settings: UTScanPlanSettings,
     output_path: str,
     width: int = 1200,
-    height: int = 500,
+    height: int = 550,
 ) -> None:
     """모재 단면, 용접부, 사각(0.5/1.0 Skip) 및 수직 탐촉자 빔 경로를 정밀 도식화한다."""
     img = Image.new("RGBA", (width, height), (255, 255, 255, 255))
@@ -334,7 +334,7 @@ def make_ut_beam_diagram(
 
     # 2. 모재 단면 배치 (중앙 기준)
     center_x = width // 2
-    plate_top = 135
+    plate_top = 185
     plate_height_px = 75
     scale_y = plate_height_px / t  # px per mm
     scale_x = scale_y  # 1:1 종횡비
@@ -469,9 +469,9 @@ def make_ut_beam_diagram(
     # SUS(오스테나이트계 스테인리스강, P-No. 8) 여부 판단
     is_sus = any(k in str(settings.material_spec).upper() for k in ["SUS", "304", "316", "STAINLESS", "P-NO. 8", "P-NO.8", "P8", "P-8"])
 
-    # 공통 사각 탐촉자 및 중간 입사점 인덱스 마크(▲) 렌더링 헬퍼
-    def draw_probe_wedge(idx_x: int, label: str, clr: tuple, bg_clr: tuple, y_text_offset: int = 0):
-        w_half = 13
+    # 공통 사각 탐촉자 및 중간 입사점 인덱스 마크(▲) 렌더링 헬퍼 (2줄 라벨 지원)
+    def draw_probe_wedge(idx_x: int, title: str, sub_label: str, clr: tuple, bg_clr: tuple, y_text_offset: int = 0):
+        w_half = 14
         h_probe = 16
         b_top = plate_top - h_probe
         b_bot = plate_top
@@ -480,20 +480,27 @@ def make_ut_beam_diagram(
         # 2. 바닥 중간 입사점 인덱스 마크 (Index Point Mark ▲: 실제 현장 웻지 눈금)
         draw.polygon([(idx_x - 3, b_bot), (idx_x + 3, b_bot), (idx_x, b_bot - 5)], fill=(220, 30, 30))
         draw.line([(idx_x, b_bot), (idx_x, b_bot - 5)], fill=(180, 0, 0), width=1)
-        # 3. 라벨 텍스트 (탐촉자 상단 중앙 정렬)
+        # 3. 라벨 텍스트 (각도 및 스킵 거리 2줄 깔끔 배치)
         try:
-            tw = font_bold.getlength(label)
+            tw1 = font_bold.getlength(title)
+            tw2 = font_small.getlength(sub_label) if sub_label else 0
         except AttributeError:
-            tw = len(label) * 6
-        draw.text((int(idx_x - tw / 2), b_top - 14 - y_text_offset), label, fill=clr, font=font_bold)
+            tw1 = len(title) * 6
+            tw2 = len(sub_label) * 5 if sub_label else 0
+
+        if sub_label:
+            draw.text((int(idx_x - tw1 / 2), b_top - 26 - y_text_offset), title, fill=clr, font=font_bold)
+            draw.text((int(idx_x - tw2 / 2), b_top - 13 - y_text_offset), sub_label, fill=clr, font=font_small)
+        else:
+            draw.text((int(idx_x - tw1 / 2), b_top - 14 - y_text_offset), title, fill=clr, font=font_bold)
 
     if is_sus:
         # =========================================================================
         # ★ SUS 전용 직사(Direct Beam / 0.5 Skip) 모드 (ASME Sec.V Art.4 App.III)
         # =========================================================================
         badge_text = "[SUS 오스테나이트강 직사 모드] 0.5 Skip Direct Beam Only : 주상정 산란 방지 & 양면 100% 체적 커버"
-        draw.rectangle([center_x - 325, plate_top - 100, center_x + 325, plate_top - 78], fill=(255, 243, 230), outline=(220, 110, 30), width=1)
-        draw.text((center_x - 315, plate_top - 96), badge_text, fill=(180, 70, 0), font=font_bold)
+        draw.rectangle([center_x - 325, plate_top - 130, center_x + 325, plate_top - 108], fill=(255, 243, 230), outline=(220, 110, 30), width=1)
+        draw.text((center_x - 315, plate_top - 124), badge_text, fill=(180, 70, 0), font=font_bold)
 
         overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         ov_draw = ImageDraw.Draw(overlay)
@@ -546,26 +553,26 @@ def make_ut_beam_diagram(
         # 우측 45° / 60° 0.5S 중심선 및 사각 탐촉자
         if 45.0 in calc_map:
             draw.line([(idx_45_r, plate_top), (center_x, plate_bottom)], fill=color_45, width=3)
-            draw_probe_wedge(idx_45_r, "45°(0.5S직사)", color_45, (240, 245, 255))
-            y_d = plate_top - 38
+            draw_probe_wedge(idx_45_r, "45°(0.5S)", f"0.5S={c45.skip_05_mm:.1f}mm", color_45, (240, 245, 255))
+            y_d = plate_top - 58
             draw.line([(center_x, y_d), (idx_45_r, y_d)], fill=color_45, width=1)
             draw.text(((center_x + idx_45_r) // 2 - 24, y_d - 13), f"0.5S={c45.skip_05_mm:.1f}mm", fill=color_45, font=font_small)
 
         if 60.0 in calc_map:
             draw.line([(idx_60_r, plate_top), (center_x, trans_y)], fill=color_60, width=3)
-            draw_probe_wedge(idx_60_r, "60°(0.5S직사)", color_60, (240, 255, 245))
-            y_d = plate_top - 38
-            draw.line([(idx_45_r, y_d), (idx_60_r, y_d)], fill=color_60, width=1)
-            draw.text(((idx_45_r + idx_60_r) // 2 - 24, y_d - 13), f"0.5S={c60.skip_05_mm:.1f}mm", fill=color_60, font=font_small)
+            draw_probe_wedge(idx_60_r, "60°(0.5S)", f"0.5S={c60.skip_05_mm:.1f}mm", color_60, (240, 255, 245))
+            y_d = plate_top - 78
+            draw.line([(center_x, y_d), (idx_60_r, y_d)], fill=color_60, width=1)
+            draw.text(((center_x + idx_60_r) // 2 - 24, y_d - 13), f"0.5S={c60.skip_05_mm:.1f}mm", fill=color_60, font=font_small)
 
         # 좌측 45° / 60° 0.5S 중심선 및 사각 탐촉자
         if 45.0 in calc_map:
             draw.line([(idx_45_l, plate_top), (center_x, plate_bottom)], fill=color_45, width=2)
-            draw_probe_wedge(idx_45_l, "45°(0.5S직사)", color_45, (240, 245, 255))
+            draw_probe_wedge(idx_45_l, "45°(0.5S)", f"0.5S={c45.skip_05_mm:.1f}mm", color_45, (240, 245, 255))
 
         if 60.0 in calc_map:
             draw.line([(idx_60_l, plate_top), (center_x, trans_y)], fill=color_60, width=2)
-            draw_probe_wedge(idx_60_l, "60°(0.5S직사)", color_60, (240, 255, 245))
+            draw_probe_wedge(idx_60_l, "60°(0.5S)", f"0.5S={c60.skip_05_mm:.1f}mm", color_60, (240, 255, 245))
 
         # 주사 화살표
         y_scan_r = plate_bottom + 18
@@ -585,7 +592,7 @@ def make_ut_beam_diagram(
             c0 = calc_map[0.0]
             str_x = center_x - int((c60.scan_max_mm + 35.0) * scale_x)
             str_x = max(left_x + 45, str_x)
-            draw_probe_wedge(str_x, "0° 수직탐상", color_0, (245, 235, 255))
+            draw_probe_wedge(str_x, "0° 수직탐상", "라미네이션", color_0, (245, 235, 255))
             draw.line([(str_x, plate_top), (str_x, plate_bottom)], fill=color_0, width=3)
             draw.text((str_x - 38, plate_bottom + 10), "모재 라미네이션 검사", fill=color_0, font=font_small)
 
@@ -594,9 +601,9 @@ def make_ut_beam_diagram(
         # ★ 탄소강/합금강 일반 모드 (각도별 100% 체적 커버리지 밴드 & 0.5S/1.0S 풀 표현)
         # =========================================================================
         # 상단 안내 뱃지: 100% Volume Coverage 입증
-        badge_text = "[전체 체적 100% 커버리지 완료] 45°(루트/하부) + 60°(전이점/협개선) + 70°(표면/HAZ) 사각지대 제로"
-        draw.rectangle([center_x - 330, plate_top - 100, center_x + 330, plate_top - 78], fill=(238, 248, 240), outline=(40, 150, 70), width=1)
-        draw.text((center_x - 315, plate_top - 96), badge_text, fill=(20, 110, 45), font=font_bold)
+        badge_text = "[전체 검사 체적 100% 커버리지] 45°(루트/하부) + 60°(전이점/협개선) + 70°(표면/HAZ) 무결점 검사"
+        draw.rectangle([center_x - 330, plate_top - 130, center_x + 330, plate_top - 108], fill=(238, 248, 240), outline=(40, 150, 70), width=1)
+        draw.text((center_x - 315, plate_top - 124), badge_text, fill=(20, 110, 45), font=font_bold)
 
         overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         ov_draw = ImageDraw.Draw(overlay)
@@ -647,25 +654,22 @@ def make_ut_beam_diagram(
                 (center_x - groove_top_half_px, plate_top)
             ], fill=(*color_60, 35))
 
-        # C. 70° 체적 커버리지 (표면 비드 직하부 & HAZ 전담): 주황색 밴드
+        # C. 70° 체적 커버리지 (우측 배치: 1.0 Skip 표면 비드 직하부 & HAZ 전담): 주황색 밴드
         if 70.0 in calc_map:
             c70 = calc_map[70.0]
             s05_70 = int(c70.skip_05_mm * scale_x)
             s10_70 = int(c70.skip_10_mm * scale_x)
-            # 좌측 0.5S 직접 빔체적 (표면 비드 및 상층부 직격!)
+            idx_10_70_r = center_x + s10_70
+            idx_05_70_r = center_x + s05_70
+
+            # 우측 1.0S 반사 빔체적 (바닥 반사 후 표면/HAZ 커버)
             ov_draw.polygon([
-                (center_x - s05_70 - 9, plate_top), (center_x - s05_70 + 9, plate_top),
-                (center_x + groove_top_half_px, plate_top + 18),
-                (center_x - groove_top_half_px - haz_px, plate_top + 18)
-            ], fill=(*color_70, 45))
-            # 좌측 1.0S 반사 빔체적 (바닥 반사 후 표면/HAZ 커버)
-            ov_draw.polygon([
-                (center_x - s10_70 - 9, plate_top), (center_x - s10_70 + 9, plate_top),
-                (center_x - s05_70 + 14, plate_bottom), (center_x - s05_70 - 14, plate_bottom)
+                (idx_10_70_r - 9, plate_top), (idx_10_70_r + 9, plate_top),
+                (idx_05_70_r + 14, plate_bottom), (idx_05_70_r - 14, plate_bottom)
             ], fill=(*color_70, 30))
             ov_draw.polygon([
-                (center_x - s05_70 + 14, plate_bottom), (center_x - s05_70 - 14, plate_bottom),
-                (center_x + groove_top_half_px + haz_px, plate_top),
+                (idx_05_70_r + 14, plate_bottom), (idx_05_70_r - 14, plate_bottom),
+                (center_x - groove_top_half_px - haz_px, plate_top),
                 (center_x, plate_top)
             ], fill=(*color_70, 30))
 
@@ -673,9 +677,9 @@ def make_ut_beam_diagram(
         draw = ImageDraw.Draw(img)
 
         # ---------------------------------------------------------
-        # 2. 중심선, 아이콘 및 치수선 그리기
+        # 2. 중심선, 아이콘 및 치수선 그리기 (좌우 대칭 균형 & 겹침 제로)
         # ---------------------------------------------------------
-        # A. 우측 45° (0.5S & 1.0S) - 사각 탐촉자 + 중간 입사점 인덱스 마크(▲)
+        # A. 우측 45° (0.5S & 1.0S) - 하부/루트 전담
         if 45.0 in calc_map:
             c45 = calc_map[45.0]
             s05_45 = int(c45.skip_05_mm * scale_x)
@@ -685,21 +689,17 @@ def make_ut_beam_diagram(
 
             # 45° 0.5S 중심선 (중간 입사점에서 모재 바닥 루트로 45.0° 직사)
             draw.line([(idx_05_r, plate_top), (center_x, plate_bottom)], fill=color_45, width=3)
-            draw_probe_wedge(idx_05_r, "45°(0.5S)", color_45, (240, 245, 255))
+            draw_probe_wedge(idx_05_r, "45°(0.5S)", f"0.5S={c45.skip_05_mm:.1f}mm", color_45, (240, 245, 255))
 
             # 45° 1.0S 중심선 (중간 입사점에서 바닥 반사 후 개선부로 45.0° 반사)
             draw.line([(idx_10_r, plate_top), (idx_05_r, plate_bottom)], fill=color_45, width=2)
             draw.line([(idx_05_r, plate_bottom), (center_x - trans_half_px, trans_y)], fill=color_45, width=2)
-            draw_probe_wedge(idx_10_r, "45°(1.0S)", color_45, (240, 245, 255))
+            draw_probe_wedge(idx_10_r, "45°(1.0S)", f"1.0S={c45.skip_10_mm:.1f}mm", color_45, (240, 245, 255))
 
-            # 치수선
-            y_d = plate_top - 38
-            draw.line([(center_x, y_d), (idx_05_r, y_d)], fill=color_45, width=1)
-            draw.text(((center_x + idx_05_r) // 2 - 24, y_d - 13), f"0.5S={c45.skip_05_mm:.1f}mm", fill=color_45, font=font_small)
-
-            y_d2 = plate_top - 56
-            draw.line([(center_x, y_d2), (idx_10_r, y_d2)], fill=color_45, width=1)
-            draw.text(((center_x + idx_10_r) // 2 - 24, y_d2 - 13), f"1.0S={c45.skip_10_mm:.1f}mm", fill=color_45, font=font_small)
+            # 45° 치수선 (우측 상단 1단)
+            y_r1 = plate_top - 62
+            draw.line([(center_x, y_r1), (idx_05_r, y_r1)], fill=color_45, width=1)
+            draw.text(((center_x + idx_05_r) // 2 - 24, y_r1 - 13), f"45° 0.5S: {c45.skip_05_mm:.1f}mm", fill=color_45, font=font_small)
 
             # 45° 주사 범위 화살표
             y_scan = plate_bottom + 18
@@ -711,7 +711,7 @@ def make_ut_beam_diagram(
             draw.text(((scan_min_px + scan_max_px) // 2 - 55, y_scan + 4), f"45° 주사: {c45.scan_min_mm:.1f}~{c45.scan_max_mm:.1f}mm",
                       fill=color_45, font=font_bold)
 
-        # B. 좌측 60° (0.5S & 1.0S) - 사각 탐촉자 + 중간 입사점 인덱스 마크(▲)
+        # B. 좌측 60° (0.5S & 1.0S) - 전이점/협개선 전담
         if 60.0 in calc_map:
             c60 = calc_map[60.0]
             s05_60 = int(c60.skip_05_mm * scale_x)
@@ -721,21 +721,21 @@ def make_ut_beam_diagram(
 
             # 60° 0.5S 중심선 (중간 입사점에서 19T 전이점으로 60.0° 직사)
             draw.line([(idx_05_l, plate_top), (center_x, trans_y)], fill=color_60, width=2)
-            draw_probe_wedge(idx_05_l, "60°(0.5S)", color_60, (240, 255, 245))
+            draw_probe_wedge(idx_05_l, "60°(0.5S)", f"0.5S={c60.skip_05_mm:.1f}mm", color_60, (240, 255, 245))
 
             # 60° 1.0S 중심선 (중간 입사점에서 바닥 반사 후 개선부 상단으로 60.0° 반사)
             draw.line([(idx_10_l, plate_top), (idx_05_l, plate_bottom)], fill=color_60, width=3)
             draw.line([(idx_05_l, plate_bottom), (center_x + groove_top_half_px, plate_top)], fill=color_60, width=3)
-            draw_probe_wedge(idx_10_l, "60°(1.0S)", color_60, (240, 255, 245))
+            draw_probe_wedge(idx_10_l, "60°(1.0S)", f"1.0S={c60.skip_10_mm:.1f}mm", color_60, (240, 255, 245))
 
-            # 치수선
-            y_d = plate_top - 38
-            draw.line([(idx_05_l, y_d), (center_x, y_d)], fill=color_60, width=1)
-            draw.text(((idx_05_l + center_x) // 2 - 25, y_d - 13), f"0.5S={c60.skip_05_mm:.1f}mm", fill=color_60, font=font_small)
+            # 60° 치수선 (좌측 상단 2단 완벽 분리)
+            y_l1 = plate_top - 62
+            y_l2 = plate_top - 86
+            draw.line([(idx_05_l, y_l1), (center_x, y_l1)], fill=color_60, width=1)
+            draw.text(((idx_05_l + center_x) // 2 - 25, y_l1 - 13), f"60° 0.5S: {c60.skip_05_mm:.1f}mm", fill=color_60, font=font_small)
 
-            y_d2 = plate_top - 56
-            draw.line([(idx_10_l, y_d2), (center_x, y_d2)], fill=color_60, width=1)
-            draw.text(((idx_10_l + center_x) // 2 - 25, y_d2 - 13), f"1.0S={c60.skip_10_mm:.1f}mm", fill=color_60, font=font_small)
+            draw.line([(idx_10_l, y_l2), (center_x, y_l2)], fill=color_60, width=1)
+            draw.text(((idx_10_l + center_x) // 2 - 25, y_l2 - 13), f"60° 1.0S: {c60.skip_10_mm:.1f}mm", fill=color_60, font=font_small)
 
             # 60° 주사 범위 화살표
             y_scan = plate_bottom + 18
@@ -747,43 +747,32 @@ def make_ut_beam_diagram(
             draw.text(((scan_min_px + scan_max_px) // 2 - 55, y_scan + 4), f"60° 주사: {c60.scan_min_mm:.1f}~{c60.scan_max_mm:.1f}mm",
                       fill=color_60, font=font_bold)
 
-        # C. 좌측 70° (★ 0.5S 직접빔 + 1.0S 반사빔) - 사각 탐촉자 + 중간 입사점 인덱스 마크(▲)
-        # ※ 실제 70.0° 기하학적 각도 (tan(70°) = 2.747, 1:1 종횡비 완벽 정합)
+        # C. 우측 70° (★ 우측 배치로 좌우 대칭 균형 확보! 1.0 Skip 표면/HAZ 전담 - 170.2mm 위치)
         if 70.0 in calc_map:
             c70 = calc_map[70.0]
             s05_70 = int(c70.skip_05_mm * scale_x)
             s10_70 = int(c70.skip_10_mm * scale_x)
-            idx_05_70 = center_x - s05_70
-            idx_10_70 = center_x - s10_70
-
-            # 70° 0.5S 중심선 (중간 입사점에서 바닥 중심선으로 70.0° 직접 직사)
-            draw.line([(idx_05_70, plate_top), (center_x, plate_bottom)], fill=color_70, width=2)
-            draw_probe_wedge(idx_05_70, "70°(0.5S)", color_70, (255, 248, 240), y_text_offset=12)
+            idx_10_70_r = center_x + s10_70
+            idx_05_70_r = center_x + s05_70
 
             # 70° 1.0S 중심선 (중간 입사점에서 바닥 70° 반사 후 용접부 표면/HAZ 도달)
-            draw.line([(idx_10_70, plate_top), (idx_05_70, plate_bottom)], fill=color_70, width=2)
-            draw.line([(idx_05_70, plate_bottom), (center_x, plate_top)], fill=color_70, width=2)
-            draw_probe_wedge(idx_10_70, "70°(1.0S)", color_70, (255, 248, 240))
+            draw.line([(idx_10_70_r, plate_top), (idx_05_70_r, plate_bottom)], fill=color_70, width=2)
+            draw.line([(idx_05_70_r, plate_bottom), (center_x - groove_top_half_px, plate_top)], fill=color_70, width=2)
+            draw_probe_wedge(idx_10_70_r, "70°(1.0S)", f"1.0S={c70.skip_10_mm:.1f}mm", color_70, (255, 248, 240))
 
-            # 70° 치수선 (상단 분리 배치)
-            y_d70_1 = plate_top - 48
-            draw.line([(idx_05_70, y_d70_1), (center_x, y_d70_1)], fill=color_70, width=1)
-            draw.text(((idx_05_70 + center_x) // 2 - 25, y_d70_1 - 13), f"0.5S={c70.skip_05_mm:.1f}mm", fill=color_70, font=font_small)
+            # 70° 치수선 (우측 상단 2단 - 45도 위에 겹침 없이 배치)
+            y_r2 = plate_top - 86
+            draw.line([(center_x, y_r2), (idx_10_70_r, y_r2)], fill=color_70, width=1)
+            draw.text(((center_x + idx_10_70_r) // 2 - 28, y_r2 - 13), f"70° 1.0S: {c70.skip_10_mm:.1f}mm", fill=color_70, font=font_small)
 
-            y_d70_2 = plate_top - 64
-            draw.line([(idx_10_70, y_d70_2), (center_x, y_d70_2)], fill=color_70, width=1)
-            draw.text(((idx_10_70 + center_x) // 2 - 25, y_d70_2 - 13), f"1.0S={c70.skip_10_mm:.1f}mm", fill=color_70, font=font_small)
-
-            # 70° 주사 범위 화살표 (60도가 없을 때 또는 70도 단독일 때)
-            if 60.0 not in calc_map:
-                y_scan = plate_bottom + 18
-                scan_min_px = center_x - int(c70.scan_max_mm * scale_x)
-                scan_max_px = center_x - int(c70.scan_min_mm * scale_x)
-                draw.line([(scan_min_px, y_scan), (scan_max_px, y_scan)], fill=color_70, width=2)
-                draw.line([(scan_min_px + 5, y_scan - 3), (scan_min_px, y_scan), (scan_min_px + 5, y_scan + 3)], fill=color_70, width=2)
-                draw.line([(scan_max_px - 5, y_scan - 3), (scan_max_px, y_scan), (scan_max_px - 5, y_scan + 3)], fill=color_70, width=2)
-                draw.text(((scan_min_px + scan_max_px) // 2 - 55, y_scan + 4), f"70° 주사: {c70.scan_min_mm:.1f}~{c70.scan_max_mm:.1f}mm",
-                          fill=color_70, font=font_bold)
+            # 70° 주사 범위 화살표 (우측 45도 주사 아래에 깔끔 배치)
+            s_min_70 = center_x + int(c70.scan_min_mm * scale_x)
+            s_max_70 = center_x + int(c70.scan_max_mm * scale_x)
+            y_scan_70 = y_scan + 22
+            draw.line([(s_min_70, y_scan_70), (s_max_70, y_scan_70)], fill=color_70, width=2)
+            draw.line([(s_min_70 + 5, y_scan_70 - 3), (s_min_70, y_scan_70), (s_min_70 + 5, y_scan_70 + 3)], fill=color_70, width=2)
+            draw.line([(s_max_70 - 5, y_scan_70 - 3), (s_max_70, y_scan_70), (s_max_70 - 5, y_scan_70 + 3)], fill=color_70, width=2)
+            draw.text(((s_min_70 + s_max_70) // 2 - 50, y_scan_70 + 4), f"70° 주사: {c70.scan_min_mm:.1f}~{c70.scan_max_mm:.1f}mm", fill=color_70, font=font_bold)
 
         # D. 수직 탐촉자 (0°): 가장 바깥쪽 안전한 모재 위치로 간섭 없이 배치
         if 0.0 in calc_map:
@@ -796,7 +785,7 @@ def make_ut_beam_diagram(
             str_offset_mm = max_left + 22.0
             str_x = center_x - int(str_offset_mm * scale_x)
             str_x = max(left_x + 45, str_x)
-            draw_probe_wedge(str_x, "0° 수직탐상", color_0, (245, 235, 255))
+            draw_probe_wedge(str_x, "0° 수직탐상", "라미네이션", color_0, (245, 235, 255))
             draw.line([(str_x, plate_top), (str_x, plate_bottom)], fill=color_0, width=3)
             draw.text((str_x - 38, plate_bottom + 10), "모재 라미네이션 검사", fill=color_0, font=font_small)
 
