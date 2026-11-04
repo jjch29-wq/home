@@ -1820,18 +1820,18 @@ class PautScanPlanApp(tk.Tk):
         probe_box = ttk.LabelFrame(form, text="3. 초음파 탐촉자 (사각 및 수직)", style="Section.TLabelframe", padding=8)
         probe_box.pack(fill="x", pady=4)
 
-        probe_cols = ("선택", "구분", "굴절각", "주파수", "진동자", "입사점(mm)")
+        probe_cols = ("선택", "구분", "굴절각", "주파수", "진동자", "입사점(mm)", "시리얼 (S/N)")
         for c_idx, col_name in enumerate(probe_cols):
             ttk.Label(probe_box, text=col_name, font=("맑은 고딕", 9, "bold")).grid(row=0, column=c_idx, padx=4, pady=2)
 
         default_probes_data = [
-            (True, "사각", 45.0, 4.0, "14×14", 13.0),
-            (True, "사각", 60.0, 4.0, "14×14", 14.0),
-            (True, "사각", 70.0, 4.0, "14×14", 15.0),
-            (True, "수직", 0.0, 4.0, "Φ20", 0.0),
+            (True, "사각", 45.0, 2.0, "14×14", 13.0, "SN-4501"),
+            (True, "사각", 60.0, 2.0, "14×14", 14.0, "SN-6001"),
+            (True, "사각", 70.0, 2.0, "14×14", 15.0, "SN-7001"),
+            (True, "수직", 0.0, 4.0, "Φ20", 0.0, "SN-0001"),
         ]
         self.ut_probe_vars.clear()
-        for p_idx, (act, p_type, ang, freq, sz, idx_off) in enumerate(default_probes_data):
+        for p_idx, (act, p_type, ang, freq, sz, idx_off, sn) in enumerate(default_probes_data):
             p_row = p_idx + 1
             act_var = tk.BooleanVar(value=act)
             ang_var = tk.DoubleVar(value=ang)
@@ -1839,10 +1839,12 @@ class PautScanPlanApp(tk.Tk):
             sz_var = tk.StringVar(value=sz)
             idx_var = tk.DoubleVar(value=idx_off)
             type_var = tk.StringVar(value=p_type)
+            sn_var = tk.StringVar(value=sn)
 
             self.ut_probe_vars.append({
                 "active": act_var, "type": type_var, "angle": ang_var,
-                "freq": freq_var, "size": sz_var, "index": idx_var
+                "freq": freq_var, "size": sz_var, "index": idx_var,
+                "serial": sn_var
             })
 
             cb = ttk.Checkbutton(probe_box, variable=act_var, command=self.refresh_ut_preview)
@@ -1851,17 +1853,40 @@ class PautScanPlanApp(tk.Tk):
             ttk.Label(probe_box, text=p_type).grid(row=p_row, column=1, padx=4, pady=2)
             ttk.Label(probe_box, text=f"{ang:g}°", font=("맑은 고딕", 9, "bold")).grid(row=p_row, column=2, padx=4, pady=2)
 
-            f_ent = ttk.Entry(probe_box, textvariable=freq_var, width=6, justify="center")
+            # 주파수 드롭다운 (2.0, 4.0, 5.0, 2.25, 1.0 MHz)
+            freq_presets = ["2.0", "4.0", "5.0", "2.25", "1.0"]
+            f_ent = ttk.Combobox(probe_box, textvariable=freq_var, values=freq_presets, width=5, justify="center")
             f_ent.grid(row=p_row, column=3, padx=2, pady=2)
+            f_ent.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
             f_ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            f_ent.bind("<Return>", lambda _e: self.refresh_ut_preview())
 
-            sz_ent = ttk.Entry(probe_box, textvariable=sz_var, width=8, justify="center")
+            # 진동자 크기 드롭다운 (사각: 14×14, 10×10, 8×9 등 / 수직: Φ20, Φ10 등)
+            if ang == 0.0 or p_type == "수직":
+                size_presets = ["Φ20", "Φ10", "Φ14", "Φ24", "20", "10"]
+            else:
+                size_presets = ["14×14", "10×10", "8×9", "12×12", "6×6"]
+            sz_ent = ttk.Combobox(probe_box, textvariable=sz_var, values=size_presets, width=7, justify="center")
             sz_ent.grid(row=p_row, column=4, padx=2, pady=2)
+            sz_ent.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
             sz_ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            sz_ent.bind("<Return>", lambda _e: self.refresh_ut_preview())
 
-            i_ent = ttk.Entry(probe_box, textvariable=idx_var, width=6, justify="center")
+            # 입사점(mm) 드롭다운 (사각: 1mm 단위 8.0~20.0mm / 수직: 0.0mm)
+            if ang == 0.0 or p_type == "수직":
+                idx_presets = ["0.0", "1.0", "2.0"]
+            else:
+                idx_presets = [f"{x:.1f}" for x in range(8, 21)]
+            i_ent = ttk.Combobox(probe_box, textvariable=idx_var, values=idx_presets, width=5, justify="center")
             i_ent.grid(row=p_row, column=5, padx=2, pady=2)
+            i_ent.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
             i_ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            i_ent.bind("<Return>", lambda _e: self.refresh_ut_preview())
+
+            sn_ent = ttk.Entry(probe_box, textvariable=sn_var, width=10, justify="center")
+            sn_ent.grid(row=p_row, column=6, padx=3, pady=2)
+            sn_ent.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+            sn_ent.bind("<Return>", lambda _e: self.refresh_ut_preview())
 
         # 4. 장비 및 교정 조건 그룹
         cal_box = ttk.LabelFrame(form, text="4. 장비 및 교정 조건", style="Section.TLabelframe", padding=8)
@@ -1875,14 +1900,73 @@ class PautScanPlanApp(tk.Tk):
             ("scan_level", "검사 감도", "기준감도(DAC) + 6 dB"),
             ("transfer_correction_db", "전송 보정 (dB)", "2.0"),
         ]
+
+        cal_presets = {
+            "instrument_name": [
+                "Masterscan 380M (Sonatest)",
+                "Sitescan 380M (Sonatest)",
+                "Sitescan D-50 (Sonatest)",
+                "Sitescan 500S (Sonatest)",
+                "Masterscan 700M (Sonatest)",
+                "Masterscan D-70 (Sonatest)",
+                "Sonatest WAVE",
+                "EPOCH 650 (Olympus)",
+                "EPOCH 600 (Olympus)",
+                "EPOCH 1000 (Olympus)",
+                "USM 36 (Krautkramer)",
+                "USM 35X (Krautkramer)",
+                "USM Go+ (Baker Hughes)",
+                "USN 60 (Krautkramer)",
+                "OmniScan X3 (Olympus)",
+                "OmniScan MX2 (Olympus)",
+            ],
+            "couplant": [
+                "초음파 탐상 전용 글리세린 / 페이스트",
+                "글리세린 (Glycerin)",
+                "CMC 페이스트 (CMC Paste)",
+                "초음파 접촉매질 젤 (Ultragel II)",
+                "기계유 / 엔진오일 (SAE 30)",
+            ],
+            "cal_block": [
+                "STB-A1 / IIW Type 1 & ASME Basic Block",
+                "ASME Sec.V Basic Calibration Block",
+                "IIW Type 1 (STB-A1)",
+                "IIW Type 2 (STB-A2)",
+                "DSC Block / AWS Resolution Block",
+            ],
+            "cal_method": [
+                "DAC (거리진폭보정곡선)",
+                "TCG (시간보정이득)",
+                "DGS / AVG 기법",
+                "기준 반사체 직접 비교법",
+            ],
+            "reference_level": [
+                "DAC 100% (기준감도 H선)",
+                "DAC 80% (FSH)",
+                "대비시험편 슬릿 100% FSH",
+            ],
+            "scan_level": [
+                "기준감도(DAC) + 6 dB",
+                "기준감도(DAC) + 12 dB",
+                "기준감도(DAC) + 0 dB",
+            ],
+        }
+
         for row, (k, lbl, default_val) in enumerate(cal_fields):
             ttk.Label(cal_box, text=lbl, width=16).grid(row=row, column=0, sticky="w", pady=2)
             var = tk.StringVar(value=default_val)
             self.ut_vars[k] = var
-            e = ttk.Entry(cal_box, textvariable=var, width=28)
-            e.grid(row=row, column=1, sticky="ew", pady=2)
-            e.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
-            e.bind("<Return>", lambda _e: self.refresh_ut_preview())
+            if k in cal_presets:
+                e = ttk.Combobox(cal_box, textvariable=var, values=cal_presets[k], width=26)
+                e.grid(row=row, column=1, sticky="ew", pady=2)
+                e.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
+                e.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+                e.bind("<Return>", lambda _e: self.refresh_ut_preview())
+            else:
+                e = ttk.Entry(cal_box, textvariable=var, width=28)
+                e.grid(row=row, column=1, sticky="ew", pady=2)
+                e.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
+                e.bind("<Return>", lambda _e: self.refresh_ut_preview())
         cal_box.columnconfigure(1, weight=1)
 
         # 5. 계산 결과 실시간 요약 카드 (Treeview)
@@ -1923,16 +2007,26 @@ class PautScanPlanApp(tk.Tk):
         probes = []
         for p_idx, p_data in enumerate(self.ut_probe_vars):
             act = p_data["active"].get()
-            ang = float(p_data["angle"].get())
-            freq = float(p_data["freq"].get())
+            try:
+                ang = float(p_data["angle"].get())
+            except (ValueError, TypeError):
+                ang = 45.0
+            try:
+                freq = float(p_data["freq"].get())
+            except (ValueError, TypeError):
+                freq = 2.0
             sz = str(p_data["size"].get())
-            idx_off = float(p_data["index"].get())
+            try:
+                idx_off = float(p_data["index"].get())
+            except (ValueError, TypeError):
+                idx_off = 13.0
             p_type = str(p_data["type"].get())
 
             wave = "LW (종파)" if (ang == 0.0 or p_type == "수직") else "SW (횡파)"
             v = 5920.0 if (ang == 0.0 or p_type == "수직") else 3240.0
             sz_clean = sz.replace('×', 'x').replace('Φ', '').replace('φ', '')
             p_name = f"{int(freq)}Z{sz_clean}N" if ang == 0.0 else f"{int(freq)}Z{sz_clean}A{int(ang)}"
+            sn = str(p_data.get("serial", tk.StringVar()).get()) if "serial" in p_data else ""
 
             probes.append(UTProbeConfig(
                 probe_id=f"P{p_idx+1}",
@@ -1944,6 +2038,7 @@ class PautScanPlanApp(tk.Tk):
                 velocity_ms=v,
                 index_offset_mm=idx_off,
                 probe_model=p_name,
+                probe_serial=sn,
                 is_active=act,
             ))
 
@@ -1962,8 +2057,8 @@ class PautScanPlanApp(tk.Tk):
             bevel_angle_upper_deg=float(self.ut_vars.get("bevel_angle_upper_deg", tk.StringVar(value="10.0")).get() or 10.0),
             root_gap_mm=float(self.ut_vars.get("root_gap_mm", tk.StringVar(value="2.5")).get() or 2.5),
             root_face_mm=float(self.ut_vars.get("root_face_mm", tk.StringVar(value="1.5")).get() or 1.5),
-            cap_width_mm=float(self.ut_vars.get("cap_width_mm", tk.StringVar(value="20.0")).get() or 20.0),
-            cap_height_mm=float(self.ut_vars.get("cap_height_mm", tk.StringVar(value="2.0")).get() or 2.0),
+            cap_width_mm=float(self.ut_vars.get("cap_width_mm", tk.StringVar(value="36.0")).get() or 36.0),
+            cap_height_mm=float(self.ut_vars.get("cap_height_mm", tk.StringVar(value="2.5")).get() or 2.5),
             haz_width_mm=float(self.ut_vars.get("haz_width_mm", tk.StringVar(value="10.0")).get() or 10.0),
             instrument_name=self.ut_vars.get("instrument_name", tk.StringVar()).get(),
             couplant=self.ut_vars.get("couplant", tk.StringVar()).get(),
@@ -1987,6 +2082,8 @@ class PautScanPlanApp(tk.Tk):
                     self.ut_probe_vars[p_idx]["freq"].set(p_cfg.frequency_mhz)
                     self.ut_probe_vars[p_idx]["size"].set(p_cfg.crystal_size_mm)
                     self.ut_probe_vars[p_idx]["index"].set(p_cfg.index_offset_mm)
+                    if "serial" in self.ut_probe_vars[p_idx]:
+                        self.ut_probe_vars[p_idx]["serial"].set(getattr(p_cfg, "probe_serial", ""))
 
     def _reset_ut_defaults(self):
         default_s = UTScanPlanSettings()
@@ -2047,9 +2144,9 @@ class PautScanPlanApp(tk.Tk):
             pass
 
     def _update_probes_by_thickness(self, t: float):
-        """두께(T)에 따라 절차서 SIS H 241 SI Para 4.6.1 기준 탐촉자 크기 및 입사점 자동 적용.
-        - T > 25.4 mm (30t급): 사각 14×14 mm (45°:13, 60°:14, 70°:15), 수직 Φ20 mm (0°:0)
-        - T <= 25.4 mm: 사각 10×10 mm (45°:10, 60°:11, 70°:12), 수직 Φ10 mm (0°:0)
+        """두께(T)에 따라 절차서 SIS H 241 SI Para 4.6.1 기준 탐촉자 규격(주파수/진동자/입사점) 자동 적용.
+        - T > 25.4 mm (30t급): 사각 2.0MHz 14×14 mm (45°:13, 60°:14, 70°:15), 수직 4.0MHz Φ20 mm (0°:0)
+        - T <= 25.4 mm: 사각 4.0MHz 10×10 mm (45°:10, 60°:11, 70°:12), 수직 4.0MHz Φ10 mm (0°:0)
         """
         is_thick = (t > 25.4)
         for p_dict in self.ut_probe_vars:
@@ -2061,28 +2158,36 @@ class PautScanPlanApp(tk.Tk):
                 if abs(ang - 45.0) < 0.1:
                     p_dict["size"].set("14×14")
                     p_dict["index"].set(13.0)
+                    p_dict["freq"].set(2.0)
                 elif abs(ang - 60.0) < 0.1:
                     p_dict["size"].set("14×14")
                     p_dict["index"].set(14.0)
+                    p_dict["freq"].set(2.0)
                 elif abs(ang - 70.0) < 0.1:
                     p_dict["size"].set("14×14")
                     p_dict["index"].set(15.0)
+                    p_dict["freq"].set(2.0)
                 elif abs(ang - 0.0) < 0.1:
                     p_dict["size"].set("Φ20")
                     p_dict["index"].set(0.0)
+                    p_dict["freq"].set(4.0)
             else:
                 if abs(ang - 45.0) < 0.1:
                     p_dict["size"].set("10×10")
                     p_dict["index"].set(10.0)
+                    p_dict["freq"].set(4.0)
                 elif abs(ang - 60.0) < 0.1:
                     p_dict["size"].set("10×10")
                     p_dict["index"].set(11.0)
+                    p_dict["freq"].set(4.0)
                 elif abs(ang - 70.0) < 0.1:
                     p_dict["size"].set("10×10")
                     p_dict["index"].set(12.0)
+                    p_dict["freq"].set(4.0)
                 elif abs(ang - 0.0) < 0.1:
                     p_dict["size"].set("Φ10")
                     p_dict["index"].set(0.0)
+                    p_dict["freq"].set(4.0)
 
     def _on_thickness_changed(self, _event=None):
         try:
@@ -2096,9 +2201,20 @@ class PautScanPlanApp(tk.Tk):
         preset_name = self.ut_vars.get("pipe_preset", tk.StringVar()).get()
         data = self.pipe_presets.get(preset_name)
         if data is not None:
+            t_val = float(data['t'])
             self.ut_vars["pipe_od_mm"].set(f"{data['od']:g}")
-            self.ut_vars["thickness_mm"].set(f"{data['t']:g}")
-            self._update_probes_by_thickness(data["t"])
+            self.ut_vars["thickness_mm"].set(f"{t_val:g}")
+            # 두께에 맞는 적정 비드 폭(덧살 폭) 자동 설정 (홈 개구부보다 2~4mm 넓게)
+            if t_val >= 25.0:
+                rec_cap = 36.0
+            elif t_val >= 18.0:
+                rec_cap = 32.0
+            elif t_val >= 12.0:
+                rec_cap = 26.0
+            else:
+                rec_cap = 20.0
+            self.ut_vars["cap_width_mm"].set(f"{rec_cap:g}")
+            self._update_probes_by_thickness(t_val)
             self.refresh_ut_preview()
 
     def _on_bevel_preset_selected(self, _event=None):

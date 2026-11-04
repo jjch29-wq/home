@@ -32,40 +32,67 @@ class TestUTScanPlan(unittest.TestCase):
         )
 
     def test_probe_selection_by_thickness(self):
-        """절차서 SIS H 241 SI Para 4.6.1 두께별 탐촉자 규격 자동 선정 검증."""
-        # 1) 두께 T > 25.4mm (예: 30.97mm) -> 14×14 및 Φ20
+        """절차서 SIS H 241 SI Para 4.6.1 두께별 탐촉자 규격 자동 선정 검증.
+        - 후판(T > 25.4mm): 사각 2.0MHz 14×14mm, 수직 4.0MHz Φ20mm
+        - 박판(T <= 25.4mm): 사각 4.0MHz 10×10mm, 수직 4.0MHz Φ10mm
+        """
+        # 1) 두께 T > 25.4mm (예: 30.97mm) -> 사각 2MHz 14×14, 수직 4MHz Φ20
         thick_probes = get_standard_probes_by_thickness(30.97)
         self.assertEqual(len(thick_probes), 4)
         p_map_thick = {p.angle_deg: p for p in thick_probes}
 
         self.assertEqual(p_map_thick[45.0].crystal_size_mm, "14×14")
+        self.assertEqual(p_map_thick[45.0].frequency_mhz, 2.0)
         self.assertEqual(p_map_thick[45.0].index_offset_mm, 13.0)
-        self.assertEqual(p_map_thick[60.0].crystal_size_mm, "14×14")
-        self.assertEqual(p_map_thick[60.0].index_offset_mm, 14.0)
-        self.assertEqual(p_map_thick[70.0].crystal_size_mm, "14×14")
-        self.assertEqual(p_map_thick[70.0].index_offset_mm, 15.0)
-        self.assertEqual(p_map_thick[0.0].crystal_size_mm, "Φ20")
-        self.assertEqual(p_map_thick[0.0].index_offset_mm, 0.0)
+        self.assertEqual(p_map_thick[45.0].probe_model, "2Z14x14A45")
 
-        # 2) 두께 T <= 25.4mm (예: 15.87mm) -> 10×10 및 Φ10
+        self.assertEqual(p_map_thick[60.0].crystal_size_mm, "14×14")
+        self.assertEqual(p_map_thick[60.0].frequency_mhz, 2.0)
+        self.assertEqual(p_map_thick[60.0].index_offset_mm, 14.0)
+        self.assertEqual(p_map_thick[60.0].probe_model, "2Z14x14A60")
+
+        self.assertEqual(p_map_thick[70.0].crystal_size_mm, "14×14")
+        self.assertEqual(p_map_thick[70.0].frequency_mhz, 2.0)
+        self.assertEqual(p_map_thick[70.0].index_offset_mm, 15.0)
+        self.assertEqual(p_map_thick[70.0].probe_model, "2Z14x14A70")
+
+        self.assertEqual(p_map_thick[0.0].crystal_size_mm, "Φ20")
+        self.assertEqual(p_map_thick[0.0].frequency_mhz, 4.0)
+        self.assertEqual(p_map_thick[0.0].index_offset_mm, 0.0)
+        self.assertEqual(p_map_thick[0.0].probe_model, "4Z20N")
+
+        # 2) 두께 T <= 25.4mm (예: 15.87mm) -> 사각 4MHz 10×10, 수직 4MHz Φ10
         thin_probes = get_standard_probes_by_thickness(15.87)
         self.assertEqual(len(thin_probes), 4)
         p_map_thin = {p.angle_deg: p for p in thin_probes}
 
         self.assertEqual(p_map_thin[45.0].crystal_size_mm, "10×10")
+        self.assertEqual(p_map_thin[45.0].frequency_mhz, 4.0)
         self.assertEqual(p_map_thin[45.0].index_offset_mm, 10.0)
+        self.assertEqual(p_map_thin[45.0].probe_model, "4Z10x10A45")
+
         self.assertEqual(p_map_thin[60.0].crystal_size_mm, "10×10")
+        self.assertEqual(p_map_thin[60.0].frequency_mhz, 4.0)
         self.assertEqual(p_map_thin[60.0].index_offset_mm, 11.0)
+        self.assertEqual(p_map_thin[60.0].probe_model, "4Z10x10A60")
+
         self.assertEqual(p_map_thin[70.0].crystal_size_mm, "10×10")
+        self.assertEqual(p_map_thin[70.0].frequency_mhz, 4.0)
         self.assertEqual(p_map_thin[70.0].index_offset_mm, 12.0)
+        self.assertEqual(p_map_thin[70.0].probe_model, "4Z10x10A70")
+
         self.assertEqual(p_map_thin[0.0].crystal_size_mm, "Φ10")
+        self.assertEqual(p_map_thin[0.0].frequency_mhz, 4.0)
         self.assertEqual(p_map_thin[0.0].index_offset_mm, 0.0)
+        self.assertEqual(p_map_thin[0.0].probe_model, "4Z10N")
 
         # 3) UTScanPlanSettings 기본값(T=30.97mm)의 탐촉자 검증
         default_settings = UTScanPlanSettings()
         def_map = {p.angle_deg: p for p in default_settings.probes}
         self.assertEqual(def_map[45.0].crystal_size_mm, "14×14")
+        self.assertEqual(def_map[45.0].frequency_mhz, 2.0)
         self.assertEqual(def_map[0.0].crystal_size_mm, "Φ20")
+        self.assertEqual(def_map[0.0].frequency_mhz, 4.0)
 
     def test_calculate_ut_geometry(self):
         results = calculate_ut_geometry(self.settings)

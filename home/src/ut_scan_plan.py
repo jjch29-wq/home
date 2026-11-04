@@ -33,13 +33,14 @@ class UTProbeConfig:
     probe_id: str = "P1"
     probe_type: str = "사각 (Angle)"           # "사각 (Angle)" 또는 "수직 (Straight)"
     angle_deg: float = 45.0                     # 0.0 (수직), 45.0, 60.0, 70.0 (사각)
-    frequency_mhz: float = 4.0                  # 2.0, 4.0, 5.0 MHz 등
+    frequency_mhz: float = 2.0                  # 2.0 (두꺼운 모재), 4.0 MHz (수직/박판) 등
     crystal_size_mm: str = "14×14"              # "14×14", "10×10", "Φ10", "Φ20" 등 (SIS H 241 SI 4.6.1)
     wave_type: str = "SW (횡파)"                # "SW (횡파)" 또는 "LW (종파)"
     velocity_ms: float = 3240.0                 # 탄소강: 횡파 3240 m/s, 종파 5920 m/s
     index_offset_mm: float = 13.0               # 탐촉자 전단부에서 입사점까지 거리 (사각)
-    probe_model: str = "4Z14x14A45"             # 모델명
+    probe_model: str = "2Z14x14A45"             # 모델명
     wedge_delay_us: float = 0.0                 # 웻지 지연 시간
+    probe_serial: str = ""                      # 탐촉자 고유 시리얼 번호 (S/N)
     is_active: bool = True                      # 활성화 여부
 
 
@@ -54,17 +55,17 @@ def get_standard_probes_by_thickness(thickness_mm: float) -> List[UTProbeConfig]
     """
     if thickness_mm > 25.4:
         return [
-            UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "14×14", "SW (횡파)", 3240.0, 13.0, "4Z14x14A45", is_active=True),
-            UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "14×14", "SW (횡파)", 3240.0, 14.0, "4Z14x14A60", is_active=True),
-            UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "14×14", "SW (횡파)", 3240.0, 15.0, "4Z14x14A70", is_active=True),
-            UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ20", "LW (종파)", 5920.0, 0.0, "4Z20N", is_active=True),
+            UTProbeConfig("P1", "사각 (Angle)", 45.0, 2.0, "14×14", "SW (횡파)", 3240.0, 13.0, "2Z14x14A45", probe_serial="SN-4501", is_active=True),
+            UTProbeConfig("P2", "사각 (Angle)", 60.0, 2.0, "14×14", "SW (횡파)", 3240.0, 14.0, "2Z14x14A60", probe_serial="SN-6001", is_active=True),
+            UTProbeConfig("P3", "사각 (Angle)", 70.0, 2.0, "14×14", "SW (횡파)", 3240.0, 15.0, "2Z14x14A70", probe_serial="SN-7001", is_active=True),
+            UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ20", "LW (종파)", 5920.0, 0.0, "4Z20N", probe_serial="SN-0001", is_active=True),
         ]
     else:
         return [
-            UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "10×10", "SW (횡파)", 3240.0, 10.0, "4Z10x10A45", is_active=True),
-            UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "10×10", "SW (횡파)", 3240.0, 11.0, "4Z10x10A60", is_active=True),
-            UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "10×10", "SW (횡파)", 3240.0, 12.0, "4Z10x10A70", is_active=True),
-            UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ10", "LW (종파)", 5920.0, 0.0, "4Z10N", is_active=True),
+            UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "10×10", "SW (횡파)", 3240.0, 10.0, "4Z10x10A45", probe_serial="SN-4501", is_active=True),
+            UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "10×10", "SW (횡파)", 3240.0, 11.0, "4Z10x10A60", probe_serial="SN-6001", is_active=True),
+            UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "10×10", "SW (횡파)", 3240.0, 12.0, "4Z10x10A70", probe_serial="SN-7001", is_active=True),
+            UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ10", "LW (종파)", 5920.0, 0.0, "4Z10N", probe_serial="SN-0001", is_active=True),
         ]
 
 
@@ -91,8 +92,8 @@ class UTScanPlanSettings:
     bevel_angle_upper_deg: float = 10.0         # 상부 홈 편각 (19T 초과 10°)
     root_gap_mm: float = 2.5                    # 루트 간격 (도면: 2.5 mm)
     root_face_mm: float = 1.5                   # 루트 면
-    cap_width_mm: float = 20.0                  # 비드 폭
-    cap_height_mm: float = 2.0                  # 덧살 높이
+    cap_width_mm: float = 36.0                  # 비드 폭 (30t 기준 홈 개구부 33.6mm + 양측 덧살 토우 2.4mm = 36mm)
+    cap_height_mm: float = 2.5                  # 덧살 높이
     haz_width_mm: float = 10.0                  # 열영향부(HAZ) 검사 확장폭
 
     # 탐상 장비 및 교정 정보
@@ -104,42 +105,45 @@ class UTScanPlanSettings:
     scan_level: str = "기준감도(DAC) + 6 dB"
     transfer_correction_db: float = 2.0         # 전송 손실 보정
 
-    # 탐촉자 목록 (기본: T=30.97mm 기준 절차서 4.6.1 규격: 14×14 및 Φ20)
+    # 탐촉자 목록 (기본: T=30.97mm 기준 사각 2MHz 14×14 및 수직 4MHz Φ20)
     probes: List[UTProbeConfig] = field(default_factory=lambda: [
         UTProbeConfig(
             probe_id="P1",
             probe_type="사각 (Angle)",
             angle_deg=45.0,
-            frequency_mhz=4.0,
+            frequency_mhz=2.0,
             crystal_size_mm="14×14",
             wave_type="SW (횡파)",
             velocity_ms=3240.0,
             index_offset_mm=13.0,
-            probe_model="4Z14x14A45",
+            probe_model="2Z14x14A45",
+            probe_serial="SN-4501",
             is_active=True
         ),
         UTProbeConfig(
             probe_id="P2",
             probe_type="사각 (Angle)",
             angle_deg=60.0,
-            frequency_mhz=4.0,
+            frequency_mhz=2.0,
             crystal_size_mm="14×14",
             wave_type="SW (횡파)",
             velocity_ms=3240.0,
             index_offset_mm=14.0,
-            probe_model="4Z14x14A60",
+            probe_model="2Z14x14A60",
+            probe_serial="SN-6001",
             is_active=True
         ),
         UTProbeConfig(
             probe_id="P3",
             probe_type="사각 (Angle)",
             angle_deg=70.0,
-            frequency_mhz=4.0,
+            frequency_mhz=2.0,
             crystal_size_mm="14×14",
             wave_type="SW (횡파)",
             velocity_ms=3240.0,
             index_offset_mm=15.0,
-            probe_model="4Z14x14A70",
+            probe_model="2Z14x14A70",
+            probe_serial="SN-7001",
             is_active=True
         ),
         UTProbeConfig(
@@ -152,6 +156,7 @@ class UTScanPlanSettings:
             velocity_ms=5920.0,
             index_offset_mm=0.0,
             probe_model="4Z20N",
+            probe_serial="SN-0001",
             is_active=True
         ),
     ])
@@ -169,10 +174,10 @@ class UTScanPlanSettings:
                     probes.append(UTProbeConfig(**p))
         else:
             probes = [
-                UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "14×14", "SW (횡파)", 3240.0, 13.0, "4Z14x14A45"),
-                UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "14×14", "SW (횡파)", 3240.0, 14.0, "4Z14x14A60"),
-                UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "14×14", "SW (횡파)", 3240.0, 15.0, "4Z14x14A70"),
-                UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ20", "LW (종파)", 5920.0, 0.0, "4Z20N"),
+                UTProbeConfig("P1", "사각 (Angle)", 45.0, 2.0, "14×14", "SW (횡파)", 3240.0, 13.0, "2Z14x14A45", probe_serial="SN-4501"),
+                UTProbeConfig("P2", "사각 (Angle)", 60.0, 2.0, "14×14", "SW (횡파)", 3240.0, 14.0, "2Z14x14A60", probe_serial="SN-6001"),
+                UTProbeConfig("P3", "사각 (Angle)", 70.0, 2.0, "14×14", "SW (횡파)", 3240.0, 15.0, "2Z14x14A70", probe_serial="SN-7001"),
+                UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ20", "LW (종파)", 5920.0, 0.0, "4Z20N", probe_serial="SN-0001"),
             ]
         data["probes"] = probes
         return cls(**data)
@@ -288,7 +293,11 @@ def calculate_ut_geometry(settings: UTScanPlanSettings) -> List[UTCalculationRes
                 if theta >= 68.0:
                     target = "용접부 상층부 및 표면/언더컷, 표면 근처 HAZ"
                 elif theta >= 55.0:
-                    target = "용접부 중간층, 융합불량(Lack of Fusion), 슬래그 혼입"
+                    has_70 = any(p.is_active and p.angle_deg >= 68.0 for p in settings.probes)
+                    if has_70:
+                        target = "용접부 중간층, 융합불량(Lack of Fusion), 슬래그 혼입"
+                    else:
+                        target = "용접부 중간층 및 상부 협개선(10°), 상층부 융합불량, 슬래그"
                 else:
                     target = "루트부(Lack of Penetration, Root Crack) 및 대향면 결함"
 
@@ -338,10 +347,10 @@ def make_ut_beam_diagram(
                 continue
         return ImageFont.load_default()
 
-    font_title = get_font(15, bold=True)
-    font_bold = get_font(11, bold=True)
-    font_normal = get_font(10, bold=False)
-    font_small = get_font(9, bold=False)
+    font_title = get_font(16, bold=True)
+    font_bold = get_font(12, bold=True)
+    font_normal = get_font(11, bold=False)
+    font_small = get_font(10, bold=False)
 
     t = float(settings.thickness_mm)
     bevel_deg = float(settings.bevel_angle_deg)
@@ -399,6 +408,9 @@ def make_ut_beam_diagram(
     groove_top_half_px = rg_half_px + w1_px + w2_px
     trans_half_px = rg_half_px + w1_px
 
+    # 덧살(Weld Cap) 폭은 홈 개구부(Groove opening) 전체를 완전히 덮고 양쪽 모재 표면으로 자연스럽게 오버랩(Toe Overlap)되어야 함
+    cap_half_px = max(cap_half_px, groove_top_half_px + 2.0 * scale_x)
+
     # HAZ(열영향부) 채색 (복합 베벨 꺾임 반영)
     haz_poly_left = [
         (center_x - groove_top_half_px - haz_px, plate_top),
@@ -444,13 +456,15 @@ def make_ut_beam_diagram(
                (center_x + rg_half_px, plate_bottom - rf_px), (center_x + rg_half_px, plate_bottom)],
               fill=(70, 95, 130), width=2)
 
-    # 19T 전이선 점선 및 각도 라벨
+    # 19T 전이선 점선 (지시선 라벨은 빔 간섭을 완벽히 방지하기 위해 최상단 레이어에서 렌더링)
     if is_compound:
         draw.line([(center_x - trans_half_px, trans_y), (center_x + trans_half_px, trans_y)], fill=(150, 170, 190), width=1)
-        draw.text((center_x + trans_half_px + 8, trans_y - 8), f"19T 전이점 (하부 37.5° / 상부 10°)", fill=(70, 90, 130), font=font_small)
 
     draw.line([(center_x - cap_half_px, plate_top), (center_x, plate_top - cap_h_px), (center_x + cap_half_px, plate_top)],
               fill=(50, 80, 120), width=2)
+    # 덧살 양쪽 외곽 토우가 모재 표면에 안착하는 라인
+    draw.line([(center_x - cap_half_px, plate_top), (center_x - groove_top_half_px, plate_top)], fill=(70, 95, 130), width=1)
+    draw.line([(center_x + groove_top_half_px, plate_top), (center_x + cap_half_px, plate_top)], fill=(70, 95, 130), width=1)
 
     # 용접 중심선
     for y in range(plate_top - 30, plate_bottom + 35, 7):
@@ -499,6 +513,29 @@ def make_ut_beam_diagram(
         draw.line([(exam_vol_left, y), (exam_vol_left, y + 3)], fill=(70, 130, 180), width=1)
         draw.line([(exam_vol_right, y), (exam_vol_right, y + 3)], fill=(70, 130, 180), width=1)
 
+    # ★ 열영향부(HAZ 10mm) 치수선 및 경계 라벨
+    toe_left = int(center_x - max(groove_top_half_px, cap_half_px))
+    y_haz_dim = plate_top - 12
+    color_haz = (40, 105, 175)
+
+    # 좌측 상단 HAZ 10mm 치수선 (인출선 + 치수선 + 화살표)
+    draw.line([(exam_vol_left, plate_top), (exam_vol_left, plate_top - 18)], fill=color_haz, width=1)
+    draw.line([(toe_left, plate_top), (toe_left, plate_top - 18)], fill=color_haz, width=1)
+    draw.line([(exam_vol_left, y_haz_dim), (toe_left, y_haz_dim)], fill=color_haz, width=1)
+    draw.line([(exam_vol_left + 4, y_haz_dim - 3), (exam_vol_left, y_haz_dim), (exam_vol_left + 4, y_haz_dim + 3)], fill=color_haz, width=1)
+    draw.line([(toe_left - 4, y_haz_dim - 3), (toe_left, y_haz_dim), (toe_left - 4, y_haz_dim + 3)], fill=color_haz, width=1)
+
+    haz_txt = f"HAZ {haz_w:g}mm"
+    try:
+        tw_haz = font_small.getlength(haz_txt)
+    except AttributeError:
+        tw_haz = len(haz_txt) * 6
+    draw.text((int((exam_vol_left + toe_left) / 2 - tw_haz / 2), y_haz_dim - 14), haz_txt, fill=color_haz, font=font_small)
+
+    # 하단 점선 경계 라벨
+    draw.text((exam_vol_left - 20, plate_bottom + 4), f"HAZ {haz_w:g}mm", fill=color_haz, font=font_small)
+    draw.text((exam_vol_right - 14, plate_bottom + 4), f"HAZ {haz_w:g}mm", fill=color_haz, font=font_small)
+
     # SUS(오스테나이트계 스테인리스강, P-No. 8) 여부 판단
     is_sus = any(k in str(settings.material_spec).upper() for k in ["SUS", "304", "316", "STAINLESS", "P-NO. 8", "P-NO.8", "P8", "P-8"])
 
@@ -531,9 +568,28 @@ def make_ut_beam_diagram(
         # =========================================================================
         # ★ SUS 전용 직사(Direct Beam / 0.5 Skip) 모드 (ASME Sec.V Art.4 App.III)
         # =========================================================================
-        badge_text = "[SUS 오스테나이트강 직사 모드] 0.5 Skip Direct Beam Only : 주상정 산란 방지 & 양면 100% 체적 커버"
-        draw.rectangle([center_x - 325, plate_top - 130, center_x + 325, plate_top - 108], fill=(255, 243, 230), outline=(220, 110, 30), width=1)
-        draw.text((center_x - 315, plate_top - 124), badge_text, fill=(180, 70, 0), font=font_bold)
+        active_sus_desc = []
+        if 45.0 in calc_map:
+            active_sus_desc.append("45°(루트)")
+        if 60.0 in calc_map:
+            active_sus_desc.append("60°(개선)")
+        if 70.0 in calc_map:
+            active_sus_desc.append("70°(표면)")
+        for ang in sorted(calc_map.keys()):
+            if ang > 0 and ang not in [45.0, 60.0, 70.0]:
+                active_sus_desc.append(f"{ang:g}°")
+
+        ang_summary = " + ".join(active_sus_desc) if active_sus_desc else "직사 탐상"
+        badge_text = f"[SUS 오스테나이트강 직사 모드] {ang_summary} (0.5S Direct Only : 주상정 산란 방지)"
+        try:
+            tw_badge = int(font_bold.getlength(badge_text))
+        except AttributeError:
+            tw_badge = int(len(badge_text) * 7.5)
+        pad_badge = 18
+        badge_half_w = max(200, int(tw_badge / 2) + pad_badge)
+        draw.rectangle([center_x - badge_half_w, plate_top - 130, center_x + badge_half_w, plate_top - 108],
+                       fill=(255, 243, 230), outline=(220, 110, 30), width=1)
+        draw.text((int(center_x - tw_badge / 2), plate_top - 124), badge_text, fill=(180, 70, 0), font=font_bold)
 
         overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         ov_draw = ImageDraw.Draw(overlay)
@@ -633,10 +689,51 @@ def make_ut_beam_diagram(
         # =========================================================================
         # ★ 탄소강/합금강 일반 모드 (각도별 100% 체적 커버리지 밴드 & 0.5S/1.0S 풀 표현)
         # =========================================================================
-        # 상단 안내 뱃지: 100% Volume Coverage 입증
-        badge_text = "[전체 검사 체적 100% 커버리지] 45°(루트/하부) + 60°(전이점/협개선) + 70°(표면/HAZ) 무결점 검사"
-        draw.rectangle([center_x - 330, plate_top - 130, center_x + 330, plate_top - 108], fill=(238, 248, 240), outline=(40, 150, 70), width=1)
-        draw.text((center_x - 315, plate_top - 124), badge_text, fill=(20, 110, 45), font=font_bold)
+        # 상단 안내 뱃지: 선택된 탐촉자에 따른 동적 커버리지 안내
+        active_ang_desc = []
+        if 45.0 in calc_map:
+            active_ang_desc.append("45°(루트/하부)")
+        if 60.0 in calc_map:
+            if 70.0 in calc_map:
+                active_ang_desc.append("60°(전이점/협개선)")
+            else:
+                active_ang_desc.append("60°(전이점 및 상부 협개선 전담)")
+        if 70.0 in calc_map:
+            active_ang_desc.append("70°(표면/HAZ)")
+        for ang in sorted(calc_map.keys()):
+            if ang > 0 and ang not in [45.0, 60.0, 70.0]:
+                active_ang_desc.append(f"{ang:g}°")
+
+        if len(active_ang_desc) >= 3:
+            badge_text = f"[전체 검사 체적 100% 커버리지 완료] {' + '.join(active_ang_desc)} 무결점 검사"
+            box_fill = (238, 248, 240)
+            box_outline = (40, 150, 70)
+            text_fill = (20, 110, 45)
+        elif len(active_ang_desc) == 2:
+            badge_text = f"[검사 체적 조합 탐상] {' + '.join(active_ang_desc)}"
+            box_fill = (240, 246, 255)
+            box_outline = (40, 120, 180)
+            text_fill = (20, 80, 140)
+        elif len(active_ang_desc) == 1:
+            badge_text = f"[단일 굴절각 탐상 모드] {active_ang_desc[0]} 스캔플랜"
+            box_fill = (255, 250, 235)
+            box_outline = (180, 140, 40)
+            text_fill = (140, 90, 10)
+        else:
+            badge_text = "[사각 탐촉자 미선택] 사각 탐촉자를 선택하십시오"
+            box_fill = (255, 240, 240)
+            box_outline = (210, 70, 70)
+            text_fill = (160, 30, 30)
+
+        try:
+            tw_badge = int(font_bold.getlength(badge_text))
+        except AttributeError:
+            tw_badge = int(len(badge_text) * 7.5)
+        pad_badge = 18
+        badge_half_w = max(200, int(tw_badge / 2) + pad_badge)
+        draw.rectangle([center_x - badge_half_w, plate_top - 130, center_x + badge_half_w, plate_top - 108],
+                       fill=box_fill, outline=box_outline, width=1)
+        draw.text((int(center_x - tw_badge / 2), plate_top - 124), badge_text, fill=text_fill, font=font_bold)
 
         overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         ov_draw = ImageDraw.Draw(overlay)
@@ -729,10 +826,19 @@ def make_ut_beam_diagram(
             draw.line([(idx_05_r, plate_bottom), (center_x, plate_top)], fill=color_45, width=2)
             draw_probe_wedge(idx_10_r, "45°(1.0S)", f"1.0S={c45.skip_10_mm:.1f}mm", color_45, (240, 245, 255))
 
-            # 45° 치수선 (우측 상단 1단)
-            y_r1 = plate_top - 62
+            # 45° 치수선 (우측 상단: 0.5S 및 1.0S)
+            if 70.0 in calc_map:
+                y_r1 = plate_top - 56
+                y_r2 = plate_top - 74
+            else:
+                y_r1 = plate_top - 62
+                y_r2 = plate_top - 86
+
             draw.line([(center_x, y_r1), (idx_05_r, y_r1)], fill=color_45, width=1)
             draw.text(((center_x + idx_05_r) // 2 - 24, y_r1 - 13), f"45° 0.5S: {c45.skip_05_mm:.1f}mm", fill=color_45, font=font_small)
+
+            draw.line([(center_x, y_r2), (idx_10_r, y_r2)], fill=color_45, width=1)
+            draw.text(((center_x + idx_10_r) // 2 - 24, y_r2 - 13), f"45° 1.0S: {c45.skip_10_mm:.1f}mm", fill=color_45, font=font_small)
 
             # 45° 주사 범위 화살표
             y_scan = plate_bottom + 18
@@ -761,9 +867,14 @@ def make_ut_beam_diagram(
             draw.line([(idx_05_l, plate_bottom), (center_x, plate_top)], fill=color_60, width=3)
             draw_probe_wedge(idx_10_l, "60°(1.0S)", f"1.0S={c60.skip_10_mm:.1f}mm", color_60, (240, 255, 245))
 
-            # 60° 치수선 (좌측 상단 2단 완벽 분리)
-            y_l1 = plate_top - 62
-            y_l2 = plate_top - 86
+            # 60° 치수선 (좌측 상단: 0.5S 및 1.0S 완벽 분리)
+            if 70.0 in calc_map:
+                y_l1 = plate_top - 56
+                y_l2 = plate_top - 74
+            else:
+                y_l1 = plate_top - 62
+                y_l2 = plate_top - 86
+
             draw.line([(idx_05_l, y_l1), (center_x, y_l1)], fill=color_60, width=1)
             draw.text(((idx_05_l + center_x) // 2 - 25, y_l1 - 13), f"60° 0.5S: {c60.skip_05_mm:.1f}mm", fill=color_60, font=font_small)
 
@@ -793,10 +904,10 @@ def make_ut_beam_diagram(
             draw.line([(idx_05_70_r, plate_bottom), (center_x, plate_top)], fill=color_70, width=2)
             draw_probe_wedge(idx_10_70_r, "70°(1.0S)", f"1.0S={c70.skip_10_mm:.1f}mm", color_70, (255, 248, 240))
 
-            # 70° 치수선 (우측 상단 2단 - 45도 위에 겹침 없이 배치)
-            y_r2 = plate_top - 86
-            draw.line([(center_x, y_r2), (idx_10_70_r, y_r2)], fill=color_70, width=1)
-            draw.text(((center_x + idx_10_70_r) // 2 - 28, y_r2 - 13), f"70° 1.0S: {c70.skip_10_mm:.1f}mm", fill=color_70, font=font_small)
+            # 70° 치수선 (우측 상단 3단 - 45도 1.0S 위에 겹침 없이 배치)
+            y_r3 = plate_top - 92
+            draw.line([(center_x, y_r3), (idx_10_70_r, y_r3)], fill=color_70, width=1)
+            draw.text(((center_x + idx_10_70_r) // 2 - 28, y_r3 - 13), f"70° 1.0S: {c70.skip_10_mm:.1f}mm", fill=color_70, font=font_small)
 
             # 70° 주사 범위 화살표 (우측 45도 주사 아래에 깔끔 배치)
             s_min_70 = center_x + int(c70.scan_min_mm * scale_x)
@@ -828,8 +939,8 @@ def make_ut_beam_diagram(
     draw.rectangle([10, legend_top, width - 10, legend_top + 22], fill=(235, 242, 252), outline=(205, 215, 230), width=1)
     draw.text((20, legend_top + 4), "[스캔플랜 기하학 계산 및 검출 대상 영역 요약표]", fill=(20, 45, 95), font=font_bold)
 
-    headers = [("탐촉자 구분", 110), ("굴절각", 65), ("0.5 Skip", 85), ("1.0 Skip", 85),
-               ("Sound Path", 95), ("주사 범위(Xmin~Xmax)", 170), ("주요 검출 대상 영역", 380)]
+    headers = [("탐촉자 구분", 95), ("시리얼(S/N)", 85), ("굴절각", 55), ("0.5 Skip", 75), ("1.0 Skip", 75),
+               ("Sound Path", 85), ("주사 범위(Xmin~Xmax)", 155), ("주요 검출 대상 영역", 370)]
     cur_x = 20
     row_y = legend_top + 28
     for h_name, w_px in headers:
@@ -847,32 +958,78 @@ def make_ut_beam_diagram(
         res = calc_map[angle]
         clr = p_colors.get(angle, (50, 50, 50))
 
+        p_cfg = next((p for p in settings.probes if abs(p.angle_deg - angle) < 0.1), None)
         cur_x = 20
         draw.rectangle([cur_x, row_y + 2, cur_x + 10, row_y + 11], fill=clr)
         draw.text((cur_x + 16, row_y), res.probe_type, fill=(30, 30, 30), font=font_normal)
-        cur_x += 110
+        cur_x += 95
+
+        sn_str = getattr(p_cfg, "probe_serial", "-") if p_cfg and getattr(p_cfg, "probe_serial", "") else "-"
+        draw.text((cur_x, row_y), sn_str, fill=(40, 50, 75), font=font_small)
+        cur_x += 85
 
         draw.text((cur_x, row_y), f"{res.angle_deg:g}°", fill=clr, font=font_bold)
-        cur_x += 65
+        cur_x += 55
 
         s05_str = f"{res.skip_05_mm:.1f} mm" if res.angle_deg > 0 else "-"
         draw.text((cur_x, row_y), s05_str, fill=(40, 40, 40), font=font_normal)
-        cur_x += 85
+        cur_x += 75
 
         s10_str = f"{res.skip_10_mm:.1f} mm" if res.angle_deg > 0 else "-"
         draw.text((cur_x, row_y), s10_str, fill=(40, 40, 40), font=font_normal)
-        cur_x += 85
+        cur_x += 75
 
         sp_str = f"{res.sound_path_10_mm:.1f} mm"
         draw.text((cur_x, row_y), sp_str, fill=(40, 40, 40), font=font_normal)
-        cur_x += 95
+        cur_x += 85
 
         scan_str = f"{res.scan_min_mm:.1f} ~ {res.scan_max_mm:.1f} mm"
         draw.text((cur_x, row_y), scan_str, fill=(40, 40, 40), font=font_bold)
-        cur_x += 170
+        cur_x += 155
 
         draw.text((cur_x, row_y), res.coverage_target, fill=(70, 75, 85), font=font_small)
         row_y += 18
+
+    # -------------------------------------------------------------
+    # ★ 복합 베벨(Compound Bevel) 전이점 CAD 지시선(Leader Callout)
+    # (탐촉자 겹침 완전 해결: 45° 1.0S 탐촉자 뒤쪽으로 충분히 인출하여 무간섭 배치)
+    # -------------------------------------------------------------
+    if is_compound:
+        tx_r = int(center_x + trans_half_px)
+        ty_r = int(trans_y)
+        color_lead = (30, 80, 150)
+
+        # 45° 1.0S 탐촉자 위치(idx_10_r) 파악 후 그 뒤쪽(우측)으로 완전히 인출
+        target_x = center_x + int(s.thickness_mm * 2.0 * scale_x) + 28 if "s" in locals() else tx_r + 175
+        if 45.0 in calc_map:
+            target_x = center_x + int(calc_map[45.0].skip_10_mm * scale_x) + 26
+
+        p0 = (tx_r, ty_r)
+        p1 = (target_x, ty_r)
+
+        # 1. 전이점 마커 점 (●)
+        draw.ellipse([p0[0]-2, p0[1]-2, p0[0]+2, p0[1]+2], fill=(220, 40, 40), outline=(160, 0, 0))
+        # 2. 19T 전이선 수평 연장 지시선 (점선)
+        for x_dot in range(tx_r, target_x, 6):
+            draw.line([(x_dot, ty_r), (min(x_dot + 3, target_x), ty_r)], fill=(120, 150, 185), width=1)
+
+        # 3. 2줄 컴팩트 라벨 및 깔끔한 화이트 마스크 박스 (탐촉자와 100% 무간섭)
+        line1 = f"{trans_val:g}T 전이점"
+        line2 = f"(하부 {bevel_deg:g}° / 상부 {upper_angle:g}°)"
+        try:
+            tw1 = font_bold.getlength(line1)
+            tw2 = font_small.getlength(line2)
+        except AttributeError:
+            tw1 = len(line1) * 6
+            tw2 = len(line2) * 5
+        box_w = max(tw1, tw2) + 8
+        box_h = 24
+        bx = target_x + 2
+        by = ty_r - 12
+
+        draw.rectangle([bx, by, bx + box_w, by + box_h], fill=(255, 255, 255), outline=(140, 170, 205), width=1)
+        draw.text((bx + 4, by + 2), line1, fill=(20, 50, 110), font=font_bold)
+        draw.text((bx + 4, by + 12), line2, fill=(60, 80, 120), font=font_small)
 
     # RGBA -> RGB 변환 저장
     img.convert("RGB").save(output_path, "PNG")
@@ -1076,15 +1233,15 @@ def create_ut_workbook(settings: UTScanPlanSettings, output_path: str) -> str:
 
     tbl_headers = [
         ("B", "탐촉자 구분"),
-        ("C", "굴절각(°)"),
-        ("D", "주파수(MHz)"),
-        ("E", "진동자 크기"),
-        ("F", "0.5 Skip(mm)"),
-        ("G", "1.0 Skip(mm)"),
-        ("H", "Sound Path(mm)"),
-        ("I", "입사점(Xmin)"),
-        ("J", "입사점(Xmax)"),
-        ("K", "주사 범위 요약"),
+        ("C", "시리얼 (S/N)"),
+        ("D", "굴절각(°)"),
+        ("E", "주파수(MHz)"),
+        ("F", "진동자 크기"),
+        ("G", "0.5 Skip(mm)"),
+        ("H", "1.0 Skip(mm)"),
+        ("I", "Sound Path(mm)"),
+        ("J", "주사 범위(Xmin~Xmax)"),
+        ("K", "검사 범위 요약"),
         ("L", "주요 검출 대상"),
     ]
 
@@ -1106,20 +1263,20 @@ def create_ut_workbook(settings: UTScanPlanSettings, output_path: str) -> str:
         ws.row_dimensions[current_row].height = 16
 
         ws[f"B{current_row}"] = f"{res.probe_type} ({res.probe_id})"
-        ws[f"C{current_row}"] = f"{res.angle_deg:g}°"
-        ws[f"D{current_row}"] = f"{p_cfg.frequency_mhz:g}" if p_cfg else "-"
-        ws[f"E{current_row}"] = p_cfg.crystal_size_mm if p_cfg else "-"
-        ws[f"F{current_row}"] = f"{res.skip_05_mm:.1f}" if res.angle_deg > 0 else "-"
-        ws[f"G{current_row}"] = f"{res.skip_10_mm:.1f}" if res.angle_deg > 0 else "-"
-        ws[f"H{current_row}"] = f"{res.sound_path_10_mm:.1f}"
-        ws[f"I{current_row}"] = f"{res.scan_min_mm:.1f}"
-        ws[f"J{current_row}"] = f"{res.scan_max_mm:.1f}"
+        ws[f"C{current_row}"] = getattr(p_cfg, "probe_serial", "-") if p_cfg and getattr(p_cfg, "probe_serial", "") else "-"
+        ws[f"D{current_row}"] = f"{res.angle_deg:g}°"
+        ws[f"E{current_row}"] = f"{p_cfg.frequency_mhz:g}" if p_cfg else "-"
+        ws[f"F{current_row}"] = p_cfg.crystal_size_mm if p_cfg else "-"
+        ws[f"G{current_row}"] = f"{res.skip_05_mm:.1f}" if res.angle_deg > 0 else "-"
+        ws[f"H{current_row}"] = f"{res.skip_10_mm:.1f}" if res.angle_deg > 0 else "-"
+        ws[f"I{current_row}"] = f"{res.sound_path_10_mm:.1f}"
+        ws[f"J{current_row}"] = f"{res.scan_min_mm:.1f} ~ {res.scan_max_mm:.1f} mm"
         ws[f"K{current_row}"] = res.scan_range_desc
         ws[f"L{current_row}"] = res.coverage_target
 
         for col in ["B", "C", "D", "E", "F", "G", "H", "I", "J"]:
             ws[f"{col}{current_row}"].alignment = align_center
-            ws[f"{col}{current_row}"].font = font_bold if col in ["C", "F", "G", "H"] else font_normal
+            ws[f"{col}{current_row}"].font = font_bold if col in ["C", "D", "G", "H", "I"] else font_normal
         ws[f"K{current_row}"].alignment = align_center
         ws[f"K{current_row}"].font = font_normal
         ws[f"L{current_row}"].alignment = align_left
@@ -1143,16 +1300,17 @@ def create_ut_workbook(settings: UTScanPlanSettings, output_path: str) -> str:
         tmp_img_path = tmp.name
 
     try:
-        make_ut_beam_diagram(settings, tmp_img_path, width=1200, height=500)
+        # 가로 1240px, 세로 520px로 다이어그램 생성하여 B열부터 L열까지 가득 채움 (가독성 165% 대폭 향상)
+        make_ut_beam_diagram(settings, tmp_img_path, width=1240, height=520)
         xl_img = XLImage(tmp_img_path)
-        xl_img.width = 750
-        xl_img.height = 312
+        xl_img.width = 1240
+        xl_img.height = 520
         ws.add_image(xl_img, f"B{current_row}")
     finally:
         pass
 
-    # 다이어그램 아래 빈 행들 높이 지정
-    for offset in range(17):
+    # 다이어그램 높이에 맞춰 행 높이 지정 (B열~L열 테이블 너비와 100% 정합)
+    for offset in range(23):
         ws.row_dimensions[current_row + offset].height = 18
 
     # 인쇄 설정 (A4 가로 1페이지 강제 맞춤)
