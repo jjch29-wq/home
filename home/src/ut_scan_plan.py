@@ -609,52 +609,52 @@ def make_ut_beam_diagram(
         ov_draw = ImageDraw.Draw(overlay)
 
         # ---------------------------------------------------------
-        # 1. 각도별 체적 스위프 밴드 (Volume Coverage Bands)
+        # 1. 각도별 체적 스위프 밴드 (Volume Coverage Bands: 기하학적 100% 정합)
         # ---------------------------------------------------------
-        # A. 45° 체적 커버리지 (하부 0~19T & 루트 전담): 청색 밴드
+        # A. 45° 체적 커버리지 (우측 0.5S 직사 + 1.0S 반사: 정확한 45.0°)
         if 45.0 in calc_map:
             c45 = calc_map[45.0]
             s05_45 = int(c45.skip_05_mm * scale_x)
             s10_45 = int(c45.skip_10_mm * scale_x)
-            # 0.5S 직접 빔체적
+            # 0.5S 직접 빔체적 (45.0° 직사)
             ov_draw.polygon([
                 (center_x + s05_45 - 8, plate_top), (center_x + s05_45 + 8, plate_top),
                 (center_x + rg_half_px + 8, plate_bottom),
                 (center_x - rg_half_px - 8, plate_bottom)
             ], fill=(*color_45, 50))
-            # 1.0S 반사 빔체적
+            # 1.0S 반사 빔체적 (45.0° 반사)
             ov_draw.polygon([
                 (center_x + s10_45 - 8, plate_top), (center_x + s10_45 + 8, plate_top),
                 (center_x + s05_45 + 10, plate_bottom), (center_x + s05_45 - 10, plate_bottom)
             ], fill=(*color_45, 30))
             ov_draw.polygon([
                 (center_x + s05_45 + 10, plate_bottom), (center_x + s05_45 - 10, plate_bottom),
-                (center_x - trans_half_px, trans_y), (center_x, plate_top)
+                (center_x + cap_half_px, plate_top), (center_x - cap_half_px, plate_top)
             ], fill=(*color_45, 30))
 
-        # B. 60° 체적 커버리지 (19T 전이점 ~ 상부 10° 협개선 전담): 녹색 밴드
+        # B. 60° 체적 커버리지 (좌측 0.5S 직사 + 1.0S 반사: 정확한 60.0°)
         if 60.0 in calc_map:
             c60 = calc_map[60.0]
             s05_60 = int(c60.skip_05_mm * scale_x)
             s10_60 = int(c60.skip_10_mm * scale_x)
-            # 좌측 0.5S 직접 빔체적
+            # 좌측 0.5S 직접 빔체적 (중간 입사점에서 바닥 루트/개선부로 정확한 60.0° 직사)
             ov_draw.polygon([
                 (center_x - s05_60 - 8, plate_top), (center_x - s05_60 + 8, plate_top),
                 (center_x + rg_half_px + 10, plate_bottom),
-                (center_x - rg_half_px - 6, plate_bottom)
+                (center_x - rg_half_px - 8, plate_bottom)
             ], fill=(*color_60, 45))
-            # 좌측 1.0S 반사 빔체적
+            # 좌측 1.0S 반사 빔체적 (바닥 반사 후 상부 개선면으로 정확한 60.0° 반사)
             ov_draw.polygon([
                 (center_x - s10_60 - 8, plate_top), (center_x - s10_60 + 8, plate_top),
                 (center_x - s05_60 + 12, plate_bottom), (center_x - s05_60 - 12, plate_bottom)
             ], fill=(*color_60, 35))
             ov_draw.polygon([
                 (center_x - s05_60 + 12, plate_bottom), (center_x - s05_60 - 12, plate_bottom),
-                (center_x + groove_top_half_px + haz_px, plate_top),
+                (center_x + groove_top_half_px, plate_top),
                 (center_x - groove_top_half_px, plate_top)
             ], fill=(*color_60, 35))
 
-        # C. 70° 체적 커버리지 (우측 배치: 1.0 Skip 표면 비드 직하부 & HAZ 전담): 주황색 밴드
+        # C. 70° 체적 커버리지 (우측 1.0S 반사: 정확한 70.0°)
         if 70.0 in calc_map:
             c70 = calc_map[70.0]
             s05_70 = int(c70.skip_05_mm * scale_x)
@@ -662,7 +662,7 @@ def make_ut_beam_diagram(
             idx_10_70_r = center_x + s10_70
             idx_05_70_r = center_x + s05_70
 
-            # 우측 1.0S 반사 빔체적 (바닥 반사 후 표면/HAZ 커버)
+            # 우측 1.0S 반사 빔체적 (정확한 70.0° V자 반사로 상부 표면/HAZ 커버)
             ov_draw.polygon([
                 (idx_10_70_r - 9, plate_top), (idx_10_70_r + 9, plate_top),
                 (idx_05_70_r + 14, plate_bottom), (idx_05_70_r - 14, plate_bottom)
@@ -670,7 +670,7 @@ def make_ut_beam_diagram(
             ov_draw.polygon([
                 (idx_05_70_r + 14, plate_bottom), (idx_05_70_r - 14, plate_bottom),
                 (center_x - groove_top_half_px - haz_px, plate_top),
-                (center_x, plate_top)
+                (center_x + groove_top_half_px + haz_px, plate_top)
             ], fill=(*color_70, 30))
 
         img = Image.alpha_composite(img, overlay)
@@ -687,13 +687,13 @@ def make_ut_beam_diagram(
             idx_05_r = center_x + s05_45
             idx_10_r = center_x + s10_45
 
-            # 45° 0.5S 중심선 (중간 입사점에서 모재 바닥 루트로 45.0° 직사)
+            # 45° 0.5S 중심선 (중간 입사점에서 모재 바닥 루트로 수학적 45.0° 직사)
             draw.line([(idx_05_r, plate_top), (center_x, plate_bottom)], fill=color_45, width=3)
             draw_probe_wedge(idx_05_r, "45°(0.5S)", f"0.5S={c45.skip_05_mm:.1f}mm", color_45, (240, 245, 255))
 
-            # 45° 1.0S 중심선 (중간 입사점에서 바닥 반사 후 개선부로 45.0° 반사)
+            # 45° 1.0S 중심선 (중간 입사점에서 바닥 반사 후 상단 용접부로 수학적 45.0° 대칭 반사)
             draw.line([(idx_10_r, plate_top), (idx_05_r, plate_bottom)], fill=color_45, width=2)
-            draw.line([(idx_05_r, plate_bottom), (center_x - trans_half_px, trans_y)], fill=color_45, width=2)
+            draw.line([(idx_05_r, plate_bottom), (center_x, plate_top)], fill=color_45, width=2)
             draw_probe_wedge(idx_10_r, "45°(1.0S)", f"1.0S={c45.skip_10_mm:.1f}mm", color_45, (240, 245, 255))
 
             # 45° 치수선 (우측 상단 1단)
@@ -719,13 +719,13 @@ def make_ut_beam_diagram(
             idx_05_l = center_x - s05_60
             idx_10_l = center_x - s10_60
 
-            # 60° 0.5S 중심선 (중간 입사점에서 19T 전이점으로 60.0° 직사)
-            draw.line([(idx_05_l, plate_top), (center_x, trans_y)], fill=color_60, width=2)
+            # 60° 0.5S 중심선 (★ 중요: 바닥 깊이 T까지 완전 하향하여 수학적 정확한 60.0° 직사)
+            draw.line([(idx_05_l, plate_top), (center_x, plate_bottom)], fill=color_60, width=2)
             draw_probe_wedge(idx_05_l, "60°(0.5S)", f"0.5S={c60.skip_05_mm:.1f}mm", color_60, (240, 255, 245))
 
-            # 60° 1.0S 중심선 (중간 입사점에서 바닥 반사 후 개선부 상단으로 60.0° 반사)
+            # 60° 1.0S 중심선 (중간 입사점에서 바닥 반사 후 상단 용접부로 수학적 정확한 60.0° 대칭 반사)
             draw.line([(idx_10_l, plate_top), (idx_05_l, plate_bottom)], fill=color_60, width=3)
-            draw.line([(idx_05_l, plate_bottom), (center_x + groove_top_half_px, plate_top)], fill=color_60, width=3)
+            draw.line([(idx_05_l, plate_bottom), (center_x, plate_top)], fill=color_60, width=3)
             draw_probe_wedge(idx_10_l, "60°(1.0S)", f"1.0S={c60.skip_10_mm:.1f}mm", color_60, (240, 255, 245))
 
             # 60° 치수선 (좌측 상단 2단 완벽 분리)
@@ -755,9 +755,9 @@ def make_ut_beam_diagram(
             idx_10_70_r = center_x + s10_70
             idx_05_70_r = center_x + s05_70
 
-            # 70° 1.0S 중심선 (중간 입사점에서 바닥 70° 반사 후 용접부 표면/HAZ 도달)
+            # 70° 1.0S 중심선 (중간 입사점에서 바닥 반사 후 상단 용접부로 수학적 정확한 70.0° 대칭 반사)
             draw.line([(idx_10_70_r, plate_top), (idx_05_70_r, plate_bottom)], fill=color_70, width=2)
-            draw.line([(idx_05_70_r, plate_bottom), (center_x - groove_top_half_px, plate_top)], fill=color_70, width=2)
+            draw.line([(idx_05_70_r, plate_bottom), (center_x, plate_top)], fill=color_70, width=2)
             draw_probe_wedge(idx_10_70_r, "70°(1.0S)", f"1.0S={c70.skip_10_mm:.1f}mm", color_70, (255, 248, 240))
 
             # 70° 치수선 (우측 상단 2단 - 45도 위에 겹침 없이 배치)
