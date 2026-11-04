@@ -34,13 +34,38 @@ class UTProbeConfig:
     probe_type: str = "사각 (Angle)"           # "사각 (Angle)" 또는 "수직 (Straight)"
     angle_deg: float = 45.0                     # 0.0 (수직), 45.0, 60.0, 70.0 (사각)
     frequency_mhz: float = 4.0                  # 2.0, 4.0, 5.0 MHz 등
-    crystal_size_mm: str = "10×10"              # "10×10", "Φ10", "Φ20" 등
+    crystal_size_mm: str = "14×14"              # "14×14", "10×10", "Φ10", "Φ20" 등 (SIS H 241 SI 4.6.1)
     wave_type: str = "SW (횡파)"                # "SW (횡파)" 또는 "LW (종파)"
     velocity_ms: float = 3240.0                 # 탄소강: 횡파 3240 m/s, 종파 5920 m/s
-    index_offset_mm: float = 10.0               # 탐촉자 전단부에서 입사점까지 거리 (사각)
-    probe_model: str = "4Z10x10A45"             # 모델명
+    index_offset_mm: float = 13.0               # 탐촉자 전단부에서 입사점까지 거리 (사각)
+    probe_model: str = "4Z14x14A45"             # 모델명
     wedge_delay_us: float = 0.0                 # 웻지 지연 시간
     is_active: bool = True                      # 활성화 여부
+
+
+def get_standard_probes_by_thickness(thickness_mm: float) -> List[UTProbeConfig]:
+    """SIS H 241 SI (REV.0) Para 4.6.1 기준 모재 두께별 권장 탐촉자 규격 반환.
+    - T > 25.4 mm (예: 30.97 mm 등 30t급):
+        사각 14×14 mm (45°: 입사점 13 mm, 60°: 입사점 14 mm, 70°: 입사점 15 mm)
+        수직 Φ20 mm (0°: 입사점 0 mm)
+    - T <= 25.4 mm:
+        사각 10×10 mm (45°: 입사점 10 mm, 60°: 입사점 11 mm, 70°: 입사점 12 mm)
+        수직 Φ10 mm (0°: 입사점 0 mm)
+    """
+    if thickness_mm > 25.4:
+        return [
+            UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "14×14", "SW (횡파)", 3240.0, 13.0, "4Z14x14A45", is_active=True),
+            UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "14×14", "SW (횡파)", 3240.0, 14.0, "4Z14x14A60", is_active=True),
+            UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "14×14", "SW (횡파)", 3240.0, 15.0, "4Z14x14A70", is_active=True),
+            UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ20", "LW (종파)", 5920.0, 0.0, "4Z20N", is_active=True),
+        ]
+    else:
+        return [
+            UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "10×10", "SW (횡파)", 3240.0, 10.0, "4Z10x10A45", is_active=True),
+            UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "10×10", "SW (횡파)", 3240.0, 11.0, "4Z10x10A60", is_active=True),
+            UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "10×10", "SW (횡파)", 3240.0, 12.0, "4Z10x10A70", is_active=True),
+            UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ10", "LW (종파)", 5920.0, 0.0, "4Z10N", is_active=True),
+        ]
 
 
 @dataclass
@@ -79,18 +104,18 @@ class UTScanPlanSettings:
     scan_level: str = "기준감도(DAC) + 6 dB"
     transfer_correction_db: float = 2.0         # 전송 손실 보정
 
-    # 탐촉자 목록 (기본: 사각 45°, 60°, 70° 및 수직 0°)
+    # 탐촉자 목록 (기본: T=30.97mm 기준 절차서 4.6.1 규격: 14×14 및 Φ20)
     probes: List[UTProbeConfig] = field(default_factory=lambda: [
         UTProbeConfig(
             probe_id="P1",
             probe_type="사각 (Angle)",
             angle_deg=45.0,
             frequency_mhz=4.0,
-            crystal_size_mm="10×10",
+            crystal_size_mm="14×14",
             wave_type="SW (횡파)",
             velocity_ms=3240.0,
-            index_offset_mm=10.0,
-            probe_model="4Z10x10A45",
+            index_offset_mm=13.0,
+            probe_model="4Z14x14A45",
             is_active=True
         ),
         UTProbeConfig(
@@ -98,11 +123,11 @@ class UTScanPlanSettings:
             probe_type="사각 (Angle)",
             angle_deg=60.0,
             frequency_mhz=4.0,
-            crystal_size_mm="10×10",
+            crystal_size_mm="14×14",
             wave_type="SW (횡파)",
             velocity_ms=3240.0,
-            index_offset_mm=11.0,
-            probe_model="4Z10x10A60",
+            index_offset_mm=14.0,
+            probe_model="4Z14x14A60",
             is_active=True
         ),
         UTProbeConfig(
@@ -110,11 +135,11 @@ class UTScanPlanSettings:
             probe_type="사각 (Angle)",
             angle_deg=70.0,
             frequency_mhz=4.0,
-            crystal_size_mm="10×10",
+            crystal_size_mm="14×14",
             wave_type="SW (횡파)",
             velocity_ms=3240.0,
-            index_offset_mm=12.0,
-            probe_model="4Z10x10A70",
+            index_offset_mm=15.0,
+            probe_model="4Z14x14A70",
             is_active=True
         ),
         UTProbeConfig(
@@ -122,11 +147,11 @@ class UTScanPlanSettings:
             probe_type="수직 (Straight)",
             angle_deg=0.0,
             frequency_mhz=4.0,
-            crystal_size_mm="Φ10",
+            crystal_size_mm="Φ20",
             wave_type="LW (종파)",
             velocity_ms=5920.0,
             index_offset_mm=0.0,
-            probe_model="4Z10N",
+            probe_model="4Z20N",
             is_active=True
         ),
     ])
@@ -144,10 +169,10 @@ class UTScanPlanSettings:
                     probes.append(UTProbeConfig(**p))
         else:
             probes = [
-                UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "10×10", "SW (횡파)", 3240.0, 10.0, "4Z10x10A45"),
-                UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "10×10", "SW (횡파)", 3240.0, 11.0, "4Z10x10A60"),
-                UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "10×10", "SW (횡파)", 3240.0, 12.0, "4Z10x10A70"),
-                UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ10", "LW (종파)", 5920.0, 0.0, "4Z10N"),
+                UTProbeConfig("P1", "사각 (Angle)", 45.0, 4.0, "14×14", "SW (횡파)", 3240.0, 13.0, "4Z14x14A45"),
+                UTProbeConfig("P2", "사각 (Angle)", 60.0, 4.0, "14×14", "SW (횡파)", 3240.0, 14.0, "4Z14x14A60"),
+                UTProbeConfig("P3", "사각 (Angle)", 70.0, 4.0, "14×14", "SW (횡파)", 3240.0, 15.0, "4Z14x14A70"),
+                UTProbeConfig("P4", "수직 (Straight)", 0.0, 4.0, "Φ20", "LW (종파)", 5920.0, 0.0, "4Z20N"),
             ]
         data["probes"] = probes
         return cls(**data)
@@ -344,7 +369,7 @@ def make_ut_beam_diagram(
     plate_half_len_mm = max(110.0, t * math.tan(math.radians(70.0)) * 2.0 + haz_w + 35.0)
     plate_half_len_px = int(plate_half_len_mm * scale_x)
 
-    left_x = max(25, center_x - plate_half_len_px)
+    left_x = max(95, center_x - plate_half_len_px)
     right_x = min(width - 25, center_x + plate_half_len_px)
 
     draw.rectangle([left_x, plate_top, right_x, plate_bottom], fill=(248, 250, 252), outline=(130, 140, 150), width=2)
@@ -432,12 +457,20 @@ def make_ut_beam_diagram(
         draw.line([(center_x, y), (center_x, y + 4)], fill=(220, 50, 50), width=1)
     draw.text((center_x - 30, plate_bottom + 38), "용접 중심선", fill=(200, 30, 30), font=font_small)
 
-    # 두께 치수선
-    dim_x = left_x + 16
-    draw.line([(dim_x, plate_top), (dim_x, plate_bottom)], fill=(80, 80, 80), width=1)
-    draw.line([(dim_x - 3, plate_top), (dim_x + 3, plate_top)], fill=(80, 80, 80), width=1)
-    draw.line([(dim_x - 3, plate_bottom), (dim_x + 3, plate_bottom)], fill=(80, 80, 80), width=1)
-    draw.text((dim_x - 55, (plate_top + plate_bottom) // 2 - 7), f"T={t:g}mm", fill=(50, 50, 50), font=font_bold)
+    # 두께 치수선 (도면 표준: 모재 좌측 외곽 연장선 배치로 텍스트·선 겹침 완전 제거)
+    ext_len = 16
+    dim_x = left_x - 10
+    draw.line([(left_x - ext_len, plate_top), (left_x, plate_top)], fill=(120, 130, 140), width=1)
+    draw.line([(left_x - ext_len, plate_bottom), (left_x, plate_bottom)], fill=(120, 130, 140), width=1)
+    draw.line([(dim_x, plate_top), (dim_x, plate_bottom)], fill=(80, 90, 100), width=1)
+    draw.line([(dim_x - 3, plate_top + 4), (dim_x, plate_top), (dim_x + 3, plate_top + 4)], fill=(80, 90, 100), width=1)
+    draw.line([(dim_x - 3, plate_bottom - 4), (dim_x, plate_bottom), (dim_x + 3, plate_bottom - 4)], fill=(80, 90, 100), width=1)
+    t_str = f"T={t:g}mm"
+    try:
+        tw_t = font_bold.getlength(t_str)
+    except AttributeError:
+        tw_t = len(t_str) * 7
+    draw.text((int(dim_x - tw_t - 6), (plate_top + plate_bottom) // 2 - 7), t_str, fill=(40, 40, 40), font=font_bold)
 
     # 3. 초음파 빔 경로 및 탐촉자 (각도별 100% 체적 커버리지 & 0.5S/1.0S 풀 표현)
     calculations = calculate_ut_geometry(settings)
@@ -591,7 +624,7 @@ def make_ut_beam_diagram(
         if 0.0 in calc_map:
             c0 = calc_map[0.0]
             str_x = center_x - int((c60.scan_max_mm + 35.0) * scale_x)
-            str_x = max(left_x + 45, str_x)
+            str_x = max(left_x + 55, str_x)
             draw_probe_wedge(str_x, "0° 수직탐상", "라미네이션", color_0, (245, 235, 255))
             draw.line([(str_x, plate_top), (str_x, plate_bottom)], fill=color_0, width=3)
             draw.text((str_x - 38, plate_bottom + 10), "모재 라미네이션 검사", fill=color_0, font=font_small)
@@ -784,7 +817,7 @@ def make_ut_beam_diagram(
                 max_left = max(max_left, c60.scan_max_mm)
             str_offset_mm = max_left + 22.0
             str_x = center_x - int(str_offset_mm * scale_x)
-            str_x = max(left_x + 45, str_x)
+            str_x = max(left_x + 55, str_x)
             draw_probe_wedge(str_x, "0° 수직탐상", "라미네이션", color_0, (245, 235, 255))
             draw.line([(str_x, plate_top), (str_x, plate_bottom)], fill=color_0, width=3)
             draw.text((str_x - 38, plate_bottom + 10), "모재 라미네이션 검사", fill=color_0, font=font_small)

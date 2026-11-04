@@ -17,6 +17,7 @@ from ut_scan_plan import (
     UTScanPlanSettings,
     calculate_ut_geometry,
     create_ut_workbook,
+    get_standard_probes_by_thickness,
     make_ut_beam_diagram,
 )
 
@@ -29,6 +30,42 @@ class TestUTScanPlan(unittest.TestCase):
             bevel_angle_deg=35.0,
             haz_width_mm=10.0,
         )
+
+    def test_probe_selection_by_thickness(self):
+        """절차서 SIS H 241 SI Para 4.6.1 두께별 탐촉자 규격 자동 선정 검증."""
+        # 1) 두께 T > 25.4mm (예: 30.97mm) -> 14×14 및 Φ20
+        thick_probes = get_standard_probes_by_thickness(30.97)
+        self.assertEqual(len(thick_probes), 4)
+        p_map_thick = {p.angle_deg: p for p in thick_probes}
+
+        self.assertEqual(p_map_thick[45.0].crystal_size_mm, "14×14")
+        self.assertEqual(p_map_thick[45.0].index_offset_mm, 13.0)
+        self.assertEqual(p_map_thick[60.0].crystal_size_mm, "14×14")
+        self.assertEqual(p_map_thick[60.0].index_offset_mm, 14.0)
+        self.assertEqual(p_map_thick[70.0].crystal_size_mm, "14×14")
+        self.assertEqual(p_map_thick[70.0].index_offset_mm, 15.0)
+        self.assertEqual(p_map_thick[0.0].crystal_size_mm, "Φ20")
+        self.assertEqual(p_map_thick[0.0].index_offset_mm, 0.0)
+
+        # 2) 두께 T <= 25.4mm (예: 15.87mm) -> 10×10 및 Φ10
+        thin_probes = get_standard_probes_by_thickness(15.87)
+        self.assertEqual(len(thin_probes), 4)
+        p_map_thin = {p.angle_deg: p for p in thin_probes}
+
+        self.assertEqual(p_map_thin[45.0].crystal_size_mm, "10×10")
+        self.assertEqual(p_map_thin[45.0].index_offset_mm, 10.0)
+        self.assertEqual(p_map_thin[60.0].crystal_size_mm, "10×10")
+        self.assertEqual(p_map_thin[60.0].index_offset_mm, 11.0)
+        self.assertEqual(p_map_thin[70.0].crystal_size_mm, "10×10")
+        self.assertEqual(p_map_thin[70.0].index_offset_mm, 12.0)
+        self.assertEqual(p_map_thin[0.0].crystal_size_mm, "Φ10")
+        self.assertEqual(p_map_thin[0.0].index_offset_mm, 0.0)
+
+        # 3) UTScanPlanSettings 기본값(T=30.97mm)의 탐촉자 검증
+        default_settings = UTScanPlanSettings()
+        def_map = {p.angle_deg: p for p in default_settings.probes}
+        self.assertEqual(def_map[45.0].crystal_size_mm, "14×14")
+        self.assertEqual(def_map[0.0].crystal_size_mm, "Φ20")
 
     def test_calculate_ut_geometry(self):
         results = calculate_ut_geometry(self.settings)

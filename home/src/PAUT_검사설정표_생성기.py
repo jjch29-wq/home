@@ -1739,9 +1739,9 @@ class PautScanPlanApp(tk.Tk):
         thickness_presets = ("6.02", "7.11", "8.18", "9.27", "9.53", "10.31", "11.13", "12.70", "15.09", "15.87", "17.48", "19.05", "21.44", "22.23", "23.83", "26.19", "30.97", "38.10")
         t_cb = ttk.Combobox(joint_box, textvariable=self.ut_vars["thickness_mm"], values=thickness_presets, width=25)
         t_cb.grid(row=r, column=1, sticky="ew", pady=2)
-        t_cb.bind("<<ComboboxSelected>>", lambda _e: self.refresh_ut_preview())
-        t_cb.bind("<FocusOut>", lambda _e: self.refresh_ut_preview())
-        t_cb.bind("<Return>", lambda _e: self.refresh_ut_preview())
+        t_cb.bind("<<ComboboxSelected>>", self._on_thickness_changed)
+        t_cb.bind("<FocusOut>", self._on_thickness_changed)
+        t_cb.bind("<Return>", self._on_thickness_changed)
         r += 1
 
         # 배관 외경 OD (자동 입력 및 직접 수정 가능)
@@ -1825,10 +1825,10 @@ class PautScanPlanApp(tk.Tk):
             ttk.Label(probe_box, text=col_name, font=("맑은 고딕", 9, "bold")).grid(row=0, column=c_idx, padx=4, pady=2)
 
         default_probes_data = [
-            (True, "사각", 45.0, 4.0, "10×10", 10.0),
-            (True, "사각", 60.0, 4.0, "10×10", 11.0),
-            (True, "사각", 70.0, 4.0, "10×10", 12.0),
-            (True, "수직", 0.0, 4.0, "Φ10", 0.0),
+            (True, "사각", 45.0, 4.0, "14×14", 13.0),
+            (True, "사각", 60.0, 4.0, "14×14", 14.0),
+            (True, "사각", 70.0, 4.0, "14×14", 15.0),
+            (True, "수직", 0.0, 4.0, "Φ20", 0.0),
         ]
         self.ut_probe_vars.clear()
         for p_idx, (act, p_type, ang, freq, sz, idx_off) in enumerate(default_probes_data):
@@ -1931,7 +1931,8 @@ class PautScanPlanApp(tk.Tk):
 
             wave = "LW (종파)" if (ang == 0.0 or p_type == "수직") else "SW (횡파)"
             v = 5920.0 if (ang == 0.0 or p_type == "수직") else 3240.0
-            p_name = f"{int(freq)}Z{sz.replace('×','x')}N" if ang == 0.0 else f"{int(freq)}Z{sz.replace('×','x')}A{int(ang)}"
+            sz_clean = sz.replace('×', 'x').replace('Φ', '').replace('φ', '')
+            p_name = f"{int(freq)}Z{sz_clean}N" if ang == 0.0 else f"{int(freq)}Z{sz_clean}A{int(ang)}"
 
             probes.append(UTProbeConfig(
                 probe_id=f"P{p_idx+1}",
@@ -1978,6 +1979,14 @@ class PautScanPlanApp(tk.Tk):
         for k, var in self.ut_vars.items():
             if hasattr(settings, k):
                 var.set(str(getattr(settings, k)))
+        if hasattr(settings, "probes") and settings.probes:
+            for p_idx, p_cfg in enumerate(settings.probes):
+                if p_idx < len(self.ut_probe_vars):
+                    self.ut_probe_vars[p_idx]["active"].set(p_cfg.is_active)
+                    self.ut_probe_vars[p_idx]["angle"].set(p_cfg.angle_deg)
+                    self.ut_probe_vars[p_idx]["freq"].set(p_cfg.frequency_mhz)
+                    self.ut_probe_vars[p_idx]["size"].set(p_cfg.crystal_size_mm)
+                    self.ut_probe_vars[p_idx]["index"].set(p_cfg.index_offset_mm)
 
     def _reset_ut_defaults(self):
         default_s = UTScanPlanSettings()
@@ -2037,12 +2046,59 @@ class PautScanPlanApp(tk.Tk):
         except Exception as exc:
             pass
 
+    def _update_probes_by_thickness(self, t: float):
+        """두께(T)에 따라 절차서 SIS H 241 SI Para 4.6.1 기준 탐촉자 크기 및 입사점 자동 적용.
+        - T > 25.4 mm (30t급): 사각 14×14 mm (45°:13, 60°:14, 70°:15), 수직 Φ20 mm (0°:0)
+        - T <= 25.4 mm: 사각 10×10 mm (45°:10, 60°:11, 70°:12), 수직 Φ10 mm (0°:0)
+        """
+        is_thick = (t > 25.4)
+        for p_dict in self.ut_probe_vars:
+            try:
+                ang = float(p_dict["angle"].get())
+            except (ValueError, TypeError):
+                continue
+            if is_thick:
+                if abs(ang - 45.0) < 0.1:
+                    p_dict["size"].set("14×14")
+                    p_dict["index"].set(13.0)
+                elif abs(ang - 60.0) < 0.1:
+                    p_dict["size"].set("14×14")
+                    p_dict["index"].set(14.0)
+                elif abs(ang - 70.0) < 0.1:
+                    p_dict["size"].set("14×14")
+                    p_dict["index"].set(15.0)
+                elif abs(ang - 0.0) < 0.1:
+                    p_dict["size"].set("Φ20")
+                    p_dict["index"].set(0.0)
+            else:
+                if abs(ang - 45.0) < 0.1:
+                    p_dict["size"].set("10×10")
+                    p_dict["index"].set(10.0)
+                elif abs(ang - 60.0) < 0.1:
+                    p_dict["size"].set("10×10")
+                    p_dict["index"].set(11.0)
+                elif abs(ang - 70.0) < 0.1:
+                    p_dict["size"].set("10×10")
+                    p_dict["index"].set(12.0)
+                elif abs(ang - 0.0) < 0.1:
+                    p_dict["size"].set("Φ10")
+                    p_dict["index"].set(0.0)
+
+    def _on_thickness_changed(self, _event=None):
+        try:
+            t = float(self.ut_vars["thickness_mm"].get())
+            self._update_probes_by_thickness(t)
+        except (ValueError, TypeError):
+            pass
+        self.refresh_ut_preview()
+
     def _on_pipe_preset_selected(self, _event=None):
         preset_name = self.ut_vars.get("pipe_preset", tk.StringVar()).get()
         data = self.pipe_presets.get(preset_name)
         if data is not None:
             self.ut_vars["pipe_od_mm"].set(f"{data['od']:g}")
             self.ut_vars["thickness_mm"].set(f"{data['t']:g}")
+            self._update_probes_by_thickness(data["t"])
             self.refresh_ut_preview()
 
     def _on_bevel_preset_selected(self, _event=None):
