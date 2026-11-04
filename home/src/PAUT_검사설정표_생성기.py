@@ -2000,17 +2000,28 @@ class PautScanPlanApp(tk.Tk):
                     scan = f"{res.scan_min_mm:.1f} ~ {res.scan_max_mm:.1f} mm"
                     self.ut_calc_tree.insert("", "end", values=(f"{res.angle_deg:g}°", s05, s10, sp, scan))
 
-            # 다이어그램 고해상도 생성 및 가용 영역 맞춤 미리보기
+            # 다이어그램 고해상도 생성 및 가용 영역 맞춤 미리보기 (초기 축소 방지 & 가용폭 100% 활용)
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 tmp_path = tmp.name
             try:
-                make_ut_beam_diagram(settings, tmp_path, width=1200, height=500)
+                # 위젯 기하 구조 즉시 동기화 (초기 실행 시 winfo_width()가 0/1이 되는 현상 방지)
+                try:
+                    self.update_idletasks()
+                except Exception:
+                    pass
+
+                make_ut_beam_diagram(settings, tmp_path, width=1200, height=550)
                 full_img = Image.open(tmp_path)
                 
                 lbl_w = self.ut_preview_label.winfo_width() if hasattr(self, "ut_preview_label") else 0
-                lbl_h = self.ut_preview_label.winfo_height() if hasattr(self, "ut_preview_label") else 0
-                target_w = max(680, lbl_w - 20 if lbl_w > 100 else 740)
-                target_h = max(300, min(550, int(target_w * 500 / 1200)))
+                # 초기 실행 시에도 조그맣게 축소되지 않도록 기본 1150px 확보 (가용 시 라벨 폭에 맞춤)
+                if lbl_w > 300:
+                    target_w = max(1000, min(1200, lbl_w - 20))
+                else:
+                    target_w = 1150  # 초기 화면 축소 방지 기본 크기
+                
+                # 1200x550 종횡비(550/1200) 정밀 유지
+                target_h = int(target_w * 550 / 1200)
                 
                 resized_img = full_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
                 from PIL import ImageTk
