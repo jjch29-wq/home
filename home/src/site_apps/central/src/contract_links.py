@@ -166,7 +166,8 @@ def connect_contract(rows, root, issue_path=None):
         elif method == 'PAUT' and not row.get('데이터') and line and joint:
             # Exact line folder plus a bounded JOINT token avoids S01/S010/R01R collisions.
             token = re.compile(r'(?:^|_)' + re.escape(joint) + r'(?=_|$)', re.I)
-            matches = [p for p in paut_files if line in p.relative_to(paut_root).parts[:-1]
+            clean_line = line.strip().rstrip('_')
+            matches = [p for p in paut_files if (any(clean_line in part for part in p.relative_to(paut_root).parts[:-1]) or clean_line in p.stem)
                        and token.search(p.stem)]
             if len(inspections[(method, line, joint)]) > 1:
                 notes.append('PAUT 데이터 연결 보류: 동일 라인·JOINT의 검사일이 여러 개입니다.')
