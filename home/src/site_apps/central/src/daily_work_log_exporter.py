@@ -22,8 +22,6 @@ class DailyWorkLogExporter:
         self.fill_header = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
 
     def generate_excel(self, data, output_path):
-        from site_apps.central.src.rt_quantities import corrected_rt_history
-        data = corrected_rt_history({'day': data})['day']
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "작업감독일보"
