@@ -326,7 +326,7 @@ class AttributeExportTests(unittest.TestCase):
             '라인번호': 'LINE-01', '용접부번호': 'R02', '도면번호': 'DWG-01',
             '검사일자': '2026-10-17', '검사방법': 'RT', '구간정보': 'N/1,P/2,N/1',
         })
-        self.assertEqual(rec_defect['결함종류'], 'P')
+        self.assertEqual(rec_defect['결함종류'], 'P/2')
         rec_clean = normalize({
             '라인번호': 'LINE-01', '용접부번호': 'R01', '도면번호': 'DWG-01',
             '검사일자': '2026-10-17', '검사방법': 'RT', '구간정보': 'N/1,N/1,N/1',

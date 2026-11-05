@@ -39,7 +39,7 @@ _RT_REPORT_DEFECT_CACHE = {}
 
 
 def parse_defects(raw_value):
-    """Parse defect codes from interpretation text or list of point readings per [별표 3]."""
+    """Parse defect codes and grades from interpretation text or list of point readings."""
     if not raw_value:
         return ''
     if isinstance(raw_value, (list, tuple, set)):
@@ -55,10 +55,17 @@ def parse_defects(raw_value):
         code_part = parts[0].strip()
         if not code_part or code_part.upper().startswith('N') or code_part.upper() in ('OK', 'ACC', 'N/A'):
             continue
-        mapped = DEFECT_CODE_MAP.get(code_part.upper(), DEFECT_CODE_MAP.get(code_part, code_part.upper()))
-        if mapped and mapped not in codes:
-            codes.append(mapped)
-    return '/'.join(codes)
+        grade_part = parts[1].strip() if len(parts) > 1 else ''
+        if grade_part:
+            if code_part in ('이물질', '이물'):
+                val = f'이물/{grade_part}'
+            else:
+                val = f'{code_part.upper()}/{grade_part}'
+        else:
+            val = DEFECT_CODE_MAP.get(code_part.upper(), DEFECT_CODE_MAP.get(code_part, code_part.upper()))
+        if val not in codes:
+            codes.append(val)
+    return ', '.join(codes)
 
 
 def extract_rt_defects_from_workbook(report_path):
