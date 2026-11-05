@@ -3,6 +3,7 @@ import copy
 import csv
 import json
 import re
+import zipfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -87,6 +88,31 @@ def connect_contract(rows, root, issue_path=None):
     inspections = defaultdict(set)
     for k in groups:
         inspections[(k[0], k[2], k[3])].add(k[1])
+    file_token_cache = {}
+    def get_report_text(path):
+        if path not in file_token_cache:
+            text = ''
+            if path.suffix.lower() in ('.xlsx', '.xlsm'):
+                try:
+                    with zipfile.ZipFile(path, 'r') as z:
+                        for name in z.namelist():
+                            if name == 'xl/sharedStrings.xml' or (name.startswith('xl/worksheets/') and name.endswith('.xml')):
+                                text += ' ' + z.read(name).decode('utf-8', errors='ignore')
+                except Exception:
+                    pass
+            elif path.suffix.lower() in ('.pdf', '.hwp', '.hwpx', '.docx', '.txt', '.csv'):
+                try:
+                    raw = path.read_bytes()
+                    text = raw.decode('utf-8', errors='ignore') + ' ' + raw.decode('euc-kr', errors='ignore')
+                except Exception:
+                    pass
+            file_token_cache[path] = text
+        return file_token_cache[path]
+
+    def report_matches(path, *tokens):
+        content = get_report_text(path)
+        return all(str(t).strip() in content for t in tokens if str(t).strip())
+
     for k, group in groups.items():
         if len(group) != 1:
             for row in group:
@@ -99,7 +125,23 @@ def connect_contract(rows, root, issue_path=None):
         if not row.get('보고서번호') and len(candidates) == 1:
             row['보고서번호'] = next(iter(candidates))
         elif not row.get('보고서번호') and len(candidates) > 1:
-            notes.append('계약 자료 연결 보류: 발행 보고서 번호가 여러 개입니다.')
+            verified = []
+            for candidate in candidates:
+                cand_reports = reports.get((method, report_key(candidate)), [])
+                for rep_path in cand_reports:
+                    if joint and report_matches(rep_path, line, joint):
+                        verified.append((candidate, rep_path))
+                        break
+                    elif report_matches(rep_path, line):
+                        verified.append((candidate, rep_path))
+                        break
+            if len(verified) == 1:
+                row['보고서번호'] = verified[0][0]
+                row['보고서'] = relative(verified[0][1])
+            elif len(verified) > 1:
+                notes.append('계약 자료 연결 보류: 발행 보고서 번호가 여러 개입니다.')
+            else:
+                notes.append('계약 자료 연결 보류: 발행 보고서 번호가 여러 개입니다.')
         if not row.get('보고서') and row.get('보고서번호'):
             choices = reports.get((method, report_key(row['보고서번호'])), [])
             if len(choices) == 1:

@@ -99,19 +99,19 @@ class AttributeExportTests(unittest.TestCase):
             self.assertEqual(ws['A2'].value, self.record['공사명'])
             self.assertEqual(ws['L2'].value, 2)
             self.assertEqual(ws['I2'].value.strftime('%Y-%m-%d'), '2026-10-17')
-            for cell in ('M2', 'N2'):
-                target = ws[cell].hyperlink.target
-                self.assertNotIn('file:', target)
-                self.assertTrue((moved / unquote(target)).is_file())
+            target = ws['M2'].hyperlink.target
+            self.assertNotIn('file:', target)
+            self.assertTrue((moved / unquote(target)).is_file())
             self.assertIn('%23', ws['M2'].hyperlink.target)
             self.assertIn('%25', ws['M2'].hyperlink.target)
             self.assertIn('보고서/한글 ', ws['M2'].hyperlink.target)
             self.assertNotIn('%EB', ws['M2'].hyperlink.target)
             self.assertEqual(ws['M2'].value, 'RT-2026-001')
-            self.assertEqual(book['검사내역']['H2'].value, 'RT-2026-001')
-            self.assertEqual(book['검사내역']['H2'].hyperlink.target, ws['M2'].hyperlink.target)
+            self.assertEqual(book['검사내역']['B2'].value, 'RT-2026-001')
+            self.assertEqual(book['검사내역']['B2'].hyperlink.target, ws['M2'].hyperlink.target)
             self.assertEqual(book['제출파일목록'].max_row, 3)
-            self.assertEqual(ws['P2'].value, '입력 및 연결 확인 완료')
+            self.assertTrue((moved / unquote(ws['O2'].hyperlink.target)).is_file())
+            self.assertEqual(ws['S2'].value, '입력 및 연결 확인 완료')
         finally:
             book.close()
         with self.assertRaises(FileExistsError):
@@ -237,7 +237,7 @@ class AttributeExportTests(unittest.TestCase):
         export_workbook(restored, self.root, output)
         book = load_workbook(output)
         try:
-            self.assertIn('검사결과 불일치', book['속성정보']['P2'].value)
+            self.assertIn('검사결과 불일치', book['속성정보']['S2'].value)
         finally:
             book.close()
 

@@ -75,9 +75,12 @@ def normalize(record, method='', date='', source=''):
         '촬영포인트': parse_points(record.get('촬영포인트') or first(record, '구간정보', 'Loc')) if (first(record, '보고서종류', '검사방법') or method).upper() == 'RT' else [],
         '검사차수': first(record, '검사차수', '재검사차수'),
     })
-    # 업체 is deliberately not assigned to contractor/subcontractor without a rule.
-    if record.get('업체'):
-        row['확인사항'].append('원본 업체: ' + text(record['업체']) + ' (시공사/하도사 구분 확인)')
+    if not row['용역사']:
+        row['용역사'] = first(record, '용역사') or '서울검사'
+    if not row['시공사'] and record.get('업체'):
+        row['시공사'] = text(record['업체'])
+    if not row['공사명']:
+        row['공사명'] = first(record, '공사명', '공사', 'Project') or '2026년 중앙지사 열수송관 비파괴검사 단가계약'
     if not row['용접부특성'] and (positive_quantity(record.get('RT_OR')) or positive_quantity(record.get('RT_RE'))):
         ori = positive_quantity(record.get('RT_OR'))
         if ori:
@@ -522,6 +525,40 @@ def issues(row, root):
     return list(dict.fromkeys(result))
 
 
+def natural_key(val):
+    if not val:
+        return ()
+    return tuple(int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(val)))
+
+
+def joint_sort_key(val):
+    val = str(val or '').strip().upper()
+    if not val:
+        return (99, ())
+    if val.startswith('HT-S'):
+        group = 1
+    elif val.startswith('HT-R'):
+        group = 2
+    elif val.startswith('S'):
+        group = 3
+    elif val.startswith('R'):
+        group = 4
+    else:
+        group = 5
+    return (group, natural_key(val))
+
+
+def row_sort_key(r):
+    method_order = {'RT': 1, 'PAUT': 2, 'MT': 3, 'PT': 4}
+    m = method_order.get(str(r.get('보고서종류', '')).upper(), 99)
+    rep = natural_key(r.get('보고서번호', ''))
+    loc = natural_key(r.get('라인번호', ''))
+    joint = joint_sort_key(r.get('용접부번호', ''))
+    res = 0 if r.get('검사결과') == '합격' else 1
+    date = str(r.get('검사일자', ''))
+    return (m, rep, loc, joint, res, date)
+
+
 def export_workbook(rows, root, destination, unmatched=None, pending=None):
     from site_apps.central.src.contract_links import allowed
     """Native Excel hyperlinks; never generate executable formulas from source text."""
@@ -536,6 +573,10 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
         raise ValueError('생성할 검사 기록이 없습니다.')
     if destination.exists():
         raise FileExistsError('같은 이름의 파일이 있습니다. 다른 이름을 선택하세요.')
+    rows = sorted(rows, key=row_sort_key)
+    for r in rows:
+        if not r.get('용접부특성'):
+            r['용접부특성'] = 'O'
     book = Workbook()
     sheet = book.active
     sheet.title = '속성정보'
@@ -553,8 +594,10 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
             point_counts[point] = max(point_counts.get(point, 0), 1)
     point_columns = [(point, index) for point in sorted(point_counts, key=lambda p: tuple(map(int, p.split('-'))))
                      for index in range(point_counts[point])]
-    headers = (*FIELDS, '보고서번호 (클릭하여 열기)', '영상 보관 위치', 'PAUT 데이터 열기', '확인사항', '데이터 출처', '기록ID',
-               '검사결과', 'RT 영상 수', *(f'RT {p}' + (f' ({i + 1})' if i else '') for p, i in point_columns))
+    # 1~12열(FIELDS)은 발주처 공식 규격 유지, 바로 뒤에 보고서번호/검사결과/구간정보를 배치하여 용접부번호와의 거리를 최소화
+    headers = (*FIELDS, '보고서번호 (클릭하여 열기)', '검사결과',
+               *(f'RT {p}' + (f' ({i + 1})' if i else '') for p, i in point_columns),
+               'RT 영상 수', '영상 보관 위치', 'PAUT 데이터 열기', '확인사항', '데이터 출처', '기록ID')
     sheet.append(headers)
 
     def put(ws, row, col, value):
@@ -584,23 +627,24 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
             cell = put(sheet, index, col, value)
             if field == '검사일자':
                 cell.number_format = 'yyyy-mm-dd'
-        for col, field in enumerate(LINKS, 13):
-            if field == '보고서':
-                put(sheet, index, col, record.get('보고서번호', ''))
-            try:
-                path = contained_path(root, record.get(field))
-                if path and path.exists():
-                    label = (record.get('보고서번호') or '번호 미입력 · 보고서 열기') if field == '보고서' else field + ' 열기'
-                    link(sheet, index, col, path, label)
-            except ValueError:
-                pass
-        put(sheet, index, 16, '\n'.join(issues(record, root)) or '입력 및 연결 확인 완료')
-        put(sheet, index, 17, record.get('출처', ''))
-        put(sheet, index, 18, record['id'])
-        put(sheet, index, 19, record.get('검사결과', ''))
+        
+        # 13: 보고서번호 (링크)
+        rep_val = record.get('보고서번호', '')
+        put(sheet, index, 13, rep_val)
+        try:
+            path = contained_path(root, record.get('보고서'))
+            if path and path.exists():
+                link(sheet, index, 13, path, rep_val or '번호 미입력 · 보고서 열기')
+        except ValueError:
+            pass
+
+        # 14: 검사결과
+        put(sheet, index, 14, record.get('검사결과', ''))
+
+        # 15 ~ (14 + len(point_columns)): 구간정보 (RT 1-2, 2-3...)
         mapping = mappings[index - 2]
-        put(sheet, index, 20, sum(len(values) for values in mapping.values()) if record['보고서종류'] == 'RT' else '')
-        for col, (point, image_index) in enumerate(point_columns, 21):
+        for offset, (point, image_index) in enumerate(point_columns):
+            col = 15 + offset
             values = mapping.get(point, [])
             if point in record.get('촬영포인트', []) and not values:
                 put(sheet, index, col, '미연결')
@@ -611,6 +655,31 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
                         link(sheet, index, col, target, point + (f' ({image_index + 1})' if image_index else ''))
                 except ValueError:
                     pass
+
+        # 후순위 관리 열들: RT 영상 수, 영상 보관 위치, PAUT 데이터 열기, 확인사항, 데이터 출처, 기록ID
+        base_col = 15 + len(point_columns)
+        # RT 영상 수
+        put(sheet, index, base_col, sum(len(values) for values in mapping.values()) if record['보고서종류'] == 'RT' else '')
+        # 영상 보관 위치
+        try:
+            film_path = contained_path(root, record.get('필름영상화'))
+            if film_path and film_path.exists():
+                link(sheet, index, base_col + 1, film_path, '필름영상화 열기')
+        except ValueError:
+            pass
+        # PAUT 데이터 열기
+        try:
+            paut_path = contained_path(root, record.get('데이터'))
+            if paut_path and paut_path.exists():
+                link(sheet, index, base_col + 2, paut_path, '데이터 열기')
+        except ValueError:
+            pass
+        # 확인사항
+        put(sheet, index, base_col + 3, '\n'.join(issues(record, root)) or '입력 및 연결 확인 완료')
+        # 데이터 출처
+        put(sheet, index, base_col + 4, record.get('출처', ''))
+        # 기록ID
+        put(sheet, index, base_col + 5, record['id'])
     for col, options in (('H', 'O,REPAIR'), ('K', ','.join(METHODS))):
         validation = DataValidation(type='list', formula1='"' + options + '"', allow_blank=True)
         validation.showErrorMessage = True
@@ -621,26 +690,60 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
     sheet.add_data_validation(pages)
     pages.add(f'L2:L{len(rows) + 1}')
     overview = book.create_sheet('검사내역', 0)
-    overview_fields = ('검사일자', '보고서종류', '라인번호', '용접부번호', '용접부특성', '검사결과', '결함종류')
-    overview.append((*overview_fields, '보고서번호 (클릭하여 열기)',
-                     *(f'RT {p}' + (f' ({i + 1})' if i else '') for p, i in point_columns),
-                     'PAUT 데이터 열기', '확인사항', 'RT 영상 연결현황', '검사차수'))
+    # 보고서종류 -> 보고서번호 -> 검사결과 -> 라인번호 -> 용접부번호 -> 구간정보(RT 1-2...) 순으로 배치하여 조인트 번호 바로 옆에 구간정보 연결
+    overview_headers = ('보고서종류', '보고서번호 (클릭하여 열기)', '검사결과', '라인번호', '용접부번호',
+                        *(f'RT {p}' + (f' ({i + 1})' if i else '') for p, i in point_columns),
+                        '검사일자', '용접부특성', '결함종류', 'PAUT 데이터 열기', 'RT 영상 연결현황', '확인사항', '검사차수')
+    overview.append(overview_headers)
+
     for row_index, record in enumerate(rows, 2):
-        for col, field in enumerate(overview_fields, 1):
-            put(overview, row_index, col, record.get(field, ''))
-        for target_col, source_col in [(8, 13),
-                                       *[(9 + offset, 21 + offset) for offset in range(len(point_columns))],
-                                       (9 + len(point_columns), 15)]:
+        # 1: 보고서종류
+        put(overview, row_index, 1, record.get('보고서종류', ''))
+        # 2: 보고서번호 (링크)
+        rep_val = record.get('보고서번호', '')
+        put(overview, row_index, 2, rep_val)
+        try:
+            path = contained_path(root, record.get('보고서'))
+            if path and path.exists():
+                link(overview, row_index, 2, path, rep_val or '번호 미입력 · 보고서 열기')
+        except ValueError:
+            pass
+        # 3: 검사결과
+        put(overview, row_index, 3, record.get('검사결과', ''))
+        # 4: 라인번호
+        put(overview, row_index, 4, record.get('라인번호', ''))
+        # 5: 용접부번호
+        put(overview, row_index, 5, record.get('용접부번호', ''))
+
+        # 6 ~ (5 + len(point_columns)): 구간정보 (RT 1-2, 2-3...)
+        mapping = mappings[row_index - 2]
+        for offset, (point, image_index) in enumerate(point_columns):
+            target_col = 6 + offset
+            source_col = 15 + offset
             source_cell = sheet.cell(row_index, source_col)
-            if source_col == 13 or source_col >= 21:
-                put(overview, row_index, target_col, source_cell.value or '')
+            put(overview, row_index, target_col, source_cell.value or '')
             if source_cell.hyperlink:
                 cell = put(overview, row_index, target_col, source_cell.value)
                 cell.hyperlink = source_cell.hyperlink.target
                 cell.style = 'Hyperlink'
-        put(overview, row_index, 10 + len(point_columns), sheet.cell(row_index, 16).value)
+
+        # 후속 정보 열들
+        curr_col = 6 + len(point_columns)
+        # 검사일자
+        put(overview, row_index, curr_col, record.get('검사일자', ''))
+        # 용접부특성
+        put(overview, row_index, curr_col + 1, record.get('용접부특성', ''))
+        # 결함종류
+        put(overview, row_index, curr_col + 2, record.get('결함종류', ''))
+        # PAUT 데이터 열기
+        try:
+            paut_path = contained_path(root, record.get('데이터'))
+            if paut_path and paut_path.exists():
+                link(overview, row_index, curr_col + 3, paut_path, '데이터 열기')
+        except ValueError:
+            pass
+        # RT 영상 연결현황
         expected = record.get('촬영포인트', [])
-        mapping = mappings[row_index - 2]
         if record['보고서종류'] == 'RT':
             def valid_image(value):
                 try:
@@ -654,8 +757,12 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
             else:
                 count = sum(any(valid_image(value) for value in values) for values in mapping.values())
                 connection_status = f'{count}포인트 연결 / 전체 포인트 미확인'
-            put(overview, row_index, 11 + len(point_columns), connection_status)
-        put(overview, row_index, 12 + len(point_columns), record.get('검사차수', ''))
+            put(overview, row_index, curr_col + 4, connection_status)
+        # 확인사항
+        base_col = 15 + len(point_columns)
+        put(overview, row_index, curr_col + 5, sheet.cell(row_index, base_col + 3).value)
+        # 검사차수
+        put(overview, row_index, curr_col + 6, record.get('검사차수', ''))
     if unmatched:
         diagnostics = book.create_sheet('보고서 대조확인')
         keys = ('검사일자', '보고서종류', '라인번호', '용접부번호', '보고서번호', '대조결과', '출처')
@@ -715,12 +822,15 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
                 cell.alignment = Alignment(vertical='top', wrap_text=True)
         for col in range(1, ws.max_column + 1):
             ws.column_dimensions[get_column_letter(col)].width = 22
-    sheet.column_dimensions['P'].width = 65
-    sheet.column_dimensions['Q'].width = 40
+    sheet_issue_col = get_column_letter(18 + len(point_columns))
+    sheet_source_col = get_column_letter(19 + len(point_columns))
+    sheet.column_dimensions[sheet_issue_col].width = 65
+    sheet.column_dimensions[sheet_source_col].width = 40
     files.column_dimensions['B'].width = 90
     guide.column_dimensions['B'].width = 100
-    overview.column_dimensions['C'].width = 38
-    overview.column_dimensions[get_column_letter(10 + len(point_columns))].width = 65
+    overview.column_dimensions['B'].width = 28
+    overview.column_dimensions['D'].width = 38
+    overview.column_dimensions[get_column_letter(11 + len(point_columns))].width = 65
     # Atomic creation prevents leaving a half-written deliverable.
     descriptor, temporary_name = tempfile.mkstemp(prefix='.attributes_', suffix='.xlsx', dir=root)
     os.close(descriptor)
@@ -750,9 +860,11 @@ def main():
     window = tk.Tk()
     window.title('중앙지사 속성정보 엑셀 생성')
     window.geometry('1250x760')
-    state = {'history': [], 'reports': [], 'rows': [], 'unmatched': []}
+    state = {'history': [], 'reports': [], 'rows': [], 'unmatched': [], 'cached_keys': set(), 'cached_ids': set()}
     root_var = tk.StringVar(value=os.environ.get('CENTRAL_ATTRIBUTE_ROOT') or get_submission_dir())
     history_var = tk.StringVar(value=os.environ.get('CENTRAL_ATTRIBUTE_HISTORY') or get_history_path())
+    only_reported_var = tk.BooleanVar(value=True)
+    status_filter_var = tk.StringVar(value='전체 자료')
     status = tk.StringVar(value='중앙지사 이력을 불러온 뒤 보고서 앱에서 저장한 JSON 또는 XLSX를 추가하세요.')
     form = ttk.Frame(window, padding=10)
     form.pack(fill='both', expand=True)
@@ -786,13 +898,104 @@ def main():
     toolbar = ttk.Frame(form)
     toolbar.grid(row=2, column=0, columnspan=3, sticky='ew', pady=8)
 
+    def get_issue_history_keys():
+        issue_path = os.environ.get('CENTRAL_ATTRIBUTE_ISSUES')
+        if not issue_path:
+            from site_apps.central.src.data_sync import get_data_dir
+            issue_path = Path(get_data_dir()).parent / 'ndt_report' / 'report_issue_history.json'
+        issue_path = Path(issue_path)
+        if not issue_path.is_file():
+            g_path = Path(r'G:\내 드라이브\07_Antigravity\PMI_Data\ndt_report\report_issue_history.json')
+            if g_path.is_file():
+                issue_path = g_path
+        keys = set()
+        if issue_path.is_file():
+            try:
+                entries = json.loads(issue_path.read_text(encoding='utf-8-sig'))
+                for entry in entries:
+                    if entry.get('deleted_at') or not entry.get('report_no'):
+                        continue
+                    mode = str(entry.get('mode') or '').strip().upper()
+                    for item in entry.get('items', []):
+                        line = str(item.get('Line No.') or item.get('Dwg') or item.get('라인번호') or '').strip()
+                        joint = str(item.get('Joint') or item.get('Joint No.') or item.get('용접부번호') or '').strip()
+                        date = str(item.get('Date') or item.get('검사일자') or '').strip()
+                        keys.add((mode, date, line, joint))
+            except Exception:
+                pass
+        return keys
+
+    issue_keys_cache = [None]
+    def has_report_history(row):
+        if row.get('보고서번호') or row.get('보고서'):
+            return True
+        if issue_keys_cache[0] is None:
+            issue_keys_cache[0] = get_issue_history_keys()
+        k = (
+            str(row.get('보고서종류') or '').strip().upper(),
+            str(row.get('검사일자') or '').strip(),
+            str(row.get('라인번호') or '').strip(),
+            str(row.get('용접부번호') or '').strip()
+        )
+        return k in issue_keys_cache[0]
+
+    def get_row_status(row):
+        k = (
+            str(row.get('보고서종류') or '').strip().upper(),
+            str(row.get('검사일자') or '').strip(),
+            str(row.get('라인번호') or '').strip(),
+            str(row.get('용접부번호') or '').strip()
+        )
+        is_existing = (row.get('id') in state.get('cached_ids', set())) or (k in state.get('cached_keys', set()))
+        has_report = bool(row.get('보고서') or row.get('보고서번호'))
+        
+        if is_existing:
+            if has_report:
+                return '기존 완료', 'existing_done'
+            return '기존 미연결', 'unconnected'
+        else:
+            if has_report:
+                return '신규 연결', 'new_connected'
+            return '신규 미연결', 'new_unconnected'
+
+    def active_rows():
+        rows = state['rows']
+        if only_reported_var.get():
+            rows = [r for r in rows if has_report_history(r)]
+        f = status_filter_var.get()
+        if f == '신규 자료만':
+            rows = [r for r in rows if '신규' in get_row_status(r)[0]]
+        elif f == '기존 완료만':
+            rows = [r for r in rows if get_row_status(r)[0] == '기존 완료']
+        elif f == '미연결만':
+            rows = [r for r in rows if '미연결' in get_row_status(r)[0]]
+        return rows
+
     def refresh():
         tree.delete(*tree.get_children())
-        for row in state['rows']:
+        rows_to_show = sorted(active_rows(), key=row_sort_key)
+        for row in rows_to_show:
             count = len(issues(row, root_var.get())) if root_var.get() else '폴더 선택'
-            tree.insert('', 'end', iid=row['id'], values=tuple(row.get(k, '') for k in visible) + (str(count),))
+            st_text, tag = get_row_status(row)
+            vals = (
+                row.get('검사일자', ''),
+                row.get('보고서종류', ''),
+                row.get('라인번호', ''),
+                row.get('용접부번호', ''),
+                st_text,
+                row.get('보고서번호', ''),
+                row.get('용접부특성', ''),
+                row.get('검사결과', ''),
+                str(count)
+            )
+            tree.insert('', 'end', iid=row['id'], values=vals, tags=(tag,))
         pending = pending_saved()
-        status.set(f"중앙지사 검사 {len(state['rows'])}건 / 보고서 대조확인 {len(state['unmatched'])}건 / 연결 복원보류 {len(pending)}건. 보류 자료는 자동 연결하지 않고 보존합니다.")
+        cnt_exist_done = sum(1 for r in rows_to_show if get_row_status(r)[0] == '기존 완료')
+        cnt_new_conn = sum(1 for r in rows_to_show if get_row_status(r)[0] == '신규 연결')
+        cnt_unconn = sum(1 for r in rows_to_show if '미연결' in get_row_status(r)[0])
+        status_detail = f" [기존완료: {cnt_exist_done}건 | 신규연결: {cnt_new_conn}건 | 미연결: {cnt_unconn}건]"
+        filter_msg = f" (필터 적용: {len(rows_to_show)}/{len(state['rows'])}건)" if (len(rows_to_show) != len(state['rows'])) else ""
+        status.set(f"중앙지사 검사 {len(rows_to_show)}건{status_detail}{filter_msg} / 보고서 대조확인 {len(state['unmatched'])}건 / 연결 복원보류 {len(pending)}건. 보류 자료는 자동 연결하지 않고 보존합니다.")
 
     def pending_saved():
         if not root_var.get():
@@ -816,9 +1019,29 @@ def main():
         if root_var.get():
             cache = Path(root_var.get()) / CACHE_NAME
             if cache.exists():
-                base = restore_connections(base, read_connections(cache))
+                cached_connections = read_connections(cache)
+                state['cached_keys'] = {
+                    (str(r.get('보고서종류') or '').strip().upper(),
+                     str(r.get('검사일자') or '').strip(),
+                     str(r.get('라인번호') or '').strip(),
+                     str(r.get('용접부번호') or '').strip())
+                    for r in cached_connections
+                }
+                state['cached_ids'] = {r['id'] for r in cached_connections if 'id' in r}
+                base = restore_connections(base, cached_connections)
         if preserve:
             base = restore_connections(base, state['rows'])
+        for r in base:
+            if not r.get('용역사'):
+                r['용역사'] = '서울검사'
+            if not r.get('시공사') and r.get('원본값', {}).get('업체'):
+                r['시공사'] = r['원본값']['업체']
+            if not r.get('공사명'):
+                r['공사명'] = '2026년 중앙지사 열수송관 비파괴검사 단가계약'
+            if not r.get('용접부특성') and not any('RT_RE는 불량매수' in s for s in r.get('확인사항', [])):
+                r['용접부특성'] = 'O'
+            if '확인사항' in r and isinstance(r['확인사항'], list):
+                r['확인사항'] = [n for n in r['확인사항'] if '시공사/하도사 구분 확인' not in n]
         unmatched = []
         state['rows'] = merge_rows(base, state['reports'], unmatched)
         state['unmatched'] = unmatched
@@ -843,8 +1066,10 @@ def main():
             state['rows'] = restore_connections(state['rows'], saved_connections)
             persist()
             refresh()
-        if (Path(root_var.get()) / '보고서').is_dir():
+        if (Path(root_var.get()) / '보고서').is_dir() or (Path(root_var.get()) / 'PAUT DATA').is_dir():
             connect_files()
+        else:
+            refresh()
 
     method = tk.StringVar(value='RT')
     def add_report():
@@ -861,6 +1086,11 @@ def main():
                 messagebox.showinfo('보고서 대조확인', f"{len(state['unmatched'])}건은 중앙지사 기록에 병합하지 않았습니다. 엑셀의 '보고서 대조확인' 시트에서 확인할 수 있습니다.")
 
     ttk.Button(toolbar, text='중앙지사 이력 불러오기', command=lambda: run(load)).pack(side='left')
+    ttk.Checkbutton(toolbar, text='보고서 이력 있는 것만', variable=only_reported_var, command=refresh).pack(side='left', padx=(6, 8))
+    ttk.Label(toolbar, text='구분:').pack(side='left', padx=(4, 2))
+    status_filter_combo = ttk.Combobox(toolbar, textvariable=status_filter_var, values=['전체 자료', '신규 자료만', '기존 완료만', '미연결만'], state='readonly', width=11)
+    status_filter_combo.pack(side='left', padx=(0, 8))
+    status_filter_combo.bind('<<ComboboxSelected>>', lambda _: refresh())
     ttk.Combobox(toolbar, textvariable=method, values=METHODS, state='readonly', width=6).pack(side='left', padx=5)
     ttk.Button(toolbar, text='보고서 데이터 추가', command=lambda: run(add_report)).pack(side='left')
     def make_folders():
@@ -868,7 +1098,10 @@ def main():
             choose_root()
         if not root_var.get():
             return
-        count = create_submission_folders(state['rows'], root_var.get())
+        rows = active_rows()
+        if not rows:
+            raise ValueError('생성할 대상 검사 기록이 없습니다.')
+        count = create_submission_folders(rows, root_var.get())
         messagebox.showinfo('폴더 생성 완료', f'{count}개 검사 기록의 제출 폴더를 만들었습니다.\n보고서·영상·데이터를 넣은 후 자동 연결을 누르세요. 기존 파일은 변경하지 않습니다.')
 
     def connect_files():
@@ -881,14 +1114,19 @@ def main():
     ttk.Button(toolbar, text='제출 폴더 틀 생성', command=lambda: run(make_folders)).pack(side='left', padx=6)
     ttk.Button(toolbar, text='자료 자동 연결', command=lambda: run(connect_files)).pack(side='left')
     ttk.Label(form, text='보고서 프로그램의 「데이터 저장(JSON)」 또는 미리보기 엑셀 내보내기를 사용하세요. 완성 보고서 원본은 행 편집에서 연결합니다.').grid(row=3, column=0, columnspan=3, sticky='w')
-    visible = ('검사일자', '보고서종류', '라인번호', '용접부번호', '용접부특성', '검사결과')
+    visible = ('검사일자', '보고서종류', '라인번호', '용접부번호', '구분', '보고서번호', '용접부특성', '검사결과')
     table = ttk.Frame(form)
     table.grid(row=4, column=0, columnspan=3, sticky='nsew', pady=8)
     form.rowconfigure(4, weight=1)
     tree = ttk.Treeview(table, columns=(*visible, '확인 항목 수'), show='headings')
     for field in (*visible, '확인 항목 수'):
         tree.heading(field, text=field)
-        tree.column(field, width=145)
+        width = 160 if field == '보고서번호' else (100 if field in ('검사일자', '보고서종류', '구분', '검사결과', '확인 항목 수') else 145)
+        tree.column(field, width=width)
+    tree.tag_configure('existing_done', background='#FFFFFF')
+    tree.tag_configure('new_connected', background='#E8F8F5')
+    tree.tag_configure('new_unconnected', background='#FFF9E6')
+    tree.tag_configure('unconnected', background='#FDF2E9')
     scroll = ttk.Scrollbar(table, orient='vertical', command=tree.yview)
     horizontal = ttk.Scrollbar(table, orient='horizontal', command=tree.xview)
     tree.configure(yscrollcommand=scroll.set, xscrollcommand=horizontal.set)
@@ -904,37 +1142,101 @@ def main():
             return
         if not root_var.get():
             raise ValueError('제출 폴더를 먼저 선택하세요.')
-        row = next(row for row in state['rows'] if row['id'] == selected[0])
+        selected_set = set(selected)
+        target_rows = [row for row in state['rows'] if row['id'] in selected_set]
+        if not target_rows:
+            return
+
+        is_multi = len(target_rows) > 1
+        primary_row = target_rows[0]
+
         dialog = tk.Toplevel(window)
-        dialog.title('속성정보 / 원본 자료 연결')
+        title_text = f'속성정보 / 원본 자료 연결 (선택된 {len(target_rows)}건 일괄 편집)' if is_multi else '속성정보 / 원본 자료 연결'
+        dialog.title(title_text)
         dialog.transient(window)
         dialog.grab_set()
-        variables = {field: tk.StringVar(value=row.get(field, '')) for field in (*FIELDS, *LINKS, '검사결과', '보고서번호')}
-        for index, (field, variable) in enumerate(variables.items()):
-            ttk.Label(dialog, text=field).grid(row=index, column=0, sticky='w', padx=6)
-            original = row.get('원본값', {}).get(field)
-            ttk.Entry(dialog, textvariable=variable, width=85, state='readonly' if original else 'normal').grid(row=index, column=1, padx=6, pady=2)
+
+        all_fields = (*FIELDS, *LINKS, '검사결과', '보고서번호')
+        initial_values = {}
+        for field in all_fields:
+            if is_multi:
+                vals = {r.get(field, '') for r in target_rows}
+                initial_values[field] = next(iter(vals)) if len(vals) == 1 else ''
+            else:
+                initial_values[field] = primary_row.get(field, '')
+
+        variables = {field: tk.StringVar(value=initial_values[field]) for field in all_fields}
+
+        curr_row = 0
+        if is_multi:
+            banner = ttk.Label(
+                dialog,
+                text=f'선택된 {len(target_rows)}건의 검사 기록을 일괄 편집합니다.\n입력하거나 변경한 항목만 선택된 {len(target_rows)}건 전체에 일괄 적용됩니다. (빈 칸으로 둔 항목은 기존 값 유지)',
+                foreground='#0055AA'
+            )
+            banner.grid(row=curr_row, column=0, columnspan=4, sticky='w', padx=6, pady=(4, 6))
+            curr_row += 1
+
+        for field in all_fields:
+            variable = variables[field]
+            ttk.Label(dialog, text=field).grid(row=curr_row, column=0, sticky='w', padx=6)
+            original = primary_row.get('원본값', {}).get(field) if not is_multi else False
+            ttk.Entry(dialog, textvariable=variable, width=85, state='readonly' if original else 'normal').grid(row=curr_row, column=1, padx=6, pady=2)
             if field in LINKS:
                 def browse(field=field):
                     path = filedialog.askopenfilename(initialdir=root_var.get(), parent=dialog)
                     if path:
-                        variables[field].set(contained_path(root_var.get(), path).relative_to(Path(root_var.get()).resolve()).as_posix())
+                        rel_path = contained_path(root_var.get(), path).relative_to(Path(root_var.get()).resolve()).as_posix()
+                        variables[field].set(rel_path)
+                        if field == '보고서':
+                            stem = Path(path).stem
+                            curr_rep = variables['보고서번호'].get().strip()
+                            if not curr_rep or curr_rep == initial_values.get('보고서번호', ''):
+                                variables['보고서번호'].set(stem)
+
                 def folder(field=field):
                     path = filedialog.askdirectory(initialdir=root_var.get(), parent=dialog)
                     if path:
-                        variables[field].set(contained_path(root_var.get(), path).relative_to(Path(root_var.get()).resolve()).as_posix())
-                ttk.Button(dialog, text='파일', command=lambda f=browse: run(f)).grid(row=index, column=2)
-                ttk.Button(dialog, text='폴더', command=lambda f=folder: run(f)).grid(row=index, column=3)
+                        rel_path = contained_path(root_var.get(), path).relative_to(Path(root_var.get()).resolve()).as_posix()
+                        variables[field].set(rel_path)
+
+                ttk.Button(dialog, text='파일', command=lambda f=browse: run(f)).grid(row=curr_row, column=2)
+                ttk.Button(dialog, text='폴더', command=lambda f=folder: run(f)).grid(row=curr_row, column=3)
+            curr_row += 1
+
         def save():
             for field in LINKS:
-                contained_path(root_var.get(), variables[field].get())
-            if variables['필름영상화'].get().strip() != row.get('필름영상화', ''):
-                row['자동연결영상'] = False
-            row.update({field: var.get().strip() for field, var in variables.items()})
+                val = variables[field].get().strip()
+                if val:
+                    contained_path(root_var.get(), val)
+
+            if not is_multi:
+                if variables['필름영상화'].get().strip() != primary_row.get('필름영상화', ''):
+                    primary_row['자동연결영상'] = False
+                primary_row.update({field: var.get().strip() for field, var in variables.items()})
+                if '확인사항' in primary_row and isinstance(primary_row['확인사항'], list):
+                    if primary_row.get('보고서') or primary_row.get('보고서번호'):
+                        primary_row['확인사항'] = [n for n in primary_row['확인사항'] if '발행 보고서 번호가 여러 개입니다' not in n]
+            else:
+                changed_fields = {}
+                for field, var in variables.items():
+                    val = var.get().strip()
+                    if val != initial_values[field]:
+                        changed_fields[field] = val
+
+                for r in target_rows:
+                    if '필름영상화' in changed_fields and changed_fields['필름영상화'] != r.get('필름영상화', ''):
+                        r['자동연결영상'] = False
+                    r.update(changed_fields)
+                    if '확인사항' in r and isinstance(r['확인사항'], list):
+                        if r.get('보고서') or r.get('보고서번호'):
+                            r['확인사항'] = [n for n in r['확인사항'] if '발행 보고서 번호가 여러 개입니다' not in n]
+
             persist()
             dialog.destroy()
             refresh()
-        if row['보고서종류'] == 'RT':
+
+        if not is_multi and primary_row.get('보고서종류') == 'RT':
             def edit_images():
                 popup = tk.Toplevel(dialog)
                 popup.title('RT 포인트별 영상 연결')
@@ -943,7 +1245,7 @@ def main():
                 ttk.Label(popup, text='한 줄에 포인트=상대경로 입력. 같은 포인트의 영상은 줄을 추가하세요.').pack(padx=8, pady=5)
                 editor = tk.Text(popup, width=100, height=15)
                 editor.pack(padx=8)
-                current = point_images({**row, '필름영상화': variables['필름영상화'].get()}, root_var.get())
+                current = point_images({**primary_row, '필름영상화': variables['필름영상화'].get()}, root_var.get())
                 editor.insert('1.0', '\n'.join(f'{p}={v}' for p, values in current.items() for v in values))
                 point_var = tk.StringVar(value='1-2')
                 controls = ttk.Frame(popup)
@@ -970,17 +1272,27 @@ def main():
                         if not target or not target.is_file() or not allowed(root_var.get(), target, 'RT', '필름영상화'):
                             raise ValueError('RT 폴더 안의 실제 영상 파일을 선택하세요.')
                         mapping.setdefault(point.strip(), []).append(target.relative_to(Path(root_var.get()).resolve()).as_posix())
-                    point_images({**row, 'RT영상': mapping}, root_var.get())
-                    row['RT영상'] = mapping
-                    row['자동연결영상'] = False
+                    point_images({**primary_row, 'RT영상': mapping}, root_var.get())
+                    primary_row['RT영상'] = mapping
+                    primary_row['자동연결영상'] = False
                     persist()
                     popup.destroy()
                     dialog.grab_set()
                 ttk.Button(controls, text='영상 파일 추가', command=lambda: run(add_images)).pack(side='left', padx=5)
                 ttk.Button(controls, text='포인트 연결 적용', command=lambda: run(apply_images)).pack(side='right')
-            ttk.Button(dialog, text='RT 포인트별 영상 연결 (1-2 / 2-3 / 3-1 …)', command=lambda: run(edit_images)).grid(row=17, column=1, pady=4)
-        ttk.Label(dialog, text='\n'.join(issues(row, root_var.get())), wraplength=850).grid(row=18, column=0, columnspan=4, sticky='w', padx=6)
-        ttk.Button(dialog, text='적용', command=lambda: run(save)).grid(row=19, column=1, pady=8)
+            ttk.Button(dialog, text='RT 포인트별 영상 연결 (1-2 / 2-3 / 3-1 …)', command=lambda: run(edit_images)).grid(row=curr_row, column=1, pady=4)
+            curr_row += 1
+
+        if not is_multi:
+            issue_msg = '\n'.join(issues(primary_row, root_var.get()))
+        else:
+            issue_cnt = sum(1 for r in target_rows if issues(r, root_var.get()))
+            issue_msg = f'선택된 {len(target_rows)}건 중 확인 항목이 있는 기록: {issue_cnt}건'
+
+        ttk.Label(dialog, text=issue_msg, wraplength=850).grid(row=curr_row, column=0, columnspan=4, sticky='w', padx=6, pady=4)
+        curr_row += 1
+        btn_label = f'선택된 {len(target_rows)}건에 일괄 적용' if is_multi else '적용'
+        ttk.Button(dialog, text=btn_label, command=lambda: run(save)).grid(row=curr_row, column=1, pady=8)
     tree.bind('<Double-1>', lambda event: run(lambda: edit(event)))
 
     def open_selected():
@@ -994,20 +1306,34 @@ def main():
         os.startfile(target)
 
     def common_fields():
-        if not state['rows']:
+        rows = active_rows()
+        if not rows:
             raise ValueError('검사 기록을 먼저 불러오세요.')
         dialog = tk.Toplevel(window)
         dialog.title('공통정보 일괄 입력')
         dialog.transient(window)
         dialog.grab_set()
+
+        default_contract = next((r['공사명'] for r in rows if r.get('공사명')), '2026년 중앙지사 열수송관 비파괴검사 단가계약')
+        default_contractor = next((r['시공사'] for r in rows if r.get('시공사')), next((r.get('원본값', {}).get('업체', '') for r in rows if r.get('원본값', {}).get('업체')), ''))
+        default_subcontractor = next((r['하도사'] for r in rows if r.get('하도사')), '')
+        default_agency = next((r['용역사'] for r in rows if r.get('용역사')), '서울검사')
+
+        defaults = {
+            '공사명': default_contract,
+            '시공사': default_contractor,
+            '하도사': default_subcontractor,
+            '용역사': default_agency,
+        }
+
         variables = {}
         for index, field in enumerate(('공사명', '시공사', '하도사', '용역사')):
-            variables[field] = tk.StringVar()
+            variables[field] = tk.StringVar(value=defaults.get(field, ''))
             ttk.Label(dialog, text=field).grid(row=index, column=0, padx=8, pady=4)
             ttk.Entry(dialog, textvariable=variables[field], width=55).grid(row=index, column=1, padx=8)
         ttk.Label(dialog, text='입력한 값은 전체 기록의 빈 칸에만 적용합니다. 기존 값은 유지합니다.').grid(row=4, column=0, columnspan=2, padx=8)
         def apply():
-            for row in state['rows']:
+            for row in active_rows():
                 for field, variable in variables.items():
                     if not row.get(field) and variable.get().strip():
                         row[field] = variable.get().strip()
@@ -1038,14 +1364,17 @@ def main():
     def export():
         if not root_var.get():
             raise ValueError('제출 폴더를 선택하세요.')
-        count = sum(bool(issues(row, root_var.get())) for row in state['rows'])
+        rows_to_export = active_rows()
+        if not rows_to_export:
+            raise ValueError('저장할 대상 검사 기록이 없습니다.')
+        count = sum(bool(issues(row, root_var.get())) for row in rows_to_export)
         if count and not messagebox.askyesno('검토용 엑셀 생성', f'{count}건에 확인사항이 있습니다. 확인사항을 포함한 검토용 엑셀을 생성할까요?'):
             return
         path = filedialog.asksaveasfilename(initialdir=root_var.get(), initialfile='중앙지사_속성정보.xlsx', defaultextension='.xlsx', filetypes=[('Excel', '*.xlsx')])
         if path:
             persist()
-            export_workbook(state['rows'], root_var.get(), path, state['unmatched'], pending_saved())
-            messagebox.showinfo('생성 완료', f'{len(state["rows"])}건 저장\n확인사항 있는 기록: {count}건\n{path}')
+            export_workbook(rows_to_export, root_var.get(), path, state['unmatched'], pending_saved())
+            messagebox.showinfo('생성 완료', f'{len(rows_to_export)}건 저장\n확인사항 있는 기록: {count}건\n{path}')
 
     bottom = ttk.Frame(form)
     bottom.grid(row=5, column=0, columnspan=3, sticky='ew')
