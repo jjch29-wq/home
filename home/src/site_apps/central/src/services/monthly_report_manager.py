@@ -6088,26 +6088,54 @@ class MonthlyReportManager:
                     self._keep_single_lower_horizontal_border(c_cell)
 
                 # Keep long Line No. values on one line inside the widened F:I area.
-                ws.cell(row=current_row, column=6).alignment = Alignment(
+                # 병합된 F:I(6~9) 모든 셀에 wrap_text=False를 적용하고,
+                # 한글 포함 또는 긴 라인번호는 폰트 크기를 자동 축소하여 줄바꿈 및 글자 잘림을 방지함.
+                line_str = str(line or '')
+                line_display_w = sum(2 if ord(c) > 127 else 1 for c in line_str)
+                if line_display_w >= 28:
+                    import copy
+                    line_font = copy.copy(self.font_normal)
+                    line_font.size = 7.5
+                elif line_display_w >= 24:
+                    import copy
+                    line_font = copy.copy(self.font_normal)
+                    line_font.size = 8.5
+                else:
+                    line_font = self.font_normal
+
+                line_align = Alignment(
                     horizontal='center', vertical='center',
                     wrap_text=False, shrink_to_fit=True
                 )
+                for col_idx in range(6, 10):
+                    c = ws.cell(row=current_row, column=col_idx)
+                    c.alignment = line_align
+                    c.font = line_font
+
                 # Keep complete Section values such as Sec.12-3 visible in
                 # the merged D:E area instead of clipping the final digit.
-                ws.cell(row=current_row, column=4).alignment = Alignment(
+                sec_align = Alignment(
                     horizontal='center', vertical='center',
                     wrap_text=False, shrink_to_fit=True
                 )
+                for col_idx in (4, 5):
+                    ws.cell(row=current_row, column=col_idx).alignment = sec_align
+
                 if is_detail:
-                    ws.cell(row=current_row, column=12).alignment = Alignment(
+                    detail_align = Alignment(
                         horizontal='center', vertical='center',
                         wrap_text=False, shrink_to_fit=True
                     )
+                    for col_idx in (12, 13):
+                        ws.cell(row=current_row, column=col_idx).alignment = detail_align
+
                 # 규격은 좁은 N:O 병합 영역에서도 두 줄로 나뉘지 않게 한다.
-                ws.cell(row=current_row, column=14).alignment = Alignment(
+                spec_align = Alignment(
                     horizontal='center', vertical='center',
                     wrap_text=False, shrink_to_fit=True
                 )
+                for col_idx in (14, 15):
+                    ws.cell(row=current_row, column=col_idx).alignment = spec_align
 
                 current_row += 1
 

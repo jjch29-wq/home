@@ -1,5 +1,4 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
     "python.terminal.activateEnvironment": true,
     "python.analysis.exclude": [
         "**/node_modules",
@@ -16,17 +15,5 @@
         "review_pages/**",
         "review_unpacked/**",
         "temp_math_imgs/**"
-    ],
-    "python-envs.pythonProjects": [
-        {
-            "path": "Na-aba/home/src/주식정보.py",
-            "envManager": "ms-python.python:venv",
-            "packageManager": "ms-python.python:pip"
-        },
-        {
-            "path": "home/src/자재작업일보기성서류Ver.1.py",
-            "envManager": "ms-python.python:venv",
-            "packageManager": "ms-python.python:pip"
-        }
     ]
 }

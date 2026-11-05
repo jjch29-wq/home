@@ -28,7 +28,7 @@ class DailyWorkLogExporter:
 
         # 1. Set Column Widths (A to AA roughly)
         col_widths = {
-            'A': 5, 'B': 12, 'C': 8, 'D': 14, 'E': 21, 'F': 9, 'G': 8, 'H': 8, 'I': 15, 'J': 7, 'K': 7, 'L': 7,
+            'A': 5, 'B': 12, 'C': 8, 'D': 12, 'E': 26, 'F': 8, 'G': 8, 'H': 8, 'I': 13, 'J': 7, 'K': 7, 'L': 7,
             'M': 7, 'N': 6, 'O': 10, 'P': 10, 'Q': 10, 'R': 7, 'S': 7, 'T': 7, 'U': 4, 'V': 4, 'W': 4, 'X': 4, 'Y': 4, 'Z': 4
         }
         for col, width in col_widths.items():
@@ -247,9 +247,26 @@ class DailyWorkLogExporter:
             set_cell(f'A{row_idx}', i + 1)
             set_cell(f'B{row_idx}', res.get('업체', ''))
             set_cell(f'C{row_idx}', res.get('검사방법', ''))
-            set_cell(f'D{row_idx}', res.get('구간', ''))
-            set_cell(f'E{row_idx}', res.get('라인번호', ''))
-            set_cell(f'F{row_idx}', res.get('Joint No.', ''))
+            set_cell(f'D{row_idx}', res.get('구간', ''), align=self.align_nowrap)
+            line_text = str(res.get('라인번호', '') or '')
+            line_str = line_text
+            num_lines = line_str.count('\n') + 1
+            if num_lines > 1:
+                set_cell(f'E{row_idx}', line_text, font=self.font_small, align=self.align_center)
+            else:
+                line_display_w = sum(2 if ord(c) > 127 else 1 for c in line_str)
+                if line_display_w >= 34:
+                    import copy
+                    font_line = copy.copy(self.font_normal)
+                    font_line.size = 7.5
+                elif line_display_w >= 24:
+                    import copy
+                    font_line = copy.copy(self.font_normal)
+                    font_line.size = 8.5
+                else:
+                    font_line = self.font_normal
+                set_cell(f'E{row_idx}', line_text, font=font_line, align=self.align_nowrap)
+            set_cell(f'F{row_idx}', res.get('Joint No.', ''), align=self.align_nowrap)
             set_cell(f'G{row_idx}', res.get('관경', ''))
             set_cell(f'H{row_idx}', res.get('두께', ''))
             set_cell(f'I{row_idx}', res.get('용접사', ''))
@@ -292,7 +309,7 @@ class DailyWorkLogExporter:
                 ws[f'B{row_idx}'].value = "- 이 하 여 백 -"
                 ws[f'B{row_idx}'].alignment = Alignment(horizontal='center', vertical='center')
                 
-            ws.row_dimensions[row_idx].height = 20
+            ws.row_dimensions[row_idx].height = max(34, num_lines * 17) if num_lines > 1 else 20
 
         # Print setup (Landscape, fit to one page width)
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE

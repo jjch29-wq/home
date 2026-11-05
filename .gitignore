@@ -145,3 +145,17 @@ Na-aba/home/data/~$*.xlsx
 _logs_and_temps/
 _archive_reports/
 .venv.broken-20260912/
+
+
+# Workspace temporary directories and outputs
+tmp/
+.work-sync/
+output/
+outputs/
+node_modules/
+rt_film_organizer/
+
+# Temporary generated reports and backups
+home/PAUT_Report_*.xlsx
+home/recovery_backups/
+home/src/Daily_Economic_Report_*.xlsx
