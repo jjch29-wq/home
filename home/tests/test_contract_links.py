@@ -56,7 +56,7 @@ class ContractLinksTests(unittest.TestCase):
 
 
     def test_parse_defects_and_extract_rt_defects(self):
-        self.assertEqual(parse_defects('N/1,N/1,N/1'), '')
+        self.assertEqual(parse_defects('N/1,N/1,N/1'), 'N/1')
         self.assertEqual(parse_defects('N/1,P/2,N/1'), 'P/2')
         self.assertEqual(parse_defects(['N/1', '이물질/4', 'N/1']), '이물/4')
         self.assertEqual(parse_defects('N/1,CL/4,N/1'), 'CL/4')

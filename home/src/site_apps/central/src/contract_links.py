@@ -47,13 +47,17 @@ def parse_defects(raw_value):
     else:
         items = re.split(r'[,;]+', str(raw_value).strip())
     codes = []
+    has_non_defect = False
     for item in items:
         item = str(item).strip()
         if not item:
             continue
         parts = item.split('/')
         code_part = parts[0].strip()
-        if not code_part or code_part.upper().startswith('N') or code_part.upper() in ('OK', 'ACC', 'N/A'):
+        if not code_part:
+            continue
+        if code_part.upper().startswith('N') or code_part.upper() in ('OK', 'ACC', 'N/A'):
+            has_non_defect = True
             continue
         grade_part = parts[1].strip() if len(parts) > 1 else ''
         if grade_part:
@@ -65,7 +69,11 @@ def parse_defects(raw_value):
             val = DEFECT_CODE_MAP.get(code_part.upper(), DEFECT_CODE_MAP.get(code_part, code_part.upper()))
         if val not in codes:
             codes.append(val)
-    return ', '.join(codes)
+    if codes:
+        return ', '.join(codes)
+    if has_non_defect:
+        return 'N/1'
+    return ''
 
 
 def extract_rt_defects_from_workbook(report_path):

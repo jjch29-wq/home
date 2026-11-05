@@ -331,7 +331,7 @@ class AttributeExportTests(unittest.TestCase):
             '라인번호': 'LINE-01', '용접부번호': 'R01', '도면번호': 'DWG-01',
             '검사일자': '2026-10-17', '검사방법': 'RT', '구간정보': 'N/1,N/1,N/1',
         })
-        self.assertEqual(rec_clean['결함종류'], '')
+        self.assertEqual(rec_clean['결함종류'], 'N/1')
 
 
 if __name__ == '__main__':
