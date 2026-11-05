@@ -1152,14 +1152,6 @@ def main():
             if state['unmatched']:
                 messagebox.showinfo('보고서 대조확인', f"{len(state['unmatched'])}건은 중앙지사 기록에 병합하지 않았습니다. 엑셀의 '보고서 대조확인' 시트에서 확인할 수 있습니다.")
 
-    ttk.Button(toolbar, text='중앙지사 이력 불러오기', command=lambda: run(load)).pack(side='left')
-    ttk.Checkbutton(toolbar, text='보고서 이력 있는 것만', variable=only_reported_var, command=refresh).pack(side='left', padx=(6, 8))
-    ttk.Label(toolbar, text='구분:').pack(side='left', padx=(4, 2))
-    status_filter_combo = ttk.Combobox(toolbar, textvariable=status_filter_var, values=['전체 자료', '신규 자료만', '기존 완료만', '미연결만'], state='readonly', width=11)
-    status_filter_combo.pack(side='left', padx=(0, 8))
-    status_filter_combo.bind('<<ComboboxSelected>>', lambda _: refresh())
-    ttk.Combobox(toolbar, textvariable=method, values=METHODS, state='readonly', width=6).pack(side='left', padx=5)
-    ttk.Button(toolbar, text='보고서 데이터 추가', command=lambda: run(add_report)).pack(side='left')
     def make_folders():
         if not root_var.get():
             choose_root()
@@ -1178,9 +1170,30 @@ def main():
         persist()
         refresh()
 
-    ttk.Button(toolbar, text='제출 폴더 틀 생성', command=lambda: run(make_folders)).pack(side='left', padx=6)
-    ttk.Button(toolbar, text='자료 자동 연결', command=lambda: run(connect_files)).pack(side='left')
-    ttk.Label(form, text='보고서 프로그램의 「데이터 저장(JSON)」 또는 미리보기 엑셀 내보내기를 사용하세요. 완성 보고서 원본은 행 편집에서 연결합니다.').grid(row=3, column=0, columnspan=3, sticky='w')
+    # 1. 핵심 데이터 로드 및 연결 작업
+    ttk.Button(toolbar, text='중앙지사 이력 불러오기', command=lambda: run(load)).pack(side='left')
+    ttk.Button(toolbar, text='자료 자동 연결', command=lambda: run(connect_files)).pack(side='left', padx=4)
+    ttk.Button(toolbar, text='제출 폴더 틀 생성', command=lambda: run(make_folders)).pack(side='left', padx=4)
+
+    # 2. 구분선
+    ttk.Separator(toolbar, orient='vertical').pack(side='left', fill='y', padx=8, pady=2)
+
+    # 3. 데이터 조회 및 필터
+    ttk.Checkbutton(toolbar, text='보고서 이력 있는 것만', variable=only_reported_var, command=refresh).pack(side='left', padx=(0, 6))
+    ttk.Label(toolbar, text='구분:').pack(side='left', padx=(2, 2))
+    status_filter_combo = ttk.Combobox(toolbar, textvariable=status_filter_var, values=['전체 자료', '신규 자료만', '기존 완료만', '미연결만'], state='readonly', width=11)
+    status_filter_combo.pack(side='left', padx=(0, 4))
+    status_filter_combo.bind('<<ComboboxSelected>>', lambda _: refresh())
+
+    # 4. 구분선
+    ttk.Separator(toolbar, orient='vertical').pack(side='left', fill='y', padx=8, pady=2)
+
+    # 5. 외부 보조 데이터 가져오기 (용도 명시)
+    ttk.Label(toolbar, text='외부 보조:').pack(side='left', padx=(0, 2))
+    ttk.Combobox(toolbar, textvariable=method, values=METHODS, state='readonly', width=5).pack(side='left', padx=2)
+    ttk.Button(toolbar, text='보고서 데이터 추가', command=lambda: run(add_report)).pack(side='left', padx=(2, 0))
+
+    ttk.Label(form, text='안내: [자료 자동 연결]을 실행하면 중앙지사 제출 폴더 내 보고서(.xlsx) 및 RT 영상, PAUT 데이터가 100% 자동 매칭됩니다.').grid(row=3, column=0, columnspan=3, sticky='w')
     visible = ('검사일자', '보고서종류', '라인번호', '용접부번호', '구분', '보고서번호', '용접부특성', '검사결과')
     table = ttk.Frame(form)
     table.grid(row=4, column=0, columnspan=3, sticky='nsew', pady=8)
