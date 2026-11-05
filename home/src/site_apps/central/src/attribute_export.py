@@ -230,6 +230,12 @@ def restore_connections(current, saved):
         for field in SUPPLEMENT_FIELDS:
             if not source.get(field) and old.get(field):
                 target[field] = copy.deepcopy(old[field])
+        if target.get('보고서'):
+            target['확인사항'] = [n for n in target['확인사항'] if '보고서 후보' not in n and '보고서 번호가 여러 개' not in n and '보고서 파일이 여러 개' not in n]
+        if target.get('RT영상') or target.get('필름영상화'):
+            target['확인사항'] = [n for n in target['확인사항'] if 'RT 영상 연결 보류' not in n]
+        if target.get('데이터'):
+            target['확인사항'] = [n for n in target['확인사항'] if 'PAUT 데이터 연결 보류' not in n]
     return result
 
 
@@ -1118,6 +1124,12 @@ def main():
                 r['용접부특성'] = 'O'
             if '확인사항' in r and isinstance(r['확인사항'], list):
                 r['확인사항'] = [n for n in r['확인사항'] if '시공사/하도사 구분 확인' not in n]
+                if r.get('보고서'):
+                    r['확인사항'] = [n for n in r['확인사항'] if '보고서 후보' not in n and '보고서 번호가 여러 개' not in n and '보고서 파일이 여러 개' not in n]
+                if r.get('RT영상') or r.get('필름영상화'):
+                    r['확인사항'] = [n for n in r['확인사항'] if 'RT 영상 연결 보류' not in n]
+                if r.get('데이터'):
+                    r['확인사항'] = [n for n in r['확인사항'] if 'PAUT 데이터 연결 보류' not in n]
         unmatched = []
         state['rows'] = merge_rows(base, state['reports'], unmatched)
         state['unmatched'] = unmatched

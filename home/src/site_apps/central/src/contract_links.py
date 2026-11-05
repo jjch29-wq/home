@@ -174,5 +174,11 @@ def connect_contract(rows, root, issue_path=None):
             elif matches:
                 row['데이터파일'] = [relative(p) for p in sorted(matches)]
                 row['데이터'] = row['데이터파일'][0]
+        if row.get('보고서'):
+            notes = [n for n in notes if '보고서 후보' not in n and '보고서 번호가 여러 개' not in n and '보고서 파일이 여러 개' not in n]
+        if row.get('RT영상') or row.get('필름영상화'):
+            notes = [n for n in notes if 'RT 영상 연결 보류' not in n]
+        if row.get('데이터'):
+            notes = [n for n in notes if 'PAUT 데이터 연결 보류' not in n]
         row['확인사항'] = list(dict.fromkeys(notes))
     return result
