@@ -54,6 +54,11 @@ class DailyWorkLogExporter:
                     if border: c.border = border
             return cell
 
+        # Reduce spacer row heights to keep 1-page fit clean
+        ws.row_dimensions[1].height = 6
+        ws.row_dimensions[3].height = 6
+        ws.row_dimensions[6].height = 6
+
         # =========================================================================
         # HEADER SECTION
         # =========================================================================
@@ -61,7 +66,14 @@ class DailyWorkLogExporter:
         
         # Left Info
         merge_and_set('A4:F4', "용 역 명 : 2026년 중앙지사 열수송관 비파괴검사용역", font=self.font_normal, align=self.align_left, border=None)
-        date_str = data.get('date', '2026년   월   일')
+        date_str = data.get('date')
+        if not date_str:
+            import re
+            m = re.search(r'(\d{4})[-_]?(\d{2})[-_]?(\d{2})', str(output_path))
+            if m:
+                date_str = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+            else:
+                date_str = '2026년   월   일'
         weather_str = data.get('weather', '')
         merge_and_set('A5:F5', f"검사일자 : {date_str}          날씨 : {weather_str}", font=self.font_normal, align=self.align_left, border=None)
 
@@ -330,7 +342,7 @@ class DailyWorkLogExporter:
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 1 if total_rows <= 8 else 0
+        ws.page_setup.fitToHeight = 1 if total_rows <= 15 else 0
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.print_area = f'A1:T{start_row + total_rows - 1}'
         ws.print_title_rows = '30:31'
@@ -343,8 +355,8 @@ class DailyWorkLogExporter:
         # Margins
         ws.page_margins.left = 0.5
         ws.page_margins.right = 0.5
-        ws.page_margins.top = 0.6
-        ws.page_margins.bottom = 0.5
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.4
         ws.page_margins.header = 0.3
 
         wb.save(output_path)
