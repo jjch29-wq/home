@@ -81,7 +81,10 @@ def normalize(record, method='', date='', source=''):
         row['시공사'] = text(record['업체'])
     if not row['공사명']:
         row['공사명'] = first(record, '공사명', '공사', 'Project') or '2026년 중앙지사 열수송관 비파괴검사 단가계약'
-    if not row['용접부특성'] and (positive_quantity(record.get('RT_OR')) or positive_quantity(record.get('RT_RE'))):
+    joint_no = text(row.get('용접부번호'))
+    if re.search(r'\d+R$', joint_no, re.I):
+        row['용접부특성'] = 'REPAIR'
+    elif not row['용접부특성'] and (positive_quantity(record.get('RT_OR')) or positive_quantity(record.get('RT_RE'))):
         ori = positive_quantity(record.get('RT_OR'))
         if ori:
             row['용접부특성'] = 'O'
@@ -632,7 +635,10 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
     rows = sorted(rows, key=row_sort_key)
     page_cache = {}
     for r in rows:
-        if not r.get('용접부특성'):
+        joint_no = text(r.get('용접부번호'))
+        if re.search(r'\d+R$', joint_no, re.I):
+            r['용접부특성'] = 'REPAIR'
+        elif not r.get('용접부특성'):
             r['용접부특성'] = 'O'
         if not r.get('보고서 매수') and r.get('보고서'):
             try:
@@ -1105,7 +1111,10 @@ def main():
                 r['시공사'] = r['원본값']['업체']
             if not r.get('공사명'):
                 r['공사명'] = '2026년 중앙지사 열수송관 비파괴검사 단가계약'
-            if not r.get('용접부특성') and not any('RT_RE는 불량매수' in s for s in r.get('확인사항', [])):
+            joint_no = text(r.get('용접부번호'))
+            if re.search(r'\d+R$', joint_no, re.I):
+                r['용접부특성'] = 'REPAIR'
+            elif not r.get('용접부특성') and not any('RT_RE는 불량매수' in s for s in r.get('확인사항', [])):
                 r['용접부특성'] = 'O'
             if '확인사항' in r and isinstance(r['확인사항'], list):
                 r['확인사항'] = [n for n in r['확인사항'] if '시공사/하도사 구분 확인' not in n]
