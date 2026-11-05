@@ -12122,7 +12122,7 @@ class PMIReportApp:
             CELL_HEIGHT_PX = (CELL_ROW_HEIGHT * 1.33333) - 2
             ROW_PT_TO_PX = 1.33333
 
-            used_photo_row_slots = set()
+            used_photo_slots = set()
             for i, (img_path, slot_index) in enumerate(scheduled_photos):
                 page_index = slot_index // photos_per_page
                 slot_in_page = slot_index % photos_per_page
@@ -12130,7 +12130,7 @@ class PMIReportApp:
                 col_ptr = slot_in_page % num_cols
                 is_page_start_photo = page_index > 0 and photo_row_in_page == 0
                 logical_row_slot = (page_index * num_rows) + photo_row_in_page
-                used_photo_row_slots.add(logical_row_slot)
+                used_photo_slots.add((logical_row_slot, col_ptr))
                 row = 5 + (logical_row_slot * 2)
 
                 # Reset max height for a new row of photos
@@ -12250,18 +12250,23 @@ class PMIReportApp:
             # 모든 페이지의 빈 사진행도 같은 높이로 유지하고 테두리를 그려 표 형태를 완성한다.
             full_photo_rows = total_pages * num_rows
             for slot in range(full_photo_rows):
-                if slot in used_photo_row_slots:
-                    continue
                 padding_row = 5 + (slot * 2)
-                worksheet.set_row(padding_row, CELL_ROW_HEIGHT)
-                worksheet.set_row(padding_row + 1, DESC_ROW_HEIGHT)
+                row_has_any_photo = any((slot, c) in used_photo_slots for c in range(num_cols))
+                if not row_has_any_photo:
+                    worksheet.set_row(padding_row, CELL_ROW_HEIGHT)
+                    worksheet.set_row(padding_row + 1, DESC_ROW_HEIGHT)
                 
-                # 빈 슬롯에도 테두리 서식을 적용하여 표 형태를 채움
+                # 빈 슬롯마다 테두리 서식을 적용하여 표 형태를 채움 (부분 빈 행 포함)
                 for col_ptr in range(num_cols):
+                    if (slot, col_ptr) in used_photo_slots:
+                        continue
                     c_start, c_end = photo_col_spans[col_ptr]
                     if c_start != c_end:
                         worksheet.merge_range(padding_row, c_start, padding_row, c_end, "", center_border)
                         worksheet.merge_range(padding_row + 1, c_start, padding_row + 1, c_end, "사진 설명: ", desc_format)
+                    else:
+                        worksheet.write(padding_row, c_start, "", center_border)
+                        worksheet.write(padding_row + 1, c_start, "사진 설명: ", desc_format)
 
             full_print_end_row = 5 + (full_photo_rows * 2) - 1
             worksheet.print_area(0, 0, full_print_end_row, GRID_COLS - 1)
