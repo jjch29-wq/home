@@ -370,49 +370,62 @@ def auto_connect(rows, root):
         from site_apps.central.src.contract_links import connect_contract
         from site_apps.central.src.data_sync import get_data_dir
         issue_path = os.environ.get('CENTRAL_ATTRIBUTE_ISSUES') or Path(get_data_dir()).parent / 'ndt_report' / 'report_issue_history.json'
-        return connect_contract(rows, root, issue_path)
-    result = copy.deepcopy(rows)
-    for row, relative in submission_plan(result):
-        directory = contained_path(root, relative)
-        notes = row.setdefault('확인사항', [])
-        if not row.get('보고서'):
-            own = directory / '보고서'
-            candidates = [p for p in own.iterdir() if p.is_file() and p.suffix.lower() in REPORT_EXTENSIONS and not p.name.startswith('~$')] if own.is_dir() else []
-            if not candidates and row.get('보고서번호'):
-                shared = contained_path(root, Path(row['보고서종류']) / '보고서')
-                candidates = [p for p in shared.iterdir() if p.is_file() and p.suffix.lower() in REPORT_EXTENSIONS
-                              and p.stem.casefold() == row['보고서번호'].casefold()] if shared.is_dir() else []
-            if row.get('보고서번호'):
-                candidates = [p for p in candidates if p.stem.casefold() == row['보고서번호'].casefold()]
-            if len(candidates) == 1:
-                target = contained_path(root, str(candidates[0]))
-                row['보고서'] = target.relative_to(root).as_posix()
-                if not row.get('보고서번호'):
-                    row['보고서번호'] = target.stem
-            elif len(candidates) > 1:
-                message = '자동 연결 보류: 보고서 후보가 여러 개입니다.'
-                if message not in notes:
-                    notes.append(message)
-        if row['보고서종류'] == 'RT' and (row.get('자동연결영상') or (not row.get('RT영상') and not row.get('필름영상화'))):
-            images = directory / '필름영상화'
-            if images.is_dir():
-                # This exact path was derived from this record, not discovered by point alone.
-                mapping = {}
-                for target in sorted(images.iterdir()):
-                    if not target.is_file() or target.suffix.lower() not in IMAGE_EXTENSIONS:
-                        continue
-                    matches = POINT_PATTERN.findall(target.stem)
-                    if len(matches) == 1:
-                        safe = contained_path(root, str(target))
-                        mapping.setdefault(matches[0].replace(' ', ''), []).append(safe.relative_to(root).as_posix())
-                if mapping:
-                    row['RT영상'] = mapping
-                    row['필름영상화'] = images.relative_to(root).as_posix()
-                    row['자동연결영상'] = True
-        elif row['보고서종류'] == 'PAUT' and not row.get('데이터'):
-            data = directory / '데이터'
-            if data.is_dir() and any(p.is_file() for p in data.rglob('*')):
-                row['데이터'] = contained_path(root, str(data)).relative_to(root).as_posix()
+        result = connect_contract(rows, root, issue_path)
+    else:
+        result = copy.deepcopy(rows)
+        for row, relative in submission_plan(result):
+            directory = contained_path(root, relative)
+            notes = row.setdefault('확인사항', [])
+            if not row.get('보고서'):
+                own = directory / '보고서'
+                candidates = [p for p in own.iterdir() if p.is_file() and p.suffix.lower() in REPORT_EXTENSIONS and not p.name.startswith('~$')] if own.is_dir() else []
+                if not candidates and row.get('보고서번호'):
+                    shared = contained_path(root, Path(row['보고서종류']) / '보고서')
+                    candidates = [p for p in shared.iterdir() if p.is_file() and p.suffix.lower() in REPORT_EXTENSIONS
+                                  and p.stem.casefold() == row['보고서번호'].casefold()] if shared.is_dir() else []
+                if row.get('보고서번호'):
+                    candidates = [p for p in candidates if p.stem.casefold() == row['보고서번호'].casefold()]
+                if len(candidates) == 1:
+                    target = contained_path(root, str(candidates[0]))
+                    row['보고서'] = target.relative_to(root).as_posix()
+                    if not row.get('보고서번호'):
+                        row['보고서번호'] = target.stem
+                elif len(candidates) > 1:
+                    message = '자동 연결 보류: 보고서 후보가 여러 개입니다.'
+                    if message not in notes:
+                        notes.append(message)
+            if row['보고서종류'] == 'RT' and (row.get('자동연결영상') or (not row.get('RT영상') and not row.get('필름영상화'))):
+                images = directory / '필름영상화'
+                if images.is_dir():
+                    # This exact path was derived from this record, not discovered by point alone.
+                    mapping = {}
+                    for target in sorted(images.iterdir()):
+                        if not target.is_file() or target.suffix.lower() not in IMAGE_EXTENSIONS:
+                            continue
+                        matches = POINT_PATTERN.findall(target.stem)
+                        if len(matches) == 1:
+                            safe = contained_path(root, str(target))
+                            mapping.setdefault(matches[0].replace(' ', ''), []).append(safe.relative_to(root).as_posix())
+                    if mapping:
+                        row['RT영상'] = mapping
+                        row['필름영상화'] = images.relative_to(root).as_posix()
+                        row['자동연결영상'] = True
+            elif row['보고서종류'] == 'PAUT' and not row.get('데이터'):
+                data = directory / '데이터'
+                if data.is_dir() and any(p.is_file() for p in data.rglob('*')):
+                    row['데이터'] = contained_path(root, str(data)).relative_to(root).as_posix()
+    page_cache = {}
+    for row in result:
+        if not row.get('보고서 매수') and row.get('보고서'):
+            try:
+                rep_path = contained_path(root, row['보고서'])
+                if rep_path and rep_path.is_file():
+                    if rep_path not in page_cache:
+                        page_cache[rep_path] = count_report_pages(rep_path)
+                    if page_cache[rep_path]:
+                        row['보고서 매수'] = page_cache[rep_path]
+            except Exception:
+                pass
     return result
 
 
@@ -464,6 +477,49 @@ def point_images(row, root):
             resolved = contained_path(root, str(path))
             result.setdefault(point, []).append(resolved.relative_to(Path(root).resolve()).as_posix())
     return result
+
+
+def count_report_pages(file_path):
+    p = Path(file_path)
+    if not p.is_file():
+        return None
+    suffix = p.suffix.lower()
+    if suffix == '.pdf':
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(str(p))
+            return len(reader.pages)
+        except Exception:
+            return None
+    elif suffix in ('.xlsx', '.xls', '.xlsm'):
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(p, data_only=True, read_only=True)
+            try:
+                sheet_count = len(wb.sheetnames)
+                for sname in wb.sheetnames:
+                    ws = wb[sname]
+                    for row in ws.iter_rows(max_row=15, values_only=True):
+                        for cell in row:
+                            if cell:
+                                s = str(cell)
+                                m = re.search(r'Page\s*\d+\s*(?:of|/)\s*(\d+)', s, re.I)
+                                if m:
+                                    return int(m.group(1))
+                for sname in wb.sheetnames:
+                    ws = wb[sname]
+                    for row in ws.iter_rows(max_row=10, values_only=True):
+                        row_strs = [str(c).strip() for c in row if c is not None]
+                        for idx, val in enumerate(row_strs):
+                            if val.lower() == 'of' and idx + 1 < len(row_strs):
+                                if row_strs[idx + 1].isdigit():
+                                    return int(row_strs[idx + 1])
+                return sheet_count
+            finally:
+                wb.close()
+        except Exception:
+            return None
+    return 1
 
 
 def issues(row, root):
@@ -574,9 +630,20 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
     if destination.exists():
         raise FileExistsError('같은 이름의 파일이 있습니다. 다른 이름을 선택하세요.')
     rows = sorted(rows, key=row_sort_key)
+    page_cache = {}
     for r in rows:
         if not r.get('용접부특성'):
             r['용접부특성'] = 'O'
+        if not r.get('보고서 매수') and r.get('보고서'):
+            try:
+                rep_path = contained_path(root, r['보고서'])
+                if rep_path and rep_path.is_file():
+                    if rep_path not in page_cache:
+                        page_cache[rep_path] = count_report_pages(rep_path)
+                    if page_cache[rep_path]:
+                        r['보고서 매수'] = page_cache[rep_path]
+            except Exception:
+                pass
     book = Workbook()
     sheet = book.active
     sheet.title = '속성정보'
