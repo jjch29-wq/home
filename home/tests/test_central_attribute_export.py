@@ -98,6 +98,10 @@ class AttributeExportTests(unittest.TestCase):
             self.assertEqual(ws['A2'].data_type, 's')
             self.assertEqual(ws['A2'].value, self.record['공사명'])
             self.assertEqual(ws['L2'].value, 2)
+            self.assertEqual(ws['A1'].alignment.horizontal, 'center')
+            self.assertEqual(ws['A1'].alignment.vertical, 'center')
+            self.assertEqual(ws['A2'].alignment.horizontal, 'center')
+            self.assertEqual(ws['A2'].alignment.vertical, 'center')
             self.assertEqual(ws['I2'].value.strftime('%Y-%m-%d'), '2026-10-17')
             target = ws['M2'].hyperlink.target
             self.assertNotIn('file:', target)

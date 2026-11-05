@@ -940,11 +940,15 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
         for cell in ws[1]:
             cell.font = Font(color='FFFFFF', bold=True)
             cell.fill = PatternFill('solid', fgColor='17365D')
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         for row in ws.iter_rows(min_row=2):
             for cell in row:
-                cell.alignment = Alignment(vertical='top', wrap_text=True)
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         for col in range(1, ws.max_column + 1):
             ws.column_dimensions[get_column_letter(col)].width = 22
+    for cell in guide['B']:
+        if cell.row > 1:
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
     sheet_issue_col = get_column_letter(18 + len(point_columns))
     sheet_source_col = get_column_letter(19 + len(point_columns))
     sheet.column_dimensions[sheet_issue_col].width = 65
