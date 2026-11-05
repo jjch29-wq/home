@@ -239,10 +239,11 @@ class DailyWorkLogExporter:
         merge_and_set('T30:T31', 'PT(m)', font=self.font_small, fill=self.fill_header)
         
         # Populate NDT Results
-        ndt_results = data.get('ndt_results', [])
+        raw_ndt = data.get('ndt_results', [])
+        ndt_results = [r for r in raw_ndt if any(str(v).strip() for v in r.values())] if raw_ndt else []
         start_row = 32
-        total_rows = max(10, len(ndt_results) + 1)
-        for i in range(total_rows): # minimum 10 empty rows for good look
+        total_rows = max(8, len(ndt_results) + 1)
+        for i in range(total_rows): # minimum 8 rows to fill Page 1 nicely without page overflow
             row_idx = start_row + i
             res = ndt_results[i] if i < len(ndt_results) else {}
             
@@ -314,7 +315,7 @@ class DailyWorkLogExporter:
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 0
+        ws.page_setup.fitToHeight = 1 if total_rows <= 8 else 0
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.print_area = f'A1:T{start_row + total_rows - 1}'
         ws.print_title_rows = '30:31'
@@ -327,7 +328,7 @@ class DailyWorkLogExporter:
         # Margins
         ws.page_margins.left = 0.5
         ws.page_margins.right = 0.5
-        ws.page_margins.top = 0.8
+        ws.page_margins.top = 0.6
         ws.page_margins.bottom = 0.5
         ws.page_margins.header = 0.3
 

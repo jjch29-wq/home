@@ -236,10 +236,11 @@ class DailyWorkLogExporter:
         merge_and_set('T26:T27', 'PT(m)', font=self.font_small, fill=self.fill_header)
         
         # Populate NDT Results
-        ndt_results = data.get('ndt_results', [])
+        raw_ndt = data.get('ndt_results', [])
+        ndt_results = [r for r in raw_ndt if any(str(v).strip() for v in r.values())] if raw_ndt else []
         start_row = 28
-        total_rows = max(10, len(ndt_results) + 1)
-        for i in range(total_rows): # minimum 10 empty rows for good look
+        total_rows = max(8, len(ndt_results) + 1)
+        for i in range(total_rows): # minimum 8 rows to fill Page 1 nicely without page overflow
             row_idx = start_row + i
             res = ndt_results[i] if i < len(ndt_results) else {}
             
