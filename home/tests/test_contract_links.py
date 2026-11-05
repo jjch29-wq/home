@@ -6,7 +6,9 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from site_apps.central.src.contract_links import connect_contract, allowed
+from site_apps.central.src.contract_links import (
+    connect_contract, allowed, parse_defects, extract_rt_defects_from_workbook,
+)
 
 
 class ContractLinksTests(unittest.TestCase):
@@ -51,6 +53,17 @@ class ContractLinksTests(unittest.TestCase):
             self.assertEqual(len(result['데이터파일']), 2)
             result = connect_contract([row, dict(row, 검사일자='2026-10-20')], root)
             self.assertTrue(all(not r.get('데이터') for r in result))
+
+
+    def test_parse_defects_and_extract_rt_defects(self):
+        self.assertEqual(parse_defects('N/1,N/1,N/1'), '')
+        self.assertEqual(parse_defects('N/1,P/2,N/1'), 'P')
+        self.assertEqual(parse_defects(['N/1', '이물질/4', 'N/1']), 'SI')
+        self.assertEqual(parse_defects('N/1,CL/4,N/1'), 'SI')
+        self.assertEqual(parse_defects('N/1,UC/1,N/1'), 'UC')
+        self.assertEqual(parse_defects(['N/1', 'P/1', '이물/2']), 'P/SI')
+        self.assertEqual(parse_defects(None), '')
+        self.assertEqual(parse_defects(''), '')
 
 
 if __name__ == '__main__':

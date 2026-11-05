@@ -7,6 +7,116 @@ import zipfile
 from collections import defaultdict
 from pathlib import Path
 
+DEFECT_CODE_MAP = {
+    'P': 'P',       # 기공 (Porosity)
+    'SI': 'SI',     # 슬래그 혼입 (Slag Inclusion)
+    'CL': 'SI',     # 클러스터/슬래그
+    '이물': 'SI',
+    '이물질': 'SI',
+    'SLAG': 'SI',
+    'LF': 'LF',     # 융합 불량 (Lack of Fusion)
+    'IP': 'IP',     # 용입 부족 (Incompleted Penetration)
+    'LP': 'IP',
+    'RC': 'RC',     # 루트 요면 (Root Concavity)
+    'EC': 'EC',     # 외부 요면 (External Concavity)
+    'EP': 'EP',     # 과도 용입 (Excessive Penetration)
+    'MI': 'MI',     # 단차 (Misalignment)
+    'TI': 'TI',     # 텅스텐 혼입 (Tungsten Inclusion)
+    'BT': 'BT',     # 용락 (Burn Through)
+    'IUC': 'IUC',   # 루트언더컷 (Internal Under Cut)
+    'EUC': 'EUC',   # 외부언더컷 (External Under Cut)
+    'UC': 'UC',     # 언더컷 (Under Cut)
+    'AS': 'AS',     # 아크 스트라이크 (Arc Strike)
+    'OL': 'OL',     # 오버랩 (Over Lap)
+    'C': 'C',       # 균열 (Crack)
+    'CR': 'C',
+    'CRACK': 'C',
+    'G': 'G',       # 사상불량 (Grinding)
+    'M': 'M',       # 모재결함 (Material)
+}
+
+_RT_REPORT_DEFECT_CACHE = {}
+
+
+def parse_defects(raw_value):
+    """Parse defect codes from interpretation text or list of point readings per [별표 3]."""
+    if not raw_value:
+        return ''
+    if isinstance(raw_value, (list, tuple, set)):
+        items = list(raw_value)
+    else:
+        items = re.split(r'[,;]+', str(raw_value).strip())
+    codes = []
+    for item in items:
+        item = str(item).strip()
+        if not item:
+            continue
+        parts = item.split('/')
+        code_part = parts[0].strip()
+        if not code_part or code_part.upper().startswith('N') or code_part.upper() in ('OK', 'ACC', 'N/A'):
+            continue
+        mapped = DEFECT_CODE_MAP.get(code_part.upper(), DEFECT_CODE_MAP.get(code_part, code_part.upper()))
+        if mapped and mapped not in codes:
+            codes.append(mapped)
+    return '/'.join(codes)
+
+
+def extract_rt_defects_from_workbook(report_path):
+    p = Path(report_path).resolve()
+    if p in _RT_REPORT_DEFECT_CACHE:
+        return _RT_REPORT_DEFECT_CACHE[p]
+    mapping = {}
+    if p.suffix.lower() not in ('.xlsx', '.xlsm') or not p.is_file():
+        _RT_REPORT_DEFECT_CACHE[p] = mapping
+        return mapping
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(p, data_only=True, read_only=True)
+        try:
+            for sname in wb.sheetnames:
+                if sname.startswith('R1'):
+                    continue
+                ws = wb[sname]
+                sheet_line = ''
+                point_cols = {}
+                for row in ws.iter_rows(values_only=True):
+                    if not row:
+                        continue
+                    for cell in row:
+                        if cell and ('JA2026' in str(cell) or 'Sec.' in str(cell)):
+                            m = re.search(r'(JA2026[0-9A-Za-z_-]+)', str(cell))
+                            if m:
+                                sheet_line = m.group(1).strip()
+                    for c_idx, cell in enumerate(row):
+                        if cell and re.fullmatch(r'\d+\s*-\s*\d+', str(cell).strip()):
+                            point_cols[c_idx] = str(cell).strip().replace(' ', '')
+                    if row[0]:
+                        val = str(row[0]).strip()
+                        if not val or any(k in val for k in ('JOINT', 'REPORT', 'TOTAL', '총', '~')):
+                            continue
+                        joint_no = val
+                        interps = []
+                        if point_cols:
+                            for c_idx in point_cols:
+                                if c_idx < len(row) and row[c_idx] is not None:
+                                    s = str(row[c_idx]).strip()
+                                    if s:
+                                        interps.append(s)
+                        else:
+                            for cell in row[3:12]:
+                                if cell is not None and ('/' in str(cell) or str(cell).strip() in ('N', 'P', 'IP', 'LF', 'UC', 'SI', '이물질')):
+                                    interps.append(str(cell).strip())
+                        code = parse_defects(interps)
+                        if sheet_line:
+                            mapping[(sheet_line.casefold(), joint_no.casefold())] = code
+                        mapping[('', joint_no.casefold())] = code
+        finally:
+            wb.close()
+    except Exception:
+        pass
+    _RT_REPORT_DEFECT_CACHE[p] = mapping
+    return mapping
+
 
 def report_key(value):
     return re.sub(r'[/\\]', '-', str(value or '').strip()).casefold()
@@ -148,6 +258,22 @@ def connect_contract(rows, root, issue_path=None):
                 row['보고서'] = relative(choices[0])
             elif len(choices) > 1:
                 notes.append('계약 자료 연결 보류: 같은 번호의 보고서 파일이 여러 개입니다.')
+        if method == 'RT' and not row.get('결함종류'):
+            if row.get('보고서'):
+                try:
+                    rep_file = (root / row['보고서']).resolve()
+                    if rep_file.is_file():
+                        defects = extract_rt_defects_from_workbook(rep_file)
+                        df = defects.get((line.casefold(), joint.casefold())) or defects.get(('', joint.casefold()))
+                        if df:
+                            row['결함종류'] = df
+                except Exception:
+                    pass
+            if not row.get('결함종류'):
+                raw_sec = row.get('구간정보') or (row.get('원본값') or {}).get('구간정보')
+                df = parse_defects(raw_sec)
+                if df:
+                    row['결함종류'] = df
         if method == 'RT' and not row.get('RT영상') and not row.get('필름영상화'):
             matching = images.get(k, [])
             if row.get('보고서번호'):

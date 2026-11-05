@@ -59,13 +59,17 @@ def date_text(value):
 
 def normalize(record, method='', date='', source=''):
     row = {key: text(record.get(key)) for key in FIELDS}
+    defect_val = first(record, '결함종류', 'Type of Flaw')
+    if not defect_val and (first(record, '보고서종류', '검사방법') or method).upper() == 'RT':
+        from site_apps.central.src.contract_links import parse_defects
+        defect_val = parse_defects(record.get('구간정보'))
     row.update({
         '검사일자': date_text(first(record, '검사일자', 'Date') or date),
         '보고서종류': first(record, '보고서종류', '검사방법') or method,
         '라인번호': first(record, '라인번호', 'Line No.', 'Line'),
         '도면번호': first(record, '도면번호', 'Dwg', 'ISO'),
         '용접부번호': first(record, '용접부번호', 'Joint No.', 'Joint No', 'Joint'),
-        '결함종류': first(record, '결함종류', 'Type of Flaw'),
+        '결함종류': defect_val,
         '용접부특성': first(record, '용접부특성'),
         '출처': source,
         '확인사항': [],
@@ -435,6 +439,26 @@ def auto_connect(rows, root):
                         row['보고서 매수'] = page_cache[rep_path]
             except Exception:
                 pass
+        if row.get('보고서종류') == 'RT' and not row.get('결함종류'):
+            if row.get('보고서'):
+                try:
+                    rep_path = contained_path(root, row['보고서'])
+                    if rep_path and rep_path.is_file():
+                        from site_apps.central.src.contract_links import extract_rt_defects_from_workbook
+                        defects = extract_rt_defects_from_workbook(rep_path)
+                        joint_key = text(row.get('용접부번호')).casefold()
+                        line_key = text(row.get('라인번호')).casefold()
+                        df = defects.get((line_key, joint_key)) or defects.get(('', joint_key))
+                        if df:
+                            row['결함종류'] = df
+                except Exception:
+                    pass
+            if not row.get('결함종류'):
+                from site_apps.central.src.contract_links import parse_defects
+                raw_sec = row.get('구간정보') or (row.get('원본값') or {}).get('구간정보')
+                df = parse_defects(raw_sec)
+                if df:
+                    row['결함종류'] = df
     return result
 
 
@@ -656,6 +680,26 @@ def export_workbook(rows, root, destination, unmatched=None, pending=None):
                         r['보고서 매수'] = page_cache[rep_path]
             except Exception:
                 pass
+        if r.get('보고서종류') == 'RT' and not r.get('결함종류'):
+            if r.get('보고서'):
+                try:
+                    rep_path = contained_path(root, r['보고서'])
+                    if rep_path and rep_path.is_file():
+                        from site_apps.central.src.contract_links import extract_rt_defects_from_workbook
+                        defects = extract_rt_defects_from_workbook(rep_path)
+                        joint_key = text(r.get('용접부번호')).casefold()
+                        line_key = text(r.get('라인번호')).casefold()
+                        df = defects.get((line_key, joint_key)) or defects.get(('', joint_key))
+                        if df:
+                            r['결함종류'] = df
+                except Exception:
+                    pass
+            if not r.get('결함종류'):
+                from site_apps.central.src.contract_links import parse_defects
+                raw_sec = r.get('구간정보') or (r.get('원본값') or {}).get('구간정보')
+                df = parse_defects(raw_sec)
+                if df:
+                    r['결함종류'] = df
     book = Workbook()
     sheet = book.active
     sheet.title = '속성정보'
