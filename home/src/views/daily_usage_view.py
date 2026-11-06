@@ -1432,20 +1432,20 @@ def update_daily_usage_view_impl(self):
         
         v_tuple = (
             usage_date,
-            entry.get('업체명', ''),
-            entry.get('적용코드', ''),
-            entry.get('Site', ''),
-            entry.get('구분', ''),
-            entry.get('검사품명', ''),
-            entry.get('성적서번호', ''),
+            self.clean_nan(entry.get('업체명', '')),
+            self.clean_nan(entry.get('적용코드', '')),
+            self.clean_nan(entry.get('Site', '')),
+            self.clean_nan(entry.get('구분', '')),
+            self.clean_nan(entry.get('검사품명', '')),
+            self.clean_nan(entry.get('성적서번호', '')),
             consolidated_workers, # Header: '작업자' (Index 6)
             display_worktime,     # Header: '작업시간' (Index 7)
             *disp_row_ots,        # OT1..OT10 (Index 8..17)
-            entry.get('장비명', ''), # Header: '장비명' (Index 18)
-            entry.get('검사방법', ''),# Header: '검사방법' (Index 19)
-            entry.get('회사코드', ''), # Index 20
+            self.clean_nan(entry.get('장비명', '')), # Header: '장비명' (Index 18)
+            self.clean_nan(entry.get('검사방법', '')),# Header: '검사방법' (Index 19)
+            self.clean_nan(entry.get('회사코드', '')), # Index 20
             disp_q,               # Index 21 (수량)
-            entry.get('Unit', ''), # Index 22 (단위) [NEW]
+            self.clean_nan(entry.get('Unit', '')), # Index 22 (단위) [NEW]
             disp_p,               # Index 23 (단가)
             disp_t,               # Index 23 (출장비)
             disp_m,               # Index 24 (일식)
@@ -1616,36 +1616,58 @@ def update_daily_usage_view_impl(self):
             
         # --- BUILD FINAL VISIBILITY (MERGED LOGIC) ---
         all_cols = list(self.daily_usage_tree['columns'])
-        # manual_set: columns user explicitly hid via column manager (empty = no exclusions)
+        
+        # [OPTIMIZED] 목적에 맞춘 추천 컬럼 정렬 순서
+        preferred_order = [
+            '날짜', '구분', '검사방법', '수량', '단위', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고'
+        ]
+
+        # manual_set: columns user explicitly selected via column manager
         manual_visible_list = getattr(self, 'manual_visible_cols', [])
-        if not manual_visible_list:
-            manual_visible_list = all_cols
-        manual_hidden = set(all_cols) - set(manual_visible_list)
+        # If manual list has old default list containing all OT1~10 or empty, prefer optimized default
+        is_custom_selection = bool(manual_visible_list and set(manual_visible_list) != set(all_cols) and not ('OT1' in manual_visible_list and 'OT10' in manual_visible_list))
         
-        # [SAFETY] Core columns that should almost never be hidden unless user is very specific
-        # [REFINED] Minimal mandatory columns to allow smarter auto-hiding of empty fields
-        mandatory_cols = ['날짜', '현장', '작업자']
+        manual_hidden = set(all_cols) - set(manual_visible_list) if is_custom_selection else set()
         
-        final_visible = []
-        # We iterate in ALL_COLS order to maintain the original column sequence
+        # 개별 OT1~OT10 컬럼은 사용자가 수동 선택하지 않는 한 기본 목록 그리드에서는 자동 노출을 억제 (OT금액 총합으로 표시)
+        if not is_custom_selection:
+            for i in range(1, 11):
+                dynamic_col_status[f'OT{i}'] = False
+            dynamic_col_status['적용코드'] = False
+            dynamic_col_status['현장'] = False
+
+        # [SAFETY] Core columns that should almost never be hidden
+        mandatory_cols = ['날짜', '구분', '검사방법', '수량', '작업자']
+        
+        # 활성화 대상 컬럼 판정
+        active_set = set()
         for col in all_cols:
             if col == '(Full작업자)': continue
             
-            # 1. Mandatory override: Always show core columns
+            # 1. Mandatory override
             if col in mandatory_cols:
-                final_visible.append(col)
+                active_set.add(col)
                 continue
             
             # 2. SMART HIDING: For columns we track data status for
             if col in dynamic_col_status:
-                # Show ONLY if it has data AND isn't manually hidden
                 if dynamic_col_status[col] and col not in manual_hidden:
-                    final_visible.append(col)
-                # Skip untracked fallback for this column (i.e. if NO data, it's HIDDEN)
+                    active_set.add(col)
                 continue
             
-            # 3. Fallback for untracked columns (e.g. manually added custom columns)
+            # 3. Fallback for untracked columns
             if col not in manual_hidden:
+                active_set.add(col)
+
+        # 사용자 지정 순서 또는 최적화된 추천 순서(preferred_order)로 최종 displaycolumns 구성
+        final_visible = []
+        order_base = manual_visible_list if is_custom_selection else preferred_order
+        for col in order_base:
+            if col in active_set and col not in final_visible:
+                final_visible.append(col)
+        # 그 외 활성화된 컬럼들은 뒤쪽에 순서대로 배치
+        for col in all_cols:
+            if col in active_set and col not in final_visible:
                 final_visible.append(col)
 
         # [STABILITY] Clear the Treeview's displayed columns
@@ -1680,7 +1702,7 @@ def update_daily_usage_view_impl(self):
     else:
         # If empty, show only mandatory columns to keep the view clean
         all_cols = self.daily_usage_tree['columns']
-        final_visible = ['날짜', '현장', '작업자']
+        final_visible = ['날짜', '구분', '검사방법', '수량', '작업자']
         self.daily_usage_tree['displaycolumns'] = final_visible
         
         # Standard column setup for display
