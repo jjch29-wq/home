@@ -109,6 +109,10 @@ class SectionLineBillingDialog(tk.Toplevel):
                 self.config = {}
 
     def _setup_ui(self):
+        style = ttk.Style()
+        theme_bg = style.lookup("TFrame", "background") or self.cget("bg")
+        self.theme_bg = theme_bg
+
         main_frame = ttk.Frame(self, padding=8)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
@@ -174,7 +178,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         sec_box_frame = ttk.Frame(left_panel)
         sec_box_frame.pack(fill=tk.X)
         
-        self.sec_canvas = tk.Canvas(sec_box_frame, height=35, highlightthickness=0, bd=0, bg=self.cget("bg"))
+        self.sec_canvas = tk.Canvas(sec_box_frame, height=35, highlightthickness=0, bd=0, bg=self.theme_bg)
         self.sec_scrollbar = ttk.Scrollbar(sec_box_frame, orient="vertical", command=self.sec_canvas.yview)
         self.sections_container = ttk.Frame(self.sec_canvas)
         
@@ -216,7 +220,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         line_box_frame = ttk.Frame(right_panel)
         line_box_frame.pack(fill=tk.X)
         
-        self.line_canvas = tk.Canvas(line_box_frame, height=35, highlightthickness=0, bd=0, bg=self.cget("bg"))
+        self.line_canvas = tk.Canvas(line_box_frame, height=35, highlightthickness=0, bd=0, bg=self.theme_bg)
         self.line_scrollbar = ttk.Scrollbar(line_box_frame, orient="vertical", command=self.line_canvas.yview)
         self.lines_container = ttk.Frame(self.line_canvas)
         
@@ -520,15 +524,19 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.update_preview()
 
     def _adjust_selector_heights(self):
-        """내용량에 따라 좌우 박스 높이를 균형있게 맞추고(30~120px) 불필요한 스크롤바 자동 숨김"""
+        """내용량에 따라 좌우 박스 높이를 정확히 일치시키고(최대 120px) 불필요한 스크롤바 자동 숨김"""
         try:
             self.update_idletasks()
             
             req_sec = self.sections_container.winfo_reqheight()
             req_line = self.lines_container.winfo_reqheight()
             
-            # 좌우 중 더 긴 쪽에 맞춰 높이를 동기화하여 깔끔하게 정돈
-            common_h = max(30, min(max(req_sec, req_line) + 6, 120))
+            # 좌우 내용 중 더 긴 쪽에 맞춰 높이를 동기화 (여백 없이 콘텐츠에 딱 맞춤)
+            max_req = max(req_sec, req_line)
+            if max_req <= 0:
+                common_h = 26
+            else:
+                common_h = min(max_req, 120)
             
             self.sec_canvas.configure(height=common_h)
             if req_sec > 120:
