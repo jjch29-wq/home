@@ -174,7 +174,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         sec_box_frame = ttk.Frame(left_panel)
         sec_box_frame.pack(fill=tk.X)
         
-        self.sec_canvas = tk.Canvas(sec_box_frame, height=35, highlightthickness=1, highlightbackground="#D0D0D0", bg=self.cget("bg"))
+        self.sec_canvas = tk.Canvas(sec_box_frame, height=35, highlightthickness=0, bd=0, bg=self.cget("bg"))
         self.sec_scrollbar = ttk.Scrollbar(sec_box_frame, orient="vertical", command=self.sec_canvas.yview)
         self.sections_container = ttk.Frame(self.sec_canvas)
         
@@ -216,7 +216,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         line_box_frame = ttk.Frame(right_panel)
         line_box_frame.pack(fill=tk.X)
         
-        self.line_canvas = tk.Canvas(line_box_frame, height=35, highlightthickness=1, highlightbackground="#D0D0D0", bg=self.cget("bg"))
+        self.line_canvas = tk.Canvas(line_box_frame, height=35, highlightthickness=0, bd=0, bg=self.cget("bg"))
         self.line_scrollbar = ttk.Scrollbar(line_box_frame, orient="vertical", command=self.line_canvas.yview)
         self.lines_container = ttk.Frame(self.line_canvas)
         
@@ -520,23 +520,23 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.update_preview()
 
     def _adjust_selector_heights(self):
-        """내용량에 따라 박스 높이를 30~120px 사이로 동적 조절하고 불필요한 스크롤바 자동 숨김"""
+        """내용량에 따라 좌우 박스 높이를 균형있게 맞추고(30~120px) 불필요한 스크롤바 자동 숨김"""
         try:
             self.update_idletasks()
             
-            # 1. Section Box
             req_sec = self.sections_container.winfo_reqheight()
-            h_sec = max(30, min(req_sec + 6, 120))
-            self.sec_canvas.configure(height=h_sec)
+            req_line = self.lines_container.winfo_reqheight()
+            
+            # 좌우 중 더 긴 쪽에 맞춰 높이를 동기화하여 깔끔하게 정돈
+            common_h = max(30, min(max(req_sec, req_line) + 6, 120))
+            
+            self.sec_canvas.configure(height=common_h)
             if req_sec > 120:
                 self.sec_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
             else:
                 self.sec_scrollbar.pack_forget()
                 
-            # 2. Line Box
-            req_line = self.lines_container.winfo_reqheight()
-            h_line = max(30, min(req_line + 6, 120))
-            self.line_canvas.configure(height=h_line)
+            self.line_canvas.configure(height=common_h)
             if req_line > 120:
                 self.line_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
             else:
