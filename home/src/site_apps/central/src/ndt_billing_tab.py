@@ -680,7 +680,7 @@ class NDTCalculatorTab(ttk.Frame):
         ttk.Button(lbl_frame, text="선택 삭제", command=self.delete_selected_records).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="전체 선택", command=self.select_all_records).pack(side=tk.RIGHT, padx=5)
 
-        self.subtotal_var = tk.StringVar(value="[소계] 길이 검사: 0.0000 M  |  포인트 검사: 0 매/Point  |  총 공급가액: 0 원")
+        self.subtotal_var = tk.StringVar(value="[소계] PAUT: 0.0000 M  |  RT: 0 매  |  MT: 0.0000 M  |  총 공급가액: 0 원")
         subtotal_lbl = ttk.Label(bottom_frame, textvariable=self.subtotal_var, font=("Arial", 11, "bold"), foreground="blue")
         subtotal_lbl.pack(side=tk.BOTTOM, anchor=tk.E, pady=(5, 5))
 
@@ -1027,19 +1027,25 @@ class NDTCalculatorTab(ttk.Frame):
         for k in self.contract_vars:
             self.contract_vars[k]["curr_qty"].set("0")
             
-        total_meters = 0.0
-        total_points = 0.0
+        total_paut = 0.0
+        total_rt = 0.0
+        total_mt = 0.0
+        total_pt = 0.0
         total_amt = grouped_supply_amount(self.records, self.contract_vars)
         grouped = grouped_billing_totals(self.records, self.contract_vars)
             
         for rec in self.records:
             qty = float(rec.get("qty", 0.0))
-            ndt_type = rec.get("ndt_type", "")
+            ndt_type = str(rec.get("ndt_type", "")).upper()
             
             if "PAUT" in ndt_type or "UT" in ndt_type:
-                total_meters += qty
-            else:
-                total_points += qty
+                total_paut += qty
+            elif "RT" in ndt_type:
+                total_rt += qty
+            elif "MT" in ndt_type:
+                total_mt += qty
+            elif "PT" in ndt_type:
+                total_pt += qty
                 
             
             loc = "플랜트(관리소)" if "관리소" in rec["loc"] or "플랜트" in rec.get("loc_type", rec["loc"]) else "열배관"
@@ -1054,7 +1060,17 @@ class NDTCalculatorTab(ttk.Frame):
                     self.contract_vars[key]["curr_qty"].set(f"{int(new_val):,}" if float(new_val).is_integer() else f"{new_val:,.4f}")
                     
         if hasattr(self, 'subtotal_var'):
-            self.subtotal_var.set(f"[소계] 길이 검사: {total_meters:,.4f} M  |  포인트 검사: {int(total_points):,} 매/Point  |  총 공급가액: {total_amt:,} 원")
+            summary_parts = []
+            if total_paut > 0:
+                summary_parts.append(f"PAUT: {total_paut:,.4f} M")
+            if total_rt > 0:
+                summary_parts.append(f"RT: {int(total_rt):,} 매")
+            if total_mt > 0:
+                summary_parts.append(f"MT: {total_mt:,.4f} M")
+            if total_pt > 0:
+                summary_parts.append(f"PT: {total_pt:,.4f} M")
+            summary_text = "  |  ".join(summary_parts) if summary_parts else "물량 없음"
+            self.subtotal_var.set(f"[소계] {summary_text}  |  총 공급가액: {total_amt:,} 원")
                     
         self.export_billing_data()
 
