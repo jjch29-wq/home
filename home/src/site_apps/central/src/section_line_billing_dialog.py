@@ -37,18 +37,20 @@ class SectionLineBillingDialog(tk.Toplevel):
     def __init__(self, parent=None, history=None, config=None):
         super().__init__(parent)
         self.title("구간 / 라인별 기성청구 내역서 및 미리보기")
-        self.geometry("1180x760")
-        self.minsize(980, 620)
+        self.geometry("1200x820")
+        self.minsize(1000, 680)
         
         self.history = history
         self.config = config
         self._load_data()
         
-        self.section_var = tk.StringVar()
         self.exclude_reinspect_var = tk.BooleanVar(value=True)
         self.round_var = tk.StringVar(value="1")
         
-        self.line_vars = {} # line_str -> BooleanVar
+        self.sections_map = {} # sec -> set(lines)
+        self.section_vars = {} # sec -> BooleanVar
+        self.line_vars = {}    # line -> BooleanVar
+        self.line_sec_map = {} # line -> sec
         
         self._setup_ui()
         self._populate_sections()
@@ -82,20 +84,16 @@ class SectionLineBillingDialog(tk.Toplevel):
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # 1. Top Filter Frame
-        filter_frame = ttk.LabelFrame(main_frame, text="■ 구간 및 정산 옵션 설정", padding=10)
+        filter_frame = ttk.LabelFrame(main_frame, text="■ 구간 및 정산 옵션 설정 (다중 구간/라인 선택 지원)", padding=10)
         filter_frame.pack(fill=tk.X, pady=(0, 10))
         
+        # Row 1: 기성 회차 및 옵션
         row1 = ttk.Frame(filter_frame)
-        row1.pack(fill=tk.X, pady=2)
+        row1.pack(fill=tk.X, pady=(0, 6))
         
-        ttk.Label(row1, text="대상 구간(섹션) :", font=("맑은 고딕", 10, "bold")).pack(side=tk.LEFT, padx=(0, 6))
-        self.cb_section = ttk.Combobox(row1, textvariable=self.section_var, width=28, state="readonly", font=("맑은 고딕", 10))
-        self.cb_section.pack(side=tk.LEFT, padx=(0, 15))
-        self.cb_section.bind("<<ComboboxSelected>>", self._on_section_selected)
-        
-        ttk.Label(row1, text="기성 회차 :", font=("맑은 고딕", 10, "bold")).pack(side=tk.LEFT, padx=(10, 6))
-        ttk.Entry(row1, textvariable=self.round_var, width=6, justify="center").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Label(row1, text="회").pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Label(row1, text="기성 회차 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Entry(row1, textvariable=self.round_var, width=5, justify="center").pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Label(row1, text="회").pack(side=tk.LEFT, padx=(0, 25))
         
         self.chk_exclude_re = ttk.Checkbutton(
             row1, 
@@ -103,19 +101,36 @@ class SectionLineBillingDialog(tk.Toplevel):
             variable=self.exclude_reinspect_var,
             command=self.update_preview
         )
-        self.chk_exclude_re.pack(side=tk.LEFT, padx=(10, 0))
+        self.chk_exclude_re.pack(side=tk.LEFT, padx=(0, 0))
         
-        # Row 2: Line selection checklist
-        row2 = ttk.Frame(filter_frame)
-        row2.pack(fill=tk.X, pady=(8, 2))
+        # Row 2: 대상 구간(섹션) 다중 선택 헤더
+        row_sec_hdr = ttk.Frame(filter_frame)
+        row_sec_hdr.pack(fill=tk.X, pady=(4, 2))
         
-        ttk.Label(row2, text="대상 라인 선택 :", font=("맑은 고딕", 10, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(row_sec_hdr, text="대상 구간(섹션) 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        self.chk_all_secs_var = tk.BooleanVar(value=False)
+        self.chk_all_secs = ttk.Checkbutton(row_sec_hdr, text="[ 구간 전체 선택 ]", variable=self.chk_all_secs_var, command=self._toggle_all_sections)
+        self.chk_all_secs.pack(side=tk.LEFT, padx=(0, 15))
+        
+        self.sec_summary_lbl = ttk.Label(row_sec_hdr, text="", font=("맑은 고딕", 9), foreground="#2B579A")
+        self.sec_summary_lbl.pack(side=tk.LEFT)
+        
+        # Sections Container Frame
+        self.sections_container = ttk.Frame(filter_frame)
+        self.sections_container.pack(fill=tk.X, pady=(2, 6))
+        
+        # Row 3: 대상 라인 선택 헤더
+        row_line_hdr = ttk.Frame(filter_frame)
+        row_line_hdr.pack(fill=tk.X, pady=(4, 2))
+        
+        ttk.Label(row_line_hdr, text="대상 라인 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.chk_all_lines_var = tk.BooleanVar(value=True)
-        self.chk_all_lines = ttk.Checkbutton(row2, text="[ 전체 선택 ]", variable=self.chk_all_lines_var, command=self._toggle_all_lines)
+        self.chk_all_lines = ttk.Checkbutton(row_line_hdr, text="[ 라인 전체 선택 ]", variable=self.chk_all_lines_var, command=self._toggle_all_lines)
         self.chk_all_lines.pack(side=tk.LEFT, padx=(0, 10))
         
+        # Lines Container Frame
         self.lines_container = ttk.Frame(filter_frame)
-        self.lines_container.pack(fill=tk.X, pady=(4, 0))
+        self.lines_container.pack(fill=tk.X, pady=(2, 2))
         
         # 2. Preview Grid Frame
         preview_frame = ttk.LabelFrame(main_frame, text="■ 정식 기성청구 내역서 미리보기 (Official Billing Claim Preview)", padding=10)
@@ -192,6 +207,7 @@ class SectionLineBillingDialog(tk.Toplevel):
 
     def _populate_sections(self):
         sections_map = {}
+        self.line_sec_map = {}
         for dt, day_data in self.history.items():
             for r in day_data.get('ndt_results', []):
                 sec = str(r.get('구간', '')).strip()
@@ -209,45 +225,133 @@ class SectionLineBillingDialog(tk.Toplevel):
                     sections_map[base_sec] = set()
                 if line:
                     sections_map[base_sec].add(line)
+                    self.line_sec_map[line] = base_sec
                     
         sorted_secs = sorted(sections_map.keys())
         self.sections_map = sections_map
-        self.cb_section['values'] = sorted_secs
         
-        if "SEC#015 (한국노총)" in sorted_secs:
-            self.cb_section.set("SEC#015 (한국노총)")
-        elif sorted_secs:
-            self.cb_section.set(sorted_secs[0])
+        for widget in self.sections_container.winfo_children():
+            widget.destroy()
             
-        self._on_section_selected()
+        self.section_vars = {}
+        if not sorted_secs:
+            ttk.Label(self.sections_container, text="(등록된 구간 데이터가 없습니다)", foreground="#888888").pack(side=tk.LEFT)
+            self._on_sections_changed()
+            return
+            
+        row_frame = ttk.Frame(self.sections_container)
+        row_frame.pack(fill=tk.X, pady=1)
+        
+        # 기본 선택: SEC#015 (한국노총) 또는 첫 번째 구간
+        default_sec = "SEC#015 (한국노총)" if "SEC#015 (한국노총)" in sorted_secs else sorted_secs[0]
+        
+        for idx, sec in enumerate(sorted_secs):
+            is_checked = (sec == default_sec)
+            var = tk.BooleanVar(value=is_checked)
+            self.section_vars[sec] = var
+            chk = ttk.Checkbutton(row_frame, text=sec, variable=var, command=self._on_section_toggled)
+            chk.pack(side=tk.LEFT, padx=(0, 14))
+            if (idx + 1) % 6 == 0 and (idx + 1) < len(sorted_secs):
+                row_frame = ttk.Frame(self.sections_container)
+                row_frame.pack(fill=tk.X, pady=1)
+                
+        self.chk_all_secs_var.set(len(sorted_secs) == 1)
+        self._on_sections_changed()
 
-    def _on_section_selected(self, event=None):
-        sec = self.section_var.get()
-        lines = sorted(list(self.sections_map.get(sec, [])))
+    def _toggle_all_sections(self):
+        val = self.chk_all_secs_var.get()
+        for v in self.section_vars.values():
+            v.set(val)
+        self._on_sections_changed()
+
+    def _on_section_toggled(self):
+        all_checked = all(v.get() for v in self.section_vars.values()) if self.section_vars else False
+        self.chk_all_secs_var.set(all_checked)
+        self._on_sections_changed()
+
+    def get_selected_sections(self):
+        return [s for s, v in self.section_vars.items() if v.get()]
+
+    def get_section_display_name(self, for_filename=False):
+        selected = self.get_selected_sections()
+        if not selected:
+            return "미선택"
+        all_secs = list(self.sections_map.keys())
+        if len(selected) == len(all_secs) and len(all_secs) > 1:
+            return "전체구간"
+        if len(selected) == 1:
+            name = selected[0]
+            if for_filename:
+                return name.replace("#", "").replace(" ", "_")
+            return name
+        elif len(selected) == 2:
+            if for_filename:
+                s0 = selected[0].replace("#", "").replace(" ", "_")
+                s1 = selected[1].replace("#", "").replace(" ", "_")
+                return f"{s0}_{s1}"
+            return f"{selected[0]}, {selected[1]}"
+        else:
+            s0 = selected[0].replace("#", "").replace(" ", "_") if for_filename else selected[0]
+            if for_filename:
+                return f"{s0}_외{len(selected)-1}개구간"
+            return f"{s0} 외 {len(selected)-1}개 구간"
+
+    def _on_sections_changed(self):
+        selected_secs = self.get_selected_sections()
+        
+        # Update summary label
+        disp_name = self.get_section_display_name()
+        self.sec_summary_lbl.config(text=f"(선택: {disp_name})")
+        
+        # Collect lines for all selected sections
+        active_lines = []
+        for sec in selected_secs:
+            lines = sorted(list(self.sections_map.get(sec, [])))
+            for line in lines:
+                active_lines.append((line, sec))
+                
+        # Preserve previous selections
+        prev_selections = {l: v.get() for l, v in self.line_vars.items()}
         
         for widget in self.lines_container.winfo_children():
             widget.destroy()
             
         self.line_vars = {}
+        if not active_lines:
+            lbl = ttk.Label(self.lines_container, text="(선택된 구간이 없거나 등록된 라인이 없습니다)", foreground="#888888")
+            lbl.pack(side=tk.LEFT, pady=2)
+            self.chk_all_lines_var.set(False)
+            self.update_preview()
+            return
+            
         row_frame = ttk.Frame(self.lines_container)
-        row_frame.pack(fill=tk.X, pady=2)
+        row_frame.pack(fill=tk.X, pady=1)
         
-        for idx, line in enumerate(lines):
-            var = tk.BooleanVar(value=True)
+        show_sec_tag = len(selected_secs) > 1
+        for idx, (line, sec) in enumerate(active_lines):
+            val = prev_selections.get(line, True)
+            var = tk.BooleanVar(value=val)
             self.line_vars[line] = var
-            chk = ttk.Checkbutton(row_frame, text=line, variable=var, command=self.update_preview)
-            chk.pack(side=tk.LEFT, padx=(0, 15))
-            if (idx + 1) % 4 == 0 and (idx + 1) < len(lines):
+            disp_text = f"{line} ({sec})" if show_sec_tag else line
+            chk = ttk.Checkbutton(row_frame, text=disp_text, variable=var, command=self._on_line_toggled)
+            chk.pack(side=tk.LEFT, padx=(0, 14))
+            if (idx + 1) % 3 == 0 and (idx + 1) < len(active_lines):
                 row_frame = ttk.Frame(self.lines_container)
-                row_frame.pack(fill=tk.X, pady=2)
+                row_frame.pack(fill=tk.X, pady=1)
                 
-        self.chk_all_lines_var.set(True)
+        all_lines_checked = all(v.get() for v in self.line_vars.values()) if self.line_vars else True
+        self.chk_all_lines_var.set(all_lines_checked)
         self.update_preview()
 
     def _toggle_all_lines(self):
         val = self.chk_all_lines_var.get()
         for v in self.line_vars.values():
             v.set(val)
+        self.update_preview()
+
+    def _on_line_toggled(self):
+        all_checked = all(v.get() for v in self.line_vars.values()) if self.line_vars else False
+        self.chk_all_lines_var.set(all_checked)
         self.update_preview()
 
     def get_selected_lines(self):
@@ -500,7 +604,7 @@ class SectionLineBillingDialog(tk.Toplevel):
     def generate_excel_file(self, filepath):
         data = self.calculate_billing_data()
         rnd = self.round_var.get()
-        sec = self.section_var.get()
+        sec = self.get_section_display_name()
         
         wb = openpyxl.Workbook()
         
@@ -927,8 +1031,12 @@ class SectionLineBillingDialog(tk.Toplevel):
         return filepath
 
     def export_excel(self):
+        if not self.get_selected_lines():
+            messagebox.showwarning("선택 확인", "기성 청구할 라인을 최소 하나 이상 선택해 주세요.", parent=self)
+            return
+            
         rnd = self.round_var.get()
-        sec = self.section_var.get().replace("#", "").replace(" ", "_")
+        sec = self.get_section_display_name(for_filename=True)
         default_name = f"제{rnd}회_{sec}_기성청구내역서_{datetime.now().strftime('%Y%m%d')}.xlsx"
         
         filepath = filedialog.asksaveasfilename(
@@ -948,8 +1056,12 @@ class SectionLineBillingDialog(tk.Toplevel):
             messagebox.showerror("저장 오류", f"엑셀 파일 저장 중 오류가 발생했습니다:\n{e}", parent=self)
 
     def export_pdf(self):
+        if not self.get_selected_lines():
+            messagebox.showwarning("선택 확인", "기성 청구할 라인을 최소 하나 이상 선택해 주세요.", parent=self)
+            return
+            
         rnd = self.round_var.get()
-        sec = self.section_var.get().replace("#", "").replace(" ", "_")
+        sec = self.get_section_display_name(for_filename=True)
         default_name = f"제{rnd}회_{sec}_기성청구내역서_{datetime.now().strftime('%Y%m%d')}.pdf"
         
         pdf_path = filedialog.asksaveasfilename(
