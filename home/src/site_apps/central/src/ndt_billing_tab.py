@@ -1438,7 +1438,6 @@ class NDTCalculatorTab(ttk.Frame):
     def open_section_line_billing_dialog(self):
         try:
             dlg = SectionLineBillingDialog(self, history=None, config=CONFIG)
-            dlg.grab_set()
         except Exception as e:
             messagebox.showerror("오류", f"구간/라인별 기성청구 창을 여는 중 오류가 발생했습니다:\n{e}")
 

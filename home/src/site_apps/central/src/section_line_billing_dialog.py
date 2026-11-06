@@ -54,6 +54,31 @@ class SectionLineBillingDialog(tk.Toplevel):
         
         self._setup_ui()
         self._populate_sections()
+        self.after(20, self._make_window_independent)
+
+    def _make_window_independent(self):
+        """Windows에서 독립적인 작업표시줄 아이콘을 부여하여 최소화(-) 버튼이 정상 작동하도록 지원"""
+        try:
+            import sys
+            if sys.platform == "win32":
+                from ctypes import windll
+                self.update_idletasks()
+                hwnd = windll.user32.GetParent(self.winfo_id())
+                if not hwnd:
+                    hwnd = self.winfo_id()
+                GWL_EXSTYLE = -20
+                WS_EX_APPWINDOW = 0x00040000
+                WS_EX_TOOLWINDOW = 0x00000080
+                
+                style = windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+                style = (style & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW
+                windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+                
+                # 프레임 갱신으로 작업표시줄 등록
+                self.withdraw()
+                self.after(10, self.deiconify)
+        except Exception as e:
+            print("make_window_independent error:", e)
         
     def _load_data(self):
         if self.history is None:
@@ -1172,7 +1197,6 @@ if __name__ == '__main__':
     
     def open_dlg():
         dlg = SectionLineBillingDialog(root)
-        dlg.grab_set()
         
     ttk.Button(root, text="구간/라인별 기성청구 열기", command=open_dlg).pack(expand=True, pady=30)
     root.mainloop()
