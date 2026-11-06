@@ -37,8 +37,8 @@ class SectionLineBillingDialog(tk.Toplevel):
     def __init__(self, parent=None, history=None, config=None):
         super().__init__(parent)
         self.title("구간 / 라인별 기성청구 내역서 및 미리보기")
-        self.geometry("1180x780")
-        self.minsize(980, 620)
+        self.geometry("1240x820")
+        self.minsize(1050, 650)
         
         self.history = history
         self.config = config
@@ -46,6 +46,10 @@ class SectionLineBillingDialog(tk.Toplevel):
         
         self.exclude_reinspect_var = tk.BooleanVar(value=True)
         self.round_var = tk.StringVar(value="1")
+        self.month_var = tk.StringVar(value="전체 월")
+        self.company_var = tk.StringVar(value="전체 업체")
+        self.method_var = tk.StringVar(value="전체 방법")
+        self.line_search_var = tk.StringVar(value="")
         
         self.sections_map = {} # sec -> set(lines)
         self.section_vars = {} # sec -> BooleanVar
@@ -53,7 +57,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.line_sec_map = {} # line -> sec
         
         self._setup_ui()
-        self._populate_sections()
+        self._init_filter_options()
         self.after(20, self._make_window_independent)
 
     def _make_window_independent(self):
@@ -109,61 +113,127 @@ class SectionLineBillingDialog(tk.Toplevel):
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # -------------------------------------------------------------
-        # 1. Top Filter Frame (고정 상단)
+        # 1. Top Filter Frame (기성 청구 조건 및 정산 옵션 설정)
         # -------------------------------------------------------------
-        filter_frame = ttk.LabelFrame(main_frame, text="■ 구간 및 정산 옵션 설정 (다중 구간/라인 선택)", padding=6)
+        filter_frame = ttk.LabelFrame(main_frame, text="■ 기성 청구 조건 및 정산 옵션 설정 (다차원 연동 필터)", padding=6)
         filter_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
         
-        # Row 1: 기성 회차, 제외 옵션, 새로고침 버튼
+        # Row 1: 기성 회차, 검사 월, 시공업체, 검사방법, 제외 옵션, 새로고침
         row1 = ttk.Frame(filter_frame)
-        row1.pack(fill=tk.X, pady=(0, 4))
+        row1.pack(fill=tk.X, pady=(0, 6))
         
-        ttk.Label(row1, text="기성 회차 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Entry(row1, textvariable=self.round_var, width=5, justify="center").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Label(row1, text="회").pack(side=tk.LEFT, padx=(0, 20))
+        ttk.Label(row1, text="기성 회차:", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Entry(row1, textvariable=self.round_var, width=4, justify="center").pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Label(row1, text="회").pack(side=tk.LEFT, padx=(0, 10))
+        
+        ttk.Label(row1, text="검사 월:", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(6, 2))
+        self.cb_month = ttk.Combobox(row1, textvariable=self.month_var, width=10, state="readonly", font=("맑은 고딕", 9))
+        self.cb_month.pack(side=tk.LEFT, padx=(0, 8))
+        self.cb_month.bind("<<ComboboxSelected>>", self._on_primary_filter_changed)
+        
+        ttk.Label(row1, text="시공업체:", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(6, 2))
+        self.cb_company = ttk.Combobox(row1, textvariable=self.company_var, width=13, state="readonly", font=("맑은 고딕", 9))
+        self.cb_company.pack(side=tk.LEFT, padx=(0, 8))
+        self.cb_company.bind("<<ComboboxSelected>>", self._on_primary_filter_changed)
+        
+        ttk.Label(row1, text="검사방법:", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(6, 2))
+        self.cb_method = ttk.Combobox(row1, textvariable=self.method_var, width=9, state="readonly", font=("맑은 고딕", 9))
+        self.cb_method.pack(side=tk.LEFT, padx=(0, 10))
+        self.cb_method.bind("<<ComboboxSelected>>", self._on_primary_filter_changed)
         
         self.chk_exclude_re = ttk.Checkbutton(
             row1, 
-            text="시공사 귀책 수정재검 물량 제외 (권장)", 
+            text="수정재검 제외 (권장)", 
             variable=self.exclude_reinspect_var,
             command=self.update_preview
         )
-        self.chk_exclude_re.pack(side=tk.LEFT, padx=(0, 15))
+        self.chk_exclude_re.pack(side=tk.LEFT, padx=(6, 0))
         
-        btn_refresh = ttk.Button(row1, text="🔄 데이터 새로고침", command=self.refresh_data, width=19)
+        btn_refresh = ttk.Button(row1, text="🔄 데이터 새로고침", command=self.refresh_data, width=17)
         btn_refresh.pack(side=tk.RIGHT, padx=(0, 2))
         
-        # Row 2: 대상 구간(섹션) 다중 선택 헤더
-        row_sec_hdr = ttk.Frame(filter_frame)
-        row_sec_hdr.pack(fill=tk.X, pady=(2, 1))
+        # Row 2: 좌우 2단 분할 영역 (1. 구간 목록 | 2. 라인 목록)
+        selector_frame = ttk.Frame(filter_frame)
+        selector_frame.pack(fill=tk.X, pady=(2, 2))
         
-        ttk.Label(row_sec_hdr, text="대상 구간(섹션) 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
-        self.chk_all_secs_var = tk.BooleanVar(value=False)
-        self.chk_all_secs = ttk.Checkbutton(row_sec_hdr, text="[ 구간 전체 선택 ]", variable=self.chk_all_secs_var, command=self._toggle_all_sections)
-        self.chk_all_secs.pack(side=tk.LEFT, padx=(0, 12))
+        # -----------------------------
+        # Left Panel: 1. 대상 구간 선택
+        # -----------------------------
+        left_panel = ttk.Frame(selector_frame)
+        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        self.sec_summary_lbl = ttk.Label(row_sec_hdr, text="", font=("맑은 고딕", 9), foreground="#2B579A")
-        self.sec_summary_lbl.pack(side=tk.LEFT)
+        sec_hdr = ttk.Frame(left_panel)
+        sec_hdr.pack(fill=tk.X, pady=(0, 2))
+        ttk.Label(sec_hdr, text="1. 대상 구간(섹션) :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        self.chk_all_secs_var = tk.BooleanVar(value=True)
+        self.chk_all_secs = ttk.Checkbutton(sec_hdr, text="[구간 전체선택]", variable=self.chk_all_secs_var, command=self._toggle_all_sections)
+        self.chk_all_secs.pack(side=tk.LEFT, padx=(0, 6))
+        self.sec_count_lbl = ttk.Label(sec_hdr, text="(0개)", font=("맑은 고딕", 9), foreground="#2B579A")
+        self.sec_count_lbl.pack(side=tk.LEFT)
         
-        # Sections Container Frame
-        self.sections_container = ttk.Frame(filter_frame)
-        self.sections_container.pack(fill=tk.X, pady=(1, 4))
+        sec_box_frame = ttk.Frame(left_panel)
+        sec_box_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Row 3: 대상 라인 선택 헤더
-        row_line_hdr = ttk.Frame(filter_frame)
-        row_line_hdr.pack(fill=tk.X, pady=(4, 2))
+        self.sec_canvas = tk.Canvas(sec_box_frame, height=120, highlightthickness=1, highlightbackground="#D3D3D3", bg="#FFFFFF")
+        self.sec_scrollbar = ttk.Scrollbar(sec_box_frame, orient="vertical", command=self.sec_canvas.yview)
+        self.sections_container = ttk.Frame(self.sec_canvas)
         
-        ttk.Label(row_line_hdr, text="대상 라인 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
+        self.sec_canvas_win = self.sec_canvas.create_window((0, 0), window=self.sections_container, anchor="nw")
+        self.sec_canvas.configure(yscrollcommand=self.sec_scrollbar.set)
+        
+        self.sections_container.bind("<Configure>", lambda e: self.sec_canvas.configure(scrollregion=self.sec_canvas.bbox("all")))
+        self.sec_canvas.bind("<Configure>", lambda e: self.sec_canvas.itemconfig(self.sec_canvas_win, width=e.width))
+        
+        def _sec_wheel(e):
+            self.sec_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        self.sec_canvas.bind("<MouseWheel>", _sec_wheel)
+        self.sections_container.bind("<MouseWheel>", _sec_wheel)
+        
+        self.sec_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.sec_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # -----------------------------
+        # Right Panel: 2. 대상 라인 선택
+        # -----------------------------
+        right_panel = ttk.Frame(selector_frame)
+        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        
+        line_hdr = ttk.Frame(right_panel)
+        line_hdr.pack(fill=tk.X, pady=(0, 2))
+        ttk.Label(line_hdr, text="2. 대상 라인 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
         self.chk_all_lines_var = tk.BooleanVar(value=True)
-        self.chk_all_lines = ttk.Checkbutton(row_line_hdr, text="[ 라인 전체 선택 ]", variable=self.chk_all_lines_var, command=self._toggle_all_lines)
-        self.chk_all_lines.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.line_count_lbl = ttk.Label(row_line_hdr, text="", font=("맑은 고딕", 9), foreground="#555555")
+        self.chk_all_lines = ttk.Checkbutton(line_hdr, text="[라인 전체선택]", variable=self.chk_all_lines_var, command=self._toggle_all_lines)
+        self.chk_all_lines.pack(side=tk.LEFT, padx=(0, 6))
+        self.line_count_lbl = ttk.Label(line_hdr, text="(0개)", font=("맑은 고딕", 9), foreground="#555555")
         self.line_count_lbl.pack(side=tk.LEFT)
         
-        # Lines Container Frame (정갈한 그리드 배치)
-        self.lines_container = ttk.Frame(filter_frame)
-        self.lines_container.pack(fill=tk.X, pady=(2, 2))
+        search_frame = ttk.Frame(line_hdr)
+        search_frame.pack(side=tk.RIGHT)
+        ttk.Label(search_frame, text="🔍 라인검색:", font=("맑은 고딕", 9)).pack(side=tk.LEFT, padx=(0, 2))
+        entry_search = ttk.Entry(search_frame, textvariable=self.line_search_var, width=15)
+        entry_search.pack(side=tk.LEFT)
+        self.line_search_var.trace_add("write", lambda *args: self._on_line_search_changed())
+        
+        line_box_frame = ttk.Frame(right_panel)
+        line_box_frame.pack(fill=tk.BOTH, expand=True)
+        
+        self.line_canvas = tk.Canvas(line_box_frame, height=120, highlightthickness=1, highlightbackground="#D3D3D3", bg="#FFFFFF")
+        self.line_scrollbar = ttk.Scrollbar(line_box_frame, orient="vertical", command=self.line_canvas.yview)
+        self.lines_container = ttk.Frame(self.line_canvas)
+        
+        self.line_canvas_win = self.line_canvas.create_window((0, 0), window=self.lines_container, anchor="nw")
+        self.line_canvas.configure(yscrollcommand=self.line_scrollbar.set)
+        
+        self.lines_container.bind("<Configure>", lambda e: self.line_canvas.configure(scrollregion=self.line_canvas.bbox("all")))
+        self.line_canvas.bind("<Configure>", lambda e: self.line_canvas.itemconfig(self.line_canvas_win, width=e.width))
+        
+        def _line_wheel(e):
+            self.line_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        self.line_canvas.bind("<MouseWheel>", _line_wheel)
+        self.lines_container.bind("<MouseWheel>", _line_wheel)
+        
+        self.line_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.line_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # -------------------------------------------------------------
         # 2. Bottom Fixed Area (화면 맨 하단에 무조건 고정 표시)
@@ -246,13 +316,54 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.tree.tag_configure("subtotal_row", background="#EBF1F5", font=("맑은 고딕", 10, "bold"))
         self.tree.tag_configure("cur_highlight", background="#F2F5FB")
 
-    def _populate_sections(self):
+    def _init_filter_options(self):
+        all_months = set()
+        all_companies = set()
+        all_methods = set()
+        
+        for dt, day_data in self.history.items():
+            if len(dt) >= 7:
+                all_months.add(dt[:7])
+            for r in day_data.get('ndt_results', []):
+                c = str(r.get('업체', '')).strip()
+                m = str(r.get('검사방법', '')).strip().upper()
+                if c: all_companies.add(c)
+                if m: all_methods.add(m)
+                
+        sorted_m = sorted(list(all_months), reverse=True)
+        sorted_c = sorted(list(all_companies))
+        sorted_met = sorted(list(all_methods))
+        
+        self.cb_month['values'] = ['전체 월'] + sorted_m
+        self.cb_company['values'] = ['전체 업체'] + sorted_c
+        self.cb_method['values'] = ['전체 방법'] + sorted_met
+        
+        self.month_var.set('전체 월')
+        self.company_var.set('전체 업체')
+        self.method_var.set('전체 방법')
+        
+        self._on_primary_filter_changed()
+
+    def _on_primary_filter_changed(self, event=None):
+        sel_month = self.month_var.get()
+        sel_comp = self.company_var.get()
+        sel_method = self.method_var.get()
+        
         sections_map = {}
         self.line_sec_map = {}
+        
         for dt, day_data in self.history.items():
+            if sel_month != '전체 월' and not dt.startswith(sel_month):
+                continue
             for r in day_data.get('ndt_results', []):
+                comp = str(r.get('업체', '')).strip()
+                if sel_comp != '전체 업체' and comp != sel_comp:
+                    continue
+                met = str(r.get('검사방법', '')).strip().upper()
+                if sel_method != '전체 방법' and met != sel_method.upper():
+                    continue
+                    
                 sec = str(r.get('구간', '')).strip()
-                loc = str(r.get('위치', '')).strip()
                 line = str(r.get('라인번호', '')).strip()
                 if not sec and not line: continue
                 
@@ -268,32 +379,37 @@ class SectionLineBillingDialog(tk.Toplevel):
                     sections_map[base_sec].add(line)
                     self.line_sec_map[line] = base_sec
                     
-        sorted_secs = sorted(sections_map.keys())
         self.sections_map = sections_map
+        sorted_secs = sorted(sections_map.keys())
         
         for widget in self.sections_container.winfo_children():
             widget.destroy()
             
         self.section_vars = {}
         if not sorted_secs:
-            ttk.Label(self.sections_container, text="(등록된 구간 데이터가 없습니다)", foreground="#888888").pack(side=tk.LEFT)
+            ttk.Label(self.sections_container, text="(해당 조건의 구간 데이터가 없습니다)", foreground="#888888").pack(side=tk.LEFT, padx=6, pady=6)
+            self.chk_all_secs_var.set(False)
+            self.sec_count_lbl.config(text="(0개)")
             self._on_sections_changed()
             return
             
-        # 기본 선택: SEC#015 (한국노총) 또는 첫 번째 구간
-        default_sec = "SEC#015 (한국노총)" if "SEC#015 (한국노총)" in sorted_secs else sorted_secs[0]
+        self.sec_count_lbl.config(text=f"(총 {len(sorted_secs)}개)")
         
-        cols_per_row = 6
+        # Sections checklist (2 columns)
+        cols_per_row = 2
         for idx, sec in enumerate(sorted_secs):
-            is_checked = (sec == default_sec)
-            var = tk.BooleanVar(value=is_checked)
+            var = tk.BooleanVar(value=True) # 기본 전체 선택
             self.section_vars[sec] = var
             chk = ttk.Checkbutton(self.sections_container, text=sec, variable=var, command=self._on_section_toggled)
             r = idx // cols_per_row
             c = idx % cols_per_row
-            chk.grid(row=r, column=c, sticky="w", padx=(0, 16), pady=2)
-                
-        self.chk_all_secs_var.set(len(sorted_secs) == 1)
+            chk.grid(row=r, column=c, sticky="w", padx=(4, 10), pady=2)
+            
+        self.chk_all_secs_var.set(True)
+        try:
+            self.sec_canvas.yview_moveto(0)
+        except Exception:
+            pass
         self._on_sections_changed()
 
     def _toggle_all_sections(self):
@@ -334,27 +450,39 @@ class SectionLineBillingDialog(tk.Toplevel):
                 return f"{s0}_외{len(selected)-1}개구간"
             return f"{s0} 외 {len(selected)-1}개 구간"
 
+    def get_filter_subtitle(self, for_filename=False):
+        parts = []
+        m = self.month_var.get()
+        c = self.company_var.get()
+        met = self.method_var.get()
+        if m != "전체 월": parts.append(m.replace("-", ""))
+        if c != "전체 업체": parts.append(c.replace("(주)", "").replace(" ", "_"))
+        if met != "전체 방법": parts.append(met)
+        if not parts:
+            return ""
+        if for_filename:
+            return "_" + "_".join(parts)
+        return "[" + " / ".join(parts) + "]"
+
     def refresh_data(self):
-        """최신 daily_work_history.json 데이터를 다시 읽어서 구간 및 라인 목록 갱신"""
+        """최신 daily_work_history.json 데이터를 다시 읽어서 필터 옵션 갱신"""
         self.history = None
         self._load_data()
-        self._populate_sections()
+        self._init_filter_options()
 
     def _on_sections_changed(self):
         selected_secs = self.get_selected_sections()
+        search_kw = self.line_search_var.get().strip().upper()
         
-        # Update summary label
-        disp_name = self.get_section_display_name()
-        self.sec_summary_lbl.config(text=f"(선택: {disp_name})")
-        
-        # Collect lines for all selected sections
         active_lines = []
         for sec in selected_secs:
             lines = sorted(list(self.sections_map.get(sec, [])))
             for line in lines:
+                if search_kw:
+                    if search_kw not in line.upper() and search_kw not in sec.upper():
+                        continue
                 active_lines.append((line, sec))
                 
-        # Preserve previous selections
         prev_selections = {l: v.get() for l, v in self.line_vars.items()}
         
         for widget in self.lines_container.winfo_children():
@@ -362,17 +490,18 @@ class SectionLineBillingDialog(tk.Toplevel):
             
         self.line_vars = {}
         if not active_lines:
-            lbl = ttk.Label(self.lines_container, text="(선택된 구간이 없거나 등록된 라인이 없습니다)", foreground="#888888")
-            lbl.pack(side=tk.LEFT, pady=2)
+            msg = "(해당하는 라인이 없습니다)" if not search_kw else f"('{search_kw}' 검색 결과 없음)"
+            lbl = ttk.Label(self.lines_container, text=msg, foreground="#888888")
+            lbl.pack(side=tk.LEFT, padx=6, pady=6)
             self.chk_all_lines_var.set(False)
             self.line_count_lbl.config(text="(0개)")
             self.update_preview()
             return
             
-        self.line_count_lbl.config(text=f"(총 {len(active_lines)}개 라인)")
+        self.line_count_lbl.config(text=f"(총 {len(active_lines)}개)")
         
         show_sec_tag = len(selected_secs) > 1
-        cols_per_row = 4
+        cols_per_row = 2
         for idx, (line, sec) in enumerate(active_lines):
             val = prev_selections.get(line, True)
             var = tk.BooleanVar(value=val)
@@ -381,11 +510,18 @@ class SectionLineBillingDialog(tk.Toplevel):
             chk = ttk.Checkbutton(self.lines_container, text=disp_text, variable=var, command=self._on_line_toggled)
             r = idx // cols_per_row
             c = idx % cols_per_row
-            chk.grid(row=r, column=c, sticky="w", padx=(0, 16), pady=2)
+            chk.grid(row=r, column=c, sticky="w", padx=(4, 10), pady=2)
                 
         all_lines_checked = all(v.get() for v in self.line_vars.values()) if self.line_vars else True
         self.chk_all_lines_var.set(all_lines_checked)
+        try:
+            self.line_canvas.yview_moveto(0)
+        except Exception:
+            pass
         self.update_preview()
+
+    def _on_line_search_changed(self):
+        self._on_sections_changed()
 
     def _toggle_all_lines(self):
         val = self.chk_all_lines_var.get()
@@ -404,6 +540,9 @@ class SectionLineBillingDialog(tk.Toplevel):
     def calculate_billing_data(self):
         selected_lines = set(self.get_selected_lines())
         exclude_re = self.exclude_reinspect_var.get()
+        sel_month = self.month_var.get()
+        sel_comp = self.company_var.get()
+        sel_method = self.method_var.get()
         
         mat_costs = self.config.get("MATERIAL_COST", {
             "PAUT_300A 이상": 37559, "PAUT_250A": 37559, "PAUT_200A": 37559,
@@ -430,16 +569,23 @@ class SectionLineBillingDialog(tk.Toplevel):
         line_records = []
         
         for dt in sorted(self.history.keys()):
+            if sel_month != "전체 월" and not dt.startswith(sel_month):
+                continue
             for r in self.history[dt].get('ndt_results', []):
                 line = str(r.get('라인번호', '')).strip()
                 if line not in selected_lines:
+                    continue
+                comp = str(r.get('업체', '')).strip()
+                if sel_comp != "전체 업체" and comp != sel_comp:
+                    continue
+                method = str(r.get('검사방법', '')).strip().upper()
+                if sel_method != "전체 방법" and method != sel_method.upper():
                     continue
                     
                 total_joints += 1
                 j_no = str(r.get('Joint No.', '')).strip()
                 is_re = bool(r.get('원본JointNo') or (len(j_no) > 2 and j_no.endswith('R')))
                 
-                method = str(r.get('검사방법', '')).strip().upper()
                 shift = str(r.get('근무구분', '')).strip()
                 work_time = '야간' if '야간' in shift else '일반'
                 size_str = str(r.get('관경', '')).strip()
@@ -649,6 +795,8 @@ class SectionLineBillingDialog(tk.Toplevel):
         data = self.calculate_billing_data()
         rnd = self.round_var.get()
         sec = self.get_section_display_name()
+        sub_txt = self.get_filter_subtitle()
+        sub_str = f" {sub_txt}" if sub_txt else ""
         
         wb = openpyxl.Workbook()
         
@@ -687,7 +835,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         ws1['A1'].font = font_title
         ws1['A1'].alignment = Alignment(horizontal='center', vertical='center')
         
-        ws1['A3'] = f"공 사 명 : 2026년 중앙지사 열수송관 비파괴검사용역 단가계약 ({sec})"
+        ws1['A3'] = f"공 사 명 : 2026년 중앙지사 열수송관 비파괴검사용역 단가계약 ({sec}){sub_str}"
         ws1['A3'].font = font_sub
         
         ws1.merge_cells('A5:A6'); ws1['A5'] = "공종"; ws1['A5'].alignment = Alignment(horizontal='center', vertical='center')
@@ -810,7 +958,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         ws2.page_setup.fitToHeight = 0
         ws2.sheet_properties.pageSetUpPr.fitToPage = True
         
-        ws2['A2'] = f"{sec} 라인번호별 비파괴검사 실적 비교표"
+        ws2['A2'] = f"{sec} 라인번호별 비파괴검사 실적 비교표{sub_str}"
         ws2['A2'].font = font_title
         
         hdrs_s2 = [
@@ -998,7 +1146,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         ws4.page_setup.paperSize = ws4.PAPERSIZE_A4
         ws4.sheet_properties.pageSetUpPr.fitToPage = True
         
-        ws4['A2'] = f"{sec} 기성 승인 내역 및 일자별 검사 실적 상세"
+        ws4['A2'] = f"{sec} 기성 승인 내역 및 일자별 검사 실적 상세{sub_str}"
         ws4['A2'].font = font_title
         
         raw_hdrs = ["순번", "검사일자", "라인번호", "위치/구간", "검사방법", "관경", "근무구분", "기성수량", "단위", "단가(원)", "공급가액(원)", "부가세(원)", "합계금액(원)", "비고"]
@@ -1081,7 +1229,8 @@ class SectionLineBillingDialog(tk.Toplevel):
             
         rnd = self.round_var.get()
         sec = self.get_section_display_name(for_filename=True)
-        default_name = f"제{rnd}회_{sec}_기성청구내역서_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        sub_fn = self.get_filter_subtitle(for_filename=True)
+        default_name = f"제{rnd}회_{sec}{sub_fn}_기성청구내역서_{datetime.now().strftime('%Y%m%d')}.xlsx"
         
         filepath = filedialog.asksaveasfilename(
             parent=self,
@@ -1106,7 +1255,8 @@ class SectionLineBillingDialog(tk.Toplevel):
             
         rnd = self.round_var.get()
         sec = self.get_section_display_name(for_filename=True)
-        default_name = f"제{rnd}회_{sec}_기성청구내역서_{datetime.now().strftime('%Y%m%d')}.pdf"
+        sub_fn = self.get_filter_subtitle(for_filename=True)
+        default_name = f"제{rnd}회_{sec}{sub_fn}_기성청구내역서_{datetime.now().strftime('%Y%m%d')}.pdf"
         
         pdf_path = filedialog.asksaveasfilename(
             parent=self,
