@@ -1202,8 +1202,11 @@ def update_daily_usage_view_impl(self):
         n_method = str(entry.get('검사방법', '')).strip()
         n_insp = str(entry.get('검사품명', '')).strip()
         n_code = str(entry.get('적용코드', '')).strip()
+        n_pipe = str(entry.get('관경(Inch)', entry.get('관경', ''))).strip()
+        n_worktype = str(entry.get('작업형태', '')).strip()
+        n_qty = str(entry.get('Usage', entry.get('검사량', ''))).strip()
         
-        content_key = (n_date, n_site, c_worktime, n_method, t_key, mat_id, n_insp, n_code)
+        content_key = (n_date, n_site, c_worktime, n_method, t_key, mat_id, n_insp, n_code, n_pipe, n_worktype, n_qty)
         
         # Record is duplicate split ONLY IF exact content matches
         is_duplicate_split = content_key in seen_contents
