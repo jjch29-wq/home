@@ -130,8 +130,8 @@ class SectionLineBillingDialog(tk.Toplevel):
         )
         self.chk_exclude_re.pack(side=tk.LEFT, padx=(0, 15))
         
-        btn_refresh = ttk.Button(row1, text="🔄 데이터 새로고침", command=self.refresh_data, width=15)
-        btn_refresh.pack(side=tk.RIGHT)
+        btn_refresh = ttk.Button(row1, text="🔄 데이터 새로고침", command=self.refresh_data, width=19)
+        btn_refresh.pack(side=tk.RIGHT, padx=(0, 2))
         
         # Row 2: 대상 구간(섹션) 다중 선택 헤더
         row_sec_hdr = ttk.Frame(filter_frame)
