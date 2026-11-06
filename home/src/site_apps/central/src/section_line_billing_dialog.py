@@ -37,8 +37,8 @@ class SectionLineBillingDialog(tk.Toplevel):
     def __init__(self, parent=None, history=None, config=None):
         super().__init__(parent)
         self.title("구간 / 라인별 기성청구 내역서 및 미리보기")
-        self.geometry("1200x820")
-        self.minsize(1000, 680)
+        self.geometry("1160x720")
+        self.minsize(960, 560)
         
         self.history = history
         self.config = config
@@ -80,20 +80,22 @@ class SectionLineBillingDialog(tk.Toplevel):
                 self.config = {}
 
     def _setup_ui(self):
-        main_frame = ttk.Frame(self, padding=12)
+        main_frame = ttk.Frame(self, padding=8)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # 1. Top Filter Frame
-        filter_frame = ttk.LabelFrame(main_frame, text="■ 구간 및 정산 옵션 설정 (다중 구간/라인 선택 지원)", padding=10)
-        filter_frame.pack(fill=tk.X, pady=(0, 10))
+        # -------------------------------------------------------------
+        # 1. Top Filter Frame (고정 상단)
+        # -------------------------------------------------------------
+        filter_frame = ttk.LabelFrame(main_frame, text="■ 구간 및 정산 옵션 설정 (다중 구간/라인 선택)", padding=6)
+        filter_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
         
-        # Row 1: 기성 회차 및 옵션
+        # Row 1: 기성 회차, 제외 옵션, 새로고침 버튼
         row1 = ttk.Frame(filter_frame)
-        row1.pack(fill=tk.X, pady=(0, 6))
+        row1.pack(fill=tk.X, pady=(0, 4))
         
         ttk.Label(row1, text="기성 회차 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
         ttk.Entry(row1, textvariable=self.round_var, width=5, justify="center").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Label(row1, text="회").pack(side=tk.LEFT, padx=(0, 25))
+        ttk.Label(row1, text="회").pack(side=tk.LEFT, padx=(0, 20))
         
         self.chk_exclude_re = ttk.Checkbutton(
             row1, 
@@ -101,40 +103,97 @@ class SectionLineBillingDialog(tk.Toplevel):
             variable=self.exclude_reinspect_var,
             command=self.update_preview
         )
-        self.chk_exclude_re.pack(side=tk.LEFT, padx=(0, 0))
+        self.chk_exclude_re.pack(side=tk.LEFT, padx=(0, 15))
+        
+        btn_refresh = ttk.Button(row1, text="🔄 데이터 새로고침", command=self.refresh_data, width=15)
+        btn_refresh.pack(side=tk.RIGHT)
         
         # Row 2: 대상 구간(섹션) 다중 선택 헤더
         row_sec_hdr = ttk.Frame(filter_frame)
-        row_sec_hdr.pack(fill=tk.X, pady=(4, 2))
+        row_sec_hdr.pack(fill=tk.X, pady=(2, 1))
         
         ttk.Label(row_sec_hdr, text="대상 구간(섹션) 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.chk_all_secs_var = tk.BooleanVar(value=False)
         self.chk_all_secs = ttk.Checkbutton(row_sec_hdr, text="[ 구간 전체 선택 ]", variable=self.chk_all_secs_var, command=self._toggle_all_sections)
-        self.chk_all_secs.pack(side=tk.LEFT, padx=(0, 15))
+        self.chk_all_secs.pack(side=tk.LEFT, padx=(0, 12))
         
         self.sec_summary_lbl = ttk.Label(row_sec_hdr, text="", font=("맑은 고딕", 9), foreground="#2B579A")
         self.sec_summary_lbl.pack(side=tk.LEFT)
         
         # Sections Container Frame
         self.sections_container = ttk.Frame(filter_frame)
-        self.sections_container.pack(fill=tk.X, pady=(2, 6))
+        self.sections_container.pack(fill=tk.X, pady=(1, 4))
         
         # Row 3: 대상 라인 선택 헤더
         row_line_hdr = ttk.Frame(filter_frame)
-        row_line_hdr.pack(fill=tk.X, pady=(4, 2))
+        row_line_hdr.pack(fill=tk.X, pady=(2, 1))
         
         ttk.Label(row_line_hdr, text="대상 라인 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.chk_all_lines_var = tk.BooleanVar(value=True)
         self.chk_all_lines = ttk.Checkbutton(row_line_hdr, text="[ 라인 전체 선택 ]", variable=self.chk_all_lines_var, command=self._toggle_all_lines)
         self.chk_all_lines.pack(side=tk.LEFT, padx=(0, 10))
         
-        # Lines Container Frame
-        self.lines_container = ttk.Frame(filter_frame)
-        self.lines_container.pack(fill=tk.X, pady=(2, 2))
+        self.line_count_lbl = ttk.Label(row_line_hdr, text="", font=("맑은 고딕", 9), foreground="#555555")
+        self.line_count_lbl.pack(side=tk.LEFT)
         
-        # 2. Preview Grid Frame
-        preview_frame = ttk.LabelFrame(main_frame, text="■ 정식 기성청구 내역서 미리보기 (Official Billing Claim Preview)", padding=10)
-        preview_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        # Lines Scrollable Canvas Frame (라인이 많아져도 상단 높이를 일정하게 유지)
+        self.lines_scroll_frame = ttk.Frame(filter_frame)
+        self.lines_scroll_frame.pack(fill=tk.X, pady=(1, 1))
+        
+        self.lines_canvas = tk.Canvas(self.lines_scroll_frame, height=68, highlightthickness=1, highlightbackground="#D3D3D3", bg="#FAFAFA")
+        self.lines_scrollbar = ttk.Scrollbar(self.lines_scroll_frame, orient="vertical", command=self.lines_canvas.yview)
+        self.lines_container = ttk.Frame(self.lines_canvas)
+        
+        def _on_inner_config(e):
+            self.lines_canvas.configure(scrollregion=self.lines_canvas.bbox("all"))
+        self.lines_container.bind("<Configure>", _on_inner_config)
+        self.lines_canvas.create_window((0, 0), window=self.lines_container, anchor="nw")
+        self.lines_canvas.configure(yscrollcommand=self.lines_scrollbar.set)
+        
+        def _on_wheel(e):
+            self.lines_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        self.lines_canvas.bind("<MouseWheel>", _on_wheel)
+        self.lines_container.bind("<MouseWheel>", _on_wheel)
+        
+        self.lines_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.lines_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # -------------------------------------------------------------
+        # 2. Bottom Fixed Area (화면 맨 하단에 무조건 고정 표시)
+        # -------------------------------------------------------------
+        bottom_area = ttk.Frame(main_frame)
+        bottom_area.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
+        
+        # Action Buttons
+        btn_frame = ttk.Frame(bottom_area)
+        btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 0))
+        
+        btn_close = ttk.Button(btn_frame, text="닫  기", command=self.destroy, width=12)
+        btn_close.pack(side=tk.LEFT)
+        
+        btn_pdf = ttk.Button(btn_frame, text="📄 PDF 바로 발행", command=self.export_pdf, width=18)
+        btn_pdf.pack(side=tk.RIGHT, padx=(6, 0))
+        
+        btn_excel = ttk.Button(btn_frame, text="📋 정식 기성청구 엑셀 양식 저장", command=self.export_excel, width=30)
+        btn_excel.pack(side=tk.RIGHT, padx=(6, 0))
+        
+        # Summary Info Bar
+        summary_frame = ttk.Frame(bottom_area)
+        summary_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(2, 2))
+        
+        self.status_lbl_var = tk.StringVar(value="조회 준비 중...")
+        lbl_status = ttk.Label(summary_frame, textvariable=self.status_lbl_var, font=("맑은 고딕", 9), foreground="#555555")
+        lbl_status.pack(side=tk.LEFT)
+        
+        self.totals_lbl_var = tk.StringVar(value="금회 공급가액: 0 원  |  부가세: 0 원  |  합계금액(VAT포함): 0 원")
+        lbl_totals = ttk.Label(summary_frame, textvariable=self.totals_lbl_var, font=("맑은 고딕", 10, "bold"), foreground="#1F4E78")
+        lbl_totals.pack(side=tk.RIGHT)
+        
+        # -------------------------------------------------------------
+        # 3. Preview Grid Frame (중간 남는 공간 100% 차지)
+        # -------------------------------------------------------------
+        preview_frame = ttk.LabelFrame(main_frame, text="■ 정식 기성청구 내역서 미리보기 (Official Billing Claim Preview)", padding=6)
+        preview_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         
         cols = (
             "cat", "spec", "unit", "price", 
@@ -145,7 +204,7 @@ class SectionLineBillingDialog(tk.Toplevel):
             "rem_qty", "rem_amt"
         )
         
-        self.tree = ttk.Treeview(preview_frame, columns=cols, show="headings", height=12)
+        self.tree = ttk.Treeview(preview_frame, columns=cols, show="headings")
         
         headers = [
             ("cat", "공  종", 130, "w"),
@@ -179,31 +238,6 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.tree.tag_configure("total_row", background="#FFF2CC", font=("맑은 고딕", 10, "bold"))
         self.tree.tag_configure("subtotal_row", background="#EBF1F5", font=("맑은 고딕", 10, "bold"))
         self.tree.tag_configure("cur_highlight", background="#F2F5FB")
-        
-        # 3. Bottom Summary Info Bar
-        summary_frame = ttk.Frame(main_frame)
-        summary_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        self.status_lbl_var = tk.StringVar(value="조회 준비 중...")
-        lbl_status = ttk.Label(summary_frame, textvariable=self.status_lbl_var, font=("맑은 고딕", 10), foreground="#555555")
-        lbl_status.pack(side=tk.LEFT)
-        
-        self.totals_lbl_var = tk.StringVar(value="금회 공급가액: 0 원  |  부가세: 0 원  |  합계금액(VAT포함): 0 원")
-        lbl_totals = ttk.Label(summary_frame, textvariable=self.totals_lbl_var, font=("맑은 고딕", 11, "bold"), foreground="#1F4E78")
-        lbl_totals.pack(side=tk.RIGHT)
-        
-        # 4. Action Buttons
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(fill=tk.X)
-        
-        btn_close = ttk.Button(btn_frame, text="닫  기", command=self.destroy, width=12)
-        btn_close.pack(side=tk.LEFT)
-        
-        btn_pdf = ttk.Button(btn_frame, text="📄 PDF 바로 발행", command=self.export_pdf, width=18)
-        btn_pdf.pack(side=tk.RIGHT, padx=(6, 0))
-        
-        btn_excel = ttk.Button(btn_frame, text="📋 정식 기성청구 엑셀 양식 저장", command=self.export_excel, width=30)
-        btn_excel.pack(side=tk.RIGHT, padx=(6, 0))
 
     def _populate_sections(self):
         sections_map = {}
@@ -296,6 +330,12 @@ class SectionLineBillingDialog(tk.Toplevel):
                 return f"{s0}_외{len(selected)-1}개구간"
             return f"{s0} 외 {len(selected)-1}개 구간"
 
+    def refresh_data(self):
+        """최신 daily_work_history.json 데이터를 다시 읽어서 구간 및 라인 목록 갱신"""
+        self.history = None
+        self._load_data()
+        self._populate_sections()
+
     def _on_sections_changed(self):
         selected_secs = self.get_selected_sections()
         
@@ -321,9 +361,12 @@ class SectionLineBillingDialog(tk.Toplevel):
             lbl = ttk.Label(self.lines_container, text="(선택된 구간이 없거나 등록된 라인이 없습니다)", foreground="#888888")
             lbl.pack(side=tk.LEFT, pady=2)
             self.chk_all_lines_var.set(False)
+            self.line_count_lbl.config(text="(0개)")
             self.update_preview()
             return
             
+        self.line_count_lbl.config(text=f"(총 {len(active_lines)}개 라인, 상하 스크롤 가능)")
+        
         row_frame = ttk.Frame(self.lines_container)
         row_frame.pack(fill=tk.X, pady=1)
         
@@ -334,13 +377,20 @@ class SectionLineBillingDialog(tk.Toplevel):
             self.line_vars[line] = var
             disp_text = f"{line} ({sec})" if show_sec_tag else line
             chk = ttk.Checkbutton(row_frame, text=disp_text, variable=var, command=self._on_line_toggled)
-            chk.pack(side=tk.LEFT, padx=(0, 14))
-            if (idx + 1) % 3 == 0 and (idx + 1) < len(active_lines):
+            chk.pack(side=tk.LEFT, padx=(0, 12))
+            if (idx + 1) % 4 == 0 and (idx + 1) < len(active_lines):
                 row_frame = ttk.Frame(self.lines_container)
                 row_frame.pack(fill=tk.X, pady=1)
                 
         all_lines_checked = all(v.get() for v in self.line_vars.values()) if self.line_vars else True
         self.chk_all_lines_var.set(all_lines_checked)
+        
+        # 스크롤 위치 초기화
+        try:
+            self.lines_canvas.yview_moveto(0)
+        except Exception:
+            pass
+            
         self.update_preview()
 
     def _toggle_all_lines(self):
