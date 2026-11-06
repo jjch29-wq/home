@@ -37,8 +37,8 @@ class SectionLineBillingDialog(tk.Toplevel):
     def __init__(self, parent=None, history=None, config=None):
         super().__init__(parent)
         self.title("구간 / 라인별 기성청구 내역서 및 미리보기")
-        self.geometry("1160x720")
-        self.minsize(960, 560)
+        self.geometry("1180x780")
+        self.minsize(980, 620)
         
         self.history = history
         self.config = config
@@ -151,7 +151,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         
         # Row 3: 대상 라인 선택 헤더
         row_line_hdr = ttk.Frame(filter_frame)
-        row_line_hdr.pack(fill=tk.X, pady=(2, 1))
+        row_line_hdr.pack(fill=tk.X, pady=(4, 2))
         
         ttk.Label(row_line_hdr, text="대상 라인 선택 :", font=("맑은 고딕", 9, "bold")).pack(side=tk.LEFT, padx=(0, 6))
         self.chk_all_lines_var = tk.BooleanVar(value=True)
@@ -161,27 +161,9 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.line_count_lbl = ttk.Label(row_line_hdr, text="", font=("맑은 고딕", 9), foreground="#555555")
         self.line_count_lbl.pack(side=tk.LEFT)
         
-        # Lines Scrollable Canvas Frame (라인이 많아져도 상단 높이를 일정하게 유지)
-        self.lines_scroll_frame = ttk.Frame(filter_frame)
-        self.lines_scroll_frame.pack(fill=tk.X, pady=(1, 1))
-        
-        self.lines_canvas = tk.Canvas(self.lines_scroll_frame, height=68, highlightthickness=1, highlightbackground="#D3D3D3", bg="#FAFAFA")
-        self.lines_scrollbar = ttk.Scrollbar(self.lines_scroll_frame, orient="vertical", command=self.lines_canvas.yview)
-        self.lines_container = ttk.Frame(self.lines_canvas)
-        
-        def _on_inner_config(e):
-            self.lines_canvas.configure(scrollregion=self.lines_canvas.bbox("all"))
-        self.lines_container.bind("<Configure>", _on_inner_config)
-        self.lines_canvas.create_window((0, 0), window=self.lines_container, anchor="nw")
-        self.lines_canvas.configure(yscrollcommand=self.lines_scrollbar.set)
-        
-        def _on_wheel(e):
-            self.lines_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
-        self.lines_canvas.bind("<MouseWheel>", _on_wheel)
-        self.lines_container.bind("<MouseWheel>", _on_wheel)
-        
-        self.lines_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        self.lines_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Lines Container Frame (정갈한 그리드 배치)
+        self.lines_container = ttk.Frame(filter_frame)
+        self.lines_container.pack(fill=tk.X, pady=(2, 2))
         
         # -------------------------------------------------------------
         # 2. Bottom Fixed Area (화면 맨 하단에 무조건 고정 표시)
@@ -298,21 +280,18 @@ class SectionLineBillingDialog(tk.Toplevel):
             self._on_sections_changed()
             return
             
-        row_frame = ttk.Frame(self.sections_container)
-        row_frame.pack(fill=tk.X, pady=1)
-        
         # 기본 선택: SEC#015 (한국노총) 또는 첫 번째 구간
         default_sec = "SEC#015 (한국노총)" if "SEC#015 (한국노총)" in sorted_secs else sorted_secs[0]
         
+        cols_per_row = 6
         for idx, sec in enumerate(sorted_secs):
             is_checked = (sec == default_sec)
             var = tk.BooleanVar(value=is_checked)
             self.section_vars[sec] = var
-            chk = ttk.Checkbutton(row_frame, text=sec, variable=var, command=self._on_section_toggled)
-            chk.pack(side=tk.LEFT, padx=(0, 14))
-            if (idx + 1) % 6 == 0 and (idx + 1) < len(sorted_secs):
-                row_frame = ttk.Frame(self.sections_container)
-                row_frame.pack(fill=tk.X, pady=1)
+            chk = ttk.Checkbutton(self.sections_container, text=sec, variable=var, command=self._on_section_toggled)
+            r = idx // cols_per_row
+            c = idx % cols_per_row
+            chk.grid(row=r, column=c, sticky="w", padx=(0, 16), pady=2)
                 
         self.chk_all_secs_var.set(len(sorted_secs) == 1)
         self._on_sections_changed()
@@ -390,32 +369,22 @@ class SectionLineBillingDialog(tk.Toplevel):
             self.update_preview()
             return
             
-        self.line_count_lbl.config(text=f"(총 {len(active_lines)}개 라인, 상하 스크롤 가능)")
-        
-        row_frame = ttk.Frame(self.lines_container)
-        row_frame.pack(fill=tk.X, pady=1)
+        self.line_count_lbl.config(text=f"(총 {len(active_lines)}개 라인)")
         
         show_sec_tag = len(selected_secs) > 1
+        cols_per_row = 4
         for idx, (line, sec) in enumerate(active_lines):
             val = prev_selections.get(line, True)
             var = tk.BooleanVar(value=val)
             self.line_vars[line] = var
             disp_text = f"{line} ({sec})" if show_sec_tag else line
-            chk = ttk.Checkbutton(row_frame, text=disp_text, variable=var, command=self._on_line_toggled)
-            chk.pack(side=tk.LEFT, padx=(0, 12))
-            if (idx + 1) % 4 == 0 and (idx + 1) < len(active_lines):
-                row_frame = ttk.Frame(self.lines_container)
-                row_frame.pack(fill=tk.X, pady=1)
+            chk = ttk.Checkbutton(self.lines_container, text=disp_text, variable=var, command=self._on_line_toggled)
+            r = idx // cols_per_row
+            c = idx % cols_per_row
+            chk.grid(row=r, column=c, sticky="w", padx=(0, 16), pady=2)
                 
         all_lines_checked = all(v.get() for v in self.line_vars.values()) if self.line_vars else True
         self.chk_all_lines_var.set(all_lines_checked)
-        
-        # 스크롤 위치 초기화
-        try:
-            self.lines_canvas.yview_moveto(0)
-        except Exception:
-            pass
-            
         self.update_preview()
 
     def _toggle_all_lines(self):
