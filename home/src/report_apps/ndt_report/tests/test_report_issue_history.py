@@ -34,6 +34,21 @@ class IssueHistoryTests(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertEqual(backups[0].read_bytes(), original)
 
+    def test_cross_drive_resolution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cloud = root / 'cloud'
+            cloud.mkdir()
+            target = cloud / 'report_issue_history.json'
+            history.save_history([{'id': 'drive-test', 'items': [], 'report_no': 'OK'}], target)
+            drive = cloud.drive or 'C:'
+            other_drive = 'Z:' if drive.upper() != 'Z:' else 'Y:'
+            fake_path = f"{other_drive}{str(cloud)[len(drive):]}"
+            config = root / 'sync.json'
+            config.write_text(json.dumps({'data_dir': fake_path}), encoding='utf-8')
+            with patch.object(history, 'SYNC_CONFIG', config):
+                self.assertEqual(history.resolve_history_path().resolve(), target.resolve())
+
     def test_unavailable_drive_does_not_fall_back_to_local(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -57,11 +72,13 @@ class IssueHistoryTests(unittest.TestCase):
             config.write_text(json.dumps({'data_dir': str(cloud)}), encoding='utf-8')
             history.save_history([{'id': 'same', 'items': [], 'report_no': 'A'}], local)
             history.save_history([{'id': 'same', 'items': [], 'report_no': 'B'}], target)
-            before = (local.read_bytes(), target.read_bytes())
+            original_local = local.read_bytes()
             with patch.object(history, 'DEFAULT_PATH', local), patch.object(history, 'SYNC_CONFIG', config):
-                with self.assertRaises(ValueError):
-                    history.load_history()
-            self.assertEqual((local.read_bytes(), target.read_bytes()), before)
+                loaded = history.load_history()
+            self.assertEqual(loaded[0]['report_no'], 'B')
+            backups = list(root.glob('report_issue_history.backup-*.json'))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_bytes(), original_local)
 
     def test_restore_only_issued_rows_and_latest_number(self):
         from report_issue_history import restore_report_numbers
@@ -90,6 +107,16 @@ class IssueHistoryTests(unittest.TestCase):
             self.assertEqual(second.name, 'SIS-GI-KDHC-JY-RT-001 (2).xlsx')
             self.assertEqual(first.read_bytes(), b'keep')
             self.assertEqual(Path(report_output_path(directory, 'CON', '.xlsm')).name, '_CON.xlsm')
+
+    def test_restore_hot_tapping_prefix_variation(self):
+        issued = {'_source_id': 'old-id', '_source_site': 'central',
+                  'Date': '2026-10-20', 'Dwg': 'JA2026-017-006-0-1-400A', 'Joint': 'S01'}
+        entries = [{'mode': 'MT', 'report_no': 'MT-002', 'items': [issued]}]
+        rows = [{'Date': '2026-10-20', '라인번호': 'JA2026-017-006-0-1-400A', 'Joint No.': 'HT-S01',
+                 '_source_site': 'central', '_source_id': 'new-id'}]
+        with patch.object(history, 'load_history', return_value=entries):
+            history.restore_report_numbers('MT', rows)
+        self.assertEqual(rows[0]['Report No'], 'MT-002')
 
     def test_restore_changed_source_id_without_crossing_inspections(self):
         issued = {'_source_id': 'old', '_source_site': 'central',

@@ -19,26 +19,48 @@ def resolve_history_path(path=None):
         return DEFAULT_PATH
     config = json.loads(SYNC_CONFIG.read_text(encoding='utf-8'))
     directory = Path(config['data_dir'])
+    target = directory / 'report_issue_history.json'
+    dir_text = str(directory)
+    if (not target.is_file() or not directory.is_dir()) and re.match(r'^[A-Za-z]:[\\/]', dir_text):
+        relative_drive_path = dir_text[2:]
+        found_dir = None
+        for drive_letter in 'CDEFGHIJKLMNOPQRSTUVWXYZ':
+            alternate_dir = Path(f'{drive_letter}:{relative_drive_path}')
+            alternate_target = alternate_dir / 'report_issue_history.json'
+            if alternate_target.is_file():
+                directory = alternate_dir
+                target = alternate_target
+                break
+            elif alternate_dir.is_dir() and found_dir is None:
+                found_dir = alternate_dir
+        else:
+            if not directory.is_dir() and found_dir is not None:
+                directory = found_dir
+                target = directory / 'report_issue_history.json'
+
     if not directory.is_absolute() or not directory.is_dir():
         raise OSError(f'발행 이력 동기화 폴더에 연결할 수 없습니다: {directory}')
-    target = directory / 'report_issue_history.json'
     if DEFAULT_PATH.exists() and DEFAULT_PATH.resolve() != target.resolve():
         local = load_history(DEFAULT_PATH)
         shared = load_history(target)
         by_id = {entry['id']: entry for entry in shared}
+        changed = False
         for entry in local:
             previous = by_id.get(entry['id'])
-            if previous is not None and previous != entry:
-                raise ValueError('로컬·드라이브에 서로 다른 동일 발행 이력이 있습니다. 병합 확인이 필요합니다.')
             if previous is None:
                 shared.append(entry)
                 by_id[entry['id']] = entry
+                changed = True
         # Preserve the original before publishing the merged history.
         backup = DEFAULT_PATH.with_name(f'report_issue_history.backup-{uuid.uuid4().hex}.json')
         backup.write_bytes(DEFAULT_PATH.read_bytes())
-        shared.sort(key=lambda entry: entry.get('issued_at', ''))
-        save_history(shared, target)
-        DEFAULT_PATH.unlink()
+        if changed:
+            shared.sort(key=lambda entry: entry.get('issued_at', ''))
+            save_history(shared, target)
+        try:
+            DEFAULT_PATH.unlink()
+        except OSError:
+            pass
     return target
 
 
@@ -70,11 +92,17 @@ def load_history(path=None):
 
 def restore_report_numbers(mode, items, path=None):
     """Restore the latest active issue number for the same source inspection."""
-    def inspection(item):
+    def norm_joint(j):
+        s = str(j or '').strip().upper()
+        return re.sub(r'^(?:HT|HOT)[-_]?', '', s)
+
+    def inspection(item, normalized=False):
         site = str(item.get('_source_site') or '').strip()
         source = str(item.get('_source_path') or '').strip().replace('\\', '/').casefold()
-        line = str(item.get('Line No.') or item.get('Dwg') or item.get('ISO') or '').strip()
+        line = str(item.get('Line No.') or item.get('Dwg') or item.get('ISO') or item.get('라인번호') or '').strip()
         joint = str(item.get('Joint No.') or item.get('Joint') or '').strip()
+        if normalized:
+            joint = norm_joint(joint)
         date = str(item.get('Date') or '').strip()
         if not (site or source) or not all((line, joint, date)):
             return None
@@ -83,7 +111,7 @@ def restore_report_numbers(mode, items, path=None):
     def identity(item):
         if item.get('_source_id'):
             return ('source', item.get('_source_site', ''), item['_source_id'])
-        line = item.get('Line No.') or item.get('Dwg') or item.get('ISO')
+        line = item.get('Line No.') or item.get('Dwg') or item.get('ISO') or item.get('라인번호')
         joint = item.get('Joint No.') or item.get('Joint')
         if not line or not joint or not item.get('Date'):
             return None
@@ -91,6 +119,7 @@ def restore_report_numbers(mode, items, path=None):
                 item['Date'], line, joint)
     numbers = {}
     inspection_numbers = {}
+    norm_inspection_numbers = {}
     for entry in load_history(path):
         if entry.get('deleted_at') or entry.get('mode') != mode or not entry.get('report_no'):
             continue
@@ -101,6 +130,9 @@ def restore_report_numbers(mode, items, path=None):
             fallback = inspection(item)
             if fallback is not None:
                 inspection_numbers.setdefault(fallback, set()).add(entry['report_no'])
+            fallback_norm = inspection(item, normalized=True)
+            if fallback_norm is not None:
+                norm_inspection_numbers.setdefault(fallback_norm, set()).add(entry['report_no'])
     for item in items:
         key = identity(item)
         if key in numbers:
@@ -109,6 +141,10 @@ def restore_report_numbers(mode, items, path=None):
             candidates = inspection_numbers.get(inspection(item), set())
             if len(candidates) == 1:
                 item['Report No'] = next(iter(candidates))
+            elif not candidates:
+                norm_candidates = norm_inspection_numbers.get(inspection(item, normalized=True), set())
+                if len(norm_candidates) == 1:
+                    item['Report No'] = next(iter(norm_candidates))
 
 
 def record_issue(mode, report_no, output_path, items, path=None):
@@ -277,12 +313,26 @@ def show_history(parent, path=None):
                 issues.add(entry['id'])
         status.set(f'발행 {len(issues)}회 · 검사 항목 {len(visible)}건')
 
+    def resolve_existing_path(path_str):
+        p = Path(path_str)
+        if p.exists():
+            return p
+        text = str(path_str)
+        if re.match(r'^[A-Za-z]:[\\/]', text):
+            rel = text[2:]
+            for drive_letter in 'CDEFGHIJKLMNOPQRSTUVWXYZ':
+                alt = Path(f'{drive_letter}:{rel}')
+                if alt.exists():
+                    return alt
+        return p
+
     def open_output(_event=None):
         selection = tree.selection()
         if not selection:
             return
         try:
-            os.startfile(visible[selection[0]][0]['output_path'])
+            target_path = resolve_existing_path(visible[selection[0]][0]['output_path'])
+            os.startfile(str(target_path))
         except OSError as exc:
             messagebox.showerror('파일 열기 실패', str(exc), parent=window)
 
