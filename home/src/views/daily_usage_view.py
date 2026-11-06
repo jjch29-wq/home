@@ -898,6 +898,13 @@ def update_daily_usage_view_impl(self):
     import re
     marker_pattern = MARKER_PATTERN
     
+    # Reload latest data from Excel if available
+    if hasattr(self, 'load_data'):
+        try:
+            self.load_data()
+        except Exception:
+            pass
+    
     # [FIX] Aggressively hide any active suggestion window
     filter_widgets = [
         getattr(self, 'cb_daily_filter_site', None),
@@ -1198,9 +1205,8 @@ def update_daily_usage_view_impl(self):
         
         content_key = (n_date, n_site, c_worktime, n_method, t_key, mat_id, n_insp, n_code)
         
-        # Record is duplicate split IF (Timestamp matches) AND (Content matches)
-        # [FIX] Changed to OR but because t_key is in content_key, separate saves will always be unique.
-        is_duplicate_split = (t_key and t_key in seen_entry_times) or (content_key in seen_contents)
+        # Record is duplicate split ONLY IF exact content matches
+        is_duplicate_split = content_key in seen_contents
         
         if t_key: seen_entry_times.add(t_key)
         seen_contents.add(content_key)
