@@ -160,7 +160,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         # Left Panel: 1. 대상 구간 선택
         # -----------------------------
         left_panel = ttk.Frame(selector_frame)
-        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        left_panel.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5), anchor="n")
         
         sec_hdr = ttk.Frame(left_panel)
         sec_hdr.pack(fill=tk.X, pady=(0, 2))
@@ -172,9 +172,9 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.sec_count_lbl.pack(side=tk.LEFT)
         
         sec_box_frame = ttk.Frame(left_panel)
-        sec_box_frame.pack(fill=tk.BOTH, expand=True)
+        sec_box_frame.pack(fill=tk.X)
         
-        self.sec_canvas = tk.Canvas(sec_box_frame, height=120, highlightthickness=1, highlightbackground="#D3D3D3", bg="#FFFFFF")
+        self.sec_canvas = tk.Canvas(sec_box_frame, height=35, highlightthickness=1, highlightbackground="#D0D0D0", bg=self.cget("bg"))
         self.sec_scrollbar = ttk.Scrollbar(sec_box_frame, orient="vertical", command=self.sec_canvas.yview)
         self.sections_container = ttk.Frame(self.sec_canvas)
         
@@ -189,14 +189,13 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.sec_canvas.bind("<MouseWheel>", _sec_wheel)
         self.sections_container.bind("<MouseWheel>", _sec_wheel)
         
-        self.sec_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.sec_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.sec_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # -----------------------------
         # Right Panel: 2. 대상 라인 선택
         # -----------------------------
         right_panel = ttk.Frame(selector_frame)
-        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        right_panel.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0), anchor="n")
         
         line_hdr = ttk.Frame(right_panel)
         line_hdr.pack(fill=tk.X, pady=(0, 2))
@@ -215,9 +214,9 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.line_search_var.trace_add("write", lambda *args: self._on_line_search_changed())
         
         line_box_frame = ttk.Frame(right_panel)
-        line_box_frame.pack(fill=tk.BOTH, expand=True)
+        line_box_frame.pack(fill=tk.X)
         
-        self.line_canvas = tk.Canvas(line_box_frame, height=120, highlightthickness=1, highlightbackground="#D3D3D3", bg="#FFFFFF")
+        self.line_canvas = tk.Canvas(line_box_frame, height=35, highlightthickness=1, highlightbackground="#D0D0D0", bg=self.cget("bg"))
         self.line_scrollbar = ttk.Scrollbar(line_box_frame, orient="vertical", command=self.line_canvas.yview)
         self.lines_container = ttk.Frame(self.line_canvas)
         
@@ -232,8 +231,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         self.line_canvas.bind("<MouseWheel>", _line_wheel)
         self.lines_container.bind("<MouseWheel>", _line_wheel)
         
-        self.line_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.line_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.line_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # -------------------------------------------------------------
         # 2. Bottom Fixed Area (화면 맨 하단에 무조건 고정 표시)
@@ -518,7 +516,33 @@ class SectionLineBillingDialog(tk.Toplevel):
             self.line_canvas.yview_moveto(0)
         except Exception:
             pass
+        self._adjust_selector_heights()
         self.update_preview()
+
+    def _adjust_selector_heights(self):
+        """내용량에 따라 박스 높이를 30~120px 사이로 동적 조절하고 불필요한 스크롤바 자동 숨김"""
+        try:
+            self.update_idletasks()
+            
+            # 1. Section Box
+            req_sec = self.sections_container.winfo_reqheight()
+            h_sec = max(30, min(req_sec + 6, 120))
+            self.sec_canvas.configure(height=h_sec)
+            if req_sec > 120:
+                self.sec_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            else:
+                self.sec_scrollbar.pack_forget()
+                
+            # 2. Line Box
+            req_line = self.lines_container.winfo_reqheight()
+            h_line = max(30, min(req_line + 6, 120))
+            self.line_canvas.configure(height=h_line)
+            if req_line > 120:
+                self.line_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            else:
+                self.line_scrollbar.pack_forget()
+        except Exception:
+            pass
 
     def _on_line_search_changed(self):
         self._on_sections_changed()
