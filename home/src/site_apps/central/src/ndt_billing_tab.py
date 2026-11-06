@@ -8,6 +8,7 @@ import win32com.client as win32
 from tkcalendar import DateEntry
 from site_apps.central.src.services.ndt_calculator import calculate_billing
 from site_apps.central.src.services.billing_totals import grouped_billing_totals, grouped_supply_amount
+from site_apps.central.src.section_line_billing_dialog import SectionLineBillingDialog
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
@@ -672,6 +673,7 @@ class NDTCalculatorTab(ttk.Frame):
             
         ttk.Button(lbl_frame, text="조회(일보 연동)", command=self.import_from_work_log).pack(side=tk.LEFT, padx=(5, 0))
             
+        ttk.Button(lbl_frame, text="📊 구간/라인별 기성청구", command=self.open_section_line_billing_dialog).pack(side=tk.RIGHT, padx=(0, 6))
         ttk.Button(lbl_frame, text="기성청구", command=self.export_to_excel).pack(side=tk.RIGHT)
         ttk.Button(lbl_frame, text="기록 초기화", command=self.clear_records).pack(side=tk.RIGHT, padx=5)
         ttk.Button(lbl_frame, text="작업/감독일보에서 연동", command=self.import_from_work_log).pack(side=tk.RIGHT, padx=5)
@@ -1432,6 +1434,13 @@ class NDTCalculatorTab(ttk.Frame):
             messagebox.showinfo("불러오기 완료", msg)
         except Exception as e:
             messagebox.showerror("오류", f"불러오기 중 오류가 발생했습니다: {e}")
+
+    def open_section_line_billing_dialog(self):
+        try:
+            dlg = SectionLineBillingDialog(self, history=None, config=CONFIG)
+            dlg.grab_set()
+        except Exception as e:
+            messagebox.showerror("오류", f"구간/라인별 기성청구 창을 여는 중 오류가 발생했습니다:\n{e}")
 
     def open_report_hub(self):
         import subprocess
