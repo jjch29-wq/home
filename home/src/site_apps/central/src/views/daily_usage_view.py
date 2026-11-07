@@ -1029,33 +1029,33 @@ def setup_daily_usage_tab_impl(self):
     # Create Treeview for recent entries
     columns = ("id", "date", "site", "loc_type", "method", "inspection_item", "material", "qty", "worker", "insp_type", "joint_count", "rej_count", "pipe_size")
     self.tv_recent = ttk.Treeview(self.recent_frame, columns=columns, show='headings', height=5)
-    self.tv_recent['displaycolumns'] = ("date", "site", "loc_type", "method", "inspection_item", "material", "qty", "worker", "insp_type", "joint_count", "rej_count", "pipe_size")
+    self.tv_recent['displaycolumns'] = ("date", "loc_type", "method", "qty", "worker", "pipe_size", "inspection_item", "material", "joint_count", "rej_count")
     
     self.tv_recent.heading("date", text="날짜")
     self.tv_recent.heading("site", text="현장명")
     self.tv_recent.heading("loc_type", text="구분")
     self.tv_recent.heading("method", text="검사방법")
+    self.tv_recent.heading("qty", text="수량")
+    self.tv_recent.heading("worker", text="작업자")
+    self.tv_recent.heading("pipe_size", text="관경")
     self.tv_recent.heading("inspection_item", text="검사품명")
     self.tv_recent.heading("material", text="자재명")
-    self.tv_recent.heading("qty", text="수량")
-    self.tv_recent.heading("worker", text="작업자(첫번째)")
     self.tv_recent.heading("insp_type", text="검사구분")
     self.tv_recent.heading("joint_count", text="조인트수")
     self.tv_recent.heading("rej_count", text="불량수")
-    self.tv_recent.heading("pipe_size", text="관경(Inch)")
     
-    self.tv_recent.column("date", width=80, minwidth=80, stretch=False, anchor='center')
-    self.tv_recent.column("site", width=100, minwidth=100, stretch=False, anchor='center')
-    self.tv_recent.column("loc_type", width=100, minwidth=100, stretch=False, anchor='center')
-    self.tv_recent.column("method", width=60, minwidth=60, stretch=False, anchor='center')
+    self.tv_recent.column("date", width=85, minwidth=80, stretch=False, anchor='center')
+    self.tv_recent.column("site", width=80, minwidth=80, stretch=False, anchor='center')
+    self.tv_recent.column("loc_type", width=85, minwidth=80, stretch=False, anchor='center')
+    self.tv_recent.column("method", width=65, minwidth=60, stretch=False, anchor='center')
+    self.tv_recent.column("qty", width=60, minwidth=50, stretch=False, anchor='center')
+    self.tv_recent.column("worker", width=120, minwidth=80, stretch=False, anchor='center')
+    self.tv_recent.column("pipe_size", width=70, minwidth=60, stretch=False, anchor='center')
     self.tv_recent.column("inspection_item", width=80, minwidth=80, stretch=False, anchor='center')
-    self.tv_recent.column("material", width=120, minwidth=120, stretch=False, anchor='center')
-    self.tv_recent.column("qty", width=50, minwidth=50, stretch=False, anchor='center')
-    self.tv_recent.column("worker", width=80, minwidth=80, stretch=False, anchor='center')
+    self.tv_recent.column("material", width=120, minwidth=100, stretch=False, anchor='center')
     self.tv_recent.column("insp_type", width=60, minwidth=60, stretch=False, anchor='center')
     self.tv_recent.column("joint_count", width=60, minwidth=60, stretch=False, anchor='center')
     self.tv_recent.column("rej_count", width=60, minwidth=60, stretch=False, anchor='center')
-    self.tv_recent.column("pipe_size", width=80, minwidth=80, stretch=False, anchor='center')
     
     # Bind click to load record and delete
     self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
@@ -1188,6 +1188,7 @@ def update_daily_usage_view_impl(self):
     filter_worker = self.cb_daily_filter_worker.get().strip() if hasattr(self, 'cb_daily_filter_worker') else '전체'
     filter_vehicle = self.cb_daily_filter_vehicle.get().strip() if hasattr(self, 'cb_daily_filter_vehicle') else '전체'
     filter_shift = self.cb_daily_filter_shift.get().strip() if hasattr(self, 'cb_daily_filter_shift') else '전체'
+    filter_method = self.cb_daily_filter_method.get().strip() if hasattr(self, 'cb_daily_filter_method') else '전체'
     
     # Ensure default values if empty
     if not filter_site: filter_site = '전체'
@@ -1195,6 +1196,7 @@ def update_daily_usage_view_impl(self):
     if not filter_equipment: filter_equipment = '전체'
     if not filter_worker: filter_worker = '전체'
     if not filter_shift: filter_shift = '전체'
+    if not filter_method: filter_method = '전체'
     
     # (Dropdown population moved to refresh_inquiry_filters for stability)
     
@@ -1311,6 +1313,12 @@ def update_daily_usage_view_impl(self):
     if filter_vehicle != '전체' and '차량번호' in filtered_df.columns:
         # Support partial match for vehicle number
         filtered_df = filtered_df[filtered_df['차량번호'].astype(str).str.contains(filter_vehicle, na=False, case=False, regex=False)]
+    
+    if filter_method != '전체':
+        for col_cand in ['검사방법', 'InspectionMethod', 'Method']:
+            if col_cand in filtered_df.columns:
+                filtered_df = filtered_df[filtered_df[col_cand].astype(str).str.strip().str.upper() == filter_method.upper()]
+                break
     
     # Filter by material if specified
     if filter_material != '전체':

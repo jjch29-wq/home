@@ -6066,55 +6066,61 @@ class MaterialManager:
         self.cb_daily_filter_shift = ttk.Combobox(filter_row, width=8, state="readonly", values=["전체", "주간", "야간", "주야간", "휴일"])
         self.cb_daily_filter_shift.pack(side='left', padx=2)
         self.cb_daily_filter_shift.set('전체')
+
+        ttk.Label(filter_row, text="검사방법:").pack(side='left', padx=(5, 2))
+        self.cb_daily_filter_method = ttk.Combobox(filter_row, width=8, state="readonly", values=["전체", "PAUT", "RT", "MT", "PT"])
+        self.cb_daily_filter_method.pack(side='left', padx=2)
+        self.cb_daily_filter_method.set('전체')
         
-        # --- Row 3: Action Buttons (Top) ---
+        # --- Row 3: Action Buttons (조회 및 데이터 관리 그룹) ---
         btn_row = ttk.Frame(filter_frame)
         btn_row.pack(fill='x', pady=2)
         
-        # --- Row 4: Action Buttons (Bottom) ---
+        # --- Row 4: Action Buttons (보고서 및 엑셀 출력 그룹) ---
         btn_row2 = ttk.Frame(filter_frame)
         btn_row2.pack(fill='x', pady=2)
         
-        btn_filter = ttk.Button(btn_row, text="조회", style='Action.TButton', command=self.update_daily_usage_view)
-        btn_filter.pack(side='left', padx=5)
+        # [그룹 1: 조회 제어]
+        btn_filter = ttk.Button(btn_row, text="🔍 조회", style='Action.TButton', command=self.update_daily_usage_view)
+        btn_filter.pack(side='left', padx=(5, 2))
         
         btn_filter_reset = ttk.Button(btn_row, text="♻️ 필터 초기화", command=self.reset_daily_usage_filters)
-        btn_filter_reset.pack(side='left', padx=5)
-        
-        btn_delete = ttk.Button(btn_row, text="선택 항목 삭제", command=self.delete_daily_usage_entry)
-        btn_delete.pack(side='left', padx=10)
-        
-        btn_edit = ttk.Button(btn_row, text="선택 항목 수정", command=self.open_edit_daily_usage_dialog)
-        btn_edit.pack(side='left', padx=5)
-        
-        # Move export/report related buttons to btn_row2 to avoid horizontal cutoff
-        btn_export = ttk.Button(btn_row2, text="엑셀 내보내기", command=self.export_daily_usage_history)
-        btn_export.pack(side='left', padx=5)
-        
-        btn_export_invoice = ttk.Button(btn_row2, text="기성청구서 출력", command=self.export_invoice_excel)
-        btn_export_invoice.pack(side='left', padx=5)
-        
-        btn_export_all = ttk.Button(btn_row2, text="전체 기록 내보내기", command=self.export_all_daily_usage)
-        btn_export_all.pack(side='left', padx=5)
-        
-        btn_col_manage = ttk.Button(btn_row2, text="컬럼 관리", command=self.show_column_visibility_dialog)
-        btn_col_manage.pack(side='left', padx=10)
+        btn_filter_reset.pack(side='left', padx=2)
 
+        btn_col_manage = ttk.Button(btn_row, text="⚙️ 컬럼 관리", command=self.show_column_visibility_dialog)
+        btn_col_manage.pack(side='left', padx=(2, 12))
+        
+        # [그룹 2: 레코드 편집 및 저장]
+        btn_edit = ttk.Button(btn_row, text="✏️ 선택 항목 수정", command=self.open_edit_daily_usage_dialog)
+        btn_edit.pack(side='left', padx=2)
+
+        btn_delete = ttk.Button(btn_row, text="🗑️ 선택 항목 삭제", command=self.delete_daily_usage_entry)
+        btn_delete.pack(side='left', padx=2)
+
+        self.btn_daily_save_list = ttk.Button(btn_row, text="💾 목록 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
+        self.btn_daily_save_list.pack(side='left', padx=(8, 5))
+
+        # [그룹 3: 보고서 및 출력 (Row 4)]
         btn_ndt_report = ttk.Button(btn_row2, text="📊 진도보고서 출력", command=self.export_monthly_ndt_report)
-        btn_ndt_report.pack(side='left', padx=5)
+        btn_ndt_report.pack(side='left', padx=(5, 2))
 
         btn_weekly_report = ttk.Button(btn_row2, text="🗓️ 주간 업무보고 출력", command=self.export_weekly_report)
-        btn_weekly_report.pack(side='left', padx=5)
+        btn_weekly_report.pack(side='left', padx=2)
 
-        # Dedicated Save Button for the List View
-        self.btn_daily_save_list = ttk.Button(btn_row2, text="💾 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
-        self.btn_daily_save_list.pack(side='left', padx=10)
+        btn_export_invoice = ttk.Button(btn_row2, text="🧾 기성청구서 출력", command=self.export_invoice_excel)
+        btn_export_invoice.pack(side='left', padx=2)
+
+        btn_export = ttk.Button(btn_row2, text="📥 조회결과 엑셀 내보내기", command=self.export_daily_usage_history)
+        btn_export.pack(side='left', padx=(10, 2))
+
+        btn_export_all = ttk.Button(btn_row2, text="📦 전체 기록 백업", command=self.export_all_daily_usage)
+        btn_export_all.pack(side='left', padx=2)
 
         # Bindings
         filter_widgets = [
             self.cb_daily_filter_site, self.cb_daily_filter_company, self.cb_daily_filter_material, 
             self.cb_daily_filter_equipment, self.cb_daily_filter_worker, 
-            self.cb_daily_filter_shift
+            self.cb_daily_filter_shift, self.cb_daily_filter_method
         ]
         for widget in filter_widgets:
             widget.bind("<Return>", lambda e: self.update_daily_usage_view())
@@ -11514,10 +11520,10 @@ class MaterialManager:
                 self.cb_daily_filter_company, self.cb_daily_filter_site, 
                 self.cb_daily_filter_material, self.cb_daily_filter_equipment,
                 self.cb_daily_filter_worker, self.cb_daily_filter_vehicle,
-                self.cb_daily_filter_shift
+                self.cb_daily_filter_shift, getattr(self, 'cb_daily_filter_method', None)
             ]
             for combo in filter_combos:
-                if hasattr(self, combo.winfo_name()) or True: # Safeguard
+                if combo is not None and hasattr(combo, 'set'):
                     combo.set('전체')
             
             # 3. Refresh View
