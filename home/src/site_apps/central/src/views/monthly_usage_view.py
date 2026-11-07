@@ -463,7 +463,15 @@ def update_monthly_usage_view_impl(self):
         if f in df.columns:
             df.loc[dup_mask, f] = 0.0
 
-    # Group by Year, Month, Site, 검사방법, MaterialID and aggregate
+    # Group by Year, Month, Site, 검사방법, and separate film materials for RT
+    def get_mat_group_m(r):
+        m = str(r.get('검사방법', '')).strip().upper()
+        if m == 'RT':
+            mid = r.get('MaterialID', '')
+            return '' if pd.isna(mid) else str(mid).strip()
+        return ''
+    df['_MatGroup'] = df.apply(get_mat_group_m, axis=1)
+
     agg_dict['OT시간'] = 'sum'
     agg_dict['OT금액'] = 'sum'
     agg_dict['WorkerCount'] = 'sum'
@@ -473,7 +481,7 @@ def update_monthly_usage_view_impl(self):
     else:
         df['검사방법'] = '미지정'
 
-    grouped = df.groupby(['Year', 'Month', 'Site', '검사방법', 'MaterialID'], dropna=False).agg(agg_dict).reset_index()
+    grouped = df.groupby(['Year', 'Month', 'Site', '검사방법', '_MatGroup'], dropna=False).agg(agg_dict).reset_index()
     
     self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
     
@@ -517,7 +525,7 @@ def update_monthly_usage_view_impl(self):
         def clean_str(val):
             return str(val).replace('nan', '').replace('None', '').strip()
             
-        mat_id = entry['MaterialID']
+        mat_id = entry.get('_MatGroup', '')
         method_str = str(entry.get('검사방법', '')).strip().upper()
         
         # [ROBUST] Material name logic

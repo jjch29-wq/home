@@ -3839,19 +3839,24 @@ class MaterialManager:
                 df[nf] = pd.to_numeric(df[nf], errors='coerce').fillna(0.0)
                 site_agg_dict[nf] = 'sum'
 
-        # Helper for joining values in site-only summary
-        def join_unique_non_empty(series):
-            vals = [" ".join(str(v).split()) for v in series if pd.notna(v) and str(v).strip()]
-            return " | ".join(sorted(set(vals)))
+        # Separate film materials (for RT) while grouping equipment/empty together (for PAUT, MT, PT)
+        def get_mat_group(r):
+            m = str(r.get('검사방법', '')).strip().upper()
+            if m == 'RT':
+                mid = r.get('MaterialID', '')
+                return '' if pd.isna(mid) else str(mid).strip()
+            return ''
             
-        # Add Joiner for mixed MaterialIDs in site-only summary
-        site_agg_dict['MaterialID'] = join_unique_non_empty
+        df['_MatGroup'] = df.apply(get_mat_group, axis=1)
         
         # Ensure Site and Method are strings and filled
         if 'Site' in df.columns: df['Site'] = df['Site'].fillna('').astype(str)
         if '검사방법' in df.columns: df['검사방법'] = df['검사방법'].fillna('미지정').astype(str)
         
-        site_summary = df.groupby(['Site', '검사방법'], dropna=False).agg(site_agg_dict).reset_index()
+        if 'MaterialID' in site_agg_dict:
+            del site_agg_dict['MaterialID']
+            
+        site_summary = df.groupby(['Site', '검사방법', '_MatGroup'], dropna=False).agg(site_agg_dict).reset_index()
         
         # [NEW] Track active columns for dynamic hiding
         site_cols = ('현장', '검사방법', '품목명', '수량', '단가', '금액', '형광자분', '흑색자분', '백색페인트', 
@@ -3927,37 +3932,24 @@ class MaterialManager:
             if is_active(r_other): active_cols.add('기타')
             if is_active(rtk_sum): active_cols.add('RTK총계')
             
-            # Get Material Name (Handle multiple joined IDs if site grouping consolidated them)
-            mat_ids_raw = str(row['MaterialID']).split(' | ')
-            mat_names_list = []
-            for m_id_str in mat_ids_raw:
-                curr_id = m_id_str.strip()
-                if not curr_id or curr_id.lower() in ('nan', 'none', '0', '0.0', ''): continue
-                
-                # [ROBUST] Logic to find material name from ID (handling numeric conversion)
-                def get_single_mat_name(m_id_val):
-                    try: 
-                        m_f = float(m_id_val)
-                        if m_f == 0.0: return ""
+            # Get Material Name from _MatGroup
+            curr_id = str(row.get('_MatGroup', '')).strip()
+            mat_name = ""
+            if curr_id and curr_id.lower() not in ('nan', 'none', '0', '0.0', ''):
+                try: 
+                    m_f = float(curr_id)
+                    if m_f != 0.0:
                         matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_f]
-                        if not matches.empty: return str(matches.iloc[0]['품목명'])
-                    except: pass
-                    matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(m_id_val)]
-                    if not matches.empty: return str(matches.iloc[0]['품목명'])
-                    return f"ID:{m_id_val}"
-                
-                name_found = get_single_mat_name(curr_id)
-                if not name_found or name_found in ('ID:0', 'ID:0.0'):
-                    continue
-                # Skip equipment/scanner keywords from consumable name
-                if any(eq in name_found.upper() for eq in ['SCANNER', '스캐너', 'YOKE', '장비', 'CRAWLER']):
-                    continue
-                mat_names_list.append(name_found)
+                        if not matches.empty: mat_name = str(matches.iloc[0]['품목명'])
+                except: pass
+                if not mat_name:
+                    matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(curr_id)]
+                    if not matches.empty: mat_name = str(matches.iloc[0]['품목명'])
+                if not mat_name and curr_id not in ('0', '0.0'):
+                    mat_name = f"ID:{curr_id}"
                     
             method_str = str(row.get('검사방법', '')).strip().upper()
-            if mat_names_list:
-                mat_name = ", ".join(sorted(set(mat_names_list)))
-            else:
+            if not mat_name:
                 if method_str == 'MT':
                     mat_name = "MT약품"
                 elif method_str == 'PAUT':
