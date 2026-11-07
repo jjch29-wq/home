@@ -1917,9 +1917,14 @@ class MaterialManager:
 
     def get_material_display_name(self, mat_id):
         """Get formatted material name as '품목명 (SN: SN번호) - 규격'"""
-        # [FIX] Handle NaN/empty IDs gracefully to prevent matching empty strings
-        if pd.isna(mat_id) or str(mat_id).lower().strip() in ('nan', 'none', '', '0'):
+        # [FIX] Handle NaN/empty/zero IDs gracefully to prevent showing '0.0' or matching empty strings
+        if pd.isna(mat_id) or str(mat_id).lower().strip() in ('nan', 'none', '', '0', '0.0', '0.00', '-'):
             return ""
+        try:
+            if float(str(mat_id).replace(',', '').strip()) == 0.0:
+                return ""
+        except:
+            pass
             
         if self.materials_df.empty:
             return f"ID: {mat_id}"
