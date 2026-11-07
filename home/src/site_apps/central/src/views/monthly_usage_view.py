@@ -52,6 +52,11 @@ def setup_monthly_usage_tab_impl(self):
     self.cb_filter_material_monthly.pack(side='left', padx=5)
     self.cb_filter_material_monthly.set('전체')
     
+    # [UX IMPROVEMENT] 드롭다운(연도, 월, 현장, 검사방법, 자재명) 항목 클릭/선택 시 즉시 자동 조회 적용
+    for cb in (self.cb_filter_year, self.cb_filter_month, self.cb_filter_site_monthly, self.cb_filter_method_monthly, self.cb_filter_material_monthly):
+        cb.bind("<<ComboboxSelected>>", lambda e: self.update_monthly_usage_view())
+        cb.bind("<Return>", lambda e: self.update_monthly_usage_view())
+
     btn_filter = ttk.Button(filter_frame, text="조회", command=self.update_monthly_usage_view)
     btn_filter.pack(side='left', padx=10)
     
