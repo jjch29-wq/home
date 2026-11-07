@@ -8271,7 +8271,8 @@ class MaterialManager:
             if len(material_usage_sums) > 9:
                 material_usage_sums[9] = anti_drop_qty
             if len(material_usage_sums) > 10:
-                material_usage_sums[10] = float(len(rt_dates))
+                # 동위원소(선원) 구매는 작업일수가 아닌 장비 투입 실적 기준 1대(1개) 구매
+                material_usage_sums[10] = 1.0 if len(rt_dates) > 0 else 0.0
 
             for i, qty in enumerate(material_usage_sums):
                 if i < len(current_mat_data):
