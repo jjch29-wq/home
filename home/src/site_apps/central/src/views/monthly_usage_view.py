@@ -449,19 +449,6 @@ def update_monthly_usage_view_impl(self):
     # Apply calculation and marking
     calc_results = df.apply(sync_dedup_and_calc_ot, axis=1)
     df[['OT시간', 'OT금액', 'WorkerCount', '_is_m_dup']] = calc_results
-    
-    # Zero out other quantitative fields for duplicate rows before aggregation
-    # [FIX] Do NOT zero out 'Usage' and '검사량' during view-level deduping.
-    # Database-level splitting already zeros them for valid splits. 
-    # View-level zeroing was causing data loss if the quantity was on a secondary row.
-    q_fields = ['단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '제경비', '기술료', '환산물량', '재료비', '인건비']
-    rtk_fields = [f'RTK_{c}' for c in ['센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타']]
-    ndt_fields = ['NDT_형광자분', 'NDT_자분', 'NDT_흑색자분', 'NDT_페인트', 'NDT_백색페인트', 'NDT_침투제', 'NDT_세척제', 'NDT_현상제', 'NDT_형광', 'NDT_형광침투제']
-    
-    dup_mask = df['_is_m_dup'] == True
-    for f in q_fields + rtk_fields + ndt_fields:
-        if f in df.columns:
-            df.loc[dup_mask, f] = 0.0
 
     # Group by Year, Month, Site, 검사방법, and separate film materials for RT
     def get_mat_group_m(r):
