@@ -1625,9 +1625,9 @@ def update_daily_usage_view_impl(self):
         # --- BUILD FINAL VISIBILITY (MERGED LOGIC) ---
         all_cols = list(self.daily_usage_tree['columns'])
         
-        # [OPTIMIZED] 목적에 맞춘 추천 컬럼 정렬 순서
+        # [OPTIMIZED] 목적에 맞춘 추천 컬럼 정렬 순서 (원가 세부항목 대신 단가·검사금액으로 통합)
         preferred_order = [
-            '날짜', '구분', '검사방법', '수량', '단위', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고'
+            '날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고'
         ]
 
         # manual_set: columns user explicitly selected via column manager
@@ -1643,6 +1643,9 @@ def update_daily_usage_view_impl(self):
                 dynamic_col_status[f'OT{i}'] = False
             dynamic_col_status['적용코드'] = False
             dynamic_col_status['현장'] = False
+            # 세부 원가 계산 항목(조건1, 조건2, 보정계수, 제경비, 기술료, 환산물량, 재료비, 인건비, 작업형태)은 단가·검사금액으로 통합하고 기본 숨김
+            for c_cost in ('조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '작업형태'):
+                manual_hidden.add(c_cost)
 
         # [SAFETY] Core columns that should almost never be hidden
         mandatory_cols = ['날짜', '구분', '검사방법', '수량', '작업자']
@@ -1683,12 +1686,12 @@ def update_daily_usage_view_impl(self):
         
 
         
-        # Header renames (if any)
-
-        # Ensure stretch=False and minwidth is relaxed for ALL displayed columns
-        # This is critical for making all columns, especially the last one, resizable
+        # Header renames & column alignment
         for col in final_visible:
-            self.daily_usage_tree.column(col, stretch=False, minwidth=20)
+            disp_title = "자재명" if col == "품목명" else ("검사금액" if col == "검사비" else col)
+            self.daily_usage_tree.heading(col, text=disp_title)
+            anchor = 'e' if col in ('수량', '단가', '검사비', 'OT금액', '출장비', '일식') else 'center'
+            self.daily_usage_tree.column(col, stretch=False, minwidth=20, anchor=anchor)
 
         # Re-apply saved column widths if available
         if hasattr(self, 'tab_config') and 'daily_usage_col_widths' in self.tab_config:

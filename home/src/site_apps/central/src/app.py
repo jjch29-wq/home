@@ -6154,8 +6154,8 @@ class MaterialManager:
         self.daily_usage_tree = ttk.Treeview(list_frame, columns=columns, show='headings',
                                               yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
-        # Define display columns - 목적에 최적화된 추천 기본 컬럼
-        visible_defaults = ['날짜', '구분', '검사방법', '수량', '단위', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
+        # Define display columns - 목적에 최적화된 추천 기본 컬럼 (원가 세부항목 대신 단가·검사금액으로 통합)
+        visible_defaults = ['날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
@@ -6183,9 +6183,10 @@ class MaterialManager:
         # Column configuration
         col_widths = {
             '날짜': 105, '구분': 85, '검사방법': 75, '수량': 70, '단위': 45,
+            '단가': 85, '검사비': 105,
             '작업자': 150, '작업시간': 130, 'OT금액': 90, '장비명': 130, '업체명': 120, '비고': 180,
             '현장': 90, '검사품명': 100, '적용코드': 90, '성적서번호': 110,
-            'OT시간': 75, '단가': 85, '출장비': 85, '검사비': 90, '일식': 75,
+            'OT시간': 75, '출장비': 85, '일식': 75,
             '차량번호': 110, '주행거리': 85, '차량점검': 150, '차량비고': 130,
             '품목명': 160, '입력시간': 150,
             'OT1': 90, 'OT2': 90, 'OT3': 90, 'OT4': 90, 'OT5': 90,
@@ -6193,9 +6194,11 @@ class MaterialManager:
         }
         
         for col in columns:
-            self.daily_usage_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(self.daily_usage_tree, c, False))
+            disp_title = "자재명" if col == "품목명" else ("검사금액" if col == "검사비" else col)
+            self.daily_usage_tree.heading(col, text=disp_title, command=lambda c=col: self.treeview_sort_column(self.daily_usage_tree, c, False))
             width = col_widths.get(col, 100)
-            self.daily_usage_tree.column(col, width=width, minwidth=20, stretch=False, anchor='center')
+            anchor = 'e' if col in ('수량', '단가', '검사비', 'OT금액', '출장비', '일식') else 'center'
+            self.daily_usage_tree.column(col, width=width, minwidth=20, stretch=False, anchor=anchor)
         
         # Grid layout for list_frame
         self.daily_usage_tree.grid(row=0, column=0, sticky='nsew')
