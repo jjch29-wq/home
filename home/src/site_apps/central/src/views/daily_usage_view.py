@@ -1939,55 +1939,22 @@ def update_daily_usage_view_impl(self):
 
         # manual_set: columns user explicitly selected via column manager
         manual_visible_list = getattr(self, 'manual_visible_cols', [])
-        # If manual list has old default list containing all OT1~10 or empty, prefer optimized default
-        is_custom_selection = bool(manual_visible_list and set(manual_visible_list) != set(all_cols) and not ('OT1' in manual_visible_list and 'OT10' in manual_visible_list))
         
-        manual_hidden = set(all_cols) - set(manual_visible_list) if is_custom_selection else set()
-        
-        # 개별 OT1~OT10 컬럼은 사용자가 수동 선택하지 않는 한 기본 목록 그리드에서는 자동 노출을 억제 (OT금액 총합으로 표시)
-        if not is_custom_selection:
-            for i in range(1, 11):
-                dynamic_col_status[f'OT{i}'] = False
-            # '적용코드' 및 '현장' 컬럼은 중앙지사 단일 앱 목록에서 기본 숨김
-            dynamic_col_status['적용코드'] = False
-            dynamic_col_status['현장'] = False
-            # 세부 원가 계산 항목(조건1, 조건2, 보정계수, 제경비, 기술료, 환산물량, 재료비, 인건비, 작업형태)은 단가·검사금액으로 통합하고 기본 숨김
-            for c_cost in ('조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '작업형태'):
-                manual_hidden.add(c_cost)
+        # 레거시 노이즈 컬럼 제거 (조건1, 조건2, 보정계수, 제경비, 기술료, 환산물량, 재료비, 인건비 등 세부원가 및 개별OT1~10)
+        noisy_cols = {'작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '적용코드', '현장'}
+        if manual_visible_list:
+            cleaned_manual = [c for c in manual_visible_list if c not in noisy_cols and not (c.startswith('OT') and c[2:].isdigit())]
+            if len(cleaned_manual) != len(manual_visible_list):
+                self.manual_visible_cols = cleaned_manual
+                manual_visible_list = cleaned_manual
 
-        # [SAFETY] Core columns that should almost never be hidden
-        mandatory_cols = ['날짜', '구분', '검사방법', '수량', '작업자']
+        is_custom_selection = bool(manual_visible_list and set(manual_visible_list) != set(preferred_order) and set(manual_visible_list) != set(all_cols))
         
-        # 활성화 대상 컬럼 판정
-        active_set = set()
-        for col in all_cols:
-            if col == '(Full작업자)': continue
-            
-            # 1. Mandatory override
-            if col in mandatory_cols:
-                active_set.add(col)
-                continue
-            
-            # 2. SMART HIDING: For columns we track data status for
-            if col in dynamic_col_status:
-                if dynamic_col_status[col] and col not in manual_hidden:
-                    active_set.add(col)
-                continue
-            
-            # 3. Fallback for untracked columns
-            if col not in manual_hidden:
-                active_set.add(col)
-
-        # 사용자 지정 순서 또는 최적화된 추천 순서(preferred_order)로 최종 displaycolumns 구성
-        final_visible = []
-        order_base = manual_visible_list if is_custom_selection else preferred_order
-        for col in order_base:
-            if col in active_set and col not in final_visible:
-                final_visible.append(col)
-        # 그 외 활성화된 컬럼들은 뒤쪽에 순서대로 배치
-        for col in all_cols:
-            if col in active_set and col not in final_visible:
-                final_visible.append(col)
+        # displaycolumns 결정: 사용자가 직접 커스텀 조정한 경우 외에는 무조건 깔끔한 preferred_order만 노출
+        if is_custom_selection:
+            final_visible = [c for c in manual_visible_list if c in all_cols]
+        else:
+            final_visible = [c for c in preferred_order if c in all_cols]
 
         # [STABILITY] Clear the Treeview's displayed columns
         self.daily_usage_tree['displaycolumns'] = final_visible

@@ -12361,11 +12361,11 @@ class MaterialManager:
         
         # [FIX] Use stored manual preferences instead of current filtered displaycolumns
         # so that hidden-by-data columns still appear checked if user wants them.
+        preferred_defaults = ['날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
         if tree == self.daily_usage_tree:
             active_cols = getattr(self, 'manual_visible_cols', [])
             if not active_cols:
-                # Default to all non-data columns if no preference saved
-                active_cols = [c for c in all_cols if c != '(Full작업자)']
+                active_cols = list(preferred_defaults)
         else:
             active_cols = tree['displaycolumns']
             if not active_cols or active_cols == ('#all'):
@@ -12384,7 +12384,7 @@ class MaterialManager:
             
             # Reconstruct final display based on user result + mandatory ones
             mandatory_lookup = {
-                self.daily_usage_tree: ['날짜', '업체명', '현장', '작업자', '검사품명', '수량', '단위', '단가', '검사비', 'OT시간', 'OT금액', '비고'],
+                self.daily_usage_tree: ['날짜', '구분', '검사방법', '수량', '작업자'],
                 self.inout_tree: ['날짜', '구분', '품목명']
             }
             
@@ -12393,8 +12393,14 @@ class MaterialManager:
                 if mc in all_cols and mc not in final_selection:
                     final_selection.append(mc)
             
-            # Re-order to match original tree columns
-            sorted_selection = [c for c in all_cols if c in final_selection]
+            # Re-order according to preferred order first, then remaining
+            if tree == self.daily_usage_tree:
+                sorted_selection = [c for c in preferred_defaults if c in final_selection]
+                for c in all_cols:
+                    if c in final_selection and c not in sorted_selection:
+                        sorted_selection.append(c)
+            else:
+                sorted_selection = [c for c in all_cols if c in final_selection]
             
             tree['displaycolumns'] = sorted_selection
             
@@ -14153,12 +14159,21 @@ class MaterialManager:
                     if col in translations:
                         self.manual_visible_cols[i] = translations[col]
                 
-                if self.manual_visible_cols and hasattr(self, 'daily_usage_tree'):
-                    # Append new NDT columns to saved config if they are missing
-                    for nc in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비']:
-                        if nc not in self.manual_visible_cols:
-                            self.manual_visible_cols.append(nc)
-                            
+                # [CLEANUP] Remove noisy NDT calculation breakdown columns and noise columns from display list
+                for nc in ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '적용코드', '현장']:
+                    while nc in self.manual_visible_cols:
+                        self.manual_visible_cols.remove(nc)
+
+                # Ensure preferred columns in clean order
+                preferred_order = ['날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
+                if not self.manual_visible_cols or any(ot in self.manual_visible_cols for ot in ['OT1', 'OT2', 'OT3']):
+                    self.manual_visible_cols = list(preferred_order)
+                else:
+                    for pc in preferred_order:
+                        if pc not in self.manual_visible_cols:
+                            self.manual_visible_cols.append(pc)
+                
+                if hasattr(self, 'daily_usage_tree'):
                     try:
                         self.daily_usage_tree['displaycolumns'] = [c for c in self.manual_visible_cols if c in self.daily_usage_tree['columns']]
                     except: pass
