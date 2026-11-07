@@ -1934,7 +1934,7 @@ def update_daily_usage_view_impl(self):
         
         # [OPTIMIZED] 목적에 맞춘 추천 컬럼 정렬 순서 (원가 세부항목 대신 단가·검사금액으로 통합)
         preferred_order = [
-            '날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고'
+            '날짜', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고'
         ]
 
         # manual_set: columns user explicitly selected via column manager
@@ -1947,6 +1947,17 @@ def update_daily_usage_view_impl(self):
             if len(cleaned_manual) != len(manual_visible_list):
                 self.manual_visible_cols = cleaned_manual
                 manual_visible_list = cleaned_manual
+
+        if manual_visible_list and '품목명' not in manual_visible_list:
+            if '검사방법' in manual_visible_list:
+                idx = manual_visible_list.index('검사방법')
+                manual_visible_list.insert(idx + 1, '품목명')
+            elif '수량' in manual_visible_list:
+                idx = manual_visible_list.index('수량')
+                manual_visible_list.insert(idx, '품목명')
+            else:
+                manual_visible_list.append('품목명')
+            self.manual_visible_cols = manual_visible_list
 
         is_custom_selection = bool(manual_visible_list and set(manual_visible_list) != set(preferred_order) and set(manual_visible_list) != set(all_cols))
         
@@ -1988,7 +1999,7 @@ def update_daily_usage_view_impl(self):
     else:
         # If empty, show only mandatory columns to keep the view clean
         all_cols = self.daily_usage_tree['columns']
-        final_visible = ['날짜', '구분', '검사방법', '수량', '작업자']
+        final_visible = ['날짜', '구분', '검사방법', '품목명', '수량', '작업자']
         self.daily_usage_tree['displaycolumns'] = final_visible
         
         # Standard column setup for display

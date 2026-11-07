@@ -6239,7 +6239,7 @@ class MaterialManager:
                                               yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
         # Define display columns - 목적에 최적화된 추천 기본 컬럼 (원가 세부항목 대신 단가·검사금액으로 통합)
-        visible_defaults = ['날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
+        visible_defaults = ['날짜', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
@@ -12461,7 +12461,7 @@ class MaterialManager:
         
         # [FIX] Use stored manual preferences instead of current filtered displaycolumns
         # so that hidden-by-data columns still appear checked if user wants them.
-        preferred_defaults = ['날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
+        preferred_defaults = ['날짜', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
         if tree == self.daily_usage_tree:
             active_cols = getattr(self, 'manual_visible_cols', [])
             if not active_cols:
@@ -12484,7 +12484,7 @@ class MaterialManager:
             
             # Reconstruct final display based on user result + mandatory ones
             mandatory_lookup = {
-                self.daily_usage_tree: ['날짜', '구분', '검사방법', '수량', '작업자'],
+                self.daily_usage_tree: ['날짜', '구분', '검사방법', '품목명', '수량', '작업자'],
                 self.inout_tree: ['날짜', '구분', '품목명']
             }
             
@@ -14274,10 +14274,19 @@ class MaterialManager:
                         self.manual_visible_cols.remove(nc)
 
                 # Ensure preferred columns in clean order
-                preferred_order = ['날짜', '구분', '검사방법', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
+                preferred_order = ['날짜', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
                 if not self.manual_visible_cols or any(ot in self.manual_visible_cols for ot in ['OT1', 'OT2', 'OT3']):
                     self.manual_visible_cols = list(preferred_order)
                 else:
+                    if '품목명' not in self.manual_visible_cols:
+                        if '검사방법' in self.manual_visible_cols:
+                            idx = self.manual_visible_cols.index('검사방법')
+                            self.manual_visible_cols.insert(idx + 1, '품목명')
+                        elif '수량' in self.manual_visible_cols:
+                            idx = self.manual_visible_cols.index('수량')
+                            self.manual_visible_cols.insert(idx, '품목명')
+                        else:
+                            self.manual_visible_cols.append('품목명')
                     for pc in preferred_order:
                         if pc not in self.manual_visible_cols:
                             self.manual_visible_cols.append(pc)
