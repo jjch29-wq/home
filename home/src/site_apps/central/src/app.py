@@ -1224,11 +1224,8 @@ class MaterialManager:
         self.refresh_inquiry_filters()
         self.update_daily_usage_view()
         
-        # Bind tab events (Drag and drop reordering)
+        # Bind tab events (Fixed order, disable drag reordering)
         self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
-        self.notebook.bind("<Button-1>", self.on_tab_drag_start)
-        self.notebook.bind("<B1-Motion>", self.on_tab_drag)
-        self.notebook.bind("<ButtonRelease-1>", self.on_tab_drag_end)
         self.notebook.bind("<Button-3>", self.show_tab_context_menu)
         
         # Bind main window resize to maintain sash ratios
@@ -13748,30 +13745,14 @@ class MaterialManager:
         return 'break'
     
     def show_tab_context_menu(self, event):
-        """Show context menu for tab reordering"""
-        # Identify which tab was clicked
+        """Show context menu for tab options"""
         try:
             clicked_tab = self.notebook.index(f"@{event.x},{event.y}")
             self.notebook.select(clicked_tab)
             
-            # Create context menu
             context_menu = tk.Menu(self.root, tearoff=0)
-            
-            # Only show "Move Left" if not the first tab
-            if clicked_tab > 0:
-                context_menu.add_command(label="← 탭 왼쪽으로 이동", 
-                                        command=lambda: self.move_tab_left(clicked_tab))
-            
-            # Only show "Move Right" if not the last tab
-            if clicked_tab < self.notebook.index('end') - 1:
-                context_menu.add_command(label="탭 오른쪽으로 이동 →", 
-                                        command=lambda: self.move_tab_right(clicked_tab))
-            
-            context_menu.add_separator()
             context_menu.add_command(label="🔄 기본 탭 순서로 초기화", 
                                     command=self.reset_tab_order_to_default)
-            
-            # Show menu at cursor position
             context_menu.post(event.x_root, event.y_root)
         except:
             pass
@@ -13835,20 +13816,17 @@ class MaterialManager:
             self.save_tab_config()
 
     def on_tab_drag_start(self, *args, **kwargs):
-        from site_apps.central.src.controllers.event_controller import on_tab_drag_start_impl
-        return on_tab_drag_start_impl(self, *args, **kwargs)
+        pass
 
     def on_tab_drag(self, *args, **kwargs):
-        from site_apps.central.src.controllers.event_controller import on_tab_drag_impl
-        return on_tab_drag_impl(self, *args, **kwargs)
+        pass
 
     def normalize_site_name(self, *args, **kwargs):
         from site_apps.central.src.utils.helpers import normalize_site_name_impl
         return normalize_site_name_impl(self, *args, **kwargs)
 
     def on_tab_drag_end(self, *args, **kwargs):
-        from site_apps.central.src.controllers.event_controller import on_tab_drag_end_impl
-        return on_tab_drag_end_impl(self, *args, **kwargs)
+        pass
     
     def on_tab_changed(self, *args, **kwargs):
         from site_apps.central.src.controllers.event_controller import on_tab_changed_impl
@@ -14193,10 +14171,19 @@ class MaterialManager:
                 for col in self.budget_view_tree['columns']:
                     self.tab_config['budget_view_col_widths'][col] = self.budget_view_tree.column(col, 'width')
             
-            # Save tab order
-            self.tab_config['tab_order'] = []
-            for tab in self.notebook.tabs():
-                self.tab_config['tab_order'].append(self.notebook.tab(tab, "text"))
+            # Save tab order (항상 표준 기본 순서 고정)
+            default_tab_order = [
+                '현재 재고 현황',
+                '데이터 가져오기/내보내기',
+                '입출고 관리',
+                '현장별 일일 사용량 기입',
+                '현장 일일기록 조회 및 관리',
+                '월별 집계',
+                '작업/감독일보',
+                '기성 정산 (NDT)',
+                '공사실행예산서'
+            ]
+            self.tab_config['tab_order'] = default_tab_order
                 
             # [NEW] Save equipment list
             self.tab_config['equipments'] = self.equipments
@@ -14332,7 +14319,7 @@ class MaterialManager:
                 # Create mapping from text to tab widget
                 tab_map = {text: tab for text, tab in current_order}
                 
-                # Restore tab order if saved order exists
+                # Restore tab order to standard default order (항상 표준 순서 강제 복원)
                 default_order = [
                     '현재 재고 현황',
                     '데이터 가져오기/내보내기',
@@ -14344,17 +14331,13 @@ class MaterialManager:
                     '기성 정산 (NDT)',
                     '공사실행예산서'
                 ]
-                saved_order = config.get('tab_order', default_order)
-                if not saved_order:
-                    saved_order = default_order
-                if saved_order:
-                    # [ROBUST] Reorder tabs according to saved order (relaxed length check)
-                    for i, tab_text in enumerate(saved_order):
-                        if tab_text in tab_map:
-                            tab = tab_map[tab_text]
-                            current_pos = self.notebook.index(tab)
-                            if current_pos != i:
-                                self.notebook.insert(i, tab, text=tab_text)
+                for i, tab_text in enumerate(default_order):
+                    if tab_text in tab_map:
+                        tab = tab_map[tab_text]
+                        current_pos = self.notebook.index(tab)
+                        if current_pos != i:
+                            self.notebook.insert(i, tab, text=tab_text)
+                self.tab_config['tab_order'] = default_order
                 
                 # 마지막으로 보던 탭 복원 (설정 없으면 기본값: '현장별 일일 사용량 기입')
                 selected_text = config.get('selected_tab_text')

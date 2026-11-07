@@ -357,76 +357,18 @@ def on_daily_usage_tree_select_impl(self, event):
 
 
 def on_tab_drag_start_impl(self, event):
-    """Start tab dragging by identifying the tab under the cursor"""
-    if getattr(self, 'layout_locked', False):
-        self._drag_start_index = None
-        return
-        
-    try:
-        # Check if click is on a tab tab
-        clicked_tab = self.notebook.identify(event.x, event.y)
-        if clicked_tab == "label":
-            # Find which index this is
-            self._drag_start_index = self.notebook.index(f"@{event.x},{event.y}")
-            self._current_drag_index = self._drag_start_index
-            self._drag_start_x = event.x
-            self._drag_start_y = event.y
-            self._is_dragging = False
-        else:
-            self._drag_start_index = None
-    except:
-        self._drag_start_index = None
+    """No-op: tab drag reordering disabled to prevent accidental moves"""
+    pass
 
 
 def on_tab_drag_impl(self, event):
-    """Handle visual swapping of tabs during drag with minimum distance threshold"""
-    if getattr(self, 'layout_locked', False):
-        return
-
-    if not hasattr(self, '_drag_start_index') or self._drag_start_index is None:
-        return
-
-    # [STABILITY] Prevent accidental tab reordering on normal clicks: require at least 30px horizontal movement
-    start_x = getattr(self, '_drag_start_x', event.x)
-    start_y = getattr(self, '_drag_start_y', event.y)
-    dx = abs(event.x - start_x)
-    dy = abs(event.y - start_y)
-    
-    if not getattr(self, '_is_dragging', False):
-        if dx < 30 or dx < dy * 1.5:  # Must be a deliberate horizontal drag
-            return
-        self._is_dragging = True
-
-    try:
-        # Find the index of the tab currently under the cursor
-        target_index = self.notebook.index(f"@{event.x},{event.y}")
-        
-        if target_index != self._current_drag_index:
-            # Get the widget of the tab we are dragging
-            tab_widget = self.notebook.tabs()[self._current_drag_index]
-            tab_text = self.notebook.tab(self._current_drag_index, "text")
-            
-            # Use insert to move tab widget. 
-            # Note: insert(pos, widget) handles the reordering logic in Notebook
-            self.notebook.insert(target_index, tab_widget, text=tab_text)
-            
-            self._current_drag_index = target_index
-            self.notebook.select(target_index)
-    except:
-        pass
+    """No-op: tab drag reordering disabled to prevent accidental moves"""
+    pass
 
 
 def on_tab_drag_end_impl(self, event):
-    """Finalize tab order and save configuration"""
-    if hasattr(self, '_drag_start_index') and self._drag_start_index is not None:
-        if getattr(self, '_is_dragging', False) and self._current_drag_index != self._drag_start_index:
-            print(f"Tab reordered: {self._drag_start_index} -> {self._current_drag_index}")
-            # [FIX] Force save on manual drag end to ensure order is persisted
-            self.save_tab_config(force=True)
-        
-        self._drag_start_index = None
-        self._current_drag_index = None
-        self._is_dragging = False
+    """No-op: tab drag reordering disabled to prevent accidental moves"""
+    pass
 
 
 def on_tab_changed_impl(self, event=None):
