@@ -7726,16 +7726,21 @@ class MaterialManager:
                     paut_dates.add(date_key)
                     # Specialized Scanner Detection (Robust matching)
                     eq_clean = equip_name.replace(' ', '').upper()
+                    aux_clean = str(row.get('보조장비', '')).replace(' ', '').upper()
                     m_clean = m_name_local.replace(' ', '').upper()
                     mid_clean = str(m_id_local).replace(' ', '').upper()
-                    
-                    is_cobra_scanner = ('SCANNER(COBRA)' in eq_clean or 'SCANNER(COBRA)' in m_clean or 'SCANNER(COBRA)' in mid_clean or
-                                        ('COBRA' in eq_clean and 'SCANNER' in eq_clean) or 
-                                        ('COBRA' in m_clean and 'SCANNER' in m_clean) or
-                                        ('COBRA' in mid_clean and 'SCANNER' in mid_clean))
+                    note_clean = str(row.get('Note', row.get('비고', ''))).replace(' ', '').upper()
+                    cond_clean = str(row.get('조건1', '')).replace(' ', '').upper()
+                    pipe_clean = str(row.get('관경(Inch)', row.get('관경', ''))).replace(' ', '').upper()
+
+                    combined_text = f"{eq_clean}|{aux_clean}|{m_clean}|{mid_clean}|{note_clean}"
+
+                    is_cobra_scanner = ('COBRA' in combined_text or
+                                        'SCANNER(COBRA)' in combined_text or
+                                        ('100A이하' in cond_clean and ('PAUT' in method_val or 'PAUT' in equip_name)))
 
                     # [FIX] If it's a scanner and not COBRA, it's MANUAL
-                    is_manual_scanner = ('SCANNER' in eq_clean or 'SCANNER' in m_clean or 'SCANNER' in mid_clean) and not is_cobra_scanner
+                    is_manual_scanner = ('SCANNER' in combined_text or 'JIREH' in combined_text) and not is_cobra_scanner
 
                     if is_manual_scanner:
                         paut_manual_scanner_dates.add(date_key)
