@@ -67,9 +67,9 @@ def setup_monthly_usage_tab_impl(self):
     vsb = ttk.Scrollbar(tree_frame, orient="vertical")
     hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
     
-    # Treeview with columns: streamlined, intuitive order prioritizing method, material, quantities and revenues
-    columns = ('연도', '월', '현장', '검사방법', '품목명', '수량', '검사비', '출장비', '일식', '제경비', '기술료', '총기성액', 
-               '환산물량', '재료비', '인건비', '작업자', '작업시간', 'OT시간', 'OT금액', '단가',
+    # Treeview with columns: streamlined, intuitive order: method, material, quantity, unit price, amount, workers, OTs, consumables
+    columns = ('연도', '월', '현장', '검사방법', '품목명', '수량', '단가', '금액', 
+               '작업자', 'OT시간', 'OT금액',
                'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
                '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', 
                '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
@@ -85,9 +85,9 @@ def setup_monthly_usage_tab_impl(self):
     # Column configuration with intuitive widths
     col_widths = {
         '연도': 65, '월': 50, '현장': 100, '검사방법': 75, '품목명': 160,
-        '수량': 70, '검사비': 90, '출장비': 80, '일식': 70, '제경비': 80, '기술료': 80, '총기성액': 95,
-        '환산물량': 75, '재료비': 85, '인건비': 90, '작업자': 110, '작업시간': 100,
-        'OT시간': 75, 'OT금액': 90, '단가': 80,
+        '수량': 70, '단가': 85, '금액': 95,
+        '작업자': 110,
+        'OT시간': 75, 'OT금액': 90,
         'OT1': 80, 'OT2': 80, 'OT3': 80, 'OT4': 80, 'OT5': 80,
         'OT6': 80, 'OT7': 80, 'OT8': 80, 'OT9': 80, 'OT10': 80,
         '센터미스': 65, '농도': 65, '마킹미스': 65,
@@ -125,7 +125,7 @@ def setup_monthly_usage_tab_impl(self):
     
     self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
     
-    site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '총기성액', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
+    site_cols = ('현장', '검사방법', '품목명', '수량', '단가', '금액', '형광자분', '흑색자분', '백색페인트', 
                  '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
     self.site_summary_tree = ttk.Treeview(site_frame, columns=site_cols, show='headings')
     for col in site_cols:
@@ -133,7 +133,8 @@ def setup_monthly_usage_tab_impl(self):
         # Adjust widths based on content
         if col in ['현장', '품목명']: width = 120
         elif col in ['검사방법']: width = 75
-        elif col in ['검사비', '출장비', '제경비', '기술료', '총기성액', '환산물량', '재료비', '인건비']: width = 95
+        elif col in ['단가', '금액']: width = 95
+        elif col in ['수량']: width = 70
         else: width = 75
         self.site_summary_tree.column(col, width=width, anchor='center', stretch=False)
     
@@ -545,10 +546,10 @@ def update_monthly_usage_view_impl(self):
         ot_hours = entry.get('OT시간', 0.0)
         ot_amount = entry.get('OT금액', 0.0)
         test_amount = entry.get('검사량', 0.0)
-        unit_price = entry.get('단가', 0.0)
+        test_fee = entry.get('검사비', 0.0)
+        unit_price = (test_fee / test_amount) if (test_amount > 0 and test_fee > 0) else entry.get('단가', 0.0)
         travel_cost = entry.get('출장비', 0.0)
         meal_cost = entry.get('일식', 0.0)
-        test_fee = entry.get('검사비', 0.0)
         overhead_cost = entry.get('제경비', 0.0)
         tech_fee = entry.get('기술료', 0.0)
         total_billing = test_fee + travel_cost + meal_cost + overhead_cost + tech_fee
@@ -685,21 +686,12 @@ def update_monthly_usage_view_impl(self):
             method_str,
             mat_name,
             f"{test_amount:.1f}" if test_amount > 0 else '',
+            f"{unit_price:,.0f}" if unit_price > 0 else '',
             f"{test_fee:,.0f}" if test_fee > 0 else '',
-            f"{travel_cost:,.0f}" if travel_cost > 0 else '',
-            f"{meal_cost:,.0f}" if meal_cost > 0 else '',
-            f"{overhead_cost:,.0f}" if overhead_cost > 0 else '',
-            f"{tech_fee:,.0f}" if tech_fee > 0 else '',
-            f"{total_billing:,.0f}" if total_billing > 0 else '',
-            f"{conv_qty:.2f}" if conv_qty > 0 else '',
-            f"{mat_cost:,.0f}" if mat_cost > 0 else '',
-            f"{labor_cost:,.0f}" if labor_cost > 0 else '',
             worker_str,
-            worktime_str,
             f"{ot_hours:.1f}" if ot_hours > 0 else '',
             f"{ot_amount:,.0f}" if ot_amount > 0 else '',
-            f"{unit_price:,.0f}" if unit_price > 0 else '',
-            *ot_values,  # Index 20 to 29
+            *ot_values,  # Index 11 to 20
             f"{rtk_center:.1f}" if rtk_center > 0 else '',
             f"{rtk_density:.1f}" if rtk_density > 0 else '',
             f"{rtk_marking:.1f}" if rtk_marking > 0 else '',
@@ -729,6 +721,7 @@ def update_monthly_usage_view_impl(self):
     # Add total row at the bottom if there's data
     if not grouped.empty:
         total_rtk_sum = total_rtk_center + total_rtk_density + total_rtk_marking + total_rtk_film + total_rtk_handling + total_rtk_customer + total_rtk_other
+        overall_unit_price = (total_test_fee / total_test_amount) if (total_test_amount > 0 and total_test_fee > 0) else 0.0
         
         # Configure tag for total row
         self.monthly_usage_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
@@ -740,20 +733,11 @@ def update_monthly_usage_view_impl(self):
             '', # 검사방법
             '', # 품목명
             f"{total_test_amount:,.0f}" if total_test_amount > 0 else '',
+            f"{overall_unit_price:,.0f}" if overall_unit_price > 0 else '',
             f"{total_test_fee:,.0f}" if total_test_fee > 0 else '',
-            f"{total_travel_cost:,.0f}" if total_travel_cost > 0 else '',
-            f"{total_meal_cost:,.0f}" if total_meal_cost > 0 else '',
-            f"{total_overhead_cost:,.0f}" if total_overhead_cost > 0 else '',
-            f"{total_tech_fee:,.0f}" if total_tech_fee > 0 else '',
-            f"{total_total_billing:,.0f}" if total_total_billing > 0 else '',
-            f"{total_conv_qty:.2f}" if total_conv_qty > 0 else '',
-            f"{total_mat_cost:,.0f}" if total_mat_cost > 0 else '',
-            f"{total_labor_cost:,.0f}" if total_labor_cost > 0 else '',
             '', # 작업자
-            f"{total_worker_count:.1f}" if total_worker_count > 0 else '', # 작업시간 (총 공수)
             f"{total_ot_hours:.1f}" if total_ot_hours > 0 else '',
             f"{total_ot_amount:,.0f}" if total_ot_amount > 0 else '',
-            '', # 단가
             *[f"{a:,.0f}" if a > 0 else '' for a in total_indiv_ot_amounts],
             f"{total_rtk_center:.1f}" if total_rtk_center > 0 else '',
             f"{total_rtk_density:.1f}" if total_rtk_density > 0 else '',
@@ -805,13 +789,8 @@ def update_monthly_usage_view_impl(self):
         monthly_hide.add('(Full작업자)')
         
         # Cost columns
-        if not is_active_m(total_unit_price): monthly_hide.add('단가')
-        if not is_active_m(total_travel_cost): monthly_hide.add('출장비')
-        if not is_active_m(total_meal_cost): monthly_hide.add('일식')
-        if not is_active_m(total_test_fee): monthly_hide.add('검사비')
-        if not is_active_m(total_overhead_cost): monthly_hide.add('제경비')
-        if not is_active_m(total_tech_fee): monthly_hide.add('기술료')
-        if not is_active_m(total_total_billing): monthly_hide.add('총기성액')
+        if not is_active_m(overall_unit_price): monthly_hide.add('단가')
+        if not is_active_m(total_test_fee): monthly_hide.add('금액')
         if not is_active_m(total_test_amount): monthly_hide.add('수량')
         if not is_active_m(total_ot_hours): monthly_hide.add('OT시간')
         if not is_active_m(total_ot_amount): monthly_hide.add('OT금액')
@@ -843,7 +822,7 @@ def update_monthly_usage_view_impl(self):
         self.monthly_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
     else:
         # If empty data
-        visible_cols = ['연도', '월', '현장', '검사방법', '품목명', '수량', '검사비', '총기성액', '작업자', '작업시간']
+        visible_cols = ['연도', '월', '현장', '검사방법', '품목명', '수량', '단가', '금액', '작업자']
         self.monthly_usage_tree['displaycolumns'] = [c for c in visible_cols if c in self.monthly_usage_tree['columns']]
         for col in visible_cols:
             if col in self.monthly_usage_tree['columns']:

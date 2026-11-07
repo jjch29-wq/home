@@ -3854,9 +3854,9 @@ class MaterialManager:
         site_summary = df.groupby(['Site', '검사방법'], dropna=False).agg(site_agg_dict).reset_index()
         
         # [NEW] Track active columns for dynamic hiding
-        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '총기성액', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
+        site_cols = ('현장', '검사방법', '품목명', '수량', '단가', '금액', '형광자분', '흑색자분', '백색페인트', 
                      '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
-        active_cols = set(['현장', '검사방법', '품목명', '수량']) # Mandatory columns
+        active_cols = set(['현장', '검사방법', '품목명', '수량', '단가', '금액']) # Mandatory columns
         
         # Define a robust active check for numeric data
         def is_active(val):
@@ -3873,13 +3873,6 @@ class MaterialManager:
 
         tot_site_qty = 0.0
         tot_site_test_fee = 0.0
-        tot_site_travel = 0.0
-        tot_site_overhead = 0.0
-        tot_site_tech = 0.0
-        tot_site_billing = 0.0
-        tot_site_conv = 0.0
-        tot_site_mat = 0.0
-        tot_site_labor = 0.0
         tot_site_black_mag = 0.0
         tot_site_white_paint = 0.0
         tot_site_rtk = 0.0
@@ -3905,34 +3898,19 @@ class MaterialManager:
             r_other = row.get('RTK_기타', 0.0)
             rtk_sum = r_center + r_density + r_marking + r_film + r_careless + r_customer + r_other
             
+            qty_v = row.get('검사량', 0.0)
             test_fee_v = row.get('검사비', 0.0)
-            travel_v = row.get('출장비', 0.0)
-            overhead_v = row.get('제경비', 0.0)
-            tech_fee_v = row.get('기술료', 0.0)
-            total_billing_v = test_fee_v + travel_v + overhead_v + tech_fee_v
+            unit_price_v = (test_fee_v / qty_v) if (qty_v > 0 and test_fee_v > 0) else 0.0
             
-            tot_site_qty += row.get('검사량', 0.0)
+            tot_site_qty += qty_v
             tot_site_test_fee += test_fee_v
-            tot_site_travel += travel_v
-            tot_site_overhead += overhead_v
-            tot_site_tech += tech_fee_v
-            tot_site_billing += total_billing_v
-            tot_site_conv += row.get('환산물량', 0.0)
-            tot_site_mat += row.get('재료비', 0.0)
-            tot_site_labor += row.get('인건비', 0.0)
             tot_site_black_mag += black_mag
             tot_site_white_paint += white_paint
             tot_site_rtk += rtk_sum
 
             # Track which columns are active using robust threshold
-            if is_active(test_fee_v): active_cols.add('검사비')
-            if is_active(travel_v): active_cols.add('출장비')
-            if is_active(overhead_v): active_cols.add('제경비')
-            if is_active(tech_fee_v): active_cols.add('기술료')
-            if is_active(total_billing_v): active_cols.add('총기성액')
-            if is_active(row.get('환산물량', 0.0)): active_cols.add('환산물량')
-            if is_active(row.get('재료비', 0.0)): active_cols.add('재료비')
-            if is_active(row.get('인건비', 0.0)): active_cols.add('인건비')
+            if is_active(unit_price_v): active_cols.add('단가')
+            if is_active(test_fee_v): active_cols.add('금액')
             if is_active(row.get('NDT_형광자분', 0.0)): active_cols.add('형광자분')
             if is_active(black_mag): active_cols.add('흑색자분')
             if is_active(white_paint): active_cols.add('백색페인트')
@@ -3993,15 +3971,9 @@ class MaterialManager:
                 row['Site'],
                 row['검사방법'],
                 mat_name,
-                f"{row.get('검사량', 0.0):.1f}" if is_active(row.get('검사량', 0.0)) else '',
+                f"{qty_v:.1f}" if is_active(qty_v) else '',
+                f"{unit_price_v:,.0f}" if is_active(unit_price_v) else '',
                 f"{test_fee_v:,.0f}" if is_active(test_fee_v) else '',
-                f"{travel_v:,.0f}" if is_active(travel_v) else '',
-                f"{overhead_v:,.0f}" if is_active(overhead_v) else '',
-                f"{tech_fee_v:,.0f}" if is_active(tech_fee_v) else '',
-                f"{total_billing_v:,.0f}" if is_active(total_billing_v) else '',
-                f"{row.get('환산물량', 0.0):.1f}" if is_active(row.get('환산물량', 0.0)) else '',
-                f"{row.get('재료비', 0.0):,.0f}" if is_active(row.get('재료비', 0.0)) else '',
-                f"{row.get('인건비', 0.0):,.0f}" if is_active(row.get('인건비', 0.0)) else '',
                 f"{row.get('NDT_형광자분', 0.0):.1f}" if is_active(row.get('NDT_형광자분', 0.0)) else '',
                 f"{black_mag:.1f}" if is_active(black_mag) else '',
                 f"{white_paint:.1f}" if is_active(white_paint) else '',
@@ -4025,19 +3997,14 @@ class MaterialManager:
         # Add overall summary row to Site Summary
         if not site_summary.empty:
             self.site_summary_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+            overall_site_unit_price = (tot_site_test_fee / tot_site_qty) if (tot_site_qty > 0 and tot_site_test_fee > 0) else 0.0
             total_site_vals = (
                 '--- 전체 누계 ---',
                 '',
                 '',
                 f"{tot_site_qty:.1f}" if is_active(tot_site_qty) else '',
+                f"{overall_site_unit_price:,.0f}" if is_active(overall_site_unit_price) else '',
                 f"{tot_site_test_fee:,.0f}" if is_active(tot_site_test_fee) else '',
-                f"{tot_site_travel:,.0f}" if is_active(tot_site_travel) else '',
-                f"{tot_site_overhead:,.0f}" if is_active(tot_site_overhead) else '',
-                f"{tot_site_tech:,.0f}" if is_active(tot_site_tech) else '',
-                f"{tot_site_billing:,.0f}" if is_active(tot_site_billing) else '',
-                f"{tot_site_conv:.1f}" if is_active(tot_site_conv) else '',
-                f"{tot_site_mat:,.0f}" if is_active(tot_site_mat) else '',
-                f"{tot_site_labor:,.0f}" if is_active(tot_site_labor) else '',
                 '', # 형광자분
                 f"{tot_site_black_mag:.1f}" if is_active(tot_site_black_mag) else '',
                 f"{tot_site_white_paint:.1f}" if is_active(tot_site_white_paint) else '',
