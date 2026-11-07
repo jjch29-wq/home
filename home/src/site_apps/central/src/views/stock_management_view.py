@@ -77,8 +77,8 @@ def setup_stock_tab_impl(self):
     self.cb_filter_eq = ttk.Combobox(filter_frame, width=20)
     self.cb_filter_eq.grid(row=1, column=5, padx=2, pady=2)
     
-    # [UX IMPROVEMENT] 장비 포함 전체 보기 체크박스 추가
-    self.chk_show_all_equipment_var = tk.BooleanVar(value=False)
+    # [UX IMPROVEMENT] 장비 포함 전체 보기 체크박스 추가 (기본 활성화: 자재와 장비 함께 표시)
+    self.chk_show_all_equipment_var = tk.BooleanVar(value=True)
     self.chk_show_all_equipment = ttk.Checkbutton(
         filter_frame, text="☑ 장비 포함 전체 보기", 
         variable=self.chk_show_all_equipment_var, 
