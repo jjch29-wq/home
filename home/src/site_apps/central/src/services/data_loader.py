@@ -132,11 +132,11 @@ def load_data_impl(self):
                     
                     self.materials_df.loc[mask, '모델명'] = self.materials_df.loc[mask, '모델명'].apply(strip_ndt_prefix)
                     
-                    # [FIX] NDT 약품(MT/PT) 중 유효 화학약품 모델은 Active=1로 유지하여 재고 현황 및 소비 수량이 정상 표시되도록 보장
-                    valid_models = ['세척제', '침투제', '현상제', '백색페인트', '흑색자분', '형광자분', '형광침투제', '자분페인트']
-                    model_mask = mask & self.materials_df['모델명'].astype(str).str.strip().isin(valid_models)
-                    self.materials_df.loc[model_mask, 'Active'] = 1
-                    print(f"DEBUG: Migrated {mask.sum()} NDT items by stripping prefixes and activated {model_mask.sum()} NDT consumables.")
+                    # [FIX] NDT 약품(MT/PT) 중 파일 원본의 Active 값이 없는(NaN) 경우에만 기본값 처리하고,
+                    # 이미 명시적으로 지정된 Active 값(0 또는 1)은 임의로 덮어쓰지 않고 보존
+                    if 'Active' in self.materials_df.columns:
+                        self.materials_df['Active'] = pd.to_numeric(self.materials_df['Active'], errors='coerce').fillna(0).astype(int)
+                    print(f"DEBUG: Migrated {mask.sum()} NDT items by stripping prefixes.")
             
             # 2. Transactions
             self.transactions_df = pd.read_excel(self.db_path, sheet_name='Transactions')
