@@ -1160,53 +1160,52 @@ class MaterialManager:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
         
-        # Tab 1: Current Stock
+        # Tab 1: Current Stock (현재 재고 현황)
         self.tab_stock = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_stock, text='현재 재고 현황')
         self.setup_stock_tab()
-        
-        # Tab 2: Register/Transaction
-        self.tab_inout = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_inout, text='입출고 관리')
-        self.setup_inout_tab()
-        
-        # Tab 3: Daily Work Log (New)
-        self.tab_daily_work_log = DailyWorkLogTab(self.notebook)
-        self.tab_daily_work_log.main_app = self
-        self.notebook.add(self.tab_daily_work_log, text='작업/감독일보')
 
-        # Tab 4: Import/Export
+        # Tab 2: Import/Export (데이터 가져오기/내보내기)
         self.tab_import = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_import, text='데이터 가져오기/내보내기')
         self.setup_import_tab()
         
-        # Tab 5: Monthly Usage Entry
-        self.tab_monthly_usage = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_monthly_usage, text='월별 집계')
-        self.setup_monthly_usage_tab()
-        
-        # Tab 6: Daily Usage Entry by Site
+        # Tab 3: Register/Transaction (입출고 관리)
+        self.tab_inout = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_inout, text='입출고 관리')
+        self.setup_inout_tab()
+
+        # Tab 4: Daily Usage Entry by Site (현장별 일일 사용량 기입 - 시작 기본 탭)
         self.tab_daily_usage = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_daily_usage, text='현장별 일일 사용량 기입')
         self.setup_daily_usage_tab()
         
-        # Tab 7: Daily Usage Query
+        # Tab 5: Daily Usage Query (현장 일일기록 조회 및 관리)
         self.tab_daily_usage_query = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_daily_usage_query, text='현장 일일기록 조회 및 관리')
         self.setup_daily_usage_query_tab()
         
+        # Tab 6: Monthly Usage Entry (월별 집계)
+        self.tab_monthly_usage = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_monthly_usage, text='월별 집계')
+        self.setup_monthly_usage_tab()
 
-        # Tab 8: Project Execution Budget (New)
+        # Tab 7: Daily Work Log (작업/감독일보)
+        self.tab_daily_work_log = DailyWorkLogTab(self.notebook)
+        self.tab_daily_work_log.main_app = self
+        self.notebook.add(self.tab_daily_work_log, text='작업/감독일보')
+
+        # Tab 8: NDT Billing Calculator (기성 정산 (NDT))
+        self.tab_ndt_billing = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
+        self.setup_ndt_billing_tab()
+
+        # Tab 9: Project Execution Budget (공사실행예산서)
         self.tab_budget = ttk.Frame(self.notebook)
         self.notebook.add(self.tab_budget, text='공사실행예산서')
         self.setup_budget_tab()
         
-        # Tab 9: NDT Billing Calculator
-        self.tab_ndt_billing = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab_ndt_billing, text='기성 정산 (NDT)')
-        self.setup_ndt_billing_tab()
-        
-        # Select default tab instantly to prevent flicker
+        # Select default tab instantly to prevent flicker: 현장별 일일 사용량 기입
         self.notebook.select(self.tab_daily_usage)
         
         # Initial view update (Move here to ensure all tabs are ready before refresh)
@@ -14114,7 +14113,20 @@ class MaterialManager:
                 tab_map = {text: tab for text, tab in current_order}
                 
                 # Restore tab order if saved order exists
-                saved_order = config.get('tab_order', [])
+                default_order = [
+                    '현재 재고 현황',
+                    '데이터 가져오기/내보내기',
+                    '입출고 관리',
+                    '현장별 일일 사용량 기입',
+                    '현장 일일기록 조회 및 관리',
+                    '월별 집계',
+                    '작업/감독일보',
+                    '기성 정산 (NDT)',
+                    '공사실행예산서'
+                ]
+                saved_order = config.get('tab_order', default_order)
+                if not saved_order:
+                    saved_order = default_order
                 if saved_order:
                     # [ROBUST] Reorder tabs according to saved order (relaxed length check)
                     for i, tab_text in enumerate(saved_order):
@@ -14125,7 +14137,7 @@ class MaterialManager:
                                 self.notebook.insert(i, tab, text=tab_text)
                 
                 # 기존 시작 화면 유지: 현장별 일일 사용량 기입
-                selected_idx = 4
+                selected_idx = 3
                 selected_text = "현장별 일일 사용량 기입"
                 
                 tab_restored = False
