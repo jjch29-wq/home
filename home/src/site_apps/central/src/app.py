@@ -474,6 +474,7 @@ class MaterialManager:
         ] # Initialize worker/name list
         self.warehouses = [] # Initialize warehouse list
         self.equipments = [] # Initialize equipment list
+        self.aux_equipments = ['JIREH MICROBE BTG006'] # Initialize auxiliary equipment list
         self.vehicles = [] # Initialize vehicle list
         self.vehicle_inspections = {} # [NEW] Track active inspection widgets
         self.vehicle_boxes = [] # [NEW] Track active inspection widgets for automated save
@@ -4450,6 +4451,7 @@ class MaterialManager:
                 'sites': ('현장 목록 관리', self.sites),
                 'users': ('담당자 목록 관리', getattr(self, 'users', [])),
                 'equipments': ('장비 목록 관리', getattr(self, 'equipments', [])),
+                'aux_equipments': ('보조장비 목록 관리', getattr(self, 'aux_equipments', [])),
                 'vehicles': ('차량 목록 관리', getattr(self, 'vehicles', [])),
                 'companies': ('업체 목록 관리', getattr(self, 'companies', [])),
                 'materials': ('품목 목록 관리 (기본)', getattr(self, 'carestream_films', [])),
@@ -13816,6 +13818,7 @@ class MaterialManager:
                 'companies': getattr(self, 'companies', []),
                 'warehouses': getattr(self, 'warehouses', []),
                 'equipments': getattr(self, 'equipments', []),
+                'aux_equipments': getattr(self, 'aux_equipments', ['JIREH MICROBE BTG006']),
                 'test_items': getattr(self, 'test_items', []),
                 'applied_codes': getattr(self, 'applied_codes', []),
                 'vehicles': getattr(self, 'vehicles', []),
@@ -13901,6 +13904,7 @@ class MaterialManager:
                 
             # [NEW] Save equipment list
             self.tab_config['equipments'] = self.equipments
+            self.tab_config['aux_equipments'] = getattr(self, 'aux_equipments', ['JIREH MICROBE BTG006'])
             
             # Save Draggable items
             # Prepare in-memory geometries for merging (capture current states)
@@ -14097,6 +14101,12 @@ class MaterialManager:
                 self.vehicles[:] = sorted(list(set(updated_vehicles)))
                 
                 self.equipments[:] = config.get('equipments', [])
+                loaded_aux = config.get('aux_equipments', ['JIREH MICROBE BTG006'])
+                if not loaded_aux:
+                    loaded_aux = ['JIREH MICROBE BTG006']
+                elif 'JIREH MICROBE BTG006' not in loaded_aux:
+                    loaded_aux.append('JIREH MICROBE BTG006')
+                self.aux_equipments = list(dict.fromkeys(loaded_aux))
                 self.test_items[:] = config.get('test_items', [])
                 self.applied_codes[:] = config.get('applied_codes', [])
                 if 'materials' in config:
