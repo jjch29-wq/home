@@ -1205,8 +1205,19 @@ class MaterialManager:
         self.notebook.add(self.tab_budget, text='공사실행예산서')
         self.setup_budget_tab()
         
-        # Select default tab instantly to prevent flicker: 현장별 일일 사용량 기입
-        self.notebook.select(self.tab_daily_usage)
+        # Select default tab instantly to prevent flicker: 마지막 보던 탭 또는 현장별 일일 사용량 기입
+        init_tab = self.tab_daily_usage
+        if hasattr(self, 'tab_config') and isinstance(self.tab_config, dict):
+            saved_tab_name = self.tab_config.get('selected_tab_text')
+            if saved_tab_name:
+                for tid in self.notebook.tabs():
+                    if self.notebook.tab(tid, "text") == saved_tab_name:
+                        init_tab = tid
+                        break
+        try:
+            self.notebook.select(init_tab)
+        except:
+            self.notebook.select(self.tab_daily_usage)
         
         # Initial view update (Move here to ensure all tabs are ready before refresh)
         self.refresh_inquiry_filters()
@@ -14215,9 +14226,15 @@ class MaterialManager:
                             if current_pos != i:
                                 self.notebook.insert(i, tab, text=tab_text)
                 
-                # 기존 시작 화면 유지: 현장별 일일 사용량 기입
-                selected_idx = 3
-                selected_text = "현장별 일일 사용량 기입"
+                # 마지막으로 보던 탭 복원 (설정 없으면 기본값: '현장별 일일 사용량 기입')
+                selected_text = config.get('selected_tab_text')
+                selected_idx = config.get('selected_tab')
+                if not selected_text and isinstance(selected_idx, int) and 0 <= selected_idx < self.notebook.index('end'):
+                    try:
+                        selected_text = self.notebook.tab(selected_idx, "text")
+                    except: pass
+                if not selected_text:
+                    selected_text = "현장별 일일 사용량 기입"
                 
                 tab_restored = False
                 if selected_text:
@@ -14230,9 +14247,10 @@ class MaterialManager:
                                 break
                             except: pass
                 
-                if not tab_restored and 0 <= selected_idx < self.notebook.index('end'):
+                if not tab_restored and isinstance(selected_idx, int) and 0 <= selected_idx < self.notebook.index('end'):
                     try:
                         self.notebook.select(selected_idx)
+                        tab_restored = True
                     except: pass
                 
                 # Force update after selection so the tab is rendered and children computed
