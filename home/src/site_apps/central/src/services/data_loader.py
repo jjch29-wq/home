@@ -120,7 +120,7 @@ def load_data_impl(self):
             if not self.materials_df.empty:
                 ndt_parent_cats = ["PT약품", "MT약품", "NDT약품"]
                 # Normalize category names for matching
-                temp_cats = self.materials_df['품목명'].str.replace(' ', '').str.upper()
+                temp_cats = self.materials_df['품목명'].astype(str).str.replace(' ', '').str.upper()
                 mask = temp_cats.isin(ndt_parent_cats)
                 if mask.any():
                     def strip_ndt_prefix(model):
@@ -131,7 +131,12 @@ def load_data_impl(self):
                         return s
                     
                     self.materials_df.loc[mask, '모델명'] = self.materials_df.loc[mask, '모델명'].apply(strip_ndt_prefix)
-                    print(f"DEBUG: Migrated {mask.sum()} NDT items by stripping prefixes.")
+                    
+                    # [FIX] NDT 약품(MT/PT) 중 유효 화학약품 모델은 Active=1로 유지하여 재고 현황 및 소비 수량이 정상 표시되도록 보장
+                    valid_models = ['세척제', '침투제', '현상제', '백색페인트', '흑색자분', '형광자분', '형광침투제', '자분페인트']
+                    model_mask = mask & self.materials_df['모델명'].astype(str).str.strip().isin(valid_models)
+                    self.materials_df.loc[model_mask, 'Active'] = 1
+                    print(f"DEBUG: Migrated {mask.sum()} NDT items by stripping prefixes and activated {model_mask.sum()} NDT consumables.")
             
             # 2. Transactions
             self.transactions_df = pd.read_excel(self.db_path, sheet_name='Transactions')

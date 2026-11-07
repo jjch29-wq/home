@@ -315,52 +315,31 @@ def update_stock_view_impl(self):
     self.stock_tree.tag_configure('in_stock', background='') # Default
     
     for _, mat in self.materials_df.iterrows():
-        if mat.get('Active', 1) == 0:
-            continue
-        
         mat_id = mat['MaterialID']
-
-        # [REFINED] Skip non-consumables OR auto-registered items that are NOT consumables.
-        # We ALLOW auto-registered items if they are confirmed as consumables (like films/drugs).
-        spec = str(mat.get('규격', '')).strip()
-        mat_name_str = str(mat.get('품목명', mat.get('ǰ', ''))).strip()
-        is_consumable = self._is_consumable_material(mat_name_str, '')
-        
-        # [UX IMPROVEMENT] '장비 포함 전체 보기' 체크 해제 상태일 때만 비소모성 자재 숨김
-        if not getattr(self, 'chk_show_all_equipment_var', None) or not self.chk_show_all_equipment_var.get():
-            if not is_consumable or (spec == "자동등록" and not is_consumable):
-                continue
-
         str_mat_id = self.normalize_id(mat_id)
         
+        spec = str(mat.get('규격', '')).strip()
+        mat_name_raw = self.clean_nan(mat.get('품목명', mat.get('ǰ', '')))
+        model_name_raw = self.clean_nan(mat.get('모델명', mat.get('𵨸', '')))
+        combined_name = (mat_name_raw + " " + model_name_raw).replace(' ', '')
+        
+        # [REFINED] Check consumable status using combined name or item name
+        is_consumable = self._is_consumable_material(combined_name or mat_name_raw, '')
+
         # Use optimized lookup
         in_qty = stock_in_lookup.get(str_mat_id, 0.0)
         out_qty = abs(stock_out_lookup.get(str_mat_id, 0.0))
         daily_qty = daily_usage_lookup.get(str_mat_id, 0.0)
         
-        mat_name_str = str(mat.get('품목명', mat.get('ǰ', ''))).strip()
-        # [NEW] Fallback to name-based lookup if ID lookup is 0
+        # Fallback to name-based lookup if ID lookup is 0
         if daily_qty == 0 and 'daily_name_lookup' in locals():
-            daily_qty = daily_name_lookup.get(mat_name_str, 0.0)
-        
-        # Get stored quantity
-        val = mat.get('수량', 0)
-        try: stored_qty = float(str(val).replace(',', '')) if pd.notna(val) else 0.0
-        except: stored_qty = 0.0
+            daily_qty = daily_name_lookup.get(mat_name_raw, 0.0)
         
         # [FINAL_STOCK_CALC] Current Stock = Master + In/Out - Site Usage
         ndt_usage = 0.0
-        mat_name_raw = self.clean_nan(mat.get('품목명', mat.get('ǰ', '')))
-        model_name_raw = self.clean_nan(mat.get('모델명', mat.get('𵨸', '')))
-        
-        # Combine Item Name + Model Name for robust keyword searching (e.g. 'PT약품 세척제')
-        combined_name = (mat_name_raw + " " + model_name_raw).replace(' ', '')
-        
         # If this is an NDT item, find matching usage by name
         if hasattr(self, 'ndt_name_lookup') or 'ndt_name_lookup' in locals():
             lookup_source = ndt_name_lookup if 'ndt_name_lookup' in locals() else self.ndt_name_lookup
-            
-            # [REFINED] Only match specific keywords from combined name.
             for ndt_key, ndt_val in lookup_source.items():
                 if ndt_key in combined_name:
                     ndt_usage = ndt_val
@@ -368,6 +347,24 @@ def update_stock_view_impl(self):
                     # ensure we don't also subtract generic inspection quantity
                     daily_qty = 0.0 
                     break
+
+        # [CRITICAL FIX] 실제 소비/입출고 내역이 있는 품목은 휴면/비활성화 상태여도 반드시 표시
+        has_activity = (in_qty > 0 or out_qty > 0 or daily_qty > 0 or ndt_usage > 0)
+
+        # [UX IMPROVEMENT] '장비 포함 전체 보기' 체크 해제 상태일 때만 비소모성 자재 숨김
+        show_all = getattr(self, 'chk_show_all_equipment_var', None) and self.chk_show_all_equipment_var.get()
+        if not show_all:
+            if not is_consumable or (spec == "자동등록" and not is_consumable):
+                continue
+
+        # 활동 내역이 없는 비활성화 품목만 건너뜀
+        if mat.get('Active', 1) == 0 and not has_activity:
+            continue
+        
+        # Get stored quantity
+        val = mat.get('수량', 0)
+        try: stored_qty = float(str(val).replace(',', '')) if pd.notna(val) else 0.0
+        except: stored_qty = 0.0
         
         total_incoming = stored_qty + in_qty
         total_used = out_qty + daily_qty + ndt_usage
