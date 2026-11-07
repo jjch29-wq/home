@@ -6148,13 +6148,9 @@ class MaterialManager:
         self.cb_daily_filter_method.pack(side='left', padx=2)
         self.cb_daily_filter_method.set('전체')
         
-        # --- Row 3: Action Buttons (조회 및 데이터 관리 그룹) ---
+        # --- Row 3: Action Buttons (1줄 통합 툴바) ---
         btn_row = ttk.Frame(filter_frame)
-        btn_row.pack(fill='x', pady=2)
-        
-        # --- Row 4: Action Buttons (보고서 및 엑셀 출력 그룹) ---
-        btn_row2 = ttk.Frame(filter_frame)
-        btn_row2.pack(fill='x', pady=2)
+        btn_row.pack(fill='x', pady=(4, 2))
         
         # [그룹 1: 조회 제어]
         btn_filter = ttk.Button(btn_row, text="🔍 조회", style='Action.TButton', command=self.update_daily_usage_view)
@@ -6164,7 +6160,7 @@ class MaterialManager:
         btn_filter_reset.pack(side='left', padx=2)
 
         btn_col_manage = ttk.Button(btn_row, text="⚙️ 컬럼 관리", command=self.show_column_visibility_dialog)
-        btn_col_manage.pack(side='left', padx=(2, 12))
+        btn_col_manage.pack(side='left', padx=(2, 10))
         
         # [그룹 2: 레코드 편집 및 저장]
         btn_edit = ttk.Button(btn_row, text="✏️ 선택 항목 수정", command=self.open_edit_daily_usage_dialog)
@@ -6174,22 +6170,13 @@ class MaterialManager:
         btn_delete.pack(side='left', padx=2)
 
         self.btn_daily_save_list = ttk.Button(btn_row, text="💾 목록 변경사항 저장", command=self.save_all_daily_usage_changes, style='Accent.TButton' if 'Accent.TButton' in self.style.theme_names() else 'TButton')
-        self.btn_daily_save_list.pack(side='left', padx=(8, 5))
+        self.btn_daily_save_list.pack(side='left', padx=(2, 10))
 
-        # [그룹 3: 보고서 및 출력 (Row 4)]
-        btn_ndt_report = ttk.Button(btn_row2, text="📊 진도보고서 출력", command=self.export_monthly_ndt_report)
-        btn_ndt_report.pack(side='left', padx=(5, 2))
+        # [그룹 3: 데이터 내보내기 및 백업]
+        btn_export = ttk.Button(btn_row, text="📥 조회결과 엑셀 내보내기", command=self.export_daily_usage_history)
+        btn_export.pack(side='left', padx=2)
 
-        btn_weekly_report = ttk.Button(btn_row2, text="🗓️ 주간 업무보고 출력", command=self.export_weekly_report)
-        btn_weekly_report.pack(side='left', padx=2)
-
-        btn_export_invoice = ttk.Button(btn_row2, text="🧾 기성청구서 출력", command=self.export_invoice_excel)
-        btn_export_invoice.pack(side='left', padx=2)
-
-        btn_export = ttk.Button(btn_row2, text="📥 조회결과 엑셀 내보내기", command=self.export_daily_usage_history)
-        btn_export.pack(side='left', padx=(10, 2))
-
-        btn_export_all = ttk.Button(btn_row2, text="📦 전체 기록 백업", command=self.export_all_daily_usage)
+        btn_export_all = ttk.Button(btn_row, text="📦 전체 기록 백업", command=self.export_all_daily_usage)
         btn_export_all.pack(side='left', padx=2)
 
         # Bindings
