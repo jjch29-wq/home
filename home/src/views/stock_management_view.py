@@ -248,9 +248,19 @@ def update_stock_view_impl(self):
             except: return 0.0
             
         # [ROBUST] Support multiple column names for usage and film counts
-        temp_daily['TotalUsage'] = temp_daily.apply(lambda r: 
-            _f(r.get('Usage', r.get('검사량', r.get('수량', r.get('Quantity', 0))))) + 
-            _f(r.get('FilmCount', r.get('매수', 0))), axis=1)
+        # MT/PAUT/UT 등의 검사량(Meter)은 소모품 자재 ID가 부여되지 않은 한 소모량으로 합산하지 않음
+        def _calc_daily_consumable(r):
+            method = str(r.get('검사방법', '')).strip().upper()
+            norm_id = r.get('NormID', '')
+            if method in ['MT', 'PAUT', 'UT', 'PMI'] and norm_id not in consumable_ids:
+                return 0.0
+            for col in ['FilmCount', '매수', 'Usage', '검사량', '수량', 'Quantity']:
+                v = _f(r.get(col, 0))
+                if v > 0:
+                    return v
+            return 0.0
+
+        temp_daily['TotalUsage'] = temp_daily.apply(_calc_daily_consumable, axis=1)
         
         # [NEW] Filter: Only include consumables in the site-usage deduction lookup
         # This ensures durable equipment (PAUT, MT-Yoke) reported in the site tab doesn't decrease stock
@@ -262,13 +272,24 @@ def update_stock_view_impl(self):
                 str(r.get('검사방법', '')).strip()
             ), axis=1)
         
-        temp_consumable = temp_daily[temp_daily['IsConsumable']]
+        temp_consumable = temp_daily[temp_daily['IsConsumable'] & (temp_daily['TotalUsage'] > 0)]
         
-        daily_usage_lookup = temp_consumable.groupby('NormID')['TotalUsage'].sum().to_dict()
+        # [CRITICAL FIX] 빈 ID('')나 결측치는 절대 룩업 키로 등록하지 않음 (미할당 품목 일괄 차감 방지)
+        valid_id_consumables = temp_consumable[
+            temp_consumable['NormID'].astype(str).str.strip().ne('') & 
+            ~temp_consumable['NormID'].astype(str).str.lower().isin(['nan', 'none', 'null'])
+        ]
+        daily_usage_lookup = valid_id_consumables.groupby('NormID')['TotalUsage'].sum().to_dict()
+        daily_usage_lookup.pop('', None)
+        daily_usage_lookup.pop('nan', None)
         
-        # [NEW] Also build a name-based lookup for fallback
+        # [NEW] Also build a name-based lookup for fallback (빈 이름이나 'nan' 제외)
         temp_consumable['NormName'] = temp_consumable.apply(lambda r: str(r.get('품목명', r.get('장비명', ''))).strip(), axis=1)
-        daily_name_lookup = temp_consumable.groupby('NormName')['TotalUsage'].sum().to_dict()
+        valid_name_consumables = temp_consumable[
+            temp_consumable['NormName'].astype(str).str.strip().ne('') & 
+            ~temp_consumable['NormName'].astype(str).str.lower().isin(['nan', 'none', 'null', '0', '0.0'])
+        ]
+        daily_name_lookup = valid_name_consumables.groupby('NormName')['TotalUsage'].sum().to_dict()
         print(f"DEBUG: Daily Consumable Lookup built: {daily_name_lookup}")
         
         # [NEW] Pre-calculate NDT chemical totals by name (Enhanced with fuzzy matching and JSON parsing)
@@ -315,33 +336,51 @@ def update_stock_view_impl(self):
     self.stock_tree.tag_configure('in_stock', background='') # Default
     
     for _, mat in self.materials_df.iterrows():
-        if mat.get('Active', 1) == 0:
-            continue
-        
         mat_id = mat['MaterialID']
-
-        # [REFINED] Skip non-consumables OR auto-registered items that are NOT consumables.
-        # We ALLOW auto-registered items if they are confirmed as consumables (like films/drugs).
-        spec = str(mat.get('규격', '')).strip()
-        mat_name_str = str(mat.get('품목명', mat.get('ǰ', ''))).strip()
-        is_consumable = self._is_consumable_material(mat_name_str, '')
+        str_mat_id = self.normalize_id(mat_id)
         
+        spec = str(mat.get('규격', '')).strip()
+        mat_name_raw = self.clean_nan(mat.get('품목명', mat.get('ǰ', '')))
+        model_name_raw = self.clean_nan(mat.get('모델명', mat.get('𵨸', '')))
+        combined_name = (mat_name_raw + " " + model_name_raw).replace(' ', '')
+        
+        # [REFINED] Check consumable status using combined name or item name
+        is_consumable = self._is_consumable_material(combined_name or mat_name_raw, '')
+
+        # Use optimized lookup (only if ID is valid)
+        in_qty = stock_in_lookup.get(str_mat_id, 0.0) if str_mat_id else 0.0
+        out_qty = abs(stock_out_lookup.get(str_mat_id, 0.0)) if str_mat_id else 0.0
+        daily_qty = daily_usage_lookup.get(str_mat_id, 0.0) if str_mat_id else 0.0
+        
+        # Fallback to name-based lookup if ID lookup is 0 and name is valid
+        if daily_qty == 0 and mat_name_raw and mat_name_raw.lower() not in ['nan', 'none', ''] and 'daily_name_lookup' in locals():
+            daily_qty = daily_name_lookup.get(mat_name_raw, 0.0)
+        
+        # [FINAL_STOCK_CALC] Current Stock = Master + In/Out - Site Usage
+        ndt_usage = 0.0
+        # If this is an NDT item, find matching usage by name
+        if hasattr(self, 'ndt_name_lookup') or 'ndt_name_lookup' in locals():
+            lookup_source = ndt_name_lookup if 'ndt_name_lookup' in locals() else self.ndt_name_lookup
+            for ndt_key, ndt_val in lookup_source.items():
+                if ndt_key in combined_name:
+                    ndt_usage = ndt_val
+                    # If we found a specific NDT chemical (e.g. via model name), 
+                    # ensure we don't also subtract generic inspection quantity
+                    daily_qty = 0.0 
+                    break
+
+        # [CRITICAL FIX] 실제 소비/입출고 내역이 있는 품목은 휴면/비활성화 상태여도 반드시 표시
+        has_activity = (in_qty > 0 or out_qty > 0 or daily_qty > 0 or ndt_usage > 0)
+
         # [UX IMPROVEMENT] '장비 포함 전체 보기' 체크 해제 상태일 때만 비소모성 자재 숨김
-        if not getattr(self, 'chk_show_all_equipment_var', None) or not self.chk_show_all_equipment_var.get():
+        show_all = getattr(self, 'chk_show_all_equipment_var', None) and self.chk_show_all_equipment_var.get()
+        if not show_all:
             if not is_consumable or (spec == "자동등록" and not is_consumable):
                 continue
 
-        str_mat_id = self.normalize_id(mat_id)
-        
-        # Use optimized lookup
-        in_qty = stock_in_lookup.get(str_mat_id, 0.0)
-        out_qty = abs(stock_out_lookup.get(str_mat_id, 0.0))
-        daily_qty = daily_usage_lookup.get(str_mat_id, 0.0)
-        
-        mat_name_str = str(mat.get('품목명', mat.get('ǰ', ''))).strip()
-        # [NEW] Fallback to name-based lookup if ID lookup is 0
-        if daily_qty == 0 and 'daily_name_lookup' in locals():
-            daily_qty = daily_name_lookup.get(mat_name_str, 0.0)
+        # 활동 내역이 없는 비활성화 품목만 건너뜀
+        if mat.get('Active', 1) == 0 and not has_activity:
+            continue
         
         # Get stored quantity
         val = mat.get('수량', 0)

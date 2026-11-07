@@ -248,9 +248,19 @@ def update_stock_view_impl(self):
             except: return 0.0
             
         # [ROBUST] Support multiple column names for usage and film counts
-        temp_daily['TotalUsage'] = temp_daily.apply(lambda r: 
-            _f(r.get('Usage', r.get('검사량', r.get('수량', r.get('Quantity', 0))))) + 
-            _f(r.get('FilmCount', r.get('매수', 0))), axis=1)
+        # MT/PAUT/UT 등의 검사량(Meter)은 소모품 자재 ID가 부여되지 않은 한 소모량으로 합산하지 않음
+        def _calc_daily_consumable(r):
+            method = str(r.get('검사방법', '')).strip().upper()
+            norm_id = r.get('NormID', '')
+            if method in ['MT', 'PAUT', 'UT', 'PMI'] and norm_id not in consumable_ids:
+                return 0.0
+            for col in ['FilmCount', '매수', 'Usage', '검사량', '수량', 'Quantity']:
+                v = _f(r.get(col, 0))
+                if v > 0:
+                    return v
+            return 0.0
+
+        temp_daily['TotalUsage'] = temp_daily.apply(_calc_daily_consumable, axis=1)
         
         # [NEW] Filter: Only include consumables in the site-usage deduction lookup
         # This ensures durable equipment (PAUT, MT-Yoke) reported in the site tab doesn't decrease stock
@@ -262,13 +272,24 @@ def update_stock_view_impl(self):
                 str(r.get('검사방법', '')).strip()
             ), axis=1)
         
-        temp_consumable = temp_daily[temp_daily['IsConsumable']]
+        temp_consumable = temp_daily[temp_daily['IsConsumable'] & (temp_daily['TotalUsage'] > 0)]
         
-        daily_usage_lookup = temp_consumable.groupby('NormID')['TotalUsage'].sum().to_dict()
+        # [CRITICAL FIX] 빈 ID('')나 결측치는 절대 룩업 키로 등록하지 않음 (미할당 품목 일괄 차감 방지)
+        valid_id_consumables = temp_consumable[
+            temp_consumable['NormID'].astype(str).str.strip().ne('') & 
+            ~temp_consumable['NormID'].astype(str).str.lower().isin(['nan', 'none', 'null'])
+        ]
+        daily_usage_lookup = valid_id_consumables.groupby('NormID')['TotalUsage'].sum().to_dict()
+        daily_usage_lookup.pop('', None)
+        daily_usage_lookup.pop('nan', None)
         
-        # [NEW] Also build a name-based lookup for fallback
+        # [NEW] Also build a name-based lookup for fallback (빈 이름이나 'nan' 제외)
         temp_consumable['NormName'] = temp_consumable.apply(lambda r: str(r.get('품목명', r.get('장비명', ''))).strip(), axis=1)
-        daily_name_lookup = temp_consumable.groupby('NormName')['TotalUsage'].sum().to_dict()
+        valid_name_consumables = temp_consumable[
+            temp_consumable['NormName'].astype(str).str.strip().ne('') & 
+            ~temp_consumable['NormName'].astype(str).str.lower().isin(['nan', 'none', 'null', '0', '0.0'])
+        ]
+        daily_name_lookup = valid_name_consumables.groupby('NormName')['TotalUsage'].sum().to_dict()
         print(f"DEBUG: Daily Consumable Lookup built: {daily_name_lookup}")
         
         # [NEW] Pre-calculate NDT chemical totals by name (Enhanced with fuzzy matching and JSON parsing)
@@ -326,13 +347,13 @@ def update_stock_view_impl(self):
         # [REFINED] Check consumable status using combined name or item name
         is_consumable = self._is_consumable_material(combined_name or mat_name_raw, '')
 
-        # Use optimized lookup
-        in_qty = stock_in_lookup.get(str_mat_id, 0.0)
-        out_qty = abs(stock_out_lookup.get(str_mat_id, 0.0))
-        daily_qty = daily_usage_lookup.get(str_mat_id, 0.0)
+        # Use optimized lookup (only if ID is valid)
+        in_qty = stock_in_lookup.get(str_mat_id, 0.0) if str_mat_id else 0.0
+        out_qty = abs(stock_out_lookup.get(str_mat_id, 0.0)) if str_mat_id else 0.0
+        daily_qty = daily_usage_lookup.get(str_mat_id, 0.0) if str_mat_id else 0.0
         
-        # Fallback to name-based lookup if ID lookup is 0
-        if daily_qty == 0 and 'daily_name_lookup' in locals():
+        # Fallback to name-based lookup if ID lookup is 0 and name is valid
+        if daily_qty == 0 and mat_name_raw and mat_name_raw.lower() not in ['nan', 'none', ''] and 'daily_name_lookup' in locals():
             daily_qty = daily_name_lookup.get(mat_name_raw, 0.0)
         
         # [FINAL_STOCK_CALC] Current Stock = Master + In/Out - Site Usage
