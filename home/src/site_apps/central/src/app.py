@@ -15286,6 +15286,8 @@ class MaterialManager:
             self.cb_filter_year.set(p_cb_year.get())
             self.cb_filter_month.set(p_cb_month.get())
             self.cb_filter_site_monthly.set(p_cb_site.get())
+            if hasattr(self, 'cb_filter_method_monthly'):
+                self.cb_filter_method_monthly.set(p_cb_method.get())
             self.cb_filter_material_monthly.set(p_cb_mat.get())
             self.update_monthly_usage_view()
 
@@ -15306,6 +15308,13 @@ class MaterialManager:
         p_cb_site.pack(side='left', padx=2)
         p_cb_site.set(self.cb_filter_site_monthly.get())
         p_cb_site.bind("<<ComboboxSelected>>", sync_and_refresh)
+
+        ttk.Label(filter_row, text="방법:").pack(side='left', padx=2)
+        method_vals = getattr(self, 'cb_filter_method_monthly', {}).get('values', ['전체', 'RT', 'PAUT', 'MT', 'PT']) if hasattr(self, 'cb_filter_method_monthly') else ['전체', 'RT', 'PAUT', 'MT', 'PT']
+        p_cb_method = ttk.Combobox(filter_row, values=method_vals, width=8)
+        p_cb_method.pack(side='left', padx=2)
+        p_cb_method.set(self.cb_filter_method_monthly.get() if hasattr(self, 'cb_filter_method_monthly') else '전체')
+        p_cb_method.bind("<<ComboboxSelected>>", sync_and_refresh)
 
         ttk.Label(filter_row, text="품목:").pack(side='left', padx=2)
         p_cb_mat = ttk.Combobox(filter_row, values=self.cb_filter_material_monthly['values'], width=18)
@@ -15411,6 +15420,7 @@ class MaterialManager:
                 'year': p_cb_year,
                 'month': p_cb_month,
                 'site': p_cb_site,
+                'method': p_cb_method,
                 'mat': p_cb_mat
             }
         }

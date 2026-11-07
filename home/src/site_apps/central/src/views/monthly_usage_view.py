@@ -41,6 +41,12 @@ def setup_monthly_usage_tab_impl(self):
                                    command=lambda: self.open_list_management_dialog('sites', target_cb=self.cb_filter_site_monthly))
     btn_site_mgr_monthly.place(in_=self.cb_filter_site_monthly, relx=1.0, x=-18, rely=0.5, anchor='e', width=16, height=16)
     
+    # [NEW] 특정 검사방법 필터 (전체, RT, PAUT, MT, PT)
+    ttk.Label(filter_frame, text="검사방법:").pack(side='left', padx=5)
+    self.cb_filter_method_monthly = ttk.Combobox(filter_frame, values=['전체', 'RT', 'PAUT', 'MT', 'PT'], width=10)
+    self.cb_filter_method_monthly.pack(side='left', padx=5)
+    self.cb_filter_method_monthly.set('전체')
+
     ttk.Label(filter_frame, text="자재명:").pack(side='left', padx=5)
     self.cb_filter_material_monthly = ttk.Combobox(filter_frame, width=25)
     self.cb_filter_material_monthly.pack(side='left', padx=5)
@@ -212,6 +218,7 @@ def update_monthly_usage_view_impl(self):
     filter_year = self.cb_filter_year.get()
     filter_month = self.cb_filter_month.get()
     filter_site = self.cb_filter_site_monthly.get() if hasattr(self, 'cb_filter_site_monthly') else '전체'
+    filter_method = self.cb_filter_method_monthly.get() if hasattr(self, 'cb_filter_method_monthly') else '전체'
     filter_material = self.cb_filter_material_monthly.get() if hasattr(self, 'cb_filter_material_monthly') else '전체'
     
     # Return if daily usage data is empty
@@ -248,6 +255,9 @@ def update_monthly_usage_view_impl(self):
     if filter_site != '전체':
         df = df[df['Site'] == filter_site]
         
+    if filter_method != '전체':
+        df = df[df['검사방법'].astype(str).str.strip().str.upper() == filter_method.strip().upper()]
+
     if filter_material != '전체':
         # Get matching MaterialIDs for the selected item name
         matching_ids = self.materials_df[self.materials_df['품목명'] == filter_material]['MaterialID'].tolist()
@@ -308,6 +318,19 @@ def update_monthly_usage_view_impl(self):
         if not self.cb_filter_material_monthly.get():
             self.cb_filter_material_monthly.set('전체')
 
+    # Populate method filter options from data
+    if hasattr(self, 'cb_filter_method_monthly'):
+        raw_methods = set(['RT', 'PAUT', 'MT', 'PT'])
+        if not self.daily_usage_df.empty and '검사방법' in self.daily_usage_df.columns:
+            for m in self.daily_usage_df['검사방법'].dropna():
+                m_str = str(m).strip().upper()
+                if m_str and m_str != 'NAN':
+                    raw_methods.add(m_str)
+        unique_methods = ['전체'] + sorted(raw_methods)
+        self.cb_filter_method_monthly['values'] = unique_methods
+        if not self.cb_filter_method_monthly.get():
+            self.cb_filter_method_monthly.set('전체')
+
     # [NEW] Sync detached filters to main window state
     if 'monthly' in self.detached_windows:
         p_filters = self.detached_windows['monthly'].get('filters', {})
@@ -315,10 +338,14 @@ def update_monthly_usage_view_impl(self):
             p_filters['year'].set(self.cb_filter_year.get())
             p_filters['month'].set(self.cb_filter_month.get())
             p_filters['site'].set(self.cb_filter_site_monthly.get())
+            if 'method' in p_filters and hasattr(self, 'cb_filter_method_monthly'):
+                p_filters['method'].set(self.cb_filter_method_monthly.get())
             p_filters['mat'].set(self.cb_filter_material_monthly.get())
             
-            # Also sync dropdown values for Site/Material
+            # Also sync dropdown values for Site/Material/Method
             p_filters['site']['values'] = self.cb_filter_site_monthly['values']
+            if 'method' in p_filters and hasattr(self, 'cb_filter_method_monthly'):
+                p_filters['method']['values'] = self.cb_filter_method_monthly['values']
             p_filters['mat']['values'] = self.cb_filter_material_monthly['values']
     
     # Prepare aggregation dictionary for all numeric fields
