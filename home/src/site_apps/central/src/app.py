@@ -14906,26 +14906,15 @@ class MaterialManager:
             # Get current filtered data from treeview
             stock_data = []
             
+            cols = list(self.stock_tree['columns'])
             for item in self.stock_tree.get_children():
                 values = self.stock_tree.item(item, 'values')
-                stock_data.append({
-                    'No.': values[0],
-                    '회사코드': values[1],
-                    '관리품번': values[2],
-                    '품목명': values[3],
-                    'SN': values[4],
-                    '창고': values[5],
-                    '모델명': values[6],
-                    '규격': values[7],
-                    '품목군코드': values[8],
-                    '공급업체': values[9],
-                    '제조사': values[10],
-                    '제조국': values[11],
-                    '가격': values[12],
-                    '관리단위': values[13],
-                    '수량': values[14],
-                    '재고하한': values[15]
-                })
+                row_dict = {}
+                for idx, col in enumerate(cols):
+                    if idx < len(values):
+                        heading_text = self.stock_tree.heading(col, 'text') or col
+                        row_dict[heading_text] = values[idx]
+                stock_data.append(row_dict)
             
             if not stock_data:
                 messagebox.showinfo("알림", "내보낼 데이터가 없습니다.")

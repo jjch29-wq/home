@@ -138,7 +138,7 @@ def setup_stock_tab_impl(self):
     vsb = ttk.Scrollbar(tree_frame, orient="vertical")
     hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
     
-    columns = ('No.', '회사코드', '관리품번', '품목명', 'SN', '창고', '모델명', '규격', '품목군코드', '공급업체', '제조사', '제조국', '가격', '원가', '관리단위', '입고수량', '사용수량', '재고수량', '재고하한', '상태/위치')
+    columns = ('No.', '회사코드', '관리품번', '자재명', '장비명', 'SN', '창고', '모델명', '규격', '품목군코드', '공급업체', '제조사', '제조국', '가격', '원가', '관리단위', '입고수량', '사용수량', '재고수량', '재고하한', '상태/위치')
     self.stock_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', 
                                   yscrollcommand=vsb.set, xscrollcommand=hsb.set)
     
@@ -146,7 +146,7 @@ def setup_stock_tab_impl(self):
     hsb.config(command=self.stock_tree.xview)
     
     # Column configuration
-    col_widths = [60, 80, 100, 180, 90, 90, 120, 120, 90, 120, 120, 80, 80, 80, 80, 80, 80, 80, 80, 130]
+    col_widths = [50, 70, 80, 160, 160, 90, 80, 120, 100, 80, 100, 100, 70, 70, 70, 65, 70, 70, 70, 70, 110]
     for col, width in zip(columns, col_widths):
         self.stock_tree.heading(col, text=col, command=lambda _col=col: self.treeview_sort_column(self.stock_tree, _col, False))
         # Change stretch=True to stretch=False to allow fixed user-defined widths
@@ -435,13 +435,18 @@ def update_stock_view_impl(self):
                         status_location = f"현장: {site_name}" if site_name else "출고됨"
                         row_tag = 'deployed'
         
+        # [NEW] 자재명 / 장비명 컬럼 분리 표기
+        mat_col = mat_name_raw if is_consumable else "-"
+        eq_col = "-" if is_consumable else mat_name_raw
+
         # Default row display
         stock_summary.append({
             'data': (
                 str(row_idx),
                 safe_get(mat.get('회사코드', ''), ''),
                 safe_get(mat.get('관리품번', ''), ''),
-                safe_get(mat.get('품목명', ''), ''),
+                mat_col,
+                eq_col,
                 safe_get(mat.get('SN', ''), ''),
                 safe_get(mat.get('창고', ''), ''),
                 safe_get(mat.get('모델명', ''), ''),
@@ -464,8 +469,8 @@ def update_stock_view_impl(self):
         })
         row_idx += 1
     
-    # [NEW] Sort by Item Name (Index 3) then Model Name (Index 6)
-    stock_summary.sort(key=lambda x: (str(x['data'][3]), str(x['data'][6])))
+    # [NEW] Sort by 자재명 (Index 3) then 장비명 (Index 4) then 모델명 (Index 7)
+    stock_summary.sort(key=lambda x: (str(x['data'][3]), str(x['data'][4]), str(x['data'][7])))
     
     # Filter by search term and dropdowns
     filter_co = str(self.cb_filter_co.get()).strip() if self.cb_filter_co.get() else "전체"
@@ -481,12 +486,12 @@ def update_stock_view_impl(self):
         row = row_obj['data']
         # Dropdown Filters
         if filter_co != "전체" and str(row[1]) != filter_co: continue
-        if filter_class != "전체" and str(row[8]) != filter_class: continue
-        if filter_mfr != "전체" and str(row[10]) != filter_mfr: continue
-        if filter_name != "전체" and str(row[3]) != filter_name: continue
-        if filter_sn != "전체" and str(row[4]) != filter_sn: continue
-        if filter_model != "전체" and str(row[6]) != filter_model: continue
         if filter_eq != "전체" and str(row[2]) != filter_eq: continue
+        if filter_name != "전체" and str(row[3]) != filter_name and str(row[4]) != filter_name: continue
+        if filter_sn != "전체" and str(row[5]) != filter_sn: continue
+        if filter_model != "전체" and str(row[7]) != filter_model: continue
+        if filter_class != "전체" and str(row[9]) != filter_class: continue
+        if filter_mfr != "전체" and str(row[11]) != filter_mfr: continue
         
         # General Search Term
         if search_term:
