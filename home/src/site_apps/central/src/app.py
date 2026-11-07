@@ -7954,7 +7954,10 @@ class MaterialManager:
                         
                 if is_mt:
                     mt_dates.add(date_key)
-                if 'RT' in method_val or 'RT' in equip_name or 'RT' in m_name_local:
+                is_rt = ('RT' in method_val or 'RT' in equip_name or 'RT' in m_name_local or
+                         'SE-75' in equip_name or 'SE-175' in equip_name or
+                         'SE-75' in aux_clean or 'SE-175' in aux_clean)
+                if is_rt:
                     rt_dates.add(date_key)
             except Exception:
                 pass
@@ -8321,6 +8324,8 @@ class MaterialManager:
                 # 같은 날짜/현장의 700A, 200A 작업에 같은 차량이 반복 저장돼도 1일이다.
                 actual_days = len(set(str(r.get('Date', '')).strip().split(' ')[0] for _, r in df.iterrows() if str(r.get('Date', '')).strip()))
                 cat_name = str(row_data.get('cat', '')).strip()
+                cat_upper = cat_name.upper()
+                item_upper = str(row_data.get('item', '')).upper()
                 if cat_name == '차량유지비':
                     row_data['ppl'] = 'N/A'
                     row_data['qty'] = f"{total_vehicle_days:g}" if total_vehicle_days > 0 else ""
@@ -8334,6 +8339,11 @@ class MaterialManager:
                     row_data['qty'] = f"{actual_days:g}" if actual_days > 0 else ""
                     row_data['unit'] = '일'
                     row_data['price'] = 1667
+                elif any(k in cat_upper or k in item_upper for k in ['SE-175', 'SE175', 'SE-75', 'SE75', '방사성동위원소', '동위원소']):
+                    row_data['ppl'] = 'N/A'
+                    row_data['qty'] = f"{len(rt_dates):g}" if len(rt_dates) > 0 else ""
+                    row_data['unit'] = '일'
+                    row_data['price'] = 35714
                     
             for i, row_data in enumerate(current_exp_data.get('depreciation', [])):
                 item = row_data.get('item', '')
