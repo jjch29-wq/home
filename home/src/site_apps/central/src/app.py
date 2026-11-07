@@ -1043,6 +1043,7 @@ class MaterialManager:
             'cb_co_code': 'co_code_list',
             'cb_eq_code': 'eq_code_list',
             'cb_item_name': 'item_name_list',
+            'cb_eq_name': 'equipments',
             'cb_model': 'model_list',
             'cb_class': 'class_list',
             'cb_spec': 'spec_list',
@@ -1611,7 +1612,7 @@ class MaterialManager:
         self.inout_top_paned.add(reg_container, weight=1)
         
         # Frame for Registration (Directly packed)
-        reg_frame = ttk.LabelFrame(reg_container, text="자재 신규 등록")
+        reg_frame = ttk.LabelFrame(reg_container, text="자재 / 장비 신규 등록")
         reg_frame.pack(fill='both', expand=True, padx=10, pady=5)
         reg_frame.grid_columnconfigure(1, weight=1)
         reg_frame.grid_columnconfigure(3, weight=1)
@@ -1627,14 +1628,15 @@ class MaterialManager:
         self.cb_eq_code.grid(row=0, column=3, padx=5, pady=2, sticky='ew')
         self.cb_eq_code.bind('<Return>', lambda e: self.cb_item_name.focus_set())
         
-        # Row 1
+        # Row 1: 자재명 / 장비명 (현재 재고 현황 탭과 통일)
         ttk.Label(reg_frame, text="자재명:").grid(row=1, column=0, padx=5, pady=2, sticky='w')
         item_name_container = ttk.Frame(reg_frame)
         item_name_container.grid(row=1, column=1, padx=5, pady=2, sticky='ew')
         
         self.cb_item_name = ttk.Combobox(item_name_container, width=15)
         self.cb_item_name.pack(side='left', fill='x', expand=True)
-        self.cb_item_name.bind('<Return>', lambda e: self.cb_model.focus_set())
+        self.cb_item_name.bind('<Return>', lambda e: self.cb_eq_name.focus_set())
+        self.cb_item_name.bind('<<ComboboxSelected>>', lambda e: self.cb_eq_name.set('') if hasattr(self, 'cb_eq_name') else None)
         
         # [MODERN] Place the search button INSIDE the combobox
         btn_pref_search = tk.Button(self.cb_item_name, text="🔍", font=('Arial', 8), 
@@ -1643,78 +1645,84 @@ class MaterialManager:
         # Offset x=-20 to avoid overlapping the combobox arrow
         btn_pref_search.place(relx=1.0, x=-20, rely=0.5, anchor='e', width=18, height=18)
         
-        ttk.Label(reg_frame, text="모델명:").grid(row=1, column=2, padx=5, pady=2, sticky='w')
-        self.cb_model = ttk.Combobox(reg_frame, width=20)
-        self.cb_model.grid(row=1, column=3, padx=5, pady=2, sticky='ew')
-        self.cb_model.bind('<Return>', lambda e: self.ent_sn.focus_set())
+        ttk.Label(reg_frame, text="장비명:").grid(row=1, column=2, padx=5, pady=2, sticky='w')
+        self.cb_eq_name = ttk.Combobox(reg_frame, width=20)
+        self.cb_eq_name.grid(row=1, column=3, padx=5, pady=2, sticky='ew')
+        self.cb_eq_name.bind('<Return>', lambda e: self.cb_model.focus_set())
+        self.cb_eq_name.bind('<<ComboboxSelected>>', lambda e: self.cb_item_name.set(''))
         
         # Row 2
-        ttk.Label(reg_frame, text="SN번호:").grid(row=2, column=0, padx=5, pady=2, sticky='w')
-        self.ent_sn = ttk.Entry(reg_frame, width=15)
-        self.ent_sn.grid(row=2, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="모델명:").grid(row=2, column=0, padx=5, pady=2, sticky='w')
+        self.cb_model = ttk.Combobox(reg_frame, width=15)
+        self.cb_model.grid(row=2, column=1, padx=5, pady=2, sticky='ew')
+        self.cb_model.bind('<Return>', lambda e: self.ent_sn.focus_set())
+        
+        ttk.Label(reg_frame, text="SN번호:").grid(row=2, column=2, padx=5, pady=2, sticky='w')
+        self.ent_sn = ttk.Entry(reg_frame, width=20)
+        self.ent_sn.grid(row=2, column=3, padx=5, pady=2, sticky='ew')
         self.ent_sn.bind('<Return>', lambda e: self.cb_class.focus_set())
         
-        ttk.Label(reg_frame, text="분류:").grid(row=2, column=2, padx=5, pady=2, sticky='w')
-        self.cb_class = ttk.Combobox(reg_frame, width=20)
-        self.cb_class.grid(row=2, column=3, padx=5, pady=2, sticky='ew')
+        # Row 3
+        ttk.Label(reg_frame, text="분류:").grid(row=3, column=0, padx=5, pady=2, sticky='w')
+        self.cb_class = ttk.Combobox(reg_frame, width=15)
+        self.cb_class.grid(row=3, column=1, padx=5, pady=2, sticky='ew')
         self.cb_class.bind('<Return>', lambda e: self.cb_spec.focus_set())
         
-        # Row 3
-        ttk.Label(reg_frame, text="규격:").grid(row=3, column=0, padx=5, pady=2, sticky='w')
-        self.cb_spec = ttk.Combobox(reg_frame, width=15)
-        self.cb_spec.grid(row=3, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="규격:").grid(row=3, column=2, padx=5, pady=2, sticky='w')
+        self.cb_spec = ttk.Combobox(reg_frame, width=20)
+        self.cb_spec.grid(row=3, column=3, padx=5, pady=2, sticky='ew')
         self.cb_spec.bind('<Return>', lambda e: self.cb_unit.focus_set())
         
-        ttk.Label(reg_frame, text="단위:").grid(row=3, column=2, padx=5, pady=2, sticky='w')
-        self.cb_unit = ttk.Combobox(reg_frame, width=20)
-        self.cb_unit.grid(row=3, column=3, padx=5, pady=2, sticky='ew')
+        # Row 4
+        ttk.Label(reg_frame, text="단위:").grid(row=4, column=0, padx=5, pady=2, sticky='w')
+        self.cb_unit = ttk.Combobox(reg_frame, width=15)
+        self.cb_unit.grid(row=4, column=1, padx=5, pady=2, sticky='ew')
         self.cb_unit.bind('<Return>', lambda e: self.cb_supplier.focus_set())
         
-        # Row 4
-        ttk.Label(reg_frame, text="공급업자:").grid(row=4, column=0, padx=5, pady=2, sticky='w')
-        self.cb_supplier = ttk.Combobox(reg_frame, width=15)
-        self.cb_supplier.grid(row=4, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="공급업자:").grid(row=4, column=2, padx=5, pady=2, sticky='w')
+        self.cb_supplier = ttk.Combobox(reg_frame, width=20)
+        self.cb_supplier.grid(row=4, column=3, padx=5, pady=2, sticky='ew')
         self.cb_supplier.bind('<Return>', lambda e: self.cb_mfr.focus_set())
         
-        ttk.Label(reg_frame, text="제조사:").grid(row=4, column=2, padx=5, pady=2, sticky='w')
-        self.cb_mfr = ttk.Combobox(reg_frame, width=20)
-        self.cb_mfr.grid(row=4, column=3, padx=5, pady=2, sticky='ew')
+        # Row 5
+        ttk.Label(reg_frame, text="제조사:").grid(row=5, column=0, padx=5, pady=2, sticky='w')
+        self.cb_mfr = ttk.Combobox(reg_frame, width=15)
+        self.cb_mfr.grid(row=5, column=1, padx=5, pady=2, sticky='ew')
         self.cb_mfr.bind('<Return>', lambda e: self.cb_origin.focus_set())
         
-        # Row 5
-        ttk.Label(reg_frame, text="제조국:").grid(row=5, column=0, padx=5, pady=2, sticky='w')
-        self.cb_origin = ttk.Combobox(reg_frame, width=15)
-        self.cb_origin.grid(row=5, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="제조국:").grid(row=5, column=2, padx=5, pady=2, sticky='w')
+        self.cb_origin = ttk.Combobox(reg_frame, width=20)
+        self.cb_origin.grid(row=5, column=3, padx=5, pady=2, sticky='ew')
         self.cb_origin.bind('<Return>', lambda e: self.ent_reorder.focus_set())
-        
-        ttk.Label(reg_frame, text="재주문 수준:").grid(row=5, column=2, padx=5, pady=2, sticky='w')
-        self.ent_reorder = ttk.Entry(reg_frame, width=20)
-        self.ent_reorder.grid(row=5, column=3, padx=5, pady=2, sticky='ew')
-        self.ent_reorder.insert(0, "0")
-        self.ent_reorder.bind('<Return>', lambda e: self.ent_init.focus_set())
         
         # Row 6
         ttk.Label(reg_frame, text="초기재고:").grid(row=6, column=0, padx=5, pady=2, sticky='w')
         self.ent_init = ttk.Entry(reg_frame, width=15)
         self.ent_init.grid(row=6, column=1, padx=5, pady=2, sticky='ew')
         self.ent_init.insert(0, "0")
-        self.ent_init.bind('<Return>', lambda e: self.ent_price.focus_set())
+        self.ent_init.bind('<Return>', lambda e: self.ent_reorder.focus_set())
         
-        ttk.Label(reg_frame, text="단가(가격):").grid(row=6, column=2, padx=5, pady=2, sticky='w')
-        self.ent_price = ttk.Entry(reg_frame, width=20)
-        self.ent_price.grid(row=6, column=3, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="재주문 수준:").grid(row=6, column=2, padx=5, pady=2, sticky='w')
+        self.ent_reorder = ttk.Entry(reg_frame, width=20)
+        self.ent_reorder.grid(row=6, column=3, padx=5, pady=2, sticky='ew')
+        self.ent_reorder.insert(0, "0")
+        self.ent_reorder.bind('<Return>', lambda e: self.ent_price.focus_set())
+        
+        # Row 7
+        ttk.Label(reg_frame, text="단가(가격):").grid(row=7, column=0, padx=5, pady=2, sticky='w')
+        self.ent_price = ttk.Entry(reg_frame, width=15)
+        self.ent_price.grid(row=7, column=1, padx=5, pady=2, sticky='ew')
         self.ent_price.insert(0, "0")
         self.ent_price.bind('<Return>', lambda e: self.ent_cost.focus_set())
         
-        # Row 7
-        ttk.Label(reg_frame, text="원가:").grid(row=7, column=0, padx=5, pady=2, sticky='w')
-        self.ent_cost = ttk.Entry(reg_frame, width=15)
-        self.ent_cost.grid(row=7, column=1, padx=5, pady=2, sticky='ew')
+        ttk.Label(reg_frame, text="원가:").grid(row=7, column=2, padx=5, pady=2, sticky='w')
+        self.ent_cost = ttk.Entry(reg_frame, width=20)
+        self.ent_cost.grid(row=7, column=3, padx=5, pady=2, sticky='ew')
         self.ent_cost.insert(0, "0")
         self.ent_cost.bind('<Return>', lambda e: btn_reg.focus_set())
         
         # Row 8
-        btn_reg = ttk.Button(reg_frame, text="자재 등록", command=self.register_material)
+        btn_reg = ttk.Button(reg_frame, text="자재 / 장비 등록", command=self.register_material)
         btn_reg.grid(row=8, column=0, columnspan=4, pady=10)
         
 
@@ -1724,7 +1732,7 @@ class MaterialManager:
         self.inout_top_paned.add(trans_reg_container, weight=1)
         
         # Frame for In/Out Transaction (Directly packed)
-        trans_frame = ttk.LabelFrame(trans_reg_container, text="입출고 기록")
+        trans_frame = ttk.LabelFrame(trans_reg_container, text="자재 / 장비 입출고 기록")
         trans_frame.pack(fill='both', expand=True, padx=10, pady=5)
         trans_frame.grid_columnconfigure(1, weight=1)
         trans_frame.grid_columnconfigure(3, weight=1)
@@ -1733,7 +1741,7 @@ class MaterialManager:
         history_container = ttk.Frame(self.inout_paned)
         self.inout_paned.add(history_container, weight=2)
         
-        ttk.Label(trans_frame, text="자재 선택:").grid(row=0, column=0, padx=5, pady=2, sticky='w')
+        ttk.Label(trans_frame, text="자재/장비 선택:").grid(row=0, column=0, padx=5, pady=2, sticky='w')
         mat_sel_container = ttk.Frame(trans_frame)
         mat_sel_container.grid(row=0, column=1, padx=5, pady=2, columnspan=3, sticky='ew')
         
@@ -1829,7 +1837,7 @@ class MaterialManager:
         filter_row2 = ttk.Frame(history_ctrl_frame)
         filter_row2.pack(fill='x', pady=2)
         
-        ttk.Label(filter_row2, text="자재명 필터:").pack(side='left', padx=5)
+        ttk.Label(filter_row2, text="자재/장비명 필터:").pack(side='left', padx=5)
         self.cb_trans_filter_mat = ttk.Combobox(filter_row2, width=35, state="readonly")
         self.cb_trans_filter_mat.pack(side='left', padx=5)
         self.cb_trans_filter_mat.bind('<<ComboboxSelected>>', lambda e: self.update_transaction_view())
@@ -2428,6 +2436,18 @@ class MaterialManager:
             self.item_name_list[:] = all_mat_vals
             self.cb_item_name['values'] = self.item_name_list
             
+        # Update cb_eq_name with equipment names
+        if hasattr(self, 'cb_eq_name'):
+            eq_vals = []
+            if hasattr(self, 'equipments') and self.equipments:
+                eq_vals.extend(self.equipments)
+            if not self.materials_df.empty and '품목명' in self.materials_df.columns:
+                for _, r in self.materials_df.iterrows():
+                    pname = str(r.get('품목명', '')).strip()
+                    if pname and not self._is_consumable_material(pname, ''):
+                        eq_vals.append(pname)
+            self.cb_eq_name['values'] = sorted(list(set(eq_vals)))
+            
         # [FIX] Do NOT overwrite cb_filter_name values here; it was already set with consumable filtering above.
         # Just ensure the autocomplete list is refreshed.
         if hasattr(self, 'apply_autocomplete_to_all_comboboxes'):
@@ -2438,16 +2458,17 @@ class MaterialManager:
         self.root.after(100, self.update_stock_view)
 
     def register_material(self):
-        co_code = self.cb_co_code.get()
-        item_name = self.cb_item_name.get()
-        eq_code = self.cb_eq_code.get()
-        sn = self.ent_sn.get()
-        classification = self.cb_class.get()
-        spec = self.cb_spec.get()
-        unit = self.cb_unit.get()
-        supplier = self.cb_supplier.get()
-        manufacturer = self.cb_mfr.get()
-        origin = self.cb_origin.get()
+        co_code = self.cb_co_code.get().strip()
+        item_name = self.cb_item_name.get().strip()
+        eq_name = self.cb_eq_name.get().strip() if hasattr(self, 'cb_eq_name') else ''
+        eq_code = self.cb_eq_code.get().strip()
+        sn = self.ent_sn.get().strip()
+        classification = self.cb_class.get().strip()
+        spec = self.cb_spec.get().strip()
+        unit = self.cb_unit.get().strip()
+        supplier = self.cb_supplier.get().strip()
+        manufacturer = self.cb_mfr.get().strip()
+        origin = self.cb_origin.get().strip()
         
         try:
             init_stock = float(self.ent_init.get())
@@ -2458,9 +2479,15 @@ class MaterialManager:
             messagebox.showwarning("입력 오류", "재고, 단가, 원가 정보는 숫자여야 합니다.")
             return
             
-        if not item_name:
-            messagebox.showwarning("입력 오류", "자재명을 입력해주세요.")
+        if not item_name and not eq_name:
+            messagebox.showwarning("입력 오류", "자재명 또는 장비명을 입력해주세요.")
             return
+
+        final_item_name = eq_name if eq_name else item_name
+        is_equipment = bool(eq_name)
+        
+        if is_equipment and hasattr(self, 'equipments') and eq_name not in self.equipments:
+            self.equipments.append(eq_name)
         
         # Generate MaterialID
         if self.materials_df.empty:
@@ -2471,14 +2498,11 @@ class MaterialManager:
         # Extract SN from Model Name (Now using newly added model name combobox)
         model_name = self.cb_model.get().strip() if hasattr(self, 'cb_model') else ''
         new_model, new_sn = self.extract_sn_from_model(model_name, sn)
-        # Note: In register_material, model_name is currently not an input field, but SN is.
-        # If the user adds model name to registration later, this will handle it.
-        
         new_row = {
             'MaterialID': mat_id,
             '회사코드': co_code,
             '관리품번': eq_code,
-            '품목명': item_name,
+            '품목명': final_item_name,
             'SN': new_sn,
             '창고': '',
             '모델명': new_model,
@@ -2491,7 +2515,8 @@ class MaterialManager:
             '원가': cost_val,
             '관리단위': unit if unit else 'EA',
             '수량': init_stock,
-            '재고하한': reorder_point
+            '재고하한': reorder_point,
+            'Active': 1
         }
         
         self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_row])], ignore_index=True)
@@ -2499,12 +2524,14 @@ class MaterialManager:
         self.update_material_combo()
         self.update_registration_combos()
         self.update_stock_view()
-        messagebox.showinfo("완료", f"'{item_name}' 자재가 등록되었습니다.")
+        type_str = "장비" if is_equipment else "자재"
+        messagebox.showinfo("완료", f"'{final_item_name}' {type_str}가 등록되었습니다.")
         
         # Clear entries
         self.cb_co_code.set('')
         self.cb_eq_code.set('')
         self.cb_item_name.set('')
+        if hasattr(self, 'cb_eq_name'): self.cb_eq_name.set('')
         self.ent_sn.delete(0, tk.END)
         self.cb_class.set('')
         self.cb_spec.set('')
@@ -2532,7 +2559,7 @@ class MaterialManager:
             user = self.ent_user.get().strip()
             
             if not mat_selection:
-                messagebox.showwarning("입력 오류", "자재를 선택해주세요.")
+                messagebox.showwarning("입력 오류", "자재 또는 장비를 선택해주세요.")
                 return
             if not t_type:
                 messagebox.showwarning("입력 오류", "구분(입고/출고)을 선택해주세요.")
@@ -10144,7 +10171,12 @@ class MaterialManager:
                 dlg.destroy()
             else:
                 # Registration form
-                self.cb_item_name.set(name)
+                if self._is_consumable_material(name, ''):
+                    self.cb_item_name.set(name)
+                    if hasattr(self, 'cb_eq_name'): self.cb_eq_name.set('')
+                else:
+                    if hasattr(self, 'cb_eq_name'): self.cb_eq_name.set(name)
+                    self.cb_item_name.set('')
                 if hasattr(self, 'cb_model'): self.cb_model.set(model)
                 if hasattr(self, 'ent_sn'): 
                     self.ent_sn.delete(0, tk.END)

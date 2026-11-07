@@ -115,6 +115,12 @@ def _is_consumable_material_impl(self, name, method):
     Equipment (exclude): Scanners, Crawlers, Sources, Meters, Yokes, etc.
     """
     if not name: return False
+    
+    # Check registered equipments list first
+    if hasattr(self, 'equipments') and self.equipments:
+        if any(str(name).strip().upper() == str(eq).strip().upper() for eq in self.equipments):
+            return False
+            
     n = str(name).strip().upper().replace(' ', '')
     m = str(method).strip().upper()
 
