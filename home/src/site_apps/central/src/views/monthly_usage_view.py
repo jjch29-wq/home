@@ -183,8 +183,13 @@ def setup_monthly_usage_tab_impl(self):
                text="📋 사후원가 특별근무에 적용",
                command=self.apply_worker_shift_hours_to_budget).pack(side='right', padx=5)
 
-    # Initial view update
+    # [NEW] 사용자가 구분선을 마우스로 조절했을 때 높이 자동 저장
+    self.monthly_paned.bind('<ButtonRelease-1>', lambda e: self.root.after(50, self._on_monthly_sash_changed), add="+")
+
+    # Initial view update & 사진 높이 비율로 테이블 높이 자동 복원
     self.update_monthly_usage_view()
+    self.root.after(150, self._ensure_monthly_sash_visibility)
+    self.root.after(400, self._ensure_monthly_sash_visibility)
 
 
 def update_monthly_usage_view_impl(self):

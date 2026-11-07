@@ -8754,6 +8754,70 @@ class MaterialManager:
             print(f"Error ensuring sash visibility: {e}")
             self.root.after(500, self._ensure_daily_usage_sash_visibility)
     
+    def _ensure_monthly_sash_visibility(self):
+        """월별 집계 3개 테이블 높이를 저장된 설정 또는 사진 비율(28.2%, 59.0%)로 복원"""
+        try:
+            if not hasattr(self, 'monthly_paned') or not self.monthly_paned.winfo_exists():
+                return
+            
+            # 탭이 선택되어 화면에 렌더링될 때 정확한 높이 계산
+            self.monthly_paned.update_idletasks()
+            total_h = self.monthly_paned.winfo_height()
+            if total_h <= 50:
+                return
+            
+            # 사진 기반 기본 비율: 상단(월별사용량) 28.2%, 중간(현장별누계) 30.8%, 하단(작업자별) 41.0%
+            r0 = 0.282
+            r1 = 0.590
+            
+            if hasattr(self, 'tab_config'):
+                saved_ratios = self.tab_config.get('monthly_sash_ratios')
+                if saved_ratios and len(saved_ratios) >= 2:
+                    try:
+                        r0 = float(saved_ratios[0])
+                        r1 = float(saved_ratios[1])
+                    except: pass
+            
+            target_pos0 = int(total_h * r0)
+            target_pos1 = int(total_h * r1)
+            
+            # 경계 한계값 (각 테이블이 최소 50px 이상 보이도록 제한)
+            min_pane_h = 50
+            target_pos0 = max(min_pane_h, min(target_pos0, total_h - 2 * min_pane_h))
+            target_pos1 = max(target_pos0 + min_pane_h, min(target_pos1, total_h - min_pane_h))
+            
+            try:
+                self.monthly_paned.sashpos(0, target_pos0)
+                self.monthly_paned.sashpos(1, target_pos1)
+            except Exception as e:
+                print(f"Error setting monthly sash pos: {e}")
+        except Exception as e:
+            print(f"Error in _ensure_monthly_sash_visibility: {e}")
+
+    def _on_monthly_sash_changed(self, event=None):
+        """사용자가 월별 집계 테이블 구분선을 조절했을 때 높이 및 비율 저장"""
+        try:
+            if not hasattr(self, 'monthly_paned') or not self.monthly_paned.winfo_exists():
+                return
+            self.monthly_paned.update_idletasks()
+            total_h = self.monthly_paned.winfo_height()
+            if total_h <= 50:
+                return
+            s0 = self.monthly_paned.sashpos(0)
+            s1 = self.monthly_paned.sashpos(1)
+            if s0 <= 0 or s1 <= 0 or s0 >= s1:
+                return
+            if not hasattr(self, 'tab_config'):
+                self.tab_config = {}
+            r0 = round(s0 / total_h, 4)
+            r1 = round(s1 / total_h, 4)
+            self.tab_config['monthly_sash_positions'] = [s0, s1]
+            self.tab_config['monthly_sash_ratios'] = [r0, r1]
+            self.save_tab_config()
+            print(f"Saved monthly sash positions: [{s0}, {s1}], ratios: [{r0}, {r1}]")
+        except Exception as e:
+            print(f"Error saving monthly sash positions: {e}")
+    
     
     
     def update_resolution_display(self):
@@ -13870,6 +13934,19 @@ class MaterialManager:
                     bottom_dashboard_sashes = [self.bottom_dashboard.sashpos(0), self.bottom_dashboard.sashpos(1)]
                 except: pass
 
+            monthly_sash_positions = []
+            monthly_sash_ratios = []
+            if hasattr(self, 'monthly_paned') and isinstance(self.monthly_paned, ttk.PanedWindow):
+                try:
+                    m_h = self.monthly_paned.winfo_height()
+                    s0 = self.monthly_paned.sashpos(0)
+                    s1 = self.monthly_paned.sashpos(1)
+                    if s0 > 0 and s1 > 0 and s0 < s1:
+                        monthly_sash_positions = [s0, s1]
+                        if m_h > 50:
+                            monthly_sash_ratios = [round(s0 / m_h, 4), round(s1 / m_h, 4)]
+                except: pass
+
             entry_inner_frame_height = None
             if hasattr(self, 'entry_inner_frame'):
                 try: entry_inner_frame_height = self.entry_inner_frame.winfo_height()
@@ -13909,6 +13986,8 @@ class MaterialManager:
                 'daily_usage_sash_pos': daily_usage_sash_pos,
                 'daily_history_sash_pos': daily_history_sash_pos,
                 'bottom_dashboard_sashes': bottom_dashboard_sashes,
+                'monthly_sash_positions': monthly_sash_positions or getattr(self, 'tab_config', {}).get('monthly_sash_positions', [125, 262]),
+                'monthly_sash_ratios': monthly_sash_ratios or getattr(self, 'tab_config', {}).get('monthly_sash_ratios', [0.282, 0.590]),
                 'entry_inner_frame_height': entry_inner_frame_height,
                 'history_visible_cols': getattr(self, 'manual_visible_cols', []),
                 'monthly_visible_cols': getattr(self, 'monthly_visible_cols', []),
@@ -14724,6 +14803,9 @@ class MaterialManager:
                                         self.bottom_dashboard.sashpos(1, int(bottom_sashes[1]))
                                 except: pass
                                 
+                            # Monthly usage table sashes (월별 집계 3개 테이블 높이 복원)
+                            self._ensure_monthly_sash_visibility()
+
                             # If sash lock is active (check config heavily)
                             config_locked = config.get('daily_usage_sash_locked', False)
                             if config_locked:

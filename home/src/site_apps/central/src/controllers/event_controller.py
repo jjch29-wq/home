@@ -342,6 +342,10 @@ def _on_main_window_resize_impl(self, event):
             # Check if inout tab exists and has saved ratio
             if hasattr(self, 'inout_paned') and hasattr(self, 'tab_config') and 'inout_sash_ratio' in self.tab_config:
                 self.root.after(100, self._ensure_inout_sash_visibility)
+
+            # Check if monthly usage tab exists
+            if hasattr(self, 'monthly_paned'):
+                self.root.after(100, self._ensure_monthly_sash_visibility)
                 
     except Exception as e:
         print(f"Error handling main window resize: {e}")
@@ -444,6 +448,8 @@ def on_tab_changed_impl(self, event=None):
             print("Monthly usage tab selected - refreshing view")
             self.refresh_inquiry_filters()
             self.update_monthly_usage_view()
+            self.root.after(50, self._ensure_monthly_sash_visibility)
+            self.root.after(200, self._ensure_monthly_sash_visibility)
         elif tab_text == '공사실행예산서':
             print("Construction budget tab selected - refreshing view")
             self.update_budget_site_view()
