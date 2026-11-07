@@ -1897,24 +1897,26 @@ class MaterialManager:
 
     def get_material_display_name(self, mat_id):
         """Get formatted material name as '품목명 (SN: SN번호) - 규격'"""
-        # [FIX] Handle NaN IDs gracefully to prevent "NAN" display
-        if pd.isna(mat_id) or str(mat_id).lower().strip() == 'nan':
+        # [FIX] Handle NaN/empty IDs gracefully to prevent matching empty strings
+        if pd.isna(mat_id) or str(mat_id).lower().strip() in ('nan', 'none', '', '0'):
             return ""
             
         if self.materials_df.empty:
             return f"ID: {mat_id}"
             
-        try:
-            mat_row = self.materials_df[self.materials_df['MaterialID'] == mat_id]
-        except (TypeError, ValueError):
-            mat_row = pd.DataFrame()  # Comparison failed (e.g. dtype mismatch) → treat as not found
+        target_id = self.normalize_id(mat_id)
+        if not target_id:
+            return ""
+            
+        mask = (self.materials_df['MaterialID'].notna()) & (self.materials_df['MaterialID'].apply(self.normalize_id) == target_id)
+        mat_row = self.materials_df[mask]
             
         if mat_row.empty:
             # [NEW] Handle non-numeric IDs (raw names for PAUT) and orphans gracefully
             return str(mat_id)
             
         mat = mat_row.iloc[0]
-        name = mat['품목명']
+        name = mat.get('품목명', '')
         
         # [SAFETY] If 품목명 is NaN/empty, fall back to str(mat_id)
         if pd.isna(name) or str(name).strip() == '':
@@ -1941,36 +1943,39 @@ class MaterialManager:
 
     def get_material_name_only(self, mat_id):
         """Get only the 품목명 for a material"""
+        if pd.isna(mat_id) or str(mat_id).lower().strip() in ('nan', 'none', '', '0'):
+            return ""
         if self.materials_df.empty:
             return f"(미등록) {mat_id}"
         
         target_id = self.normalize_id(mat_id)
-        # Match using normalized IDs to handle formatting variations
-        mask = self.materials_df['MaterialID'].apply(self.normalize_id) == target_id
+        if not target_id:
+            return ""
+        # Match using normalized IDs, strictly ignoring NaN MaterialIDs
+        mask = (self.materials_df['MaterialID'].notna()) & (self.materials_df['MaterialID'].apply(self.normalize_id) == target_id)
         mat_row = self.materials_df[mask]
         
         if mat_row.empty:
             return f"(미등록) {mat_id}"
-        return str(mat_row.iloc[0].get('품목명', f"(미등록) {mat_id}"))
+        name = mat_row.iloc[0].get('품목명', '')
+        return "" if pd.isna(name) else str(name).strip()
 
     def get_material_info(self, mat_id):
         """Get all material columns as a dictionary"""
+        if pd.isna(mat_id) or str(mat_id).lower().strip() in ('nan', 'none', '', '0'):
+            return {}
         if self.materials_df.empty:
             return {}
         
         target_id = self.normalize_id(mat_id)
-        mask = self.materials_df['MaterialID'].apply(self.normalize_id) == target_id
+        if not target_id:
+            return {}
+        mask = (self.materials_df['MaterialID'].notna()) & (self.materials_df['MaterialID'].apply(self.normalize_id) == target_id)
         mat_row = self.materials_df[mask]
         
         if mat_row.empty:
             return {}
         return mat_row.iloc[0].to_dict()
-        
-        # Add specification if exists
-        if spec and pd.notna(spec) and str(spec).strip():
-            display += f" - {spec}"
-            
-        return display
 
     def update_material_combo(self):
         """Update both In/Out and Daily Usage material comboboxes with unified list"""
@@ -2735,14 +2740,14 @@ class MaterialManager:
                     if u_val <= 0 and f_val <= 0 and not any(v > 0 for v in ndt_vals_list) and not str(row.get('Site', '')):
                         continue
 
+                    method_val = str(row.get('검사방법', '')).strip().upper()
                     mat_id = self.normalize_id(row.get('MaterialID'))
-                    mat_name = self.get_material_name_only(mat_id)
-                    mat_info = self.get_material_info(mat_id)
+                    mat_name = self.get_material_name_only(mat_id) if mat_id else ""
+                    mat_info = self.get_material_info(mat_id) if mat_id else {}
                     
                     # [NEW] Filter: Only show consumables in In/Out history (Exclude PAUT, etc.)
-                    # If mat_name is empty (manual entry), check method or keywords in Note if needed, 
-                    # but _is_consumable_material already handles method.
-                    if not self._is_consumable_material(mat_name, row.get('검사방법', '')):
+                    # If mat_name is empty (non-RT / NDT-only entry), keep row if NDT chemicals were used
+                    if not (mat_id and self._is_consumable_material(mat_name, method_val)):
                         # Check if it has NDT chemicals (which ARE consumables)
                         if not any(v > 0 for v in ndt_vals_list):
                             continue
@@ -2761,8 +2766,13 @@ class MaterialManager:
                     
                     worker_str = ", ".join(workers) if workers else str(row.get('User', ''))
 
-                    # [FIX] Allow showing quantity for PT/MT/NDT items in history view
-                    disp_qty = u_val
+                    # [FIX] Quantity for display:
+                    # If RT: show film count / usage
+                    # If not RT and no main consumable material: disp_qty should be 0 (chemicals have their own columns)
+                    if method_val == 'RT' or (mat_id and self._is_consumable_material(mat_name, method_val)):
+                        disp_qty = f_val if f_val > 0 else u_val
+                    else:
+                        disp_qty = 0
 
                     # [ROBUST] Try to parse ndt_data if it exists as a JSON string
                     ndt_json = {}
@@ -2877,7 +2887,7 @@ class MaterialManager:
                     raw_qty = row.get('Quantity', row.get('수량', 0))
                     try:
                         clean_qty = abs(float(str(raw_qty).replace(',', '')))
-                        qty_str = f"{clean_qty:.1f}" if clean_qty % 1 != 0 else f"{int(clean_qty)}"
+                        qty_str = (f"{clean_qty:.1f}" if clean_qty % 1 != 0 else f"{int(clean_qty)}") if clean_qty > 0 else ""
                     except:
                         qty_str = self.clean_nan(raw_qty)
 
