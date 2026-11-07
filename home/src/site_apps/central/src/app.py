@@ -3854,7 +3854,7 @@ class MaterialManager:
         site_summary = df.groupby(['Site', '검사방법'], dropna=False).agg(site_agg_dict).reset_index()
         
         # [NEW] Track active columns for dynamic hiding
-        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
+        site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '총기성액', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
                      '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
         active_cols = set(['현장', '검사방법', '품목명', '수량']) # Mandatory columns
         
@@ -3870,6 +3870,19 @@ class MaterialManager:
                 return abs(v) > 0.001
             except:
                 return bool(s)
+
+        tot_site_qty = 0.0
+        tot_site_test_fee = 0.0
+        tot_site_travel = 0.0
+        tot_site_overhead = 0.0
+        tot_site_tech = 0.0
+        tot_site_billing = 0.0
+        tot_site_conv = 0.0
+        tot_site_mat = 0.0
+        tot_site_labor = 0.0
+        tot_site_black_mag = 0.0
+        tot_site_white_paint = 0.0
+        tot_site_rtk = 0.0
 
         for _, row in site_summary.iterrows():
             # Get RT film usage from unified Usage column
@@ -3892,11 +3905,31 @@ class MaterialManager:
             r_other = row.get('RTK_기타', 0.0)
             rtk_sum = r_center + r_density + r_marking + r_film + r_careless + r_customer + r_other
             
+            test_fee_v = row.get('검사비', 0.0)
+            travel_v = row.get('출장비', 0.0)
+            overhead_v = row.get('제경비', 0.0)
+            tech_fee_v = row.get('기술료', 0.0)
+            total_billing_v = test_fee_v + travel_v + overhead_v + tech_fee_v
+            
+            tot_site_qty += row.get('검사량', 0.0)
+            tot_site_test_fee += test_fee_v
+            tot_site_travel += travel_v
+            tot_site_overhead += overhead_v
+            tot_site_tech += tech_fee_v
+            tot_site_billing += total_billing_v
+            tot_site_conv += row.get('환산물량', 0.0)
+            tot_site_mat += row.get('재료비', 0.0)
+            tot_site_labor += row.get('인건비', 0.0)
+            tot_site_black_mag += black_mag
+            tot_site_white_paint += white_paint
+            tot_site_rtk += rtk_sum
+
             # Track which columns are active using robust threshold
-            if is_active(row.get('검사비', 0.0)): active_cols.add('검사비')
-            if is_active(row.get('출장비', 0.0)): active_cols.add('출장비')
-            if is_active(row.get('제경비', 0.0)): active_cols.add('제경비')
-            if is_active(row.get('기술료', 0.0)): active_cols.add('기술료')
+            if is_active(test_fee_v): active_cols.add('검사비')
+            if is_active(travel_v): active_cols.add('출장비')
+            if is_active(overhead_v): active_cols.add('제경비')
+            if is_active(tech_fee_v): active_cols.add('기술료')
+            if is_active(total_billing_v): active_cols.add('총기성액')
             if is_active(row.get('환산물량', 0.0)): active_cols.add('환산물량')
             if is_active(row.get('재료비', 0.0)): active_cols.add('재료비')
             if is_active(row.get('인건비', 0.0)): active_cols.add('인건비')
@@ -3934,19 +3967,35 @@ class MaterialManager:
                     if not matches.empty: return str(matches.iloc[0]['품목명'])
                     return f"ID:{m_id_val}"
                 
-                mat_names_list.append(get_single_mat_name(curr_id))
+                name_found = get_single_mat_name(curr_id)
+                # Skip equipment/scanner keywords from consumable name
+                if any(eq in name_found.upper() for eq in ['SCANNER', '스캐너', 'YOKE', '장비', 'CRAWLER']):
+                    continue
+                mat_names_list.append(name_found)
                     
-            mat_name = ", ".join(sorted(set(mat_names_list))) if mat_names_list else "품목 미지정"
+            method_str = str(row.get('검사방법', '')).strip().upper()
+            if mat_names_list:
+                mat_name = ", ".join(sorted(set(mat_names_list)))
+            else:
+                if method_str == 'MT':
+                    mat_name = "MT약품"
+                elif method_str == 'PAUT':
+                    mat_name = "-"
+                elif method_str == 'PT':
+                    mat_name = "PT약품"
+                else:
+                    mat_name = "-"
 
             values = (
                 row['Site'],
                 row['검사방법'],
                 mat_name,
                 f"{row.get('검사량', 0.0):.1f}" if is_active(row.get('검사량', 0.0)) else '',
-                f"{row.get('검사비', 0.0):,.0f}" if is_active(row.get('검사비', 0.0)) else '',
-                f"{row.get('출장비', 0.0):,.0f}" if is_active(row.get('출장비', 0.0)) else '',
-                f"{row.get('제경비', 0.0):,.0f}" if is_active(row.get('제경비', 0.0)) else '',
-                f"{row.get('기술료', 0.0):,.0f}" if is_active(row.get('기술료', 0.0)) else '',
+                f"{test_fee_v:,.0f}" if is_active(test_fee_v) else '',
+                f"{travel_v:,.0f}" if is_active(travel_v) else '',
+                f"{overhead_v:,.0f}" if is_active(overhead_v) else '',
+                f"{tech_fee_v:,.0f}" if is_active(tech_fee_v) else '',
+                f"{total_billing_v:,.0f}" if is_active(total_billing_v) else '',
                 f"{row.get('환산물량', 0.0):.1f}" if is_active(row.get('환산물량', 0.0)) else '',
                 f"{row.get('재료비', 0.0):,.0f}" if is_active(row.get('재료비', 0.0)) else '',
                 f"{row.get('인건비', 0.0):,.0f}" if is_active(row.get('인건비', 0.0)) else '',
@@ -3969,6 +4018,34 @@ class MaterialManager:
             self.site_summary_tree.insert('', tk.END, values=values)
             if detached:
                 detached['site_tree'].insert('', tk.END, values=values)
+
+        # Add overall summary row to Site Summary
+        if not site_summary.empty:
+            self.site_summary_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+            total_site_vals = (
+                '--- 전체 누계 ---',
+                '',
+                '',
+                f"{tot_site_qty:.1f}" if is_active(tot_site_qty) else '',
+                f"{tot_site_test_fee:,.0f}" if is_active(tot_site_test_fee) else '',
+                f"{tot_site_travel:,.0f}" if is_active(tot_site_travel) else '',
+                f"{tot_site_overhead:,.0f}" if is_active(tot_site_overhead) else '',
+                f"{tot_site_tech:,.0f}" if is_active(tot_site_tech) else '',
+                f"{tot_site_billing:,.0f}" if is_active(tot_site_billing) else '',
+                f"{tot_site_conv:.1f}" if is_active(tot_site_conv) else '',
+                f"{tot_site_mat:,.0f}" if is_active(tot_site_mat) else '',
+                f"{tot_site_labor:,.0f}" if is_active(tot_site_labor) else '',
+                '', # 형광자분
+                f"{tot_site_black_mag:.1f}" if is_active(tot_site_black_mag) else '',
+                f"{tot_site_white_paint:.1f}" if is_active(tot_site_white_paint) else '',
+                '', '', '', '', # 침투제, 세척제, 현상제, 형광침투제
+                '', '', '', '', '', '', '', # RTK 세부
+                f"{tot_site_rtk:.1f}" if is_active(tot_site_rtk) else ''
+            )
+            self.site_summary_tree.insert('', tk.END, values=total_site_vals, tags=('total',))
+            if detached:
+                detached['site_tree'].tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+                detached['site_tree'].insert('', tk.END, values=total_site_vals, tags=('total',))
 
         # Apply dynamic column hiding to Site Summary
         visible_sum_cols = [col for col in site_cols if col in active_cols]
@@ -4171,6 +4248,26 @@ class MaterialManager:
                     if detached:
                         detached['worker_tree'].insert('', tk.END, values=values)
                 
+                # Add overall summary row to Worker Summary
+                if not worker_summary.empty:
+                    self.worker_summary_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+                    total_worker_vals = (
+                        '--- 전체 누계 ---',
+                        f"{worker_summary['Count'].sum():.1f}" if is_active(worker_summary['Count'].sum()) else "",
+                        f"{worker_summary['H_Day'].sum():.1f}" if is_active(worker_summary['H_Day'].sum()) else "",
+                        f"{worker_summary['H_Night'].sum():.1f}" if is_active(worker_summary['H_Night'].sum()) else "",
+                        f"{worker_summary['H_Holiday'].sum():.1f}" if is_active(worker_summary['H_Holiday'].sum()) else "",
+                        f"{worker_summary['OT_H'].sum():.1f}" if is_active(worker_summary['OT_H'].sum()) else "",
+                        f"{worker_summary['A_Day'].sum():,.0f}" if is_active(worker_summary['A_Day'].sum()) else "",
+                        f"{worker_summary['A_Night'].sum():,.0f}" if is_active(worker_summary['A_Night'].sum()) else "",
+                        f"{worker_summary['A_Holiday'].sum():,.0f}" if is_active(worker_summary['A_Holiday'].sum()) else "",
+                        f"{worker_summary['OT_A'].sum():,.0f}" if is_active(worker_summary['OT_A'].sum()) else ""
+                    )
+                    self.worker_summary_tree.insert('', tk.END, values=total_worker_vals, tags=('total',))
+                    if detached:
+                        detached['worker_tree'].tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
+                        detached['worker_tree'].insert('', tk.END, values=total_worker_vals, tags=('total',))
+
                 # Apply dynamic column hiding to Worker Summary
                 visible_worker_cols = [col for col in worker_sum_cols if col in active_worker_cols]
                 self.worker_summary_tree['displaycolumns'] = visible_worker_cols
@@ -4184,7 +4281,7 @@ class MaterialManager:
                                    "공사실행예산서 탭을 먼저 열어 초기화하세요.")
             return
 
-        # worker_summary_tree에서 모든 행의 주간/야간/휴일 합산
+        # worker_summary_tree에서 모든 행의 주간/야간/휴일 합산 (전체 누계 요약행 제외)
         total_h_day = 0.0
         total_h_night = 0.0
         total_h_holiday = 0.0
@@ -4197,7 +4294,12 @@ class MaterialManager:
             except: return 0.0
 
         for item in self.worker_summary_tree.get_children():
+            tags = self.worker_summary_tree.item(item, 'tags')
+            if 'total' in tags:
+                continue
             vals = self.worker_summary_tree.item(item, 'values')
+            if vals and '전체 누계' in str(vals[0]):
+                continue
             # 컬럼 순서: 작업자, 총공수, 연장(시간), 야간(시간), 휴일(시간), 총OT(시간), 연장(금액), 야간(금액), 휴일(금액), 총OT(금액)
             h_day     = _f(vals[2]) if len(vals) > 2 else 0.0
             h_night   = _f(vals[3]) if len(vals) > 3 else 0.0

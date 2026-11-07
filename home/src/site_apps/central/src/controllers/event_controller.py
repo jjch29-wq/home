@@ -101,42 +101,52 @@ def on_monthly_usage_select_impl(self, event):
         self._populate_monthly_summary_trees(self.current_monthly_df)
         return
         
-    # Extract row info (Year, Month, Site, Material)
+    # Extract row info (Year, Month, Site, Method, Material) dynamically by column name
     try:
-        year = int(values[0])
-        month = int(values[1])
-        site = str(values[2]).strip()
-        # Material is at index 22 (after 연도-월-현장-작업자-작업시간-OT시간-OT금액-OT1...OT10-검사량-단가-출장비-일식-검사비)
-        mat_name = str(values[22]).strip()
+        cols = self.monthly_usage_tree['columns']
+        row_dict = dict(zip(cols, values))
+        
+        year_val = row_dict.get('연도', values[0] if len(values) > 0 else '')
+        month_val = row_dict.get('월', values[1] if len(values) > 1 else '')
+        if not str(year_val).strip() or not str(month_val).strip():
+            return
+        year = int(year_val)
+        month = int(month_val)
+        site = str(row_dict.get('현장', '')).strip()
+        method = str(row_dict.get('검사방법', '')).strip()
+        mat_name = str(row_dict.get('품목명', '')).strip()
         
         matching_ids = []
-        # Find matching MateriaIDs for this mat_name from master data
+        # Find matching MaterialIDs for this mat_name from master data
         if hasattr(self, 'materials_df') and not self.materials_df.empty:
-            matches = self.materials_df[self.materials_df['MaterialName'].astype(str).str.contains(mat_name, case=False, na=False)]
+            matches = self.materials_df[self.materials_df['품목명'].astype(str).str.contains(mat_name, case=False, na=False)]
             if not matches.empty:
                 matching_ids = matches['MaterialID'].tolist()
 
         # Filter the current monthly dataset
         mask = (self.current_monthly_df['Year'] == year) & \
-               (self.current_monthly_df['Month'] == month) & \
-               (self.current_monthly_df['Site'] == site)
+               (self.current_monthly_df['Month'] == month)
+        if site:
+            mask = mask & (self.current_monthly_df['Site'] == site)
+        if method and method not in ('미지정', '-'):
+            mask = mask & (self.current_monthly_df['검사방법'] == method)
 
-        
         # [ROBUST] Material Filter: matches 품목명 or direct MaterialID (for manual entries)
-        if not matching_ids:
-            # If not in master materials, check if mat_name itself exists as an ID in the data
-            if mat_name in self.current_monthly_df['MaterialID'].astype(str).values:
-                matching_ids = [mat_name]
-            else:
-                # Fallback: check case/space insensitive match in data
-                m_norm = mat_name.replace(' ', '').upper()
-                possible_ids = self.current_monthly_df['MaterialID'].dropna().unique()
-                for p_id in possible_ids:
-                    if str(p_id).replace(' ', '').upper() == m_norm:
-                        matching_ids.append(p_id)
-        
-        if matching_ids:
-            mask = mask & (self.current_monthly_df['MaterialID'].isin(matching_ids))
+        if mat_name and mat_name not in ('-', 'MT약품', 'PT약품', '품목 미지정'):
+            if not matching_ids:
+                # If not in master materials, check if mat_name itself exists as an ID in the data
+                if mat_name in self.current_monthly_df['MaterialID'].astype(str).values:
+                    matching_ids = [mat_name]
+                else:
+                    # Fallback: check case/space insensitive match in data
+                    m_norm = mat_name.replace(' ', '').upper()
+                    possible_ids = self.current_monthly_df['MaterialID'].dropna().unique()
+                    for p_id in possible_ids:
+                        if str(p_id).replace(' ', '').upper() == m_norm:
+                            matching_ids.append(p_id)
+            
+            if matching_ids:
+                mask = mask & (self.current_monthly_df['MaterialID'].isin(matching_ids))
         
         filtered_subset = self.current_monthly_df[mask]
         self._populate_monthly_summary_trees(filtered_subset)

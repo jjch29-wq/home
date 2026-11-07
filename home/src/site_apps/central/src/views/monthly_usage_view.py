@@ -67,37 +67,38 @@ def setup_monthly_usage_tab_impl(self):
     vsb = ttk.Scrollbar(tree_frame, orient="vertical")
     hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
     
-    # Treeview with columns including worker, work time, and OT fields
-    # Added '(Full작업자)' for full list backup during Excel export
-    columns = ('연도', '월', '현장', '구분', '작업자', '작업시간', 'OT시간', 'OT금액', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
-               '수량', '단가', '출장비', '일식', '검사비', '제경비', '기술료', '환산물량', '재료비', '인건비', '품목명', '센터미스', '농도', '마킹미스', '필름마크', 
-               '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
+    # Treeview with columns: streamlined, intuitive order prioritizing method, material, quantities and revenues
+    columns = ('연도', '월', '현장', '검사방법', '품목명', '수량', '검사비', '출장비', '일식', '제경비', '기술료', '총기성액', 
+               '환산물량', '재료비', '인건비', '작업자', '작업시간', 'OT시간', 'OT금액', '단가',
+               'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', 
+               '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', 
+               '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '(Full작업자)')
     self.monthly_usage_tree = ttk.Treeview(tree_frame, columns=columns, show='headings',
                                            yscrollcommand=vsb.set, xscrollcommand=hsb.set)
     
-    # Hide the (Full작업자) column from display
-    self.monthly_usage_tree['displaycolumns'] = [c for c in columns if c != '(Full작업자)']
+    # Hide the (Full작업자) and OT1~OT10 by default from initial display
+    self.monthly_usage_tree['displaycolumns'] = [c for c in columns if c not in ('(Full작업자)', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10')]
     
     vsb.config(command=self.monthly_usage_tree.yview)
     hsb.config(command=self.monthly_usage_tree.xview)
     
-    # Column configuration with added OT columns
+    # Column configuration with intuitive widths
     col_widths = {
-        '연도': 90, '월': 70, '현장': 140, '구분': 100, '작업자': 100, '작업시간': 100,
-        'OT시간': 100, 'OT금액': 110,
-        'OT1': 100, 'OT2': 100, 'OT3': 100, 'OT4': 100, 'OT5': 100,
-        'OT6': 100, 'OT7': 100, 'OT8': 100, 'OT9': 100, 'OT10': 100,
-        '수량': 110, '단가': 110, '출장비': 110, '일식': 110, '검사비': 110,
-        '제경비': 100, '기술료': 100, '환산물량': 100, '재료비': 100, '인건비': 100,
-        '품목명': 220, '센터미스': 80, '농도': 80, '마킹미스': 80,
-        '필름마크': 80, '취급부주의': 80, '고객불만': 80, '기타': 80, 'RTK총계': 80,
-        '형광자분': 90, '흑색자분': 90, '백색페인트': 90, '침투제': 90, '세척제': 90,
-        '현상제': 90, '형광침투제': 90, '비고': 220
+        '연도': 65, '월': 50, '현장': 100, '검사방법': 75, '품목명': 160,
+        '수량': 70, '검사비': 90, '출장비': 80, '일식': 70, '제경비': 80, '기술료': 80, '총기성액': 95,
+        '환산물량': 75, '재료비': 85, '인건비': 90, '작업자': 110, '작업시간': 100,
+        'OT시간': 75, 'OT금액': 90, '단가': 80,
+        'OT1': 80, 'OT2': 80, 'OT3': 80, 'OT4': 80, 'OT5': 80,
+        'OT6': 80, 'OT7': 80, 'OT8': 80, 'OT9': 80, 'OT10': 80,
+        '센터미스': 65, '농도': 65, '마킹미스': 65,
+        '필름마크': 65, '취급부주의': 65, '고객불만': 65, '기타': 65, 'RTK총계': 75,
+        '형광자분': 75, '흑색자분': 75, '백색페인트': 75, '침투제': 75, '세척제': 75,
+        '현상제': 75, '형광침투제': 75, '비고': 180
     }
     
     for col in columns:
         self.monthly_usage_tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(self.monthly_usage_tree, c, False))
-        width = col_widths.get(col, 100)
+        width = col_widths.get(col, 80)
         self.monthly_usage_tree.column(col, width=width, minwidth=20, stretch=False, anchor='center')
     
     # [NEW] Enable column reordering via drag & drop
@@ -124,15 +125,16 @@ def setup_monthly_usage_tab_impl(self):
     
     self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
     
-    site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
+    site_cols = ('현장', '검사방법', '품목명', '수량', '검사비', '출장비', '제경비', '기술료', '총기성액', '환산물량', '재료비', '인건비', '형광자분', '흑색자분', '백색페인트', 
                  '침투제', '세척제', '현상제', '형광침투제', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계')
     self.site_summary_tree = ttk.Treeview(site_frame, columns=site_cols, show='headings')
     for col in site_cols:
         self.site_summary_tree.heading(col, text=("자재명" if col == "품목명" else col))
         # Adjust widths based on content
-        if col in ['현장', '검사방법', '품목명']: width = 120
-        elif col in ['검사비', '출장비', '제경비', '기술료', '환산물량', '재료비', '인건비']: width = 100
-        else: width = 80
+        if col in ['현장', '품목명']: width = 120
+        elif col in ['검사방법']: width = 75
+        elif col in ['검사비', '출장비', '제경비', '기술료', '총기성액', '환산물량', '재료비', '인건비']: width = 95
+        else: width = 75
         self.site_summary_tree.column(col, width=width, anchor='center', stretch=False)
     
     # [NEW] Auto-save site summary column widths
@@ -460,11 +462,17 @@ def update_monthly_usage_view_impl(self):
         if f in df.columns:
             df.loc[dup_mask, f] = 0.0
 
-    # Group by Year, Month, Site, MaterialID and aggregate
+    # Group by Year, Month, Site, 검사방법, MaterialID and aggregate
     agg_dict['OT시간'] = 'sum'
     agg_dict['OT금액'] = 'sum'
     agg_dict['WorkerCount'] = 'sum'
-    grouped = df.groupby(['Year', 'Month', 'Site', 'MaterialID'], dropna=False).agg(agg_dict).reset_index()
+    
+    if '검사방법' in df.columns:
+        df['검사방법'] = df['검사방법'].fillna('미지정').astype(str)
+    else:
+        df['검사방법'] = '미지정'
+
+    grouped = df.groupby(['Year', 'Month', 'Site', '검사방법', 'MaterialID'], dropna=False).agg(agg_dict).reset_index()
     
     self.monthly_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.monthly_usage_tree), add="+")
     
@@ -482,6 +490,7 @@ def update_monthly_usage_view_impl(self):
     total_test_fee = 0.0
     total_overhead_cost = 0.0
     total_tech_fee = 0.0
+    total_total_billing = 0.0
     total_conv_qty = 0.0
     total_mat_cost = 0.0
     total_labor_cost = 0.0
@@ -508,27 +517,24 @@ def update_monthly_usage_view_impl(self):
             return str(val).replace('nan', '').replace('None', '').strip()
             
         mat_id = entry['MaterialID']
+        method_str = str(entry.get('검사방법', '')).strip().upper()
         
-        # [ROBUST] Handle type mismatch in MaterialID lookup for Monthly Tab
-        def get_mat_name(m_id):
-            if pd.isna(m_id) or str(m_id).lower() == 'nan': return "N/A"
-            # Try to find name from materials_df
-            try:
-                # Convert both to float for numeric comparison
-                m_id_f = float(m_id)
-                matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_id_f]
-                if not matches.empty:
-                    return str(matches.iloc[0]['품목명'])
-            except: pass
-            
-            # Fallback to string comparison
-            matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(m_id)]
-            if not matches.empty:
-                return str(matches.iloc[0]['품목명'])
-            
-            return f"ID: {m_id}"
-
-        mat_name = get_mat_name(mat_id)
+        # [ROBUST] Material name logic
+        mat_name = ""
+        if pd.notna(mat_id) and str(mat_id).lower() not in ('nan', 'none', '', '0'):
+            mat_name = self.get_material_name_only(mat_id)
+            if any(eq in mat_name.upper() for eq in ['SCANNER', '스캐너', 'YOKE', '장비', 'CRAWLER']):
+                mat_name = "-"
+        
+        if not mat_name or mat_name in ("N/A", "품목 미지정"):
+            if method_str == 'MT':
+                mat_name = "MT약품"
+            elif method_str == 'PAUT':
+                mat_name = "-"
+            elif method_str == 'PT':
+                mat_name = "PT약품"
+            else:
+                mat_name = "-"
         
         # Apply material filter
         if filter_material != '전체' and mat_name != filter_material:
@@ -545,6 +551,7 @@ def update_monthly_usage_view_impl(self):
         test_fee = entry.get('검사비', 0.0)
         overhead_cost = entry.get('제경비', 0.0)
         tech_fee = entry.get('기술료', 0.0)
+        total_billing = test_fee + travel_cost + meal_cost + overhead_cost + tech_fee
         conv_qty = entry.get('환산물량', 0.0)
         mat_cost = entry.get('재료비', 0.0)
         labor_cost = entry.get('인건비', 0.0)
@@ -579,6 +586,7 @@ def update_monthly_usage_view_impl(self):
         total_test_fee += test_fee
         total_overhead_cost += overhead_cost
         total_tech_fee += tech_fee
+        total_total_billing += total_billing
         total_conv_qty += conv_qty
         total_mat_cost += mat_cost
         total_labor_cost += labor_cost
@@ -639,9 +647,6 @@ def update_monthly_usage_view_impl(self):
                     for v_str in sub_vals:
                         v_clean = v_str.replace(',', '')
                         if v_clean.isdigit() and int(v_clean) > 100:
-                            # [PARITY] Monetary amount: Calculate hours from paired WorkTime
-                            wt_val = str(entry.get(w_c, '')).strip() if w_c else ''
-                            # Note: for individuals, we usually just show the amount in these columns
                             parsed_ots.append(f"{int(v_clean):,}")
                         elif '(' in v_str and '원)' in v_str:
                             try:
@@ -677,79 +682,79 @@ def update_monthly_usage_view_impl(self):
             int(entry['Year']),
             int(entry['Month']),
             entry.get('Site', ''),
-            entry.get('구분', ''),
+            method_str,
+            mat_name,
+            f"{test_amount:.1f}" if test_amount > 0 else '',
+            f"{test_fee:,.0f}" if test_fee > 0 else '',
+            f"{travel_cost:,.0f}" if travel_cost > 0 else '',
+            f"{meal_cost:,.0f}" if meal_cost > 0 else '',
+            f"{overhead_cost:,.0f}" if overhead_cost > 0 else '',
+            f"{tech_fee:,.0f}" if tech_fee > 0 else '',
+            f"{total_billing:,.0f}" if total_billing > 0 else '',
+            f"{conv_qty:.2f}" if conv_qty > 0 else '',
+            f"{mat_cost:,.0f}" if mat_cost > 0 else '',
+            f"{labor_cost:,.0f}" if labor_cost > 0 else '',
             worker_str,
             worktime_str,
             f"{ot_hours:.1f}" if ot_hours > 0 else '',
             f"{ot_amount:,.0f}" if ot_amount > 0 else '',
-            *ot_values,  # Index 7 to 16
-            f"{test_amount:.1f}" if test_amount > 0 else '',
             f"{unit_price:,.0f}" if unit_price > 0 else '',
-            f"{travel_cost:,.0f}" if travel_cost > 0 else '',
-            f"{meal_cost:,.0f}" if meal_cost > 0 else '',
-            f"{test_fee:,.0f}" if test_fee > 0 else '',
-            f"{overhead_cost:,.0f}" if overhead_cost > 0 else '',
-            f"{tech_fee:,.0f}" if tech_fee > 0 else '',
-            f"{conv_qty:.2f}" if conv_qty > 0 else '',
-            f"{mat_cost:,.0f}" if mat_cost > 0 else '',
-            f"{labor_cost:,.0f}" if labor_cost > 0 else '',
-            mat_name, # 품목명
-            f"{rtk_center:.1f}" if rtk_center > 0 else '', # 23
-            f"{rtk_density:.1f}" if rtk_density > 0 else '', # 24
-            f"{rtk_marking:.1f}" if rtk_marking > 0 else '', # 25
-            f"{rtk_film:.1f}" if rtk_film > 0 else '', # 26
-            f"{rtk_handling:.1f}" if rtk_handling > 0 else '', # 27
-            f"{rtk_customer:.1f}" if rtk_customer > 0 else '', # 28
-            f"{rtk_other:.1f}" if rtk_other > 0 else '', # 29
-            f"{rtk_total:.1f}" if rtk_total > 0 else '', # 30
-            f"{ndt_fluorescent_mag:.1f}" if ndt_fluorescent_mag > 0 else '', # 31
-            f"{ndt_magnet:.1f}" if ndt_magnet > 0 else '', # 32
-            f"{ndt_paint:.1f}" if ndt_paint > 0 else '', # 33
-            f"{ndt_penetrant:.1f}" if ndt_penetrant > 0 else '', # 34
-            f"{ndt_cleaner:.1f}" if ndt_cleaner > 0 else '', # 35
-            f"{ndt_developer:.1f}" if ndt_developer > 0 else '', # 36: 현상제
-            f"{ndt_fluorescent_pen:.1f}" if ndt_fluorescent_pen > 0 else '', # 37
-            '',  # Index 38: Note
-            ", ".join(sorted(set(all_workers))) # Index 39: Full작업자
+            *ot_values,  # Index 20 to 29
+            f"{rtk_center:.1f}" if rtk_center > 0 else '',
+            f"{rtk_density:.1f}" if rtk_density > 0 else '',
+            f"{rtk_marking:.1f}" if rtk_marking > 0 else '',
+            f"{rtk_film:.1f}" if rtk_film > 0 else '',
+            f"{rtk_handling:.1f}" if rtk_handling > 0 else '',
+            f"{rtk_customer:.1f}" if rtk_customer > 0 else '',
+            f"{rtk_other:.1f}" if rtk_other > 0 else '',
+            f"{rtk_total:.1f}" if rtk_total > 0 else '',
+            f"{ndt_fluorescent_mag:.1f}" if ndt_fluorescent_mag > 0 else '',
+            f"{ndt_magnet:.1f}" if ndt_magnet > 0 else '',
+            f"{ndt_paint:.1f}" if ndt_paint > 0 else '',
+            f"{ndt_penetrant:.1f}" if ndt_penetrant > 0 else '',
+            f"{ndt_cleaner:.1f}" if ndt_cleaner > 0 else '',
+            f"{ndt_developer:.1f}" if ndt_developer > 0 else '',
+            f"{ndt_fluorescent_pen:.1f}" if ndt_fluorescent_pen > 0 else '',
+            clean_str(entry.get('Note', '')),
+            ", ".join(sorted(set(all_workers)))
         )
-        # [ROBUST] Final length check for 45 columns
-        while len(val_tuple) < 45: val_tuple += ("",)
         
         self.monthly_usage_tree.insert('', tk.END, values=val_tuple)
         
         # [NEW] Popup sync
         if 'monthly' in self.detached_windows:
             p_tree = self.detached_windows['monthly']['tree']
-            p_tree.insert('', tk.END, values=val_tuple) # Keep all 40 cols
+            p_tree.insert('', tk.END, values=val_tuple)
     
     # Add total row at the bottom if there's data
     if not grouped.empty:
         total_rtk_sum = total_rtk_center + total_rtk_density + total_rtk_marking + total_rtk_film + total_rtk_handling + total_rtk_customer + total_rtk_other
         
         # Configure tag for total row
-        self.monthly_usage_tree.tag_configure('total', background='#E8F4F8', font=('Arial', 12, 'bold'))
+        self.monthly_usage_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
         
         total_values = (
             '',
             '',
             '--- 전체 누계 ---',
-            '',  # 구분
-            '',  # 작업자
-            f"{total_worker_count:.1f}" if total_worker_count > 0 else '', # 작업시간 (총 공수)
-            f"{total_ot_hours:.1f}" if total_ot_hours > 0 else '',
-            f"{total_ot_amount:,.0f}" if total_ot_amount > 0 else '',
-            *[f"{a:,.0f}" if a > 0 else '' for a in total_indiv_ot_amounts],
+            '', # 검사방법
+            '', # 품목명
             f"{total_test_amount:,.0f}" if total_test_amount > 0 else '',
-            '', # 단가
+            f"{total_test_fee:,.0f}" if total_test_fee > 0 else '',
             f"{total_travel_cost:,.0f}" if total_travel_cost > 0 else '',
             f"{total_meal_cost:,.0f}" if total_meal_cost > 0 else '',
-            f"{total_test_fee:,.0f}" if total_test_fee > 0 else '',
             f"{total_overhead_cost:,.0f}" if total_overhead_cost > 0 else '',
             f"{total_tech_fee:,.0f}" if total_tech_fee > 0 else '',
+            f"{total_total_billing:,.0f}" if total_total_billing > 0 else '',
             f"{total_conv_qty:.2f}" if total_conv_qty > 0 else '',
             f"{total_mat_cost:,.0f}" if total_mat_cost > 0 else '',
             f"{total_labor_cost:,.0f}" if total_labor_cost > 0 else '',
-            '', # 품목명
+            '', # 작업자
+            f"{total_worker_count:.1f}" if total_worker_count > 0 else '', # 작업시간 (총 공수)
+            f"{total_ot_hours:.1f}" if total_ot_hours > 0 else '',
+            f"{total_ot_amount:,.0f}" if total_ot_amount > 0 else '',
+            '', # 단가
+            *[f"{a:,.0f}" if a > 0 else '' for a in total_indiv_ot_amounts],
             f"{total_rtk_center:.1f}" if total_rtk_center > 0 else '',
             f"{total_rtk_density:.1f}" if total_rtk_density > 0 else '',
             f"{total_rtk_marking:.1f}" if total_rtk_marking > 0 else '',
@@ -773,6 +778,7 @@ def update_monthly_usage_view_impl(self):
         # [NEW] Popup sync for total row
         if 'monthly' in self.detached_windows:
             p_tree = self.detached_windows['monthly']['tree']
+            p_tree.tag_configure('total', background='#E8F4F8', font=('Malgun Gothic', 10, 'bold'))
             p_tree.insert('', tk.END, values=total_values, tags=('total',))
         
         # --- [NEW] Populate Summaries (Initial/Total) ---
@@ -793,22 +799,19 @@ def update_monthly_usage_view_impl(self):
         all_cols = list(self.monthly_usage_tree['columns'])
         monthly_hide = set()
         
-        # [REFINED] Minimal always_show list for smarter monthly column hiding
-        always_show = {'연도', '월', '현장'}
-        
-        # Individual OT slots
+        # Always hide OT1~OT10 and (Full작업자) by default in top table
         for i in range(1, 11):
-            col = f'OT{i}' if i > 1 else 'OT시간'
-            # Check from total amounts
-            amt = total_indiv_ot_amounts[i-1] if i <= len(total_indiv_ot_amounts) else 0
-            if not is_active_m(amt):
-                monthly_hide.add(f'OT{i}')
-                monthly_hide.add(f'작업자{i}' if i > 1 else '')
+            monthly_hide.add(f'OT{i}')
+        monthly_hide.add('(Full작업자)')
         
         # Cost columns
+        if not is_active_m(total_unit_price): monthly_hide.add('단가')
         if not is_active_m(total_travel_cost): monthly_hide.add('출장비')
         if not is_active_m(total_meal_cost): monthly_hide.add('일식')
         if not is_active_m(total_test_fee): monthly_hide.add('검사비')
+        if not is_active_m(total_overhead_cost): monthly_hide.add('제경비')
+        if not is_active_m(total_tech_fee): monthly_hide.add('기술료')
+        if not is_active_m(total_total_billing): monthly_hide.add('총기성액')
         if not is_active_m(total_test_amount): monthly_hide.add('수량')
         if not is_active_m(total_ot_hours): monthly_hide.add('OT시간')
         if not is_active_m(total_ot_amount): monthly_hide.add('OT금액')
@@ -840,9 +843,10 @@ def update_monthly_usage_view_impl(self):
         self.monthly_usage_tree.insert('', tk.END, values=total_values, tags=('total',))
     else:
         # If empty data
-        visible_cols = ['연도', '월', '현장', '작업자', '작업시간', '품목명']
-        self.monthly_usage_tree['displaycolumns'] = visible_cols
+        visible_cols = ['연도', '월', '현장', '검사방법', '품목명', '수량', '검사비', '총기성액', '작업자', '작업시간']
+        self.monthly_usage_tree['displaycolumns'] = [c for c in visible_cols if c in self.monthly_usage_tree['columns']]
         for col in visible_cols:
-            self.monthly_usage_tree.column(col, stretch=False, minwidth=20)
+            if col in self.monthly_usage_tree['columns']:
+                self.monthly_usage_tree.column(col, stretch=False, minwidth=20)
 
 
