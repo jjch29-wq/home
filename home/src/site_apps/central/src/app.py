@@ -1856,8 +1856,8 @@ class MaterialManager:
         inout_vsb = ttk.Scrollbar(tree_scroll_frame, orient="vertical")
         inout_hsb = ttk.Scrollbar(tree_scroll_frame, orient="horizontal")
         
-        # [RESTRUCTURED] Optimized for NDT consumables: Focus on RT, PT, MT quantities
-        columns = ('날짜', '현장', '구분', '품목명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
+        # [RESTRUCTURED] Optimized for NDT consumables & Equipment: Focus on RT, PT, MT quantities and Equipment
+        columns = ('날짜', '현장', '구분', '품목명', '장비명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
         self.inout_tree = ttk.Treeview(tree_scroll_frame, columns=columns, show='headings', height=10,
                                        yscrollcommand=inout_vsb.set, xscrollcommand=inout_hsb.set)
         
@@ -1866,7 +1866,7 @@ class MaterialManager:
         
         # [NEW] Default Column Widths for NDT-focused View
         col_widths = {
-            '날짜': 130, '현장': 120, '구분': 60, '품목명': 160, 
+            '날짜': 130, '현장': 100, '구분': 60, '품목명': 150, '장비명': 150,
             '수량': 70, '세척제': 60, '침투제': 60, '현상제': 60, '백색페인트': 80, '흑색자분': 80,
             'SN': 100, '규격': 100, '창고': 80, '담당자': 80, '비고': 150, '검사비': 90
         }
@@ -1875,8 +1875,8 @@ class MaterialManager:
             width = col_widths.get(col, 100)
             self.inout_tree.column(col, width=width, minwidth=50, stretch=False, anchor='center')
         
-        # [FIX] Select only the core NDT-relevant columns for initial display
-        visible_cols = ('날짜', '현장', '구분', '품목명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', '비고')
+        # [FIX] Select core columns including both 자재명 and 장비명 for initial display
+        visible_cols = ('날짜', '현장', '구분', '품목명', '장비명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', '비고')
         self.inout_tree['displaycolumns'] = visible_cols
         self.enable_tree_column_drag(self.inout_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.inout_tree))
         self.inout_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config(), add='+')
@@ -2720,9 +2720,9 @@ class MaterialManager:
                     mat_name = self.get_material_name_only(mat_id)
                     mat_info = self.get_material_info(mat_id)
                     
-                    # [NEW] Filter: Only show consumables in In/Out history
-                    if not self._is_consumable_material(mat_name, ''):
-                        continue
+                    is_con = self._is_consumable_material(mat_name, '')
+                    mat_col = mat_name if is_con else "-"
+                    eq_col = "-" if is_con else mat_name
 
                     # [NEW] Deduplication: Skip auto-generated transactions that are already covered by DAILY usage entries
                     # This removes the "50 vs -50" duplication while keeping the richer DAILY info.
@@ -2734,7 +2734,8 @@ class MaterialManager:
                         'Date': row['Date'],
                         'Site': row.get('Site', ''),
                         'Type': row.get('Type', 'OUT'),
-                        '품목명': mat_name,
+                        '품목명': mat_col,
+                        '장비명': eq_col,
                         'SN': mat_info.get('SN', ''),
                         '규격': mat_info.get('규격', ''),
                         'MaterialID': mat_id,
@@ -2772,12 +2773,20 @@ class MaterialManager:
                     mat_name = self.get_material_name_only(mat_id) if mat_id else ""
                     mat_info = self.get_material_info(mat_id) if mat_id else {}
                     
-                    # [NEW] Filter: Only show consumables in In/Out history (Exclude PAUT, etc.)
-                    # If mat_name is empty (non-RT / NDT-only entry), keep row if NDT chemicals were used
-                    if not (mat_id and self._is_consumable_material(mat_name, method_val)):
-                        # Check if it has NDT chemicals (which ARE consumables)
-                        if not any(v > 0 for v in ndt_vals_list):
-                            continue
+                    # Extract Equipment from DailyUsage
+                    eq_name = str(row.get('장비명', '')).strip()
+                    aux_eq = str(row.get('보조장비', '')).strip()
+                    if eq_name == 'nan': eq_name = ''
+                    if aux_eq == 'nan': aux_eq = ''
+                    full_eq = f"{eq_name} ({aux_eq})" if (eq_name and aux_eq) else (eq_name if eq_name else (aux_eq if aux_eq else ""))
+
+                    has_chem = any(v > 0 for v in ndt_vals_list)
+                    has_mat = bool(mat_id and self._is_consumable_material(mat_name, method_val))
+                    has_eq = bool(full_eq)
+
+                    # [NEW] Filter: Keep row if it has consumable material, NDT chemicals, OR equipment used
+                    if not (has_mat or has_chem or has_eq):
+                        continue
                     
                     # [FIX] Filter removed to show all site usage in history
                     
@@ -2814,7 +2823,8 @@ class MaterialManager:
                         'Date': row['Date'],
                         'Site': row.get('Site', ''),
                         'Type': 'OUT',
-                        '품목명': mat_name,
+                        '품목명': mat_name if has_mat else "-",
+                        '장비명': full_eq if full_eq else "-",
                         'SN': mat_info.get('SN', ''),
                         '규격': mat_info.get('규격', ''),
                         'MaterialID': mat_id,
@@ -2839,14 +2849,16 @@ class MaterialManager:
             df_unified = pd.DataFrame(unified_rows)
             
             # Apply Filters
-            # Material Filter
+            # Material / Equipment Filter
             if hasattr(self, 'cb_trans_filter_mat'):
                 selected_mat = str(self.cb_trans_filter_mat.get()).strip()
                 if selected_mat and selected_mat != "전체":
-                    # Check if MaterialID matches the display name in materials_df
                     matching_rows = []
                     for idx, row in df_unified.iterrows():
-                        if self.get_material_display_name(row['MaterialID']) == selected_mat:
+                        mid_name = self.get_material_display_name(row['MaterialID'])
+                        pm_name = str(row.get('품목명', '')).strip()
+                        eq_name = str(row.get('장비명', '')).strip()
+                        if selected_mat in (mid_name, pm_name, eq_name):
                             matching_rows.append(idx)
                     df_unified = df_unified.loc[matching_rows]
             
@@ -2879,25 +2891,41 @@ class MaterialManager:
                     m_current = self.cb_trans_filter_mat.get()
                     # Get display names for all MaterialIDs in the unified set
                     unique_mat_ids = df_unified['MaterialID'].dropna().unique()
-                    m_vals = sorted([self.get_material_display_name(mid) for mid in unique_mat_ids])
-                    self.cb_trans_filter_mat['values'] = ["전체"] + [v for v in m_vals if v.strip()]
+                    m_vals = [self.get_material_display_name(mid) for mid in unique_mat_ids]
+                    for eq in df_unified['장비명'].dropna().unique():
+                        eq_s = str(eq).strip()
+                        if eq_s and eq_s != '-':
+                            m_vals.append(eq_s)
+                    for pm in df_unified['품목명'].dropna().unique():
+                        pm_s = str(pm).strip()
+                        if pm_s and pm_s != '-':
+                            m_vals.append(pm_s)
+                    m_vals = sorted(list(set([v for v in m_vals if v.strip()])))
+                    self.cb_trans_filter_mat['values'] = ["전체"] + m_vals
                     if m_current: self.cb_trans_filter_mat.set(m_current)
                     else: self.cb_trans_filter_mat.set("전체")
                 finally: self._mat_filter_busy = False
                 
             # [STABILITY] Ensure all standard columns are visible and reset any previous hiding
-            all_inout_cols = ('날짜', '현장', '구분', '품목명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
+            all_inout_cols = ('날짜', '현장', '구분', '품목명', '장비명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', 'SN', '규격', '창고', '담당자', '비고', '검사비')
             
             # Use saved configuration if available
             if hasattr(self, 'tab_config') and 'inout_visible_cols' in self.tab_config:
-                self.inout_tree['displaycolumns'] = [c for c in self.tab_config['inout_visible_cols'] if c in all_inout_cols]
+                saved_cols = [c for c in self.tab_config['inout_visible_cols'] if c in all_inout_cols]
+                if '장비명' not in saved_cols:
+                    if '품목명' in saved_cols:
+                        idx_pm = saved_cols.index('품목명')
+                        saved_cols.insert(idx_pm + 1, '장비명')
+                    else:
+                        saved_cols.append('장비명')
+                    self.tab_config['inout_visible_cols'] = saved_cols
+                self.inout_tree['displaycolumns'] = saved_cols
             else:
-                self.inout_tree['displaycolumns'] = all_inout_cols
+                self.inout_tree['displaycolumns'] = ('날짜', '현장', '구분', '품목명', '장비명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', '비고')
 
             # Sort and display
             df_sorted = df_unified.sort_values(by='Date', ascending=False).head(500)
             
-            # [RESTORED] Column Order based on setup: 날짜, 구분, 품목명, SN, 규격, 수량, 현장, 창고, 담당자, 비고, 검사비
             for idx, row in df_sorted.iterrows():
                 try:
                     # Robust date formatting with fallback for NaT
@@ -2930,6 +2958,7 @@ class MaterialManager:
                         self.clean_nan(row.get('Site', '')),
                         self.clean_nan(row.get('Type', '-')),
                         self.clean_nan(row.get('품목명', '')),
+                        self.clean_nan(row.get('장비명', '')),
                         qty_str,
                         _q_str(row.get('NDT_세척제', 0)),
                         _q_str(row.get('NDT_침투제', 0)),
@@ -12562,7 +12591,7 @@ class MaterialManager:
             # Reconstruct final display based on user result + mandatory ones
             mandatory_lookup = {
                 self.daily_usage_tree: ['날짜', '구분', '검사방법', '품목명', '수량', '작업자'],
-                self.inout_tree: ['날짜', '구분', '품목명']
+                self.inout_tree: ['날짜', '구분', '품목명', '장비명']
             }
             
             mandatory_cols = mandatory_lookup.get(tree, ['날짜'])
