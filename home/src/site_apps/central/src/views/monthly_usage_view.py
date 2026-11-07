@@ -521,7 +521,7 @@ def update_monthly_usage_view_impl(self):
         
         # [ROBUST] Material name logic
         mat_name = ""
-        if pd.notna(mat_id) and str(mat_id).lower() not in ('nan', 'none', '', '0'):
+        if pd.notna(mat_id) and str(mat_id).lower() not in ('nan', 'none', '', '0', '0.0'):
             mat_name = self.get_material_name_only(mat_id)
             if any(eq in mat_name.upper() for eq in ['SCANNER', '스캐너', 'YOKE', '장비', 'CRAWLER']):
                 mat_name = "-"

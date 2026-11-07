@@ -3954,12 +3954,13 @@ class MaterialManager:
             mat_names_list = []
             for m_id_str in mat_ids_raw:
                 curr_id = m_id_str.strip()
-                if not curr_id or curr_id.lower() == 'nan': continue
+                if not curr_id or curr_id.lower() in ('nan', 'none', '0', '0.0', ''): continue
                 
                 # [ROBUST] Logic to find material name from ID (handling numeric conversion)
                 def get_single_mat_name(m_id_val):
                     try: 
                         m_f = float(m_id_val)
+                        if m_f == 0.0: return ""
                         matches = self.materials_df[pd.to_numeric(self.materials_df['MaterialID'], errors='coerce') == m_f]
                         if not matches.empty: return str(matches.iloc[0]['품목명'])
                     except: pass
@@ -3968,6 +3969,8 @@ class MaterialManager:
                     return f"ID:{m_id_val}"
                 
                 name_found = get_single_mat_name(curr_id)
+                if not name_found or name_found in ('ID:0', 'ID:0.0'):
+                    continue
                 # Skip equipment/scanner keywords from consumable name
                 if any(eq in name_found.upper() for eq in ['SCANNER', '스캐너', 'YOKE', '장비', 'CRAWLER']):
                     continue
