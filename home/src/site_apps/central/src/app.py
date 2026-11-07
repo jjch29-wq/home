@@ -6936,7 +6936,7 @@ class MaterialManager:
         self.budget_view_custom_columns = getattr(self, 'budget_view_custom_columns', [])
         self.budget_view_default_cols = (
             'Date', 'Site', '장비명', '검사방법', '작업자', '품목명',
-            '총기성액', '청구인건비', '청구재료비', '제경비', '기술료',
+            '총기성액',
             '총지출액', '자재원가', 'OT합계', '출장비', '일식', 
             '예상이윤', '목표이익률', '현재이익률', '비고'
         )
@@ -7664,9 +7664,20 @@ class MaterialManager:
                     self.budget_view_tree.tag_configure('comparison', background='#E3F2FD', font=('Malgun Gothic', 10, 'bold'))
                     self.budget_view_tree.insert('', tk.END, values=tuple(comparison_row_map.get(col, '') for col in self.budget_view_cols), tags=('comparison',))
 
-            # --- [NEW] Smart Column Hiding Application ---
-            active_cols = [col for col in self.budget_view_cols 
-                           if col in mandatory_cols or has_data_map.get(col, False)]
+            # --- Smart Column Hiding Application ---
+            # 기성 청구 세부 내역(인건비(청구), 재료비(청구), 제경비, 기술료)은 [기성 정산 (NDT)] 탭의 고유 영역이므로
+            # 공사실행예산서 기본 보기에서는 제외하고 총기성액(매출) 및 손익 중심으로 표시
+            hidden_billing_cols = {'청구인건비', '청구재료비', '제경비', '기술료'}
+            
+            saved_visible = getattr(self, 'budget_view_visible_cols', [])
+            if saved_visible:
+                # Remove billing details from saved preference to keep clean view
+                cleaned_visible = [c for c in saved_visible if c not in hidden_billing_cols and c in self.budget_view_cols]
+                self.budget_view_visible_cols = cleaned_visible
+                active_cols = cleaned_visible if cleaned_visible else [c for c in self.budget_view_default_cols if c in self.budget_view_cols]
+            else:
+                active_cols = [col for col in self.budget_view_cols 
+                               if col not in hidden_billing_cols and (col in mandatory_cols or has_data_map.get(col, False))]
             self.budget_view_tree['displaycolumns'] = active_cols
             
             # --- Treeview 태그 스타일 (합계 행 강조) ---
@@ -14510,8 +14521,9 @@ class MaterialManager:
                         self.monthly_usage_tree['displaycolumns'] = [c for c in self.monthly_visible_cols if c in self.monthly_usage_tree['columns']]
                     except: pass
 
-                # Restore budget site performance view visibility if saved
-                self.budget_view_visible_cols = config.get('budget_view_visible_cols', [])
+                # Restore budget site performance view visibility if saved (exclude billing breakdown details by default)
+                raw_budget_cols = config.get('budget_view_visible_cols', [])
+                self.budget_view_visible_cols = [c for c in raw_budget_cols if c not in {'청구인건비', '청구재료비', '제경비', '기술료'}]
                 self.budget_view_heading_aliases = config.get('budget_view_heading_aliases', {})
                 self.budget_view_custom_columns = config.get('budget_view_custom_columns', [])
                 if hasattr(self, 'budget_view_tree'):
