@@ -2032,9 +2032,11 @@ class MaterialManager:
             self.cb_material['values'] = all_vals
         if hasattr(self, 'cb_daily_material'):
             if isinstance(self.cb_daily_material, ttk.Combobox):
-                self.cb_daily_material['values'] = all_vals
+                # [NEW] Filter: Only include actual consumables (films, chemicals) in the material dropdown
+                consumable_only_vals = [v for v in all_vals if self._is_consumable_material(v.split('[')[0].split('-')[0].strip(), '')]
+                self.cb_daily_material['values'] = consumable_only_vals
                 try:
-                    max_chars = max((len(str(v)) for v in all_vals), default=12)
+                    max_chars = max((len(str(v)) for v in consumable_only_vals), default=12)
                     self.cb_daily_material.configure(width=min(40, max(22, max_chars + 2)))
                 except Exception:
                     pass
@@ -10700,13 +10702,20 @@ class MaterialManager:
             # 2. 품목 ID 확인 (디스플레이 명칭 기반 매칭)
             mat_display = self.cb_daily_material.get().strip()
             mat_id = ""
-            if mat_display:
+            current_method = self.cb_daily_test_method.get().strip().upper()
+            if current_method in ('PAUT', 'MT'):
+                # PAUT(길이검사) 및 MT(약품별도기입)는 MaterialID에 자재ID/장비명을 기입하지 않음
+                mat_id = ""
+            elif mat_display:
                 for _, row in self.materials_df.iterrows():
                     if self.get_material_display_name(row['MaterialID']) == mat_display:
-                        mat_id = row['MaterialID']
-                        # 휴면 계정 자동 활성화
-                        if row.get('Active', 1) == 0:
-                            self.materials_df.loc[self.materials_df['MaterialID'] == mat_id, 'Active'] = 1
+                        # Only assign consumable items to mat_id
+                        m_name = str(row.get('품목명', '')).strip()
+                        if self._is_consumable_material(m_name, current_method):
+                            mat_id = row['MaterialID']
+                            # 휴면 계정 자동 활성화
+                            if row.get('Active', 1) == 0:
+                                self.materials_df.loc[self.materials_df['MaterialID'] == mat_id, 'Active'] = 1
                         break
                 
                 # [FIX] Only auto-register if it's a CONSUMABLE (Drug/Film). Equipment should NOT be registered.
@@ -10718,8 +10727,8 @@ class MaterialManager:
                         else:
                             mat_id = mat_display
                     else:
-                        # For equipment or non-consumables, just store the name as ID (skips stock tracking)
-                        mat_id = mat_display
+                        # For equipment or non-consumables, do not store in MaterialID
+                        mat_id = ""
 
             # 3. 중복 저장 방지 체크
             if not self.daily_usage_df.empty:
