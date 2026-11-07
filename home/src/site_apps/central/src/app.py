@@ -13756,10 +13756,44 @@ class MaterialManager:
                 context_menu.add_command(label="탭 오른쪽으로 이동 →", 
                                         command=lambda: self.move_tab_right(clicked_tab))
             
+            context_menu.add_separator()
+            context_menu.add_command(label="🔄 기본 탭 순서로 초기화", 
+                                    command=self.reset_tab_order_to_default)
+            
             # Show menu at cursor position
             context_menu.post(event.x_root, event.y_root)
         except:
             pass
+    
+    def reset_tab_order_to_default(self):
+        """Reset notebook tabs to standard default order"""
+        default_order = [
+            '현재 재고 현황',
+            '데이터 가져오기/내보내기',
+            '입출고 관리',
+            '현장별 일일 사용량 기입',
+            '현장 일일기록 조회 및 관리',
+            '월별 집계',
+            '작업/감독일보',
+            '기성 정산 (NDT)',
+            '공사실행예산서'
+        ]
+        try:
+            tab_map = {}
+            for tab_id in self.notebook.tabs():
+                tab_map[self.notebook.tab(tab_id, "text")] = tab_id
+                
+            for i, tab_text in enumerate(default_order):
+                if tab_text in tab_map:
+                    tab = tab_map[tab_text]
+                    self.notebook.insert(i, tab, text=tab_text)
+                    
+            if hasattr(self, 'tab_config'):
+                self.tab_config['tab_order'] = default_order
+            self.save_tab_config(force=True)
+            messagebox.showinfo("완료", "탭 순서가 기본 상태로 복원되었습니다.")
+        except Exception as e:
+            messagebox.showerror("오류", f"탭 순서 복원 실패: {e}")
     
     def move_tab_left(self, tab_index):
         """Move tab one position to the left"""
