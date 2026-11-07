@@ -52,7 +52,7 @@ def select(parent, app, variable):
     # 1. Load from app.aux_equipments
     aux_list = getattr(app, 'aux_equipments', None)
     if aux_list is None:
-        aux_list = ['JIREH MICROBE BTG006']
+        aux_list = ['JIREH MICROBE BTG006', 'COBRA Manual Scanner']
         if hasattr(app, 'aux_equipments'):
             app.aux_equipments = aux_list
     for item in aux_list:
@@ -70,8 +70,9 @@ def select(parent, app, variable):
             candidates.extend(names(item))
 
     # Always ensure default registered aux equipment is present
-    if 'JIREH MICROBE BTG006' not in candidates:
-        candidates.append('JIREH MICROBE BTG006')
+    for req in ['JIREH MICROBE BTG006', 'COBRA Manual Scanner']:
+        if req not in candidates:
+            candidates.append(req)
 
     candidates = sorted(set(candidates))
 
