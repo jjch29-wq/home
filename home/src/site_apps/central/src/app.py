@@ -470,7 +470,7 @@ class MaterialManager:
         self.sites = [] # Initialize site list
         self.daily_units = ['EA', 'CAN', 'SET', 'KG', 'M', '매', 'I/D', 'P,M,I/D', 'M,I/D', 'Point', 'Meter', 'Inch', 'Dia']
         self.users = [
-            "부장 주진철", "대리 우명광", "주임 김진환", "계장 장승대", "주임 김성렬", "부장 박광복", "과장 주영광"
+            "부장 주진철", "대리 우명광", "주임 김진환", "계장 장승대", "주임 김성렬", "부장 박광복", "과장 주영광", "계장 박상태"
         ] # Initialize worker/name list
         self.warehouses = [] # Initialize warehouse list
         self.equipments = [] # Initialize equipment list

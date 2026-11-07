@@ -268,6 +268,13 @@ def load_data_impl(self):
                             # Ensure all strings are stripped and nan-free
                             self.daily_usage_df[col] = self.daily_usage_df[col].astype(str).str.strip().replace(['nan', 'None', 'NULL', '-0.0', '0.0', 'NaN', 'NAN', 'nan.0'], '')
                     
+                    # Normalize worker titles (e.g. '박상태' -> '계장 박상태')
+                    worker_name_map = {'박상태': '계장 박상태'}
+                    for i in range(1, 11):
+                        u_col = 'User' if i == 1 else f'User{i}'
+                        if u_col in self.daily_usage_df.columns:
+                            self.daily_usage_df[u_col] = self.daily_usage_df[u_col].replace(worker_name_map)
+                    
                     # Add/Fix columns for auto-calculation
                     if '검사방법' not in self.daily_usage_df.columns and '검사량' in self.daily_usage_df.columns:
                         # Migrate old string '검사량' (PAUT, UT...) to '검사방법'
