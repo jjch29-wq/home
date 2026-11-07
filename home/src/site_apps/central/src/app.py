@@ -1503,6 +1503,16 @@ class MaterialManager:
         from site_apps.central.src.views.stock_management_view import update_stock_view_impl
         return update_stock_view_impl(self, *args, **kwargs)
 
+    def reload_and_update_stock_view(self, *args, **kwargs):
+        """[UX IMPROVEMENT] 엑셀/클라우드 파일을 디스크에서 다시 읽어들인 후 재고 화면을 갱신합니다."""
+        try:
+            self.load_data()
+            if hasattr(self, 'refresh_filters'):
+                self.refresh_filters()
+        except Exception as e:
+            print(f"[ERROR] Failed to reload data from file: {e}")
+        return self.update_stock_view(*args, **kwargs)
+
     def open_detached_stock_view(self):
         """현재 재고 현황을 별도의 팝업창(모니터링 창)으로 엽니다."""
         if hasattr(self, 'detached_windows') and 'stock' in self.detached_windows and self.detached_windows['stock']['window'].winfo_exists():

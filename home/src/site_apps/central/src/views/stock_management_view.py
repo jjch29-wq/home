@@ -18,7 +18,7 @@ def setup_stock_tab_impl(self):
     action_row = ttk.Frame(control_frame)
     action_row.pack(fill='x', side='top', pady=(0, 5))
     
-    btn_refresh = ttk.Button(action_row, text="재고 새로고침", command=self.update_stock_view)
+    btn_refresh = ttk.Button(action_row, text="재고 새로고침", command=self.reload_and_update_stock_view)
     btn_refresh.pack(side='left', padx=5)
     
     btn_alert = ttk.Button(action_row, text="재주문 필요 항목 보기", command=self.show_low_stock)
