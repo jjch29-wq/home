@@ -18,6 +18,15 @@ if str(HOME_SRC) not in sys.path:
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 CLOUDFLARED_EXE = PROJECT_ROOT / "tools" / "cloudflared.exe"
 
+# 가상환경(.venv) 자동 감지 및 전환
+_venv_python = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+if _venv_python.exists():
+    try:
+        if Path(sys.executable).resolve() != _venv_python.resolve():
+            sys.exit(subprocess.call([str(_venv_python)] + sys.argv))
+    except Exception:
+        pass
+
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -70,7 +79,13 @@ def start_tunnel(port):
     return proc, public_url
 
 def main():
-    import uvicorn
+    try:
+        import uvicorn
+    except ModuleNotFoundError:
+        print("\n [오류] uvicorn 모듈을 찾을 수 없습니다.")
+        print(" 프로젝트 가상환경(.venv)을 활성화하거나 아래 명령어로 실행해 주세요:")
+        print(" 👉 .\\.venv\\Scripts\\python.exe home/src/site_apps/gyeongin/run_mobile.py\n")
+        sys.exit(1)
     local_ip = get_local_ip()
     port = 8001  # Gyeongin uses port 8001 to run side-by-side with Central (8000)
 
