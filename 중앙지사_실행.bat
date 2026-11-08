@@ -3,6 +3,11 @@ setlocal
 cd /d "C:\Users\jjch2\Desktop\PMI"
 if not exist "home\src" cd /d "%~dp0"
 
+REM [0] 바탕화면에 바로가기가 없으면 자동 생성
+if not exist "%USERPROFILE%\Desktop\중앙지사_자재관리.bat" (
+    copy /y "%~dp0중앙지사_실행.bat" "%USERPROFILE%\Desktop\중앙지사_자재관리.bat" >nul 2>&1
+)
+
 if exist ".venv\Scripts\python.exe" (
   set "PYTHON_EXE=.venv\Scripts\python.exe"
 ) else (
