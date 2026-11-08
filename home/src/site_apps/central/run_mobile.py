@@ -38,7 +38,8 @@ def main():
     print("=" * 60)
     print(" 서버를 종료하려면 터미널에서 Ctrl + C를 누르세요.\n")
 
-    uvicorn.run("site_apps.central.mobile.server:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("site_apps.central.mobile.server:app", host="0.0.0.0", port=port, reload=False)
 
 if __name__ == "__main__":
     main()
+

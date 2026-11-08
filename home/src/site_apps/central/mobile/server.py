@@ -63,7 +63,33 @@ VEHICLES = [
 ]
 
 EQUIPMENTS = ["PAUT MX2(OMNI2-103085)", "Se-75", "Yoke"]
-AUX_EQUIPMENTS = ["PAUT SCANNER (MANUAL)", "MICROBE BTG006", "COBRA Manual Scanner"]
+AUX_EQUIPMENTS = [
+    "ADR, SURVEY, 콜리메타", "ADR", "SURVEY", "콜리메타",
+    "PAUT SCANNER (MANUAL)", "MICROBE BTG006", "COBRA Manual Scanner"
+]
+
+METHOD_DEFAULTS = {
+    "RT": {
+        "equip_main": "Se-75",
+        "aux_equipments": ["ADR, SURVEY, 콜리메타", "ADR", "SURVEY", "콜리메타"],
+        "default_aux": "ADR, SURVEY, 콜리메타"
+    },
+    "PAUT": {
+        "equip_main": "PAUT MX2(OMNI2-103085)",
+        "aux_equipments": ["PAUT SCANNER (MANUAL)", "MICROBE BTG006", "COBRA Manual Scanner"],
+        "default_aux": "PAUT SCANNER (MANUAL)"
+    },
+    "MT": {
+        "equip_main": "Yoke",
+        "aux_equipments": ["자분살포기", "조도계", "자계강도계"],
+        "default_aux": "자분살포기"
+    },
+    "PT": {
+        "equip_main": "PT 약품",
+        "aux_equipments": ["조도계", "온습도계"],
+        "default_aux": "조도계"
+    }
+}
 
 WORKTIMES = [
     "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00",
@@ -125,6 +151,7 @@ def get_config():
         "vehicles": VEHICLES,
         "equipments": EQUIPMENTS,
         "aux_equipments": AUX_EQUIPMENTS,
+        "method_defaults": METHOD_DEFAULTS,
         "worktimes": WORKTIMES,
         "pipe_sizes": list(SIZE_LENGTH.keys()),
         "methods": ["PAUT", "RT", "MT", "PT"],
@@ -279,3 +306,4 @@ def index():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

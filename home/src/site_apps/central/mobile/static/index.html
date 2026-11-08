@@ -259,6 +259,7 @@
 
         // Add 3 default workers
         initDefaultWorkers();
+        applyMethodDefaults(selectedMethod);
         updateQtyCalc();
         loadRecentRecords();
       } catch (e) {
@@ -394,6 +395,32 @@
       }
     });
 
+    function applyMethodDefaults(method) {
+      if (!appConfig || !appConfig.method_defaults) return;
+      const def = appConfig.method_defaults[method];
+      if (!def) return;
+      
+      const equipSelect = document.getElementById("select-equip");
+      const auxSelect = document.getElementById("select-aux-equip");
+      
+      if (def.equip_main) {
+        // Ensure equip_main option exists
+        let exists = Array.from(equipSelect.options).some(o => o.value === def.equip_main);
+        if (!exists) {
+          const opt = document.createElement("option");
+          opt.value = def.equip_main;
+          opt.textContent = def.equip_main;
+          equipSelect.prepend(opt);
+        }
+        equipSelect.value = def.equip_main;
+      }
+      
+      if (def.aux_equipments) {
+        auxSelect.innerHTML = def.aux_equipments.map(a => `<option value="${a}" ${a === def.default_aux ? 'selected' : ''}>${a}</option>`).join("");
+        auxSelect.value = def.default_aux;
+      }
+    }
+
     // Method segmented buttons
     document.querySelectorAll(".method-btn").forEach(btn => {
       btn.addEventListener("click", (e) => {
@@ -402,6 +429,7 @@
         });
         btn.className = "method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition";
         selectedMethod = btn.dataset.method;
+        applyMethodDefaults(selectedMethod);
         updateQtyCalc();
       });
     });
@@ -525,3 +553,4 @@
   </script>
 </body>
 </html>
+
