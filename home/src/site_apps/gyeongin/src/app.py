@@ -567,9 +567,10 @@ class MaterialManager:
     def _init_ndt_vars_and_traces(self):
         """NDT 관련 변수(관경, 조인트수)를 생성하고 자동계산 이벤트를 바인딩합니다."""
         # 동적 바인딩에 대비해 명시적으로 StringVar 초기화
-        for var_name in ['ndt_report_pipe_var', 'ndt_ori_joint_var', 'ndt_rep_joint_var', 'ndt_ori_qty_var', 'ndt_rep_qty_var', 'ndt_rej_joint_var', 'ndt_inspection_type_var']:
+        for var_name in ['ndt_report_pipe_var', 'ndt_ori_joint_var', 'ndt_rep_joint_var', 'ndt_ori_qty_var', 'ndt_rep_qty_var', 'ndt_rej_joint_var', 'ndt_inspection_type_var', 'ndt_loc_type_var', 'hot_tap_stage_var', 'hot_tap_size_var', 'hot_tap_location_var']:
             if not hasattr(self, var_name):
-                setattr(self, var_name, tk.StringVar(value=""))
+                init_val = "경인사무소" if var_name == "ndt_loc_type_var" else ""
+                setattr(self, var_name, tk.StringVar(value=init_val))
 
         # 콜백 함수: 관경과 조인트수가 변경되면 수량을 자동계산
         def on_ndt_change(*args):
@@ -637,7 +638,8 @@ class MaterialManager:
         getattr(self, 'ndt_rep_joint_var').trace_add('write', on_ndt_change)
         self.ndt_rej_joint_var.trace_add('write', on_ndt_change)
         for name in ('ndt_loc_type_var', 'hot_tap_stage_var', 'hot_tap_size_var'):
-            getattr(self, name).trace_add('write', on_ndt_change)
+            if hasattr(self, name):
+                getattr(self, name).trace_add('write', on_ndt_change)
         self._refresh_ndt_quantity = on_ndt_change
 
     def preload_config_locks(self):
