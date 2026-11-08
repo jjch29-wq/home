@@ -85,3 +85,4 @@
 .venv\Scripts\python.exe home/src/site_apps/gyeongin/src/sync_google_sheet.py
 ```
 3. 중복 데이터는 자동으로 제외되며, 신규 내역만 `Material_Inventory.xlsx`의 `DailyUsage` 시트에 안전하게 반영됩니다.
+
