@@ -162,7 +162,7 @@ class WorkerItem(BaseModel):
 class RecordSaveRequest(BaseModel):
     date: str
     site: str = "경인사무소"
-    company: str = "한국지역난방공사 경인사무소"
+    company: str = "경인사무소"
     loc_type: str = "열수송관"
     method: str
     pipe: str = ""
@@ -356,3 +356,4 @@ if STATIC_DIR.exists():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
+

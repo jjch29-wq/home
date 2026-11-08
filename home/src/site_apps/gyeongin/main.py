@@ -1,4 +1,4 @@
-"""한국지역난방 경인사무소 실행기."""
+"""경인사무소 실행기."""
 from pathlib import Path
 import os
 import sys
@@ -43,3 +43,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

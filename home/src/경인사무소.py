@@ -1,4 +1,4 @@
-"""Compatibility launcher for Gyeongin Office. Edit site_apps/gyeongin for this site."""
+"""경인사무소 실행기. Edit site_apps/gyeongin for this site."""
 from pathlib import Path
 import sys
 
@@ -22,3 +22,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

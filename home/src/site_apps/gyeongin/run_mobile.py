@@ -78,7 +78,7 @@ def main():
     tunnel_proc, public_url = start_tunnel(port)
 
     print("=" * 65, flush=True)
-    print("   🚀 한국지역난방공사 경인사무소 모바일 현장 입력 시스템", flush=True)
+    print("   🚀 경인사무소 모바일 현장 입력 시스템", flush=True)
     print("=" * 65, flush=True)
     print(f" [사내/PC 브라우저 접속]        👉 http://localhost:{port}", flush=True)
     print(f" [사내 Wi-Fi 스마트폰/태블릿]   👉 http://{local_ip}:{port}", flush=True)
@@ -102,3 +102,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
