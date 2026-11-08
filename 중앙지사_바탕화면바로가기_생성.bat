@@ -19,3 +19,4 @@ echo   4. 중앙지사_배포.bat
 echo.
 pause
 endlocal
+
