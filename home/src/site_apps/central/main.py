@@ -24,10 +24,37 @@ class CentralMaterialManager(MaterialManager):
         # 2. 주기적 백그라운드 자동 동기화 (앱 켜둔 상태에서도 30초마다 신규 모바일 입력 자동 감지)
         self.root.after(15000, self._start_periodic_sync)
 
+    def open_google_sync_dialog(self):
+        """구글 웹 앱 URL 설정 대화상자"""
+        import tkinter.simpledialog as sd
+        from tkinter import messagebox
+        from site_apps.central.src.sync_google_sheet import load_sync_config, save_sync_config
+        cfg = load_sync_config()
+        current_url = cfg.get("web_app_url", "")
+        new_url = sd.askstring(
+            "구글 클라우드 웹 앱 URL 설정",
+            "Google Apps Script에서 배포한 웹 앱 URL을 입력하세요:\n(예: https://script.google.com/macros/s/.../exec)",
+            initialvalue=current_url,
+            parent=self.root
+        )
+        if new_url is not None:
+            cfg["web_app_url"] = new_url.strip()
+            if save_sync_config(cfg):
+                messagebox.showinfo("설정 완료", "구글 클라우드 웹 앱 URL이 성공적으로 저장되었습니다.")
+                if new_url.strip():
+                    self.trigger_mobile_sync(show_msg=True)
+
     def trigger_mobile_sync(self, show_msg=True):
         """사용자가 '📱 모바일 동기화' 버튼 클릭 시 즉시 수동 동기화 실행"""
         try:
-            from site_apps.central.src.sync_google_sheet import sync_all_central_sources
+            from site_apps.central.src.sync_google_sheet import sync_all_central_sources, load_sync_config
+            cfg = load_sync_config()
+            if not cfg.get("web_app_url") and show_msg:
+                from tkinter import messagebox
+                if messagebox.askyesno("구글 웹 앱 URL 미등록", "구글 클라우드 웹 앱 URL이 아직 등록되지 않았습니다.\n지금 URL을 등록하여 24시간 연동을 활성화하시겠습니까?"):
+                    self.open_google_sync_dialog()
+                    return
+
             res = sync_all_central_sources()
             added = res.get("added_count", 0)
             if added > 0:
@@ -40,7 +67,7 @@ class CentralMaterialManager(MaterialManager):
             else:
                 if show_msg:
                     from tkinter import messagebox
-                    messagebox.showinfo("동기화 확인", "모든 모바일 데이터가 이미 최신 상태입니다.")
+                    messagebox.showinfo("동기화 확인", f"모든 모바일 데이터가 이미 최신 상태입니다.\n({res.get('message', '')})")
         except Exception as ex:
             if show_msg:
                 from tkinter import messagebox

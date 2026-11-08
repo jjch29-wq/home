@@ -78,6 +78,8 @@ def setup_daily_usage_tab_impl(self):
         ('세션 불러오기', self.load_form_session),
     ):
         tools_menu.add_command(label=label, command=command)
+    if hasattr(self, 'open_google_sync_dialog'):
+        tools_menu.add_command(label='📱 구글 클라우드 URL 설정', command=self.open_google_sync_dialog)
     tools_button.configure(menu=tools_menu)
     tools_button.pack(side='right', padx=3)
     output_button = ttk.Menubutton(row1, text='일보 출력')

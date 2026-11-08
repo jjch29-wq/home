@@ -411,3 +411,4 @@ function getAllRecords() {
     rows: rows
   };
 }
+
