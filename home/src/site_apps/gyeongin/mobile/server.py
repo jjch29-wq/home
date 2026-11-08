@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import math
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import datetime
@@ -346,6 +347,21 @@ def calculate_ot(req: OtCalcRequest):
         "desc": f"주간 {res.get('day', 0)}h, 야간 {res.get('night', 0)}h, 심야·휴일 {res.get('holiday', 0)}h"
     }
 
+def safe_str(val, default=""):
+    if val is None or pd.isna(val):
+        return default
+    s = str(val).strip()
+    return default if s.lower() in ("nan", "none", "<na>", "") else s
+
+def safe_float(val, default=0.0):
+    try:
+        if val is None or pd.isna(val):
+            return default
+        f = float(str(val).replace(",", "").strip())
+        return f if math.isfinite(f) else default
+    except Exception:
+        return default
+
 @app.post("/api/calculate_qty")
 def calculate_qty(req: QtyCalcRequest):
     method = req.method.strip().upper()
@@ -357,12 +373,12 @@ def calculate_qty(req: QtyCalcRequest):
         unit_price = 25500.0
         qty = round(joints * 3.0, 1) if joints > 0 else 0.0
     else:
-        unit = "M"
+        unit = "P,M,I/D" if method == "MT" else "M"
         unit_price = 18500.0 if method == "PAUT" else 4200.0
         base_len = SIZE_LENGTH.get(pipe, 0.0)
         single_len = quantity_per_joint(method, pipe, SIZE_LENGTH)
         calc_len = single_len if single_len is not None else base_len
-        qty = round(calc_len * joints, 4) if calc_len > 0 and joints > 0 else 0.0
+        qty = round(calc_len * joints, 4) if calc_len > 0 and joints > 0 else (joints if joints > 0 else 0.0)
 
     total_cost = int(round(qty * unit_price))
     return {
@@ -395,43 +411,44 @@ def get_recent_records(date: Optional[str] = None):
         records = []
         for idx, row in filtered.iterrows():
             workers_str = ""
-            for i in range(1, 4):
-                u = row.get(f"User{i}")
-                if pd.notna(u) and str(u).strip():
-                    ot_val = row.get(f"User{i}_OT_Pay", 0)
-                    workers_str += f"{str(u).strip()} ({ot_val:,.0f}원), "
+            for i in range(1, 11):
+                u_col = f"User{i}" if i > 1 else "User"
+                ot_col = f"User{i}_OT_Pay" if i > 1 else "User_OT_Pay"
+                ot_fallback = f"OT{i}" if i > 1 else "OT"
+                u = safe_str(row.get(u_col))
+                if u:
+                    ot_val = safe_float(row.get(ot_col, row.get(ot_fallback, 0)))
+                    workers_str += f"{u} ({ot_val:,.0f}원), "
             
             # Form chemical summary if present
             chem_summary = []
             for col, short in [('NDT_형광자분', '형자'), ('NDT_흑색자분', '흑자'), ('NDT_백색페인트', '백페'), 
                                ('NDT_침투제', '침투'), ('NDT_세척제', '세척'), ('NDT_현상제', '현상'), ('NDT_형광침투제', '형침')]:
-                val = row.get(col, 0)
-                try:
-                    if float(val) > 0: chem_summary.append(f"{short}:{float(val):g}")
-                except Exception: pass
+                val = safe_float(row.get(col, 0))
+                if val > 0:
+                    chem_summary.append(f"{short}:{val:g}")
 
             rtk_summary = []
-            rtk_total = row.get("RTK_총계", 0)
-            try:
-                if float(rtk_total) > 0: rtk_summary.append(f"RTK:{float(rtk_total):g}")
-            except Exception: pass
+            rtk_total = safe_float(row.get("RTK_총계", row.get("RTK_RTK총계", 0)))
+            if rtk_total > 0:
+                rtk_summary.append(f"RTK:{rtk_total:g}")
 
             records.append({
                 "id": int(idx),
-                "date": str(row.get("Date_str", "")),
-                "company": str(row.get("업체명", "경인사무소")),
-                "method": str(row.get("검사방법", "")),
-                "item_name": str(row.get("검사품명", "Piping")),
-                "material": str(row.get("자재명", row.get("MaterialID", row.get("품목명", "")))),
-                "loc_type": str(row.get("작업구분", "경인사무소")),
-                "pipe": str(row.get("관경(Inch)", row.get("규격", ""))),
-                "qty": float(row.get("수량", 0)),
-                "unit": str(row.get("Unit", row.get("단위", "M"))),
-                "unit_price": float(row.get("단가", 0)),
-                "travel_cost": float(row.get("출장비", 0)),
-                "total_fee": float(row.get("검사비", 0)),
-                "applied_code": str(row.get("적용코드", "")),
-                "report_no": str(row.get("성적서번호", "")),
+                "date": safe_str(row.get("Date_str"), safe_str(row.get("Date"))),
+                "company": safe_str(row.get("업체명"), "경인사무소"),
+                "method": safe_str(row.get("검사방법")),
+                "item_name": safe_str(row.get("검사품명"), "Piping"),
+                "material": safe_str(row.get("자재명"), safe_str(row.get("MaterialID"), safe_str(row.get("품목명")))),
+                "loc_type": safe_str(row.get("작업구분"), safe_str(row.get("구분"), "경인사무소")),
+                "pipe": safe_str(row.get("관경(Inch)"), safe_str(row.get("규격"))),
+                "qty": safe_float(row.get("수량", row.get("Usage", row.get("검사량", 0)))),
+                "unit": safe_str(row.get("Unit"), safe_str(row.get("단위"), "M")),
+                "unit_price": safe_float(row.get("단가")),
+                "travel_cost": safe_float(row.get("출장비")),
+                "total_fee": safe_float(row.get("검사비")),
+                "applied_code": safe_str(row.get("적용코드")),
+                "report_no": safe_str(row.get("성적서번호")),
                 "extra": " ".join(chem_summary + rtk_summary),
                 "workers": workers_str.rstrip(", ")
             })
