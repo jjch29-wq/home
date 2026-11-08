@@ -7,11 +7,12 @@ if _src not in sys.path:
     sys.path.insert(0, _src)
 
 from site_apps.central.src.app import MaterialManager
+from site_apps.central.main import CentralMaterialManager
 
 def main():
     import tkinter as tk
     root = tk.Tk()
-    app = MaterialManager(root)
+    app = CentralMaterialManager(root)
     try:
         root.mainloop()
     except KeyboardInterrupt:

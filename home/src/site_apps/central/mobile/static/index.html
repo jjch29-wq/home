@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>중앙지사 현장 모바일 검사 입력</title>
+  <title>한국지역난방공사 중앙지사 24시간 모바일 현장 입력</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons CDN -->
@@ -18,63 +18,98 @@
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 pb-24">
+<body class="bg-slate-100 text-slate-800 pb-28">
 
-  <!-- Mobile Top App Bar -->
+  <!-- Mobile Top App Bar (Central Blue Theme) -->
   <header class="sticky top-0 z-30 bg-blue-700 text-white shadow-md px-4 py-3 flex items-center justify-between">
     <div class="flex items-center space-x-2">
-      <i data-lucide="activity" class="w-6 h-6 text-yellow-300"></i>
+      <i data-lucide="flame" class="w-6 h-6 text-yellow-300 animate-pulse"></i>
       <div>
-        <h1 class="text-base font-bold leading-tight">중앙지사 현장 입력</h1>
-        <p class="text-xs text-blue-200">한국지역난방공사 모바일 연동</p>
+        <h1 class="text-base font-bold leading-tight">중앙지사 24시간 현장입력</h1>
+        <p class="text-xs text-blue-200">한국지역난방공사 24/365 클라우드</p>
       </div>
     </div>
     <div class="flex items-center space-x-1">
-      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500 text-white shadow-sm">
-        <span class="w-1.5 h-1.5 rounded-full bg-white mr-1 animate-pulse"></span> 클라우드 연결됨
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-500 text-white shadow-sm">
+        <span class="w-1.5 h-1.5 rounded-full bg-white mr-1 animate-pulse"></span> Google 24h
       </span>
     </div>
   </header>
 
   <main class="max-w-md mx-auto p-4 space-y-4">
 
-    <!-- 1. 기본 정보 카드 -->
+    <!-- 1. 공사 구분 및 기본 정보 카드 -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
-          <i data-lucide="calendar" class="w-4 h-4"></i> 작업 일자 및 구분
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
+          <i data-lucide="building-2" class="w-4 h-4"></i> 공사 구분 및 기본 정보
         </span>
         <span id="weekday-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-medium text-slate-600">오늘</span>
       </div>
 
+      <!-- 업체명 / 발주처 -->
+      <div>
+        <label class="block text-xs font-bold text-slate-700 mb-1">업체명 (발주처)</label>
+        <select id="select-company" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="한국지역난방공사 중앙지사" selected>한국지역난방공사 중앙지사</option>
+          <option value="한국지역난방공사">한국지역난방공사</option>
+          <option value="중앙지사">중앙지사</option>
+        </select>
+      </div>
+
+      <!-- 공사 구분 & 검사 일자 -->
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">검사 일자</label>
-          <input type="date" id="input-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        </div>
-        <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">공사 구분</label>
-          <select id="select-loc-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="select-loc-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="열수송관" selected>열수송관</option>
             <option value="플랜트(관리소)">플랜트(관리소)</option>
             <option value="열배관">열배관</option>
             <option value="핫태핑">핫태핑</option>
           </select>
         </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">검사 일자</label>
+          <input type="date" id="input-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+
+      <!-- 핫태핑 전용 옵션 카드 (공사구분이 핫태핑일 때 노출) -->
+      <div id="hottap-card" class="hidden p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2">
+        <span class="text-xs font-bold text-amber-900 flex items-center gap-1">
+          <i data-lucide="flame" class="w-3.5 h-3.5 text-amber-600"></i> 핫태핑(Hot Tapping) 상세 정보
+        </span>
+        <div class="grid grid-cols-3 gap-1.5">
+          <div>
+            <label class="block text-[10px] text-slate-500 mb-0.5">핫태핑 차수</label>
+            <select id="hottap-stage" class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold">
+              <option value="1차">1차</option>
+              <option value="2차">2차</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-500 mb-0.5">핫태핑 개소</label>
+            <input type="number" id="hottap-joints" value="1" min="1" step="1" class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div>
+            <label class="block text-[10px] text-slate-500 mb-0.5">핫태핑 관경</label>
+            <input type="text" id="hottap-pipe" placeholder="예: 250A" class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold">
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 2. NDT 공법 및 물량 카드 -->
+    <!-- 2. 검사 방법 및 품명/자재 정보 카드 -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
-          <i data-lucide="gauge" class="w-4 h-4"></i> 검사 공법 및 물량 자동 산정
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
+          <i data-lucide="layers" class="w-4 h-4"></i> 검사 방법 및 품명·자재
         </span>
       </div>
 
-      <!-- Segmented Method Buttons -->
+      <!-- Segmented Method Buttons (PAUT 기본) -->
       <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법</label>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
         <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
           <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition">PAUT</button>
           <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">RT</button>
@@ -83,76 +118,306 @@
         </div>
       </div>
 
+      <!-- 검사품명 -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
+          <button type="button" id="btn-toggle-custom-item" class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
+        </div>
+        <select id="select-item-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="Pipe" selected>Pipe</option>
+          <option value="Piping">Piping</option>
+          <option value="Tank">Tank</option>
+          <option value="Vessel">Vessel</option>
+          <option value="Plate">Plate</option>
+          <option value="Beam">Beam</option>
+          <option value="Structure">Structure</option>
+          <option value="기타">기타</option>
+        </select>
+        <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
+      </div>
+
+      <!-- 자재명 (RT 필름 / 약품) -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
+          <button type="button" id="btn-toggle-custom-mat" class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
+        </div>
+        <select id="select-material" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <!-- Populated via JS -->
+        </select>
+        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800">
+      </div>
+
+      <!-- 적용코드 & 성적서번호 -->
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">배관 관경(Size)</label>
-          <select id="select-pipe" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <!-- Populated via JS -->
+          <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
+          <select id="select-applied-code" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="지역난방시방서" selected>지역난방시방서</option>
+            <option value="KS">KS</option>
+            <option value="ASME">ASME</option>
+            <option value="AWS">AWS</option>
+            <option value="API">API</option>
+            <option value="KEPIC">KEPIC</option>
+            <option value="기타">기타</option>
           </select>
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">조인트수(개소)</label>
-          <input type="number" id="input-joints" value="1" min="0.1" step="0.5" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
+          <input type="text" id="input-report-no" placeholder="성적서번호 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
       </div>
+    </div>
 
-      <!-- Calculated Qty & Cost Box -->
-      <div class="p-3 bg-blue-50/70 border border-blue-100 rounded-xl flex items-center justify-between">
+    <!-- 3. 검사 물량 및 단가 산정 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
+          <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
+        </span>
+        <button type="button" id="btn-toggle-pipe-calc" class="text-xs font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition flex items-center gap-1">
+          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+          <span id="pipe-calc-btn-text">배관 관경 계산기</span>
+        </button>
+      </div>
+
+      <!-- 배관 관경 자동 계산 영역 -->
+      <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
+            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-blue-600"></i> 배관 관경(Size) 및 조인트수
+          </span>
+          <span class="text-[10px] text-blue-700 font-semibold bg-blue-100 px-1.5 py-0.5 rounded">지역난방 표준 환산</span>
+        </div>
+
         <div>
-          <p class="text-xs text-blue-600 font-medium">환산 검사 수량</p>
-          <p class="text-lg font-black text-blue-900 leading-tight">
-            <span id="display-qty">0.8401</span> <span id="display-unit" class="text-xs font-normal">M</span>
-          </p>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+          <select id="select-pipe" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- Populated via JS -->
+          </select>
         </div>
-        <div class="text-right">
-          <p class="text-xs text-blue-600 font-medium">예상 검사비</p>
-          <p class="text-base font-black text-slate-900 leading-tight" id="display-cost">273,411원</p>
+
+        <div id="rt-joints-box" class="space-y-2 pt-0.5 hidden">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
+              <input type="number" id="input-ori-joints" value="1" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
+              <input type="number" id="input-rep-joints" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+            </div>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
+            <input type="number" id="input-rej-qty" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+          </div>
+        </div>
+
+        <div id="non-rt-joints-box">
+          <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
+          <input type="number" id="input-joints" value="1" min="0.1" step="0.5" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
         </div>
       </div>
 
-      <!-- Equipment Selectors -->
+      <div id="non-pipe-banner" class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+        <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
+        <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
+      </div>
+
+      <!-- 공통 수량 및 단위 -->
       <div class="grid grid-cols-2 gap-2 pt-1">
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">주 장비</label>
+          <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
+          <input type="number" id="input-qty" value="0.8401" min="0" step="0.0001" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
+          <select id="select-unit" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="M" selected>M</option>
+            <option value="매">매</option>
+            <option value="EA">EA</option>
+            <option value="P,M,I/D">P,M,I/D</option>
+            <option value="Point">Point</option>
+            <option value="SET">SET</option>
+            <option value="CAN">CAN</option>
+            <option value="KG">KG</option>
+            <option value="Inch">Inch</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 단가 / 출장비 / 일식 -->
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
+          <input type="number" id="input-unit-price" value="325451" min="0" step="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
+          <input type="number" id="input-travel-cost" value="0" min="0" step="1000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
+          <input type="text" id="input-lump-sum" placeholder="식대/일식" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
+        </div>
+      </div>
+
+      <!-- Total Fee Box -->
+      <div class="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-blue-800 font-bold">총 검사비 (수량×단가+출장비)</p>
+          <p class="text-[10px] text-blue-600">제경비 110%, 기술료 20% 계약단가 기준</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input type="number" id="input-total-fee" value="273411" class="w-32 bg-white border border-blue-300 rounded-lg px-2 py-1 text-right text-base font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <span class="text-xs font-bold text-blue-900">원</span>
+        </div>
+      </div>
+
+      <!-- Equipments -->
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
           <select id="select-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
             <!-- Populated via JS -->
           </select>
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
           <select id="select-aux-equip" onchange="checkCustomAux()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
             <!-- Populated via JS -->
           </select>
-          <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
+          <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800">
         </div>
       </div>
     </div>
 
-    <!-- 3. 당일 작업자 및 OT 산정 카드 (중앙지사 스킬 엔진 탑재) -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+    <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
+    <div id="rtk-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
-          <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
+        <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
+          <i data-lucide="scan-line" class="w-4 h-4"></i> RTK 결함 분류 (RT 매수)
         </span>
-        <button type="button" id="btn-batch-apply" class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
-          <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
-        </button>
+        <span class="text-xs font-bold text-purple-700">총계: <span id="rtk-total-badge">0</span> 매</span>
       </div>
 
-      <div id="workers-container" class="space-y-3">
-        <!-- Worker 1 to 3 rows inserted here -->
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
+          <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
+          <input type="number" id="rtk-density" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
+          <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
+          <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
+          <input type="number" id="rtk-handling" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
+          <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
+          <input type="number" id="rtk-etc" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
+          <input type="number" id="rtk-total" readonly value="0" class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
+        </div>
       </div>
-
-      <button type="button" id="btn-add-worker" class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-blue-400 hover:text-blue-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
-        <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
-      </button>
     </div>
 
-    <!-- 4. 차량 점검 및 주행거리 (현장 카메라 연동) -->
+    <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
+    <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
+          <i data-lucide="flask-conical" class="w-4 h-4"></i> NDT 자재 소모량 (7종 약품)
+        </span>
+        <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
+          <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
+          <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
+          <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
+          <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
+          <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
+          <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. [PAUT 전용] 가이드 안내 카드 -->
+    <div id="paut-guide-card" class="bg-blue-50/80 rounded-2xl border border-blue-200 p-3.5 space-y-2">
+      <div class="flex items-center space-x-2 text-blue-900 font-bold text-xs">
+        <i data-lucide="info" class="w-4 h-4 text-blue-600"></i>
+        <span>PAUT 표준 검사 조건 (중앙지사 시방서)</span>
+      </div>
+      <p class="text-[11px] text-blue-800 leading-relaxed">
+        • 주 장비: <strong>PAUT MX2</strong> / 보조: <strong>PAUT SCANNER (MANUAL)</strong><br>
+        • 관경별 원주 길이(M)가 자동 환산 적용됩니다.
+      </p>
+    </div>
+
+    <!-- 7. 참여 작업자 및 근무 시간 -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
-          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 계기판
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
+          <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 (최대 10명)
+        </span>
+        <div class="flex items-center space-x-1.5">
+          <button type="button" id="btn-batch-apply" class="text-[11px] font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition">
+            1번 시간 일괄적용
+          </button>
+          <button type="button" id="btn-add-worker" class="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center gap-0.5">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> 추가
+          </button>
+        </div>
+      </div>
+
+      <div id="workers-container" class="space-y-2.5">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+
+    <!-- 8. 차량 점검 및 특이사항 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
+          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
         </span>
       </div>
 
@@ -169,30 +434,24 @@
         </div>
       </div>
 
-      <!-- Quick Inspection Checkboxes -->
       <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
         <div class="flex justify-between items-center">
           <span>차량 외관 / 청결도</span>
-          <span class="font-bold text-emerald-600">양호 (기본)</span>
+          <span class="font-bold text-blue-600">양호 (기본)</span>
         </div>
         <div class="flex justify-between items-center">
-          <span>청소 / 자물쇠 시건</span>
-          <span class="font-bold text-emerald-600">함 / 완료</span>
+          <span>차량 비고</span>
+          <input type="text" id="input-vehicle-note" placeholder="차량 특이사항 기입" class="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs w-44">
         </div>
       </div>
 
-      <!-- Photo Capture Trigger -->
       <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1">현장 / 계기판 사진 첨부</label>
-        <label class="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer active:scale-98 transition">
-          <i data-lucide="camera" class="w-4 h-4 text-blue-600"></i>
-          <span id="photo-status">카메라로 사진 촬영 또는 선택</span>
-          <input type="file" id="input-photo" accept="image/*" capture="environment" class="hidden">
-        </label>
+        <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
+        <input type="text" id="input-note" placeholder="특이사항 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
       </div>
     </div>
 
-    <!-- 5. Big Submit Button -->
+    <!-- 9. Submit Button -->
     <div class="pt-2">
       <button type="button" id="btn-submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-blue-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
         <i data-lucide="send" class="w-5 h-5"></i>
@@ -200,7 +459,7 @@
       </button>
     </div>
 
-    <!-- 6. 최근 저장된 내역 (실시간 리스트) -->
+    <!-- 10. 최근 저장된 내역 (실시간 리스트) -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
@@ -220,7 +479,7 @@
 
   <!-- Notification Toast -->
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
-    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <i data-lucide="check-circle" class="w-4 h-4 text-blue-400"></i>
     <span id="toast-msg">저장되었습니다.</span>
   </div>
 
@@ -228,11 +487,11 @@
     let appConfig = null;
     let selectedMethod = "PAUT";
     let workerRows = [];
+    let isPipeCalcOpen = true;
+    let isManualQty = false;
 
-    // Initialize date to today
     const dateInput = document.getElementById("input-date");
-    const todayStr = new Date().toISOString().split("T")[0];
-    dateInput.value = todayStr;
+    dateInput.value = new Date().toISOString().split("T")[0];
 
     function showToast(msg, isError = false) {
       const toast = document.getElementById("toast");
@@ -244,35 +503,130 @@
       }, 2500);
     }
 
-    async function loadConfig() {
-      try {
-        const res = await fetch("/api/config");
-        appConfig = await res.json();
-        
-        // Populate pipe sizes
-        const pipeSelect = document.getElementById("select-pipe");
-        pipeSelect.innerHTML = appConfig.pipe_sizes.map(p => `<option value="${p}" ${p === '250A' ? 'selected' : ''}>${p}</option>`).join("");
+    // Toggle custom inputs
+    document.getElementById("btn-toggle-custom-item").addEventListener("click", () => {
+      const inp = document.getElementById("input-custom-item");
+      inp.classList.toggle("hidden");
+      if (!inp.classList.contains("hidden")) inp.focus();
+    });
 
-        // Populate Equipments
-        document.getElementById("select-equip").innerHTML = appConfig.equipments.map(e => `<option value="${e}">${e}</option>`).join("");
-        document.getElementById("select-aux-equip").innerHTML = appConfig.aux_equipments.map(e => `<option value="${e}">${e}</option>`).join("");
-        document.getElementById("select-vehicle").innerHTML = appConfig.vehicles.map(v => `<option value="${v}">${v}</option>`).join("");
+    document.getElementById("btn-toggle-custom-mat").addEventListener("click", () => {
+      const inp = document.getElementById("input-custom-mat");
+      inp.classList.toggle("hidden");
+      if (!inp.classList.contains("hidden")) inp.focus();
+    });
 
-        // Add 3 default workers
-        initDefaultWorkers();
-        applyMethodDefaults(selectedMethod);
-        updateQtyCalc();
-        loadRecentRecords();
-      } catch (e) {
-        showToast("설정 불러오기 실패", true);
+    function checkCustomAux() {
+      const val = document.getElementById("select-aux-equip").value;
+      const inp = document.getElementById("input-custom-aux");
+      if (val === "✏️ 직접 입력...") {
+        inp.classList.remove("hidden");
+        inp.focus();
+      } else {
+        inp.classList.add("hidden");
+      }
+    }
+
+    // Hot-tapping toggle
+    document.getElementById("select-loc-type").addEventListener("change", function() {
+      const isHotTap = this.value === "핫태핑";
+      const card = document.getElementById("hottap-card");
+      if (isHotTap) {
+        card.classList.remove("hidden");
+      } else {
+        card.classList.add("hidden");
+      }
+    });
+
+    // Pipe calculator toggle
+    document.getElementById("btn-toggle-pipe-calc").addEventListener("click", () => {
+      isPipeCalcOpen = !isPipeCalcOpen;
+      applyPipeSectionState();
+    });
+
+    function applyPipeSectionState() {
+      const section = document.getElementById("pipe-calc-section");
+      const btnText = document.getElementById("pipe-calc-btn-text");
+      if (isPipeCalcOpen) {
+        section.classList.remove("hidden");
+        btnText.textContent = "배관 관경 계산기 접기";
+      } else {
+        section.classList.add("hidden");
+        btnText.textContent = "배관 관경 계산기 펼치기";
+      }
+    }
+
+    // Inspection item name change handler
+    document.getElementById("select-item-name").addEventListener("change", function() {
+      const item = this.value;
+      const banner = document.getElementById("non-pipe-banner");
+      const isPipe = item === "Piping" || item === "Pipe";
+
+      if (isPipe) {
+        banner.classList.add("hidden");
+        isPipeCalcOpen = true;
+        applyPipeSectionState();
+        isManualQty = false;
+        updatePipeCalc();
+      } else {
+        banner.classList.remove("hidden");
+        isPipeCalcOpen = false;
+        applyPipeSectionState();
+        isManualQty = true;
+      }
+    });
+
+    function loadConfig() {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(initData)
+          .withFailureHandler(() => showToast("설정 로드 실패", true))
+          .getConfig();
+      } else {
+        fetch("/api/config")
+          .then(r => r.json())
+          .then(initData)
+          .catch(() => showToast("로컬 설정 로드 실패", true));
+      }
+    }
+
+    function initData(cfg) {
+      appConfig = cfg;
+
+      // Pipe sizes
+      const pipeSelect = document.getElementById("select-pipe");
+      pipeSelect.innerHTML = appConfig.pipe_sizes.map(p => `<option value="${p}" ${p === '250A' ? 'selected' : ''}>${p}</option>`).join("");
+
+      // Equipments & Vehicles
+      document.getElementById("select-equip").innerHTML = appConfig.equipments.map(e => `<option value="${e}">${e}</option>`).join("");
+      document.getElementById("select-aux-equip").innerHTML = appConfig.aux_equipments.map(e => `<option value="${e}">${e}</option>`).join("") + '<option value="✏️ 직접 입력...">✏️ 직접 입력...</option>';
+      document.getElementById("select-vehicle").innerHTML = appConfig.vehicles.map(v => `<option value="${v}">${v}</option>`).join("");
+
+      initDefaultWorkers();
+      switchMethod("PAUT");
+      loadRecentRecords();
+    }
+
+    function updateMaterialOptions(method) {
+      const matSelect = document.getElementById("select-material");
+      if (!appConfig) return;
+
+      if (method === "RT") {
+        matSelect.innerHTML = appConfig.materials.map(m => `<option value="${m}">${m}</option>`).join("");
+      } else {
+        matSelect.innerHTML = `
+          <option value="">해당없음 (자재소모 약품 별도 기입)</option>
+          <option value="PT 약품 세트">PT 약품 세트</option>
+          <option value="MT 자분/페인트">MT 자분/페인트</option>
+          <option value="기타 자재">기타 자재</option>
+        `;
       }
     }
 
     function initDefaultWorkers() {
       workerRows = [
-        { user: "부장 주진철", shift: "야간", time: "22:00~익일09:00", ot: "77,500" },
-        { user: "부장 이병국", shift: "야간", time: "22:00~익일09:00", ot: "77,500" },
-        { user: "계장 박상태", shift: "야간", time: "22:00~익일09:00", ot: "77,500" }
+        { user: "부장 주진철", shift: "주간", time: "09:00~18:00", ot: "0" },
+        { user: "부장 이병국", shift: "주간", time: "09:00~18:00", ot: "0" }
       ];
       renderWorkers();
     }
@@ -283,52 +637,61 @@
 
       workerRows.forEach((w, idx) => {
         const row = document.createElement("div");
-        row.className = "p-3 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2";
+        row.className = "p-3 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2 relative";
         row.innerHTML = `
           <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-700 flex items-center gap-1">
-              <span class="w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-black">${idx + 1}</span>
-              참여자 ${idx + 1}
-            </span>
-            ${idx > 0 ? `<button type="button" class="text-[11px] text-rose-500 font-semibold" onclick="removeWorker(${idx})">삭제</button>` : '<span class="text-[10px] text-blue-600 font-semibold">대표 작업자</span>'}
+            <span class="text-xs font-bold text-slate-700">참여자 ${idx + 1}</span>
+            ${idx > 0 ? `<button type="button" onclick="removeWorker(${idx})" class="text-slate-400 hover:text-rose-500 p-0.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
           </div>
-
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">작업자</label>
-              <select class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800" onchange="updateWorkerField(${idx}, 'user', this.value)">
-                ${appConfig ? appConfig.users.map(u => `<option value="${u}" ${u === w.user ? 'selected' : ''}>${u}</option>`).join("") : ''}
+              <label class="block text-[10px] text-slate-400 mb-0.5">성명</label>
+              <select onchange="updateWorkerField(${idx}, 'user', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+                ${appConfig ? appConfig.users.map(u => `<option value="${u}" ${u === w.user ? 'selected' : ''}>${u}</option>`).join("") : `<option>${w.user}</option>`}
               </select>
             </div>
             <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">근무 구분</label>
-              <select class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800" onchange="updateWorkerField(${idx}, 'shift', this.value); recalculateWorkerOt(${idx});">
+              <label class="block text-[10px] text-slate-400 mb-0.5">근무형태</label>
+              <select onchange="updateWorkerField(${idx}, 'shift', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
                 <option value="주간" ${w.shift === '주간' ? 'selected' : ''}>주간</option>
                 <option value="야간" ${w.shift === '야간' ? 'selected' : ''}>야간</option>
                 <option value="휴일" ${w.shift === '휴일' ? 'selected' : ''}>휴일</option>
               </select>
             </div>
           </div>
-
-          <div class="grid grid-cols-2 gap-2 items-center">
+          <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">작업 시간</label>
-              <select class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800" onchange="updateWorkerField(${idx}, 'time', this.value); recalculateWorkerOt(${idx});">
-                ${appConfig ? appConfig.worktimes.map(t => `<option value="${t}" ${t === w.time ? 'selected' : ''}>${t}</option>`).join("") : ''}
+              <label class="block text-[10px] text-slate-400 mb-0.5">근무시간</label>
+              <select onchange="onWorkerTimeChange(${idx}, this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
+                ${appConfig ? appConfig.worktimes.map(t => `<option value="${t}" ${t === w.time ? 'selected' : ''}>${t}</option>`).join("") : `<option>${w.time}</option>`}
               </select>
             </div>
             <div>
-              <label class="block text-[10px] text-slate-400 mb-0.5">OT 금액 (원)</label>
-              <input type="text" value="${w.ot}" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-700 text-right" onchange="updateWorkerField(${idx}, 'ot', this.value)">
+              <label class="block text-[10px] text-slate-400 mb-0.5">산출 수당 (원)</label>
+              <input type="text" value="${w.ot}" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
             </div>
           </div>
         `;
         container.appendChild(row);
       });
+      lucide.createIcons();
     }
 
-    function updateWorkerField(idx, field, value) {
-      workerRows[idx][field] = value;
+    function updateWorkerField(idx, field, val) {
+      if (workerRows[idx]) workerRows[idx][field] = val;
+    }
+
+    function onWorkerTimeChange(idx, timeVal) {
+      updateWorkerField(idx, 'time', timeVal);
+      // Client-side quick calculation for OT
+      let ot = 0;
+      if (timeVal.includes("20:00")) ot = 15000;
+      else if (timeVal.includes("22:00")) ot = 30000;
+      else if (timeVal.includes("24:00")) ot = 50000;
+      else if (timeVal.includes("02:00")) ot = 75000;
+      else if (timeVal.includes("03:00")) ot = 90000;
+      workerRows[idx].ot = ot.toLocaleString();
+      renderWorkers();
     }
 
     function removeWorker(idx) {
@@ -337,239 +700,340 @@
     }
 
     document.getElementById("btn-add-worker").addEventListener("click", () => {
-      if (workerRows.length >= 10) {
-        showToast("최대 10명까지 추가 가능합니다.", true);
-        return;
-      }
-      workerRows.push({
-        user: appConfig.users[0] || "부장 주진철",
-        shift: workerRows[0].shift || "주간",
-        time: workerRows[0].time || "09:00~18:00",
-        ot: workerRows[0].ot || "0"
-      });
+      const firstUser = appConfig ? appConfig.users[0] : "부장 주진철";
+      workerRows.push({ user: firstUser, shift: "주간", time: "09:00~18:00", ot: "0" });
       renderWorkers();
     });
 
-    async function recalculateWorkerOt(idx) {
-      const w = workerRows[idx];
-      const curDate = dateInput.value;
-      const fullTimeStr = `(${w.shift}) ${w.time}`;
-      try {
-        const res = await fetch("/api/calculate_ot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ worktime: fullTimeStr, date: curDate })
-        });
-        const data = await res.json();
-        w.ot = data.amount_str || "0";
+    document.getElementById("btn-batch-apply").addEventListener("click", () => {
+      if (workerRows.length > 0) {
+        const lead = workerRows[0];
+        for (let i = 1; i < workerRows.length; i++) {
+          workerRows[i].shift = lead.shift;
+          workerRows[i].time = lead.time;
+          workerRows[i].ot = lead.ot;
+        }
         renderWorkers();
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    // Batch apply leader's shift and time to all workers
-    document.getElementById("btn-batch-apply").addEventListener("click", async () => {
-      if (workerRows.length === 0) return;
-      const leader = workerRows[0];
-      const curDate = dateInput.value;
-      const fullTimeStr = `(${leader.shift}) ${leader.time}`;
-
-      try {
-        const res = await fetch("/api/calculate_ot", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ worktime: fullTimeStr, date: curDate })
-        });
-        const data = await res.json();
-        const otVal = data.amount_str || "0";
-
-        workerRows.forEach(w => {
-          w.shift = leader.shift;
-          w.time = leader.time;
-          w.ot = otVal;
-        });
-        renderWorkers();
-        showToast(`첫 참여자 기준 일괄 적용 완료 (${otVal}원)`);
-      } catch (e) {
-        showToast("일괄 계산 오류", true);
+        showToast("대표 참여자 설정이 일괄 적용되었습니다.");
       }
     });
 
-    function checkCustomAux() {
-      const select = document.getElementById("select-aux-equip");
-      const customInput = document.getElementById("input-custom-aux");
-      if (select.value === "__custom__") {
-        customInput.classList.remove("hidden");
-        customInput.focus();
+    // Method Switching
+    function switchMethod(method) {
+      selectedMethod = method;
+
+      document.querySelectorAll(".method-btn").forEach(btn => {
+        if (btn.dataset.method === method) {
+          btn.className = "method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition";
+        } else {
+          btn.className = "method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition";
+        }
+      });
+
+      const rtkCard = document.getElementById("rtk-card");
+      const chemCard = document.getElementById("chemicals-card");
+      const pautCard = document.getElementById("paut-guide-card");
+      const rtJointsBox = document.getElementById("rt-joints-box");
+      const nonRtJointsBox = document.getElementById("non-rt-joints-box");
+      const unitSelect = document.getElementById("select-unit");
+
+      updateMaterialOptions(method);
+
+      if (method === "RT") {
+        rtkCard.classList.remove("hidden");
+        chemCard.classList.add("hidden");
+        pautCard.classList.add("hidden");
+        rtJointsBox.classList.remove("hidden");
+        nonRtJointsBox.classList.add("hidden");
+        unitSelect.value = "매";
+        document.getElementById("input-unit-price").value = 205412;
+      } else if (method === "PAUT") {
+        rtkCard.classList.add("hidden");
+        chemCard.classList.add("hidden");
+        pautCard.classList.remove("hidden");
+        rtJointsBox.classList.add("hidden");
+        nonRtJointsBox.classList.remove("hidden");
+        unitSelect.value = "M";
+        document.getElementById("input-unit-price").value = 325451;
       } else {
-        customInput.classList.add("hidden");
+        rtkCard.classList.add("hidden");
+        chemCard.classList.remove("hidden");
+        pautCard.classList.add("hidden");
+        rtJointsBox.classList.add("hidden");
+        nonRtJointsBox.classList.remove("hidden");
+        unitSelect.value = (method === "MT") ? "P,M,I/D" : "M";
+        document.getElementById("input-unit-price").value = 110000;
+      }
+
+      applyMethodDefaults(method);
+      if (!isManualQty) {
+        updatePipeCalc();
+      } else {
+        recalculateTotalFee();
       }
     }
+
+    document.querySelectorAll(".method-btn").forEach(btn => {
+      btn.addEventListener("click", () => switchMethod(btn.dataset.method));
+    });
 
     function applyMethodDefaults(method) {
-      if (!appConfig || !appConfig.method_defaults) return;
-      const def = appConfig.method_defaults[method];
-      if (!def) return;
-      
       const equipSelect = document.getElementById("select-equip");
       const auxSelect = document.getElementById("select-aux-equip");
-      const customInput = document.getElementById("input-custom-aux");
-      if (customInput) customInput.classList.add("hidden");
-      
-      if (def.equip_main) {
-        // Ensure equip_main option exists
-        let exists = Array.from(equipSelect.options).some(o => o.value === def.equip_main);
-        if (!exists) {
-          const opt = document.createElement("option");
-          opt.value = def.equip_main;
-          opt.textContent = def.equip_main;
-          equipSelect.prepend(opt);
-        }
-        equipSelect.value = def.equip_main;
-      }
-      
-      if (def.aux_equipments) {
-        let opts = def.aux_equipments.map(a => `<option value="${a}" ${a === def.default_aux ? 'selected' : ''}>${a}</option>`).join("");
-        opts += `<option value="__custom__">✏️ 직접 입력...</option>`;
-        auxSelect.innerHTML = opts;
-        auxSelect.value = def.default_aux;
+
+      if (method === "PAUT") {
+        equipSelect.value = "PAUT MX2(OMNI2-103085)";
+        auxSelect.value = "PAUT SCANNER (MANUAL)";
+      } else if (method === "RT") {
+        equipSelect.value = "Se-75";
+        auxSelect.value = "ADR, SURVEY, 콜리메타";
+      } else if (method === "MT") {
+        equipSelect.value = "Yoke";
+        auxSelect.value = "자분살포기";
+      } else if (method === "PT") {
+        equipSelect.value = "PT 약품";
+        auxSelect.value = "조도계";
       }
     }
 
-    // Method segmented buttons
-    document.querySelectorAll(".method-btn").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        document.querySelectorAll(".method-btn").forEach(b => {
-          b.className = "method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition";
-        });
-        btn.className = "method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition";
-        selectedMethod = btn.dataset.method;
-        applyMethodDefaults(selectedMethod);
-        updateQtyCalc();
-      });
+    // Calculation logic
+    function updatePipeCalc() {
+      if (isManualQty) {
+        recalculateTotalFee();
+        return;
+      }
+
+      const pipe = document.getElementById("select-pipe").value;
+      const baseLen = (appConfig && appConfig.size_lengths && appConfig.size_lengths[pipe]) ? appConfig.size_lengths[pipe] : 0.8401;
+
+      let qty = 0;
+      if (selectedMethod === "RT") {
+        const oriJoints = parseFloat(document.getElementById("input-ori-joints").value) || 0;
+        qty = oriJoints * 3.0; // 3 films per joint
+      } else {
+        const joints = parseFloat(document.getElementById("input-joints").value) || 0;
+        qty = parseFloat((baseLen * joints).toFixed(4));
+      }
+
+      document.getElementById("input-qty").value = qty;
+      recalculateTotalFee();
+    }
+
+    document.getElementById("select-pipe").addEventListener("change", updatePipeCalc);
+    document.getElementById("input-joints").addEventListener("input", updatePipeCalc);
+    document.getElementById("input-ori-joints").addEventListener("input", updatePipeCalc);
+
+    document.getElementById("input-qty").addEventListener("input", () => {
+      isManualQty = true;
+      recalculateTotalFee();
     });
 
-    async function updateQtyCalc() {
-      const pipe = document.getElementById("select-pipe").value;
-      const joints = parseFloat(document.getElementById("input-joints").value) || 0;
+    document.getElementById("input-unit-price").addEventListener("input", recalculateTotalFee);
+    document.getElementById("input-travel-cost").addEventListener("input", recalculateTotalFee);
 
-      try {
-        const res = await fetch("/api/calculate_qty", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ method: selectedMethod, pipe, joints })
-        });
-        const data = await res.json();
-        document.getElementById("display-qty").textContent = data.qty;
-        document.getElementById("display-unit").textContent = data.unit;
-        document.getElementById("display-cost").textContent = `${data.total_cost.toLocaleString()}원`;
-      } catch (e) {}
+    function recalculateTotalFee() {
+      const qty = parseFloat(document.getElementById("input-qty").value) || 0;
+      const unitPrice = parseFloat(document.getElementById("input-unit-price").value) || 0;
+      const travelCost = parseFloat(document.getElementById("input-travel-cost").value) || 0;
+      const total = Math.round((qty * unitPrice) + travelCost);
+      document.getElementById("input-total-fee").value = total;
     }
 
-    document.getElementById("select-pipe").addEventListener("change", updateQtyCalc);
-    document.getElementById("input-joints").addEventListener("input", updateQtyCalc);
+    // RTK Defect Calculations
+    document.querySelectorAll(".rtk-inp").forEach(inp => {
+      inp.addEventListener("input", updateRtkTotal);
+    });
 
-    // Save record to database
-    document.getElementById("btn-submit").addEventListener("click", async () => {
-      const date = dateInput.value;
-      const loc_type = document.getElementById("select-loc-type").value;
-      const pipe = document.getElementById("select-pipe").value;
-      const joints = parseFloat(document.getElementById("input-joints").value) || 0;
-      const qty = parseFloat(document.getElementById("display-qty").textContent) || 0;
-      const unit = document.getElementById("display-unit").textContent;
-      const equip_main = document.getElementById("select-equip").value;
-      let equip_aux = document.getElementById("select-aux-equip").value;
-      if (equip_aux === "__custom__") {
-        equip_aux = document.getElementById("input-custom-aux").value.trim() || "해당없음";
+    function updateRtkTotal() {
+      let sum = 0;
+      document.querySelectorAll(".rtk-inp").forEach(inp => {
+        sum += parseInt(inp.value) || 0;
+      });
+      document.getElementById("rtk-total").value = sum;
+      document.getElementById("rtk-total-badge").textContent = sum;
+    }
+
+    // Build payload
+    function getFormData() {
+      const isCustomItem = !document.getElementById("input-custom-item").classList.contains("hidden");
+      const itemName = isCustomItem ? document.getElementById("input-custom-item").value.trim() : document.getElementById("select-item-name").value;
+
+      const isCustomMat = !document.getElementById("input-custom-mat").classList.contains("hidden");
+      const material = isCustomMat ? document.getElementById("input-custom-mat").value.trim() : document.getElementById("select-material").value;
+
+      let aux = document.getElementById("select-aux-equip").value;
+      if (aux === "✏️ 직접 입력...") {
+        aux = document.getElementById("input-custom-aux").value.trim() || "없음";
       }
-      const vehicle_no = document.getElementById("select-vehicle").value;
-      const mileage = document.getElementById("input-mileage").value;
 
-      const payload = {
-        date,
-        site: "중앙지사",
-        company: "한국지역난방공사 중앙지사",
-        loc_type,
+      return {
+        date: document.getElementById("input-date").value,
+        company: document.getElementById("select-company").value,
+        loc_type: document.getElementById("select-loc-type").value,
+        hot_tap_stage: document.getElementById("hottap-stage").value,
+        hot_tap_joints: document.getElementById("hottap-joints").value,
+        hot_tap_pipe: document.getElementById("hottap-pipe").value,
         method: selectedMethod,
-        pipe,
-        joints,
-        qty,
-        unit,
-        unit_price: selectedMethod === "PAUT" ? 325451 : (selectedMethod === "RT" ? 205412 : 110000),
-        equip_main,
-        equip_aux,
-        work_shape: workerRows[0]?.shift || "주간",
+        pipe: document.getElementById("select-pipe").value,
+        item_name: itemName || "Pipe",
+        material: material,
+        applied_code: document.getElementById("select-applied-code").value,
+        report_no: document.getElementById("input-report-no").value.trim(),
+        joints: parseFloat(document.getElementById("input-joints").value) || 0,
+        ori_joints: parseFloat(document.getElementById("input-ori-joints").value) || 0,
+        rep_joints: parseFloat(document.getElementById("input-rep-joints").value) || 0,
+        rej_qty: parseFloat(document.getElementById("input-rej-qty").value) || 0,
+        qty: parseFloat(document.getElementById("input-qty").value) || 0,
+        unit: document.getElementById("select-unit").value,
+        unit_price: parseFloat(document.getElementById("input-unit-price").value) || 0,
+        travel_cost: parseFloat(document.getElementById("input-travel-cost").value) || 0,
+        lump_sum: document.getElementById("input-lump-sum").value.trim(),
+        total_fee: parseFloat(document.getElementById("input-total-fee").value) || 0,
+        equip_main: document.getElementById("select-equip").value,
+        equip_aux: aux,
+        vehicle_no: document.getElementById("select-vehicle").value,
+        mileage: document.getElementById("input-mileage").value.trim(),
+        vehicle_note: document.getElementById("input-vehicle-note").value.trim(),
+        note: document.getElementById("input-note").value.trim(),
         workers: workerRows,
-        vehicle_no,
-        mileage,
-        vehicle_note: "양호|함|완료"
+        // RTK (8)
+        rtk_center_miss: parseInt(document.getElementById("rtk-center-miss").value) || 0,
+        rtk_density: parseInt(document.getElementById("rtk-density").value) || 0,
+        rtk_marking_miss: parseInt(document.getElementById("rtk-marking-miss").value) || 0,
+        rtk_film_mark: parseInt(document.getElementById("rtk-film-mark").value) || 0,
+        rtk_handling: parseInt(document.getElementById("rtk-handling").value) || 0,
+        rtk_complaint: parseInt(document.getElementById("rtk-complaint").value) || 0,
+        rtk_etc: parseInt(document.getElementById("rtk-etc").value) || 0,
+        rtk_total: parseInt(document.getElementById("rtk-total").value) || 0,
+        // Chemicals (7)
+        chem_fl_mag: parseFloat(document.getElementById("chem-fl-mag").value) || 0,
+        chem_black_mag: parseFloat(document.getElementById("chem-black-mag").value) || 0,
+        chem_white_paint: parseFloat(document.getElementById("chem-white-paint").value) || 0,
+        chem_penetrant: parseFloat(document.getElementById("chem-penetrant").value) || 0,
+        chem_cleaner: parseFloat(document.getElementById("chem-cleaner").value) || 0,
+        chem_developer: parseFloat(document.getElementById("chem-developer").value) || 0
       };
+    }
 
-      try {
-        const btn = document.getElementById("btn-submit");
-        btn.disabled = true;
-        btn.innerHTML = `<span class="animate-spin mr-2">🔄</span> 저장 중...`;
+    // Submit handler
+    document.getElementById("btn-submit").addEventListener("click", () => {
+      const payload = getFormData();
+      const btn = document.getElementById("btn-submit");
+      btn.disabled = true;
+      btn.innerHTML = `<span>저장 중...</span>`;
 
-        const res = await fetch("/api/save_record", {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(res => {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>`;
+            lucide.createIcons();
+            showToast("중앙지사 구글 클라우드에 성공적으로 저장되었습니다!");
+            loadRecentRecords();
+          })
+          .withFailureHandler(err => {
+            btn.disabled = false;
+            btn.innerHTML = `<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>`;
+            lucide.createIcons();
+            showToast("저장 실패: " + err, true);
+          })
+          .saveRecord(payload);
+      } else {
+        fetch("/api/save_record", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(res => {
+          btn.disabled = false;
+          btn.innerHTML = `<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>`;
+          lucide.createIcons();
+          if (res.status === "success") {
+            showToast(res.message || "성공적으로 저장되었습니다.");
+            loadRecentRecords();
+          } else {
+            showToast("저장 실패: " + (res.detail || "알 수 없는 오류"), true);
+          }
+        })
+        .catch(err => {
+          btn.disabled = false;
+          btn.innerHTML = `<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>`;
+          lucide.createIcons();
+          showToast("통신 오류가 발생했습니다.", true);
         });
-        const data = await res.json();
-        if (res.ok) {
-          showToast("클라우드 DB에 성공적으로 저장되었습니다!");
-          loadRecentRecords();
-        } else {
-          showToast(data.detail || "저장 실패", true);
-        }
-      } catch (e) {
-        showToast("네트워크/저장 오류 발생", true);
-      } finally {
-        const btn = document.getElementById("btn-submit");
-        btn.disabled = false;
-        btn.innerHTML = `<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>`;
-        lucide.createIcons();
       }
     });
 
-    async function loadRecentRecords() {
+    // Recent records
+    function loadRecentRecords() {
       const container = document.getElementById("recent-list");
-      try {
-        const res = await fetch(`/api/recent_records?date=${dateInput.value}`);
-        const data = await res.json();
-        if (!data.records || data.records.length === 0) {
-          container.innerHTML = `<div class="text-center py-4 text-xs text-slate-400">당일 저장된 내역이 없습니다.</div>`;
-          return;
-        }
+      const date = document.getElementById("input-date").value;
 
-        container.innerHTML = data.records.map(r => `
-          <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-            <div>
-              <div class="flex items-center gap-1.5 mb-0.5">
-                <span class="px-1.5 py-0.5 text-[10px] font-black rounded ${r.method === 'PAUT' ? 'bg-indigo-600 text-white' : (r.method === 'RT' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-white')}">${r.method}</span>
-                <span class="text-xs font-bold text-slate-800">${r.loc_type} ${r.pipe}</span>
-                <span class="text-xs font-black text-blue-600">${r.qty} ${r.unit}</span>
-              </div>
-              <p class="text-[11px] text-slate-500">${r.workers}</p>
-            </div>
-            <span class="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">저장됨</span>
-          </div>
-        `).join("");
-      } catch (e) {
-        container.innerHTML = `<div class="text-center py-2 text-xs text-rose-500">불러오기 실패</div>`;
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(renderRecentRecords)
+          .withFailureHandler(() => container.innerHTML = `<div class="text-xs text-rose-500 py-2 text-center">조회 실패</div>`)
+          .getRecentRecords(date);
+      } else {
+        fetch(`/api/recent_records?date=${date}`)
+          .then(r => r.json())
+          .then(renderRecentRecords)
+          .catch(() => container.innerHTML = `<div class="text-xs text-rose-500 py-2 text-center">조회 실패</div>`);
       }
     }
 
     document.getElementById("btn-refresh-history").addEventListener("click", loadRecentRecords);
-    dateInput.addEventListener("change", loadRecentRecords);
+    document.getElementById("input-date").addEventListener("change", loadRecentRecords);
 
-    // Initial load
-    window.addEventListener("DOMContentLoaded", () => {
-      loadConfig();
-      lucide.createIcons();
-    });
+    function renderRecentRecords(data) {
+      const container = document.getElementById("recent-list");
+      const list = data.records || [];
+      if (list.length === 0) {
+        container.innerHTML = `<div class="text-center py-4 text-xs text-slate-400">당일 저장된 내역이 없습니다.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(item => `
+        <div onclick='copyRecordToForm(${JSON.stringify(item).replace(/'/g, "&apos;")})' class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 hover:border-blue-300 hover:bg-blue-50/50 transition cursor-pointer">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-black ${item.method === 'PAUT' ? 'bg-blue-100 text-blue-700' : (item.method === 'RT' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700')}">${item.method}</span>
+              ${item.loc_type || ''} ${item.pipe || ''}
+            </span>
+            <span class="text-xs font-black text-blue-900">${(item.total_fee || 0).toLocaleString()}원</span>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-500">
+            <span>수량: <strong class="text-slate-800">${item.qty} ${item.unit}</strong> (단가: ${(item.unit_price || 0).toLocaleString()}원)</span>
+            <span class="text-[10px] text-blue-600 font-semibold">👆 터치하여 양식 복사</span>
+          </div>
+          ${item.workers ? `<div class="text-[10px] text-slate-400 truncate">참여: ${item.workers}</div>` : ''}
+        </div>
+      `).join("");
+    }
+
+    function copyRecordToForm(item) {
+      if (!item) return;
+      if (item.method) switchMethod(item.method);
+      if (item.loc_type) document.getElementById("select-loc-type").value = item.loc_type;
+      if (item.pipe) document.getElementById("select-pipe").value = item.pipe;
+      if (item.qty) {
+        document.getElementById("input-qty").value = item.qty;
+        isManualQty = true;
+      }
+      if (item.unit) document.getElementById("select-unit").value = item.unit;
+      if (item.unit_price) document.getElementById("input-unit-price").value = item.unit_price;
+      if (item.travel_cost) document.getElementById("input-travel-cost").value = item.travel_cost;
+      if (item.total_fee) document.getElementById("input-total-fee").value = item.total_fee;
+      if (item.applied_code) document.getElementById("select-applied-code").value = item.applied_code;
+      if (item.report_no) document.getElementById("input-report-no").value = item.report_no;
+      showToast("선택한 내역이 입력 폼에 복사되었습니다.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Initialize
+    loadConfig();
+    lucide.createIcons();
   </script>
 </body>
 </html>
-
