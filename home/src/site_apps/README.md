@@ -3,6 +3,7 @@
 | 사업장 | 수정할 코드 | 기존 실행 파일 |
 | --- | --- | --- |
 | 중앙지사 | `central/src/app.py`와 같은 폴더의 모듈 | `home/src/한국지역난방 중앙지사.py` |
+| 경인사무소 | `gyeongin/main.py` 및 `mobile/` 모듈 | `home/src/경인사무소.py` |
 | 가스공사 | `kogas/src/app.py`와 같은 폴더의 모듈 | `home/src/가스공사 가산~가평.py` |
 | 롯데 | `lotte/src/app.py`와 같은 폴더의 모듈 | `home/src/롯데건설 바이오로직스.py` |
 
