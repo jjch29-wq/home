@@ -126,6 +126,67 @@ def get_gyeongin_aux_equipments():
         ]
     return list(dict.fromkeys(items))
 
+def get_gyeongin_materials():
+    materials = []
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                materials = data.get("materials", [])
+        except Exception:
+            pass
+    if not materials:
+        materials = [
+            'Carestream AA400-3⅓*12"', 'Carestream AA400-3⅓*17"', 'Carestream AA400-4½*12"',
+            'Carestream AA400-10*12"', 'Carestream M100-3⅓*12"', 'Carestream M100-10*12"',
+            'Carestream M100-14*17"', 'Carestream MX125-3⅓*6"', 'Carestream MX125-3⅓*12"',
+            'Carestream MX125-4½*12"', 'Carestream MX125-10*12"', 'Carestream MX125-14*17"',
+            'Carestream T200-3⅓*12"', 'Carestream T200-3⅓*17"', 'Carestream T200-4½*12"',
+            'Carestream T200-10*12"', 'Carestream T200-14*17"'
+        ]
+    return materials
+
+def get_gyeongin_units():
+    units = []
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                units = data.get("daily_units", [])
+        except Exception:
+            pass
+    if not units:
+        units = ['매', 'M', 'P,M,I/D', 'EA', 'Point', 'SET', 'CAN', 'KG', 'Inch', 'Dia', 'I/D', 'Meter']
+    order = ['매', 'M', 'P,M,I/D', 'EA', 'Point', 'SET', 'CAN', 'KG', 'Inch', 'Dia', 'I/D', 'Meter']
+    sorted_units = [u for u in order if u in units] + [u for u in units if u not in order]
+    return list(dict.fromkeys(sorted_units))
+
+def get_gyeongin_test_items():
+    items = []
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                items = data.get("test_items", [])
+        except Exception:
+            pass
+    defaults = ['Piping', 'Tank', 'Vessel', 'Plate', 'Beam', 'Structure', 'Pipe', '기타']
+    merged = [i for i in items if i] + defaults
+    return list(dict.fromkeys(merged))
+
+def get_gyeongin_applied_codes():
+    codes = []
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                codes = data.get("applied_codes", [])
+        except Exception:
+            pass
+    defaults = ['KS', 'ASME', 'AWS', 'API', 'KEPIC', '기타']
+    merged = [c for c in codes if c] + defaults
+    return list(dict.fromkeys(merged))
+
 EQUIPMENTS = ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품"]
 
 METHOD_DEFAULTS = {
@@ -210,7 +271,10 @@ class RecordSaveRequest(BaseModel):
     loc_type: str = "경인사무소"
     method: str = "RT"
     pipe: str = ""
-    item_name: str = "Piping"
+    item_name: str = "Piping"        # 검사품명
+    material: str = ""               # 자재명 / 필름명
+    applied_code: str = "KS"         # 적용코드
+    report_no: str = ""              # 성적서번호
     joints: float = 0.0
     ori_joints: float = 0.0
     ori_qty: float = 0.0
@@ -220,6 +284,9 @@ class RecordSaveRequest(BaseModel):
     qty: float = 0.0
     unit: str = "매"
     unit_price: float = 0.0
+    travel_cost: float = 0.0         # 출장비
+    lump_sum: str = ""               # 일식
+    total_fee: float = 0.0           # 검사비
     equip_main: str = ""
     equip_aux: str = ""
     work_shape: str = "일반"
@@ -258,7 +325,11 @@ def get_config():
         "pipe_sizes": list(SIZE_LENGTH.keys()),
         "methods": ["RT", "PT", "MT", "PAUT"],
         "companies": get_gyeongin_companies(),
-        "loc_types": ["경인사무소", "일반배관", "플랜트", "탱크/기기", "기타"]
+        "loc_types": ["경인사무소", "일반배관", "플랜트", "탱크/기기", "기타"],
+        "units": get_gyeongin_units(),
+        "materials": get_gyeongin_materials(),
+        "test_items": get_gyeongin_test_items(),
+        "applied_codes": get_gyeongin_applied_codes()
     }
 
 @app.post("/api/calculate_ot")
@@ -350,10 +421,17 @@ def get_recent_records(date: Optional[str] = None):
                 "date": str(row.get("Date_str", "")),
                 "company": str(row.get("업체명", "경인사무소")),
                 "method": str(row.get("검사방법", "")),
+                "item_name": str(row.get("검사품명", "Piping")),
+                "material": str(row.get("자재명", row.get("MaterialID", row.get("품목명", "")))),
                 "loc_type": str(row.get("작업구분", "경인사무소")),
                 "pipe": str(row.get("관경(Inch)", row.get("규격", ""))),
                 "qty": float(row.get("수량", 0)),
-                "unit": str(row.get("단위", "M")),
+                "unit": str(row.get("Unit", row.get("단위", "M"))),
+                "unit_price": float(row.get("단가", 0)),
+                "travel_cost": float(row.get("출장비", 0)),
+                "total_fee": float(row.get("검사비", 0)),
+                "applied_code": str(row.get("적용코드", "")),
+                "report_no": str(row.get("성적서번호", "")),
                 "extra": " ".join(chem_summary + rtk_summary),
                 "workers": workers_str.rstrip(", ")
             })
@@ -369,31 +447,52 @@ def save_record(req: RecordSaveRequest):
     if not paths:
         raise HTTPException(status_code=500, detail="Database file not found")
 
+    calculated_fee = int(round(req.total_fee)) if req.total_fee > 0 else int(round(req.qty * req.unit_price + req.travel_cost))
+
     new_row_data = {
         "Date": req.date,
         "Site": req.site,
         "작업구분": req.loc_type,
         "구분": req.loc_type,
+        "검사구분": req.loc_type,
         "업체명": req.company,
         "회사코드": req.company_code or req.company,
         "검사방법": req.method,
         "규격": req.pipe,
         "관경(Inch)": req.pipe,
         "검사품명": req.item_name,
+        "자재명": req.material,
+        "MaterialID": req.material,
+        "Material": req.material,
+        "품목명": req.material,
+        "적용코드": req.applied_code,
+        "성적서번호": req.report_no,
         "조인트수": req.joints or req.ori_joints,
         "불량수": req.rej_qty,
         "수량": req.qty,
+        "검사량": req.qty,
+        "Usage": req.qty,
         "단위": req.unit,
+        "Unit": req.unit,
         "단가": req.unit_price,
-        "검사비": int(round(req.qty * req.unit_price)),
+        "출장비": req.travel_cost,
+        "일식": req.lump_sum,
+        "검사비": calculated_fee,
         "장비명": req.equip_main,
         "보조장비": req.equip_aux,
         "작업형태": req.work_shape,
         "차량번호": req.vehicle_no,
         "주행거리": req.mileage,
+        "차량점검": "양호",
         "차량비고": req.vehicle_note,
         "Note": req.note,
+        "Remark": req.note,
+        "DailyMemo": req.note,
         "EntryTime": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "입력시간": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "검사자": req.workers[0].user if req.workers else "",
+        "User": req.workers[0].user if req.workers else "",
+        "FilmCount": req.qty if req.method == 'RT' else 0,
         # RTK (8 categories)
         "RTK_센터미스": req.rtk_center_miss,
         "RTK_농도": req.rtk_density,
@@ -403,6 +502,7 @@ def save_record(req: RecordSaveRequest):
         "RTK_고객불만": req.rtk_complaint,
         "RTK_기타": req.rtk_etc,
         "RTK_총계": req.rtk_total,
+        "RTK_RTK총계": req.rtk_total,
         # NDT Chemicals (7 categories)
         "NDT_형광자분": req.chem_fl_mag,
         "NDT_흑색자분": req.chem_black_mag,

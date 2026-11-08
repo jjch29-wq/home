@@ -18,7 +18,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 pb-24">
+<body class="bg-slate-100 text-slate-800 pb-28">
 
   <!-- Mobile Top App Bar -->
   <header class="sticky top-0 z-30 bg-emerald-700 text-white shadow-md px-4 py-3 flex items-center justify-between">
@@ -26,7 +26,7 @@
       <i data-lucide="shield-check" class="w-6 h-6 text-yellow-300"></i>
       <div>
         <h1 class="text-base font-bold leading-tight">경인사무소 현장 입력</h1>
-        <p class="text-xs text-emerald-200">모바일 검사 및 자재 소모량 관리</p>
+        <p class="text-xs text-emerald-200">배관·비배관(탱크/기기) 검사 및 자재 관리</p>
       </div>
     </div>
     <div class="flex items-center space-x-1">
@@ -38,11 +38,11 @@
 
   <main class="max-w-md mx-auto p-4 space-y-4">
 
-    <!-- 1. 기본 정보 카드 (업체명 / 일자 / 공사구분) -->
+    <!-- 1. 기본 정보 카드 (거래처 / 현장명 / 일자 / 공사구분) -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-          <i data-lucide="building-2" class="w-4 h-4"></i> 거래처 및 기본 정보
+          <i data-lucide="building-2" class="w-4 h-4"></i> 거래처 및 공통 정보
         </span>
         <span id="weekday-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-medium text-slate-600">오늘</span>
       </div>
@@ -58,38 +58,46 @@
         <select id="select-company" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           <!-- Populated via JS -->
         </select>
-        <input type="text" id="input-custom-company" placeholder="신규 업체명 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <input type="text" id="input-custom-company" placeholder="신규 업체명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
       </div>
 
+      <!-- 현장명 & 검사 일자 -->
       <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">현장명</label>
+          <input type="text" id="input-site-name" value="경인사무소" placeholder="현장명 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">검사 일자</label>
           <input type="date" id="input-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">공사 구분</label>
-          <select id="select-loc-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <option value="경인사무소" selected>경인사무소</option>
-            <option value="일반배관">일반배관</option>
-            <option value="플랜트">플랜트</option>
-            <option value="탱크/기기">탱크/기기</option>
-            <option value="기타">기타</option>
-          </select>
-        </div>
+      </div>
+
+      <!-- 공사 구분 -->
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">공사/작업 구분</label>
+        <select id="select-loc-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="경인사무소" selected>경인사무소</option>
+          <option value="일반배관">일반배관</option>
+          <option value="플랜트">플랜트</option>
+          <option value="탱크/기기">탱크/기기</option>
+          <option value="철골/구조물">철골/구조물</option>
+          <option value="기타">기타</option>
+        </select>
       </div>
     </div>
 
-    <!-- 2. NDT 공법 및 물량 자동 산정 카드 -->
+    <!-- 2. 검사 방법 및 품명/자재 정보 카드 -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-          <i data-lucide="gauge" class="w-4 h-4"></i> 검사 공법 및 관경 물량
+          <i data-lucide="layers" class="w-4 h-4"></i> 검사 방법 및 검사품명·자재
         </span>
       </div>
 
       <!-- Segmented Method Buttons (RT 기본) -->
       <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법</label>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
         <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
           <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
           <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
@@ -98,63 +106,163 @@
         </div>
       </div>
 
-      <!-- 관경 선택 -->
+      <!-- 검사품명 (Piping, Tank, Vessel, Plate, Beam, Structure 등) -->
       <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1">배관 관경(Size)</label>
-        <select id="select-pipe" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
+          <button type="button" id="btn-toggle-custom-item" class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
+        </div>
+        <select id="select-item-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           <!-- Populated via JS -->
         </select>
+        <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력 (예: 압력용기, 저장탱크, H-Beam 등)" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
       </div>
 
-      <!-- RT 전용 조인트/불량수 입력란 -->
-      <div id="rt-joints-box" class="space-y-2 pt-1">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">[ORI] 조인트수</label>
-            <input type="number" id="input-ori-joints" value="1" min="0" step="1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">[REP] 조인트수</label>
-            <input type="number" id="input-rep-joints" value="0" min="0" step="1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
+      <!-- 자재명 (RT 필름 등) -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
+          <button type="button" id="btn-toggle-custom-mat" class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
+        </div>
+        <select id="select-material" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <!-- Populated via JS -->
+        </select>
+        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <!-- 적용코드 & 성적서번호 -->
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
+          <select id="select-applied-code" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <!-- Populated via JS -->
+          </select>
+          <input type="text" id="input-custom-code" placeholder="코드 직접 입력" class="hidden mt-1 w-full bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-xs font-semibold text-slate-800">
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">당일 불량(REJ)수 (매)</label>
-          <input type="number" id="input-rej-qty" value="0" min="0" step="1" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <p class="text-[10px] text-slate-400 mt-0.5">※ RT 총 물량 = ORI 매수 (REJ는 그중 불량수, REP 별도)</p>
+          <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
+          <input type="text" id="input-report-no" placeholder="성적서번호 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
+    </div>
 
-      <!-- 일반 NDT (PT/MT/PAUT) 조인트수 입력란 -->
-      <div id="non-rt-joints-box" class="hidden">
-        <label class="block text-xs font-medium text-slate-500 mb-1">조인트수 (개소)</label>
-        <input type="number" id="input-joints" value="1" min="0.1" step="0.5" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+    <!-- 3. 검사 물량 및 산출 카드 (배관 관경 자동 계산 + 비배관 직접 입력 지원) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+          <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
+        </span>
+        <button type="button" id="btn-toggle-pipe-calc" class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
+          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+          <span id="pipe-calc-btn-text">배관 관경 계산기 접기</span>
+        </button>
       </div>
 
-      <!-- Calculated Qty & Cost Box -->
-      <div class="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl flex items-center justify-between">
+      <!-- 배관 관경 자동 계산 영역 (선택/토글 가능) -->
+      <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
+            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 산출
+          </span>
+          <span class="text-[10px] text-slate-400">배관 검사 시 관경·조인트수 선택</span>
+        </div>
+
+        <!-- 관경 선택 -->
         <div>
-          <p class="text-xs text-emerald-700 font-medium">환산 검사 수량</p>
-          <p class="text-lg font-black text-emerald-950 leading-tight">
-            <span id="display-qty">3</span> <span id="display-unit" class="text-xs font-normal">매</span>
-          </p>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+          <select id="select-pipe" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <!-- Populated via JS -->
+          </select>
         </div>
-        <div class="text-right">
-          <p class="text-xs text-emerald-700 font-medium">예상 검사비</p>
-          <p class="text-base font-black text-slate-900 leading-tight" id="display-cost">76,500원</p>
+
+        <!-- RT 전용 조인트/불량수 입력란 -->
+        <div id="rt-joints-box" class="space-y-2 pt-0.5">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
+              <input type="number" id="input-ori-joints" value="1" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
+              <input type="number" id="input-rep-joints" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
+            <input type="number" id="input-rej-qty" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <p class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1 rounded border border-emerald-100">
+              ※ RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도
+            </p>
+          </div>
+        </div>
+
+        <!-- 일반 NDT (PT/MT/PAUT) 조인트수 입력란 -->
+        <div id="non-rt-joints-box" class="hidden">
+          <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
+          <input type="number" id="input-joints" value="1" min="0.1" step="0.5" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+      </div>
+
+      <!-- 공통 수량 및 단위 (비배관/배관 직접 수정 가능) -->
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            검사 수량 (직접 기입 가능)
+          </label>
+          <input type="number" id="input-qty" value="3" min="0" step="0.1" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            단위 (Unit)
+          </label>
+          <select id="select-unit" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+      </div>
+
+      <!-- 단가 / 출장비 / 일식 -->
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
+          <input type="number" id="input-unit-price" value="25500" min="0" step="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
+          <input type="number" id="input-travel-cost" value="0" min="0" step="1000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
+          <input type="text" id="input-lump-sum" placeholder="식대/일식" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Calculated Total Cost Highlight Box -->
+      <div class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-emerald-800 font-bold">총 검사비 (수량×단가+출장비)</p>
+          <p class="text-[10px] text-emerald-600">수동 수정 가능</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input type="number" id="input-total-fee" value="76500" class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <span class="text-xs font-bold text-emerald-900">원</span>
         </div>
       </div>
 
       <!-- Equipment Selectors -->
-      <div class="grid grid-cols-2 gap-2 pt-1">
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">주 장비</label>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
           <select id="select-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
             <!-- Populated via JS -->
           </select>
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
           <select id="select-aux-equip" onchange="checkCustomAux()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
             <!-- Populated via JS -->
           </select>
@@ -163,7 +271,7 @@
       </div>
     </div>
 
-    <!-- 3-A. [RT 전용] RTK 결함 분류 카드 -->
+    <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
     <div id="rtk-card" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
@@ -208,7 +316,7 @@
       </div>
     </div>
 
-    <!-- 3-B. [PT / MT 전용] NDT 자재 소모량 카드 -->
+    <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
     <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
@@ -249,7 +357,7 @@
       </div>
     </div>
 
-    <!-- 3-C. [PAUT / UT 전용] 안내 카드 -->
+    <!-- 6. [PAUT / UT 전용] 안내 카드 -->
     <div id="paut-guide-card" class="hidden bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-center space-y-1">
       <div class="flex justify-center text-blue-600">
         <i data-lucide="info" class="w-5 h-5"></i>
@@ -260,7 +368,7 @@
       </p>
     </div>
 
-    <!-- 4. 당일 작업자 및 OT 산정 카드 (경인사무소 OT 엔진) -->
+    <!-- 7. 참여 작업자 및 OT 산정 카드 (경인사무소 OT 엔진) -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
@@ -280,11 +388,11 @@
       </button>
     </div>
 
-    <!-- 5. 차량 점검 및 주행거리 -->
+    <!-- 8. 차량 점검 및 특이사항 (비고) -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 주행거리
+          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
         </span>
       </div>
 
@@ -315,12 +423,12 @@
 
       <!-- Note / 특이사항 -->
       <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고)</label>
+        <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
         <input type="text" id="input-note" placeholder="특이사항 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
       </div>
     </div>
 
-    <!-- 6. Big Submit Button -->
+    <!-- 9. Big Submit Button -->
     <div class="pt-2">
       <button type="button" id="btn-submit" class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
         <i data-lucide="send" class="w-5 h-5"></i>
@@ -328,7 +436,7 @@
       </button>
     </div>
 
-    <!-- 7. 최근 저장된 내역 (실시간 리스트) -->
+    <!-- 10. 최근 저장된 내역 (실시간 리스트) -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
@@ -356,6 +464,7 @@
     let appConfig = null;
     let selectedMethod = "RT"; // Default RT for Gyeongin Office
     let workerRows = [];
+    let isPipeCalcOpen = true;
 
     // Initialize date to today
     const dateInput = document.getElementById("input-date");
@@ -372,6 +481,39 @@
       }, 2500);
     }
 
+    // Toggle custom inputs
+    document.getElementById("btn-toggle-custom-co").addEventListener("click", () => {
+      const inp = document.getElementById("input-custom-company");
+      inp.classList.toggle("hidden");
+      if (!inp.classList.contains("hidden")) inp.focus();
+    });
+
+    document.getElementById("btn-toggle-custom-item").addEventListener("click", () => {
+      const inp = document.getElementById("input-custom-item");
+      inp.classList.toggle("hidden");
+      if (!inp.classList.contains("hidden")) inp.focus();
+    });
+
+    document.getElementById("btn-toggle-custom-mat").addEventListener("click", () => {
+      const inp = document.getElementById("input-custom-mat");
+      inp.classList.toggle("hidden");
+      if (!inp.classList.contains("hidden")) inp.focus();
+    });
+
+    // Toggle pipe calc section
+    document.getElementById("btn-toggle-pipe-calc").addEventListener("click", () => {
+      isPipeCalcOpen = !isPipeCalcOpen;
+      const section = document.getElementById("pipe-calc-section");
+      const btnText = document.getElementById("pipe-calc-btn-text");
+      if (isPipeCalcOpen) {
+        section.classList.remove("hidden");
+        btnText.textContent = "배관 관경 계산기 접기";
+      } else {
+        section.classList.add("hidden");
+        btnText.textContent = "배관 관경 계산기 펼치기";
+      }
+    });
+
     async function loadConfig() {
       try {
         const res = await fetch("/api/config");
@@ -380,6 +522,22 @@
         // Populate companies
         const compSelect = document.getElementById("select-company");
         compSelect.innerHTML = appConfig.companies.map(c => `<option value="${c}">${c}</option>`).join("");
+
+        // Populate inspection items
+        const itemSelect = document.getElementById("select-item-name");
+        itemSelect.innerHTML = appConfig.test_items.map(item => `<option value="${item}" ${item === 'Piping' ? 'selected' : ''}>${item}</option>`).join("");
+
+        // Populate materials
+        const matSelect = document.getElementById("select-material");
+        matSelect.innerHTML = appConfig.materials.map(m => `<option value="${m}">${m}</option>`).join("");
+
+        // Populate units
+        const unitSelect = document.getElementById("select-unit");
+        unitSelect.innerHTML = appConfig.units.map(u => `<option value="${u}" ${u === '매' ? 'selected' : ''}>${u}</option>`).join("");
+
+        // Populate applied codes
+        const codeSelect = document.getElementById("select-applied-code");
+        codeSelect.innerHTML = appConfig.applied_codes.map(c => `<option value="${c}" ${c === 'KS' ? 'selected' : ''}>${c}</option>`).join("");
 
         // Populate pipe sizes
         const pipeSelect = document.getElementById("select-pipe");
@@ -397,15 +555,6 @@
         showToast("설정 불러오기 실패", true);
       }
     }
-
-    // Toggle custom company input
-    document.getElementById("btn-toggle-custom-co").addEventListener("click", () => {
-      const inp = document.getElementById("input-custom-company");
-      inp.classList.toggle("hidden");
-      if (!inp.classList.contains("hidden")) {
-        inp.focus();
-      }
-    });
 
     function initDefaultWorkers() {
       workerRows = [
@@ -530,6 +679,7 @@
       const pautCard = document.getElementById("paut-guide-card");
       const rtJointsBox = document.getElementById("rt-joints-box");
       const nonRtJointsBox = document.getElementById("non-rt-joints-box");
+      const unitSelect = document.getElementById("select-unit");
 
       if (method === "RT") {
         rtkCard.classList.remove("hidden");
@@ -537,25 +687,28 @@
         pautCard.classList.add("hidden");
         rtJointsBox.classList.remove("hidden");
         nonRtJointsBox.classList.add("hidden");
-        document.getElementById("display-unit").textContent = "매";
+        unitSelect.value = "매";
+        document.getElementById("input-unit-price").value = 25500;
       } else if (method === "PT" || method === "MT") {
         rtkCard.classList.add("hidden");
         chemCard.classList.remove("hidden");
         pautCard.classList.add("hidden");
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
-        document.getElementById("display-unit").textContent = "M";
+        unitSelect.value = method === "MT" ? "P,M,I/D" : "M";
+        document.getElementById("input-unit-price").value = 4200;
       } else if (method === "PAUT") {
         rtkCard.classList.add("hidden");
         chemCard.classList.add("hidden");
         pautCard.classList.remove("hidden");
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
-        document.getElementById("display-unit").textContent = "M";
+        unitSelect.value = "M";
+        document.getElementById("input-unit-price").value = 18500;
       }
 
       applyMethodDefaults(method);
-      updateQtyCalc();
+      updatePipeCalc();
     }
 
     document.querySelectorAll(".method-btn").forEach(btn => {
@@ -601,8 +754,8 @@
       document.getElementById("rtk-total-badge").textContent = sum;
     }
 
-    // Qty and Cost Calculation
-    async function updateQtyCalc() {
+    // Pipe calculation function
+    async function updatePipeCalc() {
       const pipe = document.getElementById("select-pipe").value;
       let joints = 0;
       if (selectedMethod === "RT") {
@@ -618,17 +771,33 @@
           body: JSON.stringify({ method: selectedMethod, pipe, joints })
         });
         const data = await res.json();
-        document.getElementById("display-qty").textContent = data.qty;
-        document.getElementById("display-unit").textContent = data.unit;
-        document.getElementById("display-cost").textContent = data.total_cost.toLocaleString() + "원";
+        
+        // Update input fields
+        document.getElementById("input-qty").value = data.qty;
+        document.getElementById("select-unit").value = data.unit;
+        document.getElementById("input-unit-price").value = data.unit_price;
+        recalculateTotalFee();
       } catch (e) {
         console.error(e);
       }
     }
 
-    document.getElementById("select-pipe").addEventListener("change", updateQtyCalc);
-    document.getElementById("input-ori-joints").addEventListener("input", updateQtyCalc);
-    document.getElementById("input-joints").addEventListener("input", updateQtyCalc);
+    function recalculateTotalFee() {
+      const qty = parseFloat(document.getElementById("input-qty").value) || 0;
+      const unitPrice = parseFloat(document.getElementById("input-unit-price").value) || 0;
+      const travelCost = parseFloat(document.getElementById("input-travel-cost").value) || 0;
+      const totalFee = Math.round(qty * unitPrice + travelCost);
+      document.getElementById("input-total-fee").value = totalFee;
+    }
+
+    // Event listeners for recalculation
+    document.getElementById("select-pipe").addEventListener("change", updatePipeCalc);
+    document.getElementById("input-ori-joints").addEventListener("input", updatePipeCalc);
+    document.getElementById("input-joints").addEventListener("input", updatePipeCalc);
+
+    document.getElementById("input-qty").addEventListener("input", recalculateTotalFee);
+    document.getElementById("input-unit-price").addEventListener("input", recalculateTotalFee);
+    document.getElementById("input-travel-cost").addEventListener("input", recalculateTotalFee);
 
     // Save record
     document.getElementById("btn-submit").addEventListener("click", async () => {
@@ -640,17 +809,38 @@
         // Resolve company
         let company = document.getElementById("select-company").value;
         const customCo = document.getElementById("input-custom-company").value.trim();
-        if (customCo) {
-          company = customCo;
-        }
+        if (customCo) company = customCo;
 
+        // Resolve item name
+        let item_name = document.getElementById("select-item-name").value;
+        const customItem = document.getElementById("input-custom-item").value.trim();
+        if (customItem) item_name = customItem;
+
+        // Resolve material
+        let material = document.getElementById("select-material").value;
+        const customMat = document.getElementById("input-custom-mat").value.trim();
+        if (customMat) material = customMat;
+
+        // Resolve code
+        let applied_code = document.getElementById("select-applied-code").value;
+        const customCode = document.getElementById("input-custom-code").value.trim();
+        if (customCode) applied_code = customCode;
+
+        const site = document.getElementById("input-site-name").value.trim() || "경인사무소";
         const date = dateInput.value;
         const loc_type = document.getElementById("select-loc-type").value;
+        const report_no = document.getElementById("input-report-no").value.trim();
         const pipe = document.getElementById("select-pipe").value;
-        const qty = parseFloat(document.getElementById("display-qty").textContent) || 0;
-        const unit = document.getElementById("display-unit").textContent;
+
+        // Qty & Price
+        const qty = parseFloat(document.getElementById("input-qty").value) || 0;
+        const unit = document.getElementById("select-unit").value;
+        const unit_price = parseFloat(document.getElementById("input-unit-price").value) || 0;
+        const travel_cost = parseFloat(document.getElementById("input-travel-cost").value) || 0;
+        const lump_sum = document.getElementById("input-lump-sum").value.trim();
+        const total_fee = parseFloat(document.getElementById("input-total-fee").value) || 0;
+
         const equip_main = document.getElementById("select-equip").value;
-        
         let equip_aux = document.getElementById("select-aux-equip").value;
         const customAux = document.getElementById("input-custom-aux").value.trim();
         if (customAux) equip_aux = customAux;
@@ -686,19 +876,26 @@
 
         const payload = {
           date,
-          site: "경인사무소",
+          site,
           company,
           company_code: company,
           loc_type,
           method: selectedMethod,
           pipe,
-          item_name: "Piping",
+          item_name,
+          material,
+          applied_code,
+          report_no,
           joints,
           ori_joints,
           rep_joints,
           rej_qty,
           qty,
           unit,
+          unit_price,
+          travel_cost,
+          lump_sum,
+          total_fee,
           equip_main,
           equip_aux,
           work_shape: workerRows[0] ? workerRows[0].shift : "일반",
@@ -747,13 +944,15 @@
         container.innerHTML = data.records.map(r => `
           <div class="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1 text-xs">
             <div class="flex items-center justify-between">
-              <span class="font-extrabold text-emerald-800">[${r.company}] ${r.method} · ${r.pipe}</span>
-              <span class="font-black text-slate-900">${r.qty} ${r.unit}</span>
+              <span class="font-extrabold text-emerald-800">[${r.company}] ${r.method} · ${r.item_name || 'Piping'}${r.pipe ? ` (${r.pipe})` : ''}</span>
+              <span class="font-black text-slate-900">${r.qty} ${r.unit} (${Number(r.total_fee || 0).toLocaleString()}원)</span>
             </div>
             <div class="flex items-center justify-between text-[11px] text-slate-500">
-              <span>${r.date} · ${r.loc_type}</span>
+              <span>${r.date} · ${r.loc_type}${r.applied_code ? ` · ${r.applied_code}` : ''}</span>
               ${r.extra ? `<span class="text-amber-700 font-bold">${r.extra}</span>` : ''}
             </div>
+            ${r.material ? `<div class="text-[10px] text-slate-500">자재: ${r.material}</div>` : ''}
+            ${r.report_no ? `<div class="text-[10px] text-slate-400">성적서: ${r.report_no}</div>` : ''}
             ${r.workers ? `<div class="text-[10px] text-slate-400 truncate">참여: ${r.workers}</div>` : ''}
           </div>
         `).join("");
