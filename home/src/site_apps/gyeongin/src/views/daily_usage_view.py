@@ -80,7 +80,7 @@ def setup_daily_usage_tab_impl(self):
     output_button = ttk.Menubutton(row1, text='일보 출력')
     output_menu = tk.Menu(output_button, tearoff=False)
     output_menu.add_command(label='작업일보 출력', command=self.export_daily_work_report)
-    output_menu.add_command(label='중앙지사 일보', command=self.export_central_daily_work_report)
+    output_menu.add_command(label='경인사무소 일보', command=self.export_central_daily_work_report)
     output_button.configure(menu=output_menu)
     output_button.pack(side='right', padx=3)
 

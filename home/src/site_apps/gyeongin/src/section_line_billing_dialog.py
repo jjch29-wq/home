@@ -867,7 +867,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         ws1['A1'].font = font_title
         ws1['A1'].alignment = Alignment(horizontal='center', vertical='center')
         
-        ws1['A3'] = f"공 사 명 : 2026년 중앙지사 열수송관 비파괴검사용역 단가계약 ({sec}){sub_str}"
+        ws1['A3'] = f"공 사 명 : 경인사무소 비파괴검사용역 단가계약 ({sec}){sub_str}"
         ws1['A3'].font = font_sub
         
         ws1.merge_cells('A5:A6'); ws1['A5'] = "공종"; ws1['A5'].alignment = Alignment(horizontal='center', vertical='center')
@@ -1130,7 +1130,7 @@ class SectionLineBillingDialog(tk.Toplevel):
         ws3.page_setup.paperSize = ws3.PAPERSIZE_A4
         ws3.sheet_properties.pageSetUpPr.fitToPage = True
         
-        ws3['A2'] = "2026년 중앙지사 열수송관 비파괴검사 공종별 단가산출 내역서"
+        ws3['A2'] = "경인사무소 비파괴검사 공종별 단가산출 내역서"
         ws3['A2'].font = font_title
         ws3['A3'] = "산출기준: 재료비 + 인건비(노무비) + 제경비(인건비 110%) + 기술료((인건비+제경비) 20%)"
         ws3['A3'].font = font_cell

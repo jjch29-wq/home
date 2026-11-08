@@ -366,7 +366,7 @@ class MaterialManager:
             except Exception:
                 pass
                 
-        self.root.title("자재 및 소모품 관리 시스템 (Material Manager)")
+        self.root.title("경인사무소 - 자재 및 소모품 관리 시스템 (Material Manager)")
         self.root.geometry("1600x900")
         try:
             self.root.state('zoomed') # Maximize on Windows
@@ -459,7 +459,7 @@ class MaterialManager:
             # exe 실행 모드: exe와 같은 폴더에 DB 저장 (어디서 실행해도 동일)
             self.db_path = os.path.join(self.app_dir, 'Material_Inventory.xlsx')
 
-        # 중앙지사에서 선택한 클라우드 재고 파일을 우선 사용한다.
+        # 경인사무소에서 선택한 클라우드 재고 파일을 우선 사용한다.
         from site_apps.gyeongin.src.data_sync import get_business_data_dir
         cloud_inventory = os.path.join(get_business_data_dir(), 'Material_Inventory.xlsx')
         if os.path.isfile(cloud_inventory):
@@ -1192,10 +1192,10 @@ class MaterialManager:
         self.notebook.add(self.tab_monthly_usage, text='월별 집계')
         self.setup_monthly_usage_tab()
 
-        # Tab 7: Daily Work Log (작업/감독일보)
+        # Tab 7: Daily Work Log (작업일보)
         self.tab_daily_work_log = DailyWorkLogTab(self.notebook)
         self.tab_daily_work_log.main_app = self
-        self.notebook.add(self.tab_daily_work_log, text='작업/감독일보')
+        self.notebook.add(self.tab_daily_work_log, text='작업일보')
 
         # Tab 8: NDT Billing Calculator (기성 정산 (NDT))
         self.tab_ndt_billing = ttk.Frame(self.notebook)
@@ -12631,7 +12631,7 @@ class MaterialManager:
 
             if not sorted_dates:
                 ws.cell(row=row_idx, column=1, value=f"{s_date} ~ {e_date}").alignment = center_align
-                ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
+                ws.cell(row=row_idx, column=2, value="경인사무소 관내").alignment = center_align
                 ws.cell(row=row_idx, column=3, value="금주 신규 작업 없음").alignment = center_align
                 ws.cell(row=row_idx, column=4, value="-").alignment = center_align
                 ws.cell(row=row_idx, column=5, value="0 시간").alignment = center_align
@@ -12680,7 +12680,7 @@ class MaterialManager:
                 total_time += 8
                 
                 ws.cell(row=row_idx, column=1, value=str(date_val)).alignment = center_align
-                ws.cell(row=row_idx, column=2, value="중앙지사 관내").alignment = center_align
+                ws.cell(row=row_idx, column=2, value="경인사무소 관내").alignment = center_align
                 ws.cell(row=row_idx, column=3, value=work_description).alignment = center_align_wrap
                 ws.cell(row=row_idx, column=4, value=f"{w_count} 명").alignment = center_align
                 ws.cell(row=row_idx, column=5, value="8 시간").alignment = center_align
@@ -13582,7 +13582,7 @@ class MaterialManager:
             '현장별 일일 사용량 기입',
             '현장 일일기록 조회 및 관리',
             '월별 집계',
-            '작업/감독일보',
+            '작업일보',
             '기성 정산 (NDT)',
             '공사실행예산서'
         ]
@@ -13988,7 +13988,7 @@ class MaterialManager:
                 '현장별 일일 사용량 기입',
                 '현장 일일기록 조회 및 관리',
                 '월별 집계',
-                '작업/감독일보',
+                '작업일보',
                 '기성 정산 (NDT)',
                 '공사실행예산서'
             ]
@@ -14136,7 +14136,7 @@ class MaterialManager:
                     '현장별 일일 사용량 기입',
                     '현장 일일기록 조회 및 관리',
                     '월별 집계',
-                    '작업/감독일보',
+                    '작업일보',
                     '기성 정산 (NDT)',
                     '공사실행예산서'
                 ]

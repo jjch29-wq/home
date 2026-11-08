@@ -13,7 +13,7 @@ from site_apps.gyeongin.src.app import MaterialManager
 class GyeonginMaterialManager(MaterialManager):
     def __init__(self, root):
         super().__init__(root)
-        self.root.title("자재 및 소모품 관리 시스템 - 경인사무소 (Material Manager)")
+        self.root.title("경인사무소 - 자재 및 소모품 관리 시스템")
 
 def main():
     import tkinter as tk

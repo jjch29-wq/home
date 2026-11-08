@@ -215,7 +215,7 @@ class DailyWorkLogTab(ttk.Frame):
         from site_apps.gyeongin.src.views.calendar_work_summary import CalendarWorkSummary
         self.calendar_work_summary = CalendarWorkSummary(
             self.date_entry, self,
-            site_getter=lambda: '중앙지사',
+            site_getter=lambda: '경인사무소',
             frame_getter=lambda: getattr(getattr(self, 'main_app', None), 'daily_usage_df', None),
             history_getter=self.load_history)
         # self.date_entry.bind("<FocusOut>", self.on_date_change) # Removed to prevent accidental UI wipes
@@ -1231,7 +1231,7 @@ class DailyWorkLogTab(ttk.Frame):
         photo_count = len(day_photos)
 
         confirm_message = (
-            f"정말로 {date_str}의 작업/감독일보 저장 내용을 모두 삭제하시겠습니까?\n"
+            f"정말로 {date_str}의 작업일보 저장 내용을 모두 삭제하시겠습니까?\n"
             f"등록된 공정사진 {photo_count}장도 함께 삭제됩니다.\n\n"
             "※ 프로그램 관리 폴더의 복사본만 삭제되며 외부 원본은 유지됩니다.\n"
             "(이 작업은 되돌릴 수 없습니다)"
@@ -1415,7 +1415,7 @@ class DailyWorkLogTab(ttk.Frame):
         if not self._validate_hot_rows():
             return
         # Save File Dialog
-        default_name = f"{self.date_entry.get().replace('-', '')}_작업_감독일보.xlsx"
+        default_name = f"{self.date_entry.get().replace('-', '')}_작업일보.xlsx"
         file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             initialfile=default_name,

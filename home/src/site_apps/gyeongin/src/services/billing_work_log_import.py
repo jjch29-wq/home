@@ -82,7 +82,7 @@ def build_work_log_billing_records(history, start, end, *, material_costs, labor
                      vat=int(Decimal(subtotal) * Decimal('.1')))
         costs['total_amount'] = subtotal + costs['vat']
         records.append(dict(date=day, company=company, actual_company=company,
-                            loc=f'[{location}] 중앙지사 / {section} / {line}', loc_type=location,
+                            loc=f'[{location}] 경인사무소 / {section} / {line}', loc_type=location,
                             ndt_type=method, material_type=material, work_time=work_time,
                             qty=qty, adjusted_qty=qty, corr=1.0, unit='매' if method == 'RT' else 'M',
                             section=section, line=line, source='work_log',

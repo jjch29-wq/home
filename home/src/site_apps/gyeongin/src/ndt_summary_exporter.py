@@ -71,7 +71,7 @@ class NDTSummaryExporter:
             
         # Write Title
         ws.merge_cells('A1:G1')
-        title_cell = ws.cell(row=1, column=1, value="용 역 명 : 2026년 중앙지사 열수송관 비파괴검사용역")
+        title_cell = ws.cell(row=1, column=1, value="용 역 명 : 경인사무소 비파괴검사용역")
         title_cell.font = Font(name='맑은 고딕', size=14, bold=True)
         title_cell.alignment = Alignment(horizontal='left', vertical='center')
         ws.row_dimensions[1].height = 25
@@ -167,7 +167,7 @@ class NDTSummaryExporter:
         num_cols = len(all_headers)
         col_letter = get_column_letter(num_cols)
         ws.merge_cells(f'A1:{col_letter}1')
-        title_cell = ws.cell(row=1, column=1, value="용 역 명 : 2026년 중앙지사 열수송관 비파괴검사용역")
+        title_cell = ws.cell(row=1, column=1, value="용 역 명 : 경인사무소 비파괴검사용역")
         title_cell.font = Font(name='맑은 고딕', size=14, bold=True)
         title_cell.alignment = Alignment(horizontal='left', vertical='center')
         ws.row_dimensions[1].height = 25

@@ -73,7 +73,7 @@ def get_business_data_dir():
 
 
 def get_submission_dir():
-    return os.path.join(get_data_dir(), '중앙지사_제출자료')
+    return os.path.join(get_data_dir(), '경인사무소_제출자료')
 
 
 def get_process_photos_dir():

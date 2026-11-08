@@ -43,26 +43,26 @@ DEFAULT_CONFIG = {
     "CONTRACT_QTY": {
         "열배관": {
             "일반": {
-                "PAUT_300A 이상": 129,
-                "PAUT_250A": 4,
-                "PAUT_200A": 4,
-                "PAUT_150A-125A": 1,
-                "PAUT_100A 이하": 1,
-                "RT_3 1/3 x 12\"": 293,
-                "RT_3 1/3 x 6\"": 105,
-                "MT_MT": 26,
-                "PT_PT": 26
+                "PAUT_300A 이상": 0,
+                "PAUT_250A": 0,
+                "PAUT_200A": 0,
+                "PAUT_150A-125A": 0,
+                "PAUT_100A 이하": 0,
+                "RT_3 1/3 x 12\"": 0,
+                "RT_3 1/3 x 6\"": 0,
+                "MT_MT": 0,
+                "PT_PT": 0
             },
             "야간": {
-                "PAUT_300A 이상": 624,
-                "PAUT_250A": 1,
-                "PAUT_200A": 2,
-                "PAUT_150A-125A": 1,
-                "PAUT_100A 이하": 1,
-                "RT_3 1/3 x 12\"": 43,
-                "RT_3 1/3 x 6\"": 49,
-                "MT_MT": 1,
-                "PT_PT": 1
+                "PAUT_300A 이상": 0,
+                "PAUT_250A": 0,
+                "PAUT_200A": 0,
+                "PAUT_150A-125A": 0,
+                "PAUT_100A 이하": 0,
+                "RT_3 1/3 x 12\"": 0,
+                "RT_3 1/3 x 6\"": 0,
+                "MT_MT": 0,
+                "PT_PT": 0
             }
         }
     },
@@ -1638,7 +1638,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws.Range("A1").VerticalAlignment = -4108
             
             ws.Range("A4:J4").Merge()
-            ws.Range("A4").Value = "공 사 명 :  2026년 중앙지사 열수송관 비파괴검사용역 단가계약"
+            ws.Range("A4").Value = "공 사 명 :  경인사무소 비파괴검사용역 단가계약"
             ws.Range("A4").Font.Bold = True
             ws.Range("A4").Font.Size = 14
             ws.Range("A4").HorizontalAlignment = -4131 # xlLeft
@@ -2109,7 +2109,7 @@ class NDTCalculatorTab(ttk.Frame):
                     ws_cover.Cells(row, c_idx).Borders.LineStyle = 1
                 ws_cover.Rows(row).RowHeight = 30
 
-            _cover_row(11, "공 사 명", "2026년 중앙지사 열수송관 비파괴검사용역 단가계약")
+            _cover_row(11, "공 사 명", "경인사무소 비파괴검사용역 단가계약")
             _cover_row(12, "계 약 기 간", "2026.08.05 ~ 2027.08.05")
 
             # --- 5단계 자금 흐름 표 ---
@@ -2203,7 +2203,7 @@ class NDTCalculatorTab(ttk.Frame):
             ws_cover.Range("A29").HorizontalAlignment = -4108 # xlCenter
             
             ws_cover.Range("A32:G32").Merge()
-            ws_cover.Range("A32").Value = "한국지역난방공사 중앙지사 귀하"
+            ws_cover.Range("A32").Value = "경인사무소 귀하"
             ws_cover.Range("A32").Font.Size = 22
             ws_cover.Range("A32").Font.Bold = True
             ws_cover.Range("A32").HorizontalAlignment = -4108 # xlCenter

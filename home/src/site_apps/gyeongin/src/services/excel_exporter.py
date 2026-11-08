@@ -652,7 +652,7 @@ def export_daily_work_report_impl(self):
                 
         data['rtk_total'] = rtk_total
 
-        default_filename = f"한국지역난방 중앙지사_{date_val.strftime('%Y%m%d')}.xlsx"
+        default_filename = f"경인사무소_{date_val.strftime('%Y%m%d')}.xlsx"
         save_path = filedialog.asksaveasfilename(
             title="작업일보 저장",
             initialfile=default_filename,
@@ -986,13 +986,13 @@ def export_central_daily_work_report_impl(self):
             defaultextension=".xlsx", 
             initialfile=default_name, 
             filetypes=[("Excel File", "*.xlsx")], 
-            title="중앙지사 검사일보 저장"
+            title="경인사무소 검사일보 저장"
         )
         
         if filepath:
             wb.save(filepath)
             wb.close()
-            messagebox.showinfo("완료", f"중앙지사 엑셀 작업일보 생성이 완료되었습니다.\n(2번 비파괴검사결과서는 엑셀에서 직접 기입해 주세요)\n\n{filepath}")
+            messagebox.showinfo("완료", f"경인사무소 엑셀 작업일보 생성이 완료되었습니다.\n(2번 비파괴검사결과서는 엑셀에서 직접 기입해 주세요)\n\n{filepath}")
             os.startfile(filepath)
             
     except Exception as e:

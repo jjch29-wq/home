@@ -65,7 +65,7 @@ class DailyWorkLogExporter:
         merge_and_set('A2:R2', "비파괴검사 결과서 및 작업/감독일보", font=self.font_title, border=None)
         
         # Left Info
-        merge_and_set('A4:F4', "용 역 명 : 2026년 중앙지사 열수송관 비파괴검사용역", font=self.font_normal, align=self.align_left, border=None)
+        merge_and_set('A4:F4', "용 역 명 : 경인사무소 비파괴검사용역", font=self.font_normal, align=self.align_left, border=None)
         date_str = data.get('date')
         if not date_str:
             import re
