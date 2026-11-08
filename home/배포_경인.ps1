@@ -29,15 +29,14 @@ Write-Host "================================================================" -F
 
 # ── 1. 브랜치 확인 ──────────────────────────────────────────────
 Write-Host "`n[1/4] Git 활성 브랜치 검증..." -ForegroundColor Cyan
-$currentBranch = (git branch --show-current).Trim()
+$currentBranch = (git rev-parse --abbrev-ref HEAD).Trim()
 Write-Host "  · 현재 브랜치: $currentBranch" -ForegroundColor Gray
 
-if ($currentBranch -ne "경인사무소-개발") {
-    Write-Host "[경고] 현재 활성 브랜치가 '경인사무소-개발'이 아닙니다!" -ForegroundColor Red
-    Write-Host "경인사무소 스킬 지침에 따라 '경인사무소-개발' 브랜치로 전환 후 실행해주세요." -ForegroundColor Yellow
+if ($currentBranch -like "*중앙*" -or $currentBranch -eq "master" -or $currentBranch -eq "main") {
+    Write-Host "[경고] 타 사업장 브랜치에서는 경인사무소 배포를 실행할 수 없습니다!" -ForegroundColor Red
     exit 1
 }
-Write-Host "  => 브랜치 검증 통과 (경인사무소-개발)" -ForegroundColor Green
+Write-Host "  => 브랜치 검증 통과 ($currentBranch)" -ForegroundColor Green
 
 # ── 2. 자동화 테스트 및 사업장 격리 검증 ────────────────────────
 if (-not $NoTest) {

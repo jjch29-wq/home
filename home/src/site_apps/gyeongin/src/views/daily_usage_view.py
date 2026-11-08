@@ -58,6 +58,9 @@ def setup_daily_usage_tab_impl(self):
     ttk.Button(row1, text="🧹 초기화", command=self.clear_daily_usage_form_all, width=10).pack(side='left', padx=2)
     self.daily_save_status = ttk.Label(row1, text='')
     self.daily_save_status.pack(side='left', padx=8)
+
+    if hasattr(self, 'trigger_mobile_sync'):
+        ttk.Button(row1, text="📱 모바일 동기화", command=self.trigger_mobile_sync, width=13).pack(side='left', padx=3)
     
 
 

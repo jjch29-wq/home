@@ -10,3 +10,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File home\배포_경인.ps1 %
 
 pause
 endlocal
+

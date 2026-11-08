@@ -18,3 +18,4 @@ echo.
 echo 동기화 작업이 완료되었습니다.
 pause
 endlocal
+

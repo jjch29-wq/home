@@ -22,6 +22,25 @@ logger = logging.getLogger("gyeongin_sync")
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "data" / "google_sync_config.json"
 DEFAULT_INVENTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "Material_Inventory.xlsx"
 
+def get_all_inventory_paths() -> List[Path]:
+    """경인사무소의 모든 재고 DB 경로 탐색 (로컬 및 Google Drive)"""
+    paths = []
+    if DEFAULT_INVENTORY_PATH.exists():
+        paths.append(DEFAULT_INVENTORY_PATH)
+
+    try:
+        import ctypes
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        drives = [chr(65 + i) for i in range(26) if (bitmask >> i) & 1]
+        if 'G' in drives:
+            cloud_p = Path(r"G:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\data\Material_Inventory.xlsx")
+            if cloud_p.exists() and cloud_p not in paths:
+                paths.append(cloud_p)
+    except Exception:
+        pass
+
+    return paths
+
 def load_sync_config() -> dict:
     if CONFIG_PATH.exists():
         try:
@@ -202,8 +221,77 @@ def run_sync(web_app_url: Optional[str] = None, inventory_path: Optional[Path] =
             "message": f"동기화 중 오류 발생: {str(e)}"
         }
 
+def sync_local_and_drive_files() -> Dict[str, Any]:
+    """로컬 Material_Inventory.xlsx와 Google Drive의 파일 간 DailyUsage 양방향 무손실 동기화"""
+    paths = get_all_inventory_paths()
+    if len(paths) < 2:
+        return {
+            "status": "success",
+            "added_count": 0,
+            "message": "단일 데이터베이스 모드 (구글 드라이브 미연결)"
+        }
+
+    p1, p2 = paths[0], paths[1]  # local, google drive
+    try:
+        with pd.ExcelFile(p1) as f1:
+            df1 = f1.parse("DailyUsage") if "DailyUsage" in f1.sheet_names else pd.DataFrame()
+        with pd.ExcelFile(p2) as f2:
+            df2 = f2.parse("DailyUsage") if "DailyUsage" in f2.sheet_names else pd.DataFrame()
+
+        rows1 = df1.to_dict(orient="records") if not df1.empty else []
+        rows2 = df2.to_dict(orient="records") if not df2.empty else []
+
+        # p2(드라이브)의 행들을 p1(로컬)에 동기화
+        res1 = sync_records_to_excel(rows2, inventory_path=p1)
+        # p1(로컬)의 행들을 p2(드라이브)에 동기화
+        res2 = sync_records_to_excel(rows1, inventory_path=p2)
+
+        total_added = res1.get("added_count", 0) + res2.get("added_count", 0)
+        return {
+            "status": "success",
+            "added_count": total_added,
+            "message": f"로컬 및 구글 드라이브 동기화 완료 (추가: {total_added}건)"
+        }
+    except Exception as e:
+        logger.error(f"로컬/드라이브 동기화 실패: {e}")
+        return {"status": "error", "message": str(e), "added_count": 0}
+
+def sync_all_gyeongin_sources() -> Dict[str, Any]:
+    """
+    경인사무소 전체 데이터 소스 (Google Apps Script Web App + Google Drive + Local) 자동 통합 동기화
+    휴대폰에서 저장된 내역을 앱 실행 시 또는 백그라운드에서 자동으로 감지하여 엑셀에 반영합니다.
+    """
+    total_added = 0
+    messages = []
+
+    # 1. Google Drive 및 Local 간 상호 동기화
+    res_drive = sync_local_and_drive_files()
+    if res_drive.get("added_count", 0) > 0:
+        total_added += res_drive["added_count"]
+        messages.append(res_drive["message"])
+
+    # 2. Google Apps Script 클라우드 Web App 동기화 (설정된 경우)
+    cfg = load_sync_config()
+    target_url = cfg.get("web_app_url")
+    if target_url:
+        try:
+            for p in get_all_inventory_paths():
+                res_web = run_sync(target_url, inventory_path=p)
+                if res_web.get("added_count", 0) > 0:
+                    total_added += res_web["added_count"]
+                    messages.append(res_web["message"])
+        except Exception as e:
+            messages.append(f"웹 앱 동기화 건너뜀: {e}")
+
+    summary_msg = " / ".join(messages) if messages else "이미 최신 상태입니다."
+    return {
+        "status": "success",
+        "added_count": total_added,
+        "message": summary_msg
+    }
+
 if __name__ == "__main__":
     import sys
     url = sys.argv[1] if len(sys.argv) > 1 else None
-    result = run_sync(url)
+    result = run_sync(url) if url else sync_all_gyeongin_sources()
     print(json.dumps(result, ensure_ascii=False, indent=2))

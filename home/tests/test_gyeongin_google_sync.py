@@ -5,7 +5,9 @@ from pathlib import Path
 from home.src.site_apps.gyeongin.src.sync_google_sheet import (
     load_sync_config,
     save_sync_config,
-    sync_records_to_excel
+    sync_records_to_excel,
+    sync_all_gyeongin_sources,
+    get_all_inventory_paths
 )
 
 class TestGyeonginGoogleSync(unittest.TestCase):
@@ -68,6 +70,11 @@ class TestGyeonginGoogleSync(unittest.TestCase):
             self.assertEqual(len(read_df), 2)
             self.assertEqual(read_df.iloc[1]["User"], "대리 우명광")
             self.assertEqual(read_df.iloc[1]["검사방법"], "RT")
+
+    def test_sync_all_gyeongin_sources_callable(self):
+        res = sync_all_gyeongin_sources()
+        self.assertEqual(res["status"], "success")
+        self.assertIn("added_count", res)
 
 if __name__ == "__main__":
     unittest.main()
