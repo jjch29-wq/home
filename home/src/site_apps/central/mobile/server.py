@@ -77,7 +77,7 @@ def get_central_aux_equipments():
         items = [
             "ADR, SURVEY, 콜리메타", "ADR; SURVEY; 콜리메타", "ADR", "SURVEY", "콜리메타",
             "PAUT SCANNER (MANUAL)", "COBRA Manual Scanner", "JIREH MICROBE BTG006",
-            "JIREH Scanner", "자분살포기", "조도계", "자계강도계", "온습도계", "BLACK LIGHT", "없음"
+            "JIREH Scanner", "자분살포기", "조도계", "자계강도계", "온습도계", "휴대용 UV메타", "없음"
         ]
     return list(dict.fromkeys(items))
 
@@ -113,7 +113,7 @@ METHOD_DEFAULTS = {
             "자분살포기",
             "조도계",
             "자계강도계",
-            "BLACK LIGHT",
+            "휴대용 UV메타",
             "없음"
         ],
         "default_aux": "자분살포기"
