@@ -1,3 +1,4 @@
+from copy import deepcopy
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
@@ -69,32 +70,34 @@ DEFAULT_CONFIG = {
 
 def load_config():
     if not os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=4)
-        return DEFAULT_CONFIG
+        save_config(deepcopy(DEFAULT_CONFIG))
+        return deepcopy(DEFAULT_CONFIG)
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            # 2026 신규 단가계약 스키마가 없는 경우(과거 config.json) DEFAULT로 덮어쓰기
-            if "PAUT_300A 이상" not in config.get("MATERIAL_COST", {}):
-                with open(CONFIG_FILE, 'w', encoding='utf-8') as fw:
-                    json.dump(DEFAULT_CONFIG, fw, ensure_ascii=False, indent=4)
-                return DEFAULT_CONFIG
-                
+            # Merge missing schema fields without replacing saved records or rates.
+            def merge_missing(target, defaults):
+                for key, value in defaults.items():
+                    if key not in target:
+                        target[key] = deepcopy(value)
+                    elif isinstance(target[key], dict) and isinstance(value, dict):
+                        merge_missing(target[key], value)
+            merge_missing(config, DEFAULT_CONFIG)
             # Migrate old config to district heating schema
             if "열배관" in config.get("LABOR_COST", {}):
                 config["LABOR_COST"]["열배관"] = config["LABOR_COST"].pop("열배관")
                 config["LABOR_COST"].pop("플랜트(관리소)", None)
-                with open(CONFIG_FILE, 'w', encoding='utf-8') as fw:
-                    json.dump(config, fw, ensure_ascii=False, indent=4)
+                # Persist migrated settings on the next successful atomic save.
                     
             return config
-    except:
-        return DEFAULT_CONFIG
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f'기성 설정을 읽지 못했습니다. 원본 파일을 확인해주세요: {error}') from error
 
 def save_config(config):
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+    temp_path = CONFIG_FILE + '.tmp'
+    with open(temp_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
+    os.replace(temp_path, CONFIG_FILE)
 
 # 글로벌 변수
 CONFIG = load_config()
@@ -117,11 +120,12 @@ class NDTCalculatorTab(ttk.Frame):
         # self.create_menu()
         self.create_widgets()
         # self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self._restore_billing_state(CONFIG.get('BILLING_STATE', {}))
         self.load_billing_records()
         
     def load_billing_records(self):
         global CONFIG
-        self.records = CONFIG.get("BILLING_RECORDS", [])
+        self.records = deepcopy(CONFIG.get("BILLING_RECORDS", []))
         
         if hasattr(self, 'tree'):
             for item in self.tree.get_children():
@@ -140,13 +144,44 @@ class NDTCalculatorTab(ttk.Frame):
             if hasattr(self, 'update_qty_summary'):
                 self.update_qty_summary()
 
+    def _capture_billing_state(self):
+        return {
+            'round': self.round_var.get(),
+            'contract': {key: {field: values[field].get() for field in ('c_qty', 'contract', 'p_qty', 'prev')}
+                         for key, values in self.contract_vars.items()},
+            'expenses': {key: {field: values[field].get() for field in ('budget', 'prev', 'curr')}
+                         for key, values in self.exp_vars.items()},
+            'total': {'contract': self.total_contract_var.get(), 'prev': self.total_prev_var.get()},
+        }
+
+    def _restore_billing_state(self, state):
+        if not state:
+            return
+        self.round_var.set(state.get('round', 1))
+        for section, variables in (('contract', self.contract_vars), ('expenses', self.exp_vars)):
+            for key, fields in state.get(section, {}).items():
+                if key in variables:
+                    for field, value in fields.items():
+                        if field in variables[key]:
+                            variables[key][field].set(value)
+        for field, variable in (('contract', self.total_contract_var), ('prev', self.total_prev_var)):
+            if field in state.get('total', {}):
+                variable.set(state['total'][field])
+
     def save_billing_records(self):
+        global CONFIG
+        candidate = deepcopy(CONFIG)
+        candidate['BILLING_RECORDS'] = deepcopy(self.records)
+        candidate['BILLING_STATE'] = self._capture_billing_state()
         try:
-            global CONFIG
-            CONFIG["BILLING_RECORDS"] = self.records
-            save_config(CONFIG)
-        except Exception as e:
-            print(f"Error saving billing records: {e}")
+            save_config(candidate)
+        except Exception as error:
+            self.load_billing_records()
+            messagebox.showerror('기성 저장 실패', f'원본 저장에 실패하여 기록을 복원했습니다.\n{error}')
+            return False
+        CONFIG.clear()
+        CONFIG.update(candidate)
+        return True
 
     def save_ui_state(self):
         try:
@@ -1013,7 +1048,8 @@ class NDTCalculatorTab(ttk.Frame):
                 return
             # Finish validation/calculation before replacing any existing data.
             self.records = prepared
-            self.save_billing_records()
+            if not self.save_billing_records():
+                return
             self.load_billing_records()
             messagebox.showinfo('연동 완료', f'작업/감독일보의 업체·구간·라인별 {len(prepared)}건을 연동했습니다.')
         except Exception as error:
@@ -1211,6 +1247,7 @@ class NDTCalculatorTab(ttk.Frame):
         else:
             target_records = self.records
             
+        previous_state = self._capture_billing_state()
         grouped = grouped_billing_totals(target_records, self.contract_vars)
         for cat, v in self.contract_vars.items():
             p_qty = self.get_float(v["p_qty"])
@@ -1256,9 +1293,16 @@ class NDTCalculatorTab(ttk.Frame):
                 self.tree.delete(item)
             self.update_qty_summary()
         else:
-            self.clear_records()
+            self.records = []
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+            self.update_qty_summary()
             
         self.round_var.set(self.round_var.get() + 1)
+        if not self.save_billing_records():
+            self._restore_billing_state(previous_state)
+            self.update_qty_summary()
+            return
         messagebox.showinfo("이월 완료", f"제 {self.round_var.get()} 회차 기성으로 이월되었습니다.")
             
     def save_project(self):
@@ -1368,12 +1412,14 @@ class NDTCalculatorTab(ttk.Frame):
         messagebox.showinfo("불러오기 완료", msg)
 
     def load_project(self):
+        previous_state = self._capture_billing_state()
+        previous_records = deepcopy(self.records)
+        applied = False
         try:
             filepaths = filedialog.askopenfilenames(filetypes=[("NDT Project", "*.ndt")], title="작업 불러오기 (여러 파일 선택 시 병합됨)")
             if not filepaths: return
             
-            self.clear_records()
-            self.records = []
+            prepared_records = []
             
             # 다중 파일 선택 시 순서 보장을 위해 정렬
             filepaths = sorted(filepaths)
@@ -1386,16 +1432,20 @@ class NDTCalculatorTab(ttk.Frame):
                     data = json.load(f)
                     
                 current_records = data.get("records", [])
-                self.records.extend(current_records)
+                if not isinstance(current_records, list) or not all(isinstance(row, dict) for row in current_records):
+                    raise ValueError('작업 기록 형식이 올바르지 않습니다.')
+                for record in current_records:
+                    for key in ('date', 'loc', 'ndt_type', 'work_time', 'material_type', 'qty', 'unit', 'subtotal'):
+                        if key not in record:
+                            raise ValueError(f'작업 기록의 필수 항목이 없습니다: {key}')
+                    for key in ('qty', 'subtotal', 'unit_price', 'mat_cost', 'lab_cost', 'overhead', 'tech', 'vat', 'total_amount'):
+                        if key in record:
+                            value = float(str(record[key]).replace(',', '') or 0)
+                            if not __import__('math').isfinite(value):
+                                raise ValueError(f'유효하지 않은 금액/수량: {key}')
+                            record[key] = value
+                prepared_records.extend(current_records)
                 
-                for res in current_records:
-                    self.tree.insert("", tk.END, values=(
-                        res["date"], res["loc"], res["ndt_type"], res["work_time"], 
-                        res["material_type"], f"{res['qty']:.4f}", res["unit"],
-                        f"{res.get('mat_cost', 0):,}", f"{res.get('lab_cost', 0):,}",
-                        f"{res['overhead']:,}", f"{res['tech']:,}", f"{res['subtotal']:,}"
-                    ))
-                    
                 curr_round = data.get("round", 1)
                 if curr_round > max_round:
                     max_round = curr_round
@@ -1403,6 +1453,8 @@ class NDTCalculatorTab(ttk.Frame):
             
             if not latest_data: return
             
+            applied = True
+            self.records = prepared_records
             self.round_var.set(latest_data.get("round", max_round))
             cont = latest_data.get("contract", {})
             
@@ -1446,9 +1498,19 @@ class NDTCalculatorTab(ttk.Frame):
             self.total_contract_var.set(f"{tot.get('contract', 288268000):,}")
             self.total_prev_var.set(f"{tot.get('prev', 0):,}")
             
+            if not self.save_billing_records():
+                self.records = previous_records
+                self._restore_billing_state(previous_state)
+                self.update_qty_summary()
+                return
+            self.load_billing_records()
             msg = f"총 {len(filepaths)}개의 작업 파일에서 {len(self.records)}개의 기록을 성공적으로 병합하여 불러왔습니다."
             messagebox.showinfo("불러오기 완료", msg)
         except Exception as e:
+            if applied:
+                self.records = previous_records
+                self._restore_billing_state(previous_state)
+                self.update_qty_summary()
             messagebox.showerror("오류", f"불러오기 중 오류가 발생했습니다: {e}")
 
     def open_section_line_billing_dialog(self):

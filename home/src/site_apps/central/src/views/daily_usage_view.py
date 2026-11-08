@@ -852,11 +852,12 @@ def setup_daily_usage_tab_impl(self):
             return
         for i in range(1, 11):
             target = getattr(self, f'worker_group{i}')
-            if target is source or not target.participation_var.get() or not target.get_worker():
+            if not target.participation_var.get() or not target.get_worker():
                 continue
-            target.cb_shift.set(source.cb_shift.get())
-            target.ent_worktime.set(source.ent_worktime.get())
-            target.set_meal(source.get_meal())
+            if target is not source:
+                target.cb_shift.set(source.cb_shift.get())
+                target.ent_worktime.set(source.ent_worktime.get())
+                target.set_meal(source.get_meal())
             self.calculate_and_update_ot(target.ent_worktime.get(), target.ent_worktime)
         update_crew_summary()
 
@@ -1420,6 +1421,8 @@ def update_daily_usage_view_impl(self):
     has_unit = False         # [NEW]
     
     
+    from site_apps.central.src.views.memo_details import daily_memo_lookup, record_notes
+    memo_lookup = daily_memo_lookup(self.daily_usage_df)
     current_date = None
     
     # Seen sets for deduping
@@ -1580,18 +1583,12 @@ def update_daily_usage_view_impl(self):
                 ots = str(entry.get(ok, '')).strip()
                 wts = str(entry.get(wk, '')).strip()
                 
-                if ots and ots not in ('nan', '0.0', '0'):
+                if wts or (ots and ots not in ('nan', '0.0', '0')):
                     try:
-                        if '(' in ots and '원)' in ots:
-                            h_p = float(ots.split('시간')[0])
-                            a_p = int(_re.sub(r'[^0-9]', '', ots.split('(')[1].split('원')[0]))
-                        elif ots.replace(',', '').isdigit():
-                            a_p = int(ots.replace(',', ''))
-                            h_p, _ = self._calculate_ot_from_worktime(wts, pd.to_datetime(entry.get('Date', datetime.datetime.now())))
-                        else:
-                            a_p = 0
-                            h_p = self._parse_ot_hours(ots)
-                            
+                        from site_apps.central.src.services.ot_calculator import ot_breakdown
+                        result = ot_breakdown(wts, entry.get('Date'), ots)
+                        h_p, a_p = result['hours'], result['amount']
+
                         # Activity-based hours: Max of all workers in this row
                         row_ot_hours = row_ot_hours + h_p if has_job_labor else max(row_ot_hours, h_p)
                         # Cost-based amounts: Always sum across all workers
@@ -1782,6 +1779,9 @@ def update_daily_usage_view_impl(self):
         while len(v_list) < len(tree_cols): v_list.append("")
         
         for c_idx, c_name in enumerate(tree_cols):
+            if c_name == '메모':
+                note, daily_memo = record_notes(entry, memo_lookup)
+                v_list[c_idx] = '📝' if note or daily_memo else ''
             if c_name in ('보조장비', '원본매수', '재검사매수', '참여인원', '참여시간', '참여OT'):
                 value = entry.get(c_name, '')
                 v_list[c_idx] = '' if pd.isna(value) else value
@@ -1934,7 +1934,7 @@ def update_daily_usage_view_impl(self):
         
         # [OPTIMIZED] 목적에 맞춘 추천 컬럼 정렬 순서 (원가 세부항목 대신 단가·검사금액으로 통합)
         preferred_order = [
-            '날짜', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고'
+            '날짜', '메모', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고'
         ]
 
         # manual_set: columns user explicitly selected via column manager
@@ -1966,6 +1966,9 @@ def update_daily_usage_view_impl(self):
             final_visible = [c for c in manual_visible_list if c in all_cols]
         else:
             final_visible = [c for c in preferred_order if c in all_cols]
+
+        if '메모' in all_cols and '메모' not in final_visible:
+            final_visible.insert(final_visible.index('날짜') + 1 if '날짜' in final_visible else 0, '메모')
 
         # [STABILITY] Clear the Treeview's displayed columns
         self.daily_usage_tree['displaycolumns'] = final_visible

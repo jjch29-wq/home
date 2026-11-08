@@ -4,43 +4,18 @@ from datetime import datetime
 import re
 from site_apps.central.src.utils.helpers import *
 
-def calculate_current_stock_impl(self, mat_id):
-    """Calculate current stock for a material based on transactions (fully robust version)"""
-    # 1. Normalize the target mat_id to clean string
-    str_mat_id = re.sub(r'\.0$', '', str(mat_id).strip())
-    if not str_mat_id or str_mat_id.lower() == 'nan':
+def calculate_current_stock_impl(self, mat_id, lookups=None):
+    """Use the same stock calculation as the inventory list."""
+    from site_apps.central.src.models.stock_calculation import build_stock_lookups, stock_breakdown
+    target = self.normalize_id(mat_id)
+    if not target or self.materials_df.empty:
         return 0.0
-
-    # Helper to get normalized MaterialID series
-    def get_norm_series(df):
-        return df['MaterialID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-
-    # 2. Get Transaction Sum
-    net_trans_qty = 0.0
-    if not self.transactions_df.empty:
-        mat_trans = self.transactions_df[get_norm_series(self.transactions_df) == str_mat_id]
-        net_trans_qty = float(mat_trans['Quantity'].sum()) if not mat_trans.empty else 0.0
-    
-    # 3. Get Base Quantity and Model Name from Materials Master
-    stored_qty = 0.0
-    is_chemical_group = False
-    if not self.materials_df.empty:
-        mat_rows = self.materials_df[get_norm_series(self.materials_df) == str_mat_id]
-        if not mat_rows.empty:
-            mat = mat_rows.iloc[0]
-            model_name = str(mat.get('모델명', '')).strip().upper()
-            if model_name == 'MT약품' and str(mat.get('관리단위', '')).strip().upper() != 'EA':
-                # Only exclude non-consumables (usually EA units are for equipment)
-                # If it's a chemical but mislabeled as MT약품, we might still want to track it if it has a non-EA unit.
-                # However, safer for now is to just fix normalization first. 
-                # Let's keep the user's specific request but fix the ID matching below.
-                return 0.0
-            
-            val = mat.get('수량', 0)
-            try: stored_qty = float(str(val).replace(',', '')) if pd.notna(val) else 0.0
-            except: stored_qty = 0.0
-            
-    return stored_qty + net_trans_qty
+    matches = self.materials_df[self.materials_df['MaterialID'].apply(self.normalize_id) == target]
+    if matches.empty:
+        return 0.0
+    if lookups is None:
+        lookups = build_stock_lookups(self)
+    return stock_breakdown(self, matches.iloc[0], lookups)['current_stock']
 
 
 def _sync_dataframe_schema_impl(self, df, sheet_name):

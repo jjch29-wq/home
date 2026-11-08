@@ -256,48 +256,32 @@ def on_recent_record_click_impl(self, event):
             if record_idx in self.daily_usage_df.index:
                 record = self.daily_usage_df.loc[record_idx].to_dict()
                 # Use existing method to populate the form
-                self.load_daily_usage_to_form(record)
+                from site_apps.central.src.views.daily_date_context import load_recent_record
+                if not load_recent_record(self, record):
+                    return
+                from site_apps.central.src.views.daily_record_save import remember_source
+                remember_source(self, record_idx)
                 print(f"DEBUG: Loaded recent record {record_idx} to form.")
         except Exception as e:
             print(f"DEBUG: Error loading recent record: {e}")
 
 
 def _on_daily_usage_select_impl(self, event):
-    """[NEW] Update Note Detail Area and load record to form when a row is selected in Site tab"""
-    if not hasattr(self, 'daily_usage_tree'): return
-    
+    """Load the selected record into the entry form."""
+    if not hasattr(self, 'daily_usage_tree'):
+        return
     selection = self.daily_usage_tree.selection()
     if not selection:
-        if hasattr(self, 'txt_daily_note_detail'):
-            self.txt_daily_note_detail.config(state='normal')
-            self.txt_daily_note_detail.delete('1.0', tk.END)
-            self.txt_daily_note_detail.config(state='disabled')
         return
-        
-    item = selection[0]
-    tags = self.daily_usage_tree.item(item, 'tags')
+    tags = self.daily_usage_tree.item(selection[0], 'tags')
     if tags and tags[0].isdigit():
         idx = int(tags[0])
         if idx in self.daily_usage_df.index:
-            row_data = self.daily_usage_df.loc[idx].to_dict()
-            self.load_daily_usage_to_form(row_data)
-
-    # Update note detail area as before
-    if hasattr(self, 'txt_daily_note_detail'):
-        values = self.daily_usage_tree.item(item, 'values')
-        if values:
-            try:
-                cols = self.daily_usage_tree['columns']
-                if '비고' in cols:
-                    note_idx = list(cols).index('비고')
-                    if note_idx < len(values):
-                        note_text = values[note_idx]
-                        self.txt_daily_note_detail.config(state='normal')
-                        self.txt_daily_note_detail.delete('1.0', tk.END)
-                        self.txt_daily_note_detail.insert(tk.END, note_text)
-                        self.txt_daily_note_detail.config(state='disabled')
-            except Exception as e:
-                print(f"Detail view error: {e}")
+            from site_apps.central.src.views.daily_date_context import load_recent_record
+            if not load_recent_record(self, self.daily_usage_df.loc[idx].to_dict()):
+                return
+            from site_apps.central.src.views.daily_record_save import remember_source
+            remember_source(self, idx)
 
 
 def on_budget_tree_select_impl(self, event):

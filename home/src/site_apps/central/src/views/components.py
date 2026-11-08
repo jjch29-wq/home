@@ -12,8 +12,8 @@ from site_apps.central.src.utils.helpers import normalize_id, enable_column_resi
 class DraggableMessagebox:
     """A custom draggable replacements for standard tkinter.messagebox"""
     @staticmethod
-    def _show(type, title, message):
-        root = tk._default_root
+    def _show(type, title, message, parent=None, **kwargs):
+        root = parent or tk._default_root
         if not root:
             # Fallback to standard if no root exists yet
             if type == "error": return messagebox.showerror_orig(title, message)
@@ -105,11 +105,11 @@ class DraggableMessagebox:
         root.wait_window(dialog)
 
     @staticmethod
-    def showerror(title, message): DraggableMessagebox._show("error", title, message)
+    def showerror(title, message, **kwargs): DraggableMessagebox._show("error", title, message, **kwargs)
     @staticmethod
-    def showwarning(title, message): DraggableMessagebox._show("warning", title, message)
+    def showwarning(title, message, **kwargs): DraggableMessagebox._show("warning", title, message, **kwargs)
     @staticmethod
-    def showinfo(title, message): DraggableMessagebox._show("info", title, message)
+    def showinfo(title, message, **kwargs): DraggableMessagebox._show("info", title, message, **kwargs)
 
 
 class WorkerCompositeWidget(ttk.Frame):

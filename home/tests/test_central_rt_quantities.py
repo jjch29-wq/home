@@ -229,7 +229,7 @@ class RtQuantitiesTests(unittest.TestCase):
         tree = ast.parse(source.read_text(encoding='utf-8'))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'DailyWorkLogTab')
         methods = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in
-                   ('_rt_context', '_validate_rt_rows', 'get_current_data', 'save_current_history')]
+                   ('_rt_context', '_validate_rt_rows', 'get_current_data', 'save_current_history', '_capture_log_input')]
         namespace = {'rt_counts': rt_counts, 'sync_rt_widgets': sync_rt_widgets, 'messagebox': Mock(),
                      'widget_rt_values': widget_rt_values, 'resolve_rt_row': resolve_rt_row}
         module = ast.Module(body=[ast.ClassDef(name='App', bases=[], keywords=[], body=methods, decorator_list=[])], type_ignores=[])
@@ -252,6 +252,7 @@ class RtQuantitiesTests(unittest.TestCase):
         self.assertEqual(saved['ndt_results'][0]['RT_OR'], '3')
         self.assertEqual(saved['ndt_results'][0]['RT_RE'], '1')
         self.assertEqual(saved['process_photos'], [{'file': 'photo.jpg'}])
+        self.assertEqual(app._log_baseline, app._capture_log_input())
 
 
 if __name__ == '__main__':

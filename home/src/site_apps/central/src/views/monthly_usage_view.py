@@ -215,9 +215,11 @@ def update_monthly_usage_view_impl(self):
         
     # [NEW] Clear detached monthly views if open
     if 'monthly' in self.detached_windows:
-        p_tree = self.detached_windows['monthly']['tree']
-        for item in p_tree.get_children():
-            p_tree.delete(item)
+        detached = self.detached_windows['monthly']
+        for key in ('tree', 'site_tree', 'worker_tree'):
+            p_tree = detached[key]
+            for item in p_tree.get_children():
+                p_tree.delete(item)
     
     # Get filter values
     filter_year = self.cb_filter_year.get()
@@ -265,9 +267,10 @@ def update_monthly_usage_view_impl(self):
 
     if filter_material != '전체':
         # Get matching MaterialIDs for the selected item name
-        matching_ids = self.materials_df[self.materials_df['품목명'] == filter_material]['MaterialID'].tolist()
+        matching_ids = {self.normalize_id(value) for value in self.materials_df[self.materials_df['품목명'] == filter_material]['MaterialID'].tolist()}
+        matching_ids.discard('')
         if matching_ids:
-            df = df[df['MaterialID'].isin(matching_ids)]
+            df = df[df['MaterialID'].apply(self.normalize_id).isin(matching_ids)]
         else:
             # If no material found in master list, clear and return (though this shouldn't happen with sync)
             return
@@ -433,35 +436,24 @@ def update_monthly_usage_view_impl(self):
                 raw_workers.append(u_v)
                 w_count += 1
             
-            if o_c:
-                ots = str(row.get(o_c, '')).strip()
-                if ots and ots not in ('nan', '0.0', '0'):
-                    try:
-                        # Use same parsing logic as Site Tab
-                        if '(' in ots and '원)' in ots:
-                            h_p = float(ots.split('시간')[0])
-                            amt_str = _re.sub(r'[^0-9]', '', ots.split('(')[1].split('원')[0])
-                            a_p = int(amt_str) if amt_str else 0
-                        elif ots.replace(',', '').isdigit():
-                            a_p = int(ots.replace(',', ''))
-                            wt_v = str(row.get(w_c, '')).strip() if w_c else ''
-                            h_p, _ = self._calculate_ot_from_worktime(wt_v, pd.to_datetime(row.get('Date', pd.Timestamp.now())))
-                        else:
-                            a_p = self.calculate_ot_amount(ots)
-                            h_p = self._parse_ot_hours(ots)
-                        
-                        h_max = max(h_max, h_p)
-                        a_sum += a_p
-                    except: pass
+            if u_v:
+                from site_apps.central.src.services.ot_calculator import ot_breakdown
+                result = ot_breakdown(row.get(w_c, '') if w_c else '', row.get('Date'),
+                                      row.get(o_c, '') if o_c else '')
+                h_max += result['hours']
+                a_sum += result['amount']
 
-        # 2. Deduping Key (Date, Site, WorkTime, Material)
-        # [REFINED] Exclude workers from the key to correctly catch records split across rows.
+        # Split rows share labor only when the participating crew and shifts match.
         n_date = self._safe_format_datetime(row.get('Date', ''), '%Y-%m-%d')
         n_site = str(row.get('Site', '')).strip()
         c_worktime = str(row.get('WorkTime', '')).strip()
         n_mat = str(row.get('MaterialID', ''))
         
-        content_key = (n_date, n_site, c_worktime, n_mat)
+        crew = tuple(sorted((self.clean_nan(row.get(u_c, '')),
+                             self.clean_nan(row.get(w_c, '')) if w_c else '')
+                            for u_c, w_c, o_c in matched_pairs
+                            if self.clean_nan(row.get(u_c, ''))))
+        content_key = (n_date, n_site, c_worktime, crew)
         
         e_t_raw = row.get('EntryTime', '')
         try:
@@ -471,10 +463,11 @@ def update_monthly_usage_view_impl(self):
                 t_key = str(e_t_raw).split('.')[0].strip() if e_t_raw else ""
         except: t_key = ""
         
-        is_dup = (t_key and t_key in seen_m_times) or (content_key in seen_m_contents)
+        time_key = (n_date, n_site, t_key, crew)
+        is_dup = (t_key and time_key in seen_m_times) or (content_key in seen_m_contents)
         
         if not is_dup:
-            if t_key: seen_m_times.add(t_key)
+            if t_key: seen_m_times.add(time_key)
             seen_m_contents.add(content_key)
             
             # Primary row: return full values
@@ -673,37 +666,15 @@ def update_monthly_usage_view_impl(self):
                 user_val = str(entry.get(u_c, '')).strip()
                 has_worker = user_val and user_val != 'nan'
                 
-                if has_worker and val and val != 'nan' and val != '0.0':
-                    # Handle multiple OTs if joined by aggregation separator ' | '
-                    sub_vals = [v.strip() for v in val.split(' | ') if v.strip()]
-                    parsed_ots = []
-                    for v_str in sub_vals:
-                        v_clean = v_str.replace(',', '')
-                        if v_clean.isdigit() and int(v_clean) > 100:
-                            parsed_ots.append(f"{int(v_clean):,}")
-                        elif '(' in v_str and '원)' in v_str:
-                            try:
-                                amount_str = v_str.split('(')[1].split('원')[0].replace(',', '').strip()
-                                amount = int(float(amount_str))
-                                parsed_ots.append(f"{amount:,}")
-                            except: pass
-                        else:
-                            try:
-                                amt = self.calculate_ot_amount(v_str)
-                                if amt > 0: parsed_ots.append(f"{amt:,}")
-                                elif any(x in v_str for x in [':', '시', '시간', '~', '-']): pass 
-                                else: parsed_ots.append(v_str)
-                            except: pass
-                    
-                    ot_values.append(", ".join(parsed_ots))
-                    try:
-                        # [FIX] Sum ALL values accurately
-                        for p_val in parsed_ots:
-                            try:
-                                amt = int(p_val.replace(',', ''))
-                                total_indiv_ot_amounts[i-1] += amt
-                            except: pass
-                    except: pass
+                if has_worker:
+                    from site_apps.central.src.services.ot_calculator import ot_breakdown
+                    originals = df[(df['Year'] == entry['Year']) & (df['Month'] == entry['Month']) &
+                                   (df['Site'] == entry['Site']) & (df['검사방법'] == entry['검사방법']) &
+                                   (df['_MatGroup'] == entry['_MatGroup'])]
+                    amount = sum(ot_breakdown(r.get(matched_pairs[i-1][1], ''), r.get('Date'), r.get(o_c, ''))['amount']
+                                 for _, r in originals.iterrows() if not r.get('_is_m_dup', False))
+                    ot_values.append(f'{amount:,}' if amount else '')
+                    total_indiv_ot_amounts[i-1] += amount
                 else:
                     ot_values.append('')
             else:

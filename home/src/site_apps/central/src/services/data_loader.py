@@ -528,86 +528,60 @@ def load_data_impl(self):
         print(f"DEBUG: Initial refresh_inquiry_filters failed: {e}")
 
 
-def save_data_impl(self):
+def save_data_impl(self, require_primary=True):
+    """Serialize a complete workbook beside the original before replacing it."""
+    import tempfile
+    temp_path = None
     try:
-        # [STABILITY] Ensure MaterialID is safely normalized (numeric where possible, otherwise original string)
-        def normalize_id(val):
-            if pd.isna(val) or str(val).strip() == '': return val
-            try:
-                s_val = str(val).strip()
-                # Handle "10001.0" or "10001"
-                num = float(s_val)
-                if num == int(num): return int(num)
-                return num
-            except:
-                # Keep as string (for PAUT/manual names)
-                return str(val).strip()
-
-        for df_name, df in [('Materials', self.materials_df), ('Transactions', self.transactions_df), 
-                            ('Monthly', self.monthly_usage_df), ('Daily', self.daily_usage_df)]:
-            if df is not None and 'MaterialID' in df.columns:
-                df['MaterialID'] = df['MaterialID'].apply(normalize_id)
-            if df is not None and 'Active' in df.columns:
-                df['Active'] = pd.to_numeric(df['Active'], errors='coerce').fillna(1).astype(int)
-        
-        # [STABILITY] Robust saving with Retry and Backup-on-Fail logic
-        max_retries = 3
-        retry_delay = 0.5
-        
-        save_success = False
-        last_err = None
-        
-        for attempt in range(max_retries):
-            try:
-                # Explicitly check for write permission/locks
-                if os.path.exists(self.db_path):
-                    with open(self.db_path, 'a'): pass
-                
-                with pd.ExcelWriter(self.db_path, engine='openpyxl') as writer:
-                    self.materials_df.to_excel(writer, sheet_name='Materials', index=False)
-                    self.transactions_df.to_excel(writer, sheet_name='Transactions', index=False)
-                    self.monthly_usage_df.to_excel(writer, sheet_name='MonthlyUsage', index=False)
-                    self.daily_usage_df.to_excel(writer, sheet_name='DailyUsage', index=False)
-                    self.budget_df.to_excel(writer, sheet_name='Budget', index=False)
-                    if hasattr(self, 'settings_df'):
-                        self.settings_df.to_excel(writer, sheet_name='Settings', index=False)
-                
-                save_success = True
-                break # Success!
-            except PermissionError as pe:
-                last_err = pe
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay) # Wait and try again
-                    continue
-                else:
-                    # Final attempt failed due to lock. Try saving as Conflict Backup.
-                    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                    conflict_path = self.db_path.replace('.xlsx', f'_Conflict_{ts}.xlsx')
+        frames = {}
+        for sheet, attr in (('Materials', 'materials_df'), ('Transactions', 'transactions_df'),
+                            ('MonthlyUsage', 'monthly_usage_df'), ('DailyUsage', 'daily_usage_df'),
+                            ('Budget', 'budget_df'), ('Settings', 'settings_df')):
+            if not hasattr(self, attr):
+                continue
+            frame = getattr(self, attr).copy(deep=True)
+            if 'MaterialID' in frame:
+                def normalize(value):
+                    if pd.isna(value) or not str(value).strip(): return value
                     try:
-                        with pd.ExcelWriter(conflict_path, engine='openpyxl') as writer:
-                            self.materials_df.to_excel(writer, sheet_name='Materials', index=False)
-                            self.transactions_df.to_excel(writer, sheet_name='Transactions', index=False)
-                            self.monthly_usage_df.to_excel(writer, sheet_name='MonthlyUsage', index=False)
-                            self.daily_usage_df.to_excel(writer, sheet_name='DailyUsage', index=False)
-                            self.budget_df.to_excel(writer, sheet_name='Budget', index=False)
-                            if hasattr(self, 'settings_df'):
-                                self.settings_df.to_excel(writer, sheet_name='Settings', index=False)
-                        
-                        self.show_error_dialog("데이터 저장 지연/충돌", 
-                            f"원본 파일('{os.path.basename(self.db_path)}')이 다른 프로그램에 의해 잠겨 있습니다.\n\n"
-                            f"데이터 유실 방지를 위해 다음 경로에 임시 저장되었습니다:\n{os.path.basename(conflict_path)}\n\n"
-                            f"동기화 중 오류일 수 있으니, 나중에 수동으로 이름을 변경하거나 파일을 병합해 주세요.")
-                        return True # Technically "saved" somewhere
-                    except Exception as e2:
-                         raise Exception(f"원본 파일 잠김 및 백업 저장 실패: {e2}") from pe
-            except Exception as e:
-                raise e # Other errors
-
-        return save_success
-    except Exception as e:
-        import traceback
-        err_detail = traceback.format_exc()
-        self.show_error_dialog("데이터 저장 실패", f"데이터를 저장하는데 실패했습니다:\n{e}\n\n파일이 열려있다면 닫고 다시 시도해주세요.")
+                        number = float(str(value).replace(',', ''))
+                        return int(number) if number.is_integer() else number
+                    except (ValueError, TypeError): return str(value).strip()
+                frame['MaterialID'] = frame['MaterialID'].map(normalize)
+            if 'Active' in frame:
+                frame['Active'] = pd.to_numeric(frame['Active'], errors='coerce').fillna(1).astype(int)
+            frames[sheet] = frame
+        target = os.path.abspath(self.db_path)
+        with tempfile.NamedTemporaryFile(prefix='.material-save-', suffix='.xlsx',
+                                         dir=os.path.dirname(target), delete=False) as temp:
+            temp_path = temp.name
+        with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
+            for sheet, frame in frames.items():
+                frame.to_excel(writer, sheet_name=sheet, index=False)
+        for attempt in range(3):
+            try:
+                os.replace(temp_path, target)
+                temp_path = None
+                return True
+            except PermissionError:
+                if attempt < 2:
+                    time.sleep(0.5)
+                    continue
+                stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                conflict = os.path.splitext(target)[0] + f'_Conflict_{stamp}.xlsx'
+                os.replace(temp_path, conflict)
+                temp_path = None
+                self.show_error_dialog('데이터 저장 지연/충돌',
+                    f'원본 파일을 교체하지 못했습니다. 임시 백업: {conflict}\n'
+                    '원본 파일을 닫은 뒤 다시 저장해주세요.')
+                return False # A conflict copy is not a successful save of the primary workbook.
+    except Exception as error:
+        self.show_error_dialog('데이터 저장 실패',
+            f'원본 파일은 교체하지 않았습니다.\n{error}\n파일 상태를 확인하고 다시 저장해주세요.')
         return False
-
-
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass

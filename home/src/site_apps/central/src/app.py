@@ -793,7 +793,7 @@ class MaterialManager:
         self.save_data()
         messagebox.showinfo("마이그레이션 완료", "기존 데이터가 새로운 형식으로 변환되었습니다.")
 
-    def register_new_material(self, name, model='', sn='', **kwargs):
+    def register_new_material(self, name, model='', sn='', persist=True, **kwargs):
         """Helper to register a new material in the master list summerly"""
         try:
             # Robustly calculate NEW ID even if mixed types or NaNs exist
@@ -828,8 +828,9 @@ class MaterialManager:
             if k in new_mat: new_mat[k] = v
             
         self.materials_df = pd.concat([self.materials_df, pd.DataFrame([new_mat])], ignore_index=True)
-        self.save_data()
-        self.update_material_combo()
+        if persist:
+            self.save_data()
+            self.update_material_combo()
         return new_id
         
         self.save_data()
@@ -1245,12 +1246,14 @@ class MaterialManager:
     
     def show_low_stock(self):
         """Show items with low stock (less than their specific reorder point)"""
+        from site_apps.central.src.models.stock_calculation import build_stock_lookups
+        stock_lookups = build_stock_lookups(self)
         low_stock_items = []
         for _, mat in self.materials_df.iterrows():
             if mat.get('Active', 1) == 0:
                 continue
                 
-            current = self.calculate_current_stock(mat['MaterialID'])
+            current = self.calculate_current_stock(mat['MaterialID'], lookups=stock_lookups)
             reorder_point = mat.get('재고하한', 10)
             if pd.isna(reorder_point) or reorder_point <= 0:
                 reorder_point = 10 # Default fallback
@@ -2948,7 +2951,7 @@ class MaterialManager:
                 self.inout_tree['displaycolumns'] = ('날짜', '현장', '구분', '품목명', '장비명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', '비고')
 
             # Sort and display
-            df_sorted = df_unified.sort_values(by='Date', ascending=False).head(500)
+            df_sorted = df_unified.sort_values(by='Date', ascending=False)
             
             for idx, row in df_sorted.iterrows():
                 try:
@@ -3025,39 +3028,51 @@ class MaterialManager:
             messagebox.showwarning("선택 오류", "삭제할 기록을 선택해주세요.")
             return
             
-        if not messagebox.askyesno("삭제 확인", "선택한 기록을 삭제하시겠습니까?\n(삭제 시 재고 계산에 즉시 반영됩니다.)"):
+        targets = []
+        try:
+            for item in selection:
+                tags = self.inout_tree.item(item, 'tags')
+                if len(tags) < 2 or tags[1] not in ('TRANS', 'DAILY'):
+                    raise ValueError('기록의 원본 정보를 확인할 수 없습니다.')
+                idx, source = int(tags[0]), tags[1]
+                frame = self.transactions_df if source == 'TRANS' else self.daily_usage_df
+                if idx not in frame.index:
+                    raise ValueError('기록이 변경되었습니다. 새로고침 후 다시 선택해주세요.')
+                targets.append((source, idx))
+        except (ValueError, TypeError) as error:
+            messagebox.showwarning('삭제 오류', str(error), parent=self.root)
             return
-            
-        for item in selection:
-            tags = self.inout_tree.item(item, 'tags')
-            if len(tags) >= 2:
-                idx = int(tags[0])
-                source = tags[1]
-                
-                if source == 'TRANS':
-                    if idx in self.transactions_df.index:
-                        self.transactions_df = self.transactions_df.drop(idx)
-                elif source == 'DAILY':
-                    if idx in self.daily_usage_df.index:
-                        self.daily_usage_df = self.daily_usage_df.drop(idx)
-                        # Optional: also delete from daily reports if needed
-                        # But for now, removing from DailyUsage sheet is primary
-        
-        self.save_data()
+        daily_count = len({idx for source, idx in targets if source == 'DAILY'})
+        prompt = '선택한 기록을 삭제할까요? 삭제 시 재고 계산에 반영됩니다.'
+        if daily_count:
+            prompt += (f'\n\n현장 사용 {daily_count}건은 원본 일일 작업 기록 전체가 삭제됩니다.'
+                       '\n검사량·작업자·작업시간·메모도 함께 삭제되어 조회 및 집계에 영향을 줍니다.')
+        if not messagebox.askyesno('삭제 확인', prompt, parent=self.root):
+            return
+        old_transactions = self.transactions_df.copy(deep=True)
+        old_daily = self.daily_usage_df.copy(deep=True)
+        try:
+            self.transactions_df = self.transactions_df.drop(
+                list({idx for source, idx in targets if source == 'TRANS'}))
+            self.daily_usage_df = self.daily_usage_df.drop(
+                list({idx for source, idx in targets if source == 'DAILY'}))
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+        except Exception as error:
+            self.transactions_df = old_transactions
+            self.daily_usage_df = old_daily
+            messagebox.showerror('삭제 저장 실패', f'{error}\n화면의 원본 기록을 복원했습니다.', parent=self.root)
+            return
         self.update_transaction_view()
         self.update_stock_view()
         
-        # [FIX] Automatically refresh the Site tab and Query tab
+        if daily_count:
+            self.update_recent_entries_view()
+            self.update_daily_usage_view()
+            self.update_monthly_usage_view()
         if hasattr(self, 'budget_view_tree'):
             self.update_budget_site_view()
-        if hasattr(self, 'query_tree') and hasattr(self, 'cb_filter_year'):
-            try:
-                y = int(self.cb_filter_year.get().replace('년', ''))
-                m = int(self.cb_filter_month.get().replace('월', ''))
-                self.update_monthly_usage_view(y, m)
-            except:
-                pass
-                
+
         messagebox.showinfo("완료", "거래 기록이 삭제되었습니다.")
 
     def on_material_selected(self, *args, **kwargs):
@@ -3625,17 +3640,38 @@ class MaterialManager:
         """Export the detailed In/Out history to Excel summerly"""
         history_data = []
         columns = [self.inout_tree.heading(col, 'text') for col in self.inout_tree['columns']]
-        
+
         for item in self.inout_tree.get_children():
             values = self.inout_tree.item(item, 'values')
             row_data = {}
             for i, col in enumerate(columns):
                 row_data[col] = values[i] if i < len(values) else ''
             history_data.append(row_data)
-        
+
         if not history_data:
             messagebox.showinfo("알림", "내보낼 데이터가 없습니다.")
             return
+
+        # Prepare filename
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        filename = f"입출고내역_{today}.xlsx"
+
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            initialfile=filename,
+            title="입출고 내역 저장",
+            filetypes=[("Excel files", "*.xlsx")]
+        )
+
+        if save_path:
+            try:
+                history_df = pd.DataFrame(history_data)
+                history_df = self.clean_df_export(history_df)
+                self.save_df_to_excel_autofit(history_df, save_path, "입출고내역")
+                messagebox.showinfo("완료", "입출고 내역이 저장되었습니다.")
+            except Exception as e:
+                messagebox.showerror("오류", f"저장 실패: {e}")
+
 
     def _migrate_worktimes(self, input_list):
         """Helper to standardize work times with 익일 marker and sort logically"""
@@ -3669,26 +3705,6 @@ class MaterialManager:
 
         return sorted(list(processed_times), key=time_sort_key)
         
-        # Prepare filename
-        today = datetime.datetime.now().strftime('%Y%m%d')
-        filename = f"입출고내역_{today}.xlsx"
-        
-        save_path = filedialog.asksaveasfilename(
-            defaultextension=".xlsx",
-            initialfile=filename,
-            title="입출고 내역 저장",
-            filetypes=[("Excel files", "*.xlsx")]
-        )
-        
-        if save_path:
-            try:
-                history_df = pd.DataFrame(history_data)
-                history_df = self.clean_df_export(history_df)
-                self.save_df_to_excel_autofit(history_df, save_path, "입출고내역")
-                messagebox.showinfo("완료", "입출고 내역이 저장되었습니다.")
-            except Exception as e:
-                messagebox.showerror("오류", f"저장 실패: {e}")
-    
     def export_all(self):
         save_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
@@ -4124,7 +4140,7 @@ class MaterialManager:
             temp_df['Date'] = df_norm['Date'] if 'Date' in df_norm.columns else None
             temp_df['Site'] = df_norm['Site'] if 'Site' in df_norm.columns else ''
             temp_df['MaterialID'] = df_norm['MaterialID'] if 'MaterialID' in df_norm.columns else ''
-            temp_df['WorkTime'] = df_norm['WorkTime'] if 'WorkTime' in df_norm.columns else '' # Base worktime for deduping
+            temp_df['WorkTime'] = df_norm[wc] if wc else '' # This worker's own shift
             
             worker_data.append(temp_df)
         
@@ -4145,68 +4161,19 @@ class MaterialManager:
                     w = str(row.get('WorkTime', '')).strip()
                     m = str(row.get('MaterialID', '')).strip()
                     un = str(row.get('WorkerName', '')).strip()
-                    return (d, s, w, m, un)
+                    return (d, s, w, un)
                 
                 worker_df['_dedupe_key'] = worker_df.apply(make_worker_key, axis=1)
                 # Keep the first instance of a worker in any given activity unit
                 worker_df = worker_df.drop_duplicates(subset=['_dedupe_key']).drop(columns=['_dedupe_key'])
             
             if not worker_df.empty:
-                # [FIXED] Use row['Date'] if available, otherwise fallback to first available date in subset
-                def get_date_val(row):
-                    if 'Date' in row and pd.notna(row['Date']): return row['Date']
-                    try: return df.iloc[0]['Date']
-                    except: return None
-
-                # [NEW] Enhanced OT hour extraction: check WorkTime if OTValue is only amount
-                def get_ot_hours_robust(row):
-                    ot_val = str(row['OTValue']).strip()
-                    if not ot_val or ot_val == '0': return 0.0
-                    
-                    # If it's already "N시간...", parse it
-                    if '시간' in ot_val:
-                        return self._parse_ot_hours(ot_val)
-                    
-                    # If it's just an amount, calculate hours from WorkTime
-                    if ot_val.replace(',', '').isdigit() and int(ot_val.replace(',', '')) > 100:
-                        wt_val = row['ShiftType']
-                        date_val = get_date_val(row)
-                        h, _ = self._calculate_ot_from_worktime(wt_val, date_val)
-                        return h
-                    
-                    return self._parse_ot_hours(ot_val)
-
-                worker_df['OT_H'] = worker_df.apply(get_ot_hours_robust, axis=1)
-                
-                # Split calculation also needs to be robust
-                def get_split_robust(row):
-                    ot_val = str(row['OTValue']).strip()
-                    date_val = get_date_val(row)
-                    if '시간' in ot_val or not (ot_val.replace(',', '').isdigit() and int(ot_val.replace(',', '')) > 100):
-                        return self._calculate_split_ot_hours(ot_val, date_val)
-                    else:
-                        # Recalculate from WorkTime
-                        wt_val = row['ShiftType']
-                        
-                        # We need the simulation logic from _calculate_split_ot_hours but using wt_val
-                        # Let's use a temporary string that _calculate_split_ot_hours can parse
-                        h, _ = self._calculate_ot_from_worktime(wt_val, date_val)
-                        fake_ot_str = f"{h}시간 ({ot_val}원)"
-                        # Check start hour from wt_val for range logic
-                        marker_pattern = MARKER_PATTERN
-                        clean_wt = marker_pattern.sub('', str(wt_val)).strip()
-                        if '~' in clean_wt:
-                            start_time = clean_wt.split('~')[0]
-                            fake_ot_str = f"{start_time}~{h}시간 ({ot_val}원)"
-                        
-                        return self._calculate_split_ot_hours(fake_ot_str, date_val)
-
-                # Now returns 3 values (day, night, holiday_dawn)
-                worker_df[['OT_H_Day', 'OT_H_Night', 'OT_H_Holiday_Dawn']] = worker_df.apply(
-                    lambda r: pd.Series(get_split_robust(r)), axis=1
-                )
-                worker_df['OT_A'] = worker_df['OTValue'].apply(self.calculate_ot_amount)
-                
+                from site_apps.central.src.services.ot_calculator import ot_breakdown
+                calculated = worker_df.apply(lambda row: ot_breakdown(row['ShiftType'], row['Date'], row['OTValue']), axis=1)
+                for column, key in (('H_Day', 'day'), ('H_Night', 'night'), ('H_Holiday', 'holiday'),
+                                    ('OT_H', 'hours'), ('A_Day', 'day_amount'), ('A_Night', 'night_amount'),
+                                    ('A_Holiday', 'holiday_amount'), ('OT_A', 'amount')):
+                    worker_df[column] = calculated.map(lambda result: result[key])
                 # [FIXED] Parse fractional work counts from ShiftType (e.g., "0.5주간" -> 0.5)
                 def parse_work_count(val):
                     s = str(val).strip()
@@ -4219,37 +4186,6 @@ class MaterialManager:
                     return 1.0
                 
                 worker_df['Count'] = worker_df['ShiftType'].apply(parse_work_count)
-                
-                # [FIXED] Shift types: Automatically treat Saturday/Sunday as Holiday shifts
-                def determine_shift_holiday(row):
-                    s_type = str(row['ShiftType']).strip()
-                    if '휴일' in s_type: return 1.0
-                    d_val = get_date_val(row)
-                    if d_val:
-                        try:
-                            if pd.to_datetime(d_val).weekday() >= 5: return 1.0
-                        except: pass
-                    return 0.0
-
-                worker_df['Shift_Holiday'] = worker_df.apply(determine_shift_holiday, axis=1)
-                worker_df['Shift_Day'] = worker_df['ShiftType'].apply(lambda x: 1.0 if '주간' in str(x) and '휴일' not in str(x) else 0.0)
-                worker_df['Shift_Night'] = worker_df['ShiftType'].apply(lambda x: 1.0 if '야간' in str(x) and '휴일' not in str(x) else 0.0)
-                
-                # If explicit holiday shift, all OT is holiday.
-                # If NOT explicit holiday shift, add the OT_H_Holiday_Dawn (Friday dawn) to holiday hours.
-                worker_df['H_Holiday'] = worker_df.apply(lambda r: r['OT_H'] if r['Shift_Holiday'] > 0 else r['OT_H_Holiday_Dawn'], axis=1)
-                
-                # Calculate amount properly. If it was fully holiday, it's just OT_A.
-                # If it was Friday Dawn, add the calculated dawn hours * 7500 to whatever other OT they had?
-                # Actually, A_Holiday should just be the amount from those hours
-                worker_df['A_Holiday'] = worker_df.apply(lambda r: r['OT_A'] if r['Shift_Holiday'] > 0 else r['OT_H_Holiday_Dawn'] * 7500, axis=1)
-                
-                # For day/night, they only get values if it's NOT a full holiday shift.
-                worker_df['H_Day'] = worker_df.apply(lambda r: r['OT_H_Day'] if r['Shift_Holiday'] == 0 else 0.0, axis=1)
-                worker_df['H_Night'] = worker_df.apply(lambda r: r['OT_H_Night'] if r['Shift_Holiday'] == 0 else 0.0, axis=1)
-                worker_df['A_Day'] = worker_df.apply(lambda r: r['H_Day'] * 4000 if r['Shift_Holiday'] == 0 else 0.0, axis=1)
-                worker_df['A_Night'] = worker_df.apply(lambda r: r['H_Night'] * 5000 if r['Shift_Holiday'] == 0 else 0.0, axis=1)
-
                 # [REVERTED] Back to entry-based count
                 worker_summary = worker_df.groupby('WorkerName').agg({
                     'Count': 'sum',
@@ -4318,7 +4254,7 @@ class MaterialManager:
 
     def apply_worker_shift_hours_to_budget(self):
         """월별 탭의 작업자별 누계(주간/야간/휴일) 시간을 공사실행예산서 특별근무 투입시간에 적용한다."""
-        if not hasattr(self, 'labor_detail_widget'):
+        if not hasattr(self, 'actual_labor_detail_widget'):
             messagebox.showwarning("공사탭 미초기화",
                                    "공사실행예산서 탭을 먼저 열어 초기화하세요.")
             return
@@ -4362,29 +4298,16 @@ class MaterialManager:
                                 "월별 탭에서 조회를 먼저 실행하세요.")
             return
 
-        # LaborCostDetailWidget 특별근무 섹션에 입력
-        ldw = self.labor_detail_widget
-        # 연장근무 ← 주간 OT 시간 합계 / 인원수
-        if worker_count_day > 0:
-            avg_day = total_h_day / worker_count_day
-            ldw.entries["연장근무"]['personnel'].delete(0, 'end')
-            ldw.entries["연장근무"]['personnel'].insert(0, f"{worker_count_day:g}")
-            ldw.entries["연장근무"]['period'].delete(0, 'end')
-            ldw.entries["연장근무"]['period'].insert(0, f"{avg_day:.1f}")
-        # 야간근무 ← 야간 OT 시간 합계
-        if worker_count_night > 0:
-            avg_night = total_h_night / worker_count_night
-            ldw.entries["야간근무"]['personnel'].delete(0, 'end')
-            ldw.entries["야간근무"]['personnel'].insert(0, f"{worker_count_night:g}")
-            ldw.entries["야간근무"]['period'].delete(0, 'end')
-            ldw.entries["야간근무"]['period'].insert(0, f"{avg_night:.1f}")
-        # 휴일근무 ← 휴일 OT 시간 합계
-        if worker_count_holiday > 0:
-            avg_holiday = total_h_holiday / worker_count_holiday
-            ldw.entries["휴일근무"]['personnel'].delete(0, 'end')
-            ldw.entries["휴일근무"]['personnel'].insert(0, f"{worker_count_holiday:g}")
-            ldw.entries["휴일근무"]['period'].delete(0, 'end')
-            ldw.entries["휴일근무"]['period'].insert(0, f"{avg_holiday:.1f}")
+        ldw = self.actual_labor_detail_widget
+        for label, count, hours, rate in (
+                ('연장근무', worker_count_day, total_h_day, 4000),
+                ('야간근무', worker_count_night, total_h_night, 5000),
+                ('휴일근무', worker_count_holiday, total_h_holiday, 7500)):
+            for field, value in (('personnel', count), ('period', hours / max(count, 1)), ('unit_price', rate)):
+                widget = ldw.entries[label][field]
+                widget.delete(0, 'end')
+                widget.insert(0, f'{value:.15g}')
+            ldw._on_input_change(label)
 
         # 계산 반영
         ldw.calculate_all()
@@ -4398,9 +4321,9 @@ class MaterialManager:
 
         messagebox.showinfo("적용 완료",
                             f"특별근무 투입시간 적용 완료!\n"
-                            f"  연장근무: {worker_count_day}명 / {total_h_day:.1f}h (평균 {total_h_day/max(worker_count_day,1):.1f}h/인)\n"
-                            f"  야간근무: {worker_count_night}명 / {total_h_night:.1f}h (평균 {total_h_night/max(worker_count_night,1):.1f}h/인)\n"
-                            f"  휴일근무: {worker_count_holiday}명 / {total_h_holiday:.1f}h (평균 {total_h_holiday/max(worker_count_holiday,1):.1f}h/인)")
+                            f"  연장근무: {worker_count_day}명 / {total_h_day:.15g}h (평균 {total_h_day/max(worker_count_day,1):.15g}h/인)\n"
+                            f"  야간근무: {worker_count_night}명 / {total_h_night:.15g}h (평균 {total_h_night/max(worker_count_night,1):.15g}h/인)\n"
+                            f"  휴일근무: {worker_count_holiday}명 / {total_h_holiday:.15g}h (평균 {total_h_holiday/max(worker_count_holiday,1):.15g}h/인)")
 
     def export_monthly_usage_history(self):
         """Export monthly usage data, site summaries, and worker summaries to a multi-sheet Excel file"""
@@ -5974,73 +5897,46 @@ class MaterialManager:
         return on_recent_record_click_impl(self, *args, **kwargs)
 
     def delete_recent_entry(self, event=None):
-        """최근 기록 테이블에서 선택한 항목을 삭제"""
+        """Delete only selected daily records, retaining unrelated stock transactions."""
         selection = self.tv_recent.selection()
         if not selection:
             return
-            
-        import tkinter.messagebox as messagebox
-        result = messagebox.askyesno("삭제 확인", "선택한 최근 기록을 삭제하시겠습니까?\n(삭제 시 차감되었던 재고도 자동으로 환원됩니다.)")
-        if not result:
-            return
-            
-        indices_to_delete = []
-        for item in selection:
-            tags = self.tv_recent.item(item, 'tags')
-            if tags:
-                try:
-                    df_idx = int(tags[0])
-                    indices_to_delete.append(df_idx)
-                except ValueError:
-                    continue
-                    
-        if not indices_to_delete:
-            return
-            
         try:
-            valid_indices_to_delete = []
-            for idx in indices_to_delete:
-                if idx not in self.daily_usage_df.index:
-                    continue
-                
-                valid_indices_to_delete.append(idx)
-                entry = self.daily_usage_df.loc[idx]
-                site = entry.get('Site', '')
-                usage_date = pd.to_datetime(entry.get('Date'))
-                
-                if not self.transactions_df.empty:
-                    trans_mask = (
-                        (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
-                        (self.transactions_df['Site'].astype(str) == str(site)) &
-                        (self.transactions_df['Type'] == 'OUT') &
-                        (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False, regex=False))
-                    )
-                    self.transactions_df = self.transactions_df[~trans_mask]
-                    
-            if valid_indices_to_delete:
-                self.daily_usage_df = self.daily_usage_df.drop(valid_indices_to_delete)
-                self.daily_usage_df = self.daily_usage_df.reset_index(drop=True)
-            
-            if self.save_data():
-                # messagebox.showinfo("삭제 완료", "기록이 성공적으로 삭제되었습니다.")
-                self.update_daily_usage_view()
-                self.update_recent_entries_view() # Ensure the mini table is updated!
-                self.update_stock_view()
-                self.update_transaction_view()
-                self.refresh_inquiry_filters()
-                
-                # [FIX] Automatically refresh the Site tab and Query tab
-                if hasattr(self, 'budget_view_tree'):
-                    self.update_budget_site_view()
-                if hasattr(self, 'query_tree') and hasattr(self, 'cb_filter_year'):
-                    try:
-                        y = int(self.cb_filter_year.get().replace('년', ''))
-                        m = int(self.cb_filter_month.get().replace('월', ''))
-                        self.update_monthly_usage_view(y, m)
-                    except:
-                        pass
-        except Exception as e:
-            messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
+            indices = set()
+            for item in selection:
+                tags = self.tv_recent.item(item, 'tags')
+                if not tags or int(tags[0]) not in self.daily_usage_df.index:
+                    raise ValueError('기록이 변경되었습니다. 새로고침 후 다시 선택해주세요.')
+                indices.add(int(tags[0]))
+        except (ValueError, TypeError):
+            messagebox.showwarning('삭제 오류', '선택한 기록을 확인할 수 없습니다. 새로고침해주세요.', parent=self.root)
+            return
+        if not messagebox.askyesno('삭제 확인',
+                f'선택한 일일 작업 기록 {len(indices)}건을 삭제할까요?\n'
+                '검사량·작업자·메모가 함께 삭제되고 재고 및 집계에 반영됩니다.\n'
+                '별도 입출고 기록은 유지됩니다.', parent=self.root):
+            return
+        old_daily = self.daily_usage_df.copy(deep=True)
+        old_transactions = self.transactions_df.copy(deep=True)
+        try:
+            # Auto-deduction transactions are already excluded by stock calculation.
+            # Date/site matches cannot identify which daily job created a legacy transaction.
+            self.daily_usage_df = self.daily_usage_df.drop(list(indices))
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+        except Exception as error:
+            self.daily_usage_df = old_daily
+            self.transactions_df = old_transactions
+            messagebox.showerror('삭제 저장 실패', f'{error}\n원본 기록을 복원했습니다.', parent=self.root)
+            return
+        self.update_daily_usage_view()
+        self.update_recent_entries_view()
+        self.update_stock_view()
+        self.update_transaction_view()
+        self.refresh_inquiry_filters()
+        self.update_monthly_usage_view()
+        if hasattr(self, 'budget_view_tree'):
+            self.update_budget_site_view()
 
     def update_recent_entries_view(self):
         """최신 작업일자와 입력시간 순으로 최근 기록 30건을 표시한다."""
@@ -6294,11 +6190,12 @@ class MaterialManager:
         # but we will only show a consolidated '작업자' in 'displaycolumns'.
         # Added '(Full작업자)' for Excel export backup.
         columns = ('날짜', '업체명', '적용코드', '현장', '구분', '검사품명', '성적서번호', '작업자', '작업시간', 'OT1', 'OT2', 'OT3', 'OT4', 'OT5', 'OT6', 'OT7', 'OT8', 'OT9', 'OT10', '장비명', '검사방법', '회사코드', '수량', '단위', '단가', '출장비', '일식', '검사비', 'OT시간', 'OT금액', '품목명', '센터미스', '농도', '마킹미스', '필름마크', '취급부주의', '고객불만', '기타', 'RTK총계', '형광자분', '흑색자분', '백색페인트', '침투제', '세척제', '현상제', '형광침투제', '비고', '입력시간', '차량번호', '주행거리', '차량점검', '차량비고', '(Full작업자)')
+        columns += ('메모',)
         self.daily_usage_tree = ttk.Treeview(list_frame, columns=columns, show='headings',
                                               yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
         # Define display columns - 목적에 최적화된 추천 기본 컬럼 (원가 세부항목 대신 단가·검사금액으로 통합)
-        visible_defaults = ['날짜', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
+        visible_defaults = ['날짜', '메모', '구분', '검사방법', '품목명', '수량', '단위', '단가', '검사비', '작업자', '작업시간', 'OT금액', '장비명', '업체명', '비고']
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
@@ -6325,7 +6222,7 @@ class MaterialManager:
         
         # Column configuration
         col_widths = {
-            '날짜': 105, '구분': 85, '검사방법': 75, '수량': 70, '단위': 45,
+            '날짜': 105, '메모': 55, '구분': 85, '검사방법': 75, '수량': 70, '단위': 45,
             '단가': 85, '검사비': 105,
             '작업자': 150, '작업시간': 130, 'OT금액': 90, '장비명': 130, '업체명': 120, '비고': 180,
             '현장': 90, '검사품명': 100, '적용코드': 90, '성적서번호': 110,
@@ -6352,10 +6249,9 @@ class MaterialManager:
         list_frame.grid_columnconfigure(0, weight=1)
         
         # Auto-save column widths when user resizes columns
-        # [NEW] Bind worker details popup AND Quick Edit dialog to double-click
+        # Worker details remain available on a single click; double-click opens notes.
         self.daily_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.daily_usage_tree), add="+")
-        self.daily_usage_tree.bind("<Double-1>", lambda e: self.show_worker_popup(e, self.daily_usage_tree), add="+")
-        self.daily_usage_tree.bind("<Double-1>", lambda e: self.open_edit_daily_usage_dialog(), add="+")
+        self.daily_usage_tree.bind("<Double-1>", self._show_daily_usage_note)
         
         # [NEW] Enable column reordering via drag & drop
         self.enable_tree_column_drag(self.daily_usage_tree)
@@ -6365,15 +6261,7 @@ class MaterialManager:
             
         self.daily_usage_tree.bind('<ButtonRelease-1>', save_column_widths)
 
-        # [NEW] Note Detail Area for long descriptions
-        detail_frame = ttk.LabelFrame(display_frame, text="상세 비고 (선택된 항목)")
-        detail_frame.pack(fill='x', padx=5, pady=(0, 5))
-        
-        self.txt_daily_note_detail = tk.Text(detail_frame, height=3, font=('Malgun Gothic', 10), wrap='word', bg='#F9F9F9')
-        self.txt_daily_note_detail.pack(fill='both', expand=True, padx=5, pady=5)
-        self.txt_daily_note_detail.config(state='disabled')
-
-        # Selection binding to update detail area
+        # Keep loading the selected record into the entry form.
         self.daily_usage_tree.bind('<<TreeviewSelect>>', self._on_daily_usage_select)
         
         # Optimize treeview scroll region to prevent unnecessary scrollbars
@@ -6407,6 +6295,42 @@ class MaterialManager:
         # Apply optimization after a short delay
         self.root.after(500, optimize_treeview_scroll_region)
 
+
+    def _show_daily_usage_note(self, event):
+        """Display the clicked record's full note without opening the editor."""
+        tree = self.daily_usage_tree
+        if tree.identify_region(event.x, event.y) not in ('cell', 'tree'):
+            return
+        item = tree.identify_row(event.y)
+        if not item:
+            return
+        tags = tree.item(item, 'tags')
+        if not tags or 'total' in tags:
+            return 'break'
+        try:
+            entry = self.daily_usage_df.loc[int(tags[0])]
+        except (ValueError, KeyError, IndexError):
+            return 'break'
+        from site_apps.central.src.views.memo_details import daily_memo_lookup, record_notes
+        note, daily_memo = record_notes(entry, daily_memo_lookup(self.daily_usage_df))
+        details = f"[기록 비고]\n{note or '등록된 비고가 없습니다.'}\n\n[날짜별 메모]\n{daily_memo or '등록된 메모가 없습니다.'}"
+        popup = tk.Toplevel(self.root)
+        popup.title('비고 · 날짜별 메모')
+        popup.geometry('650x320')
+        popup.transient(self.root)
+        frame = ttk.Frame(popup, padding=10)
+        frame.pack(fill='both', expand=True)
+        text = tk.Text(frame, wrap='word', font=('Malgun Gothic', 11))
+        scrollbar = ttk.Scrollbar(frame, orient='vertical', command=text.yview)
+        text.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
+        text.pack(fill='both', expand=True)
+        text.insert('1.0', details)
+        text.configure(state='disabled')
+        ttk.Button(popup, text='닫기', command=popup.destroy).pack(pady=(0, 10))
+        popup.bind('<Escape>', lambda e: popup.destroy())
+        text.focus_set()
+        return 'break'
 
     def _on_daily_usage_select(self, *args, **kwargs):
         from site_apps.central.src.controllers.event_controller import _on_daily_usage_select_impl
@@ -6978,6 +6902,9 @@ class MaterialManager:
         
         # 초기 데이터 로드 (첫 현장 자동 선택 후 표시)
         self.root.after(100, lambda: self.update_budget_site_view())
+
+        self._budget_loaded_site = self.cb_budget_site.get().strip()
+        self._budget_baseline = self._capture_budget_input()
 
     def update_budget_view(self):
         """Refresh the budget inquiry view to reflect updated budget data."""
@@ -7751,25 +7678,30 @@ class MaterialManager:
 
     def _load_budget_to_form(self, site, silent=False):
         """선택한 현장의 예산서를 상단 입력 폼에 로드한다."""
-        # [NEW] Clear current form before loading new site data to prevent residual data
-        self.clear_budget_form()
-
-        # [FIX] clear_budget_form()이 cb_budget_site를 지우므로 즉시 복원
-        # budget_df에 해당 현장이 없더라도 콤보박스에 선택한 현장명은 유지해야 함
-        if site and hasattr(self, 'cb_budget_site'):
-            self.cb_budget_site.set(site)
-
+        previous_site = getattr(self, '_budget_loaded_site', '')
         if not site:
             if not silent: messagebox.showwarning("현장 미선택", "현장을 먼저 선택해주세요.")
+            self.cb_budget_site.set(previous_site)
             return
         if not hasattr(self, 'budget_df') or self.budget_df.empty:
             if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+            self.cb_budget_site.set(previous_site)
             return
         match = self.budget_df[self.budget_df['Site'] == site]
         if match.empty:
             if not silent: messagebox.showinfo("데이터 없음", f"'{site}' 현장의 저장된 예산서가 없습니다.")
+            self.cb_budget_site.set(previous_site)
             return
 
+        current = self._capture_budget_input()
+        baseline = getattr(self, '_budget_baseline', None)
+        dirty = current != baseline if baseline is not None else any(
+            str(value).strip() not in ('', '0', '0.0') for value in current['fields'].values())
+        if dirty and not messagebox.askyesno('예산 불러오기',
+                '저장하지 않은 작성 내용을 버리고 선택한 현장의 예산을 불러올까요?', parent=self.root):
+            self.cb_budget_site.set(previous_site)
+            return
+        self.clear_budget_form()
         row = match.iloc[0]
         self.cb_budget_site.set(site)
         
@@ -7881,6 +7813,9 @@ class MaterialManager:
         if not silent: messagebox.showinfo("로드 완료", f"'{site}' 현장의 예산서를 불러왔습니다.")
         # [STABILITY] Update KPI summary after load
         self._update_budget_kpis()
+
+        self._budget_loaded_site = site
+        self._budget_baseline = self._capture_budget_input()
 
     def fill_budget_from_actuals(self):
         """하단 필터(현장, 기간) 기준으로 실제 실적 데이터를 집계하여 상단 예산 폼에 자동 입력한다."""
@@ -8202,70 +8137,13 @@ class MaterialManager:
                     processed_ot_signatures.add(ot_signature)
                 
                 # [FIX] 분류별 OT 상세 집계
-                if wt_hours > 0 and not is_duplicate_ot:
-                    # 명시적으로 '휴일'이라고 쓰여있거나, 주말인데 기본 교대근무가 아닌 특근성 출근인 경우 (이번엔 단순히 텍스트 명시에 더 의존)
-                    if '휴일' in wt_shift:
-                        ot_data['휴일근무']['hours'] += wt_hours
-                        ot_data['휴일근무']['names'].add(worker_name_only)
-                    else:
-                        # 평일/주말 공통: 연장이나 야간 명시가 있거나 시간대 기반 계산
-                        if sep_match:
-                            try:
-                                sep = sep_match.group(1)
-                                st_str, en_str = clean_wt.split(sep)
-                                sh, sm = map(int, st_str.split(':'))
-                                eh, em = map(int, en_str.split(':'))
-                                start_f = sh + sm/60.0
-                                end_f = eh + em/60.0
-                                if end_f < start_f: end_f += 24
-                                
-                                # 현장 기본 퇴근 시간 (17시 기준 혹은 18시 등)
-                                # 전체 시간이 주어질 때 명확히 구분 (기본근무: ~18, 연장근무: 18~22, 야간근무: 22~)
-                                if end_f > 18:
-                                    ot_start = max(start_f, 18.0)
-                                    # 18~22: 연장근무
-                                    h_over = max(0, min(end_f, 22.0) - ot_start)
-                                    # 22~24 : 야간근무
-                                    h_night = max(0, min(end_f, 24.0) - max(ot_start, 22.0))
-                                    # 24~ : 심야/익일 근무
-                                    h_dawn = max(0, end_f - max(ot_start, 24.0))
-                                    
-                                    if h_over > 0:
-                                        ot_data['연장근무']['hours'] += h_over
-                                        ot_data['연장근무']['names'].add(worker_name_only)
-                                    if h_night > 0:
-                                        ot_data['야간근무']['hours'] += h_night
-                                        ot_data['야간근무']['names'].add(worker_name_only)
-                                    if h_dawn > 0:
-                                        try:
-                                            # 날짜 확인 (금요일 밤 -> 토요일 새벽인지)
-                                            entry_date = pd.to_datetime(row.get('Date'))
-                                            if entry_date.weekday() == 4: # 4 = 금요일
-                                                ot_data['휴일근무']['hours'] += h_dawn
-                                                ot_data['휴일근무']['names'].add(worker_name_only)
-                                            else:
-                                                ot_data['야간근무']['hours'] += h_dawn
-                                                ot_data['야간근무']['names'].add(worker_name_only)
-                                        except:
-                                            ot_data['야간근무']['hours'] += h_dawn
-                                            ot_data['야간근무']['names'].add(worker_name_only)
-                            except: pass
-                        else:
-                            # 시간 범위가 주어지지 않은 숫자(예: 4h, 10h) 처리 로직
-                            # 명시적으로 (연장) 태그가 있는 경우
-                            if '연장' in wt_shift:
-                                ot_data['연장근무']['hours'] += wt_hours
-                                ot_data['연장근무']['names'].add(worker_name_only)
-                            # 명시적 태그가 없으나 8시간을 초과하는 경우
-                            elif wt_hours > 8:
-                                h_extra = wt_hours - 8
-                                if '야간' in wt_shift or '주야간' in wt_shift:
-                                    ot_data['야간근무']['hours'] += h_extra
-                                    ot_data['야간근무']['names'].add(worker_name_only)
-                                else:
-                                    ot_data['연장근무']['hours'] += h_extra
-                                    ot_data['연장근무']['names'].add(worker_name_only)
-
+                if not is_duplicate_ot:
+                    from site_apps.central.src.services.ot_calculator import ot_breakdown
+                    breakdown = ot_breakdown(wt_val, date_val, row.get(f'OT{suffix}', ''))
+                    for label, key in (('연장근무', 'day'), ('야간근무', 'night'), ('휴일근무', 'holiday')):
+                        if breakdown[key] > 0:
+                            ot_data[label]['hours'] += breakdown[key]
+                            ot_data[label]['names'].add(worker_name_only)
 
             # --- 자재 사용량 집계 (NDT + 필름) ---
             if is_new_logical_entry:
@@ -8401,13 +8279,13 @@ class MaterialManager:
                     if u_count > 0:
                         avg_h = t_hours / u_count
                         labor_data[stype]['personnel'] = f"{u_count:g}"
-                        labor_data[stype]['period'] = f"{avg_h:g}"
+                        labor_data[stype]['period'] = f"{avg_h:.15g}"
                     else:
                         labor_data[stype]['personnel'] = ""
                         labor_data[stype]['period'] = ""
                     # [FIX] 사전예산 단가 복사
                     if stype in planned_labor_data:
-                        labor_data[stype]['unit_price'] = planned_labor_data[stype].get('unit_price', '')
+                        labor_data[stype]['unit_price'] = str({'연장근무':4000, '야간근무':5000, '휴일근무':7500}[stype])
             self.actual_labor_detail_widget.set_data(labor_data)
 
         # 5. 실적 자재비 상세 탭 누적 업데이트
@@ -8581,20 +8459,36 @@ class MaterialManager:
                             f"사전예산은 방어되어 변경되지 않았습니다.\n"
                             f"(기간: {start_ts.strftime('%Y-%m-%d')} ~ {end_ts.strftime('%Y-%m-%d')}){profit_str}")
 
+    def _capture_budget_input(self):
+        fields = {key: widget.get() for key, widget in getattr(self, 'budget_widgets', {}).items()
+                  if key != 'cb_budget_site' and hasattr(widget, 'get')
+                  and (not hasattr(widget, 'cget') or str(widget.cget('state')) != 'readonly')}
+        details = {name: getattr(self, name).get_data() for name in (
+            'labor_detail_widget', 'material_detail_widget', 'expense_detail_widget',
+            'actual_labor_detail_widget', 'actual_material_detail_widget', 'actual_expense_detail_widget')
+            if hasattr(self, name)}
+        return {'fields': fields, 'details': details}
+
     def save_budget_entry(self):
         """Save or update budget entry"""
         site = self.cb_budget_site.get().strip()
         if not site:
             messagebox.showwarning("입력 오류", "현장명을 입력해주세요.")
             return
-            
+
         try:
             def _get(attr):
-                try: 
-                    w = getattr(self, attr, None)
-                    if w: return float(str(w.get()).replace(',', '') or 0)
+                widget = getattr(self, attr, None)
+                if widget is None:
                     return 0.0
-                except: return 0.0
+                text = str(widget.get()).replace(',', '').strip()
+                try:
+                    value = float(text or 0)
+                except (ValueError, TypeError):
+                    raise ValueError('금액에는 숫자를 입력해주세요.')
+                if not math.isfinite(value):
+                    raise ValueError('금액에는 유한한 숫자를 입력해주세요.')
+                return value
 
             rev = _get('ent_budget_revenue')
             unit_price = _get('ent_budget_unit_price')
@@ -8605,14 +8499,14 @@ class MaterialManager:
             profit = rev - (lab + mat + exp + out)
             note = self.ent_budget_note.get().strip() if hasattr(self, 'ent_budget_note') else ""
             period = getattr(self, 'ent_budget_period').get().strip() if hasattr(self, 'ent_budget_period') else ""
-            
+
             a_rev = _get('ent_budget_actual_revenue')
             a_unit = _get('ent_budget_actual_unit_price')
             a_lab = _get('ent_budget_actual_labor')
             a_mat = _get('ent_budget_actual_material')
             a_exp = _get('ent_budget_actual_expense')
             a_out = _get('ent_budget_actual_outsource')
-            a_prof = _get('ent_budget_actual_profit')
+            a_prof = a_rev - (a_lab + a_mat + a_exp + a_out)
             a_note = getattr(self, 'ent_budget_actual_note').get().strip() if hasattr(self, 'ent_budget_actual_note') else ""
             a_period = getattr(self, 'ent_budget_actual_period').get().strip() if hasattr(self, 'ent_budget_actual_period') else ""
         except ValueError:
@@ -8646,7 +8540,7 @@ class MaterialManager:
         # This fixes TypeError: Invalid value '' for dtype 'float64' permanently
         numeric_keys = {
             'Revenue', 'UnitPrice', 'LaborCost', 'MaterialCost', 'Expense', 'OutsourceCost', 'Profit',
-            'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost', 
+            'Actual_Revenue', 'Actual_UnitPrice', 'Actual_LaborCost', 'Actual_MaterialCost',
             'Actual_Expense', 'Actual_OutsourceCost', 'Actual_Profit'
         }
         new_data_sanitized = {}
@@ -8668,28 +8562,37 @@ class MaterialManager:
                     new_data_sanitized[k] = str(v)
 
 
-        if not self.budget_df.empty and site in self.budget_df['Site'].values:
-            # [FIX] Use explicit .loc[index, key] to ensure correct row update
-            idx = self.budget_df[self.budget_df['Site'] == site].index[0]
-            for key, val in new_data_sanitized.items():
-                if isinstance(val, str) and key in self.budget_df.columns and self.budget_df[key].dtype != 'object':
-                    self.budget_df[key] = self.budget_df[key].astype(object)
-                self.budget_df.loc[idx, key] = val
-        else:
-            # Create a properly typed DataFrame for concatenation to avoid dtype clashes
-            row_df = pd.DataFrame([new_data_sanitized])
-            self.budget_df = pd.concat([self.budget_df, row_df], ignore_index=True)
-            
-        if self.save_data():
-            messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
-            
-            # [NEW] Refresh UI to show the updated data in comparison rows immediately
-            self.update_budget_view()
-            
-            if 'budget' in self.detached_windows: self._refresh_detached_budget()
-            # [NEW] 저장 후 현장 목록 갱신 (새로 기입한 현장명 반영)
-            self.refresh_inquiry_filters()
-            # self.clear_budget_form() # [UX] Don't clear immediately so user can verify
+        original = self.budget_df.copy(deep=True)
+        try:
+            if not self.budget_df.empty and site in self.budget_df['Site'].values:
+                # [FIX] Use explicit .loc[index, key] to ensure correct row update
+                idx = self.budget_df[self.budget_df['Site'] == site].index[0]
+                for key, val in new_data_sanitized.items():
+                    if isinstance(val, str) and key in self.budget_df.columns and self.budget_df[key].dtype != 'object':
+                        self.budget_df[key] = self.budget_df[key].astype(object)
+                    self.budget_df.loc[idx, key] = val
+            else:
+                # Create a properly typed DataFrame for concatenation to avoid dtype clashes
+                row_df = pd.DataFrame([new_data_sanitized])
+                self.budget_df = pd.concat([self.budget_df, row_df], ignore_index=True)
+
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+        except Exception as error:
+            self.budget_df = original
+            messagebox.showerror('예산 저장 실패', f'{error}\n기존 예산 기록을 복원했습니다.', parent=self.root)
+            return
+        self._budget_loaded_site = site
+        self._budget_baseline = self._capture_budget_input()
+        messagebox.showinfo("성공", f"'{site}' 현장의 예산 정보가 저장/수정되었습니다.")
+
+        # [NEW] Refresh UI to show the updated data in comparison rows immediately
+        self.update_budget_view()
+
+        if 'budget' in self.detached_windows: self._refresh_detached_budget()
+        # [NEW] 저장 후 현장 목록 갱신 (새로 기입한 현장명 반영)
+        self.refresh_inquiry_filters()
+        # self.clear_budget_form() # [UX] Don't clear immediately so user can verify
 
     def _toggle_hidden_site(self, site, hide=True):
         """현장명을 드롭다운 목록에서 숨기거나 다시 표시한다."""
@@ -8732,14 +8635,21 @@ class MaterialManager:
             return
             
         if messagebox.askyesno("삭제 확인", f"'{site}' 현장의 예산 정보를 삭제하시겠습니까?"):
-            self.budget_df = self.budget_df[self.budget_df['Site'] != site]
-            if self.save_data():
-                messagebox.showinfo("성공", "삭제되었습니다.")
-                self.update_budget_view()
-                if 'budget' in self.detached_windows: self._refresh_detached_budget()
-                # [NEW] 삭제 후 현장 목록 갱신
-                self.refresh_inquiry_filters()
-                self.clear_budget_form()
+            original = self.budget_df.copy(deep=True)
+            try:
+                self.budget_df = self.budget_df[self.budget_df['Site'] != site]
+                if not self.save_data(require_primary=True):
+                    raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+            except Exception as error:
+                self.budget_df = original
+                messagebox.showerror('예산 삭제 실패', f'{error}\n기존 예산 기록을 복원했습니다.', parent=self.root)
+                return
+            messagebox.showinfo("성공", "삭제되었습니다.")
+            self.update_budget_view()
+            if 'budget' in self.detached_windows: self._refresh_detached_budget()
+            # [NEW] 삭제 후 현장 목록 갱신
+            self.refresh_inquiry_filters()
+            self.clear_budget_form()
 
 
     def clear_budget_form(self):
@@ -8756,13 +8666,13 @@ class MaterialManager:
                 else:
                     try: w.delete(0, 'end')
                     except: pass
-        # [NEW] Reset detail widgets
-        if hasattr(self, 'labor_detail_widget'): self.labor_detail_widget.reset()
-        if hasattr(self, 'material_detail_widget'):
-            self.material_detail_widget.reset()
-        if hasattr(self, 'expense_detail_widget'):
-            self.expense_detail_widget.reset()
-            
+        # Reset both planned and actual detail tables, including values serialized on save.
+        for name in ('labor_detail_widget', 'material_detail_widget', 'expense_detail_widget',
+                     'actual_labor_detail_widget', 'actual_material_detail_widget', 'actual_expense_detail_widget'):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.reset()
+
         # [STABILITY] Reset KPI summary
         self._update_budget_kpis()
 
@@ -10629,6 +10539,7 @@ class MaterialManager:
     def clear_daily_usage_form_all(self, keep_date=False, keep_workers=False):
         """현장별 일일 사용량 입력 폼의 모든 필드를 초기화합니다."""
         # 1. 콤보박스 선택 해제
+        self._daily_edit_source = None
         for cb in [self.cb_daily_company, self.cb_daily_site, 
                    self.cb_daily_test_method, self.cb_daily_unit]:
             cb.set('')
@@ -10816,75 +10727,10 @@ class MaterialManager:
                         # For equipment or non-consumables, do not store in MaterialID
                         mat_id = ""
 
-            # 3. 중복 저장 방지 체크
-            if not self.daily_usage_df.empty:
-                try:
-                    # Normalize date for comparison
-                    check_date = pd.to_datetime(date_val).date()
-                    # One date can contain separate NDT rows for different pipe
-                    # sizes.  A different quantity must not be offered as an
-                    # overwrite of the previously saved row.
-                    current_usage = to_f(self.ent_daily_test_amount)
-                    stored_usage = pd.to_numeric(
-                        self.daily_usage_df.get(
-                            'Usage',
-                            pd.Series(index=self.daily_usage_df.index, dtype=float),
-                        ),
-                        errors='coerce',
-                    ).fillna(0.0)
-                    # Ensure MaterialID is matched correctly (exact string match)
-                    existing = self.daily_usage_df[
-                        (pd.to_datetime(self.daily_usage_df['Date']).dt.date == check_date) & 
-                        (self.daily_usage_df['Site'] == site) & 
-                        (self.daily_usage_df['MaterialID'] == mat_id) &
-                        ((stored_usage - current_usage).abs() < 1e-9) &
-                        (self.daily_usage_df['검사품명'].astype(str).str.strip() == self.ent_daily_inspection_item.get().strip()) &
-                        (self.daily_usage_df['적용코드'].astype(str).str.strip() == self.ent_daily_applied_code.get().strip())
-                    ]
-                    if not existing.empty:
-                        answer = messagebox.askyesnocancel("중복 확인", 
-                            f"이미 {date_val} 날짜에 '{site}' 현장의 '{mat_display}' 품목 기록이 {len(existing)}건 존재합니다.\n\n"
-                            "기존 기록을 덮어쓰시겠습니까?\n\n"
-                            "'예(Y)': 기존 기록 덮어쓰기 (수정)\n"
-                            "'아니오(N)': 새로운 기록으로 추가 저장\n"
-                            "'취소(Cancel)': 작업 취소")
-                        
-                        if answer is None:
-                            return
-                        elif answer is True:
-                            # 덮어쓰기 위해 기존 기록 삭제 및 트랜잭션 롤백
-                            for idx in existing.index:
-                                entry = self.daily_usage_df.loc[idx]
-                                site_name = entry.get('Site', '')
-                                usage_date = pd.to_datetime(entry.get('Date'))
-                                mat_id_to_delete = entry.get('MaterialID', '')
-                                if not self.transactions_df.empty:
-                                    trans_mask = (
-                                        (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
-                                        (self.transactions_df['Site'].astype(str) == str(site_name)) &
-                                        (self.transactions_df['MaterialID'].astype(str) == str(mat_id_to_delete)) &
-                                        (self.transactions_df['Type'] == 'OUT') &
-                                        (self.transactions_df['Note'].str.contains(f"{site_name} 현장 사용", na=False, regex=False))
-                                    )
-                                    self.transactions_df = self.transactions_df[~trans_mask]
-                            
-                            self.daily_usage_df = self.daily_usage_df.drop(existing.index)
-                            self.daily_usage_df = self.daily_usage_df.reset_index(drop=True)
-                except Exception as e:
-                    print(f"DEBUG: Duplicate check failed: {e}")
-
-            # [DEBUG] Trace what is being saved
-            print(f"[DEBUG SAVE] mat_display={repr(mat_display)}, mat_id={repr(mat_id)}")
-            print(f"[DEBUG SAVE] cb_daily_material.get()={repr(self.cb_daily_material.get())}")
-            print(f"[DEBUG SAVE] cb_daily_equip.get()={repr(self.cb_daily_equip.get())}")
-            if hasattr(self, 'vehicle_boxes') and self.vehicle_boxes:
-                vd = self.vehicle_boxes[0].get_data()
-                print(f"[DEBUG SAVE] vehicle[0]: no={repr(vd.get('vehicle_info',''))}, km={repr(vd.get('mileage',''))}")
-            else:
-                print(f"[DEBUG SAVE] vehicle_boxes: none/empty")
-
-            # 4. 핵심 로직 실행 (단건 저장)
-            saved_count = self._add_single_usage_record_logic(mat_id, date_val, site, auto_save=True)
+            # Prepare first; replacement and persistence share one rollback boundary.
+            from site_apps.central.src.views.daily_record_save import save_prepared
+            plan = self._add_single_usage_record_logic(mat_id, date_val, site, prepare_only=True)
+            saved_count = save_prepared(self, plan)
             if saved_count > 0:
                 # [SMART VISIBILITY] Adjust filters to ensure the NEW record is visible
                 try:
@@ -11845,88 +11691,46 @@ class MaterialManager:
         tree.update_idletasks()
 
     def delete_daily_usage_entry(self):
-        """선택된 일일 사용량 기록 삭제 (인덱스 기반으로 정확하게 삭제 및 재고 환원)"""
-        selected_items = self.daily_usage_tree.selection()
-        
-        if not selected_items:
-            messagebox.showwarning("선택 오류", "삭제할 항목을 선택해주세요.")
+        """Delete only selected daily records, retaining unrelated stock transactions."""
+        selection = self.daily_usage_tree.selection()
+        if not selection:
             return
-        
-        # 사용자 확인
-        result = messagebox.askyesno("삭제 확인", f"{len(selected_items)}개의 기록을 삭제하시겠습니까?\n(삭제 시 차감되었던 재고도 자동으로 환원됩니다.)")
-        
-        if not result:
-            return
-        
-        indices_to_delete = []
-        for item in selected_items:
-            tags = self.daily_usage_tree.item(item, 'tags')
-            if tags:
-                try:
-                    df_idx = int(tags[0])
-                    indices_to_delete.append(df_idx)
-                except ValueError:
-                    continue
-        
-        if not indices_to_delete:
-            messagebox.showwarning("삭제 실패", "삭제할 항목의 데이터 정보를 찾을 수 없습니다.")
-            return
-
-        deleted_count = 0
         try:
-            valid_indices_to_delete = []
-            for idx in indices_to_delete:
-                if idx not in self.daily_usage_df.index:
-                    continue
-                
-                valid_indices_to_delete.append(idx)
-                entry = self.daily_usage_df.loc[idx]
-                
-                # --- [FIX] 재고 환원 로직 (자동 차감된 트랜잭션만 선택적으로 환원) ---
-                site = entry.get('Site', '')
-                usage_date = pd.to_datetime(entry.get('Date'))
-                mat_id_to_delete = entry.get('MaterialID', '')
-                
-                if not self.transactions_df.empty:
-                    # 해당 현장/날짜의 "(자동 차감)" 트랜잭션을 찾아 삭제
-                    trans_mask = (
-                        (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(usage_date).normalize()) &
-                        (self.transactions_df['Site'].astype(str) == str(site)) &
-                        (self.transactions_df['MaterialID'].astype(str) == str(mat_id_to_delete)) &
-                        (self.transactions_df['Type'] == 'OUT') &
-                        (self.transactions_df['Note'].str.contains(f"{site} 현장 사용", na=False, regex=False))
-                    )
-                    self.transactions_df = self.transactions_df[~trans_mask]
-                    deleted_count += 1
-
-            if valid_indices_to_delete:
-                # 기록 삭제
-                self.daily_usage_df = self.daily_usage_df.drop(valid_indices_to_delete)
-            
-            # 인덱스 초기화는 하지 않음 (태그 매칭을 위해 원본 인덱스 유지 권장하나, 
-            # drop 후에는 뷰 업데이트 시 어차피 다시 생성되므로 안전하게 reset_index 가능)
-            self.daily_usage_df = self.daily_usage_df.reset_index(drop=True)
-            
-            if self.save_data():
-                messagebox.showinfo("삭제 완료", f"{len(indices_to_delete)}개의 기록이 삭제되고 재고가 환원되었습니다.")
-                self.update_daily_usage_view()
-                self.update_recent_entries_view() # Ensure the mini table is updated!
-                self.update_stock_view()
-                self.update_transaction_view()
-                self.refresh_inquiry_filters()
-                
-                # [FIX] Automatically refresh the Site tab and Query tab
-                if hasattr(self, 'budget_view_tree'):
-                    self.update_budget_site_view()
-                if hasattr(self, 'query_tree') and hasattr(self, 'cb_filter_year'):
-                    try:
-                        y = int(self.cb_filter_year.get().replace('년', ''))
-                        m = int(self.cb_filter_month.get().replace('월', ''))
-                        self.update_monthly_usage_view(y, m)
-                    except:
-                        pass
-        except Exception as e:
-            messagebox.showerror("삭제 오류", f"기록 삭제 중 오류가 발생했습니다: {e}")
+            indices = set()
+            for item in selection:
+                tags = self.daily_usage_tree.item(item, 'tags')
+                if not tags or int(tags[0]) not in self.daily_usage_df.index:
+                    raise ValueError('기록이 변경되었습니다. 새로고침 후 다시 선택해주세요.')
+                indices.add(int(tags[0]))
+        except (ValueError, TypeError):
+            messagebox.showwarning('삭제 오류', '선택한 기록을 확인할 수 없습니다. 새로고침해주세요.', parent=self.root)
+            return
+        if not messagebox.askyesno('삭제 확인',
+                f'선택한 일일 작업 기록 {len(indices)}건을 삭제할까요?\n'
+                '검사량·작업자·메모가 함께 삭제되고 재고 및 집계에 반영됩니다.\n'
+                '별도 입출고 기록은 유지됩니다.', parent=self.root):
+            return
+        old_daily = self.daily_usage_df.copy(deep=True)
+        old_transactions = self.transactions_df.copy(deep=True)
+        try:
+            # Auto-deduction transactions are already excluded by stock calculation.
+            # Date/site matches cannot identify which daily job created a legacy transaction.
+            self.daily_usage_df = self.daily_usage_df.drop(list(indices))
+            if not self.save_data(require_primary=True):
+                raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+        except Exception as error:
+            self.daily_usage_df = old_daily
+            self.transactions_df = old_transactions
+            messagebox.showerror('삭제 저장 실패', f'{error}\n원본 기록을 복원했습니다.', parent=self.root)
+            return
+        self.update_daily_usage_view()
+        self.update_recent_entries_view()
+        self.update_stock_view()
+        self.update_transaction_view()
+        self.refresh_inquiry_filters()
+        self.update_monthly_usage_view()
+        if hasattr(self, 'budget_view_tree'):
+            self.update_budget_site_view()
 
     def open_edit_daily_usage_dialog(self):
         """Open a dialog to edit the selected daily usage record"""
@@ -12277,7 +12081,7 @@ class MaterialManager:
                 # [FIX] Only auto-register if it's a CONSUMABLE. Equipment should NOT be registered.
                 if not found_id:
                     if self._is_consumable_material(full_mat_name, cb_method.get().strip()):
-                        found_id = self.register_new_material(full_mat_name, warehouse='현장', 규격='수정등록')
+                        found_id = full_mat_name # Resolve/register inside the guarded save transaction.
                     else:
                         found_id = full_mat_name
             
@@ -12353,6 +12157,11 @@ class MaterialManager:
         """Helper for personal calculation during editing without complex widget lookups"""
         try:
             current_date = calculation_date if calculation_date else self.ent_daily_date.get_date()
+            for index in range(1, 11):
+                group = getattr(self, f'worker_group{index}', None)
+                if group is not None and group.ent_worktime is worktime_entry:
+                    worktime_value = group.get_time()
+                    break
             ot_hours, amount = self._calculate_ot_from_worktime(worktime_value, current_date)
             
             if amount > 0:
@@ -12406,22 +12215,14 @@ class MaterialManager:
 
     def save_daily_usage_edits(self, df_idx, new_data):
         """Save edited daily usage and reconcile stock"""
+        frame_names = ('daily_usage_df', 'transactions_df', 'materials_df', 'monthly_usage_df')
+        snapshots = {name: getattr(self, name).copy(deep=True) for name in frame_names}
+        saved = False
         try:
             old_entry = self.daily_usage_df.loc[df_idx]
             
-            # 1. Revert Old Stock (Delete existing auto-deductions before applying new ones)
-            old_site = old_entry.get('Site', '')
-            old_date = pd.to_datetime(old_entry.get('Date'))
-            
-            if not self.transactions_df.empty:
-                trans_mask = (
-                    (pd.to_datetime(self.transactions_df['Date'], errors='coerce').dt.normalize() == pd.to_datetime(old_date).normalize()) &
-                    (self.transactions_df['Site'] == old_site) &
-                    (self.transactions_df['Type'] == 'OUT') &
-                    (self.transactions_df['Note'].str.contains(f"{old_site} 현장 사용", na=False))
-                )
-                self.transactions_df = self.transactions_df[~trans_mask]
-
+            # Separate stock transactions cannot be linked by date/site alone.
+            # Inventory deducts the edited DailyUsage row and excludes automatic mirrors.
             # 2. Update entry in DF
             # [FIX] Handle column name aliases (Date/날짜, Site/현장) to ensure existing columns are updated
             site_col = 'Site' if 'Site' in self.daily_usage_df.columns else '현장'
@@ -12450,6 +12251,10 @@ class MaterialManager:
                 
                 # Use safe setter to avoid all dtype crashes
                 self._safe_set_daily_df(df_idx, target_key, v, is_numeric=(is_numeric or k == 'MaterialID'))
+
+            from site_apps.central.src.models.stock_calculation import synchronize_legacy_chemicals
+            for column, value in synchronize_legacy_chemicals(old_entry, new_data).items():
+                self._safe_set_daily_df(df_idx, column, value, is_numeric=False)
 
             # Ensure Usage is consistently updated from Inspection Amount (검사량)
             usage_col = 'Usage' if 'Usage' in self.daily_usage_df.columns else '수량'
@@ -12485,12 +12290,13 @@ class MaterialManager:
                         if self._is_consumable_material(new_mat_display, method):
                             # [UX IMPROVEMENT] 등록되지 않은 소모품 감지 시 승인 팝업 추가 (수정/저장 동일)
                             if messagebox.askyesno("신규 자재 등록", f"등록되지 않은 소모품 자재명('{new_mat_display}')입니다.\n재고 마스터에 신규 자재로 등록하시겠습니까?\n\n(아니오를 누르면 기록에는 변경되지만 재고 연동(차감) 대상에서 제외됩니다.)"):
-                                new_mat_id = self.register_new_material(new_mat_display, warehouse='현장', 규격='자동등록')
+                                new_mat_id = self.register_new_material(new_mat_display, warehouse='현장', 규격='자동등록', persist=False)
                             else:
                                 new_mat_id = new_mat_display
                         else:
                             new_mat_id = new_mat_display
                 
+                self._safe_set_daily_df(df_idx, 'MaterialID', new_mat_id, is_numeric=False)
                 new_qty = float(new_data.get('검사량', 0))
                 new_note_pattern = f'{new_site} 현장 사용 (자동 차감)'
                 
@@ -12513,15 +12319,23 @@ class MaterialManager:
                 self._auto_reconcile_and_register_ndt(new_date, new_site, ndt_data, all_workers, new_data.get('회사코드', ''))
 
             # 4. Save & Refresh
-            if self.save_data():
+            if self.save_data(require_primary=True):
+                saved = True
                 self.update_daily_usage_view()
                 self.refresh_inquiry_filters()
                 self.update_stock_view()
                 self.update_transaction_view()
                 self.update_material_combo() # Refresh history suggestions
+                self.update_recent_entries_view()
+                self.update_monthly_usage_view()
                 return True
-            return False
+            raise RuntimeError('원본 파일에 저장하지 못했습니다.')
         except Exception as e:
+            if saved:
+                messagebox.showwarning('저장 완료 · 화면 갱신 확인', f'기록은 저장되었습니다. 다시 조회해주세요.\n{e}')
+                return True
+            for name, snapshot in snapshots.items():
+                setattr(self, name, snapshot)
             messagebox.showerror("수정 오류", f"기록 수정 중 오류가 발생했습니다: {e}")
             return False
                 
@@ -13887,6 +13701,11 @@ class MaterialManager:
         """Calculate OT amount based on worktime and update corresponding OT field"""
         try:
             current_date = self.ent_daily_date.get_date()
+            for index in range(1, 11):
+                group = getattr(self, f'worker_group{index}', None)
+                if group is not None and getattr(group, 'ent_worktime', None) is worktime_entry:
+                    worktime_value = group.get_time()
+                    break
             ot_hours, amount = self._calculate_ot_from_worktime(worktime_value, current_date)
             
             ot_entry = self.get_corresponding_ot_field(worktime_entry)
@@ -15744,22 +15563,26 @@ class MaterialManager:
     def open_usage_memo_history(self):
         """현장별 일일 사용량 기입 탭의 상시 메모 이력 조회 및 이동"""
         memo_rows = []
+        full_memos = {}
         if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
             if 'DailyMemo' in self.daily_usage_df.columns:
                 import pandas as pd
                 df_memos = self.daily_usage_df.dropna(subset=['DailyMemo'])
+                site = self.cb_daily_site.get().strip()
+                if site and site != '전체' and 'Site' in df_memos.columns:
+                    df_memos = df_memos[df_memos['Site'].fillna('').astype(str).str.strip() == site]
                 df_memos = df_memos[df_memos['DailyMemo'].astype(str).str.strip() != '']
                 
-                for date_val, group in df_memos.groupby('Date'):
-                    memo = str(group['DailyMemo'].iloc[0]).strip()
-                    if memo:
-                        if isinstance(date_val, pd.Timestamp):
-                            date_str = date_val.strftime('%Y-%m-%d')
-                        else:
-                            date_str = str(date_val).split(' ')[0]
-                        preview = ' '.join(memo.split())
-                        memo_rows.append((date_str, preview))
-                        
+                from site_apps.central.src.views.memo_details import daily_memo_lookup
+                for (date_str, _site), memo in daily_memo_lookup(df_memos).items():
+                    if date_str in full_memos:
+                        full_memos[date_str] += '\n\n' + memo
+                    else:
+                        full_memos[date_str] = memo
+                for date_str, memo in full_memos.items():
+                    preview = ' '.join(memo.split())
+                    memo_rows.append((date_str, preview))
+
         memo_rows.sort(key=lambda item: item[0], reverse=True)
 
         import tkinter as tk
@@ -15808,9 +15631,10 @@ class MaterialManager:
             date_key = str(tree.item(selected[0], 'values')[0])
             try:
                 import datetime
-                self.ent_daily_date.set_date(datetime.datetime.strptime(date_key, '%Y-%m-%d').date())
-                self.update_daily_usage_view()
-                window.destroy()
+                from site_apps.central.src.views.daily_date_context import open_memo_date
+                selected_date = datetime.datetime.strptime(date_key, '%Y-%m-%d').date()
+                if open_memo_date(self, selected_date, full_memos[date_key]):
+                    window.destroy()
             except Exception as e:
                 print(f"Date navigate error: {e}")
 

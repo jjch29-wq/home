@@ -36,18 +36,18 @@ def has_daily_input(app):
                for i in range(1, 11))
 
 
-def change_daily_date(app):
+def change_daily_date(app, force=False):
     selected = app.ent_daily_date.get_date()
     previous = getattr(app, '_last_daily_date', None)
-    if selected == previous:
-        return
+    if selected == previous and not force:
+        return True
     if has_daily_input(app) and not messagebox.askyesno(
             '작업 날짜 변경',
             '입력 내용과 등록할 작업 목록을 비우고 날짜를 변경할까요?\n'
             '저장된 기록은 유지됩니다. 작성 중인 내용은 사라집니다.', parent=app.root):
         if previous is not None:
             app.ent_daily_date.set_date(previous)
-        return
+        return False
     company, site = app.cb_daily_company.get(), app.cb_daily_site.get()
     batch = getattr(app, 'inspection_batch', None)
     if batch is not None:
@@ -78,3 +78,30 @@ def change_daily_date(app):
     if status is not None:
         status.config(text=f'{selected:%Y-%m-%d} · 새 작업 입력')
     app.update_recent_entries_view()
+    return True
+
+
+def open_memo_date(app, selected, memo):
+    """Navigate through the normal discard guard, then restore the full saved memo."""
+    app.ent_daily_date.set_date(selected)
+    if not change_daily_date(app, force=True):
+        return False
+    app.main_memo_text.delete('1.0', 'end')
+    app.main_memo_text.insert('1.0', memo)
+    app._daily_recent_show_all = False
+    return True
+
+
+def load_recent_record(app, record):
+    """Replace editor contents only after explicit consent to discard current input."""
+    if has_daily_input(app) and not messagebox.askyesno(
+            '최근 기록 불러오기',
+            '작성 중인 입력과 등록할 작업 목록을 비우고 선택한 기록을 불러올까요?\n'
+            '아직 저장하지 않은 내용은 사라집니다.', parent=app.root):
+        return False
+    batch = getattr(app, 'inspection_batch', None)
+    if batch is not None:
+        batch.clear()
+    app.clear_daily_usage_form_all(keep_date=True, keep_workers=True)
+    app.load_daily_usage_to_form(record)
+    return True

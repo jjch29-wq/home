@@ -23,56 +23,9 @@ def get_base_salaries_impl(self):
 
 
 def _calculate_ot_from_worktime_impl(self, worktime_value, calculation_date):
-    """Standalone helper to calculate OT hours and amount from a worktime string"""
-    try:
-        if not worktime_value:
-            return 0.0, 0
-            
-        import re
-        marker_pattern = MARKER_PATTERN
-        clean_val = marker_pattern.sub('', str(worktime_value)).strip()
-        
-        # Use regex to find separator (~ or -) more robustly
-        sep_match = re.search(r'[:\d]\s*([~-])\s*[:\d]', clean_val)
-        if not sep_match: return 0.0, 0
-        sep = sep_match.group(1)
-        
-        start_time_str, end_time_str = clean_val.split(sep)
-        sh, sm = map(int, start_time_str.split(':'))
-        eh, em = map(int, end_time_str.split(':'))
-        
-        start_f = sh + sm / 60.0
-        end_f = eh + em / 60.0
-        if end_f < start_f: end_f += 24
-        total_duration = end_f - start_f
-        if total_duration <= 0: return 0.0, 0
-
-        weekday = calculation_date.weekday()
-        is_holiday = weekday >= 5
-        is_friday = (weekday == 4)
-
-        ot_hours = 0.0
-        amount = 0
-        if is_holiday:
-            ot_hours = total_duration
-            amount = ot_hours * 7500
-        else:
-            if end_f > 18:
-                ot_start = max(start_f, 18.0)
-                ot_hours = end_f - ot_start
-                evening_end = min(end_f, 22.0)
-                evening_hours = max(0, evening_end - ot_start)
-                night_start = max(ot_start, 22.0)
-                night_end = min(end_f, 24.0)
-                night_hours = max(0, night_end - night_start)
-                dawn_start = max(ot_start, 24.0)
-                dawn_hours = max(0, end_f - dawn_start)
-                dawn_rate = 7500 if is_friday else 5000
-                amount = (evening_hours * 4000) + (night_hours * 5000) + (dawn_hours * dawn_rate)
-        
-        return ot_hours, int(amount)
-    except:
-        return 0.0, 0
+    from site_apps.central.src.services.ot_calculator import ot_breakdown
+    result = ot_breakdown(worktime_value, calculation_date)
+    return result['hours'], result['amount']
 
 
 def calculate_ot_amount_impl(self, ot_value):

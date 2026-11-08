@@ -11,7 +11,7 @@ import pandas as pd
 
 SRC = Path(__file__).resolve().parents[1] / 'src'
 sys.path.insert(0, str(SRC))
-from site_apps.central.src.views.daily_date_context import change_daily_date, has_daily_input, show_recent_scope
+from site_apps.central.src.views.daily_date_context import change_daily_date, has_daily_input, show_recent_scope, open_memo_date
 
 
 class Field:
@@ -36,6 +36,37 @@ def fixture(data):
 
 
 class DailyDateContextTests(unittest.TestCase):
+    def test_memo_history_moves_date_and_restores_full_text(self):
+        app = fixture({'main_memo': 'draft'})
+        memo = 'First line\nSecond line'
+        target = datetime.date(2026, 10, 20)
+        with patch('site_apps.central.src.views.daily_date_context.messagebox.askyesno', return_value=True):
+            self.assertTrue(open_memo_date(app, target, memo))
+        self.assertEqual(app.ent_daily_date.get_date(), target)
+        self.assertEqual(app._last_daily_date, target)
+        self.assertEqual(app._daily_recent_date_filter, target)
+        self.assertFalse(app._daily_recent_show_all)
+        app.main_memo_text.insert.assert_called_once_with('1.0', memo)
+        app.update_recent_entries_view.assert_called_once()
+
+    def test_memo_history_cancel_preserves_draft_and_list(self):
+        app = fixture({'main_memo': 'draft'})
+        previous = app._last_daily_date
+        with patch('site_apps.central.src.views.daily_date_context.messagebox.askyesno', return_value=False):
+            self.assertFalse(open_memo_date(app, datetime.date(2026, 10, 20), 'saved'))
+        self.assertEqual(app.ent_daily_date.get_date(), previous)
+        app.main_memo_text.delete.assert_not_called()
+        app.main_memo_text.insert.assert_not_called()
+        app.update_recent_entries_view.assert_not_called()
+        app.inspection_batch.clear.assert_not_called()
+
+    def test_same_date_memo_navigation_still_checks_draft(self):
+        app = fixture({'main_memo': 'draft'})
+        with patch('site_apps.central.src.views.daily_date_context.messagebox.askyesno', return_value=False) as ask:
+            self.assertFalse(open_memo_date(app, app._last_daily_date, 'saved'))
+        ask.assert_called_once()
+        app.main_memo_text.insert.assert_not_called()
+
     def test_record_scope_switch_does_not_change_date_or_discard_input(self):
         app = fixture({'amount':'18'})
         app._daily_recent_date_filter = app.ent_daily_date.get_date()

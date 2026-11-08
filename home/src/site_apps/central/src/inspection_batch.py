@@ -182,7 +182,7 @@ def commit_plans(app, plans):
     lists = {name: list(getattr(app, name)) for name in list_names}
     try:
         count = sum(app._commit_usage_plan(plan, auto_save=False) for plan in plans)
-        if not app.save_data():
+        if not app.save_data(require_primary=True):
             raise RuntimeError('일괄 저장하지 못했습니다. 입력 목록은 유지됩니다. 파일 상태를 확인한 뒤 다시 저장하세요.')
         return count
     except Exception:

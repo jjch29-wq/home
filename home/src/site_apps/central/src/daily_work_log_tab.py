@@ -55,6 +55,8 @@ class DailyWorkLogTab(ttk.Frame):
             name: welder_id for welder_id, name in self.welder_names.items()
         }
         self.setup_ui()
+        self._loaded_log_date = self._selected_date_key()
+        self._log_baseline = self._capture_log_input()
         if self.data_connection_error:
             self.after_idle(
                 lambda: messagebox.showerror(
@@ -1412,6 +1414,17 @@ class DailyWorkLogTab(ttk.Frame):
             return
         if not self._validate_hot_rows():
             return
+        # Save File Dialog
+        default_name = f"{self.date_entry.get().replace('-', '')}_작업_감독일보.xlsx"
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            initialfile=default_name,
+            title="일보 저장",
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
+        )
+
+        if not file_path:
+            return
         self.auto_calculate_and_save(show_completion=False)
         # Gather all data
         data = {
@@ -1423,36 +1436,27 @@ class DailyWorkLogTab(ttk.Frame):
             'remarks': self.remarks_text.get("1.0", "end-1c"),
             'ndt_results': []
         }
-        
+
         # Qty
         for comp_key, entries in self.qty_entries.items():
             data['qty_data'][comp_key] = {k: v.get() for k, v in entries.items()}
-            
+
         # Equip
         for eq, entries in self.equip_entries.items():
             data['equip_data'][eq] = {k: v.get() for k, v in entries.items()}
-            
+
         # Personnel
         for p_key, ent in self.personnel_entries.items():
             data['personnel_data'][p_key] = ent.get()
-            
+
         # NDT - only gather rows that have at least one non-empty value
         for row_entries in self.ndt_grid_entries:
             row_dict = {col: ent.get() for col, ent in row_entries.items()}
             row_dict['용접사'] = self._normalize_welder_id(row_dict.get('용접사'))
             if any(val.strip() for val in row_dict.values()):
                 data['ndt_results'].append(row_dict)
-            
+
         self.save_current_history()
-        # Save File Dialog
-        default_name = f"{self.date_entry.get().replace('-', '')}_작업_감독일보.xlsx"
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".xlsx",
-            initialfile=default_name,
-            title="일보 저장",
-            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
-        )
-        
         if file_path:
             try:
                 exporter = DailyWorkLogExporter()
@@ -1635,10 +1639,15 @@ class DailyWorkLogTab(ttk.Frame):
         try:
             with open(self.history_path, 'r', encoding='utf-8') as f:
                 history = json.load(f)
+            if not isinstance(history, dict) or any(not isinstance(day, dict) for day in history.values()):
+                raise ValueError('일보 이력 형식이 올바르지 않습니다.')
             self._rt_parent_history = [row for day in sorted(history) for row in history[day].get('ndt_results', [])]
             return history
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError:
             return {}
+        except (OSError, ValueError) as exc:
+            messagebox.showerror('일보 이력 읽기 실패', f'이력을 읽지 못해 작업을 중단합니다. 원본 파일은 유지됩니다.\n{exc}')
+            raise
 
     def save_history(self, history):
         connection_error = get_data_connection_error()
@@ -1651,6 +1660,7 @@ class DailyWorkLogTab(ttk.Frame):
             raise SharedDataUnavailableError(connection_error)
 
         if os.path.isfile(self.history_path):
+            self.load_history() # Refuse to overwrite an unreadable existing history.
             shutil.copy2(self.history_path, self.history_path + '.backup.json')
         temp_path = self.history_path + '.tmp'
         with open(temp_path, 'w', encoding='utf-8') as f:
@@ -1659,6 +1669,7 @@ class DailyWorkLogTab(ttk.Frame):
         self._refresh_ndt_history_choices(history)
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
+        # Saving photo metadata does not persist other editor fields.
 
     def _refresh_ndt_history_choices(self, history=None):
         """Refresh NDT combobox choices immediately after saving new rows."""
@@ -1801,12 +1812,42 @@ class DailyWorkLogTab(ttk.Frame):
             
         history[current_date] = data
         self.save_history(history)
+        self._loaded_log_date = current_date
+        self._log_baseline = self._capture_log_input()
+
+    def _capture_log_input(self):
+        """Capture editable values without saving or including the date selector."""
+        return {
+            'weather': self.weather_entry.get(),
+            'remarks': self.remarks_text.get('1.0', 'end-1c'),
+            'qty': {key: {field: widget.get() for field, widget in entries.items()}
+                    for key, entries in self.qty_entries.items()},
+            'equipment': {key: {field: widget.get() for field, widget in entries.items()}
+                          for key, entries in self.equip_entries.items()},
+            'people': {key: widget.get() for key, widget in self.personnel_entries.items()},
+            'ndt': [{key: widget.get() for key, widget in row.items() if hasattr(widget, 'get')}
+                    for row in self.ndt_grid_entries],
+        }
 
     def on_date_change(self, event=None):
-        self._clear_ndt_selection()
         current_date = self._selected_date_key()
+        previous = getattr(self, '_loaded_log_date', None)
+        baseline = getattr(self, '_log_baseline', None)
+        if baseline is not None and self._capture_log_input() != baseline:
+            if not messagebox.askyesno('일보 날짜 이동', '저장하지 않은 작성 내용을 버리고 선택한 날짜를 불러올까요?', parent=self):
+                if previous:
+                    self.date_entry.set_date(previous)
+                return
+        # Read before clearing the editor so failures preserve the draft.
+        try:
+            loaded_history = self.load_history()
+        except (OSError, ValueError):
+            if previous:
+                self.date_entry.set_date(previous)
+            return
+        self._clear_ndt_selection()
         # 화면에서도 RT 불량과 불량률을 검사수량 누계와 같은 기준으로 표시한다.
-        history = corrected_rt_history(self.load_history())
+        history = corrected_rt_history(loaded_history)
         self._refresh_saved_date_markers(history)
         self._update_date_status(history)
         
@@ -2030,6 +2071,9 @@ class DailyWorkLogTab(ttk.Frame):
             self.qty_entries['RT_소계']['총누계'].insert(0, format_val('RT', rt_total))
             if rt_expected > 0:
                 self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
+
+        self._loaded_log_date = current_date
+        self._log_baseline = self._capture_log_input()
 
     def auto_calculate_and_save(self, show_completion=True):
         if not self._validate_rt_rows():
