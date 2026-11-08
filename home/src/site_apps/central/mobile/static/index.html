@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>중앙지사 현장 모바일 검사 입력</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    input, select, button {
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 pb-24">
+
+  <!-- Mobile Top App Bar -->
+  <header class="sticky top-0 z-30 bg-blue-700 text-white shadow-md px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-2">
+      <i data-lucide="activity" class="w-6 h-6 text-yellow-300"></i>
+      <div>
+        <h1 class="text-base font-bold leading-tight">중앙지사 현장 입력</h1>
+        <p class="text-xs text-blue-200">한국지역난방공사 모바일 연동</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-1">
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500 text-white shadow-sm">
+        <span class="w-1.5 h-1.5 rounded-full bg-white mr-1 animate-pulse"></span> 클라우드 연결됨
+      </span>
+    </div>
+  </header>
+
+  <main class="max-w-md mx-auto p-4 space-y-4">
+
+    <!-- 1. 기본 정보 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
+          <i data-lucide="calendar" class="w-4 h-4"></i> 작업 일자 및 구분
+        </span>
+        <span id="weekday-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-medium text-slate-600">오늘</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">검사 일자</label>
+          <input type="date" id="input-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">공사 구분</label>
+          <select id="select-loc-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="열수송관" selected>열수송관</option>
+            <option value="플랜트(관리소)">플랜트(관리소)</option>
+            <option value="열배관">열배관</option>
+            <option value="핫태핑">핫태핑</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. NDT 공법 및 물량 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
+          <i data-lucide="gauge" class="w-4 h-4"></i> 검사 공법 및 물량 자동 산정
+        </span>
+      </div>
+
+      <!-- Segmented Method Buttons -->
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법</label>
+        <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
+          <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition">PAUT</button>
+          <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">RT</button>
+          <button type="button" data-method="MT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
+          <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+          <select id="select-pipe" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">조인트수(개소)</label>
+          <input type="number" id="input-joints" value="1" min="0.1" step="0.5" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+
+      <!-- Calculated Qty & Cost Box -->
+      <div class="p-3 bg-blue-50/70 border border-blue-100 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-blue-600 font-medium">환산 검사 수량</p>
+          <p class="text-lg font-black text-blue-900 leading-tight">
+            <span id="display-qty">0.8401</span> <span id="display-unit" class="text-xs font-normal">M</span>
+          </p>
+        </div>
+        <div class="text-right">
+          <p class="text-xs text-blue-600 font-medium">예상 검사비</p>
+          <p class="text-base font-black text-slate-900 leading-tight" id="display-cost">273,411원</p>
+        </div>
+      </div>
+
+      <!-- Equipment Selectors -->
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">주 장비</label>
+          <select id="select-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
+          <select id="select-aux-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 당일 작업자 및 OT 산정 카드 (중앙지사 스킬 엔진 탑재) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
+          <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
+        </span>
+        <button type="button" id="btn-batch-apply" class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
+        </button>
+      </div>
+
+      <div id="workers-container" class="space-y-3">
+        <!-- Worker 1 to 3 rows inserted here -->
+      </div>
+
+      <button type="button" id="btn-add-worker" class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-blue-400 hover:text-blue-600 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
+        <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
+      </button>
+    </div>
+
+    <!-- 4. 차량 점검 및 주행거리 (현장 카메라 연동) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1">
+          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 계기판
+        </span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
+          <select id="select-vehicle" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
+          <input type="number" id="input-mileage" placeholder="예: 70" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
+        </div>
+      </div>
+
+      <!-- Quick Inspection Checkboxes -->
+      <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
+        <div class="flex justify-between items-center">
+          <span>차량 외관 / 청결도</span>
+          <span class="font-bold text-emerald-600">양호 (기본)</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>청소 / 자물쇠 시건</span>
+          <span class="font-bold text-emerald-600">함 / 완료</span>
+        </div>
+      </div>
+
+      <!-- Photo Capture Trigger -->
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">현장 / 계기판 사진 첨부</label>
+        <label class="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer active:scale-98 transition">
+          <i data-lucide="camera" class="w-4 h-4 text-blue-600"></i>
+          <span id="photo-status">카메라로 사진 촬영 또는 선택</span>
+          <input type="file" id="input-photo" accept="image/*" capture="environment" class="hidden">
+        </label>
+      </div>
+    </div>
+
+    <!-- 5. Big Submit Button -->
+    <div class="pt-2">
+      <button type="button" id="btn-submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-blue-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-5 h-5"></i>
+        <span>중앙지사 클라우드에 작업 저장</span>
+      </button>
+    </div>
+
+    <!-- 6. 최근 저장된 내역 (실시간 리스트) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+          <i data-lucide="history" class="w-4 h-4"></i> 당일 저장된 최근 내역
+        </span>
+        <button type="button" id="btn-refresh-history" class="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+          <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
+        </button>
+      </div>
+
+      <div id="recent-list" class="space-y-2">
+        <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-msg">저장되었습니다.</span>
+  </div>
+
+  <script>
+    let appConfig = null;
+    let selectedMethod = "PAUT";
+    let workerRows = [];
+
+    // Initialize date to today
+    const dateInput = document.getElementById("input-date");
+    const todayStr = new Date().toISOString().split("T")[0];
+    dateInput.value = todayStr;
+
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById("toast");
+      const msgEl = document.getElementById("toast-msg");
+      msgEl.textContent = msg;
+      toast.className = `fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl ${isError ? 'bg-rose-800' : 'bg-slate-900'} text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-100 pointer-events-auto flex items-center gap-2`;
+      setTimeout(() => {
+        toast.className = toast.className.replace('opacity-100', 'opacity-0').replace('pointer-events-auto', 'pointer-events-none');
+      }, 2500);
+    }
+
+    async function loadConfig() {
+      try {
+        const res = await fetch("/api/config");
+        appConfig = await res.json();
+        
+        // Populate pipe sizes
+        const pipeSelect = document.getElementById("select-pipe");
+        pipeSelect.innerHTML = appConfig.pipe_sizes.map(p => `<option value="${p}" ${p === '250A' ? 'selected' : ''}>${p}</option>`).join("");
+
+        // Populate Equipments
+        document.getElementById("select-equip").innerHTML = appConfig.equipments.map(e => `<option value="${e}">${e}</option>`).join("");
+        document.getElementById("select-aux-equip").innerHTML = appConfig.aux_equipments.map(e => `<option value="${e}">${e}</option>`).join("");
+        document.getElementById("select-vehicle").innerHTML = appConfig.vehicles.map(v => `<option value="${v}">${v}</option>`).join("");
+
+        // Add 3 default workers
+        initDefaultWorkers();
+        updateQtyCalc();
+        loadRecentRecords();
+      } catch (e) {
+        showToast("설정 불러오기 실패", true);
+      }
+    }
+
+    function initDefaultWorkers() {
+      workerRows = [
+        { user: "부장 주진철", shift: "야간", time: "22:00~익일09:00", ot: "77,500" },
+        { user: "부장 이병국", shift: "야간", time: "22:00~익일09:00", ot: "77,500" },
+        { user: "계장 박상태", shift: "야간", time: "22:00~익일09:00", ot: "77,500" }
+      ];
+      renderWorkers();
+    }
+
+    function renderWorkers() {
+      const container = document.getElementById("workers-container");
+      container.innerHTML = "";
+
+      workerRows.forEach((w, idx) => {
+        const row = document.createElement("div");
+        row.className = "p-3 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2";
+        row.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <span class="w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-black">${idx + 1}</span>
+              참여자 ${idx + 1}
+            </span>
+            ${idx > 0 ? `<button type="button" class="text-[11px] text-rose-500 font-semibold" onclick="removeWorker(${idx})">삭제</button>` : '<span class="text-[10px] text-blue-600 font-semibold">대표 작업자</span>'}
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">작업자</label>
+              <select class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800" onchange="updateWorkerField(${idx}, 'user', this.value)">
+                ${appConfig ? appConfig.users.map(u => `<option value="${u}" ${u === w.user ? 'selected' : ''}>${u}</option>`).join("") : ''}
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">근무 구분</label>
+              <select class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800" onchange="updateWorkerField(${idx}, 'shift', this.value); recalculateWorkerOt(${idx});">
+                <option value="주간" ${w.shift === '주간' ? 'selected' : ''}>주간</option>
+                <option value="야간" ${w.shift === '야간' ? 'selected' : ''}>야간</option>
+                <option value="휴일" ${w.shift === '휴일' ? 'selected' : ''}>휴일</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 items-center">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">작업 시간</label>
+              <select class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800" onchange="updateWorkerField(${idx}, 'time', this.value); recalculateWorkerOt(${idx});">
+                ${appConfig ? appConfig.worktimes.map(t => `<option value="${t}" ${t === w.time ? 'selected' : ''}>${t}</option>`).join("") : ''}
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">OT 금액 (원)</label>
+              <input type="text" value="${w.ot}" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-700 text-right" onchange="updateWorkerField(${idx}, 'ot', this.value)">
+            </div>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    function updateWorkerField(idx, field, value) {
+      workerRows[idx][field] = value;
+    }
+
+    function removeWorker(idx) {
+      workerRows.splice(idx, 1);
+      renderWorkers();
+    }
+
+    document.getElementById("btn-add-worker").addEventListener("click", () => {
+      if (workerRows.length >= 10) {
+        showToast("최대 10명까지 추가 가능합니다.", true);
+        return;
+      }
+      workerRows.push({
+        user: appConfig.users[0] || "부장 주진철",
+        shift: workerRows[0].shift || "주간",
+        time: workerRows[0].time || "09:00~18:00",
+        ot: workerRows[0].ot || "0"
+      });
+      renderWorkers();
+    });
+
+    async function recalculateWorkerOt(idx) {
+      const w = workerRows[idx];
+      const curDate = dateInput.value;
+      const fullTimeStr = `(${w.shift}) ${w.time}`;
+      try {
+        const res = await fetch("/api/calculate_ot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ worktime: fullTimeStr, date: curDate })
+        });
+        const data = await res.json();
+        w.ot = data.amount_str || "0";
+        renderWorkers();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Batch apply leader's shift and time to all workers
+    document.getElementById("btn-batch-apply").addEventListener("click", async () => {
+      if (workerRows.length === 0) return;
+      const leader = workerRows[0];
+      const curDate = dateInput.value;
+      const fullTimeStr = `(${leader.shift}) ${leader.time}`;
+
+      try {
+        const res = await fetch("/api/calculate_ot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ worktime: fullTimeStr, date: curDate })
+        });
+        const data = await res.json();
+        const otVal = data.amount_str || "0";
+
+        workerRows.forEach(w => {
+          w.shift = leader.shift;
+          w.time = leader.time;
+          w.ot = otVal;
+        });
+        renderWorkers();
+        showToast(`첫 참여자 기준 일괄 적용 완료 (${otVal}원)`);
+      } catch (e) {
+        showToast("일괄 계산 오류", true);
+      }
+    });
+
+    // Method segmented buttons
+    document.querySelectorAll(".method-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        document.querySelectorAll(".method-btn").forEach(b => {
+          b.className = "method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition";
+        });
+        btn.className = "method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition";
+        selectedMethod = btn.dataset.method;
+        updateQtyCalc();
+      });
+    });
+
+    async function updateQtyCalc() {
+      const pipe = document.getElementById("select-pipe").value;
+      const joints = parseFloat(document.getElementById("input-joints").value) || 0;
+
+      try {
+        const res = await fetch("/api/calculate_qty", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ method: selectedMethod, pipe, joints })
+        });
+        const data = await res.json();
+        document.getElementById("display-qty").textContent = data.qty;
+        document.getElementById("display-unit").textContent = data.unit;
+        document.getElementById("display-cost").textContent = `${data.total_cost.toLocaleString()}원`;
+      } catch (e) {}
+    }
+
+    document.getElementById("select-pipe").addEventListener("change", updateQtyCalc);
+    document.getElementById("input-joints").addEventListener("input", updateQtyCalc);
+
+    // Save record to database
+    document.getElementById("btn-submit").addEventListener("click", async () => {
+      const date = dateInput.value;
+      const loc_type = document.getElementById("select-loc-type").value;
+      const pipe = document.getElementById("select-pipe").value;
+      const joints = parseFloat(document.getElementById("input-joints").value) || 0;
+      const qty = parseFloat(document.getElementById("display-qty").textContent) || 0;
+      const unit = document.getElementById("display-unit").textContent;
+      const equip_main = document.getElementById("select-equip").value;
+      const equip_aux = document.getElementById("select-aux-equip").value;
+      const vehicle_no = document.getElementById("select-vehicle").value;
+      const mileage = document.getElementById("input-mileage").value;
+
+      const payload = {
+        date,
+        site: "중앙지사",
+        company: "한국지역난방공사 중앙지사",
+        loc_type,
+        method: selectedMethod,
+        pipe,
+        joints,
+        qty,
+        unit,
+        unit_price: selectedMethod === "PAUT" ? 325451 : (selectedMethod === "RT" ? 205412 : 110000),
+        equip_main,
+        equip_aux,
+        work_shape: workerRows[0]?.shift || "주간",
+        workers: workerRows,
+        vehicle_no,
+        mileage,
+        vehicle_note: "양호|함|완료"
+      };
+
+      try {
+        const btn = document.getElementById("btn-submit");
+        btn.disabled = true;
+        btn.innerHTML = `<span class="animate-spin mr-2">🔄</span> 저장 중...`;
+
+        const res = await fetch("/api/save_record", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast("클라우드 DB에 성공적으로 저장되었습니다!");
+          loadRecentRecords();
+        } else {
+          showToast(data.detail || "저장 실패", true);
+        }
+      } catch (e) {
+        showToast("네트워크/저장 오류 발생", true);
+      } finally {
+        const btn = document.getElementById("btn-submit");
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>`;
+        lucide.createIcons();
+      }
+    });
+
+    async function loadRecentRecords() {
+      const container = document.getElementById("recent-list");
+      try {
+        const res = await fetch(`/api/recent_records?date=${dateInput.value}`);
+        const data = await res.json();
+        if (!data.records || data.records.length === 0) {
+          container.innerHTML = `<div class="text-center py-4 text-xs text-slate-400">당일 저장된 내역이 없습니다.</div>`;
+          return;
+        }
+
+        container.innerHTML = data.records.map(r => `
+          <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+            <div>
+              <div class="flex items-center gap-1.5 mb-0.5">
+                <span class="px-1.5 py-0.5 text-[10px] font-black rounded ${r.method === 'PAUT' ? 'bg-indigo-600 text-white' : (r.method === 'RT' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-white')}">${r.method}</span>
+                <span class="text-xs font-bold text-slate-800">${r.loc_type} ${r.pipe}</span>
+                <span class="text-xs font-black text-blue-600">${r.qty} ${r.unit}</span>
+              </div>
+              <p class="text-[11px] text-slate-500">${r.workers}</p>
+            </div>
+            <span class="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">저장됨</span>
+          </div>
+        `).join("");
+      } catch (e) {
+        container.innerHTML = `<div class="text-center py-2 text-xs text-rose-500">불러오기 실패</div>`;
+      }
+    }
+
+    document.getElementById("btn-refresh-history").addEventListener("click", loadRecentRecords);
+    dateInput.addEventListener("change", loadRecentRecords);
+
+    // Initial load
+    window.addEventListener("DOMContentLoaded", () => {
+      loadConfig();
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
