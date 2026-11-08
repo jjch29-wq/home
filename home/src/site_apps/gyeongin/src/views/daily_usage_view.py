@@ -316,18 +316,18 @@ def setup_daily_usage_tab_impl(self):
     self.ent_daily_test_fee = ttk.Entry(form_content, width=15)
     self.ent_daily_test_fee.grid(row=7, column=1, padx=(2, 10), pady=1, sticky='w')
 
-    # --- NDT 자동 산출 패널 ---
-    self.ndt_calc_frame = ttk.LabelFrame(form_content, text="NDT 상세 조건 및 자동 계산", padding=5)
+    # --- NDT 상세 조건 및 자동 계산 (경인사무소: 관경별 수량 및 물량 자동 산출) ---
+    self.ndt_calc_frame = ttk.LabelFrame(form_content, text="NDT 관경별 수량 및 물량 자동 산출", padding=5)
     self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
     self.ndt_calc_frame.grid_remove() # 기본 숨김
 
     self.ndt_work_time_var = tk.StringVar(value="일반")
-    self.ndt_loc_type_var = tk.StringVar(value="열수송관")
-    self.ndt_source_var = tk.StringVar(value="Ir-192 또는 Se-75 (1.0)")
-    self.ndt_thickness_var = tk.StringVar(value="15mm 이하 (1.0)")
-    self.ndt_pipe_var = tk.StringVar(value="250mm 초과 [10인치 이상] (1.0)")
-    self.ndt_overhead_var = tk.DoubleVar(value=110.0)
-    self.ndt_tech_var = tk.DoubleVar(value=20.0)
+    self.ndt_loc_type_var = tk.StringVar(value="경인사무소")
+    self.ndt_source_var = tk.StringVar(value="조건없음")
+    self.ndt_thickness_var = tk.StringVar(value="조건없음")
+    self.ndt_pipe_var = tk.StringVar(value="조건없음")
+    self.ndt_overhead_var = tk.DoubleVar(value=0.0)
+    self.ndt_tech_var = tk.DoubleVar(value=0.0)
     self.ndt_ori_joint_var = tk.StringVar(value="")
     self.ndt_ori_qty_var = tk.StringVar(value="")
     self.ndt_rep_joint_var = tk.StringVar(value="")
@@ -335,103 +335,19 @@ def setup_daily_usage_tab_impl(self):
     self.ndt_rej_joint_var = tk.StringVar(value="")
     self.ndt_report_pipe_var = tk.StringVar(value="")
 
-    row0 = ttk.Frame(self.ndt_calc_frame)
-    row0.pack(fill='x', pady=2)
-    ttk.Label(row0, text="구분:").pack(side='left')
-    ttk.Combobox(row0, textvariable=self.ndt_loc_type_var, values=["열수송관", "핫태핑"], width=18, state="readonly").pack(side='left', padx=2)
-    ttk.Label(row0, text="  작업형태:").pack(side='left', padx=(5,0))
-    for t in ["일반", "야간", "휴일"]:
-        ttk.Radiobutton(row0, text=t, value=t, variable=self.ndt_work_time_var).pack(side='left', padx=2)
-
-    from site_apps.gyeongin.src.hot_tapping import LENGTHS, STAGES, inspection_length
-    self.hot_tap_stage_var = tk.StringVar(value='1차')
-    self.hot_tap_size_var = tk.StringVar(value='600A')
-    self.hot_tap_location_var = tk.StringVar()
-    self.hot_tap_parts_var = tk.StringVar()
-    hot_row = ttk.Frame(self.ndt_calc_frame)
-    for label, var, values, width in (
-        ('검사 차수:', self.hot_tap_stage_var, list(STAGES), 5),
-        (' 관경(A):', self.hot_tap_size_var, [f'{n}A' for n in LENGTHS], 7),
-        (' 개소명/번호:', self.hot_tap_location_var, None, 14)):
-        ttk.Label(hot_row, text=label).pack(side='left')
-        widget = ttk.Combobox(hot_row, textvariable=var, values=values, state='readonly', width=width) if values else ttk.Entry(hot_row, textvariable=var, width=width)
-        widget.pack(side='left')
-    hot_parts = ttk.Label(self.ndt_calc_frame, textvariable=self.hot_tap_parts_var)
-    def update_hot_panel(*_):
-        if self.ndt_loc_type_var.get() == '핫태핑':
-            hot_row.pack(fill='x', pady=2)
-            hot_parts.pack(fill='x')
-            self.hot_tap_parts_var.set(STAGES[self.hot_tap_stage_var.get()] + ' (1개소 기준)')
-        else:
-            hot_row.pack_forget()
-            hot_parts.pack_forget()
-    self.ndt_loc_type_var.trace_add('write', update_hot_panel)
-    self.hot_tap_stage_var.trace_add('write', update_hot_panel)
-
-    row1 = ttk.Frame(self.ndt_calc_frame)
-    row1.pack(fill='x', pady=2)
-    ttk.Label(row1, text="조건1:").pack(side='left', padx=(0,0))
-    self.cb_ndt_cond1 = ttk.Combobox(row1, textvariable=self.ndt_source_var, width=22, state='readonly')
-    self.cb_ndt_cond1.pack(side='left', padx=2)
-    ttk.Label(row1, text="  조건2:").pack(side='left', padx=(5,0))
-    self.cb_ndt_cond2 = ttk.Combobox(row1, textvariable=self.ndt_thickness_var, width=22, state='readonly')
-    self.cb_ndt_cond2.pack(side='left', padx=2)
-
-    row2 = ttk.Frame(self.ndt_calc_frame)
-    row2.pack(fill='x', pady=2)
-    ttk.Label(row2, text="보고서용 관경(Inch):").pack(side='left', padx=(0,0))
-    def _pipe_size_sort_key(value):
-        """관경 문자열을 숫자 크기로 정렬하기 위한 키를 반환한다."""
-        match = re.search(r"\d+(?:\.\d+)?", str(value))
-        return float(match.group()) if match else -1.0
-
-    report_pipe_values = sorted(
-        getattr(self, 'SIZE_LENGTH', {}).keys(),
-        key=_pipe_size_sort_key,
-        reverse=True,
-    )
-    self.cb_ndt_report_pipe = ttk.Combobox(row2, textvariable=self.ndt_report_pipe_var, width=10, values=report_pipe_values)
-    self.cb_ndt_report_pipe.pack(side='left', padx=2)
-    ttk.Label(row2, text="  제경비율(%):").pack(side='left', padx=(5,0))
-    ttk.Entry(row2, textvariable=self.ndt_overhead_var, width=5).pack(side='left')
-    ttk.Label(row2, text=" 기술료율(%):").pack(side='left', padx=(5,0))
-    ttk.Entry(row2, textvariable=self.ndt_tech_var, width=5).pack(side='left')
-    
-    row3 = ttk.Frame(self.ndt_calc_frame)
-    row3.pack(fill='x', pady=2)
-    ttk.Label(row3, text="[ORI] 조인트:").pack(side='left', padx=(0,0))
-    ttk.Entry(row3, textvariable=self.ndt_ori_joint_var, width=5).pack(side='left', padx=2)
-    ttk.Label(row3, text=" 물량:").pack(side='left', padx=(0,0))
-    ttk.Entry(row3, textvariable=self.ndt_ori_qty_var, width=5).pack(side='left', padx=2)
-    ttk.Label(row3, text="  [REP] 조인트:").pack(side='left', padx=(5,0))
-    ttk.Entry(row3, textvariable=self.ndt_rep_joint_var, width=5).pack(side='left', padx=2)
-    ttk.Label(row3, text=" 물량:").pack(side='left', padx=(0,0))
-    ttk.Entry(row3, textvariable=self.ndt_rep_qty_var, width=5).pack(side='left', padx=2)
-    
-    row4 = ttk.Frame(self.ndt_calc_frame)
-    row4.pack(fill='x', pady=2)
-    ttk.Label(row4, text="당일 불량(REJ)수 (RT: 매):").pack(side='left', padx=(0,0))
-    ttk.Entry(row4, textvariable=self.ndt_rej_joint_var, width=5).pack(side='left', padx=2)
-    ttk.Label(row4, text='RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도').pack(side='left', padx=5)
-
     def _calculate_ndt_fee():
         try:
-            from site_apps.gyeongin.src.ndt_billing_tab import MATERIAL_COST, LABOR_COST
             ndt_type = self.cb_daily_test_method.get().strip().upper()
-            work_time = self.ndt_work_time_var.get()
-            if self.ndt_loc_type_var.get() == '핫태핑' and ndt_type not in ('MT', 'PT'):
-                raise ValueError('핫태핑 길이표는 MT/PT 검사에 적용됩니다.')
             
-            # --- 수량(Usage) 자동 산출 로직 추가 ---
+            # --- 수량(Usage) 자동 산출 로직 ---
             if ndt_type in ('PAUT', 'PT', 'MT', 'RT'):
                 pipe_val = getattr(self, 'ndt_report_pipe_var').get().strip().upper()
                 if pipe_val and pipe_val.isdigit():
                     pipe_val += 'A'
                 
                 size_lookup = getattr(self, 'SIZE_LENGTH', {})
-                is_hot = self.ndt_loc_type_var.get() == '핫태핑'
                 from site_apps.gyeongin.src.services.inspection_quantity import quantity_per_joint
-                length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get()) if is_hot else quantity_per_joint(ndt_type, pipe_val, size_lookup)
+                length = quantity_per_joint(ndt_type, pipe_val, size_lookup)
                 if length is not None:
                     total_joints = 0.0
                     
@@ -457,106 +373,61 @@ def setup_daily_usage_tab_impl(self):
                             calculated_qty = float(self.ndt_ori_qty_var.get() or 0)
                         self.ent_daily_test_amount.delete(0, tk.END)
                         self.ent_daily_test_amount.insert(0, f"{calculated_qty:g}" if ndt_type == 'RT' else f"{calculated_qty:.4f}")
-            # ---------------------------------------
             
-            qty_str = self.ent_daily_test_amount.get().replace(',','')
-            if not qty_str: return
-            qty = float(qty_str)
-            
-            factor = 1.0
-            if ndt_type == "RT":
-                if "1.3" in self.ndt_source_var.get(): factor *= 1.3
-                if "1.4" in self.ndt_thickness_var.get(): factor *= 1.4
-                elif "2.2" in self.ndt_thickness_var.get(): factor *= 2.2
-            elif ndt_type == "UT":
-                pipe_val = self.ndt_pipe_var.get()
-                if "1.2" in pipe_val: factor *= 1.2
-                elif "1.4" in pipe_val: factor *= 1.4
-                elif "1.7" in pipe_val: factor *= 1.7
-                elif "2.0" in pipe_val: factor *= 2.0
-                if "1.2" in self.ndt_thickness_var.get(): factor *= 1.2
-            elif ndt_type == "PT":
-                if "1.2" in self.ndt_pipe_var.get(): factor *= 1.2
-                elif "1.4" in self.ndt_pipe_var.get(): factor *= 1.4
-            
-            adj_qty = qty * factor
-            mat_type = self.cb_daily_material.get().strip().lower()
-            billing_key = ndt_type
-            if ndt_type == "RT":
-                # 중앙지사 계약은 RT 필름 규격별로 단가가 구분된다.
-                billing_key = 'RT_3 1/3 x 6"' if "6" in mat_type and "12" not in mat_type else 'RT_3 1/3 x 12"'
-            elif ndt_type == "PT":
-                billing_key = "PT_PT"
-            elif ndt_type == "MT":
-                billing_key = "MT_MT"
-            elif ndt_type == "PAUT":
-                paut_cond = self.ndt_pipe_var.get().split('(')[0].strip()
-                billing_key = f"PAUT_{paut_cond}"
-
-            # 신규 중앙지사 계약 키를 우선 사용하고, UT 등 기존 항목은
-            # 과거 설정 키도 계속 읽을 수 있도록 검사방법명으로 보완한다.
-            mat_unit_cost = MATERIAL_COST.get(billing_key, MATERIAL_COST.get(ndt_type, 0))
-            
-            total_mat = int(qty * mat_unit_cost)
-            
-            loc_type_val = self.ndt_loc_type_var.get().strip()
-            # 화면 명칭은 계약 명칭인 '열수송관'으로 표시하되,
-            # 기존 단가 설정 파일의 '열배관' 키와 호환한다.
-            contract_loc = {"열수송관": "열배관", "핫태핑": "열배관"}.get(loc_type_val, loc_type_val)
-            
-            if contract_loc in LABOR_COST:
-                labor_rates = LABOR_COST[contract_loc].get(work_time, {})
-                lab_unit = labor_rates.get(billing_key, labor_rates.get(ndt_type, 0))
-            else:
-                # 과거 설정 파일의 작업형태 최상위 구조도 호환한다.
-                labor_rates = LABOR_COST.get(work_time, {})
-                lab_unit = labor_rates.get(billing_key, labor_rates.get(ndt_type, 0))
+            # 단가가 이미 입력되어 있다면 검사비 자동 계산
+            qty_str = self.ent_daily_test_amount.get().replace(',','').strip()
+            if qty_str:
+                try:
+                    qty = float(qty_str)
+                    up_str = self.ent_daily_unit_price.get().replace(',','').strip()
+                    if up_str:
+                        up = float(up_str)
+                        subtotal = int(qty * up)
+                        self.ent_daily_test_fee.delete(0, tk.END)
+                        self.ent_daily_test_fee.insert(0, f"{subtotal:,}")
+                except ValueError: pass
                 
-            import math
-            try:
-                overhead_rate = float(self.ndt_overhead_var.get()) / 100
-                if math.isnan(overhead_rate): overhead_rate = 0.0
-            except:
-                overhead_rate = 0.0
-            try:
-                tech_rate = float(self.ndt_tech_var.get()) / 100
-                if math.isnan(tech_rate): tech_rate = 0.0
-            except:
-                tech_rate = 0.0
-                
-            # [FIX] Calculate fixed base unit price first to prevent 1-won fluctuations
-            base_mat = mat_unit_cost
-            base_lab = int(factor * lab_unit)
-            base_overhead = int(base_lab * overhead_rate)
-            base_tech = int((base_lab + base_overhead) * tech_rate)
-            
-            unit_price = base_mat + base_lab + base_overhead + base_tech
-            subtotal = int(qty * unit_price)
-            
-            # Store proportional totals for internal logs
-            total_mat = int(qty * base_mat)
-            total_lab = int(qty * base_lab)
-            overhead = int(qty * base_overhead)
-            tech = int(qty * base_tech)
-            
-            self.ent_daily_unit_price.delete(0, tk.END)
-            self.ent_daily_unit_price.insert(0, f"{unit_price:,.0f}")
-            
-            self.ent_daily_test_fee.delete(0, tk.END)
-            self.ent_daily_test_fee.insert(0, f"{subtotal:,.0f}")
-            
-            self._last_ndt_factor = factor
-            self._last_ndt_adj_qty = adj_qty
-            self._last_ndt_mat_cost = total_mat
-            self._last_ndt_lab_cost = total_lab
-            self._last_ndt_overhead = overhead
-            self._last_ndt_tech = tech
-            
         except Exception as e:
             import traceback; traceback.print_exc()
 
     self._calculate_daily_ndt_fee = _calculate_ndt_fee
-    ttk.Button(row2, text="자동 산출", command=_calculate_ndt_fee).pack(side='right', padx=5)
+
+    # Row 1: 보고서용 관경(Inch) + 자동 산출 버튼
+    row1 = ttk.Frame(self.ndt_calc_frame)
+    row1.pack(fill='x', pady=2)
+    ttk.Label(row1, text="보고서용 관경(Inch):").pack(side='left', padx=(0,0))
+    def _pipe_size_sort_key(value):
+        match = re.search(r"\d+(?:\.\d+)?", str(value))
+        return float(match.group()) if match else -1.0
+
+    report_pipe_values = sorted(
+        getattr(self, 'SIZE_LENGTH', {}).keys(),
+        key=_pipe_size_sort_key,
+        reverse=True,
+    )
+    self.cb_ndt_report_pipe = ttk.Combobox(row1, textvariable=self.ndt_report_pipe_var, width=12, values=report_pipe_values)
+    self.cb_ndt_report_pipe.pack(side='left', padx=2)
+    ttk.Button(row1, text="자동 산출", command=_calculate_ndt_fee).pack(side='right', padx=5)
+
+    # Row 2: ORI / REP 조인트 및 물량
+    row2 = ttk.Frame(self.ndt_calc_frame)
+    row2.pack(fill='x', pady=2)
+    ttk.Label(row2, text="[ORI] 조인트:").pack(side='left', padx=(0,0))
+    ttk.Entry(row2, textvariable=self.ndt_ori_joint_var, width=6).pack(side='left', padx=2)
+    ttk.Label(row2, text=" 물량:").pack(side='left', padx=(0,0))
+    ttk.Entry(row2, textvariable=self.ndt_ori_qty_var, width=8).pack(side='left', padx=2)
+    ttk.Label(row2, text="  [REP] 조인트:").pack(side='left', padx=(6,0))
+    ttk.Entry(row2, textvariable=self.ndt_rep_joint_var, width=6).pack(side='left', padx=2)
+    ttk.Label(row2, text=" 물량:").pack(side='left', padx=(0,0))
+    ttk.Entry(row2, textvariable=self.ndt_rep_qty_var, width=8).pack(side='left', padx=2)
+
+    # Row 3: 당일 불량(REJ)수
+    row3 = ttk.Frame(self.ndt_calc_frame)
+    row3.pack(fill='x', pady=2)
+    ttk.Label(row3, text="당일 불량(REJ)수 (RT: 매):").pack(side='left', padx=(0,0))
+    ttk.Entry(row3, textvariable=self.ndt_rej_joint_var, width=6).pack(side='left', padx=2)
+    ttk.Label(row3, text='RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도', foreground='#555555').pack(side='left', padx=5)
+
 
     def on_batch_pipe_change(*_):
         # Report diameter also determines the PAUT contract bracket.
@@ -579,11 +450,11 @@ def setup_daily_usage_tab_impl(self):
     self.ent_daily_test_amount.bind('<Return>', lambda e: self.cb_daily_unit.focus_set())
     self.cb_daily_unit.set('매')
     self.ndt_work_time_var.set("일반")
-    self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-    self.ndt_thickness_var.set("15mm 이하 (1.0)")
-    self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-    self.ndt_overhead_var.set(110.0)
-    self.ndt_tech_var.set(20.0)
+    self.ndt_source_var.set("조건없음")
+    self.ndt_thickness_var.set("조건없음")
+    self.ndt_pipe_var.set("조건없음")
+    self.ndt_overhead_var.set(0.0)
+    self.ndt_tech_var.set(0.0)
     self.ndt_calc_frame.grid_remove()
     self.cb_daily_unit.bind('<Return>', lambda e: self.ent_daily_unit_price.focus_set())
     self.cb_daily_unit.bind('<<ComboboxSelected>>', lambda e: self.ent_daily_unit_price.focus_set())
@@ -641,31 +512,9 @@ def setup_daily_usage_tab_impl(self):
                 self.empty_guide_frame.grid_remove() # Hide guide
                 self.rtk_grid.lift() # [FIX] Prevent overlay click-blocking
                 self.master_form_panel.update_idletasks()
-                self.cb_ndt_cond1.config(textvariable=self.ndt_source_var, values=["Ir-192 또는 Se-75 (1.0)", "X-ray 발생장치 (1.3)"])
-                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["15mm 이하 (1.0)", "15mm초과~25mm이하 (1.4)", "25mm초과~40mm이하 (2.2)"])
-                self.ndt_source_var.set("Ir-192 또는 Se-75 (1.0)")
-                self.ndt_thickness_var.set("15mm 이하 (1.0)")
-            elif method == "UT":
+            elif method in ["UT", "PT", "MT", "PAUT"]:
                 self.rtk_grid.grid_remove() # [NEW] Hide RTK
                 self.empty_guide_frame.grid() # Show guide
-                self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["250mm 초과 [10인치 이상] (1.0)", "200~250mm [8인치] (1.2)", "150~200mm [6인치] (1.4)", "100~150mm [4인치] (1.7)", "100mm 이하 [3인치 이하] (2.0)"])
-                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
-                self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-                self.ndt_thickness_var.set("조건없음 (1.0)")
-            elif method in ["PT", "MT"]:
-                self.rtk_grid.grid_remove() # [NEW] Hide RTK
-                # guide already hidden above
-                self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["조건없음 (1.0)"])
-                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
-                self.ndt_pipe_var.set("조건없음 (1.0)")
-                self.ndt_thickness_var.set("조건없음 (1.0)")
-            elif method == "PAUT":
-                self.rtk_grid.grid_remove() # [NEW] Hide RTK
-                self.empty_guide_frame.grid() # Show guide
-                self.cb_ndt_cond1.config(textvariable=self.ndt_pipe_var, values=["300A 이상 (1.0)", "250A (1.0)", "200A (1.0)", "150A-125A (1.0)", "100A 이하 (1.0)"])
-                self.cb_ndt_cond2.config(textvariable=self.ndt_thickness_var, values=["조건없음 (1.0)"])
-                self.ndt_pipe_var.set("300A 이상 (1.0)")
-                self.ndt_thickness_var.set("조건없음 (1.0)")
         else:
             self.ndt_calc_frame.grid_remove()
             self.rtk_grid.grid_remove() # [NEW] Hide RTK

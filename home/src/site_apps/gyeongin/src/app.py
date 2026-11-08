@@ -585,7 +585,7 @@ class MaterialManager:
                 if pipe_val and pipe_val.isdigit():
                     pipe_val += 'A'
                     
-                if self.ndt_loc_type_var.get() == '핫태핑':
+                if hasattr(self, 'hot_tap_location_var') and self.ndt_loc_type_var.get() == '핫태핑':
                     if method not in ('MT', 'PT'): return
                     from site_apps.gyeongin.src.hot_tapping import inspection_length
                     length = inspection_length(self.hot_tap_size_var.get(), self.hot_tap_stage_var.get())
@@ -10635,7 +10635,7 @@ class MaterialManager:
         if hasattr(self, 'inspection_batch') and self.inspection_batch.plans:
             self.inspection_batch.save()
             return
-        if self.ndt_loc_type_var.get() == '핫태핑':
+        if hasattr(self, 'hot_tap_location_var') and self.ndt_loc_type_var.get() == '핫태핑':
             if self.cb_daily_test_method.get().strip().upper() not in ('MT', 'PT'):
                 messagebox.showwarning('핫태핑', '핫태핑 길이표는 MT/PT 검사에 적용됩니다.')
                 return
