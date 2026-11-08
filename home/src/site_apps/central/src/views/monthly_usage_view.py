@@ -195,7 +195,7 @@ def setup_monthly_usage_tab_impl(self):
                command=self.apply_worker_shift_hours_to_budget).pack(side='right', padx=5)
 
     # [NEW] 사용자가 구분선을 마우스로 조절했을 때 높이 자동 저장
-    self.monthly_paned.bind('<ButtonRelease-1>', lambda e: self.root.after(50, self._on_monthly_sash_changed), add="+")
+    self.monthly_paned.bind('<ButtonRelease-1>', self._on_monthly_sash_changed, add="+")
 
     # Initial view update & 사진 높이 비율로 테이블 높이 자동 복원
     self.update_monthly_usage_view()

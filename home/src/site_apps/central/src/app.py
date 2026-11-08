@@ -8888,6 +8888,8 @@ class MaterialManager:
 
     def _on_monthly_sash_changed(self, event=None):
         """사용자가 월별 집계 테이블 구분선을 조절했을 때 높이 및 비율 저장"""
+        if not getattr(self, 'is_ready', False):
+            return
         try:
             if not hasattr(self, 'monthly_paned') or not self.monthly_paned.winfo_exists():
                 return
@@ -14053,19 +14055,7 @@ class MaterialManager:
                     bottom_dashboard_sashes = [self.bottom_dashboard.sashpos(0), self.bottom_dashboard.sashpos(1)]
                 except: pass
 
-            monthly_sash_positions = []
-            monthly_sash_ratios = []
-            if hasattr(self, 'monthly_paned') and isinstance(self.monthly_paned, ttk.PanedWindow):
-                try:
-                    m_h = self.monthly_paned.winfo_height()
-                    s0 = self.monthly_paned.sashpos(0)
-                    s1 = self.monthly_paned.sashpos(1)
-                    if s0 > 0 and s1 > 0 and s0 < s1:
-                        monthly_sash_positions = [s0, s1]
-                        if m_h > 50:
-                            monthly_sash_ratios = [round(s0 / m_h, 4), round(s1 / m_h, 4)]
-                except: pass
-
+            # Only user drags update sash preferences; hidden/startup layouts are temporary.
             entry_inner_frame_height = None
             if hasattr(self, 'entry_inner_frame'):
                 try: entry_inner_frame_height = self.entry_inner_frame.winfo_height()
@@ -14105,8 +14095,8 @@ class MaterialManager:
                 'daily_usage_sash_pos': daily_usage_sash_pos,
                 'daily_history_sash_pos': daily_history_sash_pos,
                 'bottom_dashboard_sashes': bottom_dashboard_sashes,
-                'monthly_sash_positions': monthly_sash_positions or getattr(self, 'tab_config', {}).get('monthly_sash_positions', [125, 262]),
-                'monthly_sash_ratios': monthly_sash_ratios or getattr(self, 'tab_config', {}).get('monthly_sash_ratios', [0.282, 0.590]),
+                'monthly_sash_positions': self.tab_config.get('monthly_sash_positions', [125, 262]),
+                'monthly_sash_ratios': self.tab_config.get('monthly_sash_ratios', [0.282, 0.590]),
                 'entry_inner_frame_height': entry_inner_frame_height,
                 'history_visible_cols': getattr(self, 'manual_visible_cols', []),
                 'monthly_visible_cols': getattr(self, 'monthly_visible_cols', []),
