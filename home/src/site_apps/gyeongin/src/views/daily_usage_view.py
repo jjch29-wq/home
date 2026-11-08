@@ -250,7 +250,7 @@ def setup_daily_usage_tab_impl(self):
 
     # Left column stays consecutive; the right column groups the two equipment fields.
     ttk.Label(form_content, text="방법:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
-    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=[' ', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
+    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=['RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
     self.cb_daily_test_method.grid(row=2, column=1, padx=(2, 10), pady=1, sticky='w')
     
     ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
@@ -471,11 +471,12 @@ def setup_daily_usage_tab_impl(self):
     self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_select_focus, add='+')
     self.cb_daily_test_method.bind('<Return>', on_method_select_focus, add='+')
     
-    def on_method_change_auto_unit_logic(e):
-        method = self.cb_daily_test_method.get().strip()
+    def on_method_change_auto_unit_logic(e=None):
+        method = self.cb_daily_test_method.get().strip().upper()
         print(f"[DEBUG] on_method_change_auto_unit_logic triggered. method='{method}'")
         unit_map = {'RT': '매', 'UT': 'P,M,I/D', 'MT': 'P,M,I/D', 'PT': 'P,M,I/D', 'PAUT': 'M,I/D'}
-        if method in unit_map: self.cb_daily_unit.set(unit_map[method])
+        if method in unit_map:
+            self.cb_daily_unit.set(unit_map[method])
 
         import sys
         if "롯데건설 바이오로직스" in sys.argv[0]:
@@ -486,41 +487,99 @@ def setup_daily_usage_tab_impl(self):
                     self.ent_daily_unit_price.insert(0, f"{contract_prices[method]:,}")
                 except Exception:
                     pass
-        
-        if method in ["MT", "PT"]:
-            try:
-                self.ndt_frame.grid()
-                self.empty_guide_frame.grid_remove() # Hide guide
-            except:
-                pass
-        else:
-            try:
-                self.ndt_frame.grid_remove()
-            except:
-                pass
 
-        
+        # 검사방법별 기본 장비/보조장비 매핑 (경인사무소 비즈니스 규칙)
+        equip_defaults = {
+            'RT': ('Se-75', 'ADR, SURVEY, 콜리메타'),
+            'PAUT': ('PAUT MX2(OMNI2-103085)', 'PAUT SCANNER (MANUAL)'),
+            'MT': ('Yoke', '자분살포기'),
+            'PT': ('PT 약품', '조도계'),
+        }
+        known_main_equips = {v[0] for v in equip_defaults.values()}
+        curr_main_equip = self.ent_daily_equip.get().strip() if hasattr(self, 'ent_daily_equip') else ''
+        if method in equip_defaults:
+            def_main, def_aux = equip_defaults[method]
+            if hasattr(self, 'ent_daily_equip') and (not curr_main_equip or curr_main_equip in known_main_equips):
+                self.ent_daily_equip.delete(0, tk.END)
+                self.ent_daily_equip.insert(0, def_main)
+            if hasattr(self, 'daily_aux_equipment_var'):
+                curr_aux = self.daily_aux_equipment_var.get().strip()
+                known_aux = {v[1] for v in equip_defaults.values()}
+                if not curr_aux or curr_aux in known_aux:
+                    self.daily_aux_equipment_var.set(def_aux)
+
+        # 1. 하단 NDT 관경 및 물량 산출 프레임 제어 (RT, UT, PT, PAUT, MT)
         if method in ["RT", "UT", "PT", "PAUT", "MT"]:
-            try:
-                self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
-                self.ndt_calc_frame.lift()
-                self.root.after(50, self._ensure_canvas_scroll_region)
-            except Exception as ex:
-                print(f"Error in grid: {ex}")
-            if method == "RT":
-                self.rtk_grid.grid() # [NEW] Show RTK
-                self.empty_guide_frame.grid_remove() # Hide guide
-                self.rtk_grid.lift() # [FIX] Prevent overlay click-blocking
-                self.master_form_panel.update_idletasks()
-            elif method in ["UT", "PT", "MT", "PAUT"]:
-                self.rtk_grid.grid_remove() # [NEW] Hide RTK
-                self.empty_guide_frame.grid() # Show guide
+            if hasattr(self, 'ndt_calc_frame'):
+                try:
+                    self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5, 0))
+                    self.ndt_calc_frame.lift()
+                    self.root.after(50, self._ensure_canvas_scroll_region)
+                except Exception as ex:
+                    print(f"Error in grid ndt_calc_frame: {ex}")
         else:
-            self.ndt_calc_frame.grid_remove()
-            self.rtk_grid.grid_remove() # [NEW] Hide RTK
-            try: self.empty_guide_frame.grid_remove() 
-            except: pass
-        return "break" 
+            if hasattr(self, 'ndt_calc_frame'):
+                try: self.ndt_calc_frame.grid_remove()
+                except Exception: pass
+
+        # 2. 우측 1행 1열 패널 전환
+        # RT -> RTK 분류 (self.rtk_grid)
+        # MT, PT -> NDT 자재 소모량 (self.ndt_frame)
+        # UT, PAUT -> 통합 안내 패널 (self.empty_guide_frame)
+        if method == "RT":
+            if hasattr(self, 'empty_guide_frame'):
+                try: self.empty_guide_frame.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'ndt_frame'):
+                try: self.ndt_frame.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'rtk_grid'):
+                try:
+                    self.rtk_grid.grid(row=1, column=1, padx=5, pady=2, sticky='new')
+                    self.rtk_grid.lift()
+                    self.master_form_panel.update_idletasks()
+                except Exception as ex:
+                    print(f"Error in grid rtk_grid: {ex}")
+        elif method in ["MT", "PT"]:
+            if hasattr(self, 'empty_guide_frame'):
+                try: self.empty_guide_frame.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'rtk_grid'):
+                try: self.rtk_grid.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'ndt_frame'):
+                try:
+                    self.ndt_frame.grid(row=1, column=1, padx=5, pady=2, sticky='new')
+                    self.ndt_frame.lift()
+                    self.master_form_panel.update_idletasks()
+                except Exception as ex:
+                    print(f"Error in grid ndt_frame: {ex}")
+        elif method in ["UT", "PAUT"]:
+            if hasattr(self, 'rtk_grid'):
+                try: self.rtk_grid.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'ndt_frame'):
+                try: self.ndt_frame.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'empty_guide_frame'):
+                try:
+                    self.empty_guide_frame.grid(row=1, column=1, padx=5, pady=2, sticky='new')
+                    self.empty_guide_frame.lift()
+                    self.master_form_panel.update_idletasks()
+                except Exception as ex:
+                    print(f"Error in grid empty_guide_frame: {ex}")
+        else:
+            if hasattr(self, 'rtk_grid'):
+                try: self.rtk_grid.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'ndt_frame'):
+                try: self.ndt_frame.grid_remove()
+                except Exception: pass
+            if hasattr(self, 'empty_guide_frame'):
+                try: self.empty_guide_frame.grid_remove()
+                except Exception: pass
+
+    self.on_method_change_auto_unit_logic = on_method_change_auto_unit_logic
     self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit_logic, add='+')
     self.cb_daily_test_method.bind('<KeyRelease>', on_method_change_auto_unit_logic, add='+')
     
@@ -619,6 +678,11 @@ def setup_daily_usage_tab_impl(self):
     
     guide_lbl = ttk.Label(self.empty_guide_frame, text="💡 PAUT 및 UT 검사는 NDT 자재 및 RTK 입력이 필요하지 않습니다.\n(특이사항은 하단의 메모를 활용해 주세요.)", justify='center', padding=10)
     guide_lbl.pack(fill='both', expand=True)
+
+    # 기본 검사방법(RT) 설정 및 화면(RTK / NDT 수량 산출) 자동 표시
+    if not self.cb_daily_test_method.get().strip():
+        self.cb_daily_test_method.set('RT')
+    self.on_method_change_auto_unit_logic()
 
     # [LAYOUT FIX] Removed obsolete minsize row configurations
 

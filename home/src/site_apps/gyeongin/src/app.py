@@ -9489,8 +9489,6 @@ class MaterialManager:
         company_idx = len(self.ndt_company_entries)
         ndt_materials = self.ndt_materials_all
 
-
-        
         # Company frame (Standard frame to save space, no title border)
         company_frame = ttk.Frame(self.ndt_company_container)
         company_frame.pack(fill='x', padx=2, pady=2)
@@ -9502,11 +9500,28 @@ class MaterialManager:
         
         # Company code selector (Index 0)
         ttk.Label(grid_frame, text="회사코드:", font=('Arial', 8, 'bold')).grid(row=0, column=0, padx=1, pady=1, sticky='e')
-        cb_co = ttk.Combobox(grid_frame, width=8, values=getattr(self, 'co_code_list', []))
-        cb_co.grid(row=0, column=1, padx=1, pady=1, sticky='ew')
-        cb_co.set('')  # Default empty
         
-        entries = {'_company': cb_co}  # Store company combobox
+        existing_co = []
+        if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
+            for col in ['업체명', '회사코드', 'Company']:
+                if col in self.daily_usage_df.columns:
+                    existing_co.extend([str(x).strip() for x in self.daily_usage_df[col].dropna() if str(x).strip() and str(x).strip() != 'nan'])
+
+        all_companies = list(dict.fromkeys(
+            [c for c in getattr(self, 'co_code_list', []) if c] + 
+            [c for c in getattr(self, 'companies', []) if c] +
+            existing_co
+        ))
+        cb_co = ttk.Combobox(grid_frame, width=10, values=all_companies)
+        cb_co.grid(row=0, column=1, padx=1, pady=1, sticky='ew')
+        
+        curr_co = getattr(self, 'cb_daily_company', None)
+        if curr_co and curr_co.get().strip():
+            cb_co.set(curr_co.get().strip())
+        else:
+            cb_co.set('')
+        
+        entries = {'_company': cb_co, '_frame': company_frame}  # Store company combobox and frame
         
         # NDT entries grid (Index 1 to 7)
         for i, mat in enumerate(ndt_materials):
@@ -9523,12 +9538,14 @@ class MaterialManager:
     def remove_last_ndt_company(self):
         """마지막 회사 섹션 삭제"""
         if hasattr(self, 'ndt_company_entries') and len(self.ndt_company_entries) > 1:
-            # Remove last entry dict
-            self.ndt_company_entries.pop()
-            # Destroy last widget in container
-            widgets = self.ndt_company_container.winfo_children()
-            if widgets:
-                widgets[-1].destroy()
+            entry_dict = self.ndt_company_entries.pop()
+            f = entry_dict.get('_frame')
+            if f and f.winfo_exists():
+                f.destroy()
+            else:
+                widgets = self.ndt_company_container.winfo_children()
+                if widgets:
+                    widgets[-1].destroy()
 
     def sync_worker_times(self, *args, **kwargs):
         from site_apps.gyeongin.src.models.worker_model import sync_worker_times_impl
@@ -10568,35 +10585,39 @@ class MaterialManager:
         self.ndt_work_time_var.set("일반")
         self.ndt_source_var.set("Se-75 (1.0)")
         self.ndt_thickness_var.set("조건없음 (1.0)")
-        self.ndt_pipe_var.set("250mm 초과 [10인치 이상] (1.0)")
-        self.ndt_overhead_var.set(110.0)
-        self.ndt_tech_var.set(20.0)
+        self.ndt_pipe_var.set("조건없음")
+        self.ndt_overhead_var.set(0.0)
+        self.ndt_tech_var.set(0.0)
         self.ndt_ori_joint_var.set("")
         self.ndt_ori_qty_var.set("")
         self.ndt_rep_joint_var.set("")
         self.ndt_rep_qty_var.set("")
         self.ndt_rej_joint_var.set("")
         self.ndt_report_pipe_var.set("")
-        self.ndt_loc_type_var.set('열수송관')
-        self.hot_tap_stage_var.set('1차')
-        self.hot_tap_size_var.set('600A')
-        self.hot_tap_location_var.set('')
-        self.ndt_calc_frame.grid_remove()
-        self.rtk_grid.grid_remove() # [NEW] Hide RTK on clear
-        self.ndt_frame.grid_remove() # [NEW] Hide NDT frame on clear
+        self.ndt_loc_type_var.set('경인사무소')
+        if hasattr(self, 'hot_tap_stage_var'): self.hot_tap_stage_var.set('')
+        if hasattr(self, 'hot_tap_size_var'): self.hot_tap_size_var.set('')
+        if hasattr(self, 'hot_tap_location_var'): self.hot_tap_location_var.set('')
         
         # 4. NDT 자재 및 RTK 필드 초기화
         if hasattr(self, 'ndt_company_entries'):
             for entries in self.ndt_company_entries:
                 for mat in ["형광자분", "흑색자분", "백색페인트", "침투제", "세척제", "현상제", "형광침투제"]:
                     if mat in entries: entries[mat].delete(0, tk.END)
+                if '_company' in entries and hasattr(entries['_company'], 'set'):
+                    entries['_company'].set('')
         
-        for ent in self.rtk_entries.values():
-            if ent.winfo_exists():
-                ent.config(state='normal')
-                ent.delete(0, tk.END)
-                if ent == self.rtk_entries.get("총계"): 
-                    ent.config(state='readonly')
+        if hasattr(self, 'rtk_entries'):
+            for ent in self.rtk_entries.values():
+                if ent.winfo_exists():
+                    ent.config(state='normal')
+                    ent.delete(0, tk.END)
+                    if ent == self.rtk_entries.get("총계"): 
+                        ent.config(state='readonly')
+        
+        self.cb_daily_test_method.set('RT')
+        if hasattr(self, 'on_method_change_auto_unit_logic'):
+            self.on_method_change_auto_unit_logic(None)
         
         # 5. 차량 점검 섹션 초기화 (중복 방지 및 고정 패널 사용)
         for key in list(getattr(self, 'vehicle_inspections', {})):
