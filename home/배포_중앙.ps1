@@ -14,6 +14,8 @@ param(
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 Set-Location $ProjectRoot
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $env:GIT_REDIRECT_STDERR = '2>&1'
 $ErrorActionPreference = 'Continue'
 
@@ -68,10 +70,10 @@ git add home/src/site_apps/central/main.py
 git add home/src/site_apps/central/mobile/
 git add home/src/site_apps/central/google_apps_script/
 git add home/src/site_apps/central/src/
-git add "home/src/한국지역난방 중앙지사.py"
+git add "home/src/*중앙지사*.py"
 git add home/tests/test_central*
-git add home/배포_중앙.ps1
-git add 중앙지사_*.bat
+git add "home/*배포_중앙*.ps1"
+git add "*중앙지사_*.bat"
 
 $staged = git diff --cached --name-only
 if (-not $staged) {
