@@ -24,8 +24,9 @@ if str(GYEONGIN_SRC) not in sys.path:
 if str(HOME_SRC) not in sys.path:
     sys.path.insert(0, str(HOME_SRC))
 
-from site_apps.central.src.services.ot_calculator import ot_breakdown
-from site_apps.central.src.services.inspection_quantity import quantity_per_joint
+# Site Isolation: Only use Gyeongin packages
+from site_apps.gyeongin.src.services.ot_calculator import ot_breakdown
+from site_apps.gyeongin.src.services.inspection_quantity import quantity_per_joint
 
 app = FastAPI(title="경인사무소 모바일 현장 입력 시스템", version="1.0.0")
 
@@ -64,6 +65,50 @@ VEHICLES = [
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "src" / "Material_Manager_Config.json"
 
+def get_inventory_paths():
+    """Return cloud and local inventory paths for Gyeongin Office"""
+    paths = []
+    local_p = Path(__file__).resolve().parents[1] / "data" / "Material_Inventory.xlsx"
+    if local_p.exists():
+        paths.append(str(local_p))
+
+    try:
+        # Fast check without hanging on unmounted network/virtual drives
+        import ctypes
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        drives = [chr(65 + i) for i in range(26) if (bitmask >> i) & 1]
+        if 'G' in drives:
+            cloud_p = os.path.join(r"G:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\data", "Material_Inventory.xlsx")
+            if os.path.exists(cloud_p) and cloud_p not in paths:
+                paths.insert(0, cloud_p)
+    except Exception:
+        pass
+
+    return paths
+
+def get_gyeongin_companies():
+    """Load dynamic client company list from config and database"""
+    companies = []
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                companies = data.get("companies", [])
+        except Exception:
+            pass
+    paths = get_inventory_paths()
+    if paths:
+        try:
+            df = pd.read_excel(paths[0], sheet_name="DailyUsage")
+            if not df.empty and "업체명" in df.columns:
+                existing = [str(x).strip() for x in df["업체명"].dropna() if str(x).strip() and str(x).strip() != 'nan']
+                companies.extend(existing)
+        except Exception:
+            pass
+    if not companies:
+        companies = ["경인사무소"]
+    return list(dict.fromkeys(companies))
+
 def get_gyeongin_aux_equipments():
     items = []
     if CONFIG_PATH.exists():
@@ -81,7 +126,7 @@ def get_gyeongin_aux_equipments():
         ]
     return list(dict.fromkeys(items))
 
-EQUIPMENTS = ["PAUT MX2(OMNI2-103085)", "Se-75", "Yoke"]
+EQUIPMENTS = ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품"]
 
 METHOD_DEFAULTS = {
     "RT": {
@@ -94,18 +139,18 @@ METHOD_DEFAULTS = {
             "콜리메타",
             "없음"
         ],
-        "default_aux": "ADR, SURVEY, 콜리메타"
+        "default_aux": "ADR, SURVEY, 콜리메타",
+        "unit": "매"
     },
-    "PAUT": {
-        "equip_main": "PAUT MX2(OMNI2-103085)",
+    "PT": {
+        "equip_main": "PT 약품",
         "aux_equipments": [
-            "PAUT SCANNER (MANUAL)",
-            "COBRA Manual Scanner",
-            "JIREH MICROBE BTG006",
-            "JIREH Scanner",
+            "조도계",
+            "온습도계",
             "없음"
         ],
-        "default_aux": "PAUT SCANNER (MANUAL)"
+        "default_aux": "조도계",
+        "unit": "M"
     },
     "MT": {
         "equip_main": "Yoke",
@@ -116,16 +161,20 @@ METHOD_DEFAULTS = {
             "휴대용 UV메타",
             "없음"
         ],
-        "default_aux": "자분살포기"
+        "default_aux": "자분살포기",
+        "unit": "M"
     },
-    "PT": {
-        "equip_main": "PT 약품",
+    "PAUT": {
+        "equip_main": "PAUT MX2(OMNI2-103085)",
         "aux_equipments": [
-            "조도계",
-            "온습도계",
+            "PAUT SCANNER (MANUAL)",
+            "COBRA Manual Scanner",
+            "JIREH MICROBE BTG006",
+            "JIREH Scanner",
             "없음"
         ],
-        "default_aux": "조도계"
+        "default_aux": "PAUT SCANNER (MANUAL)",
+        "unit": "M"
     }
 }
 
@@ -137,12 +186,6 @@ WORKTIMES = [
 ]
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-
-def get_inventory_paths():
-    """Return cloud and local inventory paths for Gyeongin Office"""
-    cloud_p = os.path.join(r"G:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\data", "Material_Inventory.xlsx")
-    local_p = Path(__file__).resolve().parents[1] / "data" / "Material_Inventory.xlsx"
-    return [p for p in [cloud_p, str(local_p)] if os.path.exists(p)]
 
 class OtCalcRequest(BaseModel):
     worktime: str
@@ -163,22 +206,45 @@ class RecordSaveRequest(BaseModel):
     date: str
     site: str = "경인사무소"
     company: str = "경인사무소"
-    loc_type: str = "열수송관"
-    method: str
+    company_code: str = ""
+    loc_type: str = "경인사무소"
+    method: str = "RT"
     pipe: str = ""
-    item_name: str = "Pipe"
+    item_name: str = "Piping"
     joints: float = 0.0
+    ori_joints: float = 0.0
+    ori_qty: float = 0.0
+    rep_joints: float = 0.0
+    rep_qty: float = 0.0
+    rej_qty: float = 0.0
     qty: float = 0.0
-    unit: str = "M"
+    unit: str = "매"
     unit_price: float = 0.0
     equip_main: str = ""
     equip_aux: str = ""
-    work_shape: str = "주간"
-    workers: List[WorkerItem]
+    work_shape: str = "일반"
+    workers: List[WorkerItem] = []
     vehicle_no: str = ""
     mileage: str = ""
     vehicle_note: str = ""
     note: str = ""
+    # RTK Defect Categories (8 items)
+    rtk_center_miss: float = 0.0
+    rtk_density: float = 0.0
+    rtk_marking_miss: float = 0.0
+    rtk_film_mark: float = 0.0
+    rtk_handling: float = 0.0
+    rtk_complaint: float = 0.0
+    rtk_etc: float = 0.0
+    rtk_total: float = 0.0
+    # NDT Chemical Consumables (7 items)
+    chem_fl_mag: float = 0.0      # 형광자분
+    chem_black_mag: float = 0.0   # 흑색자분
+    chem_white_paint: float = 0.0 # 백색페인트
+    chem_penetrant: float = 0.0   # 침투제
+    chem_cleaner: float = 0.0     # 세척제
+    chem_developer: float = 0.0   # 현상제
+    chem_fl_pen: float = 0.0      # 형광침투제
 
 @app.get("/api/config")
 def get_config():
@@ -190,8 +256,9 @@ def get_config():
         "method_defaults": METHOD_DEFAULTS,
         "worktimes": WORKTIMES,
         "pipe_sizes": list(SIZE_LENGTH.keys()),
-        "methods": ["PAUT", "RT", "MT", "PT"],
-        "loc_types": ["열수송관", "플랜트(관리소)", "열배관", "핫태핑"]
+        "methods": ["RT", "PT", "MT", "PAUT"],
+        "companies": get_gyeongin_companies(),
+        "loc_types": ["경인사무소", "일반배관", "플랜트", "탱크/기기", "기타"]
     }
 
 @app.post("/api/calculate_ot")
@@ -201,11 +268,11 @@ def calculate_ot(req: OtCalcRequest):
     except Exception:
         dt = datetime.date.today()
     
-    total_ot_hours, ot_pay, desc = ot_breakdown(req.worktime, dt)
+    res = ot_breakdown(req.worktime, dt)
     return {
-        "total_hours": total_ot_hours,
-        "ot_pay": ot_pay,
-        "desc": desc
+        "total_hours": res.get("hours", 0.0),
+        "ot_pay": res.get("amount", 0),
+        "desc": f"주간 {res.get('day', 0)}h, 야간 {res.get('night', 0)}h, 심야·휴일 {res.get('holiday', 0)}h"
     }
 
 @app.post("/api/calculate_qty")
@@ -215,14 +282,16 @@ def calculate_qty(req: QtyCalcRequest):
     joints = float(req.joints or 0)
 
     if method == "RT":
-        qty = round(joints * 3.0, 4) if joints > 0 else 0.0
         unit = "매"
-        unit_price = 205412.0
+        unit_price = 25500.0
+        qty = round(joints * 3.0, 1) if joints > 0 else 0.0
     else:
         unit = "M"
-        unit_price = 325451.0 if method == "PAUT" else 110000.0
+        unit_price = 18500.0 if method == "PAUT" else 4200.0
         base_len = SIZE_LENGTH.get(pipe, 0.0)
-        qty = round(quantity_per_joint(base_len) * joints, 4) if base_len > 0 and joints > 0 else 0.0
+        single_len = quantity_per_joint(method, pipe, SIZE_LENGTH)
+        calc_len = single_len if single_len is not None else base_len
+        qty = round(calc_len * joints, 4) if calc_len > 0 and joints > 0 else 0.0
 
     total_cost = int(round(qty * unit_price))
     return {
@@ -261,14 +330,31 @@ def get_recent_records(date: Optional[str] = None):
                     ot_val = row.get(f"User{i}_OT_Pay", 0)
                     workers_str += f"{str(u).strip()} ({ot_val:,.0f}원), "
             
+            # Form chemical summary if present
+            chem_summary = []
+            for col, short in [('NDT_형광자분', '형자'), ('NDT_흑색자분', '흑자'), ('NDT_백색페인트', '백페'), 
+                               ('NDT_침투제', '침투'), ('NDT_세척제', '세척'), ('NDT_현상제', '현상'), ('NDT_형광침투제', '형침')]:
+                val = row.get(col, 0)
+                try:
+                    if float(val) > 0: chem_summary.append(f"{short}:{float(val):g}")
+                except Exception: pass
+
+            rtk_summary = []
+            rtk_total = row.get("RTK_총계", 0)
+            try:
+                if float(rtk_total) > 0: rtk_summary.append(f"RTK:{float(rtk_total):g}")
+            except Exception: pass
+
             records.append({
                 "id": int(idx),
                 "date": str(row.get("Date_str", "")),
+                "company": str(row.get("업체명", "경인사무소")),
                 "method": str(row.get("검사방법", "")),
-                "loc_type": str(row.get("작업구분", "열수송관")),
-                "pipe": str(row.get("규격", "")),
+                "loc_type": str(row.get("작업구분", "경인사무소")),
+                "pipe": str(row.get("관경(Inch)", row.get("규격", ""))),
                 "qty": float(row.get("수량", 0)),
                 "unit": str(row.get("단위", "M")),
+                "extra": " ".join(chem_summary + rtk_summary),
                 "workers": workers_str.rstrip(", ")
             })
 
@@ -287,11 +373,15 @@ def save_record(req: RecordSaveRequest):
         "Date": req.date,
         "Site": req.site,
         "작업구분": req.loc_type,
+        "구분": req.loc_type,
         "업체명": req.company,
+        "회사코드": req.company_code or req.company,
         "검사방법": req.method,
         "규격": req.pipe,
+        "관경(Inch)": req.pipe,
         "검사품명": req.item_name,
-        "조인트수": req.joints,
+        "조인트수": req.joints or req.ori_joints,
+        "불량수": req.rej_qty,
         "수량": req.qty,
         "단위": req.unit,
         "단가": req.unit_price,
@@ -303,16 +393,35 @@ def save_record(req: RecordSaveRequest):
         "주행거리": req.mileage,
         "차량비고": req.vehicle_note,
         "Note": req.note,
-        "EntryTime": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "EntryTime": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        # RTK (8 categories)
+        "RTK_센터미스": req.rtk_center_miss,
+        "RTK_농도": req.rtk_density,
+        "RTK_마킹미스": req.rtk_marking_miss,
+        "RTK_필름마크": req.rtk_film_mark,
+        "RTK_취급부주의": req.rtk_handling,
+        "RTK_고객불만": req.rtk_complaint,
+        "RTK_기타": req.rtk_etc,
+        "RTK_총계": req.rtk_total,
+        # NDT Chemicals (7 categories)
+        "NDT_형광자분": req.chem_fl_mag,
+        "NDT_흑색자분": req.chem_black_mag,
+        "NDT_백색페인트": req.chem_white_paint,
+        "NDT_침투제": req.chem_penetrant,
+        "NDT_세척제": req.chem_cleaner,
+        "NDT_현상제": req.chem_developer,
+        "NDT_형광침투제": req.chem_fl_pen,
     }
 
     # Assign workers
-    for idx, w in enumerate(req.workers[:5], start=1):
+    for idx, w in enumerate(req.workers[:10], start=1):
         new_row_data[f"User{idx}"] = w.user
+        new_row_data[f"WorkTime{idx}"] = w.time
         new_row_data[f"User{idx}_WorkTime"] = w.time
         new_row_data[f"User{idx}_Work_Shape"] = w.shift
         clean_ot = float(str(w.ot).replace(",", "").strip()) if w.ot else 0.0
         new_row_data[f"User{idx}_OT_Pay"] = clean_ot
+        new_row_data[f"OT{idx}"] = clean_ot
 
     saved_dbs = []
     for p in paths:
@@ -356,4 +465,3 @@ if STATIC_DIR.exists():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)
-
