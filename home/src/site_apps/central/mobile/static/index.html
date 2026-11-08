@@ -120,9 +120,10 @@
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
-          <select id="select-aux-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+          <select id="select-aux-equip" onchange="checkCustomAux()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
             <!-- Populated via JS -->
           </select>
+          <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
         </div>
       </div>
     </div>
@@ -395,6 +396,17 @@
       }
     });
 
+    function checkCustomAux() {
+      const select = document.getElementById("select-aux-equip");
+      const customInput = document.getElementById("input-custom-aux");
+      if (select.value === "__custom__") {
+        customInput.classList.remove("hidden");
+        customInput.focus();
+      } else {
+        customInput.classList.add("hidden");
+      }
+    }
+
     function applyMethodDefaults(method) {
       if (!appConfig || !appConfig.method_defaults) return;
       const def = appConfig.method_defaults[method];
@@ -402,6 +414,8 @@
       
       const equipSelect = document.getElementById("select-equip");
       const auxSelect = document.getElementById("select-aux-equip");
+      const customInput = document.getElementById("input-custom-aux");
+      if (customInput) customInput.classList.add("hidden");
       
       if (def.equip_main) {
         // Ensure equip_main option exists
@@ -416,7 +430,9 @@
       }
       
       if (def.aux_equipments) {
-        auxSelect.innerHTML = def.aux_equipments.map(a => `<option value="${a}" ${a === def.default_aux ? 'selected' : ''}>${a}</option>`).join("");
+        let opts = def.aux_equipments.map(a => `<option value="${a}" ${a === def.default_aux ? 'selected' : ''}>${a}</option>`).join("");
+        opts += `<option value="__custom__">✏️ 직접 입력...</option>`;
+        auxSelect.innerHTML = opts;
         auxSelect.value = def.default_aux;
       }
     }
@@ -463,7 +479,10 @@
       const qty = parseFloat(document.getElementById("display-qty").textContent) || 0;
       const unit = document.getElementById("display-unit").textContent;
       const equip_main = document.getElementById("select-equip").value;
-      const equip_aux = document.getElementById("select-aux-equip").value;
+      let equip_aux = document.getElementById("select-aux-equip").value;
+      if (equip_aux === "__custom__") {
+        equip_aux = document.getElementById("input-custom-aux").value.trim() || "해당없음";
+      }
       const vehicle_no = document.getElementById("select-vehicle").value;
       const mileage = document.getElementById("input-mileage").value;
 

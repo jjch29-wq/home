@@ -62,31 +62,69 @@ VEHICLES = [
     "95가0200 (스타렉스)", "개인차량 (스타렉스)", "개인차량-이병국 (스타렉스)"
 ]
 
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "src" / "Material_Manager_Config.json"
+
+def get_central_aux_equipments():
+    items = []
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                items = data.get("aux_equipments", [])
+        except Exception:
+            pass
+    if not items:
+        items = [
+            "ADR, SURVEY, 콜리메타", "ADR; SURVEY; 콜리메타", "ADR", "SURVEY", "콜리메타",
+            "PAUT SCANNER (MANUAL)", "COBRA Manual Scanner", "JIREH MICROBE BTG006",
+            "JIREH Scanner", "자분살포기", "조도계", "자계강도계", "온습도계", "BLACK LIGHT", "없음"
+        ]
+    return list(dict.fromkeys(items))
+
 EQUIPMENTS = ["PAUT MX2(OMNI2-103085)", "Se-75", "Yoke"]
-AUX_EQUIPMENTS = [
-    "ADR, SURVEY, 콜리메타", "ADR", "SURVEY", "콜리메타",
-    "PAUT SCANNER (MANUAL)", "MICROBE BTG006", "COBRA Manual Scanner"
-]
 
 METHOD_DEFAULTS = {
     "RT": {
         "equip_main": "Se-75",
-        "aux_equipments": ["ADR, SURVEY, 콜리메타", "ADR", "SURVEY", "콜리메타"],
+        "aux_equipments": [
+            "ADR, SURVEY, 콜리메타",
+            "ADR; SURVEY; 콜리메타",
+            "ADR",
+            "SURVEY",
+            "콜리메타",
+            "없음"
+        ],
         "default_aux": "ADR, SURVEY, 콜리메타"
     },
     "PAUT": {
         "equip_main": "PAUT MX2(OMNI2-103085)",
-        "aux_equipments": ["PAUT SCANNER (MANUAL)", "MICROBE BTG006", "COBRA Manual Scanner"],
+        "aux_equipments": [
+            "PAUT SCANNER (MANUAL)",
+            "COBRA Manual Scanner",
+            "JIREH MICROBE BTG006",
+            "JIREH Scanner",
+            "없음"
+        ],
         "default_aux": "PAUT SCANNER (MANUAL)"
     },
     "MT": {
         "equip_main": "Yoke",
-        "aux_equipments": ["자분살포기", "조도계", "자계강도계"],
+        "aux_equipments": [
+            "자분살포기",
+            "조도계",
+            "자계강도계",
+            "BLACK LIGHT",
+            "없음"
+        ],
         "default_aux": "자분살포기"
     },
     "PT": {
         "equip_main": "PT 약품",
-        "aux_equipments": ["조도계", "온습도계"],
+        "aux_equipments": [
+            "조도계",
+            "온습도계",
+            "없음"
+        ],
         "default_aux": "조도계"
     }
 }
@@ -150,7 +188,7 @@ def get_config():
         "users": USERS,
         "vehicles": VEHICLES,
         "equipments": EQUIPMENTS,
-        "aux_equipments": AUX_EQUIPMENTS,
+        "aux_equipments": get_central_aux_equipments(),
         "method_defaults": METHOD_DEFAULTS,
         "worktimes": WORKTIMES,
         "pipe_sizes": list(SIZE_LENGTH.keys()),
