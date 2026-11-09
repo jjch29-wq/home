@@ -340,10 +340,12 @@ def get_recent_records(date: Optional[str] = None):
 
         df["Date_str"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
 
+        is_fallback = False
         if date:
             filtered = df[df["Date_str"] == date]
             if filtered.empty:
                 filtered = df.tail(15)
+                is_fallback = True
         else:
             filtered = df.tail(15)
 
@@ -444,9 +446,9 @@ def get_recent_records(date: Optional[str] = None):
             })
 
         records.reverse()
-        return {"records": records}
+        return {"records": records, "is_fallback": is_fallback}
     except Exception as e:
-        return {"records": [], "error": str(e)}
+        return {"records": [], "is_fallback": False, "error": str(e)}
 
 def build_row_data(req: RecordSaveRequest, preserve_entry_time: Optional[str] = None) -> Dict[str, Any]:
     calculated_fee = int(round(req.total_fee)) if req.total_fee > 0 else int(round(req.qty * req.unit_price + req.travel_cost))

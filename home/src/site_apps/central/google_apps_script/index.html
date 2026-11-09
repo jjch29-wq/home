@@ -1212,13 +1212,21 @@
         const res = await apiCall('getRecentRecords', date);
         const list = res.records || [];
         if (list.length === 0) {
-          container.innerHTML = `<div class="text-center py-4 text-xs text-slate-400">당일 저장된 내역이 없습니다.</div>`;
+          container.innerHTML = `<div class="text-center py-4 text-xs text-slate-400">당일(${date}) 저장된 내역이 없습니다. (새 작업을 저장하거나 날짜를 변경해 보세요)</div>`;
           window.recentRecordsList = [];
           return;
         }
 
         window.recentRecordsList = list;
-        container.innerHTML = list.map((item, idx) => `
+        let headerHtml = '';
+        if (res.is_fallback) {
+          headerHtml = `<div class="p-2.5 mb-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 font-bold flex items-center justify-between">
+            <span>ℹ️ 선택일(${date}) 내역이 없어 <strong>[최근 등록 내역]</strong>을 표시합니다.</span>
+            <span class="text-[10px] text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-extrabold">${list.length}건</span>
+          </div>`;
+        }
+
+        container.innerHTML = headerHtml + list.map((item, idx) => `
           <div class="p-3.5 bg-slate-900 text-slate-100 rounded-2xl mb-3 shadow-md border border-slate-700/80">
             <div class="flex items-start justify-between gap-2">
               <div>

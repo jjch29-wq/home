@@ -484,13 +484,13 @@ function batchSyncRecords(payload) {
 }
 
 /**
- * 최근 저장된 내역 조회
+ * 최근 저장된 내역 조회 (당일 또는 최근 내역 자동 표시)
  */
 function getRecentRecords(targetDate) {
   var sheet = getDailyUsageSheet();
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) {
-    return { records: [] };
+    return { records: [], is_fallback: false };
   }
 
   var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -498,9 +498,7 @@ function getRecentRecords(targetDate) {
   var numRows = lastRow - startRow + 1;
   var data = sheet.getRange(startRow, 1, numRows, headerRow.length).getValues();
 
-  var records = [];
-  for (var r = 0; r < data.length; r++) {
-    var row = data[r];
+  function parseRow(r, row) {
     var item = {};
     for (var c = 0; c < headerRow.length; c++) {
       item[headerRow[c]] = row[c];
@@ -511,10 +509,6 @@ function getRecentRecords(targetDate) {
       rowDateStr = Utilities.formatDate(item['Date'], "Asia/Seoul", "yyyy-MM-dd");
     } else {
       rowDateStr = String(item['Date'] || '').substring(0, 10);
-    }
-
-    if (targetDate && rowDateStr !== targetDate) {
-      continue;
     }
 
     var workersArr = [];
@@ -552,7 +546,7 @@ function getRecentRecords(targetDate) {
 
     var entryTimeVal = formatCellTime(item['EntryTime'] || item['입력시간']);
 
-    records.push({
+    return {
       id: startRow + r,
       entry_time: entryTimeVal,
       date: rowDateStr,
@@ -602,11 +596,32 @@ function getRecentRecords(targetDate) {
       extra: chemList.join(" "),
       workers: workersArr.join(", "),
       worker_list: workerList
-    });
+    };
   }
 
-  records.reverse();
-  return { records: records.slice(0, 15) };
+  var matchedRecords = [];
+  var allRecent = [];
+
+  for (var r = 0; r < data.length; r++) {
+    var rec = parseRow(r, data[r]);
+    allRecent.push(rec);
+    if (!targetDate || rec.date === targetDate) {
+      matchedRecords.push(rec);
+    }
+  }
+
+  var isFallback = false;
+  var finalRecords = matchedRecords;
+  if (matchedRecords.length === 0 && targetDate && allRecent.length > 0) {
+    finalRecords = allRecent.slice(-10);
+    isFallback = true;
+  }
+
+  finalRecords.reverse();
+  return {
+    records: finalRecords.slice(0, 15),
+    is_fallback: isFallback
+  };
 }
 
 /**
