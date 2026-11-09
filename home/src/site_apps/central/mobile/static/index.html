@@ -502,7 +502,69 @@
   </div>
 
   <script>
-    let appConfig = null;
+    const DEFAULT_CONFIG = {
+      companies: ["한국지역난방공사 중앙지사", "한국지역난방공사", "중앙지사"],
+      loc_types: ["열수송관", "플랜트(관리소)", "열배관", "핫태핑"],
+      users: [
+        "부장 주진철", "부장 이병국", "부장 박광복", "차장 권인경",
+        "과장 주영광", "대리 우명광", "계장 박상태", "계장 이준우",
+        "계장 장승대", "주임 김성렬", "주임 김진환"
+      ],
+      vehicles: [
+        "81두1580 (탑차)", "89보4028 (탑차)", "90너4889 (탑차)",
+        "71고4405 (스타렉스)", "76마3422 (스타렉스)", "81도5958 (스타렉스)",
+        "81도8458 (스타렉스)", "81루5100 (스타렉스)", "84저1259 (스타렉스)",
+        "90서8616 (스타렉스)", "91주8839 (스타렉스)", "95가0175 (스타렉스)",
+        "95가0200 (스타렉스)", "개인차량 (스타렉스)", "개인차량-이병국 (스타렉스)"
+      ],
+      equipments: ["PAUT MX2(OMNI2-103085)", "Se-75", "Yoke", "PT 약품"],
+      aux_equipments: [
+        "PAUT SCANNER (MANUAL)", "COBRA Manual Scanner", "JIREH MICROBE BTG006",
+        "JIREH Scanner", "ADR, SURVEY, 콜리메타", "ADR; SURVEY; 콜리메타",
+        "ADR", "SURVEY", "콜리메타", "자분살포기", "조도계", "자계강도계", "온습도계", "휴대용 UV메타", "없음"
+      ],
+      methods: ["PAUT", "RT", "MT", "PT"],
+      pipe_sizes: [
+        "1100A", "1000A", "900A", "850A", "800A", "750A", "700A", "650A",
+        "600A", "550A", "500A", "450A", "400A", "350A", "300A", "250A",
+        "200A", "150A", "125A", "100A", "80A", "65A", "50A", "40A",
+        "32A", "25A", "20A"
+      ],
+      size_lengths: {
+        '1100A': 3.511,  '1000A': 3.1919, '900A': 2.8727, '850A': 2.7131,
+        '800A':  2.5535, '750A':  2.3939, '700A': 2.2343, '650A': 2.0747,
+        '600A':  1.9151, '550A':  1.7555, '500A': 1.5959, '450A': 1.4363,
+        '400A':  1.2767, '350A':  1.1172, '300A': 1.0006, '250A': 0.8401,
+        '200A':  0.6795, '150A':  0.519,  '125A': 0.4392, '100A': 0.3591,
+        '80A':   0.2799, '65A':   0.2397, '50A':  0.1901, '40A':  0.1527,
+        '32A':   0.1341, '25A':   0.1068, '20A':  0.0855
+      },
+      base_prices: {
+        "PAUT": 325451,
+        "RT": 205412,
+        "MT": 110000,
+        "PT": 110000
+      },
+      units: ["M", "매", "EA", "P,M,I/D", "Point", "SET", "CAN", "KG", "Inch", "Dia", "I/D"],
+      test_items: ["Pipe", "Piping", "Tank", "Vessel", "Plate", "Beam", "Structure", "기타"],
+      applied_codes: ["지역난방시방서", "KS", "ASME", "AWS", "API", "KEPIC", "기타"],
+      materials: [
+        'Carestream AA400-3⅓*12"', 'Carestream AA400-3⅓*17"', 'Carestream AA400-4½*12"',
+        'Carestream AA400-10*12"', 'Carestream M100-3⅓*12"', 'Carestream M100-10*12"',
+        'Carestream M100-14*17"', 'Carestream MX125-3⅓*6"', 'Carestream MX125-3⅓*12"',
+        'Carestream MX125-4½*12"', 'Carestream MX125-10*12"', 'Carestream MX125-14*17"',
+        'Carestream T200-3⅓*12"', 'Carestream T200-3⅓*17"', 'Carestream T200-4½*12"',
+        'Carestream T200-10*12"', 'Carestream T200-14*17"'
+      ],
+      worktimes: [
+        "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00",
+        "09:00~22:00", "09:00~23:00", "09:00~24:00", "09:00~익일01:00",
+        "09:00~익일02:00", "09:00~익일03:00", "18:00~익일02:00",
+        "18:00~익일03:00", "22:00~익일09:00", "12:00~익일08:00"
+      ]
+    };
+
+    let appConfig = Object.assign({}, DEFAULT_CONFIG);
     let selectedMethod = "PAUT";
     let workerRows = [];
     let isPipeCalcOpen = true;
@@ -597,32 +659,63 @@
     function loadConfig() {
       if (typeof google !== 'undefined' && google.script && google.script.run) {
         google.script.run
-          .withSuccessHandler(initData)
-          .withFailureHandler(() => showToast("설정 로드 실패", true))
+          .withSuccessHandler(res => {
+            if (res) initData(res, false);
+          })
+          .withFailureHandler(err => {
+            console.warn("설정 비동기 갱신 대기 (기본값 유지):", err);
+          })
           .getConfig();
       } else {
         fetch("/api/config")
           .then(r => r.json())
-          .then(initData)
-          .catch(() => showToast("로컬 설정 로드 실패", true));
+          .then(res => initData(res, false))
+          .catch(err => console.warn("로컬 설정 로드 대기:", err));
       }
     }
 
-    function initData(cfg) {
-      appConfig = cfg;
+    function initData(cfg, shouldLoadRecent = true) {
+      if (!cfg) return;
+      try {
+        const raw = (typeof cfg === 'string') ? JSON.parse(cfg) : cfg;
+        appConfig = Object.assign({}, DEFAULT_CONFIG, raw);
 
-      // Pipe sizes
-      const pipeSelect = document.getElementById("select-pipe");
-      pipeSelect.innerHTML = appConfig.pipe_sizes.map(p => `<option value="${p}" ${p === '250A' ? 'selected' : ''}>${p}</option>`).join("");
+        // Pipe sizes
+        const pipeSelect = document.getElementById("select-pipe");
+        if (pipeSelect && appConfig.pipe_sizes) {
+          pipeSelect.innerHTML = appConfig.pipe_sizes.map(p => `<option value="${p}" ${p === '250A' ? 'selected' : ''}>${p}</option>`).join("");
+        }
 
-      // Equipments & Vehicles
-      document.getElementById("select-equip").innerHTML = appConfig.equipments.map(e => `<option value="${e}">${e}</option>`).join("");
-      document.getElementById("select-aux-equip").innerHTML = appConfig.aux_equipments.map(e => `<option value="${e}">${e}</option>`).join("") + '<option value="✏️ 직접 입력...">✏️ 직접 입력...</option>';
-      document.getElementById("select-vehicle").innerHTML = appConfig.vehicles.map(v => `<option value="${v}">${v}</option>`).join("");
+        // Equipments & Vehicles
+        const equipSelect = document.getElementById("select-equip");
+        if (equipSelect && appConfig.equipments) {
+          equipSelect.innerHTML = appConfig.equipments.map(e => `<option value="${e}">${e}</option>`).join("");
+        }
+        const auxSelect = document.getElementById("select-aux-equip");
+        if (auxSelect && appConfig.aux_equipments) {
+          auxSelect.innerHTML = appConfig.aux_equipments.map(e => `<option value="${e}">${e}</option>`).join("") + '<option value="✏️ 직접 입력...">✏️ 직접 입력...</option>';
+        }
+        const vehSelect = document.getElementById("select-vehicle");
+        if (vehSelect && appConfig.vehicles) {
+          vehSelect.innerHTML = appConfig.vehicles.map(v => `<option value="${v}">${v}</option>`).join("");
+        }
 
-      initDefaultWorkers();
-      switchMethod("PAUT");
-      loadRecentRecords();
+        // Companies
+        const compSelect = document.getElementById("select-company");
+        if (compSelect && appConfig.companies) {
+          compSelect.innerHTML = appConfig.companies.map(c => `<option value="${c}" ${c === '한국지역난방공사 중앙지사' ? 'selected' : ''}>${c}</option>`).join("");
+        }
+
+        if (workerRows.length === 0) {
+          initDefaultWorkers();
+        }
+        switchMethod(selectedMethod || "PAUT");
+        if (shouldLoadRecent) {
+          loadRecentRecords();
+        }
+      } catch (err) {
+        console.error("initData error:", err);
+      }
     }
 
     function updateMaterialOptions(method) {
@@ -1306,7 +1399,8 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // Initialize
+    // Initialize immediately with default central config (0ms instant render)
+    initData(DEFAULT_CONFIG, true);
     loadConfig();
     lucide.createIcons();
   </script>

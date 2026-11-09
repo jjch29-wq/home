@@ -169,22 +169,25 @@ function getDailyUsageSheet() {
  * 설정 데이터 획득
  */
 function getConfig() {
-  var sheet = getDailyUsageSheet();
   var companies = APP_CONFIG.companies.slice();
-
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var compColIdx = headerRow.indexOf("업체명");
-    if (compColIdx !== -1) {
-      var values = sheet.getRange(2, compColIdx + 1, lastRow - 1, 1).getValues();
-      for (var i = 0; i < values.length; i++) {
-        var c = String(values[i][0]).trim();
-        if (c && c !== 'nan' && companies.indexOf(c) === -1) {
-          companies.push(c);
+  try {
+    var sheet = getDailyUsageSheet();
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var compColIdx = headerRow.indexOf("업체명");
+      if (compColIdx !== -1) {
+        var values = sheet.getRange(2, compColIdx + 1, lastRow - 1, 1).getValues();
+        for (var i = 0; i < values.length; i++) {
+          var c = String(values[i][0]).trim();
+          if (c && c !== 'nan' && companies.indexOf(c) === -1) {
+            companies.push(c);
+          }
         }
       }
     }
+  } catch (err) {
+    // sheet read fallback
   }
 
   var cfg = JSON.parse(JSON.stringify(APP_CONFIG));
