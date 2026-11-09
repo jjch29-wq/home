@@ -391,6 +391,10 @@
           <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
           <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">형광침투제</span>
+          <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
       </div>
     </div>
 
@@ -933,17 +937,27 @@
     // Google Apps Script API Bridge & Local Fallback
     function apiCall(action, payload) {
       return new Promise((resolve, reject) => {
+        const handleGasResponse = (res) => {
+          if (typeof res === 'string') {
+            try {
+              resolve(JSON.parse(res));
+              return;
+            } catch (e) {}
+          }
+          resolve(res || {});
+        };
+
         if (typeof google !== 'undefined' && google.script && google.script.run) {
           if (action === 'getConfig') {
-            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getConfig();
+            google.script.run.withSuccessHandler(handleGasResponse).withFailureHandler(reject).getConfig();
           } else if (action === 'saveRecord') {
-            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveRecord(payload);
+            google.script.run.withSuccessHandler(handleGasResponse).withFailureHandler(reject).saveRecord(payload);
           } else if (action === 'updateRecord' || action === 'update') {
-            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).updateRecord(payload);
+            google.script.run.withSuccessHandler(handleGasResponse).withFailureHandler(reject).updateRecord(payload);
           } else if (action === 'deleteRecord' || action === 'delete') {
-            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteRecord(payload);
+            google.script.run.withSuccessHandler(handleGasResponse).withFailureHandler(reject).deleteRecord(payload);
           } else if (action === 'getRecentRecords') {
-            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getRecentRecords(payload);
+            google.script.run.withSuccessHandler(handleGasResponse).withFailureHandler(reject).getRecentRecords(payload);
           } else {
             reject(new Error("알 수 없는 API 액션: " + action));
           }
@@ -990,7 +1004,8 @@
       }
 
       try {
-        const res = await apiCall(actionName, payload);
+        const rawRes = await apiCall(actionName, payload);
+        const res = (typeof rawRes === 'string') ? JSON.parse(rawRes) : (rawRes || {});
         if (res && res.status === 'success') {
           showToast(isEditing ? "작업일보가 성공적으로 수정되었습니다!" : "중앙지사 구글 클라우드에 성공적으로 저장되었습니다!");
           if (isEditing) cancelEditMode();
@@ -1209,7 +1224,8 @@
       const date = document.getElementById("input-date").value;
 
       try {
-        const res = await apiCall('getRecentRecords', date);
+        const rawRes = await apiCall('getRecentRecords', date);
+        const res = (typeof rawRes === 'string') ? JSON.parse(rawRes) : (rawRes || {});
         const list = res.records || [];
         if (list.length === 0) {
           container.innerHTML = `<div class="text-center py-4 text-xs text-slate-400">당일(${date}) 저장된 내역이 없습니다. (새 작업을 저장하거나 날짜를 변경해 보세요)</div>`;

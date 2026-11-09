@@ -483,6 +483,12 @@ function batchSyncRecords(payload) {
   };
 }
 
+function safeNum(val, defaultVal) {
+  if (val === undefined || val === null || val === '') return (defaultVal !== undefined ? defaultVal : 0);
+  var n = Number(String(val).replace(/,/g, '').trim());
+  return isNaN(n) ? (defaultVal !== undefined ? defaultVal : 0) : n;
+}
+
 /**
  * 최근 저장된 내역 조회 (당일 또는 최근 내역 자동 표시)
  */
@@ -520,7 +526,7 @@ function getRecentRecords(targetDate) {
         var shiftMatch = rawTime.match(/^\((.*?)\)\s*(.*)$/);
         var shiftVal = shiftMatch ? shiftMatch[1] : '주간';
         var cleanTime = shiftMatch ? shiftMatch[2] : rawTime;
-        var otPay = Number(item[(u === 1) ? 'OT' : ('OT' + u)] || 0);
+        var otPay = safeNum(item[(u === 1) ? 'OT' : ('OT' + u)], 0);
 
         workersArr.push(String(uName).trim() + " (" + otPay.toLocaleString() + "원)");
         workerList.push({
@@ -533,15 +539,15 @@ function getRecentRecords(targetDate) {
     }
 
     var chemList = [];
-    if (Number(item['NDT_형광자분'] || 0) > 0) chemList.push("형자:" + item['NDT_형광자분']);
-    if (Number(item['NDT_흑색자분'] || 0) > 0) chemList.push("흑자:" + item['NDT_흑색자분']);
-    if (Number(item['NDT_백색페인트'] || 0) > 0) chemList.push("백페:" + item['NDT_백색페인트']);
-    if (Number(item['NDT_침투제'] || 0) > 0) chemList.push("침투:" + item['NDT_침투제']);
-    if (Number(item['NDT_세척제'] || 0) > 0) chemList.push("세척:" + item['NDT_세척제']);
-    if (Number(item['NDT_현상제'] || 0) > 0) chemList.push("현상:" + item['NDT_현상제']);
-    if (Number(item['NDT_형광침투제'] || 0) > 0) chemList.push("형침:" + item['NDT_형광침투제']);
+    if (safeNum(item['NDT_형광자분']) > 0) chemList.push("형자:" + item['NDT_형광자분']);
+    if (safeNum(item['NDT_흑색자분']) > 0) chemList.push("흑자:" + item['NDT_흑색자분']);
+    if (safeNum(item['NDT_백색페인트']) > 0) chemList.push("백페:" + item['NDT_백색페인트']);
+    if (safeNum(item['NDT_침투제']) > 0) chemList.push("침투:" + item['NDT_침투제']);
+    if (safeNum(item['NDT_세척제']) > 0) chemList.push("세척:" + item['NDT_세척제']);
+    if (safeNum(item['NDT_현상제']) > 0) chemList.push("현상:" + item['NDT_현상제']);
+    if (safeNum(item['NDT_형광침투제']) > 0) chemList.push("형침:" + item['NDT_형광침투제']);
 
-    var rtkTotal = Number(item['RTK_총계'] || item['RTK_RTK총계'] || 0);
+    var rtkTotal = safeNum(item['RTK_총계'] || item['RTK_RTK총계'], 0);
     if (rtkTotal > 0) chemList.push("RTK:" + rtkTotal);
 
     var entryTimeVal = formatCellTime(item['EntryTime'] || item['입력시간']);
@@ -558,18 +564,18 @@ function getRecentRecords(targetDate) {
       loc_type: String(item['작업구분'] || item['구분'] || '열수송관'),
       pipe: String(item['관경(Inch)'] || item['규격'] || ''),
       hot_tap_stage: String(item['핫태핑차수'] || '1차'),
-      hot_tap_joints: Number(item['핫태핑개소'] || 1),
+      hot_tap_joints: safeNum(item['핫태핑개소'], 1),
       hot_tap_pipe: String(item['핫태핑관경'] || ''),
-      joints: Number(item['조인트수'] || 0),
-      ori_joints: Number(item['조인트수'] || 0),
-      rep_joints: Number(item['rep_joints'] || 0),
-      rej_qty: Number(item['불량수'] || 0),
-      qty: Number(item['수량'] || item['Usage'] || item['검사량'] || 0),
+      joints: safeNum(item['조인트수'], 0),
+      ori_joints: safeNum(item['조인트수'], 0),
+      rep_joints: safeNum(item['rep_joints'], 0),
+      rej_qty: safeNum(item['불량수'], 0),
+      qty: safeNum(item['수량'] || item['Usage'] || item['검사량'], 0),
       unit: String(item['Unit'] || item['단위'] || 'M'),
-      unit_price: Number(item['단가'] || 0),
-      travel_cost: Number(item['출장비'] || 0),
+      unit_price: safeNum(item['단가'], 0),
+      travel_cost: safeNum(item['출장비'], 0),
       lump_sum: String(item['일식'] || ''),
-      total_fee: Number(item['검사비'] || 0),
+      total_fee: safeNum(item['검사비'], 0),
       equip_main: String(item['장비명'] || ''),
       equip_aux: String(item['보조장비'] || ''),
       vehicle_no: String(item['차량번호'] || ''),
@@ -578,21 +584,21 @@ function getRecentRecords(targetDate) {
       note: String(item['Note'] || item['Remark'] || item['DailyMemo'] || ''),
       applied_code: String(item['적용코드'] || ''),
       report_no: String(item['성적서번호'] || ''),
-      rtk_center_miss: Number(item['RTK_센터미스'] || 0),
-      rtk_density: Number(item['RTK_농도'] || 0),
-      rtk_marking_miss: Number(item['RTK_마킹미스'] || 0),
-      rtk_film_mark: Number(item['RTK_필름마크'] || 0),
-      rtk_handling: Number(item['RTK_취급부주의'] || 0),
-      rtk_complaint: Number(item['RTK_고객불만'] || 0),
-      rtk_etc: Number(item['RTK_기타'] || 0),
+      rtk_center_miss: safeNum(item['RTK_센터미스'], 0),
+      rtk_density: safeNum(item['RTK_농도'], 0),
+      rtk_marking_miss: safeNum(item['RTK_마킹미스'], 0),
+      rtk_film_mark: safeNum(item['RTK_필름마크'], 0),
+      rtk_handling: safeNum(item['RTK_취급부주의'], 0),
+      rtk_complaint: safeNum(item['RTK_고객불만'], 0),
+      rtk_etc: safeNum(item['RTK_기타'], 0),
       rtk_total: rtkTotal,
-      chem_fl_mag: Number(item['NDT_형광자분'] || 0),
-      chem_black_mag: Number(item['NDT_흑색자분'] || 0),
-      chem_white_paint: Number(item['NDT_백색페인트'] || 0),
-      chem_penetrant: Number(item['NDT_침투제'] || 0),
-      chem_cleaner: Number(item['NDT_세척제'] || 0),
-      chem_developer: Number(item['NDT_현상제'] || 0),
-      chem_fl_pen: Number(item['NDT_형광침투제'] || 0),
+      chem_fl_mag: safeNum(item['NDT_형광자분'], 0),
+      chem_black_mag: safeNum(item['NDT_흑색자분'], 0),
+      chem_white_paint: safeNum(item['NDT_백색페인트'], 0),
+      chem_penetrant: safeNum(item['NDT_침투제'], 0),
+      chem_cleaner: safeNum(item['NDT_세척제'], 0),
+      chem_developer: safeNum(item['NDT_현상제'], 0),
+      chem_fl_pen: safeNum(item['NDT_형광침투제'], 0),
       extra: chemList.join(" "),
       workers: workersArr.join(", "),
       worker_list: workerList
