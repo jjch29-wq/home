@@ -981,13 +981,18 @@ def setup_daily_usage_tab_impl(self):
     self.cb_daily_site.bind('<<ComboboxSelected>>',
                             lambda e: self.update_recent_entries_view(), add='+')
     
-    # Right-click menu for deletion
+    # Right-click menu for deletion & loading
     self.recent_menu = tk.Menu(self.tv_recent, tearoff=0)
-    self.recent_menu.add_command(label="삭제", command=self.delete_recent_entry)
+    self.recent_menu.add_command(label="📋 상단 입력 폼에 불러오기", command=self.load_selected_recent_to_form)
+    self.recent_menu.add_separator()
+    self.recent_menu.add_command(label="🗑️ 선택한 작업일보 삭제 (Del)", command=self.delete_recent_entry)
     
     def show_recent_menu(event):
         item = self.tv_recent.identify_row(event.y)
         if item:
+            self._suppress_recent_select = True
+            # Keep suppress active through the asynchronous <<TreeviewSelect>> event dispatch
+            self.root.after(600, lambda: setattr(self, '_suppress_recent_select', False))
             self.tv_recent.selection_set(item)
             self.recent_menu.tk_popup(event.x_root, event.y_root)
             

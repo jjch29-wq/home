@@ -267,21 +267,8 @@ def on_recent_record_click_impl(self, event):
 
 
 def _on_daily_usage_select_impl(self, event):
-    """Load the selected record into the entry form."""
-    if not hasattr(self, 'daily_usage_tree'):
-        return
-    selection = self.daily_usage_tree.selection()
-    if not selection:
-        return
-    tags = self.daily_usage_tree.item(selection[0], 'tags')
-    if tags and tags[0].isdigit():
-        idx = int(tags[0])
-        if idx in self.daily_usage_df.index:
-            from site_apps.gyeongin.src.views.daily_date_context import load_recent_record
-            if not load_recent_record(self, self.daily_usage_df.loc[idx].to_dict()):
-                return
-            from site_apps.gyeongin.src.views.daily_record_save import remember_source
-            remember_source(self, idx)
+    """No-op: 조회 및 관리(Tab 5) 행 선택 시 4번 탭 입력 폼을 자동으로 덮어쓰지 않음."""
+    pass
 
 
 def on_budget_tree_select_impl(self, event):

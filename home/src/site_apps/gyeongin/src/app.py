@@ -470,7 +470,13 @@ class MaterialManager:
         self.sites = [] # Initialize site list
         self.daily_units = ['EA', 'CAN', 'SET', 'KG', 'M', '매', 'I/D', 'P,M,I/D', 'M,I/D', 'Point', 'Meter', 'Inch', 'Dia']
         self.users = [
-            "부장 주진철", "대리 우명광", "주임 김진환", "계장 장승대", "주임 김성렬", "부장 박광복", "과장 주영광", "계장 박상태"
+            "이사 곽재운", "이사 박홍규",
+            "부장 주진철", "부장 박광복", "부장 이병국", "부장 이용주", "부장 주동기", "부장 김규년", "부장 곽상돈", "부장 정효철", "부장 노현태",
+            "차장 김춘호", "차장 권인경", "차장 박원준",
+            "과장 주영광", "과장 유상훈",
+            "대리 김상현", "대리 윤석현", "대리 우명광", "대리 박만영",
+            "계장 박상태", "계장 이준우", "계장 장승대", "계장 이은수", "계장 손주언", "계장 이경재", "계장 박재욱", "계장 한지원",
+            "주임 김진환", "주임 황조현", "주임 김태현"
         ] # Initialize worker/name list
         self.warehouses = [] # Initialize warehouse list
         self.equipments = [] # Initialize equipment list
@@ -5894,7 +5900,16 @@ class MaterialManager:
         from site_apps.gyeongin.src.views.daily_usage_view import setup_daily_usage_tab_impl
         return setup_daily_usage_tab_impl(self, *args, **kwargs)
 
+    def load_selected_recent_to_form(self):
+        """최근 기록 컨텍스트 메뉴에서 명시적으로 불러오기를 선택했을 때 실행"""
+        self._suppress_recent_select = False
+        from site_apps.gyeongin.src.controllers.event_controller import on_recent_record_click_impl
+        return on_recent_record_click_impl(self, None)
+
     def on_recent_record_click(self, *args, **kwargs):
+        if getattr(self, '_suppress_recent_select', False):
+            self._suppress_recent_select = False
+            return
         from site_apps.gyeongin.src.controllers.event_controller import on_recent_record_click_impl
         return on_recent_record_click_impl(self, *args, **kwargs)
 
@@ -5920,12 +5935,26 @@ class MaterialManager:
             return
         old_daily = self.daily_usage_df.copy(deep=True)
         old_transactions = self.transactions_df.copy(deep=True)
+        deleted_entry_times = [
+            str(old_daily.loc[i].get('EntryTime', '')).strip()
+            for i in indices if i in old_daily.index and str(old_daily.loc[i].get('EntryTime', '')).strip()
+        ]
         try:
             # Auto-deduction transactions are already excluded by stock calculation.
             # Date/site matches cannot identify which daily job created a legacy transaction.
             self.daily_usage_df = self.daily_usage_df.drop(list(indices))
             if not self.save_data(require_primary=True):
                 raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+            if deleted_entry_times:
+                try:
+                    import threading
+                    from site_apps.gyeongin.src.sync_google_sheet import push_delete_to_web_app
+                    def _async_del():
+                        for et in deleted_entry_times:
+                            push_delete_to_web_app(et)
+                    threading.Thread(target=_async_del, daemon=True).start()
+                except Exception:
+                    pass
         except Exception as error:
             self.daily_usage_df = old_daily
             self.transactions_df = old_transactions
@@ -6255,15 +6284,35 @@ class MaterialManager:
         self.daily_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.daily_usage_tree), add="+")
         self.daily_usage_tree.bind("<Double-1>", self._show_daily_usage_note)
         
-        # [NEW] Enable column reordering via drag & drop
-        self.enable_tree_column_drag(self.daily_usage_tree)
+        # Tab 5 Treeview Context Menu (Right Click)
+        self.daily_usage_context_menu = tk.Menu(self.daily_usage_tree, tearoff=0)
+        self.daily_usage_context_menu.add_command(label="🗑️ 선택 항목 삭제 (Del)", command=self.delete_daily_usage_entry)
+        self.daily_usage_context_menu.add_command(label="✏️ 선택 항목 수정", command=self.open_edit_daily_usage_dialog)
+        self.daily_usage_context_menu.add_separator()
+        self.daily_usage_context_menu.add_command(label="📋 일일 사용량 기입 탭으로 불러오기", command=self.load_daily_usage_selection_to_form)
+        self.daily_usage_context_menu.add_command(label="📝 비고·메모 상세보기", command=self._show_daily_usage_note)
+
+        def show_daily_usage_tree_menu(event):
+            region = self.daily_usage_tree.identify_region(event.x, event.y)
+            if region == "heading":
+                self._show_heading_context_menu(event, self.daily_usage_tree)
+                return
+            item = self.daily_usage_tree.identify_row(event.y)
+            if item:
+                if item not in self.daily_usage_tree.selection():
+                    self.daily_usage_tree.selection_set(item)
+                self.daily_usage_context_menu.tk_popup(event.x_root, event.y_root)
+
+        # [NEW] Enable column reordering via drag & drop with right-click handler
+        self.enable_tree_column_drag(self.daily_usage_tree, context_menu_handler=show_daily_usage_tree_menu)
+        self.daily_usage_tree.bind("<Delete>", lambda e: self.delete_daily_usage_entry())
         
         def save_column_widths(event=None):
             self.save_tab_config()
             
         self.daily_usage_tree.bind('<ButtonRelease-1>', save_column_widths)
 
-        # Keep loading the selected record into the entry form.
+        # Selection in Tab 5 does not automatically overwrite Tab 4 form
         self.daily_usage_tree.bind('<<TreeviewSelect>>', self._on_daily_usage_select)
         
         # Optimize treeview scroll region to prevent unnecessary scrollbars
@@ -6298,12 +6347,16 @@ class MaterialManager:
         self.root.after(500, optimize_treeview_scroll_region)
 
 
-    def _show_daily_usage_note(self, event):
+    def _show_daily_usage_note(self, event=None):
         """Display the clicked record's full note without opening the editor."""
         tree = self.daily_usage_tree
-        if tree.identify_region(event.x, event.y) not in ('cell', 'tree'):
-            return
-        item = tree.identify_row(event.y)
+        if event is not None and hasattr(event, 'x') and hasattr(event, 'y'):
+            if tree.identify_region(event.x, event.y) not in ('cell', 'tree'):
+                return
+            item = tree.identify_row(event.y)
+        else:
+            sel = tree.selection()
+            item = sel[0] if sel else None
         if not item:
             return
         tags = tree.item(item, 'tags')
@@ -6333,6 +6386,26 @@ class MaterialManager:
         popup.bind('<Escape>', lambda e: popup.destroy())
         text.focus_set()
         return 'break'
+
+    def load_daily_usage_selection_to_form(self):
+        """Tab 5 컨텍스트 메뉴에서 명시적으로 '일일 사용량 기입 탭으로 불러오기'를 선택했을 때 실행"""
+        if not hasattr(self, 'daily_usage_tree'):
+            return
+        selection = self.daily_usage_tree.selection()
+        if not selection:
+            return
+        tags = self.daily_usage_tree.item(selection[0], 'tags')
+        if tags and tags[0].isdigit():
+            idx = int(tags[0])
+            if idx in self.daily_usage_df.index:
+                from site_apps.gyeongin.src.views.daily_date_context import load_recent_record
+                if load_recent_record(self, self.daily_usage_df.loc[idx].to_dict()):
+                    from site_apps.gyeongin.src.views.daily_record_save import remember_source
+                    remember_source(self, idx)
+                    try:
+                        self.notebook.select(self.tab_daily_usage)
+                    except Exception:
+                        pass
 
     def _on_daily_usage_select(self, *args, **kwargs):
         from site_apps.gyeongin.src.controllers.event_controller import _on_daily_usage_select_impl
@@ -7881,10 +7954,24 @@ class MaterialManager:
         
         # Default mapping for core workers if rank is missing
         worker_rank_map = {
-            "주진철": "부장", "우명광": "대리", "김진환": "주임", "장승대": "계장",
-            "김성렬": "주임", "박광복": "부장", "주영광": "과장", "이경재": "주임",
-            "황조현": "주임", "김춘호": "차장", "박원준": "과장", "이봉주": "부장",
-            "김성현": "대리"
+            # 이사
+            "곽재운": "이사", "박홍규": "이사",
+            # 부장
+            "박광복": "부장", "이용주": "부장", "이병국": "부장", "주진철": "부장",
+            "주동기": "부장", "김규년": "부장", "곽상돈": "부장", "정효철": "부장", "노현태": "부장",
+            # 차장
+            "김춘호": "차장", "권인경": "차장", "박원준": "차장",
+            # 과장
+            "주영광": "과장", "유상훈": "과장",
+            # 대리
+            "김상현": "대리", "윤석현": "대리", "우명광": "대리", "우영광": "대리", "박만영": "대리",
+            # 계장
+            "이준우": "계장", "장승대": "계장", "박상태": "계장", "이은수": "계장",
+            "손주언": "계장", "이경재": "계장", "박재욱": "계장", "한지원": "계장",
+            # 주임
+            "김진환": "주임", "황조현": "주임", "김태현": "주임",
+            # 과거 이력 호환
+            "김성렬": "주임", "이봉주": "부장"
         }
 
         # 상세 재료비 집계를 위한 맵
@@ -9464,6 +9551,10 @@ class MaterialManager:
                         if base_no not in current_bases:
                             if any(t in base_no for t in ['81두1580', '89보4028', '90너4889']):
                                 new_v = f"{base_no} (탑차)"
+                            elif any(t in base_no for t in ['76마3422', '71고4405']):
+                                new_v = f"{base_no} (스타렉스 12인승)"
+                            elif '자가용' in base_no or '대중교통' in base_no:
+                                new_v = "자가용/대중교통"
                             else:
                                 new_v = f"{base_no} (스타렉스)"
                             self.vehicles.append(new_v)
@@ -11735,12 +11826,26 @@ class MaterialManager:
             return
         old_daily = self.daily_usage_df.copy(deep=True)
         old_transactions = self.transactions_df.copy(deep=True)
+        deleted_entry_times = [
+            str(old_daily.loc[i].get('EntryTime', '')).strip()
+            for i in indices if i in old_daily.index and str(old_daily.loc[i].get('EntryTime', '')).strip()
+        ]
         try:
             # Auto-deduction transactions are already excluded by stock calculation.
             # Date/site matches cannot identify which daily job created a legacy transaction.
             self.daily_usage_df = self.daily_usage_df.drop(list(indices))
             if not self.save_data(require_primary=True):
                 raise RuntimeError('원본 파일에 저장하지 못했습니다.')
+            if deleted_entry_times:
+                try:
+                    import threading
+                    from site_apps.gyeongin.src.sync_google_sheet import push_delete_to_web_app
+                    def _async_del():
+                        for et in deleted_entry_times:
+                            push_delete_to_web_app(et)
+                    threading.Thread(target=_async_del, daemon=True).start()
+                except Exception:
+                    pass
         except Exception as error:
             self.daily_usage_df = old_daily
             self.transactions_df = old_transactions
@@ -14227,6 +14332,10 @@ class MaterialManager:
                     base = v.split('(')[0].strip()
                     if any(t in base for t in ['81두1580', '89보4028', '90너4889']):
                         updated_vehicles.append(f"{base} (탑차)")
+                    elif any(t in base for t in ['76마3422', '71고4405']):
+                        updated_vehicles.append(f"{base} (스타렉스 12인승)")
+                    elif '자가용' in base or '대중교통' in base:
+                        updated_vehicles.append("자가용/대중교통")
                     else:
                         updated_vehicles.append(f"{base} (스타렉스)")
                 self.vehicles[:] = sorted(list(set(updated_vehicles)))
@@ -14384,10 +14493,18 @@ class MaterialManager:
                 final_vehicles = []
                 for v in self.vehicles:
                     base = v.split('(')[0].strip()
+                    if not base:
+                        continue
                     if any(t in base for t in ['81두1580', '89보4028', '90너4889']):
                         final_vehicles.append(f"{base} (탑차)")
+                    elif any(t in base for t in ['76마3422', '71고4405']):
+                        final_vehicles.append(f"{base} (스타렉스 12인승)")
+                    elif '자가용' in base or '대중교통' in base:
+                        final_vehicles.append("자가용/대중교통")
                     else:
                         final_vehicles.append(f"{base} (스타렉스)")
+                if "자가용/대중교통" not in final_vehicles:
+                    final_vehicles.append("자가용/대중교통")
                 self.vehicles[:] = sorted(list(set(final_vehicles)))
                 # [FIX] Update combo box values after loading lists from config
                 # Update sites combo boxes
