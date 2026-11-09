@@ -187,7 +187,7 @@ function getConfig() {
       }
     }
   } catch (err) {
-    // sheet read fallback
+    // fallback to default config if sheet read fails
   }
 
   var cfg = JSON.parse(JSON.stringify(APP_CONFIG));

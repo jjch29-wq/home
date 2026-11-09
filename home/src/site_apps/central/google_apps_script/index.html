@@ -212,7 +212,33 @@
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
           <select id="select-pipe" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <!-- Populated via JS -->
+            <option value="1100A">1100A</option>
+            <option value="1000A">1000A</option>
+            <option value="900A">900A</option>
+            <option value="850A">850A</option>
+            <option value="800A">800A</option>
+            <option value="750A">750A</option>
+            <option value="700A">700A</option>
+            <option value="650A">650A</option>
+            <option value="600A">600A</option>
+            <option value="550A">550A</option>
+            <option value="500A">500A</option>
+            <option value="450A">450A</option>
+            <option value="400A">400A</option>
+            <option value="350A">350A</option>
+            <option value="300A">300A</option>
+            <option value="250A" selected>250A</option>
+            <option value="200A">200A</option>
+            <option value="150A">150A</option>
+            <option value="125A">125A</option>
+            <option value="100A">100A</option>
+            <option value="80A">80A</option>
+            <option value="65A">65A</option>
+            <option value="50A">50A</option>
+            <option value="40A">40A</option>
+            <option value="32A">32A</option>
+            <option value="25A">25A</option>
+            <option value="20A">20A</option>
           </select>
         </div>
 
@@ -299,13 +325,30 @@
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
           <select id="select-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
-            <!-- Populated via JS -->
+            <option value="PAUT MX2(OMNI2-103085)" selected>PAUT MX2(OMNI2-103085)</option>
+            <option value="Se-75">Se-75</option>
+            <option value="Yoke">Yoke</option>
+            <option value="PT 약품">PT 약품</option>
           </select>
         </div>
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
           <select id="select-aux-equip" onchange="checkCustomAux()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
-            <!-- Populated via JS -->
+            <option value="PAUT SCANNER (MANUAL)" selected>PAUT SCANNER (MANUAL)</option>
+            <option value="COBRA Manual Scanner">COBRA Manual Scanner</option>
+            <option value="JIREH MICROBE BTG006">JIREH MICROBE BTG006</option>
+            <option value="JIREH Scanner">JIREH Scanner</option>
+            <option value="ADR, SURVEY, 콜리메타">ADR, SURVEY, 콜리메타</option>
+            <option value="ADR">ADR</option>
+            <option value="SURVEY">SURVEY</option>
+            <option value="콜리메타">콜리메타</option>
+            <option value="자분살포기">자분살포기</option>
+            <option value="조도계">조도계</option>
+            <option value="자계강도계">자계강도계</option>
+            <option value="온습도계">온습도계</option>
+            <option value="휴대용 UV메타">휴대용 UV메타</option>
+            <option value="없음">없음</option>
+            <option value="✏️ 직접 입력...">✏️ 직접 입력...</option>
           </select>
           <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800">
         </div>
@@ -427,7 +470,119 @@
       </div>
 
       <div id="workers-container" class="space-y-2.5">
-        <!-- Rendered via JS -->
+        <div class="p-3 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2 relative">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700">참여자 1</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">성명</label>
+              <select onchange="updateWorkerField(0, 'user', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+                <option value="부장 주진철" selected>부장 주진철</option>
+                <option value="부장 이병국">부장 이병국</option>
+                <option value="부장 박광복">부장 박광복</option>
+                <option value="차장 권인경">차장 권인경</option>
+                <option value="과장 주영광">과장 주영광</option>
+                <option value="대리 우명광">대리 우명광</option>
+                <option value="계장 박상태">계장 박상태</option>
+                <option value="계장 이준우">계장 이준우</option>
+                <option value="계장 장승대">계장 장승대</option>
+                <option value="주임 김성렬">주임 김성렬</option>
+                <option value="주임 김진환">주임 김진환</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">근무형태</label>
+              <select onchange="updateWorkerField(0, 'shift', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+                <option value="주간" selected>주간</option>
+                <option value="야간">야간</option>
+                <option value="휴일">휴일</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">근무시간</label>
+              <select onchange="onWorkerTimeChange(0, this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
+                <option value="09:00~18:00" selected>09:00~18:00</option>
+                <option value="09:00~19:00">09:00~19:00</option>
+                <option value="09:00~20:00">09:00~20:00</option>
+                <option value="09:00~21:00">09:00~21:00</option>
+                <option value="09:00~22:00">09:00~22:00</option>
+                <option value="09:00~23:00">09:00~23:00</option>
+                <option value="09:00~24:00">09:00~24:00</option>
+                <option value="09:00~익일01:00">09:00~익일01:00</option>
+                <option value="09:00~익일02:00">09:00~익일02:00</option>
+                <option value="09:00~익일03:00">09:00~익일03:00</option>
+                <option value="18:00~익일02:00">18:00~익일02:00</option>
+                <option value="18:00~익일03:00">18:00~익일03:00</option>
+                <option value="22:00~익일09:00">22:00~익일09:00</option>
+                <option value="12:00~익일08:00">12:00~익일08:00</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">산출 수당 (원)</label>
+              <input type="text" value="0" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
+            </div>
+          </div>
+        </div>
+        <div class="p-3 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2 relative">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700">참여자 2</span>
+            <button type="button" onclick="removeWorker(1)" class="text-slate-400 hover:text-rose-500 p-0.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">성명</label>
+              <select onchange="updateWorkerField(1, 'user', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+                <option value="부장 주진철">부장 주진철</option>
+                <option value="부장 이병국" selected>부장 이병국</option>
+                <option value="부장 박광복">부장 박광복</option>
+                <option value="차장 권인경">차장 권인경</option>
+                <option value="과장 주영광">과장 주영광</option>
+                <option value="대리 우명광">대리 우명광</option>
+                <option value="계장 박상태">계장 박상태</option>
+                <option value="계장 이준우">계장 이준우</option>
+                <option value="계장 장승대">계장 장승대</option>
+                <option value="주임 김성렬">주임 김성렬</option>
+                <option value="주임 김진환">주임 김진환</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">근무형태</label>
+              <select onchange="updateWorkerField(1, 'shift', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+                <option value="주간" selected>주간</option>
+                <option value="야간">야간</option>
+                <option value="휴일">휴일</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">근무시간</label>
+              <select onchange="onWorkerTimeChange(1, this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
+                <option value="09:00~18:00" selected>09:00~18:00</option>
+                <option value="09:00~19:00">09:00~19:00</option>
+                <option value="09:00~20:00">09:00~20:00</option>
+                <option value="09:00~21:00">09:00~21:00</option>
+                <option value="09:00~22:00">09:00~22:00</option>
+                <option value="09:00~23:00">09:00~23:00</option>
+                <option value="09:00~24:00">09:00~24:00</option>
+                <option value="09:00~익일01:00">09:00~익일01:00</option>
+                <option value="09:00~익일02:00">09:00~익일02:00</option>
+                <option value="09:00~익일03:00">09:00~익일03:00</option>
+                <option value="18:00~익일02:00">18:00~익일02:00</option>
+                <option value="18:00~익일03:00">18:00~익일03:00</option>
+                <option value="22:00~익일09:00">22:00~익일09:00</option>
+                <option value="12:00~익일08:00">12:00~익일08:00</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] text-slate-400 mb-0.5">산출 수당 (원)</label>
+              <input type="text" value="0" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -443,7 +598,21 @@
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
           <select id="select-vehicle" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
-            <!-- Populated via JS -->
+            <option value="81두1580 (탑차)" selected>81두1580 (탑차)</option>
+            <option value="89보4028 (탑차)">89보4028 (탑차)</option>
+            <option value="90너4889 (탑차)">90너4889 (탑차)</option>
+            <option value="71고4405 (스타렉스)">71고4405 (스타렉스)</option>
+            <option value="76마3422 (스타렉스)">76마3422 (스타렉스)</option>
+            <option value="81도5958 (스타렉스)">81도5958 (스타렉스)</option>
+            <option value="81도8458 (스타렉스)">81도8458 (스타렉스)</option>
+            <option value="81루5100 (스타렉스)">81루5100 (스타렉스)</option>
+            <option value="84저1259 (스타렉스)">84저1259 (스타렉스)</option>
+            <option value="90서8616 (스타렉스)">90서8616 (스타렉스)</option>
+            <option value="91주8839 (스타렉스)">91주8839 (스타렉스)</option>
+            <option value="95가0175 (스타렉스)">95가0175 (스타렉스)</option>
+            <option value="95가0200 (스타렉스)">95가0200 (스타렉스)</option>
+            <option value="개인차량 (스타렉스)">개인차량 (스타렉스)</option>
+            <option value="개인차량-이병국 (스타렉스)">개인차량-이병국 (스타렉스)</option>
           </select>
         </div>
         <div>
@@ -502,6 +671,32 @@
   </div>
 
   <script>
+    // Visual error diagnostics on mobile screens
+    window.onerror = function(msg, url, line, col, error) {
+      try {
+        var b = document.getElementById("mobile-error-banner");
+        if (!b) {
+          b = document.createElement("div");
+          b.id = "mobile-error-banner";
+          b.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:999999;background:#b91c1c;color:#fff;padding:8px 12px;font-size:11px;font-weight:bold;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.4);word-break:break-all;";
+          document.body.prepend(b);
+        }
+        b.innerHTML = "⚠️ 모바일 스크립트 오류: " + msg + " (" + line + "줄)";
+      } catch (e) {}
+      return false;
+    };
+
+    // Safe Lucide icon initializer that never throws on slow/blocked mobile CDN
+    function safeCreateIcons() {
+      try {
+        if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
+          lucide.createIcons();
+        }
+      } catch (e) {
+        console.warn("lucide icons error:", e);
+      }
+    }
+
     const DEFAULT_CONFIG = {
       companies: ["한국지역난방공사 중앙지사", "한국지역난방공사", "중앙지사"],
       loc_types: ["열수송관", "플랜트(관리소)", "열배관", "핫태핑"],
@@ -785,7 +980,7 @@
         `;
         container.appendChild(row);
       });
-      lucide.createIcons();
+      safeCreateIcons();
     }
 
     function updateWorkerField(idx, field, val) {
@@ -1245,7 +1440,7 @@
         if (submitBtn) {
           submitBtn.className = "w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-amber-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
           submitBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i><span>작업일보 수정 완료 (클라우드 저장)</span>';
-          lucide.createIcons();
+          safeCreateIcons();
         }
 
         showToast("일보 수정 모드로 전환되었습니다.");
@@ -1279,7 +1474,7 @@
       if (submitBtn) {
         submitBtn.className = "w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-blue-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
         submitBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>';
-        lucide.createIcons();
+        safeCreateIcons();
       }
     }
 
@@ -1368,7 +1563,7 @@
             </div>
           </div>
         `).join("");
-        lucide.createIcons();
+        safeCreateIcons();
       } catch (err) {
         container.innerHTML = `<div class="text-xs text-rose-500 py-2 text-center">조회 실패: ${err.message}</div>`;
       }
@@ -1402,7 +1597,7 @@
     // Initialize immediately with default central config (0ms instant render)
     initData(DEFAULT_CONFIG, true);
     loadConfig();
-    lucide.createIcons();
+    safeCreateIcons();
   </script>
 </body>
 </html>
