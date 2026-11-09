@@ -159,3 +159,5 @@ rt_film_organizer/
 home/PAUT_Report_*.xlsx
 home/recovery_backups/
 home/src/Daily_Economic_Report_*.xlsx
+home/src/site_apps/**/data/backups/
+**/Material_Inventory_pre_sync_*.xlsx

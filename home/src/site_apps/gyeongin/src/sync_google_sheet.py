@@ -32,10 +32,11 @@ def get_all_inventory_paths() -> List[Path]:
         import ctypes
         bitmask = ctypes.windll.kernel32.GetLogicalDrives()
         drives = [chr(65 + i) for i in range(26) if (bitmask >> i) & 1]
-        if 'G' in drives:
-            cloud_p = Path(r"G:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\data\Material_Inventory.xlsx")
+        for d in drives:
+            cloud_p = Path(rf"{d}:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\data\Material_Inventory.xlsx")
             if cloud_p.exists() and cloud_p not in paths:
                 paths.append(cloud_p)
+                break
     except Exception:
         pass
 
@@ -192,9 +193,285 @@ def sync_records_to_excel(
         "message": f"총 {len(new_rows)}건의 클라우드 작업 내역이 PC 엑셀(DailyUsage)에 성공적으로 동기화되었습니다."
     }
 
+def clean_record_for_json(record: Dict[str, Any]) -> Dict[str, Any]:
+    """DataFrame 레코드를 JSON 직렬화 안전한 딕셔너리로 변환"""
+    cleaned = {}
+    for k, v in record.items():
+        if pd.isna(v) or v is None:
+            cleaned[k] = ""
+        elif isinstance(v, (datetime, pd.Timestamp)):
+            cleaned[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+        elif hasattr(v, 'item'):
+            cleaned[k] = v.item()
+        elif isinstance(v, float) and v.is_integer():
+            cleaned[k] = int(v)
+        else:
+            cleaned[k] = v
+    return cleaned
+
+def push_record_to_web_app(
+    record: Dict[str, Any],
+    action: str = "update",
+    original_entry_time: Optional[str] = None,
+    web_app_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    PC에서 작업 일보 수정/삭제/추가 내역을 Google Apps Script Web App에 실시간 Push
+    """
+    try:
+        import requests
+    except ImportError:
+        logger.error("requests 라이브러리가 설치되지 않아 Push를 건너뜁니다.")
+        return {"status": "error", "message": "requests not installed"}
+
+    cfg = load_sync_config()
+    target_url = web_app_url or cfg.get("web_app_url")
+    if not target_url:
+        return {"status": "error", "message": "Google Apps Script 웹 앱 URL이 설정되지 않았습니다."}
+
+    payload = {
+        "action": action,
+        "entry_time": str(original_entry_time or record.get("EntryTime", "")).split(".")[0].strip(),
+        "row_data": clean_record_for_json(record)
+    }
+
+    try:
+        resp = requests.post(
+            target_url,
+            json=payload,
+            headers={"User-Agent": "Gyeongin-Office-PC/1.0"},
+            timeout=15,
+            allow_redirects=True
+        )
+        data = resp.json()
+        logger.info(f"구글 시트 Push 성공 ({action}): {data.get('message', '')}")
+        return data
+    except Exception as e:
+        logger.error(f"구글 시트 Push 실패 ({action}): {e}")
+        return {"status": "error", "message": str(e)}
+
+def push_delete_to_web_app(
+    entry_time: str,
+    web_app_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    PC에서 삭제된 작업 일보의 EntryTime을 Google Apps Script Web App에 전송하여 시트에서도 삭제
+    """
+    return push_record_to_web_app({}, action="delete", original_entry_time=entry_time, web_app_url=web_app_url)
+
+def push_batch_to_web_app(
+    saves: Optional[List[Dict[str, Any]]] = None,
+    updates: Optional[List[Dict[str, Any]]] = None,
+    deletes: Optional[List[str]] = None,
+    web_app_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Google Apps Script Web App에 일괄 동기화 요청
+    (단건 표준 API를 순차 호출하여 모든 Apps Script 배포 버전과 100% 호환 보장)
+    """
+    cfg = load_sync_config()
+    target_url = web_app_url or cfg.get("web_app_url")
+    if not target_url:
+        return {"status": "error", "message": "Google Apps Script 웹 앱 URL이 설정되지 않았습니다."}
+
+    deleted_cnt = 0
+    updated_cnt = 0
+    saved_cnt = 0
+
+    # 1. 삭제 처리
+    for d in (deletes or []):
+        d_str = str(d).split(".")[0].strip()
+        if d_str:
+            res_del = push_delete_to_web_app(d_str, web_app_url=target_url)
+            if res_del.get("status") == "success":
+                deleted_cnt += 1
+
+    # 2. 수정 처리
+    for u in (updates or []):
+        u_time = str(u.get("EntryTime", "")).split(".")[0].strip()
+        res_upd = push_record_to_web_app(u, action="update", original_entry_time=u_time, web_app_url=target_url)
+        if res_upd.get("status") == "success":
+            updated_cnt += 1
+
+    # 3. 신규 추가 처리
+    for s in (saves or []):
+        res_sav = push_record_to_web_app(s, action="save", web_app_url=target_url)
+        if res_sav.get("status") == "success":
+            saved_cnt += 1
+
+    return {
+        "status": "success",
+        "added_count": saved_cnt,
+        "updated_count": updated_cnt,
+        "deleted_count": deleted_cnt,
+        "message": f"동기화 완료 (추가: {saved_cnt}건, 수정: {updated_cnt}건, 삭제: {deleted_cnt}건)"
+    }
+
+def two_way_reconcile_with_web_app(
+    inventory_path: Optional[Path] = None,
+    web_app_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Google 스프레드시트와 PC 엑셀(DailyUsage) 간 완전 양방향(Two-way) 무손실 정합성 동기화
+    1. 구글 시트의 신규 행을 PC 엑셀로 가져옴 (Pull)
+    2. PC 엑셀에만 있는 행이나 수정된 행을 구글 시트로 밀어넣음 (Push)
+    """
+    cfg = load_sync_config()
+    target_url = web_app_url or cfg.get("web_app_url")
+    if not target_url:
+        return {"status": "error", "message": "Google Apps Script URL 미설정"}
+
+    target_path = Path(inventory_path) if inventory_path else DEFAULT_INVENTORY_PATH
+    if not target_path.exists():
+        return {"status": "error", "message": f"재고 파일이 존재하지 않습니다: {target_path}"}
+
+    try:
+        # 1. 구글 시트 전체 레코드 가져오기
+        headers, cloud_rows = fetch_records_from_web_app(target_url)
+
+        # 2. 엑셀 파일 읽기
+        with pd.ExcelFile(target_path) as ef:
+            all_sheets = {sheet: ef.parse(sheet) for sheet in ef.sheet_names}
+
+        if "DailyUsage" not in all_sheets:
+            return {"status": "error", "message": "DailyUsage 시트가 없습니다."}
+
+        daily_df = all_sheets["DailyUsage"].copy()
+        local_rows = daily_df.to_dict(orient="records") if not daily_df.empty else []
+
+        def get_keys(r):
+            entry_time = str(r.get("EntryTime", "")).split(".")[0].strip()
+            date_str = str(r.get("Date", "")).split()[0].strip()
+            user_str = str(r.get("User", "")).strip()
+            method_str = str(r.get("검사방법", "")).strip()
+            qty_str = str(r.get("수량", r.get("Usage", 0))).strip()
+            item_str = str(r.get("검사품명", "")).strip()
+            time_key = f"TIME:{entry_time}" if (entry_time and entry_time != "nan") else None
+            comp_key = f"COMP:{date_str}|{user_str}|{method_str}|{qty_str}|{item_str}"
+            return time_key, comp_key
+
+        local_keys = set()
+        local_time_map = {}
+        for r in local_rows:
+            tk, ck = get_keys(r)
+            if tk:
+                local_keys.add(tk)
+                local_time_map[tk] = r
+            local_keys.add(ck)
+
+        cloud_keys = set()
+        cloud_time_map = {}
+        for r in cloud_rows:
+            tk, ck = get_keys(r)
+            if tk:
+                cloud_keys.add(tk)
+                cloud_time_map[tk] = r
+            cloud_keys.add(ck)
+
+        # A. 구글 시트의 변경사항 -> PC 엑셀로 동기화 (신규 추가: Pull / 수정 갱신: Pull-Update)
+        to_pull = []
+        excel_modified = False
+
+        def _norm_val(val):
+            if pd.isna(val) or val is None:
+                return ""
+            s = str(val).strip()
+            if s.lower() in ("nan", "none"):
+                return ""
+            try:
+                f = float(s.replace(",", ""))
+                return str(int(f)) if f.is_integer() else str(f)
+            except ValueError:
+                return s
+
+        for cr in cloud_rows:
+            tk, ck = get_keys(cr)
+            if tk and tk in local_time_map:
+                # 이미 존재하는 행: 클라우드에서 수정된 필드가 있으면 로컬 엑셀 행을 클라우드 값으로 업데이트
+                lr = local_time_map[tk]
+                row_changed = False
+                for col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "출장비", "검사비"]:
+                    if col in cr and _norm_val(lr.get(col)) != _norm_val(cr.get(col)):
+                        lr[col] = cr[col]
+                        row_changed = True
+                if row_changed:
+                    excel_modified = True
+            elif (tk and tk in local_keys) or (ck in local_keys):
+                continue
+            else:
+                to_pull.append(cr)
+
+        pulled_cnt = 0
+        if to_pull:
+            res_p = sync_records_to_excel(to_pull, inventory_path=target_path)
+            pulled_cnt = res_p.get("added_count", 0)
+
+        if excel_modified:
+            # 수정된 로컬 행들을 엑셀에 다시 저장
+            with pd.ExcelFile(target_path) as ef:
+                all_sheets = {sheet: ef.parse(sheet) for sheet in ef.sheet_names}
+            all_sheets["DailyUsage"] = pd.DataFrame(local_rows)
+            with pd.ExcelWriter(target_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+                all_sheets["DailyUsage"].to_excel(writer, sheet_name="DailyUsage", index=False)
+            logger.info("모바일 수정 사항이 로컬 엑셀 행에 제자리 갱신되었습니다.")
+
+        # B. PC에만 있는 행 -> 구글 시트로 밀어넣기 (Push)
+        to_push_saves = []
+        to_push_updates = []
+        for r in local_rows:
+            tk, ck = get_keys(r)
+            if not tk:
+                if ck not in cloud_keys:
+                    to_push_saves.append(r)
+                continue
+
+            if tk not in cloud_keys:
+                to_push_saves.append(r)
+            else:
+                # 존재하는 행: 주요 필드(수량, 단가, 비고, 업체명 등) 수정 여부 비교
+                cr = cloud_time_map.get(tk)
+                if cr:
+                    def _norm(val):
+                        if pd.isna(val) or val is None:
+                            return ""
+                        s = str(val).strip()
+                        if s.lower() in ("nan", "none"):
+                            return ""
+                        try:
+                            f = float(s.replace(",", ""))
+                            return str(int(f)) if f.is_integer() else str(f)
+                        except ValueError:
+                            return s
+
+                    is_modified = False
+                    for check_col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명"]:
+                        if _norm(r.get(check_col)) != _norm(cr.get(check_col)):
+                            is_modified = True
+                            break
+                    if is_modified:
+                        to_push_updates.append(r)
+
+        pushed_cnt = 0
+        if to_push_saves or to_push_updates:
+            res_batch = push_batch_to_web_app(saves=to_push_saves, updates=to_push_updates, web_app_url=target_url)
+            pushed_cnt = len(to_push_saves) + len(to_push_updates)
+
+        cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        save_sync_config(cfg)
+
+        return {
+            "status": "success",
+            "pulled_count": pulled_cnt,
+            "pushed_count": pushed_cnt,
+            "message": f"구글 스프레드시트 양방향 동기화 완료 (가져옴: {pulled_cnt}건, 밀어넣음: {pushed_cnt}건)"
+        }
+    except Exception as e:
+        logger.error(f"양방향 동기화 오류: {e}")
+        return {"status": "error", "message": f"양방향 동기화 오류: {e}"}
+
 def run_sync(web_app_url: Optional[str] = None, inventory_path: Optional[Path] = None) -> Dict[str, Any]:
     """
-    통합 동기화 실행 함수
+    통합 동기화 실행 함수 (완전 양방향 지원)
     """
     cfg = load_sync_config()
     target_url = web_app_url or cfg.get("web_app_url")
@@ -204,22 +481,7 @@ def run_sync(web_app_url: Optional[str] = None, inventory_path: Optional[Path] =
             "message": "Google Apps Script 배포 웹 앱 URL이 설정되지 않았습니다. google_sync_config.json에 등록하세요."
         }
 
-    try:
-        headers, rows = fetch_records_from_web_app(target_url)
-        res = sync_records_to_excel(rows, inventory_path)
-        
-        cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if web_app_url:
-            cfg["web_app_url"] = web_app_url
-        save_sync_config(cfg)
-        
-        return res
-    except Exception as e:
-        logger.error(f"동기화 실패: {e}")
-        return {
-            "status": "error",
-            "message": f"동기화 중 오류 발생: {str(e)}"
-        }
+    return two_way_reconcile_with_web_app(inventory_path=inventory_path, web_app_url=target_url)
 
 def sync_local_and_drive_files() -> Dict[str, Any]:
     """로컬 Material_Inventory.xlsx와 Google Drive의 파일 간 DailyUsage 양방향 무손실 동기화"""
@@ -277,8 +539,9 @@ def sync_all_gyeongin_sources() -> Dict[str, Any]:
         try:
             for p in get_all_inventory_paths():
                 res_web = run_sync(target_url, inventory_path=p)
-                if res_web.get("added_count", 0) > 0:
-                    total_added += res_web["added_count"]
+                p_added = res_web.get("pulled_count", 0) + res_web.get("pushed_count", 0) + res_web.get("added_count", 0)
+                if p_added > 0:
+                    total_added += p_added
                     messages.append(res_web["message"])
         except Exception as e:
             messages.append(f"웹 앱 동기화 건너뜀: {e}")

@@ -8,11 +8,28 @@
 var APP_CONFIG = {
   companies: ["경인사무소"],
   users: [
-    "부장 주진철", "대리 우명광", "주임 김진환", "계장 장승대",
-    "주임 김성렬", "부장 박광복", "과장 주영광", "계장 박상태"
+    "이사 곽재운", "이사 박홍규",
+    "부장 주진철", "부장 박광복", "부장 이병국", "부장 이용주", "부장 주동기", "부장 김규년", "부장 곽상돈", "부장 정효철", "부장 노현태",
+    "차장 김춘호", "차장 권인경", "차장 박원준",
+    "과장 주영광", "과장 유상훈",
+    "대리 김상현", "대리 윤석현", "대리 우명광", "대리 박만영",
+    "계장 박상태", "계장 이준우", "계장 장승대", "계장 이은수", "계장 손주언", "계장 이경재", "계장 박재욱", "계장 한지원",
+    "주임 김진환", "주임 황조현", "주임 김태현"
   ],
   vehicles: [
-    "경인 1호차 (스타렉스)", "경인 2호차 (카니발)", "경인 3호차 (포터)", "자가용/대중교통"
+    "84저1259 (스타렉스)",
+    "95가0200 (스타렉스)",
+    "91주8839 (스타렉스)",
+    "90서8616 (스타렉스)",
+    "76마3422 (스타렉스 12인승)",
+    "71고4405 (스타렉스 12인승)",
+    "89보4028 (탑차)",
+    "81두1580 (탑차)",
+    "81루5100 (스타렉스)",
+    "95가0175 (스타렉스)",
+    "81도5958 (스타렉스)",
+    "90너4889 (탑차)",
+    "자가용/대중교통"
   ],
   equipments: ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품"],
   aux_equipments: [
@@ -95,6 +112,18 @@ function doPost(e) {
       payload = e.parameter;
     }
     
+    var action = payload.action || 'save';
+    if (action === 'batch_sync') {
+      var res = batchSyncRecords(payload);
+      return createJsonResponse(res);
+    } else if (action === 'update' || action === 'updateRecord' || (payload.id !== undefined && payload.is_update)) {
+      var res = updateRecord(payload);
+      return createJsonResponse(res);
+    } else if (action === 'delete' || action === 'deleteRecord') {
+      var res = deleteRecord(payload);
+      return createJsonResponse(res);
+    }
+
     var res = saveRecord(payload);
     return createJsonResponse(res);
   } catch (err) {
@@ -160,11 +189,21 @@ function getConfig() {
 /**
  * 작업 레코드 시트에 저장
  */
-function saveRecord(req) {
-  var sheet = getDailyUsageSheet();
-  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+function buildRowMap(req, preserveEntryTime) {
+  var nowStr = preserveEntryTime || (req.entry_time ? String(req.entry_time) : Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"));
   
-  var nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+  // PC 프로그램에서 직접 보낸 row_data 맵이 있는 경우 그대로 매핑
+  if (req.row_data && typeof req.row_data === 'object') {
+    var directMap = {};
+    for (var k in req.row_data) {
+      if (req.row_data.hasOwnProperty(k)) {
+        directMap[k] = req.row_data[k];
+      }
+    }
+    directMap['EntryTime'] = nowStr;
+    return directMap;
+  }
+
   var calculatedFee = Number(req.total_fee || 0);
   if (calculatedFee <= 0) {
     calculatedFee = Math.round((Number(req.qty || 0) * Number(req.unit_price || 0)) + Number(req.travel_cost || 0));
@@ -230,6 +269,16 @@ function saveRecord(req) {
     'NDT_형광침투제': Number(req.chem_fl_pen || 0)
   };
 
+  // Reset worker columns
+  for (var u = 1; u <= 10; u++) {
+    var uKey = (u === 1) ? 'User' : ('User' + u);
+    var wtKey = (u === 1) ? 'WorkTime' : ('WorkTime' + u);
+    var otKey = (u === 1) ? 'OT' : ('OT' + u);
+    rowMap[uKey] = '';
+    rowMap[wtKey] = '';
+    rowMap[otKey] = 0;
+  }
+
   // 참여 작업자 할당 (1 ~ 10)
   if (req.workers && req.workers.length > 0) {
     rowMap['User'] = req.workers[0].user || '';
@@ -246,6 +295,17 @@ function saveRecord(req) {
     }
   }
 
+  return rowMap;
+}
+
+/**
+ * 작업 레코드 시트에 저장
+ */
+function saveRecord(req) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var rowMap = buildRowMap(req);
+
   // 헤더 순서대로 배열 생성
   var newRow = [];
   for (var h = 0; h < headerRow.length; h++) {
@@ -258,6 +318,148 @@ function saveRecord(req) {
   return {
     status: 'success',
     message: '구글 드라이브 클라우드에 성공적으로 저장되었습니다.'
+  };
+}
+
+function formatCellTime(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+  }
+  return String(val).split('.')[0].trim();
+}
+
+/**
+ * 작업 레코드 수정
+ */
+function updateRecord(req) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var entryTimeCol = headerRow.indexOf("EntryTime");
+  var lastRow = sheet.getLastRow();
+  var targetRow = -1;
+
+  if (entryTimeCol !== -1 && req.entry_time && lastRow > 1) {
+    var reqTimeNorm = String(req.entry_time).split('.')[0].trim();
+    var timeValues = sheet.getRange(2, entryTimeCol + 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < timeValues.length; i++) {
+      var cellTimeNorm = formatCellTime(timeValues[i][0]);
+      if (cellTimeNorm === reqTimeNorm) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (targetRow === -1 && req.id !== undefined && req.id !== null) {
+    var rowNum = Number(req.id);
+    if (rowNum >= 2 && rowNum <= lastRow) {
+      targetRow = rowNum;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { status: 'error', detail: '수정할 일보 내역을 찾을 수 없습니다.' };
+  }
+
+  var rowMap = buildRowMap(req, req.entry_time);
+  var rowValues = [];
+  for (var j = 0; j < headerRow.length; j++) {
+    var colName = headerRow[j];
+    rowValues.push(rowMap.hasOwnProperty(colName) ? rowMap[colName] : '');
+  }
+  sheet.getRange(targetRow, 1, 1, headerRow.length).setValues([rowValues]);
+  return { status: 'success', message: '성공적으로 수정되었습니다.' };
+}
+
+/**
+ * 작업 레코드 삭제
+ */
+function deleteRecord(req) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var entryTimeCol = headerRow.indexOf("EntryTime");
+  var lastRow = sheet.getLastRow();
+  var targetRow = -1;
+
+  if (entryTimeCol !== -1 && req.entry_time && lastRow > 1) {
+    var reqTimeNorm = String(req.entry_time).split('.')[0].trim();
+    var timeValues = sheet.getRange(2, entryTimeCol + 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < timeValues.length; i++) {
+      var cellTimeNorm = formatCellTime(timeValues[i][0]);
+      if (cellTimeNorm === reqTimeNorm) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (targetRow === -1 && req.id !== undefined && req.id !== null) {
+    var rowNum = Number(req.id);
+    if (rowNum >= 2 && rowNum <= lastRow) {
+      targetRow = rowNum;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { status: 'error', detail: '삭제할 일보 내역을 찾을 수 없습니다.' };
+  }
+
+  sheet.deleteRow(targetRow);
+  return { status: 'success', message: '성공적으로 삭제되었습니다.' };
+}
+
+/**
+ * PC 프로그램 일괄 동기화 (추가, 수정, 삭제 일괄 처리)
+ */
+function batchSyncRecords(payload) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var entryTimeCol = headerRow.indexOf("EntryTime");
+
+  var deletesCount = 0;
+  var updatesCount = 0;
+  var savesCount = 0;
+
+  // 1. 삭제 처리
+  var deletes = payload.deletes || [];
+  if (deletes.length > 0 && entryTimeCol !== -1) {
+    for (var d = 0; d < deletes.length; d++) {
+      var targetTime = String(deletes[d]).split('.')[0].trim();
+      var curLastRow = sheet.getLastRow();
+      if (curLastRow <= 1) break;
+      var timeVals = sheet.getRange(2, entryTimeCol + 1, curLastRow - 1, 1).getValues();
+      for (var r = timeVals.length - 1; r >= 0; r--) {
+        var cellTime = formatCellTime(timeVals[r][0]);
+        if (cellTime === targetTime) {
+          sheet.deleteRow(r + 2);
+          deletesCount++;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. 수정 처리
+  var updates = payload.updates || [];
+  for (var u = 0; u < updates.length; u++) {
+    var resU = updateRecord(updates[u]);
+    if (resU.status === 'success') updatesCount++;
+  }
+
+  // 3. 신규 추가 처리
+  var saves = payload.saves || [];
+  for (var s = 0; s < saves.length; s++) {
+    var resS = saveRecord(saves[s]);
+    if (resS.status === 'success') savesCount++;
+  }
+
+  return {
+    status: 'success',
+    added_count: savesCount,
+    updated_count: updatesCount,
+    deleted_count: deletesCount,
+    message: '일괄 동기화 완료 (추가: ' + savesCount + '건, 수정: ' + updatesCount + '건, 삭제: ' + deletesCount + '건)'
   };
 }
 
@@ -297,11 +499,19 @@ function getRecentRecords(targetDate) {
 
     // 작업자 요약
     var workersArr = [];
+    var workerObjects = [];
     for (var u = 1; u <= 10; u++) {
       var uName = item[(u === 1) ? 'User' : ('User' + u)];
       if (uName && String(uName).trim()) {
+        var uTime = item[(u === 1) ? 'WorkTime' : ('WorkTime' + u)] || '09:00~18:00';
         var otPay = Number(item[(u === 1) ? 'OT' : ('OT' + u)] || 0);
         workersArr.push(String(uName).trim() + " (" + otPay.toLocaleString() + "원)");
+        workerObjects.push({
+          user: String(uName).trim(),
+          shift: '일반',
+          time: String(uTime).trim() || '09:00~18:00',
+          ot: otPay.toLocaleString()
+        });
       }
     }
 
@@ -320,6 +530,7 @@ function getRecentRecords(targetDate) {
 
     records.push({
       id: startRow + r,
+      entry_time: formatCellTime(item['EntryTime']) || String(item['EntryTime'] || ''),
       date: rowDateStr,
       company: String(item['업체명'] || '경인사무소'),
       method: String(item['검사방법'] || ''),
@@ -335,7 +546,8 @@ function getRecentRecords(targetDate) {
       applied_code: String(item['적용코드'] || ''),
       report_no: String(item['성적서번호'] || ''),
       extra: chemList.join(" "),
-      workers: workersArr.join(", ")
+      workers: workersArr.join(", "),
+      worker_list: workerObjects
     });
   }
 

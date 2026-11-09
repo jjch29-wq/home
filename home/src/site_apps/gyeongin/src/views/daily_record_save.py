@@ -10,6 +10,7 @@ def remember_source(app, index):
 def save_prepared(app, plan):
     source = getattr(app, '_daily_edit_source', None)
     replace = None
+    snapshot = None
     if source is not None:
         index, snapshot = source
         if index not in app.daily_usage_df.index or not app.daily_usage_df.loc[index].equals(snapshot):
@@ -50,6 +51,24 @@ def save_prepared(app, plan):
         if not count or not app.save_data(require_primary=True):
             raise RuntimeError('원본 파일에 저장하지 못했습니다. 입력 내용은 유지됩니다.')
         app._daily_edit_source = None
+
+        # [경인 클라우드 실시간 Push] 구글 스프레드시트 웹앱으로 수정/신규 내역 비동기 전송
+        try:
+            import threading
+            from site_apps.gyeongin.src.sync_google_sheet import push_record_to_web_app
+
+            records = list(plan.get('records_to_save', []))
+            is_update = (replace is not None)
+            orig_time = str(snapshot.get('EntryTime', '')).strip() if (is_update and snapshot is not None) else None
+
+            def _async_push():
+                for rec in records:
+                    push_record_to_web_app(rec, action='update' if is_update else 'save', original_entry_time=orig_time)
+
+            threading.Thread(target=_async_push, daemon=True).start()
+        except Exception:
+            pass
+
         return count
     except Exception:
         for name, frame in frames.items(): setattr(app, name, frame)

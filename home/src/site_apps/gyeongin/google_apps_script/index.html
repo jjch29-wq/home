@@ -38,6 +38,20 @@
 
   <main class="max-w-md mx-auto p-4 space-y-4">
 
+    <!-- Edit Mode Indicator Banner (Hidden by default) -->
+    <div id="edit-banner" class="hidden bg-amber-500 text-white rounded-2xl shadow-lg p-3.5 flex items-center justify-between border-2 border-amber-600 animate-pulse">
+      <div class="flex items-center space-x-2">
+        <i data-lucide="edit-3" class="w-5 h-5 text-amber-100"></i>
+        <div>
+          <span class="text-xs font-black uppercase tracking-wider block">일보 내역 수정 모드</span>
+          <p id="edit-banner-desc" class="text-xs text-amber-100 font-medium truncate max-w-[200px]"></p>
+        </div>
+      </div>
+      <button type="button" id="btn-cancel-edit" class="px-3 py-1.5 bg-white text-amber-800 rounded-xl text-xs font-black shadow hover:bg-amber-50 active:scale-95 transition">
+        수정 취소
+      </button>
+    </div>
+
     <!-- 1. 거래처 및 공통 정보 카드 -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -552,16 +566,23 @@
             google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getConfig();
           } else if (action === 'saveRecord') {
             google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveRecord(payload);
+          } else if (action === 'updateRecord' || action === 'update') {
+            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).updateRecord(payload);
+          } else if (action === 'deleteRecord' || action === 'delete') {
+            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteRecord(payload);
           } else if (action === 'getRecentRecords') {
             google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getRecentRecords(payload);
+          } else {
+            reject(new Error("알 수 없는 API 액션: " + action));
           }
         } else {
           // Fallback to fetch if hosted separately
-          const url = (action === 'saveRecord') ? '?api=save' : `?api=${action}`;
+          const isPost = (action === 'saveRecord' || action === 'updateRecord' || action === 'deleteRecord' || action === 'delete' || action === 'update');
+          const url = isPost ? '?api=' + action : `?api=${action}`;
           fetch(url, {
-            method: (action === 'saveRecord') ? 'POST' : 'GET',
+            method: isPost ? 'POST' : 'GET',
             headers: { 'Content-Type': 'application/json' },
-            body: (action === 'saveRecord') ? JSON.stringify(payload) : undefined
+            body: isPost ? JSON.stringify({ action: action, ...payload }) : undefined
           })
           .then(res => res.json())
           .then(resolve)
@@ -984,12 +1005,21 @@
           chem_fl_pen: parseFloat(document.getElementById("chem-fl-pen").value) || 0
         };
 
-        const res = await apiCall('saveRecord', payload);
+        const isEditing = Boolean(currentEditingRecord);
+        const actionName = isEditing ? 'updateRecord' : 'saveRecord';
+        if (isEditing) {
+          payload.id = currentEditingRecord.id;
+          payload.entry_time = currentEditingRecord.entry_time;
+          payload.is_update = true;
+        }
+
+        const res = await apiCall(actionName, payload);
         if (res && res.status === 'success') {
-          showToast("구글 드라이브 클라우드에 성공적으로 저장되었습니다!");
+          showToast(isEditing ? "작업일보가 성공적으로 수정되었습니다!" : "구글 드라이브 클라우드에 성공적으로 저장되었습니다!");
+          if (isEditing) cancelEditMode();
           loadRecentRecords();
         } else {
-          showToast((res && res.detail) || "저장 실패", true);
+          showToast((res && res.detail) || (isEditing ? "수정 실패" : "저장 실패"), true);
         }
       } catch (e) {
         showToast("구글 클라우드 저장 오류: " + e.message, true);
@@ -999,31 +1029,280 @@
       }
     });
 
-    // Recent records
+    let currentEditingRecord = null;
+    window.recentRecordsList = [];
+
+    // Start edit mode with full record population
+    window.startEditRecord = function(r) {
+      if (!r) return;
+      try {
+        currentEditingRecord = r;
+
+        // Smooth scroll to top immediately
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Show Edit Banner
+        const banner = document.getElementById("edit-banner");
+        const bannerDesc = document.getElementById("edit-banner-desc");
+        if (banner) banner.classList.remove("hidden");
+        if (bannerDesc) bannerDesc.textContent = `${r.date} [${r.company}] ${r.method} · ${r.item_name || 'Piping'} (${r.qty} ${r.unit})`;
+
+        // Populate basic fields
+        if (r.date && dateInput) dateInput.value = r.date;
+        const siteInput = document.getElementById("input-site-name");
+        if (r.site && siteInput) siteInput.value = r.site;
+
+        // Company
+        const coSelect = document.getElementById("select-company");
+        const customCo = document.getElementById("input-custom-company");
+        if (r.company && coSelect) {
+          let foundCo = false;
+          for (let opt of coSelect.options) {
+            if (opt.value === r.company) { foundCo = true; break; }
+          }
+          if (foundCo) {
+            coSelect.value = r.company;
+            if (customCo) { customCo.value = ""; customCo.classList.add("hidden"); }
+          } else {
+            if (customCo) { customCo.value = r.company; customCo.classList.remove("hidden"); }
+          }
+        }
+
+        // Loc type
+        const locSelect = document.getElementById("select-loc-type");
+        if (r.loc_type && locSelect) locSelect.value = r.loc_type;
+
+        // Method
+        if (r.method) switchMethod(r.method);
+
+        // Item Name
+        const itemSelect = document.getElementById("select-item-name");
+        const customItem = document.getElementById("input-custom-item");
+        if (r.item_name && itemSelect) {
+          let foundItem = false;
+          for (let opt of itemSelect.options) {
+            if (opt.value === r.item_name) { foundItem = true; break; }
+          }
+          if (foundItem) {
+            itemSelect.value = r.item_name;
+            if (customItem) { customItem.value = ""; customItem.classList.add("hidden"); }
+          } else {
+            if (customItem) { customItem.value = r.item_name; customItem.classList.remove("hidden"); }
+          }
+          itemSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Material
+        const matSelect = document.getElementById("select-material");
+        const customMat = document.getElementById("input-custom-mat");
+        if (r.material && matSelect) {
+          let foundMat = false;
+          for (let opt of matSelect.options) {
+            if (opt.value === r.material) { foundMat = true; break; }
+          }
+          if (foundMat) {
+            matSelect.value = r.material;
+            if (customMat) { customMat.value = ""; customMat.classList.add("hidden"); }
+          } else {
+            if (customMat) { customMat.value = r.material; customMat.classList.remove("hidden"); }
+          }
+        }
+
+        // Applied Code
+        const appCodeSelect = document.getElementById("select-applied-code");
+        if (r.applied_code && appCodeSelect) appCodeSelect.value = r.applied_code;
+        const repNoInput = document.getElementById("input-report-no");
+        if (r.report_no && repNoInput) repNoInput.value = r.report_no;
+
+        // Pipe & Joints
+        const pipeSelect = document.getElementById("select-pipe");
+        if (r.pipe && pipeSelect) pipeSelect.value = r.pipe;
+        const oriJointsInput = document.getElementById("input-ori-joints");
+        if (r.ori_joints !== undefined && oriJointsInput) oriJointsInput.value = r.ori_joints;
+        const repJointsInput = document.getElementById("input-rep-joints");
+        if (r.rep_joints !== undefined && repJointsInput) repJointsInput.value = r.rep_joints;
+        const rejQtyInput = document.getElementById("input-rej-qty");
+        if (r.rej_qty !== undefined && rejQtyInput) rejQtyInput.value = r.rej_qty;
+        const jointsInput = document.getElementById("input-joints");
+        if (r.joints !== undefined && jointsInput) jointsInput.value = r.joints;
+
+        // Qty & Price
+        const qtyInput = document.getElementById("input-qty");
+        if (r.qty !== undefined && qtyInput) {
+          isManualQty = true;
+          qtyInput.value = r.qty;
+        }
+        const unitSelect = document.getElementById("select-unit");
+        if (r.unit && unitSelect) unitSelect.value = r.unit;
+        const unitPriceInput = document.getElementById("input-unit-price");
+        if (r.unit_price !== undefined && unitPriceInput) unitPriceInput.value = r.unit_price;
+        const travelInput = document.getElementById("input-travel-cost");
+        if (r.travel_cost !== undefined && travelInput) travelInput.value = r.travel_cost;
+        const lumpInput = document.getElementById("input-lump-sum");
+        if (r.lump_sum !== undefined && lumpInput) lumpInput.value = r.lump_sum || '';
+        const totalFeeInput = document.getElementById("input-total-fee");
+        if (r.total_fee !== undefined && totalFeeInput) totalFeeInput.value = r.total_fee;
+
+        // Equip
+        const equipSelect = document.getElementById("select-equip");
+        if (r.equip_main && equipSelect) equipSelect.value = r.equip_main;
+        const auxEquipSelect = document.getElementById("select-aux-equip");
+        if (r.equip_aux && auxEquipSelect) auxEquipSelect.value = r.equip_aux;
+
+        // Vehicle
+        const vehicleSelect = document.getElementById("select-vehicle");
+        if (r.vehicle_no && vehicleSelect) vehicleSelect.value = r.vehicle_no;
+        const mileageInput = document.getElementById("input-mileage");
+        if (r.mileage && mileageInput) mileageInput.value = r.mileage;
+        const noteInput = document.getElementById("input-note");
+        if (r.note && noteInput) noteInput.value = r.note;
+
+        // RTK Defect Fields
+        const rtkFields = ['rtk-center-miss', 'rtk-density', 'rtk-marking-miss', 'rtk-film-mark', 'rtk-handling', 'rtk-complaint', 'rtk-etc', 'rtk-total'];
+        const rtkKeys = ['rtk_center_miss', 'rtk_density', 'rtk_marking_miss', 'rtk_film_mark', 'rtk_handling', 'rtk_complaint', 'rtk_etc', 'rtk_total'];
+        for (let i = 0; i < rtkFields.length; i++) {
+          const el = document.getElementById(rtkFields[i]);
+          if (el) el.value = r[rtkKeys[i]] || 0;
+        }
+
+        // Chemicals
+        const chemFields = ['chem-fl-mag', 'chem-black-mag', 'chem-white-paint', 'chem-penetrant', 'chem-cleaner', 'chem-developer', 'chem-fl-pen'];
+        const chemKeys = ['chem_fl_mag', 'chem_black_mag', 'chem_white_paint', 'chem_penetrant', 'chem_cleaner', 'chem_developer', 'chem_fl_pen'];
+        for (let i = 0; i < chemFields.length; i++) {
+          const el = document.getElementById(chemFields[i]);
+          if (el) el.value = r[chemKeys[i]] || 0;
+        }
+
+        // Workers (안전한 배열 처리)
+        if (r.worker_list && Array.isArray(r.worker_list) && r.worker_list.length > 0) {
+          workerRows = JSON.parse(JSON.stringify(r.worker_list));
+        } else if (!Array.isArray(workerRows) || workerRows.length === 0) {
+          initDefaultWorkers();
+        }
+        renderWorkers();
+
+        // Update Submit Button Appearance for Edit Mode
+        const submitBtn = document.getElementById("btn-submit");
+        if (submitBtn) {
+          submitBtn.className = "w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-amber-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
+          submitBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i><span>작업일보 수정 완료 (클라우드 저장)</span>';
+          lucide.createIcons();
+        }
+
+        showToast("일보 수정 모드로 전환되었습니다.");
+      } catch (err) {
+        console.error("startEditRecord error:", err);
+        showToast("수정 모드 전환 오류: " + err.message, true);
+      }
+    };
+
+    window.startEditRecordByIndex = function(idx) {
+      if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
+      window.startEditRecord(window.recentRecordsList[idx]);
+    };
+
+    window.copyRecordByIndex = function(idx) {
+      if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
+      window.copyRecordToForm(window.recentRecordsList[idx]);
+    };
+
+    window.deleteRecordByIndex = function(idx) {
+      if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
+      window.deleteRecord(window.recentRecordsList[idx]);
+    };
+
+    // Cancel edit mode and restore normal state
+    function cancelEditMode() {
+      currentEditingRecord = null;
+      const banner = document.getElementById("edit-banner");
+      if (banner) banner.classList.add("hidden");
+
+      // Reset Submit Button
+      const submitBtn = document.getElementById("btn-submit");
+      if (submitBtn) {
+        submitBtn.className = "w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
+        submitBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5"></i><span>구글 드라이브 클라우드에 작업 저장</span>';
+        lucide.createIcons();
+      }
+    }
+
+    document.getElementById("btn-cancel-edit").addEventListener("click", () => {
+      cancelEditMode();
+      showToast("수정이 취소되었습니다.");
+    });
+
+    // Delete record with confirmation
+    window.deleteRecord = async function(r) {
+      if (!r) return;
+      const desc = `[${r.date} ${r.company} ${r.method} · ${r.item_name || 'Piping'}]`;
+      if (!confirm(`${desc}\n해당 작업일보 내역을 정말 삭제하시겠습니까?\n\n※ 삭제된 내역은 스프레드시트에서 즉시 제거됩니다.`)) {
+        return;
+      }
+
+      try {
+        const res = await apiCall('deleteRecord', { id: r.id, entry_time: r.entry_time });
+        if (res && res.status === 'success') {
+          showToast(`${desc} 내역이 삭제되었습니다.`);
+          if (currentEditingRecord && currentEditingRecord.entry_time === r.entry_time) {
+            cancelEditMode();
+          }
+          loadRecentRecords();
+        } else {
+          showToast((res && res.detail) || "삭제 실패", true);
+        }
+      } catch (e) {
+        showToast("삭제 오류: " + e.message, true);
+      }
+    };
+
+    // Recent records loader with Edit / Delete / Copy controls
     async function loadRecentRecords() {
       const container = document.getElementById("recent-list");
       try {
         const res = await apiCall('getRecentRecords', dateInput.value);
         if (!res || !res.records || res.records.length === 0) {
           container.innerHTML = '<div class="text-center py-4 text-xs text-slate-400">당일 등록된 작업 내역이 없습니다.</div>';
+          window.recentRecordsList = [];
           return;
         }
 
-        container.innerHTML = res.records.map(r => `
-          <div class="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1 text-xs hover:border-emerald-400 cursor-pointer transition" onclick='copyRecordToForm(${JSON.stringify(r).replace(/'/g, "&#39;")})'>
-            <div class="flex items-center justify-between">
-              <span class="font-extrabold text-emerald-800">[${r.company}] ${r.method} · ${r.item_name || 'Piping'}${r.pipe ? ` (${r.pipe})` : ''}</span>
-              <span class="font-black text-slate-900">${r.qty} ${r.unit} (${Number(r.total_fee || 0).toLocaleString()}원)</span>
+        window.recentRecordsList = res.records;
+        container.innerHTML = res.records.map((r, idx) => {
+          return `
+            <div class="p-3.5 bg-slate-900 text-slate-100 rounded-2xl mb-3 shadow-md border border-slate-700/80">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <span class="inline-block px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-extrabold text-[11px] mb-1">[${r.company}] ${r.method} · ${r.item_name || 'Piping'}${r.pipe ? ` (${r.pipe})` : ''}</span>
+                  <div class="text-[11px] text-slate-400 font-medium">
+                    📅 ${r.date} · 🏢 ${r.site || r.loc_type}${r.applied_code ? ` · ${r.applied_code}` : ''}
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="block font-black text-white text-sm">${r.qty} ${r.unit}</span>
+                  <span class="text-[11px] text-emerald-400 font-bold">${Number(r.total_fee || 0).toLocaleString()}원</span>
+                </div>
+              </div>
+
+              ${r.report_no ? `<div class="text-[10px] text-slate-400 mt-1">📄 성적서: ${r.report_no}</div>` : ''}
+              ${r.workers ? `<div class="text-[10px] text-slate-300 bg-slate-800/90 p-1.5 rounded-lg border border-slate-700/60 mt-1.5">👷 참여: ${r.workers}</div>` : ''}
+              ${r.extra ? `<div class="text-[10px] text-amber-400 font-bold mt-1">🧪 ${r.extra}</div>` : ''}
+
+              <!-- 3 Action Buttons (Copy, Edit, Delete) -->
+              <div class="pt-2.5 mt-2.5 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
+                <button type="button" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-1 transition" onclick="copyRecordByIndex(${idx})">
+                  <span>📋</span> <span>복사</span>
+                </button>
+                <button type="button" class="flex-1 py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 text-amber-300 font-bold rounded-xl border border-amber-500/40 flex items-center justify-center gap-1 transition" onclick="startEditRecordByIndex(${idx})">
+                  <span>✏️</span> <span>수정</span>
+                </button>
+                <button type="button" class="flex-1 py-1.5 px-2 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 text-rose-300 font-bold rounded-xl border border-rose-500/40 flex items-center justify-center gap-1 transition" onclick="deleteRecordByIndex(${idx})">
+                  <span>🗑️</span> <span>삭제</span>
+                </button>
+              </div>
             </div>
-            <div class="flex items-center justify-between text-[11px] text-slate-500">
-              <span>${r.date} · ${r.loc_type}${r.applied_code ? ` · ${r.applied_code}` : ''}</span>
-              ${r.extra ? `<span class="text-amber-700 font-bold">${r.extra}</span>` : ''}
-            </div>
-            ${r.material ? `<div class="text-[10px] text-slate-500 truncate">자재: ${r.material}</div>` : ''}
-            ${r.report_no ? `<div class="text-[10px] text-slate-400">성적서: ${r.report_no}</div>` : ''}
-            ${r.workers ? `<div class="text-[10px] text-slate-400 truncate">참여: ${r.workers}</div>` : ''}
-          </div>
-        `).join("");
+          `;
+        }).join("");
+        lucide.createIcons();
       } catch (e) {
         container.innerHTML = `<div class="text-center py-4 text-xs text-rose-500">내역 로드 오류: ${e.message}</div>`;
       }

@@ -51,9 +51,13 @@ SIZE_LENGTH = {
 }
 
 USERS = [
-    "부장 주진철", "부장 이병국", "부장 박광복", "차장 권인경",
-    "과장 주영광", "대리 우명광", "계장 박상태", "계장 이준우",
-    "계장 장승대", "주임 김성렬", "주임 김진환"
+    "이사 곽재운", "이사 박홍규",
+    "부장 주진철", "부장 박광복", "부장 이병국", "부장 이용주", "부장 주동기", "부장 김규년", "부장 곽상돈", "부장 정효철", "부장 노현태",
+    "차장 김춘호", "차장 권인경", "차장 박원준",
+    "과장 주영광", "과장 유상훈",
+    "대리 김상현", "대리 윤석현", "대리 우명광", "대리 박만영",
+    "계장 박상태", "계장 이준우", "계장 장승대", "계장 이은수", "계장 손주언", "계장 이경재", "계장 박재욱", "계장 한지원",
+    "주임 김진환", "주임 황조현", "주임 김태현"
 ]
 
 VEHICLES = [
@@ -78,10 +82,11 @@ def get_inventory_paths():
         import ctypes
         bitmask = ctypes.windll.kernel32.GetLogicalDrives()
         drives = [chr(65 + i) for i in range(26) if (bitmask >> i) & 1]
-        if 'G' in drives:
-            cloud_p = os.path.join(r"G:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\data", "Material_Inventory.xlsx")
+        for d in drives:
+            cloud_p = os.path.join(rf"{d}:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\data", "Material_Inventory.xlsx")
             if os.path.exists(cloud_p) and cloud_p not in paths:
                 paths.insert(0, cloud_p)
+                break
     except Exception:
         pass
 
@@ -314,6 +319,103 @@ class RecordSaveRequest(BaseModel):
     chem_developer: float = 0.0   # 현상제
     chem_fl_pen: float = 0.0      # 형광침투제
 
+class RecordUpdateRequest(RecordSaveRequest):
+    id: Optional[int] = None
+    entry_time: Optional[str] = None
+
+class RecordDeleteRequest(BaseModel):
+    id: Optional[int] = None
+    entry_time: Optional[str] = None
+
+def build_row_data(req: RecordSaveRequest, preserve_entry_time: Optional[str] = None) -> dict:
+    calculated_fee = int(round(req.total_fee)) if req.total_fee > 0 else int(round(req.qty * req.unit_price + req.travel_cost))
+    stamp = preserve_entry_time if preserve_entry_time else datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    new_row_data = {
+        "Date": req.date,
+        "Site": req.site,
+        "작업구분": req.loc_type,
+        "구분": req.loc_type,
+        "검사구분": req.loc_type,
+        "업체명": req.company,
+        "회사코드": req.company_code or req.company,
+        "검사방법": req.method,
+        "규격": req.pipe,
+        "관경(Inch)": req.pipe,
+        "검사품명": req.item_name,
+        "자재명": req.material,
+        "MaterialID": req.material,
+        "Material": req.material,
+        "품목명": req.material,
+        "적용코드": req.applied_code,
+        "성적서번호": req.report_no,
+        "조인트수": req.joints or req.ori_joints,
+        "불량수": req.rej_qty,
+        "수량": req.qty,
+        "검사량": req.qty,
+        "Usage": req.qty,
+        "단위": req.unit,
+        "Unit": req.unit,
+        "단가": req.unit_price,
+        "출장비": req.travel_cost,
+        "일식": req.lump_sum,
+        "검사비": calculated_fee,
+        "장비명": req.equip_main,
+        "보조장비": req.equip_aux,
+        "작업형태": req.work_shape,
+        "차량번호": req.vehicle_no,
+        "주행거리": req.mileage,
+        "차량점검": "양호",
+        "차량비고": req.vehicle_note,
+        "Note": req.note,
+        "Remark": req.note,
+        "DailyMemo": req.note,
+        "EntryTime": stamp,
+        "입력시간": stamp,
+        "검사자": req.workers[0].user if req.workers else "",
+        "User": req.workers[0].user if req.workers else "",
+        "FilmCount": req.qty if req.method == 'RT' else 0,
+        # RTK (8 categories)
+        "RTK_센터미스": req.rtk_center_miss,
+        "RTK_농도": req.rtk_density,
+        "RTK_마킹미스": req.rtk_marking_miss,
+        "RTK_필름마크": req.rtk_film_mark,
+        "RTK_취급부주의": req.rtk_handling,
+        "RTK_고객불만": req.rtk_complaint,
+        "RTK_기타": req.rtk_etc,
+        "RTK_총계": req.rtk_total,
+        "RTK_RTK총계": req.rtk_total,
+        # NDT Chemicals (7 categories)
+        "NDT_형광자분": req.chem_fl_mag,
+        "NDT_흑색자분": req.chem_black_mag,
+        "NDT_백색페인트": req.chem_white_paint,
+        "NDT_침투제": req.chem_penetrant,
+        "NDT_세척제": req.chem_cleaner,
+        "NDT_현상제": req.chem_developer,
+        "NDT_형광침투제": req.chem_fl_pen,
+    }
+
+    # Reset worker columns up to 10
+    for idx in range(1, 11):
+        new_row_data[f"User{idx}"] = ""
+        new_row_data[f"WorkTime{idx}"] = ""
+        new_row_data[f"User{idx}_WorkTime"] = ""
+        new_row_data[f"User{idx}_Work_Shape"] = ""
+        new_row_data[f"User{idx}_OT_Pay"] = 0.0
+        new_row_data[f"OT{idx}"] = 0.0
+
+    # Assign workers
+    for idx, w in enumerate(req.workers[:10], start=1):
+        new_row_data[f"User{idx}"] = w.user
+        new_row_data[f"WorkTime{idx}"] = w.time
+        new_row_data[f"User{idx}_WorkTime"] = w.time
+        new_row_data[f"User{idx}_Work_Shape"] = w.shift
+        clean_ot = float(str(w.ot).replace(",", "").strip()) if w.ot else 0.0
+        new_row_data[f"User{idx}_OT_Pay"] = clean_ot
+        new_row_data[f"OT{idx}"] = clean_ot
+
+    return new_row_data
+
 @app.get("/api/config")
 def get_config():
     return {
@@ -410,15 +512,27 @@ def get_recent_records(date: Optional[str] = None):
 
         records = []
         for idx, row in filtered.iterrows():
-            workers_str = ""
+            workers_summary = ""
+            workers_list = []
             for i in range(1, 11):
                 u_col = f"User{i}" if i > 1 else "User"
+                wt_col = f"WorkTime{i}" if i > 1 else "WorkTime"
+                ws_col = f"User{i}_Work_Shape" if i > 1 else "User_Work_Shape"
                 ot_col = f"User{i}_OT_Pay" if i > 1 else "User_OT_Pay"
                 ot_fallback = f"OT{i}" if i > 1 else "OT"
+
                 u = safe_str(row.get(u_col))
                 if u:
+                    time_val = safe_str(row.get(wt_col), "09:00~18:00")
+                    shift_val = safe_str(row.get(ws_col), "일반")
                     ot_val = safe_float(row.get(ot_col, row.get(ot_fallback, 0)))
-                    workers_str += f"{u} ({ot_val:,.0f}원), "
+                    workers_summary += f"{u} ({ot_val:,.0f}원), "
+                    workers_list.append({
+                        "user": u,
+                        "shift": shift_val,
+                        "time": time_val,
+                        "ot": str(int(ot_val)) if ot_val == int(ot_val) else f"{ot_val:.1f}"
+                    })
             
             # Form chemical summary if present
             chem_summary = []
@@ -433,9 +547,13 @@ def get_recent_records(date: Optional[str] = None):
             if rtk_total > 0:
                 rtk_summary.append(f"RTK:{rtk_total:g}")
 
+            entry_time_val = safe_str(row.get("EntryTime"), safe_str(row.get("입력시간")))
+
             records.append({
                 "id": int(idx),
+                "entry_time": entry_time_val,
                 "date": safe_str(row.get("Date_str"), safe_str(row.get("Date"))),
+                "site": safe_str(row.get("Site"), "경인사무소"),
                 "company": safe_str(row.get("업체명"), "경인사무소"),
                 "method": safe_str(row.get("검사방법")),
                 "item_name": safe_str(row.get("검사품명"), "Piping"),
@@ -446,11 +564,38 @@ def get_recent_records(date: Optional[str] = None):
                 "unit": safe_str(row.get("Unit"), safe_str(row.get("단위"), "M")),
                 "unit_price": safe_float(row.get("단가")),
                 "travel_cost": safe_float(row.get("출장비")),
+                "lump_sum": safe_str(row.get("일식")),
                 "total_fee": safe_float(row.get("검사비")),
                 "applied_code": safe_str(row.get("적용코드")),
                 "report_no": safe_str(row.get("성적서번호")),
+                "equip_main": safe_str(row.get("장비명")),
+                "equip_aux": safe_str(row.get("보조장비")),
+                "vehicle_no": safe_str(row.get("차량번호")),
+                "mileage": safe_str(row.get("주행거리")),
+                "note": safe_str(row.get("Note"), safe_str(row.get("DailyMemo"))),
+                "joints": safe_float(row.get("조인트수")),
+                "ori_joints": safe_float(row.get("조인트수")),
+                "rej_qty": safe_float(row.get("불량수")),
+                # RTK
+                "rtk_center_miss": safe_float(row.get("RTK_센터미스")),
+                "rtk_density": safe_float(row.get("RTK_농도")),
+                "rtk_marking_miss": safe_float(row.get("RTK_마킹미스")),
+                "rtk_film_mark": safe_float(row.get("RTK_필름마크")),
+                "rtk_handling": safe_float(row.get("RTK_취급부주의")),
+                "rtk_complaint": safe_float(row.get("RTK_고객불만")),
+                "rtk_etc": safe_float(row.get("RTK_기타")),
+                "rtk_total": safe_float(row.get("RTK_총계", row.get("RTK_RTK총계"))),
+                # Chemicals
+                "chem_fl_mag": safe_float(row.get("NDT_형광자분")),
+                "chem_black_mag": safe_float(row.get("NDT_흑색자분")),
+                "chem_white_paint": safe_float(row.get("NDT_백색페인트")),
+                "chem_penetrant": safe_float(row.get("NDT_침투제")),
+                "chem_cleaner": safe_float(row.get("NDT_세척제")),
+                "chem_developer": safe_float(row.get("NDT_현상제")),
+                "chem_fl_pen": safe_float(row.get("NDT_형광침투제")),
                 "extra": " ".join(chem_summary + rtk_summary),
-                "workers": workers_str.rstrip(", ")
+                "workers_summary": workers_summary.rstrip(", "),
+                "workers": workers_list
             })
 
         records.reverse()
@@ -464,81 +609,7 @@ def save_record(req: RecordSaveRequest):
     if not paths:
         raise HTTPException(status_code=500, detail="Database file not found")
 
-    calculated_fee = int(round(req.total_fee)) if req.total_fee > 0 else int(round(req.qty * req.unit_price + req.travel_cost))
-
-    new_row_data = {
-        "Date": req.date,
-        "Site": req.site,
-        "작업구분": req.loc_type,
-        "구분": req.loc_type,
-        "검사구분": req.loc_type,
-        "업체명": req.company,
-        "회사코드": req.company_code or req.company,
-        "검사방법": req.method,
-        "규격": req.pipe,
-        "관경(Inch)": req.pipe,
-        "검사품명": req.item_name,
-        "자재명": req.material,
-        "MaterialID": req.material,
-        "Material": req.material,
-        "품목명": req.material,
-        "적용코드": req.applied_code,
-        "성적서번호": req.report_no,
-        "조인트수": req.joints or req.ori_joints,
-        "불량수": req.rej_qty,
-        "수량": req.qty,
-        "검사량": req.qty,
-        "Usage": req.qty,
-        "단위": req.unit,
-        "Unit": req.unit,
-        "단가": req.unit_price,
-        "출장비": req.travel_cost,
-        "일식": req.lump_sum,
-        "검사비": calculated_fee,
-        "장비명": req.equip_main,
-        "보조장비": req.equip_aux,
-        "작업형태": req.work_shape,
-        "차량번호": req.vehicle_no,
-        "주행거리": req.mileage,
-        "차량점검": "양호",
-        "차량비고": req.vehicle_note,
-        "Note": req.note,
-        "Remark": req.note,
-        "DailyMemo": req.note,
-        "EntryTime": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "입력시간": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "검사자": req.workers[0].user if req.workers else "",
-        "User": req.workers[0].user if req.workers else "",
-        "FilmCount": req.qty if req.method == 'RT' else 0,
-        # RTK (8 categories)
-        "RTK_센터미스": req.rtk_center_miss,
-        "RTK_농도": req.rtk_density,
-        "RTK_마킹미스": req.rtk_marking_miss,
-        "RTK_필름마크": req.rtk_film_mark,
-        "RTK_취급부주의": req.rtk_handling,
-        "RTK_고객불만": req.rtk_complaint,
-        "RTK_기타": req.rtk_etc,
-        "RTK_총계": req.rtk_total,
-        "RTK_RTK총계": req.rtk_total,
-        # NDT Chemicals (7 categories)
-        "NDT_형광자분": req.chem_fl_mag,
-        "NDT_흑색자분": req.chem_black_mag,
-        "NDT_백색페인트": req.chem_white_paint,
-        "NDT_침투제": req.chem_penetrant,
-        "NDT_세척제": req.chem_cleaner,
-        "NDT_현상제": req.chem_developer,
-        "NDT_형광침투제": req.chem_fl_pen,
-    }
-
-    # Assign workers
-    for idx, w in enumerate(req.workers[:10], start=1):
-        new_row_data[f"User{idx}"] = w.user
-        new_row_data[f"WorkTime{idx}"] = w.time
-        new_row_data[f"User{idx}_WorkTime"] = w.time
-        new_row_data[f"User{idx}_Work_Shape"] = w.shift
-        clean_ot = float(str(w.ot).replace(",", "").strip()) if w.ot else 0.0
-        new_row_data[f"User{idx}_OT_Pay"] = clean_ot
-        new_row_data[f"OT{idx}"] = clean_ot
+    new_row_data = build_row_data(req)
 
     saved_dbs = []
     for p in paths:
@@ -567,6 +638,107 @@ def save_record(req: RecordSaveRequest):
         "status": "success",
         "saved_databases": saved_dbs,
         "message": f"성공적으로 저장되었습니다. ({len(saved_dbs)}개 저장소 동기화 완료)"
+    }
+
+@app.post("/api/update_record")
+def update_record(req: RecordUpdateRequest):
+    paths = get_inventory_paths()
+    if not paths:
+        raise HTTPException(status_code=500, detail="Database file not found")
+
+    new_row_data = build_row_data(req, preserve_entry_time=req.entry_time)
+
+    updated_dbs = []
+    for p in paths:
+        try:
+            wb = openpyxl.load_workbook(p)
+            if "DailyUsage" not in wb.sheetnames:
+                continue
+            ws = wb["DailyUsage"]
+            headers = [cell.value for cell in ws[1]]
+
+            target_row_idx = None
+
+            # 1. Match by EntryTime if available
+            if req.entry_time and ("EntryTime" in headers or "입력시간" in headers):
+                time_col = headers.index("EntryTime") + 1 if "EntryTime" in headers else headers.index("입력시간") + 1
+                for r in range(2, ws.max_row + 1):
+                    val = str(ws.cell(row=r, column=time_col).value or "").strip()
+                    if val == req.entry_time.strip():
+                        target_row_idx = r
+                        break
+
+            # 2. Fallback to row index id (id is 0-based index from DataFrame -> row is id + 2)
+            if target_row_idx is None and req.id is not None:
+                candidate_row = req.id + 2
+                if 2 <= candidate_row <= ws.max_row:
+                    target_row_idx = candidate_row
+
+            if target_row_idx is not None:
+                for col_idx, h in enumerate(headers, start=1):
+                    if h in new_row_data:
+                        ws.cell(row=target_row_idx, column=col_idx, value=new_row_data[h])
+                wb.save(p)
+                updated_dbs.append(p)
+            else:
+                print(f"Record not found for update in {p}")
+        except Exception as ex:
+            print(f"Error updating {p}: {ex}")
+
+    if not updated_dbs:
+        raise HTTPException(status_code=404, detail="수정할 일보 내역을 찾을 수 없습니다.")
+
+    return {
+        "status": "success",
+        "updated_databases": updated_dbs,
+        "message": f"성공적으로 수정되었습니다. ({len(updated_dbs)}개 저장소 반영 완료)"
+    }
+
+@app.post("/api/delete_record")
+def delete_record(req: RecordDeleteRequest):
+    paths = get_inventory_paths()
+    if not paths:
+        raise HTTPException(status_code=500, detail="Database file not found")
+
+    deleted_dbs = []
+    for p in paths:
+        try:
+            wb = openpyxl.load_workbook(p)
+            if "DailyUsage" not in wb.sheetnames:
+                continue
+            ws = wb["DailyUsage"]
+            headers = [cell.value for cell in ws[1]]
+
+            target_row_idx = None
+            if req.entry_time and ("EntryTime" in headers or "입력시간" in headers):
+                time_col = headers.index("EntryTime") + 1 if "EntryTime" in headers else headers.index("입력시간") + 1
+                for r in range(2, ws.max_row + 1):
+                    val = str(ws.cell(row=r, column=time_col).value or "").strip()
+                    if val == req.entry_time.strip():
+                        target_row_idx = r
+                        break
+
+            if target_row_idx is None and req.id is not None:
+                candidate_row = req.id + 2
+                if 2 <= candidate_row <= ws.max_row:
+                    target_row_idx = candidate_row
+
+            if target_row_idx is not None:
+                ws.delete_rows(target_row_idx, 1)
+                wb.save(p)
+                deleted_dbs.append(p)
+            else:
+                print(f"Record not found for deletion in {p}")
+        except Exception as ex:
+            print(f"Error deleting from {p}: {ex}")
+
+    if not deleted_dbs:
+        raise HTTPException(status_code=404, detail="삭제할 일보 내역을 찾을 수 없습니다.")
+
+    return {
+        "status": "success",
+        "deleted_databases": deleted_dbs,
+        "message": f"성공적으로 삭제되었습니다. ({len(deleted_dbs)}개 저장소 반영 완료)"
     }
 
 @app.get("/favicon.ico", include_in_schema=False)
