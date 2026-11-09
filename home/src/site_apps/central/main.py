@@ -13,7 +13,9 @@ class CentralMaterialManager(MaterialManager):
         try:
             from site_apps.central.src.sync_google_sheet import sync_all_central_sources
             init_res = sync_all_central_sources()
-            if init_res.get("added_count", 0) > 0:
+            if init_res.get("status") != "success":
+                print(f"[중앙지사 모바일] 시작 동기화 오류: {init_res.get('message', '')}")
+            elif init_res.get("added_count", 0) > 0:
                 print(f"[중앙지사 모바일] 시작 시 신규 {init_res['added_count']}건 자동 동기화 완료")
         except Exception as e:
             print(f"[중앙지사 모바일] 시작 동기화 건너뜀: {e}")
@@ -56,6 +58,11 @@ class CentralMaterialManager(MaterialManager):
                     return
 
             res = sync_all_central_sources()
+            if res.get("status") != "success":
+                if show_msg:
+                    from tkinter import messagebox
+                    messagebox.showerror("동기화 오류", res.get("message", "모바일 동기화에 실패했습니다."))
+                return
             added = res.get("added_count", 0)
             if added > 0:
                 self.load_data()
@@ -79,8 +86,10 @@ class CentralMaterialManager(MaterialManager):
             try:
                 from site_apps.central.src.sync_google_sheet import sync_all_central_sources
                 res = sync_all_central_sources()
-                added = res.get("added_count", 0)
-                if added > 0:
+                if res.get("status") != "success":
+                    self.root.after(0, self._on_periodic_sync_error, res.get("message", "모바일 동기화 실패"))
+                elif res.get("added_count", 0) > 0:
+                    added = res["added_count"]
                     self.root.after(0, self._on_periodic_sync_found, added)
             except Exception:
                 pass
@@ -91,6 +100,12 @@ class CentralMaterialManager(MaterialManager):
                     pass
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _on_periodic_sync_error(self, message):
+        """백그라운드 동기화 실패를 숨기지 않고 상태 영역과 콘솔에 표시한다."""
+        if hasattr(self, 'daily_save_status') and self.daily_save_status:
+            self.daily_save_status.config(text="📱 모바일 동기화 오류", foreground="red")
+        print(f"[중앙지사 모바일] 백그라운드 동기화 오류: {message}")
 
     def _on_periodic_sync_found(self, count):
         """신규 모바일 데이터가 감지되었을 때 UI 자동 갱신"""

@@ -72,7 +72,16 @@ class TestCentralGoogleSync(unittest.TestCase):
             self.assertEqual(read_df.iloc[1]["검사방법"], "RT")
 
     def test_sync_all_central_sources_callable(self):
-        res = sync_all_central_sources()
+        from unittest.mock import patch
+
+        with patch(
+            "home.src.site_apps.central.src.sync_google_sheet.sync_local_and_drive_files",
+            return_value={"status": "success", "added_count": 0, "message": "mock drive"},
+        ), patch(
+            "home.src.site_apps.central.src.sync_google_sheet.load_sync_config",
+            return_value={"web_app_url": ""},
+        ):
+            res = sync_all_central_sources()
         self.assertEqual(res["status"], "success")
         self.assertIn("added_count", res)
 
@@ -122,6 +131,62 @@ class TestCentralGoogleSync(unittest.TestCase):
             self.assertEqual(len(updated_df), 1)
             self.assertEqual(float(updated_df.iloc[0]["수량"]), 2.5)
             self.assertEqual(str(updated_df.iloc[0]["Note"]), "모바일에서 수정된 메모")
+
+    def test_mobile_delete_is_applied_after_successful_snapshot(self):
+        from unittest.mock import patch
+        from home.src.site_apps.central.src.sync_google_sheet import two_way_reconcile_with_web_app
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_excel = Path(tmp_dir) / "Material_Inventory.xlsx"
+            record = {
+                "Date": "2026-11-10",
+                "Site": "중앙지사",
+                "User": "부장 주진철",
+                "검사방법": "PAUT",
+                "수량": 1.0,
+                "관경(Inch)": "250A",
+                "EntryTime": "2026-11-10 10:00:00",
+            }
+            with pd.ExcelWriter(test_excel, engine="openpyxl") as writer:
+                pd.DataFrame([record]).to_excel(writer, sheet_name="DailyUsage", index=False)
+
+            with patch(
+                "home.src.site_apps.central.src.sync_google_sheet.fetch_records_from_web_app",
+                return_value=(["EntryTime"], [record]),
+            ), patch("home.src.site_apps.central.src.sync_google_sheet.push_batch_to_web_app") as push_mock:
+                first = two_way_reconcile_with_web_app(test_excel, "https://mock.url")
+                self.assertEqual(first["status"], "success")
+                push_mock.assert_not_called()
+
+            with patch(
+                "home.src.site_apps.central.src.sync_google_sheet.fetch_records_from_web_app",
+                return_value=(["EntryTime"], []),
+            ), patch("home.src.site_apps.central.src.sync_google_sheet.push_batch_to_web_app") as push_mock:
+                second = two_way_reconcile_with_web_app(test_excel, "https://mock.url")
+                self.assertEqual(second["status"], "success")
+                self.assertEqual(second["deleted_count"], 1)
+                push_mock.assert_not_called()
+
+            with pd.ExcelFile(test_excel) as ef:
+                deleted_df = ef.parse("DailyUsage")
+            self.assertEqual(len(deleted_df), 0)
+
+    def test_push_batch_reports_partial_failure(self):
+        from unittest.mock import patch
+        from home.src.site_apps.central.src.sync_google_sheet import push_batch_to_web_app
+
+        with patch(
+            "home.src.site_apps.central.src.sync_google_sheet.push_record_to_web_app",
+            return_value={"status": "error", "message": "mock failure"},
+        ):
+            result = push_batch_to_web_app(
+                saves=[{"EntryTime": "2026-11-10 10:00:00"}],
+                web_app_url="https://mock.url",
+            )
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["added_count"], 0)
+        self.assertIn("mock failure", result["message"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,33 @@ logger = logging.getLogger("central_sync")
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "data" / "google_sync_config.json"
 DEFAULT_INVENTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "Material_Inventory.xlsx"
 
+
+def _sync_state_path(inventory_path: Path) -> Path:
+    """Return the per-database state used to recognize mobile deletions safely."""
+    return inventory_path.with_name(".mobile_sync_state.json")
+
+
+def _load_sync_state(inventory_path: Path) -> Dict[str, Any]:
+    path = _sync_state_path(inventory_path)
+    if not path.exists():
+        return {"cloud_entry_times": []}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("cloud_entry_times"), list):
+            return data
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning("모바일 동기화 상태 파일을 읽지 못했습니다: %s", exc)
+    return {"cloud_entry_times": []}
+
+
+def _save_sync_state(inventory_path: Path, cloud_entry_times: set) -> None:
+    path = _sync_state_path(inventory_path)
+    payload = {
+        "cloud_entry_times": sorted(cloud_entry_times),
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
 def get_all_inventory_paths() -> List[Path]:
     """중앙지사의 모든 재고 DB 경로 탐색 (로컬 및 Google Drive)"""
     paths = []
@@ -278,6 +305,7 @@ def push_batch_to_web_app(
     deleted_cnt = 0
     updated_cnt = 0
     saved_cnt = 0
+    errors = []
 
     # 1. 삭제 처리
     for d in (deletes or []):
@@ -286,6 +314,8 @@ def push_batch_to_web_app(
             res_del = push_delete_to_web_app(d_str, web_app_url=target_url)
             if res_del.get("status") == "success":
                 deleted_cnt += 1
+            else:
+                errors.append(res_del.get("message") or res_del.get("detail") or f"삭제 실패: {d_str}")
 
     # 2. 수정 처리
     for u in (updates or []):
@@ -293,19 +323,28 @@ def push_batch_to_web_app(
         res_upd = push_record_to_web_app(u, action="update", original_entry_time=u_time, web_app_url=target_url)
         if res_upd.get("status") == "success":
             updated_cnt += 1
+        else:
+            errors.append(res_upd.get("message") or res_upd.get("detail") or f"수정 실패: {u_time}")
 
     # 3. 신규 추가 처리
     for s in (saves or []):
         res_sav = push_record_to_web_app(s, action="save", web_app_url=target_url)
         if res_sav.get("status") == "success":
             saved_cnt += 1
+        else:
+            errors.append(res_sav.get("message") or res_sav.get("detail") or "신규 저장 실패")
 
     return {
-        "status": "success",
+        "status": "error" if errors else "success",
         "added_count": saved_cnt,
         "updated_count": updated_cnt,
         "deleted_count": deleted_cnt,
-        "message": f"동기화 완료 (추가: {saved_cnt}건, 수정: {updated_cnt}건, 삭제: {deleted_cnt}건)"
+        "errors": errors,
+        "message": (
+            f"동기화 일부 실패: {'; '.join(errors)}"
+            if errors
+            else f"동기화 완료 (추가: {saved_cnt}건, 수정: {updated_cnt}건, 삭제: {deleted_cnt}건)"
+        )
     }
 
 def two_way_reconcile_with_web_app(
@@ -340,6 +379,7 @@ def two_way_reconcile_with_web_app(
 
         daily_df = all_sheets["DailyUsage"].copy()
         local_rows = daily_df.to_dict(orient="records") if not daily_df.empty else []
+        previous_cloud_times = set(_load_sync_state(target_path).get("cloud_entry_times", []))
 
         def get_keys(r):
             entry_time = str(r.get("EntryTime", "")).split(".")[0].strip()
@@ -369,6 +409,43 @@ def two_way_reconcile_with_web_app(
                 cloud_keys.add(tk)
                 cloud_time_map[tk] = r
             cloud_keys.add(ck)
+
+        current_cloud_times = {
+            str(r.get("EntryTime", "")).split(".")[0].strip()
+            for r in cloud_rows
+            if str(r.get("EntryTime", "")).split(".")[0].strip() not in ("", "nan")
+        }
+
+        # Only infer a mobile deletion for rows observed in the previous successful
+        # cloud snapshot. The first sync preserves every PC row to avoid data loss.
+        mobile_deleted_times = previous_cloud_times - current_cloud_times
+        mobile_deleted_count = 0
+        if mobile_deleted_times:
+            retained_rows = []
+            for row in local_rows:
+                entry_time = str(row.get("EntryTime", "")).split(".")[0].strip()
+                if entry_time not in mobile_deleted_times:
+                    retained_rows.append(row)
+            if len(retained_rows) != len(local_rows):
+                mobile_deleted_count = len(local_rows) - len(retained_rows)
+                local_rows = retained_rows
+                all_sheets["DailyUsage"] = pd.DataFrame(local_rows, columns=daily_df.columns)
+                backup_dir = target_path.parent / "backups"
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                shutil.copy2(target_path, backup_dir / f"Material_Inventory_pre_mobile_delete_{timestamp}.xlsx")
+                with pd.ExcelWriter(target_path, engine="openpyxl") as writer:
+                    for sheet_name, frame in all_sheets.items():
+                        frame.to_excel(writer, sheet_name=sheet_name, index=False)
+
+                local_keys = set()
+                local_time_map = {}
+                for row in local_rows:
+                    tk, ck = get_keys(row)
+                    if tk:
+                        local_keys.add(tk)
+                        local_time_map[tk] = row
+                    local_keys.add(ck)
 
         # A. 구글 시트의 변경사항 -> PC 엑셀로 동기화 (신규 추가: Pull / 수정 갱신: Pull-Update)
         to_pull = []
@@ -445,17 +522,30 @@ def two_way_reconcile_with_web_app(
         pushed_cnt = 0
         if to_push_saves or to_push_updates:
             res_batch = push_batch_to_web_app(saves=to_push_saves, updates=to_push_updates, web_app_url=target_url)
-            pushed_cnt = len(to_push_saves) + len(to_push_updates)
+            pushed_cnt = res_batch.get("added_count", 0) + res_batch.get("updated_count", 0)
+            if res_batch.get("status") != "success":
+                return {
+                    "status": "error",
+                    "message": res_batch.get("message", "모바일 클라우드 전송에 실패했습니다."),
+                    "pulled_count": pulled_cnt,
+                    "pushed_count": pushed_cnt,
+                }
 
         cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         save_sync_config(cfg)
+        _save_sync_state(target_path, current_cloud_times)
 
         return {
             "status": "success",
             "pulled_count": pulled_cnt,
             "pushed_count": pushed_cnt,
+            "deleted_count": mobile_deleted_count,
             "added_count": pulled_cnt,
-            "message": f"구글 스프레드시트 양방향 동기화 완료 (가져옴: {pulled_cnt}건, 밀어넣음: {pushed_cnt}건)"
+            "message": (
+                "구글 스프레드시트 양방향 동기화 완료 "
+                f"(가져옴: {pulled_cnt}건, 밀어넣음: {pushed_cnt}건, "
+                f"모바일 삭제 반영: {mobile_deleted_count}건)"
+            )
         }
     except Exception as e:
         logger.error(f"양방향 동기화 오류: {e}")
@@ -515,9 +605,12 @@ def sync_all_central_sources() -> Dict[str, Any]:
     pulled_count = 0
     pushed_count = 0
     messages = []
+    errors = []
 
     # 1. Google Drive 및 Local 간 상호 동기화
     res_drive = sync_local_and_drive_files()
+    if res_drive.get("status") != "success":
+        errors.append(res_drive.get("message", "로컬/공유 드라이브 동기화 실패"))
     if res_drive.get("added_count", 0) > 0:
         total_added += res_drive["added_count"]
         messages.append(res_drive["message"])
@@ -538,15 +631,19 @@ def sync_all_central_sources() -> Dict[str, Any]:
                     pushed_count += pushed
                     if res_web.get("message"):
                         messages.append(res_web["message"])
+                else:
+                    errors.append(res_web.get("message", f"웹 앱 동기화 실패: {p}"))
         except Exception as e:
-            messages.append(f"웹 앱 동기화 건너뜀: {e}")
+            errors.append(f"웹 앱 동기화 건너뜀: {e}")
 
-    summary_msg = " / ".join(messages) if messages else "이미 최신 상태입니다."
+    summary_parts = messages + errors
+    summary_msg = " / ".join(summary_parts) if summary_parts else "이미 최신 상태입니다."
     return {
-        "status": "success",
+        "status": "error" if errors else "success",
         "added_count": total_added,
         "pulled_count": pulled_count,
         "pushed_count": pushed_count,
+        "errors": errors,
         "message": summary_msg
     }
 

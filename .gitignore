@@ -58,6 +58,7 @@ logo_settings.json
 logo_settings_unified.json
 Material_Manager_Config.json
 pmi_database.db
+**/.mobile_sync_state.json
 
 # Config directory (API keys, etc.)
 config/
