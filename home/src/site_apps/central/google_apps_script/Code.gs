@@ -120,6 +120,18 @@ function doPost(e) {
       payload = e.parameter;
     }
 
+    var action = payload.action || 'save';
+    if (action === 'batch_sync' || action === 'batch') {
+      var res = batchSyncRecords(payload);
+      return createJsonResponse(res);
+    } else if (action === 'update' || action === 'updateRecord' || (payload.id !== undefined && payload.is_update)) {
+      var res = updateRecord(payload);
+      return createJsonResponse(res);
+    } else if (action === 'delete' || action === 'deleteRecord') {
+      var res = deleteRecord(payload);
+      return createJsonResponse(res);
+    }
+
     var res = saveRecord(payload);
     return createJsonResponse(res);
   } catch (err) {
@@ -181,13 +193,24 @@ function getConfig() {
 }
 
 /**
- * 작업 레코드 시트에 저장
+ * 작업 레코드 맵 구성 (신규 및 수정 공용)
  */
-function saveRecord(req) {
-  var sheet = getDailyUsageSheet();
-  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+function buildRowMap(req, preserveEntryTime) {
+  var nowStr = preserveEntryTime || (req.entry_time ? String(req.entry_time) : Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"));
 
-  var nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+  // PC 프로그램에서 직접 보낸 row_data 맵이 있는 경우 그대로 매핑
+  if (req.row_data && typeof req.row_data === 'object') {
+    var directMap = {};
+    for (var k in req.row_data) {
+      if (req.row_data.hasOwnProperty(k)) {
+        directMap[k] = req.row_data[k];
+      }
+    }
+    directMap['EntryTime'] = nowStr;
+    directMap['입력시간'] = nowStr;
+    return directMap;
+  }
+
   var calculatedFee = Number(req.total_fee || 0);
   if (calculatedFee <= 0) {
     calculatedFee = Math.round((Number(req.qty || 0) * Number(req.unit_price || 0)) + Number(req.travel_cost || 0));
@@ -262,6 +285,16 @@ function saveRecord(req) {
     'NDT_형광침투제': Number(req.chem_fl_pen || 0)
   };
 
+  // Reset worker columns
+  for (var u = 1; u <= 10; u++) {
+    var uKey = (u === 1) ? 'User' : ('User' + u);
+    var wtKey = (u === 1) ? 'WorkTime' : ('WorkTime' + u);
+    var otKey = (u === 1) ? 'OT' : ('OT' + u);
+    rowMap[uKey] = '';
+    rowMap[wtKey] = '';
+    rowMap[otKey] = 0;
+  }
+
   // 참여 작업자 할당 (1 ~ 10)
   if (req.workers && req.workers.length > 0) {
     rowMap['User'] = req.workers[0].user || '';
@@ -283,6 +316,17 @@ function saveRecord(req) {
     rowMap['(Full작업자)'] = allWorkersDesc.join(', ');
   }
 
+  return rowMap;
+}
+
+/**
+ * 작업 레코드 시트에 저장
+ */
+function saveRecord(req) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var rowMap = buildRowMap(req);
+
   var newRow = [];
   for (var h = 0; h < headerRow.length; h++) {
     var headerName = headerRow[h];
@@ -294,6 +338,148 @@ function saveRecord(req) {
   return {
     status: 'success',
     message: '중앙지사 구글 클라우드에 성공적으로 저장되었습니다.'
+  };
+}
+
+function formatCellTime(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+  }
+  return String(val).split('.')[0].trim();
+}
+
+/**
+ * 작업 레코드 수정
+ */
+function updateRecord(req) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var entryTimeCol = headerRow.indexOf("EntryTime");
+  var lastRow = sheet.getLastRow();
+  var targetRow = -1;
+
+  if (entryTimeCol !== -1 && req.entry_time && lastRow > 1) {
+    var reqTimeNorm = String(req.entry_time).split('.')[0].trim();
+    var timeValues = sheet.getRange(2, entryTimeCol + 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < timeValues.length; i++) {
+      var cellTimeNorm = formatCellTime(timeValues[i][0]);
+      if (cellTimeNorm === reqTimeNorm) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (targetRow === -1 && req.id !== undefined && req.id !== null) {
+    var rowNum = Number(req.id);
+    if (rowNum >= 2 && rowNum <= lastRow) {
+      targetRow = rowNum;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { status: 'error', detail: '수정할 일보 내역을 찾을 수 없습니다.' };
+  }
+
+  var rowMap = buildRowMap(req, req.entry_time);
+  var rowValues = [];
+  for (var j = 0; j < headerRow.length; j++) {
+    var colName = headerRow[j];
+    rowValues.push(rowMap.hasOwnProperty(colName) ? rowMap[colName] : '');
+  }
+  sheet.getRange(targetRow, 1, 1, headerRow.length).setValues([rowValues]);
+  return { status: 'success', message: '성공적으로 수정되었습니다.' };
+}
+
+/**
+ * 작업 레코드 삭제
+ */
+function deleteRecord(req) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var entryTimeCol = headerRow.indexOf("EntryTime");
+  var lastRow = sheet.getLastRow();
+  var targetRow = -1;
+
+  if (entryTimeCol !== -1 && req.entry_time && lastRow > 1) {
+    var reqTimeNorm = String(req.entry_time).split('.')[0].trim();
+    var timeValues = sheet.getRange(2, entryTimeCol + 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < timeValues.length; i++) {
+      var cellTimeNorm = formatCellTime(timeValues[i][0]);
+      if (cellTimeNorm === reqTimeNorm) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (targetRow === -1 && req.id !== undefined && req.id !== null) {
+    var rowNum = Number(req.id);
+    if (rowNum >= 2 && rowNum <= lastRow) {
+      targetRow = rowNum;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { status: 'error', detail: '삭제할 일보 내역을 찾을 수 없습니다.' };
+  }
+
+  sheet.deleteRow(targetRow);
+  return { status: 'success', message: '성공적으로 삭제되었습니다.' };
+}
+
+/**
+ * PC 프로그램 일괄 동기화 (추가, 수정, 삭제 일괄 처리)
+ */
+function batchSyncRecords(payload) {
+  var sheet = getDailyUsageSheet();
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var entryTimeCol = headerRow.indexOf("EntryTime");
+
+  var deletesCount = 0;
+  var updatesCount = 0;
+  var savesCount = 0;
+
+  // 1. 삭제 처리
+  var deletes = payload.deletes || [];
+  if (deletes.length > 0 && entryTimeCol !== -1) {
+    for (var d = 0; d < deletes.length; d++) {
+      var targetTime = String(deletes[d]).split('.')[0].trim();
+      var curLastRow = sheet.getLastRow();
+      if (curLastRow <= 1) break;
+      var timeVals = sheet.getRange(2, entryTimeCol + 1, curLastRow - 1, 1).getValues();
+      for (var r = timeVals.length - 1; r >= 0; r--) {
+        var cellTime = formatCellTime(timeVals[r][0]);
+        if (cellTime === targetTime) {
+          sheet.deleteRow(r + 2);
+          deletesCount++;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. 수정 처리
+  var updates = payload.updates || [];
+  for (var u = 0; u < updates.length; u++) {
+    var resU = updateRecord(updates[u]);
+    if (resU.status === 'success') updatesCount++;
+  }
+
+  // 3. 신규 추가 처리
+  var saves = payload.saves || [];
+  for (var s = 0; s < saves.length; s++) {
+    var resS = saveRecord(saves[s]);
+    if (resS.status === 'success') savesCount++;
+  }
+
+  return {
+    status: 'success',
+    added_count: savesCount,
+    updated_count: updatesCount,
+    deleted_count: deletesCount,
+    message: '일괄 동기화 완료 (추가: ' + savesCount + '건, 수정: ' + updatesCount + '건, 삭제: ' + deletesCount + '건)'
   };
 }
 
@@ -332,11 +518,23 @@ function getRecentRecords(targetDate) {
     }
 
     var workersArr = [];
+    var workerList = [];
     for (var u = 1; u <= 10; u++) {
       var uName = item[(u === 1) ? 'User' : ('User' + u)];
       if (uName && String(uName).trim()) {
+        var rawTime = String(item[(u === 1) ? 'WorkTime' : ('WorkTime' + u)] || '09:00~18:00');
+        var shiftMatch = rawTime.match(/^\((.*?)\)\s*(.*)$/);
+        var shiftVal = shiftMatch ? shiftMatch[1] : '주간';
+        var cleanTime = shiftMatch ? shiftMatch[2] : rawTime;
         var otPay = Number(item[(u === 1) ? 'OT' : ('OT' + u)] || 0);
+
         workersArr.push(String(uName).trim() + " (" + otPay.toLocaleString() + "원)");
+        workerList.push({
+          user: String(uName).trim(),
+          shift: shiftVal,
+          time: cleanTime,
+          ot: String(otPay)
+        });
       }
     }
 
@@ -352,24 +550,58 @@ function getRecentRecords(targetDate) {
     var rtkTotal = Number(item['RTK_총계'] || item['RTK_RTK총계'] || 0);
     if (rtkTotal > 0) chemList.push("RTK:" + rtkTotal);
 
+    var entryTimeVal = formatCellTime(item['EntryTime'] || item['입력시간']);
+
     records.push({
       id: startRow + r,
+      entry_time: entryTimeVal,
       date: rowDateStr,
+      site: String(item['Site'] || '중앙지사'),
       company: String(item['업체명'] || '한국지역난방공사 중앙지사'),
       method: String(item['검사방법'] || ''),
       item_name: String(item['검사품명'] || 'Pipe'),
       material: String(item['자재명'] || item['MaterialID'] || item['품목명'] || ''),
       loc_type: String(item['작업구분'] || item['구분'] || '열수송관'),
       pipe: String(item['관경(Inch)'] || item['규격'] || ''),
+      hot_tap_stage: String(item['핫태핑차수'] || '1차'),
+      hot_tap_joints: Number(item['핫태핑개소'] || 1),
+      hot_tap_pipe: String(item['핫태핑관경'] || ''),
+      joints: Number(item['조인트수'] || 0),
+      ori_joints: Number(item['조인트수'] || 0),
+      rep_joints: Number(item['rep_joints'] || 0),
+      rej_qty: Number(item['불량수'] || 0),
       qty: Number(item['수량'] || item['Usage'] || item['검사량'] || 0),
       unit: String(item['Unit'] || item['단위'] || 'M'),
       unit_price: Number(item['단가'] || 0),
       travel_cost: Number(item['출장비'] || 0),
+      lump_sum: String(item['일식'] || ''),
       total_fee: Number(item['검사비'] || 0),
+      equip_main: String(item['장비명'] || ''),
+      equip_aux: String(item['보조장비'] || ''),
+      vehicle_no: String(item['차량번호'] || ''),
+      mileage: String(item['주행거리'] || ''),
+      vehicle_note: String(item['차량비고'] || ''),
+      note: String(item['Note'] || item['Remark'] || item['DailyMemo'] || ''),
       applied_code: String(item['적용코드'] || ''),
       report_no: String(item['성적서번호'] || ''),
+      rtk_center_miss: Number(item['RTK_센터미스'] || 0),
+      rtk_density: Number(item['RTK_농도'] || 0),
+      rtk_marking_miss: Number(item['RTK_마킹미스'] || 0),
+      rtk_film_mark: Number(item['RTK_필름마크'] || 0),
+      rtk_handling: Number(item['RTK_취급부주의'] || 0),
+      rtk_complaint: Number(item['RTK_고객불만'] || 0),
+      rtk_etc: Number(item['RTK_기타'] || 0),
+      rtk_total: rtkTotal,
+      chem_fl_mag: Number(item['NDT_형광자분'] || 0),
+      chem_black_mag: Number(item['NDT_흑색자분'] || 0),
+      chem_white_paint: Number(item['NDT_백색페인트'] || 0),
+      chem_penetrant: Number(item['NDT_침투제'] || 0),
+      chem_cleaner: Number(item['NDT_세척제'] || 0),
+      chem_developer: Number(item['NDT_현상제'] || 0),
+      chem_fl_pen: Number(item['NDT_형광침투제'] || 0),
       extra: chemList.join(" "),
-      workers: workersArr.join(", ")
+      workers: workersArr.join(", "),
+      worker_list: workerList
     });
   }
 

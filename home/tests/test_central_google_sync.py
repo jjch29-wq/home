@@ -76,6 +76,53 @@ class TestCentralGoogleSync(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         self.assertIn("added_count", res)
 
+    def test_two_way_reconcile_in_place_update(self):
+        from unittest.mock import patch
+        from home.src.site_apps.central.src.sync_google_sheet import two_way_reconcile_with_web_app
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_excel = Path(tmp_dir) / "Material_Inventory.xlsx"
+            initial_df = pd.DataFrame([{
+                "Date": "2026-11-09",
+                "Site": "중앙지사",
+                "User": "부장 주진철",
+                "검사방법": "PAUT",
+                "수량": 1.0,
+                "단가": 325451.0,
+                "관경(Inch)": "250A",
+                "구분": "열수송관",
+                "Note": "초기 메모",
+                "EntryTime": "2026-11-09 10:00:00"
+            }])
+            with pd.ExcelWriter(test_excel, engine="openpyxl") as writer:
+                initial_df.to_excel(writer, sheet_name="DailyUsage", index=False)
+
+            # Cloud has updated quantity and note for the same EntryTime
+            cloud_records = [{
+                "Date": "2026-11-09",
+                "Site": "중앙지사",
+                "User": "부장 주진철",
+                "검사방법": "PAUT",
+                "수량": 2.5,
+                "단가": 325451.0,
+                "관경(Inch)": "250A",
+                "구분": "열수송관",
+                "Note": "모바일에서 수정된 메모",
+                "EntryTime": "2026-11-09 10:00:00"
+            }]
+
+            with patch("home.src.site_apps.central.src.sync_google_sheet.fetch_records_from_web_app", return_value=(["Date"], cloud_records)), \
+                 patch("home.src.site_apps.central.src.sync_google_sheet.push_batch_to_web_app", return_value={"status": "success"}):
+                res = two_way_reconcile_with_web_app(inventory_path=test_excel, web_app_url="https://mock.url")
+                self.assertEqual(res["status"], "success")
+
+            with pd.ExcelFile(test_excel) as ef:
+                updated_df = ef.parse("DailyUsage")
+
+            self.assertEqual(len(updated_df), 1)
+            self.assertEqual(float(updated_df.iloc[0]["수량"]), 2.5)
+            self.assertEqual(str(updated_df.iloc[0]["Note"]), "모바일에서 수정된 메모")
+
 if __name__ == "__main__":
     unittest.main()
 
