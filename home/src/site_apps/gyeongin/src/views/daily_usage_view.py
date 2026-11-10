@@ -497,6 +497,7 @@ def setup_daily_usage_tab_impl(self):
         equip_defaults = {
             'RT': ('Se-75', 'ADR, SURVEY, 콜리메타'),
             'PAUT': ('PAUT MX2(OMNI2-103085)', 'PAUT SCANNER (MANUAL)'),
+            'UT': ('Sitescan 150', '사각 PROBE 70˚ (2MHz 10*10); 대비시험편 STB-A1'),
             'MT': ('Yoke', '자분살포기'),
             'PT': ('PT 약품', '조도계'),
         }

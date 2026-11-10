@@ -1,6 +1,56 @@
-"""Optional auxiliary equipment selection for central daily inspection records."""
+"""Optional auxiliary equipment selection for central/gyeongin daily inspection records."""
 import tkinter as tk
 from tkinter import ttk
+
+METHOD_AUX_MAP = {
+    'PAUT': [
+        'PAUT SCANNER (MANUAL)',
+        'MICROBE (스캐너 Body-137331, Encoder-136861)',
+        'COBRA (스캐너 139310)',
+        'PAUT PROBE 5L64-A2',
+        'PAUT PROBE 2.25L64-A2',
+        'PAUT PROBE 7.5CCEV35-16-A15',
+        'PAUT PROBE 5L32-A31',
+        'PAUT WEDGE SA2-N55S-IHC',
+        'PAUT WEDGE SA2-OL-IHC',
+        'PAUT WEDGE SA15-N60S-IHC',
+        'PAUT WEDGE SA10-N55S',
+        '대비시험편 STB-A1'
+    ],
+    'UT': [
+        'UT 사각 PROBE 70˚ (2MHz 10*10)',
+        'UT 사각 PROBE 60˚ (2MHz 10*10)',
+        'UT 사각 PROBE 45˚ (2MHz 10*10)',
+        'UT 사각 PROBE 70˚ (4MHz 10*10)',
+        'UT 수직 PROBE (2MHz Φ20)',
+        'UT 수직 PROBE (4MHz Φ10)',
+        '대비시험편 STB-A1',
+        '대비시험편 STB-A2',
+        '대비시험편 RB-4',
+        '접촉매질(Couplant)'
+    ],
+    'RT': [
+        'ADR, SURVEY, 콜리메타',
+        'ADR',
+        'SURVEY',
+        '콜리메타 (120˚)',
+        '콜리메타 (360˚)',
+        'R/CONTROL (25ft)',
+        'SURVEY METER',
+        'ALARM DOSIMETER (ADR)'
+    ],
+    'MT': [
+        '자분살포기',
+        'Black Light (자외선등)',
+        '조도계',
+        '자계강도계',
+        'Pie Gauge'
+    ],
+    'PT': [
+        '조도계',
+        '온습도계'
+    ]
+}
 
 
 def names(value):
@@ -43,38 +93,49 @@ def add_selector(parent, app, variable, width=25):
 
 def select(parent, app, variable):
     dialog = tk.Toplevel(parent)
-    dialog.title('보조장비 선택 (여러 개 선택 가능)')
-    dialog.geometry('560x460')
+    dialog.title('보조장비 및 프로브 선택 (다중 체크 가능)')
+    dialog.geometry('600x530')
     dialog.transient(parent.winfo_toplevel())
-    selected = names(variable.get())
-    candidates = list(selected)
 
-    # 1. Load from app.aux_equipments
+    # Selected set (track items currently chosen)
+    selected_set = set(names(variable.get()))
+
+    # Determine current active method
+    curr_method = '전체'
+    method_var = getattr(app, 'daily_method_var', None) or getattr(app, 'method_var', None)
+    if method_var and hasattr(method_var, 'get'):
+        val = str(method_var.get()).strip().upper()
+        if val in METHOD_AUX_MAP:
+            curr_method = val
+
+    # Collect all candidate items
+    all_candidates = []
+    # 1. From app.aux_equipments
     aux_list = getattr(app, 'aux_equipments', None)
-    if aux_list is None:
-        aux_list = ['PAUT SCANNER(MANUAL)', 'COBRA Manual Scanner']
-        if hasattr(app, 'aux_equipments'):
-            app.aux_equipments = aux_list
-    for item in aux_list:
-        candidates.extend(names(item))
+    if aux_list:
+        for it in aux_list:
+            all_candidates.extend(names(it))
 
-    # 2. Load from app.equipments
-    for item in getattr(app, 'equipments', []):
-        label = item.get('name', '') if isinstance(item, dict) else str(item)
-        candidates.extend(names(label))
+    # 2. From METHOD_AUX_MAP
+    for m_list in METHOD_AUX_MAP.values():
+        all_candidates.extend(m_list)
 
-    # 3. Load from historical records
+    # 3. From app.equipments
+    for it in getattr(app, 'equipments', []):
+        lbl = it.get('name', '') if isinstance(it, dict) else str(it)
+        all_candidates.extend(names(lbl))
+
+    # 4. From history
     history = getattr(app, 'daily_usage_df', None)
     if history is not None and '보조장비' in history.columns:
-        for item in history['보조장비'].dropna():
-            candidates.extend(names(item))
+        for it in history['보조장비'].dropna():
+            all_candidates.extend(names(it))
 
-    # Always ensure default registered aux equipment is present
-    for req in ['PAUT SCANNER(MANUAL)', 'COBRA Manual Scanner']:
-        if req not in candidates:
-            candidates.append(req)
+    # Preserve all existing selected items in candidates
+    all_candidates.extend(selected_set)
 
-    candidates = sorted(set(candidates))
+    # Clean and deduplicate candidates
+    all_candidates = list(dict.fromkeys(c.strip() for c in all_candidates if c and c.strip()))
 
     def persist_items(items):
         """Save auxiliary equipment list permanently to app and config file"""
@@ -92,51 +153,132 @@ def select(parent, app, variable):
             except Exception as ex:
                 print(f"Error persisting aux equipments: {ex}")
 
-    ttk.Label(dialog, text='클릭하여 선택/해제 · 직접 추가/삭제한 항목도 영구 보관됩니다.').pack(padx=10, pady=8)
+    # Top info & Selected Count banner
+    top_frame = ttk.Frame(dialog)
+    top_frame.pack(fill='x', padx=12, pady=(10, 4))
+    
+    lbl_title = ttk.Label(top_frame, text='✔ 클릭하여 다중 선택 · 검사방법별 필터 및 실시간 검색 지원', font=('Malgun Gothic', 9, 'bold'))
+    lbl_title.pack(side='left')
+
+    lbl_count = ttk.Label(top_frame, text=f'선택: {len(selected_set)}개', font=('Malgun Gothic', 9, 'bold'), foreground='#0066cc')
+    lbl_count.pack(side='right')
+
+    # Method Filter Tabs
+    tab_frame = ttk.Frame(dialog)
+    tab_frame.pack(fill='x', padx=12, pady=4)
+    
+    active_method_filter = tk.StringVar(value=curr_method)
+
+    def on_filter_change():
+        apply_filter()
+
+    method_buttons = ['전체', 'PAUT', 'UT', 'RT', 'MT', 'PT']
+    for m in method_buttons:
+        rb = ttk.Radiobutton(tab_frame, text=m, value=m, variable=active_method_filter, command=on_filter_change)
+        rb.pack(side='left', padx=3)
+
+    # Search Bar
+    search_frame = ttk.Frame(dialog)
+    search_frame.pack(fill='x', padx=12, pady=4)
+    ttk.Label(search_frame, text='🔍 검색:').pack(side='left', padx=(0, 4))
+    search_var = tk.StringVar()
+    search_entry = ttk.Entry(search_frame, textvariable=search_var)
+    search_entry.pack(side='left', fill='x', expand=True)
+
+    # Listbox Body
     body = ttk.Frame(dialog)
-    body.pack(fill='both', expand=True, padx=10)
+    body.pack(fill='both', expand=True, padx=12, pady=4)
     scrollbar = ttk.Scrollbar(body)
     scrollbar.pack(side='right', fill='y')
     listing = tk.Listbox(body, selectmode='multiple', exportselection=False,
-                         yscrollcommand=scrollbar.set)
+                         font=('Malgun Gothic', 10), yscrollcommand=scrollbar.set)
     listing.pack(fill='both', expand=True)
     scrollbar.configure(command=listing.yview)
 
-    def refresh_listing():
+    # Current displayed items in listing
+    displayed_items = []
+    updating_selection = False
+
+    def apply_filter(*args):
+        nonlocal displayed_items, updating_selection
+        updating_selection = True
+        keyword = search_var.get().strip().lower()
+        method_filter = active_method_filter.get()
+
+        if method_filter == '전체':
+            allowed_set = None
+        else:
+            allowed_set = set(METHOD_AUX_MAP.get(method_filter, []))
+
+        filtered = []
+        for it in all_candidates:
+            # Method filter check
+            if allowed_set is not None:
+                # If item is in allowed_set or already selected or matches method prefix
+                matches_method = (it in allowed_set) or (method_filter in it) or (it in selected_set)
+                if not matches_method:
+                    continue
+
+            # Keyword filter check
+            if keyword and keyword not in it.lower():
+                continue
+
+            filtered.append(it)
+
+        displayed_items = filtered
         listing.delete(0, 'end')
-        for i, item in enumerate(candidates):
+        for i, item in enumerate(displayed_items):
             listing.insert('end', item)
-            if item in selected:
+            if item in selected_set:
                 listing.selection_set(i)
 
-    refresh_listing()
+        lbl_count.config(text=f'선택: {len(selected_set)}개')
+        updating_selection = False
 
+    search_var.trace_add('write', apply_filter)
+
+    def on_listbox_select(event):
+        nonlocal updating_selection
+        if updating_selection:
+            return
+        # Get current selection in visible items
+        current_visible_selected = {displayed_items[i] for i in listing.curselection()}
+        # For all items currently displayed: if visible and selected -> add to selected_set; if visible not selected -> remove
+        for item in displayed_items:
+            if item in current_visible_selected:
+                selected_set.add(item)
+            else:
+                selected_set.discard(item)
+        lbl_count.config(text=f'선택: {len(selected_set)}개')
+
+    listing.bind('<<ListboxSelect>>', on_listbox_select)
+
+    # Initial populate
+    apply_filter()
+
+    # Manual Add & Delete row
     row = ttk.Frame(dialog)
-    row.pack(fill='x', padx=10, pady=8)
+    row.pack(fill='x', padx=12, pady=6)
     entry = ttk.Entry(row)
     entry.pack(side='left', fill='x', expand=True)
 
-    def add():
+    def add_custom():
         new_items = names(entry.get())
         if not new_items:
             return
         for item in new_items:
-            if item not in candidates:
-                candidates.append(item)
-                listing.insert('end', item)
-            try:
-                idx = [listing.get(i) for i in range(listing.size())].index(item)
-                listing.selection_set(idx)
-            except ValueError:
-                pass
+            if item not in all_candidates:
+                all_candidates.append(item)
+            selected_set.add(item)
         persist_items(new_items)
         entry.delete(0, 'end')
+        apply_filter()
 
     def delete_selected():
         sel_indices = list(listing.curselection())
         if not sel_indices:
             return
-        to_remove = [listing.get(i) for i in sel_indices]
+        to_remove = [displayed_items[i] for i in sel_indices]
         changed = False
         if hasattr(app, 'aux_equipments') and app.aux_equipments:
             for r in to_remove:
@@ -144,30 +286,36 @@ def select(parent, app, variable):
                     app.aux_equipments.remove(r)
                     changed = True
         for r in to_remove:
-            if r in candidates:
-                candidates.remove(r)
-            if r in selected:
-                selected.remove(r)
+            if r in all_candidates:
+                all_candidates.remove(r)
+            selected_set.discard(r)
         if changed and hasattr(app, 'save_tab_config'):
             try:
                 app.save_tab_config(force=True)
             except Exception as ex:
                 print(f"Error saving tab config on delete: {ex}")
-        refresh_listing()
+        apply_filter()
 
-    ttk.Button(row, text='추가', command=add).pack(side='left', padx=4)
-    ttk.Button(row, text='선택 삭제', command=delete_selected).pack(side='left', padx=4)
-    entry.bind('<Return>', lambda event: add())
+    def clear_all():
+        selected_set.clear()
+        apply_filter()
+
+    ttk.Button(row, text='직접 추가', command=add_custom).pack(side='left', padx=3)
+    ttk.Button(row, text='선택 삭제', command=delete_selected).pack(side='left', padx=3)
+    ttk.Button(row, text='선택 초기화', command=clear_all).pack(side='left', padx=3)
+    entry.bind('<Return>', lambda event: add_custom())
 
     def apply():
-        add()
-        chosen = [listing.get(i) for i in listing.curselection()]
+        add_custom()
+        # Sort or maintain selected items order
+        chosen = [it for it in all_candidates if it in selected_set]
         variable.set('; '.join(chosen))
         persist_items(chosen)
         dialog.destroy()
 
     buttons = ttk.Frame(dialog)
-    buttons.pack(pady=(0, 10))
-    ttk.Button(buttons, text='적용', command=apply).pack(side='left', padx=4)
-    ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='left', padx=4)
+    buttons.pack(fill='x', padx=12, pady=(0, 10))
+    ttk.Button(buttons, text='선택 완료 (적용)', command=apply).pack(side='right', padx=4)
+    ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='right', padx=4)
+
     dialog.grab_set()

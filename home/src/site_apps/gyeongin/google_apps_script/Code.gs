@@ -31,12 +31,67 @@ var APP_CONFIG = {
     "90너4889 (탑차)",
     "자가용/대중교통"
   ],
-  equipments: ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품", "해당없음"],
-  aux_equipments: [
-    "ADR, SURVEY, 콜리메타", "ADR; SURVEY; 콜리메타", "ADR", "SURVEY", "콜리메타",
-    "PAUT SCANNER (MANUAL)", "COBRA Manual Scanner", "JIREH MICROBE BTG006",
-    "JIREH Scanner", "자분살포기", "조도계", "자계강도계", "온습도계", "휴대용 UV메타", "없음"
+  equipments: [
+    "PAUT MX2(OMNI2-103085)",
+    "PAUT MX2(OMNI2-100055)",
+    "PAUT X3(QC-0093084)",
+    "Sitescan 150(I000760)",
+    "Sitescan 150(I000950)",
+    "Sitescan 140(1403264TC)",
+    "Masterscan 380(I005587)",
+    "Epoch 650(150128312)",
+    "Se-75(D10692)",
+    "Se-75(D10626)",
+    "Ir-192(880D D10700)",
+    "방사선발생장치 300EGM2",
+    "Yoke AC(MY-2 NW0453)",
+    "Yoke AC(MP-A3 MP31646)",
+    "Yoke AC(MY-2 NW6999)",
+    "Yoke DC(MP-A2D MP3403)",
+    "PT 약품",
+    "해당없음"
   ],
+  aux_equipments: [
+    "ADR, SURVEY, 콜리메타", "ADR", "SURVEY", "콜리메타 (120˚)", "콜리메타 (360˚)", "R/CONTROL (25ft)",
+    "PAUT SCANNER (MANUAL)", "MICROBE (스캐너 Body-137331, Encoder-136861)", "COBRA (스캐너 139310)",
+    "PAUT PROBE 5L64-A2", "PAUT PROBE 2.25L64-A2", "PAUT PROBE 7.5CCEV35-16-A15", "PAUT PROBE 5L32-A31",
+    "PAUT WEDGE SA2-N55S-IHC", "PAUT WEDGE SA2-OL-IHC", "PAUT WEDGE SA15-N60S-IHC",
+    "UT 사각 PROBE 70˚ (2MHz 10*10)", "UT 사각 PROBE 60˚ (2MHz 10*10)", "UT 사각 PROBE 45˚ (2MHz 10*10)",
+    "UT 수직 PROBE (2MHz Φ20)", "대비시험편 STB-A1", "대비시험편 STB-A2",
+    "자분살포기", "Black Light (자외선등)", "조도계", "자계강도계", "온습도계", "휴대용 UV메타", "없음"
+  ],
+  method_defaults: {
+    RT: {
+      equip_main: "Se-75(D10692)",
+      aux_equipments: ["ADR, SURVEY, 콜리메타", "콜리메타 (120˚)", "콜리메타 (360˚)", "R/CONTROL (25ft)", "SURVEY METER", "ALARM DOSIMETER (ADR)", "라이트마킹", "없음"],
+      default_aux: "ADR, SURVEY, 콜리메타",
+      unit: "매"
+    },
+    UT: {
+      equip_main: "Sitescan 150(I000760)",
+      aux_equipments: ["UT 사각 PROBE 70˚ (2MHz 10*10)", "UT 사각 PROBE 60˚ (2MHz 10*10)", "UT 사각 PROBE 45˚ (2MHz 10*10)", "UT 사각 PROBE 70˚ (4MHz 10*10)", "UT 수직 PROBE (2MHz Φ20)", "UT 수직 PROBE (4MHz Φ10)", "대비시험편 STB-A1", "대비시험편 STB-A2", "대비시험편 RB-4", "접촉매질(Couplant)", "없음"],
+      default_aux: "UT 사각 PROBE 70˚ (2MHz 10*10); 대비시험편 STB-A1",
+      unit: "M"
+    },
+    PT: {
+      equip_main: "PT 약품",
+      aux_equipments: ["조도계", "온습도계", "없음"],
+      default_aux: "조도계",
+      unit: "M"
+    },
+    MT: {
+      equip_main: "Yoke AC(MY-2 NW0453)",
+      aux_equipments: ["자분살포기", "Black Light (자외선등)", "조도계", "자계강도계", "Pie Gauge", "없음"],
+      default_aux: "자분살포기",
+      unit: "M"
+    },
+    PAUT: {
+      equip_main: "PAUT MX2(OMNI2-103085)",
+      aux_equipments: ["PAUT SCANNER (MANUAL)", "MICROBE (스캐너 Body-137331, Encoder-136861)", "COBRA (스캐너 139310)", "PAUT PROBE 5L64-A2", "PAUT PROBE 2.25L64-A2", "PAUT PROBE 7.5CCEV35-16-A15", "PAUT PROBE 5L32-A31", "PAUT WEDGE SA2-N55S-IHC", "PAUT WEDGE SA2-OL-IHC", "PAUT WEDGE SA15-N60S-IHC", "대비시험편 STB-A1", "없음"],
+      default_aux: "PAUT SCANNER (MANUAL)",
+      unit: "M"
+    }
+  },
   pipe_sizes: [
     "15A", "20A", "25A", "32A", "40A", "50A", "65A", "80A", "90A", "100A",
     "125A", "150A", "200A", "250A", "300A", "350A", "400A", "450A", "500A",

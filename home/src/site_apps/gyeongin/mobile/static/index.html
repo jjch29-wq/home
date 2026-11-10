@@ -291,11 +291,16 @@
           </select>
         </div>
         <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
-          <select id="select-aux-equip" onchange="checkCustomAux()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
-            <!-- Populated via JS -->
-          </select>
-          <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-medium text-slate-500">보조 장비 / 프로브 (다중 선택)</label>
+            <span id="aux-badge-count" class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
+          </div>
+          <button type="button" onclick="openAuxModal()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
+            <span id="aux-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
+            <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
+          </button>
+          <input type="hidden" id="select-aux-equip" value="">
+          <input type="text" id="input-custom-aux" placeholder="직접 보조장비/프로브 입력 또는 수정" oninput="onCustomAuxInput()" class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
         </div>
       </div>
     </div>
@@ -525,6 +530,55 @@
     <span id="toast-msg">저장되었습니다.</span>
   </div>
 
+  <!-- 보조장비 / 프로브 다중 선택 모달 -->
+  <div id="aux-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+      <!-- 헤더 -->
+      <div class="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+            <i data-lucide="layers" class="w-4 h-4 text-blue-600"></i>
+            보조장비 및 프로브 다중 선택
+          </h3>
+          <p class="text-[11px] text-slate-500">현장에서 사용하는 장비/프로브를 체크하세요 (여러 개 선택 가능)</p>
+        </div>
+        <button type="button" onclick="closeAuxModal()" class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">✕</button>
+      </div>
+
+      <!-- 방법 필터 탭 & 검색 -->
+      <div class="p-3 border-b border-slate-100 space-y-2 bg-white">
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar" id="aux-filter-tabs">
+          <button type="button" onclick="setAuxFilter('CURRENT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0" data-tab="CURRENT">현재방법</button>
+          <button type="button" onclick="setAuxFilter('ALL')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="ALL">전체</button>
+          <button type="button" onclick="setAuxFilter('PAUT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="PAUT">PAUT</button>
+          <button type="button" onclick="setAuxFilter('UT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="UT">UT</button>
+          <button type="button" onclick="setAuxFilter('RT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="RT">RT</button>
+          <button type="button" onclick="setAuxFilter('MT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="MT">MT</button>
+          <button type="button" onclick="setAuxFilter('PT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="PT">PT</button>
+        </div>
+        <div class="relative">
+          <input type="text" id="aux-search-input" oninput="renderAuxItems()" placeholder="🔍 장비명, 프로브, 웨지 검색 (예: 70, A2, 콜리, 스캐너...)" class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
+        </div>
+      </div>
+
+      <!-- 아이템 체크 리스트 -->
+      <div id="aux-items-container" class="flex-1 overflow-y-auto p-3 space-y-1.5 max-h-[48vh]">
+        <!-- Dynamic check items -->
+      </div>
+
+      <!-- 하단 액션 버튼 -->
+      <div class="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+        <div class="text-xs text-slate-600 font-medium">
+          선택: <span id="aux-selected-count" class="font-bold text-blue-600">0</span>개
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="clearAuxSelections()" class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl hover:bg-slate-300">초기화</button>
+          <button type="button" onclick="applyAuxSelections()" class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm">선택 완료</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let appConfig = null;
     let selectedMethod = "RT";
@@ -749,7 +803,6 @@
 
         // Equipments & Vehicles
         document.getElementById("select-equip").innerHTML = appConfig.equipments.map(e => `<option value="${e}">${e}</option>`).join("");
-        document.getElementById("select-aux-equip").innerHTML = appConfig.aux_equipments.map(e => `<option value="${e}">${e}</option>`).join("");
         document.getElementById("select-vehicle").innerHTML = appConfig.vehicles.map(v => `<option value="${v}">${v}</option>`).join("");
 
         initDefaultWorkers();
@@ -969,23 +1022,210 @@
       btn.addEventListener("click", () => switchMethod(btn.dataset.method));
     });
 
+    let selectedAuxItems = new Set();
+    let activeAuxFilter = 'CURRENT';
+
+    const AUX_MASTER_DATA = {
+      PAUT: [
+        "PAUT SCANNER (MANUAL)",
+        "MICROBE (스캐너 Body-137331, Encoder-136861)",
+        "COBRA (스캐너 139310)",
+        "PAUT PROBE 5L64-A2",
+        "PAUT PROBE 2.25L64-A2",
+        "PAUT PROBE 7.5CCEV35-16-A15",
+        "PAUT PROBE 5L32-A31",
+        "PAUT WEDGE SA2-N55S-IHC",
+        "PAUT WEDGE SA2-OL-IHC",
+        "PAUT WEDGE SA15-N60S-IHC",
+        "PAUT WEDGE SA10-N55S",
+        "대비시험편 STB-A1"
+      ],
+      UT: [
+        "UT 사각 PROBE 70˚ (2MHz 10*10)",
+        "UT 사각 PROBE 60˚ (2MHz 10*10)",
+        "UT 사각 PROBE 45˚ (2MHz 10*10)",
+        "UT 사각 PROBE 70˚ (4MHz 10*10)",
+        "UT 수직 PROBE (2MHz Φ20)",
+        "UT 수직 PROBE (4MHz Φ10)",
+        "대비시험편 STB-A1",
+        "대비시험편 STB-A2",
+        "대비시험편 RB-4",
+        "접촉매질(Couplant)"
+      ],
+      RT: [
+        "ADR, SURVEY, 콜리메타",
+        "콜리메타 (120˚)",
+        "콜리메타 (360˚)",
+        "R/CONTROL (25ft)",
+        "SURVEY METER",
+        "ALARM DOSIMETER (ADR)",
+        "라이트마킹"
+      ],
+      MT: [
+        "자분살포기",
+        "Black Light (자외선등)",
+        "조도계",
+        "자계강도계",
+        "Pie Gauge"
+      ],
+      PT: [
+        "조도계",
+        "온습도계"
+      ]
+    };
+
+    function parseAuxItems(str) {
+      if (!str) return [];
+      return str.split(/[;,]/).map(s => s.trim()).filter(s => s && s.toLowerCase() !== '없음');
+    }
+
+    function updateAuxDisplay() {
+      const arr = Array.from(selectedAuxItems);
+      const displayEl = document.getElementById("aux-equip-display");
+      const countBadge = document.getElementById("aux-badge-count");
+      const hiddenInput = document.getElementById("select-aux-equip");
+      const customInput = document.getElementById("input-custom-aux");
+
+      const joined = arr.join("; ");
+      if (hiddenInput) hiddenInput.value = joined;
+      if (customInput) customInput.value = joined;
+      if (countBadge) countBadge.textContent = `${arr.length}개 선택`;
+
+      if (displayEl) {
+        if (arr.length === 0) {
+          displayEl.textContent = "선택 클릭 (다중 선택 ▾)";
+          displayEl.className = "truncate text-slate-400 font-normal text-left";
+        } else {
+          displayEl.textContent = joined;
+          displayEl.className = "truncate text-slate-800 font-semibold text-left";
+        }
+      }
+    }
+
+    function onCustomAuxInput() {
+      const customVal = document.getElementById("input-custom-aux").value.trim();
+      const hiddenInput = document.getElementById("select-aux-equip");
+      if (hiddenInput) hiddenInput.value = customVal;
+      selectedAuxItems = new Set(parseAuxItems(customVal));
+      const countBadge = document.getElementById("aux-badge-count");
+      if (countBadge) countBadge.textContent = `${selectedAuxItems.size}개 선택`;
+      const displayEl = document.getElementById("aux-equip-display");
+      if (displayEl) {
+        displayEl.textContent = customVal || "선택 클릭 (다중 선택 ▾)";
+        displayEl.className = customVal ? "truncate text-slate-800 font-semibold text-left" : "truncate text-slate-400 font-normal text-left";
+      }
+    }
+
+    function openAuxModal() {
+      const modal = document.getElementById("aux-modal");
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      activeAuxFilter = 'CURRENT';
+      setAuxFilter('CURRENT');
+      const searchInp = document.getElementById("aux-search-input");
+      if (searchInp) {
+        searchInp.value = "";
+        setTimeout(() => searchInp.focus(), 100);
+      }
+    }
+
+    function closeAuxModal() {
+      const modal = document.getElementById("aux-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function setAuxFilter(tab) {
+      activeAuxFilter = tab;
+      document.querySelectorAll(".aux-tab").forEach(btn => {
+        if (btn.dataset.tab === tab) {
+          btn.className = "aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0";
+        } else {
+          btn.className = "aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0";
+        }
+      });
+      renderAuxItems();
+    }
+
+    function getAllAuxCandidates() {
+      let list = [];
+      if (appConfig && appConfig.aux_equipments) {
+        list.push(...appConfig.aux_equipments);
+      }
+      for (const m in AUX_MASTER_DATA) {
+        list.push(...AUX_MASTER_DATA[m]);
+      }
+      list.push(...Array.from(selectedAuxItems));
+      return Array.from(new Set(list.map(s => s.trim()))).filter(s => s && s !== '없음');
+    }
+
+    function renderAuxItems() {
+      const container = document.getElementById("aux-items-container");
+      if (!container) return;
+      const keyword = (document.getElementById("aux-search-input")?.value || "").trim().toLowerCase();
+
+      const candidates = getAllAuxCandidates();
+      let filtered = candidates.filter(item => {
+        if (keyword && !item.toLowerCase().includes(keyword)) {
+          return false;
+        }
+        if (activeAuxFilter === 'ALL') return true;
+        const curM = selectedMethod || 'RT';
+        const targetM = (activeAuxFilter === 'CURRENT') ? curM : activeAuxFilter;
+        const allowed = AUX_MASTER_DATA[targetM] || [];
+        return allowed.includes(item) || item.includes(targetM) || selectedAuxItems.has(item);
+      });
+
+      const selectedCountEl = document.getElementById("aux-selected-count");
+      if (selectedCountEl) selectedCountEl.textContent = selectedAuxItems.size;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-xs text-slate-400">일치하는 보조장비/프로브가 없습니다.<br>직접 입력하거나 '전체' 탭을 눌러보세요.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => {
+        const isChecked = selectedAuxItems.has(item);
+        const safeItem = item.replace(/'/g, "\\'");
+        return `
+          <label class="flex items-center gap-2.5 p-2 rounded-xl border ${isChecked ? 'bg-blue-50/80 border-blue-300' : 'bg-slate-50 border-slate-200'} cursor-pointer select-none transition-all">
+            <input type="checkbox" onchange="toggleAuxItem('${safeItem}', this.checked)" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-0">
+            <span class="text-xs ${isChecked ? 'font-bold text-blue-900' : 'text-slate-700'} flex-1 truncate">${item}</span>
+          </label>
+        `;
+      }).join("");
+    }
+
+    function toggleAuxItem(name, isChecked) {
+      if (isChecked) {
+        selectedAuxItems.add(name);
+      } else {
+        selectedAuxItems.delete(name);
+      }
+      const selectedCountEl = document.getElementById("aux-selected-count");
+      if (selectedCountEl) selectedCountEl.textContent = selectedAuxItems.size;
+      renderAuxItems();
+    }
+
+    function clearAuxSelections() {
+      selectedAuxItems.clear();
+      renderAuxItems();
+    }
+
+    function applyAuxSelections() {
+      updateAuxDisplay();
+      closeAuxModal();
+    }
+
     function applyMethodDefaults(method) {
       if (!appConfig || !appConfig.method_defaults || !appConfig.method_defaults[method]) return;
       const def = appConfig.method_defaults[method];
-      document.getElementById("select-equip").value = def.equip_main;
-      const auxSelect = document.getElementById("select-aux-equip");
-      auxSelect.innerHTML = def.aux_equipments.map(a => `<option value="${a}" ${a === def.default_aux ? 'selected' : ''}>${a}</option>`).join("");
-      document.getElementById("input-custom-aux").classList.add("hidden");
-    }
-
-    function checkCustomAux() {
-      const auxVal = document.getElementById("select-aux-equip").value;
-      const customInp = document.getElementById("input-custom-aux");
-      if (auxVal === "직접 입력" || auxVal === "✏️ 직접 입력...") {
-        customInp.classList.remove("hidden");
-        customInp.focus();
-      } else {
-        customInp.classList.add("hidden");
+      if (def.equip_main) {
+        const eqSelect = document.getElementById("select-equip");
+        if (eqSelect) eqSelect.value = def.equip_main;
+      }
+      if (def.default_aux) {
+        selectedAuxItems = new Set(parseAuxItems(def.default_aux));
+        updateAuxDisplay();
       }
     }
 
@@ -1289,8 +1529,13 @@
         // Equip
         const equipSelect = document.getElementById("select-equip");
         if (r.equip_main && equipSelect) equipSelect.value = r.equip_main;
-        const auxEquipSelect = document.getElementById("select-aux-equip");
-        if (r.equip_aux && auxEquipSelect) auxEquipSelect.value = r.equip_aux;
+        if (r.equip_aux) {
+          selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
+          updateAuxDisplay();
+        } else {
+          selectedAuxItems.clear();
+          updateAuxDisplay();
+        }
 
         // Vehicle
         const vehicleSelect = document.getElementById("select-vehicle");
@@ -1466,6 +1711,11 @@
       if (r.unit) document.getElementById("select-unit").value = r.unit;
       if (r.unit_price) document.getElementById("input-unit-price").value = r.unit_price;
       if (r.travel_cost) document.getElementById("input-travel-cost").value = r.travel_cost;
+      if (r.equip_main) document.getElementById("select-equip").value = r.equip_main;
+      if (r.equip_aux) {
+        selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
+        updateAuxDisplay();
+      }
       if (r.qty !== undefined) {
         isManualQty = true;
         document.getElementById("input-qty").value = r.qty;
