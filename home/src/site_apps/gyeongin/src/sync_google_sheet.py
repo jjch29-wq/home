@@ -20,7 +20,27 @@ import pandas as pd
 logger = logging.getLogger("gyeongin_sync")
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "data" / "google_sync_config.json"
+SYNC_STATE_PATH = Path(__file__).resolve().parent.parent / "data" / ".mobile_sync_state.json"
 DEFAULT_INVENTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "Material_Inventory.xlsx"
+
+def load_sync_state() -> dict:
+    if SYNC_STATE_PATH.exists():
+        try:
+            with open(SYNC_STATE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"동기화 상태 읽기 오류: {e}")
+    return {"synced_entry_times": []}
+
+def save_sync_state(state: dict) -> bool:
+    try:
+        SYNC_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(SYNC_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logger.warning(f"동기화 상태 저장 실패: {e}")
+        return False
 
 def get_all_inventory_paths() -> List[Path]:
     """경인사무소의 모든 재고 DB 경로 탐색 (로컬 및 Google Drive)"""
@@ -274,7 +294,13 @@ def push_delete_to_web_app(
     """
     PC에서 삭제된 작업 일보의 EntryTime을 Google Apps Script Web App에 전송하여 시트에서도 삭제
     """
-    return push_record_to_web_app({}, action="delete", original_entry_time=entry_time, web_app_url=web_app_url)
+    et_clean = str(entry_time).split(".")[0].strip()
+    sync_state = load_sync_state()
+    cur_times = sync_state.get("synced_entry_times", [])
+    if et_clean in cur_times:
+        sync_state["synced_entry_times"] = [t for t in cur_times if t != et_clean]
+        save_sync_state(sync_state)
+    return push_record_to_web_app({}, action="delete", original_entry_time=et_clean, web_app_url=web_app_url)
 
 def push_batch_to_web_app(
     saves: Optional[List[Dict[str, Any]]] = None,
@@ -385,6 +411,15 @@ def two_way_reconcile_with_web_app(
                 cloud_time_map[tk] = r
             cloud_keys.add(ck)
 
+        # 동기화 상태 추적 (모바일 삭제 감지용)
+        sync_state = load_sync_state()
+        known_cloud_times = set(sync_state.get("synced_entry_times", []))
+        cloud_raw_times = {str(r.get("EntryTime", "")).split(".")[0].strip() for r in cloud_rows if r.get("EntryTime")}
+        if not known_cloud_times and cloud_raw_times:
+            known_cloud_times = set(cloud_raw_times)
+            sync_state["synced_entry_times"] = sorted(list(known_cloud_times))
+            save_sync_state(sync_state)
+
         # A. 구글 시트의 변경사항 -> PC 엑셀로 동기화 (신규 추가: Pull / 수정 갱신: Pull-Update)
         to_pull = []
         excel_modified = False
@@ -423,55 +458,71 @@ def two_way_reconcile_with_web_app(
             res_p = sync_records_to_excel(to_pull, inventory_path=target_path)
             pulled_cnt = res_p.get("added_count", 0)
 
-        if excel_modified:
-            # 수정된 로컬 행들을 엑셀에 다시 저장
-            with pd.ExcelFile(target_path) as ef:
-                all_sheets = {sheet: ef.parse(sheet) for sheet in ef.sheet_names}
-            all_sheets["DailyUsage"] = pd.DataFrame(local_rows)
-            with pd.ExcelWriter(target_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-                all_sheets["DailyUsage"].to_excel(writer, sheet_name="DailyUsage", index=False)
-            logger.info("모바일 수정 사항이 로컬 엑셀 행에 제자리 갱신되었습니다.")
-
-        # B. PC에만 있는 행 -> 구글 시트로 밀어넣기 (Push)
+        # B. PC에만 있는 행 -> 구글 시트로 밀어넣기 (Push) or 모바일 삭제 감지 반영
         to_push_saves = []
         to_push_updates = []
+        to_delete_local = []
+        kept_local_rows = []
+
         for r in local_rows:
             tk, ck = get_keys(r)
+            raw_et = str(r.get("EntryTime", "")).split(".")[0].strip()
             if not tk:
                 if ck not in cloud_keys:
                     to_push_saves.append(r)
+                kept_local_rows.append(r)
                 continue
 
             if tk not in cloud_keys:
-                to_push_saves.append(r)
+                # 클라우드에 없는 행:
+                # 이전에 클라우드에 존재했던 기록이면 => 모바일에서 삭제된 것! 로컬 엑셀에서도 삭제
+                # 이전에 클라우드에 없던 새로운 기록이면 => PC에서 새로 등록한 것! 클라우드로 Push
+                if raw_et in known_cloud_times:
+                    to_delete_local.append(r)
+                    excel_modified = True
+                else:
+                    to_push_saves.append(r)
+                    kept_local_rows.append(r)
             else:
+                kept_local_rows.append(r)
                 # 존재하는 행: 주요 필드(수량, 단가, 비고, 업체명 등) 수정 여부 비교
                 cr = cloud_time_map.get(tk)
                 if cr:
-                    def _norm(val):
-                        if pd.isna(val) or val is None:
-                            return ""
-                        s = str(val).strip()
-                        if s.lower() in ("nan", "none"):
-                            return ""
-                        try:
-                            f = float(s.replace(",", ""))
-                            return str(int(f)) if f.is_integer() else str(f)
-                        except ValueError:
-                            return s
-
                     is_modified = False
-                    for check_col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명"]:
-                        if _norm(r.get(check_col)) != _norm(cr.get(check_col)):
+                    for check_col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "출장비", "검사비"]:
+                        if _norm_val(r.get(check_col)) != _norm_val(cr.get(check_col)):
                             is_modified = True
                             break
                     if is_modified:
                         to_push_updates.append(r)
 
+        if to_delete_local:
+            local_rows = kept_local_rows
+            excel_modified = True
+            logger.info(f"모바일에서 삭제된 {len(to_delete_local)}건의 작업이 로컬 엑셀에서도 제거되었습니다.")
+
+        if excel_modified:
+            # 수정/삭제된 로컬 행들을 엑셀에 다시 저장
+            with pd.ExcelFile(target_path) as ef:
+                all_sheets = {sheet: ef.parse(sheet) for sheet in ef.sheet_names}
+            all_sheets["DailyUsage"] = pd.DataFrame(local_rows)
+            with pd.ExcelWriter(target_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+                all_sheets["DailyUsage"].to_excel(writer, sheet_name="DailyUsage", index=False)
+            logger.info("모바일 수정/삭제 사항이 로컬 엑셀 행에 제자리 갱신되었습니다.")
+
         pushed_cnt = 0
         if to_push_saves or to_push_updates:
             res_batch = push_batch_to_web_app(saves=to_push_saves, updates=to_push_updates, web_app_url=target_url)
             pushed_cnt = len(to_push_saves) + len(to_push_updates)
+
+        # 동기화 상태 갱신: 최종 클라우드 EntryTime 목록 저장
+        final_cloud_times = set(cloud_raw_times)
+        for s in to_push_saves:
+            s_et = str(s.get("EntryTime", "")).split(".")[0].strip()
+            if s_et:
+                final_cloud_times.add(s_et)
+        sync_state["synced_entry_times"] = sorted(list(final_cloud_times))
+        save_sync_state(sync_state)
 
         cfg["last_sync_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         save_sync_config(cfg)
@@ -480,7 +531,8 @@ def two_way_reconcile_with_web_app(
             "status": "success",
             "pulled_count": pulled_cnt,
             "pushed_count": pushed_cnt,
-            "message": f"구글 스프레드시트 양방향 동기화 완료 (가져옴: {pulled_cnt}건, 밀어넣음: {pushed_cnt}건)"
+            "deleted_local_count": len(to_delete_local),
+            "message": f"구글 스프레드시트 양방향 동기화 완료 (가져옴: {pulled_cnt}건, 밀어넣음: {pushed_cnt}건, 모바일삭제반영: {len(to_delete_local)}건)"
         }
     except Exception as e:
         logger.error(f"양방향 동기화 오류: {e}")
