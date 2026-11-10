@@ -184,7 +184,7 @@ def get_gyeongin_test_items():
                 items = data.get("test_items", [])
         except Exception:
             pass
-    defaults = ['Piping', 'Tank', 'Vessel', 'Plate', 'Beam', 'Structure', 'Pipe', '기타']
+    defaults = ['Piping', 'Tank', 'Vessel', 'Plate', 'Beam', 'Structure', 'Pipe', '사무실 내근 및 장비점검', '우천 대기', '안전교육', '휴무', '기타']
     merged = [i for i in items if i] + defaults
     return list(dict.fromkeys(merged))
 
@@ -201,7 +201,7 @@ def get_gyeongin_applied_codes():
     merged = [c for c in codes if c] + defaults
     return list(dict.fromkeys(merged))
 
-EQUIPMENTS = ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품"]
+EQUIPMENTS = ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품", "해당없음"]
 
 METHOD_DEFAULTS = {
     "RT": {

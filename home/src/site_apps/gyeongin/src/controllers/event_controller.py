@@ -241,21 +241,23 @@ def on_mouse_motion_impl(self, event, widget=None):
 
 
 def on_recent_record_click_impl(self, event):
-    """최근 기록 테이블의 항목을 클릭했을 때 상단 입력 폼에 해당 데이터를 로드"""
+    """최근 기록 테이블의 항목을 더블클릭하거나 우클릭 메뉴로 선택했을 때 상단 입력 폼에 해당 데이터를 로드"""
     selection = self.tv_recent.selection()
     if not selection: return
     item = self.tv_recent.item(selection[0])
-    values = item.get('values')
-    if not values: return
+    tags = item.get('tags', [])
+    values = item.get('values', [])
     
-    record_id = values[0]
+    record_idx = None
+    if tags and str(tags[0]).isdigit():
+        record_idx = int(tags[0])
+    elif values and str(values[0]).isdigit():
+        record_idx = int(values[0])
     
-    if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
+    if record_idx is not None and hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
         try:
-            record_idx = int(record_id)
             if record_idx in self.daily_usage_df.index:
                 record = self.daily_usage_df.loc[record_idx].to_dict()
-                # Use existing method to populate the form
                 from site_apps.gyeongin.src.views.daily_date_context import load_recent_record
                 if not load_recent_record(self, record):
                     return

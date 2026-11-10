@@ -31,7 +31,7 @@ var APP_CONFIG = {
     "90너4889 (탑차)",
     "자가용/대중교통"
   ],
-  equipments: ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품"],
+  equipments: ["Se-75", "PAUT MX2(OMNI2-103085)", "Yoke", "PT 약품", "해당없음"],
   aux_equipments: [
     "ADR, SURVEY, 콜리메타", "ADR; SURVEY; 콜리메타", "ADR", "SURVEY", "콜리메타",
     "PAUT SCANNER (MANUAL)", "COBRA Manual Scanner", "JIREH MICROBE BTG006",
@@ -43,8 +43,8 @@ var APP_CONFIG = {
     "550A", "600A", "650A", "700A", "750A", "800A", "850A", "900A", "950A",
     "1000A", "1050A", "1100A", "1150A", "1200A"
   ],
-  units: ["매", "M", "P,M,I/D", "EA", "Point", "SET", "CAN", "KG", "Inch", "Dia", "I/D", "Meter"],
-  test_items: ["Piping", "Tank", "Vessel", "Plate", "Beam", "Structure", "Pipe", "기타"],
+  units: ["매", "M", "P,M,I/D", "EA", "Point", "SET", "CAN", "KG", "Inch", "Dia", "I/D", "Meter", "일"],
+  test_items: ["Piping", "Tank", "Vessel", "Plate", "Beam", "Structure", "Pipe", "사무실 내근 및 장비점검", "우천 대기", "안전교육", "휴무", "기타"],
   applied_codes: ["KS", "ASME", "AWS", "API", "KEPIC", "기타"],
   materials: [
     'Carestream AA400-3⅓*12"', 'Carestream AA400-3⅓*17"', 'Carestream AA400-4½*12"',

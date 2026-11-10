@@ -274,13 +274,14 @@ class InspectionBatch(ttk.LabelFrame):
         try:
             site = app.cb_daily_site.get().strip()
             method = app.cb_daily_test_method.get().strip().upper()
+            is_no_work = (method in ('내근/대기', '휴무', '대기', '내근', '기타')) or ('내근' in method)
             if not site or not method:
                 raise ValueError('현장명과 검사방법을 입력하세요.')
             if not app.ent_daily_inspection_item.get().strip():
                 raise ValueError('검사품명을 입력하세요.')
             qty = number(app.ent_daily_test_amount.get(), '검사량', True)
             rate = number(app.ent_daily_unit_price.get(), '단가', True)
-            if qty <= 0 or not app.cb_daily_unit.get().strip():
+            if not is_no_work and (qty <= 0 or not app.cb_daily_unit.get().strip()):
                 raise ValueError('검사량은 0보다 커야 하며 단위를 입력해야 합니다.')
             number(qty * rate, '검사비')
             for key in ('ndt_ori_joint_var', 'ndt_ori_qty_var', 'ndt_rep_joint_var', 'ndt_rep_qty_var', 'ndt_rej_joint_var'):
@@ -296,7 +297,7 @@ class InspectionBatch(ttk.LabelFrame):
                 if app.get_material_display_name(row['MaterialID']) == display:
                     mat_id = row['MaterialID']
                     break
-            if display and mat_id == display and app._is_consumable_material(display, method):
+            if not is_no_work and display and mat_id == display and app._is_consumable_material(display, method):
                 raise ValueError('소모품은 품목 검색에서 등록된 자재를 선택하세요. 그래야 일괄 저장 시 재고가 차감됩니다.')
             plan = app._add_single_usage_record_logic(mat_id, app.ent_daily_date.get_date(), site,
                                                      auto_save=False, prepare_only=True)
@@ -317,8 +318,8 @@ class InspectionBatch(ttk.LabelFrame):
                     raise ValueError(f'{name}: 작업시간을 시작~종료 형식으로 입력하세요.')
             primary = next((r for r in plan['records_to_save'] if r.get('검사구분') != 'REP'), plan['records_to_save'][0])
             primary['검사비'] = int(qty * rate)
-            # PAUT/UT never carry chemicals or RT retake counts from a previously selected method.
-            if app.cb_daily_test_method.get().strip().upper() in ('PAUT', 'UT'):
+            # PAUT/UT or No-work never carry chemicals or RT retake counts
+            if is_no_work or app.cb_daily_test_method.get().strip().upper() in ('PAUT', 'UT'):
                 for record in plan['records_to_save']:
                     for key in record:
                         if key.startswith(('NDT_', 'RTK_')):

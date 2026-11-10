@@ -11,26 +11,39 @@ def show_recent_scope(app, selected_only=False):
 
 def has_daily_input(app):
     data = app._get_usage_session_data()
-    fields = ('applied_code', 'report_no', 'equip', 'material', 'inspection_item',
-              'method', 'amount', 'unit_price', 'travel_cost', 'meal_cost',
-              'test_fee', 'note', 'main_memo')
-    if any(str(data.get(key, '') or '').strip() for key in fields):
+    # 1. 작업 목록에 대기 중인 작업이 있는 경우
+    batch = data.get('inspection_batch')
+    if batch and len(batch) > 0:
         return True
-    if data.get('inspection_batch'):
+    
+    # 2. 사용자가 직접 기입한 유의미한 필드 (자동 세팅되는 기본값 applied_code, method, unit_price 등 제외)
+    user_filled_fields = ('report_no', 'inspection_item', 'note', 'main_memo', 'material')
+    if any(str(data.get(key, '') or '').strip() for key in user_filled_fields):
         return True
-    if any(worker.get('time') or worker.get('ot') for worker in data.get('workers', [])):
+        
+    # 검사량이 0 초과로 기입된 경우
+    amount_str = str(data.get('amount', '') or '').strip()
+    try:
+        if amount_str and float(amount_str) > 0:
+            return True
+    except ValueError:
+        if amount_str:
+            return True
+
+    # 3. 화학약품 / RTK에 기입된 값이 있는 경우
+    if any(str(value or '').strip() for value in data.get('rtk', {}).values() if str(value or '').strip() not in ('', '0')):
         return True
-    if any(str(value or '').strip() for row in data.get('vehicles', [])
-           for key, value in row.items() if key != '_raw_mileage' or str(value) not in ('', '0')):
-        return True
-    fixed = getattr(app, 'fixed_vehicle_widget', None)
-    if fixed is not None and any(str(value or '').strip() for value in fixed.get_data().values()):
-        return True
-    if any(str(value or '').strip() for value in data.get('rtk', {}).values()):
-        return True
-    if any(str(value or '').strip() for row in data.get('ndt_companies', [])
-           for key, value in row.items() if key != '_company'):
-        return True
+    for co in data.get('ndt_companies', []):
+        for k, v in co.items():
+            if k != '_company' and str(v or '').strip() not in ('', '0'):
+                return True
+                
+    # 4. 차량 점검에 주행거리가 입력된 경우
+    for row in data.get('vehicles', []):
+        km = str(row.get('운행거리', '') or row.get('mileage', '') or '').strip()
+        if km and km not in ('0', '0.0'):
+            return True
+
     return any(getattr(app, f'worker_group{i}', None) is not None
                and getattr(app, f'worker_group{i}').ent_meal.get().strip()
                for i in range(1, 11))

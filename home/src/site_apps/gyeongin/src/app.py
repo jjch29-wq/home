@@ -5901,17 +5901,13 @@ class MaterialManager:
         return setup_daily_usage_tab_impl(self, *args, **kwargs)
 
     def load_selected_recent_to_form(self):
-        """최근 기록 컨텍스트 메뉴에서 명시적으로 불러오기를 선택했을 때 실행"""
-        self._suppress_recent_select = False
+        """최근 기록 컨텍스트 메뉴 또는 더블클릭 시 명시적으로 불러오기를 실행"""
         from site_apps.gyeongin.src.controllers.event_controller import on_recent_record_click_impl
         return on_recent_record_click_impl(self, None)
 
     def on_recent_record_click(self, *args, **kwargs):
-        if getattr(self, '_suppress_recent_select', False):
-            self._suppress_recent_select = False
-            return
-        from site_apps.gyeongin.src.controllers.event_controller import on_recent_record_click_impl
-        return on_recent_record_click_impl(self, *args, **kwargs)
+        """단순 클릭/선택 시에는 폼을 덮어쓰지 않음 (더블클릭 또는 우클릭 메뉴 사용)"""
+        pass
 
     def delete_recent_entry(self, event=None):
         """Delete only selected daily records, retaining unrelated stock transactions."""
@@ -6410,6 +6406,162 @@ class MaterialManager:
     def _on_daily_usage_select(self, *args, **kwargs):
         from site_apps.gyeongin.src.controllers.event_controller import _on_daily_usage_select_impl
         return _on_daily_usage_select_impl(self, *args, **kwargs)
+
+    def quick_set_no_work_entry(self):
+        """현장 작업이 없는 날(내근, 대기, 교육, 휴무 등) 빠른 세팅 다이얼로그"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("⚡ 작업 없음 / 내근 빠른 등록")
+        dialog.geometry("460x420")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + max(0, (self.root.winfo_width() - 460) // 2)
+        y = self.root.winfo_y() + max(0, (self.root.winfo_height() - 420) // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        frame = ttk.Frame(dialog, padding=16)
+        frame.pack(fill='both', expand=True)
+
+        ttk.Label(frame, text="⚡ 현장 작업 없음 빠른 등록", font=('Malgun Gothic', 12, 'bold')).pack(anchor='w', pady=(0, 4))
+        desc_lbl = ttk.Label(
+            frame,
+            text="현장 비파괴검사가 없는 날의 내근·대기·교육·휴무를 0원으로 간편 등록합니다.\n(작업자 근태 9시간 및 차량 안전점검이 정상 유지됩니다)",
+            font=('Malgun Gothic', 9),
+            foreground='#475569'
+        )
+        desc_lbl.pack(anchor='w', pady=(0, 12))
+
+        type_var = tk.StringVar(value="사무실 내근 및 장비점검")
+        method_var = tk.StringVar(value="내근/대기")
+
+        types = [
+            ("🏢 사무실 내근 및 장비점검", "사무실 내근 및 장비점검", "내근/대기"),
+            ("🌧️ 우천 / 현장 공사 대기", "우천 대기", "내근/대기"),
+            ("⛑️ 안전교육 및 직무교육", "안전교육", "내근/대기"),
+            ("🏖️ 휴무 / 공휴일 (비근무)", "휴무", "휴무")
+        ]
+
+        lbl_frame = ttk.LabelFrame(frame, text="작업 없음 사유 선택", padding=10)
+        lbl_frame.pack(fill='x', pady=(0, 12))
+
+        def on_type_select(val, meth):
+            type_var.set(val)
+            method_var.set(meth)
+
+        for disp, val, meth in types:
+            rb = ttk.Radiobutton(
+                lbl_frame,
+                text=disp,
+                value=val,
+                variable=type_var,
+                command=lambda v=val, m=meth: on_type_select(v, m)
+            )
+            rb.pack(anchor='w', pady=3)
+
+        memo_frame = ttk.Frame(frame)
+        memo_frame.pack(fill='x', pady=(0, 16))
+        ttk.Label(memo_frame, text="비고/특이사항:").pack(side='left', padx=(0, 5))
+        ent_memo = ttk.Entry(memo_frame)
+        ent_memo.insert(0, "현장 작업 없음 (사무실 내근 및 장비점검)")
+        ent_memo.pack(side='left', fill='x', expand=True)
+
+        def update_default_memo(*args):
+            v = type_var.get()
+            ent_memo.delete(0, tk.END)
+            ent_memo.insert(0, f"현장 작업 없음 ({v})")
+
+        type_var.trace_add("write", update_default_memo)
+
+        def apply_quick_entry(add_to_batch=False):
+            selected_type = type_var.get()
+            selected_meth = method_var.get()
+            memo_text = ent_memo.get().strip() or f"현장 작업 없음 ({selected_type})"
+            dialog.destroy()
+
+            # 1. 폼 초기화 (날짜 및 작업자 유지)
+            self.clear_daily_usage_form_all(keep_date=True, keep_workers=True)
+
+            # 2. 폼 값 채우기
+            if hasattr(self, 'cb_daily_company'):
+                self.cb_daily_company.set('경인사무소')
+            if hasattr(self, 'cb_daily_site'):
+                self.cb_daily_site.set('경인사무소')
+            if hasattr(self, 'ndt_loc_type_var'):
+                self.ndt_loc_type_var.set('경인사무소')
+            if hasattr(self, 'cb_daily_test_method'):
+                self.cb_daily_test_method.set(selected_meth)
+                if hasattr(self, 'on_method_change_auto_unit_logic'):
+                    self.on_method_change_auto_unit_logic(None)
+            if hasattr(self, 'ent_daily_inspection_item'):
+                self.ent_daily_inspection_item.delete(0, tk.END)
+                self.ent_daily_inspection_item.insert(0, selected_type)
+            if hasattr(self, 'cb_daily_material'):
+                self.cb_daily_material.delete(0, tk.END)
+                self.cb_daily_material.insert(0, '해당없음')
+            if hasattr(self, 'ent_daily_applied_code'):
+                self.ent_daily_applied_code.delete(0, tk.END)
+                self.ent_daily_applied_code.insert(0, '기타')
+            if hasattr(self, 'ent_daily_equip'):
+                self.ent_daily_equip.delete(0, tk.END)
+                self.ent_daily_equip.insert(0, '해당없음')
+            if hasattr(self, 'ent_daily_test_amount'):
+                self.ent_daily_test_amount.delete(0, tk.END)
+                self.ent_daily_test_amount.insert(0, '0')
+            if hasattr(self, 'cb_daily_unit'):
+                self.cb_daily_unit.set('일')
+            if hasattr(self, 'ent_daily_unit_price'):
+                self.ent_daily_unit_price.delete(0, tk.END)
+                self.ent_daily_unit_price.insert(0, '0')
+            if hasattr(self, 'ent_daily_travel_cost'):
+                self.ent_daily_travel_cost.delete(0, tk.END)
+                self.ent_daily_travel_cost.insert(0, '0')
+            if hasattr(self, 'ent_daily_meal_cost'):
+                self.ent_daily_meal_cost.delete(0, tk.END)
+                self.ent_daily_meal_cost.insert(0, '0')
+            if hasattr(self, 'ent_daily_test_fee'):
+                self.ent_daily_test_fee.delete(0, tk.END)
+                self.ent_daily_test_fee.insert(0, '0')
+            if hasattr(self, 'lbl_daily_total_fee'):
+                self.lbl_daily_total_fee.config(text='0원')
+            if hasattr(self, 'ent_daily_note'):
+                self.ent_daily_note.delete(0, tk.END)
+                self.ent_daily_note.insert(0, memo_text)
+
+            # 차량 비고 설정
+            panel = getattr(self, 'vehicle_panel', None)
+            if panel and hasattr(panel, 'selected'):
+                active_editor = panel.selected()
+                if active_editor and hasattr(active_editor, 'ent_note'):
+                    active_editor.ent_note.delete(0, tk.END)
+                    active_editor.ent_note.insert(0, '운행없음 (시건 양호)')
+
+            # 작업자 1 기본 세팅 (비어있으면 기본 사용자 지정)
+            if hasattr(self, 'worker_groups') and self.worker_groups:
+                g0 = self.worker_groups[0]
+                if not g0.cb_name.get().strip() and hasattr(self, 'users') and self.users:
+                    g0.cb_name.set(self.users[0])
+                if not g0.ent_worktime.get().strip():
+                    g0.ent_worktime.set('09:00~18:00')
+                if selected_meth == '휴무':
+                    g0.cb_shift.set('휴무')
+                else:
+                    g0.cb_shift.set('주간')
+                g0.ent_ot.delete(0, tk.END)
+                g0.ent_ot.insert(0, '0')
+
+            if add_to_batch:
+                if hasattr(self, 'inspection_batch'):
+                    self.inspection_batch.add()
+                    messagebox.showinfo("안내", f"'{selected_type}'(0원) 항목이 작업 목록에 추가되었습니다.\n하단 [저장] 버튼을 누르면 최종 저장됩니다.")
+            else:
+                messagebox.showinfo("안내", f"'{selected_type}'(0원) 정보가 입력 폼에 세팅되었습니다.\n확인 후 '＋ 작업 목록에 추가' 버튼을 눌러주세요.")
+
+        btn_row = ttk.Frame(frame)
+        btn_row.pack(fill='x')
+        ttk.Button(btn_row, text="📋 폼에 세팅", command=lambda: apply_quick_entry(False), width=12).pack(side='left', padx=3)
+        ttk.Button(btn_row, text="➕ 폼 세팅 및 목록 담기", command=lambda: apply_quick_entry(True), width=20).pack(side='left', padx=3)
+        ttk.Button(btn_row, text="취소", command=dialog.destroy, width=8).pack(side='right', padx=3)
 
 
     

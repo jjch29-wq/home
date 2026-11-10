@@ -52,6 +52,22 @@
       </button>
     </div>
 
+    <!-- ⚡ 현장 작업 없음 / 내근 원클릭 세팅 카드 -->
+    <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-3.5 shadow-sm">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2.5">
+          <span class="text-xl">⚡</span>
+          <div>
+            <div class="text-xs font-bold text-amber-950">현장 작업이 없는 날인가요?</div>
+            <div class="text-[11px] text-amber-800">사무실 내근, 우천 대기, 안전교육, 휴무 1초 세팅</div>
+          </div>
+        </div>
+        <button type="button" onclick="openNoWorkModal()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-xl shadow-sm transition">
+          선택하기
+        </button>
+      </div>
+    </div>
+
     <!-- 1. 거래처 및 공통 정보 카드 -->
     <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -112,11 +128,12 @@
       <!-- Segmented Method Buttons (RT 기본) -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
-        <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
+        <div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
           <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
           <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
           <button type="button" data-method="MT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
           <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
+          <button type="button" data-method="내근/대기" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
         </div>
       </div>
 
@@ -464,6 +481,44 @@
 
   </main>
 
+  <!-- Modal: 현장 작업 없음 / 내근 선택 다이얼로그 -->
+  <div id="modal-no-work" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+          <span>⚡</span> 작업 없음 / 내근 빠른 세팅
+        </h3>
+        <button type="button" onclick="closeNoWorkModal()" class="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
+      </div>
+      <p class="text-xs text-slate-500">
+        현장 검사(NDT)가 없는 날에 해당하는 유형을 선택하시면 검사수량 0, 자재비 0원, 출퇴근(9h) 및 차량 안전점검이 자동 설정됩니다.
+      </p>
+      <div class="grid grid-cols-1 gap-2">
+        <button type="button" onclick="applyNoWorkSettings('사무실 내근 및 장비점검', '09:00~18:00', '내근/대기')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
+          <div class="font-bold text-xs text-slate-800">🏢 사무실 내근 및 장비점검</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">정상 근무 09:00~18:00 (9h) · 차량 운행없음</div>
+        </button>
+        <button type="button" onclick="applyNoWorkSettings('우천 대기', '09:00~18:00', '내근/대기')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
+          <div class="font-bold text-xs text-slate-800">🌧️ 우천 대기</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">현장 우천/기상 대기 · 정상 근무 09:00~18:00 (9h)</div>
+        </button>
+        <button type="button" onclick="applyNoWorkSettings('안전교육', '09:00~18:00', '내근/대기')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
+          <div class="font-bold text-xs text-slate-800">🦺 안전교육</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">안전보건 및 직무교육 이수 · 정상 근무 (9h)</div>
+        </button>
+        <button type="button" onclick="applyNoWorkSettings('휴무', '0', '휴무')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 transition">
+          <div class="font-bold text-xs text-slate-800">🏖️ 휴무 / 공휴일</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">근무시간 0h · 차량 시건 양호</div>
+        </button>
+      </div>
+      <div class="pt-1">
+        <button type="button" onclick="closeNoWorkModal()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Notification Toast -->
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
     <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
@@ -488,6 +543,83 @@
       setTimeout(() => {
         toast.className = toast.className.replace('opacity-100', 'opacity-0').replace('pointer-events-auto', 'pointer-events-none');
       }, 2500);
+    }
+
+    function openNoWorkModal() {
+      document.getElementById("modal-no-work").classList.remove("hidden");
+    }
+
+    function closeNoWorkModal() {
+      document.getElementById("modal-no-work").classList.add("hidden");
+    }
+
+    function applyNoWorkSettings(itemType, workHours, methodType) {
+      closeNoWorkModal();
+      
+      // 1. 방법 전환
+      switchMethod(methodType || "내근/대기");
+      
+      // 2. 품명 설정
+      const itemSelect = document.getElementById("select-item-name");
+      const customItem = document.getElementById("input-custom-item");
+      if (itemSelect) {
+        let found = false;
+        for (let opt of itemSelect.options) {
+          if (opt.value === itemType) {
+            itemSelect.value = itemType;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          itemSelect.value = "기타";
+          customItem.classList.remove("hidden");
+          customItem.value = itemType;
+        } else {
+          customItem.classList.add("hidden");
+          customItem.value = "";
+        }
+      }
+      
+      // 3. 자재 및 장비 설정
+      const equipSelect = document.getElementById("select-equip");
+      if (equipSelect) equipSelect.value = "해당없음";
+      const matSelect = document.getElementById("select-material");
+      if (matSelect) matSelect.value = "해당없음 (자재소모 약품 별도 기입)";
+      
+      // 4. 수량, 단가, 검사비 0원
+      isManualQty = true;
+      document.getElementById("input-qty").value = 0;
+      document.getElementById("input-unit-price").value = 0;
+      document.getElementById("input-travel-fee").value = 0;
+      document.getElementById("input-total-fee").value = 0;
+      document.getElementById("select-unit").value = "일";
+      
+      // 5. 차량 점검: 운행거리 0, 운행없음
+      const vehKm = document.getElementById("input-veh-mileage");
+      if (vehKm) vehKm.value = 0;
+      const vehMemo = document.getElementById("input-veh-memo");
+      if (vehMemo) vehMemo.value = "운행없음 (시건 양호)";
+      
+      // 6. 작업자 근무시간 설정
+      document.querySelectorAll(".worker-row").forEach((row, idx) => {
+        const timeInp = row.querySelector(".worker-time");
+        const otInp = row.querySelector(".worker-ot");
+        const shiftSel = row.querySelector(".worker-shift");
+        if (idx === 0) {
+          if (itemType === '휴무') {
+            if (timeInp) timeInp.value = "";
+            if (otInp) otInp.value = "0";
+            if (shiftSel) shiftSel.value = "휴무";
+          } else {
+            if (timeInp) timeInp.value = workHours || "09:00~18:00";
+            if (otInp) otInp.value = "0";
+            if (shiftSel) shiftSel.value = "일반";
+          }
+        }
+      });
+      
+      showToast(`⚡ '${itemType}' 설정 완료! 저장 버튼을 누르시면 기록됩니다.`);
     }
 
     // Toggle custom inputs
@@ -812,6 +944,17 @@
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = "M";
         document.getElementById("input-unit-price").value = 18500;
+      } else if (method === "내근/대기" || method === "휴무") {
+        rtkCard.classList.add("hidden");
+        chemCard.classList.add("hidden");
+        pautCard.classList.add("hidden");
+        rtJointsBox.classList.add("hidden");
+        nonRtJointsBox.classList.add("hidden");
+        unitSelect.value = "일";
+        document.getElementById("input-unit-price").value = 0;
+        document.getElementById("input-qty").value = 0;
+        document.getElementById("input-travel-fee").value = 0;
+        document.getElementById("input-total-fee").value = 0;
       }
 
       applyMethodDefaults(method);

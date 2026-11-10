@@ -62,6 +62,8 @@ def setup_daily_usage_tab_impl(self):
     if hasattr(self, 'trigger_mobile_sync'):
         ttk.Button(row1, text="📱 모바일 동기화", command=self.trigger_mobile_sync, width=13).pack(side='left', padx=3)
     
+    ttk.Button(row1, text="⚡ 작업 없음 / 내근", command=self.quick_set_no_work_entry, width=16).pack(side='left', padx=3)
+    
 
 
 
@@ -253,7 +255,7 @@ def setup_daily_usage_tab_impl(self):
 
     # Left column stays consecutive; the right column groups the two equipment fields.
     ttk.Label(form_content, text="방법:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
-    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=['RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
+    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=['RT', 'PAUT', 'UT', 'MT', 'PT', '내근/대기', '휴무', '기타'])
     self.cb_daily_test_method.grid(row=2, column=1, padx=(2, 10), pady=1, sticky='w')
     
     ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
@@ -974,8 +976,8 @@ def setup_daily_usage_tab_impl(self):
     self.tv_recent.column("joint_count", width=60, minwidth=60, stretch=False, anchor='center')
     self.tv_recent.column("rej_count", width=60, minwidth=60, stretch=False, anchor='center')
     
-    # Bind click to load record and delete
-    self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
+    # Double-click loads record to form; Delete key deletes selected entry
+    self.tv_recent.bind('<Double-1>', lambda e: self.load_selected_recent_to_form())
     self.tv_recent.bind('<Delete>', self.delete_recent_entry)
     self.tv_recent.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
     self.cb_daily_site.bind('<<ComboboxSelected>>',
@@ -990,10 +992,8 @@ def setup_daily_usage_tab_impl(self):
     def show_recent_menu(event):
         item = self.tv_recent.identify_row(event.y)
         if item:
-            self._suppress_recent_select = True
-            # Keep suppress active through the asynchronous <<TreeviewSelect>> event dispatch
-            self.root.after(600, lambda: setattr(self, '_suppress_recent_select', False))
-            self.tv_recent.selection_set(item)
+            if item not in self.tv_recent.selection():
+                self.tv_recent.selection_set(item)
             self.recent_menu.tk_popup(event.x_root, event.y_root)
             
     self.tv_recent.bind("<Button-3>", show_recent_menu)
