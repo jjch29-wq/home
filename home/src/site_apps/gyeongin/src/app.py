@@ -12456,6 +12456,22 @@ class MaterialManager:
                 self.update_material_combo() # Refresh history suggestions
                 self.update_recent_entries_view()
                 self.update_monthly_usage_view()
+
+                # [경인 클라우드 실시간 Push] PC 5번 탭 수정 내역을 구글 웹앱(모바일)으로 비동기 전송
+                try:
+                    import threading
+                    from site_apps.gyeongin.src.sync_google_sheet import push_record_to_web_app
+                    updated_rec = self.daily_usage_df.loc[df_idx].to_dict()
+                    orig_entry_time = str(old_entry.get('EntryTime', '')).strip()
+                    threading.Thread(
+                        target=push_record_to_web_app,
+                        args=(updated_rec,),
+                        kwargs={'action': 'update', 'original_entry_time': orig_entry_time},
+                        daemon=True
+                    ).start()
+                except Exception:
+                    pass
+
                 return True
             raise RuntimeError('원본 파일에 저장하지 못했습니다.')
         except Exception as e:
