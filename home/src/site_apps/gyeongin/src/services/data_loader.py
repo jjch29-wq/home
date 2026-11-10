@@ -562,23 +562,15 @@ def save_data_impl(self, require_primary=True):
                 frame.to_excel(writer, sheet_name=sheet, index=False)
         for attempt in range(5):
             try:
-                try:
-                    os.replace(temp_path, target)
-                    temp_path = None
-                except PermissionError:
-                    # On Google Drive Desktop (G:\내 드라이브), os.replace may fail during sync while in-place copy succeeds
-                    shutil.copy2(temp_path, target)
-                    try:
-                        os.remove(temp_path)
-                    except OSError:
-                        pass
-                    temp_path = None
+                from site_apps.gyeongin.src.workbook_io import replace_workbook, copy_workbook
+                replace_workbook(temp_path, target)
+                temp_path = None
                 # [경인 안전 동기화] 클라우드 DB 저장 성공 시 로컬 엑셀 사본에 즉시 미러링 (정합성 및 좀비 행 방지)
                 try:
                     from site_apps.gyeongin.src.sync_google_sheet import DEFAULT_INVENTORY_PATH
                     local_target = os.path.abspath(str(DEFAULT_INVENTORY_PATH))
                     if os.path.normcase(target) != os.path.normcase(local_target) and os.path.exists(target):
-                        shutil.copy2(target, local_target)
+                        copy_workbook(target, local_target)
                 except Exception as mirror_err:
                     print(f"[경인 데이터 동기화] 로컬 사본 미러링 건너뜀: {mirror_err}")
                 return True

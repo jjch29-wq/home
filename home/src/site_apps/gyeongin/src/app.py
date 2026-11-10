@@ -10563,7 +10563,7 @@ class MaterialManager:
                 self.ent_daily_applied_code.delete(0, tk.END)
                 self.ent_daily_applied_code.insert(0, self.clean_nan(record['적용코드']))
             from site_apps.gyeongin.src.aux_equipment import restore
-            restore(self, record.get('보조장비', ''))
+            restore(self, record.get('보조장비', ''), method=record.get('검사방법', ''))
             if '장비명' in record:
                 self.cb_daily_equip.delete(0, tk.END)
                 self.cb_daily_equip.insert(0, self.clean_nan(record['장비명']))
@@ -11330,7 +11330,7 @@ class MaterialManager:
             self.ent_daily_applied_code.insert(0, data.get('applied_code', ''))
         
         from site_apps.gyeongin.src.aux_equipment import restore
-        restore(self, data.get('aux_equipment', ''))
+        restore(self, data.get('aux_equipment', ''), method=data.get('method', ''))
         self.cb_daily_company.set(data.get('company', ''))
         self.cb_daily_site.set(data.get('site', ''))
         self.ent_daily_report_no.delete(0, tk.END); self.ent_daily_report_no.insert(0, data.get('report_no', ''))
@@ -11544,7 +11544,7 @@ class MaterialManager:
             _set_val(self.cb_daily_company, self.clean_nan(first_record.get('업체명', '')))
             _set_val(self.cb_daily_equip, self.clean_nan(first_record.get('장비명', '')))
             from site_apps.gyeongin.src.aux_equipment import restore
-            restore(self, first_record.get('보조장비', ''))
+            restore(self, first_record.get('보조장비', ''), method=first_record.get('검사방법', ''))
             
             self.ent_daily_applied_code.delete(0, 'end')
             self.ent_daily_applied_code.insert(0, self.clean_nan(first_record.get('적용코드', '')))

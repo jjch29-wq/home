@@ -480,6 +480,8 @@ def setup_daily_usage_tab_impl(self):
     
     def on_method_change_auto_unit_logic(e=None):
         method = self.cb_daily_test_method.get().strip().upper()
+        equipment_method_changed = method != getattr(self, '_daily_equipment_method', None)
+        self._daily_equipment_method = method
         print(f"[DEBUG] on_method_change_auto_unit_logic triggered. method='{method}'")
         unit_map = {'RT': '매', 'UT': 'P,M,I/D', 'MT': 'P,M,I/D', 'PT': 'P,M,I/D', 'PAUT': 'M,I/D'}
         if method in unit_map:
@@ -540,7 +542,8 @@ def setup_daily_usage_tab_impl(self):
                 curr_aux = self.daily_aux_equipment_var.get().strip()
                 method_aux_set = set(method_aux_list)
                 curr_aux_parts = [p.strip() for p in curr_aux.split(';') if p.strip()]
-                if not curr_aux or not method_aux_set or not all(p in method_aux_set for p in curr_aux_parts):
+                if (equipment_method_changed and getattr(self, '_daily_edit_source', None) is None
+                        and (not curr_aux or not method_aux_set or not all(p in method_aux_set for p in curr_aux_parts))):
                     self.daily_aux_equipment_var.set(def_aux)
 
         # 1. 하단 NDT 관경 및 물량 산출 프레임 제어 (RT, UT, PT, PAUT, MT)

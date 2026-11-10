@@ -286,6 +286,9 @@ class InspectionBatch(ttk.LabelFrame):
         return data
 
     def add(self):
+        if getattr(self.app, '_daily_edit_source', None) is not None:
+            messagebox.showwarning('기존 기록 수정', '불러온 기록은 작업 목록에 신규 추가하지 않습니다. 저장 버튼을 눌러 기존 기록에 수정 내용을 반영하세요.')
+            return
         app = self.app
         try:
             site = app.cb_daily_site.get().strip()
@@ -527,6 +530,9 @@ class InspectionBatch(ttk.LabelFrame):
         return shared
 
     def save(self):
+        if getattr(self.app, '_daily_edit_source', None) is not None:
+            messagebox.showwarning('기존 기록 수정', '기존 기록 수정과 신규 작업 일괄 저장을 함께 진행할 수 없습니다. 작업 목록과 수정 대상을 확인해주세요.')
+            return
         if self.editing is not None:
             messagebox.showwarning('작업 수정 중', '작업 담기를 눌러 수정 내용을 반영한 뒤 저장하세요.')
             return

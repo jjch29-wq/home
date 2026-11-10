@@ -1136,6 +1136,7 @@
 
     // Method Switching
     function switchMethod(method) {
+      const methodChanged = selectedMethod !== method;
       selectedMethod = method;
 
       document.querySelectorAll(".method-btn").forEach(btn => {
@@ -1205,7 +1206,7 @@
         document.getElementById("input-total-fee").value = 0;
       }
 
-      applyMethodDefaults(method);
+      if (methodChanged) applyMethodDefaults(method);
       if (!isManualQty) {
         updatePipeCalc();
       } else {
@@ -2558,10 +2559,8 @@
       if (r.unit_price) document.getElementById("input-unit-price").value = r.unit_price;
       if (r.travel_cost) document.getElementById("input-travel-cost").value = r.travel_cost;
       if (r.equip_main) setMainEquipItems(r.equip_main);
-      if (r.equip_aux) {
-        selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
-        updateAuxDisplay();
-      }
+      selectedAuxItems = new Set(parseAuxItems(r.equip_aux || ""));
+      updateAuxDisplay();
       if (r.qty !== undefined) {
         isManualQty = true;
         document.getElementById("input-qty").value = r.qty;

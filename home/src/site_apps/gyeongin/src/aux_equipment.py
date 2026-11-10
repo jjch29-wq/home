@@ -653,10 +653,12 @@ def value(app):
     return '; '.join(names(field.get())) if field is not None else ''
 
 
-def restore(app, text=''):
+def restore(app, text='', method=None):
     field = getattr(app, 'daily_aux_equipment_var', None)
     if field is not None:
         field.set('; '.join(names(text)))
+    if method is not None:
+        app._daily_equipment_method = str(method).strip().upper()
 
 
 def report_names(records):

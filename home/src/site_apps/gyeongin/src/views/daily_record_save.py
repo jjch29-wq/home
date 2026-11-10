@@ -46,6 +46,13 @@ def save_prepared(app, plan):
     lists = {name:list(getattr(app, name)) for name in ('sites', 'users', 'vehicles', 'daily_units', 'equipments')}
     try:
         if replace is not None:
+            # EntryTime is the cloud reconciliation identity, not the edit time.
+            original_time = snapshot.get('EntryTime')
+            if pd.notna(original_time) and str(original_time).strip():
+                plan = dict(plan)
+                plan['common_data'] = dict(plan.get('common_data', {}), EntryTime=original_time)
+                plan['records_to_save'] = [dict(record, EntryTime=original_time)
+                                           for record in plan['records_to_save']]
             app.daily_usage_df = app.daily_usage_df.drop(replace)
         count = app._commit_usage_plan(plan, auto_save=False)
         if not count or not app.save_data(require_primary=True):
