@@ -217,13 +217,8 @@ def push_record_to_web_app(
 ) -> Dict[str, Any]:
     """
     PC에서 작업 일보 수정/삭제/추가 내역을 Google Apps Script Web App에 실시간 Push
+    (requests 미설치 환경에서도 표준 라이브러리 urllib.request로 100% 작동 보장)
     """
-    try:
-        import requests
-    except ImportError:
-        logger.error("requests 라이브러리가 설치되지 않아 Push를 건너뜁니다.")
-        return {"status": "error", "message": "requests not installed"}
-
     cfg = load_sync_config()
     target_url = web_app_url or cfg.get("web_app_url")
     if not target_url:
@@ -235,7 +230,9 @@ def push_record_to_web_app(
         "row_data": clean_record_for_json(record)
     }
 
+    # 1. requests 시도
     try:
+        import requests
         resp = requests.post(
             target_url,
             json=payload,
@@ -245,6 +242,26 @@ def push_record_to_web_app(
         )
         data = resp.json()
         logger.info(f"구글 시트 Push 성공 ({action}): {data.get('message', '')}")
+        return data
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"requests 통한 Push 실패, urllib로 재시도: {e}")
+
+    # 2. urllib.request 표준 라이브러리 fallback
+    try:
+        req_data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(
+            target_url,
+            data=req_data,
+            headers={
+                "User-Agent": "Gyeongin-Office-PC/1.0",
+                "Content-Type": "application/json"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        logger.info(f"구글 시트 Push 성공 (urllib, {action}): {data.get('message', '')}")
         return data
     except Exception as e:
         logger.error(f"구글 시트 Push 실패 ({action}): {e}")
