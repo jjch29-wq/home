@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>경인사무소 24시간 모바일 현장 입력</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,11 +15,15 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
-    input, select, button {
+
+    input,
+    select,
+    button {
       touch-action: manipulation;
     }
   </style>
 </head>
+
 <body class="bg-slate-100 text-slate-800 pb-28">
 
   <!-- Mobile Top App Bar -->
@@ -30,7 +36,8 @@
       </div>
     </div>
     <div class="flex items-center space-x-1">
-      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500 text-white shadow-sm">
+      <span
+        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500 text-white shadow-sm">
         <span class="w-1.5 h-1.5 rounded-full bg-white mr-1 animate-pulse"></span> Google 24h
       </span>
     </div>
@@ -39,7 +46,8 @@
   <main class="max-w-md mx-auto p-4 space-y-4">
 
     <!-- Edit Mode Indicator Banner (Hidden by default) -->
-    <div id="edit-banner" class="hidden bg-amber-500 text-white rounded-2xl shadow-lg p-3.5 flex items-center justify-between border-2 border-amber-600 animate-pulse">
+    <div id="edit-banner"
+      class="hidden bg-amber-500 text-white rounded-2xl shadow-lg p-3.5 flex items-center justify-between border-2 border-amber-600 animate-pulse">
       <div class="flex items-center space-x-2">
         <i data-lucide="edit-3" class="w-5 h-5 text-amber-100"></i>
         <div>
@@ -47,7 +55,8 @@
           <p id="edit-banner-desc" class="text-xs text-amber-100 font-medium truncate max-w-[200px]"></p>
         </div>
       </div>
-      <button type="button" id="btn-cancel-edit" class="px-3 py-1.5 bg-white text-amber-800 rounded-xl text-xs font-black shadow hover:bg-amber-50 active:scale-95 transition">
+      <button type="button" id="btn-cancel-edit"
+        class="px-3 py-1.5 bg-white text-amber-800 rounded-xl text-xs font-black shadow hover:bg-amber-50 active:scale-95 transition">
         수정 취소
       </button>
     </div>
@@ -62,7 +71,8 @@
             <div class="text-[11px] text-amber-800">사무실 내근, 우천 대기, 안전교육, 휴무 1초 세팅</div>
           </div>
         </div>
-        <button type="button" onclick="openNoWorkModal()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-xl shadow-sm transition">
+        <button type="button" onclick="openNoWorkModal()"
+          class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-xl shadow-sm transition">
           선택하기
         </button>
       </div>
@@ -74,39 +84,46 @@
         <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
           <i data-lucide="building-2" class="w-4 h-4"></i> 거래처 및 공통 정보
         </span>
-        <span id="weekday-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-medium text-slate-600">오늘</span>
+        <span id="weekday-badge"
+          class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-medium text-slate-600">오늘</span>
       </div>
 
       <!-- 업체명(거래처) 선택 / 직접 입력 -->
       <div>
         <div class="flex items-center justify-between mb-1">
           <label class="block text-xs font-bold text-slate-700">업체명 (거래처)</label>
-          <button type="button" id="btn-toggle-custom-co" class="text-[11px] text-blue-600 font-semibold hover:underline">
+          <button type="button" id="btn-toggle-custom-co"
+            class="text-[11px] text-blue-600 font-semibold hover:underline">
             ✏️ 직접 입력
           </button>
         </div>
-        <select id="select-company" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <select id="select-company"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           <!-- Populated via JS -->
         </select>
-        <input type="text" id="input-custom-company" placeholder="신규 업체명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <input type="text" id="input-custom-company" placeholder="신규 업체명 직접 입력"
+          class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
       </div>
 
       <!-- 현장명 & 검사 일자 -->
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">현장명</label>
-          <input type="text" id="input-site-name" value="경인사무소" placeholder="현장명 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <input type="text" id="input-site-name" value="경인사무소" placeholder="현장명 기입"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">검사 일자</label>
-          <input type="date" id="input-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <input type="date" id="input-date"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
 
       <!-- 공사 구분 -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">공사/작업 구분</label>
-        <select id="select-loc-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <select id="select-loc-type"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           <option value="경인사무소" selected>경인사무소</option>
           <option value="일반배관">일반배관</option>
           <option value="플랜트">플랜트</option>
@@ -128,391 +145,455 @@
       <!-- Segmented Method Buttons (RT 기본) -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
-        <div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
-          <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
-          <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
-          <button type="button" data-method="MT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
-          <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
-          <button type="button" data-method="내근/대기" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
+          <div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
+            <button type="button" data-method="RT"
+              class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
+            <button type="button" data-method="PT"
+              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
+            <button type="button" data-method="MT"
+              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
+            <button type="button" data-method="PAUT"
+              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
+            <button type="button" data-method="내근/대기"
+              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
+          </div>
         </div>
-      </div>
 
-      <!-- 검사품명 -->
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
-          <button type="button" id="btn-toggle-custom-item" class="text-[11px] text-blue-600 font-semibold hover:underline">
-            ✏️ 직접 입력
-          </button>
-        </div>
-        <select id="select-item-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <!-- Populated via JS -->
-        </select>
-        <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력 (예: 저장탱크, 압력용기, H-Beam 등)" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
-      </div>
-
-      <!-- 자재명 -->
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
-          <button type="button" id="btn-toggle-custom-mat" class="text-[11px] text-blue-600 font-semibold hover:underline">
-            ✏️ 직접 입력
-          </button>
-        </div>
-        <select id="select-material" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <!-- Populated via JS -->
-        </select>
-        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
-      </div>
-
-      <!-- 적용코드 & 성적서번호 -->
-      <div class="grid grid-cols-2 gap-2">
+        <!-- 검사품명 -->
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
-          <select id="select-applied-code" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
+            <button type="button" id="btn-toggle-custom-item"
+              class="text-[11px] text-blue-600 font-semibold hover:underline">
+              ✏️ 직접 입력
+            </button>
+          </div>
+          <select id="select-item-name"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <!-- Populated via JS -->
           </select>
-          <input type="text" id="input-custom-code" placeholder="코드 직접 입력" class="hidden mt-1 w-full bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-xs font-semibold text-slate-800">
+          <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력 (예: 저장탱크, 압력용기, H-Beam 등)"
+            class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
         </div>
+
+        <!-- 자재명 -->
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
-          <input type="text" id="input-report-no" placeholder="성적서번호 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. 검사 물량 및 단가 산정 카드 -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-          <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
-        </span>
-        <button type="button" id="btn-toggle-pipe-calc" class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
-          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
-          <span id="pipe-calc-btn-text">배관 관경 계산기</span>
-        </button>
-      </div>
-
-      <!-- 배관 관경 자동 계산 영역 -->
-      <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
-            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 계산
-          </span>
-          <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">배관 검사 전용</span>
-        </div>
-
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
-          <select id="select-pipe" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
+            <button type="button" id="btn-toggle-custom-mat"
+              class="text-[11px] text-blue-600 font-semibold hover:underline">
+              ✏️ 직접 입력
+            </button>
+          </div>
+          <select id="select-material"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <!-- Populated via JS -->
           </select>
+          <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력"
+            class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
         </div>
 
-        <div id="rt-joints-box" class="space-y-2 pt-0.5">
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
-              <input type="number" id="input-ori-joints" value="1" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
-            <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
-              <input type="number" id="input-rep-joints" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            </div>
+        <!-- 적용코드 & 성적서번호 -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
+            <select id="select-applied-code"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <!-- Populated via JS -->
+            </select>
+            <input type="text" id="input-custom-code" placeholder="코드 직접 입력"
+              class="hidden mt-1 w-full bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-xs font-semibold text-slate-800">
           </div>
           <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
-            <input type="number" id="input-rej-qty" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <p class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1.5 rounded border border-emerald-100">
-              ※ RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도
-            </p>
+            <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
+            <input type="text" id="input-report-no" placeholder="성적서번호 기입"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 검사 물량 및 단가 산정 카드 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+            <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
+          </span>
+          <button type="button" id="btn-toggle-pipe-calc"
+            class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
+            <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+            <span id="pipe-calc-btn-text">배관 관경 계산기</span>
+          </button>
+        </div>
+
+        <!-- 배관 관경 자동 계산 영역 -->
+        <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
+              <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 계산
+            </span>
+            <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">배관 검사
+              전용</span>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+            <select id="select-pipe"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <!-- Populated via JS -->
+            </select>
+          </div>
+
+          <div id="rt-joints-box" class="space-y-2 pt-0.5">
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
+                <input type="number" id="input-ori-joints" value="1" min="0" step="1"
+                  class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              </div>
+              <div>
+                <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
+                <input type="number" id="input-rep-joints" value="0" min="0" step="1"
+                  class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
+              <input type="number" id="input-rej-qty" value="0" min="0" step="1"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <p
+                class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1.5 rounded border border-emerald-100">
+                ※ RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도
+              </p>
+            </div>
+          </div>
+
+          <div id="non-rt-joints-box" class="hidden">
+            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
+            <input type="number" id="input-joints" value="1" min="0.1" step="0.5"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           </div>
         </div>
 
-        <div id="non-rt-joints-box" class="hidden">
-          <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
-          <input type="number" id="input-joints" value="1" min="0.1" step="0.5" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <div id="non-pipe-banner"
+          class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+          <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
+          <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
+        </div>
+
+        <!-- 공통 수량 및 단위 -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
+            <input type="number" id="input-qty" value="3" min="0" step="0.01"
+              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
+            <select id="select-unit"
+              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <!-- Populated via JS -->
+            </select>
+          </div>
+        </div>
+
+        <!-- 단가 / 출장비 / 일식 -->
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
+            <input type="number" id="input-unit-price" value="25500" min="0" step="100"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
+            <input type="number" id="input-travel-cost" value="0" min="0" step="1000"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
+            <input type="text" id="input-lump-sum" placeholder="식대/일식"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+          </div>
+        </div>
+
+        <!-- Total Cost -->
+        <div
+          class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+          <div>
+            <p class="text-xs text-emerald-800 font-bold">총 검사비 (수량×단가+출장비)</p>
+            <p class="text-[10px] text-emerald-600">수치 수정 시 즉시 재계산</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <input type="number" id="input-total-fee" value="76500"
+              class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <span class="text-xs font-bold text-emerald-900">원</span>
+          </div>
+        </div>
+
+        <!-- Equipments -->
+        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
+            <select id="select-equip"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+              <!-- Populated via JS -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
+            <select id="select-aux-equip" onchange="checkCustomAux()"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+              <!-- Populated via JS -->
+            </select>
+            <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력"
+              class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
+          </div>
         </div>
       </div>
 
-      <div id="non-pipe-banner" class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
-        <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
-        <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
+      <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
+      <div id="rtk-card" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
+            <i data-lucide="scan-line" class="w-4 h-4"></i> RTK 결함 분류 (RT 매수)
+          </span>
+          <span class="text-xs font-bold text-purple-700">총계: <span id="rtk-total-badge">0</span> 매</span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
+            <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0"
+              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
+            <input type="number" id="rtk-density" min="0" step="1" placeholder="0"
+              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
+            <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0"
+              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
+            <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0"
+              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
+            <input type="number" id="rtk-handling" min="0" step="1" placeholder="0"
+              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
+            <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0"
+              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div class="col-span-2">
+            <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
+            <input type="number" id="rtk-etc" min="0" step="1" placeholder="0"
+              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          </div>
+          <div>
+            <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
+            <input type="number" id="rtk-total" readonly value="0"
+              class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
+          </div>
+        </div>
       </div>
 
-      <!-- 공통 수량 및 단위 -->
-      <div class="grid grid-cols-2 gap-2 pt-1">
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
-          <input type="number" id="input-qty" value="3" min="0" step="0.01" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
+      <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
+            <i data-lucide="flask-conical" class="w-4 h-4"></i> NDT 자재 소모량 (7종 약품)
+          </span>
+          <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
         </div>
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
-          <select id="select-unit" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <!-- Populated via JS -->
-          </select>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+            <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
+            <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0"
+              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+            <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
+            <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0"
+              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+            <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
+            <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0"
+              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+            <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
+            <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0"
+              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+            <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
+            <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0"
+              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          </div>
+          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+            <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
+            <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0"
+              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          </div>
+          <div
+            class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
+            <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
+            <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0"
+              class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          </div>
         </div>
       </div>
 
-      <!-- 단가 / 출장비 / 일식 -->
-      <div class="grid grid-cols-3 gap-2">
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
-          <input type="number" id="input-unit-price" value="25500" min="0" step="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+      <!-- 6. [PAUT / UT 전용] 안내 카드 -->
+      <div id="paut-guide-card"
+        class="hidden bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-center space-y-1">
+        <div class="flex justify-center text-blue-600">
+          <i data-lucide="info" class="w-5 h-5"></i>
         </div>
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
-          <input type="number" id="input-travel-cost" value="0" min="0" step="1000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-        </div>
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
-          <input type="text" id="input-lump-sum" placeholder="식대/일식" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-        </div>
+        <p class="text-xs font-bold text-blue-900">PAUT / UT 검사 안내</p>
+        <p class="text-[11px] text-blue-700 leading-relaxed">
+          PAUT 및 UT 검사는 NDT 소모 약품 및 RTK 결함 입력이 필요하지 않습니다. 특이사항은 하단의 비고(메모)를 활용해 주세요.
+        </p>
       </div>
 
-      <!-- Total Cost -->
-      <div class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-        <div>
-          <p class="text-xs text-emerald-800 font-bold">총 검사비 (수량×단가+출장비)</p>
-          <p class="text-[10px] text-emerald-600">수치 수정 시 즉시 재계산</p>
+      <!-- 7. 참여 작업자 및 OT 산정 카드 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+            <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
+          </span>
+          <button type="button" id="btn-batch-apply"
+            class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
+          </button>
         </div>
-        <div class="flex items-center gap-1.5">
-          <input type="number" id="input-total-fee" value="76500" class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <span class="text-xs font-bold text-emerald-900">원</span>
-        </div>
-      </div>
 
-      <!-- Equipments -->
-      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
-          <select id="select-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
-            <!-- Populated via JS -->
-          </select>
+        <div id="workers-container" class="space-y-3">
+          <!-- Worker rows dynamically inserted -->
         </div>
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
-          <select id="select-aux-equip" onchange="checkCustomAux()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
-            <!-- Populated via JS -->
-          </select>
-          <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
-        </div>
-      </div>
-    </div>
 
-    <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
-    <div id="rtk-card" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
-          <i data-lucide="scan-line" class="w-4 h-4"></i> RTK 결함 분류 (RT 매수)
-        </span>
-        <span class="text-xs font-bold text-purple-700">총계: <span id="rtk-total-badge">0</span> 매</span>
-      </div>
-
-      <div class="grid grid-cols-3 gap-2">
-        <div>
-          <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
-          <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
-          <input type="number" id="rtk-density" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
-          <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
-          <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
-          <input type="number" id="rtk-handling" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-        </div>
-        <div>
-          <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
-          <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-        </div>
-        <div class="col-span-2">
-          <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
-          <input type="number" id="rtk-etc" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-        </div>
-        <div>
-          <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
-          <input type="number" id="rtk-total" readonly value="0" class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
-        </div>
-      </div>
-    </div>
-
-    <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
-    <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
-          <i data-lucide="flask-conical" class="w-4 h-4"></i> NDT 자재 소모량 (7종 약품)
-        </span>
-        <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
-      </div>
-
-      <div class="grid grid-cols-2 gap-2">
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-          <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
-          <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-        </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-          <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
-          <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-        </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-          <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
-          <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-        </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-          <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
-          <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-        </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-          <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
-          <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-        </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-          <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
-          <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-        </div>
-        <div class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
-          <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
-          <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0" class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-        </div>
-      </div>
-    </div>
-
-    <!-- 6. [PAUT / UT 전용] 안내 카드 -->
-    <div id="paut-guide-card" class="hidden bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-center space-y-1">
-      <div class="flex justify-center text-blue-600">
-        <i data-lucide="info" class="w-5 h-5"></i>
-      </div>
-      <p class="text-xs font-bold text-blue-900">PAUT / UT 검사 안내</p>
-      <p class="text-[11px] text-blue-700 leading-relaxed">
-        PAUT 및 UT 검사는 NDT 소모 약품 및 RTK 결함 입력이 필요하지 않습니다. 특이사항은 하단의 비고(메모)를 활용해 주세요.
-      </p>
-    </div>
-
-    <!-- 7. 참여 작업자 및 OT 산정 카드 -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-          <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
-        </span>
-        <button type="button" id="btn-batch-apply" class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
-          <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
+        <button type="button" id="btn-add-worker"
+          class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
+          <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
         </button>
       </div>
 
-      <div id="workers-container" class="space-y-3">
-        <!-- Worker rows dynamically inserted -->
-      </div>
+      <!-- 8. 차량 점검 및 특이사항 (비고) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+            <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
+          </span>
+        </div>
 
-      <button type="button" id="btn-add-worker" class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
-        <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
-      </button>
-    </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
+            <select id="select-vehicle"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
+              <!-- Populated via JS -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
+            <input type="number" id="input-mileage" placeholder="예: 70"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
+          </div>
+        </div>
 
-    <!-- 8. 차량 점검 및 특이사항 (비고) -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
-        </span>
-      </div>
+        <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
+          <div class="flex justify-between items-center">
+            <span>차량 외관 / 청결도</span>
+            <span class="font-bold text-emerald-600">양호 (기본)</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span>청소 / 자물쇠 시건</span>
+            <span class="font-bold text-emerald-600">함 / 완료</span>
+          </div>
+        </div>
 
-      <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
-          <select id="select-vehicle" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
-            <!-- Populated via JS -->
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
-          <input type="number" id="input-mileage" placeholder="예: 70" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
+          <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
+          <input type="text" id="input-note" placeholder="특이사항 기입"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
         </div>
       </div>
 
-      <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
-        <div class="flex justify-between items-center">
-          <span>차량 외관 / 청결도</span>
-          <span class="font-bold text-emerald-600">양호 (기본)</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span>청소 / 자물쇠 시건</span>
-          <span class="font-bold text-emerald-600">함 / 완료</span>
-        </div>
-      </div>
-
-      <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
-        <input type="text" id="input-note" placeholder="특이사항 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
-      </div>
-    </div>
-
-    <!-- 9. Submit Button -->
-    <div class="pt-2">
-      <button type="button" id="btn-submit" class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
-        <i data-lucide="send" class="w-5 h-5"></i>
-        <span>구글 드라이브 클라우드에 24시간 작업 저장</span>
-      </button>
-    </div>
-
-    <!-- 10. 최근 저장된 내역 (실시간 리스트) -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-          <i data-lucide="history" class="w-4 h-4"></i> 구글 시트 저장 최근 내역
-        </span>
-        <button type="button" id="btn-refresh-history" class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5">
-          <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
+      <!-- 9. Submit Button -->
+      <div class="pt-2">
+        <button type="button" id="btn-submit"
+          class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+          <i data-lucide="send" class="w-5 h-5"></i>
+          <span>구글 드라이브 클라우드에 24시간 작업 저장</span>
         </button>
       </div>
 
-      <div id="recent-list" class="space-y-2">
-        <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
+      <!-- 10. 최근 저장된 내역 (실시간 리스트) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+            <i data-lucide="history" class="w-4 h-4"></i> 구글 시트 저장 최근 내역
+          </span>
+          <button type="button" id="btn-refresh-history"
+            class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
+          </button>
+        </div>
+
+        <div id="recent-list" class="space-y-2">
+          <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
+        </div>
       </div>
-    </div>
 
   </main>
 
   <!-- Modal: 현장 작업 없음 / 내근 선택 다이얼로그 -->
-  <div id="modal-no-work" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+  <div id="modal-no-work"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
     <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2">
         <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
           <span>⚡</span> 작업 없음 / 내근 빠른 세팅
         </h3>
-        <button type="button" onclick="closeNoWorkModal()" class="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
+        <button type="button" onclick="closeNoWorkModal()"
+          class="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
       </div>
       <p class="text-xs text-slate-500">
         현장 검사(NDT)가 없는 날에 해당하는 유형을 선택하시면 검사수량 0, 자재비 0원, 출퇴근(9h) 및 차량 안전점검이 자동 설정됩니다.
       </p>
       <div class="grid grid-cols-1 gap-2">
-        <button type="button" onclick="applyNoWorkSettings('사무실 내근 및 장비점검', '09:00~18:00', '내근/대기')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
+        <button type="button" onclick="applyNoWorkSettings('사무실 내근 및 장비점검', '09:00~18:00', '내근/대기')"
+          class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
           <div class="font-bold text-xs text-slate-800">🏢 사무실 내근 및 장비점검</div>
           <div class="text-[11px] text-slate-500 mt-0.5">정상 근무 09:00~18:00 (9h) · 차량 운행없음</div>
         </button>
-        <button type="button" onclick="applyNoWorkSettings('우천 대기', '09:00~18:00', '내근/대기')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
+        <button type="button" onclick="applyNoWorkSettings('우천 대기', '09:00~18:00', '내근/대기')"
+          class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
           <div class="font-bold text-xs text-slate-800">🌧️ 우천 대기</div>
           <div class="text-[11px] text-slate-500 mt-0.5">현장 우천/기상 대기 · 정상 근무 09:00~18:00 (9h)</div>
         </button>
-        <button type="button" onclick="applyNoWorkSettings('안전교육', '09:00~18:00', '내근/대기')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
+        <button type="button" onclick="applyNoWorkSettings('안전교육', '09:00~18:00', '내근/대기')"
+          class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition">
           <div class="font-bold text-xs text-slate-800">🦺 안전교육</div>
           <div class="text-[11px] text-slate-500 mt-0.5">안전보건 및 직무교육 이수 · 정상 근무 (9h)</div>
         </button>
-        <button type="button" onclick="applyNoWorkSettings('휴무', '0', '휴무')" class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 transition">
+        <button type="button" onclick="applyNoWorkSettings('휴무', '0', '휴무')"
+          class="w-full text-left p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 transition">
           <div class="font-bold text-xs text-slate-800">🏖️ 휴무 / 공휴일</div>
           <div class="text-[11px] text-slate-500 mt-0.5">근무시간 0h · 차량 시건 양호</div>
         </button>
       </div>
       <div class="pt-1">
-        <button type="button" onclick="closeNoWorkModal()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
+        <button type="button" onclick="closeNoWorkModal()"
+          class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
           닫기
         </button>
       </div>
@@ -520,7 +601,8 @@
   </div>
 
   <!-- Notification Toast -->
-  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
+  <div id="toast"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
     <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
     <span id="toast-msg">저장되었습니다.</span>
   </div>
@@ -555,10 +637,10 @@
 
     function applyNoWorkSettings(itemType, workHours, methodType) {
       closeNoWorkModal();
-      
+
       // 1. 방법 전환
       switchMethod(methodType || "내근/대기");
-      
+
       // 2. 품명 설정
       const itemSelect = document.getElementById("select-item-name");
       const customItem = document.getElementById("input-custom-item");
@@ -580,13 +662,13 @@
           customItem.value = "";
         }
       }
-      
+
       // 3. 자재 및 장비 설정
       const equipSelect = document.getElementById("select-equip");
       if (equipSelect) equipSelect.value = "해당없음";
       const matSelect = document.getElementById("select-material");
       if (matSelect) matSelect.value = "해당없음 (자재소모 약품 별도 기입)";
-      
+
       // 4. 수량, 단가, 검사비 0원
       isManualQty = true;
       document.getElementById("input-qty").value = 0;
@@ -594,13 +676,13 @@
       document.getElementById("input-travel-fee").value = 0;
       document.getElementById("input-total-fee").value = 0;
       document.getElementById("select-unit").value = "일";
-      
+
       // 5. 차량 점검: 운행거리 0, 운행없음
       const vehKm = document.getElementById("input-veh-mileage");
       if (vehKm) vehKm.value = 0;
       const vehMemo = document.getElementById("input-veh-memo");
       if (vehMemo) vehMemo.value = "운행없음 (시건 양호)";
-      
+
       // 6. 작업자 근무시간 설정
       document.querySelectorAll(".worker-row").forEach((row, idx) => {
         const timeInp = row.querySelector(".worker-time");
@@ -618,7 +700,7 @@
           }
         }
       });
-      
+
       showToast(`⚡ '${itemType}' 설정 완료! 저장 버튼을 누르시면 기록됩니다.`);
     }
 
@@ -641,7 +723,7 @@
       if (!inp.classList.contains("hidden")) inp.focus();
     });
 
-    document.getElementById("select-applied-code").addEventListener("change", function() {
+    document.getElementById("select-applied-code").addEventListener("change", function () {
       const customCode = document.getElementById("input-custom-code");
       if (this.value === "기타" || this.value === "직접 입력") {
         customCode.classList.remove("hidden");
@@ -670,7 +752,7 @@
     }
 
     // Inspection item name change handler
-    document.getElementById("select-item-name").addEventListener("change", function() {
+    document.getElementById("select-item-name").addEventListener("change", function () {
       const item = this.value;
       const banner = document.getElementById("non-pipe-banner");
       const isPipe = item === "Piping" || item === "Pipe";
@@ -716,9 +798,9 @@
             headers: { 'Content-Type': 'application/json' },
             body: isPost ? JSON.stringify({ action: action, ...payload }) : undefined
           })
-          .then(res => res.json())
-          .then(resolve)
-          .catch(reject);
+            .then(res => res.json())
+            .then(resolve)
+            .catch(reject);
         }
       });
     }
@@ -726,7 +808,7 @@
     async function loadConfig() {
       try {
         appConfig = await apiCall('getConfig');
-        
+
         // Companies
         const compSelect = document.getElementById("select-company");
         compSelect.innerHTML = appConfig.companies.map(c => `<option value="${c}">${c}</option>`).join("");
@@ -1176,7 +1258,7 @@
     window.recentRecordsList = [];
 
     // Start edit mode with full record population
-    window.startEditRecord = function(r) {
+    window.startEditRecord = function (r) {
       if (!r) return;
       try {
         currentEditingRecord = r;
@@ -1339,17 +1421,17 @@
       }
     };
 
-    window.startEditRecordByIndex = function(idx) {
+    window.startEditRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.startEditRecord(window.recentRecordsList[idx]);
     };
 
-    window.copyRecordByIndex = function(idx) {
+    window.copyRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.copyRecordToForm(window.recentRecordsList[idx]);
     };
 
-    window.deleteRecordByIndex = function(idx) {
+    window.deleteRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.deleteRecord(window.recentRecordsList[idx]);
     };
@@ -1375,7 +1457,7 @@
     });
 
     // Delete record with confirmation
-    window.deleteRecord = async function(r) {
+    window.deleteRecord = async function (r) {
       if (!r) return;
       const desc = `[${r.date} ${r.company} ${r.method} · ${r.item_name || 'Piping'}]`;
       if (!confirm(`${desc}\n해당 작업일보 내역을 정말 삭제하시겠습니까?\n\n※ 삭제된 내역은 스프레드시트에서 즉시 제거됩니다.`)) {
@@ -1451,7 +1533,7 @@
       }
     }
 
-    window.copyRecordToForm = function(r) {
+    window.copyRecordToForm = function (r) {
       if (!r) return;
       if (r.company) document.getElementById("select-company").value = r.company;
       if (r.method) switchMethod(r.method);
@@ -1481,4 +1563,5 @@
     lucide.createIcons();
   </script>
 </body>
+
 </html>

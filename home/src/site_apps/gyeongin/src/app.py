@@ -6070,6 +6070,8 @@ class MaterialManager:
             # Keep the newest row visible after refreshing.
             if self.tv_recent.get_children():
                 self.tv_recent.yview_moveto(0)
+                first_child = self.tv_recent.get_children()[0]
+                self.tv_recent.selection_set(first_child)
         except Exception as e:
             print(f"DEBUG: Error updating recent entries view: {e}")
 
@@ -6536,17 +6538,21 @@ class MaterialManager:
                     active_editor.ent_note.delete(0, tk.END)
                     active_editor.ent_note.insert(0, '운행없음 (시건 양호)')
 
-            # 작업자 1 기본 세팅 (비어있으면 기본 사용자 지정)
+            # 작업자 1 기본 세팅 (비어있으면 기본 사용자 지정 및 참여 체크)
             if hasattr(self, 'worker_groups') and self.worker_groups:
                 g0 = self.worker_groups[0]
+                if hasattr(g0, 'participation_var'):
+                    g0.participation_var.set(True)
                 if not g0.cb_name.get().strip() and hasattr(self, 'users') and self.users:
                     g0.cb_name.set(self.users[0])
-                if not g0.ent_worktime.get().strip():
-                    g0.ent_worktime.set('09:00~18:00')
                 if selected_meth == '휴무':
                     g0.cb_shift.set('휴무')
+                    g0.ent_worktime.delete(0, tk.END)
+                    g0.ent_worktime.insert(0, '')
                 else:
                     g0.cb_shift.set('주간')
+                    g0.ent_worktime.delete(0, tk.END)
+                    g0.ent_worktime.insert(0, '09:00~18:00')
                 g0.ent_ot.delete(0, tk.END)
                 g0.ent_ot.insert(0, '0')
 
@@ -11059,6 +11065,7 @@ class MaterialManager:
                 for key in list(getattr(self, 'memos', {}).keys()):
                     self.remove_box(key)
 
+                self._daily_recent_date_filter = None
                 self.update_daily_usage_view()
                 self.update_recent_entries_view()
                 self.refresh_inquiry_filters()

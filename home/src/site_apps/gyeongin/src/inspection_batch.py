@@ -184,6 +184,22 @@ def commit_plans(app, plans):
         count = sum(app._commit_usage_plan(plan, auto_save=False) for plan in plans)
         if not app.save_data(require_primary=True):
             raise RuntimeError('일괄 저장하지 못했습니다. 입력 목록은 유지됩니다. 파일 상태를 확인한 뒤 다시 저장하세요.')
+
+        # [경인 클라우드 실시간 Push] 구글 스프레드시트 웹앱으로 일괄 저장 내역 비동기 전송
+        try:
+            import threading
+            from site_apps.gyeongin.src.sync_google_sheet import push_record_to_web_app
+            all_records = []
+            for p in plans:
+                all_records.extend(p.get('records_to_save', []))
+            if all_records:
+                def _async_push():
+                    for rec in all_records:
+                        push_record_to_web_app(rec, action='save')
+                threading.Thread(target=_async_push, daemon=True).start()
+        except Exception:
+            pass
+
         return count
     except Exception:
         for name, value in frames.items():
@@ -564,6 +580,7 @@ class InspectionBatch(ttk.LabelFrame):
                 if (field.endswith('start_date') and shared['Date'] < widget.get_date()) or (
                         field.endswith('end_date') and shared['Date'] > widget.get_date()):
                     widget.set_date(shared['Date'])
+            self.app._daily_recent_date_filter = None
             for method in ('update_daily_usage_view', 'update_recent_entries_view', 'refresh_inquiry_filters', 'update_stock_view'):
                 getattr(self.app, method)()
         except Exception as exc:
