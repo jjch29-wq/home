@@ -145,416 +145,433 @@
       <!-- Segmented Method Buttons (RT 기본) -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
-          <div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
-            <button type="button" data-method="RT"
-              class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
-            <button type="button" data-method="PT"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
-            <button type="button" data-method="MT"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
-            <button type="button" data-method="PAUT"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
-            <button type="button" data-method="내근/대기"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
-          </div>
+        <div class="grid grid-cols-6 gap-1 p-1 bg-slate-100 rounded-xl" id="method-buttons">
+          <button type="button" data-method="RT"
+            class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
+          <button type="button" data-method="PAUT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
+          <button type="button" data-method="UT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">UT</button>
+          <button type="button" data-method="MT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
+          <button type="button" data-method="PT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
+          <button type="button" data-method="내근/대기"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
         </div>
+      </div>
 
-        <!-- 검사품명 -->
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
-            <button type="button" id="btn-toggle-custom-item"
-              class="text-[11px] text-blue-600 font-semibold hover:underline">
-              ✏️ 직접 입력
-            </button>
-          </div>
-          <select id="select-item-name"
-            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <!-- Populated via JS -->
-          </select>
-          <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력 (예: 저장탱크, 압력용기, H-Beam 등)"
-            class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      <!-- 검사품명 -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
+          <button type="button" id="btn-toggle-custom-item"
+            class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
         </div>
+        <select id="select-item-name"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <!-- Populated via JS -->
+        </select>
+        <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력 (예: 저장탱크, 압력용기, H-Beam 등)"
+          class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      </div>
 
-        <!-- 자재명 -->
+      <!-- 자재명 -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
+          <button type="button" id="btn-toggle-custom-mat"
+            class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
+        </div>
+        <select id="select-material"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <!-- Populated via JS -->
+        </select>
+        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력"
+          class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <!-- 적용코드 & 성적서번호 -->
+      <div class="grid grid-cols-2 gap-2">
         <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
-            <button type="button" id="btn-toggle-custom-mat"
-              class="text-[11px] text-blue-600 font-semibold hover:underline">
-              ✏️ 직접 입력
-            </button>
-          </div>
-          <select id="select-material"
+          <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
+          <select id="select-applied-code"
             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <!-- Populated via JS -->
           </select>
-          <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력"
-            class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <input type="text" id="input-custom-code" placeholder="코드 직접 입력"
+            class="hidden mt-1 w-full bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-xs font-semibold text-slate-800">
         </div>
-
-        <!-- 적용코드 & 성적서번호 -->
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
-            <select id="select-applied-code"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <!-- Populated via JS -->
-            </select>
-            <input type="text" id="input-custom-code" placeholder="코드 직접 입력"
-              class="hidden mt-1 w-full bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-xs font-semibold text-slate-800">
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
-            <input type="text" id="input-report-no" placeholder="성적서번호 기입"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
+          <input type="text" id="input-report-no" placeholder="성적서번호 기입"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
+    </div>
 
-      <!-- 3. 검사 물량 및 단가 산정 카드 -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-            <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
-          </span>
-          <button type="button" id="btn-toggle-pipe-calc"
-            class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
-            <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
-            <span id="pipe-calc-btn-text">배관 관경 계산기</span>
-          </button>
-        </div>
-
-        <!-- 배관 관경 자동 계산 영역 -->
-        <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
-              <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 계산
-            </span>
-            <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">배관 검사
-              전용</span>
-          </div>
-
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
-            <select id="select-pipe"
-              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <!-- Populated via JS -->
-            </select>
-          </div>
-
-          <div id="rt-joints-box" class="space-y-2 pt-0.5">
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
-                <input type="number" id="input-ori-joints" value="1" min="0" step="1"
-                  class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              </div>
-              <div>
-                <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
-                <input type="number" id="input-rep-joints" value="0" min="0" step="1"
-                  class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              </div>
-            </div>
-            <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
-              <input type="number" id="input-rej-qty" value="0" min="0" step="1"
-                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <p
-                class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1.5 rounded border border-emerald-100">
-                ※ RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도
-              </p>
-            </div>
-          </div>
-
-          <div id="non-rt-joints-box" class="hidden">
-            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
-            <input type="number" id="input-joints" value="1" min="0.1" step="0.5"
-              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-        </div>
-
-        <div id="non-pipe-banner"
-          class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
-          <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
-          <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
-        </div>
-
-        <!-- 공통 수량 및 단위 -->
-        <div class="grid grid-cols-2 gap-2 pt-1">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
-            <input type="number" id="input-qty" value="3" min="0" step="0.01"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
-            <select id="select-unit"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <!-- Populated via JS -->
-            </select>
-          </div>
-        </div>
-
-        <!-- 단가 / 출장비 / 일식 -->
-        <div class="grid grid-cols-3 gap-2">
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
-            <input type="number" id="input-unit-price" value="25500" min="0" step="100"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
-            <input type="number" id="input-travel-cost" value="0" min="0" step="1000"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
-            <input type="text" id="input-lump-sum" placeholder="식대/일식"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-          </div>
-        </div>
-
-        <!-- Total Cost -->
-        <div
-          class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-          <div>
-            <p class="text-xs text-emerald-800 font-bold">총 검사비 (수량×단가+출장비)</p>
-            <p class="text-[10px] text-emerald-600">수치 수정 시 즉시 재계산</p>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <input type="number" id="input-total-fee" value="76500"
-              class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <span class="text-xs font-bold text-emerald-900">원</span>
-          </div>
-        </div>
-
-        <!-- Equipments -->
-        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
-            <select id="select-equip"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
-              <!-- Populated via JS -->
-            </select>
-          </div>
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="block text-[11px] font-medium text-slate-500">보조 장비 / 프로브 (다중 선택)</label>
-              <span id="aux-badge-count" class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
-            </div>
-            <button type="button" onclick="openAuxModal()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
-              <span id="aux-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
-              <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
-            </button>
-            <input type="hidden" id="select-aux-equip" value="">
-            <input type="text" id="input-custom-aux" placeholder="직접 보조장비/프로브 입력 또는 수정" oninput="onCustomAuxInput()" class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
-      <div id="rtk-card" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
-            <i data-lucide="scan-line" class="w-4 h-4"></i> RTK 결함 분류 (RT 매수)
-          </span>
-          <span class="text-xs font-bold text-purple-700">총계: <span id="rtk-total-badge">0</span> 매</span>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2">
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
-            <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
-            <input type="number" id="rtk-density" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
-            <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
-            <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
-            <input type="number" id="rtk-handling" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
-            <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div class="col-span-2">
-            <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
-            <input type="number" id="rtk-etc" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
-            <input type="number" id="rtk-total" readonly value="0"
-              class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
-          </div>
-        </div>
-      </div>
-
-      <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
-      <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
-            <i data-lucide="flask-conical" class="w-4 h-4"></i> NDT 자재 소모량 (7종 약품)
-          </span>
-          <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
-            <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
-            <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
-            <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
-            <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
-            <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
-            <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div
-            class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
-            <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
-            <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0"
-              class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-        </div>
-      </div>
-
-      <!-- 6. [PAUT / UT 전용] 안내 카드 -->
-      <div id="paut-guide-card"
-        class="hidden bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-center space-y-1">
-        <div class="flex justify-center text-blue-600">
-          <i data-lucide="info" class="w-5 h-5"></i>
-        </div>
-        <p class="text-xs font-bold text-blue-900">PAUT / UT 검사 안내</p>
-        <p class="text-[11px] text-blue-700 leading-relaxed">
-          PAUT 및 UT 검사는 NDT 소모 약품 및 RTK 결함 입력이 필요하지 않습니다. 특이사항은 하단의 비고(메모)를 활용해 주세요.
-        </p>
-      </div>
-
-      <!-- 7. 참여 작업자 및 OT 산정 카드 -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-            <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
-          </span>
-          <button type="button" id="btn-batch-apply"
-            class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
-            <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
-          </button>
-        </div>
-
-        <div id="workers-container" class="space-y-3">
-          <!-- Worker rows dynamically inserted -->
-        </div>
-
-        <button type="button" id="btn-add-worker"
-          class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
-          <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
+    <!-- 3. 검사 물량 및 단가 산정 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+          <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
+        </span>
+        <button type="button" id="btn-toggle-pipe-calc"
+          class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
+          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+          <span id="pipe-calc-btn-text">배관 관경 계산기</span>
         </button>
       </div>
 
-      <!-- 8. 차량 점검 및 특이사항 (비고) -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-            <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
+      <!-- 배관 관경 자동 계산 영역 -->
+      <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
+            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 계산
           </span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
-            <select id="select-vehicle"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
-              <!-- Populated via JS -->
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
-            <input type="number" id="input-mileage" placeholder="예: 70"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
-          </div>
-        </div>
-
-        <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
-          <div class="flex justify-between items-center">
-            <span>차량 외관 / 청결도</span>
-            <span class="font-bold text-emerald-600">양호 (기본)</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span>청소 / 자물쇠 시건</span>
-            <span class="font-bold text-emerald-600">함 / 완료</span>
-          </div>
+          <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">배관 검사
+            전용</span>
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
-          <input type="text" id="input-note" placeholder="특이사항 기입"
-            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+          <select id="select-pipe"
+            class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <div id="rt-joints-box" class="space-y-2 pt-0.5">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
+              <input type="number" id="input-ori-joints" value="1" min="0" step="1"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
+              <input type="number" id="input-rep-joints" value="0" min="0" step="1"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
+            <input type="number" id="input-rej-qty" value="0" min="0" step="1"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <p
+              class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1.5 rounded border border-emerald-100">
+              ※ RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도
+            </p>
+          </div>
+        </div>
+
+        <div id="non-rt-joints-box" class="hidden">
+          <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
+          <input type="number" id="input-joints" value="1" min="0.1" step="0.5"
+            class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
 
-      <!-- 9. Submit Button -->
-      <div class="pt-2">
-        <button type="button" id="btn-submit"
-          class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
-          <i data-lucide="send" class="w-5 h-5"></i>
-          <span>구글 드라이브 클라우드에 24시간 작업 저장</span>
+      <div id="non-pipe-banner"
+        class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+        <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
+        <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
+      </div>
+
+      <!-- 공통 수량 및 단위 -->
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
+          <input type="number" id="input-qty" value="3" min="0" step="0.01"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
+          <select id="select-unit"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+      </div>
+
+      <!-- 단가 / 출장비 / 일식 -->
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
+          <input type="number" id="input-unit-price" value="25500" min="0" step="100"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
+          <input type="number" id="input-travel-cost" value="0" min="0" step="1000"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
+          <input type="text" id="input-lump-sum" placeholder="식대/일식"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Total Cost -->
+      <div
+        class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-emerald-800 font-bold">총 검사비 (수량×단가+출장비)</p>
+          <p class="text-[10px] text-emerald-600">수치 수정 시 즉시 재계산</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input type="number" id="input-total-fee" value="76500"
+            class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <span class="text-xs font-bold text-emerald-900">원</span>
+        </div>
+      </div>
+
+      <!-- Equipments -->
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
+          <select id="select-equip"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+            <!-- Populated via JS -->
+          </select>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-medium text-slate-500">주 장비 (다중 선택)</label>
+            <span id="main-equip-badge-count"
+              class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
+          </div>
+          <button type="button" onclick="openMainEquipModal()"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
+            <span id="main-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
+            <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
+          </button>
+          <input type="hidden" id="select-equip" value="">
+          <input type="text" id="input-custom-main-equip" placeholder="직접 주 장비 입력 또는 수정"
+            oninput="onCustomMainEquipInput()"
+            class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-medium text-slate-500">보조 장비 / 프로브 (다중 선택)</label>
+            <span id="aux-badge-count"
+              class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
+          </div>
+          <button type="button" onclick="openAuxModal()"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
+            <span id="aux-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
+            <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
+          </button>
+          <input type="hidden" id="select-aux-equip" value="">
+          <input type="text" id="input-custom-aux" placeholder="직접 보조장비/프로브 입력 또는 수정" oninput="onCustomAuxInput()"
+            class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
+    <div id="rtk-card" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
+          <i data-lucide="scan-line" class="w-4 h-4"></i> RTK 결함 분류 (RT 매수)
+        </span>
+        <span class="text-xs font-bold text-purple-700">총계: <span id="rtk-total-badge">0</span> 매</span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
+          <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
+          <input type="number" id="rtk-density" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
+          <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
+          <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
+          <input type="number" id="rtk-handling" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
+          <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
+          <input type="number" id="rtk-etc" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
+          <input type="number" id="rtk-total" readonly value="0"
+            class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
+    <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
+          <i data-lucide="flask-conical" class="w-4 h-4"></i> NDT 자재 소모량 (7종 약품)
+        </span>
+        <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
+          <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
+          <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
+          <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
+          <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
+          <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
+          <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
+          <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
+          <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0"
+            class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. [PAUT / UT 전용] 안내 카드 -->
+    <div id="paut-guide-card" class="hidden bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-center space-y-1">
+      <div class="flex justify-center text-blue-600">
+        <i data-lucide="info" class="w-5 h-5"></i>
+      </div>
+      <p class="text-xs font-bold text-blue-900">PAUT / UT 검사 안내</p>
+      <p class="text-[11px] text-blue-700 leading-relaxed">
+        PAUT 및 UT 검사는 NDT 소모 약품 및 RTK 결함 입력이 필요하지 않습니다. 특이사항은 하단의 비고(메모)를 활용해 주세요.
+      </p>
+    </div>
+
+    <!-- 7. 참여 작업자 및 OT 산정 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+          <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
+        </span>
+        <button type="button" id="btn-batch-apply"
+          class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
         </button>
       </div>
 
-      <!-- 10. 최근 저장된 내역 (실시간 리스트) -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-            <i data-lucide="history" class="w-4 h-4"></i> 구글 시트 저장 최근 내역
-          </span>
-          <button type="button" id="btn-refresh-history"
-            class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5">
-            <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
-          </button>
-        </div>
+      <div id="workers-container" class="space-y-3">
+        <!-- Worker rows dynamically inserted -->
+      </div>
 
-        <div id="recent-list" class="space-y-2">
-          <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
+      <button type="button" id="btn-add-worker"
+        class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
+        <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
+      </button>
+    </div>
+
+    <!-- 8. 차량 점검 및 특이사항 (비고) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
+        </span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
+          <select id="select-vehicle"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
+          <input type="number" id="input-mileage" placeholder="예: 70"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
         </div>
       </div>
+
+      <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
+        <div class="flex justify-between items-center">
+          <span>차량 외관 / 청결도</span>
+          <span class="font-bold text-emerald-600">양호 (기본)</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>청소 / 자물쇠 시건</span>
+          <span class="font-bold text-emerald-600">함 / 완료</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
+        <input type="text" id="input-note" placeholder="특이사항 기입"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
+      </div>
+    </div>
+
+    <!-- 9. Submit Button -->
+    <div class="pt-2">
+      <button type="button" id="btn-submit"
+        class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-5 h-5"></i>
+        <span>구글 드라이브 클라우드에 24시간 작업 저장</span>
+      </button>
+    </div>
+
+    <!-- 10. 최근 저장된 내역 (실시간 리스트) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+          <i data-lucide="history" class="w-4 h-4"></i> 구글 시트 저장 최근 내역
+        </span>
+        <button type="button" id="btn-refresh-history"
+          class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5">
+          <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
+        </button>
+      </div>
+
+      <div id="recent-list" class="space-y-2">
+        <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
+      </div>
+    </div>
 
   </main>
 
@@ -611,8 +628,10 @@
   </div>
 
   <!-- 보조장비 / 프로브 다중 선택 모달 -->
-  <div id="aux-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+  <div id="aux-modal"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
       <!-- 헤더 -->
       <div class="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
         <div>
@@ -622,22 +641,39 @@
           </h3>
           <p class="text-[11px] text-slate-500">현장에서 사용하는 장비/프로브를 체크하세요 (여러 개 선택 가능)</p>
         </div>
-        <button type="button" onclick="closeAuxModal()" class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">✕</button>
+        <button type="button" onclick="closeAuxModal()"
+          class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">✕</button>
       </div>
 
       <!-- 방법 필터 탭 & 검색 -->
       <div class="p-3 border-b border-slate-100 space-y-2 bg-white">
         <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar" id="aux-filter-tabs">
-          <button type="button" onclick="setAuxFilter('CURRENT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0" data-tab="CURRENT">현재방법</button>
-          <button type="button" onclick="setAuxFilter('ALL')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="ALL">전체</button>
-          <button type="button" onclick="setAuxFilter('PAUT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="PAUT">PAUT</button>
-          <button type="button" onclick="setAuxFilter('UT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="UT">UT</button>
-          <button type="button" onclick="setAuxFilter('RT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="RT">RT</button>
-          <button type="button" onclick="setAuxFilter('MT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="MT">MT</button>
-          <button type="button" onclick="setAuxFilter('PT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="PT">PT</button>
+          <button type="button" onclick="setAuxFilter('CURRENT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0"
+            data-tab="CURRENT">현재방법</button>
+          <button type="button" onclick="setAuxFilter('ALL')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="ALL">전체</button>
+          <button type="button" onclick="setAuxFilter('PAUT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="PAUT">PAUT</button>
+          <button type="button" onclick="setAuxFilter('UT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="UT">UT</button>
+          <button type="button" onclick="setAuxFilter('RT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="RT">RT</button>
+          <button type="button" onclick="setAuxFilter('MT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="MT">MT</button>
+          <button type="button" onclick="setAuxFilter('PT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="PT">PT</button>
         </div>
         <div class="relative">
-          <input type="text" id="aux-search-input" oninput="renderAuxItems()" placeholder="🔍 장비명, 프로브, 웨지 검색 (예: 70, A2, 콜리, 스캐너...)" class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
+          <input type="text" id="aux-search-input" oninput="renderAuxItems()"
+            placeholder="🔍 장비명, 프로브, 모델명, 시리얼번호(S/N) 검색 (예: S1599, 56923, 7334, NW1085...)"
+            class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
         </div>
       </div>
 
@@ -652,8 +688,85 @@
           선택: <span id="aux-selected-count" class="font-bold text-blue-600">0</span>개
         </div>
         <div class="flex items-center gap-2">
-          <button type="button" onclick="clearAuxSelections()" class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl hover:bg-slate-300">초기화</button>
-          <button type="button" onclick="applyAuxSelections()" class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm">선택 완료</button>
+          <button type="button" onclick="clearAuxSelections()"
+            class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl hover:bg-slate-300">초기화</button>
+          <button type="button" onclick="applyAuxSelections()"
+            class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm">선택
+            완료</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 주 장비 다중 선택 모달 -->
+  <div id="main-equip-modal"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+      <!-- 헤더 -->
+      <div class="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+            <i data-lucide="cpu" class="w-4 h-4 text-blue-600"></i>
+            주 장비 다중 선택 (시리얼번호 S/N)
+          </h3>
+          <p class="text-[11px] text-slate-500">현장에서 사용하는 주 장비를 체크하세요 (여러 개 선택 가능)</p>
+        </div>
+        <button type="button" onclick="closeMainEquipModal()"
+          class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">✕</button>
+      </div>
+
+      <!-- 방법 필터 탭 & 검색 -->
+      <div class="p-3 border-b border-slate-100 space-y-2 bg-white">
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar" id="main-equip-filter-tabs">
+          <button type="button" onclick="setMainEquipFilter('CURRENT')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0"
+            data-tab="CURRENT">현재방법</button>
+          <button type="button" onclick="setMainEquipFilter('ALL')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="ALL">전체</button>
+          <button type="button" onclick="setMainEquipFilter('PAUT')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="PAUT">PAUT</button>
+          <button type="button" onclick="setMainEquipFilter('UT')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="UT">UT</button>
+          <button type="button" onclick="setMainEquipFilter('RT')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="RT">RT</button>
+          <button type="button" onclick="setMainEquipFilter('MT')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="MT">MT</button>
+          <button type="button" onclick="setMainEquipFilter('PT')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="PT">PT</button>
+          <button type="button" onclick="setMainEquipFilter('기타')"
+            class="main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="기타">기타</button>
+        </div>
+        <div class="relative">
+          <input type="text" id="main-equip-search-input" oninput="renderMainEquipItems()"
+            placeholder="🔍 주 장비명, 모델명, 시리얼번호(S/N) 검색 (예: OMNI2, I000760, D10692, NW0453...)"
+            class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
+        </div>
+      </div>
+
+      <!-- 아이템 체크 리스트 -->
+      <div id="main-equip-items-container" class="flex-1 overflow-y-auto p-3 space-y-1.5 max-h-[48vh]">
+        <!-- Dynamic check items -->
+      </div>
+
+      <!-- 하단 액션 버튼 -->
+      <div class="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+        <div class="text-xs text-slate-600 font-medium">
+          선택: <span id="main-equip-selected-count" class="font-bold text-blue-600">0</span>개
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="clearMainEquipSelections()"
+            class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl hover:bg-slate-300">초기화</button>
+          <button type="button" onclick="applyMainEquipSelections()"
+            class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm">선택
+            완료</button>
         </div>
       </div>
     </div>
@@ -718,6 +831,12 @@
       // 3. 자재 및 장비 설정
       const equipSelect = document.getElementById("select-equip");
       if (equipSelect) equipSelect.value = "해당없음";
+      if (typeof setMainEquipItems === "function") {
+        setMainEquipItems("해당없음");
+      } else {
+        const equipSelect = document.getElementById("select-equip");
+        if (equipSelect) equipSelect.value = "해당없음";
+      }
       const matSelect = document.getElementById("select-material");
       if (matSelect) matSelect.value = "해당없음 (자재소모 약품 별도 기입)";
 
@@ -725,7 +844,8 @@
       isManualQty = true;
       document.getElementById("input-qty").value = 0;
       document.getElementById("input-unit-price").value = 0;
-      document.getElementById("input-travel-fee").value = 0;
+      const travelEl = document.getElementById("input-travel-cost");
+      if (travelEl) travelEl.value = 0;
       document.getElementById("input-total-fee").value = 0;
       document.getElementById("select-unit").value = "일";
 
@@ -883,6 +1003,7 @@
 
         // Equipments & Vehicles
         document.getElementById("select-equip").innerHTML = appConfig.equipments.map(e => `<option value="${e}">${e}</option>`).join("");
+        // Vehicles
         document.getElementById("select-vehicle").innerHTML = appConfig.vehicles.map(v => `<option value="${v}">${v}</option>`).join("");
 
         initDefaultWorkers();
@@ -1069,14 +1190,14 @@
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = method === "MT" ? "P,M,I/D" : "M";
         document.getElementById("input-unit-price").value = 4200;
-      } else if (method === "PAUT") {
+      } else if (method === "PAUT" || method === "UT") {
         rtkCard.classList.add("hidden");
         chemCard.classList.add("hidden");
         pautCard.classList.remove("hidden");
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = "M";
-        document.getElementById("input-unit-price").value = 18500;
+        document.getElementById("input-unit-price").value = (method === "PAUT") ? 18500 : 9300;
       } else if (method === "내근/대기" || method === "휴무") {
         rtkCard.classList.add("hidden");
         chemCard.classList.add("hidden");
@@ -1086,7 +1207,8 @@
         unitSelect.value = "일";
         document.getElementById("input-unit-price").value = 0;
         document.getElementById("input-qty").value = 0;
-        document.getElementById("input-travel-fee").value = 0;
+        const travelEl = document.getElementById("input-travel-cost");
+        if (travelEl) travelEl.value = 0;
         document.getElementById("input-total-fee").value = 0;
       }
 
@@ -1106,49 +1228,414 @@
     let activeAuxFilter = 'CURRENT';
 
     const AUX_MASTER_DATA = {
-      PAUT: [
+      "PAUT": [
         "PAUT SCANNER (MANUAL)",
-        "MICROBE (스캐너 Body-137331, Encoder-136861)",
-        "COBRA (스캐너 139310)",
-        "PAUT PROBE 5L64-A2",
-        "PAUT PROBE 2.25L64-A2",
-        "PAUT PROBE 7.5CCEV35-16-A15",
-        "PAUT PROBE 5L32-A31",
-        "PAUT WEDGE SA2-N55S-IHC",
-        "PAUT WEDGE SA2-OL-IHC",
-        "PAUT WEDGE SA15-N60S-IHC",
-        "PAUT WEDGE SA10-N55S",
-        "대비시험편 STB-A1"
+        "MICROBE 스캐너 (Body-137331, Encoder-136861)",
+        "COBRA 스캐너 (139310)",
+        "PAUT 스캐너 (133490)",
+        "PAUT PROBE(A2) 2.25L64-0.75*12-D62-U-110-2 (GBA008)",
+        "PAUT PROBE(A2) 2.25L64-0.75*12-D62-U-110-2 (GBA009)",
+        "PAUT PROBE(A2) 2.25L64-A2 (P3378)",
+        "PAUT PROBE(A2) 2.25L64-A2 (R0080)",
+        "PAUT PROBE(A2) 5L64-06*10-D62-U-110-2.0-P1 (GBA011)",
+        "PAUT PROBE(A2) 5L64-A2 (S1599)",
+        "PAUT PROBE(A2) 5L64-A2 (S1694)",
+        "PAUT PROBE(A2) 5L64-A2 (S5225)",
+        "PAUT PROBE(A15) 7.5CCEV35-16-A15 (V4063)",
+        "PAUT PROBE(A15) 7.5CCEV35 (V4109)",
+        "PAUT PROBE(A25) XAAB-10882 (W2479)",
+        "PAUT PROBE(A25) 4DL16-12X5-A25 (U3188)",
+        "PAUT PROBE(A31) 5L32-A31 (P4301)",
+        "PAUT PROBE(A25) 5DL16-12X5-A25-P-2.5-OM (Y1193)",
+        "PAUT PROBE(A10) 5L16-A10 (S1873)",
+        "PAUT PROBE(A32) 5L64-32X10-A32 (U1462)",
+        "PAUT PROBE(A32) 5L64-32X10-A32 (U14651)",
+        "엔코더(PAUT) COBRA-SP-ENC (25A2505)",
+        "엔코더(PAUT) (소형 2EA, 대형 2EA)",
+        "엔코더(PAUT) CKS007 (135275)",
+        "엔코더(PAUT) CKS007 (136682)",
+        "케이블(PAUT) (140828-03)",
+        "채널분배기(PAUT) (QC-008086)",
+        "채널분배기(PAUT) OMNI-A-ADP05 (974106-03)",
+        "채널분배기(PAUT) (1011294-01)",
+        "모듈(PAUT) Omni-M-PA32 (OMNI-600336)",
+        "TomoView Lock Key (1930372742)",
+        "Index Control Bar (N/A(Bar 300mm))",
+        "엔코더(PAUT) (145552)",
+        "채널분배기(PAUT) (QC003541)",
+        "충전기 (70180-0004709)",
+        "충전기 (70180-0024164)",
+        "빔툴키 PRO H (MN720433)",
+        "OMNISCAN PC TOOLKIT / OMNIPC-A (134846330)",
+        "WELDSIGHT-A (1522192766)",
+        "채널분배기(PAUT) Omni-A2-SPLIT128 4UT (QC-080522)",
+        "엔코더(PAUT) (132801)",
+        "스캐너 (133490)",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC",
+        "PAUT PROBE-WEDGE(SA2) SA2-OL-IHC",
+        "PAUT PROBE-WEDGE(SA10) SA10-N55S-IHC",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IHC",
+        "PAUT PROBE-WEDGE(SA25) SA25-DL70L 평웻지",
+        "PAUT PROBE-WEDGE(SA25) SA25-DL70L AOD1.05",
+        "PAUT PROBE-WEDGE(SA25) SA25-DL70L AOD1.315",
+        "PAUT PROBE-WEDGE(SA25) SA25-DL70L AOD2.875",
+        "PAUT PROBE-WEDGE(SA25) SA25-DL70L AOD3.5",
+        "PAUT PROBE-WEDGE(SA31) SA31-N55S-IHC",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD8",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD10",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD12",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD14",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD16",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD18",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD20",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD24",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD30",
+        "PAUT PROBE-WEDGE(SA2) SA2-N55S-IHC-AOD22 DUAL",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD0.84",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD1.05",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD1.315",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD1.66",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD1.9",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD2.375",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD2.875",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD3.25",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD3.5",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD4",
+        "PAUT PROBE-WEDGE(SA15) SA15-N60S-IH-AOD4.5",
+        "PAUT PROBE-WEDGE(SA31) SA31-N55S-IHC-AOD8.625",
+        "PAUT PROBE-WEDGE(SA31) SA31-N55S-IHC-AOD12.75",
+        "PAUT PROBE-WEDGE(SD62) SD62-N55S-IHC-DUAL",
+        "PAUT PROBE-WEDGE(M15) M10-N55S-IHC(PS)",
+        "PAUT PROBE-WEDGE(M15) M15-N60S-IH",
+        "PAUT PROBE-WEDGE(M15) M15-N60S-IH-AOD1.66",
+        "PAUT PROBE-WEDGE(M15) M15-N60S-IH-AOD2.8",
+        "PAUT PROBE-WEDGE(SA31) N55S-I HC-PLATE",
+        "표준시험편 IIW TYPEⅠ(C/S) (V1-CS-25-D46)",
+        "표준시험편 IIW TYPEⅠ(STS304) (16-3060)",
+        "표준시험편 IIW TYPEⅠ(STS304) (A19374)",
+        "표준시험편 IIW (BS-2704)",
+        "표준시험편 ISO19675 PAUT CAL BLOCK",
+        "표준시험편 ISO19675 PAUT CAL BLOCK (56340)",
+        "표준시험편 STB-A1 (2)",
+        "표준시험편 STB-A1 (09148)",
+        "표준시험편 STB-A1 (1830)",
+        "표준시험편 STB-A1 (356)",
+        "표준시험편 STB-A1 (No.09159)",
+        "표준시험편 STB-A1 (244)",
+        "표준시험편 STB-A1 (257)"
       ],
-      UT: [
-        "UT 사각 PROBE 70˚ (2MHz 10*10)",
-        "UT 사각 PROBE 60˚ (2MHz 10*10)",
-        "UT 사각 PROBE 45˚ (2MHz 10*10)",
-        "UT 사각 PROBE 70˚ (4MHz 10*10)",
-        "수직 PROBE (2MHz Φ20)",
-        "수직 PROBE (4MHz Φ10)",
-        "대비시험편 STB-A1",
-        "대비시험편 STB-A2",
-        "대비시험편 RB-4",
+      "UT": [
+        "사각 PROBE(70˚) MWB70-2 (56923-5617)",
+        "사각 PROBE(70˚) MWB70-2 (56923-5124)",
+        "사각 PROBE(70˚) A5013 (572702)",
+        "사각 PROBE(70˚) 5C10X10A70 (AFPC017)",
+        "사각 PROBE(70˚) 5C10X10A70 (AFPC018)",
+        "사각 PROBE(70˚) 2C14X14A70 (ACUC002)",
+        "사각 PROBE(70˚) 2C16X16 A70 (ACUC020)",
+        "사각 PROBE(70˚) 5C10X10A70 (AFPB11)",
+        "사각 PROBE(70˚) D791-RM (556223)",
+        "사각 PROBE(70˚) A609-S (514619)",
+        "사각 PROBE(70˚) A609-S (16306)",
+        "사각 PROBE(70˚) D7908 (1271887)",
+        "사각 PROBE(70˚) MWB70-4 (56929-92244)",
+        "사각 PROBE(70˚) MWB70-4 (56929-92222)",
+        "사각 PROBE(70˚) MWB70-4 (56929-92258)",
+        "사각 PROBE(70˚) MWB70-4 (56929-40641)",
+        "사각 PROBE(70˚) SWB70-2 (58416-01771)",
+        "사각 PROBE(70˚) U-PRO70-4 (H5817)",
+        "사각 PROBE(70˚) MWB70-4 (56929-84005)",
+        "사각 PROBE(70˚) MWB70-4 (56929-71089)",
+        "사각 PROBE(70˚) TKS70-2 (ACUC19)",
+        "사각 PROBE(70˚) TKS70-4 (H0006)",
+        "사각 PROBE(70˚) KA4-70 (8×9) (H6323)",
+        "사각 PROBE(70˚) 5C10×10A70 (AFPC023)",
+        "사각 PROBE(70˚) MWB70-4 (8×9) (56929-59715)",
+        "사각 PROBE(70˚) WB70-2 (20×22) (57001-51556)",
+        "사각 PROBE(60˚) KL5-60 (H7793)",
+        "사각 PROBE(60˚) KL5-60 (H7794)",
+        "사각 PROBE(60˚) KL5-60 (H7798)",
+        "사각 PROBE(60˚) MWB60-2 (56922-05004)",
+        "사각 PROBE(60˚) MWB60-2 (57000-51382)",
+        "사각 PROBE(60˚) MWB60-4 (56928-17156)",
+        "사각 PROBE(60˚) MWB60-4 (56928-17283)",
+        "사각 PROBE(60˚) MWB60-4 (56928-35552)",
+        "사각 PROBE(60˚) MWB60-4 (56929-52302)",
+        "사각 PROBE(60˚) MWB60-4 (56928-17312)",
+        "사각 PROBE(60˚) TKS60 (ACUB001)",
+        "사각 PROBE(60˚) MWB60-4 (56928-57116)",
+        "사각 PROBE(60˚) MWB60-4 (56928-52153)",
+        "사각 PROBE(60˚) TKS60 (AFPB54)",
+        "사각 PROBE(60˚) TKS60 (ACUB17)",
+        "사각 PROBE(60˚) TKS60-2 (16×16) (ACUB016)",
+        "사각 PROBE(60˚) TKS5C5×5A60 (AFKA98)",
+        "사각 PROBE(45˚) 2Z10X10R (JR1399)",
+        "사각 PROBE(45˚) KL5-45 (H6005)",
+        "사각 PROBE(45˚) KL5-45 (H6006)",
+        "사각 PROBE(45˚) HS-7427-2/45 (H9163)",
+        "사각 PROBE(45˚) MWB45-2 (56921-6976)",
+        "사각 PROBE(45˚) MWB45-4 (56927-56190)",
+        "사각 PROBE(45˚) MWB45-4 (56927-58799)",
+        "사각 PROBE(45˚) MWB45-4 (56927-26651)",
+        "사각 PROBE(45˚) 2C16X16A45 (ACUA017)",
+        "사각 PROBE(45˚) 2C14X14A45 (ACUA001)",
+        "사각 PROBE(45˚) 2C10X10A45 (ACPA32)",
+        "사각 PROBE(45˚) 2C10X10A45 (ACPA33)",
+        "사각 PROBE(45˚) MWB45 (56927-35905)",
+        "사각 PROBE(45˚) U-PRO45 (D4065)",
+        "사각 PROBE(45˚) TKS45 (ACUC31)",
+        "사각 PROBE(45˚) TKS45 (ACUA009)",
+        "사각 PROBE(45˚) MWB45 (56927-58233)",
+        "사각 PROBE(45˚) MWB45 (56927-52290)",
+        "사각 PROBE(45˚) TKS5C5×5A45 (AFKA87)",
+        "사각 PROBE(30˚) TKS5C5×5A30 (AFKA79)",
+        "사각 PROBE(35˚) TKS5C5×5A35 (AFKA81)",
+        "사각 PROBE(40˚) TKS5C5×5A40 (AFKA84)",
+        "사각 PROBE(50˚) TKS5C5×5A50 (AFKA92)",
+        "사각 PROBE(55˚) TKS5C5×5A55 (AFKA93)",
+        "수직 PROBE(Φ5) 1C24N (NAGA67)",
+        "수직 PROBE(Φ5) A109-S (57744-54161)",
+        "수직 PROBE(Φ5) A109-S (57745-76316)",
+        "수직 PROBE(Φ5) 5C5N (57745-76327)",
+        "수직 PROBE(Φ10) MB2S (57749-52552)",
+        "수직 PROBE(Φ10) MB2S (57749-53039)",
+        "수직 PROBE(Φ10) MB2S (57749-75353)",
+        "수직 PROBE(Φ10) MB2S (57749-75360)",
+        "수직 PROBE(Φ10) MB4S (57749-75378)",
+        "수직 PROBE(Φ10) MB4S (502788)",
+        "수직 PROBE(Φ10) MB4S (503983)",
+        "수직 PROBE(Φ10) MB4S (NFBA 56)",
+        "수직 PROBE(Φ10) MB4S (NFGIA 15)",
+        "수직 PROBE(Φ20) 5C20N (57746-51530)",
+        "수직 PROBE(Φ24) B1S (I 130)",
+        "수직 PROBE(Φ24) B2S (I 037)",
+        "수직 PROBE(Φ24) B2S (I 138)",
+        "수직 PROBE(Φ24) B2S (57748-4571)",
+        "수직 PROBE(Φ24) SW2-24 (57748-52567)",
+        "수직 PROBE(Φ24) SW2-24 (57748-56177)",
+        "수직 PROBE(Φ24) SW2-24 (57748-56178)",
+        "수직 PROBE(Φ24) B4S (T029092)",
+        "수직 PROBE(Φ24) B4S (57746-51052)",
+        "수직 PROBE(Φ25) SLF4-25 (57745-07614)",
+        "수직 PROBE(Φ10) MB4S (57749-55037)",
+        "수직 PROBE(Φ10) MB4S (57749-74386)",
+        "수직 PROBE(Φ10) MB4S (57749-71405)",
+        "수직 PROBE(Φ10) MB2S (57748-4757)",
+        "수직 PROBE(Φ20) TKS5C20N (NFGIA20)",
+        "수직 PROBE(Φ24) B4S (57746-51384)",
+        "듀얼-사각 PROBE(70˚) 2C8ⅹ14LAD70 (DLANC006)",
+        "듀얼-사각 PROBE(기타) 2C6ⅹ18CRD (DCCRJA032)",
+        "듀얼-사각 PROBE(기타) 2C8ⅹ14CRD (DCCNA05)",
+        "듀얼-사각 PROBE(기타) TRCr2-AUST (12-1944)",
+        "듀얼-수직 PROBE(Φ5) MTD705 (869315)",
+        "듀얼-수직 PROBE(Φ10) MSEB4 (57462-78164)",
+        "듀얼-수직 PROBE(Φ25) SEB4 (57469-50297)",
+        "표준시험편 1mm~30mm 10단",
+        "표준시험편 ASME C - BCB",
+        "표준시험편 ASME RB FBH (Ø3) (SIS-GI-001~006)",
+        "표준시험편 ASME 감도교정",
+        "표준시험편 ASME 직진성 (SIS-CAL-2201)",
+        "표준시험편 AWS DS (35161)",
+        "표준시험편 AWS RC",
+        "표준시험편 BEARING 시험편 (4EA)",
+        "표준시험편 IIW TYPEⅠ(C/S) (V1-CS-25-D46)",
+        "표준시험편 IIW TYPEⅠ(STS304) (16-3060)",
+        "표준시험편 IIW TYPEⅠ(STS304) (A19374)",
+        "표준시험편 IIW (BS-2704)",
+        "표준시험편 ISO19675 PAUT CAL BLOCK",
+        "표준시험편 ISO19675 PAUT CAL BLOCK (56340)",
+        "표준시험편 SS0902 스텝웨지(20mm-4단)",
+        "표준시험편 ST1018스텝웨지(30mm-5단) (KDE21371)",
+        "표준시험편 STB G V2",
+        "표준시험편 STB G V3",
+        "표준시험편 STB GV15-1.4",
+        "표준시험편 STB GV15-1",
+        "표준시험편 STB GV15-2.8",
+        "표준시험편 STB GV15-2",
+        "표준시험편 STB GV15-4",
+        "표준시험편 STB GV15-5.6",
+        "표준시험편 STB GV5",
+        "표준시험편 STB GV8",
+        "표준시험편 STB N1",
+        "표준시험편 STB-A1 (2)",
+        "표준시험편 STB-A1 (09148)",
+        "표준시험편 STB-A1 (1830)",
+        "표준시험편 STB-A1 (356)",
+        "표준시험편 STB-A1 (No.09159)",
+        "표준시험편 STB-A1 (244)",
+        "표준시험편 STB-A1 (257)",
+        "표준시험편 STB-A2 (5180)",
+        "표준시험편 STB-A2 (J-1)",
+        "표준시험편 STB-A2 (293)",
+        "표준시험편 STB-A2 (299)",
+        "표준시험편 STB-A3 (4543)",
+        "표준시험편 V3 BLOCK (STS304) (001-211)",
+        "대비시험편 RB-4 (C/S) NO. 1 (16-2577)",
+        "대비시험편 RB-4 (C/S) NO. 2 (16-2096)",
+        "대비시험편 RB-4 (STS304) NO. 1 (18-3903)",
+        "대비시험편 RB-4 (STS304) NO. 2 (19-1518)",
+        "대비시험편 RB-A7",
+        "대비시험편 RB-RA",
+        "대비시험편 RB-RB",
+        "대비시험편 RB-RC",
+        "대비시험편 RB-RE(1), (2), (3)",
         "접촉매질(Couplant)"
       ],
-      RT: [
+      "RT": [
         "ADR, SURVEY, 콜리메타",
-        "콜리메타 (120˚)",
-        "콜리메타 (360˚)",
-        "R/CONTROL (25ft)",
-        "SURVEY METER",
-        "ALARM DOSIMETER (ADR)",
-        "라이트마킹"
+        "콜리메타(120˚) TSC-19P (7334)",
+        "콜리메타(120˚) TSC-19P (7726)",
+        "콜리메타(120˚) TSC-19P (7747)",
+        "콜리메타(120˚) TSC-19P (7765)",
+        "콜리메타(120˚) TC-120L (L 284)",
+        "콜리메타(120˚) TC-120L (L 285)",
+        "콜리메타(120˚) TC-120L (L 365)",
+        "콜리메타(120˚) TC-120L (L 368)",
+        "콜리메타(120˚) TC-120L (L 369)",
+        "콜리메타(360˚) TSC-19P (2104)",
+        "콜리메타(360˚) TSC-19P (8042)",
+        "콜리메타(360˚) TSC-19P (8125)",
+        "콜리메타(360˚) TSC-19 (NW074)",
+        "Survey Meter RDS-30 (371172)",
+        "Survey Meter RDS-30 (371175)",
+        "Survey Meter RDS-30 (371174)",
+        "Survey Meter RDS-30 (371176)",
+        "Survey Meter RDS-30 (371198)",
+        "Survey Meter RSM-100 (1001107)",
+        "Survey Meter RSM100E (1000248)",
+        "Survey Meter RSM-300P (FY12RP10LI)",
+        "Survey Meter RSM-300P (FY12RP10LJ)",
+        "Survey Meter RSM-100 (1000362)",
+        "Survey Meter MKS-05P (0907026)",
+        "Survey Meter MKS-05 (1004874)",
+        "Survey Meter RSM-100 (1000677)",
+        "Alarm Dosimeter PICO CATCH-100 (NW1085)",
+        "Alarm Dosimeter PICO CATCH-100 (NW1173)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2109)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2111)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2112)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2113)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2114)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2115)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2272)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2421)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2422)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2423)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2529)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2530)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2531)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2532)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2533)",
+        "Alarm Dosimeter SPD-9300 (NB010003)",
+        "Alarm Dosimeter SPD-9300 (NB010015)",
+        "Alarm Dosimeter SPD-9300 (NB010065)",
+        "Alarm Dosimeter SPD-9300 (NB010069)",
+        "Alarm Dosimeter SPD-9300 (NB10001)",
+        "Alarm Dosimeter SPD-9300 (NB10002)",
+        "Alarm Dosimeter CLOVER (DP05AC47DF)",
+        "Alarm Dosimeter CLOVER (DQ11AC49HJ)",
+        "Alarm Dosimeter CLOVER (FV20AC60FG)",
+        "Alarm Dosimeter CLOVER (FV20AC60FF)",
+        "Alarm Dosimeter CLOVER (DQ11AC49HL)",
+        "Alarm Dosimeter PICO CATCH-100 (NW1081)",
+        "Alarm Dosimeter PICO CATCH-100 (NW1087)",
+        "Alarm Dosimeter PICO CATCH-100 (NW1090)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2780)",
+        "Alarm Dosimeter PICO CATCH-100 (NW2127)",
+        "R/CONTROL (25ft) NRC-2 (NO.7)",
+        "R/CONTROL (25ft) NRC-2 (NW1170)",
+        "R/CONTROL (25ft) NRC-2 (NW2750)",
+        "R/CONTROL (25ft) KRC-2 (RA23793)",
+        "R/CONTROL (25ft) NRC-2 (1510028)",
+        "R/CONTROL (25ft) NRC-2 (2509014)",
+        "R/CONTROL (25ft) NRC-2 (2509016)",
+        "R/CONTROL (25ft) NRC-2 (2509017)",
+        "R/CONTROL (50ft) NRC-2 (1510027)",
+        "R/CONTROL (50ft) NRC-2 (1602031)",
+        "R/CONTROL (기타) NRC-2 (6.5m) (2208006)",
+        "R/CONTROL (기타) NRC-2 (8.5m) (2008022)",
+        "R/CONTROL (기타) NRC-2 (12m) (2006058)",
+        "R/CONTROL (기타) NRC-2 (12m) (2208004)",
+        "R/CONTROL (기타) KRC-2 (12m) (RA23406)",
+        "R/CONTROL (기타) KRC-2 (12m) (RA50078)",
+        "R/CONTROL (25ft) NRC-2 (2607008)",
+        "R/CONTROL (50ft) NRC-2 (2601004)",
+        "R/CONTROL (50ft) NRC-2 (2601005)",
+        "건조기 15형 (NW0413)",
+        "건조기 15형 (RD1120)",
+        "건조기 25형 (NW0130)",
+        "건조기 25형 (NW0219)",
+        "건조기 25형 (RD2242)",
+        "판독기 P35 (NW0455)",
+        "판독기 P35 (NW0401)",
+        "판독기 P35 (NW0231)",
+        "판독기 P35 (RV6594)",
+        "판독기 DF-14L (RV1036)",
+        "판독기 FD-2C15 (RV7364)",
+        "판독기 P35 (NW0463)",
+        "판독기 P35 (NW0522)",
+        "판독기 P35 (NW0441)",
+        "판독기 LUXA-D35 (063-50027)",
+        "판독기 DF-2D55 (RV1751)",
+        "판독기 P35 (RV1799)",
+        "판독기 FD-2C15 (RV7349)",
+        "판독기 P35 (NW0082)",
+        "판독기 P35 (NW0129)",
+        "농도계 PDA-100 (06011257)",
+        "농도계 PDA-100 (06014961)",
+        "농도계 PDA-100 (060150183)",
+        "농도계 PDA-100 (060150447)",
+        "농도계 PDA-100 (060150423)",
+        "라이트마킹",
+        "영상화장비 P35-14S (NW0401)",
+        "판독기 DF-4L (RV-1404)",
+        "크롤러 (45B5E8)",
+        "농도계 DT-300 PLUS (320644)",
+        "조도계 LS-150 (10004333)"
       ],
-      MT: [
+      "MT": [
         "자분살포기",
-        "Black Light (자외선등)",
-        "조도계",
-        "자계강도계",
-        "Pie Gauge"
+        "Black Light (베터리교체형) UV-LED 2P/SPR (NW0096)",
+        "Black Light (베터리교체형) UV-LED 2P/SPR (NW0083)",
+        "Black Light (베터리교체형) UV-LED 2P/SPR (NW0113)",
+        "Black Light (베터리교체형) NAWOO 2P (1969815)",
+        "Black Light (베터리교체형) NAWOO 2P (1969816)",
+        "Black Light (베터리교체형) 3P-BS (NW 0007)",
+        "Black Light (베터리교체형) EE-365 (2057820)",
+        "Black Light (베터리교체형) UV-LED 2P/SPR (NW 0180)",
+        "Black Light (베터리교체형) UV-LED 2P/SPR (NW 0065)",
+        "Black Light (베터리교체형) UV-LED 2P/SPR (NW 0196)",
+        "Black Light (요크부착형) UV-LED YOKE거치식 (1504050)",
+        "Black Light (요크부착형) UV-LED YOKE거치식 (1504062)",
+        "UV Meter YK-35UV (071550)",
+        "조도계 LUX Meter 1330A (180604411)",
+        "조도계 LUX Meter 1330A (130310985)",
+        "조도계 LUX Meter 1330A (160500222)",
+        "표면온도계 1300 (170900753)",
+        "표면온도계 TK-307A (E3102035580)",
+        "표면온도계 1300 (090204725)",
+        "표면온도계 1300 (160701448)",
+        "자장계 (바늘형) Model 20 (13-2393)",
+        "자장계 (바늘형) Model 20 (13-2464)",
+        "조도계 LS-150 (10004333)",
+        "KS-표준시험편 (A 형) A1-7/50 (0101002)",
+        "팔각시험편",
+        "리프팅파워블럭 (AC 형) 10lb(4.5kg) (NW0938)",
+        "리프팅파워블럭 (AC 형) 10lb(4.5kg) (MP19574)",
+        "리프팅파워블럭 (AC 형) 10lb(4.5kg) (NW0756)"
       ],
-      PT: [
+      "PT": [
+        "UV Meter YK-35UV (071550)",
+        "조도계 LUX Meter 1330A (180604411)",
+        "조도계 LUX Meter 1330A (130310985)",
+        "조도계 LUX Meter 1330A (160500222)",
+        "표면온도계 1300 (170900753)",
+        "표면온도계 TK-307A (E3102035580)",
+        "표면온도계 1300 (090204725)",
+        "표면온도계 1300 (160701448)",
+        "조도계 LS-150 (10004333)",
+        "KS-표준시험편 (A 형) A형 대비시험편 (NDI 980058)",
+        "KS-표준시험편 (A 형) A형 대비시험편 (614 A/B)",
+        "원형통 피 게이지 0.780~15.57mm/10PCS (GCN0002-052-1)",
         "조도계",
         "온습도계"
       ]
@@ -1243,16 +1730,20 @@
       if (!container) return;
       const keyword = (document.getElementById("aux-search-input")?.value || "").trim().toLowerCase();
 
-      const candidates = getAllAuxCandidates();
-      let filtered = candidates.filter(item => {
+      let baseCandidates = [];
+      if (activeAuxFilter === 'ALL') {
+        baseCandidates = getAllAuxCandidates();
+      } else {
+        const curM = selectedMethod || 'RT';
+        const targetM = (activeAuxFilter === 'CURRENT') ? curM : activeAuxFilter;
+        baseCandidates = AUX_MASTER_DATA[targetM] ? [...AUX_MASTER_DATA[targetM]] : [];
+      }
+
+      let filtered = baseCandidates.filter(item => {
         if (keyword && !item.toLowerCase().includes(keyword)) {
           return false;
         }
-        if (activeAuxFilter === 'ALL') return true;
-        const curM = selectedMethod || 'RT';
-        const targetM = (activeAuxFilter === 'CURRENT') ? curM : activeAuxFilter;
-        const allowed = AUX_MASTER_DATA[targetM] || [];
-        return allowed.includes(item) || item.includes(targetM) || selectedAuxItems.has(item);
+        return true;
       });
 
       const selectedCountEl = document.getElementById("aux-selected-count");
@@ -1296,225 +1787,656 @@
       closeAuxModal();
     }
 
-    function applyMethodDefaults(method) {
-      if (!appConfig || !appConfig.method_defaults || !appConfig.method_defaults[method]) return;
-      const def = appConfig.method_defaults[method];
-      if (def.equip_main) {
-        const eqSelect = document.getElementById("select-equip");
-        if (eqSelect) eqSelect.value = def.equip_main;
-      }
-      if (def.default_aux) {
-        selectedAuxItems = new Set(parseAuxItems(def.default_aux));
-        updateAuxDisplay();
-      }
-    }
-
-    // RTK Auto calculation
-    const rtkInputs = document.querySelectorAll(".rtk-inp");
-    rtkInputs.forEach(inp => {
-      inp.addEventListener("input", calcRtkTotal);
-    });
-
-    function calcRtkTotal() {
-      let sum = 0;
-      rtkInputs.forEach(i => {
-        sum += (parseFloat(i.value) || 0);
-      });
-      document.getElementById("rtk-total").value = sum;
-      document.getElementById("rtk-total-badge").textContent = sum;
-    }
-
-    // Pipe length lookup table (Size to Length)
-    const SIZE_LENGTH_TABLE = {
-      "15A": 0.0682, "20A": 0.0854, "25A": 0.1068, "32A": 0.1341, "40A": 0.1527,
-      "50A": 0.1897, "65A": 0.2397, "80A": 0.2796, "90A": 0.3198, "100A": 0.3591,
-      "125A": 0.4379, "150A": 0.5187, "200A": 0.6795, "250A": 0.8401, "300A": 1.0006,
-      "350A": 1.1184, "400A": 1.2763, "450A": 1.4362, "500A": 1.5959, "550A": 1.7557,
-      "600A": 1.9156, "650A": 2.0754, "700A": 2.2352, "750A": 2.3951, "800A": 2.5549,
-      "850A": 2.7147, "900A": 2.8746, "950A": 3.0344, "1000A": 3.1943, "1050A": 3.3541,
-      "1100A": 3.514, "1150A": 3.6738, "1200A": 3.8337
+    const MAIN_EQUIP_BY_METHOD = {
+      "PAUT": [
+        "PAUT MX2(OMNI2-103085)",
+        "PAUT MX2(OMNI2-100055)",
+        "PAUT MX2(OMNI2-103918)",
+        "PAUT X3(QC-0093084)"
+      ],
+      "UT": [
+        "Sitescan 150(I000760)",
+        "Sitescan 150(I000950)",
+        "Sitescan 140(1403264TC)",
+        "Masterscan 380(I002561)",
+        "Masterscan 380(I003201)",
+        "Masterscan 380(I005587)",
+        "Masterscan 380(I005593)",
+        "Epoch 650(150128312)",
+        "USM-35(8814A)",
+        "USM-GO(I001008)",
+        "두께측정기 37DL-PLUS(051301807)"
+      ],
+      "RT": [
+        "Se-75(880D D10692)",
+        "Se-75(880D D10626)",
+        "Se-75(880D D4507)",
+        "Se-75(880D D7748)",
+        "Ir-192(880D D10700)",
+        "Ir-192(880D D3086)",
+        "Ir-192(880D D4567)",
+        "Ir-192(880D D10674)",
+        "Ir-192(880S S1684)",
+        "방사선발생장치 300EGM2(FR0020-2)",
+        "방사선발생장치 RF300EGM2(GR0002-3)"
+      ],
+      "MT": [
+        "Yoke AC(MY-2 NW0453)",
+        "Yoke AC(MP-A3 MP31646)",
+        "Yoke AC(MY-2 NW6999)",
+        "Yoke AC(MP-A3 KI-01)",
+        "Yoke AC(MP-A3 NW1510097)",
+        "Yoke AC(MY-2 NW4424)",
+        "Yoke AC(MP-A3 KI-02)",
+        "Yoke AC(MY-2 NW7328)",
+        "Yoke AC(MY-2 NW8064)",
+        "Yoke AC(MY-2 NW5338)",
+        "Yoke AC(MY-2 NW4413)",
+        "Yoke AC(MY-2 NW1301154)",
+        "Yoke AC(MY-2 NW4700)",
+        "Yoke DC(MP-A2D MP3403)",
+        "Yoke DC(MP-A2D MP1336)",
+        "Yoke DC(MP-A2D MP9693)",
+        "Yoke DC(MP-A2D MP2458)",
+        "AC POWER SUPPLY DA-PB(NW0589)",
+        "AC POWER SUPPLY DA-PB(NW0604)",
+        "AC POWER SUPPLY DA-PB(NW0639)",
+        "AC POWER SUPPLY DA-PB(NW0718)",
+        "AC POWER SUPPLY DA-PB(NW0582)",
+        "AC POWER SUPPLY DA-PB(NW0230)"
+      ],
+      "PT": [
+        "PT 약품",
+        "해당없음"
+      ],
+      "기타": [
+        "합금분석기(X-ray) XL2 100G(200983)",
+        "합금분석기(RI) XLi818(24673)",
+        "경도계 MIC10(1-2129)",
+        "페이라트함량측정기 FMP30(160002524)",
+        "내시경장비 ER400(E30969R)",
+        "해당없음"
+      ],
+      "내근/대기": ["해당없음"],
+      "휴무": ["해당없음"]
     };
 
-    function updatePipeCalc() {
-      const pipe = document.getElementById("select-pipe").value;
-      let joints = 0;
-      if (selectedMethod === "RT") {
-        joints = parseFloat(document.getElementById("input-ori-joints").value) || 0;
+    let selectedMainEquipItems = new Set();
+    let activeMainEquipFilter = 'CURRENT';
+
+    function parseMainEquipItems(str) {
+      if (!str) return [];
+      return str.split(/[;,]/).map(s => s.trim()).filter(s => s && s.toLowerCase() !== '없음');
+    }
+
+    function setMainEquipItems(strOrArr) {
+      if (Array.isArray(strOrArr)) {
+        selectedMainEquipItems = new Set(strOrArr.map(s => String(s).trim()).filter(Boolean));
       } else {
-        joints = parseFloat(document.getElementById("input-joints").value) || 0;
+        selectedMainEquipItems = new Set(parseMainEquipItems(String(strOrArr || '')));
+      }
+      updateMainEquipDisplay();
+    }
+
+    function updateMainEquipDisplay() {
+      const arr = Array.from(selectedMainEquipItems);
+      const displayEl = document.getElementById("main-equip-display");
+      const countBadge = document.getElementById("main-equip-badge-count");
+      const hiddenInput = document.getElementById("select-equip");
+      const customInput = document.getElementById("input-custom-main-equip");
+
+      const joined = arr.join("; ");
+      if (hiddenInput) hiddenInput.value = joined;
+      if (customInput) customInput.value = joined;
+      const activeCount = arr.filter(x => x !== '해당없음').length;
+      if (countBadge) countBadge.textContent = `${activeCount}개 선택`;
+
+      if (displayEl) {
+        if (arr.length === 0) {
+          displayEl.textContent = "선택 클릭 (다중 선택 ▾)";
+          displayEl.className = "truncate text-slate-400 font-normal text-left";
+        } else {
+          displayEl.textContent = joined;
+          displayEl.className = "truncate text-slate-800 font-semibold text-left";
+        }
+      }
+    }
+
+    function onCustomMainEquipInput() {
+      const customVal = document.getElementById("input-custom-main-equip").value.trim();
+      const hiddenInput = document.getElementById("select-equip");
+      if (hiddenInput) hiddenInput.value = customVal;
+      selectedMainEquipItems = new Set(parseMainEquipItems(customVal));
+      const activeCount = Array.from(selectedMainEquipItems).filter(x => x !== '해당없음').length;
+      const countBadge = document.getElementById("main-equip-badge-count");
+      if (countBadge) countBadge.textContent = `${activeCount}개 선택`;
+      const displayEl = document.getElementById("main-equip-display");
+      if (displayEl) {
+        displayEl.textContent = customVal || "선택 클릭 (다중 선택 ▾)";
+        displayEl.className = customVal ? "truncate text-slate-800 font-semibold text-left" : "truncate text-slate-400 font-normal text-left";
+      }
+    }
+
+    function openMainEquipModal() {
+      const modal = document.getElementById("main-equip-modal");
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      activeMainEquipFilter = 'CURRENT';
+      setMainEquipFilter('CURRENT');
+      const searchInp = document.getElementById("main-equip-search-input");
+      if (searchInp) {
+        searchInp.value = "";
+        setTimeout(() => searchInp.focus(), 100);
+      }
+    }
+
+    function closeMainEquipModal() {
+      const modal = document.getElementById("main-equip-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function setMainEquipFilter(tab) {
+      activeMainEquipFilter = tab;
+      document.querySelectorAll(".main-equip-tab").forEach(btn => {
+        if (btn.dataset.tab === tab) {
+          btn.className = "main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0";
+        } else {
+          btn.className = "main-equip-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0";
+        }
+      });
+      renderMainEquipItems();
+    }
+
+    function getAllMainEquipCandidates() {
+      let list = [];
+      for (const m in MAIN_EQUIP_BY_METHOD) {
+        list.push(...MAIN_EQUIP_BY_METHOD[m]);
+      }
+      if (appConfig && appConfig.equipments) {
+        list.push(...appConfig.equipments);
+      }
+      list.push(...Array.from(selectedMainEquipItems));
+      return Array.from(new Set(list.map(s => s.trim()))).filter(s => s && s !== '없음');
+    }
+
+    function renderMainEquipItems() {
+      const container = document.getElementById("main-equip-items-container");
+      if (!container) return;
+      const keyword = (document.getElementById("main-equip-search-input")?.value || "").trim().toLowerCase();
+
+      let baseCandidates = [];
+      if (activeMainEquipFilter === 'ALL') {
+        baseCandidates = getAllMainEquipCandidates();
+      } else {
+        const curM = selectedMethod || 'RT';
+        const targetM = (activeMainEquipFilter === 'CURRENT') ? curM : activeMainEquipFilter;
+        baseCandidates = MAIN_EQUIP_BY_METHOD[targetM] ? [...MAIN_EQUIP_BY_METHOD[targetM]] : getAllMainEquipCandidates();
       }
 
-      let qty = 0;
-      let unit = "매";
+      let filtered = baseCandidates.filter(item => {
+        if (keyword && !item.toLowerCase().includes(keyword)) {
+          return false;
+        }
+        return true;
+      });
+
+      const selectedCountEl = document.getElementById("main-equip-selected-count");
+      if (selectedCountEl) selectedCountEl.textContent = selectedMainEquipItems.size;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 text-xs text-slate-400">일치하는 주 장비가 없습니다.<br>직접 입력하거나 '전체' 탭을 눌러보세요.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => {
+        const isChecked = selectedMainEquipItems.has(item);
+        const safeItem = item.replace(/'/g, "\\'");
+        return `
+          <label class="flex items-center gap-2.5 p-2 rounded-xl border ${isChecked ? 'bg-blue-50/80 border-blue-300' : 'bg-slate-50 border-slate-200'} cursor-pointer select-none transition-all">
+            <input type="checkbox" onchange="toggleMainEquipItem('${safeItem}', this.checked)" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-0">
+            <span class="text-xs ${isChecked ? 'font-bold text-blue-900' : 'text-slate-700'} flex-1 truncate">${item}</span>
+          </label>
+        `;
+      }).join("");
+    }
+
+    function toggleMainEquipItem(name, isChecked) {
+      if (name === '해당없음') {
+        if (isChecked) {
+          selectedMainEquipItems.clear();
+          selectedMainEquipItems.add('해당없음');
+        } else {
+          selectedMainEquipItems.delete('해당없음');
+        }
+      } else {
+        selectedMainEquipItems.delete('해당없음');
+        if (isChecked) {
+          selectedMainEquipItems.add(name);
+        } else {
+          selectedMainEquipItems.delete(name);
+        }
+      }
+      const selectedCountEl = document.getElementById("main-equip-selected-count");
+      if (selectedCountEl) selectedCountEl.textContent = selectedMainEquipItems.size;
+      renderMainEquipItems();
+    }
+
+    function clearMainEquipSelections() {
+      selectedMainEquipItems.clear();
+      renderMainEquipItems();
+    }
+
+    function applyMainEquipSelections() {
+      updateMainEquipDisplay();
+      closeMainEquipModal();
+    }
+
+    function applyMethodDefaults(method) {
+      const eqSelect = document.getElementById("select-equip");
+      const methodEqList = MAIN_EQUIP_BY_METHOD[method] || (appConfig && appConfig.equipments) || ["해당없음"];
+      if (eqSelect) {
+        eqSelect.innerHTML = methodEqList.map(e => `<option value="${e}">${e}</option>`).join("");
+      }
+      if (!appConfig || !appConfig.method_defaults || !appConfig.method_defaults[method]) {
+        if (eqSelect && methodEqList.length > 0) eqSelect.value = methodEqList[0];
+        if (methodEqList.length > 0) setMainEquipItems(methodEqList[0]);
+        selectedAuxItems = new Set();
+        updateAuxDisplay();
+        return;
+      }
+      const def = appConfig.method_defaults[method];
+      if (eqSelect && def.equip_main) {
+        eqSelect.value = def.equip_main;
+          if (def.equip_main)               setMainEquipItems(def.equip_mai              } else if (methodEqList.length >                  setMainEquipItems(methodEqLi        ;
+          }
+        if (def.def          ) {
+          selectedAuxItems = new Set(parseAuxItems(def.d          ux));
+          upda        isplay();           } else {
+          selectedAu           new Set();
+                te      isp      );
+        }
+      if (d      quip_main) {
+        setMainEquipItems(def.equip_main);
+        } else if (methodEqList.le         0) {
+        setMainEquipItems(methodEqList[      
+          
+      // RTK Auto calcula             const rt        s = document.querySelecto          tk-inp");
+      rtkInputs.forEach(i        {
+          inp.addEventListener("input", calcRtkTotal);
+                   function calcRtkTotal() {
+        let sum = 0;
+        r      put      rEach(i => {
+          sum += (parseFloat(i.v      ) || 0);
+        });
+               ent.getElementById("rtk-total").value = sum;
+        document.getElementByI        -total-badge").textContent = sum;
+      if (def.default_aux) {
+        selec        Items = new Set(parseAuxItems(def.default_aux));
+        updateAuxDisplay();
+           lse {
+        selectedAuxItems = new Set();
+        updateAuxDisplay();
+      }
+        
+      // Pipe length lookup table (Size to Length)
+      const SIZE_LENGTH_TABL                "15A": 0.0682, "20A": 0.0854, "25A": 0.1068, "32A": 0.1341, "40A": 0.1527,           "50A": 0.1897, "65A": 0.2397, "80A": 0.2796, "      : 0.      , "100A": 0.3591,
+        "1        0.4379, "150A": 0.5187, "200A": 0.6795, "250A": 0.8401, "30        .0006,
+        "         1.1184, "400A": 1.2763, "450A"          , "500A": 1.5959, "550A": 1.7557,
+        "600A": 1.9156, "650A": 2.0754, "70        .2352, "7          3951, "800A": 2.5549,
+        "850A": 2.7147, "900A": 2.8746, "950A": 3.0        100        .1943, "1050A        541,
+        "11        3.514, "1150A": 3.6738,         ": 3.8337
+      };
+    // RTK A          ulation
+              kInputs = document.          ectorAll(".rtk-inp");
+    rtkInputs.forEac        => {
+              dEventListener("input", calcRtkTotal);
+    });
+
+              on updatePipeCalc() {
+        const pipe = document.getElementById("select-pipe").value;
+            t joints = 0;
+        if (selectedMethod === "RT")               joints = parseFloat(document.getElementById("inp        -jo        .value) || 0;
+        } else {
+          joints =         loat(document.getElementById("input-joints").value) |               }
+    function calcRtkTotal() {
+      let sum = 0;
+             puts.forEach(i => {
+          su       (parseFloat(i.value) || 0);
+                  document.getElementById("rtk-total").value = sum;
+      document.ge        ntById("rtk-total-badge").textContent = sum;
+    }
+
+        let qty = 0;
+        let u        "매";
+        let unitPrice = 25500;
+    // Pipe length lookup table (Size to Length)
+            SIZE_LENGTH_TABLE = {
+      "15A": 0.0682, "20A": 0.0854,          0.1068, "32A": 0.1341, "40A": 0.1527,
+      "50A": 0.1897, "      : 0      7, "80A": 0.2796, "90A": 0.3198, "100A": 0.3591,
+      "125A": 0.4379, "15        .5187, "200A": 0.6795        A": 0.8401, "300A"      0006          "350A": 1.1184, "400A": 1.2763, "450A": 1.4362, "500A": 1.5959, "550A": 1.              "600A": 1.9156,        ": 2.0754, "700A":      352,      0A": 2.3951, "800A": 2.5549,
+      "850A": 2.7147, "900A": 2.8746, "950A":        4, "1000A": 3.1943, "        : 3.3541,
+      "1      ": 3.       "1150A": 3.6738, "1200A": 3.8337
+    };
+
+        if (selectedMethod ==        ) {
+          unit =                  unitPrice = 2      ;
+            qty = Math.round(joints * 3.0 * 10) / 10;
+        } else {
+          unit = (selectedMet      === "MT") ? "P,M,I/D" : "M";
+          unitPrice = (selectedMethod === "PAUT") ? 18500 : (sele      Method === "UT" ? 9300 : 4200);             const baseLen = SIZE_LENGTH_TABLE[pipe] || 0.8401;
+          qty = Math        (baseLen * joints * 10000) / 10000;
+        }
+
+            cument.getElementById        t-qty").value = qty;
+        docum        tEleme          select-unit").value = unit;
+        document.getElementById("in          -price").value = unitPrice;
+        recalculateTotalFee();
+    function updateP          ) {
+      const pipe = document.get          yId("select-pipe").value;
+      let joints = 0;
+      if (selectedM          = "RT") {
+        joints = parseFloat(document.getElementById("input-ori-joint          e) || 0;
+      } else {
+        joints =           at(document.getElementById("input-joints").value) || 0;
+      }
+
+          nction recalculateTotalFee() {
+        const qty = parseFloat(document.getEl          d("input-qty").value) || 0;
+        co          Price = parseFloat(document.getElementById("input-unit-price").value) ||              const travelCost = parseFloat(document.getElementById("input-travel-cost").          | 0;
+        const totalFee = Math.round(qty          rice + travelCost);
+        document.getElementById("input-total-fee").value = to                let qty = 0;
+      let u          ";
       let unitPrice = 25500;
 
-      if (selectedMethod === "RT") {
-        unit = "매";
+      if (selectedMethod === "RT")             unit = "매";
         unitPrice = 25500;
-        qty = Math.round(joints * 3.0 * 10) / 10;
+        qty = Math.round(joints *          0) / 10;
       } else {
-        unit = (selectedMethod === "MT") ? "P,M,I/D" : "M";
-        unitPrice = (selectedMethod === "PAUT") ? 18500 : 4200;
-        const baseLen = SIZE_LENGTH_TABLE[pipe] || 0.8401;
+        unit = (selectedMethod === "MT") ? "P,M,I/D" : "M"            unitPrice = (selectedMethod === "PAUT") ? 18500 : (selectedMethod === "          00 : 4200);
+        const baseLen = SIZE_LENGTH_TABLE[pipe]          01;
         qty = Math.round(baseLen * joints * 10000) / 10000;
       }
 
-      document.getElementById("input-qty").value = qty;
-      document.getElementById("select-unit").value = unit;
-      document.getElementById("input-unit-price").value = unitPrice;
+      document          entById("select-pipe").addEventListener("change", () => {
+        isManualQty = false;
+            datePipeCalc();
+      });
+      document.getElementById("input-ori-joints          entListener("input", () => {
+        isManualQty = false;
+        updatePipeCalc();
+                  document.getElementById("input-joints").addEventListener("in           => {
+        isManualQty = false;
+        updatePipeCalc();
+                  document.getElementById("input-qty").value = qty;
+      document.getElementById("sele          ).value = unit;
+      document.getElementById("inpu          rice").value = unitPrice;
       recalculateTotalFee();
     }
 
-    function recalculateTotalFee() {
-      const qty = parseFloat(document.getElementById("input-qty").value) || 0;
-      const unitPrice = parseFloat(document.getElementById("input-unit-price").value) || 0;
-      const travelCost = parseFloat(document.getElementById("input-travel-cost").value) || 0;
+               t.getElementById("input-qty").addEventListener("input", () => {
+        isMa          = true;
+        recalculateTotalFee();
+          ;
+      document.getElementById("input-unit-price").addEventListener          , recalculateTotalFee);
+      document.getElementById("input-tra          ").addEventListener("input", recalculateTotalFee);
+    func          alculateTotalFee() {
+      const qty = parseFloat(document.getElementById("input-qty").          | 0;
+      const unitPrice = parseFloat(document.getElementById("input-unit-price").val          ;
+      const travelCost = parseFloat(document.getElementById("input-travel-cost"           || 0;
       const totalFee = Math.round(qty * unitPrice + travelCost);
-      document.getElementById("input-total-fee").value = totalFee;
+      document.getElementById("input-total-fee").va          talFee;
     }
 
-    document.getElementById("select-pipe").addEventListener("change", () => {
+                record to Google Sheet
+      document.getElementById("btn-submit").addEventLi            ick", async () => {
+        const btn = document.get            d("btn-submit");
+        btn.disabled = true;
+        btn.classList.add("opacity-60");
+    documen            ntById("select-pipe").a            tener("change", () => {
+      isManualQty = false;
+                 eCalc();
+    });
+                etElementById("input-ori-joints").addEventListener("inp             {
       isManualQty = false;
       updatePipeCalc();
     });
-    document.getElementById("input-ori-joints").addEventListener("input", () => {
+    document.getElemen            ut-joints").addEventListener("input", () => {
       isManualQty = false;
-      updatePipeCalc();
-    });
-    document.getElementById("input-joints").addEventListener("input", () => {
-      isManualQty = false;
-      updatePipeCalc();
+               ipeCalc();
     });
 
-    document.getElementById("input-qty").addEventListener("input", () => {
+        try {
+          let company = document.getElementById("sel            y").value;
+          const customCo = document.getElementById("input-custom-comp            e.trim();
+          if (customCo) company = customCo;
+    document.getElementB            -qty").addEventListener("input", () => {
       isManualQty = true;
-      recalculateTotalFee();
+      recalcu            ee();
     });
-    document.getElementById("input-unit-price").addEventListener("input", recalculateTotalFee);
-    document.getElementById("input-travel-cost").addEventListener("input", recalculateTotalFee);
+    document.getElementById("input-unit-price").addEve            ("input", recalculateTotalFee);
+    document.getElementById("input-trave            ddEventListener("input", recalculateTotalFee);
 
-    // Save record to Google Sheet
-    document.getElementById("btn-submit").addEventListener("click", async () => {
+          let item_name = do            ElementById("select-item-name").value;
+          const customItem = document.getEl            "input-custom-item").value.trim();
+          if (customItem) item_name = customItem;
+              record to Google Sheet
+    document.getElementById("btn-submit").addEventListener            async () => {
       const btn = document.getElementById("btn-submit");
-      btn.disabled = true;
+      b            d = true;
       btn.classList.add("opacity-60");
 
+          let material = documen            ntById("select-material").value;
+          const customMat = document.getEl          d("i          tom-mat").value.trim();
+          if (customMat)            = customMat;
       try {
-        let company = document.getElementById("select-company").value;
-        const customCo = document.getElementById("input-custom-company").value.trim();
-        if (customCo) company = customCo;
+        let company = document.getEl          d("select-company                    const customCo = document.getE            ("input-custom-company").value.trim();
+        if (cus            pany = customCo;
 
-        let item_name = document.getElementById("select-item-name").value;
-        const customItem = document.getElementById("input-custom-item").value.trim();
-        if (customItem) item_name = customItem;
+                  pli          = document.getElementById("select-applied-code")                    const customCode = document.g            yId("input-custom-code").value.trim();
+          if (customCode) applied_code =             ;
+        let item_name = documen            ntById("select-item-n          lue;
+                customItem = document.getElementById("input-custom-item").value.trim();
+           f         mItem) item_na          tomItem;
 
-        let material = document.getElementById("select-material").value;
-        const customMat = document.getElementById("input-custom-mat").value.trim();
-        if (customMat) material = customMat;
+          const site = document.getEle        Id("input-si          ).value.trim() || "경인사                 const date = dateInput.value;                onst       type = document.getElementById("s      t-loc-type").value;
+          co      report_no = document.getElementById("input-repo      o").value.trim();
+          const pipe =        eCalcOpen ? docu        etElem          "select-pipe").value : "";
+          let material = document.getElementBy          ct-material").value;
+        const customMat = doc          tElementById("input-          at").value.trim();
+        if (customMat) material = cu          
 
-        let applied_code = document.getElementById("select-applied-code").value;
-        const customCode = document.getElementById("input-custom-code").value.trim();
-        if (customCode) applied_code = customCode;
+          const qty = parseFloat(document.getElementById("inpu          value) || 0;
+          const unit = document.ge          ById("select-unit").value;
+          const unit_price = parseFloat(document.getElementById("input-unit-price").value) || 0;
+                  travel_cost = parseFloat(          .getElementById("input-travel-cost").value) || 0;
+            const lump_sum = document.getElementById("input-lump-sum").va          ();
+          const total_fee = parseFloat(document.          ntById("inp          -fee").value) || 0;
+        let applied_code = document.getE          Id("select-applied-code").value;
+        const customCode = docume          ementById("input-custom-code"            im();
+        if (cus            pplied_code = customCode;
 
-        const site = document.getElementById("input-site-name").value.trim() || "경인사무소";
-        const date = dateInput.value;
-        const loc_type = document.getElementById("select-loc-type").value;
-        const report_no = document.getElementById("input-report-no").value.trim();
-        const pipe = isPipeCalcOpen ? document.getElementById("select-pipe").value : "";
+                       _main = document.getElementById("select-equip").value;
+             et            n = document.ge              ("select-equip").value;
+                  customMainEquip = document.getElementById("input-custom-main-equip")?.val            
+                      MainEquip) equip_main = customMainEquip;
+          let equip_aux = document.getElem            el          equ          ue;
+                  customAux = document.getElementById("input-custom-aux").value.                    if (customAux) equip_aux = customAux;
+        cons           document.          ntById("input-site-name").value.trim()           소";
+        c          e = dateInput.value;
+        const loc_type = document.getElemen          elect-loc-type").value;
+        const report_no = document.getEle          ("input-report-no").value.trim();            onst pipe = isPipeCalcO            ment.getElementById("select-pipe").val                      const vehicle_no = document.getElementById("select-v            al                const mileage              getElementById("input-mileage").                   const note = document.getElementById("input-note").value;
+        const qt            loat(docu              entById("input-qty").value) || 0;
+        const unit = document.getElementById("select-unit                          t unit_price = parseFloat(document.getElementBy          t-u          e").value) |               const travel_cost = parseFloat(document.getElementById("i          vel-cost").value) || 0;
+        const lump_sum = document.getEl          d("input-lump-sum").value.trim(             const total_fee = par            cument.getElementById("input-total-fe              | 0;
 
-        const qty = parseFloat(document.getElementById("input-qty").value) || 0;
-        const unit = document.getElementById("select-unit").value;
-        const unit_price = parseFloat(document.getElementById("input-unit-price").value) || 0;
-        const travel_cost = parseFloat(document.getElementById("input-travel-cost").value) || 0;
-        const lump_sum = document.getElementById("input-lump-sum").value.trim();
-        const total_fee = parseFloat(document.getElementById("input-total-fee").value) || 0;
+          const ori_joints = parseFloat(document.get            d(            -joints").value)                   const rep_joints = parseF              t.getElementById("input-rep-joints").value) || 0;
+          const rej_qty =             (document              yId("input-rej-qty").value) || 0;
+          const joints = (selectedMethod === "RT") ?              :          loa          nt.getElementByI          -joints").value) || 0);
+        let equip_main = document.getElementBy          ct-equip").value;
+        const customMainEquip = document.getElementById("          stom-main-equip")?.value.trim();
+        if (customMainEquip) e          n = customMainEquip;
+        let equip_aux = document.getElement          lect-aux-equip").                 const customAux = document.getElementById("input-cus          ).value.trim();
+        if (customAux) equip_aux = cu          
 
-        const equip_main = document.getElementById("select-equip").value;
-        let equip_aux = document.getElementById("select-aux-equip").value;
-        const customAux = document.getElementById("input-custom-aux").value.trim();
-        if (customAux) equip_aux = customAux;
+          const payload = {
+            date, site, company, compa           company, loc_type, method: selectedMethod,
+            pipe, item_name, material, appl          , report_no,
+            joints, ori_joints, rep_joints, rej_qty, qt           unit_price, travel_cost, lump_sum, total_fee,
+            equip_main, equip_aux,
+               ork_shape: workerRows[0] ? workerRows[0].shift : "일반",
+                 kers: workerRows,
+            vehicle_no, mileage, vehicle_note: "양호 / 시건 완          ,
+            rtk_center_miss: parseFloat(document.getElement          k-center-miss").value) || 0,
+            rtk_density: parseFloat(document.          ntById("rtk-den          alue) || 0,
+            rtk_marking_miss: parseFloat(do          etElementById("rtk-marking-miss").value                      rtk_film_m            Float(document.getElemen          tk          rk").value) || 0,
+            rtk_handling: parseFloat(docu          ElementById("rtk-handling").value) || 0,
+                      laint: parseFloat(document.getElementById("rtk-complaint").value) ||                  rtk_etc: parseFloat(document.getElementById("rtk-etc").value) || 0,
+                     al: parseFloat(document.getElementById("rtk-total").value) || 0,
+              chem_fl_mag: parseFloat(document.getElementById("chem-fl-mag").value) || 0,
+              chem_black_mag: parseFloat(document.getElementById("chem-blac          value) || 0,
+            chem_white_paint: parseFloat(document.getElementById("          te-paint").value) || 0,
+            chem_penetrant: parseFloat(doc          tElementById("chem-penetrant").value) || 0,
+            chem_cleaner: parseFloat(doc          tElementB          m-cleaner").value) || 0,
+            chem_developer: parseFlo          ent.getElementById("chem-developer").value) || 0,
+            chem_          parseFloat(document.            ById("chem-fl-pen").value) || 0
+            };
+                 ehicle_no = document.ge          By          ct-vehicle").value;            onst mileage = document.getElementById("input-mileage").                 const note = do          etElement            t-note").value;
 
-        const vehicle_no = document.getElementById("select-vehicle").value;
-        const mileage = document.getElementById("input-mileage").value;
-        const note = document.getElementById("input-note").value;
+                     diting = Boolean(cur          ing          
+                    tionName = isEditing ? 'updateRecord' : 'saveRecord';
+          i          ting) {
+            payload.id = currentEditingRecord.id;
+            p          ntry_time = currentEditingRecord.entry_time;
+            payloa          ate = true;
+          }
+        const ori_joints = parseFloat(d          getElementById("input-ori-joints").value) || 0;
+        c          _joints = parseFloat(document.getElementById("input-          ts").value) || 0;
+             st rej_qty = parseFloat(document.getElementById("input-rej-qty").value) || 0;
+        const joints = (selectedMethod === "RT") ? ori_joints : (parse          cument.getElementById("input-joints").value) || 0);
 
-        const ori_joints = parseFloat(document.getElementById("input-ori-joints").value) || 0;
-        const rep_joints = parseFloat(document.getElementById("input-rep-joints").value) || 0;
-        const rej_qty = parseFloat(document.getElementById("input-rej-qty").value) || 0;
-        const joints = (selectedMethod === "RT") ? ori_joints : (parseFloat(document.getElementById("input-joints").value) || 0);
-
-        const payload = {
-          date, site, company, company_code: company, loc_type, method: selectedMethod,
-          pipe, item_name, material, applied_code, report_no,
-          joints, ori_joints, rep_joints, rej_qty, qty, unit, unit_price, travel_cost, lump_sum, total_fee,
-          equip_main, equip_aux,
-          work_shape: workerRows[0] ? workerRows[0].shift : "일반",
+          const res = await apiCall(actionName, payload);
+          if (res && res.status ===          s') {
+            showToast(isEditing ? "작업일보            되었습니다!" : "구글 드라이브 클라우드에 성공적으로 저장되었습니다!");
+                   sEditing) cancelEditMode();
+                     ent          );
+                    
+            showToast((res && res.detail) || (isEditing ? "수정 실패" : "저장 실패"), true);
+          }
+        } catch (e) {
+          showToast("          저장 오류: " + e.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.classList.remove("opacity-60");
+        cons          d = {
+          date, site, company, company_c            ny, loc_type, method: selectedMethod,
+          pip            me, material, applied_code, report_no,
+            jo          i_joints, rep_joints, r          qty, unit, unit_price, travel_cost, lump_sum, total_fee,
+          equip_main, eq                     work_shape: workerRows[0] ? workerRows[0].shift          
           workers: workerRows,
-          vehicle_no, mileage, vehicle_note: "양호 / 시건 완료", note,
-          rtk_center_miss: parseFloat(document.getElementById("rtk-center-miss").value) || 0,
-          rtk_density: parseFloat(document.getElementById("rtk-density").value) || 0,
-          rtk_marking_miss: parseFloat(document.getElementById("rtk-marking-miss").value) || 0,
+          vehicle_no, mileage, vehic            양호 / 시건 완료", note,
+             tk          miss: parseFloat(d          getElementById("rtk-center-miss").value) || 0,
+            rtk_density: parseFloat(document.getElementById("rtk-dens          lue) || 0,
+                  rking_miss: parseFloat(document.getElementById("rtk-marking-miss").value) || 0,
           rtk_film_mark: parseFloat(document.getElementById("rtk-film-mark").value) || 0,
-          rtk_handling: parseFloat(document.getElementById("rtk-handling").value) || 0,
-          rtk_complaint: parseFloat(document.getElementById("rtk-complaint").value) || 0,
-          rtk_etc: parseFloat(document.getElementById("rtk-etc").value) || 0,
-          rtk_total: parseFloat(document.getElementById("rtk-total").value) || 0,
-          chem_fl_mag: parseFloat(document.getElementById("chem-fl-mag").value) || 0,
-          chem_black_mag: parseFloat(document.getElementById("chem-black-mag").value) || 0,
-          chem_white_paint: parseFloat(document.getElementById("chem-white-paint").value) || 0,
-          chem_penetrant: parseFloat(document.getElementById("chem-penetrant").value) || 0,
-          chem_cleaner: parseFloat(document.getElementById("chem-cleaner").value) || 0,
-          chem_developer: parseFloat(document.getElementById("chem-developer").value) || 0,
-          chem_fl_pen: parseFloat(document.getElementById("chem-fl-pen").value) || 0
+          rtk_handling: parseFloat(document.getElementById("rtk-handling").val                      rtk_complaint: parseFloat(document.getElementById("rtk-complaint").value) || 0,
+          rt            seFloat(document.getEl          d("          ).value) || 0,
+          rtk_tota        seFloat(document          entById("rtk-total").value) || 0,
+          ch          g: parseFloat(document.getElementById("chem-fl-m        al      || 0              chem_black_mag: parseFloat(document.getEl        yId("chem-black-mag").value) || 0,
+          chem_white_paint: parseFloat        ent.getElementById("chem-white-paint").value) || 0,
+            c      penetrant: parseFloat(document.getElementByI        m-penetrant").value) || 0,
+          chem_cleaner: parseFloat(document.ge        ntById("chem-cleaner").value) || 0,
+          chem_devel      : pa      loat(document.getElementById("chem-developer")        ) || 0,
+          chem_fl_pen: parseFloat(document.getElementById("chem-f        ).value) || 0
         };
 
-        const isEditing = Boolean(currentEditingRecord);
-        const actionName = isEditing ? 'updateRecord' : 'saveRecord';
-        if (isEditing) {
-          payload.id = currentEditingRecord.id;
-          payload.entry_time = currentEditingRecord.entry_time;
+        const isEditing =       ean(      entEditingRecord);
+        const actionName =      diting ? 'updateRecord' : 's        ord';
+        if (isEditing)               payload.id = currentEditingRecord.id;
+          p        .entry_time = currentEditingRecord.entry_time;
           payload.is_update = true;
         }
+      });
 
-        const res = await apiCall(actionName, payload);
-        if (res && res.status === 'success') {
+      let cu        ditingRecord = null;
+          ndow.recentRecordsList = [];
+        const res = await ap        actionName, paylo               if (res && res.status === 'success') {
           showToast(isEditing ? "작업일보가 성공적으로 수정되었습니다!" : "구글 드라이브 클라우드에 성공적으로 저장되었습니다!");
           if (isEditing) cancelEditMode();
           loadRecentRecords();
         } else {
-          showToast((res && res.detail) || (isEditing ? "수정 실패" : "저장 실패"), true);
+          showToast((res           etail) || (isEditing ? "수정 실패" : "저장 실패"), true);
         }
       } catch (e) {
-        showToast("구글 클라우드 저장 오류: " + e.message, true);
-      } finally {
+        showToast("구          장 오류: " + e.message, t                } f      ly {
         btn.disabled = false;
-        btn.classList.remove("opacity-60");
-      }
+        btn.classList.remove("opacity-60")          }
     });
 
+             art edit mode with full rec      popul      n
+      window.startEditRecord = fu      on (r) {
+        if (!r) return;
+        tr                currentE        Record = r;
     let currentEditingRecord = null;
-    window.recentRecordsList = [];
-
-    // Start edit mode with full record population
+    window.recentRecordsList = []               // Smooth scroll to top immediately
+          window.scrollTo({ top: 0, behavi          oth' });        / S        dit mo          full record population
     window.startEditRecord = function (r) {
-      if (!r) return;
-      try {
-        currentEditingRecord = r;
+      if (!r) re              try {
+        currentEditingRecord                   // Show Edit Banner
+                     ner = document.getElementById("edit-banner");
+          const bannerDesc = docum              ntById("edit-banne                           (banner) banner.clas          move("hid                   if (bannerDesc) bannerDesc.textContent = `          }         ompany}] ${r.m           ${r.item_name || 'Piping'} (${r.qty} ${        })                / Smooth scroll to top immediately
+        window.scrollTo({      : 0, behavior: 'smooth' });
 
-        // Smooth scroll to top immediately
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-
-        // Show Edit Banner
+                opulate basic fields
+          if (r.date && dateInput) da        t.valu          te;
+          const siteInput = document.getElementById("input-s          ");
+          if (r.site && siteInput) siteInput.value =                   // Show Edit Banner
         const banner = document.getElementById("edit-banner");
-        const bannerDesc = document.getElementById("edit-banner-desc");
-        if (banner) banner.classList.remove("hidden");
-        if (bannerDesc) bannerDesc.textContent = `${r.date} [${r.company}] ${r.method} · ${r.item_name || 'Piping'} (${r.qty} ${r.unit})`;
+        const              = document.getElementById("edi            esc");
+           f (          banner.classList.remove("hidden");
+               annerDesc) bannerDesc.textContent = `${r.date} [${r.            ${r.method} · ${r.item_name || 'Piping'} (${r.qty} ${r.unit})`;
 
+          // Company
+          const coSelect = document.getElementById("select-company");
+          const customCo = document.getElementById("input-custom-company");
+          if (r.company && coSelect) {
+            let foundCo = false;
+            for (let opt of coSelect.options) {
+              if (opt.value === r.company) { foundCo = true; break; }
+            }
+            if (foundCo) {
+              coSelect.value = r.company;
+              if (customCo) { customCo.value = ""; customCo.classList.add("hidden"); }
+            } else {
+              if (customCo) { customCo.value = r.company; customCo.classList.remove("hidden"); }
+            }
+          }
         // Populate basic fields
         if (r.date && dateInput) dateInput.value = r.date;
         const siteInput = document.getElementById("input-site-name");
         if (r.site && siteInput) siteInput.value = r.site;
 
+          // Loc type
+          const locSelect = document.getElementById("select-loc-type");
+          if (r.loc_type && locSelect) locSelect.value = r.loc_type;
+
+          // Method
+          if (r.method) switchMethod(r.method);
+
+          // Item Name
+          const itemSelect = document.getElementById("select-item-name");
+          const customItem = document.getElementById("input-custom-item");
+          if (r.item_name && itemSelect) {
+            let foundItem = false;
+            for (let opt of itemSelect.options) {
+              if (opt.value === r.item_name) { foundItem = true; break; }
+            }
+            if (foundItem) {
+              itemSelect.value = r.item_name;
+              if (customItem) { customItem.value = ""; customItem.classList.add("hidden"); }
+            } else {
+              if (customItem) { customItem.value = r.item_name; customItem.classList.remove("hidden"); }
+            }
+            itemSelect.dispatchEvent(new Event('change'));
         // Company
         const coSelect = document.getElementById("select-company");
         const customCo = document.getElementById("input-custom-company");
@@ -1523,21 +2445,54 @@
           for (let opt of coSelect.options) {
             if (opt.value === r.company) { foundCo = true; break; }
           }
-          if (foundCo) {
-            coSelect.value = r.company;
-            if (customCo) { customCo.value = ""; customCo.classList.add("hidden"); }
+
+          // Material
+          const matSelect = document.getElementById("select-material");
+          const customMat = document.getElementById("input-custom-mat");
+          if (r.material && matSelect) {
+            let foundMat = false;
+            for (let opt of matSelect.options) {
+              if (opt.value ==          rial) { found          ue; break; }
+                            if           t) {
+              matSelect.value = r.material;
+              if (customMat) { customMat.value = ""; cust        cl      ist      ("hidden"); }
+            } else {
+                if (customMat)        tomMat.value = r.material; customMat.classList.remove("hidden"); }
+                          if (foundCo) {
+            co        .value = r.company;               if (customCo) { customCo.value = ""; customCo.classList.add(          ); }
           } else {
-            if (customCo) { customCo.value = r.company; customCo.classList.remove("hidden"); }
+            if (customCo) { customCo.value = r.company;         Co        List.remove("hidden"); }
           }
         }
 
+          // Applied Code
+             onst appCodeSelect = document.getElementById("select-applied-code");
+          if (r.applie         && appCodeSelect) appCodeSelect.value = r.applied_code;
+          const repNoInp        ocument.getElementById("input-report-no");
+          if (r.report_n        epNoInput) repNoInput.value = r.report_no;
         // Loc type
-        const locSelect = document.getElementById("select-loc-type");
-        if (r.loc_type && locSelect) locSelect.value = r.loc_type;
+            nst locSelect = document.getElementById("select-loc-type");
+        if (r.loc_type &        elect) locSelect.value = r.loc_type;
 
+          // Pipe & Joints
+          const pipeSe         document.getElementById("select-pipe");
+          if (r.pipe && pipeSelect) pip        t.value = r.pipe;
+          const oriJointsInput =         nt.getElementById("          i-joints");
+          if (r.ori_joints !== undefined &&           sInput) oriJointsInp        ue        ri_joints;
+          const           sInput = document.ge          ById("input-rep-joints");
+          if (r.rep_joints        nd         && repJointsInput) rep        Input.value = r.rep_joints;
+          const rejQtyInput = docum      getE      ntById("input-rej-qty");
+          if (r.rej_qty !== undefined && rejQtyInput) rejQtyInput.va      = r.rej_qty;
+          const jointsInput = document.getEle      ById("input-jo      ");
+          if (r.jots efined && jointsInput) jointsInput.value = r.joints;
         // Method
         if (r.method) switchMethod(r.method);
 
+          // Qty & Price
+          const qtyInput = document.getElementById("input-qty");
+          if (r.qty !== undefined && qtyInput) {
+            isManualQty = true;
+            qtyInput.value = r.qty;
         // Item Name
         const itemSelect = document.getElementById("select-item-name");
         const customItem = document.getElementById("input-custom-item");
@@ -1546,12 +2501,32 @@
           for (let opt of itemSelect.options) {
             if (opt.value === r.item_name) { foundItem = true; break; }
           }
+          const unitSelect = document.getElementById("select-unit");
+          if (r.unit && unitSelect) unitSelect.value = r.unit;
+          const unitPriceInput = document.getElementById("input-unit-price");
+          if (r.unit_price !== undefined && unitPriceInput) unitPriceInput.value = r.unit_price;
+          const travelInput = document.getElementById("input-travel-cost");
+          if (r.travel_cost !== undefined && travelInput) travelInput.value = r.travel_cost;
+          const lumpInput = document.getElementById("input-lump-sum");
+          if (r.lump_sum !== undefined && lumpInput) lumpInput.value = r.lump_sum || '';
+          const totalFeeInput = document.getElementById("input-total-fee");
+          if (r.total_fee !== undefined && totalFeeInput) totalFeeInput.value = r.total_fee;
+
+          // Equip
+          const equipSelect = document.getElementById("select-equip");
+          if (r.equip_main && equipSelect) equipSelect.value = r.equip_main;
+          if (r.equip_main) {
+            setMainEquipItems(r.equip_main);
           if (foundItem) {
             itemSelect.value = r.item_name;
             if (customItem) { customItem.value = ""; customItem.classList.add("hidden"); }
           } else {
+            setMainEquipItems("");
             if (customItem) { customItem.value = r.item_name; customItem.classList.remove("hidden"); }
           }
+          if (r.equip_aux) {
+            selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
+            updateAuxDisplay();
           itemSelect.dispatchEvent(new Event('change'));
         }
 
@@ -1567,16 +2542,32 @@
             matSelect.value = r.material;
             if (customMat) { customMat.value = ""; customMat.classList.add("hidden"); }
           } else {
+            selectedAuxItems.clear();
+            updateAuxDisplay();
             if (customMat) { customMat.value = r.material; customMat.classList.remove("hidden"); }
           }
         }
 
+          // Vehicle
+          const vehicleSelect = document.getElementById("select-vehicle");
+          if (r.vehicle_no && vehicleSelect) vehicleSelect.value = r.vehicle_no;
+          const mileageInput = document.getElementById("input-mileage");
+          if (r.mileage && mileageInput) mileageInput.value = r.mileage;
+          const noteInput = document.getElementById("input-note");
+          if (r.note && noteInput) noteInput.value = r.note;
         // Applied Code
         const appCodeSelect = document.getElementById("select-applied-code");
         if (r.applied_code && appCodeSelect) appCodeSelect.value = r.applied_code;
         const repNoInput = document.getElementById("input-report-no");
         if (r.report_no && repNoInput) repNoInput.value = r.report_no;
 
+          // RTK Defect Fields
+          const rtkFields = ['rtk-center-miss', 'rtk-density', 'rtk-marking-miss', 'rtk-film-mark', 'rtk-handling', 'rtk-complaint', 'rtk-etc', 'rtk-total'];
+          const rtkKeys = ['rtk_center_miss', 'rtk_density', 'rtk_marking_miss', 'rtk_film_mark', 'rtk_handling', 'rtk_complaint', 'rtk_etc', 'rtk_total'];
+          for (let i = 0; i < rtkFields.length; i++) {
+            const el = document.getElementById(rtkFields[i]);
+            if (el) el.value = r[rtkKeys[i]] || 0;
+          }
         // Pipe & Joints
         const pipeSelect = document.getElementById("select-pipe");
         if (r.pipe && pipeSelect) pipeSelect.value = r.pipe;
@@ -1589,6 +2580,13 @@
         const jointsInput = document.getElementById("input-joints");
         if (r.joints !== undefined && jointsInput) jointsInput.value = r.joints;
 
+          // Chemicals
+          const chemFields = ['chem-fl-mag', 'chem-black-mag', 'chem-white-paint', 'chem-penetrant', 'chem-cleaner', 'chem-developer', 'chem-fl-pen'];
+          const chemKeys = ['chem_fl_mag', 'chem_black_mag', 'chem_white_paint', 'chem_penetrant', 'chem_cleaner', 'chem_developer', 'chem_fl_pen'];
+          for (let i = 0; i < chemFields.length; i++) {
+            const el = document.getElementById(chemFields[i]);
+            if (el) el.value = r[chemKeys[i]] || 0;
+          }
         // Qty & Price
         const qtyInput = document.getElementById("input-qty");
         if (r.qty !== undefined && qtyInput) {
@@ -1606,9 +2604,19 @@
         const totalFeeInput = document.getElementById("input-total-fee");
         if (r.total_fee !== undefined && totalFeeInput) totalFeeInput.value = r.total_fee;
 
+          // Workers (안전한 배열 처리)
+          if (r.worker_list && Array.isArray(r.worker_list) && r.worker_list.length > 0) {
+            workerRows = JSON.parse(JSON.stringify(r.worker_list));
+          } else if (!Array.isArray(workerRows) || workerRows.length === 0) {
+            initDefaultWorkers();
+          }
+          renderWorkers();
         // Equip
-        const equipSelect = document.getElementById("select-equip");
-        if (r.equip_main && equipSelect) equipSelect.value = r.equip_main;
+        if (r.equip_main) {
+          setMainEquipItems(r.equip_main);
+        } else {
+          setMainEquipItems("");
+        }
         if (r.equip_aux) {
           selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
           updateAuxDisplay();
@@ -1617,6 +2625,13 @@
           updateAuxDisplay();
         }
 
+          // Update Submit Button Appearance for Edit Mode
+          const submitBtn = document.getElementById("btn-submit");
+          if (submitBtn) {
+            submitBtn.className = "w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-amber-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
+            submitBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i><span>작업일보 수정 완료 (클라우드 저장)</span>';
+            lucide.createIcons();
+          }
         // Vehicle
         const vehicleSelect = document.getElementById("select-vehicle");
         if (r.vehicle_no && vehicleSelect) vehicleSelect.value = r.vehicle_no;
@@ -1625,6 +2640,10 @@
         const noteInput = document.getElementById("input-note");
         if (r.note && noteInput) noteInput.value = r.note;
 
+          showToast("일보 수정 모드로 전환되었습니다.");
+        } catch (err) {
+          console.error("startEditRecord error:", err);
+          showToast("수정 모드 전환 오류: " + err.message, true);
         // RTK Defect Fields
         const rtkFields = ['rtk-center-miss', 'rtk-density', 'rtk-marking-miss', 'rtk-film-mark', 'rtk-handling', 'rtk-complaint', 'rtk-etc', 'rtk-total'];
         const rtkKeys = ['rtk_center_miss', 'rtk_density', 'rtk_marking_miss', 'rtk_film_mark', 'rtk_handling', 'rtk_complaint', 'rtk_etc', 'rtk_total'];
@@ -1632,7 +2651,12 @@
           const el = document.getElementById(rtkFields[i]);
           if (el) el.value = r[rtkKeys[i]] || 0;
         }
+      };
 
+      window.startEditRecordByIndex = function (idx) {
+        if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
+        window.startEditRecord(window.recentRecordsList[idx]);
+      };
         // Chemicals
         const chemFields = ['chem-fl-mag', 'chem-black-mag', 'chem-white-paint', 'chem-penetrant', 'chem-cleaner', 'chem-developer', 'chem-fl-pen'];
         const chemKeys = ['chem_fl_mag', 'chem_black_mag', 'chem_white_paint', 'chem_penetrant', 'chem_cleaner', 'chem_developer', 'chem_fl_pen'];
@@ -1641,6 +2665,10 @@
           if (el) el.value = r[chemKeys[i]] || 0;
         }
 
+      window.copyRecordByIndex = function (idx) {
+        if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
+        window.copyRecordToForm(window.recentRecordsList[idx]);
+      };
         // Workers (안전한 배열 처리)
         if (r.worker_list && Array.isArray(r.worker_list) && r.worker_list.length > 0) {
           workerRows = JSON.parse(JSON.stringify(r.worker_list));
@@ -1649,9 +2677,24 @@
         }
         renderWorkers();
 
+      window.deleteRecordByIndex = function (idx) {
+        if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
+        window.deleteRecord(window.recentRecordsList[idx]);
+      };
+
+      // Cancel edit mode and restore normal state
+      function cancelEditMode() {
+        currentEditingRecord = null;
+        const banner = document.getElementById("edit-banner");
+        if (banner) banner.classList.add("hden    // Reset Submit Button
+      if (banner) banner.classList.add("hidden");
+
+        // Reset Submit Button
         // Update Submit Button Appearance for Edit Mode
         const submitBtn = document.getElementById("btn-submit");
         if (submitBtn) {
+          submitBtn.className = "w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
+          submitBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5"></i><span>구글 드라이브 클라우드에 작업 저장</span>';
           submitBtn.className = "w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-amber-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
           submitBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i><span>작업일보 수정 완료 (클라우드 저장)</span>';
           lucide.createIcons();
@@ -1664,16 +2707,37 @@
       }
     };
 
+      document.getElementById("btn-cancel-edit").addEventListener("click", () => {
+        cancelEditMode();
+        showToast("수정이 취소되었습니다.");
+      });
     window.startEditRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.startEditRecord(window.recentRecordsList[idx]);
     };
 
+      // Delete record with confirmation
+      window.deleteRecord = async function (r) {
+        if (!r) return;
+        const desc = `[${r.date} ${r.company} ${r.method} · ${r.item_name || 'Piping'}]`;
+        if (!confirm(`${desc}\n해당 작업일보 내역을 정말 삭제하시겠습니까?\n\n※ 삭제된 내역은 스프레드시트에서 즉시 제거됩니다.`)) {
+          return;
+        }
     window.copyRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.copyRecordToForm(window.recentRecordsList[idx]);
     };
 
+        try {
+          const res = await apiCall('deleteRecord', { id: r.id, entry_time: r.entry_time });
+          if (res && res.status === 'success') {
+            showToast(`${desc} 내역이 삭제되었습니다.`);
+            if (currentEditingRecord && currentEditingRecord.entry_time === r.entry_time) {
+              cancelEditMode();
+            }
+            loadRecentRecords();
+          } else {
+            showToast((res && res.detail) || "삭제 실패", true);
     window.deleteRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.deleteRecord(window.recentRecordsList[idx]);
@@ -1714,15 +2778,28 @@
           if (currentEditingRecord && currentEditingRecord.entry_time === r.entry_time) {
             cancelEditMode();
           }
+        } catch (e) {
+          showToast("삭제 오류: " + e.message, true);
           loadRecentRecords();
         } else {
           showToast((res && res.detail) || "삭제 실패", true);
         }
+      };
       } catch (e) {
         showToast("삭제 오류: " + e.message, true);
       }
     };
 
+      // Recent records loader with Edit / Delete / Copy controls
+      async function loadRecentRecords() {
+        const container = document.getElementById("recent-list");
+        try {
+          const res = await apiCall('getRecentRecords', dateInput.value);
+          if (!res || !res.records || res.records.length === 0) {
+            container.innerHTML = '<div class="text-center py-4 text-xs text-slate-400">당일 등록된 작업 내역이 없습니다.</div>';
+            window.recentRecordsList = [];
+            return;
+          }
     // Recent records loader with Edit / Delete / Copy controls
     async function loadRecentRecords() {
       const container = document.getElementById("recent-list");
@@ -1734,6 +2811,9 @@
           return;
         }
 
+          window.recentRecordsList = res.records;
+          container.innerHTML = res.records.map((r, idx) => {
+            return `
         window.recentRecordsList = res.records;
         container.innerHTML = res.records.map((r, idx) => {
           return `
@@ -1769,6 +2849,11 @@
               </div>
             </div>
           `;
+          }).join("");
+          lucide.createIcons();
+        } catch (e) {
+          container.innerHTML = `<div class="text-center py-4 text-xs text-rose-500">내역 로드 오류: ${e.message}</div>`;
+        }
         }).join("");
         lucide.createIcons();
       } catch (e) {
@@ -1776,6 +2861,34 @@
       }
     }
 
+      window.copyRecordToForm = function (r) {
+        if (!r) return;
+        if (r.company) document.getElementById("select-company").value = r.company;
+        if (r.method) switchMethod(r.method);
+        if (r.item_name) {
+          document.getElementById("select-item-name").value = r.item_name;
+          document.getElementById("select-item-name").dispatchEvent(new Event('change'));
+        }
+        if (r.material) document.getElementById("select-material").value = r.material;
+        if (r.applied_code) document.getElementById("select-applied-code").value = r.applied_code;
+        if (r.report_no) document.getElementById("input-report-no").value = r.report_no;
+        if (r.pipe) document.getElementById("select-pipe").value = r.pipe;
+        if (r.unit) document.getElementById("select-unit").value = r.unit;
+        if (r.unit_price) document.getElementById("input-unit-price").value = r.unit_price;
+        if (r.travel_cost) document.getElementById("input-travel-cost").value = r.travel_cost;
+        if (r.equip_main) document.getElementById("select-equip").value = r.equip_main;
+        if (r.equip_main) setMainEquipItems(r.equip_main);
+        if (r.equip_aux) {
+          selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
+          updateAuxDisplay();
+        }
+        if (r.qty !== undefined) {
+          isManualQty = true;
+          document.getElementById("input-qty").value = r.qty;
+        }
+        recalculateTotalFee();
+        showToast(`[${r.company}] ${r.item_name} 작업 정보가 폼에 복사되었습니다.`);
+      };
     window.copyRecordToForm = function (r) {
       if (!r) return;
       if (r.company) document.getElementById("select-company").value = r.company;
@@ -1791,7 +2904,7 @@
       if (r.unit) document.getElementById("select-unit").value = r.unit;
       if (r.unit_price) document.getElementById("input-unit-price").value = r.unit_price;
       if (r.travel_cost) document.getElementById("input-travel-cost").value = r.travel_cost;
-      if (r.equip_main) document.getElementById("select-equip").value = r.equip_main;
+      if (r.equip_main) setMainEquipItems(r.equip_main);
       if (r.equip_aux) {
         selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
         updateAuxDisplay();
@@ -1804,9 +2917,13 @@
       showToast(`[${r.company}] ${r.item_name} 작업 정보가 폼에 복사되었습니다.`);
     };
 
+      document.getElementById("btn-refresh-history").addEventListener("click", loadRecentRecords);
+      dateInput.addEventListener("change", loadRecentRecords);
     document.getElementById("btn-refresh-history").addEventListener("click", loadRecentRecords);
     dateInput.addEventListener("change", loadRecentRecords);
 
+      loadConfig();
+      lucide.createIcons();
     loadConfig();
     lucide.createIcons();
   </script>

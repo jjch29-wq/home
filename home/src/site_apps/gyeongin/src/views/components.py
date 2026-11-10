@@ -79,12 +79,24 @@ class DraggableMessagebox:
 
         # Auto-size: compute proper width/height after all widgets are built
         def _auto_position():
+            if not dialog.winfo_exists():
+                return
             dialog.update_idletasks()
             req_w = max(440, dialog.winfo_reqwidth() + 20)
             req_h = max(200, dialog.winfo_reqheight() + 20)
-            x = root.winfo_x() + (root.winfo_width() // 2) - (req_w // 2)
-            y = root.winfo_y() + (root.winfo_height() // 2) - (req_h // 2)
+            rw = root.winfo_width() if root.winfo_ismapped() else 0
+            rh = root.winfo_height() if root.winfo_ismapped() else 0
+            if rw > 200 and rh > 200:
+                x = max(20, root.winfo_rootx() + (rw // 2) - (req_w // 2))
+                y = max(20, root.winfo_rooty() + (rh // 2) - (req_h // 2))
+            else:
+                sw = dialog.winfo_screenwidth()
+                sh = dialog.winfo_screenheight()
+                x = max(20, (sw - req_w) // 2)
+                y = max(20, (sh - req_h) // 2)
             dialog.geometry(f"{req_w}x{req_h}+{x}+{y}")
+            dialog.lift()
+            dialog.attributes("-topmost", True)
         dialog.after(10, _auto_position)
 
         btn_frame = tk.Frame(dialog, background="#f3f4f6", pady=10)

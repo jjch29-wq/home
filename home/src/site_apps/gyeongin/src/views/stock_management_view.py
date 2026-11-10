@@ -82,10 +82,15 @@ def setup_stock_tab_impl(self):
     
     # [UX IMPROVEMENT] 장비 포함 전체 보기 체크박스 추가 (기본 활성화: 자재와 장비 함께 표시)
     self.chk_show_all_equipment_var = tk.BooleanVar(value=True)
+    def _on_toggle_show_all_equipment():
+        if hasattr(self, '_refresh_stock_filter_lists'):
+            self._refresh_stock_filter_lists()
+        self.update_stock_view()
+
     self.chk_show_all_equipment = ttk.Checkbutton(
         filter_frame, text="☑ 장비 포함 전체 보기", 
         variable=self.chk_show_all_equipment_var, 
-        command=self.update_stock_view
+        command=_on_toggle_show_all_equipment
     )
     self.chk_show_all_equipment.grid(row=0, column=8, columnspan=2, padx=15, pady=2, sticky='w')
 
@@ -155,12 +160,140 @@ def setup_stock_tab_impl(self):
         # Change stretch=True to stretch=False to allow fixed user-defined widths
         self.stock_tree.column(col, width=width, minwidth=50, stretch=False, anchor='center')
     
-    # Bind double-click
-    self.stock_tree.bind('<Double-1>', lambda e: self.open_edit_material_dialog())
-    
-    # Auto-save column widths when user resizes columns
-    self.stock_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
-    self.enable_tree_column_drag(self.stock_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.stock_tree))
+    # Bind double-click (ignore header/separator double-clicks)
+    def _on_stock_double_click(event):
+        if self.stock_tree.identify_region(event.x, event.y) in ('cell', 'tree'):
+            item = self.stock_tree.identify_row(event.y)
+            if item:
+                if item not in self.stock_tree.selection():
+                    self.stock_tree.selection_set(item)
+                self.stock_tree.focus(item)
+                self.open_edit_material_dialog()
+
+    self.stock_tree.bind('<Double-1>', _on_stock_double_click)
+
+    # Row mouse drag selection + only persist column layout on header/separator clicks
+    self.stock_tree._row_drag_anchor = None
+    self.stock_tree._last_press_region = None
+
+    def _on_stock_press(event):
+        region = self.stock_tree.identify_region(event.x, event.y)
+        self.stock_tree._last_press_region = region
+        # Preserve Ctrl (0x4) and Shift (0x1) native extended-selection behavior
+        has_modifier = bool(event.state & (0x0001 | 0x0004))
+        if region in ('cell', 'tree') and not has_modifier:
+            row_id = self.stock_tree.identify_row(event.y)
+            self.stock_tree._row_drag_anchor = row_id or None
+            if row_id:
+                self.stock_tree.focus_set()
+        else:
+            self.stock_tree._row_drag_anchor = None
+
+    def _on_stock_motion(event):
+        anchor = getattr(self.stock_tree, '_row_drag_anchor', None)
+        if not anchor:
+            return
+        children = self.stock_tree.get_children('')
+        if not children or anchor not in children:
+            return
+        target = self.stock_tree.identify_row(event.y)
+        if not target:
+            # Clamp to the nearest visible row at the top/bottom of the viewport
+            clamped_y = min(max(int(event.y), 32), max(32, self.stock_tree.winfo_height() - 6))
+            target = self.stock_tree.identify_row(clamped_y)
+            if not target:
+                return
+        if target not in children:
+            return
+        i0 = children.index(anchor)
+        i1 = children.index(target)
+        lo, hi = (i0, i1) if i0 <= i1 else (i1, i0)
+        self.stock_tree.selection_set(children[lo:hi + 1])
+        self.stock_tree.focus(target)
+        self.stock_tree.see(target)
+
+    def _on_stock_release(event):
+        press_region = getattr(self.stock_tree, '_last_press_region', None)
+        self.stock_tree._row_drag_anchor = None
+        self.stock_tree._last_press_region = None
+        # Save column widths only when header/separator was interacted with
+        if press_region in ('separator', 'heading'):
+            self.save_tab_config()
+
+    self.stock_tree.bind('<ButtonPress-1>', _on_stock_press, add='+')
+    self.stock_tree.bind('<B1-Motion>', _on_stock_motion, add='+')
+    self.stock_tree.bind('<ButtonRelease-1>', _on_stock_release, add='+')
+
+    def _copy_to_clipboard(text):
+        if text is None:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(str(text))
+
+    def _copy_selected_stock_rows(event=None):
+        sel = self.stock_tree.selection()
+        if not sel:
+            return
+        visible_cols = [c for c in self.stock_tree.cget('columns')]
+        lines = []
+        for iid in sel:
+            vals = self.stock_tree.item(iid, 'values') or ()
+            row_vals = [str(vals[idx]) if idx < len(vals) else '' for idx in range(len(visible_cols))]
+            lines.append('\t'.join(row_vals))
+        _copy_to_clipboard('\n'.join(lines))
+        return 'break'
+
+    def _on_stock_right_click(event):
+        region = self.stock_tree.identify_region(event.x, event.y)
+        if region == 'heading':
+            self._show_generic_tree_heading_context_menu(event, self.stock_tree)
+            return
+        item = self.stock_tree.identify_row(event.y)
+        if not item:
+            return
+        if item not in self.stock_tree.selection():
+            self.stock_tree.selection_set(item)
+        self.stock_tree.focus(item)
+        self.stock_tree.focus_set()
+
+        col_id = self.stock_tree.identify_column(event.x)
+        col_name = self._get_column_name_from_id(self.stock_tree, col_id)
+        cell_val = ''
+        if col_name:
+            try:
+                cell_val = str(self.stock_tree.set(item, col_name)).strip()
+            except Exception:
+                cell_val = ''
+
+        menu = tk.Menu(self.stock_tree, tearoff=0)
+        sel_count = len(self.stock_tree.selection())
+        menu.add_command(label="✏️ 선택 품목 수정", command=self.open_edit_material_dialog)
+        menu.add_command(label="📜 품목 이력 보기", command=lambda: show_material_history(self))
+        menu.add_separator()
+        if col_name and cell_val:
+            preview = cell_val if len(cell_val) <= 24 else cell_val[:21] + "..."
+            menu.add_command(
+                label=f"📋 '{col_name}' 값 복사 ({preview})",
+                command=lambda v=cell_val: _copy_to_clipboard(v),
+            )
+        menu.add_command(
+            label=f"📄 선택 행 복사 ({sel_count}건)",
+            command=_copy_selected_stock_rows,
+        )
+        menu.add_command(label="☑️ 전체 선택", command=self.select_all_stock)
+        menu.add_separator()
+        menu.add_command(label="🗑️ 선택 품목 삭제", command=self.delete_selected_material)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    self.enable_tree_column_drag(self.stock_tree, context_menu_handler=_on_stock_right_click)
+    self.stock_tree.bind('<Control-c>', _copy_selected_stock_rows, add='+')
+    self.stock_tree.bind('<Control-C>', _copy_selected_stock_rows, add='+')
+    self.stock_tree.bind('<Control-a>', lambda e: (self.select_all_stock(), 'break')[1], add='+')
+    self.stock_tree.bind('<Control-A>', lambda e: (self.select_all_stock(), 'break')[1], add='+')
+    self.stock_tree.bind('<Delete>', lambda e: self.delete_selected_material(), add='+')
     
     # Grid layout
     self.stock_tree.grid(row=0, column=0, sticky='nsew')

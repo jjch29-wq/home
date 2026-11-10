@@ -419,6 +419,11 @@ class MaterialManager:
         self.style.configure(".", font=('Malgun Gothic', 12))
         self.style.configure("Treeview.Heading", font=('Malgun Gothic', 12, 'bold'))
         self.style.configure("Treeview", font=('Malgun Gothic', 12), rowheight=35) # Increased row height for "boxed" look
+        self.style.map(
+            "Treeview",
+            background=[('disabled', '#dcdad5'), ('selected', '#2563EB')],
+            foreground=[('disabled', '#999999'), ('selected', '#ffffff')],
+        )
         
         # Detect system background color for tk widgets (Canvas, Text)
         self.theme_bg = self.root.cget('bg')
@@ -469,7 +474,7 @@ class MaterialManager:
         
         self.sites = [] # Initialize site list
         self.daily_units = ['EA', 'CAN', 'SET', 'KG', 'M', '매', 'I/D', 'P,M,I/D', 'M,I/D', 'Point', 'Meter', 'Inch', 'Dia']
-        self.users = [
+        self.default_gyeongin_users = [
             "이사 곽재운", "이사 박홍규",
             "부장 주진철", "부장 박광복", "부장 이병국", "부장 이용주", "부장 주동기", "부장 김규년", "부장 곽상돈", "부장 정효철", "부장 노현태",
             "차장 김춘호", "차장 권인경", "차장 박원준",
@@ -477,7 +482,8 @@ class MaterialManager:
             "대리 김상현", "대리 윤석현", "대리 우명광", "대리 박만영",
             "계장 박상태", "계장 이준우", "계장 장승대", "계장 이은수", "계장 손주언", "계장 이경재", "계장 박재욱", "계장 한지원",
             "주임 김진환", "주임 황조현", "주임 김태현"
-        ] # Initialize worker/name list
+        ]
+        self.users = list(self.default_gyeongin_users) # Initialize worker/name list (unified with Mobile 31 workers)
         self.warehouses = [] # Initialize warehouse list
         self.equipments = [] # Initialize equipment list
         self.aux_equipments = ['JIREH MICROBE BTG006', 'COBRA Manual Scanner'] # Initialize auxiliary equipment list
@@ -656,6 +662,10 @@ class MaterialManager:
                     config = json.load(f)
                     self.layout_locked = config.get('layout_locked', False)
                     self.daily_usage_sash_locked = config.get('daily_usage_sash_locked', False)
+                    if config.get('equipments'):
+                        self.equipments[:] = config.get('equipments', [])
+                    if config.get('aux_equipments'):
+                        self.aux_equipments = list(dict.fromkeys(config.get('aux_equipments', self.aux_equipments)))
                     print(f"DEBUG: Pre-loaded locks - Layout: {self.layout_locked}, Sash: {self.daily_usage_sash_locked}")
         except Exception as e:
             print(f"DEBUG: Failed to pre-load locks: {e}")
@@ -849,42 +859,54 @@ class MaterialManager:
         if not hasattr(self, '_autocomplete_timers'):
             self._autocomplete_timers = {}
 
+        # Store/refresh dynamic source configuration without stacking duplicate event bindings
+        combobox._autocomplete_cfg = {
+            'values_list_attr': values_list_attr,
+            'values_list': values_list,
+            'prefix_list': prefix_list,
+        }
+        if getattr(combobox, '_autocomplete_bound', False):
+            return
+        combobox._autocomplete_bound = True
+
         def perform_filter(event_widget, force_all=False):
             """Filter combobox values based on typed text."""
+            cfg = getattr(event_widget, '_autocomplete_cfg', {})
+            attr_name = cfg.get('values_list_attr')
+            static_list = cfg.get('values_list')
+            prefixes = cfg.get('prefix_list')
+
             typed = str(event_widget.get()).strip()
-            widget_name = str(event_widget)
-            
+
             if not typed and not force_all:
                 return  # Don't filter on empty input unless forced
-            
-            if values_list_attr:
-                base_values = getattr(self, values_list_attr, [])
-            elif values_list is not None:
-                base_values = values_list
+
+            if attr_name:
+                base_values = getattr(self, attr_name, [])
+            elif static_list is not None:
+                base_values = static_list
             else:
                 base_values = []
-            
-            all_values = (prefix_list + base_values) if prefix_list else base_values
-            
+
+            all_values = (prefixes + base_values) if prefixes else base_values
+
             if force_all or not typed:
                 new_values = all_values
-            elif prefix_list and typed in prefix_list:
+            elif prefixes and typed in prefixes:
                 new_values = all_values
             else:
                 new_values = [v for v in all_values if typed.lower() in str(v).lower()]
-            
-            print(f"[FILTER] new_values count: {len(new_values)}, changed: {list(event_widget['values']) != list(new_values)}")
-            
+
             # Update values if changed
             if list(event_widget['values']) != list(new_values):
                 event_widget['values'] = new_values
-            
+
             # Auto-open dropdown after typing (only if not empty and has focus)
             if not force_all and typed and len(new_values) > 0:
                 # Cancel any pending open
                 if hasattr(event_widget, '_dropdown_timer'):
                     event_widget.after_cancel(event_widget._dropdown_timer)
-                
+
                 def open_dropdown():
                     try:
                         # [STABILITY] Check if it was recently selected to avoid "sticky" dropdown
@@ -894,12 +916,16 @@ class MaterialManager:
                         # Only if still has focus and NOT already open (heuristic)
                         if event_widget.focus_get() == event_widget:
                             pos = event_widget.index(tk.INSERT)
-                            event_widget.event_generate('<Alt-Down>')
+                            event_widget._auto_opening = True
+                            try:
+                                event_widget.event_generate('<Alt-Down>')
+                            finally:
+                                event_widget._auto_opening = False
                             # Keep typing position
                             event_widget.after(50, lambda: event_widget.icursor(pos))
                     except Exception:
                         pass
-                
+
                 event_widget._dropdown_timer = event_widget.after(400, open_dropdown)
 
 
@@ -1023,9 +1049,17 @@ class MaterialManager:
             perform_filter(combobox, force_all=True)
             
         combobox.bind('<FocusIn>', on_focus_in, add=True)
-        
-        # Click to show full list
-        combobox.bind('<Button-1>', lambda e: perform_filter(combobox, force_all=True), add=True)
+
+        # Use postcommand instead of <Button-1> so modifying values never breaks dropdown selection
+        def _on_autocomplete_post():
+            if not getattr(combobox, '_auto_opening', False):
+                perform_filter(combobox, force_all=True)
+
+        if isinstance(combobox, ttk.Combobox):
+            try:
+                combobox.configure(postcommand=_on_autocomplete_post)
+            except Exception:
+                pass
 
 
     def apply_autocomplete_to_all_comboboxes(self):
@@ -1045,9 +1079,9 @@ class MaterialManager:
             'cb_filter_co': 'co_code_list',
             'cb_filter_class': 'class_list',
             'cb_filter_mfr': 'mfr_list',
-            'cb_filter_name': 'consumable_display_list', # [NEW] Use consumable-only list for Stock View
+            'cb_filter_name': 'stock_filter_name_list',
             'cb_filter_sn': 'sn_list',
-            'cb_filter_model': 'model_list',
+            'cb_filter_model': 'stock_filter_model_list',
             'cb_filter_eq': 'eq_code_list',
             'cb_co_code': 'co_code_list',
             'cb_eq_code': 'eq_code_list',
@@ -1075,7 +1109,7 @@ class MaterialManager:
                 if isinstance(widget, ttk.Combobox):
                     # For filtering, we might want to include '전체' dynamically
                     current_values = list(widget['values'])
-                    if '전체' in current_values:
+                    if '전체' in current_values or widget_attr.startswith('cb_filter_'):
                         self.enable_autocomplete(widget, values_list_attr=list_attr, prefix_list=['전체'])
                     else:
                         self.enable_autocomplete(widget, values_list_attr=list_attr)
@@ -1365,7 +1399,6 @@ class MaterialManager:
         
         if matches.empty:
             messagebox.showerror("오류", f"자재 ID '{mat_id}'를 데이터베이스에서 찾을 수 없습니다.")
-            edit_win.destroy()
             return
             
         mat_data = matches.iloc[0]
@@ -2094,15 +2127,12 @@ class MaterialManager:
             combined_equip = list(set([str(e).strip() for e in self.equipments + history_equip + equip_only_vals if pd.notna(e) and str(e).strip()]))
             combined_equip.sort()
             
-            # [FIX] Only set values if it's a Combobox
+            # [FIX] Keep cb_daily_equip strictly filtered to the active inspection method's main equipments
             if isinstance(self.cb_daily_equip, ttk.Combobox):
-                self.cb_daily_equip['values'] = combined_equip
+                from site_apps.gyeongin.src.aux_equipment import get_main_equipments_by_method
+                method_main_eqs = get_main_equipments_by_method(self)
+                self.cb_daily_equip['values'] = method_main_eqs
             
-            try:
-                max_chars = max((len(str(v)) for v in combined_equip), default=12)
-                self.cb_daily_equip.configure(width=min(40, max(22, max_chars + 2)))
-            except Exception:
-                pass
             self.equipment_suggestions = combined_equip
         
         self.materials_display_list = all_vals
@@ -2175,31 +2205,29 @@ class MaterialManager:
         return (['전체'] + cleaned) if include_all else cleaned
 
     def _get_equipment_candidates(self, include_all=False):
-        """Get unified equipment suggestions from master list and history"""
-        raw_equip = set()
-        
-        # 1. Base equipment list
+        """Get unified equipment suggestions (with Serial Number).
+        When include_all=False (entry form), return ONLY main equipments for the active method.
+        """
+        from site_apps.gyeongin.src.aux_equipment import get_main_equipments_by_method
+        if not include_all:
+            return get_main_equipments_by_method(self)
+
+        raw_equip = set(get_main_equipments_by_method(self, method='ALL'))
         if hasattr(self, 'equipments'):
             for e in getattr(self, 'equipments', []):
-                if e and str(e).strip(): raw_equip.add(str(e).strip())
-                
-        # 2. Dynamic suggestions
-        if hasattr(self, 'equipment_suggestions'):
-            for e in getattr(self, 'equipment_suggestions', []):
-                if e and str(e).strip(): raw_equip.add(str(e).strip())
-                
-        # 3. History
+                if e and str(e).strip():
+                    raw_equip.add(str(e).strip())
         if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '장비명' in self.daily_usage_df.columns:
             unique_equip = self.daily_usage_df['장비명'].dropna().astype(str).str.strip().unique()
             for e in unique_equip:
-                if e: raw_equip.add(e)
-
+                if e:
+                    raw_equip.add(e)
         if hasattr(self, 'daily_usage_df') and '보조장비' in self.daily_usage_df.columns:
             from site_apps.gyeongin.src.aux_equipment import names
             for text in self.daily_usage_df['보조장비'].dropna():
                 raw_equip.update(names(text))
         cleaned = sorted([e for e in raw_equip if e != '전체'])
-        return (['전체'] + cleaned) if include_all else cleaned
+        return ['전체'] + cleaned
 
     def _get_inspection_item_candidates(self):
         """Get candidates for Inspection Item (Inspection Item Name)"""
@@ -2243,8 +2271,13 @@ class MaterialManager:
         if not text:
             filtered = source
         else:
-            q = text.lower()
-            filtered = [v for v in source if q in v.lower()]
+            if getattr(combobox, '_allow_multi', False) and ';' in text:
+                q = text.rsplit(';', 1)[-1].strip().lower()
+            else:
+                q = text.lower()
+            filtered = [v for v in source if q in v.lower()] if q else source
+            if not filtered:
+                filtered = source
 
         # [FIX] Only update if values changed to avoid recursion/flicker
         values_changed = list(combobox['values']) != list(filtered)
@@ -2302,7 +2335,10 @@ class MaterialManager:
             
             # [FIX] Debounce: Wait 300ms before showing suggestions to avoid interrupting continuous typing (especially for IME)
             if hasattr(combobox, '_suggest_after_id'):
-                combobox.after_cancel(combobox._suggest_after_id)
+                try:
+                    combobox.after_cancel(combobox._suggest_after_id)
+                except Exception:
+                    pass
             
             def _do_suggest():
                 if combobox.winfo_exists():
@@ -2311,7 +2347,6 @@ class MaterialManager:
             combobox._suggest_after_id = self.root.after(300, _do_suggest)
 
         combobox.bind('<KeyRelease>', lambda e: _on_interaction(e, open=True), add='+')
-        combobox.bind('<FocusIn>', lambda e: _on_interaction(e, open=False), add='+')
         
         # [NEW] Guard against "sticky" dropdown after selection
         def _on_selected(e=None):
@@ -2321,16 +2356,41 @@ class MaterialManager:
             
         combobox.bind('<<ComboboxSelected>>', _on_selected, add='+')
         
-        # [FIX] Use postcommand instead of <ButtonPress-1> to restore the full list.
-        # Modifying values during <ButtonPress-1> can break Tkinter dropdown selection (관경 선택 불가능 현상 수정).
+        def _widen_popdown():
+            try:
+                if not combobox.winfo_exists():
+                    return
+                popdown = combobox.tk.call('ttk::combobox::PopdownWindow', str(combobox))
+                geom = combobox.tk.call('wm', 'geometry', popdown)
+                size_part, pos_part = geom.split('+', 1)
+                cur_w, cur_h = map(int, size_part.split('x'))
+                vals = combobox['values']
+                max_chars = max((len(str(v)) for v in vals), default=25)
+                target_w = max(cur_w, min(580, max_chars * 10 + 40))
+                if target_w > cur_w:
+                    combobox.tk.call('wm', 'geometry', popdown, f"{target_w}x{cur_h}+{pos_part}")
+            except Exception:
+                pass
+
+        # [FIX] Use postcommand instead of <ButtonPress-1> to restore the full list and widen the popdown window
         def _on_post():
+            if hasattr(combobox, '_suggest_after_id'):
+                try:
+                    combobox.after_cancel(combobox._suggest_after_id)
+                except Exception:
+                    pass
             if not getattr(combobox, '_auto_opening', False):
                 try:
                     new_vals = source_getter()
-                    # Only update if changed to prevent breaking selection internally
                     if list(combobox['values']) != list(new_vals):
                         combobox['values'] = new_vals
-                except: pass
+                except Exception:
+                    pass
+            try:
+                combobox.after_idle(_widen_popdown)
+                combobox.after(20, _widen_popdown)
+            except Exception:
+                pass
         if isinstance(combobox, ttk.Combobox):
             try:
                 combobox.config(postcommand=_on_post)
@@ -2405,7 +2465,6 @@ class MaterialManager:
                 fields[col]['values'] = vals
 
             # 2. Update Stock View filters (with "전체")
-            # [NEW] For Stock View filters, also exclude non-consumable equipment to match the list view
             filter_map = {
                 '회사코드': getattr(self, 'cb_filter_co', None),
                 '품목군코드': getattr(self, 'cb_filter_class', None),
@@ -2415,28 +2474,13 @@ class MaterialManager:
                 '모델명': getattr(self, 'cb_filter_model', None),
                 '관리품번': getattr(self, 'cb_filter_eq', None)
             }
-            if col in filter_map and filter_map[col] is not None:
+            if col in filter_map and filter_map[col] is not None and col not in ('품목명', '모델명'):
                 combo = filter_map[col]
-                
-                # Filter vals for consumables if it's the item name or model
-                c_vals = vals
-                if col in ['품목명', '모델명', '관리품번']:
-                    c_vals = []
-                    for v in vals:
-                        # Heuristic: Check if any item with this name/model is a consumable
-                        if col == '품목명':
-                            if self._is_consumable_material(v, ''): c_vals.append(v)
-                        elif col == '모델명':
-                            # Check if at least one material with this model is a consumable
-                            m_rows = self.materials_df[self.materials_df['모델명'].astype(str).str.strip() == v]
-                            if not m_rows.empty and self._is_consumable_material(m_rows.iloc[0].get('품목명', ''), ''):
-                                c_vals.append(v)
-                        else:
-                            c_vals.append(v)
-                
-                combo['values'] = ["전체"] + c_vals
+                combo['values'] = ["전체"] + vals
                 if not combo.get():
                     combo.set("전체")
+
+        self._refresh_stock_filter_lists()
         
         # Add Carestream film options to 품목명 (Registration tab only)
         if hasattr(self, 'cb_item_name'):
@@ -2464,6 +2508,44 @@ class MaterialManager:
         # 3. Final view update now that filters are set to "전체"
         import threading
         self.root.after(100, self.update_stock_view)
+
+    def _refresh_stock_filter_lists(self):
+        """Sync Tab 1 name/model filter dropdowns with '장비 포함 전체 보기' toggle."""
+        show_all = bool(
+            getattr(self, 'chk_show_all_equipment_var', None)
+            and self.chk_show_all_equipment_var.get()
+        )
+        names = set()
+        models = set()
+        if hasattr(self, 'materials_df') and not self.materials_df.empty:
+            active_mask = pd.to_numeric(self.materials_df.get('Active', 1), errors='coerce').fillna(1) > 0.5
+            active_df = self.materials_df[active_mask]
+            for _, row in active_df.iterrows():
+                pname = self.clean_nan(row.get('품목명', ''))
+                mname = self.clean_nan(row.get('모델명', ''))
+                if not show_all:
+                    combined = f"{pname} {mname}".replace(' ', '')
+                    if not self._is_consumable_material(combined or pname, ''):
+                        continue
+                if pname:
+                    names.add(str(pname).strip())
+                if mname:
+                    models.add(str(mname).strip())
+
+        self.stock_filter_name_list = sorted(names)
+        self.stock_filter_model_list = sorted(models)
+
+        cb_name = getattr(self, 'cb_filter_name', None)
+        if cb_name is not None:
+            cb_name['values'] = ['전체'] + self.stock_filter_name_list
+            if not cb_name.get():
+                cb_name.set('전체')
+
+        cb_model = getattr(self, 'cb_filter_model', None)
+        if cb_model is not None:
+            cb_model['values'] = ['전체'] + self.stock_filter_model_list
+            if not cb_model.get():
+                cb_model.set('전체')
 
     def register_material(self):
         co_code = self.cb_co_code.get().strip()
@@ -4591,8 +4673,9 @@ class MaterialManager:
         def refresh_list(*args):
             query = search_var.get().strip().lower()
             listbox.delete(0, 'end')
-            # Use original data_list for filtering
-            for item in sorted(data_list):
+            # Use rank order for users, alphabetical for other lists
+            items_to_show = self._sort_gyeongin_users(data_list) if config_key == 'users' else sorted(data_list)
+            for item in items_to_show:
                 if not query or query in item.lower():
                     listbox.insert('end', item)
             # Trigger app-wide update of related comboboxes
@@ -4786,6 +4869,40 @@ class MaterialManager:
         else:
             messagebox.showinfo("정보", "이미 모든 품목이 재고 현황에 활성화되어 있습니다.")
 
+    def _sort_gyeongin_users(self, user_list):
+        """Sort workers to match Mobile rank order (이사 → 부장 → 차장 → 과장 → 대리 → 계장 → 주임), excluding non-Gyeongin names."""
+        default_order = getattr(self, 'default_gyeongin_users', [
+            "이사 곽재운", "이사 박홍규",
+            "부장 주진철", "부장 박광복", "부장 이병국", "부장 이용주", "부장 주동기", "부장 김규년", "부장 곽상돈", "부장 정효철", "부장 노현태",
+            "차장 김춘호", "차장 권인경", "차장 박원준",
+            "과장 주영광", "과장 유상훈",
+            "대리 김상현", "대리 윤석현", "대리 우명광", "대리 박만영",
+            "계장 박상태", "계장 이준우", "계장 장승대", "계장 이은수", "계장 손주언", "계장 이경재", "계장 박재욱", "계장 한지원",
+            "주임 김진환", "주임 황조현", "주임 김태현"
+        ])
+        excluded = {"주임 김성렬", "김성렬"}
+        cleaned = []
+        seen = set()
+        for raw in (user_list or []):
+            s = str(raw).strip()
+            if not s or s in excluded:
+                continue
+            if s not in seen:
+                seen.add(s)
+                cleaned.append(s)
+
+        rank_priority = {"이사": 0, "부장": 1, "차장": 2, "과장": 3, "대리": 4, "계장": 5, "주임": 6, "사원": 7}
+        default_index = {name: idx for idx, name in enumerate(default_order)}
+
+        def _sort_key(name):
+            if name in default_index:
+                return (0, default_index[name], "")
+            parts = name.split()
+            r_prio = rank_priority.get(parts[0], 99) if parts else 99
+            return (1, r_prio, name)
+
+        return sorted(cleaned, key=_sort_key)
+
     def refresh_ui_for_list_change(self, config_key):
         """Update all related UI elements after a list (sites, users, etc) has changed"""
         # Dictionary mapping config keys to their current values
@@ -4805,8 +4922,11 @@ class MaterialManager:
             
         current_vals = list_map[config_key]
         # [NEW] Ensure uniqueness and strip whitespace before sorting
-        unique_vals = sorted(list(set([str(v).strip() for v in current_vals if v])))
-        sorted_vals = unique_vals
+        if config_key == 'users':
+            sorted_vals = self._sort_gyeongin_users(current_vals)
+        else:
+            unique_vals = sorted(list(set([str(v).strip() for v in current_vals if v])))
+            sorted_vals = unique_vals
         
         # [FIX] Update the list in-place to ensure all UI dialogs holding references see the changes
         if isinstance(current_vals, list):
@@ -10129,117 +10249,12 @@ class MaterialManager:
 
         ttk.Button(main_frame, text="닫기", command=dlg.destroy).pack(pady=10)
 
-    def open_equipment_search_dialog(self):
-        """Dialog to search equipment from master and select it for the form"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title("장비 검색 및 선택")
-        dlg.geometry("700x600")
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        main_frame = ttk.Frame(dlg, padding=20)
-        main_frame.pack(fill='both', expand=True)
-
-        ttk.Label(main_frame, text="재고현황에서 장비 검색", font=('Malgun Gothic', 12, 'bold')).pack(pady=(0, 10))
-        
-        search_frame = ttk.Frame(main_frame)
-        search_frame.pack(fill='x', pady=5)
-        ttk.Label(search_frame, text="🔍 검색어:").pack(side='left', padx=5)
-        search_var = tk.StringVar()
-        search_ent = ttk.Entry(search_frame, textvariable=search_var)
-        search_ent.pack(side='left', fill='x', expand=True, padx=5)
-        search_ent.focus_set()
-
-        # Treeview for results
-        tree_frame = ttk.Frame(main_frame)
-        tree_frame.pack(fill='both', expand=True)
-        
-        columns = ('name', 'sn', 'model')
-        tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
-        tree.heading('name', text='장비명')
-        tree.heading('sn', text='SN')
-        tree.heading('model', text='모델명')
-        tree.column('name', width=200)
-        tree.column('sn', width=150)
-        tree.column('model', width=200)
-        
-        sb_y = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
-        sb_x = ttk.Scrollbar(main_frame, orient="horizontal", command=tree.xview)
-        tree.configure(yscrollcommand=sb_y.set, xscrollcommand=sb_x.set)
-        
-        tree.pack(side='left', fill='both', expand=True)
-        sb_y.pack(side='right', fill='y')
-        sb_x.pack(fill='x')
-
-        def refresh_list(*args):
-            query = search_var.get().strip().lower()
-            for item in tree.get_children():
-                tree.delete(item)
-            
-            if not self.materials_df.empty:
-                # [STRICT] Filter for Active and Non-Consumable (Equipment) items only
-                active_mask = pd.to_numeric(self.materials_df.get('Active', 1), errors='coerce').fillna(1) > 0.5
-                eq_df = self.materials_df[active_mask]
-                
-                # Further filter: Exclude consumables
-                equipment_df = eq_df[eq_df['품목명'].apply(lambda x: not self._is_consumable_material(str(x).strip(), ''))]
-                
-                unique_items = equipment_df[['품목명', 'SN', '모델명']].drop_duplicates()
-                for _, row in unique_items.iterrows():
-                    name = str(row.get('품목명', '')).strip()
-                    sn = str(row.get('SN', '')).strip()
-                    model = str(row.get('모델명', '')).strip()
-                    
-                    if name.lower() == 'nan': name = ''
-                    if sn.lower() == 'nan': sn = ''
-                    if model.lower() == 'nan': model = ''
-                    
-                    if name or sn or model:
-                        if not query or query in name.lower() or query in sn.lower() or query in model.lower():
-                            tree.insert('', tk.END, values=(name, sn, model))
-
-        def on_select(e=None):
-            selection = tree.selection()
-            if not selection: return
-            
-            vals = tree.item(selection[0])['values']
-            name, sn, model = str(vals[0]), str(vals[1]), str(vals[2])
-            
-            # Format: [Model] Name (SN)
-            display_parts = []
-            if model and model != 'None' and model != '': display_parts.append(model)
-            if name and name != model and name != 'None' and name != '': display_parts.append(name)
-            if sn and sn != 'None' and sn != '': display_parts.append(f"({sn})")
-            
-            display_name = " ".join(display_parts).strip()
-            
-            if display_name:
-                self.cb_daily_equip.delete(0, tk.END)
-                self.cb_daily_equip.insert(0, display_name)
-                dlg.destroy()
-
-        def on_direct_entry():
-            query = search_var.get().strip()
-            if not query:
-                messagebox.showwarning("입력 오류", "등록할 장비명을 입력해주세요.")
-                return
-            
-            # Use the query as the equipment name directly
-            if query not in self.equipments:
-                self.equipments.append(query)
-                self.refresh_ui_for_list_change('equipments')
-            dlg.destroy()
-
-        search_var.trace_add("write", refresh_list)
-        tree.bind('<Double-1>', on_select)
-        
-        refresh_list()
-
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(pady=10)
-        ttk.Button(btn_frame, text="선택 완료", command=on_select, width=15).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="입력 명칭으로 신규 등록", command=on_direct_entry, width=22).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="취소", command=dlg.destroy, width=10).pack(side='left', padx=5)
+    def open_equipment_search_dialog(self, target_cb=None):
+        """Open the unified mobile-style multi-select dialog for main equipment (S/N included)."""
+        from site_apps.gyeongin.src.aux_equipment import select_main
+        target = target_cb if target_cb is not None else getattr(self, 'cb_daily_equip', None)
+        on_changed = getattr(target, '_refresh_multi_badge', None)
+        return select_main(self.root, self, target, on_changed=on_changed)
 
     def open_material_search_dialog(self, target_form='transaction'):
         """Unified dialog to search materials, edit them, or select for forms"""
@@ -11829,7 +11844,7 @@ class MaterialManager:
                     cleaned = " ".join(cleaned.split())
                     if cleaned: clean_workers_set.add(cleaned)
 
-                unique_workers = sorted(list(clean_workers_set))
+                unique_workers = self._sort_gyeongin_users(clean_workers_set)
                 # self.users[:] = unique_workers # REMOVED: This was causing deleted workers to reappear
                 self.cb_daily_filter_worker['values'] = ['전체'] + unique_workers
                 if not self.cb_daily_filter_worker.get(): self.cb_daily_filter_worker.set('전체')
@@ -12127,11 +12142,14 @@ class MaterialManager:
         cb_mat.grid(row=2, column=1, columnspan=3, padx=5, pady=5, sticky='w')
         fields['Material'] = cb_mat
 
+        from site_apps.gyeongin.src.aux_equipment import add_selector, bind_main_selector, names
         # Equipment & Method
         ttk.Label(basic_frame, text="장비명:").grid(row=3, column=0, padx=5, pady=5, sticky='w')
-        cb_equip = ttk.Combobox(basic_frame, width=20, values=self.equipments)
-        cb_equip.set(self.clean_nan(entry_data.get('장비명', '')))
-        cb_equip.grid(row=3, column=1, padx=5, pady=5, sticky='w')
+        eq_edit_frame = ttk.Frame(basic_frame)
+        eq_edit_frame.grid(row=3, column=1, padx=5, pady=5, sticky='w')
+        cb_equip = ttk.Combobox(eq_edit_frame, width=22, values=self.equipments)
+        cb_equip.set('; '.join(names(entry_data.get('장비명', ''))))
+        cb_equip.pack(side='left', fill='x', expand=True)
         fields['장비명'] = cb_equip
 
         ttk.Label(basic_frame, text="검사방법:").grid(row=3, column=2, padx=5, pady=5, sticky='w')
@@ -12139,6 +12157,8 @@ class MaterialManager:
         cb_method.set(self.clean_nan(entry_data.get('검사방법', '')))
         cb_method.grid(row=3, column=3, padx=5, pady=5, sticky='w')
         fields['검사방법'] = cb_method
+
+        bind_main_selector(eq_edit_frame, self, cb_equip, method_getter=cb_method.get)
         
         # [V13_FIX] Add Unit to basic info - Now using dynamic list from unit management
         ttk.Label(basic_frame, text="단위:").grid(row=3, column=4, padx=5, pady=5, sticky='w')
@@ -12147,7 +12167,6 @@ class MaterialManager:
         cb_unit.grid(row=3, column=5, padx=5, pady=5, sticky='w')
         fields['Unit'] = cb_unit
         
-        from site_apps.gyeongin.src.aux_equipment import add_selector, names
         aux_var = tk.StringVar(value='; '.join(names(entry_data.get('보조장비', ''))))
         ttk.Label(basic_frame, text='보조장비:').grid(row=5, column=0, padx=5, pady=5, sticky='w')
         add_selector(basic_frame, self, aux_var).grid(row=5, column=1, columnspan=5, padx=5, pady=5, sticky='w')
@@ -14481,20 +14500,25 @@ class MaterialManager:
                 # Force update after selection so the tab is rendered and children computed
                 self.root.update_idletasks()
                 
-                # Restore sites list - use in-place update
-                self.sites[:] = config.get('sites', [])
+                # Restore sites list - use in-place update and exclude Central branch site
+                raw_sites = [s for s in config.get('sites', ['경인사무소']) if str(s).strip() and str(s).strip() != '중앙지사']
+                if '경인사무소' not in raw_sites:
+                    raw_sites.insert(0, '경인사무소')
+                self.sites[:] = raw_sites
                 # If sites list is empty, try to populate from current daily_usage_df
                 if not self.sites and not self.daily_usage_df.empty:
                     # [FIX] Collect and normalize sites in-place to maintain widget references and resolve crash
                     self.sites[:] = sorted(list(self.daily_usage_df['Site'].dropna().astype(str).apply(self.normalize_site_name).unique()))
                 # [NEW] Restore hidden sites list and ensure requested defaults are present
                 saved_hidden = config.get('hidden_sites', [])
-                for s in ["초안", "롯데현장"]:
+                for s in ["초안", "롯데현장", "중앙지사"]:
                     if s not in saved_hidden: saved_hidden.append(s)
                 self.hidden_sites[:] = saved_hidden
                 
-                # Restore users list - use in-place update to preserve references
-                self.users[:] = config.get('users', [])
+                # Restore users list - unify with Mobile 31-worker list and preserve references
+                saved_users = config.get('users', [])
+                merged_users = list(getattr(self, 'default_gyeongin_users', [])) + list(saved_users)
+                self.users[:] = self._sort_gyeongin_users(merged_users)
                 
                 # [MIGRATION] Load and immediately migrate worktimes to ensure 익일 marker
                 raw_worktimes = config.get('worktimes', [])
@@ -14523,8 +14547,13 @@ class MaterialManager:
                     if req not in loaded_aux:
                         loaded_aux.append(req)
                 self.aux_equipments = list(dict.fromkeys(loaded_aux))
-                self.test_items[:] = config.get('test_items', [])
-                self.applied_codes[:] = config.get('applied_codes', [])
+                default_test_items = ['Piping', 'Tank', 'Vessel', 'Plate', 'Beam', 'Structure', 'Pipe', '사무실 내근 및 장비점검', '우천 대기', '안전교육', '휴무', '기타']
+                saved_test_items = config.get('test_items', [])
+                self.test_items[:] = list(dict.fromkeys([i for i in saved_test_items if i] + default_test_items))
+
+                default_applied_codes = ['KS', 'ASME', 'AWS', 'API', 'KEPIC', '기타']
+                saved_applied_codes = config.get('applied_codes', [])
+                self.applied_codes[:] = list(dict.fromkeys([c for c in saved_applied_codes if c] + default_applied_codes))
                 if 'materials' in config:
                     self.carestream_films[:] = config['materials']
                 
@@ -14542,7 +14571,7 @@ class MaterialManager:
 
                 self.ot_times = config.get('ot_times', [])
 
-                # [CLEANUP] Clean up users list from shift markers
+                # [CLEANUP] Clean up users list from shift markers and maintain Mobile rank order
                 import re
                 cleaned_users = []
                 for user in self.users:
@@ -14556,9 +14585,10 @@ class MaterialManager:
                     elif user.strip() and user.strip() not in cleaned_users:
                         cleaned_users.append(user.strip())
                 
-                if len(cleaned_users) != len(self.users):
-                    self.users[:] = cleaned_users
-                    # Don't save yet, let the normal flow handle it
+                self.users[:] = self._sort_gyeongin_users(
+                    list(getattr(self, 'default_gyeongin_users', [])) + cleaned_users
+                )
+                self.refresh_ui_for_list_change('users')
                 
                 # Restore history visibility if saved
                 # [FIX] Mismatch between 'history_visible_cols' and 'daily_usage_visible_cols'
@@ -14648,8 +14678,12 @@ class MaterialManager:
                     self.equipments = sorted(self.daily_usage_df['장비명'].dropna().unique().tolist())
                     self.equipments = [str(e).strip() for e in self.equipments if str(e).strip()]
                 
-                # Vehicle list
-                self.vehicles[:] = config.get('vehicles', [])
+                # Vehicle list (exclude Central branch leftovers)
+                excluded_vehicle_bases = {'81도8458', '개인차량', '개인차량-이병국', '개인차량(이병국부장)'}
+                self.vehicles[:] = [
+                    v for v in config.get('vehicles', [])
+                    if v.split('(')[0].strip() not in excluded_vehicle_bases
+                ]
         
                 # 이미지에 제공된 기본 차량 목록 등록
                 default_vehicles = [
@@ -14668,7 +14702,7 @@ class MaterialManager:
                 final_vehicles = []
                 for v in self.vehicles:
                     base = v.split('(')[0].strip()
-                    if not base:
+                    if not base or base in excluded_vehicle_bases:
                         continue
                     if any(t in base for t in ['81두1580', '89보4028', '90너4889']):
                         final_vehicles.append(f"{base} (탑차)")
@@ -14690,7 +14724,7 @@ class MaterialManager:
                     self.cb_warehouse['values'] = sorted(self.warehouses)
                 # Update users combo boxes
                 if hasattr(self, 'ent_user'): 
-                    self.ent_user['values'] = sorted(self.users)
+                    self.ent_user['values'] = self._sort_gyeongin_users(self.users)
                 # Update vehicles for VehicleInspectionWidgets
                 if hasattr(self, 'fixed_vehicle_widget'):
                     self.fixed_vehicle_widget.update_vehicle_list(sorted(self.vehicles))

@@ -1,6 +1,8 @@
 import pandas as pd
 import json
 import os
+import time
+import shutil
 import traceback
 import tkinter as tk
 from tkinter import messagebox
@@ -558,13 +560,21 @@ def save_data_impl(self, require_primary=True):
         with pd.ExcelWriter(temp_path, engine='openpyxl') as writer:
             for sheet, frame in frames.items():
                 frame.to_excel(writer, sheet_name=sheet, index=False)
-        for attempt in range(3):
+        for attempt in range(5):
             try:
-                os.replace(temp_path, target)
-                temp_path = None
+                try:
+                    os.replace(temp_path, target)
+                    temp_path = None
+                except PermissionError:
+                    # On Google Drive Desktop (G:\내 드라이브), os.replace may fail during sync while in-place copy succeeds
+                    shutil.copy2(temp_path, target)
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+                    temp_path = None
                 # [경인 안전 동기화] 클라우드 DB 저장 성공 시 로컬 엑셀 사본에 즉시 미러링 (정합성 및 좀비 행 방지)
                 try:
-                    import shutil
                     from site_apps.gyeongin.src.sync_google_sheet import DEFAULT_INVENTORY_PATH
                     local_target = os.path.abspath(str(DEFAULT_INVENTORY_PATH))
                     if os.path.normcase(target) != os.path.normcase(local_target) and os.path.exists(target):
@@ -573,16 +583,17 @@ def save_data_impl(self, require_primary=True):
                     print(f"[경인 데이터 동기화] 로컬 사본 미러링 건너뜀: {mirror_err}")
                 return True
             except PermissionError:
-                if attempt < 2:
-                    time.sleep(0.5)
+                if attempt < 4:
+                    time.sleep(0.4)
                     continue
-                stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                stamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
                 conflict = os.path.splitext(target)[0] + f'_Conflict_{stamp}.xlsx'
                 os.replace(temp_path, conflict)
                 temp_path = None
                 self.show_error_dialog('데이터 저장 지연/충돌',
-                    f'원본 파일을 교체하지 못했습니다. 임시 백업: {conflict}\n'
-                    '원본 파일을 닫은 뒤 다시 저장해주세요.')
+                    f'원본 파일({os.path.basename(target)})이 엑셀 등 다른 프로그램에 열려 있어 교체하지 못했습니다.\n'
+                    f'임시 백업: {conflict}\n'
+                    '열려 있는 엑셀 파일을 닫은 뒤 다시 저장해주세요.')
                 return False # A conflict copy is not a successful save of the primary workbook.
     except Exception as error:
         self.show_error_dialog('데이터 저장 실패',

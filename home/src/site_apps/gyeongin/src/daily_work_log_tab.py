@@ -57,14 +57,11 @@ class DailyWorkLogTab(ttk.Frame):
         self.setup_ui()
         self._loaded_log_date = self._selected_date_key()
         self._log_baseline = self._capture_log_input()
+        # Do not call modal messagebox inside after_idle during __init__,
+        # because subsequent tab setup calls update_idletasks() and would
+        # block create_widgets() mid-initialization with grab_set().
         if self.data_connection_error:
-            self.after_idle(
-                lambda: messagebox.showerror(
-                    "공유 작업자료 연결 오류",
-                    self.data_connection_error,
-                    parent=self.winfo_toplevel(),
-                )
-            )
+            print(f"[경인 작업일보] 공유 경로 안내: {self.data_connection_error}")
 
     def _normalize_welder_id(self, value):
         """화면 표시값 또는 이름을 최신 용접사 번호 형식으로 변환한다."""

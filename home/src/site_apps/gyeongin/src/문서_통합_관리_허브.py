@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox, filedialog
 import json
 import os
 import re
+import time
 
 try:
     import fitz  # PyMuPDF

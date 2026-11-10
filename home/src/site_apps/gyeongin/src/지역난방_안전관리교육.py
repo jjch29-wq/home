@@ -18,7 +18,7 @@ APP_TITLE = "지역난방 안전관리교육 자동 생성"
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config_district_heating_safety_training.json")
 DEFAULT_ATTENDEES = (
     "주진철/서울검사/부장, 박광복/서울검사/부장, 권인경/서울검사/차장, "
-    "우명광/서울검사/대리, 박상태/서울검사/계장, 장승대/서울검사/주임"
+    "우명광/서울검사/대리, 박상태/서울검사/계장, 장승대/서울검사/계장"
 )
 DEFAULT_CONTENT = """1. 작업 전 안전점검 및 작업구역 출입통제
  - 작업계획, 위험요인, 근제대책을 공유하고 작업자별 역할을 확인한다.
@@ -152,7 +152,7 @@ class SafetyTrainingApp:
         form.pack(fill="x")
 
         self.date_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d 09:00"))
-        self.location_var = tk.StringVar(value="한국지역난방공사 중앙지사 현장")
+        self.location_var = tk.StringVar(value="한국지역난방공사 경인사무소 현장")
         self.type_var = tk.StringVar(value="작업 전 안전교육")
         self.duration_var = tk.StringVar(value="1시간")
         self.instructor_var = tk.StringVar()

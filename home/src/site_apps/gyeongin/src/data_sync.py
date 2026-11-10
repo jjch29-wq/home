@@ -35,6 +35,11 @@ def get_data_connection_error():
         return None
     if any(os.path.isdir(path) for path in _shared_dir_candidates(custom_dir)):
         return None
+    # 경인사무소 로컬 데이터 폴더가 존재하면 로컬 저장소로 안전하게 폴백한다.
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    local_data_dir = os.path.abspath(os.path.join(base_dir, "..", "data"))
+    if os.path.isdir(local_data_dir) or os.path.isdir(base_dir):
+        return None
     return (
         "경인사무소 공유 작업자료 경로에 연결할 수 없습니다.\n"
         f"설정 경로: {custom_dir}\n\n"

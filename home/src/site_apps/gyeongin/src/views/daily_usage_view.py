@@ -209,30 +209,32 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(common_frame, text='● 초록: 저장된 작업 있음', foreground='#2E7D32').grid(
         row=0, column=6, padx=(0, 5), pady=1, sticky='w')
 
+    from site_apps.gyeongin.src.aux_equipment import add_selector, bind_main_selector
     ttk.Label(form_content, text="주 장비:").grid(row=1, column=2, padx=(5, 0), pady=1, sticky='e')
     equip_container = ttk.Frame(form_content)
     equip_container.grid(row=1, column=3, padx=(2, 5), pady=1, sticky='w')
     
-    self.ent_daily_equip = ttk.Entry(equip_container, width=15)
+    self.ent_daily_equip = ttk.Combobox(equip_container, width=28, values=getattr(self, 'equipments', []))
     self.ent_daily_equip.pack(side='left', fill='x', expand=True)
     
     # Link to the old variable name to avoid breaking other parts of the code
     self.cb_daily_equip = self.ent_daily_equip 
     
-    # [MODERN] Place the search button INSIDE the entry widget at the right end
+    # [MODERN] Place the search button INSIDE the combobox widget at the right end (x=-20 avoids dropdown arrow)
     btn_equip_search = tk.Button(self.ent_daily_equip, text="🔍", font=('Arial', 8), 
                                 bd=0, bg='white', cursor='hand2',
                                 command=self.open_equipment_search_dialog)
-    btn_equip_search.place(relx=1.0, x=-2, rely=0.5, anchor='e', width=18, height=18)
-    
-    btn_equip_mgr = tk.Button(equip_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
-                             command=lambda: self.open_list_management_dialog('equipments', target_cb=self.ent_daily_equip))
-    btn_equip_mgr.pack(side='left', padx=(2, 0))
+    btn_equip_search.place(relx=1.0, x=-20, rely=0.5, anchor='e', width=18, height=18)
 
-    from site_apps.gyeongin.src.aux_equipment import add_selector
+    bind_main_selector(equip_container, self, self.ent_daily_equip)
+    
+    btn_equip_mgr = tk.Button(equip_container, text="⚙️", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
+                             command=lambda: self.open_list_management_dialog('equipments', target_cb=self.ent_daily_equip))
+    btn_equip_mgr.pack(side='left', padx=(0, 2))
+
     self.daily_aux_equipment_var = tk.StringVar(value='')
     ttk.Label(form_content, text="보조장비:").grid(row=2, column=2, padx=(5, 0), pady=1, sticky='e')
-    add_selector(form_content, self, self.daily_aux_equipment_var, width=25).grid(
+    add_selector(form_content, self, self.daily_aux_equipment_var, width=28).grid(
         row=2, column=3, padx=(2, 5), pady=1, sticky='w')
 
     # Row 2: 품목명
@@ -493,25 +495,51 @@ def setup_daily_usage_tab_impl(self):
                 except Exception:
                     pass
 
-        # 검사방법별 기본 장비/보조장비 매핑 (경인사무소 비즈니스 규칙)
+        # 검사방법별 기본 장비/보조장비 매핑 (시리얼번호 포함 - 경인사무소 비즈니스 규칙)
+        from site_apps.gyeongin.src.aux_equipment import (
+            get_main_equipments_by_method,
+            collect_inventory_aux_by_method,
+        )
         equip_defaults = {
-            'RT': ('Se-75', 'ADR, SURVEY, 콜리메타'),
-            'PAUT': ('PAUT MX2(OMNI2-103085)', 'PAUT SCANNER (MANUAL)'),
-            'UT': ('Sitescan 150', '사각 PROBE 70˚ (2MHz 10*10); 대비시험편 STB-A1'),
-            'MT': ('Yoke', '자분살포기'),
-            'PT': ('PT 약품', '조도계'),
+            'RT': ('Se-75(880D D10692)', '콜리메타(120˚) TSC-19P (7334); Survey Meter RDS-30 (371172); Alarm Dosimeter PICO CATCH-100 (NW1085)'),
+            'PAUT': ('PAUT MX2(OMNI2-103085)', 'MICROBE 스캐너 (Body-137331, Encoder-136861); PAUT PROBE(A2) 5L64-A2 (S1599)'),
+            'UT': ('Sitescan 150(I000760)', '사각 PROBE(70˚) MWB70-2 (56923-5617); 표준시험편 STB-A1 (09148)'),
+            'MT': ('Yoke AC(MY-2 NW0453)', 'Black Light (베터리교체형) UV-LED 2P/SPR (NW0096); 조도계 LUX Meter 1330A (180604411)'),
+            'PT': ('PT 약품', '조도계 LUX Meter 1330A (180604411)'),
+            '내근/대기': ('해당없음', ''),
+            '휴무': ('해당없음', ''),
+            '기타': ('합금분석기(X-ray) XL2 100G(200983)', ''),
         }
-        known_main_equips = {v[0] for v in equip_defaults.values()}
+        method_main_list = get_main_equipments_by_method(self, method)
+        dyn_aux_map = collect_inventory_aux_by_method(self)
+        method_aux_list = dyn_aux_map.get(method, [])
+
+        # 주 장비 드롭다운: 현재 선택한 검사방법에 해당하는 장비만 표시
+        if hasattr(self, 'ent_daily_equip') and isinstance(self.ent_daily_equip, ttk.Combobox):
+            self.ent_daily_equip['values'] = method_main_list
+
+        # 보조장비 드롭다운: 현재 선택한 검사방법에 해당하는 보조장비만 표시
+        if hasattr(self, 'cb_daily_aux_equip') and isinstance(self.cb_daily_aux_equip, ttk.Combobox):
+            self.cb_daily_aux_equip['values'] = method_aux_list
+
         curr_main_equip = self.ent_daily_equip.get().strip() if hasattr(self, 'ent_daily_equip') else ''
         if method in equip_defaults:
             def_main, def_aux = equip_defaults[method]
-            if hasattr(self, 'ent_daily_equip') and (not curr_main_equip or curr_main_equip in known_main_equips):
+            method_main_set = set(method_main_list)
+            curr_main_parts = [p.strip() for p in curr_main_equip.split(';') if p.strip()]
+            if hasattr(self, 'ent_daily_equip') and (not curr_main_parts or not method_main_set or not all(p in method_main_set for p in curr_main_parts)):
                 self.ent_daily_equip.delete(0, tk.END)
                 self.ent_daily_equip.insert(0, def_main)
+            if hasattr(self, 'ent_daily_equip') and hasattr(self.ent_daily_equip, '_refresh_multi_badge'):
+                try:
+                    self.ent_daily_equip._refresh_multi_badge()
+                except Exception:
+                    pass
             if hasattr(self, 'daily_aux_equipment_var'):
                 curr_aux = self.daily_aux_equipment_var.get().strip()
-                known_aux = {v[1] for v in equip_defaults.values()}
-                if not curr_aux or curr_aux in known_aux:
+                method_aux_set = set(method_aux_list)
+                curr_aux_parts = [p.strip() for p in curr_aux.split(';') if p.strip()]
+                if not curr_aux or not method_aux_set or not all(p in method_aux_set for p in curr_aux_parts):
                     self.daily_aux_equipment_var.set(def_aux)
 
         # 1. 하단 NDT 관경 및 물량 산출 프레임 제어 (RT, UT, PT, PAUT, MT)
@@ -592,8 +620,14 @@ def setup_daily_usage_tab_impl(self):
     # [ROBUST_AUTOCOMPLETE] Use standardized suggest system for Entry Form
     self._bind_combobox_word_suggest(self.cb_daily_site, lambda: sorted(list(set(self.sites))))
     self._bind_combobox_word_suggest(self.cb_daily_material, lambda: self._get_material_candidates(include_all=False))
-    self._bind_combobox_word_suggest(self.cb_daily_equip, lambda: self._get_equipment_candidates(include_all=False))
+    self._bind_combobox_word_suggest(self.cb_daily_equip, lambda: get_main_equipments_by_method(self))
     self.cb_daily_equip._allow_multi = True
+    if hasattr(self, 'cb_daily_aux_equip'):
+        self._bind_combobox_word_suggest(
+            self.cb_daily_aux_equip,
+            lambda: collect_inventory_aux_by_method(self).get(self.cb_daily_test_method.get().strip().upper(), [])
+        )
+        self.cb_daily_aux_equip._allow_multi = True
     self._bind_combobox_word_suggest(self.ent_daily_inspection_item, lambda: self._get_inspection_item_candidates())
     self._bind_combobox_word_suggest(self.ent_daily_applied_code, lambda: self._get_applied_code_candidates())
     
