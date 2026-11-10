@@ -145,18 +145,16 @@
       <!-- Segmented Method Buttons (RT 기본) -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
-          <div class="grid grid-cols-5 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
-            <button type="button" data-method="RT"
-              class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
-            <button type="button" data-method="PT"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
-            <button type="button" data-method="MT"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
-            <button type="button" data-method="PAUT"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
-            <button type="button" data-method="내근/대기"
-              class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
-          </div>
+          <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
+          <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
+          <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
+          <button type="button" data-method="UT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">UT</button>
+          <button type="button" data-method="MT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
+          <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
+          <button type="button" data-method="PMI" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PMI</button>
+          <button type="button" data-method="ETC" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">ETC</button>
+          <button type="button" data-method="내근/대기" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
+        </div>
         </div>
 
         <!-- 검사품명 -->
@@ -926,17 +924,11 @@
     function updateMaterialOptions(method) {
       const matSelect = document.getElementById("select-material");
       if (!appConfig) return;
-
-      if (method === "RT") {
-        matSelect.innerHTML = appConfig.materials.map(m => `<option value="${m}">${m}</option>`).join("");
-      } else {
-        matSelect.innerHTML = `
-          <option value="">해당없음 (자재소모 약품 별도 기입)</option>
-          <option value="PT 약품 세트">PT 약품 세트</option>
-          <option value="MT 자분/페인트">MT 자분/페인트</option>
-          <option value="기타 자재">기타 자재</option>
-        `;
-      }
+      const materials = method === "RT" ? (appConfig.materials || []) :
+        method === "PT" ? ["PT \uC57D\uD488 \uC138\uD2B8"] :
+        method === "MT" ? ["MT \uC790\uBD84/\uD398\uC778\uD2B8"] : [];
+      matSelect.replaceChildren(new Option("\uD574\uB2F9\uC5C6\uC74C", ""), ...materials.map(item => new Option(item, item)));
+      if (materials.length) matSelect.value = materials[0];
     }
 
     function initDefaultWorkers() {
@@ -1099,14 +1091,26 @@
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = method === "MT" ? "P,M,I/D" : "M";
         document.getElementById("input-unit-price").value = 4200;
-      } else if (method === "PAUT") {
+      } else if (method === "PAUT" || method === "UT") {
         rtkCard.classList.add("hidden");
         chemCard.classList.add("hidden");
         pautCard.classList.remove("hidden");
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = "M";
-        document.getElementById("input-unit-price").value = 18500;
+        document.getElementById("input-unit-price").value = method === "PAUT" ? 18500 : 9300;
+      } else if (method === "PMI" || method === "ETC") {
+        rtkCard.classList.add("hidden");
+        chemCard.classList.add("hidden");
+        pautCard.classList.add("hidden");
+        rtJointsBox.classList.add("hidden");
+        nonRtJointsBox.classList.add("hidden");
+        if (!Array.from(unitSelect.options).some(option => option.value === "EA")) {
+          unitSelect.add(new Option("EA", "EA"));
+        }
+        unitSelect.value = "EA";
+        document.getElementById("input-unit-price").value = 0;
+        document.getElementById("input-qty").value = 0;
       } else if (method === "내근/대기" || method === "휴무") {
         rtkCard.classList.add("hidden");
         chemCard.classList.add("hidden");
@@ -1174,11 +1178,14 @@
       document.getElementById("main-equip-modal").classList.add("hidden");
     }
 
+    const MAIN_EQUIP_BY_METHOD = {"PAUT": ["PAUT MX2(OMNI2-103085)", "PAUT MX2(OMNI2-100055)", "PAUT MX2(OMNI2-103918)", "PAUT X3(QC-0093084)"], "UT": ["Sitescan 150(I000760)", "Sitescan 150(I000950)", "Sitescan 140(1403264TC)", "Masterscan 380(I002561)", "Masterscan 380(I003201)", "Masterscan 380(I005587)", "Masterscan 380(I005593)", "Epoch 650(150128312)", "USM-35(8814A)", "USM-GO(I001008)", "\ub450\uaed8\uce21\uc815\uae30 37DL-PLUS(051301807)"], "RT": ["Se-75(880D D10692)", "Se-75(880D D10626)", "Se-75(880D D4507)", "Se-75(880D D7748)", "Ir-192(880D D10700)", "Ir-192(880D D3086)", "Ir-192(880D D4567)", "Ir-192(880D D10674)", "Ir-192(880S S1684)", "\ubc29\uc0ac\uc120\ubc1c\uc0dd\uc7a5\uce58 300EGM2(FR0020-2)", "\ubc29\uc0ac\uc120\ubc1c\uc0dd\uc7a5\uce58 RF300EGM2(GR0002-3)"], "MT": ["Yoke AC(MY-2 NW0453)", "Yoke AC(MP-A3 MP31646)", "Yoke AC(MY-2 NW6999)", "Yoke AC(MP-A3 KI-01)", "Yoke AC(MP-A3 NW1510097)", "Yoke AC(MY-2 NW4424)", "Yoke AC(MP-A3 KI-02)", "Yoke AC(MY-2 NW7328)", "Yoke AC(MY-2 NW8064)", "Yoke AC(MY-2 NW5338)", "Yoke AC(MY-2 NW4413)", "Yoke AC(MY-2 NW1301154)", "Yoke AC(MY-2 NW4700)", "Yoke DC(MP-A2D MP3403)", "Yoke DC(MP-A2D MP1336)", "Yoke DC(MP-A2D MP9693)", "Yoke DC(MP-A2D MP2458)", "AC POWER SUPPLY DA-PB(NW0589)", "AC POWER SUPPLY DA-PB(NW0604)", "AC POWER SUPPLY DA-PB(NW0639)", "AC POWER SUPPLY DA-PB(NW0718)", "AC POWER SUPPLY DA-PB(NW0582)", "AC POWER SUPPLY DA-PB(NW0230)"], "PT": ["PT \uc57d\ud488", "\ud574\ub2f9\uc5c6\uc74c"], "PMI": ["\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "\ud569\uae08\ubd84\uc11d\uae30(RI) XLi818(24673)", "\uacbd\ub3c4\uacc4 MIC10(1-2129)", "\ud398\uc774\ub77c\ud2b8\ud568\ub7c9\uce21\uc815\uae30 FMP30(160002524)", "\ub0b4\uc2dc\uacbd\uc7a5\ube44 ER400(E30969R)"], "\ub0b4\uadfc/\ub300\uae30": ["\ud574\ub2f9\uc5c6\uc74c"], "\ud734\ubb34": ["\ud574\ub2f9\uc5c6\uc74c"], "\uae30\ud0c0": ["\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "\ud569\uae08\ubd84\uc11d\uae30(RI) XLi818(24673)", "\uacbd\ub3c4\uacc4 MIC10(1-2129)", "\ud398\uc774\ub77c\ud2b8\ud568\ub7c9\uce21\uc815\uae30 FMP30(160002524)", "\ub0b4\uc2dc\uacbd\uc7a5\ube44 ER400(E30969R)", "\ud574\ub2f9\uc5c6\uc74c"]};
+
     function renderMainEquipItems() {
       const container = document.getElementById("main-equip-items-container");
       const keyword = document.getElementById("main-equip-search-input").value.trim().toLowerCase();
       const configured = Array.isArray(appConfig?.equipments) ? appConfig.equipments : [];
-      const candidates = Array.from(new Set([...configured, ...selectedMainEquipItems]))
+      const methodCandidates = MAIN_EQUIP_BY_METHOD[selectedMethod] || [];
+      const candidates = Array.from(new Set(methodCandidates))
         .filter(item => item && (!keyword || item.toLowerCase().includes(keyword)));
       document.getElementById("main-equip-selected-count").textContent = selectedMainEquipItems.size;
       if (!candidates.length) {
@@ -1363,7 +1370,8 @@
         const curM = selectedMethod || 'RT';
         const targetM = (activeAuxFilter === 'CURRENT') ? curM : activeAuxFilter;
         const allowed = AUX_MASTER_DATA[targetM] || [];
-        return allowed.includes(item) || item.includes(targetM) || selectedAuxItems.has(item);
+        const configured = appConfig?.method_defaults?.[targetM]?.aux_equipments || [];
+        return allowed.includes(item) || configured.includes(item);
       });
 
       const selectedCountEl = document.getElementById("aux-selected-count");
@@ -1407,14 +1415,37 @@
       closeAuxModal();
     }
 
+    const PMI_MAIN_EQUIPMENTS = ["\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "\ud569\uae08\ubd84\uc11d\uae30(RI) XLi818(24673)", "\uacbd\ub3c4\uacc4 MIC10(1-2129)", "\ud398\uc774\ub77c\ud2b8\ud568\ub7c9\uce21\uc815\uae30 FMP30(160002524)", "\ub0b4\uc2dc\uacbd\uc7a5\ube44 ER400(E30969R)"];
+
     function applyMethodDefaults(method) {
-      if (!appConfig || !appConfig.method_defaults || !appConfig.method_defaults[method]) return;
+      if (method === "PMI") {
+        setMainEquipItems(PMI_MAIN_EQUIPMENTS[0]);
+        selectedAuxItems = new Set();
+        updateAuxDisplay();
+        return;
+      }
+      if (method === "ETC") {
+        setMainEquipItems([]);
+        selectedAuxItems = new Set();
+        updateAuxDisplay();
+        return;
+      }
+
+      if (!appConfig?.method_defaults?.[method]) {
+        setMainEquipItems((MAIN_EQUIP_BY_METHOD[method] || [])[0] || []);
+        selectedAuxItems = new Set();
+        updateAuxDisplay();
+        return;
+      }
       const def = appConfig.method_defaults[method];
       if (def.equip_main) {
         setMainEquipItems(def.equip_main);
       }
       if (def.default_aux) {
         selectedAuxItems = new Set(parseAuxItems(def.default_aux));
+        updateAuxDisplay();
+      } else {
+        selectedAuxItems = new Set();
         updateAuxDisplay();
       }
     }
@@ -1446,6 +1477,12 @@
     };
 
     function updatePipeCalc() {
+      // PMI/ETC quantities and prices are entered directly, without pipe conversion.
+      if (selectedMethod === "PMI" || selectedMethod === "ETC") {
+        recalculateTotalFee();
+        return;
+      }
+
       const pipe = document.getElementById("select-pipe").value;
       let joints = 0;
       if (selectedMethod === "RT") {
@@ -1464,7 +1501,7 @@
         qty = Math.round(joints * 3.0 * 10) / 10;
       } else {
         unit = (selectedMethod === "MT") ? "P,M,I/D" : "M";
-        unitPrice = (selectedMethod === "PAUT") ? 18500 : 4200;
+        unitPrice = (selectedMethod === "PAUT") ? 18500 : (selectedMethod === "UT" ? 9300 : 4200);
         const baseLen = SIZE_LENGTH_TABLE[pipe] || 0.8401;
         qty = Math.round(baseLen * joints * 10000) / 10000;
       }

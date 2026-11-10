@@ -471,6 +471,7 @@ var APP_CONFIG = {
     "없음"
   ],
   method_defaults: {
+    "PMI": {"equip_main": "\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "aux_equipments": [], "default_aux": ""},
     "RT": {
       "equip_main": "Se-75(880D D10692)",
       "aux_equipments": [

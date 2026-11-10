@@ -506,6 +506,7 @@ def setup_daily_usage_tab_impl(self):
             'UT': ('Sitescan 150(I000760)', '사각 PROBE(70˚) MWB70-2 (56923-5617); 표준시험편 STB-A1 (09148)'),
             'MT': ('Yoke AC(MY-2 NW0453)', 'Black Light (베터리교체형) UV-LED 2P/SPR (NW0096); 조도계 LUX Meter 1330A (180604411)'),
             'PT': ('PT 약품', '조도계 LUX Meter 1330A (180604411)'),
+            'PMI': ('합금분석기(X-ray) XL2 100G(200983)', ''),
             '내근/대기': ('해당없음', ''),
             '휴무': ('해당없음', ''),
             '기타': ('합금분석기(X-ray) XL2 100G(200983)', ''),

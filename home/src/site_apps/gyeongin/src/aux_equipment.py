@@ -93,6 +93,8 @@ def classify_main_equipment_method(label):
     u = str(label or '').strip().upper()
     if not u or u == '해당없음':
         return None
+    if any(k in u for k in ('합금분석기', 'XRF', 'NITON', 'XL2', 'XLI818')):
+        return 'PMI'
     if any(k in u for k in ('PAUT', 'OMNI', 'MX2', 'X3')):
         return 'PAUT'
     if any(k in u for k in ('SITESCAN', 'MASTERSCAN', 'EPOCH', 'USM', '두께측정기', '37DL', 'DMS-2', 'DM-4', 'M-UT')):
@@ -818,7 +820,7 @@ def _open_multi_select_dialog(parent, app, target, mode='aux', method_getter=Non
 
     if is_main:
         dyn_method_map = collect_inventory_main_by_method(app)
-        method_buttons = ['현재방법', '전체', 'PAUT', 'UT', 'RT', 'MT', 'PT', '기타']
+        method_buttons = ['현재방법', '전체', 'PAUT', 'UT', 'RT', 'MT', 'PT', 'PMI', '기타']
         config_attr = 'equipments'
         history_col = '장비명'
     else:

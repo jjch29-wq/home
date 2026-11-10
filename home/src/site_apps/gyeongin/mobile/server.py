@@ -704,6 +704,8 @@ METHOD_DEFAULTS = {
     }
 }
 
+METHOD_DEFAULTS["PMI"] = {'equip_main': '합금분석기(X-ray) XL2 100G(200983)', 'aux_equipments': [], 'default_aux': ''}
+
 WORKTIMES = [
     "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00",
     "09:00~22:00", "09:00~23:00", "09:00~24:00", "09:00~익일01:00",
@@ -887,7 +889,7 @@ def get_config():
         "method_defaults": METHOD_DEFAULTS,
         "worktimes": WORKTIMES,
         "pipe_sizes": list(SIZE_LENGTH.keys()),
-        "methods": ["RT", "PT", "MT", "PAUT", "UT", "내근/대기", "휴무"],
+        "methods": ["RT", "PAUT", "UT", "MT", "PT", "PMI", "ETC", "내근/대기", "휴무"],
         "companies": get_gyeongin_companies(),
         "loc_types": ["경인사무소", "일반배관", "플랜트", "탱크/기기", "기타"],
         "units": get_gyeongin_units(),
