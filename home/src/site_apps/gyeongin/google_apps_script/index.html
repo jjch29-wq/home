@@ -1764,9 +1764,10 @@
       const jointsSummary = r.method === 'RT'
         ? `ORI ${r.ori_joints ?? r.joints ?? 0} / REJ ${r.rej_qty ?? 0}`
         : `${r.joints ?? 0} 개소`;
-      const vehicleSummary = r.vehicle_no
-        ? `${r.vehicle_no}${r.mileage ? ` (${r.mileage} km)` : ''}`
-        : (r.mileage ? `${r.mileage} km` : '-');
+      const mileageText = r.mileage ? (/km$/i.test(String(r.mileage).trim()) ? String(r.mileage).trim() : `${r.mileage} km`) : '';
+      const vehicleStatus = [r.vehicle_check, r.vehicle_note].filter(Boolean).join(' · ');
+      const vehicleParts = [r.vehicle_no, mileageText, vehicleStatus].filter(Boolean);
+      const vehicleSummary = vehicleParts.length ? vehicleParts.join(' · ') : '-';
 
       const detailRows = [
         ['작업구분', r.loc_type || '-'],
@@ -1778,7 +1779,7 @@
         ['성적서번호', r.report_no || '-'],
         ['주 장비', r.equip_main || '-'],
         ['보조장비', r.equip_aux || '-'],
-        ['차량 / 주행', vehicleSummary],
+        ['차량정보', vehicleSummary],
         ['단가 / 일식', `${formatRecentMoney(r.unit_price)}${r.lump_sum ? ` · ${r.lump_sum}` : ''}`],
         ['출장비', formatRecentMoney(r.travel_cost)],
         ['총 검사비', formatRecentMoney(r.total_fee)]

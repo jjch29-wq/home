@@ -1028,6 +1028,8 @@ def _row_to_record(idx: int, row) -> dict:
         "equip_aux": safe_str(row.get("보조장비")),
         "vehicle_no": safe_str(row.get("차량번호")),
         "mileage": safe_str(row.get("주행거리")),
+        "vehicle_check": safe_str(row.get("차량점검")),
+        "vehicle_note": safe_str(row.get("차량비고")),
         "note": safe_str(row.get("DailyMemo"), safe_str(row.get("Remark"), safe_str(row.get("Note")))),
         "joints": safe_float(row.get("조인트수")),
         "ori_joints": safe_float(row.get("조인트수")),

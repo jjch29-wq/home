@@ -1427,6 +1427,8 @@ function sheetItemToRecord(item, rowNumber) {
     equip_aux: String(item['보조장비'] || ''),
     vehicle_no: String(item['차량번호'] || ''),
     mileage: String(item['주행거리'] || ''),
+    vehicle_check: String(item['차량점검'] || ''),
+    vehicle_note: String(item['차량비고'] || ''),
     note: String(item['DailyMemo'] || item['Remark'] || item['Note'] || ''),
     workers: workersText.join(', '),
     worker_list: workerObjects,
