@@ -953,6 +953,209 @@ def calculate_qty(req: QtyCalcRequest):
         "total_cost": total_cost
     }
 
+def _normalize_record_date(val) -> str:
+    """Normalize sheet Date values into YYYY-MM-DD strings for range queries."""
+    if val is None or (isinstance(val, float) and math.isnan(val)):
+        return ""
+    if isinstance(val, (datetime.datetime, datetime.date, pd.Timestamp)):
+        return val.strftime("%Y-%m-%d")
+    parsed = pd.to_datetime(val, errors="coerce")
+    if pd.notna(parsed):
+        return parsed.strftime("%Y-%m-%d")
+    return safe_str(val)[:10].replace(".", "-").replace("/", "-")
+
+
+def _row_to_record(idx: int, row) -> dict:
+    """Convert one DailyUsage row from Gyeongin DB into unified mobile record dict."""
+    workers_summary_parts = []
+    workers_list = []
+    for i in range(1, 11):
+        u_col = f"User{i}" if i > 1 else "User"
+        wt_col = f"WorkTime{i}" if i > 1 else "WorkTime"
+        ws_col = f"User{i}_Work_Shape" if i > 1 else "User_Work_Shape"
+        ot_col = f"User{i}_OT_Pay" if i > 1 else "User_OT_Pay"
+        ot_fallback = f"OT{i}" if i > 1 else "OT"
+
+        u = safe_str(row.get(u_col))
+        if u:
+            time_val = safe_str(row.get(wt_col), "09:00~18:00")
+            shift_val = safe_str(row.get(ws_col), safe_str(row.get("작업형태"), "일반"))
+            ot_val = safe_float(row.get(ot_col, row.get(ot_fallback, 0)))
+            workers_summary_parts.append(f"{u} ({ot_val:,.0f}원)")
+            workers_list.append({
+                "user": u,
+                "shift": shift_val,
+                "time": time_val,
+                "ot": f"{ot_val:,.0f}" if ot_val == int(ot_val) else f"{ot_val:,.1f}"
+            })
+
+    chem_summary = []
+    for col, short in [
+        ('NDT_형광자분', '형광자분'), ('NDT_흑색자분', '흑색자분'), ('NDT_백색페인트', '백색페인트'),
+        ('NDT_침투제', '침투제'), ('NDT_세척제', '세척제'), ('NDT_현상제', '현상제'), ('NDT_형광침투제', '형광침투제')
+    ]:
+        val = safe_float(row.get(col, 0))
+        if val > 0:
+            chem_summary.append(f"{short}:{val:g}")
+
+    rtk_total = safe_float(row.get("RTK_총계", row.get("RTK_RTK총계", 0)))
+    if rtk_total > 0:
+        chem_summary.append(f"RTK:{rtk_total:g}")
+
+    entry_time_val = safe_str(row.get("EntryTime"), safe_str(row.get("입력시간")))
+    date_val = _normalize_record_date(row.get("Date_str") or row.get("Date"))
+
+    return {
+        "id": int(idx),
+        "entry_time": entry_time_val,
+        "date": date_val,
+        "site": safe_str(row.get("Site"), safe_str(row.get("작업구분"), safe_str(row.get("구분"), "경인사무소"))),
+        "company": safe_str(row.get("업체명"), "경인사무소"),
+        "method": safe_str(row.get("검사방법")),
+        "item_name": safe_str(row.get("검사품명"), "Piping"),
+        "material": safe_str(row.get("자재명"), safe_str(row.get("Material"), safe_str(row.get("MaterialID"), safe_str(row.get("품목명"))))),
+        "loc_type": safe_str(row.get("작업구분"), safe_str(row.get("검사구분"), safe_str(row.get("구분"), "경인사무소"))),
+        "pipe": safe_str(row.get("관경(Inch)"), safe_str(row.get("규격"))),
+        "qty": safe_float(row.get("수량", row.get("Usage", row.get("검사량", 0)))),
+        "unit": safe_str(row.get("Unit"), safe_str(row.get("단위"), "매")),
+        "unit_price": safe_float(row.get("단가")),
+        "travel_cost": safe_float(row.get("출장비")),
+        "lump_sum": safe_str(row.get("일식")),
+        "total_fee": safe_float(row.get("검사비")),
+        "applied_code": safe_str(row.get("적용코드")),
+        "report_no": safe_str(row.get("성적서번호")),
+        "equip_main": safe_str(row.get("장비명")),
+        "equip_aux": safe_str(row.get("보조장비")),
+        "vehicle_no": safe_str(row.get("차량번호")),
+        "mileage": safe_str(row.get("주행거리")),
+        "note": safe_str(row.get("DailyMemo"), safe_str(row.get("Remark"), safe_str(row.get("Note")))),
+        "joints": safe_float(row.get("조인트수")),
+        "ori_joints": safe_float(row.get("조인트수")),
+        "rep_joints": 0,
+        "rej_qty": safe_float(row.get("불량수")),
+        "rtk_center_miss": safe_float(row.get("RTK_센터미스")),
+        "rtk_density": safe_float(row.get("RTK_농도")),
+        "rtk_marking_miss": safe_float(row.get("RTK_마킹미스")),
+        "rtk_film_mark": safe_float(row.get("RTK_필름마크")),
+        "rtk_handling": safe_float(row.get("RTK_취급부주의")),
+        "rtk_complaint": safe_float(row.get("RTK_고객불만")),
+        "rtk_etc": safe_float(row.get("RTK_기타")),
+        "rtk_total": rtk_total,
+        "chem_fl_mag": safe_float(row.get("NDT_형광자분")),
+        "chem_black_mag": safe_float(row.get("NDT_흑색자분")),
+        "chem_white_paint": safe_float(row.get("NDT_백색페인트")),
+        "chem_penetrant": safe_float(row.get("NDT_침투제")),
+        "chem_cleaner": safe_float(row.get("NDT_세척제")),
+        "chem_developer": safe_float(row.get("NDT_현상제")),
+        "chem_fl_pen": safe_float(row.get("NDT_형광침투제")),
+        "extra": " ".join(chem_summary),
+        "workers": ", ".join(workers_summary_parts),
+        "worker_list": workers_list,
+    }
+
+
+def search_records_data(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Search Gyeongin DailyUsage sheet and return records grouped by date + site (20 groups/page)."""
+    paths = get_inventory_paths()
+    if not paths:
+        return {"status": "success", "groups": [], "has_more": False, "next_offset": 0, "total_groups": 0, "total_records": 0}
+
+    try:
+        df = pd.read_excel(paths[0], sheet_name="DailyUsage")
+        if df.empty:
+            return {"status": "success", "groups": [], "has_more": False, "next_offset": 0, "total_groups": 0, "total_records": 0}
+
+        start_date = safe_str(params.get("start_date"))
+        end_date = safe_str(params.get("end_date"))
+        keyword = safe_str(params.get("keyword")).lower()
+        raw_methods = params.get("methods") or []
+        if isinstance(raw_methods, str):
+            raw_methods = [m.strip() for m in raw_methods.split(",") if m.strip()]
+        else:
+            raw_methods = [safe_str(m) for m in raw_methods if safe_str(m)]
+
+        offset = max(0, int(params.get("offset") or 0))
+        limit = min(50, max(1, int(params.get("limit") or 20)))
+
+        records = []
+        for idx, row in df.iterrows():
+            record = _row_to_record(int(idx), row)
+            if not record["date"]:
+                continue
+            if start_date and record["date"] < start_date:
+                continue
+            if end_date and record["date"] > end_date:
+                continue
+            if raw_methods and record["method"] not in raw_methods:
+                continue
+            if keyword:
+                searchable = f"{record['site']} {record['company']} {record['report_no']}".lower()
+                if keyword not in searchable:
+                    continue
+            records.append(record)
+
+        records.sort(key=lambda r: (r["date"], r["entry_time"], r["id"]), reverse=True)
+
+        group_map: Dict[str, Dict[str, Any]] = {}
+        groups: List[Dict[str, Any]] = []
+        for rec in records:
+            g_key = f"{rec['date']}|{rec['site']}"
+            if g_key not in group_map:
+                group_map[g_key] = {
+                    "key": g_key,
+                    "date": rec["date"],
+                    "site": rec["site"],
+                    "methods": [],
+                    "record_count": 0,
+                    "total_fee": 0,
+                    "records": [],
+                }
+                groups.append(group_map[g_key])
+            grp = group_map[g_key]
+            grp["records"].append(rec)
+            grp["record_count"] += 1
+            grp["total_fee"] += rec["total_fee"]
+            if rec["method"] and rec["method"] not in grp["methods"]:
+                grp["methods"].append(rec["method"])
+
+        page = groups[offset:offset + limit]
+        return {
+            "status": "success",
+            "groups": page,
+            "has_more": offset + limit < len(groups),
+            "next_offset": offset + len(page),
+            "total_groups": len(groups),
+            "total_records": len(records),
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e), "groups": [], "has_more": False, "next_offset": 0, "total_groups": 0, "total_records": 0}
+
+
+@app.get("/api/search_records")
+def search_records_get(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    keyword: Optional[str] = None,
+    methods: Optional[str] = None,
+    offset: int = 0,
+    limit: int = 20,
+):
+    return search_records_data({
+        "start_date": start_date or "",
+        "end_date": end_date or "",
+        "keyword": keyword or "",
+        "methods": methods or "",
+        "offset": offset,
+        "limit": limit,
+    })
+
+
+@app.post("/api/search_records")
+async def search_records_post(request: Request):
+    body = await request.json()
+    return search_records_data(body if isinstance(body, dict) else {})
+
+
 @app.get("/api/recent_records")
 def get_recent_records(date: Optional[str] = None):
     paths = get_inventory_paths()
@@ -964,8 +1167,8 @@ def get_recent_records(date: Optional[str] = None):
         if df.empty:
             return {"records": []}
 
-        df["Date_str"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-        
+        df["Date_str"] = df["Date"].apply(_normalize_record_date)
+
         if date:
             filtered = df[df["Date_str"] == date]
             if filtered.empty:
@@ -973,94 +1176,7 @@ def get_recent_records(date: Optional[str] = None):
         else:
             filtered = df.tail(15)
 
-        records = []
-        for idx, row in filtered.iterrows():
-            workers_summary = ""
-            workers_list = []
-            for i in range(1, 11):
-                u_col = f"User{i}" if i > 1 else "User"
-                wt_col = f"WorkTime{i}" if i > 1 else "WorkTime"
-                ws_col = f"User{i}_Work_Shape" if i > 1 else "User_Work_Shape"
-                ot_col = f"User{i}_OT_Pay" if i > 1 else "User_OT_Pay"
-                ot_fallback = f"OT{i}" if i > 1 else "OT"
-
-                u = safe_str(row.get(u_col))
-                if u:
-                    time_val = safe_str(row.get(wt_col), "09:00~18:00")
-                    shift_val = safe_str(row.get(ws_col), "일반")
-                    ot_val = safe_float(row.get(ot_col, row.get(ot_fallback, 0)))
-                    workers_summary += f"{u} ({ot_val:,.0f}원), "
-                    workers_list.append({
-                        "user": u,
-                        "shift": shift_val,
-                        "time": time_val,
-                        "ot": str(int(ot_val)) if ot_val == int(ot_val) else f"{ot_val:.1f}"
-                    })
-            
-            # Form chemical summary if present
-            chem_summary = []
-            for col, short in [('NDT_형광자분', '형자'), ('NDT_흑색자분', '흑자'), ('NDT_백색페인트', '백페'), 
-                               ('NDT_침투제', '침투'), ('NDT_세척제', '세척'), ('NDT_현상제', '현상'), ('NDT_형광침투제', '형침')]:
-                val = safe_float(row.get(col, 0))
-                if val > 0:
-                    chem_summary.append(f"{short}:{val:g}")
-
-            rtk_summary = []
-            rtk_total = safe_float(row.get("RTK_총계", row.get("RTK_RTK총계", 0)))
-            if rtk_total > 0:
-                rtk_summary.append(f"RTK:{rtk_total:g}")
-
-            entry_time_val = safe_str(row.get("EntryTime"), safe_str(row.get("입력시간")))
-
-            records.append({
-                "id": int(idx),
-                "entry_time": entry_time_val,
-                "date": safe_str(row.get("Date_str"), safe_str(row.get("Date"))),
-                "site": safe_str(row.get("Site"), "경인사무소"),
-                "company": safe_str(row.get("업체명"), "경인사무소"),
-                "method": safe_str(row.get("검사방법")),
-                "item_name": safe_str(row.get("검사품명"), "Piping"),
-                "material": safe_str(row.get("자재명"), safe_str(row.get("MaterialID"), safe_str(row.get("품목명")))),
-                "loc_type": safe_str(row.get("작업구분"), safe_str(row.get("구분"), "경인사무소")),
-                "pipe": safe_str(row.get("관경(Inch)"), safe_str(row.get("규격"))),
-                "qty": safe_float(row.get("수량", row.get("Usage", row.get("검사량", 0)))),
-                "unit": safe_str(row.get("Unit"), safe_str(row.get("단위"), "M")),
-                "unit_price": safe_float(row.get("단가")),
-                "travel_cost": safe_float(row.get("출장비")),
-                "lump_sum": safe_str(row.get("일식")),
-                "total_fee": safe_float(row.get("검사비")),
-                "applied_code": safe_str(row.get("적용코드")),
-                "report_no": safe_str(row.get("성적서번호")),
-                "equip_main": safe_str(row.get("장비명")),
-                "equip_aux": safe_str(row.get("보조장비")),
-                "vehicle_no": safe_str(row.get("차량번호")),
-                "mileage": safe_str(row.get("주행거리")),
-                "note": safe_str(row.get("Note"), safe_str(row.get("DailyMemo"))),
-                "joints": safe_float(row.get("조인트수")),
-                "ori_joints": safe_float(row.get("조인트수")),
-                "rej_qty": safe_float(row.get("불량수")),
-                # RTK
-                "rtk_center_miss": safe_float(row.get("RTK_센터미스")),
-                "rtk_density": safe_float(row.get("RTK_농도")),
-                "rtk_marking_miss": safe_float(row.get("RTK_마킹미스")),
-                "rtk_film_mark": safe_float(row.get("RTK_필름마크")),
-                "rtk_handling": safe_float(row.get("RTK_취급부주의")),
-                "rtk_complaint": safe_float(row.get("RTK_고객불만")),
-                "rtk_etc": safe_float(row.get("RTK_기타")),
-                "rtk_total": safe_float(row.get("RTK_총계", row.get("RTK_RTK총계"))),
-                # Chemicals
-                "chem_fl_mag": safe_float(row.get("NDT_형광자분")),
-                "chem_black_mag": safe_float(row.get("NDT_흑색자분")),
-                "chem_white_paint": safe_float(row.get("NDT_백색페인트")),
-                "chem_penetrant": safe_float(row.get("NDT_침투제")),
-                "chem_cleaner": safe_float(row.get("NDT_세척제")),
-                "chem_developer": safe_float(row.get("NDT_현상제")),
-                "chem_fl_pen": safe_float(row.get("NDT_형광침투제")),
-                "extra": " ".join(chem_summary + rtk_summary),
-                "workers_summary": workers_summary.rstrip(", "),
-                "workers": workers_list
-            })
-
+        records = [_row_to_record(int(idx), row) for idx, row in filtered.iterrows()]
         records.reverse()
         return {"records": records}
     except Exception as e:
@@ -1216,6 +1332,8 @@ def index(request: Request):
         return JSONResponse(get_config())
     elif api_action == "getRecentRecords":
         return JSONResponse(get_recent_records())
+    elif api_action in ("searchRecords", "search"):
+        return JSONResponse(search_records_data(dict(request.query_params)))
     index_file = STATIC_DIR / "index.html"
     if not index_file.exists():
         return HTMLResponse("<h1>경인사무소 모바일 웹 화면 준비 중</h1>")
@@ -1226,7 +1344,9 @@ async def index_post(request: Request):
     api_action = request.query_params.get("api")
     body = await request.json()
     action = api_action or body.get("action")
-    if action == "saveRecord":
+    if action in ("searchRecords", "search"):
+        return JSONResponse(search_records_data(body if isinstance(body, dict) else {}))
+    elif action == "saveRecord":
         return JSONResponse(save_record(RecordSaveRequest(**body)))
     elif action in ("updateRecord", "update"):
         return JSONResponse(update_record(RecordUpdateRequest(**body)))

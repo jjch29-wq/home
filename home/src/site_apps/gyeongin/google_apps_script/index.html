@@ -542,11 +542,11 @@
         </button>
       </div>
 
-      <!-- 10. 최근 저장된 내역 (실시간 리스트) -->
+      <!-- 10. 작업일보 전체 검색 -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
         <div class="flex items-center justify-between border-b border-slate-100 pb-2">
           <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-            <i data-lucide="history" class="w-4 h-4"></i> 구글 시트 저장 최근 내역
+            <i data-lucide="search" class="w-4 h-4"></i> 경인 작업일보 검색
           </span>
           <button type="button" id="btn-refresh-history"
             class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5">
@@ -554,9 +554,49 @@
           </button>
         </div>
 
+        <div class="space-y-2.5">
+          <div class="grid grid-cols-4 gap-1" id="history-period-buttons">
+            <button type="button" data-period="today" class="history-period-btn py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">오늘</button>
+            <button type="button" data-period="7days" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">최근 7일</button>
+            <button type="button" data-period="month" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">이번 달</button>
+            <button type="button" data-period="custom" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">직접 지정</button>
+          </div>
+
+          <div id="history-custom-dates" class="hidden grid grid-cols-2 gap-2">
+            <input type="date" id="history-start-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
+            <input type="date" id="history-end-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
+          </div>
+
+          <div class="flex gap-2">
+            <input type="search" id="history-keyword" placeholder="현장명 · 업체명 · 성적서번호"
+              class="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <button type="button" id="btn-history-search" class="shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">검색</button>
+          </div>
+
+          <div class="flex gap-1.5 overflow-x-auto pb-1" id="history-method-filters">
+            <button type="button" data-history-method="ALL" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 text-white text-[10px] font-bold">전체</button>
+            <button type="button" data-history-method="RT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">RT</button>
+            <button type="button" data-history-method="PAUT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PAUT</button>
+            <button type="button" data-history-method="UT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">UT</button>
+            <button type="button" data-history-method="MT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">MT</button>
+            <button type="button" data-history-method="PT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PT</button>
+            <button type="button" data-history-method="PMI" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PMI</button>
+            <button type="button" data-history-method="ETC" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">ETC</button>
+            <button type="button" data-history-method="내근/대기" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">내근/대기</button>
+            <button type="button" data-history-method="휴무" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">휴무</button>
+          </div>
+
+          <div id="history-result-summary" class="text-[11px] text-slate-500">검색 준비 중...</div>
+        </div>
+
         <div id="recent-list" class="space-y-2">
           <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
         </div>
+
+        <button type="button" id="btn-history-more"
+          class="hidden w-full py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
+          20개 그룹 더 보기
+        </button>
       </div>
 
   </main>
@@ -864,12 +904,14 @@
             google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteRecord(payload);
           } else if (action === 'getRecentRecords') {
             google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getRecentRecords(payload);
+          } else if (action === 'searchRecords') {
+            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).searchRecords(payload);
           } else {
             reject(new Error("알 수 없는 API 액션: " + action));
           }
         } else {
           // Fallback to fetch if hosted separately
-          const isPost = (action === 'saveRecord' || action === 'updateRecord' || action === 'deleteRecord' || action === 'delete' || action === 'update');
+          const isPost = (action === 'saveRecord' || action === 'updateRecord' || action === 'deleteRecord' || action === 'delete' || action === 'update' || action === 'searchRecords');
           const url = isPost ? '?api=' + action : `?api=${action}`;
           fetch(url, {
             method: isPost ? 'POST' : 'GET',
@@ -1058,6 +1100,10 @@
     function switchMethod(method) {
       const methodChanged = selectedMethod !== method;
       selectedMethod = method;
+
+      if (methodChanged) {
+        resetInspectionMeasurements();
+      }
 
       document.querySelectorAll(".method-btn").forEach(btn => {
         if (btn.dataset.method === method) {
@@ -1466,6 +1512,41 @@
       document.getElementById("rtk-total-badge").textContent = sum;
     }
 
+    function resetInspectionMeasurements() {
+      document.getElementById("input-ori-joints").value = 1;
+      document.getElementById("input-rep-joints").value = 0;
+      document.getElementById("input-rej-qty").value = 0;
+      document.getElementById("input-joints").value = 1;
+      document.getElementById("input-qty").value = 0;
+
+      document.querySelectorAll(".rtk-inp").forEach(input => { input.value = ""; });
+      calcRtkTotal();
+
+      [
+        "chem-fl-mag", "chem-black-mag", "chem-white-paint", "chem-penetrant",
+        "chem-cleaner", "chem-developer", "chem-fl-pen"
+      ].forEach(id => { document.getElementById(id).value = ""; });
+
+      isManualQty = false;
+    }
+
+    function resetAfterSuccessfulSave() {
+      resetInspectionMeasurements();
+
+      ["input-report-no", "input-lump-sum", "input-mileage", "input-note"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      document.getElementById("input-travel-cost").value = 0;
+
+      ["input-custom-item", "input-custom-mat"].forEach(id => {
+        const input = document.getElementById(id);
+        input.value = "";
+        input.classList.add("hidden");
+      });
+
+      updatePipeCalc();
+    }
+
     // Pipe length lookup table (Size to Length)
     const SIZE_LENGTH_TABLE = {
       "15A": 0.0682, "20A": 0.0854, "25A": 0.1068, "32A": 0.1341, "40A": 0.1527,
@@ -1577,7 +1658,9 @@
         const lump_sum = document.getElementById("input-lump-sum").value.trim();
         const total_fee = parseFloat(document.getElementById("input-total-fee").value) || 0;
 
-        const equip_main = document.getElementById("select-equip").value;
+        let equip_main = document.getElementById("select-equip").value;
+        const customMainEquip = document.getElementById("input-custom-main-equip")?.value.trim();
+        if (customMainEquip) equip_main = customMainEquip;
         let equip_aux = document.getElementById("select-aux-equip").value;
         const customAux = document.getElementById("input-custom-aux").value.trim();
         if (customAux) equip_aux = customAux;
@@ -1626,8 +1709,13 @@
 
         const res = await apiCall(actionName, payload);
         if (res && res.status === 'success') {
-          showToast(isEditing ? "작업일보가 성공적으로 수정되었습니다!" : "구글 드라이브 클라우드에 성공적으로 저장되었습니다!");
-          if (isEditing) cancelEditMode();
+          if (isEditing) {
+            showToast("작업일보가 성공적으로 수정되었습니다!");
+            cancelEditMode();
+          } else {
+            resetAfterSuccessfulSave();
+            showToast("저장 완료 — 작업자·차량·장비는 유지되고 물량 입력은 초기화되었습니다.");
+          }
           loadRecentRecords();
         } else {
           showToast((res && res.detail) || (isEditing ? "수정 실패" : "저장 실패"), true);
@@ -1642,161 +1730,270 @@
 
     let currentEditingRecord = null;
     window.recentRecordsList = [];
+    let historyGroups = [];
+    let historyOffset = 0;
+    let historyHasMore = false;
+    let historyPeriod = 'today';
+    let historyMethods = new Set();
+    let expandedRecentIndex = null;
+
+    function escapeRecentHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatRecentMoney(value) {
+      return Number(value || 0).toLocaleString() + '원';
+    }
+
+    function renderRecentDetail(r) {
+      const workers = Array.isArray(r.worker_list) ? r.worker_list : [];
+      const workerDetail = workers.length
+        ? workers.map(w => {
+          const name = escapeRecentHtml(w.user || '작업자');
+          const time = escapeRecentHtml(w.time || '-');
+          const ot = formatRecentMoney(String(w.ot || '0').replace(/,/g, ''));
+          return `<div class="flex items-center justify-between gap-2"><span>${name} · ${time}</span><span class="font-bold text-emerald-300">OT ${ot}</span></div>`;
+        }).join('')
+        : `<div>${escapeRecentHtml(r.workers || '작업자 정보 없음')}</div>`;
+
+      const jointsSummary = r.method === 'RT'
+        ? `ORI ${r.ori_joints ?? r.joints ?? 0} / REJ ${r.rej_qty ?? 0}`
+        : `${r.joints ?? 0} 개소`;
+      const vehicleSummary = r.vehicle_no
+        ? `${r.vehicle_no}${r.mileage ? ` (${r.mileage} km)` : ''}`
+        : (r.mileage ? `${r.mileage} km` : '-');
+
+      const detailRows = [
+        ['작업구분', r.loc_type || '-'],
+        ['검사 정보', `${r.method || '-'} · ${r.item_name || 'Piping'}${r.pipe ? ` · ${r.pipe}` : ''}`],
+        ['조인트/불량', jointsSummary],
+        ['물량', `${r.qty ?? 0} ${r.unit || ''}`],
+        ['자재', r.material || '-'],
+        ['적용코드', r.applied_code || '-'],
+        ['성적서번호', r.report_no || '-'],
+        ['주 장비', r.equip_main || '-'],
+        ['보조장비', r.equip_aux || '-'],
+        ['차량 / 주행', vehicleSummary],
+        ['단가 / 일식', `${formatRecentMoney(r.unit_price)}${r.lump_sum ? ` · ${r.lump_sum}` : ''}`],
+        ['출장비', formatRecentMoney(r.travel_cost)],
+        ['총 검사비', formatRecentMoney(r.total_fee)]
+      ];
+      if (r.note) detailRows.push(['비고', r.note]);
+
+      return `
+        <div class="mt-3 pt-3 border-t border-slate-700 space-y-2">
+          <div class="grid grid-cols-[72px_1fr] gap-x-2 gap-y-1.5 text-[11px]">
+            ${detailRows.map(([label, value]) => `
+              <span class="text-slate-500">${label}</span>
+              <span class="text-slate-200 font-medium break-words">${escapeRecentHtml(value)}</span>
+            `).join('')}
+          </div>
+          <div class="rounded-xl bg-slate-800/90 border border-slate-700 p-2.5 text-[11px] text-slate-300 space-y-1">
+            <div class="text-slate-500 font-bold mb-1">참여 작업자</div>
+            ${workerDetail}
+          </div>
+          ${r.extra ? `<div class="rounded-xl bg-amber-500/10 border border-amber-500/20 p-2.5 text-[11px] text-amber-300">🧪 ${escapeRecentHtml(r.extra)}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function toggleRecentDetail(idx) {
+      expandedRecentIndex = expandedRecentIndex === idx ? null : idx;
+      renderRecentRecordsList();
+    }
+
+    function renderRecentRecordsList() {
+      const container = document.getElementById("recent-list");
+      window.recentRecordsList = [];
+      container.innerHTML = historyGroups.map(group => {
+        const methodBadges = (group.methods || []).map(method =>
+          `<span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-black">${escapeRecentHtml(method)}</span>`
+        ).join('');
+        const recordRows = (group.records || []).map(r => {
+          const idx = window.recentRecordsList.push(r) - 1;
+          const isExpanded = expandedRecentIndex === idx;
+          return `
+            <div data-recent-card-index="${idx}" class="rounded-xl border ${isExpanded ? 'border-emerald-400 bg-slate-900' : 'border-slate-700 bg-slate-900/95'} p-3 cursor-pointer">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-black">${escapeRecentHtml(r.method || '-')}</span>
+                    <span class="text-xs font-bold text-white truncate">${escapeRecentHtml(r.company || '-')} · ${escapeRecentHtml(r.item_name || 'Piping')}</span>
+                  </div>
+                  <div class="text-[10px] text-slate-400">${escapeRecentHtml(r.pipe || '비배관')}${r.report_no ? ` · 성적서 ${escapeRecentHtml(r.report_no)}` : ''}</div>
+                </div>
+                <div class="text-right shrink-0">
+                  <div class="text-sm font-black text-white">${escapeRecentHtml(r.qty)} ${escapeRecentHtml(r.unit)}</div>
+                  <div class="text-[10px] font-bold text-emerald-400">${formatRecentMoney(r.total_fee)}</div>
+                </div>
+              </div>
+              <div class="mt-2 flex justify-end text-[10px] font-bold text-emerald-400">${isExpanded ? '상세 접기 ▲' : '상세보기 ▼'}</div>
+              ${isExpanded ? renderRecentDetail(r) : ''}
+              <div class="pt-2 mt-2 border-t border-slate-800 flex gap-1.5 text-[11px]">
+                <button type="button" data-recent-action class="flex-1 py-1.5 bg-slate-800 text-slate-200 font-bold rounded-lg" onclick="copyRecordByIndex(${idx})">📋 복사</button>
+                <button type="button" data-recent-action class="flex-1 py-1.5 bg-amber-500/20 text-amber-300 font-bold rounded-lg" onclick="startEditRecordByIndex(${idx})">✏️ 수정</button>
+                <button type="button" data-recent-action class="flex-1 py-1.5 bg-rose-500/20 text-rose-300 font-bold rounded-lg" onclick="deleteRecordByIndex(${idx})">🗑️ 삭제</button>
+              </div>
+            </div>`;
+        }).join('');
+        return `
+          <section class="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden shadow-sm">
+            <div class="p-3 bg-white border-b border-slate-200">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-sm font-black text-slate-900">${escapeRecentHtml(group.date)} · ${escapeRecentHtml(group.site)}</div>
+                  <div class="flex flex-wrap gap-1 mt-1">${methodBadges}</div>
+                </div>
+                <div class="text-right shrink-0">
+                  <div class="text-[10px] text-slate-500">${Number(group.record_count || 0)}건</div>
+                  <div class="text-xs font-black text-emerald-700">${formatRecentMoney(group.total_fee)}</div>
+                </div>
+              </div>
+            </div>
+            <div class="p-2 space-y-2 bg-slate-800">${recordRows}</div>
+          </section>`;
+      }).join("");
+      lucide.createIcons();
+    }
+
+    document.getElementById("recent-list").addEventListener("click", event => {
+      if (event.target.closest("[data-recent-action]")) return;
+      const card = event.target.closest("[data-recent-card-index]");
+      if (!card) return;
+      const idx = Number(card.dataset.recentCardIndex);
+      if (!Number.isInteger(idx)) return;
+      toggleRecentDetail(idx);
+    });
+
+    function setSelectOrCustomValue(selectId, customInputId, value, fallbackCustomOption = '') {
+      const sel = document.getElementById(selectId);
+      const customInp = customInputId ? document.getElementById(customInputId) : null;
+      const val = String(value || '').trim();
+      if (!sel) return false;
+      if (!val) {
+        if (customInp) { customInp.value = ''; customInp.classList.add('hidden'); }
+        return false;
+      }
+      const hasOption = Array.from(sel.options).some(opt => opt.value === val);
+      if (hasOption) {
+        sel.value = val;
+        if (customInp) { customInp.value = ''; customInp.classList.add('hidden'); }
+        return true;
+      }
+      if (customInp) {
+        if (fallbackCustomOption && Array.from(sel.options).some(opt => opt.value === fallbackCustomOption)) {
+          sel.value = fallbackCustomOption;
+        }
+        customInp.value = val;
+        customInp.classList.remove('hidden');
+        return true;
+      }
+      sel.add(new Option(val, val));
+      sel.value = val;
+      return true;
+    }
+
+    function populateFormFromRecord(r, options = {}) {
+      const includeDate = Boolean(options.includeDate);
+      if (includeDate && r.date && dateInput) dateInput.value = r.date;
+      const siteInput = document.getElementById("input-site-name");
+      if (siteInput) siteInput.value = r.site || "경인사무소";
+
+      setSelectOrCustomValue("select-company", "input-custom-company", r.company);
+      setSelectOrCustomValue("select-loc-type", null, r.loc_type);
+
+      if (r.method) switchMethod(r.method);
+
+      if (setSelectOrCustomValue("select-item-name", "input-custom-item", r.item_name)) {
+        document.getElementById("select-item-name").dispatchEvent(new Event('change'));
+      }
+      setSelectOrCustomValue("select-material", "input-custom-mat", r.material);
+      setSelectOrCustomValue("select-applied-code", "input-custom-code", r.applied_code, "기타");
+
+      const repNoInput = document.getElementById("input-report-no");
+      if (repNoInput) repNoInput.value = r.report_no || "";
+
+      if (r.pipe) setSelectOrCustomValue("select-pipe", null, r.pipe);
+      const oriJointsInput = document.getElementById("input-ori-joints");
+      if (oriJointsInput) oriJointsInput.value = r.ori_joints ?? 1;
+      const repJointsInput = document.getElementById("input-rep-joints");
+      if (repJointsInput) repJointsInput.value = r.rep_joints ?? 0;
+      const rejQtyInput = document.getElementById("input-rej-qty");
+      if (rejQtyInput) rejQtyInput.value = r.rej_qty ?? 0;
+      const jointsInput = document.getElementById("input-joints");
+      if (jointsInput) jointsInput.value = r.joints ?? 1;
+
+      const qtyInput = document.getElementById("input-qty");
+      if (r.qty !== undefined && qtyInput) {
+        isManualQty = true;
+        qtyInput.value = r.qty;
+      }
+      if (r.unit) setSelectOrCustomValue("select-unit", null, r.unit);
+      const unitPriceInput = document.getElementById("input-unit-price");
+      if (r.unit_price !== undefined && unitPriceInput) unitPriceInput.value = r.unit_price;
+      const travelInput = document.getElementById("input-travel-cost");
+      if (r.travel_cost !== undefined && travelInput) travelInput.value = r.travel_cost;
+      const lumpInput = document.getElementById("input-lump-sum");
+      if (lumpInput) lumpInput.value = r.lump_sum || '';
+      const totalFeeInput = document.getElementById("input-total-fee");
+      if (r.total_fee !== undefined && totalFeeInput) {
+        totalFeeInput.value = r.total_fee;
+      } else {
+        recalculateTotalFee();
+      }
+
+      setMainEquipItems(r.equip_main || "");
+      selectedAuxItems = new Set(parseAuxItems(r.equip_aux || ""));
+      updateAuxDisplay();
+
+      if (r.vehicle_no) setSelectOrCustomValue("select-vehicle", null, r.vehicle_no);
+      const mileageInput = document.getElementById("input-mileage");
+      if (mileageInput) mileageInput.value = r.mileage || "";
+      const noteInput = document.getElementById("input-note");
+      if (noteInput) noteInput.value = r.note || "";
+
+      const rtkFields = ['rtk-center-miss', 'rtk-density', 'rtk-marking-miss', 'rtk-film-mark', 'rtk-handling', 'rtk-complaint', 'rtk-etc', 'rtk-total'];
+      const rtkKeys = ['rtk_center_miss', 'rtk_density', 'rtk_marking_miss', 'rtk_film_mark', 'rtk_handling', 'rtk_complaint', 'rtk_etc', 'rtk_total'];
+      for (let i = 0; i < rtkFields.length; i++) {
+        const el = document.getElementById(rtkFields[i]);
+        if (el) el.value = r[rtkKeys[i]] || 0;
+      }
+      if (typeof calcRtkTotal === 'function') calcRtkTotal();
+
+      const chemFields = ['chem-fl-mag', 'chem-black-mag', 'chem-white-paint', 'chem-penetrant', 'chem-cleaner', 'chem-developer', 'chem-fl-pen'];
+      const chemKeys = ['chem_fl_mag', 'chem_black_mag', 'chem_white_paint', 'chem_penetrant', 'chem_cleaner', 'chem_developer', 'chem_fl_pen'];
+      for (let i = 0; i < chemFields.length; i++) {
+        const el = document.getElementById(chemFields[i]);
+        if (el) el.value = r[chemKeys[i]] || 0;
+      }
+
+      if (r.worker_list && Array.isArray(r.worker_list) && r.worker_list.length > 0) {
+        workerRows = JSON.parse(JSON.stringify(r.worker_list));
+      } else if (!Array.isArray(workerRows) || workerRows.length === 0) {
+        initDefaultWorkers();
+      }
+      renderWorkers();
+    }
 
     // Start edit mode with full record population
     window.startEditRecord = function (r) {
       if (!r) return;
       try {
         currentEditingRecord = r;
-
-        // Smooth scroll to top immediately
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
-        // Show Edit Banner
         const banner = document.getElementById("edit-banner");
         const bannerDesc = document.getElementById("edit-banner-desc");
         if (banner) banner.classList.remove("hidden");
         if (bannerDesc) bannerDesc.textContent = `${r.date} [${r.company}] ${r.method} · ${r.item_name || 'Piping'} (${r.qty} ${r.unit})`;
 
-        // Populate basic fields
-        if (r.date && dateInput) dateInput.value = r.date;
-        const siteInput = document.getElementById("input-site-name");
-        if (r.site && siteInput) siteInput.value = r.site;
+        populateFormFromRecord(r, { includeDate: true });
 
-        // Company
-        const coSelect = document.getElementById("select-company");
-        const customCo = document.getElementById("input-custom-company");
-        if (r.company && coSelect) {
-          let foundCo = false;
-          for (let opt of coSelect.options) {
-            if (opt.value === r.company) { foundCo = true; break; }
-          }
-          if (foundCo) {
-            coSelect.value = r.company;
-            if (customCo) { customCo.value = ""; customCo.classList.add("hidden"); }
-          } else {
-            if (customCo) { customCo.value = r.company; customCo.classList.remove("hidden"); }
-          }
-        }
-
-        // Loc type
-        const locSelect = document.getElementById("select-loc-type");
-        if (r.loc_type && locSelect) locSelect.value = r.loc_type;
-
-        // Method
-        if (r.method) switchMethod(r.method);
-
-        // Item Name
-        const itemSelect = document.getElementById("select-item-name");
-        const customItem = document.getElementById("input-custom-item");
-        if (r.item_name && itemSelect) {
-          let foundItem = false;
-          for (let opt of itemSelect.options) {
-            if (opt.value === r.item_name) { foundItem = true; break; }
-          }
-          if (foundItem) {
-            itemSelect.value = r.item_name;
-            if (customItem) { customItem.value = ""; customItem.classList.add("hidden"); }
-          } else {
-            if (customItem) { customItem.value = r.item_name; customItem.classList.remove("hidden"); }
-          }
-          itemSelect.dispatchEvent(new Event('change'));
-        }
-
-        // Material
-        const matSelect = document.getElementById("select-material");
-        const customMat = document.getElementById("input-custom-mat");
-        if (r.material && matSelect) {
-          let foundMat = false;
-          for (let opt of matSelect.options) {
-            if (opt.value === r.material) { foundMat = true; break; }
-          }
-          if (foundMat) {
-            matSelect.value = r.material;
-            if (customMat) { customMat.value = ""; customMat.classList.add("hidden"); }
-          } else {
-            if (customMat) { customMat.value = r.material; customMat.classList.remove("hidden"); }
-          }
-        }
-
-        // Applied Code
-        const appCodeSelect = document.getElementById("select-applied-code");
-        if (r.applied_code && appCodeSelect) appCodeSelect.value = r.applied_code;
-        const repNoInput = document.getElementById("input-report-no");
-        if (r.report_no && repNoInput) repNoInput.value = r.report_no;
-
-        // Pipe & Joints
-        const pipeSelect = document.getElementById("select-pipe");
-        if (r.pipe && pipeSelect) pipeSelect.value = r.pipe;
-        const oriJointsInput = document.getElementById("input-ori-joints");
-        if (r.ori_joints !== undefined && oriJointsInput) oriJointsInput.value = r.ori_joints;
-        const repJointsInput = document.getElementById("input-rep-joints");
-        if (r.rep_joints !== undefined && repJointsInput) repJointsInput.value = r.rep_joints;
-        const rejQtyInput = document.getElementById("input-rej-qty");
-        if (r.rej_qty !== undefined && rejQtyInput) rejQtyInput.value = r.rej_qty;
-        const jointsInput = document.getElementById("input-joints");
-        if (r.joints !== undefined && jointsInput) jointsInput.value = r.joints;
-
-        // Qty & Price
-        const qtyInput = document.getElementById("input-qty");
-        if (r.qty !== undefined && qtyInput) {
-          isManualQty = true;
-          qtyInput.value = r.qty;
-        }
-        const unitSelect = document.getElementById("select-unit");
-        if (r.unit && unitSelect) unitSelect.value = r.unit;
-        const unitPriceInput = document.getElementById("input-unit-price");
-        if (r.unit_price !== undefined && unitPriceInput) unitPriceInput.value = r.unit_price;
-        const travelInput = document.getElementById("input-travel-cost");
-        if (r.travel_cost !== undefined && travelInput) travelInput.value = r.travel_cost;
-        const lumpInput = document.getElementById("input-lump-sum");
-        if (r.lump_sum !== undefined && lumpInput) lumpInput.value = r.lump_sum || '';
-        const totalFeeInput = document.getElementById("input-total-fee");
-        if (r.total_fee !== undefined && totalFeeInput) totalFeeInput.value = r.total_fee;
-
-        // Equip
-        if (r.equip_main) setMainEquipItems(r.equip_main);
-        if (r.equip_aux) {
-          selectedAuxItems = new Set(parseAuxItems(r.equip_aux));
-          updateAuxDisplay();
-        } else {
-          selectedAuxItems.clear();
-          updateAuxDisplay();
-        }
-
-        // Vehicle
-        const vehicleSelect = document.getElementById("select-vehicle");
-        if (r.vehicle_no && vehicleSelect) vehicleSelect.value = r.vehicle_no;
-        const mileageInput = document.getElementById("input-mileage");
-        if (r.mileage && mileageInput) mileageInput.value = r.mileage;
-        const noteInput = document.getElementById("input-note");
-        if (r.note && noteInput) noteInput.value = r.note;
-
-        // RTK Defect Fields
-        const rtkFields = ['rtk-center-miss', 'rtk-density', 'rtk-marking-miss', 'rtk-film-mark', 'rtk-handling', 'rtk-complaint', 'rtk-etc', 'rtk-total'];
-        const rtkKeys = ['rtk_center_miss', 'rtk_density', 'rtk_marking_miss', 'rtk_film_mark', 'rtk_handling', 'rtk_complaint', 'rtk_etc', 'rtk_total'];
-        for (let i = 0; i < rtkFields.length; i++) {
-          const el = document.getElementById(rtkFields[i]);
-          if (el) el.value = r[rtkKeys[i]] || 0;
-        }
-
-        // Chemicals
-        const chemFields = ['chem-fl-mag', 'chem-black-mag', 'chem-white-paint', 'chem-penetrant', 'chem-cleaner', 'chem-developer', 'chem-fl-pen'];
-        const chemKeys = ['chem_fl_mag', 'chem_black_mag', 'chem_white_paint', 'chem_penetrant', 'chem_cleaner', 'chem_developer', 'chem_fl_pen'];
-        for (let i = 0; i < chemFields.length; i++) {
-          const el = document.getElementById(chemFields[i]);
-          if (el) el.value = r[chemKeys[i]] || 0;
-        }
-
-        // Workers (안전한 배열 처리)
-        if (r.worker_list && Array.isArray(r.worker_list) && r.worker_list.length > 0) {
-          workerRows = JSON.parse(JSON.stringify(r.worker_list));
-        } else if (!Array.isArray(workerRows) || workerRows.length === 0) {
-          initDefaultWorkers();
-        }
-        renderWorkers();
-
-        // Update Submit Button Appearance for Edit Mode
         const submitBtn = document.getElementById("btn-submit");
         if (submitBtn) {
           submitBtn.className = "w-full py-4 bg-gradient-to-r from-amber-600 to-orange-600 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-amber-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
@@ -1870,87 +2067,139 @@
       }
     };
 
-    // Recent records loader with Edit / Delete / Copy controls
-    async function loadRecentRecords() {
+    function formatLocalDate(date) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function getHistoryDateRange() {
+      const today = new Date();
+      let start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      let end = new Date(start);
+      if (historyPeriod === '7days') {
+        start.setDate(start.getDate() - 6);
+      } else if (historyPeriod === 'month') {
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+      } else if (historyPeriod === 'custom') {
+        return {
+          start: document.getElementById('history-start-date').value,
+          end: document.getElementById('history-end-date').value
+        };
+      }
+      return { start: formatLocalDate(start), end: formatLocalDate(end) };
+    }
+
+    function updateHistoryFilterStyles() {
+      document.querySelectorAll('.history-period-btn').forEach(btn => {
+        const active = btn.dataset.period === historyPeriod;
+        btn.className = `history-period-btn py-1.5 rounded-lg text-[11px] font-bold ${active ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`;
+      });
+      document.querySelectorAll('.history-method-btn').forEach(btn => {
+        const method = btn.dataset.historyMethod;
+        const active = method === 'ALL' ? historyMethods.size === 0 : historyMethods.has(method);
+        btn.className = `history-method-btn shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold ${active ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`;
+      });
+      document.getElementById('history-custom-dates').classList.toggle('hidden', historyPeriod !== 'custom');
+    }
+
+    // Search all Gyeongin records and load 20 date/site groups at a time.
+    async function loadRecentRecords(append = false) {
       const container = document.getElementById("recent-list");
+      const moreButton = document.getElementById('btn-history-more');
+      const searchButton = document.getElementById('btn-history-search');
+      const range = getHistoryDateRange();
+      if (!range.start || !range.end || range.start > range.end) {
+        showToast('검색 시작일과 종료일을 확인해 주세요.', true);
+        return;
+      }
+      if (!append) {
+        historyOffset = 0;
+        historyGroups = [];
+        expandedRecentIndex = null;
+        container.innerHTML = '<div class="text-center py-5 text-xs text-slate-400">일보 검색 중...</div>';
+      }
+      searchButton.disabled = true;
+      moreButton.disabled = true;
       try {
-        const res = await apiCall('getRecentRecords', dateInput.value);
-        if (!res || !res.records || res.records.length === 0) {
-          container.innerHTML = '<div class="text-center py-4 text-xs text-slate-400">당일 등록된 작업 내역이 없습니다.</div>';
-          window.recentRecordsList = [];
-          return;
+        const res = await apiCall('searchRecords', {
+          start_date: range.start,
+          end_date: range.end,
+          keyword: document.getElementById('history-keyword').value.trim(),
+          methods: Array.from(historyMethods),
+          offset: historyOffset,
+          limit: 20
+        });
+        if (!res || res.status !== 'success') {
+          throw new Error((res && res.detail) || '검색 응답이 올바르지 않습니다.');
         }
-
-        window.recentRecordsList = res.records;
-        container.innerHTML = res.records.map((r, idx) => {
-          return `
-            <div class="p-3.5 bg-slate-900 text-slate-100 rounded-2xl mb-3 shadow-md border border-slate-700/80">
-              <div class="flex items-start justify-between gap-2">
-                <div>
-                  <span class="inline-block px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 font-extrabold text-[11px] mb-1">[${r.company}] ${r.method} · ${r.item_name || 'Piping'}${r.pipe ? ` (${r.pipe})` : ''}</span>
-                  <div class="text-[11px] text-slate-400 font-medium">
-                    📅 ${r.date} · 🏢 ${r.site || r.loc_type}${r.applied_code ? ` · ${r.applied_code}` : ''}
-                  </div>
-                </div>
-                <div class="text-right">
-                  <span class="block font-black text-white text-sm">${r.qty} ${r.unit}</span>
-                  <span class="text-[11px] text-emerald-400 font-bold">${Number(r.total_fee || 0).toLocaleString()}원</span>
-                </div>
-              </div>
-
-              ${r.report_no ? `<div class="text-[10px] text-slate-400 mt-1">📄 성적서: ${r.report_no}</div>` : ''}
-              ${r.workers ? `<div class="text-[10px] text-slate-300 bg-slate-800/90 p-1.5 rounded-lg border border-slate-700/60 mt-1.5">👷 참여: ${r.workers}</div>` : ''}
-              ${r.extra ? `<div class="text-[10px] text-amber-400 font-bold mt-1">🧪 ${r.extra}</div>` : ''}
-
-              <!-- 3 Action Buttons (Copy, Edit, Delete) -->
-              <div class="pt-2.5 mt-2.5 border-t border-slate-800 flex items-center justify-between gap-2 text-xs">
-                <button type="button" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-1 transition" onclick="copyRecordByIndex(${idx})">
-                  <span>📋</span> <span>복사</span>
-                </button>
-                <button type="button" class="flex-1 py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 active:scale-95 text-amber-300 font-bold rounded-xl border border-amber-500/40 flex items-center justify-center gap-1 transition" onclick="startEditRecordByIndex(${idx})">
-                  <span>✏️</span> <span>수정</span>
-                </button>
-                <button type="button" class="flex-1 py-1.5 px-2 bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 text-rose-300 font-bold rounded-xl border border-rose-500/40 flex items-center justify-center gap-1 transition" onclick="deleteRecordByIndex(${idx})">
-                  <span>🗑️</span> <span>삭제</span>
-                </button>
-              </div>
-            </div>
-          `;
-        }).join("");
-        lucide.createIcons();
+        const newGroups = Array.isArray(res.groups) ? res.groups : [];
+        historyGroups = append ? historyGroups.concat(newGroups) : newGroups;
+        historyOffset = Number(res.next_offset || historyGroups.length);
+        historyHasMore = Boolean(res.has_more);
+        if (historyGroups.length === 0) {
+          container.innerHTML = '<div class="text-center py-5 text-xs text-slate-400">검색 조건에 맞는 작업일보가 없습니다.</div>';
+          window.recentRecordsList = [];
+        } else {
+          renderRecentRecordsList();
+        }
+        document.getElementById('history-result-summary').textContent =
+          `총 ${Number(res.total_groups || 0).toLocaleString()}개 날짜·현장 그룹 · ${Number(res.total_records || 0).toLocaleString()}건`;
+        moreButton.classList.toggle('hidden', !historyHasMore);
       } catch (e) {
         container.innerHTML = `<div class="text-center py-4 text-xs text-rose-500">내역 로드 오류: ${e.message}</div>`;
+        moreButton.classList.add('hidden');
+      } finally {
+        searchButton.disabled = false;
+        moreButton.disabled = false;
       }
     }
 
     window.copyRecordToForm = function (r) {
       if (!r) return;
-      if (r.company) document.getElementById("select-company").value = r.company;
-      if (r.method) switchMethod(r.method);
-      if (r.item_name) {
-        document.getElementById("select-item-name").value = r.item_name;
-        document.getElementById("select-item-name").dispatchEvent(new Event('change'));
+      try {
+        if (currentEditingRecord) cancelEditMode();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        populateFormFromRecord(r, { includeDate: false });
+        showToast(`[${r.company || '경인사무소'}] ${r.item_name || 'Piping'} 작업 정보가 폼에 복사되었습니다.`);
+      } catch (err) {
+        console.error("copyRecordToForm error:", err);
+        showToast("복사 오류: " + err.message, true);
       }
-      if (r.material) document.getElementById("select-material").value = r.material;
-      if (r.applied_code) document.getElementById("select-applied-code").value = r.applied_code;
-      if (r.report_no) document.getElementById("input-report-no").value = r.report_no;
-      if (r.pipe) document.getElementById("select-pipe").value = r.pipe;
-      if (r.unit) document.getElementById("select-unit").value = r.unit;
-      if (r.unit_price) document.getElementById("input-unit-price").value = r.unit_price;
-      if (r.travel_cost) document.getElementById("input-travel-cost").value = r.travel_cost;
-      if (r.equip_main) setMainEquipItems(r.equip_main);
-      selectedAuxItems = new Set(parseAuxItems(r.equip_aux || ""));
-      updateAuxDisplay();
-      if (r.qty !== undefined) {
-        isManualQty = true;
-        document.getElementById("input-qty").value = r.qty;
-      }
-      recalculateTotalFee();
-      showToast(`[${r.company}] ${r.item_name} 작업 정보가 폼에 복사되었습니다.`);
     };
 
-    document.getElementById("btn-refresh-history").addEventListener("click", loadRecentRecords);
-    dateInput.addEventListener("change", loadRecentRecords);
+    document.querySelectorAll('.history-period-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        historyPeriod = btn.dataset.period;
+        updateHistoryFilterStyles();
+        loadRecentRecords(false);
+      });
+    });
+
+    document.querySelectorAll('.history-method-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const method = btn.dataset.historyMethod;
+        if (method === 'ALL') historyMethods.clear();
+        else if (historyMethods.has(method)) historyMethods.delete(method);
+        else historyMethods.add(method);
+        updateHistoryFilterStyles();
+        loadRecentRecords(false);
+      });
+    });
+
+    const todayForHistory = formatLocalDate(new Date());
+    document.getElementById('history-start-date').value = todayForHistory;
+    document.getElementById('history-end-date').value = todayForHistory;
+    document.getElementById('btn-history-search').addEventListener('click', () => loadRecentRecords(false));
+    document.getElementById('history-keyword').addEventListener('keydown', event => {
+      if (event.key === 'Enter') loadRecentRecords(false);
+    });
+    document.getElementById('history-start-date').addEventListener('change', () => loadRecentRecords(false));
+    document.getElementById('history-end-date').addEventListener('change', () => loadRecentRecords(false));
+    document.getElementById('btn-history-more').addEventListener('click', () => loadRecentRecords(true));
+    document.getElementById("btn-refresh-history").addEventListener("click", () => loadRecentRecords(false));
+    updateHistoryFilterStyles();
 
     loadConfig();
     lucide.createIcons();

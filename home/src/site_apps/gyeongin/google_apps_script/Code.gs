@@ -961,6 +961,8 @@ function doGet(e) {
   
   if (api === 'config') {
     return createJsonResponse(getConfig());
+  } else if (api === 'search') {
+    return createJsonResponse(searchRecords(e.parameter || {}));
   } else if (api === 'recent') {
     var date = e.parameter.date || '';
     return createJsonResponse(getRecentRecords(date));
@@ -990,7 +992,9 @@ function doPost(e) {
     }
     
     var action = payload.action || 'save';
-    if (action === 'batch_sync') {
+    if (action === 'searchRecords' || action === 'search') {
+      return createJsonResponse(searchRecords(payload));
+    } else if (action === 'batch_sync') {
       var res = batchSyncRecords(payload);
       return createJsonResponse(res);
     } else if (action === 'update' || action === 'updateRecord' || (payload.id !== undefined && payload.is_update)) {
@@ -1017,7 +1021,17 @@ function createJsonResponse(obj) {
  * 활성 스프레드시트의 'DailyUsage' 시트 획득 또는 자동 생성
  */
 function getDailyUsageSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var properties = PropertiesService.getScriptProperties();
+  var spreadsheetId = properties.getProperty('GYEONGIN_SPREADSHEET_ID');
+  if (!spreadsheetId) {
+    var activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!activeSpreadsheet) {
+      throw new Error('경인사무소 전용 스프레드시트를 확인할 수 없습니다.');
+    }
+    spreadsheetId = activeSpreadsheet.getId();
+    properties.setProperty('GYEONGIN_SPREADSHEET_ID', spreadsheetId);
+  }
+  var ss = SpreadsheetApp.openById(spreadsheetId);
   var sheet = ss.getSheetByName("DailyUsage");
   if (!sheet) {
     sheet = ss.insertSheet("DailyUsage");
@@ -1337,6 +1351,182 @@ function batchSyncRecords(payload) {
     updated_count: updatesCount,
     deleted_count: deletesCount,
     message: '일괄 동기화 완료 (추가: ' + savesCount + '건, 수정: ' + updatesCount + '건, 삭제: ' + deletesCount + '건)'
+  };
+}
+
+function normalizeSheetDateStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+  var s = String(val).trim().replace(/[.\/]/g, '-');
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return String(val).substring(0, 10);
+  return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+}
+
+function sheetItemToRecord(item, rowNumber) {
+  var rowDateStr = normalizeSheetDateStr(item['Date']);
+  var workersText = [];
+  var workerObjects = [];
+  for (var u = 1; u <= 10; u++) {
+    var userKey = u === 1 ? 'User' : 'User' + u;
+    var timeKey = u === 1 ? 'WorkTime' : 'WorkTime' + u;
+    var otKey = u === 1 ? 'OT' : 'OT' + u;
+    var userName = String(item[userKey] || '').trim();
+    if (!userName) continue;
+    var userTime = String(item[timeKey] || '09:00~18:00').trim();
+    var userOt = Number(item[otKey] || 0);
+    workersText.push(userName + ' (' + userOt.toLocaleString() + '원)');
+    workerObjects.push({
+      user: userName,
+      shift: String(item['작업형태'] || '일반'),
+      time: userTime,
+      ot: userOt.toLocaleString()
+    });
+  }
+
+  var extraList = [];
+  var extraColumns = [
+    ['NDT_형광자분', '형광자분'], ['NDT_흑색자분', '흑색자분'],
+    ['NDT_백색페인트', '백색페인트'], ['NDT_침투제', '침투제'],
+    ['NDT_세척제', '세척제'], ['NDT_현상제', '현상제'],
+    ['NDT_형광침투제', '형광침투제']
+  ];
+  for (var e = 0; e < extraColumns.length; e++) {
+    var extraValue = Number(item[extraColumns[e][0]] || 0);
+    if (extraValue > 0) extraList.push(extraColumns[e][1] + ':' + extraValue);
+  }
+  var rtkTotal = Number(item['RTK_총계'] || 0);
+  if (rtkTotal > 0) extraList.push('RTK:' + rtkTotal);
+
+  return {
+    id: rowNumber,
+    entry_time: formatCellTime(item['EntryTime']) || String(item['EntryTime'] || ''),
+    date: rowDateStr,
+    site: String(item['Site'] || item['작업구분'] || item['구분'] || '경인사무소'),
+    company: String(item['업체명'] || '경인사무소'),
+    method: String(item['검사방법'] || ''),
+    item_name: String(item['검사품명'] || 'Piping'),
+    material: String(item['자재명'] || item['Material'] || item['MaterialID'] || item['품목명'] || ''),
+    loc_type: String(item['작업구분'] || item['검사구분'] || item['구분'] || '경인사무소'),
+    pipe: String(item['관경(Inch)'] || item['규격'] || ''),
+    joints: Number(item['조인트수'] || 0),
+    ori_joints: Number(item['조인트수'] || 0),
+    rep_joints: 0,
+    rej_qty: Number(item['불량수'] || 0),
+    qty: Number(item['수량'] || item['Usage'] || item['검사량'] || 0),
+    unit: String(item['Unit'] || item['단위'] || '매'),
+    unit_price: Number(item['단가'] || 0),
+    travel_cost: Number(item['출장비'] || 0),
+    lump_sum: String(item['일식'] || ''),
+    total_fee: Number(item['검사비'] || 0),
+    applied_code: String(item['적용코드'] || ''),
+    report_no: String(item['성적서번호'] || ''),
+    equip_main: String(item['장비명'] || ''),
+    equip_aux: String(item['보조장비'] || ''),
+    vehicle_no: String(item['차량번호'] || ''),
+    mileage: String(item['주행거리'] || ''),
+    note: String(item['DailyMemo'] || item['Remark'] || item['Note'] || ''),
+    workers: workersText.join(', '),
+    worker_list: workerObjects,
+    rtk_center_miss: Number(item['RTK_센터미스'] || 0),
+    rtk_density: Number(item['RTK_농도'] || 0),
+    rtk_marking_miss: Number(item['RTK_마킹미스'] || 0),
+    rtk_film_mark: Number(item['RTK_필름마크'] || 0),
+    rtk_handling: Number(item['RTK_취급부주의'] || 0),
+    rtk_complaint: Number(item['RTK_고객불만'] || 0),
+    rtk_etc: Number(item['RTK_기타'] || 0),
+    rtk_total: rtkTotal,
+    chem_fl_mag: Number(item['NDT_형광자분'] || 0),
+    chem_black_mag: Number(item['NDT_흑색자분'] || 0),
+    chem_white_paint: Number(item['NDT_백색페인트'] || 0),
+    chem_penetrant: Number(item['NDT_침투제'] || 0),
+    chem_cleaner: Number(item['NDT_세척제'] || 0),
+    chem_developer: Number(item['NDT_현상제'] || 0),
+    chem_fl_pen: Number(item['NDT_형광침투제'] || 0),
+    extra: extraList.join(' ')
+  };
+}
+
+/**
+ * 경인사무소 전용 작업일보 검색.
+ * 날짜+현장 그룹을 기준으로 20개씩 반환한다.
+ */
+function searchRecords(params) {
+  params = params || {};
+  var sheet = getDailyUsageSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { status: 'success', groups: [], has_more: false, next_offset: 0, total_groups: 0, total_records: 0 };
+  }
+
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var data = sheet.getRange(2, 1, lastRow - 1, headerRow.length).getValues();
+  var startDate = String(params.start_date || '');
+  var endDate = String(params.end_date || '');
+  var keyword = String(params.keyword || '').trim().toLowerCase();
+  var methods = params.methods || [];
+  if (typeof methods === 'string') methods = methods ? methods.split(',') : [];
+  methods = methods.map(function (method) { return String(method).trim(); }).filter(String);
+  var offset = Math.max(0, Number(params.offset || 0));
+  var limit = Math.min(50, Math.max(1, Number(params.limit || 20)));
+  var records = [];
+
+  for (var r = 0; r < data.length; r++) {
+    var item = {};
+    for (var c = 0; c < headerRow.length; c++) item[headerRow[c]] = data[r][c];
+    var record = sheetItemToRecord(item, r + 2);
+    if (!record.date) continue;
+    if (startDate && record.date < startDate) continue;
+    if (endDate && record.date > endDate) continue;
+    if (methods.length && methods.indexOf(record.method) === -1) continue;
+    if (keyword) {
+      var searchable = [record.site, record.company, record.report_no].join(' ').toLowerCase();
+      if (searchable.indexOf(keyword) === -1) continue;
+    }
+    records.push(record);
+  }
+
+  records.sort(function (a, b) {
+    var aKey = a.date + ' ' + a.entry_time;
+    var bKey = b.date + ' ' + b.entry_time;
+    if (aKey === bKey) return b.id - a.id;
+    return aKey < bKey ? 1 : -1;
+  });
+
+  var groupMap = {};
+  var groups = [];
+  for (var i = 0; i < records.length; i++) {
+    var current = records[i];
+    var groupKey = current.date + '|' + current.site;
+    if (!groupMap[groupKey]) {
+      groupMap[groupKey] = {
+        key: groupKey,
+        date: current.date,
+        site: current.site,
+        methods: [],
+        record_count: 0,
+        total_fee: 0,
+        records: []
+      };
+      groups.push(groupMap[groupKey]);
+    }
+    var group = groupMap[groupKey];
+    group.records.push(current);
+    group.record_count++;
+    group.total_fee += Number(current.total_fee || 0);
+    if (current.method && group.methods.indexOf(current.method) === -1) group.methods.push(current.method);
+  }
+
+  var page = groups.slice(offset, offset + limit);
+  return {
+    status: 'success',
+    groups: page,
+    has_more: offset + limit < groups.length,
+    next_offset: offset + page.length,
+    total_groups: groups.length,
+    total_records: records.length
   };
 }
 
