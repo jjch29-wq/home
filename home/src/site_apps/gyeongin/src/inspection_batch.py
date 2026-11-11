@@ -230,7 +230,7 @@ class InspectionBatch(ttk.LabelFrame):
         area = ttk.Frame(self)
         area.pack(fill='both', expand=True)
         self.tree = ttk.Treeview(area, columns=cols, show='headings', height=5, selectmode='extended')
-        for key, title, width in zip(cols, ('방법', '관경', '검사품명', '품목/장비', '검사량', '단위', '단가', '검사비', '계산조건', '참여 인원', '참여 시간', '참여 OT', '보조장비'),
+        for key, title, width in zip(cols, ('방법', '규격 / 관경', '검사품명', '품목/장비', '검사량', '단위', '단가', '검사비', '계산조건', '참여 인원', '참여 시간', '참여 OT', '보조장비'),
                                      (65, 75, 100, 140, 90, 75, 90, 110, 170, 160, 230, 150, 220)):
             self.tree.heading(key, text=title)
             self.tree.column(key, width=width, minwidth=45, stretch=True)
@@ -445,6 +445,8 @@ class InspectionBatch(ttk.LabelFrame):
         for name in ('ndt_ori_joint_var', 'ndt_ori_qty_var', 'ndt_rep_joint_var',
                      'ndt_rep_qty_var', 'ndt_rej_joint_var', 'ndt_report_pipe_var'):
             getattr(app, name).set('')
+        if hasattr(app, 'inspection_spec_var'):
+            app.inspection_spec_var.set('')
         # Quantity traces can write zero while the joint fields are being cleared.
         for name in ('ent_daily_test_amount', 'ent_daily_unit_price', 'ent_daily_test_fee'):
             getattr(app, name).delete(0, 'end')
@@ -482,7 +484,7 @@ class InspectionBatch(ttk.LabelFrame):
             names = [str(p.get(worker_fields(i)[0], '') or '').strip() for i, p in enumerate(crew, 1)]
             times = ' / '.join(f"{names[i-1]}: {p.get(worker_fields(i)[1], '')}" for i, p in enumerate(crew, 1) if names[i-1])
             ots = ' / '.join(f"{names[i-1]}: {p.get(worker_fields(i)[2], '') or '0'}" for i, p in enumerate(crew, 1) if names[i-1])
-            self.tree.insert('', 'end', iid=str(i), values=(data['검사방법'], data.get('관경(Inch)', ''),
+            self.tree.insert('', 'end', iid=str(i), values=(data['검사방법'], ' / '.join(str(v) for v in (data.get('검사규격', ''), data.get('관경(Inch)', '')) if v),
                 data['검사품명'], plan.get('material_display', ''), data['검사량'], data['Unit'],
                 f"{data['단가']:,.0f}", f'{fee:,.0f}', f"{data.get('조건1', '')} / {data.get('조건2', '')}",
                 ', '.join(n for n in names if n), times, ots, data.get('보조장비', '')))
@@ -544,7 +546,7 @@ class InspectionBatch(ttk.LabelFrame):
             # Warn on exact repeats without deleting any existing daily/stock records.
             existing = self.app.daily_usage_df
             import pandas as pd
-            keys = ('Site', '검사방법', '검사품명', 'MaterialID', '관경(Inch)', '검사구분', '회사코드', 'Usage', '단가', '조건1', '조건2')
+            keys = ('Site', '검사방법', '검사품명', 'MaterialID', '검사대상', '검사규격', '관경(Inch)', '검사구분', '회사코드', 'Usage', '단가', '조건1', '조건2')
             def signature(record):
                 date = pd.to_datetime(record.get('Date'), errors='coerce')
                 if pd.isna(date):

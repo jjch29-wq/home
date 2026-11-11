@@ -227,22 +227,27 @@
         <button type="button" id="btn-toggle-pipe-calc"
           class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
           <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
-          <span id="pipe-calc-btn-text">배관 관경 계산기</span>
+          <span id="pipe-calc-btn-text">수량 상세</span>
         </button>
       </div>
 
+      <div class="grid grid-cols-2 gap-2">
+        <div><label for="inspection-target" class="block text-xs text-slate-500 mb-1">검사 대상</label>
+          <select id="inspection-target" class="w-full border rounded-xl px-3 py-2 text-sm"><option value="배관">배관</option><option value="배관 외">배관 외</option></select></div>
+        <div><label for="inspection-spec" class="block text-xs text-slate-500 mb-1">검사 규격</label>
+          <input id="inspection-spec" type="text" placeholder="두께 12 mm / 용접길이 300 mm" class="w-full border rounded-xl px-3 py-2 text-sm"></div>
+      </div>
       <!-- 배관 관경 자동 계산 영역 -->
       <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
         <div class="flex items-center justify-between">
           <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
-            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 계산
+            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 검사 수량 및 물량
           </span>
-          <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">배관 검사
-            전용</span>
+          <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">ORI / REP</span>
         </div>
 
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+        <div id="pipe-diameter-row">
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">관경(Inch, 배관만)</label>
           <select id="select-pipe"
             class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <!-- Populated via JS -->
@@ -252,19 +257,23 @@
         <div id="rt-joints-box" class="space-y-2 pt-0.5">
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
-              <input type="number" id="input-ori-joints" value="1" min="0" step="1"
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5" id="label-ori-count">[ORI] 조인트 수</label>
+              <input type="text" inputmode="decimal" data-numeric-input id="input-ori-joints" value="1" min="0" step="1"
                 class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
             <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
-              <input type="number" id="input-rep-joints" value="0" min="0" step="1"
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5" id="label-rep-count">[REP] 조인트 수</label>
+              <input type="text" inputmode="decimal" data-numeric-input id="input-rep-joints" value="0" min="0" step="1"
                 class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
           </div>
+          <div id="manual-rt-quantities" class="hidden grid grid-cols-2 gap-2">
+            <div><label for="input-ori-qty" class="block text-xs text-slate-500">[ORI] 촬영 매수</label><input id="input-ori-qty" type="text" inputmode="decimal" data-numeric-input min="0" step="1" value="0" class="w-full border rounded-xl px-3 py-2 text-sm"></div>
+            <div><label for="input-rep-qty" class="block text-xs text-slate-500">[REP] 촬영 매수</label><input id="input-rep-qty" type="text" inputmode="decimal" data-numeric-input min="0" step="1" value="0" class="w-full border rounded-xl px-3 py-2 text-sm"></div>
+          </div>
           <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
-            <input type="number" id="input-rej-qty" value="0" min="0" step="1"
+            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">불량 매수(REJ)</label>
+            <input type="text" inputmode="decimal" data-numeric-input id="input-rej-qty" value="0" min="0" step="1"
               class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <p
               class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1.5 rounded border border-emerald-100">
@@ -274,8 +283,8 @@
         </div>
 
         <div id="non-rt-joints-box" class="hidden">
-          <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
-          <input type="number" id="input-joints" value="1" min="0.1" step="0.5"
+          <label class="block text-[11px] font-medium text-slate-500 mb-0.5" id="label-general-count">조인트 수</label>
+          <input type="text" inputmode="decimal" data-numeric-input id="input-joints" value="1" min="0.1" step="0.5"
             class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
@@ -290,7 +299,7 @@
       <div class="grid grid-cols-2 gap-2 pt-1">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
-          <input type="number" id="input-qty" value="3" min="0" step="0.01"
+          <input type="text" inputmode="decimal" data-numeric-input id="input-qty" value="3" min="0" step="0.01"
             class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
         <div>
@@ -306,12 +315,12 @@
       <div class="grid grid-cols-3 gap-2">
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
-          <input type="number" id="input-unit-price" value="25500" min="0" step="100"
+          <input type="text" inputmode="decimal" data-numeric-input id="input-unit-price" value="25500" min="0" step="100"
             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
         </div>
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
-          <input type="number" id="input-travel-cost" value="0" min="0" step="1000"
+          <input type="text" inputmode="decimal" data-numeric-input id="input-travel-cost" value="0" min="0" step="1000"
             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
         </div>
         <div>
@@ -329,7 +338,7 @@
           <p class="text-[10px] text-emerald-600">수치 수정 시 즉시 재계산</p>
         </div>
         <div class="flex items-center gap-1.5">
-          <input type="number" id="input-total-fee" value="76500"
+          <input type="text" inputmode="decimal" data-numeric-input id="input-total-fee" value="76500"
             class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
           <span class="text-xs font-bold text-emerald-900">원</span>
         </div>
@@ -383,42 +392,42 @@
       <div class="grid grid-cols-3 gap-2">
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
-          <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-center-miss" min="0" step="1" placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
-          <input type="number" id="rtk-density" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-density" min="0" step="1" placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
-          <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-marking-miss" min="0" step="1" placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
-          <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-film-mark" min="0" step="1" placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
-          <input type="number" id="rtk-handling" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-handling" min="0" step="1" placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
-          <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-complaint" min="0" step="1" placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div class="col-span-2">
           <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
-          <input type="number" id="rtk-etc" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-etc" min="0" step="1" placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
-          <input type="number" id="rtk-total" readonly value="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-total" readonly value="0"
             class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
         </div>
       </div>
@@ -433,40 +442,44 @@
         <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
       </div>
 
+      <div>
+        <label for="input-chemical-company" class="block text-xs text-slate-500 mb-1">약품회사 (제조사)</label>
+        <input type="text" id="input-chemical-company" placeholder="사용한 약품의 제조사명 입력" class="w-full border rounded-xl px-3 py-2 text-sm">
+      </div>
       <div class="grid grid-cols-2 gap-2">
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
-          <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-fl-mag" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
-          <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-black-mag" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
-          <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-white-paint" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
-          <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-penetrant" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
-          <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-cleaner" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
-          <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-developer" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
           <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
-          <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-fl-pen" min="0" step="0.5" placeholder="0"
             class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
       </div>
@@ -523,7 +536,7 @@
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
-          <input type="number" id="input-mileage" placeholder="예: 70"
+          <input type="text" inputmode="decimal" data-numeric-input id="input-mileage" placeholder="예: 70"
             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
         </div>
       </div>
@@ -969,31 +982,36 @@
       const btnText = document.getElementById("pipe-calc-btn-text");
       if (isPipeCalcOpen) {
         section.classList.remove("hidden");
-        btnText.textContent = "배관 관경 계산기 접기";
+        btnText.textContent = "수량 상세 접기";
       } else {
         section.classList.add("hidden");
-        btnText.textContent = "배관 관경 계산기 펼치기";
+        btnText.textContent = "수량 상세 펼치기";
       }
     }
 
-    // Inspection item name change handler
-    document.getElementById("select-item-name").addEventListener("change", function () {
-      const item = this.value;
-      const banner = document.getElementById("non-pipe-banner");
-      const isPipe = item === "Piping" || item === "Pipe";
-
-      if (isPipe) {
-        banner.classList.add("hidden");
-        isPipeCalcOpen = true;
-        applyPipeSectionState();
-        isManualQty = false;
-        updatePipeCalc();
-      } else {
-        banner.classList.remove("hidden");
-        isPipeCalcOpen = false;
-        applyPipeSectionState();
-        isManualQty = true;
-      }
+    function applyInspectionTarget(recalculate = false) {
+      const piping = document.getElementById('inspection-target').value === '배관';
+      document.getElementById('pipe-diameter-row').classList.toggle('hidden', !piping);
+      document.getElementById('select-pipe').disabled = !piping;
+      document.getElementById('non-pipe-banner').classList.toggle('hidden', piping);
+      document.getElementById('label-ori-count').textContent = piping ? '[ORI] 조인트 수' : '[ORI] 검사 개소';
+      document.getElementById('label-rep-count').textContent = piping ? '[REP] 조인트 수' : '[REP] 재검사 개소';
+      document.getElementById('label-general-count').textContent = piping ? '조인트 수' : '검사 개소';
+      document.getElementById('manual-rt-quantities').classList.toggle('hidden', piping || selectedMethod !== 'RT');
+      if (!piping) isManualQty = true;
+      if (recalculate && piping) { isManualQty = false; updatePipeCalc(); }
+    }
+    document.getElementById('inspection-target').addEventListener('change', () => {
+      document.getElementById('input-ori-qty').value = document.getElementById('input-qty').value;
+      isPipeCalcOpen = true;
+      applyPipeSectionState();
+      applyInspectionTarget(true);
+    });
+    document.getElementById('input-ori-qty').addEventListener('input', () => {
+      if (document.getElementById('inspection-target').value !== '배관 외' || selectedMethod !== 'RT') return;
+      document.getElementById('input-qty').value = document.getElementById('input-ori-qty').value;
+      isManualQty = true;
+      recalculateTotalFee();
     });
 
     // Google Apps Script API Bridge
@@ -1278,6 +1296,7 @@
         document.getElementById("input-total-fee").value = 0;
       }
 
+      applyInspectionTarget(false);
       if (methodChanged) applyMethodDefaults(method);
       if (!isManualQty) {
         updatePipeCalc();
@@ -1620,6 +1639,8 @@
     }
 
     function resetInspectionMeasurements() {
+      document.getElementById('input-ori-qty').value = 0;
+      document.getElementById('input-rep-qty').value = 0;
       document.getElementById("input-ori-joints").value = 1;
       document.getElementById("input-rep-joints").value = 0;
       document.getElementById("input-rej-qty").value = 0;
@@ -1640,7 +1661,7 @@
     function resetAfterSuccessfulSave() {
       resetInspectionMeasurements();
 
-      ["input-report-no", "input-lump-sum", "input-mileage", "input-note"].forEach(id => {
+      ["input-chemical-company", "inspection-spec", "input-report-no", "input-lump-sum", "input-mileage", "input-note"].forEach(id => {
         document.getElementById(id).value = "";
       });
       document.getElementById("input-travel-cost").value = 0;
@@ -1666,6 +1687,7 @@
     };
 
     function updatePipeCalc() {
+      if (document.getElementById('inspection-target').value !== '배관') { recalculateTotalFee(); return; }
       // PMI/ETC quantities and prices are entered directly, without pipe conversion.
       if (selectedMethod === "PMI" || selectedMethod === "ETC") {
         recalculateTotalFee();
@@ -1724,6 +1746,7 @@
 
     document.getElementById("input-qty").addEventListener("input", () => {
       isManualQty = true;
+      if (selectedMethod === 'RT') document.getElementById('input-ori-qty').value = document.getElementById('input-qty').value;
       recalculateTotalFee();
     });
     document.getElementById("input-unit-price").addEventListener("input", recalculateTotalFee);
@@ -1736,6 +1759,14 @@
       btn.classList.add("opacity-60");
 
       try {
+        const invalidNumber = Array.from(document.querySelectorAll('input[data-numeric-input]')).find(input => {
+          if (input.readOnly || input.disabled || !input.getClientRects().length || !input.value.trim()) return false;
+          return !/^\d*(?:\.\d*)?$/.test(input.value.trim()) || !Number.isFinite(Number(input.value)) || Number(input.value) < 0;
+        });
+        if (invalidNumber) {
+          invalidNumber.focus();
+          throw new Error('수량·개소·금액에는 0 이상의 숫자를 입력하세요.');
+        }
         let company = document.getElementById("select-company").value;
         const customCo = document.getElementById("input-custom-company").value.trim();
         if (customCo) company = customCo;
@@ -1756,7 +1787,9 @@
         const date = dateInput.value;
         const loc_type = document.getElementById("select-loc-type").value;
         const report_no = document.getElementById("input-report-no").value.trim();
-        const pipe = isPipeCalcOpen ? document.getElementById("select-pipe").value : "";
+        const inspection_target = document.getElementById("inspection-target").value;
+        const inspection_spec = document.getElementById("inspection-spec").value.trim();
+        const pipe = inspection_target === "배관" ? document.getElementById("select-pipe").value : "";
 
         const qty = parseFloat(document.getElementById("input-qty").value) || 0;
         const unit = document.getElementById("select-unit").value;
@@ -1782,8 +1815,9 @@
         const joints = (selectedMethod === "RT") ? ori_joints : (parseFloat(document.getElementById("input-joints").value) || 0);
 
         const payload = {
-          date, site, company, company_code: company, loc_type, method: selectedMethod,
-          pipe, item_name, material, applied_code, report_no,
+          date, site, company, company_code: document.getElementById("input-chemical-company").value.trim(), loc_type, method: selectedMethod,
+          pipe, inspection_target, inspection_spec, item_name, material, applied_code, report_no,
+          ori_qty: qty, rep_qty: selectedMethod === "RT" ? (inspection_target === "배관" ? rep_joints * 3 : Number(document.getElementById("input-rep-qty").value || 0)) : 0,
           joints, ori_joints, rep_joints, rej_qty, qty, unit, unit_price, travel_cost, lump_sum, total_fee,
           equip_main, equip_aux,
           work_shape: workerRows[0] ? workerRows[0].shift : "일반",
@@ -1891,7 +1925,7 @@
         : `<div>${escapeRecentHtml(r.workers || '작업자 정보 없음')}</div>`;
 
       const jointsSummary = r.method === 'RT'
-        ? `ORI ${r.ori_joints ?? r.joints ?? 0} / REJ ${r.rej_qty ?? 0}`
+        ? `ORI ${r.ori_joints ?? r.joints ?? 0} / REP ${r.rep_joints ?? 0} / REJ ${r.rej_qty ?? 0} 매`
         : `${r.joints ?? 0} 개소`;
       const mileageText = r.mileage ? (/km$/i.test(String(r.mileage).trim()) ? String(r.mileage).trim() : `${r.mileage} km`) : '';
       const rawCheck = String(r.vehicle_check || '').trim();
@@ -1904,16 +1938,19 @@
 
       const detailRows = [
         ['작업구분', r.loc_type || '-'],
+        ['검사 대상 / 규격', `${r.inspection_target || (r.pipe ? '배관' : '배관 외')} · ${r.inspection_spec || '-'}`],
         ['검사 정보', `${r.method || '-'} · ${r.item_name || 'Piping'}${r.pipe ? ` · ${r.pipe}` : ''}`],
-        ['조인트/불량', jointsSummary],
+        [r.inspection_target === '배관 외' ? '검사 개소 / 불량 매수' : '조인트 / 불량 매수', jointsSummary],
         ['물량', `${r.qty ?? 0} ${r.unit || ''}`],
         ['자재', r.material || '-'],
+        ['약품회사', r.company_code || '-'],
         ['적용코드', r.applied_code || '-'],
         ['성적서번호', r.report_no || '-'],
         ['주 장비', r.equip_main || '-'],
         ['보조장비', r.equip_aux || '-'],
         ['차량정보', vehicleSummary]
       ];
+      if (r.method === 'RT') detailRows.push(['촬영 매수', `ORI ${r.ori_qty ?? r.qty ?? 0} 매 / REP ${r.rep_qty ?? 0} 매`]);
       if (isStructuredCheck && formattedCheck) detailRows.push(['차량점검', formattedCheck]);
       detailRows.push(
         ['단가 / 일식', `${formatRecentMoney(r.unit_price)}${r.lump_sum ? ` · ${r.lump_sum}` : ''}`],
@@ -2057,6 +2094,12 @@
       const repNoInput = document.getElementById("input-report-no");
       if (repNoInput) repNoInput.value = r.report_no || "";
 
+      document.getElementById('inspection-target').value = r.inspection_target || (r.pipe ? '배관' : '배관 외');
+      document.getElementById('inspection-spec').value = r.inspection_spec || '';
+      document.getElementById('input-chemical-company').value = r.company_code || '';
+      applyInspectionTarget(false);
+      document.getElementById('input-ori-qty').value = r.ori_qty ?? r.qty ?? 0;
+      document.getElementById('input-rep-qty').value = r.rep_qty ?? 0;
       if (r.pipe) setSelectOrCustomValue("select-pipe", null, r.pipe);
       const oriJointsInput = document.getElementById("input-ori-joints");
       if (oriJointsInput) oriJointsInput.value = r.ori_joints ?? 1;
@@ -2339,6 +2382,24 @@
     document.getElementById('btn-history-more').addEventListener('click', () => loadRecentRecords(true));
     document.getElementById("btn-refresh-history").addEventListener("click", () => loadRecentRecords(false));
     updateHistoryFilterStyles();
+
+    // Keep the input type stable while the mobile keyboard is open.
+    function selectNumericInput(event) {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement) || !input.hasAttribute('data-numeric-input') || input.readOnly || input.disabled) return;
+      if (event.type === 'focusin') input.dataset.selectOnTap = 'true';
+      if (event.type === 'click' && input.dataset.selectOnTap !== 'true') return;
+      if (event.type === 'click') delete input.dataset.selectOnTap;
+      input.select();
+      requestAnimationFrame(() => {
+        if (document.activeElement === input) input.select();
+      });
+    }
+    document.addEventListener('focusin', selectNumericInput);
+    document.addEventListener('click', selectNumericInput);
+    document.addEventListener('focusout', event => {
+      if (event.target instanceof HTMLInputElement) delete event.target.dataset.selectOnTap;
+    });
 
     loadConfig();
     lucide.createIcons();

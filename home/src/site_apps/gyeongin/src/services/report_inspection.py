@@ -89,15 +89,16 @@ def collect_inspection_details(records, size_lengths):
 
     pipe_col = next((c for c in ('관경(Inch)', '관경') if c in records.columns), '')
     joint_col = next((c for c in ('조인트수', 'POINT', 'Point') if c in records.columns), '')
-    if not pipe_col:
+    if not pipe_col and '검사규격' not in records.columns:
         return []
     groups = {}
     for _, row in records.iterrows():
-        pipe = text(row.get(pipe_col, '')).upper()
+        pipe = text(row.get(pipe_col, '')).upper() if text(row.get('검사대상', '')) != '배관 외' else ''
+        spec = text(row.get('검사규격', ''))
         method, shift = inspection_method_shift(row)
-        if not pipe or (method == 'RT' and text(row.get('검사구분', '')).upper() == 'REP'):
+        if not (pipe or spec) or (method == 'RT' and text(row.get('검사구분', '')).upper() == 'REP'):
             continue
-        detail = groups.setdefault((method, pipe, shift), {'points': 0.0, 'quantity': 0.0, 'reject_films': 0.0})
+        detail = groups.setdefault((method, pipe, spec, shift), {'points': 0.0, 'quantity': 0.0, 'reject_films': 0.0})
         detail['points'] += numeric(row.get(joint_col, 0)) if joint_col else 0
         detail['quantity'] += numeric(row.get('Usage', 0))
         if method == 'RT':
@@ -105,15 +106,15 @@ def collect_inspection_details(records, size_lengths):
 
     def sort_key(item):
         match = re.search(r'\d+(?:\.\d+)?', item[0][1])
-        return (item[0][0], item[0][2] == '야간', item[0][2], -(float(match.group()) if match else -1))
+        return (item[0][0], item[0][3] == '야간', item[0][3], -(float(match.group()) if match else -1))
 
     result = []
-    for (method, pipe, shift), detail in sorted(groups.items(), key=sort_key):
-        if not detail['points'] and detail['quantity'] > 0 and method in ('MT', 'PT', 'PAUT'):
+    for (method, pipe, spec, shift), detail in sorted(groups.items(), key=sort_key):
+        if pipe and not detail['points'] and detail['quantity'] > 0 and method in ('MT', 'PT', 'PAUT'):
             length = size_lengths.get(pipe if pipe.endswith('A') else f'{pipe}A', 0)
             if length:
                 points = detail['quantity'] / length
                 if abs(points - round(points)) < .05:
                     detail['points'] = round(points)
-        result.append(dict(detail, method=method, pipe_size=pipe, shift=shift))
+        result.append(dict(detail, method=method, pipe_size=' / '.join(v for v in (spec, pipe) if v), shift=shift))
     return result

@@ -349,7 +349,7 @@ def load_data_impl(self):
                                                     'RTK_센터미스', 'RTK_농도', 'RTK_마킹미스', 'RTK_필름마크',
                                                     'RTK_취급부주의', 'RTK_고객불만', 'RTK_기타', 'User', '장비명', '검사량',
                                                     '단가', '출장비', '일식', '검사비',
-                                                    '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수', '관경(Inch)'])
+                                                    '차량번호', '주행거리', '차량점검', '차량비고', '검사구분', '조인트수', '불량수', '검사대상', '검사규격', '관경(Inch)'])
             
             # 5. Migrate vehicle data from daily_usage_df to transactions_df
             if hasattr(self, 'daily_usage_df') and hasattr(self, 'transactions_df'):

@@ -173,7 +173,8 @@ def export_daily_work_report_impl(self):
         if not data.get('inspection_details') and hasattr(self, 'cb_daily_test_method'):
             u_method = self.cb_daily_test_method.get().strip().upper()
             u_pipe = getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip().upper()
-            if u_pipe:
+            u_spec = self.inspection_spec_var.get().strip() if hasattr(self, 'inspection_spec_var') else ''
+            if u_pipe or u_spec:
                 u_pts = getattr(self, 'ndt_ori_joint_var', tk.StringVar(value="")).get().strip()
                 try: pts_val = float(u_pts.replace(',', '')) if u_pts else 0.0
                 except: pts_val = 0.0
@@ -192,7 +193,7 @@ def export_daily_work_report_impl(self):
                     'method': u_method,
                     'shift': inspection_method_shift({'검사방법': u_method,
                         '작업형태': self.ndt_work_time_var.get() if hasattr(self, 'ndt_work_time_var') else ''})[1],
-                    'pipe_size': u_pipe,
+                    'pipe_size': ' / '.join(v for v in (u_spec, u_pipe) if v),
                     'points': int(pts_val) if pts_val.is_integer() else pts_val,
                     'quantity': qty_val,
                     'reject_films': float(self.ndt_rej_joint_var.get().replace(',', '') or 0) if u_method == 'RT' else 0,

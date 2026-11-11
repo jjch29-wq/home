@@ -468,9 +468,9 @@ def two_way_reconcile_with_web_app(
         # Compare both sides with the last successfully reconciled values.
         sync_columns = [
             "Date", "Site", "작업구분", "구분",
-            "업체명", "회사코드", "검사방법", "관경(Inch)", "규격", "검사품명",
+            "업체명", "회사코드", "검사방법", "관경(Inch)", "검사대상", "검사규격", "규격", "검사품명",
             "MaterialID", "Material", "품목명", "자재명",
-            "적용코드", "성적서번호", "조인트수", "불량수",
+            "적용코드", "성적서번호", "조인트수", "불량수", "재검사개소", "재검사매수",
             "Usage", "수량", "검사량", "Unit", "단위", "단가", "출장비", "일식", "검사비",
             "장비명", "보조장비", "작업형태",
             "차량번호", "주행거리", "차량비고",

@@ -950,7 +950,7 @@ var HEADERS = [
   'NDT_형광자분', 'NDT_흑색자분', 'NDT_백색페인트', 'NDT_침투제', 'NDT_세척제', 'NDT_현상제', 'NDT_형광침투제',
   '차량번호', '주행거리', '차량점검', '차량비고', '품목명', 'RTK_총계', '회사코드', '업체명',
   '검사품명', '적용코드', '성적서번호', 'Unit', 'Material', '작업형태',
-  '검사구분', '조인트수', '불량수', '관경(Inch)', '구분', 'Remark', 'DailyMemo', '보조장비', '수량'
+  '검사구분', '조인트수', '불량수', '관경(Inch)', '구분', 'Remark', 'DailyMemo', '보조장비', '수량', '검사규격', '검사대상', '재검사개소', '재검사매수'
 ];
 
 /**
@@ -1046,6 +1046,13 @@ function getDailyUsageSheet() {
       sheet.setFrozenRows(1);
     }
   }
+  var currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  ['검사대상', '검사규격', '재검사개소', '재검사매수'].forEach(function (field) {
+    if (currentHeaders.indexOf(field) < 0) {
+      currentHeaders.push(field);
+      sheet.getRange(1, currentHeaders.length).setValue(field);
+    }
+  });
   return sheet;
 }
 
@@ -1107,10 +1114,14 @@ function buildRowMap(req, preserveEntryTime) {
     '구분': req.loc_type || '경인사무소',
     '검사구분': req.loc_type || '경인사무소',
     '업체명': req.company || '경인사무소',
-    '회사코드': req.company_code || req.company || '경인사무소',
+    '회사코드': String(req.company_code || '').trim(),
     '검사방법': req.method || 'RT',
-    '규격': req.pipe || '',
-    '관경(Inch)': req.pipe || '',
+    '검사대상': req.inspection_target || '배관',
+    '검사규격': String(req.inspection_spec || '').trim(),
+    '규격': req.inspection_target === '배관 외' ? '' : (req.pipe || ''),
+    '관경(Inch)': req.inspection_target === '배관 외' ? '' : (req.pipe || ''),
+    '재검사개소': Number(req.rep_joints || 0),
+    '재검사매수': Number(req.rep_qty || 0),
     '검사품명': req.item_name || 'Piping',
     '자재명': req.material || '',
     'MaterialID': req.material || '',
@@ -1406,14 +1417,19 @@ function sheetItemToRecord(item, rowNumber) {
     date: rowDateStr,
     site: String(item['Site'] || item['작업구분'] || item['구분'] || '경인사무소'),
     company: String(item['업체명'] || '경인사무소'),
+    company_code: String(item['회사코드'] || ''),
     method: String(item['검사방법'] || ''),
     item_name: String(item['검사품명'] || 'Piping'),
     material: String(item['자재명'] || item['Material'] || item['MaterialID'] || item['품목명'] || ''),
     loc_type: String(item['작업구분'] || item['검사구분'] || item['구분'] || '경인사무소'),
-    pipe: String(item['관경(Inch)'] || item['규격'] || ''),
+    inspection_target: String(item['검사대상'] || ((item['관경(Inch)'] || item['규격']) ? '배관' : '배관 외')),
+    inspection_spec: String(item['검사규격'] || ''),
+    pipe: item['검사대상'] === '배관 외' ? '' : String(item['관경(Inch)'] || item['규격'] || ''),
+    ori_qty: Number(item['Usage'] || item['수량'] || 0),
+    rep_qty: Number(item['재검사매수'] || 0),
+    rep_joints: Number(item['재검사개소'] || 0),
     joints: Number(item['조인트수'] || 0),
     ori_joints: Number(item['조인트수'] || 0),
-    rep_joints: 0,
     rej_qty: Number(item['불량수'] || 0),
     qty: Number(item['수량']) || Number(item['Usage']) || Number(item['검사량']) || 0,
     unit: String(item['Unit'] || item['단위'] || '매'),
@@ -1602,11 +1618,17 @@ function getRecentRecords(targetDate) {
       entry_time: formatCellTime(item['EntryTime']) || String(item['EntryTime'] || ''),
       date: rowDateStr,
       company: String(item['업체명'] || '경인사무소'),
+    company_code: String(item['회사코드'] || ''),
       method: String(item['검사방법'] || ''),
       item_name: String(item['검사품명'] || 'Piping'),
       material: String(item['자재명'] || item['MaterialID'] || item['품목명'] || ''),
       loc_type: String(item['작업구분'] || item['구분'] || '경인사무소'),
-      pipe: String(item['관경(Inch)'] || item['규격'] || ''),
+      inspection_target: String(item['검사대상'] || ((item['관경(Inch)'] || item['규격']) ? '배관' : '배관 외')),
+    inspection_spec: String(item['검사규격'] || ''),
+    pipe: item['검사대상'] === '배관 외' ? '' : String(item['관경(Inch)'] || item['규격'] || ''),
+    ori_qty: Number(item['Usage'] || item['수량'] || 0),
+    rep_qty: Number(item['재검사매수'] || 0),
+    rep_joints: Number(item['재검사개소'] || 0),
       qty: Number(item['수량']) || Number(item['Usage']) || Number(item['검사량']) || 0,
       unit: String(item['Unit'] || item['단위'] || '매'),
       unit_price: Number(item['단가'] || 0),

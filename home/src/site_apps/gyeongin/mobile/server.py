@@ -6,7 +6,7 @@ import sys
 import json
 import math
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 import datetime
 import pandas as pd
 import openpyxl
@@ -738,6 +738,8 @@ class RecordSaveRequest(BaseModel):
     loc_type: str = "경인사무소"
     method: str = "RT"
     pipe: str = ""
+    inspection_target: Literal["배관", "배관 외"] = "배관"
+    inspection_spec: str = ""
     item_name: str = "Piping"        # 검사품명
     material: str = ""               # 자재명 / 필름명
     applied_code: str = "KS"         # 적용코드
@@ -799,10 +801,14 @@ def build_row_data(req: RecordSaveRequest, preserve_entry_time: Optional[str] = 
         "구분": req.loc_type,
         "검사구분": req.loc_type,
         "업체명": req.company,
-        "회사코드": req.company_code or req.company,
+        "회사코드": req.company_code.strip(),
         "검사방법": req.method,
-        "규격": req.pipe,
-        "관경(Inch)": req.pipe,
+        "검사대상": req.inspection_target,
+        "검사규격": req.inspection_spec.strip(),
+        "규격": req.pipe if req.inspection_target == '배관' else '',
+        "관경(Inch)": req.pipe if req.inspection_target == '배관' else '',
+        "재검사개소": req.rep_joints,
+        "재검사매수": req.rep_qty,
         "검사품명": req.item_name,
         "자재명": req.material,
         "MaterialID": req.material,
@@ -1011,11 +1017,16 @@ def _row_to_record(idx: int, row) -> dict:
         "date": date_val,
         "site": safe_str(row.get("Site"), safe_str(row.get("작업구분"), safe_str(row.get("구분"), "경인사무소"))),
         "company": safe_str(row.get("업체명"), "경인사무소"),
+        "company_code": safe_str(row.get("회사코드")),
         "method": safe_str(row.get("검사방법")),
         "item_name": safe_str(row.get("검사품명"), "Piping"),
         "material": safe_str(row.get("자재명"), safe_str(row.get("Material"), safe_str(row.get("MaterialID"), safe_str(row.get("품목명"))))),
         "loc_type": safe_str(row.get("작업구분"), safe_str(row.get("검사구분"), safe_str(row.get("구분"), "경인사무소"))),
-        "pipe": safe_str(row.get("관경(Inch)"), safe_str(row.get("규격"))),
+        "inspection_target": safe_str(row.get("검사대상"), "배관" if safe_str(row.get("관경(Inch)"), safe_str(row.get("규격"))) else "배관 외"),
+        "inspection_spec": safe_str(row.get("검사규격")),
+        "pipe": safe_str(row.get("관경(Inch)"), safe_str(row.get("규격"))) if safe_str(row.get("검사대상")) != "배관 외" else "",
+        "ori_qty": safe_float(row.get("Usage", row.get("수량", 0))),
+        "rep_qty": safe_float(row.get("재검사매수")),
         "qty": safe_float(row.get("수량", row.get("Usage", row.get("검사량", 0)))),
         "unit": safe_str(row.get("Unit"), safe_str(row.get("단위"), "매")),
         "unit_price": safe_float(row.get("단가")),
@@ -1033,7 +1044,7 @@ def _row_to_record(idx: int, row) -> dict:
         "note": safe_str(row.get("DailyMemo"), safe_str(row.get("Remark"), safe_str(row.get("Note")))),
         "joints": safe_float(row.get("조인트수")),
         "ori_joints": safe_float(row.get("조인트수")),
-        "rep_joints": 0,
+        "rep_joints": safe_float(row.get("재검사개소")),
         "rej_qty": safe_float(row.get("불량수")),
         "rtk_center_miss": safe_float(row.get("RTK_센터미스")),
         "rtk_density": safe_float(row.get("RTK_농도")),
@@ -1200,6 +1211,10 @@ def save_record(req: RecordSaveRequest):
                 continue
             ws = wb["DailyUsage"]
             headers = [cell.value for cell in ws[1]]
+            for field in ('검사대상', '검사규격', '재검사개소', '재검사매수'):
+                if field not in headers:
+                    headers.append(field)
+                    ws.cell(row=1, column=len(headers), value=field)
 
             row_values = []
             for h in headers:
@@ -1237,6 +1252,10 @@ def update_record(req: RecordUpdateRequest):
                 continue
             ws = wb["DailyUsage"]
             headers = [cell.value for cell in ws[1]]
+            for field in ('검사대상', '검사규격', '재검사개소', '재검사매수'):
+                if field not in headers:
+                    headers.append(field)
+                    ws.cell(row=1, column=len(headers), value=field)
 
             target_row_idx = None
 

@@ -14,6 +14,7 @@ from site_apps.gyeongin.src.data_sync import (
 )
 import sys
 import json
+import re
 import shutil
 import uuid
 from site_apps.gyeongin.src.rt_quantities import rt_counts, sync_rt_widgets, widget_rt_values, resolve_rt_row, retest_parent, default_rt_copy, corrected_rt_history
@@ -33,6 +34,128 @@ SIZE_LENGTH = {
     '80A':   0.2799, '65A':   0.2397, '50A':  0.1901, '40A':  0.1527,
     '32A':   0.1341, '25A':   0.1068, '20A':  0.0855,
 }
+
+NDT_TARGET_TYPES = ('배관', '판재/시험편', '기계부품', '구조물/설비', 'PMI')
+
+NDT_ITEM_CHOICES = {
+    '배관': (
+        'PIPE', '강관', '배관 용접부', '튜브(TUBE)', '라이저 파이프',
+        '매니폴드', '배관 피팅', '플랜지',
+    ),
+    '판재/시험편': (
+        'PLATE', '판재 용접부', 'WQT 시험편', '맞대기 용접 시험편',
+        '필릿 용접 시험편', '용접사 자격 시험편',
+    ),
+    '기계부품': (
+        'SHAFT', 'PINION', 'GEAR', 'ROLL', 'UNIVERSAL JOINT',
+        'CASING', 'BODY', 'IMPELLER', 'COUPLING', 'BOLT/NUT',
+    ),
+    '구조물/설비': (
+        '구조물 용접부', '중앙말뚝', 'H-PILE', 'GUIDE RAIL', 'TANK',
+        'PRESSURE VESSEL', 'HEAT EXCHANGER', 'PUMP', 'CRANE', 'FORKLIFT',
+    ),
+    'PMI': (
+        'PIPE', 'FITTING', 'FLANGE', 'VALVE', 'PUMP', 'CASING/BODY',
+        'BOLT/NUT', 'WELD', '기타 구성부품',
+    ),
+}
+
+NDT_DIMENSION_TEMPLATES = {
+    '배관': ('관경A × 두께T', '외경Ø × 두께T × 길이L'),
+    '판재/시험편': ('폭 × 길이 × 두께T / 수량EA', '폭 × 폭 × 두께T × 두께T'),
+    '기계부품': ('Ø직경 × 길이L / 수량EA', 'Ø직경1/직경2 × 길이L / 수량EA', '수량EA (검사 Point)'),
+    '구조물/설비': ('폭 × 길이 × 높이 × 두께T', '용량 CAPA / 수량EA'),
+    'PMI': ('N/A',),
+}
+
+NDT_COMMON_COLUMNS = (
+    '업체', '검사방법', '대상유형', '검사품명', '식별번호', '재질',
+    '치수원문', '수량', '단위', '결과',
+)
+
+NDT_VIEW_COLUMNS = {
+    '배관': (
+        '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수',
+        '라인번호', 'Joint No.', '관경', '두께', '용접자세', '용접사',
+        '구간정보', '규격', '근무구분', 'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT',
+    ),
+    '판재/시험편': ('시험편번호', '폭', '길이', '두께', '용접자세', '검사위치', '검사범위'),
+    '기계부품': ('부품번호', '직경', '길이', '폭', '높이', '검사위치', '검사범위'),
+    '구조물/설비': ('설비번호', '모델', '용량', '폭', '길이', '높이', '두께', '검사위치', '검사범위'),
+    'PMI': ('태그번호', '구성부품', '요구재질', '판정재질', '검사위치'),
+}
+
+NDT_DETAIL_FIELDS = (
+    '적용규격', '검사절차서', '개정번호', '도면번호', '검사위치', '검사범위', '비고'
+)
+
+
+def ndt_visible_columns(view):
+    """Return the stable column order for one bulk-entry view."""
+    view = view if view in NDT_VIEW_COLUMNS else '배관'
+    allowed = set(NDT_COMMON_COLUMNS) | set(NDT_VIEW_COLUMNS[view])
+    all_columns = tuple(dict.fromkeys(
+        NDT_COMMON_COLUMNS
+        + tuple(column for columns in NDT_VIEW_COLUMNS.values() for column in columns)
+        + NDT_DETAIL_FIELDS
+    ))
+    return tuple(column for column in all_columns if column in allowed)
+
+
+def infer_ndt_target(row):
+    """Keep legacy work-log rows in the pipe workflow without rewriting history."""
+    saved = str(row.get('대상유형', '') or '').strip()
+    if saved in NDT_TARGET_TYPES:
+        return saved
+    pipe_keys = ('라인번호', 'Joint No.', '관경', '핫태핑개소', '구간정보')
+    if any(str(row.get(key, '') or '').strip() for key in pipe_keys):
+        return '배관'
+    return ''
+
+
+def ndt_item_choices(target_type, saved_items=()):
+    """Combine reviewed report items with site history while preserving order."""
+    choices = list(NDT_ITEM_CHOICES.get(target_type, ()))
+    for item in saved_items:
+        item = str(item or '').strip()
+        if item and item not in choices:
+            choices.append(item)
+    return tuple(choices)
+
+
+def ndt_dimension_choices(target_type, saved_dimensions=()):
+    """Offer editable templates first and previously saved source text after them."""
+    choices = list(NDT_DIMENSION_TEMPLATES.get(target_type, ()))
+    for value in saved_dimensions:
+        value = str(value or '').strip()
+        if value and value not in choices:
+            choices.append(value)
+    return tuple(choices)
+
+
+def parse_machine_dimension(value):
+    """Parse common report text such as Ø90/220×120L / 112EA."""
+    text = str(value or '').strip()
+    if not text:
+        return {}
+    match = re.search(
+        r'[ØΦφ⌀]\s*'
+        r'(?P<diameter>\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)*)\s*'
+        r'[×xX*]\s*(?P<length>\d+(?:\.\d+)?)\s*(?:L|ℓ)?',
+        text,
+    )
+    if not match:
+        return {}
+    result = {
+        '직경': re.sub(r'\s+', '', match.group('diameter')),
+        '길이': match.group('length'),
+    }
+    quantity = re.search(r'/\s*(\d+(?:\.\d+)?)\s*(EA|PCS|개)\b', text[match.end():], re.IGNORECASE)
+    if quantity:
+        result['수량'] = quantity.group(1)
+        unit = quantity.group(2).upper()
+        result['단위'] = '개' if unit == '개' else unit
+    return result
 
 # 용접사 관리대장에서 갱신된 최신 발급번호.
 # 과거 작업일보 및 공정사진에 저장된 번호도 같은 기준으로 자동 이관한다.
@@ -138,7 +261,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.left_canvas.configure(yscrollcommand=self.left_scrollbar.set)
         
         def _on_left_canvas_configure(event):
-            new_width = max(event.width, self.left_frame.winfo_reqwidth())
+            new_width = event.width
             new_height = max(event.height, self.left_frame.winfo_reqheight())
             self.left_canvas.itemconfig(self.left_window, width=new_width, height=new_height)
             _update_left_scroll()
@@ -237,112 +360,167 @@ class DailyWorkLogTab(ttk.Frame):
         btn_export = ttk.Button(top_frame, text="엑셀 출력 (일보 생성)", command=self.export_excel)
         btn_export.grid(row=1, column=4, columnspan=2, padx=5, pady=(0, 3), sticky="e")
         
-        # --- Middle Section: Work Quantities ---
-        mid_frame = ttk.LabelFrame(parent, text="1. 작업 물량 및 누계 현황", padding=10)
-        mid_frame.pack(fill="x", padx=5, pady=5)
-        
-        headers = ['방법', '규격', '예상량', '전일누계', '금일작업', '총누계', '공정률(%)', '불량', '불량률(%)', '비고']
-        for col, h in enumerate(headers):
-            ttk.Label(mid_frame, text=h, font=('맑은 고딕', 9, 'bold')).grid(row=0, column=col, padx=1, pady=2)
-            
-        self.qty_rows = [
-            ('PAUT', '300A이상'), ('PAUT', '300A이상-야간'), ('PAUT', '250A'), ('PAUT', '250A-야간'), ('PAUT', '200A'), ('PAUT', '200A-야간'), 
-            ('PAUT', '150A~125A'), ('PAUT', '150A~125A-야간'), ('PAUT', '100A이하'), ('PAUT', '100A이하-야간'), ('PAUT', '소계'),
-            ('RT', '150A~100A'), ('RT', '150A~100A-야간'), ('RT', '80A이하'), ('RT', '80A이하-야간'), ('RT', '소계'),
-            ('MT', '전체(주간)'), ('MT', '전체(야간)'),
-            ('PT', '전체(주간)'), ('PT', '전체(야간)')
-        ]
-        
+        # Saved inspection quantities are grouped by client, method and unit.
+        mid_frame = ttk.LabelFrame(parent, text="1. 업체별 검사 실적", padding=10)
+        mid_frame.pack(fill='both', expand=True, padx=5, pady=5)
+        period = ttk.Frame(mid_frame)
+        period.pack(fill='x', pady=(0, 5))
+        ttk.Label(period, text='조회 시작일:').pack(side='left')
+        self.company_start_date = DateEntry(period, width=12, date_pattern='yyyy-mm-dd', state='readonly')
+        self.company_start_date.pack(side='left', padx=5)
+        ttk.Label(period, text='~ 상단 검사일자').pack(side='left')
+        ttk.Button(period, text='조회', command=self.refresh_company_summary).pack(side='right')
+        self.company_start_date.bind('<<DateEntrySelected>>', self._company_period_changed)
+        self.company_summary_rows = []
+        self._summary_start_initialized = False
+        columns = ('company', 'method', 'unit', 'previous', 'today', 'total')
+        table = ttk.Frame(mid_frame)
+        table.pack(fill='both', expand=True)
+        self.company_summary_tree = ttk.Treeview(table, columns=columns, show='headings', height=12)
+        for key, title, width in zip(columns,
+                ('업체명', '검사방법', '단위', '전일까지', '선택일 실적', '누계'),
+                (170, 75, 80, 95, 95, 95)):
+            self.company_summary_tree.heading(key, text=title, anchor='center')
+            self.company_summary_tree.column(key, width=width, minwidth=60,
+                                             stretch=False, anchor='center')
+        from site_apps.gyeongin.src.views.tree_column_resize import enable_column_resize
+        enable_column_resize(self.company_summary_tree)
+        horizontal = ttk.Scrollbar(table, orient='horizontal', command=self.company_summary_tree.xview)
+        horizontal.pack(side='bottom', fill='x')
+        self.company_summary_tree.configure(xscrollcommand=horizontal.set)
+        scrollbar = ttk.Scrollbar(table, orient='vertical', command=self.company_summary_tree.yview)
+        scrollbar.pack(side='right', fill='y')
+        self.company_summary_tree.configure(yscrollcommand=scrollbar.set)
+        self.company_summary_tree.pack(side='left', fill='both', expand=True)
+        self.company_summary_status = ttk.Label(mid_frame, text='저장된 일일 사용량 기준 · 미저장 입력 제외', wraplength=650)
+        self.company_summary_status.pack(fill='x', pady=(5, 0))
+        # Keep the old history field available for readers of archived daily logs.
         self.qty_entries = {}
-        self.default_qty = {
-            ('PAUT', '300A이상'): '129', ('PAUT', '300A이상-야간'): '624',
-            ('PAUT', '250A'): '4', ('PAUT', '250A-야간'): '1', ('PAUT', '200A'): '4',
-            ('PAUT', '200A-야간'): '2', 
-            ('PAUT', '150A~125A'): '1', ('PAUT', '150A~125A-야간'): '1',
-            ('PAUT', '100A이하'): '1', ('PAUT', '100A이하-야간'): '1',
-            ('PAUT', '소계'): '768',
-            ('RT', '150A~100A'): '293', ('RT', '150A~100A-야간'): '43',
-            ('RT', '80A이하'): '105', ('RT', '80A이하-야간'): '49',
-            ('RT', '소계'): '490', ('MT', '전체(주간)'): '26',
-            ('MT', '전체(야간)'): '1', ('PT', '전체(주간)'): '26',
-            ('PT', '전체(야간)'): '1',
-        }
-        for row_idx, (method, spec) in enumerate(self.qty_rows, start=1):
-            ttk.Label(mid_frame, text=method).grid(row=row_idx, column=0, padx=1, pady=2)
-            ttk.Label(mid_frame, text=spec).grid(row=row_idx, column=1, padx=1, pady=2)
-            
-            row_dict = {}
-            for col_idx, key in enumerate(['예상량', '전일누계', '금일작업', '총누계', '공정률', '불량', '불량률', '비고'], start=2):
-                ent = ttk.Entry(mid_frame, width=7)
-                ent.grid(row=row_idx, column=col_idx, padx=1, pady=2)
-                if key == '예상량':
-                    val = self.default_qty.get((method, spec), '')
-                    if val:
-                        ent.insert(0, val)
-                row_dict[key] = ent
-            self.qty_entries[f"{method}_{spec}"] = row_dict
-            
-        # --- Bottom Section: Equip, Personnel, Remarks ---
-        bot_frame = ttk.Frame(parent)
-        bot_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        # Equipment
-        eq_frame = ttk.LabelFrame(bot_frame, text="장비투입 현황", padding=10)
-        eq_frame.pack(side="left", fill="y", padx=5)
-        
-        ttk.Label(eq_frame, text="장비명").grid(row=0, column=0)
-        ttk.Label(eq_frame, text="금일").grid(row=0, column=1)
-        ttk.Label(eq_frame, text="누계").grid(row=0, column=2)
-        
-        self.equip_rows = ['PAUT장비', 'PAUT프로브', 'PAUT스캐너', 'RT장비', 'MT장비']
+        self.qty_rows = []
+        self.default_qty = {}
+        self.bind('<Map>', lambda event: self.refresh_company_summary(), add='+')
+
+        # Archived equipment/personnel fields remain in history, without duplicate inputs.
+        self.equip_rows = []
         self.equip_entries = {}
-        for i, eq in enumerate(self.equip_rows, start=1):
-            ttk.Label(eq_frame, text=eq).grid(row=i, column=0, sticky="w")
-            e_today = ttk.Entry(eq_frame, width=7)
-            e_cum = ttk.Entry(eq_frame, width=7)
-            e_today.grid(row=i, column=1, padx=2, pady=2)
-            e_cum.grid(row=i, column=2, padx=2, pady=2)
-            self.equip_entries[eq] = {'금일': e_today, '누계': e_cum}
-            
-        # Personnel
-        pe_frame = ttk.LabelFrame(bot_frame, text="금일 투입 인원", padding=10)
-        pe_frame.pack(side="left", fill="y", padx=5)
-        
-        ttk.Label(pe_frame, text="구분").grid(row=0, column=0)
-        ttk.Label(pe_frame, text="검사원").grid(row=0, column=1)
-        ttk.Label(pe_frame, text="안전").grid(row=0, column=2)
-        
         self.personnel_entries = {}
-        for i, lbl in enumerate(['인원', '현장대리인', '누계'], start=1):
-            ttk.Label(pe_frame, text=lbl).grid(row=i, column=0, sticky="w")
-            ent1 = ttk.Entry(pe_frame, width=8)
-            ent1.grid(row=i, column=1, padx=2, pady=2)
-            self.personnel_entries[f'검사원_{lbl}'] = ent1
-            
-            ent2 = ttk.Entry(pe_frame, width=8)
-            ent2.grid(row=i, column=2, padx=2, pady=2)
-            self.personnel_entries[f'안전_{lbl}'] = ent2
-            
-        # Remarks
-        rm_frame = ttk.LabelFrame(bot_frame, text="특이사항 및 계획", padding=10)
-        rm_frame.pack(side="left", fill="both", expand=True, padx=5)
+        # Common and company notes use the remaining width.
+        rm_frame = ttk.LabelFrame(parent, text='특이사항 및 계획', padding=10)
+        rm_frame.pack(fill='x', padx=5, pady=5)
         memo_toolbar = ttk.Frame(rm_frame)
-        memo_toolbar.pack(fill="x", pady=(0, 5))
-        ttk.Label(memo_toolbar, text="선택한 검사일자의 메모").pack(side="left")
-        ttk.Button(memo_toolbar, text="메모 이력", command=self.open_memo_history).pack(side="right")
-        self.remarks_text = tk.Text(rm_frame, width=20, height=8)
-        self.remarks_text.pack(fill="both", expand=True)
+        memo_toolbar.pack(fill='x', pady=(0, 5))
+        ttk.Label(memo_toolbar, text='저장: 상단 [자동 집계 및 저장]').pack(side='left')
+        ttk.Button(memo_toolbar, text='메모 이력', command=self.open_memo_history).pack(side='right')
+        self.memo_notebook = ttk.Notebook(rm_frame)
+        self.memo_notebook.pack(fill='both', expand=True)
+        common_page = ttk.Frame(self.memo_notebook, padding=5)
+        self.company_memo_page = ttk.Frame(self.memo_notebook, padding=5)
+        self.memo_notebook.add(common_page, text='공통 메모')
+        self.memo_notebook.add(self.company_memo_page, text='업체별 메모')
+        self.remarks_text = tk.Text(common_page, height=6, width=40, wrap='word')
+        self.remarks_text.pack(fill='both', expand=True)
+        company_toolbar = ttk.Frame(self.company_memo_page)
+        company_toolbar.pack(fill='x', pady=(0, 4))
+        ttk.Label(company_toolbar, text='업체명:').pack(side='left')
+        self.company_memo_selector = ttk.Combobox(company_toolbar, state='readonly', width=28)
+        self.company_memo_selector.pack(side='left', padx=5)
+        self.company_memo_selector.bind('<<ComboboxSelected>>', self._on_company_memo_selected)
+        self.company_memo_hint = ttk.Label(company_toolbar, text='실적 표에서 업체를 선택하세요.')
+        self.company_memo_hint.pack(side='left', padx=5)
+        self.company_memo_text = tk.Text(self.company_memo_page, height=5, width=40,
+                                         wrap='word', state='disabled')
+        self.company_memo_text.pack(fill='both', expand=True)
+        self.company_memos = {}
+        self._company_memo_company = None
+        self.company_summary_tree.bind('<<TreeviewSelect>>', self._on_company_summary_selected)
+
+    def _company_memo_snapshot(self):
+        from site_apps.gyeongin.src.company_memos import memo_snapshot
+        company = getattr(self, '_company_memo_company', None)
+        text = self.company_memo_text.get('1.0', 'end-1c') if company else ''
+        return memo_snapshot(getattr(self, 'company_memos', {}), company, text)
+
+    def _refresh_company_memo_choices(self):
+        names = {row['company'] for row in self.company_summary_rows
+                 if row['company'] != '(업체명 미입력)'}
+        names.update(self._company_memo_snapshot())
+        if self._company_memo_company:
+            names.add(self._company_memo_company)
+        self.company_memo_selector.configure(values=sorted(names))
+
+    def _select_company_memo(self, company):
+        if not company or company == '(업체명 미입력)':
+            return
+        if company != self._company_memo_company:
+            self.company_memos = self._company_memo_snapshot()
+            self._company_memo_company = company
+            self.company_memo_text.configure(state='normal')
+            self.company_memo_text.delete('1.0', tk.END)
+            self.company_memo_text.insert('1.0', self.company_memos.get(company, ''))
+        self.company_memo_selector.set(company)
+        self.company_memo_hint.configure(text=f'{self.date_entry.get()} · 같은 업체의 검사방법 간 공유')
+        self.memo_notebook.select(self.company_memo_page)
+
+    def _on_company_memo_selected(self, event=None):
+        self._select_company_memo(self.company_memo_selector.get())
+
+    def _on_company_summary_selected(self, event=None):
+        selected = self.company_summary_tree.selection()
+        if selected:
+            values = self.company_summary_tree.item(selected[0], 'values')
+            if values:
+                self._select_company_memo(str(values[0]))
+
+    def _load_company_memos(self, memos):
+        from site_apps.gyeongin.src.company_memos import memo_snapshot
+        self.company_memos = memo_snapshot(memos)
+        self._company_memo_company = None
+        self.company_memo_selector.set('')
+        self.company_memo_text.configure(state='normal')
+        self.company_memo_text.delete('1.0', tk.END)
+        self.company_memo_text.configure(state='disabled')
+        self.company_memo_hint.configure(text='실적 표에서 업체를 선택하세요.')
+        self._refresh_company_memo_choices()
+
+    def _company_period_changed(self, event=None):
+        self._summary_start_initialized = True
+        self.refresh_company_summary()
+
+    def refresh_company_summary(self):
+        from site_apps.gyeongin.src.company_usage_summary import first_usage_date, summarize_company_usage
+        frame = getattr(getattr(self, 'main_app', None), 'daily_usage_df', None)
+        selected = self.date_entry.get_date()
+        if not self._summary_start_initialized and frame is not None:
+            self.company_start_date.set_date(first_usage_date(frame, selected))
+            self._summary_start_initialized = True
+        try:
+            rows, skipped = summarize_company_usage(frame, self.company_start_date.get_date(), selected)
+        except ValueError as error:
+            self.company_summary_rows = []
+            self.company_summary_tree.delete(*self.company_summary_tree.get_children())
+            self.company_summary_status.configure(text=str(error), foreground='#9A5B00')
+            return False
+        self.company_summary_rows = rows
+        if hasattr(self, 'company_memo_selector'):
+            self._refresh_company_memo_choices()
+        self.company_summary_tree.delete(*self.company_summary_tree.get_children())
+        for row in rows:
+            self.company_summary_tree.insert('', 'end', values=(
+                row['company'], row['method'], row['unit'],
+                *(f"{row[key]:,.4f}".rstrip('0').rstrip('.') for key in ('previous', 'today', 'total'))))
+        text = f'저장된 일일 사용량 기준 · {len(rows)}개 그룹 · 미저장 입력 제외'
+        if not rows:
+            text += ' · 조회 기간에 검사 실적이 없습니다.'
+        if skipped:
+            text += f' · 날짜/수량 오류 {skipped}건 제외'
+        self.company_summary_status.configure(text=text, foreground='#9A5B00' if skipped else '#555555')
+        return True
 
     def open_memo_history(self):
         """저장된 일보 메모를 날짜/키워드로 찾아 해당 날짜로 이동한다."""
         history = self.load_history()
-        memo_rows = []
-        for date_key, day_data in history.items():
-            memo = str(day_data.get('remarks', '') or '').strip()
-            if memo:
-                preview = ' '.join(memo.split())
-                memo_rows.append((str(date_key), preview))
-        memo_rows.sort(key=lambda item: item[0], reverse=True)
+        from site_apps.gyeongin.src.company_memos import memo_history_rows
+        memo_rows = memo_history_rows(history)
 
         window = tk.Toplevel(self)
         window.title("일보 메모 이력")
@@ -352,17 +530,19 @@ class DailyWorkLogTab(ttk.Frame):
 
         search_frame = ttk.Frame(window, padding=10)
         search_frame.pack(fill="x")
-        ttk.Label(search_frame, text="날짜·내용 검색:").pack(side="left")
+        ttk.Label(search_frame, text="날짜·업체·내용 검색:").pack(side="left")
         search_var = tk.StringVar()
         search_entry = ttk.Entry(search_frame, textvariable=search_var)
         search_entry.pack(side="left", fill="x", expand=True, padx=(6, 0))
 
         table_frame = ttk.Frame(window, padding=(10, 0, 10, 10))
         table_frame.pack(fill="both", expand=True)
-        columns = ('date', 'memo')
+        columns = ('date', 'company', 'memo')
         tree = ttk.Treeview(table_frame, columns=columns, show='headings', selectmode='browse')
         tree.heading('date', text='날짜')
+        tree.heading('company', text='업체 / 공통')
         tree.heading('memo', text='메모 내용')
+        tree.column('company', width=140, minwidth=100, stretch=False)
         tree.column('date', width=110, minwidth=100, stretch=False, anchor='center')
         tree.column('memo', width=580, minwidth=300, stretch=True, anchor='w')
         scrollbar = ttk.Scrollbar(table_frame, orient='vertical', command=tree.yview)
@@ -376,9 +556,9 @@ class DailyWorkLogTab(ttk.Frame):
         def refresh_rows(*_args):
             query = search_var.get().strip().lower()
             tree.delete(*tree.get_children())
-            matched = [row for row in memo_rows if not query or query in row[0].lower() or query in row[1].lower()]
-            for date_key, preview in matched:
-                tree.insert('', 'end', values=(date_key, preview))
+            matched = [row for row in memo_rows if not query or query in ' '.join(row).lower()]
+            for date_key, company, memo in matched:
+                tree.insert('', 'end', values=(date_key, company or '공통', ' '.join(memo.split())))
             status_var.set(f"메모 {len(matched)}건  ·  더블클릭하면 해당 날짜로 이동합니다.")
 
         def move_to_selected(_event=None):
@@ -389,7 +569,13 @@ class DailyWorkLogTab(ttk.Frame):
             try:
                 self.date_entry.set_date(datetime.strptime(date_key, '%Y-%m-%d').date())
                 self.on_date_change()
-                window.destroy()
+                if self._loaded_log_date == date_key:
+                    company = str(tree.item(selected[0], 'values')[1])
+                    if company != '공통':
+                        self._select_company_memo(company)
+                    else:
+                        self.memo_notebook.select(0)
+                    window.destroy()
             except ValueError:
                 messagebox.showerror("날짜 오류", f"저장된 날짜 형식을 읽을 수 없습니다: {date_key}", parent=window)
 
@@ -424,18 +610,38 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Label(line_bar, textvariable=self.ndt_selection_text).pack(side='left', padx=(0, 8))
         ttk.Button(line_bar, text='라인번호 일괄 변경', command=self._edit_ndt_lines).pack(side='left')
         ttk.Button(line_bar, text='구간 일괄 변경', command=self._edit_ndt_sections).pack(side='left', padx=(8, 0))
-        ttk.Label(line_bar, text='현재 날짜의 라인번호·구간을 한 번에 변경합니다.').pack(side='left', padx=8)
+        ttk.Button(line_bar, text='선택 행 상세정보', command=self._edit_ndt_details).pack(side='left', padx=(8, 0))
+
+        view_bar = ttk.LabelFrame(parent, text='검사 대상 보기')
+        view_bar.pack(fill='x', padx=5, pady=(0, 4))
+        self.ndt_view_var = tk.StringVar(value='배관')
+        for target_type in NDT_TARGET_TYPES:
+            ttk.Radiobutton(
+                view_bar, text=target_type, value=target_type,
+                variable=self.ndt_view_var, command=self._set_ndt_view,
+                style='Toolbutton',
+            ).pack(side='left', padx=6, pady=3)
+        ttk.Label(
+            view_bar,
+            text='공통정보는 유지하고 선택한 대상에 필요한 열만 표시합니다.',
+        ).pack(side='left', padx=12)
         
         # Grid Container
         grid_frame = ttk.Frame(parent)
         grid_frame.pack(fill="both", expand=True, padx=5, pady=5)
         
-        self.ndt_cols = ('업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', 'Joint No.', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분',
-                         'RT_OR', 'RT_RE', 'PAUT', 'MT', 'PT')
+        all_type_columns = tuple(dict.fromkeys(
+            column for columns in NDT_VIEW_COLUMNS.values() for column in columns
+        ))
+        self.ndt_cols = tuple(dict.fromkeys(
+            NDT_COMMON_COLUMNS + all_type_columns + NDT_DETAIL_FIELDS
+        ))
         history = self.load_history()
         sections = set()
         lines = set()
         companies = set()
+        history_items = {target: set() for target in NDT_TARGET_TYPES}
+        history_dimensions = {target: set() for target in NDT_TARGET_TYPES}
         # 월간 보고서와 동일한 용접사 번호/성명 기준정보를 사용한다.
         welders = set(self.welder_names)
         for date_str, data in history.items():
@@ -444,10 +650,23 @@ class DailyWorkLogTab(ttk.Frame):
                 if r.get('라인번호'): lines.add(r['라인번호'].strip())
                 if r.get('업체'): companies.add(r['업체'].strip())
                 if r.get('용접사'): welders.add(self._normalize_welder_id(r['용접사']))
+                target_type = infer_ndt_target(r)
+                item_name = str(r.get('검사품명', '') or '').strip()
+                if target_type in history_items and item_name:
+                    history_items[target_type].add(item_name)
+                dimension = str(r.get('치수원문', '') or '').strip()
+                if target_type in history_dimensions and dimension:
+                    history_dimensions[target_type].add(dimension)
         
         self.history_sections = [''] + sorted(list(sections))
         self.history_lines = [''] + sorted(list(lines))
         self.history_companies = [''] + sorted(list(companies))
+        self.history_ndt_items = {
+            target: sorted(items) for target, items in history_items.items()
+        }
+        self.history_ndt_dimensions = {
+            target: sorted(values) for target, values in history_dimensions.items()
+        }
         self.history_welders = [''] + [
             self._format_welder_display(welder_id)
             for welder_id in sorted(welders)
@@ -456,9 +675,17 @@ class DailyWorkLogTab(ttk.Frame):
         
         # Draw Headers
         ttk.Label(grid_frame, text='선택').grid(row=0, column=0, padx=4)
+        self._ndt_header_widgets = {}
+        self._ndt_column_indices = {}
         for col_idx, c in enumerate(self.ndt_cols, start=1):
-            label = {'RT_OR': 'RT_OR 전체', 'RT_RE': 'RT_RE 불량'}.get(c, c)
-            ttk.Label(grid_frame, text=label, font=("맑은 고딕", 9, "bold")).grid(row=0, column=col_idx, padx=1, pady=2)
+            label = {
+                'RT_OR': 'RT_OR 전체', 'RT_RE': 'RT_RE 불량',
+                '규격': '필름규격', '대상유형': '대상 유형',
+            }.get(c, c)
+            header = ttk.Label(grid_frame, text=label, font=("맑은 고딕", 9, "bold"))
+            header.grid(row=0, column=col_idx, padx=1, pady=2)
+            self._ndt_header_widgets[c] = header
+            self._ndt_column_indices[c] = col_idx
             if c == '구간정보':
                 grid_frame.grid_columnconfigure(col_idx, weight=5, minsize=260)
             elif c == '라인번호':
@@ -473,6 +700,7 @@ class DailyWorkLogTab(ttk.Frame):
         self._ndt_grid_frame = grid_frame
         self.ndt_grid_entries = []
         self._append_ndt_rows(30)
+        self._set_ndt_view()
 
         hot_bar = ttk.Frame(parent)
         hot_bar.pack(fill='x', padx=5, pady=4)
@@ -530,6 +758,9 @@ class DailyWorkLogTab(ttk.Frame):
             elif c == '근무구분': w = 7
             elif c in ('검사방법', '결과', '관경', '두께'): w = 6
             elif c == '업체': w = 16
+            elif c == '대상유형': w = 12
+            elif c in ('검사품명', '치수원문', '식별번호'): w = 18
+            elif c in ('검사위치', '검사범위', '구성부품'): w = 16
             elif c == '구간': w = 10
             elif c == '용접사': w = 23
             elif c == '라인번호': w = 25
@@ -545,6 +776,21 @@ class DailyWorkLogTab(ttk.Frame):
             elif c == '검사방법':
                 ent = ttk.Combobox(grid_frame, width=w, values=['', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', 'ETC'], justify='center')
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
+                row_entries[c] = ent
+            elif c == '대상유형':
+                ent = ttk.Combobox(
+                    grid_frame, width=w, values=[''] + list(NDT_TARGET_TYPES),
+                    state='readonly', justify='center'
+                )
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
+                row_entries[c] = ent
+            elif c == '검사품명':
+                ent = ttk.Combobox(grid_frame, width=w, values=[], justify='left')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
+                row_entries[c] = ent
+            elif c == '치수원문':
+                ent = ttk.Combobox(grid_frame, width=w, values=[], justify='left')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
                 row_entries[c] = ent
             elif c == '구간정보':
                 frame = ttk.Frame(grid_frame)
@@ -717,6 +963,15 @@ class DailyWorkLogTab(ttk.Frame):
             if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
                 r['구간정보'].apply_layout()
 
+        def on_target_change(event=None, r=row_entries):
+            target_type = r['대상유형'].get().strip()
+            if target_type in NDT_TARGET_TYPES:
+                self._sync_ndt_item_choices(r)
+                self._sync_ndt_dimension_choices(r)
+                self._sync_machine_dimensions(r)
+                self.ndt_view_var.set(target_type)
+                self._set_ndt_view()
+
 
         def on_hot_change(event=None, r=row_entries):
             if r['작업구분'].get() == '핫태핑':
@@ -724,8 +979,15 @@ class DailyWorkLogTab(ttk.Frame):
         row_entries['작업구분'].bind('<<ComboboxSelected>>', on_hot_change)
         row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
         row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
+        row_entries['대상유형'].bind('<<ComboboxSelected>>', on_target_change)
         row_entries['관경'].bind('<<ComboboxSelected>>', on_ndt_change)
         row_entries['관경'].bind('<FocusOut>', on_ndt_change)
+        row_entries['치수원문'].bind(
+            '<FocusOut>', lambda event, r=row_entries: self._sync_machine_dimensions(r), add='+'
+        )
+        row_entries['치수원문'].bind(
+            '<<ComboboxSelected>>', lambda event, r=row_entries: self._sync_machine_dimensions(r), add='+'
+        )
         row_entries['Joint No.'].bind('<FocusOut>', lambda event, r=row_entries: self._sync_rt_row(r), add='+')
 
         def on_joint_enter(event, r_idx=row_idx-1, r=row_entries):
@@ -749,7 +1011,7 @@ class DailyWorkLogTab(ttk.Frame):
                         next_num = str(int(num_str) + 1).zfill(len(num_str))
                         r['Joint No.'].insert(0, prefix + next_num)
 
-            for col in ['업체', '검사방법', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분']:
+            for col in ['업체', '검사방법', '대상유형', '검사품명', '재질', '구간', '작업구분', '핫태핑개소', '핫태핑차수', '핫태핑개소수', '라인번호', '관경', '두께', '용접사', '구간정보', '결과', '규격', '근무구분', '적용규격', '검사절차서', '개정번호']:
                 if col == '규격' and r['검사방법'].get().strip().upper() != prev_row['검사방법'].get().strip().upper():
                     continue
                 if col in ('구간정보', '결과') and (r['검사방법'].get().strip().upper() == 'RT' or prev_row['검사방법'].get().strip().upper() == 'RT'):
@@ -789,6 +1051,112 @@ class DailyWorkLogTab(ttk.Frame):
                 widget.bind('<Escape>', self._clear_ndt_selection, add='+')
 
         self.ndt_grid_entries.append(row_entries)
+
+        if hasattr(self, 'ndt_view_var'):
+            self._set_ndt_view()
+
+    def _sync_ndt_item_choices(self, row):
+        target_type = row['대상유형'].get().strip()
+        saved = getattr(self, 'history_ndt_items', {}).get(target_type, ())
+        current = row['검사품명'].get().strip()
+        choices = ndt_item_choices(target_type, tuple(saved) + ((current,) if current else ()))
+        row['검사품명'].configure(values=choices)
+
+    def _sync_ndt_dimension_choices(self, row):
+        target_type = row['대상유형'].get().strip()
+        saved = getattr(self, 'history_ndt_dimensions', {}).get(target_type, ())
+        current = row['치수원문'].get().strip()
+        choices = ndt_dimension_choices(target_type, tuple(saved) + ((current,) if current else ()))
+        row['치수원문'].configure(values=choices)
+
+    def _sync_machine_dimensions(self, row):
+        """Fill only empty structured fields; never replace the entered source text."""
+        if row['대상유형'].get().strip() != '기계부품':
+            return
+        parsed = parse_machine_dimension(row['치수원문'].get())
+        for field in ('직경', '길이', '수량', '단위'):
+            if parsed.get(field) and not row[field].get().strip():
+                row[field].insert(0, parsed[field])
+
+    def _set_ndt_view(self):
+        """Show the compact common grid plus fields relevant to one target type."""
+        if not hasattr(self, '_ndt_grid_frame'):
+            return
+        view = self.ndt_view_var.get() if hasattr(self, 'ndt_view_var') else '배관'
+        if view not in NDT_VIEW_COLUMNS:
+            view = '배관'
+        visible = set(ndt_visible_columns(view))
+        for column, col_idx in self._ndt_column_indices.items():
+            is_visible = column in visible
+            header = self._ndt_header_widgets.get(column)
+            widgets = [row.get(column) for row in getattr(self, 'ndt_grid_entries', [])]
+            if is_visible:
+                if header is not None:
+                    header.grid()
+                for widget in widgets:
+                    if widget is not None:
+                        widget.grid()
+                weight = 3 if column in ('라인번호', '검사품명', '치수원문') else 1
+                minsize = 130 if column in ('업체', '검사품명', '치수원문') else 0
+                self._ndt_grid_frame.grid_columnconfigure(col_idx, weight=weight, minsize=minsize)
+            else:
+                if header is not None:
+                    header.grid_remove()
+                for widget in widgets:
+                    if widget is not None:
+                        widget.grid_remove()
+                self._ndt_grid_frame.grid_columnconfigure(col_idx, weight=0, minsize=0)
+
+    def _edit_ndt_details(self):
+        """Edit report metadata that should not permanently widen the bulk grid."""
+        row = getattr(self, 'selected_ndt_row', None)
+        if row is None:
+            messagebox.showwarning('상세정보', '먼저 검사 행을 선택하세요.')
+            return
+
+        dialog = tk.Toplevel(self)
+        dialog.title('선택 행 상세정보')
+        dialog.transient(self.winfo_toplevel())
+        dialog.resizable(False, False)
+        body = ttk.Frame(dialog, padding=15)
+        body.pack(fill='both', expand=True)
+
+        target_type = row['대상유형'].get().strip() or self.ndt_view_var.get()
+        summary = ' / '.join(filter(None, (
+            row['업체'].get().strip(), row['검사방법'].get().strip(),
+            row['검사품명'].get().strip(), row['식별번호'].get().strip(),
+        ))) or '새 검사 행'
+        ttk.Label(body, text=f'{target_type} · {summary}', font=('맑은 고딕', 10, 'bold')).grid(
+            row=0, column=0, columnspan=2, sticky='w', pady=(0, 10)
+        )
+
+        variables = {}
+        for index, field in enumerate(NDT_DETAIL_FIELDS, start=1):
+            variables[field] = tk.StringVar(value=row[field].get())
+            ttk.Label(body, text=field).grid(row=index, column=0, sticky='w', padx=(0, 12), pady=4)
+            ttk.Entry(body, textvariable=variables[field], width=56).grid(
+                row=index, column=1, sticky='ew', pady=4
+            )
+
+        ttk.Label(
+            body,
+            text='치수 원문과 수량은 표에서 입력하고, 규격·절차·위치·범위는 여기에서 보완합니다.',
+            foreground='#555555',
+        ).grid(row=len(NDT_DETAIL_FIELDS) + 1, column=0, columnspan=2, sticky='w', pady=(8, 0))
+
+        def apply():
+            if not row['대상유형'].get().strip():
+                row['대상유형'].set(target_type)
+            for field, variable in variables.items():
+                row[field].delete(0, tk.END)
+                row[field].insert(0, variable.get().strip())
+            dialog.destroy()
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=len(NDT_DETAIL_FIELDS) + 2, column=0, columnspan=2, sticky='e', pady=(12, 0))
+        ttk.Button(buttons, text='적용', command=apply).pack(side='left', padx=4)
+        ttk.Button(buttons, text='취소', command=dialog.destroy).pack(side='left')
+        dialog.grab_set()
 
 
     def _delete_selected_ndt_row(self):
@@ -1210,13 +1578,6 @@ class DailyWorkLogTab(ttk.Frame):
             messagebox.showwarning('RT 매수 확인', str(exc))
             return False
 
-    def save_current_history(self):
-        date_str = self.date_entry.get()
-        if not date_str: return
-        history = self.load_history()
-        history[date_str] = self.get_current_data()
-        self.save_history(history)
-        
     def delete_current_date_data(self):
         """현재 선택된 날짜의 데이터를 삭제하고 화면을 초기화합니다."""
         date_str = self.date_entry.get()
@@ -1297,6 +1658,7 @@ class DailyWorkLogTab(ttk.Frame):
             ent.delete(0, tk.END)
 
         self.remarks_text.delete('1.0', tk.END)
+        self._load_company_memos({})
 
         for row in self.ndt_grid_entries:
             for ent in row.values():
@@ -1422,15 +1784,20 @@ class DailyWorkLogTab(ttk.Frame):
 
         if not file_path:
             return
-        self.auto_calculate_and_save(show_completion=False)
+        if self.auto_calculate_and_save(show_completion=False) is False:
+            return
+        archived = self.load_history().get(self._selected_date_key(), {})
         # Gather all data
         data = {
             'date': self.date_entry.get(),
             'weather': self.weather_entry.get(),
             'qty_data': {},
-            'equip_data': {},
-            'personnel_data': {},
+            'summary_start_date': self.company_start_date.get(),
+            'company_summary': self.company_summary_rows,
+            'equip_data': archived.get('equip_data', {}),
+            'personnel_data': archived.get('personnel_data', {}),
             'remarks': self.remarks_text.get("1.0", "end-1c"),
+            'company_memos': DailyWorkLogTab._company_memo_snapshot(self),
             'ndt_results': []
         }
 
@@ -1679,6 +2046,8 @@ class DailyWorkLogTab(ttk.Frame):
         lines = set()
         companies = set()
         welders = set(self.welder_names)
+        history_items = {target: set() for target in NDT_TARGET_TYPES}
+        history_dimensions = {target: set() for target in NDT_TARGET_TYPES}
         for day_data in history.values():
             for row in day_data.get('ndt_results', []):
                 section = str(row.get('구간', '') or '').strip()
@@ -1693,6 +2062,13 @@ class DailyWorkLogTab(ttk.Frame):
                     companies.add(company)
                 if welder:
                     welders.add(welder)
+                target_type = infer_ndt_target(row)
+                item_name = str(row.get('검사품명', '') or '').strip()
+                if target_type in history_items and item_name:
+                    history_items[target_type].add(item_name)
+                dimension = str(row.get('치수원문', '') or '').strip()
+                if target_type in history_dimensions and dimension:
+                    history_dimensions[target_type].add(dimension)
 
         self.history_sections = [''] + sorted(sections)
         self.history_lines = [''] + sorted(lines)
@@ -1701,12 +2077,20 @@ class DailyWorkLogTab(ttk.Frame):
             self._format_welder_display(welder_id)
             for welder_id in sorted(welders)
         ]
+        self.history_ndt_items = {
+            target: sorted(items) for target, items in history_items.items()
+        }
+        self.history_ndt_dimensions = {
+            target: sorted(values) for target, values in history_dimensions.items()
+        }
 
         for row_entries in self.ndt_grid_entries:
             row_entries['구간'].configure(values=self.history_sections)
             row_entries['라인번호'].configure(values=self.history_lines)
             row_entries['업체'].configure(values=self.history_companies)
             row_entries['용접사'].configure(values=self.history_welders)
+            self._sync_ndt_item_choices(row_entries)
+            self._sync_ndt_dimension_choices(row_entries)
 
     def _refresh_saved_date_markers(self, history=None):
         """달력 팝업에서 작업일보가 저장된 날짜를 녹색으로 강조한다."""
@@ -1768,6 +2152,8 @@ class DailyWorkLogTab(ttk.Frame):
     def save_current_history(self):
         if not self._validate_rt_rows():
             return
+        if not self.refresh_company_summary():
+            return False
         history = self.load_history()
         current_date = self._selected_date_key()
         if not self._validate_hot_rows():
@@ -1776,10 +2162,13 @@ class DailyWorkLogTab(ttk.Frame):
         
         data = {
             'weather': self.weather_entry.get(),
-            'qty_data': {},
-            'equip_data': {},
-            'personnel_data': {},
+            'qty_data': history.get(current_date, {}).get('qty_data', {}),
+            'summary_start_date': self.company_start_date.get(),
+            'company_summary': self.company_summary_rows,
+            'equip_data': history.get(current_date, {}).get('equip_data', {}),
+            'personnel_data': history.get(current_date, {}).get('personnel_data', {}),
             'remarks': self.remarks_text.get("1.0", "end-1c"),
+            'company_memos': DailyWorkLogTab._company_memo_snapshot(self),
             'ndt_results': [],
             'process_photos': existing_photos,
         }
@@ -1817,6 +2206,7 @@ class DailyWorkLogTab(ttk.Frame):
         return {
             'weather': self.weather_entry.get(),
             'remarks': self.remarks_text.get('1.0', 'end-1c'),
+            'company_memos': DailyWorkLogTab._company_memo_snapshot(self),
             'qty': {key: {field: widget.get() for field, widget in entries.items()}
                     for key, entries in self.qty_entries.items()},
             'equipment': {key: {field: widget.get() for field, widget in entries.items()}
@@ -1858,82 +2248,10 @@ class DailyWorkLogTab(ttk.Frame):
         curr_data = history.get(current_date, {})
         has_current_data = current_date in history
             
-        # Update Qty
-        def load_format_val(ckey, field_name, v):
-            if not str(v).strip(): return v
-            if field_name == '예상량':
-                try: return f"{int(float(str(v).replace(',','')))}"
-                except ValueError: return v
-            if field_name in ['전일누계', '금일작업', '총누계']:
-                try:
-                    fv = float(str(v).replace(',', ''))
-                    if ckey.startswith(('PAUT', 'MT', 'PT')): return f"{fv:.4f}"
-                    return f"{fv:.1f}" if fv % 1 else f"{int(fv)}"
-                except ValueError: return v
-            return v
+        if curr_data.get('summary_start_date'):
+            self.company_start_date.set_date(curr_data['summary_start_date'])
+            self._summary_start_initialized = True
 
-        def is_zero_number(value):
-            try:
-                return float(str(value).replace(',', '').strip() or 0) == 0
-            except (TypeError, ValueError):
-                return False
-
-        for comp_key, entries in self.qty_entries.items():
-            # Load from today if exists
-            curr_qty = curr_data.get('qty_data', {}).get(comp_key, {})
-            prev_qty = prev_data.get('qty_data', {}).get(comp_key, {})
-            for field in ['예상량', '금일작업', '총누계', '공정률', '불량', '불량률', '비고']:
-                entries[field].delete(0, tk.END)
-                current_value = curr_qty.get(field, '')
-                
-                # [FIX] Force expected volume (예상량) to ALWAYS load from updated defaults
-                if field == '예상량':
-                    method, spec = comp_key.split('_', 1)
-                    current_value = self.default_qty.get((method, spec), '')
-                    
-                if not has_current_data:
-                    if field == '금일작업':
-                        current_value = ''
-                    elif field == '총누계':
-                        current_value = prev_qty.get('총누계', '0') or '0'
-                    elif field in ['불량', '불량률', '비고']:
-                        current_value = prev_qty.get(field, '')
-                    elif field == '공정률':
-                        previous_total = prev_qty.get('총누계', '0') or '0'
-                        method, spec = comp_key.split('_', 1)
-                        expected_value = self.default_qty.get((method, spec), '')
-                        try:
-                            total_num = float(str(previous_total).replace(',', ''))
-                            expected_num = float(str(expected_value).replace(',', ''))
-                            current_value = f"{(total_num / expected_num) * 100:.1f}" if expected_num > 0 else ''
-                        except (TypeError, ValueError):
-                            current_value = ''
-                else:
-                    if field == '공정률':
-                        current_total = curr_qty.get('총누계', '0') or '0'
-                        method, spec = comp_key.split('_', 1)
-                        expected_value = self.default_qty.get((method, spec), '')
-                        try:
-                            total_num = float(str(current_total).replace(',', ''))
-                            expected_num = float(str(expected_value).replace(',', ''))
-                            current_value = f"{(total_num / expected_num) * 100:.1f}" if expected_num > 0 else ''
-                        except (TypeError, ValueError):
-                            current_value = ''
-                effective_total = curr_qty.get('총누계', '') if has_current_data else prev_qty.get('총누계', '0')
-                if field in ['금일작업', '총누계', '불량', '불량률'] and is_zero_number(current_value):
-                    current_value = ''
-                elif field == '공정률' and is_zero_number(effective_total):
-                    current_value = ''
-                if str(current_value).strip():
-                    val = load_format_val(comp_key, field, current_value)
-                    entries[field].insert(0, val)
-                    
-            # Always calculate 전일누계 from past
-            prev_total = prev_qty.get('총누계', '0') or '0'
-            entries['전일누계'].delete(0, tk.END)
-            if not is_zero_number(prev_total):
-                entries['전일누계'].insert(0, load_format_val(comp_key, '전일누계', prev_total))
-            
         # Update Equip
         for eq, entries in self.equip_entries.items():
             curr_eq = curr_data.get('equip_data', {}).get(eq, {})
@@ -1971,6 +2289,8 @@ class DailyWorkLogTab(ttk.Frame):
         if 'remarks' in curr_data:
             self.remarks_text.insert("1.0", curr_data['remarks'])
             
+        self._load_company_memos(curr_data.get('company_memos', {}))
+
         # Update NDT Results
         curr_ndt = curr_data.get('ndt_results', [])
         self._ensure_ndt_capacity(len(curr_ndt))
@@ -1997,6 +2317,8 @@ class DailyWorkLogTab(ttk.Frame):
                     val = normalized_spec
                 elif col == '근무구분':
                     val = work_shift
+                elif col == '대상유형':
+                    val = infer_ndt_target(row_data)
                 elif col == '용접사':
                     val = self._format_welder_display(row_data.get(col, ''))
                 else:
@@ -2010,6 +2332,8 @@ class DailyWorkLogTab(ttk.Frame):
                     ent.insert(0, val)
                     
         for widgets in self.ndt_grid_entries:
+            self._sync_ndt_item_choices(widgets)
+            self._sync_ndt_dimension_choices(widgets)
             self._sync_ndt_spec(widgets)
             try:
                 sync_rt_widgets(widgets, all_rows=self._rt_context())
@@ -2017,57 +2341,7 @@ class DailyWorkLogTab(ttk.Frame):
                 pass  # Keep the saved inputs available for correction before saving.
         self._refresh_hot_summary()
 
-        # [NEW] Recalculate Subtotals for Qty to heal missing '금일작업' fields in UI
-        def format_val(ckey, v):
-            if ckey.startswith(('PAUT', 'MT', 'PT')):
-                return f"{v:.4f}"
-            return f"{v:.1f}" if v % 1 else f"{int(v)}"
-            
-        paut_keys = ['300A이상', '300A이상-야간', '250A', '250A-야간', '200A', '200A-야간', '150A~125A', '150A~125A-야간', '100A이하', '100A이하-야간']
-        paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in paut_keys)
-        paut_prev = sum(float(self.qty_entries[f"PAUT_{s}"]['전일누계'].get() or 0) for s in paut_keys)
-        paut_today = sum(float(self.qty_entries[f"PAUT_{s}"]['금일작업'].get() or 0) for s in paut_keys)
-        paut_total = sum(float(self.qty_entries[f"PAUT_{s}"]['총누계'].get() or 0) for s in paut_keys)
-        
-        self.qty_entries['PAUT_소계']['예상량'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['전일누계'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['금일작업'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['총누계'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['공정률'].delete(0, tk.END)
-        
-        if paut_expected > 0:
-            self.qty_entries['PAUT_소계']['예상량'].insert(0, f"{int(paut_expected)}")
-        if paut_prev != 0:
-            self.qty_entries['PAUT_소계']['전일누계'].insert(0, format_val('PAUT', paut_prev))
-        if paut_today != 0:
-            self.qty_entries['PAUT_소계']['금일작업'].insert(0, format_val('PAUT', paut_today))
-        if paut_total != 0:
-            self.qty_entries['PAUT_소계']['총누계'].insert(0, format_val('PAUT', paut_total))
-            if paut_expected > 0:
-                self.qty_entries['PAUT_소계']['공정률'].insert(0, f"{(paut_total / paut_expected) * 100:.1f}")
-                
-        rt_keys = ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간']
-        rt_expected = sum(float(self.qty_entries[f"RT_{s}"]['예상량'].get() or 0) for s in rt_keys)
-        rt_prev = sum(float(self.qty_entries[f"RT_{s}"]['전일누계'].get() or 0) for s in rt_keys)
-        rt_today = sum(float(self.qty_entries[f"RT_{s}"]['금일작업'].get() or 0) for s in rt_keys)
-        rt_total = sum(float(self.qty_entries[f"RT_{s}"]['총누계'].get() or 0) for s in rt_keys)
-        
-        self.qty_entries['RT_소계']['예상량'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['전일누계'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['금일작업'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['총누계'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['공정률'].delete(0, tk.END)
-        
-        if rt_expected > 0:
-            self.qty_entries['RT_소계']['예상량'].insert(0, f"{int(rt_expected)}")
-        if rt_prev != 0:
-            self.qty_entries['RT_소계']['전일누계'].insert(0, format_val('RT', rt_prev))
-        if rt_today != 0:
-            self.qty_entries['RT_소계']['금일작업'].insert(0, format_val('RT', rt_today))
-        if rt_total != 0:
-            self.qty_entries['RT_소계']['총누계'].insert(0, format_val('RT', rt_total))
-            if rt_expected > 0:
-                self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
+        self.refresh_company_summary()
 
         self._loaded_log_date = current_date
         self._log_baseline = self._capture_log_input()
@@ -2078,213 +2352,12 @@ class DailyWorkLogTab(ttk.Frame):
         if not self._validate_hot_rows():
             return
         self._refresh_hot_summary()
-        current_date = self.date_entry.get()
-        history = corrected_rt_history(self.load_history())
-        
-        # 1. Aggregate NDT Results -> 금일작업
-        today_qty = {comp_key: 0.0 for comp_key in self.qty_entries.keys()}
-        today_rejects = {comp_key: 0 for comp_key in self.qty_entries.keys()}
-        
-        for row_entries in self.ndt_grid_entries:
-            if not hasattr(row_entries['검사방법'], 'get'): continue
-            method = row_entries['검사방법'].get().upper().strip()
-            if not method: continue
-            
-            size_str = row_entries['관경'].get().strip() if hasattr(row_entries['관경'], 'get') else ""
-            shift_str = row_entries['근무구분'].get().strip() if hasattr(row_entries['근무구분'], 'get') else ""
-            
-            import re
-            size_match = re.search(r'\d+', size_str)
-            size_val = int(size_match.group()) if size_match else 0
-            
-            if method == 'RT':
-                val, rejects = rt_counts({key: row_entries[key].get() for key in ('RT_OR', 'RT_RE', '구간정보')})
-                if val > 0:
-                    spec_key = '80A이하' if size_val <= 80 else '150A~100A'
-                    if shift_str == '야간': spec_key += '-야간'
-                    comp = f"RT_{spec_key}"
-                    if comp in today_qty:
-                        today_qty[comp] += val
-                        today_rejects[comp] += rejects
-            
-            elif method == 'PAUT':
-                val = float(row_entries['PAUT'].get() or 0)
-                if val > 0:
-                    spec_key = '200A'
-                    if size_val >= 300: spec_key = '300A이상'
-                    elif size_val == 250: spec_key = '250A'
-                    elif size_val == 200: spec_key = '200A'
-                    elif 125 <= size_val <= 150: spec_key = '150A~125A'
-                    elif size_val <= 100: spec_key = '100A이하'
-                    if shift_str == '야간':
-                        spec_key += '-야간'
-                    comp = f"PAUT_{spec_key}"
-                    if comp in today_qty: today_qty[comp] += val
-                        
-            elif method == 'MT':
-                val = float(row_entries['MT'].get() or 0)
-                if val > 0:
-                    spec_key = '전체(야간)' if shift_str == '야간' else '전체(주간)'
-                    comp = f"MT_{spec_key}"
-                    if comp in today_qty: today_qty[comp] += val
-                    
-            elif method == 'PT':
-                val = float(row_entries['PT'].get() or 0)
-                if val > 0:
-                    spec_key = '전체(야간)' if shift_str == '야간' else '전체(주간)'
-                    comp = f"PT_{spec_key}"
-                    if comp in today_qty: today_qty[comp] += val
-                    
-        # Update 금일작업 in UI
-        def format_val(ckey, v):
-            if ckey.startswith(('PAUT', 'MT', 'PT')):
-                return f"{v:.4f}"
-            return f"{v:.1f}" if v % 1 else f"{int(v)}"
+        if not self.refresh_company_summary():
+            return False
 
-        for comp_key, val in today_qty.items():
-            if '소계' not in comp_key:
-                ent = self.qty_entries[comp_key]['금일작업']
-                ent.delete(0, tk.END)
-                if val != 0:
-                    ent.insert(0, format_val(comp_key, val))
-                
-        # 2. Update Totals based on previous date
-        past_dates = [d for d in history.keys() if d < current_date]
-        if past_dates:
-            latest_past_date = max(past_dates)
-            prev_data = history[latest_past_date]
-        else:
-            prev_data = {'qty_data': {}, 'equip_data': {}, 'personnel_data': {}}
-            
-        # Qty
-        for comp_key, entries in self.qty_entries.items():
-            if '소계' in comp_key: continue
-            prev_total_str = prev_data.get('qty_data', {}).get(comp_key, {}).get('총누계', '0') or '0'
-            try: prev_total = float(prev_total_str.replace(',',''))
-            except ValueError: prev_total = 0.0
-            today_val = float(entries['금일작업'].get() or 0)
-            
-            entries['금일작업'].delete(0, tk.END)
-            if today_val != 0:
-                entries['금일작업'].insert(0, format_val(comp_key, today_val))
-            
-            entries['전일누계'].delete(0, tk.END)
-            if prev_total != 0:
-                entries['전일누계'].insert(0, format_val(comp_key, prev_total))
-            
-            total = prev_total + today_val
-            entries['총누계'].delete(0, tk.END)
-            if total != 0:
-                entries['총누계'].insert(0, format_val(comp_key, total))
-            
-            expected = float(entries['예상량'].get() or 0)
-            entries['공정률'].delete(0, tk.END)
-            if expected > 0 and total != 0:
-                entries['예상량'].delete(0, tk.END)
-                entries['예상량'].insert(0, f"{int(expected)}")
-                progress = (total / expected) * 100
-                entries['공정률'].insert(0, f"{progress:.1f}")
-
-        # Subtotals for Qty
-        paut_keys = ['300A이상', '300A이상-야간', '250A', '250A-야간', '200A', '200A-야간', '150A~125A', '150A~125A-야간', '100A이하', '100A이하-야간']
-        paut_expected = sum(float(self.qty_entries[f"PAUT_{s}"]['예상량'].get() or 0) for s in paut_keys)
-        paut_prev = sum(float(self.qty_entries[f"PAUT_{s}"]['전일누계'].get() or 0) for s in paut_keys)
-        paut_today = sum(float(self.qty_entries[f"PAUT_{s}"]['금일작업'].get() or 0) for s in paut_keys)
-        paut_total = sum(float(self.qty_entries[f"PAUT_{s}"]['총누계'].get() or 0) for s in paut_keys)
-        
-        self.qty_entries['PAUT_소계']['예상량'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['전일누계'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['금일작업'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['총누계'].delete(0, tk.END)
-        self.qty_entries['PAUT_소계']['공정률'].delete(0, tk.END)
-        
-        if paut_expected > 0:
-            self.qty_entries['PAUT_소계']['예상량'].insert(0, f"{int(paut_expected)}")
-        if paut_prev != 0:
-            self.qty_entries['PAUT_소계']['전일누계'].insert(0, format_val('PAUT', paut_prev))
-        if paut_today != 0:
-            self.qty_entries['PAUT_소계']['금일작업'].insert(0, format_val('PAUT', paut_today))
-        if paut_total != 0:
-            self.qty_entries['PAUT_소계']['총누계'].insert(0, format_val('PAUT', paut_total))
-            if paut_expected > 0:
-                self.qty_entries['PAUT_소계']['공정률'].insert(0, f"{(paut_total / paut_expected) * 100:.1f}")
-        
-        rt_keys = ['150A~100A', '150A~100A-야간', '80A이하', '80A이하-야간']
-        rt_expected = sum(float(self.qty_entries[f"RT_{s}"]['예상량'].get() or 0) for s in rt_keys)
-        rt_prev = sum(float(self.qty_entries[f"RT_{s}"]['전일누계'].get() or 0) for s in rt_keys)
-        rt_today = sum(float(self.qty_entries[f"RT_{s}"]['금일작업'].get() or 0) for s in rt_keys)
-        rt_total = sum(float(self.qty_entries[f"RT_{s}"]['총누계'].get() or 0) for s in rt_keys)
-        
-        self.qty_entries['RT_소계']['예상량'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['전일누계'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['금일작업'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['총누계'].delete(0, tk.END)
-        self.qty_entries['RT_소계']['공정률'].delete(0, tk.END)
-        
-        if rt_expected > 0:
-            self.qty_entries['RT_소계']['예상량'].insert(0, f"{int(rt_expected)}")
-        if rt_prev != 0:
-            self.qty_entries['RT_소계']['전일누계'].insert(0, format_val('RT', rt_prev))
-        if rt_today != 0:
-            self.qty_entries['RT_소계']['금일작업'].insert(0, format_val('RT', rt_today))
-        if rt_total != 0:
-            self.qty_entries['RT_소계']['총누계'].insert(0, format_val('RT', rt_total))
-            if rt_expected > 0:
-                self.qty_entries['RT_소계']['공정률'].insert(0, f"{(rt_total / rt_expected) * 100:.1f}")
-                
-        # RT_RE is a subset of the inspected films. 불량과 불량률도 총누계 기준이다.
-        today_rejects['RT_소계'] = sum(value for key, value in today_rejects.items() if key.startswith('RT_') and key != 'RT_소계')
-        for key, entries in self.qty_entries.items():
-            if not key.startswith('RT_'):
-                continue
-            total = float(entries['총누계'].get() or 0)
-            previous_defects = prev_data.get('qty_data', {}).get(key, {}).get('불량', '0') or '0'
-            try:
-                previous_defects = int(float(str(previous_defects).replace(',', '')))
-            except (TypeError, ValueError):
-                previous_defects = 0
-            defects = previous_defects + today_rejects.get(key, 0)
-            if '불량' in entries:
-                entries['불량'].delete(0, tk.END)
-                if defects:
-                    entries['불량'].insert(0, str(defects))
-            if '불량률' in entries:
-                entries['불량률'].delete(0, tk.END)
-                entries['불량률'].insert(0, f'{defects / total * 100:.1f}' if total and defects else '')
-
-        # Equip
-        for eq, entries in self.equip_entries.items():
-            prev_total_str = prev_data.get('equip_data', {}).get(eq, {}).get('누계', '0') or '0'
-            try: prev_total = float(prev_total_str.replace(',',''))
-            except ValueError: prev_total = 0.0
-            today_val = float(entries['금일'].get() or 0)
-            total = prev_total + today_val
-            entries['누계'].delete(0, tk.END)
-            entries['누계'].insert(0, f"{total:.1f}" if total % 1 else f"{int(total)}")
-            
-        # Personnel
-        prev_p_total_str = prev_data.get('personnel_data', {}).get('검사원_누계', '0') or '0'
-        try: prev_p_total = float(prev_p_total_str.replace(',',''))
-        except ValueError: prev_p_total = 0.0
-        
-        today_p = float(self.personnel_entries['검사원_인원'].get() or 0) + float(self.personnel_entries['검사원_현장대리인'].get() or 0)
-        total_p = prev_p_total + today_p
-        
-        self.personnel_entries['검사원_누계'].delete(0, tk.END)
-        self.personnel_entries['검사원_누계'].insert(0, f"{total_p:.1f}" if total_p % 1 else f"{int(total_p)}")
-        
-        prev_s_total_str = prev_data.get('personnel_data', {}).get('안전_누계', '0') or '0'
-        try: prev_s_total = float(prev_s_total_str.replace(',',''))
-        except ValueError: prev_s_total = 0.0
-        
-        today_s = float(self.personnel_entries['안전_인원'].get() or 0) + float(self.personnel_entries['안전_현장대리인'].get() or 0)
-        total_s = prev_s_total + today_s
-        
-        self.personnel_entries['안전_누계'].delete(0, tk.END)
-        self.personnel_entries['안전_누계'].insert(0, f"{total_s:.1f}" if total_s % 1 else f"{int(total_s)}")
-        
         # Save to history
-        self.save_current_history()
+        if self.save_current_history() is False:
+            return False
         
         if show_completion:
             messagebox.showinfo("완료", "자동 집계 및 데이터 저장이 완료되었습니다.")

@@ -27,7 +27,7 @@ def save_prepared(app, plan):
             if candidates.empty:
                 break
             match = pd.to_datetime(candidates['Date'], errors='coerce').dt.date == pd.to_datetime(record['Date']).date()
-            for key in ('Site', '검사방법', '검사품명', 'MaterialID', '관경(Inch)', 'Usage', '단가'):
+            for key in ('Site', '검사방법', '검사품명', 'MaterialID', '검사대상', '검사규격', '관경(Inch)', 'Usage', '단가'):
                 if key not in candidates:
                     continue
                 def canonical(value):

@@ -51,7 +51,7 @@ def test_mobile_functions():
     html_p = Path(__file__).resolve().parents[1] / "src" / "site_apps" / "gyeongin" / "mobile" / "static" / "index.html"
     assert html_p.exists()
     content = html_p.read_text(encoding="utf-8")
-    assert "경인사무소 현장 입력" in content
+    assert "경인사무소 24시간 모바일 현장 입력" in content
     assert "RTK 결함 분류" in content
     assert "NDT 자재 소모량" in content
     assert "업체명" in content

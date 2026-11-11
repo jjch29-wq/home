@@ -591,6 +591,7 @@ class MaterialManager:
                 method = self.cb_daily_test_method.get().strip().upper()
                 
                 if method not in ('PAUT', 'PT', 'MT', 'RT'): return
+                if hasattr(self, 'inspection_target_var') and self.inspection_target_var.get() != '배관': return
                 
                 pipe_val = getattr(self, 'ndt_report_pipe_var').get().strip().upper()
                 
@@ -679,6 +680,15 @@ class MaterialManager:
                 
                 def _do_update():
                     if not self.entry_canvas.winfo_exists(): return
+                    if hasattr(self, 'daily_entry_notebook'):
+                        width = self.entry_canvas.winfo_width()
+                        height = self.entry_canvas.winfo_height()
+                        self.entry_canvas.itemconfigure(
+                            self.entry_canvas_window, width=width, height=height)
+                        self.entry_canvas.configure(scrollregion=(0, 0, width, height))
+                        self.entry_canvas.xview_moveto(0)
+                        self.entry_canvas.yview_moveto(0)
+                        return
                     
                     # Dynamically adjust the canvas window height to accommodate new/removed widgets
                     if hasattr(self, 'entry_inner_frame') and hasattr(self, 'entry_canvas_window'):
@@ -6183,7 +6193,7 @@ class MaterialManager:
                     row.get('검사구분', ''),
                     row.get('조인트수', ''),
                     row.get('불량수', ''),
-                    row.get('관경(Inch)', '')
+                    ' / '.join(self.clean_nan(row.get(key, '')) for key in ('검사규격', '관경(Inch)') if self.clean_nan(row.get(key, '')))
                 )
                 self.tv_recent.insert('', 'end', values=values, tags=(str(idx),))
                 
@@ -6348,7 +6358,7 @@ class MaterialManager:
         self.daily_usage_tree['displaycolumns'] = visible_defaults
         
         # [NEW NDT COLUMNS] Add dynamically
-        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']
+        new_cols = ['작업형태', '조건1', '조건2', '보정계수', '제경비', '기술료', '환산물량', '재료비', '인건비', '검사구분', '조인트수', '불량수', '검사대상', '검사규격', '관경(Inch)', '핫태핑차수', '핫태핑개소', '핫태핑관경']
         new_cols += ['보조장비', '원본매수', '재검사매수', '참여인원', '참여시간', '참여OT']
         c_list = list(columns)
         for nc in new_cols:
@@ -9583,6 +9593,8 @@ class MaterialManager:
             '구분': self.ndt_loc_type_var.get().strip() if self.cb_daily_test_method.get().strip() in ['RT','UT','PT','PAUT','MT'] else "",
             '조인트수': "",
             '불량수': "",
+            '검사대상': self.inspection_target_var.get() if hasattr(self, 'inspection_target_var') else '배관',
+            '검사규격': self.inspection_spec_var.get().strip() if hasattr(self, 'inspection_spec_var') else '',
             '관경(Inch)': getattr(self, 'ndt_report_pipe_var', tk.StringVar(value="")).get().strip(),
         }
 
@@ -9860,36 +9872,23 @@ class MaterialManager:
 
         # Company frame (Standard frame to save space, no title border)
         company_frame = ttk.Frame(self.ndt_company_container)
-        company_frame.pack(fill='x', padx=2, pady=2)
+        self.ndt_company_container.add(company_frame, text=f'회사 {company_idx + 1}')
+        self.ndt_company_container.select(company_frame)
         
         # Single Grid frame for everything to save vertical space
         grid_frame = ttk.Frame(company_frame)
         for c in range(8): grid_frame.columnconfigure(c, weight=1, uniform="ndt_rtk")
         grid_frame.pack(fill='x', padx=2, pady=2)
         
-        # Company code selector (Index 0)
-        ttk.Label(grid_frame, text="회사코드:", font=('Arial', 8, 'bold')).grid(row=0, column=0, padx=1, pady=1, sticky='e')
-        
-        existing_co = []
-        if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty:
-            for col in ['업체명', '회사코드', 'Company']:
-                if col in self.daily_usage_df.columns:
-                    existing_co.extend([str(x).strip() for x in self.daily_usage_df[col].dropna() if str(x).strip() and str(x).strip() != 'nan'])
-
-        all_companies = list(dict.fromkeys(
-            [c for c in getattr(self, 'co_code_list', []) if c] + 
-            [c for c in getattr(self, 'companies', []) if c] +
-            existing_co
-        ))
-        cb_co = ttk.Combobox(grid_frame, width=10, values=all_companies)
+        # Chemical manufacturers are independent of inspection clients.
+        ttk.Label(grid_frame, text="약품회사:", font=('Arial', 8, 'bold')).grid(
+            row=0, column=0, padx=1, pady=1, sticky='e')
+        from site_apps.gyeongin.src.chemical_company import chemical_company_options
+        all_companies = chemical_company_options(self)
+        cb_co = ttk.Combobox(grid_frame, width=16, values=all_companies)
         cb_co.grid(row=0, column=1, padx=1, pady=1, sticky='ew')
-        
-        curr_co = getattr(self, 'cb_daily_company', None)
-        if curr_co and curr_co.get().strip():
-            cb_co.set(curr_co.get().strip())
-        else:
-            cb_co.set('')
-        
+        cb_co.set('')
+
         entries = {'_company': cb_co, '_frame': company_frame}  # Store company combobox and frame
         
         # NDT entries grid (Index 1 to 7)
@@ -10649,6 +10648,11 @@ class MaterialManager:
             self.ndt_tech_var.set(get_valid_rate('기술료율', 20.0))
 
             # NDT 상세 조건 필드 로딩
+            if hasattr(self, 'inspection_target_var'):
+                self.inspection_target_var.set(self.clean_nan(record.get('검사대상', '')) or '배관')
+            if hasattr(self, 'inspection_spec_var'):
+                spec = record.get('검사규격', '')
+                self.inspection_spec_var.set('' if pd.isna(spec) else str(spec))
             if '관경(Inch)' in record and pd.notna(record['관경(Inch)']):
                 self.ndt_report_pipe_var.set(str(record['관경(Inch)']).replace('.0', '') if str(record['관경(Inch)']).endswith('.0') else str(record['관경(Inch)']))
             else:
@@ -10662,6 +10666,8 @@ class MaterialManager:
             else:
                 self.ndt_ori_joint_var.set(self.clean_nan(record.get('조인트수', '')))
                 self.ndt_ori_qty_var.set(self.clean_nan(record.get('원본매수', record.get('Usage', ''))))
+                self.ndt_rep_joint_var.set(self.clean_nan(record.get('재검사개소', '')))
+                self.ndt_rep_qty_var.set(self.clean_nan(record.get('재검사매수', '')))
                 
             if '불량수' in record and pd.notna(record['불량수']):
                 self.ndt_rej_joint_var.set(str(record['불량수']))
@@ -10858,6 +10864,10 @@ class MaterialManager:
         self.ndt_rep_qty_var.set("")
         self.ndt_rej_joint_var.set("")
         self.ndt_report_pipe_var.set("")
+        if hasattr(self, 'inspection_spec_var'):
+            self.inspection_spec_var.set('')
+        if hasattr(self, 'inspection_target_var'):
+            self.inspection_target_var.set('배관')
         self.ndt_loc_type_var.set('경인사무소')
         if hasattr(self, 'hot_tap_stage_var'): self.hot_tap_stage_var.set('')
         if hasattr(self, 'hot_tap_size_var'): self.hot_tap_size_var.set('')
@@ -11276,6 +11286,8 @@ class MaterialManager:
             'aux_equipment': auxiliary_equipment_value(self),
             'material': self.cb_daily_material.get().strip(),
             'inspection_item': self.ent_daily_inspection_item.get().strip(),
+            'inspection_target': self.inspection_target_var.get() if hasattr(self, 'inspection_target_var') else '배관',
+            'inspection_spec': self.inspection_spec_var.get().strip() if hasattr(self, 'inspection_spec_var') else '',
             'method': self.cb_daily_test_method.get().strip(),
             'unit': self.cb_daily_unit.get().strip(),
             'amount': self.ent_daily_test_amount.get().strip(),
@@ -11339,6 +11351,10 @@ class MaterialManager:
         else:
             self.cb_daily_material.delete(0, tk.END)
             self.cb_daily_material.insert(0, data.get('material', ''))
+        if hasattr(self, 'inspection_target_var'):
+            self.inspection_target_var.set(data.get('inspection_target', '배관'))
+        if hasattr(self, 'inspection_spec_var'):
+            self.inspection_spec_var.set(data.get('inspection_spec', ''))
         if 'inspection_item' in data:
             self.ent_daily_inspection_item.delete(0, tk.END)
             self.ent_daily_inspection_item.insert(0, data.get('inspection_item', ''))
