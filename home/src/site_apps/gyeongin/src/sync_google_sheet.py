@@ -379,9 +379,27 @@ def two_way_reconcile_with_web_app(
             return {"status": "error", "message": "DailyUsage 시트가 없습니다."}
 
         daily_df = all_sheets["DailyUsage"].copy()
+        orig_columns = list(daily_df.columns)
         local_rows = daily_df.to_dict(orient="records") if not daily_df.empty else []
 
         get_keys = record_keys
+
+        # A. 구글 시트의 변경사항 -> PC 엑셀로 동기화 (신규 추가: Pull / 수정 갱신: Pull-Update)
+        to_pull = []
+        excel_modified = False
+
+        # 동일 EntryTime(초 단위)이 중복 저장된 구 행이 남아 있으면 클라우드 수정분이 되돌아가는 원인이 되므로 정리
+        seen_tk = set()
+        deduped_local_rows = []
+        for r in local_rows:
+            tk, _ = get_keys(r)
+            if tk:
+                if tk in seen_tk:
+                    excel_modified = True
+                    continue
+                seen_tk.add(tk)
+            deduped_local_rows.append(r)
+        local_rows = deduped_local_rows
 
         local_keys = set()
         local_time_map = {}
@@ -410,25 +428,64 @@ def two_way_reconcile_with_web_app(
             sync_state["synced_entry_times"] = sorted(list(known_cloud_times))
             save_sync_state(sync_state)
 
-        # A. 구글 시트의 변경사항 -> PC 엑셀로 동기화 (신규 추가: Pull / 수정 갱신: Pull-Update)
-        to_pull = []
-        excel_modified = False
-
         def _norm_val(val):
             if pd.isna(val) or val is None:
                 return ""
+            if isinstance(val, (datetime, pd.Timestamp)):
+                return val.strftime("%Y-%m-%d")
             s = str(val).strip()
             if s.lower() in ("nan", "none"):
                 return ""
+            if len(s) >= 10 and s[4:5] in ("-", "/", ".") and s[7:8] in ("-", "/", "."):
+                parsed_dt = pd.to_datetime(s, errors="coerce")
+                if pd.notna(parsed_dt):
+                    return parsed_dt.strftime("%Y-%m-%d")
             try:
                 f = float(s.replace(",", ""))
                 return str(int(f)) if f.is_integer() else str(f)
             except ValueError:
                 return s
 
+        def _resolve_qty_norm(row):
+            for col in ("Usage", "수량", "검사량"):
+                v = _norm_val(row.get(col))
+                if v not in ("", "0"):
+                    return v
+            for col in ("Usage", "수량", "검사량"):
+                v = _norm_val(row.get(col))
+                if v != "":
+                    return v
+            return "0"
+
+        def _resolve_material_norm(row):
+            for col in ("MaterialID", "Material", "품목명", "자재명"):
+                v = _norm_val(row.get(col))
+                if v != "":
+                    return v
+            return ""
+
         # A cloud row is not automatically newer than a locally edited row.
         # Compare both sides with the last successfully reconciled values.
-        sync_columns = ["Usage", "수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "출장비", "검사비", "장비명", "보조장비", "Unit"]
+        sync_columns = [
+            "Date", "Site", "작업구분", "구분",
+            "업체명", "회사코드", "검사방법", "관경(Inch)", "규격", "검사품명",
+            "MaterialID", "Material", "품목명", "자재명",
+            "적용코드", "성적서번호", "조인트수", "불량수",
+            "Usage", "수량", "검사량", "Unit", "단위", "단가", "출장비", "일식", "검사비",
+            "장비명", "보조장비", "작업형태",
+            "차량번호", "주행거리", "차량비고",
+            "Note", "Remark", "DailyMemo",
+            "RTK_센터미스", "RTK_농도", "RTK_마킹미스", "RTK_필름마크",
+            "RTK_취급부주의", "RTK_고객불만", "RTK_기타", "RTK_총계",
+            "NDT_형광자분", "NDT_흑색자분", "NDT_백색페인트",
+            "NDT_침투제", "NDT_세척제", "NDT_현상제", "NDT_형광침투제",
+        ]
+        for u_idx in range(1, 11):
+            u_col = "User" if u_idx == 1 else f"User{u_idx}"
+            wt_col = "WorkTime" if u_idx == 1 else f"WorkTime{u_idx}"
+            ot_col = "OT" if u_idx == 1 else f"OT{u_idx}"
+            sync_columns.extend([u_col, wt_col, ot_col])
+
         baseline_path = str(target_path.resolve())
         baselines_by_path = sync_state.get("row_baselines_by_path", {})
         baselines = baselines_by_path.get(baseline_path, {})
@@ -436,8 +493,10 @@ def two_way_reconcile_with_web_app(
 
         def fingerprint(row):
             values = {col: _norm_val(row.get(col)) for col in sync_columns}
-            quantity = row.get('Usage', row.get('수량'))
-            values['Usage'] = values['수량'] = _norm_val(quantity)
+            qty_norm = _resolve_qty_norm(row)
+            values["Usage"] = values["수량"] = values["검사량"] = qty_norm
+            mat_norm = _resolve_material_norm(row)
+            values["MaterialID"] = values["Material"] = values["품목명"] = values["자재명"] = mat_norm
             return values
 
         for cr in cloud_rows:
@@ -446,13 +505,41 @@ def two_way_reconcile_with_web_app(
                 # 이미 존재하는 행: 클라우드에서 수정된 필드가 있으면 로컬 엑셀 행을 클라우드 값으로 업데이트
                 lr = local_time_map[tk]
                 baseline = baselines.get(tk)
-                local_changed = fingerprint(lr) != baseline if baseline is not None else target_path.resolve() == DEFAULT_INVENTORY_PATH.resolve()
-                if fingerprint(lr) != fingerprint(cr) and local_changed:
+                f_lr = fingerprint(lr)
+                f_cr = fingerprint(cr)
+                if baseline is not None:
+                    local_changed = any(
+                        f_lr.get(k, "") != _norm_val(v)
+                        for k, v in baseline.items()
+                        if k in f_lr
+                    )
+                else:
+                    local_changed = target_path.resolve() == DEFAULT_INVENTORY_PATH.resolve()
+                if f_lr != f_cr and local_changed:
                     # Preserve PC edits (also on first sync and after failed pushes).
                     # Section B retries sending this row; it must not be reverted here.
                     continue
                 row_changed = False
                 for col in sync_columns:
+                    if col in ("Usage", "수량", "검사량"):
+                        if f_lr[col] != f_cr[col]:
+                            raw_q = cr.get("Usage")
+                            if _norm_val(raw_q) == "":
+                                raw_q = cr.get("수량")
+                            if _norm_val(raw_q) == "":
+                                raw_q = cr.get("검사량")
+                            lr[col] = raw_q
+                            row_changed = True
+                        continue
+                    if col in ("MaterialID", "Material", "품목명", "자재명"):
+                        if f_lr[col] != f_cr[col]:
+                            raw_m = cr.get("MaterialID")
+                            if _norm_val(raw_m) == "":
+                                raw_m = cr.get("Material") or cr.get("품목명") or cr.get("자재명") or ""
+                            if col in lr or col in ("MaterialID", "Material", "품목명"):
+                                lr[col] = raw_m
+                                row_changed = True
+                        continue
                     if col in cr and _norm_val(lr.get(col)) != _norm_val(cr.get(col)):
                         lr[col] = cr[col]
                         row_changed = True
@@ -517,7 +604,11 @@ def two_way_reconcile_with_web_app(
             # 수정/삭제된 로컬 행들을 엑셀에 다시 저장
             with pd.ExcelFile(target_path) as ef:
                 all_sheets = {sheet: ef.parse(sheet) for sheet in ef.sheet_names}
-            all_sheets["DailyUsage"] = pd.DataFrame(local_rows)
+            updated_df = pd.DataFrame(local_rows)
+            ordered_cols = [c for c in orig_columns if c in updated_df.columns] + [
+                c for c in updated_df.columns if c not in orig_columns
+            ]
+            all_sheets["DailyUsage"] = updated_df[ordered_cols]
             write_workbook(target_path, all_sheets)
             logger.info("모바일 수정/삭제 사항이 로컬 엑셀 행에 제자리 갱신되었습니다.")
 
