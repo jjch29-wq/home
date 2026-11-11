@@ -2436,6 +2436,28 @@
       return Number(value || 0).toLocaleString() + '원';
     }
 
+    function formatVehicleCheckText(raw) {
+      const s = String(raw || '').trim();
+      if (!s) return '';
+      if (!/(?:^|\|)(?:out|in)_/.test(s)) return s;
+      const labels = { exterior: '외부', cleanliness: '내부', cleaning: '청소', locking: '시건' };
+      const outItems = [];
+      const inItems = [];
+      s.split('|').forEach(part => {
+        const idx = part.indexOf(':');
+        if (idx === -1) return;
+        const key = part.slice(0, idx).trim();
+        const val = part.slice(idx + 1).trim();
+        if (!val) return;
+        if (key.startsWith('out_')) outItems.push(`${labels[key.slice(4)] || key.slice(4)}:${val}`);
+        else if (key.startsWith('in_')) inItems.push(`${labels[key.slice(3)] || key.slice(3)}:${val}`);
+      });
+      const sections = [];
+      if (outItems.length) sections.push(`출차(${outItems.join(', ')})`);
+      if (inItems.length) sections.push(`입차(${inItems.join(', ')})`);
+      return sections.length ? sections.join(' / ') : s;
+    }
+
     function renderRecentDetail(r) {
       const workers = Array.isArray(r.worker_list) ? r.worker_list : [];
       const workerDetail = workers.length
@@ -2451,8 +2473,12 @@
         ? `ORI ${r.ori_joints ?? r.joints ?? 0} / REJ ${r.rej_qty ?? 0}`
         : `${r.joints ?? 0} 개소`;
       const mileageText = r.mileage ? (/km$/i.test(String(r.mileage).trim()) ? String(r.mileage).trim() : `${r.mileage} km`) : '';
-      const vehicleStatus = [r.vehicle_check, r.vehicle_note].filter(Boolean).join(' · ');
-      const vehicleParts = [r.vehicle_no, mileageText, vehicleStatus].filter(Boolean);
+      const rawCheck = String(r.vehicle_check || '').trim();
+      const rawNote = String(r.vehicle_note || '').trim();
+      const formattedCheck = formatVehicleCheckText(rawCheck);
+      const isStructuredCheck = /(?:^|\|)(?:out|in)_/.test(rawCheck);
+      const inlineCheck = (!isStructuredCheck && formattedCheck && (!rawNote || !rawNote.includes(formattedCheck))) ? formattedCheck : '';
+      const vehicleParts = [r.vehicle_no, mileageText, inlineCheck, rawNote].filter(Boolean);
       const vehicleSummary = vehicleParts.length ? vehicleParts.join(' · ') : '-';
 
       const detailRows = [
@@ -2465,11 +2491,14 @@
         ['성적서번호', r.report_no || '-'],
         ['주 장비', r.equip_main || '-'],
         ['보조장비', r.equip_aux || '-'],
-        ['차량정보', vehicleSummary],
+        ['차량정보', vehicleSummary]
+      ];
+      if (isStructuredCheck && formattedCheck) detailRows.push(['차량점검', formattedCheck]);
+      detailRows.push(
         ['단가 / 일식', `${formatRecentMoney(r.unit_price)}${r.lump_sum ? ` · ${r.lump_sum}` : ''}`],
         ['출장비', formatRecentMoney(r.travel_cost)],
         ['총 검사비', formatRecentMoney(r.total_fee)]
-      ];
+      );
       if (r.note) detailRows.push(['비고', r.note]);
 
       return `
