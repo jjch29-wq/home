@@ -145,459 +145,491 @@
       <!-- Segmented Method Buttons (RT 기본) -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
-          <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
-          <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
-          <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
-          <button type="button" data-method="UT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">UT</button>
-          <button type="button" data-method="MT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
-          <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
-          <button type="button" data-method="PMI" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PMI</button>
-          <button type="button" data-method="ETC" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">ETC</button>
-          <button type="button" data-method="내근/대기" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
+        <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
+          <button type="button" data-method="RT"
+            class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
+          <button type="button" data-method="PAUT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
+          <button type="button" data-method="UT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">UT</button>
+          <button type="button" data-method="MT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
+          <button type="button" data-method="PT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
+          <button type="button" data-method="PMI"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PMI</button>
+          <button type="button" data-method="ETC"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">ETC</button>
+          <button type="button" data-method="내근/대기"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
         </div>
-        </div>
+      </div>
 
-        <!-- 검사품명 -->
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
-            <button type="button" id="btn-toggle-custom-item"
-              class="text-[11px] text-blue-600 font-semibold hover:underline">
-              ✏️ 직접 입력
-            </button>
-          </div>
-          <select id="select-item-name"
-            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <!-- Populated via JS -->
-          </select>
-          <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력 (예: 저장탱크, 압력용기, H-Beam 등)"
-            class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      <!-- 검사품명 -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
+          <button type="button" id="btn-toggle-custom-item"
+            class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
         </div>
+        <select id="select-item-name"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <!-- Populated via JS -->
+        </select>
+        <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력 (예: 저장탱크, 압력용기, H-Beam 등)"
+          class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      </div>
 
-        <!-- 자재명 -->
+      <!-- 자재명 -->
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
+          <button type="button" id="btn-toggle-custom-mat"
+            class="text-[11px] text-blue-600 font-semibold hover:underline">
+            ✏️ 직접 입력
+          </button>
+        </div>
+        <select id="select-material"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <!-- Populated via JS -->
+        </select>
+        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력"
+          class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+      </div>
+
+      <!-- 적용코드 & 성적서번호 -->
+      <div class="grid grid-cols-2 gap-2">
         <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
-            <button type="button" id="btn-toggle-custom-mat"
-              class="text-[11px] text-blue-600 font-semibold hover:underline">
-              ✏️ 직접 입력
-            </button>
-          </div>
-          <select id="select-material"
+          <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
+          <select id="select-applied-code"
             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             <!-- Populated via JS -->
           </select>
-          <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력"
-            class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <input type="text" id="input-custom-code" placeholder="코드 직접 입력"
+            class="hidden mt-1 w-full bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-xs font-semibold text-slate-800">
         </div>
-
-        <!-- 적용코드 & 성적서번호 -->
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
-            <select id="select-applied-code"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <!-- Populated via JS -->
-            </select>
-            <input type="text" id="input-custom-code" placeholder="코드 직접 입력"
-              class="hidden mt-1 w-full bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-xs font-semibold text-slate-800">
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
-            <input type="text" id="input-report-no" placeholder="성적서번호 기입"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
+          <input type="text" id="input-report-no" placeholder="성적서번호 기입"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
+    </div>
 
-      <!-- 3. 검사 물량 및 단가 산정 카드 -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-            <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
-          </span>
-          <button type="button" id="btn-toggle-pipe-calc"
-            class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
-            <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
-            <span id="pipe-calc-btn-text">배관 관경 계산기</span>
-          </button>
-        </div>
-
-        <!-- 배관 관경 자동 계산 영역 -->
-        <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
-              <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 계산
-            </span>
-            <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">배관 검사
-              전용</span>
-          </div>
-
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
-            <select id="select-pipe"
-              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <!-- Populated via JS -->
-            </select>
-          </div>
-
-          <div id="rt-joints-box" class="space-y-2 pt-0.5">
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
-                <input type="number" id="input-ori-joints" value="1" min="0" step="1"
-                  class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              </div>
-              <div>
-                <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
-                <input type="number" id="input-rep-joints" value="0" min="0" step="1"
-                  class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              </div>
-            </div>
-            <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
-              <input type="number" id="input-rej-qty" value="0" min="0" step="1"
-                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <p
-                class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1.5 rounded border border-emerald-100">
-                ※ RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도
-              </p>
-            </div>
-          </div>
-
-          <div id="non-rt-joints-box" class="hidden">
-            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
-            <input type="number" id="input-joints" value="1" min="0.1" step="0.5"
-              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-        </div>
-
-        <div id="non-pipe-banner"
-          class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
-          <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
-          <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
-        </div>
-
-        <!-- 공통 수량 및 단위 -->
-        <div class="grid grid-cols-2 gap-2 pt-1">
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
-            <input type="number" id="input-qty" value="3" min="0" step="0.01"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
-            <select id="select-unit"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <!-- Populated via JS -->
-            </select>
-          </div>
-        </div>
-
-        <!-- 단가 / 출장비 / 일식 -->
-        <div class="grid grid-cols-3 gap-2">
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
-            <input type="number" id="input-unit-price" value="25500" min="0" step="100"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
-            <input type="number" id="input-travel-cost" value="0" min="0" step="1000"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-          </div>
-          <div>
-            <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
-            <input type="text" id="input-lump-sum" placeholder="식대/일식"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
-          </div>
-        </div>
-
-        <!-- Total Cost -->
-        <div
-          class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-          <div>
-            <p class="text-xs text-emerald-800 font-bold">총 검사비 (수량×단가+출장비)</p>
-            <p class="text-[10px] text-emerald-600">수치 수정 시 즉시 재계산</p>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <input type="number" id="input-total-fee" value="76500"
-              class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <span class="text-xs font-bold text-emerald-900">원</span>
-          </div>
-        </div>
-
-        <!-- Equipments -->
-        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="block text-[11px] font-medium text-slate-500">주 장비 (다중 선택)</label>
-              <span id="main-equip-badge-count" class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
-            </div>
-            <button type="button" onclick="openMainEquipModal()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
-              <span id="main-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
-              <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
-            </button>
-            <input type="hidden" id="select-equip" value="">
-            <input type="text" id="input-custom-main-equip" placeholder="직접 주 장비 입력 또는 수정" oninput="onCustomMainEquipInput()" class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
-          </div>
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="block text-[11px] font-medium text-slate-500">보조 장비 / 프로브 (다중 선택)</label>
-              <span id="aux-badge-count" class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
-            </div>
-            <button type="button" onclick="openAuxModal()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
-              <span id="aux-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
-              <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
-            </button>
-            <input type="hidden" id="select-aux-equip" value="">
-            <input type="text" id="input-custom-aux" placeholder="직접 보조장비/프로브 입력 또는 수정" oninput="onCustomAuxInput()" class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
-      <div id="rtk-card" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
-            <i data-lucide="scan-line" class="w-4 h-4"></i> RTK 결함 분류 (RT 매수)
-          </span>
-          <span class="text-xs font-bold text-purple-700">총계: <span id="rtk-total-badge">0</span> 매</span>
-        </div>
-
-        <div class="grid grid-cols-3 gap-2">
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
-            <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
-            <input type="number" id="rtk-density" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
-            <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
-            <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
-            <input type="number" id="rtk-handling" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
-            <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div class="col-span-2">
-            <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
-            <input type="number" id="rtk-etc" min="0" step="1" placeholder="0"
-              class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
-          </div>
-          <div>
-            <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
-            <input type="number" id="rtk-total" readonly value="0"
-              class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
-          </div>
-        </div>
-      </div>
-
-      <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
-      <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
-            <i data-lucide="flask-conical" class="w-4 h-4"></i> NDT 자재 소모량 (7종 약품)
-          </span>
-          <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
-            <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
-            <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
-            <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
-            <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
-            <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
-            <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
-            <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0"
-              class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-          <div
-            class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
-            <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
-            <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0"
-              class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
-          </div>
-        </div>
-      </div>
-
-      <!-- 6. [PAUT / UT 전용] 안내 카드 -->
-      <div id="paut-guide-card"
-        class="hidden bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-center space-y-1">
-        <div class="flex justify-center text-blue-600">
-          <i data-lucide="info" class="w-5 h-5"></i>
-        </div>
-        <p class="text-xs font-bold text-blue-900">PAUT / UT 검사 안내</p>
-        <p class="text-[11px] text-blue-700 leading-relaxed">
-          PAUT 및 UT 검사는 NDT 소모 약품 및 RTK 결함 입력이 필요하지 않습니다. 특이사항은 하단의 비고(메모)를 활용해 주세요.
-        </p>
-      </div>
-
-      <!-- 7. 참여 작업자 및 OT 산정 카드 -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-            <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
-          </span>
-          <button type="button" id="btn-batch-apply"
-            class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
-            <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
-          </button>
-        </div>
-
-        <div id="workers-container" class="space-y-3">
-          <!-- Worker rows dynamically inserted -->
-        </div>
-
-        <button type="button" id="btn-add-worker"
-          class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
-          <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
+    <!-- 3. 검사 물량 및 단가 산정 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+          <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
+        </span>
+        <button type="button" id="btn-toggle-pipe-calc"
+          class="text-xs font-bold px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1">
+          <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+          <span id="pipe-calc-btn-text">배관 관경 계산기</span>
         </button>
       </div>
 
-      <!-- 8. 차량 점검 및 특이사항 (비고) -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-            <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
+      <!-- 배관 관경 자동 계산 영역 -->
+      <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-extrabold text-slate-700 flex items-center gap-1">
+            <i data-lucide="git-commit" class="w-3.5 h-3.5 text-emerald-600"></i> 배관(Pipe) 관경 자동 계산
           </span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
-            <select id="select-vehicle"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
-              <!-- Populated via JS -->
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
-            <input type="number" id="input-mileage" placeholder="예: 70"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
-          </div>
-        </div>
-
-        <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
-          <div class="flex justify-between items-center">
-            <span>차량 외관 / 청결도</span>
-            <span class="font-bold text-emerald-600">양호 (기본)</span>
-          </div>
-          <div class="flex justify-between items-center">
-            <span>청소 / 자물쇠 시건</span>
-            <span class="font-bold text-emerald-600">함 / 완료</span>
-          </div>
+          <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-100 px-1.5 py-0.5 rounded">배관 검사
+            전용</span>
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
-          <input type="text" id="input-note" placeholder="특이사항 기입"
-            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
+          <select id="select-pipe"
+            class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <div id="rt-joints-box" class="space-y-2 pt-0.5">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
+              <input type="number" id="input-ori-joints" value="1" min="0" step="1"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
+              <input type="number" id="input-rep-joints" value="0" min="0" step="1"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
+            <input type="number" id="input-rej-qty" value="0" min="0" step="1"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <p
+              class="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50/80 p-1.5 rounded border border-emerald-100">
+              ※ RT 총 물량 = ORI 매수 · REJ는 그중 불량매수 · REP 별도
+            </p>
+          </div>
+        </div>
+
+        <div id="non-rt-joints-box" class="hidden">
+          <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
+          <input type="number" id="input-joints" value="1" min="0.1" step="0.5"
+            class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
         </div>
       </div>
 
-      <!-- 9. Submit Button -->
-      <div class="pt-2">
-        <button type="button" id="btn-submit"
-          class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
-          <i data-lucide="send" class="w-5 h-5"></i>
-          <span>구글 드라이브 클라우드에 24시간 작업 저장</span>
-        </button>
+      <div id="non-pipe-banner"
+        class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+        <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
+        <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
       </div>
 
-      <!-- 10. 작업일보 전체 검색 -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-            <i data-lucide="search" class="w-4 h-4"></i> 경인 작업일보 검색
-          </span>
-          <button type="button" id="btn-refresh-history"
-            class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5">
-            <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
+      <!-- 공통 수량 및 단위 -->
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
+          <input type="number" id="input-qty" value="3" min="0" step="0.01"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
+          <select id="select-unit"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+      </div>
+
+      <!-- 단가 / 출장비 / 일식 -->
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
+          <input type="number" id="input-unit-price" value="25500" min="0" step="100"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
+          <input type="number" id="input-travel-cost" value="0" min="0" step="1000"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
+          <input type="text" id="input-lump-sum" placeholder="식대/일식"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Total Cost -->
+      <div
+        class="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-emerald-800 font-bold">총 검사비 (수량×단가+출장비)</p>
+          <p class="text-[10px] text-emerald-600">수치 수정 시 즉시 재계산</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input type="number" id="input-total-fee" value="76500"
+            class="w-32 bg-white border border-emerald-300 rounded-lg px-2 py-1 text-right text-base font-black text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <span class="text-xs font-bold text-emerald-900">원</span>
+        </div>
+      </div>
+
+      <!-- Equipments -->
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-medium text-slate-500">주 장비 (다중 선택)</label>
+            <span id="main-equip-badge-count"
+              class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
+          </div>
+          <button type="button" onclick="openMainEquipModal()"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
+            <span id="main-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
+            <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
           </button>
+          <input type="hidden" id="select-equip" value="">
+          <input type="text" id="input-custom-main-equip" placeholder="직접 주 장비 입력 또는 수정"
+            oninput="onCustomMainEquipInput()"
+            class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
         </div>
-
-        <div class="space-y-2.5">
-          <div class="grid grid-cols-4 gap-1" id="history-period-buttons">
-            <button type="button" data-period="today" class="history-period-btn py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">오늘</button>
-            <button type="button" data-period="7days" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">최근 7일</button>
-            <button type="button" data-period="month" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">이번 달</button>
-            <button type="button" data-period="custom" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">직접 지정</button>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-medium text-slate-500">보조 장비 / 프로브 (다중 선택)</label>
+            <span id="aux-badge-count"
+              class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
           </div>
-
-          <div id="history-custom-dates" class="hidden grid grid-cols-2 gap-2">
-            <input type="date" id="history-start-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
-            <input type="date" id="history-end-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
-          </div>
-
-          <div class="flex gap-2">
-            <input type="search" id="history-keyword" placeholder="현장명 · 업체명 · 성적서번호"
-              class="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <button type="button" id="btn-history-search" class="shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">검색</button>
-          </div>
-
-          <div class="flex gap-1.5 overflow-x-auto pb-1" id="history-method-filters">
-            <button type="button" data-history-method="ALL" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 text-white text-[10px] font-bold">전체</button>
-            <button type="button" data-history-method="RT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">RT</button>
-            <button type="button" data-history-method="PAUT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PAUT</button>
-            <button type="button" data-history-method="UT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">UT</button>
-            <button type="button" data-history-method="MT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">MT</button>
-            <button type="button" data-history-method="PT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PT</button>
-            <button type="button" data-history-method="PMI" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PMI</button>
-            <button type="button" data-history-method="ETC" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">ETC</button>
-            <button type="button" data-history-method="내근/대기" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">내근/대기</button>
-            <button type="button" data-history-method="휴무" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">휴무</button>
-          </div>
-
-          <div id="history-result-summary" class="text-[11px] text-slate-500">검색 준비 중...</div>
+          <button type="button" onclick="openAuxModal()"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
+            <span id="aux-equip-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (다중 선택 ▾)</span>
+            <span class="text-blue-600 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
+          </button>
+          <input type="hidden" id="select-aux-equip" value="">
+          <input type="text" id="input-custom-aux" placeholder="직접 보조장비/프로브 입력 또는 수정" oninput="onCustomAuxInput()"
+            class="mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800 focus:outline-none">
         </div>
+      </div>
+    </div>
 
-        <div id="recent-list" class="space-y-2">
-          <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
+    <!-- 4. [RT 전용] RTK 결함 분류 카드 -->
+    <div id="rtk-card" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1">
+          <i data-lucide="scan-line" class="w-4 h-4"></i> RTK 결함 분류 (RT 매수)
+        </span>
+        <span class="text-xs font-bold text-purple-700">총계: <span id="rtk-total-badge">0</span> 매</span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
+          <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
+          <input type="number" id="rtk-density" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
+          <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
+          <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
+          <input type="number" id="rtk-handling" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
+          <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
+          <input type="number" id="rtk-etc" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+        </div>
+        <div>
+          <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
+          <input type="number" id="rtk-total" readonly value="0"
+            class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
+        </div>
+      </div>
+    </div>
 
-        <button type="button" id="btn-history-more"
-          class="hidden w-full py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
-          20개 그룹 더 보기
+    <!-- 5. [PT / MT 전용] NDT 자재 소모량 카드 -->
+    <div id="chemicals-card" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
+          <i data-lucide="flask-conical" class="w-4 h-4"></i> NDT 자재 소모량 (7종 약품)
+        </span>
+        <span class="text-[11px] text-slate-400">캔(CAN) / 개수 기입</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
+          <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
+          <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
+          <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
+          <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
+          <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+          <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
+          <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+        <div class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
+          <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
+          <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0"
+            class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. [PAUT / UT 전용] 안내 카드 -->
+    <div id="paut-guide-card" class="hidden bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-center space-y-1">
+      <div class="flex justify-center text-blue-600">
+        <i data-lucide="info" class="w-5 h-5"></i>
+      </div>
+      <p class="text-xs font-bold text-blue-900">PAUT / UT 검사 안내</p>
+      <p class="text-[11px] text-blue-700 leading-relaxed">
+        PAUT 및 UT 검사는 NDT 소모 약품 및 RTK 결함 입력이 필요하지 않습니다. 특이사항은 하단의 비고(메모)를 활용해 주세요.
+      </p>
+    </div>
+
+    <!-- 7. 참여 작업자 및 OT 산정 카드 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+          <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 및 OT 산정
+        </span>
+        <button type="button" id="btn-batch-apply"
+          class="text-xs font-semibold px-2 py-1 bg-amber-500 text-white rounded-lg shadow-sm hover:bg-amber-600 active:scale-95 transition flex items-center gap-1">
+          <i data-lucide="copy" class="w-3.5 h-3.5"></i> 첫 참여자 일괄 적용
         </button>
       </div>
+
+      <div id="workers-container" class="space-y-3">
+        <!-- Worker rows dynamically inserted -->
+      </div>
+
+      <button type="button" id="btn-add-worker"
+        class="w-full py-2 border-2 border-dashed border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition">
+        <i data-lucide="user-plus" class="w-4 h-4"></i> 작업자 추가 (+1명)
+      </button>
+    </div>
+
+    <!-- 8. 차량 점검 및 특이사항 (비고) -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+          <i data-lucide="truck" class="w-4 h-4"></i> 차량 점검 및 특이사항
+        </span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
+          <select id="select-vehicle"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
+          <input type="number" id="input-mileage" placeholder="예: 70"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
+        </div>
+      </div>
+
+      <div class="p-2.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-700">
+        <div class="flex justify-between items-center">
+          <span>차량 외관 / 청결도</span>
+          <span class="font-bold text-emerald-600">양호 (기본)</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span>청소 / 자물쇠 시건</span>
+          <span class="font-bold text-emerald-600">함 / 완료</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
+        <input type="text" id="input-note" placeholder="특이사항 기입"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
+      </div>
+    </div>
+
+    <!-- 9. Submit Button -->
+    <div class="pt-2">
+      <button type="button" id="btn-submit"
+        class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-emerald-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-5 h-5"></i>
+        <span>구글 드라이브 클라우드에 24시간 작업 저장</span>
+      </button>
+    </div>
+
+    <!-- 10. 작업일보 전체 검색 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+        <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+          <i data-lucide="search" class="w-4 h-4"></i> 경인 작업일보 검색
+        </span>
+        <button type="button" id="btn-refresh-history"
+          class="text-xs text-emerald-600 hover:underline flex items-center gap-0.5">
+          <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
+        </button>
+      </div>
+
+      <div class="space-y-2.5">
+        <div class="grid grid-cols-4 gap-1" id="history-period-buttons">
+          <button type="button" data-period="today"
+            class="history-period-btn py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">오늘</button>
+          <button type="button" data-period="7days"
+            class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">최근
+            7일</button>
+          <button type="button" data-period="month"
+            class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">이번 달</button>
+          <button type="button" data-period="custom"
+            class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">직접
+            지정</button>
+        </div>
+
+        <div id="history-custom-dates" class="hidden grid grid-cols-2 gap-2">
+          <input type="date" id="history-start-date"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
+          <input type="date" id="history-end-date"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
+        </div>
+
+        <div class="flex gap-2">
+          <input type="search" id="history-keyword" placeholder="현장명 · 업체명 · 성적서번호"
+            class="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <button type="button" id="btn-history-search"
+            class="shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">검색</button>
+        </div>
+
+        <div class="flex gap-1.5 overflow-x-auto pb-1" id="history-method-filters">
+          <button type="button" data-history-method="ALL"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 text-white text-[10px] font-bold">전체</button>
+          <button type="button" data-history-method="RT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">RT</button>
+          <button type="button" data-history-method="PAUT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PAUT</button>
+          <button type="button" data-history-method="UT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">UT</button>
+          <button type="button" data-history-method="MT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">MT</button>
+          <button type="button" data-history-method="PT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PT</button>
+          <button type="button" data-history-method="PMI"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PMI</button>
+          <button type="button" data-history-method="ETC"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">ETC</button>
+          <button type="button" data-history-method="내근/대기"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">내근/대기</button>
+          <button type="button" data-history-method="휴무"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">휴무</button>
+        </div>
+
+        <div id="history-result-summary" class="text-[11px] text-slate-500">검색 준비 중...</div>
+      </div>
+
+      <div id="recent-list" class="space-y-2">
+        <div class="text-center py-4 text-xs text-slate-400">내역 불러오는 중...</div>
+      </div>
+
+      <button type="button" id="btn-history-more"
+        class="hidden w-full py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
+        20개 그룹 더 보기
+      </button>
+    </div>
 
   </main>
 
@@ -647,24 +679,32 @@
   </div>
 
   <!-- 주 장비 다중 선택 모달 -->
-  <div id="main-equip-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+  <div id="main-equip-modal"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
       <div class="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
         <div>
           <h3 class="text-sm font-bold text-slate-900">주 장비 다중 선택</h3>
           <p class="text-[11px] text-slate-500">사용할 주장비를 여러 개 체크하세요.</p>
         </div>
-        <button type="button" onclick="closeMainEquipModal()" class="w-8 h-8 rounded-full bg-slate-200/80 text-slate-600 font-bold">✕</button>
+        <button type="button" onclick="closeMainEquipModal()"
+          class="w-8 h-8 rounded-full bg-slate-200/80 text-slate-600 font-bold">✕</button>
       </div>
       <div class="p-3 border-b border-slate-100">
-        <input type="text" id="main-equip-search-input" oninput="renderMainEquipItems()" placeholder="🔍 장비명 또는 시리얼번호 검색" class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
+        <input type="text" id="main-equip-search-input" oninput="renderMainEquipItems()"
+          placeholder="🔍 장비명 또는 시리얼번호 검색"
+          class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
       </div>
       <div id="main-equip-items-container" class="flex-1 overflow-y-auto p-3 space-y-1.5 max-h-[48vh]"></div>
       <div class="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
-        <div class="text-xs text-slate-600 font-medium">선택: <span id="main-equip-selected-count" class="font-bold text-blue-600">0</span>개</div>
+        <div class="text-xs text-slate-600 font-medium">선택: <span id="main-equip-selected-count"
+            class="font-bold text-blue-600">0</span>개</div>
         <div class="flex items-center gap-2">
-          <button type="button" onclick="clearMainEquipSelections()" class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl">초기화</button>
-          <button type="button" onclick="applyMainEquipSelections()" class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl">선택 완료</button>
+          <button type="button" onclick="clearMainEquipSelections()"
+            class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl">초기화</button>
+          <button type="button" onclick="applyMainEquipSelections()"
+            class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl">선택 완료</button>
         </div>
       </div>
     </div>
@@ -678,8 +718,10 @@
   </div>
 
   <!-- 보조장비 / 프로브 다중 선택 모달 -->
-  <div id="aux-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
+  <div id="aux-modal"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-200">
       <!-- 헤더 -->
       <div class="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
         <div>
@@ -689,22 +731,39 @@
           </h3>
           <p class="text-[11px] text-slate-500">현장에서 사용하는 장비/프로브를 체크하세요 (여러 개 선택 가능)</p>
         </div>
-        <button type="button" onclick="closeAuxModal()" class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">✕</button>
+        <button type="button" onclick="closeAuxModal()"
+          class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">✕</button>
       </div>
 
       <!-- 방법 필터 탭 & 검색 -->
       <div class="p-3 border-b border-slate-100 space-y-2 bg-white">
         <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar" id="aux-filter-tabs">
-          <button type="button" onclick="setAuxFilter('CURRENT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0" data-tab="CURRENT">현재방법</button>
-          <button type="button" onclick="setAuxFilter('ALL')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="ALL">전체</button>
-          <button type="button" onclick="setAuxFilter('PAUT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="PAUT">PAUT</button>
-          <button type="button" onclick="setAuxFilter('UT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="UT">UT</button>
-          <button type="button" onclick="setAuxFilter('RT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="RT">RT</button>
-          <button type="button" onclick="setAuxFilter('MT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="MT">MT</button>
-          <button type="button" onclick="setAuxFilter('PT')" class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0" data-tab="PT">PT</button>
+          <button type="button" onclick="setAuxFilter('CURRENT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white shrink-0"
+            data-tab="CURRENT">현재방법</button>
+          <button type="button" onclick="setAuxFilter('ALL')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="ALL">전체</button>
+          <button type="button" onclick="setAuxFilter('PAUT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="PAUT">PAUT</button>
+          <button type="button" onclick="setAuxFilter('UT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="UT">UT</button>
+          <button type="button" onclick="setAuxFilter('RT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="RT">RT</button>
+          <button type="button" onclick="setAuxFilter('MT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="MT">MT</button>
+          <button type="button" onclick="setAuxFilter('PT')"
+            class="aux-tab px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 shrink-0"
+            data-tab="PT">PT</button>
         </div>
         <div class="relative">
-          <input type="text" id="aux-search-input" oninput="renderAuxItems()" placeholder="🔍 장비명, 프로브, 웨지 검색 (예: 70, A2, 콜리, 스캐너...)" class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
+          <input type="text" id="aux-search-input" oninput="renderAuxItems()"
+            placeholder="🔍 장비명, 프로브, 웨지 검색 (예: 70, A2, 콜리, 스캐너...)"
+            class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-blue-400">
         </div>
       </div>
 
@@ -719,8 +778,11 @@
           선택: <span id="aux-selected-count" class="font-bold text-blue-600">0</span>개
         </div>
         <div class="flex items-center gap-2">
-          <button type="button" onclick="clearAuxSelections()" class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl hover:bg-slate-300">초기화</button>
-          <button type="button" onclick="applyAuxSelections()" class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm">선택 완료</button>
+          <button type="button" onclick="clearAuxSelections()"
+            class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl hover:bg-slate-300">초기화</button>
+          <button type="button" onclick="applyAuxSelections()"
+            class="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm">선택
+            완료</button>
         </div>
       </div>
     </div>
@@ -968,7 +1030,7 @@
       if (!appConfig) return;
       const materials = method === "RT" ? (appConfig.materials || []) :
         method === "PT" ? ["PT \uC57D\uD488 \uC138\uD2B8"] :
-        method === "MT" ? ["MT \uC790\uBD84/\uD398\uC778\uD2B8"] : [];
+          method === "MT" ? ["MT \uC790\uBD84/\uD398\uC778\uD2B8"] : [];
       matSelect.replaceChildren(new Option("\uD574\uB2F9\uC5C6\uC74C", ""), ...materials.map(item => new Option(item, item)));
       if (materials.length) matSelect.value = materials[0];
     }
@@ -1225,7 +1287,7 @@
       document.getElementById("main-equip-modal").classList.add("hidden");
     }
 
-    const MAIN_EQUIP_BY_METHOD = {"PAUT": ["PAUT MX2(OMNI2-103085)", "PAUT MX2(OMNI2-100055)", "PAUT MX2(OMNI2-103918)", "PAUT X3(QC-0093084)"], "UT": ["Sitescan 150(I000760)", "Sitescan 150(I000950)", "Sitescan 140(1403264TC)", "Masterscan 380(I002561)", "Masterscan 380(I003201)", "Masterscan 380(I005587)", "Masterscan 380(I005593)", "Epoch 650(150128312)", "USM-35(8814A)", "USM-GO(I001008)", "\ub450\uaed8\uce21\uc815\uae30 37DL-PLUS(051301807)"], "RT": ["Se-75(880D D10692)", "Se-75(880D D10626)", "Se-75(880D D4507)", "Se-75(880D D7748)", "Ir-192(880D D10700)", "Ir-192(880D D3086)", "Ir-192(880D D4567)", "Ir-192(880D D10674)", "Ir-192(880S S1684)", "\ubc29\uc0ac\uc120\ubc1c\uc0dd\uc7a5\uce58 300EGM2(FR0020-2)", "\ubc29\uc0ac\uc120\ubc1c\uc0dd\uc7a5\uce58 RF300EGM2(GR0002-3)"], "MT": ["Yoke AC(MY-2 NW0453)", "Yoke AC(MP-A3 MP31646)", "Yoke AC(MY-2 NW6999)", "Yoke AC(MP-A3 KI-01)", "Yoke AC(MP-A3 NW1510097)", "Yoke AC(MY-2 NW4424)", "Yoke AC(MP-A3 KI-02)", "Yoke AC(MY-2 NW7328)", "Yoke AC(MY-2 NW8064)", "Yoke AC(MY-2 NW5338)", "Yoke AC(MY-2 NW4413)", "Yoke AC(MY-2 NW1301154)", "Yoke AC(MY-2 NW4700)", "Yoke DC(MP-A2D MP3403)", "Yoke DC(MP-A2D MP1336)", "Yoke DC(MP-A2D MP9693)", "Yoke DC(MP-A2D MP2458)", "AC POWER SUPPLY DA-PB(NW0589)", "AC POWER SUPPLY DA-PB(NW0604)", "AC POWER SUPPLY DA-PB(NW0639)", "AC POWER SUPPLY DA-PB(NW0718)", "AC POWER SUPPLY DA-PB(NW0582)", "AC POWER SUPPLY DA-PB(NW0230)"], "PT": ["PT \uc57d\ud488", "\ud574\ub2f9\uc5c6\uc74c"], "PMI": ["\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "\ud569\uae08\ubd84\uc11d\uae30(RI) XLi818(24673)", "\uacbd\ub3c4\uacc4 MIC10(1-2129)", "\ud398\uc774\ub77c\ud2b8\ud568\ub7c9\uce21\uc815\uae30 FMP30(160002524)", "\ub0b4\uc2dc\uacbd\uc7a5\ube44 ER400(E30969R)"], "\ub0b4\uadfc/\ub300\uae30": ["\ud574\ub2f9\uc5c6\uc74c"], "\ud734\ubb34": ["\ud574\ub2f9\uc5c6\uc74c"], "\uae30\ud0c0": ["\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "\ud569\uae08\ubd84\uc11d\uae30(RI) XLi818(24673)", "\uacbd\ub3c4\uacc4 MIC10(1-2129)", "\ud398\uc774\ub77c\ud2b8\ud568\ub7c9\uce21\uc815\uae30 FMP30(160002524)", "\ub0b4\uc2dc\uacbd\uc7a5\ube44 ER400(E30969R)", "\ud574\ub2f9\uc5c6\uc74c"]};
+    const MAIN_EQUIP_BY_METHOD = { "PAUT": ["PAUT MX2(OMNI2-103085)", "PAUT MX2(OMNI2-100055)", "PAUT MX2(OMNI2-103918)", "PAUT X3(QC-0093084)"], "UT": ["Sitescan 150(I000760)", "Sitescan 150(I000950)", "Sitescan 140(1403264TC)", "Masterscan 380(I002561)", "Masterscan 380(I003201)", "Masterscan 380(I005587)", "Masterscan 380(I005593)", "Epoch 650(150128312)", "USM-35(8814A)", "USM-GO(I001008)", "\ub450\uaed8\uce21\uc815\uae30 37DL-PLUS(051301807)"], "RT": ["Se-75(880D D10692)", "Se-75(880D D10626)", "Se-75(880D D4507)", "Se-75(880D D7748)", "Ir-192(880D D10700)", "Ir-192(880D D3086)", "Ir-192(880D D4567)", "Ir-192(880D D10674)", "Ir-192(880S S1684)", "\ubc29\uc0ac\uc120\ubc1c\uc0dd\uc7a5\uce58 300EGM2(FR0020-2)", "\ubc29\uc0ac\uc120\ubc1c\uc0dd\uc7a5\uce58 RF300EGM2(GR0002-3)"], "MT": ["Yoke AC(MY-2 NW0453)", "Yoke AC(MP-A3 MP31646)", "Yoke AC(MY-2 NW6999)", "Yoke AC(MP-A3 KI-01)", "Yoke AC(MP-A3 NW1510097)", "Yoke AC(MY-2 NW4424)", "Yoke AC(MP-A3 KI-02)", "Yoke AC(MY-2 NW7328)", "Yoke AC(MY-2 NW8064)", "Yoke AC(MY-2 NW5338)", "Yoke AC(MY-2 NW4413)", "Yoke AC(MY-2 NW1301154)", "Yoke AC(MY-2 NW4700)", "Yoke DC(MP-A2D MP3403)", "Yoke DC(MP-A2D MP1336)", "Yoke DC(MP-A2D MP9693)", "Yoke DC(MP-A2D MP2458)", "AC POWER SUPPLY DA-PB(NW0589)", "AC POWER SUPPLY DA-PB(NW0604)", "AC POWER SUPPLY DA-PB(NW0639)", "AC POWER SUPPLY DA-PB(NW0718)", "AC POWER SUPPLY DA-PB(NW0582)", "AC POWER SUPPLY DA-PB(NW0230)"], "PT": ["PT \uc57d\ud488", "\ud574\ub2f9\uc5c6\uc74c"], "PMI": ["\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "\ud569\uae08\ubd84\uc11d\uae30(RI) XLi818(24673)", "\uacbd\ub3c4\uacc4 MIC10(1-2129)", "\ud398\uc774\ub77c\ud2b8\ud568\ub7c9\uce21\uc815\uae30 FMP30(160002524)", "\ub0b4\uc2dc\uacbd\uc7a5\ube44 ER400(E30969R)"], "\ub0b4\uadfc/\ub300\uae30": ["\ud574\ub2f9\uc5c6\uc74c"], "\ud734\ubb34": ["\ud574\ub2f9\uc5c6\uc74c"], "\uae30\ud0c0": ["\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "\ud569\uae08\ubd84\uc11d\uae30(RI) XLi818(24673)", "\uacbd\ub3c4\uacc4 MIC10(1-2129)", "\ud398\uc774\ub77c\ud2b8\ud568\ub7c9\uce21\uc815\uae30 FMP30(160002524)", "\ub0b4\uc2dc\uacbd\uc7a5\ube44 ER400(E30969R)", "\ud574\ub2f9\uc5c6\uc74c"] };
 
     function renderMainEquipItems() {
       const container = document.getElementById("main-equip-items-container");

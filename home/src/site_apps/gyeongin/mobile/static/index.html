@@ -146,14 +146,22 @@
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
         <div class="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl" id="method-buttons">
-          <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
-          <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
-          <button type="button" data-method="UT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">UT</button>
-          <button type="button" data-method="MT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
-          <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
-          <button type="button" data-method="PMI" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PMI</button>
-          <button type="button" data-method="ETC" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">ETC</button>
-          <button type="button" data-method="내근/대기" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
+          <button type="button" data-method="RT"
+            class="method-btn py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white shadow-sm transition">RT</button>
+          <button type="button" data-method="PAUT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PAUT</button>
+          <button type="button" data-method="UT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">UT</button>
+          <button type="button" data-method="MT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
+          <button type="button" data-method="PT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
+          <button type="button" data-method="PMI"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PMI</button>
+          <button type="button" data-method="ETC"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">ETC</button>
+          <button type="button" data-method="내근/대기"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">내근/대기</button>
         </div>
       </div>
 
@@ -561,34 +569,53 @@
 
       <div class="space-y-2.5">
         <div class="grid grid-cols-4 gap-1" id="history-period-buttons">
-          <button type="button" data-period="today" class="history-period-btn py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">오늘</button>
-          <button type="button" data-period="7days" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">최근 7일</button>
-          <button type="button" data-period="month" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">이번 달</button>
-          <button type="button" data-period="custom" class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">직접 지정</button>
+          <button type="button" data-period="today"
+            class="history-period-btn py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold">오늘</button>
+          <button type="button" data-period="7days"
+            class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">최근
+            7일</button>
+          <button type="button" data-period="month"
+            class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">이번 달</button>
+          <button type="button" data-period="custom"
+            class="history-period-btn py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-bold">직접
+            지정</button>
         </div>
 
         <div id="history-custom-dates" class="hidden grid grid-cols-2 gap-2">
-          <input type="date" id="history-start-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
-          <input type="date" id="history-end-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
+          <input type="date" id="history-start-date"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
+          <input type="date" id="history-end-date"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold">
         </div>
 
         <div class="flex gap-2">
           <input type="search" id="history-keyword" placeholder="현장명 · 업체명 · 성적서번호"
             class="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <button type="button" id="btn-history-search" class="shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">검색</button>
+          <button type="button" id="btn-history-search"
+            class="shrink-0 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">검색</button>
         </div>
 
         <div class="flex gap-1.5 overflow-x-auto pb-1" id="history-method-filters">
-          <button type="button" data-history-method="ALL" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 text-white text-[10px] font-bold">전체</button>
-          <button type="button" data-history-method="RT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">RT</button>
-          <button type="button" data-history-method="PAUT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PAUT</button>
-          <button type="button" data-history-method="UT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">UT</button>
-          <button type="button" data-history-method="MT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">MT</button>
-          <button type="button" data-history-method="PT" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PT</button>
-          <button type="button" data-history-method="PMI" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PMI</button>
-          <button type="button" data-history-method="ETC" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">ETC</button>
-          <button type="button" data-history-method="내근/대기" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">내근/대기</button>
-          <button type="button" data-history-method="휴무" class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">휴무</button>
+          <button type="button" data-history-method="ALL"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 text-white text-[10px] font-bold">전체</button>
+          <button type="button" data-history-method="RT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">RT</button>
+          <button type="button" data-history-method="PAUT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PAUT</button>
+          <button type="button" data-history-method="UT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">UT</button>
+          <button type="button" data-history-method="MT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">MT</button>
+          <button type="button" data-history-method="PT"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PT</button>
+          <button type="button" data-history-method="PMI"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">PMI</button>
+          <button type="button" data-history-method="ETC"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">ETC</button>
+          <button type="button" data-history-method="내근/대기"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">내근/대기</button>
+          <button type="button" data-history-method="휴무"
+            class="history-method-btn shrink-0 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">휴무</button>
         </div>
 
         <div id="history-result-summary" class="text-[11px] text-slate-500">검색 준비 중...</div>
@@ -1048,7 +1075,7 @@
       if (!appConfig) return;
       const materials = method === "RT" ? (appConfig.materials || []) :
         method === "PT" ? ["PT \uC57D\uD488 \uC138\uD2B8"] :
-        method === "MT" ? ["MT \uC790\uBD84/\uD398\uC778\uD2B8"] : [];
+          method === "MT" ? ["MT \uC790\uBD84/\uD398\uC778\uD2B8"] : [];
       matSelect.replaceChildren(new Option("\uD574\uB2F9\uC5C6\uC74C", ""), ...materials.map(item => new Option(item, item)));
       if (materials.length) matSelect.value = materials[0];
     }
