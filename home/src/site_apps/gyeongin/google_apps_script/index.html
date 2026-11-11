@@ -884,6 +884,36 @@
       showToast(`⚡ '${itemType}' 설정 완료! 저장 버튼을 누르시면 기록됩니다.`);
     }
 
+    // Sync custom text live into the select box above so the user immediately sees it applied.
+    function syncCustomOption(sel, value) {
+      if (!sel) return;
+      const val = String(value || "").trim();
+      let customOpt = sel.querySelector('option[data-custom-opt="1"]');
+      if (!val) {
+        if (customOpt) {
+          const wasSelected = sel.value === customOpt.value;
+          customOpt.remove();
+          if (wasSelected && sel.options.length > 0) sel.selectedIndex = 0;
+        }
+        return;
+      }
+      const existing = Array.from(sel.options).find(opt => opt.dataset.customOpt !== "1" && opt.value === val);
+      if (existing) {
+        if (customOpt) customOpt.remove();
+        sel.value = val;
+        return;
+      }
+      if (!customOpt) {
+        customOpt = new Option(val, val);
+        customOpt.dataset.customOpt = "1";
+        sel.add(customOpt);
+      } else {
+        customOpt.value = val;
+        customOpt.textContent = val;
+      }
+      sel.value = val;
+    }
+
     // Toggle custom inputs (clear hidden custom text so dropdown edits are never overridden)
     function bindCustomInputToggle(btnId, selectId, inputId) {
       const btn = document.getElementById(btnId);
@@ -894,14 +924,21 @@
         inp.classList.toggle("hidden");
         if (inp.classList.contains("hidden")) {
           inp.value = "";
+          syncCustomOption(sel, "");
         } else {
           inp.focus();
         }
       });
+      inp.addEventListener("input", () => {
+        syncCustomOption(sel, inp.value);
+      });
       if (sel) {
         sel.addEventListener("change", () => {
+          const selectedOpt = sel.options[sel.selectedIndex];
+          if (selectedOpt && selectedOpt.dataset.customOpt === "1") return;
           inp.value = "";
           inp.classList.add("hidden");
+          syncCustomOption(sel, "");
         });
       }
     }
@@ -1959,6 +1996,8 @@
       if (customInp) {
         if (fallbackCustomOption && Array.from(sel.options).some(opt => opt.value === fallbackCustomOption)) {
           sel.value = fallbackCustomOption;
+        } else {
+          syncCustomOption(sel, val);
         }
         customInp.value = val;
         customInp.classList.remove('hidden');
