@@ -52,6 +52,49 @@ DEFAULT_METHOD_STANDARDS = {
     'PMI': ('ASTM E1476 / SIS', '0'),
 }
 
+
+def code_procedure_candidates(method: str, company: str = '', current_value: str = '') -> list[str]:
+    """Return ordered code/procedure dropdown candidates for (company, method)."""
+    from site_apps.gyeongin.src.company_master import (
+        load_company_ndt_presets,
+        suggest_company_method_preset,
+    )
+
+    norm_method = normalize_cert_method(method) or _text(method).upper()
+    presets = load_company_ndt_presets()
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(val: str, *, require_balanced: bool = False) -> None:
+        txt = _text(val)
+        if not txt or txt in seen:
+            return
+        if require_balanced and txt.count('(') != txt.count(')'):
+            return
+        seen.add(txt)
+        ordered.append(txt)
+
+    _add(current_value)
+    if company:
+        co_preset = suggest_company_method_preset(company, norm_method, presets=presets)
+        _add(co_preset.get('default_code', ''), require_balanced=True)
+
+    lookup_methods = ('UT', 'PAUT') if norm_method == 'UT' else (norm_method,)
+    for mmap in presets.values():
+        if not isinstance(mmap, dict):
+            continue
+        for mk in lookup_methods:
+            entry = mmap.get(mk)
+            if isinstance(entry, dict):
+                _add(entry.get('default_code', ''), require_balanced=True)
+
+    if norm_method in DEFAULT_METHOD_STANDARDS:
+        _add(DEFAULT_METHOD_STANDARDS[norm_method][0])
+    if norm_method == 'RT':
+        _add('KS B 0845 / SIS H 101')
+        _add('ASME Sec.V / SIS H 141')
+    return ordered
+
 INSPECTOR_PROFILES = {
     '주진철': ('JIN CHEOL, JU', '기능사', 'II'),
     '권인경': ('IN KYUNG, KWON', '기 사', 'III'),

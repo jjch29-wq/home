@@ -469,6 +469,15 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertIn('UV-LED 2P/SPR', ws_fl['O18'].value)
             wb_fl.close()
 
+    def test_code_procedure_candidates_prioritizes_company_and_excludes_truncated(self):
+        from site_apps.gyeongin.src.cert_exporter import code_procedure_candidates
+
+        mt_codes = code_procedure_candidates('MT', '경성기공')
+        self.assertGreater(len(mt_codes), 3)
+        self.assertEqual(mt_codes[0], 'KS D 0213 / SIS H 301 (2급,2군)')
+        self.assertIn('ASME Sec.V Art.7 / SIS H 341 (Rev.13)', mt_codes)
+        self.assertTrue(all(c.count('(') == c.count(')') for c in mt_codes))
+
 
 if __name__ == '__main__':
     unittest.main()

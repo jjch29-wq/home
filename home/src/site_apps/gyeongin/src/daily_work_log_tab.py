@@ -2013,7 +2013,6 @@ class DailyWorkLogTab(ttk.Frame):
             ('성적서번호', 'report_no', 0, 0),
             ('발주처', 'customer', 0, 2),
             ('공사명/현장', 'project_name', 1, 0),
-            ('적용규격/절차', 'code_procedure', 1, 2),
             ('검사자', 'inspector', 2, 0),
         ]
         for label_txt, key, r_i, c_i in fields_meta:
@@ -2021,6 +2020,10 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Entry(edit_box, textvariable=vars_map[key], width=24).grid(
                 row=r_i, column=c_i + 1, sticky='ew', padx=(0, 10), pady=3
             )
+
+        ttk.Label(edit_box, text='적용규격/절차').grid(row=1, column=2, sticky='w', padx=(4, 6), pady=3)
+        code_combo = ttk.Combobox(edit_box, textvariable=vars_map['code_procedure'], width=22)
+        code_combo.grid(row=1, column=3, sticky='ew', padx=(0, 10), pady=3)
 
         from site_apps.gyeongin.src.aux_equipment import (
             _bind_count_badge,
@@ -2072,10 +2075,17 @@ class DailyWorkLogTab(ttk.Frame):
 
         selected_idx = [0]
 
+        from site_apps.gyeongin.src.cert_exporter import code_procedure_candidates
+
         def load_form(idx):
             selected_idx[0] = idx
             b = batches[idx]
             equip_combo['values'] = [''] + get_main_equipments_by_method(method=b.get('method', ''))
+            code_combo['values'] = code_procedure_candidates(
+                b.get('method', ''),
+                b.get('company', ''),
+                b.get('code_procedure', ''),
+            )
             for k, v in vars_map.items():
                 v.set(b.get(k, ''))
             if hasattr(equip_combo, '_refresh_multi_badge'):
