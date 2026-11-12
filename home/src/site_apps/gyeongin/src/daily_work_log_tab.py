@@ -1228,14 +1228,22 @@ class DailyWorkLogTab(ttk.Frame):
         numbers = ', '.join(str(i + 1) for i, _ in targets)
         if not messagebox.askyesno(
             '행 삭제',
-            f'선택한 {len(targets)}개 행 ({numbers}행)의 입력 내용을 삭제하시겠습니까?\n'
-            '상단 저장 버튼을 눌러야 저장된 내역에 반영됩니다.'
+            f'선택한 {len(targets)}개 행 ({numbers}행)을 삭제하시겠습니까?\n'
+            '삭제 후 현재 날짜 일보에 바로 저장됩니다.'
         ):
             return
         self._compact_ndt_rows({i for i, _ in targets})
         self._refresh_hot_summary()
         self._clear_ndt_selection()
-        messagebox.showinfo('행 삭제', '선택한 행을 삭제하고 나머지 행을 위로 정리했습니다. 상단 저장 버튼을 눌러 주세요.')
+        # 화면에서만 지우면 날짜 이동·재실행 시 저장본이 다시 불러와지므로 즉시 저장한다.
+        if self.save_current_history() is True:
+            messagebox.showinfo('행 삭제', '선택한 행을 삭제하고 저장했습니다.')
+        else:
+            messagebox.showwarning(
+                '행 삭제',
+                '화면에서는 삭제했지만 입력 확인 오류로 저장하지 못했습니다.\n'
+                '오류를 수정한 뒤 상단 저장 버튼을 눌러 주세요.',
+            )
 
     def _compact_ndt_rows(self, deleted_indices):
         # Snapshot before writing: destination widgets may also be source rows.
@@ -2943,6 +2951,7 @@ class DailyWorkLogTab(ttk.Frame):
             self._register_configured_companies(row.get('업체', '') for row in data['ndt_results'])
         self._loaded_log_date = current_date
         self._log_baseline = self._capture_log_input()
+        return True
 
     def _capture_log_input(self):
         """Capture editable values without saving or including the date selector."""

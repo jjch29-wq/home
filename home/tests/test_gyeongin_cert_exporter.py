@@ -701,6 +701,44 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertIsNone(openpyxl.load_workbook(out).worksheets[0]['AZ1'].value)
 
 
+    def test_delete_selected_ndt_row_persists_to_history(self):
+        import datetime as dt
+        import json
+        import tkinter as tk
+        from types import SimpleNamespace
+        from unittest import mock
+        from site_apps.gyeongin.src.daily_work_log_tab import DailyWorkLogTab
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch('tkinter.messagebox.askyesno', return_value=True), \
+                    mock.patch('tkinter.messagebox.showinfo'), \
+                    mock.patch('tkinter.messagebox.showwarning'):
+                tab = DailyWorkLogTab(root)
+                tab.main_app = SimpleNamespace(daily_usage_df=pd.DataFrame())
+                tab.history_path = str(Path(tmp) / 'history.json')
+                tab.date_entry.set_date(dt.date(2026, 11, 12))
+                root.update()
+                rows = tab.ndt_grid_entries
+                for i, (comp, method) in enumerate((('경성기공', 'MT'), ('현대산업', 'MT'))):
+                    rows[i]['업체'].set(comp)
+                    rows[i]['검사방법'].set(method)
+                    rows[i]['검사품명'].set('SHAFT')
+                self.assertTrue(tab.save_current_history())
+
+                tab.ndt_selection_vars[0].set(True)
+                tab._delete_selected_ndt_row()
+
+                with open(tab.history_path, encoding='utf-8') as f:
+                    saved = json.load(f)['2026-11-12']['ndt_results']
+                companies = [r.get('업체') for r in saved if r.get('업체')]
+                self.assertEqual(companies, ['현대산업'])
+        finally:
+            root.destroy()
+
+
 if __name__ == '__main__':
     unittest.main()
 
