@@ -982,7 +982,7 @@ class CertificateExporter:
         ws_gap = wb['PMI(갑)']
         base_eul = wb['PMI(을)']
         measurements = list(batch.get('pmi_measurements') or [])
-        element_cols = choose_pmi_element_columns(measurements) if measurements else []
+        element_cols = choose_pmi_element_columns(measurements, batch.get('pmi_elements')) if measurements else []
         source_rows = measurements if measurements else batch.get('rows', [])
         chunks = self._chunk_rows(source_rows, 15)
         total_pages = 1 + len(chunks)
@@ -1015,8 +1015,9 @@ class CertificateExporter:
             _write_cell(ws_eul, 'E19', d)
             _write_cell(ws_eul, 'O19', clean_worker_name(batch.get('inspector', '')) or '주진철')
             _write_cell(ws_eul, 'P19', d)
-            for slot, sym in zip(_PMI_ELEMENT_SLOTS, element_cols):
-                _write_cell(ws_eul, f'{slot}17', sym)
+            if measurements:
+                for i, slot in enumerate(_PMI_ELEMENT_SLOTS):
+                    _write_cell(ws_eul, f'{slot}17', element_cols[i] if i < len(element_cols) else '-')
 
             for idx, row in enumerate(chunk):
                 r = 20 + idx
@@ -1163,8 +1164,29 @@ def read_pmi_measurements(path: str | Path) -> list[dict]:
     return []
 
 
-def choose_pmi_element_columns(measurements: list[dict]) -> list[str]:
-    """성적서 H~M 6칸에 넣을 원소: Ni/Cr/Mo 고정 + 나머지는 평균 함량 높은 순(Fe 제외)."""
+def available_pmi_elements(measurements: list[dict]) -> list[str]:
+    """측정파일에 값이 있는 원소를 평균 함량 높은 순으로 돌려줍니다."""
+    totals: dict[str, float] = {}
+    seen: list[str] = []
+    for m in measurements or []:
+        for sym, val in (m.get('elements') or {}).items():
+            if sym not in seen:
+                seen.append(sym)
+            try:
+                totals[sym] = totals.get(sym, 0.0) + float(val)
+            except (TypeError, ValueError):
+                totals.setdefault(sym, 0.0)
+    return sorted(seen, key=lambda s: -totals.get(s, 0.0))
+
+
+def choose_pmi_element_columns(measurements: list[dict], preferred: list[str] | None = None) -> list[str]:
+    """성적서 H~M 6칸에 넣을 원소.
+
+    preferred(사용자 선택)가 있으면 그 순서대로 최대 6개, 없으면 Ni/Cr/Mo 고정 + 평균 함량 높은 순(Fe 제외).
+    """
+    if preferred:
+        picked = [s for s in preferred if s]
+        return picked[: len(_PMI_ELEMENT_SLOTS)]
     totals: dict[str, float] = {}
     for m in measurements or []:
         for sym, val in (m.get('elements') or {}).items():

@@ -778,6 +778,14 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertEqual(eul['J21'].value, 'ND')
             self.assertEqual(eul['N21'].value, 'SS304')
 
+            batch['pmi_elements'] = ['Cr', 'Mn', 'Fe']
+            out = CertificateExporter().export_certificate(batch, Path(tmp) / 'pmi_pick.xlsx')
+            eul = openpyxl.load_workbook(out)['PMI(을)']
+            self.assertEqual([eul[f'{c}17'].value for c in 'HIJKLM'], ['Cr', 'Mn', 'Fe', '-', '-', '-'])
+            self.assertEqual(eul['H20'].value, '17.12')
+            self.assertEqual(eul['J20'].value, '68.50')
+            self.assertIsNone(eul['K20'].value)
+
 
 if __name__ == '__main__':
     unittest.main()

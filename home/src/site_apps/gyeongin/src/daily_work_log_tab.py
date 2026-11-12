@@ -2319,13 +2319,109 @@ class DailyWorkLogTab(ttk.Frame):
                 return
             b['pmi_measurements'] = measurements
             b['pmi_source'] = os.path.basename(path)
+            b.pop('pmi_elements', None)
             refresh_pmi_status()
 
         def clear_pmi_file():
             b = batches[selected_idx[0]]
             b.pop('pmi_measurements', None)
             b.pop('pmi_source', None)
+            b.pop('pmi_elements', None)
             refresh_pmi_status()
+
+        def select_pmi_elements():
+            b = batches[selected_idx[0]]
+            measurements = b.get('pmi_measurements') or []
+            if not measurements:
+                return
+            from site_apps.gyeongin.src.cert_exporter import (
+                available_pmi_elements,
+                choose_pmi_element_columns,
+            )
+            available = available_pmi_elements(measurements)
+            order = list(choose_pmi_element_columns(measurements, b.get('pmi_elements')))
+            win = tk.Toplevel(top)
+            win.title('출력 원소 선택 (최대 6개, 체크 순서 = H~M 칸 순서)')
+            win.transient(top)
+            win.grab_set()
+            frm = ttk.Frame(win, padding=10)
+            frm.pack(fill='both', expand=True)
+            order_var = tk.StringVar()
+            check_vars = {}
+
+            def averages(sym):
+                vals = []
+                for m in measurements:
+                    try:
+                        vals.append(float((m.get('elements') or {}).get(sym, '')))
+                    except (TypeError, ValueError):
+                        pass
+                return f"{sum(vals) / len(vals):.2f}%" if vals else 'ND'
+
+            def refresh_order():
+                order_var.set('출력 순서: ' + (' → '.join(order) if order else '(없음)') + f'   [{len(order)}/6]')
+
+            def toggle(sym):
+                if check_vars[sym].get():
+                    if len(order) >= 6:
+                        check_vars[sym].set(False)
+                        messagebox.showwarning('원소 선택', '성적서 원소 칸은 최대 6개입니다.', parent=win)
+                        return
+                    order.append(sym)
+                elif sym in order:
+                    order.remove(sym)
+                refresh_order()
+
+            grid = ttk.Frame(frm)
+            grid.pack(fill='both', expand=True)
+            for i, sym in enumerate(available):
+                check_vars[sym] = tk.BooleanVar(value=sym in order)
+                ttk.Checkbutton(
+                    grid, text=f"{sym}  (평균 {averages(sym)})", variable=check_vars[sym],
+                    command=lambda s=sym: toggle(s),
+                ).grid(row=i // 4, column=i % 4, sticky='w', padx=6, pady=2)
+            ttk.Label(frm, textvariable=order_var, foreground='#1d4ed8').pack(anchor='w', pady=(8, 4))
+            refresh_order()
+
+            quick = ttk.Frame(frm)
+            quick.pack(fill='x', pady=(0, 6))
+            ttk.Label(quick, text='함량 상위').pack(side='left')
+            top_n_var = tk.StringVar(value=str(len(order) or 3))
+            ttk.Combobox(quick, textvariable=top_n_var, values=[str(n) for n in range(1, 7)],
+                         width=3, state='readonly').pack(side='left', padx=4)
+            exclude_fe_var = tk.BooleanVar(value=True)
+
+            def pick_top_n():
+                n = int(top_n_var.get() or 3)
+                pool = [s for s in available if not (exclude_fe_var.get() and s == 'Fe')]
+                order[:] = pool[:n]
+                for sym, var in check_vars.items():
+                    var.set(sym in order)
+                refresh_order()
+
+            ttk.Label(quick, text='개').pack(side='left')
+            ttk.Checkbutton(quick, text='Fe(잔부) 제외', variable=exclude_fe_var).pack(side='left', padx=8)
+            ttk.Button(quick, text='자동 선택', command=pick_top_n).pack(side='left')
+
+            btns = ttk.Frame(frm)
+            btns.pack(fill='x')
+
+            def reset_default():
+                b.pop('pmi_elements', None)
+                refresh_pmi_status()
+                win.destroy()
+
+            def apply_selection():
+                if not order:
+                    messagebox.showwarning('원소 선택', '원소를 1개 이상 선택하세요.', parent=win)
+                    return
+                b['pmi_elements'] = list(order)
+                refresh_pmi_status()
+                win.destroy()
+
+            ttk.Button(btns, text='기본값(Ni/Cr/Mo+상위)', command=reset_default).pack(side='left')
+            ttk.Button(btns, text='적용', command=apply_selection).pack(side='right')
+            ttk.Button(btns, text='취소', command=win.destroy).pack(side='right', padx=4)
 
         def edit_pmi_measurements():
             b = batches[selected_idx[0]]
@@ -2333,7 +2429,7 @@ class DailyWorkLogTab(ttk.Frame):
             if not measurements:
                 return
             from site_apps.gyeongin.src.cert_exporter import choose_pmi_element_columns
-            elems = choose_pmi_element_columns(measurements)
+            elems = choose_pmi_element_columns(measurements, b.get('pmi_elements'))
             win = tk.Toplevel(top)
             win.title('PMI 측정값 편집 (더블클릭: 태그/부품/합금명 수정)')
             win.transient(top)
@@ -2422,7 +2518,9 @@ class DailyWorkLogTab(ttk.Frame):
         pmi_clear_btn = ttk.Button(pmi_frame, text='해제', width=5, command=clear_pmi_file)
         pmi_clear_btn.pack(side='left', padx=(4, 4))
         pmi_edit_btn = ttk.Button(pmi_frame, text='✏ 측정값 편집', command=edit_pmi_measurements)
-        pmi_edit_btn.pack(side='left', padx=(0, 8))
+        pmi_edit_btn.pack(side='left', padx=(0, 4))
+        pmi_elem_btn = ttk.Button(pmi_frame, text='⚛ 원소 선택', command=select_pmi_elements)
+        pmi_elem_btn.pack(side='left', padx=(0, 8))
         ttk.Label(pmi_frame, textvariable=pmi_status_var, foreground='#1d4ed8').pack(side='left')
 
         def refresh_pmi_status():
@@ -2432,11 +2530,12 @@ class DailyWorkLogTab(ttk.Frame):
             pmi_btn.configure(state=state)
             pmi_clear_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
             pmi_edit_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
+            pmi_elem_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
             if not is_pmi:
                 pmi_status_var.set('')
             elif b.get('pmi_measurements'):
                 from site_apps.gyeongin.src.cert_exporter import choose_pmi_element_columns
-                cols = ', '.join(choose_pmi_element_columns(b['pmi_measurements']))
+                cols = ', '.join(choose_pmi_element_columns(b['pmi_measurements'], b.get('pmi_elements')))
                 pmi_status_var.set(f"{b.get('pmi_source', '')}: {len(b['pmi_measurements'])}건 / 원소 {cols}")
             else:
                 pmi_status_var.set('장비 측정파일을 불러오면 (을)지 성분값이 자동 기입됩니다.')
