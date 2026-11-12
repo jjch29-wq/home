@@ -13,8 +13,10 @@ from site_apps.gyeongin.src.cert_exporter import (
     CertificateExporter,
     CertificateLedgerExporter,
     build_cert_batches,
+    classify_standard_family,
     collect_ledger_records_from_history,
     find_daily_usage_context,
+    resolve_form_code,
 )
 
 
@@ -615,6 +617,88 @@ class GyeonginCertExporterTests(unittest.TestCase):
                 self.assertEqual(batches[0]['project_name'], '유성정공')
         finally:
             root.destroy()
+
+
+    def test_mixed_ks_and_asme_rows_split_into_separate_batches(self):
+        base = {
+            '업체': '현대산업', '검사방법': 'MT', '대상유형': '기계부품',
+            '재질': 'SCM420', '치수원문': 'Ø100', '수량': '1', '단위': 'EA', '결과': '합격',
+        }
+        rows = [
+            dict(base, 검사품명='GEAR-KS1', 식별번호='K1', 적용규격='KS D 0213 / SIS H 301'),
+            dict(base, 검사품명='GEAR-AS1', 식별번호='A1', 적용규격='ASME Sec.V Art.7 / SIS H 341'),
+            dict(base, 검사품명='GEAR-KS2', 식별번호='K2'),
+        ]
+        batches = build_cert_batches(rows, target_date='2026-11-12')
+        self.assertEqual(len(batches), 2)
+        fams = sorted(b['standard_family'] for b in batches)
+        self.assertEqual(fams, ['ASME', 'KS'])
+        ks = next(b for b in batches if b['standard_family'] == 'KS')
+        self.assertEqual(len(ks['rows']), 2)
+        self.assertNotEqual(batches[0]['report_no'], batches[1]['report_no'])
+
+    def test_standard_family_and_form_code_helpers(self):
+        self.assertEqual(classify_standard_family('KS D 0213 / SIS H 301'), 'KS')
+        self.assertEqual(classify_standard_family('ASME Sec.Ⅴ (SA-388) / SIS H 247'), 'ASME')
+        self.assertEqual(classify_standard_family('ISO 17638'), 'ISO')
+        self.assertEqual(resolve_form_code('MT', 'ASME Sec.V Art.7'), 'H 341')
+        self.assertEqual(resolve_form_code('PT', 'KS B 0816'), 'H 401')
+        self.assertEqual(resolve_form_code('UT', 'KS D 0248 / SIS H 203'), 'H 203')
+        self.assertEqual(resolve_form_code('UT', ''), 'H 247')
+
+    def test_footer_form_code_follows_code_procedure(self):
+        def make_batch(method, code):
+            rows = [{
+                '업체': '현대산업', '검사방법': method, '대상유형': '기계부품',
+                '검사품명': 'P-1', '식별번호': 'P-1', '재질': 'SS400', '치수원문': 'Ø50',
+                '수량': '1', '단위': 'EA', '결과': '합격', '적용규격': code,
+            }]
+            b = build_cert_batches(rows, target_date='2026-11-12')[0]
+            b['code_procedure'] = code
+            return b
+
+        exporter = CertificateExporter()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = exporter.export_certificate(make_batch('MT', 'ASME Sec.V Art.7 / SIS H 341'), Path(tmp) / 'mt.xlsx')
+            wb = openpyxl.load_workbook(out)
+            self.assertIn('H 341-1', wb.worksheets[0].oddFooter.left.text)
+
+            out = exporter.export_certificate(make_batch('PT', 'KS B 0816 / SIS H 401'), Path(tmp) / 'pt.xlsx')
+            wb = openpyxl.load_workbook(out)
+            for ws in wb.worksheets:
+                expected = 'H 401-2' if '(을)' in ws.title else 'H 401-1'
+                self.assertIn(expected, ws.oddFooter.left.text)
+
+            out = exporter.export_certificate(make_batch('UT', 'KS D 0248 / SIS H 203'), Path(tmp) / 'ut.xlsx')
+            wb = openpyxl.load_workbook(out)
+            for ws in wb.worksheets:
+                expected = 'H 203-2' if '(을)' in ws.title else 'H 203-1'
+                self.assertIn(expected, ws.oddFooter.left.text)
+
+    def test_family_specific_template_is_preferred(self):
+        import shutil
+        src_dir = CertificateExporter().template_dir
+        with tempfile.TemporaryDirectory() as tmp:
+            tdir = Path(tmp) / 'cert_templates'
+            tdir.mkdir()
+            shutil.copy(src_dir / 'Template_Cert_MT.xlsx', tdir / 'Template_Cert_MT.xlsx')
+            wb = openpyxl.load_workbook(src_dir / 'Template_Cert_MT.xlsx')
+            wb.worksheets[0]['AZ1'] = 'ASME_TEMPLATE_MARK'
+            wb.save(tdir / 'Template_Cert_MT_ASME.xlsx')
+
+            rows = [{
+                '업체': '현대산업', '검사방법': 'MT', '대상유형': '기계부품',
+                '검사품명': 'P-1', '식별번호': 'P-1', '재질': 'SS400', '치수원문': 'Ø50',
+                '수량': '1', '단위': 'EA', '결과': '합격', '적용규격': 'ASME Sec.V Art.7',
+            }]
+            batch = build_cert_batches(rows, target_date='2026-11-12')[0]
+            out = CertificateExporter(tdir).export_certificate(batch, Path(tmp) / 'out.xlsx')
+            self.assertEqual(openpyxl.load_workbook(out).worksheets[0]['AZ1'].value, 'ASME_TEMPLATE_MARK')
+
+            rows[0]['적용규격'] = 'KS D 0213'
+            batch = build_cert_batches(rows, target_date='2026-11-12')[0]
+            out = CertificateExporter(tdir).export_certificate(batch, Path(tmp) / 'out_ks.xlsx')
+            self.assertIsNone(openpyxl.load_workbook(out).worksheets[0]['AZ1'].value)
 
 
 if __name__ == '__main__':

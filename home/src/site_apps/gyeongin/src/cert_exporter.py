@@ -52,6 +52,72 @@ DEFAULT_METHOD_STANDARDS = {
     'PMI': ('ASTM E1476 / SIS', '0'),
 }
 
+_FORM_CODE_BY_METHOD_FAMILY = {
+    ('MT', 'ASME'): 'H 341',
+    ('MT', 'ISO'): 'H 363',
+    ('MT', 'KS'): 'H 301',
+    ('PT', 'ASME'): 'H 441',
+    ('PT', 'KS'): 'H 401',
+    ('UT', 'KS'): 'H 203',
+    ('UT', 'ASME'): 'H 247',
+    ('RT', 'ASME'): 'H 141',
+    ('RT', 'KS'): 'H 101',
+    ('PMI', 'ASTM'): 'H 801',
+    ('PMI', 'KS'): 'H 801',
+}
+
+
+def classify_standard_family(code_text: str) -> str:
+    """규격/절차 문자열에서 대표 규격군(KS, ASME, ISO, ASTM, AWS, API, JIS)을 판별합니다."""
+    upper = _text(code_text).upper()
+    if not upper:
+        return ''
+    if any(tok in upper for tok in ('ASME', 'SA-', 'SEC.', 'SEC ')):
+        return 'ASME'
+    if 'ASTM' in upper:
+        return 'ASTM'
+    if 'ISO' in upper:
+        return 'ISO'
+    if 'KS ' in upper or upper.startswith('KS'):
+        return 'KS'
+    if 'AWS' in upper:
+        return 'AWS'
+    if 'API' in upper:
+        return 'API'
+    if 'JIS' in upper:
+        return 'JIS'
+    return ''
+
+
+def resolve_form_code(method: str, code_procedure: str = '') -> str:
+    """검사방법과 적용규격/절차에서 성적서 바닥글 양식 코드(예: H 301, H 341)를 결정합니다."""
+    m = re.search(r'\bH\s*(\d{3})\b', _text(code_procedure).upper())
+    if m:
+        return f"H {m.group(1)}"
+    norm_method = normalize_cert_method(method)
+    family = classify_standard_family(code_procedure)
+    if (norm_method, family) in _FORM_CODE_BY_METHOD_FAMILY:
+        return _FORM_CODE_BY_METHOD_FAMILY[(norm_method, family)]
+    default_std = DEFAULT_METHOD_STANDARDS.get(norm_method, ('', ''))[0]
+    default_family = classify_standard_family(default_std)
+    return _FORM_CODE_BY_METHOD_FAMILY.get((norm_method, default_family), '')
+
+
+def _sync_footer_form_code(wb, method: str, code_procedure: str = '') -> None:
+    """성적서 각 시트의 왼쪽 바닥글 양식 번호(갑=-1, 을=-2)를 적용규격에 맞게 동기화합니다."""
+    form_code = resolve_form_code(method, code_procedure)
+    if not form_code:
+        return
+    for ws in wb.worksheets:
+        suffix = '-2' if '(을)' in (ws.title or '') else '-1'
+        left_footer = getattr(getattr(ws, 'oddFooter', None), 'left', None)
+        if left_footer is not None and left_footer.text:
+            left_footer.text = re.sub(
+                r'H\s*\d+(?:-\d+)?',
+                f"{form_code}{suffix}",
+                left_footer.text,
+            )
+
 
 def code_procedure_candidates(method: str, company: str = '', current_value: str = '') -> list[str]:
     """Return ordered code/procedure dropdown candidates for (company, method)."""
@@ -367,8 +433,8 @@ def build_cert_batches(
     daily_usage_df=None,
 ) -> list[dict]:
     """Group daily ndt_results into printable customer certificate batches."""
-    grouped: dict[tuple[str, str, str], list[dict]] = {}
-    order_keys: list[tuple[str, str, str]] = []
+    grouped: dict[tuple[str, str, str, str], list[dict]] = {}
+    order_keys: list[tuple[str, str, str, str]] = []
 
     for row in ndt_results or []:
         if not any(_text(v) for v in row.values()):
@@ -379,7 +445,10 @@ def build_cert_batches(
             continue
         company = _text(row.get('업체')) or '경인사무소'
         explicit_no = _text(row.get('성적서번호'))
-        key = (company, cert_method, explicit_no)
+        row_spec = _text(row.get('적용규격')) or _text(row.get('규격')) or _text(row.get('검사절차서'))
+        default_family = classify_standard_family(DEFAULT_METHOD_STANDARDS[cert_method][0]) or 'KS'
+        std_family = classify_standard_family(row_spec) or default_family
+        key = (company, cert_method, explicit_no, std_family)
         if key not in grouped:
             grouped[key] = []
             order_keys.append(key)
@@ -388,8 +457,8 @@ def build_cert_batches(
     batches: list[dict] = []
     seq_by_pair: dict[tuple[str, str], int] = {}
 
-    for company, cert_method, explicit_no in order_keys:
-        rows = grouped[(company, cert_method, explicit_no)]
+    for company, cert_method, explicit_no, std_family in order_keys:
+        rows = grouped[(company, cert_method, explicit_no, std_family)]
         pair = (company, cert_method)
         seq_by_pair[pair] = seq_by_pair.get(pair, 0) + 1
         seq = seq_by_pair[pair]
@@ -443,7 +512,8 @@ def build_cert_batches(
             'drawing_no': dwg_no,
             'rev_no': rev_no,
             'code_procedure': code_proc,
-            'standard_short': spec or ('ASME' if 'ASME' in code_proc.upper() else 'KS'),
+            'standard_family': classify_standard_family(code_proc) or std_family,
+            'standard_short': spec or ('ASME' if 'ASME' in code_proc.upper() else (std_family or 'KS')),
             'surface': first_non_empty('표면상태') or 'AS MACHINED',
             'requester': first_non_empty('의뢰자') or '담당자',
             'inspector': clean_worker_name(first_non_empty('작업자')) or ctx['workers'] or '주진철',
@@ -483,7 +553,14 @@ class CertificateExporter:
         if not method:
             raise ValueError(f"지원하지 않는 검사방법입니다: {batch.get('method')}")
 
-        tmpl_path = self.template_dir / f"Template_Cert_{method}.xlsx"
+        std_family = classify_standard_family(
+            batch.get('standard_family')
+            or batch.get('code_procedure')
+            or batch.get('standard_short')
+            or ''
+        )
+        family_tmpl = self.template_dir / f"Template_Cert_{method}_{std_family}.xlsx" if std_family else None
+        tmpl_path = family_tmpl if (family_tmpl is not None and family_tmpl.exists()) else (self.template_dir / f"Template_Cert_{method}.xlsx")
         if not tmpl_path.exists():
             raise FileNotFoundError(f"성적서 템플릿을 찾을 수 없습니다: {tmpl_path}")
 
@@ -496,6 +573,7 @@ class CertificateExporter:
             'PMI': self._populate_pmi,
         }
         dispatch[method](wb, batch)
+        _sync_footer_form_code(wb, method, _text(batch.get('code_procedure')))
 
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)

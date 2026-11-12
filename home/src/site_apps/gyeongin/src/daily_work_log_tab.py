@@ -2145,6 +2145,7 @@ class DailyWorkLogTab(ttk.Frame):
             CertificateExporter,
             CertificateLedgerExporter,
             build_cert_batches,
+            classify_standard_family,
         )
 
         self.save_current_history()
@@ -2184,9 +2185,15 @@ class DailyWorkLogTab(ttk.Frame):
             show='headings',
             height=min(6, max(3, len(batches))),
         )
+        def _method_label(batch: dict) -> str:
+            fam = classify_standard_family(
+                batch.get('code_procedure') or batch.get('standard_family') or batch.get('standard_short') or ''
+            )
+            return f"{batch['method']} ({fam})" if fam else batch['method']
+
         for col, text, w in (
             ('company', '업체', 120),
-            ('method', '방법', 55),
+            ('method', '방법', 85),
             ('count', '품목수', 55),
             ('report_no', '성적서번호', 180),
             ('customer', '발주처', 110),
@@ -2199,7 +2206,7 @@ class DailyWorkLogTab(ttk.Frame):
                 '',
                 'end',
                 iid=str(idx),
-                values=(b['company'], b['method'], len(b['rows']), b['report_no'], b['customer'], b['project_name']),
+                values=(b['company'], _method_label(b), len(b['rows']), b['report_no'], b['customer'], b['project_name']),
             )
         tree.pack(fill='x', pady=(0, 10))
 
@@ -2302,9 +2309,12 @@ class DailyWorkLogTab(ttk.Frame):
             b = batches[selected_idx[0]]
             for k, v in vars_map.items():
                 b[k] = v.get().strip()
+            fam = classify_standard_family(b.get('code_procedure') or '')
+            if fam:
+                b['standard_family'] = fam
             tree.item(
                 str(selected_idx[0]),
-                values=(b['company'], b['method'], len(b['rows']), b['report_no'], b['customer'], b['project_name']),
+                values=(b['company'], _method_label(b), len(b['rows']), b['report_no'], b['customer'], b['project_name']),
             )
 
         ttk.Button(edit_box, text="목록에 적용", command=save_form).grid(row=3, column=3, sticky='e', pady=3)
