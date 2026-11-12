@@ -266,14 +266,17 @@ def update_monthly_usage_view_impl(self):
         df = df[df['검사방법'].astype(str).str.strip().str.upper() == filter_method.strip().upper()]
 
     if filter_material != '전체':
-        # Get matching MaterialIDs for the selected item name
+        # Get matching MaterialIDs for the selected item name, and also match ';'-joined mobile entries.
         matching_ids = {self.normalize_id(value) for value in self.materials_df[self.materials_df['품목명'] == filter_material]['MaterialID'].tolist()}
         matching_ids.discard('')
-        if matching_ids:
-            df = df[df['MaterialID'].apply(self.normalize_id).isin(matching_ids)]
-        else:
-            # If no material found in master list, clear and return (though this shouldn't happen with sync)
-            return
+        def _matches_monthly_material(val):
+            norm = self.normalize_id(val)
+            if matching_ids and norm in matching_ids:
+                return True
+            raw_s = str(val or '').strip()
+            tokens = [t.strip() for t in raw_s.replace(',', ';').split(';') if t.strip()]
+            return filter_material in tokens or raw_s == filter_material
+        df = df[df['MaterialID'].apply(_matches_monthly_material)]
     
     # [NEW] Return early if filtered df is empty to avoid ValueError during assignment
     if df.empty:
@@ -316,9 +319,15 @@ def update_monthly_usage_view_impl(self):
                 else:
                     material_names.append(f"ID: {mat_id}")
             except:
-                matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == str(mat_id)]
+                raw_mat_str = str(mat_id).strip()
+                matches = self.materials_df[self.materials_df['MaterialID'].astype(str) == raw_mat_str]
                 if not matches.empty:
                     material_names.append(str(matches.iloc[0]['품목명']))
+                elif ';' in raw_mat_str:
+                    for part in raw_mat_str.split(';'):
+                        part_s = part.strip()
+                        if part_s:
+                            material_names.append(part_s)
                 else:
                     material_names.append(f"ID: {mat_id}")
         unique_materials = ['전체'] + sorted(set(material_names))

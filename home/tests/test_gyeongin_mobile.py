@@ -60,6 +60,17 @@ def test_mobile_functions():
     assert "단위" in content
     assert "적용코드" in content
     assert "출장비" in content
+    assert 'id="material-modal"' in content
+    assert "openMaterialModal()" in content
+    assert "highlightNdtChemicalInputs()" in content
+    assert 'data-chem-box="형광침투제"' in content
+    gas_html_p = Path(__file__).resolve().parents[1] / "src" / "site_apps" / "gyeongin" / "google_apps_script" / "index.html"
+    assert gas_html_p.exists()
+    gas_content = gas_html_p.read_text(encoding="utf-8")
+    assert 'id="material-modal"' in gas_content
+    assert "openMaterialModal()" in gas_content
+    assert "highlightNdtChemicalInputs()" in gas_content
+    assert 'data-chem-box="형광침투제"' in gas_content
     print("  => OK")
 
     print("[5] Test RecordSaveRequest creation for non-pipe item:")
@@ -68,7 +79,7 @@ def test_mobile_functions():
         site="경인사무소",
         company="경인사무소",
         item_name="Tank",
-        material="Carestream AA400-3⅓*12\"",
+        material="PT약품 (침투제); PT약품 (세척제); PT약품 (현상제)",
         applied_code="ASME",
         report_no="RPT-2026-001",
         qty=15.0,
@@ -78,6 +89,7 @@ def test_mobile_functions():
         total_fee=113000.0
     )
     assert req.item_name == "Tank"
+    assert "PT약품 (세척제)" in req.material
     assert req.unit == "P,M,I/D"
     assert req.travel_cost == 50000.0
     assert req.total_fee == 113000.0

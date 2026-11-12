@@ -11853,7 +11853,11 @@ class MaterialManager:
                 unique_mat_ids = self.daily_usage_df['MaterialID'].dropna().unique()
                 for mat_id in unique_mat_ids:
                     name = self.get_material_display_name(mat_id)
-                    if name: raw_materials.add(name)
+                    if name:
+                        for part in str(name).split(';'):
+                            part_s = part.strip()
+                            if part_s:
+                                raw_materials.add(part_s)
             
             unique_materials = sorted(list(raw_materials))
             

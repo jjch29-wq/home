@@ -191,17 +191,24 @@
       <!-- 자재명 -->
       <div>
         <div class="flex items-center justify-between mb-1">
-          <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
+          <div class="flex items-center gap-1.5">
+            <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재 · 복수 선택)</label>
+            <span id="material-badge-count"
+              class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold">0개 선택</span>
+          </div>
           <button type="button" id="btn-toggle-custom-mat"
             class="text-[11px] text-blue-600 font-semibold hover:underline">
             ✏️ 직접 입력
           </button>
         </div>
-        <select id="select-material"
-          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-          <!-- Populated via JS -->
-        </select>
-        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력"
+        <button type="button" onclick="openMaterialModal()"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 flex justify-between items-center hover:bg-slate-100 transition-colors">
+          <span id="material-display" class="truncate text-slate-400 font-normal text-left">선택 클릭 (복수 선택 ▾)</span>
+          <span class="text-emerald-700 text-[11px] font-bold shrink-0 ml-1">선택 ▾</span>
+        </button>
+        <input type="hidden" id="select-material" value="">
+        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력 또는 수정 (세미콜론 ; 으로 구분)"
+          oninput="onCustomMaterialInput()"
           class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
       </div>
 
@@ -470,41 +477,41 @@
           class="w-full border rounded-xl px-3 py-2 text-sm">
       </div>
       <div class="grid grid-cols-2 gap-2">
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+        <div data-chem-box="형광자분" class="chem-box p-2 bg-slate-50 rounded-xl border border-slate-200/70 transition-colors">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
           <input type="text" inputmode="decimal" data-numeric-input id="chem-fl-mag" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+        <div data-chem-box="흑색자분" class="chem-box p-2 bg-slate-50 rounded-xl border border-slate-200/70 transition-colors">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
           <input type="text" inputmode="decimal" data-numeric-input id="chem-black-mag" min="0" step="0.5"
             placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+        <div data-chem-box="백색페인트" class="chem-box p-2 bg-slate-50 rounded-xl border border-slate-200/70 transition-colors">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
           <input type="text" inputmode="decimal" data-numeric-input id="chem-white-paint" min="0" step="0.5"
             placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+        <div data-chem-box="침투제" class="chem-box p-2 bg-slate-50 rounded-xl border border-slate-200/70 transition-colors">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
           <input type="text" inputmode="decimal" data-numeric-input id="chem-penetrant" min="0" step="0.5"
             placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+        <div data-chem-box="세척제" class="chem-box p-2 bg-slate-50 rounded-xl border border-slate-200/70 transition-colors">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
           <input type="text" inputmode="decimal" data-numeric-input id="chem-cleaner" min="0" step="0.5" placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
-        <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
+        <div data-chem-box="현상제" class="chem-box p-2 bg-slate-50 rounded-xl border border-slate-200/70 transition-colors">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
           <input type="text" inputmode="decimal" data-numeric-input id="chem-developer" min="0" step="0.5"
             placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
-        <div class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
+        <div data-chem-box="형광침투제" class="chem-box col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between transition-colors">
           <span class="text-[11px] font-bold text-slate-700">형광침투제</span>
           <input type="text" inputmode="decimal" data-numeric-input id="chem-fl-pen" min="0" step="0.5" placeholder="0"
             class="w-24 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
@@ -898,6 +905,40 @@
     </div>
   </div>
 
+  <!-- 자재명 복수 선택 모달 -->
+  <div id="material-modal"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div
+      class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+        <div>
+          <h3 class="text-sm font-bold text-slate-900">자재명 복수 선택</h3>
+          <p class="text-[11px] text-slate-500">사용한 소모 필름·약품을 여러 개 체크하세요 (PT/MT는 7종 약품 입력칸과 자동 연동).</p>
+        </div>
+        <button type="button" onclick="closeMaterialModal()"
+          class="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm">✕</button>
+      </div>
+      <div class="p-3 border-b border-slate-100 bg-white">
+        <input type="text" id="material-search-input" oninput="renderMaterialItems()"
+          placeholder="🔍 필름 규격 또는 약품명 검색"
+          class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:bg-white focus:border-emerald-400">
+      </div>
+      <div id="material-items-container" class="flex-1 overflow-y-auto p-3 space-y-1.5 max-h-[48vh]"></div>
+      <div class="p-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+        <div class="text-xs text-slate-600 font-medium">
+          선택: <span id="material-selected-count" class="font-bold text-emerald-700">0</span>개
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="clearMaterialSelections()"
+            class="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-200 rounded-xl hover:bg-slate-300">초기화</button>
+          <button type="button" onclick="applyMaterialSelections()"
+            class="px-5 py-2 text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-sm">선택
+            완료</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let appConfig = null;
     let selectedMethod = "RT";
@@ -958,8 +999,7 @@
       if (typeof setMainEquipItems === "function") {
         setMainEquipItems("해당없음");
       }
-      const matSelect = document.getElementById("select-material");
-      if (matSelect) matSelect.value = "해당없음 (자재소모 약품 별도 기입)";
+      setMaterialItems(["해당없음 (자재소모 약품 별도 기입)"]);
 
       // 4. 수량, 단가, 검사비 0원
       isManualQty = true;
@@ -1058,7 +1098,19 @@
 
     bindCustomInputToggle("btn-toggle-custom-co", "select-company", "input-custom-company");
     bindCustomInputToggle("btn-toggle-custom-item", "select-item-name", "input-custom-item");
-    bindCustomInputToggle("btn-toggle-custom-mat", "select-material", "input-custom-mat");
+
+    (function bindCustomMaterialToggle() {
+      const btn = document.getElementById("btn-toggle-custom-mat");
+      const inp = document.getElementById("input-custom-mat");
+      if (!btn || !inp) return;
+      btn.addEventListener("click", () => {
+        inp.classList.toggle("hidden");
+        if (!inp.classList.contains("hidden")) {
+          inp.value = document.getElementById("select-material")?.value || "";
+          inp.focus();
+        }
+      });
+    })();
 
     document.getElementById("select-applied-code").addEventListener("change", function () {
       const customCode = document.getElementById("input-custom-code");
@@ -1389,18 +1441,185 @@
       }
     }
 
+    let selectedMaterialItems = new Set();
+    let renderedMaterialCandidates = [];
+
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function parseMaterialItems(str) {
+      if (!str) return [];
+      return String(str)
+        .split(/[;,]/)
+        .map(s => s.trim())
+        .filter(s => s && s.toLowerCase() !== "없음" && s !== "해당없음");
+    }
+
+    function getMaterialCandidatesForMethod(method) {
+      const m = String(method || selectedMethod || "").toUpperCase();
+      if (m === "RT") return Array.isArray(appConfig?.materials) ? appConfig.materials.slice() : [];
+      if (m === "PT") return ["PT약품 (침투제)", "PT약품 (세척제)", "PT약품 (현상제)", "PT약품 (형광침투제)", "NAWOO NPP-2 / NPR1-3 / NPD-4 세트"];
+      if (m === "MT") return ["MT약품 (백색페인트)", "MT약품 (흑색자분)", "MT약품 (형광자분)", "NAWOO 습식형광자분 (Wet Fluorescent)", "GS CHEM 형광자분"];
+      if (m === "UT") return ["접촉매질 (Oil)", "접촉매질 (Glycerin)", "접촉매질 (C.M.C)", "표준시험편 (STB-A1 / IIW)"];
+      if (m === "PAUT") return ["접촉매질 (물 / 글리세린)", "PAUT 표준시험편 (ISO19675 / STB-A1)"];
+      if (m === "PMI") return ["표준시편 (Alloy Reference / 1.25Cr 0.5Mo)"];
+      return [];
+    }
+
+    function highlightNdtChemicalInputs() {
+      const boxes = document.querySelectorAll("#chemicals-card [data-chem-box]");
+      if (!boxes.length) return;
+      const activeKeys = new Set();
+      selectedMaterialItems.forEach(item => {
+        const s = String(item || "").trim();
+        if (!s) return;
+        if (s.includes("형광침투제")) activeKeys.add("형광침투제");
+        else if (s.includes("침투제")) activeKeys.add("침투제");
+        if (s.includes("세척제")) activeKeys.add("세척제");
+        if (s.includes("현상제")) activeKeys.add("현상제");
+        if (s.includes("형광자분")) activeKeys.add("형광자분");
+        if (s.includes("흑색자분")) activeKeys.add("흑색자분");
+        if (s.includes("백색페인트")) activeKeys.add("백색페인트");
+        if (s.includes("NPP-2") || s.includes("NPR1-3") || s.includes("NPD-4")) {
+          activeKeys.add("침투제");
+          activeKeys.add("세척제");
+          activeKeys.add("현상제");
+        }
+      });
+      boxes.forEach(box => {
+        const key = box.getAttribute("data-chem-box");
+        const isActive = activeKeys.has(key);
+        box.classList.toggle("bg-amber-50/80", isActive);
+        box.classList.toggle("border-amber-400", isActive);
+        box.classList.toggle("ring-1", isActive);
+        box.classList.toggle("ring-amber-300", isActive);
+        box.classList.toggle("bg-slate-50", !isActive);
+        box.classList.toggle("border-slate-200/70", !isActive);
+      });
+    }
+
+    function updateMaterialDisplay() {
+      const items = Array.from(selectedMaterialItems);
+      const joined = items.join("; ");
+      const hiddenEl = document.getElementById("select-material");
+      const customEl = document.getElementById("input-custom-mat");
+      const badgeEl = document.getElementById("material-badge-count");
+      const displayEl = document.getElementById("material-display");
+      if (hiddenEl) hiddenEl.value = joined;
+      if (customEl && customEl !== document.activeElement) customEl.value = joined;
+      const activeCount = items.filter(x => !x.startsWith("해당없음")).length;
+      if (badgeEl) badgeEl.textContent = `${activeCount}개 선택`;
+      if (displayEl) {
+        displayEl.textContent = joined || "선택 클릭 (복수 선택 ▾)";
+        displayEl.className = joined ? "truncate text-slate-800 font-semibold text-left" : "truncate text-slate-400 font-normal text-left";
+      }
+      const modalCount = document.getElementById("material-selected-count");
+      if (modalCount) modalCount.textContent = activeCount;
+      highlightNdtChemicalInputs();
+    }
+
+    function setMaterialItems(value) {
+      const items = Array.isArray(value) ? value : parseMaterialItems(String(value || ""));
+      selectedMaterialItems = new Set(items.map(s => String(s).trim()).filter(Boolean));
+      updateMaterialDisplay();
+    }
+
+    function onCustomMaterialInput() {
+      const val = document.getElementById("input-custom-mat")?.value || "";
+      selectedMaterialItems = new Set(parseMaterialItems(val));
+      const items = Array.from(selectedMaterialItems);
+      const joined = items.join("; ");
+      const hiddenEl = document.getElementById("select-material");
+      const badgeEl = document.getElementById("material-badge-count");
+      const displayEl = document.getElementById("material-display");
+      if (hiddenEl) hiddenEl.value = val.trim();
+      const activeCount = items.filter(x => !x.startsWith("해당없음")).length;
+      if (badgeEl) badgeEl.textContent = `${activeCount}개 선택`;
+      if (displayEl) {
+        displayEl.textContent = joined || val.trim() || "선택 클릭 (복수 선택 ▾)";
+        displayEl.className = (joined || val.trim()) ? "truncate text-slate-800 font-semibold text-left" : "truncate text-slate-400 font-normal text-left";
+      }
+      highlightNdtChemicalInputs();
+    }
+
+    function openMaterialModal() {
+      const modal = document.getElementById("material-modal");
+      const search = document.getElementById("material-search-input");
+      if (!modal || !search) return;
+      modal.classList.remove("hidden");
+      search.value = "";
+      renderMaterialItems();
+      setTimeout(() => search.focus(), 100);
+    }
+
+    function closeMaterialModal() {
+      document.getElementById("material-modal")?.classList.add("hidden");
+    }
+
+    function renderMaterialItems() {
+      const container = document.getElementById("material-items-container");
+      const keyword = (document.getElementById("material-search-input")?.value || "").trim().toLowerCase();
+      const baseList = getMaterialCandidatesForMethod(selectedMethod);
+      const merged = Array.from(new Set([...baseList, ...Array.from(selectedMaterialItems)]));
+      renderedMaterialCandidates = merged.filter(item => item && (!keyword || item.toLowerCase().includes(keyword)));
+      const modalCount = document.getElementById("material-selected-count");
+      if (modalCount) {
+        modalCount.textContent = Array.from(selectedMaterialItems).filter(x => !x.startsWith("해당없음")).length;
+      }
+      if (!renderedMaterialCandidates.length) {
+        container.innerHTML = '<div class="text-center py-6 text-xs text-slate-400">일치하는 자재가 없습니다. 직접 입력을 사용하세요.</div>';
+        return;
+      }
+      container.innerHTML = renderedMaterialCandidates.map((item, idx) => {
+        const checked = selectedMaterialItems.has(item);
+        return `<label class="flex items-center gap-2.5 p-2 rounded-xl border ${checked ? 'bg-emerald-50/80 border-emerald-300' : 'bg-slate-50 border-slate-200'} cursor-pointer">
+          <input type="checkbox" onchange="toggleMaterialByIndex(${idx}, this.checked)" ${checked ? 'checked' : ''} class="w-4 h-4 text-emerald-600 rounded border-slate-300">
+          <span class="text-xs ${checked ? 'font-bold text-emerald-900' : 'text-slate-700'} flex-1 truncate">${escapeHtml(item)}</span>
+        </label>`;
+      }).join("");
+    }
+
+    function toggleMaterialByIndex(idx, checked) {
+      const name = renderedMaterialCandidates[idx];
+      if (!name) return;
+      if (checked) selectedMaterialItems.add(name);
+      else selectedMaterialItems.delete(name);
+      updateMaterialDisplay();
+      renderMaterialItems();
+    }
+
+    function clearMaterialSelections() {
+      selectedMaterialItems.clear();
+      updateMaterialDisplay();
+      renderMaterialItems();
+    }
+
+    function applyMaterialSelections() {
+      updateMaterialDisplay();
+      closeMaterialModal();
+    }
+
     function updateMaterialOptions(method) {
-      const matSelect = document.getElementById("select-material");
       if (!appConfig) return;
-      const m = String(method || "").toUpperCase();
-      const materials = m === "RT" ? (appConfig.materials || []) :
-        m === "PT" ? ["PT약품 (침투제)", "PT약품 (세척제)", "PT약품 (현상제)", "PT약품 (형광침투제)", "NAWOO NPP-2 / NPR1-3 / NPD-4 세트"] :
-        m === "MT" ? ["MT약품 (백색페인트)", "MT약품 (흑색자분)", "MT약품 (형광자분)", "NAWOO 습식형광자분 (Wet Fluorescent)", "GS CHEM 형광자분"] :
-        m === "UT" ? ["접촉매질 (Oil)", "접촉매질 (Glycerin)", "접촉매질 (C.M.C)", "표준시험편 (STB-A1 / IIW)"] :
-        m === "PAUT" ? ["접촉매질 (물 / 글리세린)", "PAUT 표준시험편 (ISO19675 / STB-A1)"] :
-        m === "PMI" ? ["표준시편 (Alloy Reference / 1.25Cr 0.5Mo)"] : [];
-      matSelect.replaceChildren(new Option("\uD574\uB2F9\uC5C6\uC74C", ""), ...materials.map(item => new Option(item, item)));
-      if (materials.length) matSelect.value = materials[0];
+      const materials = getMaterialCandidatesForMethod(method);
+      if (!isRestoringRecord) {
+        const kept = Array.from(selectedMaterialItems).filter(item => materials.includes(item));
+        if (kept.length > 0) {
+          setMaterialItems(kept);
+        } else if (materials.length > 0) {
+          setMaterialItems([materials[0]]);
+        } else {
+          setMaterialItems([]);
+        }
+      } else {
+        updateMaterialDisplay();
+      }
     }
 
     function initDefaultWorkers() {
@@ -2510,7 +2729,7 @@
 
       ["input-custom-item", "input-custom-mat"].forEach(id => {
         const input = document.getElementById(id);
-        input.value = "";
+        if (id === "input-custom-item") input.value = "";
         input.classList.add("hidden");
       });
 
@@ -2936,7 +3155,7 @@
       if (setSelectOrCustomValue("select-item-name", "input-custom-item", r.item_name)) {
         document.getElementById("select-item-name").dispatchEvent(new Event('change'));
       }
-      setSelectOrCustomValue("select-material", "input-custom-mat", r.material);
+      setMaterialItems(r.material || "");
       setSelectOrCustomValue("select-applied-code", "input-custom-code", r.applied_code, "기타");
 
       const repNoInput = document.getElementById("input-report-no");

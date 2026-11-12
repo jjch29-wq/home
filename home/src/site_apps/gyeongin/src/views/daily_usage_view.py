@@ -1489,11 +1489,14 @@ def update_daily_usage_view_impl(self):
     
     # Filter by material if specified
     if filter_material != '전체':
-        # Robust filtering: map every MaterialID in the current set to its display name 
-        # and filter by matching the user's selection string. 
-        # This correctly handles both master-linked and orphaned/deleted materials.
-        def get_disp_name(mid): return self.get_material_display_name(mid)
-        filtered_df = filtered_df[filtered_df['MaterialID'].apply(get_disp_name) == filter_material]
+        # Support both single material display names and ';'-joined multi-selected materials.
+        def matches_material_filter(mid):
+            d_name = self.get_material_display_name(mid)
+            if d_name == filter_material:
+                return True
+            tokens = [t.strip() for t in str(d_name).replace(',', ';').split(';') if t.strip()]
+            return filter_material in tokens or filter_material.lower() in str(d_name).lower()
+        filtered_df = filtered_df[filtered_df['MaterialID'].apply(matches_material_filter)]
 
     # Filter by worker or shift (Smarter & Marker-Insensitive)
     if filter_worker != '전체' or filter_shift != '전체':
