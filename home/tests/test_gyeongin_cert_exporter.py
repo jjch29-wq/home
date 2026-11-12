@@ -106,7 +106,7 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertEqual(ws_mt['S4'].value, '포스코 포항')
             self.assertEqual(ws_mt['B9'].value, 'GY025')
             self.assertEqual(ws_mt['D15'].value, 'NW0453')
-            self.assertEqual(ws_mt['B29'].value, '1ST PINION / SCM420')
+            self.assertEqual(ws_mt['B29'].value, '1ST PINION')
             self.assertEqual(ws_mt['F29'].value, 'V')
             self.assertEqual(ws_mt['H30'].value, 'V')
             self.assertIn('Ø85.2 × 555L', ws_mt['U29'].value)
@@ -117,7 +117,7 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertEqual(wb_ut['UT(을)']['E10'].value, 'NO RECORDABLE INDICATION')
 
             wb_pt = openpyxl.load_workbook(paths['PT'])
-            self.assertEqual(wb_pt['PT(갑)']['A30'].value, 'SHAFT-02 (STS304)')
+            self.assertEqual(wb_pt['PT(갑)']['A30'].value, 'SHAFT-02')
             self.assertEqual(wb_pt['PT(갑)']['R30'].value, 'Ø90×979L / 1EA')
 
             wb_rt = openpyxl.load_workbook(paths['RT'])
@@ -147,8 +147,8 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertEqual(wb.sheetnames, ['MT(갑)', 'MT(갑) (2)'])
             self.assertEqual(wb['MT(갑)']['X3'].value, '2')
             self.assertEqual(wb['MT(갑) (2)']['V3'].value, '2')
-            self.assertEqual(wb['MT(갑) (2)']['B29'].value, 'GEAR-8 / SCM420')
-            self.assertEqual(wb['MT(갑) (2)']['B30'].value, 'GEAR-9 / SCM420')
+            self.assertEqual(wb['MT(갑) (2)']['B29'].value, 'GEAR-8')
+            self.assertEqual(wb['MT(갑) (2)']['B30'].value, 'GEAR-9')
 
     def test_ledger_exporter_creates_and_appends_without_duplicates(self):
         history = {

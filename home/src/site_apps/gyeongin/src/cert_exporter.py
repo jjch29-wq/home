@@ -575,11 +575,17 @@ class CertificateExporter:
             _write_cell(ws, 'D43', app_kor)
             _write_cell(ws, 'K43', app_grade)
 
+            header_mat = _text(batch.get('material'))
             for offset, row in enumerate(chunk):
                 r = 29 + offset
                 ident = row_identifier(row)
                 mat = row_material(row)
-                id_mat = f"{ident} / {mat}" if ident and mat and mat not in ident else (ident or mat)
+                if ident and (not mat or mat == header_mat or mat in ident):
+                    id_mat = ident
+                elif ident and mat:
+                    id_mat = f"{ident} / {mat}"
+                else:
+                    id_mat = ident or mat
                 _write_cell(ws, f'B{r}', id_mat)
                 if is_rejected(row.get('결과', '')):
                     _write_cell(ws, f'F{r}', '')
@@ -635,11 +641,17 @@ class CertificateExporter:
             _write_cell(ws, 'D44', app_kor)
             _write_cell(ws, 'H44', app_grade)
 
+            header_mat = _text(batch.get('material'))
             for offset, row in enumerate(chunk):
                 r = 30 + offset
                 ident = row_identifier(row)
                 mat = row_material(row)
-                id_mat = f"{ident} ({mat})" if ident and mat and mat not in ident else (ident or mat)
+                if ident and (not mat or mat == header_mat or mat in ident):
+                    id_mat = ident
+                elif ident and mat:
+                    id_mat = f"{ident} ({mat})"
+                else:
+                    id_mat = ident or mat
                 _write_cell(ws, f'A{r}', id_mat)
                 if is_rejected(row.get('결과', '')):
                     _write_cell(ws, f'E{r}', '')
