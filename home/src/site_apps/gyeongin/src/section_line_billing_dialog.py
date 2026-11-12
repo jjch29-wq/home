@@ -12,7 +12,7 @@ try:
     from site_apps.gyeongin.src.data_sync import get_history_path
 except ImportError:
     def get_history_path():
-        p = r"F:\내 드라이브\07_Antigravity\PMI_Data\central\daily_work_history.json"
+        p = r"F:\내 드라이브\07_Antigravity\PMI_Data\gyeongin\daily_work_history.json"
         if os.path.exists(p): return p
         return os.path.abspath(os.path.join(os.path.dirname(__file__), "daily_work_history.json"))
 

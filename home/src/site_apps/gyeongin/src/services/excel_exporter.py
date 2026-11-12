@@ -765,9 +765,12 @@ def export_central_daily_work_report_impl(self):
         import tkinter as tk
         from tkinter import messagebox, filedialog
 
-        template_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'resources', 'Template_Central_DailyWorkReport.xlsx')
+        res_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'resources')
+        template_path = os.path.join(res_dir, 'Template_Gyeongin_DailyWorkReport.xlsx')
         if not os.path.exists(template_path):
-            messagebox.showerror("오류", "중앙지사 전용 작업일보 템플릿(Template_Central_DailyWorkReport.xlsx)을 찾을 수 없습니다.")
+            template_path = os.path.join(res_dir, 'Template_Central_DailyWorkReport.xlsx')
+        if not os.path.exists(template_path):
+            messagebox.showerror("오류", "경인사무소 작업일보 템플릿(Template_Gyeongin_DailyWorkReport.xlsx / Template_Central_DailyWorkReport.xlsx)을 찾을 수 없습니다.")
             return
 
         def _clean_str(v, default=''):

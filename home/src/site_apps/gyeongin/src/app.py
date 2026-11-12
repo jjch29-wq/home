@@ -443,7 +443,7 @@ class MaterialManager:
             self.app_dir = os.path.dirname(sys.executable)
             self.bundle_dir = getattr(sys, '_MEIPASS', self.app_dir)
             # For exe, use user's Documents folder for config to ensure write permissions
-            documents_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'MaterialManager', 'central')
+            documents_dir = os.path.join(os.path.expanduser('~'), 'Documents', 'MaterialManager', 'gyeongin')
             if not os.path.exists(documents_dir):
                 os.makedirs(documents_dir, exist_ok=True)
             self.config_path = os.path.join(documents_dir, 'Material_Manager_Config.json')
@@ -6221,7 +6221,7 @@ class MaterialManager:
                     if '관리소' in site or '관리소' in item or 'STATION' in item or 'V/S' in item or 'B/V' in item:
                         loc_type = '플랜트(관리소)'
                     else:
-                        loc_type = '열배관'
+                        loc_type = '경인사무소'
                 
                 values = (
                     idx,

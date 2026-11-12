@@ -55,6 +55,13 @@ class TestGyeonginGasSync(unittest.TestCase):
             verify_res = sync_gas_masters(code_gs_path=gs_copy, index_html_path=html_copy, write=False)
             self.assertEqual(verify_res["status"], "in_sync")
 
+    def test_gyeongin_runtime_paths_do_not_fallback_to_central(self):
+        gyeongin_src = Path(__file__).resolve().parents[1] / "src" / "site_apps" / "gyeongin" / "src"
+        app_text = (gyeongin_src / "app.py").read_text(encoding="utf-8")
+        self.assertNotIn("'Documents', 'MaterialManager', 'central'", app_text)
+        billing_text = (gyeongin_src / "section_line_billing_dialog.py").read_text(encoding="utf-8")
+        self.assertNotIn(r"PMI_Data\central", billing_text)
+
 
 if __name__ == "__main__":
     unittest.main()
