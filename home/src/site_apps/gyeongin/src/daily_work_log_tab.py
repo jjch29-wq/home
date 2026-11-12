@@ -2291,6 +2291,63 @@ class DailyWorkLogTab(ttk.Frame):
         ).pack(side='left', padx=2)
         aux_badge.bind('<Button-1>', lambda _e: open_aux_picker())
 
+        pmi_frame = ttk.Frame(edit_box)
+        pmi_frame.grid(row=4, column=0, columnspan=4, sticky='ew', padx=(4, 10), pady=(6, 3))
+        pmi_status_var = tk.StringVar(value='')
+
+        def import_pmi_file():
+            from site_apps.gyeongin.src.cert_exporter import read_pmi_measurements
+            b = batches[selected_idx[0]]
+            path = filedialog.askopenfilename(
+                title='PMI 장비 측정파일 선택',
+                filetypes=[('Excel/CSV', '*.xlsx *.xls *.csv'), ('All files', '*.*')],
+                parent=top,
+            )
+            if not path:
+                return
+            try:
+                measurements = read_pmi_measurements(path)
+            except Exception as exc:
+                messagebox.showerror('PMI 측정파일', f'파일을 읽지 못했습니다.\n{exc}', parent=top)
+                return
+            if not measurements:
+                messagebox.showwarning(
+                    'PMI 측정파일',
+                    '원소 함량 열(Ni, Cr, Mo 등)을 찾지 못했습니다.\n장비에서 내보낸 원본 엑셀/CSV인지 확인하세요.',
+                    parent=top,
+                )
+                return
+            b['pmi_measurements'] = measurements
+            b['pmi_source'] = os.path.basename(path)
+            refresh_pmi_status()
+
+        def clear_pmi_file():
+            b = batches[selected_idx[0]]
+            b.pop('pmi_measurements', None)
+            b.pop('pmi_source', None)
+            refresh_pmi_status()
+
+        pmi_btn = ttk.Button(pmi_frame, text='📊 PMI 측정파일 불러오기', command=import_pmi_file)
+        pmi_btn.pack(side='left')
+        pmi_clear_btn = ttk.Button(pmi_frame, text='해제', width=5, command=clear_pmi_file)
+        pmi_clear_btn.pack(side='left', padx=(4, 8))
+        ttk.Label(pmi_frame, textvariable=pmi_status_var, foreground='#1d4ed8').pack(side='left')
+
+        def refresh_pmi_status():
+            b = batches[selected_idx[0]]
+            is_pmi = str(b.get('method', '')).upper() == 'PMI'
+            state = 'normal' if is_pmi else 'disabled'
+            pmi_btn.configure(state=state)
+            pmi_clear_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
+            if not is_pmi:
+                pmi_status_var.set('')
+            elif b.get('pmi_measurements'):
+                from site_apps.gyeongin.src.cert_exporter import choose_pmi_element_columns
+                cols = ', '.join(choose_pmi_element_columns(b['pmi_measurements']))
+                pmi_status_var.set(f"{b.get('pmi_source', '')}: {len(b['pmi_measurements'])}건 / 원소 {cols}")
+            else:
+                pmi_status_var.set('장비 측정파일을 불러오면 (을)지 성분값이 자동 기입됩니다.')
+
         edit_box.columnconfigure(1, weight=1)
         edit_box.columnconfigure(3, weight=1)
 
@@ -2312,6 +2369,7 @@ class DailyWorkLogTab(ttk.Frame):
             if hasattr(equip_combo, '_refresh_multi_badge'):
                 equip_combo._refresh_multi_badge()
             refresh_aux_badge()
+            refresh_pmi_status()
 
         def save_form():
             b = batches[selected_idx[0]]

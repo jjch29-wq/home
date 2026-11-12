@@ -739,6 +739,46 @@ class GyeonginCertExporterTests(unittest.TestCase):
             root.destroy()
 
 
+    def test_pmi_measurement_file_fills_element_columns(self):
+        from site_apps.gyeongin.src.cert_exporter import read_pmi_measurements
+
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'vanta_export.xlsx'
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.append(['Instrument', 'Vanta VCR'])
+            ws.append([])
+            ws.append(['Reading No', 'Sample Name', 'Alloy 1', 'Description',
+                       'Cr', 'Cr +/-', 'Ni', 'Ni +/-', 'Mo', 'Mn', 'Cu', 'Fe', 'Ti'])
+            ws.append(['1', 'LINE-01', 'SS316', 'ELBOW', '17.12', '0.1', '10.05', '0.1', '2.11', '1.40', '0.30', '68.5', '<LOD'])
+            ws.append(['2', 'LINE-02', 'SS304', 'PIPE', '18.30', '0.1', '8.10', '0.1', '<LOD', '1.62', '0.25', '71.0', '0.02'])
+            wb.save(src)
+
+            measurements = read_pmi_measurements(src)
+            self.assertEqual(len(measurements), 2)
+            self.assertEqual(measurements[0]['tag'], 'LINE-01')
+            self.assertEqual(measurements[0]['alloy'], 'SS316')
+            self.assertEqual(measurements[0]['component'], 'ELBOW')
+            self.assertEqual(measurements[0]['elements']['Cr'], '17.12')
+            self.assertEqual(measurements[1]['elements']['Mo'], 'ND')
+
+            batch = build_cert_batches(
+                [{'업체': '현대건설', '검사방법': 'PMI', '검사품명': 'Structure', '수량': '2'}],
+                target_date='2026-11-12',
+            )[0]
+            batch['pmi_measurements'] = measurements
+            out = CertificateExporter().export_certificate(batch, Path(tmp) / 'pmi.xlsx')
+            eul = openpyxl.load_workbook(out)['PMI(을)']
+            self.assertEqual([eul[f'{c}17'].value for c in 'HIJKLM'], ['Ni', 'Cr', 'Mo', 'Mn', 'Cu', 'Ti'])
+            self.assertEqual(eul['A20'].value, 'LINE-01')
+            self.assertEqual(eul['E20'].value, 'ELBOW')
+            self.assertEqual(eul['H20'].value, '10.05')
+            self.assertEqual(eul['I20'].value, '17.12')
+            self.assertEqual(eul['N20'].value, 'SS316')
+            self.assertEqual(eul['J21'].value, 'ND')
+            self.assertEqual(eul['N21'].value, 'SS304')
+
+
 if __name__ == '__main__':
     unittest.main()
 

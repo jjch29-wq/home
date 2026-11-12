@@ -981,7 +981,10 @@ class CertificateExporter:
     def _populate_pmi(self, wb, batch: dict) -> None:
         ws_gap = wb['PMI(갑)']
         base_eul = wb['PMI(을)']
-        chunks = self._chunk_rows(batch.get('rows', []), 15)
+        measurements = list(batch.get('pmi_measurements') or [])
+        element_cols = choose_pmi_element_columns(measurements) if measurements else []
+        source_rows = measurements if measurements else batch.get('rows', [])
+        chunks = self._chunk_rows(source_rows, 15)
         total_pages = 1 + len(chunks)
         d = parse_date_value(batch.get('date', ''))
         insp_kor, insp_eng, _, _ = self._inspector_meta(batch.get('inspector', ''))
@@ -1012,9 +1015,26 @@ class CertificateExporter:
             _write_cell(ws_eul, 'E19', d)
             _write_cell(ws_eul, 'O19', clean_worker_name(batch.get('inspector', '')) or '주진철')
             _write_cell(ws_eul, 'P19', d)
+            for slot, sym in zip(_PMI_ELEMENT_SLOTS, element_cols):
+                _write_cell(ws_eul, f'{slot}17', sym)
 
             for idx, row in enumerate(chunk):
                 r = 20 + idx
+                if measurements:
+                    seq = page_offset * 15 + idx + 1
+                    tag = row.get('tag') or batch.get('item_name', '')
+                    comp_part = row.get('component') or f"Point-{seq}"
+                    judged_mat = row.get('alloy') or 'MATCH'
+                    _write_cell(ws_eul, f'A{r}', tag)
+                    _write_cell(ws_eul, f'E{r}', comp_part)
+                    _write_cell(ws_eul, f'G{r}', str(seq))
+                    elems = row.get('elements') or {}
+                    for slot, sym in zip(_PMI_ELEMENT_SLOTS, element_cols):
+                        _write_cell(ws_eul, f'{slot}{r}', elems.get(sym, '') or '-')
+                    _write_cell(ws_eul, f'N{r}', judged_mat)
+                    _write_cell(ws_eul, f'O{r}', clean_worker_name(batch.get('inspector', '')) or '주진철')
+                    _write_cell(ws_eul, f'P{r}', d)
+                    continue
                 tag = _text(row.get('태그번호')) or _text(row.get('식별번호')) or batch.get('item_name', '')
                 comp_part = _text(row.get('구성부품')) or _text(row.get('검사품명')) or f"Point-{idx + 1}"
                 judged_mat = _text(row.get('판정재질')) or _text(row.get('재질')) or _text(row.get('결과')) or 'MATCH'
@@ -1029,6 +1049,134 @@ class CertificateExporter:
             blank_row = 20 + len(chunk)
             if blank_row <= 36:
                 _write_cell(ws_eul, f'H{blank_row}', '~ B  L  A  N  K ~')
+
+
+PMI_ELEMENT_SYMBOLS = (
+    'Ni', 'Cr', 'Mo', 'Mn', 'Cu', 'Ti', 'Nb', 'V', 'W', 'Co', 'Fe', 'Si', 'Al',
+    'Zr', 'Ta', 'Hf', 'Re', 'Sn', 'Zn', 'Pb', 'Bi', 'Sb', 'Ag', 'Au', 'Pd', 'Pt',
+    'Mg', 'S', 'P', 'Se', 'As', 'Cd', 'Ga', 'Ge', 'B', 'C', 'N',
+)
+_PMI_FIXED_ELEMENTS = ('Ni', 'Cr', 'Mo')
+_PMI_ELEMENT_SLOTS = ('H', 'I', 'J', 'K', 'L', 'M')
+_PMI_TAG_KEYS = ('tag', 'sample', 'name', 'reading', '태그', '시료', '식별', '번호', 'id')
+_PMI_ALLOY_KEYS = ('alloy', 'grade', 'match', 'material', '합금', '재질', '판정')
+_PMI_COMPONENT_KEYS = ('component', 'description', 'part', 'location', 'note', '부품', '품명', '위치', '비고')
+
+
+def _pmi_element_of(header) -> str:
+    """'Ni', 'Ni %', 'Ni(%)', 'Ni Concentration' 같은 열 이름에서 원소 기호를 돌려줍니다. 오차 열은 제외."""
+    text = _text(header)
+    if not text:
+        return ''
+    low = text.lower()
+    if any(tok in low for tok in ('+/-', '±', 'err', 'sigma', '2σ', 'σ', 'lod', 'unc')):
+        return ''
+    m = re.match(r'^([A-Z][a-z]?)(?:\s*(?:%|\(%\)|\[%\]|wt%?|concentration|conc\.?))?$', text.strip())
+    if m and m.group(1) in PMI_ELEMENT_SYMBOLS:
+        return m.group(1)
+    return ''
+
+
+def _pmi_value_text(value) -> str:
+    text = _text(value)
+    if not text or text.lower() in ('nan', 'none'):
+        return ''
+    if text.startswith('<') or 'lod' in text.lower() or text.upper() in ('ND', 'N.D', 'N/D'):
+        return 'ND'
+    try:
+        num = float(text.replace('%', '').replace(',', ''))
+    except ValueError:
+        return text
+    return f"{num:.2f}"
+
+
+def read_pmi_measurements(path: str | Path) -> list[dict]:
+    """PMI 장비가 내보낸 엑셀/CSV에서 측정 건별 태그·부품·판정합금·원소 함량을 읽습니다.
+
+    머리글 행은 원소 기호 열이 3개 이상인 첫 행으로 자동 감지합니다(Vanta/Niton/XL2 등 공통).
+    """
+    import pandas as pd
+
+    src = Path(path)
+    suffix = src.suffix.lower()
+    if suffix == '.csv':
+        raw = None
+        for enc in ('utf-8-sig', 'cp949', 'latin-1'):
+            try:
+                raw = pd.read_csv(src, header=None, dtype=str, encoding=enc)
+                break
+            except UnicodeDecodeError:
+                continue
+        sheets = [raw] if raw is not None else []
+    else:
+        sheets = list(pd.read_excel(src, header=None, dtype=str, sheet_name=None).values())
+
+    for raw in sheets:
+        if raw is None or raw.empty:
+            continue
+        header_idx = None
+        for idx in range(min(len(raw), 40)):
+            if sum(1 for v in raw.iloc[idx].tolist() if _pmi_element_of(v)) >= 3:
+                header_idx = idx
+                break
+        if header_idx is None:
+            continue
+
+        headers = [_text(v) for v in raw.iloc[header_idx].tolist()]
+        element_cols: dict[str, int] = {}
+        for col, head in enumerate(headers):
+            sym = _pmi_element_of(head)
+            if sym and sym not in element_cols:
+                element_cols[sym] = col
+
+        def find_col(keys) -> int | None:
+            for key in keys:
+                for col, head in enumerate(headers):
+                    low = head.lower()
+                    if col in element_cols.values() or not low:
+                        continue
+                    if key in low:
+                        return col
+            return None
+
+        tag_col = find_col(_PMI_TAG_KEYS)
+        alloy_col = find_col(_PMI_ALLOY_KEYS)
+        comp_col = find_col(_PMI_COMPONENT_KEYS)
+
+        results: list[dict] = []
+        for idx in range(header_idx + 1, len(raw)):
+            values = raw.iloc[idx].tolist()
+            elements = {
+                sym: _pmi_value_text(values[col]) for sym, col in element_cols.items() if col < len(values)
+            }
+            if not any(v and v != 'ND' for v in elements.values()):
+                continue
+            cell = lambda c: _text(values[c]) if c is not None and c < len(values) else ''
+            results.append({
+                'tag': '' if cell(tag_col).lower() == 'nan' else cell(tag_col),
+                'component': '' if cell(comp_col).lower() == 'nan' else cell(comp_col),
+                'alloy': '' if cell(alloy_col).lower() == 'nan' else cell(alloy_col),
+                'elements': elements,
+            })
+        if results:
+            return results
+    return []
+
+
+def choose_pmi_element_columns(measurements: list[dict]) -> list[str]:
+    """성적서 H~M 6칸에 넣을 원소: Ni/Cr/Mo 고정 + 나머지는 평균 함량 높은 순(Fe 제외)."""
+    totals: dict[str, float] = {}
+    for m in measurements or []:
+        for sym, val in (m.get('elements') or {}).items():
+            try:
+                totals[sym] = totals.get(sym, 0.0) + float(val)
+            except (TypeError, ValueError):
+                continue
+    extra = [
+        sym for sym, _ in sorted(totals.items(), key=lambda kv: -kv[1])
+        if sym not in _PMI_FIXED_ELEMENTS and sym != 'Fe' and totals[sym] > 0
+    ]
+    return list(_PMI_FIXED_ELEMENTS) + extra[: len(_PMI_ELEMENT_SLOTS) - len(_PMI_FIXED_ELEMENTS)]
 
 
 def collect_ledger_records_from_history(
