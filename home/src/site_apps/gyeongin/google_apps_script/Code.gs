@@ -6,45 +6,121 @@
 
 // 1. 기본 설정 및 마스터 데이터
 var APP_CONFIG = {
+  // @SYNC:BEGIN APP_CONFIG_CORE
   companies: [
     "경인사무소",
-    "D&K켐텍", "K&M", "SG엔지니어링", "SK에코플랜트",
-    "경성기공", "글로벌 크레인", "나라삼양감속기", "대성기계", "대성테크놀로지",
-    "대화유공업", "대화콘베어체인", "도원이앤씨", "동남ENG", "동아기업DAC",
-    "동해펌프", "디에이치건설산업(주)", "롯데건설", "리니트코리아", "모나스펌프",
-    "부강풀리", "삼남엔지니어링(주)", "삼성파워텍", "삼승종합건설", "삼화테크",
-    "서울발전본부", "서진인스텍", "성헌", "세진공조기계", "수성웹툰(주)",
-    "스페이스 체인지", "신성플랜트", "아이조음", "아이피에스", "양영",
-    "에버랜드", "에스엠테크", "에이스냉동공조", "영흥발전", "올스톤산업",
-    "위드엔지니어링", "유성씨앤에프", "의성기어", "이노텍코리아", "자인건축",
-    "전진이앤씨", "제이에스티", "제일푸리", "청원기연", "캐논코리아",
-    "캐리비안베이", "케이엔엠", "코아베큠", "코오롱글로벌", "태성기전",
-    "태창기계공업", "포스코이앤씨", "포스코인터내셔널", "피테크", "한국산업인력공단",
-    "한양스틸", "함감속기제작소", "현대건설", "현대산업", "현성펌프",
+    "D&K켐텍",
+    "K&M",
+    "SG엔지니어링",
+    "SK에코플랜트",
+    "경성기공",
+    "글로벌 크레인",
+    "나라삼양감속기",
+    "대성기계",
+    "대성테크놀로지",
+    "대화유공업",
+    "대화콘베어체인",
+    "도원이앤씨",
+    "동남ENG",
+    "동아기업DAC",
+    "동해펌프",
+    "디에이치건설산업(주)",
+    "롯데건설",
+    "리니트코리아",
+    "모나스펌프",
+    "부강풀리",
+    "삼남엔지니어링(주)",
+    "삼성파워텍",
+    "삼승종합건설",
+    "삼화테크",
+    "서울발전본부",
+    "서진인스텍",
+    "성헌",
+    "세진공조기계",
+    "수성웹툰(주)",
+    "스페이스 체인지",
+    "신성플랜트",
+    "아이조음",
+    "아이피에스",
+    "양영",
+    "에버랜드",
+    "에스엠테크",
+    "에이스냉동공조",
+    "영흥발전",
+    "올스톤산업",
+    "위드엔지니어링",
+    "유성씨앤에프",
+    "의성기어",
+    "이노텍코리아",
+    "자인건축",
+    "전진이앤씨",
+    "제이에스티",
+    "제일푸리",
+    "청원기연",
+    "캐논코리아",
+    "캐리비안베이",
+    "케이엔엠",
+    "코아베큠",
+    "코오롱글로벌",
+    "태성기전",
+    "태창기계공업",
+    "포스코이앤씨",
+    "포스코인터내셔널",
+    "피테크",
+    "한국산업인력공단",
+    "한양스틸",
+    "함감속기제작소",
+    "현대건설",
+    "현대산업",
+    "현성펌프",
     "현진산업"
   ],
   users: [
-    "이사 곽재운", "이사 박홍규",
-    "부장 주진철", "부장 박광복", "부장 이병국", "부장 이용주", "부장 주동기", "부장 김규년", "부장 곽상돈", "부장 정효철", "부장 노현태",
-    "차장 김춘호", "차장 권인경", "차장 박원준",
-    "과장 주영광", "과장 유상훈",
-    "대리 김상현", "대리 윤석현", "대리 우명광", "대리 박만영",
-    "계장 박상태", "계장 이준우", "계장 장승대", "계장 이은수", "계장 손주언", "계장 이경재", "계장 박재욱", "계장 한지원",
-    "주임 김진환", "주임 황조현", "주임 김태현"
+    "이사 곽재운",
+    "이사 박홍규",
+    "부장 주진철",
+    "부장 박광복",
+    "부장 이병국",
+    "부장 이용주",
+    "부장 주동기",
+    "부장 김규년",
+    "부장 곽상돈",
+    "부장 정효철",
+    "부장 노현태",
+    "차장 김춘호",
+    "차장 권인경",
+    "차장 박원준",
+    "과장 주영광",
+    "과장 유상훈",
+    "대리 김상현",
+    "대리 윤석현",
+    "대리 우명광",
+    "대리 박만영",
+    "계장 박상태",
+    "계장 이준우",
+    "계장 장승대",
+    "계장 이은수",
+    "계장 손주언",
+    "계장 이경재",
+    "계장 박재욱",
+    "계장 한지원",
+    "주임 김진환",
+    "주임 황조현",
+    "주임 김태현"
   ],
   vehicles: [
-    "84저1259 (스타렉스)",
-    "95가0200 (스타렉스)",
-    "91주8839 (스타렉스)",
-    "90서8616 (스타렉스)",
-    "76마3422 (스타렉스 12인승)",
     "71고4405 (스타렉스 12인승)",
-    "89보4028 (탑차)",
+    "76마3422 (스타렉스 12인승)",
+    "81도5958 (스타렉스)",
     "81두1580 (탑차)",
     "81루5100 (스타렉스)",
-    "95가0175 (스타렉스)",
-    "81도5958 (스타렉스)",
+    "84저1259 (스타렉스)",
+    "89보4028 (탑차)",
     "90너4889 (탑차)",
+    "90서8616 (스타렉스)",
+    "91주8839 (스타렉스)",
+    "95가0175 (스타렉스)",
+    "95가0200 (스타렉스)",
     "자가용/대중교통"
   ],
   equipments: [
@@ -98,12 +174,12 @@ var APP_CONFIG = {
     "AC POWER SUPPLY DA-PB(NW0582)",
     "AC POWER SUPPLY DA-PB(NW0230)",
     "PT 약품",
+    "해당없음",
     "합금분석기(X-ray) XL2 100G(200983)",
     "합금분석기(RI) XLi818(24673)",
     "경도계 MIC10(1-2129)",
     "페이라트함량측정기 FMP30(160002524)",
-    "내시경장비 ER400(E30969R)",
-    "해당없음"
+    "내시경장비 ER400(E30969R)"
   ],
   aux_equipments: [
     "PAUT SCANNER (MANUAL)",
@@ -487,7 +563,11 @@ var APP_CONFIG = {
     "없음"
   ],
   method_defaults: {
-    "PMI": {"equip_main": "\ud569\uae08\ubd84\uc11d\uae30(X-ray) XL2 100G(200983)", "aux_equipments": [], "default_aux": ""},
+    "PMI": {
+      "equip_main": "합금분석기(X-ray) XL2 100G(200983)",
+      "aux_equipments": [],
+      "default_aux": ""
+    },
     "RT": {
       "equip_main": "Se-75(880D D10692)",
       "aux_equipments": [
@@ -930,6 +1010,7 @@ var APP_CONFIG = {
       "unit": "M"
     }
   },
+  // @SYNC:END APP_CONFIG_CORE
   pipe_sizes: [
     "15A", "20A", "25A", "32A", "40A", "50A", "65A", "80A", "90A", "100A",
     "125A", "150A", "200A", "250A", "300A", "350A", "400A", "450A", "500A",
@@ -939,14 +1020,27 @@ var APP_CONFIG = {
   units: ["매", "M", "P,M,I/D", "EA", "Point", "SET", "CAN", "KG", "Inch", "Dia", "I/D", "Meter", "일"],
   test_items: ["Piping", "Tank", "Vessel", "Plate", "Beam", "Structure", "Pipe", "사무실 내근 및 장비점검", "우천 대기", "안전교육", "휴무", "기타"],
   applied_codes: ["KS", "ASME", "AWS", "API", "KEPIC", "기타"],
+  // @SYNC:BEGIN APP_CONFIG_MATERIALS
   materials: [
-    'Carestream AA400-3⅓*12"', 'Carestream AA400-3⅓*17"', 'Carestream AA400-4½*12"',
-    'Carestream AA400-10*12"', 'Carestream M100-3⅓*12"', 'Carestream M100-10*12"',
-    'Carestream M100-14*17"', 'Carestream MX125-3⅓*6"', 'Carestream MX125-3⅓*12"',
-    'Carestream MX125-4½*12"', 'Carestream MX125-10*12"', 'Carestream MX125-14*17"',
-    'Carestream T200-3⅓*12"', 'Carestream T200-3⅓*17"', 'Carestream T200-4½*12"',
-    'Carestream T200-10*12"', 'Carestream T200-14*17"'
+    "Carestream AA400-3⅓*12\"",
+    "Carestream AA400-3⅓*17\"",
+    "Carestream AA400-4½*12\"",
+    "Carestream AA400-10*12\"",
+    "Carestream M100-3⅓*12\"",
+    "Carestream M100-10*12\"",
+    "Carestream M100-14*17\"",
+    "Carestream MX125-3⅓*6\"",
+    "Carestream MX125-3⅓*12\"",
+    "Carestream MX125-4½*12\"",
+    "Carestream MX125-10*12\"",
+    "Carestream MX125-14*17\"",
+    "Carestream T200-3⅓*12\"",
+    "Carestream T200-3⅓*17\"",
+    "Carestream T200-4½*12\"",
+    "Carestream T200-10*12\"",
+    "Carestream T200-14*17\""
   ],
+  // @SYNC:END APP_CONFIG_MATERIALS
   worktimes: [
     "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00",
     "09:00~22:00", "09:00~23:00", "09:00~24:00", "09:00~익일01:00",
@@ -1219,7 +1313,9 @@ function syncCompanies(req) {
 /**
  * 설정 데이터 획득 (google.script.run 및 API 공용)
  */
+// @SYNC:BEGIN COMPANY_NDT_PRESETS
 var COMPANY_NDT_PRESETS = {"D&K켐텍": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["Resin 순환 및 발포라인"], "default_code": "KS B 0816 / SIS H 401"}}, "SG엔지니어링": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["0.49톤 겐트리트레인 비파괴검사"], "default_code": ""}}, "경성기공": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["UNIVERSAL JOINT", "SHAFT", "SPINDLE", "YOKE ASS'Y", "FM SPINDLE"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BEARING KIT ASS'Y", "FLANGE", "SHAFT", "SPINDLE"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "글로벌 크레인": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["빔행정, H빔 용접"], "default_code": ""}}, "나라삼양감속기": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT, GEAR", "SHAFT, GEAR , PINION", "SHAFT, GEAR , CARRIER", "PINION 외", "SHAFT 외", "OUTPUT SHAFT", "INPUT BEVEL PINION", "PINION,GEAR,SHAFT", "PINION", "MAIN GEAR", "GEAR", "DRIVE GEAR"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["PINION, GEAR, SHAFT", "PINION SHAFT, BEVEL GEAR"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "대성기계": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["W1190 FLIGHT DETAIL", "W1520 FLIGHT DETAIL"], "default_code": "ASME Sec.V Art.7 / SIS H 341 (Rev.13)"}}, "대성테크놀로지": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SAMPLING SYSTEM PIPING", "CHEMICAL DOSEING SYSTEM PIPING", "LIFTING LUG + PAD + RIB"], "default_code": "ASME Sec.V&Ⅷ Div.1(2023Ed) / SIS H 441"}}, "대화유공업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["君津 熱延 Ｆ２－３用上ＳＴＧリトラクトＣＹＬ（クロス追従上・出）"], "default_code": ""}}, "대화콘베어체인": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "판재/시험편"], "items": ["HEAD SPROCKET", "C-PIN", "LONG PIN", "PIN LINK PLATE (A)", "PIN LINK PLATE (B)", "BUSH LINK PLATE"], "default_code": "KS0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["HEAD SPROCKET SHAFT"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "도원이앤씨": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "판재/시험편"], "items": ["강구조물 용접부", "용접사 기량테스트 / PLATE"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "동아기업DAC": {"PT": {"target_type": "배관", "target_types": ["배관"], "items": ["SPOOL"], "default_code": "KS B 0816 / SIS H 401 (2급, 2군)"}}, "동해펌프": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SWD-H80-CMKSS-AT-R", "SWE-H125 DCMKSS-TT-R", "SWA-H50 CMKSS-TT-R", "SWA-H40S CMKSS-TT-R", "CHEMICAL DOSEING SYSTEM PIPING", "SAMPLING SYSTEM PIPING", "SWC-H100-CMKSS-AT-R-S14", "LIFTING LUG + PAD + RIB"], "default_code": "ASME Sec.V&Ⅷ Div.1(2021Ed) / SIS H 441"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SWE-H125-DCMKSS-TT-R", "SWA-H50-CMKSS-TT-R", "SWA-H40S-CMKSS-TT-R", "SWD-H80-CMKSS-AT-R", "SWC-H100-CMKSS-AT-R-S14"], "default_code": "ASTM A-388 / SIS H 247 Rev.2"}}, "디에이치건설산업(주)": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["오정대교 현장 샤클 (40톤)"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "롯데건설": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편", "기계부품"], "items": ["용접사 기량테스트", "용접사 기량테스트 / PLATE", "M-BED"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}, "PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["STACK SHELL"], "default_code": "KS B 0816 / SIS H 401(2급,2군) Rev.2"}}, "리니트코리아": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["체인블럭용 러그"], "default_code": "KS B 0816 / SIS H 401 (2급, 2군)"}}, "모나스펌프": {"PMI": {"target_type": "PMI", "target_types": ["PMI"], "items": ["PUMP CASING", "SHAFT", "IMPELLER", "FLANGE", "VALVE"], "default_code": ""}, "PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CAUSTIC SODA DOSING PUMP (236-J-05A/B)", "ACID GUMS PUMP (236-J-09A/B)", "GUM TRNASFER PUMP (237-J-13A/B)", "LIME DOSING PUMP A/B (00GBN05AP001 / 00GBN06AP001)", "CLARIFIER SLUDGE TRANSFER PUMP A/B (00GNK36AP001 /", "SETTLED SLUDGE TRANSFER PUMP A/B (00GNK55AP001 / 0", "TK-484-13A/B"], "default_code": "A000-ROT-VP235-J108-COMMON"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CAUSTIC SODA DOSING PUMP (236-J-05A/B)", "ACID GUMS PUMP ( 236-J-09 A/B )", "GUM TRANSFER PUMP ( 237-J-13 A/B )", "SLUDGE FEED PUMP ( P-305841 B )", "SLUDGE FEED PUMP ( P-305841 A/B )", "C-POLYMER INJECTION PUMP ( P-305843 A/B )", "LIME DOSING PUMP A/B (00GBN05AP001 / 00GBN06AP001)", "CLARIFIER SLUDGE TRANSFER PUMP A/B (00GNK36AP001 /", "SETTLED SLUDGE TRANSFER PUMP A/B (00GNK55AP001 / 0"], "default_code": "A000-ROT-VP235-J108-COMMON"}}, "부강풀리": {"UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "삼남엔지니어링(주)": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["M-BED"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "삼성파워텍": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["외함 이동 받침대"], "default_code": ""}}, "삼승종합건설": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["미래에셋 및 NcSoft 수혈관로 설치공사"], "default_code": ""}}, "삼화테크": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BELLOWS HOSE"], "default_code": ""}}, "서울발전본부": {"MT": {"target_type": "배관", "target_types": ["배관"], "items": ["PIPE(20A, 80A)"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "배관", "target_types": ["배관"], "items": ["PIPE(80A)"], "default_code": "KS B 0896 / SIS H 201 Rev.3"}}, "서진인스텍": {"PMI": {"target_type": "PMI", "target_types": ["PMI"], "items": ["LEVEL GAUGE", "FLANGE", "VALVE"], "default_code": ""}}, "성헌": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CROSS BEARING", "추진축 조립체", "UNIVERSAL JOINT"], "default_code": "KDS 0050-0021 / SIS H 301(2급,2군)"}}, "세진공조기계": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["임펠라(IMPELLER)"], "default_code": "KS B 0816 / SIS H 401 (2급2군)"}}, "수성웹툰(주)": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BATTERY FORK LIFT(3단 MAST) 1.3TON", "BATTERY BABY CRANE 1.0TON CAPA", "전동 포크리프트 수성샐바시온 SWR-1300L"], "default_code": "KS D 0213/SIS H 301(2급,2군)"}}, "스페이스 체인지": {"MT": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["상부 슬라브 접합 외 5개"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "신성플랜트": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["Spray Tower Top Cone"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "아이조음": {"MT": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["보강대"], "default_code": "KS D 0213 / SIS H 301"}}, "아이피에스": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CV Seat", "MSV, CV Stem"], "default_code": "KS B 0816 / SIS H 401 (2급, 2군)"}}, "양영": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편", "기계부품"], "items": ["용접사 기량테스트 (Plate,Fillet)", "구조물 용접부"], "default_code": "KS D 0213 /SIS H 301 (2급,2군)"}}, "에버랜드": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["롤링X트레인 / C23 레일 파이프 외", "캐치카 / Pusher Dog 외", "페스티벌 트레인 / 차륜 SHAFT", "매직스윙 / 안전레바 PIN", "롤링 X 트레인 / X 텐션바 철판 용접부", "플래쉬팡팡 / 승용물브라켓 외", "피터팬 / 안전랩바 고정핀 외", "롤링 X 트레인 / 레일 용접부", "챔피언쉽로데오 / 안전레버 라쳇 bar 외", "렛츠 트위스트"], "default_code": "ISO 23278_2015_EN level 1 / SIS H 363"}, "PT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["비룡열차 / 전륜Frame 외", "피터팬 / 안전렙바 용접부", "롤링X트레인(청차) / 가이드 휠 외"], "default_code": "KS B 0816 / SIS H 401 (2급2군)"}, "TG": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["롤링 X 트레인 / X 텐션바 철판 두께측정"], "default_code": ""}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["페스티벌 트레인 / 차륜 SHAFT", "매직스윙 / 주행축 외", "콜럼버스 대탐험 / 헤드바 킹핀", "자동차 왕국 / 휠 샤프트 외", "롤링X트레인(홍차) / 휠캐리어 스핀들 외", "더블 락스핀 / 굴절암 샤프트", "플래쉬팡팡 / 실린더로드", "피터팬 / 안전랩바 고정핀 외", "롤링X트레인 / 지주대 베이스볼트", "챔피언쉽 로데오 / 휠 디스크 연결핀 외"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "에스엠테크": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["VACUUM SYSTEM EXCHANG / WHEEL"], "default_code": "KS D 0213 /포스코 검사기준서 공통 02 / SIS H 301 ("}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["VACUUM SYSTEM EXCHANG / WHEEL", "VACUUM SYSTEM EXCHANG / SHAFT", "Sprocket / Shaft"], "default_code": "KS D 0248 / 포스코 공통 기준서 / 02 SIS H 203 (2"}}, "에이스냉동공조": {"TG": {"target_type": "배관", "target_types": ["배관"], "items": ["MDI IN & OUT 배관"], "default_code": ""}}, "올스톤산업": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편"], "items": ["GFRC 제작공장(지유글로벌) 용접사 기량테스트"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "위드엔지니어링": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["각형강관, 원형강관"], "default_code": ""}}, "유성씨앤에프": {"TG": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["내압 두께측정"], "default_code": "KS B 0536"}}, "의성기어": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["REOUCER(R04) / SPIRAL BEVEL GEAR SPEC"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["REOUCER(R04) / SPIRAL BEVEL GEAR SPEC"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.3"}}, "이노텍코리아": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["다이크 작업대차"], "default_code": "KS D 0213 / SIS H 301"}}, "자인건축": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["UNIVERSAL JOINT", "H-Beam 용접부"], "default_code": "KS D 0213 /SIS H 301 (2급,2군)"}}, "전진이앤씨": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["S"], "default_code": ""}}, "제이에스티": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["WORM SHAFT", "GEAR, PINION, SHAFT"], "default_code": "KS D 0213 / SIS H 301(2급,2군)"}}, "제일푸리": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "ASME Sec.V / SIS H 441"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT", "RC FAN SHAFT"], "default_code": "ASME Sec.Ⅴ (SA-388) / SIS H 247 (2)"}}, "청원기연": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["하부구조물 (가이드레일)", "Buket LUG", "인력케이지 LUG"], "default_code": "KS D 0213/SIS H 301(2급,2군)"}}, "캐논코리아": {"MT": {"target_type": "배관", "target_types": ["배관"], "items": ["Resin 순환 및 발포라인"], "default_code": ""}}, "캐리비안베이": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["캐리비언 사업장 內 유기시설 및 공연시설 NDT 검사"], "default_code": ""}}, "코아베큠": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BUBBLER CANISTER"], "default_code": ""}}, "코오롱글로벌": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["강서IC Ramp-C교 A1 / PHC 말뚝", "오정대교 현장 MT-01호 설치러그", "오정대교 현장 MT-02호 설치러그"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["오정대교 수원방향", "오정대교 문산방향"], "default_code": "KS B 0896 (L검출레벨. 2류) / SIS H 201 Rev.3"}}, "태성기전": {"UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "태창기계공업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["Back Up Roll / M43131914(02)", "CPL Cassette 부품(Top Cassette 인양용 러그)/ M43161914(03"], "default_code": "KS D 0213 / SIS H 301"}}, "포스코이앤씨": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편"], "items": ["용접사 기량시험"], "default_code": ""}}, "포스코인터내셔널": {"MT": {"target_type": "배관", "target_types": ["배관"], "items": ["#70 HRSG DRAIN LINE"], "default_code": "KS D 0213 / SIS H 301 (2급, 2군)"}, "TG": {"target_type": "구조물/설비", "target_types": ["구조물/설비", "배관"], "items": ["IP LOWER RISER PIPE", "LP LOWER RISER PIPE", "IP EVA LOWER TUBE", "IP EVA UPPER TUBE", "LP EVA LOWER TUBE", "LP EVA UPPER TUBE", "#70 HRSG IP EVA LOWER #3 HEADER TUBE", "#70 HRSG IP EVA LOWER #2 HEADER TUBE", "#70 HRSG IP EVA LOWER #1 HEADER TUBE", "#70 HRSG IP EVA LOWER #2 RISER MANIFOLD", "#70 HRSG IP EVA LOWER #3 RISER MANIFOLD", "#70 HRSG IP EVA LOWER #1 RISER MANIFOLD"], "default_code": ""}}, "피테크": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["LIFTING LUG"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "한양스틸": {"UT": {"target_type": "배관", "target_types": ["배관"], "items": ["FORGED STEEL"], "default_code": "SEP 1921 Group3 Class D/d / SIS H 265 Re"}}, "함감속기제작소": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["EXCITER 406 / 408", "PT 400HP x 1150RPM x 1/24.75 C=920", "EXCITER 406/408", "KTS 290HP x 470RPM x 1/2.909", "KTS 280HP × 2100RPM × 1/3.667", "EXCITER 306/308", "KPSI 1150HP × 4000RPM × 1/2.4 , 1/1/4.8", "KTD 290HP x 1454RPM x 1/8.992", "KTD 280HP × 2100RPM × 1/5.134", "KTT 112HP × 2262RPM × 1/7.334", "BS 80HP × 1420RPM × 1/4.09", "KTS 230HP × 2100RPM × 1/3.667"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["EXCITER 406/408", "EXCITER 406 /408", "BS 80HP x 1420RPM x 1/4.09", "EXCITER 206/208", "KPSI 1150HP x 4000RPM x 1/2.4, 1/4.8", "EXCITER 306/308", "KTS 280HP x 2100RPM x 1/3.667", "KTD 280HP x 2100RPM x 1/5.134", "KTT 112HP X 2262RPM X 1/7.334", "KTD 280HP X 2100RPM X 1/5.134", "EXCITER 306 /308", "KTS 280HP × 2100RPM × 1/3.667"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "현대건설": {"MT": {"target_type": "구조물/설비", "target_types": ["구조물/설비", "기계부품"], "items": ["탄천동로 Top Down 중앙말뚝 이음 용접검사", "누드E/V철골 용접", "추진기지#1 추진관 용접부 검사"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}, "PMI": {"target_type": "PMI", "target_types": ["PMI"], "items": ["Girder", "Tie-bar", "Beam", "철골"], "default_code": ""}, "UT": {"target_type": "판재/시험편", "target_types": ["판재/시험편"], "items": ["용접사 기량테스트 / PLATE"], "default_code": "KS B 0896 (L검출레벨. 2류) / SIS H 201 Rev.3"}}, "현대산업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CONVEYOR PULLEY", "HEAD PULLEY (CV-012)", "TAIL PULLEY (CV-012)", "SNUB PULLEY (CV-012)", "TAIL DRUM (CV-017)", "SNUB&BEND PULLEY(CV-013)", "TAKE-UP PULLEY (CV-013)", "TAIL PULLEY(CV-013)", "HEAD(TRIPPER) PULLEY(CV-013)", "HEAD PULLEY(CV-013)"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "현성펌프": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BFP Upper casing"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "현진산업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["화성 EVO 조립공장 로봇설치"], "default_code": ""}}, "SK에코플랜트": {"PT": {"target_type": "배관", "target_types": ["배관"], "items": ["강관 Pipe (1500A)", "도수관로", "PIPE"], "default_code": "KS B 0888, KS B 0816 / SIS H 401SKP"}}, "K&M": {"RT": {"target_type": "배관", "target_types": ["배관"], "items": ["PIPE (150A)", "PIPE", "WQT (PIPE)"], "default_code": "ASME"}}, "케이엔엠": {"RT": {"target_type": "배관", "target_types": ["배관"], "items": ["150A PIPE WQT(6G)", "PIPE"], "default_code": "ASME"}}, "동남ENG": {"RT": {"target_type": "배관", "target_types": ["배관"], "items": ["WQT PIPE / 25A", "WQT (PIPE)", "PIPE"], "default_code": "ASME"}}, "한국산업인력공단": {"RT": {"target_type": "판재/시험편", "target_types": ["판재/시험편"], "items": ["PLATE / 301~332", "PLATE"], "default_code": "KS B 0845"}}, "영흥발전": {"PAUT": {"target_type": "배관", "target_types": ["배관"], "items": ["#4 Final RH Bundle tube", "BOILER TUBE", "PIPE"], "default_code": "SIS N 203 KOEN-YH Rev.0"}}};
+// @SYNC:END COMPANY_NDT_PRESETS
 
 function getConfig() {
   var cfg = JSON.parse(JSON.stringify(APP_CONFIG));
