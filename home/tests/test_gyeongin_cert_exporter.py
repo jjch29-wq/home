@@ -478,6 +478,73 @@ class GyeonginCertExporterTests(unittest.TestCase):
         self.assertIn('ASME Sec.V Art.7 / SIS H 341 (Rev.13)', mt_codes)
         self.assertTrue(all(c.count('(') == c.count(')') for c in mt_codes))
 
+    def test_import_daily_usage_rows_to_work_log_and_build_cert(self):
+        import tkinter as tk
+        import pandas as pd
+        from site_apps.gyeongin.src.cert_exporter import build_cert_batches
+        from site_apps.gyeongin.src.daily_work_log_tab import DailyWorkLogTab
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                tab = DailyWorkLogTab(root, main_app=None)
+                tab.history_path = str(Path(tmp) / 'history.json')
+                daily_rows = [
+                    {
+                        'Date': '2026-11-12',
+                        'Site': '경성기공',
+                        '업체명': '경성기공',
+                        '검사방법': 'MT',
+                        '검사품명': 'SHAFT',
+                        '검사규격': 'Ø500 × 1000L',
+                        '적용코드': 'KS D 0213 / SIS H 301 (2급,2군)',
+                        '성적서번호': 'SIS/GI-KSMC-MT-2611-001',
+                        '장비명': 'Yoke AC(MY-2 NW0453)',
+                        '보조장비': 'Black Light (베터리교체형) UV-LED 2P/SPR (NW0096)',
+                        'Usage': 1.0,
+                        'Unit': 'EA',
+                        'User': '부장 주진철',
+                    },
+                    {
+                        'Date': '2026-11-12',
+                        'Site': '경인사무소',
+                        '업체명': '경인사무소',
+                        '검사방법': '내근/대기',
+                        '검사품명': '사무실 내근 및 장비점검',
+                    },
+                ]
+                added, skipped = tab.import_daily_usage_rows(daily_rows, target_date='2026-11-12')
+                self.assertEqual((added, skipped), (1, 0))
+                self.assertEqual(tab.ndt_grid_entries[0]['업체'].get(), '경성기공')
+                self.assertEqual(tab.ndt_grid_entries[0]['검사방법'].get(), 'MT')
+                self.assertEqual(tab.ndt_grid_entries[0]['검사품명'].get(), 'SHAFT')
+                self.assertEqual(tab.ndt_grid_entries[0]['치수원문'].get(), 'Ø500 × 1000L')
+                self.assertEqual(tab.ndt_grid_entries[0]['수량'].get(), '1')
+                self.assertEqual(tab.ndt_grid_entries[0]['단위'].get(), 'EA')
+                self.assertEqual(tab.ndt_grid_entries[0]['결과'].get(), '합격')
+                self.assertEqual(tab.ndt_view_var.get(), '기계부품')
+
+                # Duplicate import is skipped cleanly
+                added2, skipped2 = tab.import_daily_usage_rows(daily_rows, target_date='2026-11-12')
+                self.assertEqual((added2, skipped2), (0, 1))
+
+                # User fills missing detail (재질/식별번호) and builds cert batch
+                tab.ndt_grid_entries[0]['재질'].insert(0, 'SM450')
+                tab.ndt_grid_entries[0]['식별번호'].insert(0, 'SH-001')
+                exported_rows = tab._current_ndt_rows_for_export()
+                batches = build_cert_batches(
+                    exported_rows,
+                    target_date='2026-11-12',
+                    daily_usage_df=pd.DataFrame(daily_rows),
+                )
+                self.assertEqual(len(batches), 1)
+                self.assertEqual(batches[0]['equipment'], 'Yoke AC(MY-2 NW0453)')
+                self.assertIn('UV-LED 2P/SPR', batches[0]['aux_equipment'])
+                self.assertEqual(batches[0]['material'], 'SM450')
+        finally:
+            root.destroy()
+
 
 if __name__ == '__main__':
     unittest.main()

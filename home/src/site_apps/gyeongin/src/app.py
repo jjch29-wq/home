@@ -6344,6 +6344,9 @@ class MaterialManager:
         btn_edit = ttk.Button(btn_row, text="✏️ 선택 항목 수정", command=self.open_edit_daily_usage_dialog)
         btn_edit.pack(side='left', padx=2)
 
+        btn_send_worklog = ttk.Button(btn_row, text="📋 작업일보(NDT)로 보내기", command=self.send_daily_usage_to_work_log)
+        btn_send_worklog.pack(side='left', padx=2)
+
         btn_delete = ttk.Button(btn_row, text="🗑️ 선택 항목 삭제", command=self.delete_daily_usage_entry)
         btn_delete.pack(side='left', padx=2)
 
@@ -6459,6 +6462,7 @@ class MaterialManager:
         self.daily_usage_context_menu = tk.Menu(self.daily_usage_tree, tearoff=0)
         self.daily_usage_context_menu.add_command(label="🗑️ 선택 항목 삭제 (Del)", command=self.delete_daily_usage_entry)
         self.daily_usage_context_menu.add_command(label="✏️ 선택 항목 수정", command=self.open_edit_daily_usage_dialog)
+        self.daily_usage_context_menu.add_command(label="📋 작업일보(NDT)로 보내기", command=self.send_daily_usage_to_work_log)
         self.daily_usage_context_menu.add_separator()
         self.daily_usage_context_menu.add_command(label="📋 일일 사용량 기입 탭으로 불러오기", command=self.load_daily_usage_selection_to_form)
         self.daily_usage_context_menu.add_command(label="📝 비고·메모 상세보기", command=self._show_daily_usage_note)
@@ -12096,6 +12100,51 @@ class MaterialManager:
         self.update_monthly_usage_view()
         if hasattr(self, 'budget_view_tree'):
             self.update_budget_site_view()
+
+    def send_daily_usage_to_work_log(self):
+        """선택한 현장 일일기록을 작업일보(NDT) 표로 전달해 세부 정보 보완 후 성적서 발행할 수 있게 합니다."""
+        selection = self.daily_usage_tree.selection()
+        if not selection:
+            messagebox.showwarning("선택 오류", "작업일보로 보낼 일일기록을 선택해주세요.")
+            return
+
+        selected_rows = []
+        for iid in selection:
+            tags = self.daily_usage_tree.item(iid).get('tags', [])
+            if not tags:
+                continue
+            try:
+                df_idx = int(tags[0])
+                selected_rows.append(self.daily_usage_df.loc[df_idx])
+            except (ValueError, KeyError, IndexError):
+                continue
+
+        if not selected_rows or not hasattr(self, 'tab_daily_work_log'):
+            messagebox.showwarning("오류", "선택한 일일기록을 불러올 수 없습니다.")
+            return
+
+        from site_apps.gyeongin.src.cert_exporter import normalize_cert_method, parse_date_value
+
+        ndt_rows = []
+        for r in selected_rows:
+            method = str(r.get('검사방법', '') or '').strip().upper()
+            if normalize_cert_method(method):
+                ndt_rows.append(r)
+
+        if not ndt_rows:
+            messagebox.showinfo("안내", "선택한 항목 중 성적서 발행 대상(MT/PT/UT/PAUT/RT/PMI) 검사 기록이 없습니다.")
+            return
+
+        first_date = parse_date_value(str(ndt_rows[0].get('Date', '') or '')).strftime('%Y-%m-%d')
+        added, skipped = self.tab_daily_work_log.import_daily_usage_rows(ndt_rows, target_date=first_date)
+        self.notebook.select(self.tab_daily_work_log)
+
+        msg = f"{first_date} 작업일보 NDT 표로 {added}건을 보냈습니다."
+        if skipped:
+            msg += f"\n(이미 존재하는 중복 {skipped}건 제외)"
+        if added > 0:
+            msg += "\n\n식별번호·재질·세부 치수를 입력한 뒤 '📄 시험성적서 출력'을 누르세요."
+        messagebox.showinfo("작업일보 전달 완료", msg)
 
     def open_edit_daily_usage_dialog(self):
         """Open a dialog to edit the selected daily usage record"""

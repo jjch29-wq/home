@@ -613,7 +613,8 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(line_bar, text='라인번호 일괄 변경', command=self._edit_ndt_lines).pack(side='left')
         ttk.Button(line_bar, text='구간 일괄 변경', command=self._edit_ndt_sections).pack(side='left', padx=(8, 0))
         ttk.Button(line_bar, text='선택 행 상세정보', command=self._edit_ndt_details).pack(side='left', padx=(8, 0))
-        ttk.Button(line_bar, text='📄 시험성적서 출력', command=self.export_certificates).pack(side='left', padx=(12, 0))
+        ttk.Button(line_bar, text='📥 일일기록 불러오기', command=self.load_from_daily_usage).pack(side='left', padx=(10, 0))
+        ttk.Button(line_bar, text='📄 시험성적서 출력', command=self.export_certificates).pack(side='left', padx=(8, 0))
         ttk.Button(line_bar, text='📒 성적서 발행대장', command=self.export_certificate_ledger).pack(side='left', padx=(8, 0))
 
         view_bar = ttk.LabelFrame(parent, text='검사 대상 보기')
@@ -1932,6 +1933,157 @@ class DailyWorkLogTab(ttk.Frame):
     def _daily_usage_frame(self):
         app_obj = getattr(self, 'main_app', None) or getattr(self, 'app', None)
         return getattr(app_obj, 'daily_usage_df', None)
+
+    @staticmethod
+    def _clean_import_text(val) -> str:
+        if val is None:
+            return ''
+        s = str(val).strip()
+        return '' if s.lower() in ('nan', 'none', 'nat') else s
+
+    @staticmethod
+    def _set_grid_cell(widget, value: str) -> None:
+        if hasattr(widget, 'set'):
+            widget.set(value)
+        else:
+            widget.delete(0, tk.END)
+            widget.insert(0, value)
+
+    def import_daily_usage_rows(self, usage_records, target_date: str | None = None) -> tuple[int, int]:
+        """Populate NDT report rows from DailyUsage records (skipping duplicates and non-NDT rows)."""
+        from site_apps.gyeongin.src.cert_exporter import normalize_cert_method, parse_date_value
+
+        if target_date:
+            norm_date = parse_date_value(target_date).strftime('%Y-%m-%d')
+            if norm_date != self._selected_date_key():
+                try:
+                    self.date_entry.set_date(datetime.strptime(norm_date, '%Y-%m-%d').date())
+                except Exception:
+                    pass
+                self.on_date_change()
+                if self._selected_date_key() != norm_date:
+                    return 0, 0
+
+        existing_sigs = set()
+        for row_w in self.ndt_grid_entries:
+            co = row_w['업체'].get().strip()
+            mt = row_w['검사방법'].get().strip().upper()
+            it = row_w['검사품명'].get().strip()
+            rp = row_w['성적서번호'].get().strip() if '성적서번호' in row_w else ''
+            if co or mt or it:
+                existing_sigs.add((co, mt, it, rp))
+
+        def _next_empty_row():
+            for row_w in self.ndt_grid_entries:
+                if not any(
+                    row_w[k].get().strip()
+                    for k in ('업체', '검사방법', '검사품명', '라인번호', 'Joint No.')
+                    if k in row_w
+                ):
+                    return row_w
+            self._append_ndt_rows(5)
+            return self.ndt_grid_entries[-5]
+
+        added = 0
+        skipped = 0
+        last_target_type = ''
+
+        for raw_rec in usage_records or []:
+            rec = raw_rec.to_dict() if hasattr(raw_rec, 'to_dict') else dict(raw_rec)
+            raw_method = self._clean_import_text(rec.get('검사방법') or rec.get('Method')).upper()
+            if not normalize_cert_method(raw_method):
+                continue
+
+            company = self._clean_import_text(rec.get('업체명') or rec.get('업체')) or '경인사무소'
+            item_name = self._clean_import_text(rec.get('검사품명'))
+            report_no = self._clean_import_text(rec.get('성적서번호'))
+            sig = (company, raw_method, item_name, report_no)
+            if sig in existing_sigs:
+                skipped += 1
+                continue
+
+            row_w = _next_empty_row()
+            self._set_grid_cell(row_w['업체'], company)
+            self._set_grid_cell(row_w['검사방법'], raw_method)
+            self._apply_company_method_preset(row_w, source='method')
+
+            if item_name and '검사품명' in row_w:
+                self._set_grid_cell(row_w['검사품명'], item_name)
+            applied_code = self._clean_import_text(rec.get('적용코드'))
+            if applied_code and '적용규격' in row_w:
+                self._set_grid_cell(row_w['적용규격'], applied_code)
+            if report_no and '성적서번호' in row_w:
+                self._set_grid_cell(row_w['성적서번호'], report_no)
+
+            pipe = self._clean_import_text(rec.get('관경(Inch)') or rec.get('관경'))
+            if pipe and '관경' in row_w:
+                self._set_grid_cell(row_w['관경'], pipe)
+            spec = self._clean_import_text(rec.get('검사규격'))
+            if (spec or pipe) and '치수원문' in row_w:
+                self._set_grid_cell(row_w['치수원문'], spec or pipe)
+
+            qty_raw = rec.get('Usage')
+            if qty_raw in (None, '') or str(qty_raw).strip().lower() in ('nan', 'none'):
+                qty_raw = rec.get('수량', rec.get('검사량', ''))
+            qty_txt = self._clean_import_text(qty_raw)
+            if qty_txt:
+                try:
+                    qf = float(qty_txt)
+                    qty_txt = str(int(qf)) if qf.is_integer() else f"{qf:g}"
+                except ValueError:
+                    pass
+                if '수량' in row_w:
+                    self._set_grid_cell(row_w['수량'], qty_txt)
+            unit_txt = self._clean_import_text(rec.get('Unit') or rec.get('단위'))
+            if unit_txt and '단위' in row_w:
+                self._set_grid_cell(row_w['단위'], unit_txt)
+
+            if '결과' in row_w and not row_w['결과'].get().strip():
+                self._set_grid_cell(row_w['결과'], '합격')
+
+            target_type = row_w['대상유형'].get().strip() if '대상유형' in row_w else ''
+            if target_type in NDT_TARGET_TYPES:
+                last_target_type = target_type
+
+            existing_sigs.add(sig)
+            added += 1
+
+        if added > 0:
+            if last_target_type and hasattr(self, 'ndt_view_var'):
+                self.ndt_view_var.set(last_target_type)
+                self._set_ndt_view()
+        return added, skipped
+
+    def load_from_daily_usage(self):
+        """현재 작업일보 날짜의 현장 일일기록(DailyUsage)을 NDT 표로 불러옵니다."""
+        from site_apps.gyeongin.src.cert_exporter import normalize_cert_method, parse_date_value
+
+        df = self._daily_usage_frame()
+        if df is None or getattr(df, 'empty', True):
+            messagebox.showinfo("일일기록 불러오기", "저장된 현장 일일기록이 없습니다.", parent=self)
+            return
+
+        date_key = self._selected_date_key()
+        matched = []
+        for _, row in df.iterrows():
+            raw_d = self._clean_import_text(row.get('Date') or row.get('날짜'))
+            if not raw_d or parse_date_value(raw_d).strftime('%Y-%m-%d') != date_key:
+                continue
+            method = self._clean_import_text(row.get('검사방법')).upper()
+            if not normalize_cert_method(method):
+                continue
+            matched.append(row)
+
+        if not matched:
+            messagebox.showinfo("일일기록 불러오기", f"{date_key} 날짜에 불러올 NDT 검사 기록이 없습니다.", parent=self)
+            return
+
+        added, skipped = self.import_daily_usage_rows(matched, target_date=date_key)
+        msg = f"{date_key} 일일기록 {added}건을 작업일보 NDT 표로 불러왔습니다."
+        if skipped:
+            msg += f"\n(이미 입력된 중복 {skipped}건 제외)"
+        msg += "\n\n부족한 식별번호·재질·세부 치수를 보완한 뒤 '📄 시험성적서 출력'을 누르세요."
+        messagebox.showinfo("일일기록 불러오기 완료", msg, parent=self)
 
     def export_certificates(self):
         """선택 행(또는 당일 전체)을 업체·검사방법별 시험성적서(갑/을)로 출력합니다."""
