@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import re
+import zipfile
 from copy import copy
 from pathlib import Path
 
@@ -400,7 +401,130 @@ class CertificateExporter:
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         wb.save(out)
+        footer_logo = self.template_dir.parent / "바닥글 PMI.png"
+        if footer_logo.exists():
+            self._inject_footer_logo_hf(out, footer_logo)
         return out
+
+    @staticmethod
+    def _inject_footer_logo_hf(xlsx_path: Path, logo_path: Path) -> None:
+        """Attach Excel VML header/footer graphic (&G) to sheets with an &G oddFooter."""
+        vml_template = (
+            '<xml xmlns:v="urn:schemas-microsoft-com:vml"\n'
+            ' xmlns:o="urn:schemas-microsoft-com:office:office"\n'
+            ' xmlns:x="urn:schemas-microsoft-com:office:excel">\n'
+            ' <o:shapelayout v:ext="edit">\n'
+            '  <o:idmap v:ext="edit" data="1"/>\n'
+            ' </o:shapelayout>\n'
+            ' <v:shapetype id="_x0000_t75" coordsize="21600,21600" o:spt="75"\n'
+            '  o:preferrelative="t" path="m@4@5l@4@11@9@11@9@5xe" filled="f" stroked="f">\n'
+            '  <v:stroke joinstyle="miter"/>\n'
+            '  <v:formulas>\n'
+            '   <v:f eqn="if lineDrawn pixelLineWidth 0"/>\n'
+            '   <v:f eqn="sum @0 1 0"/>\n'
+            '   <v:f eqn="sum 0 0 @1"/>\n'
+            '   <v:f eqn="prod @2 1 2"/>\n'
+            '   <v:f eqn="prod @3 21600 pixelWidth"/>\n'
+            '   <v:f eqn="prod @3 21600 pixelHeight"/>\n'
+            '   <v:f eqn="sum @0 0 1"/>\n'
+            '   <v:f eqn="prod @6 1 2"/>\n'
+            '   <v:f eqn="prod @7 21600 pixelWidth"/>\n'
+            '   <v:f eqn="sum @8 21600 0"/>\n'
+            '   <v:f eqn="prod @7 21600 pixelHeight"/>\n'
+            '   <v:f eqn="sum @10 21600 0"/>\n'
+            '  </v:formulas>\n'
+            '  <v:path o:extrusionok="f" gradientshapeok="t" o:connecttype="rect"/>\n'
+            '  <o:lock v:ext="edit" aspectratio="t"/>\n'
+            ' </v:shapetype>\n'
+            ' <v:shape id="RF" o:spid="_x0000_s1025" type="#_x0000_t75"\n'
+            '  style="position:absolute;margin-left:0;margin-top:0;width:162pt;height:15.75pt;z-index:1">\n'
+            '  <v:imagedata o:relid="rId1" o:title="SITCO 서울검사 주식회사"/>\n'
+            ' </v:shape>\n'
+            '</xml>\n'
+        ).encode("utf-8")
+        vml_rels_bytes = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+            ' <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" '
+            'Target="../media/footer_sitco.png"/>\n'
+            '</Relationships>\n'
+        ).encode("utf-8")
+        vml_rel_type = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing"
+
+        with zipfile.ZipFile(xlsx_path, "r") as zin:
+            entries = {name: zin.read(name) for name in zin.namelist()}
+
+        sheet_names = sorted(
+            name for name in entries
+            if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)
+        )
+        modified = False
+        for s_name in sheet_names:
+            xml_text = entries[s_name].decode("utf-8")
+            if "&amp;G" not in xml_text or "<legacyDrawingHF" in xml_text:
+                continue
+
+            sheet_num = re.search(r"sheet(\d+)\.xml$", s_name).group(1)
+            rels_name = f"xl/worksheets/_rels/sheet{sheet_num}.xml.rels"
+            rels_text = entries.get(
+                rels_name,
+                b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+                b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+            ).decode("utf-8")
+
+            used_ids = [int(m) for m in re.findall(r'Id="rId(\d+)"', rels_text)]
+            next_rid = f"rId{(max(used_ids) + 1) if used_ids else 1}"
+            vml_name = f"xl/drawings/vmlDrawingHF{sheet_num}.vml"
+            vml_rels_name = f"xl/drawings/_rels/vmlDrawingHF{sheet_num}.vml.rels"
+
+            rel_tag = f'<Relationship Id="{next_rid}" Type="{vml_rel_type}" Target="../drawings/vmlDrawingHF{sheet_num}.vml"/>'
+            if "</Relationships>" in rels_text:
+                rels_text = rels_text.replace("</Relationships>", f"{rel_tag}</Relationships>", 1)
+            else:
+                rels_text = rels_text.replace("/>", f">{rel_tag}</Relationships>", 1)
+            entries[rels_name] = rels_text.encode("utf-8")
+            entries[vml_name] = vml_template
+            entries[vml_rels_name] = vml_rels_bytes
+
+            if 'xmlns:r=' not in xml_text.split('>', 1)[0]:
+                xml_text = xml_text.replace(
+                    '<worksheet ',
+                    '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ',
+                    1,
+                )
+            hf_tag = f'<legacyDrawingHF r:id="{next_rid}"/>'
+            insert_match = re.search(r"<(?:picture|oleObjects|controls|webPublishItems|tableParts|extLst)\b|</worksheet>", xml_text)
+            if not insert_match:
+                continue
+            pos = insert_match.start()
+            xml_text = xml_text[:pos] + hf_tag + xml_text[pos:]
+            entries[s_name] = xml_text.encode("utf-8")
+            modified = True
+
+        if not modified:
+            return
+
+        entries["xl/media/footer_sitco.png"] = logo_path.read_bytes()
+        ct_text = entries["[Content_Types].xml"].decode("utf-8")
+        if 'Extension="vml"' not in ct_text:
+            ct_text = ct_text.replace(
+                "</Types>",
+                '<Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/></Types>',
+                1,
+            )
+        if 'Extension="png"' not in ct_text:
+            ct_text = ct_text.replace(
+                "</Types>",
+                '<Default Extension="png" ContentType="image/png"/></Types>',
+                1,
+            )
+        entries["[Content_Types].xml"] = ct_text.encode("utf-8")
+
+        tmp_path = xlsx_path.with_suffix(".tmp.xlsx")
+        with zipfile.ZipFile(tmp_path, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+            for name, data in entries.items():
+                zout.writestr(name, data)
+        os.replace(tmp_path, xlsx_path)
 
     @staticmethod
     def _chunk_rows(rows: list[dict], page_cap: int) -> list[list[dict]]:

@@ -403,6 +403,36 @@ class GyeonginCertExporterTests(unittest.TestCase):
             finally:
                 root.destroy()
 
+    def test_mt_pt_ut_certificates_embed_footer_sitco_logo(self):
+        import zipfile
+        import openpyxl
+        from site_apps.gyeongin.src.cert_exporter import CertificateExporter
+
+        exporter = CertificateExporter()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for method in ('MT', 'PT', 'UT'):
+                out = Path(tmpdir) / f'footer_{method}.xlsx'
+                exporter.export_certificate(
+                    {
+                        'method': method,
+                        'company': '경성기공',
+                        'date': '2026-11-12',
+                        'report_no': f'SIS/GI-KSMC-{method}-2611-001',
+                        'customer': '경성기공',
+                        'project_name': 'N/A',
+                        'item_name': 'SHAFT',
+                        'code_procedure': 'KS',
+                        'inspector': '주진철',
+                        'rows': [{'품목명': 'SHAFT', '재질': 'sm450', '수량': 1, '단위': 'EA'}],
+                    },
+                    out,
+                )
+                with zipfile.ZipFile(out) as zf:
+                    self.assertIn('xl/media/footer_sitco.png', zf.namelist())
+                    self.assertIn(b'<legacyDrawingHF', zf.read('xl/worksheets/sheet1.xml'))
+                wb = openpyxl.load_workbook(out)
+                wb.close()
+
 
 if __name__ == '__main__':
     unittest.main()
