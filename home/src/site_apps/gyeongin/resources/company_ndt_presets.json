@@ -1061,5 +1061,87 @@
       ],
       "default_code": ""
     }
+  },
+  "SK에코플랜트": {
+    "PT": {
+      "target_type": "배관",
+      "target_types": [
+        "배관"
+      ],
+      "items": [
+        "강관 Pipe (1500A)",
+        "도수관로",
+        "PIPE"
+      ],
+      "default_code": "KS B 0888, KS B 0816 / SIS H 401SKP"
+    }
+  },
+  "K&M": {
+    "RT": {
+      "target_type": "배관",
+      "target_types": [
+        "배관"
+      ],
+      "items": [
+        "PIPE (150A)",
+        "PIPE",
+        "WQT (PIPE)"
+      ],
+      "default_code": "ASME"
+    }
+  },
+  "케이엔엠": {
+    "RT": {
+      "target_type": "배관",
+      "target_types": [
+        "배관"
+      ],
+      "items": [
+        "150A PIPE WQT(6G)",
+        "PIPE"
+      ],
+      "default_code": "ASME"
+    }
+  },
+  "동남ENG": {
+    "RT": {
+      "target_type": "배관",
+      "target_types": [
+        "배관"
+      ],
+      "items": [
+        "WQT PIPE / 25A",
+        "WQT (PIPE)",
+        "PIPE"
+      ],
+      "default_code": "ASME"
+    }
+  },
+  "한국산업인력공단": {
+    "RT": {
+      "target_type": "판재/시험편",
+      "target_types": [
+        "판재/시험편"
+      ],
+      "items": [
+        "PLATE / 301~332",
+        "PLATE"
+      ],
+      "default_code": "KS B 0845"
+    }
+  },
+  "영흥발전": {
+    "PAUT": {
+      "target_type": "배관",
+      "target_types": [
+        "배관"
+      ],
+      "items": [
+        "#4 Final RH Bundle tube",
+        "BOILER TUBE",
+        "PIPE"
+      ],
+      "default_code": "SIS N 203 KOEN-YH Rev.0"
+    }
   }
 }

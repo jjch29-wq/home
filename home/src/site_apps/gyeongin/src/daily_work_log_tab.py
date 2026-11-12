@@ -1107,7 +1107,12 @@ class DailyWorkLogTab(ttk.Frame):
         method = row['검사방법'].get().strip().upper()
         saved = getattr(self, 'history_ndt_items', {}).get(target_type, ())
         current = row['검사품명'].get().strip()
-        target_defaults = ndt_item_choices(target_type, tuple(saved) + ((current,) if current else ()))
+        if target_type in NDT_TARGET_TYPES:
+            target_defaults = ndt_item_choices(target_type, tuple(saved) + ((current,) if current else ()))
+        else:
+            target_defaults = tuple(dict.fromkeys(
+                item for t in NDT_TARGET_TYPES for item in NDT_ITEM_CHOICES.get(t, ())
+            ))
         choices = merge_company_items(
             company,
             method,

@@ -290,10 +290,22 @@ class GyeonginCertExporterTests(unittest.TestCase):
         import tkinter as tk
         from site_apps.gyeongin.mobile import server
         from site_apps.gyeongin.src.company_master import (
+            DEFAULT_COMPANIES,
+            load_company_ndt_presets,
             merge_company_items,
             suggest_company_method_preset,
         )
         from site_apps.gyeongin.src.daily_work_log_tab import DailyWorkLogTab
+
+        load_company_ndt_presets.cache_clear()
+        all_presets = load_company_ndt_presets()
+        for co in DEFAULT_COMPANIES:
+            if co != '경인사무소':
+                self.assertIn(co, all_presets)
+
+        sk_rt = suggest_company_method_preset('SK에코플랜트', 'RT')
+        self.assertEqual(sk_rt['target_type'], '배관')
+        self.assertIn('강관 Pipe (1500A)', sk_rt['items'])
 
         mt_preset = suggest_company_method_preset('나라삼양감속기', 'MT')
         self.assertEqual(mt_preset['target_type'], '기계부품')
