@@ -441,6 +441,34 @@ class GyeonginCertExporterTests(unittest.TestCase):
                     self.assertEqual(wb['UT(을)']['E10'].value, '관련지시 없음')
                 wb.close()
 
+            # Multi-equipment + Black Light (fluorescent MT)
+            out_fl = Path(tmpdir) / 'fluent_mt.xlsx'
+            exporter.export_certificate(
+                {
+                    'method': 'MT',
+                    'company': '경성기공',
+                    'date': '2026-11-12',
+                    'report_no': 'SIS/GI-KSMC-MT-2611-002',
+                    'customer': '경성기공',
+                    'project_name': 'N/A',
+                    'item_name': 'SHAFT',
+                    'code_procedure': 'KS',
+                    'inspector': '주진철',
+                    'equipment': 'Yoke AC(MP-A3 KI-01); Yoke AC(MY-2 NW0453)',
+                    'aux_equipment': 'Black Light (베터리교체형) UV-LED 2P/SPR (NW0096); UV Meter YK-35UV (071550)',
+                    'rows': [{'품목명': 'SHAFT', '재질': 'sm450', '수량': 1, '단위': 'EA', '결과': '합격'}],
+                },
+                out_fl,
+            )
+            wb_fl = openpyxl.load_workbook(out_fl)
+            ws_fl = wb_fl['MT(갑)']
+            self.assertEqual(ws_fl['D13'].value, 'NAWOO')
+            self.assertEqual(ws_fl['D14'].value, 'MP-A3 / MY-2')
+            self.assertEqual(ws_fl['D15'].value, 'KI-01, NW0453')
+            self.assertEqual(ws_fl['O17'].value, 'NAWOO')
+            self.assertIn('UV-LED 2P/SPR', ws_fl['O18'].value)
+            wb_fl.close()
+
 
 if __name__ == '__main__':
     unittest.main()

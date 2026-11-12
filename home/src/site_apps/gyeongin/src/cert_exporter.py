@@ -135,11 +135,8 @@ def default_report_no(date_str: str, company: str, method: str, seq: int = 1) ->
     return f"SIS/GI-{code}-{m}-{d.strftime('%y%m')}-{seq:03d}"
 
 
-def match_equipment_profile(equipment_text: str, method: str) -> tuple[str, str, str]:
-    raw = _text(equipment_text)
-    if not raw or raw == '해당없음':
-        return '', '', ''
-    default_maker, default_model, default_sn = EQUIPMENT_PROFILES.get(method, ('-', '-', '-'))
+def _parse_single_equipment(raw: str, method: str) -> tuple[str, str, str]:
+    default_maker, _, default_sn = EQUIPMENT_PROFILES.get(method, ('-', '-', '-'))
     sn_match = re.search(r'\(([^)]+)\)', raw)
     sn = sn_match.group(1).strip() if sn_match else default_sn
     upper_raw = raw.upper()
@@ -156,12 +153,54 @@ def match_equipment_profile(equipment_text: str, method: str) -> tuple[str, str,
     return default_maker, model_head or raw, sn
 
 
+def match_equipment_profile(equipment_text: str, method: str) -> tuple[str, str, str]:
+    raw = _text(equipment_text)
+    if not raw or raw == '해당없음':
+        return '', '', ''
+    items = [p.strip() for p in re.split(r'[;,]+', raw) if p.strip() and p.strip() != '해당없음']
+    if not items:
+        return '', '', ''
+    makers, models, sns = [], [], []
+    for item in items:
+        mk, md, sn = _parse_single_equipment(item, method)
+        if mk and mk not in makers:
+            makers.append(mk)
+        if md and md not in models:
+            models.append(md)
+        if sn and sn not in sns:
+            sns.append(sn)
+    return ' / '.join(makers), ' / '.join(models), ', '.join(sns)
+
+
+def match_black_light_profile(aux_text: str) -> tuple[str, str]:
+    """Extract (maker, model) from Black Light entries in 보조장비 text."""
+    raw = _text(aux_text)
+    if not raw:
+        return '', ''
+    items = [p.strip() for p in re.split(r'[;,]+', raw) if p.strip()]
+    bl_items = [it for it in items if 'BLACK LIGHT' in it.upper() or 'UV-LED' in it.upper() or '자외선' in it]
+    if not bl_items:
+        return '', ''
+    makers, models = [], []
+    for it in bl_items:
+        mk = 'NAWOO'
+        if 'EE-365' in it.upper():
+            mk = 'SPECTROLINE'
+        if mk not in makers:
+            makers.append(mk)
+        cleaned = re.sub(r'^Black Light\s*(?:\([^)]*\))?\s*', '', it, flags=re.IGNORECASE).strip()
+        if cleaned and cleaned not in models:
+            models.append(cleaned)
+    return ' / '.join(makers), ' / '.join(models)
+
+
 def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method: str) -> dict:
     """Lookup matching DailyUsage fields for (date, company, method) without mutating df."""
     empty = {
         'site': '',
         'customer': '',
         'equipment': '',
+        'aux_equipment': '',
         'workers': '',
         'report_no': '',
         'applied_code': '',
@@ -219,6 +258,7 @@ def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method
         'site': site,
         'customer': first_non_empty('발주처'),
         'equipment': first_non_empty('장비명'),
+        'aux_equipment': first_non_empty('보조장비'),
         'workers': clean_worker_name(first_non_empty('Workers', 'Worker1', '작업자')),
         'report_no': first_non_empty('성적서번호'),
         'applied_code': first_non_empty('적용코드'),
@@ -366,6 +406,7 @@ def build_cert_batches(
             'inspector': ctx['workers'] or '주진철',
             'approver': '권인경',
             'equipment': ctx['equipment'],
+            'aux_equipment': ctx['aux_equipment'],
             'target_type': first_non_empty('대상유형') or '일반',
             'rows': rows,
         })
@@ -561,6 +602,7 @@ class CertificateExporter:
         insp_kor, _, insp_grade, _ = self._inspector_meta(batch.get('inspector', ''))
         app_kor, _, app_grade, _ = self._inspector_meta(batch.get('approver', '권인경'))
         maker, model, sn = match_equipment_profile(batch.get('equipment', ''), 'MT')
+        bl_maker, bl_model = match_black_light_profile(batch.get('aux_equipment', ''))
         is_asme = 'ASME' in _text(batch.get('code_procedure')).upper()
         default_interp = 'NO RECORDABLE INDICATION' if is_asme else '관련지시 없음'
 
@@ -584,6 +626,10 @@ class CertificateExporter:
             _write_cell(ws, 'D13', maker)
             _write_cell(ws, 'D14', model)
             _write_cell(ws, 'D15', sn)
+            if bl_maker:
+                _write_cell(ws, 'O17', bl_maker)
+            if bl_model:
+                _write_cell(ws, 'O18', bl_model)
             _write_cell(ws, 'L39', d)
             _write_cell(ws, 'D40', insp_kor)
             _write_cell(ws, 'K40', insp_grade)

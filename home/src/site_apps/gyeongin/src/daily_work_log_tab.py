@@ -2007,6 +2007,7 @@ class DailyWorkLogTab(ttk.Frame):
             'code_procedure': tk.StringVar(),
             'inspector': tk.StringVar(),
             'equipment': tk.StringVar(),
+            'aux_equipment': tk.StringVar(),
         }
         fields_meta = [
             ('성적서번호', 'report_no', 0, 0),
@@ -2020,15 +2021,56 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Entry(edit_box, textvariable=vars_map[key], width=24).grid(
                 row=r_i, column=c_i + 1, sticky='ew', padx=(0, 10), pady=3
             )
+
+        from site_apps.gyeongin.src.aux_equipment import (
+            _bind_count_badge,
+            bind_main_selector,
+            get_main_equipments_by_method,
+            select as select_aux_multi,
+        )
+
         ttk.Label(edit_box, text='장비(탐상기)').grid(row=2, column=2, sticky='w', padx=(4, 6), pady=3)
-        equip_combo = ttk.Combobox(edit_box, textvariable=vars_map['equipment'], width=22)
-        equip_combo.grid(row=2, column=3, sticky='ew', padx=(0, 10), pady=3)
+        equip_frame = ttk.Frame(edit_box)
+        equip_frame.grid(row=2, column=3, sticky='ew', padx=(0, 10), pady=3)
+        equip_combo = ttk.Combobox(equip_frame, textvariable=vars_map['equipment'], width=18)
+        equip_combo.pack(side='left', fill='x', expand=True)
+        bind_main_selector(
+            equip_frame,
+            self.main_app,
+            equip_combo,
+            method_getter=lambda: batches[selected_idx[0]].get('method', ''),
+        )
+
+        ttk.Label(edit_box, text='보조장비(UV 등)').grid(row=3, column=0, sticky='w', padx=(4, 6), pady=3)
+        aux_frame = ttk.Frame(edit_box)
+        aux_frame.grid(row=3, column=1, columnspan=2, sticky='ew', padx=(0, 10), pady=3)
+        aux_entry = ttk.Entry(aux_frame, textvariable=vars_map['aux_equipment'], width=22)
+        aux_entry.pack(side='left', fill='x', expand=True)
+        aux_badge = tk.Label(
+            aux_frame, text='0개 선택', font=('Malgun Gothic', 8, 'bold'),
+            bg='#e2e8f0', fg='#475569', padx=5, pady=1, cursor='hand2',
+        )
+        aux_badge.pack(side='left', padx=(3, 1))
+        refresh_aux_badge = _bind_count_badge(vars_map['aux_equipment'], aux_badge)
+        open_aux_picker = lambda: select_aux_multi(
+            aux_frame,
+            self.main_app,
+            vars_map['aux_equipment'],
+            method_getter=lambda: batches[selected_idx[0]].get('method', ''),
+            on_changed=refresh_aux_badge,
+        )
+        tk.Button(
+            aux_frame, text='☑ 선택', font=('Malgun Gothic', 8, 'bold'),
+            bg='#eff6ff', fg='#1d4ed8', activebackground='#dbeafe', activeforeground='#1e40af',
+            relief='solid', bd=1, padx=6, pady=1, cursor='hand2',
+            command=open_aux_picker,
+        ).pack(side='left', padx=2)
+        aux_badge.bind('<Button-1>', lambda _e: open_aux_picker())
+
         edit_box.columnconfigure(1, weight=1)
         edit_box.columnconfigure(3, weight=1)
 
         selected_idx = [0]
-
-        from site_apps.gyeongin.src.aux_equipment import get_main_equipments_by_method
 
         def load_form(idx):
             selected_idx[0] = idx
@@ -2036,6 +2078,9 @@ class DailyWorkLogTab(ttk.Frame):
             equip_combo['values'] = [''] + get_main_equipments_by_method(method=b.get('method', ''))
             for k, v in vars_map.items():
                 v.set(b.get(k, ''))
+            if hasattr(equip_combo, '_refresh_multi_badge'):
+                equip_combo._refresh_multi_badge()
+            refresh_aux_badge()
 
         def save_form():
             b = batches[selected_idx[0]]
