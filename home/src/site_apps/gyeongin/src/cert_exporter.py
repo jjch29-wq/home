@@ -137,19 +137,23 @@ def default_report_no(date_str: str, company: str, method: str, seq: int = 1) ->
 
 def match_equipment_profile(equipment_text: str, method: str) -> tuple[str, str, str]:
     raw = _text(equipment_text)
-    default_maker, default_model, default_sn = EQUIPMENT_PROFILES.get(method, ('-', '-', '-'))
     if not raw or raw == '해당없음':
-        return default_maker, default_model, default_sn
+        return '', '', ''
+    default_maker, default_model, default_sn = EQUIPMENT_PROFILES.get(method, ('-', '-', '-'))
     sn_match = re.search(r'\(([^)]+)\)', raw)
     sn = sn_match.group(1).strip() if sn_match else default_sn
-    if 'MY-2' in raw.upper():
-        parts = sn.split()
-        return 'NAWOO', 'MY-2', parts[-1] if parts else default_sn
-    if 'XL2' in raw.upper():
+    upper_raw = raw.upper()
+    for yoke_model in ('MY-2', 'MP-A3', 'MP-A2D'):
+        if yoke_model in upper_raw:
+            parts = sn.split()
+            return 'NAWOO', yoke_model, parts[-1] if parts else default_sn
+    if 'XL2' in upper_raw:
         return 'THERMO', 'NITON XL2 100G', sn
-    if 'MASTERSCAN' in raw.upper() or 'OMNI' in raw.upper():
-        return 'OLYMPUS/SONATEST', raw, sn
-    return default_maker, raw, sn
+    if any(k in upper_raw for k in ('MASTERSCAN', 'SITESCAN', 'EPOCH', 'USM', 'OMNI')):
+        model_head = raw.split('(')[0].strip()
+        return 'OLYMPUS/SONATEST', model_head or raw, sn
+    model_head = raw.split('(')[0].strip()
+    return default_maker, model_head or raw, sn
 
 
 def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method: str) -> dict:

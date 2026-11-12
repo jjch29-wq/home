@@ -433,6 +433,8 @@ class GyeonginCertExporterTests(unittest.TestCase):
                 wb = openpyxl.load_workbook(out)
                 if method == 'MT':
                     self.assertEqual(wb['MT(갑)']['L29'].value, '관련지시 없음')
+                    self.assertIn(wb['MT(갑)']['D13'].value, (None, ''))
+                    self.assertIn(wb['MT(갑)']['D15'].value, (None, ''))
                 elif method == 'PT':
                     self.assertEqual(wb['PT(갑)']['H30'].value, '관련지시 없음')
                 elif method == 'UT':

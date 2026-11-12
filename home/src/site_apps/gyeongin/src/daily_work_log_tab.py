@@ -2006,6 +2006,7 @@ class DailyWorkLogTab(ttk.Frame):
             'project_name': tk.StringVar(),
             'code_procedure': tk.StringVar(),
             'inspector': tk.StringVar(),
+            'equipment': tk.StringVar(),
         }
         fields_meta = [
             ('성적서번호', 'report_no', 0, 0),
@@ -2019,14 +2020,20 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Entry(edit_box, textvariable=vars_map[key], width=24).grid(
                 row=r_i, column=c_i + 1, sticky='ew', padx=(0, 10), pady=3
             )
+        ttk.Label(edit_box, text='장비(탐상기)').grid(row=2, column=2, sticky='w', padx=(4, 6), pady=3)
+        equip_combo = ttk.Combobox(edit_box, textvariable=vars_map['equipment'], width=22)
+        equip_combo.grid(row=2, column=3, sticky='ew', padx=(0, 10), pady=3)
         edit_box.columnconfigure(1, weight=1)
         edit_box.columnconfigure(3, weight=1)
 
         selected_idx = [0]
 
+        from site_apps.gyeongin.src.aux_equipment import get_main_equipments_by_method
+
         def load_form(idx):
             selected_idx[0] = idx
             b = batches[idx]
+            equip_combo['values'] = [''] + get_main_equipments_by_method(method=b.get('method', ''))
             for k, v in vars_map.items():
                 v.set(b.get(k, ''))
 
@@ -2039,7 +2046,7 @@ class DailyWorkLogTab(ttk.Frame):
                 values=(b['company'], b['method'], len(b['rows']), b['report_no'], b['customer'], b['project_name']),
             )
 
-        ttk.Button(edit_box, text="목록에 적용", command=save_form).grid(row=2, column=3, sticky='e', pady=3)
+        ttk.Button(edit_box, text="목록에 적용", command=save_form).grid(row=3, column=3, sticky='e', pady=3)
         tree.selection_set('0')
         load_form(0)
         tree.bind('<<TreeviewSelect>>', lambda _e: tree.selection() and load_form(int(tree.selection()[0])))
