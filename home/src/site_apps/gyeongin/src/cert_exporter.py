@@ -5,7 +5,8 @@ import datetime as dt
 import os
 import re
 import zipfile
-from copy import copy
+from copy import copy, deepcopy
+from io import BytesIO
 from pathlib import Path
 
 import openpyxl
@@ -978,13 +979,134 @@ class CertificateExporter:
             if blank_row <= 34:
                 _write_cell(ws_eul, f'E{blank_row}', '~ 이 하 여 백 ~')
 
+    @staticmethod
+    def _format_pmi_eul(ws) -> None:
+        """Use one body style and the full Item No. column on every PMI page."""
+        groups = ((1, 4), (5, 6), (7, 7), (8, 8), (9, 9), (10, 10),
+                  (11, 11), (12, 12), (13, 13), (14, 14), (15, 15),
+                  (16, 19), (20, 20))
+        for merged in list(ws.merged_cells.ranges):
+            if 20 <= merged.min_row <= merged.max_row <= 39 and merged.max_col <= 20:
+                ws.unmerge_cells(str(merged))
+        thin = Side(style='thin', color='000000')
+        outer = Side(style='medium', color='000000')
+        font = Font(name='바탕', size=10, color='000000')
+        for r in range(20, 40):
+            ws.row_dimensions[r].height = 28
+            for first, last in groups:
+                for c in range(first, last + 1):
+                    cell = ws.cell(r, c)
+                    cell.font = copy(font)
+                    cell.alignment = Alignment(horizontal='center', vertical='center',
+                                               wrap_text=True, shrink_to_fit=False)
+                    cell.border = Border(
+                        left=(outer if first == 1 else thin) if c == first else Side(),
+                        right=(outer if last == 20 else thin) if c == last else Side(),
+                        top=thin, bottom=outer if r == 39 else thin,
+                    )
+                if first != last:
+                    ws.merge_cells(start_row=r, start_column=first,
+                                   end_row=r, end_column=last)
+            ws.cell(r, 16).number_format = 'yyyy-mm-dd'
+        ws.column_dimensions['D'].hidden = False
+        ws.column_dimensions['G'].width = 7
+        ws.column_dimensions['N'].width = 13
+        ws.column_dimensions['P'].width = 5.5
+        ws['E19'].number_format = 'yyyy-mm-dd'
+        ws['P19'].number_format = 'yyyy-mm-dd'
+        ws.print_area = 'A1:T39'
+        ws.print_options.gridLines = False
+        ws.print_options.horizontalCentered = True
+        ws.print_options.verticalCentered = True
+        ws.sheet_view.showGridLines = False
+        # Let Excel/printer metrics fit the entire print area, including T.
+        # Column widths depend on the template's default font, so a fixed
+        # percentage calculated from screen pixels can split off the right edge.
+        ws.page_margins.left = ws.page_margins.right = 0.25
+        ws.page_margins.top = ws.page_margins.bottom = 0.25
+        ws.page_margins.header = ws.page_margins.footer = 0.15
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.orientation = 'portrait'
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 1
+        ws.page_setup.scale = None
+
+    @staticmethod
+    def _align_pmi_page_frames(cover, detail) -> None:
+        """Give both page types identical print width, height and header origin."""
+        widths = []
+        for col in range(1, 21):
+            dimension = next(
+                (item for item in detail.column_dimensions.values()
+                 if (item.min or openpyxl.utils.column_index_from_string(item.index)) <= col
+                 <= (item.max or openpyxl.utils.column_index_from_string(item.index))),
+                None,
+            )
+            widths.append(dimension.width if dimension else detail.sheet_format.defaultColWidth or 13)
+        # Expand grouped dimensions into individual columns on both sheets so
+        # Excel resolves exactly the same physical columns, rather than merely
+        # giving two differently sized tables the same page-margin settings.
+        for sheet in (cover, detail):
+            for key in list(sheet.column_dimensions):
+                if openpyxl.utils.column_index_from_string(key) <= 20:
+                    del sheet.column_dimensions[key]
+            for col, width in enumerate(widths, 1):
+                dimension = sheet.column_dimensions[get_column_letter(col)]
+                dimension.width = width
+                dimension.hidden = False
+
+        def height(sheet, row):
+            return sheet.row_dimensions[row].height or sheet.sheet_format.defaultRowHeight
+
+        # Titles, page numbers and the company header share rows 1:10.
+        for row in range(1, 11):
+            cover.row_dimensions[row].height = height(detail, row)
+        target = sum(height(detail, row) for row in range(11, 40))
+        original = sum(height(cover, row) for row in range(11, 51))
+        for row in range(11, 51):
+            cover.row_dimensions[row].height = round(height(cover, row) * target / original, 4)
+        residual = target - sum(height(cover, row) for row in range(11, 51))
+        cover.row_dimensions[50].height += residual
+        cover.print_area = 'A1:T50'
+        cover.print_options.gridLines = False
+        cover.sheet_view.showGridLines = False
+        cover.page_setup.paperSize = detail.page_setup.paperSize
+        cover.page_setup.orientation = detail.page_setup.orientation
+
+    @staticmethod
+    def _copy_pmi_eul(wb, source):
+        """Worksheet copying omits images, print area and header/footer settings."""
+        target = wb.copy_worksheet(source)
+        target.print_area = 'A1:T39'
+        target.HeaderFooter = deepcopy(source.HeaderFooter)
+        for original in source._images:
+            # Give every image its own stream: saving consumes the image data.
+            payload = original._data()
+            original.ref = BytesIO(payload)
+            image = openpyxl.drawing.image.Image(BytesIO(payload))
+            image.width, image.height = original.width, original.height
+            image.anchor = deepcopy(original.anchor)
+            target.add_image(image)
+        return target
+
     def _populate_pmi(self, wb, batch: dict) -> None:
         ws_gap = wb['PMI(갑)']
         base_eul = wb['PMI(을)']
+        ws_gap.page_margins.left = ws_gap.page_margins.right = 0.25
+        ws_gap.page_margins.top = ws_gap.page_margins.bottom = 0.25
+        ws_gap.page_margins.header = ws_gap.page_margins.footer = 0.15
+        ws_gap.print_options.horizontalCentered = True
+        ws_gap.print_options.verticalCentered = True
+        ws_gap.sheet_properties.pageSetUpPr.fitToPage = True
+        ws_gap.page_setup.fitToWidth = ws_gap.page_setup.fitToHeight = 1
+        ws_gap.page_setup.scale = None
+        self._format_pmi_eul(base_eul)
+        self._align_pmi_page_frames(ws_gap, base_eul)
         measurements = list(batch.get('pmi_measurements') or [])
         element_cols = choose_pmi_element_columns(measurements, batch.get('pmi_elements')) if measurements else []
         source_rows = measurements if measurements else batch.get('rows', [])
-        chunks = self._chunk_rows(source_rows, 15)
+        chunks = self._chunk_rows(source_rows, 20)
         total_pages = 1 + len(chunks)
         d = parse_date_value(batch.get('date', ''))
         insp_kor, insp_eng, _, _ = self._inspector_meta(batch.get('inspector', ''))
@@ -1006,9 +1128,14 @@ class CertificateExporter:
 
         for page_offset, chunk in enumerate(chunks):
             page_no = 2 + page_offset
-            ws_eul = base_eul if page_offset == 0 else wb.copy_worksheet(base_eul)
+            ws_eul = base_eul if page_offset == 0 else self._copy_pmi_eul(wb, base_eul)
             if page_offset > 0:
                 ws_eul.title = f"PMI(을) ({page_offset + 1})"
+            # Clear copied measurements, including the previous blank marker.
+            for cells in ws_eul.iter_rows(min_row=20, max_row=39, min_col=1, max_col=20):
+                for cell in cells:
+                    if not isinstance(cell, MergedCell):
+                        cell.value = None
             _write_cell(ws_eul, 'O3', f"Page       {page_no}        of        {total_pages}     .")
             _write_cell(ws_eul, 'O5', batch.get('customer', ''))
             _write_cell(ws_eul, 'O8', batch.get('report_no', ''))
@@ -1022,7 +1149,7 @@ class CertificateExporter:
             for idx, row in enumerate(chunk):
                 r = 20 + idx
                 if measurements:
-                    seq = page_offset * 15 + idx + 1
+                    seq = page_offset * 20 + idx + 1
                     tag = row.get('tag') or batch.get('item_name', '')
                     comp_part = row.get('component') or f"Point-{seq}"
                     judged_mat = row.get('alloy') or 'MATCH'
@@ -1041,14 +1168,15 @@ class CertificateExporter:
                 judged_mat = _text(row.get('판정재질')) or _text(row.get('재질')) or _text(row.get('결과')) or 'MATCH'
                 _write_cell(ws_eul, f'A{r}', tag)
                 _write_cell(ws_eul, f'E{r}', comp_part)
-                _write_cell(ws_eul, f'G{r}', str(idx + 1))
+                _write_cell(ws_eul, f'G{r}', str(page_offset * 20 + idx + 1))
                 _write_cell(ws_eul, f'N{r}', judged_mat)
                 _write_cell(ws_eul, f'O{r}', clean_worker_name(batch.get('inspector', '')) or '주진철')
                 _write_cell(ws_eul, f'P{r}', d)
                 _write_cell(ws_eul, f'T{r}', row_remarks(row))
 
             blank_row = 20 + len(chunk)
-            if blank_row <= 36:
+            if blank_row <= 39:
+                ws_eul.merge_cells(f'H{blank_row}:M{blank_row}')
                 _write_cell(ws_eul, f'H{blank_row}', '~ B  L  A  N  K ~')
 
 

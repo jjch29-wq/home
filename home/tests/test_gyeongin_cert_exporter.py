@@ -787,6 +787,82 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertIsNone(eul['K20'].value)
 
 
+
+    def test_pmi_pages_fill_through_row_39_without_stale_rows(self):
+        exporter = CertificateExporter()
+        for count in (20, 21, 40, 526):
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as tmp:
+                batch = {'method': 'PMI', 'date': '2026-11-12'}
+                batch['pmi_measurements'] = [
+                    {'tag': f'TAG-{n}', 'alloy': 'SS316', 'elements': {'Ni': '10.5', 'Cr': '17.0', 'Mo': '2.0'}}
+                    for n in range(1, count + 1)
+                ]
+                out = exporter.export_certificate(batch, Path(tmp) / 'pages.xlsx')
+                wb = openpyxl.load_workbook(out)
+                pages = wb.worksheets[1:]
+                cover = wb.worksheets[0]
+                def printed_height(sheet, start, end):
+                    return sum(sheet.row_dimensions[r].height or sheet.sheet_format.defaultRowHeight
+                               for r in range(start, end + 1))
+                self.assertAlmostEqual(printed_height(cover, 1, 50),
+                                       printed_height(pages[0], 1, 39), places=3)
+                self.assertEqual(printed_height(cover, 1, 4), printed_height(pages[0], 1, 4))
+                for sheet in wb.worksheets:
+                    self.assertEqual(sheet.page_margins.left, sheet.page_margins.right)
+                    self.assertEqual(sheet.page_margins.top, sheet.page_margins.bottom)
+                    self.assertEqual(sheet.page_margins.left, 0.25)
+                    self.assertEqual(sheet.page_margins.top, 0.25)
+                    self.assertTrue(sheet.print_options.horizontalCentered)
+                    self.assertTrue(sheet.print_options.verticalCentered)
+                    for column in range(1, 21):
+                        letter = openpyxl.utils.get_column_letter(column)
+                        self.assertEqual(sheet.column_dimensions[letter].width,
+                                         pages[0].column_dimensions[letter].width)
+                self.assertEqual(len(pages), (count + 19) // 20)
+                seen = []
+                for page_index, ws in enumerate(pages):
+                    self.assertIn('$A$1:$T$39', str(ws.print_area))
+                    self.assertEqual(str(ws.oddFooter), str(pages[0].oddFooter))
+                    self.assertTrue(str(ws.oddFooter))
+                    self.assertEqual(len(ws._images), len(pages[0]._images))
+                    self.assertGreater(len(ws._images), 0)
+                    self.assertFalse(ws.column_dimensions['D'].hidden)
+                    self.assertIsNone(ws.page_setup.scale)
+                    self.assertTrue(ws.sheet_properties.pageSetUpPr.fitToPage)
+                    self.assertEqual(ws.page_setup.fitToWidth, 1)
+                    self.assertEqual(ws.page_setup.fitToHeight, 1)
+                    self.assertTrue(ws.print_options.verticalCentered)
+                    for row_number in range(20, 40):
+                        self.assertEqual(ws.row_dimensions[row_number].height, 28)
+                        self.assertIn(f'A{row_number}:D{row_number}', ws.merged_cells)
+                        for column in ('A', 'E', 'G', 'H', 'I', 'J', 'N', 'O', 'P', 'T'):
+                            cell = ws[f'{column}{row_number}']
+                            if isinstance(cell, openpyxl.cell.cell.MergedCell):
+                                continue
+                            self.assertEqual(cell.font.name, '바탕')
+                            self.assertEqual(cell.font.sz, 10)
+                            self.assertFalse(cell.alignment.shrink_to_fit)
+                            self.assertEqual(cell.border.bottom.style,
+                                             'medium' if row_number == 39 else 'thin')
+                    self.assertEqual(ws['D39'].border.bottom.style, 'medium')
+                    used = min(20, count - page_index * 20)
+                    for r in range(20, 20 + used):
+                        seq = page_index * 20 + r - 19
+                        self.assertEqual(ws[f'A{r}'].value, f'TAG-{seq}')
+                        self.assertEqual(ws[f'G{r}'].value, str(seq))
+                        self.assertEqual(ws[f'H{r}'].value, '10.5')
+                        self.assertEqual(ws[f'I{r}'].value, '17.0')
+                        self.assertEqual(ws[f'J{r}'].value, '2.0')
+                        seen.append(seq)
+                    for r in range(20 + used, 40):
+                        for col in ('A', 'E', 'G', 'N', 'O', 'P', 'T'):
+                            self.assertIsNone(ws[f'{col}{r}'].value)
+                    if used < 20:
+                        self.assertEqual(ws[f'H{20 + used}'].value, '~ B  L  A  N  K ~')
+                self.assertEqual(seen, list(range(1, count + 1)))
+                wb.close()
+
+
 if __name__ == '__main__':
     unittest.main()
 
