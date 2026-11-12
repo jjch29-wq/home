@@ -1919,12 +1919,23 @@ class DailyWorkLogTab(ttk.Frame):
     def _current_ndt_rows_for_export(self):
         checked = []
         all_rows = []
+        meta_map = getattr(self, '_imported_row_meta', {})
         for idx, row_entries in enumerate(self.ndt_grid_entries):
             row_dict = {
                 col: ent.get() for col, ent in row_entries.items() if hasattr(ent, 'get')
             }
             if not any(str(v).strip() for v in row_dict.values()):
                 continue
+            sig = (
+                str(row_dict.get('업체', '')).strip(),
+                str(row_dict.get('검사방법', '')).strip().upper(),
+                str(row_dict.get('검사품명', '')).strip(),
+                str(row_dict.get('성적서번호', '')).strip(),
+            )
+            if sig in meta_map:
+                for mk, mv in meta_map[sig].items():
+                    if mv and not row_dict.get(mk):
+                        row_dict[mk] = mv
             all_rows.append(row_dict)
             if idx < len(self.ndt_selection_vars) and self.ndt_selection_vars[idx].get():
                 checked.append(row_dict)
@@ -2046,6 +2057,17 @@ class DailyWorkLogTab(ttk.Frame):
                 last_target_type = target_type
 
             existing_sigs.add(sig)
+            if not hasattr(self, '_imported_row_meta'):
+                self._imported_row_meta = {}
+            src_date = self._clean_import_text(rec.get('Date') or rec.get('날짜'))
+            self._imported_row_meta[sig] = {
+                '_source_date': parse_date_value(src_date).strftime('%Y-%m-%d') if src_date else '',
+                '장비명': self._clean_import_text(rec.get('장비명')),
+                '보조장비': self._clean_import_text(rec.get('보조장비')),
+                '작업자': self._clean_import_text(rec.get('User') or rec.get('작업자')),
+                'Site': self._clean_import_text(rec.get('Site') or rec.get('현장')),
+                '발주처': self._clean_import_text(rec.get('발주처')),
+            }
             added += 1
 
         if added > 0:
@@ -2055,7 +2077,7 @@ class DailyWorkLogTab(ttk.Frame):
         return added, skipped
 
     def load_from_daily_usage(self):
-        """현재 작업일보 날짜의 현장 일일기록(DailyUsage)을 NDT 표로 불러옵니다."""
+        """'1. 업체별 검사 실적' 조회 기간(시작일~상단 검사일자)의 일일기록을 NDT 표로 불러옵니다."""
         from site_apps.gyeongin.src.cert_exporter import normalize_cert_method, parse_date_value
 
         df = self._daily_usage_frame()
@@ -2063,23 +2085,55 @@ class DailyWorkLogTab(ttk.Frame):
             messagebox.showinfo("일일기록 불러오기", "저장된 현장 일일기록이 없습니다.", parent=self)
             return
 
-        date_key = self._selected_date_key()
+        end_key = self._selected_date_key()
+        try:
+            start_key = self.company_start_date.get_date().strftime('%Y-%m-%d')
+        except Exception:
+            start_key = end_key
+        if start_key > end_key:
+            start_key = end_key
+
+        selected_company = ''
+        selected_method = ''
+        if hasattr(self, 'company_summary_tree'):
+            sel = self.company_summary_tree.selection()
+            if sel:
+                vals = self.company_summary_tree.item(sel[0]).get('values', ())
+                if len(vals) >= 2:
+                    selected_company = str(vals[0] or '').strip()
+                    selected_method = str(vals[1] or '').strip().upper()
+
         matched = []
         for _, row in df.iterrows():
             raw_d = self._clean_import_text(row.get('Date') or row.get('날짜'))
-            if not raw_d or parse_date_value(raw_d).strftime('%Y-%m-%d') != date_key:
+            if not raw_d:
+                continue
+            row_date = parse_date_value(raw_d).strftime('%Y-%m-%d')
+            if row_date < start_key or row_date > end_key:
                 continue
             method = self._clean_import_text(row.get('검사방법')).upper()
             if not normalize_cert_method(method):
                 continue
+            if selected_company:
+                row_comp = self._clean_import_text(row.get('업체명') or row.get('업체')) or '경인사무소'
+                if row_comp != selected_company:
+                    continue
+            if selected_method and method != selected_method:
+                continue
             matched.append(row)
 
         if not matched:
-            messagebox.showinfo("일일기록 불러오기", f"{date_key} 날짜에 불러올 NDT 검사 기록이 없습니다.", parent=self)
+            scope = f"{selected_company} ({selected_method}) " if selected_company else ""
+            messagebox.showinfo(
+                "일일기록 불러오기",
+                f"{start_key} ~ {end_key} 기간에 불러올 {scope}NDT 검사 기록이 없습니다.",
+                parent=self,
+            )
             return
 
-        added, skipped = self.import_daily_usage_rows(matched, target_date=date_key)
-        msg = f"{date_key} 일일기록 {added}건을 작업일보 NDT 표로 불러왔습니다."
+        added, skipped = self.import_daily_usage_rows(matched, target_date=None)
+        scope_label = f"{selected_company} {selected_method} " if selected_company else ""
+        msg = f"{start_key} ~ {end_key} {scope_label}일일기록 {added}건을 작업일보 NDT 표로 불러왔습니다."
         if skipped:
             msg += f"\n(이미 입력된 중복 {skipped}건 제외)"
         msg += "\n\n부족한 식별번호·재질·세부 치수를 보완한 뒤 '📄 시험성적서 출력'을 누르세요."

@@ -545,6 +545,77 @@ class GyeonginCertExporterTests(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_load_from_daily_usage_respects_date_range_and_selected_summary_row(self):
+        import datetime as dt
+        import tkinter as tk
+        from types import SimpleNamespace
+        from unittest import mock
+        import pandas as pd
+        from site_apps.gyeongin.src.cert_exporter import build_cert_batches
+        from site_apps.gyeongin.src.daily_work_log_tab import DailyWorkLogTab
+
+        df = pd.DataFrame([
+            {
+                'Date': '2026-11-09',
+                'Site': '유성정공',
+                '업체명': '현대산업',
+                '검사방법': 'MT',
+                '검사품명': 'CONVEYOR PULLEY',
+                '장비명': 'Yoke AC(MY-2 NW0453)',
+                'Usage': 16.9,
+                'Unit': 'M',
+                'User': '계장 이경재',
+            },
+            {
+                'Date': '2026-11-11',
+                'Site': '성원에드피아',
+                '업체명': '현대건설',
+                '검사방법': 'PMI',
+                '검사품명': 'Beam',
+                '장비명': '합금분석기(X-ray) XL2 100G(200983)',
+                'Usage': 15.0,
+                'Unit': 'EA',
+                'User': '부장 주진철',
+            },
+        ])
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                app_stub = SimpleNamespace(daily_usage_df=df)
+                tab = DailyWorkLogTab(root)
+                tab.main_app = app_stub
+                tab.history_path = str(Path(tmp) / 'history.json')
+                tab.company_start_date.set_date(dt.date(2026, 11, 9))
+                tab.date_entry.set_date(dt.date(2026, 11, 12))
+                tab.refresh_company_summary()
+                # Select 현대산업 MT row in company_summary_tree
+                target_iid = next(
+                    iid for iid in tab.company_summary_tree.get_children()
+                    if tab.company_summary_tree.item(iid)['values'][:2] == ['현대산업', 'MT']
+                )
+                tab.company_summary_tree.selection_set(target_iid)
+
+                with mock.patch('tkinter.messagebox.showinfo'):
+                    tab.load_from_daily_usage()
+
+                self.assertEqual(tab.ndt_grid_entries[0]['업체'].get(), '현대산업')
+                self.assertEqual(tab.ndt_grid_entries[0]['검사방법'].get(), 'MT')
+                self.assertEqual(tab.ndt_grid_entries[1]['업체'].get(), '')
+
+                # Exporting from 2026-11-12 still finds 2026-11-09 equipment & site via _source_date
+                batches = build_cert_batches(
+                    tab._current_ndt_rows_for_export(),
+                    target_date='2026-11-12',
+                    daily_usage_df=df,
+                )
+                self.assertEqual(len(batches), 1)
+                self.assertEqual(batches[0]['equipment'], 'Yoke AC(MY-2 NW0453)')
+                self.assertEqual(batches[0]['project_name'], '유성정공')
+        finally:
+            root.destroy()
+
 
 if __name__ == '__main__':
     unittest.main()

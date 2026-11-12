@@ -394,12 +394,12 @@ def build_cert_batches(
         seq_by_pair[pair] = seq_by_pair.get(pair, 0) + 1
         seq = seq_by_pair[pair]
 
-        ctx = find_daily_usage_context(daily_usage_df, target_date, company, cert_method)
-        report_no = explicit_no or ctx['report_no'] or default_report_no(target_date, company, cert_method, seq)
-
         first_non_empty = lambda k: next((_text(r.get(k)) for r in rows if _text(r.get(k))), '')
+        ctx_date = first_non_empty('_source_date') or target_date
+        ctx = find_daily_usage_context(daily_usage_df, ctx_date, company, cert_method)
+        report_no = explicit_no or ctx['report_no'] or default_report_no(ctx_date, company, cert_method, seq)
         customer = first_non_empty('발주처') or ctx['customer'] or company
-        project_name = first_non_empty('공사명') or ctx['site'] or (_text(default_site) if _text(default_site) != '경인사무소' else '') or 'N/A'
+        project_name = first_non_empty('공사명') or first_non_empty('Site') or ctx['site'] or (_text(default_site) if _text(default_site) != '경인사무소' else '') or 'N/A'
 
         item_names = list(dict.fromkeys(filter(None, (_text(r.get('검사품명')) for r in rows))))
         if not item_names and ctx['test_item']:
@@ -446,10 +446,10 @@ def build_cert_batches(
             'standard_short': spec or ('ASME' if 'ASME' in code_proc.upper() else 'KS'),
             'surface': first_non_empty('표면상태') or 'AS MACHINED',
             'requester': first_non_empty('의뢰자') or '담당자',
-            'inspector': ctx['workers'] or '주진철',
+            'inspector': clean_worker_name(first_non_empty('작업자')) or ctx['workers'] or '주진철',
             'approver': '권인경',
-            'equipment': ctx['equipment'],
-            'aux_equipment': ctx['aux_equipment'],
+            'equipment': first_non_empty('장비명') or ctx['equipment'],
+            'aux_equipment': first_non_empty('보조장비') or ctx['aux_equipment'],
             'target_type': first_non_empty('대상유형') or '일반',
             'rows': rows,
         })
