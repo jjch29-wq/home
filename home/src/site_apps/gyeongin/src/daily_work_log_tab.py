@@ -1960,7 +1960,6 @@ class DailyWorkLogTab(ttk.Frame):
 
         top = tk.Toplevel(self)
         top.title("시험성적서(갑/을) 출력")
-        top.geometry("660x470")
         top.transient(self.winfo_toplevel())
         top.grab_set()
 
@@ -1977,7 +1976,7 @@ class DailyWorkLogTab(ttk.Frame):
             body,
             columns=('company', 'method', 'count', 'report_no', 'customer', 'project'),
             show='headings',
-            height=6,
+            height=min(6, max(3, len(batches))),
         )
         for col, text, w in (
             ('company', '업체', 120),
@@ -2127,9 +2126,19 @@ class DailyWorkLogTab(ttk.Frame):
                 messagebox.showerror("오류", f"시험성적서 생성 중 오류가 발생했습니다:\n{e}", parent=top)
 
         btn_bar = ttk.Frame(body)
-        btn_bar.pack(fill='x', pady=(6, 0))
+        btn_bar.pack(fill='x', pady=(8, 0))
         ttk.Button(btn_bar, text="시험성적서 생성", command=do_export).pack(side='right', padx=4)
         ttk.Button(btn_bar, text="닫기", command=top.destroy).pack(side='right')
+
+        top.update_idletasks()
+        req_w = max(720, top.winfo_reqwidth() + 16)
+        req_h = max(480, top.winfo_reqheight() + 16)
+        max_w = max(680, top.winfo_screenwidth() - 80)
+        max_h = max(480, top.winfo_screenheight() - 80)
+        win_w = min(req_w, max_w)
+        win_h = min(req_h, max_h)
+        top.geometry(f"{win_w}x{win_h}")
+        top.minsize(min(680, win_w), win_h)
 
     def export_certificate_ledger(self):
         """작업일보 전체 이력을 바탕으로 업체별 성적서 발행대장을 생성/누적합니다."""
