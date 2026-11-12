@@ -304,7 +304,7 @@ def match_black_light_profile(aux_text: str) -> tuple[str, str]:
     return ' / '.join(makers), ' / '.join(models)
 
 
-def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method: str) -> dict:
+def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method: str, report_no: str = '') -> dict:
     """Lookup matching DailyUsage fields for (date, company, method) without mutating df."""
     empty = {
         'site': '',
@@ -338,6 +338,8 @@ def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method
         row_method = _text(row.get('검사방법') or row.get('Method')).upper()
         if target_method and row_method and not row_method.startswith(target_method):
             continue
+        if report_no and _text(row.get('성적서번호')) not in ('', report_no):
+            continue
         matched_rows.append(row)
 
     # Relax method match if exact method row was not recorded yet for that date+company
@@ -347,7 +349,8 @@ def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method
             if not raw_d or parse_date_value(raw_d) != target_date:
                 continue
             row_comp = _text(row.get('업체명') or row.get('업체')).casefold()
-            if row_comp == target_comp:
+            row_method = _text(row.get('검사방법') or row.get('Method')).upper()
+            if row_comp == target_comp and not row_method and (not report_no or _text(row.get('성적서번호')) in ('', report_no)):
                 matched_rows.append(row)
 
     if not matched_rows:
@@ -361,15 +364,15 @@ def find_daily_usage_context(daily_usage_df, date_str: str, company: str, method
                     return v
         return ''
 
-    site = first_non_empty('Site', '현장')
+    site = first_non_empty('공사명', '공사명/현장', '현장명', 'Site', '현장')
     if site == '경인사무소':
         site = ''
     return {
         'site': site,
         'customer': first_non_empty('발주처'),
-        'equipment': first_non_empty('장비명'),
+        'equipment': first_non_empty('장비명', '장비', 'Equipment'),
         'aux_equipment': first_non_empty('보조장비'),
-        'workers': clean_worker_name(first_non_empty('Workers', 'Worker1', '작업자')),
+        'workers': clean_worker_name(first_non_empty('Workers', 'User', 'Worker1', '작업자', '검사자')),
         'report_no': first_non_empty('성적서번호'),
         'applied_code': first_non_empty('적용코드'),
         'test_item': first_non_empty('검사품명'),
@@ -466,10 +469,12 @@ def build_cert_batches(
 
         first_non_empty = lambda k: next((_text(r.get(k)) for r in rows if _text(r.get(k))), '')
         ctx_date = first_non_empty('_source_date') or target_date
-        ctx = find_daily_usage_context(daily_usage_df, ctx_date, company, cert_method)
+        ctx = find_daily_usage_context(daily_usage_df, ctx_date, company, cert_method, explicit_no)
         report_no = explicit_no or ctx['report_no'] or default_report_no(ctx_date, company, cert_method, seq)
         customer = first_non_empty('발주처') or ctx['customer'] or company
-        project_name = first_non_empty('공사명') or first_non_empty('Site') or ctx['site'] or (_text(default_site) if _text(default_site) != '경인사무소' else '') or 'N/A'
+        source_project = next((value for value in (first_non_empty('공사명'), first_non_empty('Site'), ctx['site'])
+                               if value and value.upper() not in ('N/A', '-') and value != '경인사무소'), '')
+        project_name = source_project or (_text(default_site) if _text(default_site) != '경인사무소' else '') or 'N/A'
 
         item_names = list(dict.fromkeys(filter(None, (_text(r.get('검사품명')) for r in rows))))
         if not item_names and ctx['test_item']:
@@ -524,6 +529,21 @@ def build_cert_batches(
             'target_type': first_non_empty('대상유형') or '일반',
             'rows': rows,
         })
+        # The daily record is the source for shared header fields. Saved PMI
+        # criteria may supplement these fields, but must not replace them with
+        # an older empty header or another equipment selection.
+        daily_header = {
+            'project_name': source_project,
+            'equipment': first_non_empty('장비명') or ctx['equipment'],
+            'aux_equipment': first_non_empty('보조장비') or ctx['aux_equipment'],
+            'customer': first_non_empty('발주처') or ctx['customer'],
+            'inspector': clean_worker_name(first_non_empty('작업자')) or ctx['workers'],
+        }
+        if spec or proc:
+            daily_header['code_procedure'] = code_proc
+            daily_header['standard_family'] = classify_standard_family(code_proc) or std_family
+        batches[-1]['_daily_context'] = {key: val for key, val in daily_header.items()
+                                        if val and str(val).strip().upper() not in ('N/A', '-')}
 
     return batches
 
@@ -1093,6 +1113,11 @@ class CertificateExporter:
     def _populate_pmi(self, wb, batch: dict) -> None:
         ws_gap = wb['PMI(갑)']
         base_eul = wb['PMI(을)']
+        # Use the same right-footer graphic as MT/PT/UT. Set this before
+        # copying detail sheets so every continuation page inherits it.
+        for sheet in (ws_gap, base_eul):
+            sheet.oddFooter.right.text = '&G'
+            sheet.HeaderFooter.alignWithMargins = False
         ws_gap.page_margins.left = ws_gap.page_margins.right = 0.25
         ws_gap.page_margins.top = ws_gap.page_margins.bottom = 0.25
         ws_gap.page_margins.header = ws_gap.page_margins.footer = 0.15
@@ -1104,10 +1129,16 @@ class CertificateExporter:
         self._format_pmi_eul(base_eul)
         self._align_pmi_page_frames(ws_gap, base_eul)
         measurements = list(batch.get('pmi_measurements') or [])
-        element_cols = choose_pmi_element_columns(measurements, batch.get('pmi_elements')) if measurements else []
+        element_cols = choose_pmi_element_columns(measurements, batch.get('pmi_elements')) if measurements or batch.get('pmi_elements') else []
+        criteria = batch.get('pmi_criteria') or []
+        criteria_elements = choose_pmi_element_columns(measurements, batch.get('pmi_elements'))
+        if criteria:
+            from site_apps.gyeongin.src.pmi_criteria import validate_criteria
+            validate_criteria(criteria, criteria_elements)
         source_rows = measurements if measurements else batch.get('rows', [])
         chunks = self._chunk_rows(source_rows, 20)
-        total_pages = 1 + len(chunks)
+        criteria_pages = (max(0, len(criteria) - 4) + 3) // 4
+        total_pages = 1 + len(chunks) + criteria_pages
         d = parse_date_value(batch.get('date', ''))
         insp_kor, insp_eng, _, _ = self._inspector_meta(batch.get('inspector', ''))
         _, model, sn = match_equipment_profile(batch.get('equipment', ''), 'PMI')
@@ -1142,7 +1173,7 @@ class CertificateExporter:
             _write_cell(ws_eul, 'E19', d)
             _write_cell(ws_eul, 'O19', clean_worker_name(batch.get('inspector', '')) or '주진철')
             _write_cell(ws_eul, 'P19', d)
-            if measurements:
+            if element_cols:
                 for i, slot in enumerate(_PMI_ELEMENT_SLOTS):
                     _write_cell(ws_eul, f'{slot}17', element_cols[i] if i < len(element_cols) else '-')
 
@@ -1178,6 +1209,21 @@ class CertificateExporter:
             if blank_row <= 39:
                 ws_eul.merge_cells(f'H{blank_row}:M{blank_row}')
                 _write_cell(ws_eul, f'H{blank_row}', '~ B  L  A  N  K ~')
+
+        if criteria:
+            from site_apps.gyeongin.src.pmi_criteria import render_criteria
+            # Create continuation covers before changing the original blank area.
+            extra_pages = []
+            for offset in range(4, len(criteria), 4):
+                page = self._copy_pmi_eul(wb, ws_gap)
+                page.title = f'PMI(기준 {offset // 4 + 1})'
+                page.print_area = 'A1:T50'
+                extra_pages.append((page, offset))
+            render_criteria(ws_gap, criteria[:4], criteria_elements)
+            for index, (page, offset) in enumerate(extra_pages, 1):
+                _write_cell(page, 'N3', f'Page        {1 + len(chunks) + index}       of       {total_pages}        .')
+                _write_cell(page, 'E21', 'ACCEPTANCE CRITERIA (CONTINUED)')
+                render_criteria(page, criteria[offset:offset + 4], criteria_elements, offset)
 
 
 PMI_ELEMENT_SYMBOLS = (

@@ -18,6 +18,7 @@ import json
 import re
 import shutil
 import uuid
+from site_apps.gyeongin.src.daily_certificate_context import daily_certificate_context, merge_daily_context
 from site_apps.gyeongin.src.rt_quantities import rt_counts, sync_rt_widgets, widget_rt_values, resolve_rt_row, retest_parent, default_rt_copy, corrected_rt_history
 
 # Import the exporter
@@ -760,6 +761,7 @@ class DailyWorkLogTab(ttk.Frame):
             # Adjust width for some columns
             w = 8
             if c == '규격': w = 13
+            elif c in ('재질', '요구재질'): w = 14
             elif c == '근무구분': w = 7
             elif c in ('검사방법', '결과', '관경', '두께'): w = 6
             elif c == '업체': w = 16
@@ -884,6 +886,27 @@ class DailyWorkLogTab(ttk.Frame):
                 )
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
                 row_entries[c] = ent
+            elif c in ('재질', '요구재질'):
+                ent = ttk.Combobox(grid_frame, width=w, justify='center')
+                ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky='ew')
+                row_entries[c] = ent
+
+                def material_search(_event=None, widget=ent, r=row_entries):
+                    from site_apps.gyeongin.src.ndt_material_choices import filtered_material_choices
+                    self._sync_ndt_material_choices(r)
+                    prefix = re.match(r'^(.*[,;]\s*)[^,;]*$', widget.get())
+                    widget._material_prefix = prefix.group(1) if prefix else ''
+                    widget.configure(values=filtered_material_choices(widget['values'], widget.get()))
+
+                def material_selected(_event=None, widget=ent):
+                    prefix = getattr(widget, '_material_prefix', '')
+                    if prefix:
+                        widget.set(prefix + widget.get())
+                    widget._material_prefix = ''
+
+                ent.bind('<KeyRelease>', material_search, add='+')
+                ent.bind('<<ComboboxSelected>>', material_selected, add='+')
+                ent.configure(postcommand=material_search)
             elif c == '업체':
                 ent = ttk.Combobox(grid_frame, width=w, values=self.history_companies, justify='center')
                 ent.grid(row=row_idx, column=col_idx, padx=1, pady=1, sticky="ew")
@@ -1095,6 +1118,7 @@ class DailyWorkLogTab(ttk.Frame):
                 self._set_ndt_view()
 
         self._sync_ndt_item_choices(row)
+        self._sync_ndt_material_choices(row)
 
         default_code = preset.get('default_code', '')
         if default_code and '적용규격' in row and not row['적용규격'].get().strip():
@@ -1121,6 +1145,15 @@ class DailyWorkLogTab(ttk.Frame):
             fallback_items=target_defaults,
         )
         row['검사품명'].configure(values=choices)
+
+    def _sync_ndt_material_choices(self, row):
+        from site_apps.gyeongin.src.ndt_material_choices import material_choices
+        company = row['업체'].get().strip()
+        method = row['검사방법'].get().strip().upper()
+        history = getattr(self, 'history_ndt_materials', {}).get((company, method), ())
+        for key in ('재질', '요구재질'):
+            if key in row and hasattr(row[key], 'configure'):
+                row[key].configure(values=material_choices(company, method, history))
 
     def _sync_ndt_dimension_choices(self, row):
         target_type = row['대상유형'].get().strip()
@@ -1884,6 +1917,7 @@ class DailyWorkLogTab(ttk.Frame):
         # NDT - only gather rows that have at least one non-empty value
         for row_entries in self.ndt_grid_entries:
             row_dict = {col: ent.get() for col, ent in row_entries.items()}
+            row_dict = merge_daily_context(row_dict, getattr(row_entries.get('업체'), '_daily_usage_meta', {}))
             row_dict['용접사'] = self._normalize_welder_id(row_dict.get('용접사'))
             if any(val.strip() for val in row_dict.values()):
                 data['ndt_results'].append(row_dict)
@@ -1940,10 +1974,9 @@ class DailyWorkLogTab(ttk.Frame):
                 str(row_dict.get('검사품명', '')).strip(),
                 str(row_dict.get('성적서번호', '')).strip(),
             )
+            row_dict = merge_daily_context(row_dict, getattr(row_entries.get('업체'), '_daily_usage_meta', {}))
             if sig in meta_map:
-                for mk, mv in meta_map[sig].items():
-                    if mv and not row_dict.get(mk):
-                        row_dict[mk] = mv
+                row_dict = merge_daily_context(row_dict, meta_map[sig])
             all_rows.append(row_dict)
             if idx < len(self.ndt_selection_vars) and self.ndt_selection_vars[idx].get():
                 checked.append(row_dict)
@@ -2018,6 +2051,17 @@ class DailyWorkLogTab(ttk.Frame):
             report_no = self._clean_import_text(rec.get('성적서번호'))
             sig = (company, raw_method, item_name, report_no)
             if sig in existing_sigs:
+                # Re-importing an existing daily row must still refresh its
+                # shared header fields (e.g. equipment corrected in DailyUsage).
+                context = daily_certificate_context(rec)
+                for existing_row in self.ndt_grid_entries:
+                    existing_sig = tuple(existing_row[k].get().strip() if k in existing_row else ''
+                                         for k in ('업체', '검사방법', '검사품명', '성적서번호'))
+                    if existing_sig == sig:
+                        existing_row['업체']._daily_usage_meta = context
+                        for field in ('공사명', '발주처'):
+                            if field in existing_row and context.get(field):
+                                self._set_grid_cell(existing_row[field], context[field])
                 skipped += 1
                 continue
 
@@ -2025,9 +2069,18 @@ class DailyWorkLogTab(ttk.Frame):
             self._set_grid_cell(row_w['업체'], company)
             self._set_grid_cell(row_w['검사방법'], raw_method)
             self._apply_company_method_preset(row_w, source='method')
+            context = daily_certificate_context(rec)
+            row_w['업체']._daily_usage_meta = context
+            for field in ('공사명', '발주처'):
+                if field in row_w and context.get(field):
+                    self._set_grid_cell(row_w[field], context[field])
 
             if item_name and '검사품명' in row_w:
                 self._set_grid_cell(row_w['검사품명'], item_name)
+            for material_field in ('재질', '요구재질', '판정재질'):
+                material_value = self._clean_import_text(rec.get(material_field))
+                if material_value and material_field in row_w:
+                    self._set_grid_cell(row_w[material_field], material_value)
             applied_code = self._clean_import_text(rec.get('적용코드'))
             if applied_code and '적용규격' in row_w:
                 self._set_grid_cell(row_w['적용규격'], applied_code)
@@ -2068,14 +2121,8 @@ class DailyWorkLogTab(ttk.Frame):
             if not hasattr(self, '_imported_row_meta'):
                 self._imported_row_meta = {}
             src_date = self._clean_import_text(rec.get('Date') or rec.get('날짜'))
-            self._imported_row_meta[sig] = {
-                '_source_date': parse_date_value(src_date).strftime('%Y-%m-%d') if src_date else '',
-                '장비명': self._clean_import_text(rec.get('장비명')),
-                '보조장비': self._clean_import_text(rec.get('보조장비')),
-                '작업자': self._clean_import_text(rec.get('User') or rec.get('작업자')),
-                'Site': self._clean_import_text(rec.get('Site') or rec.get('현장')),
-                '발주처': self._clean_import_text(rec.get('발주처')),
-            }
+            context['_source_date'] = parse_date_value(src_date).strftime('%Y-%m-%d') if src_date else ''
+            self._imported_row_meta[sig] = context
             added += 1
 
         if added > 0:
@@ -2173,6 +2220,21 @@ class DailyWorkLogTab(ttk.Frame):
             )
             return
 
+        from pathlib import Path
+        from site_apps.gyeongin.src.pmi_criteria import (
+            restore_report, save_report, state_key, edit_criteria_dialog,
+            saved_projects, restore_project,
+        )
+        criteria_state_path = Path(self.history_path).parent / 'pmi_criteria_state.json'
+        try:
+            for batch in batches:
+                if batch.get('method') == 'PMI':
+                    batch['_pmi_state_key'] = state_key(batch)
+                    restore_report(batch, criteria_state_path)
+        except (ValueError, OSError) as exc:
+            messagebox.showerror('PMI 기준 불러오기', str(exc), parent=self)
+            return
+
         top = tk.Toplevel(self)
         top.title("시험성적서(갑/을) 출력")
         top.transient(self.winfo_toplevel())
@@ -2238,7 +2300,12 @@ class DailyWorkLogTab(ttk.Frame):
         ]
         for label_txt, key, r_i, c_i in fields_meta:
             ttk.Label(edit_box, text=label_txt).grid(row=r_i, column=c_i, sticky='w', padx=(4, 6), pady=3)
-            ttk.Entry(edit_box, textvariable=vars_map[key], width=24).grid(
+            if key == 'project_name':
+                project_combo = ttk.Combobox(edit_box, textvariable=vars_map[key], width=24)
+                field_widget = project_combo
+            else:
+                field_widget = ttk.Entry(edit_box, textvariable=vars_map[key], width=24)
+            field_widget.grid(
                 row=r_i, column=c_i + 1, sticky='ew', padx=(0, 10), pady=3
             )
 
@@ -2320,6 +2387,7 @@ class DailyWorkLogTab(ttk.Frame):
             b['pmi_measurements'] = measurements
             b['pmi_source'] = os.path.basename(path)
             b.pop('pmi_elements', None)
+            save_form()
             refresh_pmi_status()
 
         def clear_pmi_file():
@@ -2327,18 +2395,18 @@ class DailyWorkLogTab(ttk.Frame):
             b.pop('pmi_measurements', None)
             b.pop('pmi_source', None)
             b.pop('pmi_elements', None)
+            save_form()
             refresh_pmi_status()
 
         def select_pmi_elements():
             b = batches[selected_idx[0]]
             measurements = b.get('pmi_measurements') or []
-            if not measurements:
-                return
             from site_apps.gyeongin.src.cert_exporter import (
                 available_pmi_elements,
                 choose_pmi_element_columns,
+                PMI_ELEMENT_SYMBOLS,
             )
-            available = available_pmi_elements(measurements)
+            available = available_pmi_elements(measurements) if measurements else list(PMI_ELEMENT_SYMBOLS)
             order = list(choose_pmi_element_columns(measurements, b.get('pmi_elements')))
             win = tk.Toplevel(top)
             win.title('출력 원소 선택 (최대 6개, 체크 순서 = H~M 칸 순서)')
@@ -2408,6 +2476,7 @@ class DailyWorkLogTab(ttk.Frame):
 
             def reset_default():
                 b.pop('pmi_elements', None)
+                save_report(b, criteria_state_path, b.get('_pmi_state_key'))
                 refresh_pmi_status()
                 win.destroy()
 
@@ -2416,6 +2485,7 @@ class DailyWorkLogTab(ttk.Frame):
                     messagebox.showwarning('원소 선택', '원소를 1개 이상 선택하세요.', parent=win)
                     return
                 b['pmi_elements'] = list(order)
+                save_report(b, criteria_state_path, b.get('_pmi_state_key'))
                 refresh_pmi_status()
                 win.destroy()
 
@@ -2507,6 +2577,7 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Label(bulk, text='(선택 없으면 전체)', foreground='#64748b').pack(side='left', padx=6)
 
             def close():
+                save_form()
                 refresh_pmi_status()
                 win.destroy()
 
@@ -2523,14 +2594,36 @@ class DailyWorkLogTab(ttk.Frame):
         pmi_elem_btn.pack(side='left', padx=(0, 8))
         ttk.Label(pmi_frame, textvariable=pmi_status_var, foreground='#1d4ed8').pack(side='left')
 
+        criteria_frame = ttk.Frame(edit_box)
+        criteria_frame.grid(row=5, column=0, columnspan=4, sticky='ew', padx=4, pady=4)
+        criteria_status = tk.StringVar()
+
+        def edit_material_criteria():
+            try:
+                if not save_form():
+                    return
+                edit_criteria_dialog(top, batches[selected_idx[0]], criteria_state_path)
+                refresh_pmi_status()
+            except (ValueError, OSError) as exc:
+                messagebox.showerror('PMI 재질·합격기준', str(exc), parent=top)
+
+        criteria_btn = ttk.Button(criteria_frame, text='재질·합격기준 선택', command=edit_material_criteria)
+        criteria_btn.pack(side='left')
+        ttk.Label(criteria_frame, textvariable=criteria_status).pack(side='left', padx=8)
+
         def refresh_pmi_status():
             b = batches[selected_idx[0]]
             is_pmi = str(b.get('method', '')).upper() == 'PMI'
             state = 'normal' if is_pmi else 'disabled'
+            criteria_btn.configure(state=state)
+            selected_criteria = b.get('pmi_criteria') or []
+            criteria_status.set(
+                (f'갑지 기준표 {len(selected_criteria)}개 / 4개 초과 시 기준 별지 출력' if selected_criteria
+                 else '재질 선택 후 성분 범위를 입력·저장하면 갑지에 표시됩니다.') if is_pmi else '')
             pmi_btn.configure(state=state)
             pmi_clear_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
             pmi_edit_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
-            pmi_elem_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
+            pmi_elem_btn.configure(state=state)
             if not is_pmi:
                 pmi_status_var.set('')
             elif b.get('pmi_measurements'):
@@ -2550,6 +2643,7 @@ class DailyWorkLogTab(ttk.Frame):
         def load_form(idx):
             selected_idx[0] = idx
             b = batches[idx]
+            project_combo['values'] = saved_projects(b, criteria_state_path) if b.get('method') == 'PMI' else []
             equip_combo['values'] = [''] + get_main_equipments_by_method(method=b.get('method', ''))
             code_combo['values'] = code_procedure_candidates(
                 b.get('method', ''),
@@ -2574,8 +2668,31 @@ class DailyWorkLogTab(ttk.Frame):
                 str(selected_idx[0]),
                 values=(b['company'], _method_label(b), len(b['rows']), b['report_no'], b['customer'], b['project_name']),
             )
+            if b.get('method') == 'PMI':
+                try:
+                    save_report(b, criteria_state_path, b.get('_pmi_state_key'))
+                    project_combo['values'] = saved_projects(b, criteria_state_path)
+                except (ValueError, OSError) as exc:
+                    messagebox.showerror('현장 설정 저장', str(exc), parent=top)
+                    return False
+            return True
 
-        ttk.Button(edit_box, text="목록에 적용", command=save_form).grid(row=3, column=3, sticky='e', pady=3)
+        def load_saved_project(_event=None):
+            b = batches[selected_idx[0]]
+            try:
+                previous_project = b.get('project_name')
+                if restore_project(b, criteria_state_path, vars_map['project_name'].get().strip()):
+                    if previous_project != b.get('project_name'):
+                        b.pop('pmi_measurements', None)
+                        b.pop('pmi_source', None)
+                    load_form(selected_idx[0])
+                    tree.item(str(selected_idx[0]), values=(b['company'], _method_label(b),
+                              len(b['rows']), b['report_no'], b['customer'], b['project_name']))
+            except (ValueError, OSError) as exc:
+                messagebox.showerror('현장 설정 불러오기', str(exc), parent=top)
+
+        project_combo.bind('<<ComboboxSelected>>', load_saved_project)
+        ttk.Button(edit_box, text="목록 적용·저장", command=save_form).grid(row=3, column=3, sticky='e', pady=3)
         tree.selection_set('0')
         load_form(0)
         tree.bind('<<TreeviewSelect>>', lambda _e: tree.selection() and load_form(int(tree.selection()[0])))
@@ -2600,10 +2717,14 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(ledger_frame, text="...", width=3, command=browse_ledger).pack(side='left')
 
         def do_export():
-            save_form()
+            if not save_form():
+                return
             exporter = CertificateExporter()
             created = []
             try:
+                for b in batches:
+                    if b.get('method') == 'PMI' and ('pmi_criteria' in b or 'pmi_elements' in b):
+                        save_report(b, criteria_state_path, b.get('_pmi_state_key'))
                 if len(batches) == 1:
                     b = batches[0]
                     safe_no = b['report_no'].replace('/', '').replace('\\', '-').replace(':', '-')
@@ -3047,6 +3168,7 @@ class DailyWorkLogTab(ttk.Frame):
         welders = set(self.welder_names)
         history_items = {target: set() for target in NDT_TARGET_TYPES}
         history_dimensions = {target: set() for target in NDT_TARGET_TYPES}
+        history_materials = {}
         for day_data in history.values():
             for row in day_data.get('ndt_results', []):
                 section = str(row.get('구간', '') or '').strip()
@@ -3068,6 +3190,11 @@ class DailyWorkLogTab(ttk.Frame):
                 dimension = str(row.get('치수원문', '') or '').strip()
                 if target_type in history_dimensions and dimension:
                     history_dimensions[target_type].add(dimension)
+                method = str(row.get('검사방법', '') or '').strip().upper()
+                for field in ('재질', '요구재질'):
+                    material = str(row.get(field, '') or '').strip()
+                    if material:
+                        history_materials.setdefault((company, method), set()).add(material)
 
         self.history_sections = [''] + sorted(sections)
         self.history_lines = [''] + sorted(lines)
@@ -3082,6 +3209,7 @@ class DailyWorkLogTab(ttk.Frame):
         self.history_ndt_dimensions = {
             target: sorted(values) for target, values in history_dimensions.items()
         }
+        self.history_ndt_materials = {key: sorted(values) for key, values in history_materials.items()}
 
         for row_entries in self.ndt_grid_entries:
             row_entries['구간'].configure(values=self.history_sections)
@@ -3089,6 +3217,7 @@ class DailyWorkLogTab(ttk.Frame):
             row_entries['업체'].configure(values=self.history_companies)
             row_entries['용접사'].configure(values=self.history_welders)
             self._sync_ndt_item_choices(row_entries)
+            self._sync_ndt_material_choices(row_entries)
             self._sync_ndt_dimension_choices(row_entries)
 
     def _refresh_saved_date_markers(self, history=None):
@@ -3189,6 +3318,7 @@ class DailyWorkLogTab(ttk.Frame):
                         val = self._normalize_welder_id(val)
                     row_dict[col] = str(val) if val else ""
             row_dict.update(getattr(row_entries.get('구간정보'), '_rt_retake_meta', {}))
+            row_dict = merge_daily_context(row_dict, getattr(row_entries.get('업체'), '_daily_usage_meta', {}))
             data['ndt_results'].append(row_dict)
             
         with open('debug_save.txt', 'w', encoding='utf-8') as debug_f:
@@ -3296,6 +3426,7 @@ class DailyWorkLogTab(ttk.Frame):
         # Update NDT Results
         curr_ndt = curr_data.get('ndt_results', [])
         self._ensure_ndt_capacity(len(curr_ndt))
+        self._imported_row_meta = {}
 
         def split_legacy_spec(row_data):
             spec = str(row_data.get('규격', '') or '').strip()
@@ -3313,6 +3444,7 @@ class DailyWorkLogTab(ttk.Frame):
 
         for i, row_entries in enumerate(self.ndt_grid_entries):
             row_data = curr_ndt[i] if i < len(curr_ndt) else {}
+            row_entries['업체']._daily_usage_meta = daily_certificate_context(row_data)
             normalized_spec, work_shift = split_legacy_spec(row_data)
             for col, ent in row_entries.items():
                 if col == '규격':

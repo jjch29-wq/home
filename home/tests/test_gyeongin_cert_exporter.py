@@ -798,6 +798,20 @@ class GyeonginCertExporterTests(unittest.TestCase):
                     for n in range(1, count + 1)
                 ]
                 out = exporter.export_certificate(batch, Path(tmp) / 'pages.xlsx')
+                # Check the saved package: an &G marker alone cannot print a logo.
+                import re
+                import zipfile
+                import xml.etree.ElementTree as ET
+                ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                with zipfile.ZipFile(out) as package:
+                    self.assertEqual(
+                        package.read('xl/media/footer_sitco.png'),
+                        (exporter.template_dir.parent / '바닥글 PMI.png').read_bytes(),
+                    )
+                    for name in package.namelist():
+                        if re.fullmatch(r'xl/worksheets/sheet\d+\.xml', name):
+                            sheet_xml = ET.fromstring(package.read(name))
+                            self.assertIsNotNone(sheet_xml.find('s:legacyDrawingHF', ns))
                 wb = openpyxl.load_workbook(out)
                 pages = wb.worksheets[1:]
                 cover = wb.worksheets[0]
@@ -808,6 +822,10 @@ class GyeonginCertExporterTests(unittest.TestCase):
                                        printed_height(pages[0], 1, 39), places=3)
                 self.assertEqual(printed_height(cover, 1, 4), printed_height(pages[0], 1, 4))
                 for sheet in wb.worksheets:
+                    self.assertEqual(sheet.oddFooter.right.text, '&G')
+                    self.assertFalse(sheet.HeaderFooter.alignWithMargins)
+                    self.assertIn('H 801-1' if sheet is cover else 'H 801-2',
+                                  sheet.oddFooter.left.text)
                     self.assertEqual(sheet.page_margins.left, sheet.page_margins.right)
                     self.assertEqual(sheet.page_margins.top, sheet.page_margins.bottom)
                     self.assertEqual(sheet.page_margins.left, 0.25)
