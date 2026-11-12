@@ -2107,14 +2107,19 @@ class MaterialManager:
             self.cb_material['values'] = all_vals
         if hasattr(self, 'cb_daily_material'):
             if isinstance(self.cb_daily_material, ttk.Combobox):
-                # [NEW] Filter: Only include actual consumables (films, chemicals) in the material dropdown
-                consumable_only_vals = [v for v in all_vals if self._is_consumable_material(v.split('[')[0].split('-')[0].strip(), '')]
-                self.cb_daily_material['values'] = consumable_only_vals
+                # Filter materials to active method & consumables so MT/PT/UT/RT show matching items first
+                method_vals = self._get_material_candidates(include_all=False)
+                self.cb_daily_material['values'] = method_vals
                 try:
-                    max_chars = max((len(str(v)) for v in consumable_only_vals), default=12)
-                    self.cb_daily_material.configure(width=min(40, max(22, max_chars + 2)))
+                    max_chars = max((len(str(v)) for v in method_vals), default=14)
+                    self.cb_daily_material.configure(width=min(40, max(25, max_chars + 2)))
                 except Exception:
                     pass
+        if hasattr(self, '_refresh_daily_method_dropdowns'):
+            try:
+                self._refresh_daily_method_dropdowns()
+            except Exception:
+                pass
             
         if hasattr(self, 'cb_daily_equip'):
             # [NEW] Collect history of equipment names from daily usage records (Only if Active)
@@ -2184,15 +2189,24 @@ class MaterialManager:
             if not self.cb_trans_filter_vehicle.get():
                 self.cb_trans_filter_vehicle.set("전체")
 
-    def _get_material_candidates(self, include_all=False):
+    def _get_material_candidates(self, include_all=False, method=None):
         vals = []
         if hasattr(self, 'materials_display_list'):
             vals.extend(getattr(self, 'materials_display_list', []) or [])
-        if hasattr(self, 'cb_daily_material'):
-            pass # Removed reading from widget to prevent recursive filtering issues
 
         cleaned = sorted(set(str(v).strip() for v in vals if str(v).strip() and str(v).strip() != '전체' and not str(v).strip().startswith('ID: ')))
-        return (['전체'] + cleaned) if include_all else cleaned
+        if include_all:
+            return ['전체'] + cleaned
+
+        active_method = method
+        if active_method is None and hasattr(self, 'cb_daily_test_method'):
+            try:
+                active_method = self.cb_daily_test_method.get().strip().upper()
+            except Exception:
+                active_method = ''
+
+        from site_apps.gyeongin.src.company_master import method_material_candidates
+        return method_material_candidates(active_method, inventory_materials=cleaned)
 
     def _get_history_material_candidates(self, include_all=False):
         """Get material names from both current inventory and history for selection"""
@@ -2240,14 +2254,31 @@ class MaterialManager:
         cleaned = sorted([e for e in raw_equip if e != '전체'])
         return ['전체'] + cleaned
 
-    def _get_inspection_item_candidates(self):
-        """Get candidates for Inspection Item (Inspection Item Name)"""
-        items = set(getattr(self, 'test_items', []))
-        if not self.daily_usage_df.empty and '검사품명' in self.daily_usage_df.columns:
-            hist = self.daily_usage_df['검사품명'].dropna().astype(str).str.strip().unique()
-            for h in hist: 
-                if h: items.add(h)
-        return sorted(list(items))
+    def _get_inspection_item_candidates(self, company=None, method=None):
+        """Get candidates for Inspection Item prioritizing (company, method) and report items."""
+        if company is None and hasattr(self, 'cb_daily_company'):
+            try:
+                company = self.cb_daily_company.get().strip()
+            except Exception:
+                company = ''
+        if method is None and hasattr(self, 'cb_daily_test_method'):
+            try:
+                method = self.cb_daily_test_method.get().strip().upper()
+            except Exception:
+                method = ''
+
+        hist_items = []
+        if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '검사품명' in self.daily_usage_df.columns:
+            hist_items = [str(h).strip() for h in self.daily_usage_df['검사품명'].dropna() if str(h).strip()]
+        defaults = sorted(set(str(x).strip() for x in getattr(self, 'test_items', []) if str(x).strip()))
+
+        from site_apps.gyeongin.src.company_master import method_inspection_item_candidates
+        return method_inspection_item_candidates(
+            company=company or '',
+            method=method or '',
+            history_items=hist_items,
+            fallback_items=defaults,
+        )
 
     def _get_applied_code_candidates(self):
         """Get candidates for Applied Code"""
@@ -12192,8 +12223,15 @@ class MaterialManager:
 
         # Inspection Item
         ttk.Label(basic_frame, text="검사품명:").grid(row=4, column=0, padx=5, pady=5, sticky='w')
-        ent_item = ttk.Entry(basic_frame, width=40)
-        ent_item.insert(0, self.clean_nan(entry_data.get('검사품명', '')))
+        ent_item = ttk.Combobox(
+            basic_frame,
+            width=38,
+            values=self._get_inspection_item_candidates(
+                company=self.clean_nan(entry_data.get('업체명', '')),
+                method=self.clean_nan(entry_data.get('검사방법', '')),
+            ),
+        )
+        ent_item.set(self.clean_nan(entry_data.get('검사품명', '')))
         ent_item.grid(row=4, column=1, columnspan=3, padx=5, pady=5, sticky='w')
         fields['검사품명'] = ent_item
 

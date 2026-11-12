@@ -1390,9 +1390,13 @@
     function updateMaterialOptions(method) {
       const matSelect = document.getElementById("select-material");
       if (!appConfig) return;
-      const materials = method === "RT" ? (appConfig.materials || []) :
-        method === "PT" ? ["PT \uC57D\uD488 \uC138\uD2B8"] :
-          method === "MT" ? ["MT \uC790\uBD84/\uD398\uC778\uD2B8"] : [];
+      const m = String(method || "").toUpperCase();
+      const materials = m === "RT" ? (appConfig.materials || []) :
+        m === "PT" ? ["PT약품 (침투제)", "PT약품 (세척제)", "PT약품 (현상제)", "PT약품 (형광침투제)", "NAWOO NPP-2 / NPR1-3 / NPD-4 세트"] :
+        m === "MT" ? ["MT약품 (백색페인트)", "MT약품 (흑색자분)", "MT약품 (형광자분)", "NAWOO 습식형광자분 (Wet Fluorescent)", "GS CHEM 형광자분"] :
+        m === "UT" ? ["접촉매질 (Oil)", "접촉매질 (Glycerin)", "접촉매질 (C.M.C)", "표준시험편 (STB-A1 / IIW)"] :
+        m === "PAUT" ? ["접촉매질 (물 / 글리세린)", "PAUT 표준시험편 (ISO19675 / STB-A1)"] :
+        m === "PMI" ? ["표준시편 (Alloy Reference / 1.25Cr 0.5Mo)"] : [];
       matSelect.replaceChildren(new Option("\uD574\uB2F9\uC5C6\uC74C", ""), ...materials.map(item => new Option(item, item)));
       if (materials.length) matSelect.value = materials[0];
     }

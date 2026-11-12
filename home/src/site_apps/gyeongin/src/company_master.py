@@ -172,3 +172,112 @@ def merge_company_items(
             merged.append(txt)
     return merged
 
+
+METHOD_REPORT_MATERIALS = {
+    "MT": (
+        "MT약품 (백색페인트)",
+        "MT약품 (흑색자분)",
+        "MT약품 (형광자분)",
+        "NAWOO 습식형광자분 (Wet Fluorescent)",
+        "GS CHEM 형광자분",
+    ),
+    "PT": (
+        "PT약품 (침투제)",
+        "PT약품 (세척제)",
+        "PT약품 (현상제)",
+        "PT약품 (형광침투제)",
+        "NAWOO NPP-2 / NPR1-3 / NPD-4 세트",
+    ),
+    "UT": (
+        "접촉매질 (Oil)",
+        "접촉매질 (Glycerin)",
+        "접촉매질 (C.M.C)",
+        "표준시험편 (STB-A1 / IIW)",
+    ),
+    "PAUT": (
+        "접촉매질 (물 / 글리세린)",
+        "PAUT 표준시험편 (ISO19675 / STB-A1)",
+    ),
+    "PMI": (
+        "표준시편 (Alloy Reference / 1.25Cr 0.5Mo)",
+    ),
+}
+
+
+def _material_matches_method(text: str, method: str) -> bool:
+    u = str(text or "").upper()
+    if method == "RT":
+        return any(k in u for k in ("CARESTREAM", "T200", "AA400", "M100", "MX125", "FILM", "필름"))
+    if method == "MT":
+        return "MT약품" in u or "자분" in text or "백색페인트" in text or "형광" in text and "침투" not in text
+    if method == "PT":
+        return "PT약품" in u or any(k in text for k in ("침투제", "세척제", "현상제"))
+    if method == "UT":
+        return ("표준시험편" in text or "IIW" in u or "STB" in u) and "PAUT" not in u
+    if method == "PAUT":
+        return "PAUT" in u and ("BLOCK" in u or "시험편" in text or "ISO19675" in u)
+    return False
+
+
+def method_material_candidates(method: str = "", inventory_materials=()) -> list[str]:
+    """Return method-specific consumable/media material names prioritizing inventory matches."""
+    m = str(method or "").strip().upper()
+    inv = [str(v or "").strip() for v in (inventory_materials or ()) if str(v or "").strip()]
+    if m in ("내근/대기", "휴무", "기타"):
+        return ["해당없음"]
+
+    ordered = []
+    seen = set()
+
+    def add_all(seq):
+        for item in seq:
+            txt = str(item or "").strip()
+            if txt and txt not in seen:
+                seen.add(txt)
+                ordered.append(txt)
+
+    if m in ("RT", "MT", "PT", "UT", "PAUT", "PMI"):
+        add_all(v for v in inv if _material_matches_method(v, m))
+        add_all(METHOD_REPORT_MATERIALS.get(m, ()))
+        add_all(["해당없음"])
+    else:
+        for method_key in ("RT", "MT", "PT", "UT", "PAUT", "PMI"):
+            add_all(METHOD_REPORT_MATERIALS.get(method_key, ()))
+        add_all(inv)
+        add_all(["해당없음"])
+    return ordered
+
+
+def method_inspection_item_candidates(
+    company: str = "",
+    method: str = "",
+    history_items=(),
+    fallback_items=(),
+    presets: dict | None = None,
+) -> list[str]:
+    """Return inspection item candidates ordered: (company,method) -> method reports -> history -> defaults."""
+    source = presets if presets is not None else load_company_ndt_presets()
+    m = str(method or "").strip().upper()
+    company_preset = suggest_company_method_preset(company, m, presets=source)
+
+    method_items = []
+    if m:
+        lookup_methods = ("UT", "PAUT") if m == "PAUT" else (m,)
+        for mmap in source.values():
+            if not isinstance(mmap, dict):
+                continue
+            for mk in lookup_methods:
+                for it in mmap.get(mk, {}).get("items", ()):
+                    if it:
+                        method_items.append(it)
+
+    merged = []
+    seen = set()
+    for seq in (company_preset.get("items", ()), method_items, history_items or (), fallback_items or ()):
+        for raw in seq:
+            txt = str(raw or "").strip()
+            if txt and txt not in seen:
+                seen.add(txt)
+                merged.append(txt)
+    return merged
+

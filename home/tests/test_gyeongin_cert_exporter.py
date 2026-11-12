@@ -336,6 +336,33 @@ class GyeonginCertExporterTests(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_method_material_and_item_candidates_for_daily_tab(self):
+        from site_apps.gyeongin.src.company_master import (
+            method_inspection_item_candidates,
+            method_material_candidates,
+        )
+
+        inv = [
+            'Carestream T200-3⅓*12"',
+            'MT약품 (백색페인트)',
+            'PT약품 (침투제)',
+            '표준시험편 /성적서 보유 여부기재 (STB-A1)',
+        ]
+        mt_mats = method_material_candidates('MT', inventory_materials=inv)
+        self.assertIn('MT약품 (백색페인트)', mt_mats)
+        self.assertIn('NAWOO 습식형광자분 (Wet Fluorescent)', mt_mats)
+        self.assertNotIn('Carestream T200-3⅓*12"', mt_mats)
+
+        rt_mats = method_material_candidates('RT', inventory_materials=inv)
+        self.assertEqual(rt_mats[0], 'Carestream T200-3⅓*12"')
+        ut_mats = method_material_candidates('UT', inventory_materials=inv)
+        self.assertIn('접촉매질 (Oil)', ut_mats)
+
+        mt_items = method_inspection_item_candidates('나라삼양감속기', 'MT', fallback_items=['OTHER'])
+        self.assertIn('PINION', mt_items)
+        self.assertIn('UNIVERSAL JOINT', mt_items)
+        self.assertEqual(mt_items[-1], 'OTHER')
+
 
 if __name__ == '__main__':
     unittest.main()

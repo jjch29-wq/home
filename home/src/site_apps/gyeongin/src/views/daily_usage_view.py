@@ -220,14 +220,14 @@ def setup_daily_usage_tab_impl(self):
     mat_container = ttk.Frame(form_content)
     mat_container.grid(row=1, column=1, padx=(2, 5), pady=1, sticky='w')
     
-    self.cb_daily_material = ttk.Entry(mat_container, width=25)
+    self.cb_daily_material = ttk.Combobox(mat_container, width=28)
     self.cb_daily_material.pack(side='left')
     
-    # [MODERN] Place the search button INSIDE the entry
+    # [MODERN] Place the search button INSIDE the combobox widget at the right end (x=-20 avoids dropdown arrow)
     btn_material_search = tk.Button(self.cb_daily_material, text="🔍", font=('Arial', 8), 
                                    bd=0, bg='white', cursor='hand2',
                                    command=lambda: self.open_material_search_dialog(target_form='daily_usage'))
-    btn_material_search.place(relx=1.0, x=-2, rely=0.5, anchor='e', width=18, height=18)
+    btn_material_search.place(relx=1.0, x=-20, rely=0.5, anchor='e', width=18, height=18)
     
     btn_material_mgr = tk.Button(mat_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                                 command=lambda: self.open_list_management_dialog('materials', target_cb=self.cb_daily_material))
@@ -235,13 +235,13 @@ def setup_daily_usage_tab_impl(self):
 
     # Left column stays consecutive; the right column groups the two equipment fields.
     ttk.Label(form_content, text="방법:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
-    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=['RT', 'PAUT', 'UT', 'MT', 'PT', '내근/대기', '휴무', '기타'])
+    self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=['RT', 'PAUT', 'UT', 'MT', 'PT', 'PMI', '내근/대기', '휴무', '기타'])
     self.cb_daily_test_method.grid(row=2, column=1, padx=(2, 10), pady=1, sticky='w')
     
     ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
     insp_container = ttk.Frame(form_content)
     insp_container.grid(row=3, column=3, padx=(2, 5), pady=1, sticky='w')
-    self.ent_daily_inspection_item = ttk.Entry(insp_container, width=15)
+    self.ent_daily_inspection_item = ttk.Combobox(insp_container, width=22)
     self.ent_daily_inspection_item.pack(side='left')
     
     btn_insp_item_mgr = tk.Button(insp_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
@@ -667,9 +667,25 @@ def setup_daily_usage_tab_impl(self):
                 try: self.empty_guide_frame.grid_remove()
                 except Exception: pass
 
+    def _refresh_daily_method_dropdowns(*_args):
+        """Sync daily material and inspection-item dropdowns with active company & method."""
+        if hasattr(self, 'cb_daily_material') and isinstance(self.cb_daily_material, ttk.Combobox):
+            mat_vals = self._get_material_candidates(include_all=False)
+            self.cb_daily_material['values'] = mat_vals
+        if hasattr(self, 'ent_daily_inspection_item') and isinstance(self.ent_daily_inspection_item, ttk.Combobox):
+            item_vals = self._get_inspection_item_candidates()
+            self.ent_daily_inspection_item['values'] = item_vals
+
+    self._refresh_daily_method_dropdowns = _refresh_daily_method_dropdowns
     self.on_method_change_auto_unit_logic = on_method_change_auto_unit_logic
     self.cb_daily_test_method.bind('<<ComboboxSelected>>', on_method_change_auto_unit_logic, add='+')
     self.cb_daily_test_method.bind('<KeyRelease>', on_method_change_auto_unit_logic, add='+')
+    self.cb_daily_test_method.bind('<<ComboboxSelected>>', _refresh_daily_method_dropdowns, add='+')
+    self.cb_daily_test_method.bind('<KeyRelease>', _refresh_daily_method_dropdowns, add='+')
+    if hasattr(self, 'cb_daily_company'):
+        self.cb_daily_company.bind('<<ComboboxSelected>>', _refresh_daily_method_dropdowns, add='+')
+        self.cb_daily_company.bind('<FocusOut>', _refresh_daily_method_dropdowns, add='+')
+    _refresh_daily_method_dropdowns()
     
     # [ROBUST_AUTOCOMPLETE] Use standardized suggest system for Entry Form
     self._bind_combobox_word_suggest(self.cb_daily_site, lambda: sorted(list(set(self.sites))))
