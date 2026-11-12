@@ -1,0 +1,174 @@
+from functools import lru_cache
+import json
+from pathlib import Path
+
+"""Default Gyeongin Office client company master list (extracted from Naver MYBOX archive)."""
+
+DEFAULT_COMPANIES = (
+    "경인사무소",
+    "D&K켐텍",
+    "K&M",
+    "SG엔지니어링",
+    "SK에코플랜트",
+    "경성기공",
+    "글로벌 크레인",
+    "나라삼양감속기",
+    "대성기계",
+    "대성테크놀로지",
+    "대화유공업",
+    "대화콘베어체인",
+    "도원이앤씨",
+    "동남ENG",
+    "동아기업DAC",
+    "동해펌프",
+    "디에이치건설산업(주)",
+    "롯데건설",
+    "리니트코리아",
+    "모나스펌프",
+    "부강풀리",
+    "삼남엔지니어링(주)",
+    "삼성파워텍",
+    "삼승종합건설",
+    "삼화테크",
+    "서울발전본부",
+    "서진인스텍",
+    "성헌",
+    "세진공조기계",
+    "수성웹툰(주)",
+    "스페이스 체인지",
+    "신성플랜트",
+    "아이조음",
+    "아이피에스",
+    "양영",
+    "에버랜드",
+    "에스엠테크",
+    "에이스냉동공조",
+    "영흥발전",
+    "올스톤산업",
+    "위드엔지니어링",
+    "유성씨앤에프",
+    "의성기어",
+    "이노텍코리아",
+    "자인건축",
+    "전진이앤씨",
+    "제이에스티",
+    "제일푸리",
+    "청원기연",
+    "캐논코리아",
+    "캐리비안베이",
+    "케이엔엠",
+    "코아베큠",
+    "코오롱글로벌",
+    "태성기전",
+    "태창기계공업",
+    "포스코이앤씨",
+    "포스코인터내셔널",
+    "피테크",
+    "한국산업인력공단",
+    "한양스틸",
+    "함감속기제작소",
+    "현대건설",
+    "현대산업",
+    "현성펌프",
+    "현진산업",
+)
+
+
+def merge_company_names(*sources):
+    """Return unique company names preserving '경인사무소' at index 0."""
+    seen = {"경인사무소"}
+    others = []
+    for source in sources:
+        if not source:
+            continue
+        for raw in source:
+            name = str(raw or "").strip()
+            if not name or name.lower() == "nan" or name in seen:
+                continue
+            seen.add(name)
+            others.append(name)
+    return ["경인사무소"] + sorted(others)
+
+
+def _presets_file() -> Path:
+    return Path(__file__).resolve().parent.parent / "resources" / "company_ndt_presets.json"
+
+
+@lru_cache(maxsize=2)
+def load_company_ndt_presets(presets_path: str | None = None) -> dict:
+    """Load bundled per-company × inspection-method presets."""
+    target = Path(presets_path) if presets_path else _presets_file()
+    if not target.exists():
+        return {}
+    return json.loads(target.read_text(encoding="utf-8"))
+
+
+def suggest_company_method_preset(company: str, method: str = "", presets: dict | None = None) -> dict:
+    """Return suggested target_type, target_types, items, and default_code for (company, method)."""
+    empty = {"target_type": "", "target_types": [], "items": [], "default_code": ""}
+    co = str(company or "").strip()
+    if not co:
+        return empty
+    source = presets if presets is not None else load_company_ndt_presets()
+    company_map = source.get(co)
+    if not isinstance(company_map, dict) or not company_map:
+        return empty
+
+    m = str(method or "").strip().upper()
+    if m and m in company_map:
+        entry = company_map[m]
+        return {
+            "target_type": str(entry.get("target_type", "") or ""),
+            "target_types": list(entry.get("target_types", ())),
+            "items": list(entry.get("items", ())),
+            "default_code": str(entry.get("default_code", "") or ""),
+        }
+    if m == "PAUT" and "UT" in company_map:
+        entry = company_map["UT"]
+        return {
+            "target_type": str(entry.get("target_type", "") or ""),
+            "target_types": list(entry.get("target_types", ())),
+            "items": list(entry.get("items", ())),
+            "default_code": str(entry.get("default_code", "") or ""),
+        }
+
+    # Combine presets across all recorded methods for the company when method is unset/unmatched
+    targets, items = [], []
+    default_code = ""
+    for entry in company_map.values():
+        for t in entry.get("target_types", ()):
+            if t and t not in targets:
+                targets.append(t)
+        for it in entry.get("items", ()):
+            if it and it not in items:
+                items.append(it)
+        if not default_code and entry.get("default_code"):
+            default_code = str(entry["default_code"])
+    return {
+        "target_type": targets[0] if targets else "",
+        "target_types": targets,
+        "items": items,
+        "default_code": default_code,
+    }
+
+
+def merge_company_items(
+    company: str,
+    method: str = "",
+    history_items=(),
+    fallback_items=(),
+    presets: dict | None = None,
+) -> list[str]:
+    """Order dropdown item choices as: company×method presets -> saved history -> target defaults."""
+    preset = suggest_company_method_preset(company, method, presets=presets)
+    merged = []
+    seen = set()
+    for seq in (preset.get("items", ()), history_items or (), fallback_items or ()):
+        for raw in seq:
+            txt = str(raw or "").strip()
+            if not txt or txt in seen:
+                continue
+            seen.add(txt)
+            merged.append(txt)
+    return merged
+

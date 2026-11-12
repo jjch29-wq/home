@@ -298,122 +298,23 @@ class DailyWorkLogExporter:
         merge_and_set('L16:R27', remarks, align=Alignment(horizontal='left', vertical='top', wrap_text=True))
 
         # =========================================================================
-        # SECTION 2: 비파괴검사결과서 (A29:Y...)
+        # SECTION 2: 비파괴검사결과서 (A29:T...)
         # =========================================================================
         merge_and_set('A29:F29', "2. 비파괴검사결과서", font=self.font_bold, align=self.align_left, border=None)
 
-        # Main Headers
-        headers_ndt = [
-            ('A30:A31', '순번'), ('B30:B31', '업체'), ('C30:C31', '검사방법'), ('D30:D31', '구간(Sec.No)'), ('E30:E31', '라인번호'),
-            ('F30:F31', 'Joint No.'), ('G30:G31', '관경'), ('H30:H31', '두께'), ('I30:I31', '용접사'),
-            ('N30:N31', '결과'), ('O30:O31', '규격')
-        ]
-        for rng, text in headers_ndt:
-            merge_and_set(rng, text, font=self.font_small, fill=self.fill_header, align=self.align_nowrap)
-
-        merge_and_set('J30:M30', '구간정보(Start/Length)', font=self.font_small, fill=self.fill_header)
-        set_cell('J31', '1', font=self.font_small, fill=self.fill_header)
-        set_cell('K31', '2', font=self.font_small, fill=self.fill_header)
-        set_cell('L31', '3', font=self.font_small, fill=self.fill_header)
-        set_cell('M31', '4', font=self.font_small, fill=self.fill_header)
-
-        merge_and_set('P30:Q30', 'RT매수', font=self.font_small, fill=self.fill_header)
-        set_cell('P31', 'OR', font=self.font_small, fill=self.fill_header)
-        set_cell('Q31', 'RE', font=self.font_small, fill=self.fill_header)
-
-        merge_and_set('R30:R31', 'PAUT(m)', font=self.font_small, fill=self.fill_header)
-        merge_and_set('S30:S31', 'MT(m)', font=self.font_small, fill=self.fill_header)
-        merge_and_set('T30:T31', 'PT(m)', font=self.font_small, fill=self.fill_header)
-
-        # Populate NDT Results
         raw_ndt = data.get('ndt_results', [])
         ndt_results = [r for r in raw_ndt if any(str(v).strip() for v in r.values())] if raw_ndt else []
+        non_pipe_rows = [r for r in ndt_results if self._is_non_pipe_row(r)]
+        only_non_pipe = bool(ndt_results) and len(non_pipe_rows) == len(ndt_results)
         start_row = 32
         total_rows = max(8, len(ndt_results) + 1)
-        for i in range(total_rows): # minimum 8 rows to fill Page 1 nicely without page overflow
-            row_idx = start_row + i
-            res = ndt_results[i] if i < len(ndt_results) else {}
 
-            set_cell(f'A{row_idx}', i + 1)
-            set_cell(f'B{row_idx}', res.get('업체', ''))
-            set_cell(f'C{row_idx}', res.get('검사방법', ''))
-            set_cell(f'D{row_idx}', res.get('구간', ''), align=self.align_nowrap)
-            line_text = str(res.get('라인번호', '') or '')
-            if res.get('작업구분') == '핫태핑':
-                hot_text = f"핫태핑 {res.get('핫태핑개소', '')} / {res.get('핫태핑차수', '')} / {res.get('핫태핑개소수', '1')}개소"
-                line_text = f'{line_text}\n{hot_text}'.strip()
-
-            line_str = line_text
-            num_lines = line_str.count('\n') + 1
-            if num_lines > 1:
-                set_cell(f'E{row_idx}', line_text, font=self.font_small, align=self.align_center)
-            else:
-                line_display_w = sum(2 if ord(c) > 127 else 1 for c in line_str)
-                if line_display_w >= 34:
-                    import copy
-                    font_line = copy.copy(self.font_normal)
-                    font_line.size = 7.5
-                elif line_display_w >= 24:
-                    import copy
-                    font_line = copy.copy(self.font_normal)
-                    font_line.size = 8.5
-                else:
-                    font_line = self.font_normal
-                set_cell(f'E{row_idx}', line_text, font=font_line, align=self.align_nowrap)
-            set_cell(f'F{row_idx}', res.get('Joint No.', ''), align=self.align_nowrap)
-            set_cell(f'G{row_idx}', res.get('관경', ''))
-            set_cell(f'H{row_idx}', res.get('두께', ''))
-            set_cell(f'I{row_idx}', res.get('용접사', ''))
-
-            method = res.get('검사방법', '').upper().strip()
-
-            sec_info_raw = res.get('구간정보', '').strip()
-
-            # 검사방법이나 결과 등 데이터가 있는 실제 행인데 구간정보가 비었을 때 '관련지시 없음' 처리
-            is_empty_row = not any(res.values())
-            if not is_empty_row and not sec_info_raw:
-                sec_info_raw = "관련지시 없음"
-
-            sec_info = sec_info_raw.split(',')
-            sec_info += [''] * (4 - len(sec_info)) # Pad to 4
-
-            if method in ['PAUT', 'PT', 'MT'] or sec_info_raw == "관련지시 없음":
-                set_cell(f'J{row_idx}', sec_info_raw)
-                set_cell(f'K{row_idx}', '')
-                set_cell(f'L{row_idx}', '')
-                set_cell(f'M{row_idx}', '')
-                ws.merge_cells(f'J{row_idx}:M{row_idx}')
-            else:
-                set_cell(f'J{row_idx}', sec_info[0])
-                set_cell(f'K{row_idx}', sec_info[1])
-                set_cell(f'L{row_idx}', sec_info[2])
-                set_cell(f'M{row_idx}', sec_info[3])
-
-            spec_val = res.get('규격', '')
-            shift_val = res.get('근무구분', '')
-            if shift_val and shift_val != '주간':
-                spec_val = f"{spec_val}({shift_val})" if spec_val else shift_val
-
-            set_cell(f'N{row_idx}', res.get('결과', ''))
-            set_cell(f'O{row_idx}', spec_val, align=self.align_nowrap)
-            if str(res.get('검사방법', '')).strip().upper() == 'RT':
-                from site_apps.gyeongin.src.rt_quantities import rt_counts
-                rt_total, rt_rejects = rt_counts(res)
-                set_cell(f'P{row_idx}', rt_total)
-                set_cell(f'Q{row_idx}', rt_rejects)
-            else:
-                set_cell(f'P{row_idx}', res.get('RT_OR', ''))
-                set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
-            set_cell(f'R{row_idx}', res.get('PAUT', ''))
-            set_cell(f'S{row_idx}', res.get('MT', ''))
-            set_cell(f'T{row_idx}', res.get('PT', ''))
-
-            if i == len(ndt_results):
-                ws.merge_cells(f'B{row_idx}:T{row_idx}')
-                ws[f'B{row_idx}'].value = "- 이 하 여 백 -"
-                ws[f'B{row_idx}'].alignment = Alignment(horizontal='center', vertical='center')
-
-            ws.row_dimensions[row_idx].height = max(34, num_lines * 17) if (num_lines > 1 or res.get('작업구분') == '핫태핑') else 20
+        if only_non_pipe:
+            self._write_non_pipe_section2(ws, start_row, total_rows, ndt_results, set_cell, merge_and_set)
+        else:
+            self._write_pipe_section2(ws, start_row, total_rows, ndt_results, set_cell, merge_and_set)
+            if non_pipe_rows:
+                self._write_non_pipe_detail_sheet(wb, data.get('date', ''), non_pipe_rows)
 
         # Fit the table width; additional inspection rows continue on new pages.
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
@@ -438,6 +339,206 @@ class DailyWorkLogExporter:
 
         wb.save(output_path)
         return output_path
+
+    @staticmethod
+    def _is_non_pipe_row(res):
+        target = str(res.get('대상유형', '') or '').strip()
+        if target in ('판재/시험편', '기계부품', '구조물/설비', 'PMI'):
+            return True
+        if target == '배관':
+            return False
+        has_pipe = any(str(res.get(k, '') or '').strip() for k in ('라인번호', 'Joint No.', '관경'))
+        has_general = any(str(res.get(k, '') or '').strip() for k in ('검사품명', '식별번호', '치수원문', '수량'))
+        return has_general and not has_pipe
+
+    @staticmethod
+    def _row_ident(res):
+        for key in ('식별번호', '부품번호', '시험편번호', '설비번호', '태그번호', 'Joint No.'):
+            val = str(res.get(key, '') or '').strip()
+            if val:
+                return val
+        return ''
+
+    @staticmethod
+    def _row_material(res):
+        for key in ('재질', '판정재질', '요구재질'):
+            val = str(res.get(key, '') or '').strip()
+            if val:
+                return val
+        return ''
+
+    def _write_non_pipe_section2(self, ws, start_row, total_rows, ndt_results, set_cell, merge_and_set):
+        headers = [
+            ('A30:A31', '순번'), ('B30:B31', '업체'), ('C30:C31', '검사방법'), ('D30:D31', '대상유형'),
+            ('E30:E31', '검사품명'), ('F30:F31', '식별번호'), ('G30:G31', '재질'), ('H30:H31', '두께'),
+            ('I30:I31', '도면번호'), ('J30:M31', '치수·사양원문'), ('N30:N31', '결과'), ('O30:O31', '적용규격'),
+            ('P30:Q31', '수량'), ('R30:R31', '단위'), ('S30:T31', '위치/비고'),
+        ]
+        for rng, text in headers:
+            merge_and_set(rng, text, font=self.font_small, fill=self.fill_header, align=self.align_nowrap)
+
+        for i in range(total_rows):
+            row_idx = start_row + i
+            res = ndt_results[i] if i < len(ndt_results) else {}
+            set_cell(f'A{row_idx}', i + 1)
+            set_cell(f'B{row_idx}', res.get('업체', ''))
+            set_cell(f'C{row_idx}', res.get('검사방법', ''))
+            set_cell(f'D{row_idx}', res.get('대상유형', ''), align=self.align_nowrap)
+            set_cell(f'E{row_idx}', res.get('검사품명', ''), align=self.align_left)
+            set_cell(f'F{row_idx}', self._row_ident(res), align=self.align_nowrap)
+            set_cell(f'G{row_idx}', self._row_material(res), align=self.align_nowrap)
+            set_cell(f'H{row_idx}', res.get('두께', ''))
+            set_cell(f'I{row_idx}', res.get('도면번호', ''), align=self.align_nowrap)
+            merge_and_set(f'J{row_idx}:M{row_idx}', res.get('치수원문', ''))
+            set_cell(f'N{row_idx}', res.get('결과', ''))
+            set_cell(f'O{row_idx}', res.get('적용규격', '') or res.get('규격', ''), align=self.align_nowrap)
+            merge_and_set(f'P{row_idx}:Q{row_idx}', res.get('수량', ''))
+            set_cell(f'R{row_idx}', res.get('단위', ''))
+            loc_or_note = ' / '.join(filter(None, (str(res.get('검사위치', '') or '').strip(), str(res.get('비고', '') or '').strip())))
+            merge_and_set(f'S{row_idx}:T{row_idx}', loc_or_note, font=self.font_small)
+
+            if i == len(ndt_results):
+                ws.unmerge_cells(f'J{row_idx}:M{row_idx}')
+                ws.unmerge_cells(f'P{row_idx}:Q{row_idx}')
+                ws.unmerge_cells(f'S{row_idx}:T{row_idx}')
+                ws.merge_cells(f'B{row_idx}:T{row_idx}')
+                ws[f'B{row_idx}'].value = "- 이 하 여 백 -"
+                ws[f'B{row_idx}'].alignment = Alignment(horizontal='center', vertical='center')
+            ws.row_dimensions[row_idx].height = 22
+
+    def _write_pipe_section2(self, ws, start_row, total_rows, ndt_results, set_cell, merge_and_set):
+        headers_ndt = [
+            ('A30:A31', '순번'), ('B30:B31', '업체'), ('C30:C31', '검사방법'), ('D30:D31', '구간(Sec.No)'), ('E30:E31', '라인번호'),
+            ('F30:F31', 'Joint No.'), ('G30:G31', '관경'), ('H30:H31', '두께'), ('I30:I31', '용접사'),
+            ('N30:N31', '결과'), ('O30:O31', '규격')
+        ]
+        for rng, text in headers_ndt:
+            merge_and_set(rng, text, font=self.font_small, fill=self.fill_header, align=self.align_nowrap)
+
+        merge_and_set('J30:M30', '구간정보(Start/Length)', font=self.font_small, fill=self.fill_header)
+        set_cell('J31', '1', font=self.font_small, fill=self.fill_header)
+        set_cell('K31', '2', font=self.font_small, fill=self.fill_header)
+        set_cell('L31', '3', font=self.font_small, fill=self.fill_header)
+        set_cell('M31', '4', font=self.font_small, fill=self.fill_header)
+
+        merge_and_set('P30:Q30', 'RT매수', font=self.font_small, fill=self.fill_header)
+        set_cell('P31', 'OR', font=self.font_small, fill=self.fill_header)
+        set_cell('Q31', 'RE', font=self.font_small, fill=self.fill_header)
+
+        merge_and_set('R30:R31', 'PAUT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('S30:S31', 'MT(m)', font=self.font_small, fill=self.fill_header)
+        merge_and_set('T30:T31', 'PT(m)', font=self.font_small, fill=self.fill_header)
+
+        for i in range(total_rows):
+            row_idx = start_row + i
+            res = ndt_results[i] if i < len(ndt_results) else {}
+            non_pipe = bool(res) and self._is_non_pipe_row(res)
+
+            set_cell(f'A{row_idx}', i + 1)
+            set_cell(f'B{row_idx}', res.get('업체', ''))
+            set_cell(f'C{row_idx}', res.get('검사방법', ''))
+            set_cell(f'D{row_idx}', res.get('대상유형', '') if non_pipe else res.get('구간', ''), align=self.align_nowrap)
+            line_text = str(res.get('검사품명', '') or '') if non_pipe else str(res.get('라인번호', '') or '')
+            if res.get('작업구분') == '핫태핑':
+                hot_text = f"핫태핑 {res.get('핫태핑개소', '')} / {res.get('핫태핑차수', '')} / {res.get('핫태핑개소수', '1')}개소"
+                line_text = f'{line_text}\n{hot_text}'.strip()
+
+            line_str = line_text
+            num_lines = line_str.count('\n') + 1
+            if num_lines > 1:
+                set_cell(f'E{row_idx}', line_text, font=self.font_small, align=self.align_center)
+            else:
+                line_display_w = sum(2 if ord(c) > 127 else 1 for c in line_str)
+                if line_display_w >= 34:
+                    import copy
+                    font_line = copy.copy(self.font_normal)
+                    font_line.size = 7.5
+                elif line_display_w >= 24:
+                    import copy
+                    font_line = copy.copy(self.font_normal)
+                    font_line.size = 8.5
+                else:
+                    font_line = self.font_normal
+                set_cell(f'E{row_idx}', line_text, font=font_line, align=self.align_nowrap)
+            set_cell(f'F{row_idx}', self._row_ident(res) if non_pipe else res.get('Joint No.', ''), align=self.align_nowrap)
+            set_cell(f'G{row_idx}', self._row_material(res) if non_pipe else res.get('관경', ''))
+            set_cell(f'H{row_idx}', res.get('두께', ''))
+            set_cell(f'I{row_idx}', res.get('도면번호', '') if non_pipe else res.get('용접사', ''))
+
+            method = res.get('검사방법', '').upper().strip()
+            sec_info_raw = (res.get('치수원문', '') if non_pipe else res.get('구간정보', '')).strip()
+
+            is_empty_row = not any(res.values())
+            if not is_empty_row and not sec_info_raw:
+                sec_info_raw = "관련지시 없음"
+
+            sec_info = sec_info_raw.split(',')
+            sec_info += [''] * (4 - len(sec_info))
+
+            if non_pipe or method in ['PAUT', 'PT', 'MT'] or sec_info_raw == "관련지시 없음":
+                set_cell(f'J{row_idx}', sec_info_raw)
+                set_cell(f'K{row_idx}', '')
+                set_cell(f'L{row_idx}', '')
+                set_cell(f'M{row_idx}', '')
+                ws.merge_cells(f'J{row_idx}:M{row_idx}')
+            else:
+                set_cell(f'J{row_idx}', sec_info[0])
+                set_cell(f'K{row_idx}', sec_info[1])
+                set_cell(f'L{row_idx}', sec_info[2])
+                set_cell(f'M{row_idx}', sec_info[3])
+
+            spec_val = res.get('적용규격', '') if non_pipe else res.get('규격', '')
+            shift_val = res.get('근무구분', '')
+            if shift_val and shift_val != '주간':
+                spec_val = f"{spec_val}({shift_val})" if spec_val else shift_val
+
+            set_cell(f'N{row_idx}', res.get('결과', ''))
+            set_cell(f'O{row_idx}', spec_val, align=self.align_nowrap)
+            if str(res.get('검사방법', '')).strip().upper() == 'RT':
+                from site_apps.gyeongin.src.rt_quantities import rt_counts
+                rt_total, rt_rejects = rt_counts(res)
+                set_cell(f'P{row_idx}', rt_total)
+                set_cell(f'Q{row_idx}', rt_rejects)
+            else:
+                set_cell(f'P{row_idx}', res.get('RT_OR', ''))
+                set_cell(f'Q{row_idx}', res.get('RT_RE', ''))
+            set_cell(f'R{row_idx}', res.get('PAUT', ''))
+            set_cell(f'S{row_idx}', res.get('MT', '') or (f"{res.get('수량', '')}{res.get('단위', '')}" if non_pipe and method == 'MT' else ''))
+            set_cell(f'T{row_idx}', res.get('PT', '') or (f"{res.get('수량', '')}{res.get('단위', '')}" if non_pipe and method == 'PT' else ''))
+
+            if i == len(ndt_results):
+                ws.merge_cells(f'B{row_idx}:T{row_idx}')
+                ws[f'B{row_idx}'].value = "- 이 하 여 백 -"
+                ws[f'B{row_idx}'].alignment = Alignment(horizontal='center', vertical='center')
+
+            ws.row_dimensions[row_idx].height = max(34, num_lines * 17) if (num_lines > 1 or res.get('작업구분') == '핫태핑') else 20
+
+    def _write_non_pipe_detail_sheet(self, wb, date_text, rows):
+        ws = wb.create_sheet('일반·부품 검사결과')
+        ws.append(['일반·기계부품·구조물·PMI 비파괴검사 내역', f'검사일자: {date_text}'])
+        headers = ['순번', '업체', '검사방법', '대상유형', '검사품명', '식별번호', '재질', '치수원문', '수량', '단위', '결과', '적용규격', '검사절차서', '도면번호', '검사위치', '비고']
+        ws.append(headers)
+        for idx, res in enumerate(rows, start=1):
+            ws.append([
+                idx, res.get('업체', ''), res.get('검사방법', ''), res.get('대상유형', ''),
+                res.get('검사품명', ''), self._row_ident(res), self._row_material(res),
+                res.get('치수원문', ''), res.get('수량', ''), res.get('단위', ''),
+                res.get('결과', ''), res.get('적용규격', '') or res.get('규격', ''),
+                res.get('검사절차서', ''), res.get('도면번호', ''), res.get('검사위치', ''), res.get('비고', ''),
+            ])
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.border = self.border_thin
+                cell.font = self.font_bold if cell.row == 2 else self.font_normal
+                cell.alignment = self.align_left if cell.column in (5, 8, 16) else self.align_center
+                if cell.row == 2:
+                    cell.fill = self.fill_header
+        for col, width in zip('ABCDEFGHIJKLMNOP', (6, 18, 10, 13, 20, 16, 12, 24, 9, 8, 9, 14, 14, 14, 14, 22)):
+            ws.column_dimensions[col].width = width
+        ws.page_setup.orientation = 'landscape'
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 if __name__ == "__main__":
     # Test generation

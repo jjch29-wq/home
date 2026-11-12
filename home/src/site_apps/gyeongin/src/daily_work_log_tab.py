@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from site_apps.gyeongin.src.company_master import DEFAULT_COMPANIES
 from site_apps.gyeongin.src.ndt_summary_exporter import NDTSummaryExporter
 from site_apps.gyeongin.src.services.monthly_report_manager import MonthlyReportManager
 from tkcalendar import DateEntry
@@ -86,6 +87,7 @@ NDT_VIEW_COLUMNS = {
 }
 
 NDT_DETAIL_FIELDS = (
+    '성적서번호', '발주처', '공사명', '의뢰자', '표면상태',
     '적용규격', '검사절차서', '개정번호', '도면번호', '검사위치', '검사범위', '비고'
 )
 
@@ -611,6 +613,8 @@ class DailyWorkLogTab(ttk.Frame):
         ttk.Button(line_bar, text='라인번호 일괄 변경', command=self._edit_ndt_lines).pack(side='left')
         ttk.Button(line_bar, text='구간 일괄 변경', command=self._edit_ndt_sections).pack(side='left', padx=(8, 0))
         ttk.Button(line_bar, text='선택 행 상세정보', command=self._edit_ndt_details).pack(side='left', padx=(8, 0))
+        ttk.Button(line_bar, text='📄 시험성적서 출력', command=self.export_certificates).pack(side='left', padx=(12, 0))
+        ttk.Button(line_bar, text='📒 성적서 발행대장', command=self.export_certificate_ledger).pack(side='left', padx=(8, 0))
 
         view_bar = ttk.LabelFrame(parent, text='검사 대상 보기')
         view_bar.pack(fill='x', padx=5, pady=(0, 4))
@@ -639,7 +643,7 @@ class DailyWorkLogTab(ttk.Frame):
         history = self.load_history()
         sections = set()
         lines = set()
-        companies = set()
+        companies = set(self._configured_companies())
         history_items = {target: set() for target in NDT_TARGET_TYPES}
         history_dimensions = {target: set() for target in NDT_TARGET_TYPES}
         # 월간 보고서와 동일한 용접사 번호/성명 기준정보를 사용한다.
@@ -660,7 +664,7 @@ class DailyWorkLogTab(ttk.Frame):
         
         self.history_sections = [''] + sorted(list(sections))
         self.history_lines = [''] + sorted(list(lines))
-        self.history_companies = [''] + sorted(list(companies))
+        self.history_companies = self._format_company_choices(companies)
         self.history_ndt_items = {
             target: sorted(items) for target, items in history_items.items()
         }
@@ -962,6 +966,7 @@ class DailyWorkLogTab(ttk.Frame):
             # Update '구간정보' display based on method
             if '구간정보' in r and hasattr(r['구간정보'], 'entries'):
                 r['구간정보'].apply_layout()
+            self._apply_company_method_preset(r, source='method')
 
         def on_target_change(event=None, r=row_entries):
             target_type = r['대상유형'].get().strip()
@@ -976,6 +981,16 @@ class DailyWorkLogTab(ttk.Frame):
         def on_hot_change(event=None, r=row_entries):
             if r['작업구분'].get() == '핫태핑':
                 self._edit_hot_tapping(r)
+        row_entries['업체'].bind(
+            '<<ComboboxSelected>>',
+            lambda event, r=row_entries: self._apply_company_method_preset(r, source='company'),
+            add='+',
+        )
+        row_entries['업체'].bind(
+            '<FocusOut>',
+            lambda event, r=row_entries: self._apply_company_method_preset(r, source='company'),
+            add='+',
+        )
         row_entries['작업구분'].bind('<<ComboboxSelected>>', on_hot_change)
         row_entries['검사방법'].bind('<<ComboboxSelected>>', on_ndt_change)
         row_entries['검사방법'].bind('<FocusOut>', on_ndt_change)
@@ -1055,11 +1070,50 @@ class DailyWorkLogTab(ttk.Frame):
         if hasattr(self, 'ndt_view_var'):
             self._set_ndt_view()
 
+    def _apply_company_method_preset(self, row, source='company'):
+        """Apply (company, method) target type, item dropdown ordering, and default code."""
+        from site_apps.gyeongin.src.company_master import suggest_company_method_preset
+
+        company = row['업체'].get().strip()
+        method = row['검사방법'].get().strip().upper()
+        preset = suggest_company_method_preset(company, method)
+        suggested_target = preset.get('target_type', '')
+        current_target = row['대상유형'].get().strip()
+        has_pipe_id = any(row[k].get().strip() for k in ('라인번호', 'Joint No.', '관경') if k in row)
+
+        if (
+            suggested_target in NDT_TARGET_TYPES
+            and not has_pipe_id
+            and (not current_target or (source == 'company' and not row['검사품명'].get().strip()))
+        ):
+            if current_target != suggested_target:
+                row['대상유형'].set(suggested_target)
+            self._sync_ndt_dimension_choices(row)
+            if hasattr(self, 'ndt_view_var') and self.ndt_view_var.get() != suggested_target:
+                self.ndt_view_var.set(suggested_target)
+                self._set_ndt_view()
+
+        self._sync_ndt_item_choices(row)
+
+        default_code = preset.get('default_code', '')
+        if default_code and '적용규격' in row and not row['적용규격'].get().strip():
+            row['적용규격'].insert(0, default_code)
+
     def _sync_ndt_item_choices(self, row):
+        from site_apps.gyeongin.src.company_master import merge_company_items
+
         target_type = row['대상유형'].get().strip()
+        company = row['업체'].get().strip()
+        method = row['검사방법'].get().strip().upper()
         saved = getattr(self, 'history_ndt_items', {}).get(target_type, ())
         current = row['검사품명'].get().strip()
-        choices = ndt_item_choices(target_type, tuple(saved) + ((current,) if current else ()))
+        target_defaults = ndt_item_choices(target_type, tuple(saved) + ((current,) if current else ()))
+        choices = merge_company_items(
+            company,
+            method,
+            history_items=((current,) if current else ()) + tuple(saved),
+            fallback_items=target_defaults,
+        )
         row['검사품명'].configure(values=choices)
 
     def _sync_ndt_dimension_choices(self, row):
@@ -1856,18 +1910,345 @@ class DailyWorkLogTab(ttk.Frame):
             traceback.print_exc()
             messagebox.showerror("오류", f"NDT 누계 대장 생성 중 오류가 발생했습니다:\n{str(e)}")
 
+    def _current_ndt_rows_for_export(self):
+        checked = []
+        all_rows = []
+        for idx, row_entries in enumerate(self.ndt_grid_entries):
+            row_dict = {
+                col: ent.get() for col, ent in row_entries.items() if hasattr(ent, 'get')
+            }
+            if not any(str(v).strip() for v in row_dict.values()):
+                continue
+            all_rows.append(row_dict)
+            if idx < len(self.ndt_selection_vars) and self.ndt_selection_vars[idx].get():
+                checked.append(row_dict)
+        return checked if checked else all_rows
+
+    def _daily_usage_frame(self):
+        app_obj = getattr(self, 'main_app', None) or getattr(self, 'app', None)
+        return getattr(app_obj, 'daily_usage_df', None)
+
+    def export_certificates(self):
+        """선택 행(또는 당일 전체)을 업체·검사방법별 시험성적서(갑/을)로 출력합니다."""
+        from site_apps.gyeongin.src.cert_exporter import (
+            CertificateExporter,
+            CertificateLedgerExporter,
+            build_cert_batches,
+        )
+
+        self.save_current_history()
+        rows = self._current_ndt_rows_for_export()
+        date_str = self._selected_date_key()
+        batches = build_cert_batches(
+            rows,
+            target_date=date_str,
+            default_site='경인사무소',
+            daily_usage_df=self._daily_usage_frame(),
+        )
+        if not batches:
+            messagebox.showwarning(
+                "시험성적서",
+                "출력할 검사 행이 없습니다.\n업체·검사방법(MT/PT/UT/RT/PMI)을 입력한 뒤 다시 시도하세요.",
+                parent=self,
+            )
+            return
+
+        top = tk.Toplevel(self)
+        top.title("시험성적서(갑/을) 출력")
+        top.geometry("660x470")
+        top.transient(self.winfo_toplevel())
+        top.grab_set()
+
+        body = ttk.Frame(top, padding=12)
+        body.pack(fill='both', expand=True)
+
+        ttk.Label(
+            body,
+            text=f"📄 {date_str} 시험성적서 생성 ({len(batches)}건 묶음)",
+            font=('맑은 고딕', 11, 'bold'),
+        ).pack(anchor='w', pady=(0, 8))
+
+        tree = ttk.Treeview(
+            body,
+            columns=('company', 'method', 'count', 'report_no', 'customer', 'project'),
+            show='headings',
+            height=6,
+        )
+        for col, text, w in (
+            ('company', '업체', 120),
+            ('method', '방법', 55),
+            ('count', '품목수', 55),
+            ('report_no', '성적서번호', 180),
+            ('customer', '발주처', 110),
+            ('project', '공사명/현장', 110),
+        ):
+            tree.heading(col, text=text)
+            tree.column(col, width=w, anchor='center' if col in ('method', 'count') else 'w')
+        for idx, b in enumerate(batches):
+            tree.insert(
+                '',
+                'end',
+                iid=str(idx),
+                values=(b['company'], b['method'], len(b['rows']), b['report_no'], b['customer'], b['project_name']),
+            )
+        tree.pack(fill='x', pady=(0, 10))
+
+        edit_box = ttk.LabelFrame(body, text="선택 성적서 정보 보완 (클릭하여 수정)", padding=8)
+        edit_box.pack(fill='x', pady=(0, 8))
+
+        vars_map = {
+            'report_no': tk.StringVar(),
+            'customer': tk.StringVar(),
+            'project_name': tk.StringVar(),
+            'code_procedure': tk.StringVar(),
+            'inspector': tk.StringVar(),
+        }
+        fields_meta = [
+            ('성적서번호', 'report_no', 0, 0),
+            ('발주처', 'customer', 0, 2),
+            ('공사명/현장', 'project_name', 1, 0),
+            ('적용규격/절차', 'code_procedure', 1, 2),
+            ('검사자', 'inspector', 2, 0),
+        ]
+        for label_txt, key, r_i, c_i in fields_meta:
+            ttk.Label(edit_box, text=label_txt).grid(row=r_i, column=c_i, sticky='w', padx=(4, 6), pady=3)
+            ttk.Entry(edit_box, textvariable=vars_map[key], width=24).grid(
+                row=r_i, column=c_i + 1, sticky='ew', padx=(0, 10), pady=3
+            )
+        edit_box.columnconfigure(1, weight=1)
+        edit_box.columnconfigure(3, weight=1)
+
+        selected_idx = [0]
+
+        def load_form(idx):
+            selected_idx[0] = idx
+            b = batches[idx]
+            for k, v in vars_map.items():
+                v.set(b.get(k, ''))
+
+        def save_form():
+            b = batches[selected_idx[0]]
+            for k, v in vars_map.items():
+                b[k] = v.get().strip()
+            tree.item(
+                str(selected_idx[0]),
+                values=(b['company'], b['method'], len(b['rows']), b['report_no'], b['customer'], b['project_name']),
+            )
+
+        ttk.Button(edit_box, text="목록에 적용", command=save_form).grid(row=2, column=3, sticky='e', pady=3)
+        tree.selection_set('0')
+        load_form(0)
+        tree.bind('<<TreeviewSelect>>', lambda _e: tree.selection() and load_form(int(tree.selection()[0])))
+
+        ledger_frame = ttk.Frame(body)
+        ledger_frame.pack(fill='x', pady=(4, 8))
+        append_ledger_var = tk.BooleanVar(value=False)
+        ledger_path_var = tk.StringVar()
+        ttk.Checkbutton(
+            ledger_frame,
+            text="생성 시 기존 발행대장(.xlsx)에도 자동 누적:",
+            variable=append_ledger_var,
+        ).pack(side='left')
+        ttk.Entry(ledger_frame, textvariable=ledger_path_var, width=28).pack(side='left', padx=6, fill='x', expand=True)
+
+        def browse_ledger():
+            p = filedialog.askopenfilename(title="기존 성적서 발행대장 선택", filetypes=[("Excel", "*.xlsx")], parent=top)
+            if p:
+                ledger_path_var.set(p)
+                append_ledger_var.set(True)
+
+        ttk.Button(ledger_frame, text="...", width=3, command=browse_ledger).pack(side='left')
+
+        def do_export():
+            save_form()
+            exporter = CertificateExporter()
+            created = []
+            try:
+                if len(batches) == 1:
+                    b = batches[0]
+                    safe_no = b['report_no'].replace('/', '').replace('\\', '-').replace(':', '-')
+                    out_path = filedialog.asksaveasfilename(
+                        defaultextension=".xlsx",
+                        initialfile=f"{safe_no}.xlsx",
+                        title="시험성적서 저장",
+                        filetypes=[("Excel files", "*.xlsx")],
+                        parent=top,
+                    )
+                    if not out_path:
+                        return
+                    created.append(exporter.export_certificate(b, out_path))
+                else:
+                    folder = filedialog.askdirectory(title="성적서 일괄 저장 폴더 선택", parent=top)
+                    if not folder:
+                        return
+                    for b in batches:
+                        safe_no = b['report_no'].replace('/', '').replace('\\', '-').replace(':', '-')
+                        target_file = os.path.join(folder, f"{safe_no}_{b['company']}.xlsx")
+                        created.append(exporter.export_certificate(b, target_file))
+
+                ledger_note = ""
+                if append_ledger_var.get() and ledger_path_var.get().strip():
+                    lpath = ledger_path_var.get().strip()
+                    ledger_recs = []
+                    for b in batches:
+                        proj = b['project_name']
+                        itm = b['item_name']
+                        p_item = f"{proj} / {itm}" if proj not in ('', 'N/A') and itm not in ('', 'N/A') else (itm if itm not in ('', 'N/A') else proj)
+                        ledger_recs.append({
+                            'date': b['date'],
+                            'company': b['company'],
+                            'report_no': b['report_no'],
+                            'customer': b['customer'],
+                            'project_item': p_item,
+                            'requester': b['requester'],
+                            'issuer': b['inspector'],
+                            'remark': f"{b['standard_short']} ({b['method']})",
+                        })
+                    CertificateLedgerExporter().export_ledger(
+                        ledger_recs, lpath, existing_ledger_path=lpath
+                    )
+                    ledger_note = f"\n발행대장 누적 완료: {os.path.basename(lpath)}"
+
+                messagebox.showinfo(
+                    "성적서 생성 완료",
+                    f"총 {len(created)}건의 시험성적서가 생성되었습니다.{ledger_note}",
+                    parent=top,
+                )
+                os.startfile(str(created[0]) if len(created) == 1 else os.path.dirname(str(created[0])))
+                top.destroy()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messagebox.showerror("오류", f"시험성적서 생성 중 오류가 발생했습니다:\n{e}", parent=top)
+
+        btn_bar = ttk.Frame(body)
+        btn_bar.pack(fill='x', pady=(6, 0))
+        ttk.Button(btn_bar, text="시험성적서 생성", command=do_export).pack(side='right', padx=4)
+        ttk.Button(btn_bar, text="닫기", command=top.destroy).pack(side='right')
+
+    def export_certificate_ledger(self):
+        """작업일보 전체 이력을 바탕으로 업체별 성적서 발행대장을 생성/누적합니다."""
+        from site_apps.gyeongin.src.cert_exporter import (
+            CertificateLedgerExporter,
+            collect_ledger_records_from_history,
+        )
+
+        self.save_current_history()
+        history = self.load_history()
+        all_records = collect_ledger_records_from_history(history, daily_usage_df=self._daily_usage_frame())
+        if not all_records:
+            messagebox.showwarning("발행대장", "발행대장에 반영할 검사 이력이 없습니다.", parent=self)
+            return
+
+        companies = sorted({r['company'] for r in all_records if r.get('company')})
+        top = tk.Toplevel(self)
+        top.title("성적서 발행대장 출력")
+        top.geometry("480x240")
+        top.transient(self.winfo_toplevel())
+        top.grab_set()
+
+        body = ttk.Frame(top, padding=14)
+        body.pack(fill='both', expand=True)
+
+        ttk.Label(body, text="📒 성적서 발행대장 생성 / 누적", font=('맑은 고딕', 11, 'bold')).pack(anchor='w', pady=(0, 10))
+
+        row1 = ttk.Frame(body)
+        row1.pack(fill='x', pady=4)
+        ttk.Label(row1, text="업체 선택:", width=12).pack(side='left')
+        comp_var = tk.StringVar(value='전체 업체')
+        ttk.Combobox(row1, textvariable=comp_var, values=['전체 업체'] + companies, state='readonly', width=28).pack(side='left', fill='x', expand=True)
+
+        row2 = ttk.Frame(body)
+        row2.pack(fill='x', pady=4)
+        ttk.Label(row2, text="기존 대장:", width=12).pack(side='left')
+        existing_var = tk.StringVar()
+        ttk.Entry(row2, textvariable=existing_var, width=28).pack(side='left', fill='x', expand=True)
+
+        def pick_existing():
+            p = filedialog.askopenfilename(title="기존 발행대장 선택 (미선택 시 새 파일 생성)", filetypes=[("Excel", "*.xlsx")], parent=top)
+            if p:
+                existing_var.set(p)
+
+        ttk.Button(row2, text="...", width=3, command=pick_existing).pack(side='left', padx=(4, 0))
+
+        ttk.Label(
+            body,
+            text="기존 파일을 선택하면 중복 발행번호를 건너뛰고 새 이력만 이어서 기록합니다.",
+            foreground='#555555',
+        ).pack(anchor='w', pady=(6, 12))
+
+        def do_ledger():
+            chosen = comp_var.get().strip()
+            comp_filter = '' if chosen == '전체 업체' else chosen
+            recs = [r for r in all_records if not comp_filter or r['company'] == comp_filter]
+            if not recs:
+                messagebox.showwarning("발행대장", f"'{chosen}'의 검사 기록이 없습니다.", parent=top)
+                return
+
+            existing = existing_var.get().strip() or None
+            if existing:
+                save_path = existing
+            else:
+                year_txt = str(recs[-1]['date'])[:4] or '2026'
+                label = comp_filter or '경인'
+                save_path = filedialog.asksaveasfilename(
+                    defaultextension=".xlsx",
+                    initialfile=f"{year_txt}년 {label} 성적서 발행대장.xlsx",
+                    title="발행대장 저장",
+                    filetypes=[("Excel", "*.xlsx")],
+                    parent=top,
+                )
+                if not save_path:
+                    return
+            try:
+                year_txt = str(recs[-1]['date'])[:4] or '2026'
+                out = CertificateLedgerExporter().export_ledger(
+                    recs,
+                    save_path,
+                    company_name=comp_filter,
+                    year=year_txt,
+                    existing_ledger_path=existing,
+                )
+                messagebox.showinfo("완료", f"성적서 발행대장이 저장되었습니다 ({len(recs)}건 반영).\n{out}", parent=top)
+                os.startfile(str(out))
+                top.destroy()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messagebox.showerror("오류", f"발행대장 생성 중 오류가 발생했습니다:\n{e}", parent=top)
+
+        btns = ttk.Frame(body)
+        btns.pack(fill='x')
+        ttk.Button(btns, text="발행대장 출력", command=do_ledger).pack(side='right', padx=4)
+        ttk.Button(btns, text="닫기", command=top.destroy).pack(side='right')
+
     def export_monthly_report(self):
         # 1. 설정 다이얼로그
         top = tk.Toplevel(self)
-        top.title("월간진도보고서 엑셀 출력")
+        top.title("월간진도보고서 엑셀 출력 (년간계약)")
         # Allow enough vertical space for all fields and the generate button.
-        top.geometry("620x430")
-        top.minsize(620, 430)
+        top.geometry("620x480")
+        top.minsize(620, 480)
         top.transient(self)
         top.grab_set()
         
-        ttk.Label(top, text="📊 월간진도보고서 자동 생성", font=('맑은 고딕', 12, 'bold')).pack(pady=10)
+        ttk.Label(top, text="📊 월간진도보고서 자동 생성 (년간계약 전용)", font=('맑은 고딕', 12, 'bold')).pack(pady=10)
         
+        # 년간계약 업체 필터
+        f_company = ttk.Frame(top)
+        f_company.pack(pady=4, fill=tk.X, padx=10)
+        ttk.Label(f_company, text="년간계약 업체:").pack(side=tk.LEFT, padx=5)
+        history_companies = sorted({
+            str(r.get('업체', '')).strip()
+            for day in self.load_history().values()
+            if isinstance(day, dict)
+            for r in day.get('ndt_results', [])
+            if str(r.get('업체', '')).strip()
+        })
+        comp_choices = ['전체 (미지정)'] + list(dict.fromkeys(self._configured_companies() + history_companies))
+        company_var = tk.StringVar(value='전체 (미지정)')
+        ttk.Combobox(f_company, textvariable=company_var, values=comp_choices, state='readonly', width=28).pack(side=tk.LEFT, padx=5)
+
         # 년/월 선택
         f_date = ttk.Frame(top)
         f_date.pack(pady=10)
@@ -1957,10 +2338,13 @@ class DailyWorkLogTab(ttk.Frame):
                 )
                 return
                 
+            chosen_comp = company_var.get().strip()
+            comp_filter = '' if chosen_comp in ('', '전체 (미지정)') else chosen_comp
+            file_tag = f"_{comp_filter}" if comp_filter else ""
             save_path = filedialog.asksaveasfilename(
                 defaultextension=".xlsx",
                 initialfile=(
-                    f"월간진도보고서_{ym.replace('-', '')}_"
+                    f"월간진도보고서{file_tag}_{ym.replace('-', '')}_"
                     f"{'월간' if scope_var.get() == 'month' else '전체누적'}.xlsx"
                 ),
                 title="저장 위치 선택",
@@ -1979,6 +2363,7 @@ class DailyWorkLogTab(ttk.Frame):
                     create_date=create_date_var.get().strip(),
                     owner_report_path=owner_report_path or None,
                     report_scope=scope_var.get(),
+                    company_filter=comp_filter or None,
                 )
                 if result_path:
                     messagebox.showinfo("성공", f"월간진도보고서가 생성되었습니다.\n{result_path}")
@@ -2035,6 +2420,70 @@ class DailyWorkLogTab(ttk.Frame):
         self._update_date_status(history)
         # Saving photo metadata does not persist other editor fields.
 
+    def _config_file_path(self):
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "Material_Manager_Config.json")
+
+    def _configured_companies(self):
+        names = []
+        app_obj = getattr(self, "main_app", None) or getattr(self, "app", None)
+        app_companies = getattr(app_obj, "companies", None)
+        if isinstance(app_companies, list):
+            names.extend(str(c).strip() for c in app_companies if str(c).strip())
+        cfg_path = self._config_file_path()
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as cfg_file:
+                    cfg_data = json.load(cfg_file)
+                for item in cfg_data.get("companies", []):
+                    val = str(item or "").strip()
+                    if val and val.lower() != "nan":
+                        names.append(val)
+            except Exception:
+                pass
+        deduped = list(dict.fromkeys(names))
+        if len(deduped) <= 1:
+            deduped = list(dict.fromkeys(list(DEFAULT_COMPANIES) + deduped))
+        return deduped
+
+    @staticmethod
+    def _format_company_choices(companies):
+        cleaned = {str(c).strip() for c in companies if str(c or "").strip() and str(c).strip().lower() != "nan"}
+        if "경인사무소" in cleaned:
+            cleaned.remove("경인사무소")
+            return ["", "경인사무소"] + sorted(cleaned)
+        return [""] + sorted(cleaned)
+
+    def _register_configured_companies(self, new_names):
+        cleaned = [str(n or "").strip() for n in new_names if str(n or "").strip() and str(n or "").strip().lower() != "nan"]
+        if not cleaned:
+            return
+        cfg_path = self._config_file_path()
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, "r", encoding="utf-8") as cfg_file:
+                    cfg_data = json.load(cfg_file)
+                existing = [str(c).strip() for c in cfg_data.get("companies", []) if str(c).strip()]
+                added = False
+                for name in cleaned:
+                    if name not in existing:
+                        existing.append(name)
+                        added = True
+                if added:
+                    cfg_data["companies"] = existing
+                    with open(cfg_path, "w", encoding="utf-8") as cfg_file:
+                        json.dump(cfg_data, cfg_file, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+        app_obj = getattr(self, "main_app", None) or getattr(self, "app", None)
+        if app_obj is not None and isinstance(getattr(app_obj, "companies", None), list):
+            changed = False
+            for name in cleaned:
+                if name not in app_obj.companies:
+                    app_obj.companies.append(name)
+                    changed = True
+            if changed and hasattr(app_obj, "refresh_ui_for_list_change"):
+                app_obj.refresh_ui_for_list_change("companies")
+
     def _refresh_ndt_history_choices(self, history=None):
         """Refresh NDT combobox choices immediately after saving new rows."""
         if not hasattr(self, 'ndt_grid_entries'):
@@ -2044,7 +2493,7 @@ class DailyWorkLogTab(ttk.Frame):
 
         sections = set()
         lines = set()
-        companies = set()
+        companies = set(self._configured_companies())
         welders = set(self.welder_names)
         history_items = {target: set() for target in NDT_TARGET_TYPES}
         history_dimensions = {target: set() for target in NDT_TARGET_TYPES}
@@ -2072,7 +2521,7 @@ class DailyWorkLogTab(ttk.Frame):
 
         self.history_sections = [''] + sorted(sections)
         self.history_lines = [''] + sorted(lines)
-        self.history_companies = [''] + sorted(companies)
+        self.history_companies = self._format_company_choices(companies)
         self.history_welders = [''] + [
             self._format_welder_display(welder_id)
             for welder_id in sorted(welders)
@@ -2198,6 +2647,8 @@ class DailyWorkLogTab(ttk.Frame):
             
         history[current_date] = data
         self.save_history(history)
+        if hasattr(self, '_register_configured_companies'):
+            self._register_configured_companies(row.get('업체', '') for row in data['ndt_results'])
         self._loaded_log_date = current_date
         self._log_baseline = self._capture_log_input()
 

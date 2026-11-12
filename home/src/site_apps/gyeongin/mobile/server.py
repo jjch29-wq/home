@@ -100,6 +100,9 @@ def get_inventory_paths():
 
     return paths
 
+from site_apps.gyeongin.src.company_master import DEFAULT_COMPANIES, merge_company_names
+
+
 def get_gyeongin_companies():
     """Load dynamic client company list from config and database"""
     companies = []
@@ -110,6 +113,8 @@ def get_gyeongin_companies():
                 companies = data.get("companies", [])
         except Exception:
             pass
+    if len(companies) <= 1:
+        companies = merge_company_names(DEFAULT_COMPANIES, companies)
     paths = get_inventory_paths()
     if paths:
         try:
@@ -120,8 +125,79 @@ def get_gyeongin_companies():
         except Exception:
             pass
     if not companies:
-        companies = ["경인사무소"]
-    return list(dict.fromkeys(companies))
+        companies = list(DEFAULT_COMPANIES)
+    ordered = ["경인사무소"] + [c for c in companies if c and c != "경인사무소"]
+    return list(dict.fromkeys(ordered))
+
+
+def _update_config_companies(mutator) -> List[str]:
+    data = {}
+    if CONFIG_PATH.exists():
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    current = [str(c).strip() for c in data.get("companies", []) if str(c).strip()]
+    if "경인사무소" not in current:
+        current.insert(0, "경인사무소")
+    updated = mutator(current)
+    deduped = ["경인사무소"] + [c for c in dict.fromkeys(updated) if c and c != "경인사무소"]
+    data["companies"] = deduped
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return deduped
+
+
+def add_gyeongin_company(name: str) -> Dict[str, Any]:
+    clean = str(name or "").strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="등록할 업체명을 입력해 주세요.")
+    added = False
+
+    def _add(lst: List[str]) -> List[str]:
+        nonlocal added
+        if clean not in lst:
+            lst.append(clean)
+            added = True
+        return lst
+
+    companies = _update_config_companies(_add)
+    all_companies = list(dict.fromkeys(companies + [c for c in get_gyeongin_companies() if c not in companies]))
+    return {
+        "status": "success",
+        "added": added,
+        "company": clean,
+        "companies": all_companies,
+        "message": f"[{clean}] 업체가 등록되었습니다." if added else f"[{clean}] 업체가 이미 목록에 있습니다.",
+    }
+
+
+def delete_gyeongin_company(name: str) -> Dict[str, Any]:
+    clean = str(name or "").strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail="삭제할 업체명을 지정해 주세요.")
+    if clean == "경인사무소":
+        raise HTTPException(status_code=400, detail="기본 업체 [경인사무소]는 삭제할 수 없습니다.")
+    removed = False
+
+    def _remove(lst: List[str]) -> List[str]:
+        nonlocal removed
+        if clean in lst:
+            removed = True
+            return [c for c in lst if c != clean]
+        return lst
+
+    companies = _update_config_companies(_remove)
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"[{clean}] 업체를 설정 목록에서 찾을 수 없습니다.")
+    return {
+        "status": "success",
+        "company": clean,
+        "companies": companies,
+        "message": f"[{clean}] 업체가 목록에서 삭제되었습니다.",
+    }
 
 def get_gyeongin_aux_equipments():
     items = []
@@ -886,6 +962,7 @@ def build_row_data(req: RecordSaveRequest, preserve_entry_time: Optional[str] = 
 @app.get("/api/config")
 def get_config():
     from site_apps.gyeongin.src.aux_equipment import METHOD_MAIN_EQUIP_MAP
+    from site_apps.gyeongin.src.company_master import load_company_ndt_presets
     return {
         "users": USERS,
         "vehicles": VEHICLES,
@@ -897,6 +974,7 @@ def get_config():
         "pipe_sizes": list(SIZE_LENGTH.keys()),
         "methods": ["RT", "PAUT", "UT", "MT", "PT", "PMI", "ETC", "내근/대기", "휴무"],
         "companies": get_gyeongin_companies(),
+        "company_ndt_presets": load_company_ndt_presets(),
         "loc_types": ["경인사무소", "일반배관", "플랜트", "탱크/기기", "기타"],
         "units": get_gyeongin_units(),
         "materials": get_gyeongin_materials(),
@@ -1230,9 +1308,13 @@ def save_record(req: RecordSaveRequest):
     if not saved_dbs:
         raise HTTPException(status_code=500, detail="Failed to save record to any database")
 
+    if req.company and str(req.company).strip():
+        add_gyeongin_company(req.company)
+
     return {
         "status": "success",
         "saved_databases": saved_dbs,
+        "companies": get_gyeongin_companies(),
         "message": f"성공적으로 저장되었습니다. ({len(saved_dbs)}개 저장소 동기화 완료)"
     }
 
@@ -1288,9 +1370,13 @@ def update_record(req: RecordUpdateRequest):
     if not updated_dbs:
         raise HTTPException(status_code=404, detail="수정할 일보 내역을 찾을 수 없습니다.")
 
+    if req.company and str(req.company).strip():
+        add_gyeongin_company(req.company)
+
     return {
         "status": "success",
         "updated_databases": updated_dbs,
+        "companies": get_gyeongin_companies(),
         "message": f"성공적으로 수정되었습니다. ({len(updated_dbs)}개 저장소 반영 완료)"
     }
 
@@ -1346,11 +1432,36 @@ def delete_record(req: RecordDeleteRequest):
 async def favicon():
     return Response(status_code=204)
 
+@app.get("/api/companies")
+def api_get_companies():
+    return {"status": "success", "companies": get_gyeongin_companies()}
+
+
+@app.post("/api/companies")
+async def api_add_company(request: Request):
+    body = await request.json()
+    return add_gyeongin_company(body.get("company", ""))
+
+
+@app.delete("/api/companies")
+async def api_delete_company(company: Optional[str] = None, request: Request = None):
+    target = company
+    if not target and request is not None:
+        try:
+            body = await request.json()
+            target = body.get("company", "")
+        except Exception:
+            target = ""
+    return delete_gyeongin_company(target or "")
+
+
 @app.get("/")
 def index(request: Request):
     api_action = request.query_params.get("api")
     if api_action == "getConfig":
         return JSONResponse(get_config())
+    elif api_action == "companies":
+        return JSONResponse({"status": "success", "companies": get_gyeongin_companies()})
     elif api_action == "getRecentRecords":
         return JSONResponse(get_recent_records())
     elif api_action in ("searchRecords", "search"):
@@ -1367,6 +1478,10 @@ async def index_post(request: Request):
     action = api_action or body.get("action")
     if action in ("searchRecords", "search"):
         return JSONResponse(search_records_data(body if isinstance(body, dict) else {}))
+    elif action == "addCompany":
+        return JSONResponse(add_gyeongin_company(body.get("company", "")))
+    elif action == "deleteCompany":
+        return JSONResponse(delete_gyeongin_company(body.get("company", "")))
     elif action == "saveRecord":
         return JSONResponse(save_record(RecordSaveRequest(**body)))
     elif action in ("updateRecord", "update"):

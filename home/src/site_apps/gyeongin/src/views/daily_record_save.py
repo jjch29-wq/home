@@ -59,6 +59,24 @@ def save_prepared(app, plan):
             raise RuntimeError('원본 파일에 저장하지 못했습니다. 입력 내용은 유지됩니다.')
         app._daily_edit_source = None
 
+        # 일보 저장 시 신규 업체명이 입력된 경우 PC 마스터 목록(companies)에 자동 등록
+        try:
+            companies_list = getattr(app, 'companies', None)
+            if isinstance(companies_list, list):
+                added_company = False
+                for rec in plan.get('records_to_save', []):
+                    co_name = str(rec.get('업체명', '')).strip()
+                    if co_name and co_name.lower() != 'nan' and co_name not in companies_list:
+                        companies_list.append(co_name)
+                        added_company = True
+                if added_company:
+                    if hasattr(app, 'refresh_ui_for_list_change'):
+                        app.refresh_ui_for_list_change('companies')
+                    if hasattr(app, 'save_tab_config'):
+                        app.save_tab_config()
+        except Exception:
+            pass
+
         # [경인 클라우드 실시간 Push] 구글 스프레드시트 웹앱으로 수정/신규 내역 비동기 전송
         try:
             import threading

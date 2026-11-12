@@ -490,7 +490,8 @@ class MaterialManager:
         self.vehicles = [] # Initialize vehicle list
         self.vehicle_inspections = {} # [NEW] Track active inspection widgets
         self.vehicle_boxes = [] # [NEW] Track active inspection widgets for automated save
-        self.companies = [] # Initialize companies list
+        from site_apps.gyeongin.src.company_master import DEFAULT_COMPANIES
+        self.companies = list(DEFAULT_COMPANIES) # Initialize companies list with Gyeongin defaults
         self.worktimes = [] # Initialize worktimes list
         self.ot_times = [] # Initialize ot_times list
         self.test_items = [] # [NEW] Initialize test_items
@@ -4955,6 +4956,8 @@ class MaterialManager:
             if hasattr(self, 'cb_daily_company'): self.cb_daily_company['values'] = sorted_vals
             if hasattr(self, 'cb_daily_filter_company'):
                 self.cb_daily_filter_company['values'] = ['전체'] + sorted_vals
+            if hasattr(self, 'tab_daily_work_log') and hasattr(self.tab_daily_work_log, '_refresh_ndt_history_choices'):
+                self.tab_daily_work_log._refresh_ndt_history_choices()
         elif config_key == 'daily_units':
             print(f"DEBUG: Refreshing All Unit Comboboxes with: {sorted_vals}")
             # [FIX] daily_units is already updated in-place above via current_vals[:] = sorted_vals
@@ -12830,12 +12833,12 @@ class MaterialManager:
         import os
         
         top = tk.Toplevel(self.root)
-        top.title("주간 업무보고서 출력")
-        top.geometry("460x390")
+        top.title("주간 업무보고서 출력 (년간계약)")
+        top.geometry("480x440")
         top.transient(self.root)
         top.grab_set()
         
-        ttk.Label(top, text="🗓️ 주간 업무보고서 자동 생성", font=('Arial', 12, 'bold')).pack(pady=10)
+        ttk.Label(top, text="🗓️ 주간 업무보고서 자동 생성 (년간계약 전용)", font=('Arial', 12, 'bold')).pack(pady=10)
         
         now = datetime.datetime.now()
         monday = now - datetime.timedelta(days=now.weekday())
@@ -12846,21 +12849,26 @@ class MaterialManager:
         
         from tkcalendar import DateEntry
 
-        ttk.Label(frame1, text="공사명:").grid(row=0, column=0, padx=5, pady=5, sticky='e')
-        project_name_entry = ttk.Entry(frame1, width=35)
-        project_name_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Label(frame1, text="년간계약 업체:").grid(row=0, column=0, padx=5, pady=5, sticky='e')
+        comp_choices = ['전체 (미지정)'] + list(dict.fromkeys(getattr(self, 'companies', []) or []))
+        weekly_comp_var = tk.StringVar(value='전체 (미지정)')
+        ttk.Combobox(frame1, textvariable=weekly_comp_var, values=comp_choices, state='readonly', width=32).grid(row=0, column=1, padx=5, pady=5, sticky='w')
 
-        ttk.Label(frame1, text="시작일 (월):").grid(row=1, column=0, padx=5, pady=5)
+        ttk.Label(frame1, text="공사명:").grid(row=1, column=0, padx=5, pady=5, sticky='e')
+        project_name_entry = ttk.Entry(frame1, width=35)
+        project_name_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Label(frame1, text="시작일 (월):").grid(row=2, column=0, padx=5, pady=5)
         start_cal = DateEntry(frame1, width=12, background='darkblue',
                               foreground='white', borderwidth=2,
                               date_pattern='yyyy-mm-dd', year=monday.year, month=monday.month, day=monday.day)
-        start_cal.grid(row=1, column=1, padx=5, sticky='w')
+        start_cal.grid(row=2, column=1, padx=5, sticky='w')
         
-        ttk.Label(frame1, text="종료일 (일):").grid(row=2, column=0, padx=5, pady=5)
+        ttk.Label(frame1, text="종료일 (일):").grid(row=3, column=0, padx=5, pady=5)
         end_cal = DateEntry(frame1, width=12, background='darkblue',
                             foreground='white', borderwidth=2,
                             date_pattern='yyyy-mm-dd', year=sunday.year, month=sunday.month, day=sunday.day)
-        end_cal.grid(row=2, column=1, padx=5, sticky='w')
+        end_cal.grid(row=3, column=1, padx=5, sticky='w')
         
         frame2 = ttk.Frame(top)
         frame2.pack(pady=5, fill='both', expand=True, padx=10)
@@ -12892,16 +12900,56 @@ class MaterialManager:
             import json
             with open(history_path, 'r', encoding='utf-8') as f:
                 history = json.load(f)
-                
+
+            chosen_comp = weekly_comp_var.get().strip()
+            comp_filter = '' if chosen_comp in ('', '전체 (미지정)') else chosen_comp.casefold()
+
+            def _filter_day_by_company(day_dict):
+                if not comp_filter:
+                    return day_dict
+                matched = [
+                    r for r in day_dict.get('ndt_results', [])
+                    if str(r.get('업체', '') or '').strip().casefold() == comp_filter
+                ]
+                if not matched:
+                    return None
+                copied = dict(day_dict)
+                copied['ndt_results'] = matched
+                return copied
+
+            def _accumulate_method_metrics(results, bucket):
+                for res in results:
+                    m = str(res.get("검사방법", "")).strip().upper()
+                    if not m:
+                        continue
+                    unit = str(res.get("단위", "")).strip() or "POINT"
+                    raw_qty = str(res.get("수량", "")).strip().replace(',', '')
+                    try:
+                        qty = float(raw_qty) if raw_qty else 1.0
+                    except ValueError:
+                        qty = 1.0
+                    key = (m, unit)
+                    bucket[key] = bucket.get(key, 0.0) + qty
+
+            def _format_method_metrics(bucket):
+                texts = []
+                for (m, u), qty in bucket.items():
+                    qty_txt = str(int(qty)) if qty.is_integer() else f"{qty:.2f}"
+                    texts.append(f"{m} {qty_txt} {u}")
+                return texts
+
             week_data = {}
             cumulative_data = {}
             for d_str, data in history.items():
                 try:
                     d_obj = pd.to_datetime(d_str).date()
+                    filtered_day = _filter_day_by_company(data)
+                    if filtered_day is None:
+                        continue
                     if s_dt <= d_obj <= e_dt:
-                        week_data[d_str] = data
+                        week_data[d_str] = filtered_day
                     if d_obj <= e_dt:
-                        cumulative_data[d_str] = data
+                        cumulative_data[d_str] = filtered_day
                 except: pass
 
             if not cumulative_data:
@@ -12924,10 +12972,7 @@ class MaterialManager:
             cumulative_ndt_methods = {}
             for data in cumulative_data.values():
                 cumulative_time += 8
-                for result in data.get('ndt_results', []):
-                    method = str(result.get("검사방법", "")).strip().upper()
-                    if method:
-                        cumulative_ndt_methods[method] = cumulative_ndt_methods.get(method, 0) + 1
+                _accumulate_method_metrics(data.get('ndt_results', []), cumulative_ndt_methods)
                 
             wb = Workbook()
             ws = wb.active
@@ -12986,31 +13031,36 @@ class MaterialManager:
                 # NDT results
                 ndt_results = data.get('ndt_results', [])
                 daily_ndt_methods = {}
-                for r in ndt_results:
-                    method = str(r.get("검사방법", "")).strip().upper()
-                    if method:
-                        daily_ndt_methods[method] = daily_ndt_methods.get(method, 0) + 1
-                        total_ndt_methods[method] = total_ndt_methods.get(method, 0) + 1
-                
-                daily_ndt_texts = [f"{m} {c} POINT" for m, c in daily_ndt_methods.items()]
+                _accumulate_method_metrics(ndt_results, daily_ndt_methods)
+                _accumulate_method_metrics(ndt_results, total_ndt_methods)
+
+                daily_ndt_texts = _format_method_metrics(daily_ndt_methods)
                 ndt_text = "\n".join(daily_ndt_texts) if daily_ndt_texts else "0 POINT"
 
-                # 같은 날짜·현장에서 검사한 관경을 한 작업내용으로 묶어 표시한다.
+                # 같은 날짜·현장에서 검사한 관경(또는 검사품명)을 작업내용으로 묶어 표시한다.
                 pipe_sizes = {
                     str(r.get("관경", "")).strip()
                     for r in ndt_results
                     if str(r.get("관경", "")).strip()
                 }
+                item_names = list(dict.fromkeys(
+                    str(r.get("검사품명", "")).strip()
+                    for r in ndt_results
+                    if str(r.get("검사품명", "")).strip()
+                ))
                 sorted_pipe_sizes = sorted(
                     pipe_sizes,
                     key=lambda value: int(re.search(r'\d+', value).group())
                     if re.search(r'\d+', value) else 0,
                     reverse=True,
                 )
-                work_description = (
-                    f"{', '.join(sorted_pipe_sizes)} 검사 진행"
-                    if sorted_pipe_sizes else "검사 작업 진행"
-                )
+                if sorted_pipe_sizes:
+                    work_description = f"{', '.join(sorted_pipe_sizes)} 검사 진행"
+                elif item_names:
+                    work_description = f"{', '.join(item_names[:3])} 검사 진행"
+                else:
+                    work_description = "검사 작업 진행"
+                site_label = chosen_comp if comp_filter else "경인사무소 관내"
                 
                 # Personnel data
                 w_count = get_personnel_count(data, use_report_default=True)
@@ -13018,7 +13068,7 @@ class MaterialManager:
                 total_time += 8
                 
                 ws.cell(row=row_idx, column=1, value=str(date_val)).alignment = center_align
-                ws.cell(row=row_idx, column=2, value="경인사무소 관내").alignment = center_align
+                ws.cell(row=row_idx, column=2, value=site_label).alignment = center_align
                 ws.cell(row=row_idx, column=3, value=work_description).alignment = center_align_wrap
                 ws.cell(row=row_idx, column=4, value=f"{w_count} 명").alignment = center_align
                 ws.cell(row=row_idx, column=5, value="8 시간").alignment = center_align
@@ -13048,7 +13098,7 @@ class MaterialManager:
             ws.cell(row=row_idx, column=4, value=f"-").alignment = center_align
             ws.cell(row=row_idx, column=5, value=f"{total_time} 시간").alignment = center_align
             
-            total_ndt_texts = [f"{m} {c} POINT" for m, c in total_ndt_methods.items()]
+            total_ndt_texts = _format_method_metrics(total_ndt_methods)
             total_ndt_text = "\n".join(total_ndt_texts) if total_ndt_texts else "0 POINT"
             ws.cell(row=row_idx, column=6, value=total_ndt_text).alignment = center_align_wrap
             ws.cell(row=row_idx, column=7, value="").alignment = center_align
@@ -13059,7 +13109,7 @@ class MaterialManager:
 
             if not week_data:
                 row_idx += 2
-                cumulative_ndt_texts = [f"{m} {c} POINT" for m, c in sorted(cumulative_ndt_methods.items())]
+                cumulative_ndt_texts = _format_method_metrics(cumulative_ndt_methods)
                 cumulative_ndt_text = ", ".join(cumulative_ndt_texts) if cumulative_ndt_texts else "검사실적 없음"
                 ws.merge_cells(f'A{row_idx}:G{row_idx+2}')
                 cell = ws.cell(row=row_idx, column=1)
@@ -14573,10 +14623,17 @@ class MaterialManager:
                 if 'materials' in config:
                     self.carestream_films[:] = config['materials']
                 
-                # [NEW] Restore companies list
-                self.companies[:] = config.get('companies', [])
+                # [NEW] Restore companies list (seed Naver MYBOX defaults if config only has default)
+                from site_apps.gyeongin.src.company_master import DEFAULT_COMPANIES, merge_company_names
+                saved_companies = [str(c).strip() for c in config.get('companies', []) if str(c).strip()]
+                if len(saved_companies) <= 1:
+                    self.companies[:] = merge_company_names(DEFAULT_COMPANIES, saved_companies)
+                else:
+                    self.companies[:] = merge_company_names(saved_companies)
                 if hasattr(self, 'cb_daily_company'):
                     self.cb_daily_company['values'] = sorted(self.companies)
+                if hasattr(self, 'tab_daily_work_log') and hasattr(self.tab_daily_work_log, '_refresh_ndt_history_choices'):
+                    self.tab_daily_work_log._refresh_ndt_history_choices()
 
                 
                 # Refresh all WorkerDataGroup dropdowns with the migrated list

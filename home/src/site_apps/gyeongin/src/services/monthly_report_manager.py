@@ -5601,7 +5601,7 @@ class MonthlyReportManager:
 
     def generate_report(self, history_path, target_ym, output_path, doc_num="01",
                         create_date=None, owner_report_path=None,
-                        report_scope="month"):
+                        report_scope="month", company_filter=None):
 
         self._history_path = history_path
 
@@ -5622,6 +5622,23 @@ class MonthlyReportManager:
             history_data = json.load(f)
 
         # 1. 데이터 필터링 및 집계
+        # 년간계약 업체 필터가 지정된 경우 해당 업체의 검사 행만 추린다.
+        normalized_company = str(company_filter or '').strip().casefold()
+        if normalized_company:
+            filtered_history = {}
+            for d_key, day_val in history_data.items():
+                if not isinstance(day_val, dict):
+                    continue
+                matched_rows = [
+                    r for r in day_val.get('ndt_results', [])
+                    if str(r.get('업체', '') or '').strip().casefold() == normalized_company
+                ]
+                if matched_rows:
+                    day_copy = dict(day_val)
+                    day_copy['ndt_results'] = matched_rows
+                    filtered_history[d_key] = day_copy
+            history_data = filtered_history
+
         # 월간: 선택한 월의 자료만 포함한다. 전체 누적: 최초 기록부터
         # 선택 월 말일까지 포함한다.
         valid_dates = sorted(

@@ -23,6 +23,7 @@ logger = logging.getLogger("gyeongin_sync")
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "data" / "google_sync_config.json"
 SYNC_STATE_PATH = Path(__file__).resolve().parent.parent / "data" / ".mobile_sync_state.json"
 DEFAULT_INVENTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "Material_Inventory.xlsx"
+MATERIAL_CONFIG_PATH = Path(__file__).resolve().parent / "Material_Manager_Config.json"
 
 
 def record_keys(record):
@@ -695,6 +696,122 @@ def sync_local_and_drive_files() -> Dict[str, Any]:
         logger.error(f"로컬/드라이브 동기화 실패: {e}")
         return {"status": "error", "message": str(e), "added_count": 0}
 
+def _post_web_app_json(target_url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Send JSON POST payload to Apps Script Web App via urllib."""
+    req_data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        target_url,
+        data=req_data,
+        headers={
+            "User-Agent": "Gyeongin-Office-PC/1.0",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def sync_companies_with_web_app(
+    web_app_url: Optional[str] = None,
+    config_path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """
+    PC(Material_Manager_Config.json)와 구글 시트(Companies 탭) 간 업체 목록 양방향 동기화.
+    구버전 웹앱(api=companies 미지원)에서는 POST 호출을 건너뛰어 안전성을 유지한다.
+    """
+    cfg = load_sync_config()
+    target_url = (web_app_url or cfg.get("web_app_url") or "").strip()
+    if not target_url:
+        return {"status": "skipped", "changed": 0, "message": "Google Apps Script URL 미설정"}
+
+    mat_cfg_path = Path(config_path) if config_path else MATERIAL_CONFIG_PATH
+    if not mat_cfg_path.exists():
+        return {"status": "skipped", "changed": 0, "message": "Material_Manager_Config.json 없음"}
+
+    delimiter = "&" if "?" in target_url else "?"
+    req = urllib.request.Request(
+        f"{target_url}{delimiter}api=companies",
+        headers={"User-Agent": "Gyeongin-Office-PC/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        raw_body = resp.read().decode("utf-8", errors="replace").strip()
+
+    if not raw_body.startswith("{"):
+        return {"status": "skipped", "changed": 0, "message": "구버전 웹앱 (api=companies 미지원)"}
+
+    cloud_resp = json.loads(raw_body)
+    if cloud_resp.get("status") != "success" or not isinstance(cloud_resp.get("companies"), list):
+        return {"status": "skipped", "changed": 0, "message": "업체 목록 API 응답 없음"}
+
+    cloud_companies = list(dict.fromkeys(["경인사무소"] + [
+        str(c).strip() for c in cloud_resp["companies"]
+        if str(c).strip() and str(c).strip().lower() != "nan" and str(c).strip() != "경인사무소"
+    ]))
+
+    mat_cfg = json.loads(mat_cfg_path.read_text(encoding="utf-8"))
+    local_companies = list(dict.fromkeys(["경인사무소"] + [
+        str(c).strip() for c in mat_cfg.get("companies", [])
+        if str(c).strip() and str(c).strip().lower() != "nan" and str(c).strip() != "경인사무소"
+    ]))
+
+    sync_state = load_sync_state()
+    has_known = "known_companies" in sync_state and isinstance(sync_state.get("known_companies"), list)
+    known_set = set(sync_state.get("known_companies", [])) if has_known else set()
+    local_set = set(local_companies)
+    cloud_set = set(cloud_companies)
+
+    added_local = 0
+    deleted_local = 0
+    added_cloud = 0
+    deleted_cloud = 0
+
+    if not has_known:
+        to_add_local = [c for c in cloud_companies if c not in local_set]
+        to_add_cloud = [c for c in local_companies if c not in cloud_set]
+        final_local = local_companies + to_add_local
+        added_local = len(to_add_local)
+        to_del_cloud = []
+    else:
+        removed_on_cloud = {c for c in known_set if c not in cloud_set and c != "경인사무소"}
+        removed_on_local = {c for c in known_set if c not in local_set and c != "경인사무소"}
+        to_add_local = [c for c in cloud_companies if c not in local_set and c not in known_set]
+        to_add_cloud = [c for c in local_companies if c not in cloud_set and c not in known_set]
+        to_del_cloud = sorted(removed_on_local)
+
+        final_local = [c for c in local_companies if c not in removed_on_cloud] + to_add_local
+        deleted_local = sum(1 for c in local_companies if c in removed_on_cloud)
+        added_local = len(to_add_local)
+
+    final_local = list(dict.fromkeys(["경인사무소"] + [c for c in final_local if c != "경인사무소"]))
+    if final_local != local_companies:
+        mat_cfg["companies"] = final_local
+        mat_cfg_path.write_text(json.dumps(mat_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    final_cloud = cloud_companies
+    if to_add_cloud:
+        res_push = _post_web_app_json(target_url, {"action": "syncCompanies", "companies": to_add_cloud})
+        if res_push.get("status") == "success" and isinstance(res_push.get("companies"), list):
+            final_cloud = res_push["companies"]
+            added_cloud = len(to_add_cloud)
+    for del_name in to_del_cloud:
+        res_del = _post_web_app_json(target_url, {"action": "deleteCompany", "company": del_name})
+        if res_del.get("status") == "success" and isinstance(res_del.get("companies"), list):
+            final_cloud = res_del["companies"]
+            deleted_cloud += 1
+
+    union_known = list(dict.fromkeys(final_local + [c for c in final_cloud if c not in final_local]))
+    sync_state["known_companies"] = union_known
+    save_sync_state(sync_state)
+
+    changed = added_local + deleted_local + added_cloud + deleted_cloud
+    return {
+        "status": "success",
+        "changed": changed,
+        "companies": final_local,
+        "message": f"업체 목록 동기화 완료 (PC+{added_local}/-{deleted_local}, 클라우드+{added_cloud}/-{deleted_cloud})",
+    }
+
+
 def sync_all_gyeongin_sources() -> Dict[str, Any]:
     """
     경인사무소 전체 데이터 소스 (Google Apps Script Web App + Google Drive + Local) 자동 통합 동기화
@@ -721,6 +838,9 @@ def sync_all_gyeongin_sources() -> Dict[str, Any]:
                 if p_added > 0:
                     total_added += p_added
                     messages.append(res_web["message"])
+            res_co = sync_companies_with_web_app(web_app_url=target_url)
+            if res_co.get("changed", 0) > 0:
+                messages.append(res_co["message"])
         except Exception as e:
             messages.append(f"웹 앱 동기화 건너뜀: {e}")
 

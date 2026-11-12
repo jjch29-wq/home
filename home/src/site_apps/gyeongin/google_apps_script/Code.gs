@@ -6,7 +6,23 @@
 
 // 1. 기본 설정 및 마스터 데이터
 var APP_CONFIG = {
-  companies: ["경인사무소"],
+  companies: [
+    "경인사무소",
+    "D&K켐텍", "K&M", "SG엔지니어링", "SK에코플랜트",
+    "경성기공", "글로벌 크레인", "나라삼양감속기", "대성기계", "대성테크놀로지",
+    "대화유공업", "대화콘베어체인", "도원이앤씨", "동남ENG", "동아기업DAC",
+    "동해펌프", "디에이치건설산업(주)", "롯데건설", "리니트코리아", "모나스펌프",
+    "부강풀리", "삼남엔지니어링(주)", "삼성파워텍", "삼승종합건설", "삼화테크",
+    "서울발전본부", "서진인스텍", "성헌", "세진공조기계", "수성웹툰(주)",
+    "스페이스 체인지", "신성플랜트", "아이조음", "아이피에스", "양영",
+    "에버랜드", "에스엠테크", "에이스냉동공조", "영흥발전", "올스톤산업",
+    "위드엔지니어링", "유성씨앤에프", "의성기어", "이노텍코리아", "자인건축",
+    "전진이앤씨", "제이에스티", "제일푸리", "청원기연", "캐논코리아",
+    "캐리비안베이", "케이엔엠", "코아베큠", "코오롱글로벌", "태성기전",
+    "태창기계공업", "포스코이앤씨", "포스코인터내셔널", "피테크", "한국산업인력공단",
+    "한양스틸", "함감속기제작소", "현대건설", "현대산업", "현성펌프",
+    "현진산업"
+  ],
   users: [
     "이사 곽재운", "이사 박홍규",
     "부장 주진철", "부장 박광복", "부장 이병국", "부장 이용주", "부장 주동기", "부장 김규년", "부장 곽상돈", "부장 정효철", "부장 노현태",
@@ -961,6 +977,8 @@ function doGet(e) {
   
   if (api === 'config') {
     return createJsonResponse(getConfig());
+  } else if (api === 'companies') {
+    return createJsonResponse({ status: 'success', companies: getCompaniesList() });
   } else if (api === 'search') {
     return createJsonResponse(searchRecords(e.parameter || {}));
   } else if (api === 'recent') {
@@ -994,6 +1012,12 @@ function doPost(e) {
     var action = payload.action || 'save';
     if (action === 'searchRecords' || action === 'search') {
       return createJsonResponse(searchRecords(payload));
+    } else if (action === 'addCompany') {
+      return createJsonResponse(addCompany(payload));
+    } else if (action === 'deleteCompany') {
+      return createJsonResponse(deleteCompany(payload));
+    } else if (action === 'syncCompanies') {
+      return createJsonResponse(syncCompanies(payload));
     } else if (action === 'batch_sync') {
       var res = batchSyncRecords(payload);
       return createJsonResponse(res);
@@ -1018,9 +1042,9 @@ function createJsonResponse(obj) {
 }
 
 /**
- * 활성 스프레드시트의 'DailyUsage' 시트 획득 또는 자동 생성
+ * 경인사무소 전용 스프레드시트 객체 획득
  */
-function getDailyUsageSheet() {
+function getGyeonginSpreadsheet() {
   var properties = PropertiesService.getScriptProperties();
   var spreadsheetId = properties.getProperty('GYEONGIN_SPREADSHEET_ID');
   if (!spreadsheetId) {
@@ -1031,7 +1055,14 @@ function getDailyUsageSheet() {
     spreadsheetId = activeSpreadsheet.getId();
     properties.setProperty('GYEONGIN_SPREADSHEET_ID', spreadsheetId);
   }
-  var ss = SpreadsheetApp.openById(spreadsheetId);
+  return SpreadsheetApp.openById(spreadsheetId);
+}
+
+/**
+ * 활성 스프레드시트의 'DailyUsage' 시트 획득 또는 자동 생성
+ */
+function getDailyUsageSheet() {
+  var ss = getGyeonginSpreadsheet();
   var sheet = ss.getSheetByName("DailyUsage");
   if (!sheet) {
     sheet = ss.insertSheet("DailyUsage");
@@ -1057,30 +1088,143 @@ function getDailyUsageSheet() {
 }
 
 /**
- * 설정 데이터 획득 (google.script.run 및 API 공용)
+ * 경인사무소 전용 'Companies' 마스터 시트 획득 또는 최초 1회 시드 생성
  */
-function getConfig() {
-  var sheet = getDailyUsageSheet();
-  var companies = APP_CONFIG.companies.slice();
-  
-  // 시트에 등록된 기존 업체명 동적 수집
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var compColIdx = headerRow.indexOf("업체명");
-    if (compColIdx !== -1) {
-      var values = sheet.getRange(2, compColIdx + 1, lastRow - 1, 1).getValues();
-      for (var i = 0; i < values.length; i++) {
-        var c = String(values[i][0]).trim();
-        if (c && c !== 'nan' && companies.indexOf(c) === -1) {
-          companies.push(c);
+function getCompaniesSheet() {
+  var ss = getGyeonginSpreadsheet();
+  var sheet = ss.getSheetByName("Companies");
+  if (!sheet || sheet.getLastRow() === 0) {
+    if (!sheet) sheet = ss.insertSheet("Companies");
+    sheet.getRange(1, 1).setValue("업체명").setFontWeight("bold").setBackground("#e6f4ea");
+    sheet.setFrozenRows(1);
+
+    var seed = APP_CONFIG.companies.slice();
+    var daily = getDailyUsageSheet();
+    var dLastRow = daily.getLastRow();
+    if (dLastRow > 1) {
+      var dHeaders = daily.getRange(1, 1, 1, daily.getLastColumn()).getValues()[0];
+      var compIdx = dHeaders.indexOf("업체명");
+      if (compIdx !== -1) {
+        var dVals = daily.getRange(2, compIdx + 1, dLastRow - 1, 1).getValues();
+        for (var i = 0; i < dVals.length; i++) {
+          var v = String(dVals[i][0] || '').trim();
+          if (v && v.toLowerCase() !== 'nan' && seed.indexOf(v) === -1) seed.push(v);
         }
       }
     }
+    if (seed.length > 0) {
+      var rows = seed.map(function (name) { return [name]; });
+      sheet.getRange(2, 1, rows.length, 1).setValues(rows);
+    }
   }
+  return sheet;
+}
 
+function getCompaniesList() {
+  var sheet = getCompaniesSheet();
+  var lastRow = sheet.getLastRow();
+  var result = ['경인사무소'];
+  if (lastRow > 1) {
+    var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < values.length; i++) {
+      var name = String(values[i][0] || '').trim();
+      if (name && name.toLowerCase() !== 'nan' && result.indexOf(name) === -1) {
+        result.push(name);
+      }
+    }
+  }
+  return result;
+}
+
+function ensureCompanyRegistered(companyName) {
+  var name = String(companyName || '').trim();
+  if (!name || name.toLowerCase() === 'nan') return false;
+  var existing = getCompaniesList();
+  if (existing.indexOf(name) !== -1) return false;
+  var sheet = getCompaniesSheet();
+  sheet.appendRow([name]);
+  return true;
+}
+
+function addCompany(req) {
+  var name = String((req && req.company) || '').trim();
+  if (!name) {
+    return { status: 'error', detail: '등록할 업체명을 입력해 주세요.' };
+  }
+  var added = ensureCompanyRegistered(name);
+  return {
+    status: 'success',
+    added: added,
+    company: name,
+    companies: getCompaniesList(),
+    message: added ? ('[' + name + '] 업체가 등록되었습니다.') : ('[' + name + '] 업체가 이미 목록에 있습니다.')
+  };
+}
+
+function deleteCompany(req) {
+  var name = String((req && req.company) || '').trim();
+  if (!name) {
+    return { status: 'error', detail: '삭제할 업체명을 지정해 주세요.' };
+  }
+  if (name === '경인사무소') {
+    return { status: 'error', detail: '기본 업체 [경인사무소]는 삭제할 수 없습니다.' };
+  }
+  var sheet = getCompaniesSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { status: 'error', detail: '삭제할 업체를 찾을 수 없습니다.' };
+  }
+  var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var deleted = false;
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][0] || '').trim() === name) {
+      sheet.deleteRow(i + 2);
+      deleted = true;
+    }
+  }
+  if (!deleted) {
+    return { status: 'error', detail: '[' + name + '] 업체를 찾을 수 없습니다.' };
+  }
+  return {
+    status: 'success',
+    company: name,
+    companies: getCompaniesList(),
+    message: '[' + name + '] 업체가 목록에서 삭제되었습니다.'
+  };
+}
+
+function syncCompanies(req) {
+  var incoming = (req && Array.isArray(req.companies)) ? req.companies : [];
+  var existing = getCompaniesList();
+  var toAdd = [];
+  for (var i = 0; i < incoming.length; i++) {
+    var name = String(incoming[i] || '').trim();
+    if (name && name.toLowerCase() !== 'nan' && existing.indexOf(name) === -1 && toAdd.indexOf(name) === -1) {
+      toAdd.push(name);
+    }
+  }
+  if (toAdd.length > 0) {
+    var sheet = getCompaniesSheet();
+    var startRow = sheet.getLastRow() + 1;
+    var rows = toAdd.map(function (c) { return [c]; });
+    sheet.getRange(startRow, 1, rows.length, 1).setValues(rows);
+  }
+  return {
+    status: 'success',
+    added_count: toAdd.length,
+    companies: getCompaniesList()
+  };
+}
+
+/**
+ * 설정 데이터 획득 (google.script.run 및 API 공용)
+ */
+var COMPANY_NDT_PRESETS = {"D&K켐텍": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["Resin 순환 및 발포라인"], "default_code": "KS B 0816 / SIS H 401"}}, "SG엔지니어링": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["0.49톤 겐트리트레인 비파괴검사"], "default_code": ""}}, "경성기공": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["UNIVERSAL JOINT", "SHAFT", "SPINDLE", "YOKE ASS'Y", "FM SPINDLE"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BEARING KIT ASS'Y", "FLANGE", "SHAFT", "SPINDLE"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "글로벌 크레인": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["빔행정, H빔 용접"], "default_code": ""}}, "나라삼양감속기": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT, GEAR", "SHAFT, GEAR , PINION", "SHAFT, GEAR , CARRIER", "PINION 외", "SHAFT 외", "OUTPUT SHAFT", "INPUT BEVEL PINION", "PINION,GEAR,SHAFT", "PINION", "MAIN GEAR", "GEAR", "DRIVE GEAR"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["PINION, GEAR, SHAFT", "PINION SHAFT, BEVEL GEAR"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "대성기계": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["W1190 FLIGHT DETAIL", "W1520 FLIGHT DETAIL"], "default_code": "ASME Sec.V Art.7 / SIS H 341 (Rev.13)"}}, "대성테크놀로지": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SAMPLING SYSTEM PIPING", "CHEMICAL DOSEING SYSTEM PIPING", "LIFTING LUG + PAD + RIB"], "default_code": "ASME Sec.V&Ⅷ Div.1(2023Ed) / SIS H 441"}}, "대화유공업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["君津 熱延 Ｆ２－３用上ＳＴＧリトラクトＣＹＬ（クロス追従上・出）"], "default_code": ""}}, "대화콘베어체인": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "판재/시험편"], "items": ["HEAD SPROCKET", "C-PIN", "LONG PIN", "PIN LINK PLATE (A)", "PIN LINK PLATE (B)", "BUSH LINK PLATE"], "default_code": "KS0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["HEAD SPROCKET SHAFT"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "도원이앤씨": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "판재/시험편"], "items": ["강구조물 용접부", "용접사 기량테스트 / PLATE"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "동아기업DAC": {"PT": {"target_type": "배관", "target_types": ["배관"], "items": ["SPOOL"], "default_code": "KS B 0816 / SIS H 401 (2급, 2군)"}}, "동해펌프": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SWD-H80-CMKSS-AT-R", "SWE-H125 DCMKSS-TT-R", "SWA-H50 CMKSS-TT-R", "SWA-H40S CMKSS-TT-R", "CHEMICAL DOSEING SYSTEM PIPING", "SAMPLING SYSTEM PIPING", "SWC-H100-CMKSS-AT-R-S14", "LIFTING LUG + PAD + RIB"], "default_code": "ASME Sec.V&Ⅷ Div.1(2021Ed) / SIS H 441"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SWE-H125-DCMKSS-TT-R", "SWA-H50-CMKSS-TT-R", "SWA-H40S-CMKSS-TT-R", "SWD-H80-CMKSS-AT-R", "SWC-H100-CMKSS-AT-R-S14"], "default_code": "ASTM A-388 / SIS H 247 Rev.2"}}, "디에이치건설산업(주)": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["오정대교 현장 샤클 (40톤)"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "롯데건설": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편", "기계부품"], "items": ["용접사 기량테스트", "용접사 기량테스트 / PLATE", "M-BED"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}, "PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["STACK SHELL"], "default_code": "KS B 0816 / SIS H 401(2급,2군) Rev.2"}}, "리니트코리아": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["체인블럭용 러그"], "default_code": "KS B 0816 / SIS H 401 (2급, 2군)"}}, "모나스펌프": {"PMI": {"target_type": "PMI", "target_types": ["PMI"], "items": ["PUMP CASING", "SHAFT", "IMPELLER", "FLANGE", "VALVE"], "default_code": ""}, "PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CAUSTIC SODA DOSING PUMP (236-J-05A/B)", "ACID GUMS PUMP (236-J-09A/B)", "GUM TRNASFER PUMP (237-J-13A/B)", "LIME DOSING PUMP A/B (00GBN05AP001 / 00GBN06AP001)", "CLARIFIER SLUDGE TRANSFER PUMP A/B (00GNK36AP001 /", "SETTLED SLUDGE TRANSFER PUMP A/B (00GNK55AP001 / 0", "TK-484-13A/B"], "default_code": "A000-ROT-VP235-J108-COMMON"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CAUSTIC SODA DOSING PUMP (236-J-05A/B)", "ACID GUMS PUMP ( 236-J-09 A/B )", "GUM TRANSFER PUMP ( 237-J-13 A/B )", "SLUDGE FEED PUMP ( P-305841 B )", "SLUDGE FEED PUMP ( P-305841 A/B )", "C-POLYMER INJECTION PUMP ( P-305843 A/B )", "LIME DOSING PUMP A/B (00GBN05AP001 / 00GBN06AP001)", "CLARIFIER SLUDGE TRANSFER PUMP A/B (00GNK36AP001 /", "SETTLED SLUDGE TRANSFER PUMP A/B (00GNK55AP001 / 0"], "default_code": "A000-ROT-VP235-J108-COMMON"}}, "부강풀리": {"UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "삼남엔지니어링(주)": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["M-BED"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "삼성파워텍": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["외함 이동 받침대"], "default_code": ""}}, "삼승종합건설": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["미래에셋 및 NcSoft 수혈관로 설치공사"], "default_code": ""}}, "삼화테크": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BELLOWS HOSE"], "default_code": ""}}, "서울발전본부": {"MT": {"target_type": "배관", "target_types": ["배관"], "items": ["PIPE(20A, 80A)"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "배관", "target_types": ["배관"], "items": ["PIPE(80A)"], "default_code": "KS B 0896 / SIS H 201 Rev.3"}}, "서진인스텍": {"PMI": {"target_type": "PMI", "target_types": ["PMI"], "items": ["LEVEL GAUGE", "FLANGE", "VALVE"], "default_code": ""}}, "성헌": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CROSS BEARING", "추진축 조립체", "UNIVERSAL JOINT"], "default_code": "KDS 0050-0021 / SIS H 301(2급,2군)"}}, "세진공조기계": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["임펠라(IMPELLER)"], "default_code": "KS B 0816 / SIS H 401 (2급2군)"}}, "수성웹툰(주)": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BATTERY FORK LIFT(3단 MAST) 1.3TON", "BATTERY BABY CRANE 1.0TON CAPA", "전동 포크리프트 수성샐바시온 SWR-1300L"], "default_code": "KS D 0213/SIS H 301(2급,2군)"}}, "스페이스 체인지": {"MT": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["상부 슬라브 접합 외 5개"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "신성플랜트": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["Spray Tower Top Cone"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "아이조음": {"MT": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["보강대"], "default_code": "KS D 0213 / SIS H 301"}}, "아이피에스": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CV Seat", "MSV, CV Stem"], "default_code": "KS B 0816 / SIS H 401 (2급, 2군)"}}, "양영": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편", "기계부품"], "items": ["용접사 기량테스트 (Plate,Fillet)", "구조물 용접부"], "default_code": "KS D 0213 /SIS H 301 (2급,2군)"}}, "에버랜드": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["롤링X트레인 / C23 레일 파이프 외", "캐치카 / Pusher Dog 외", "페스티벌 트레인 / 차륜 SHAFT", "매직스윙 / 안전레바 PIN", "롤링 X 트레인 / X 텐션바 철판 용접부", "플래쉬팡팡 / 승용물브라켓 외", "피터팬 / 안전랩바 고정핀 외", "롤링 X 트레인 / 레일 용접부", "챔피언쉽로데오 / 안전레버 라쳇 bar 외", "렛츠 트위스트"], "default_code": "ISO 23278_2015_EN level 1 / SIS H 363"}, "PT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["비룡열차 / 전륜Frame 외", "피터팬 / 안전렙바 용접부", "롤링X트레인(청차) / 가이드 휠 외"], "default_code": "KS B 0816 / SIS H 401 (2급2군)"}, "TG": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["롤링 X 트레인 / X 텐션바 철판 두께측정"], "default_code": ""}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["페스티벌 트레인 / 차륜 SHAFT", "매직스윙 / 주행축 외", "콜럼버스 대탐험 / 헤드바 킹핀", "자동차 왕국 / 휠 샤프트 외", "롤링X트레인(홍차) / 휠캐리어 스핀들 외", "더블 락스핀 / 굴절암 샤프트", "플래쉬팡팡 / 실린더로드", "피터팬 / 안전랩바 고정핀 외", "롤링X트레인 / 지주대 베이스볼트", "챔피언쉽 로데오 / 휠 디스크 연결핀 외"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "에스엠테크": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["VACUUM SYSTEM EXCHANG / WHEEL"], "default_code": "KS D 0213 /포스코 검사기준서 공통 02 / SIS H 301 ("}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["VACUUM SYSTEM EXCHANG / WHEEL", "VACUUM SYSTEM EXCHANG / SHAFT", "Sprocket / Shaft"], "default_code": "KS D 0248 / 포스코 공통 기준서 / 02 SIS H 203 (2"}}, "에이스냉동공조": {"TG": {"target_type": "배관", "target_types": ["배관"], "items": ["MDI IN & OUT 배관"], "default_code": ""}}, "올스톤산업": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편"], "items": ["GFRC 제작공장(지유글로벌) 용접사 기량테스트"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}}, "위드엔지니어링": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["각형강관, 원형강관"], "default_code": ""}}, "유성씨앤에프": {"TG": {"target_type": "구조물/설비", "target_types": ["구조물/설비"], "items": ["내압 두께측정"], "default_code": "KS B 0536"}}, "의성기어": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["REOUCER(R04) / SPIRAL BEVEL GEAR SPEC"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["REOUCER(R04) / SPIRAL BEVEL GEAR SPEC"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.3"}}, "이노텍코리아": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["다이크 작업대차"], "default_code": "KS D 0213 / SIS H 301"}}, "자인건축": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["UNIVERSAL JOINT", "H-Beam 용접부"], "default_code": "KS D 0213 /SIS H 301 (2급,2군)"}}, "전진이앤씨": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["S"], "default_code": ""}}, "제이에스티": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["WORM SHAFT", "GEAR, PINION, SHAFT"], "default_code": "KS D 0213 / SIS H 301(2급,2군)"}}, "제일푸리": {"PT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "ASME Sec.V / SIS H 441"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT", "RC FAN SHAFT"], "default_code": "ASME Sec.Ⅴ (SA-388) / SIS H 247 (2)"}}, "청원기연": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["하부구조물 (가이드레일)", "Buket LUG", "인력케이지 LUG"], "default_code": "KS D 0213/SIS H 301(2급,2군)"}}, "캐논코리아": {"MT": {"target_type": "배관", "target_types": ["배관"], "items": ["Resin 순환 및 발포라인"], "default_code": ""}}, "캐리비안베이": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["캐리비언 사업장 內 유기시설 및 공연시설 NDT 검사"], "default_code": ""}}, "코아베큠": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BUBBLER CANISTER"], "default_code": ""}}, "코오롱글로벌": {"MT": {"target_type": "기계부품", "target_types": ["기계부품", "구조물/설비"], "items": ["강서IC Ramp-C교 A1 / PHC 말뚝", "오정대교 현장 MT-01호 설치러그", "오정대교 현장 MT-02호 설치러그"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["오정대교 수원방향", "오정대교 문산방향"], "default_code": "KS B 0896 (L검출레벨. 2류) / SIS H 201 Rev.3"}}, "태성기전": {"UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "태창기계공업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["Back Up Roll / M43131914(02)", "CPL Cassette 부품(Top Cassette 인양용 러그)/ M43161914(03"], "default_code": "KS D 0213 / SIS H 301"}}, "포스코이앤씨": {"MT": {"target_type": "판재/시험편", "target_types": ["판재/시험편"], "items": ["용접사 기량시험"], "default_code": ""}}, "포스코인터내셔널": {"MT": {"target_type": "배관", "target_types": ["배관"], "items": ["#70 HRSG DRAIN LINE"], "default_code": "KS D 0213 / SIS H 301 (2급, 2군)"}, "TG": {"target_type": "구조물/설비", "target_types": ["구조물/설비", "배관"], "items": ["IP LOWER RISER PIPE", "LP LOWER RISER PIPE", "IP EVA LOWER TUBE", "IP EVA UPPER TUBE", "LP EVA LOWER TUBE", "LP EVA UPPER TUBE", "#70 HRSG IP EVA LOWER #3 HEADER TUBE", "#70 HRSG IP EVA LOWER #2 HEADER TUBE", "#70 HRSG IP EVA LOWER #1 HEADER TUBE", "#70 HRSG IP EVA LOWER #2 RISER MANIFOLD", "#70 HRSG IP EVA LOWER #3 RISER MANIFOLD", "#70 HRSG IP EVA LOWER #1 RISER MANIFOLD"], "default_code": ""}}, "피테크": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["LIFTING LUG"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "한양스틸": {"UT": {"target_type": "배관", "target_types": ["배관"], "items": ["FORGED STEEL"], "default_code": "SEP 1921 Group3 Class D/d / SIS H 265 Re"}}, "함감속기제작소": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["EXCITER 406 / 408", "PT 400HP x 1150RPM x 1/24.75 C=920", "EXCITER 406/408", "KTS 290HP x 470RPM x 1/2.909", "KTS 280HP × 2100RPM × 1/3.667", "EXCITER 306/308", "KPSI 1150HP × 4000RPM × 1/2.4 , 1/1/4.8", "KTD 290HP x 1454RPM x 1/8.992", "KTD 280HP × 2100RPM × 1/5.134", "KTT 112HP × 2262RPM × 1/7.334", "BS 80HP × 1420RPM × 1/4.09", "KTS 230HP × 2100RPM × 1/3.667"], "default_code": "KS D 0213 / SIS H 301"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["EXCITER 406/408", "EXCITER 406 /408", "BS 80HP x 1420RPM x 1/4.09", "EXCITER 206/208", "KPSI 1150HP x 4000RPM x 1/2.4, 1/4.8", "EXCITER 306/308", "KTS 280HP x 2100RPM x 1/3.667", "KTD 280HP x 2100RPM x 1/5.134", "KTT 112HP X 2262RPM X 1/7.334", "KTD 280HP X 2100RPM X 1/5.134", "EXCITER 306 /308", "KTS 280HP × 2100RPM × 1/3.667"], "default_code": "KS D 0248 / SIS H 203 (1류) Rev.2"}}, "현대건설": {"MT": {"target_type": "구조물/설비", "target_types": ["구조물/설비", "기계부품"], "items": ["탄천동로 Top Down 중앙말뚝 이음 용접검사", "누드E/V철골 용접", "추진기지#1 추진관 용접부 검사"], "default_code": "KS D 0213 (2급,2군) / SIS H 301"}, "PMI": {"target_type": "PMI", "target_types": ["PMI"], "items": ["Girder", "Tie-bar", "Beam", "철골"], "default_code": ""}, "UT": {"target_type": "판재/시험편", "target_types": ["판재/시험편"], "items": ["용접사 기량테스트 / PLATE"], "default_code": "KS B 0896 (L검출레벨. 2류) / SIS H 201 Rev.3"}}, "현대산업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["CONVEYOR PULLEY", "HEAD PULLEY (CV-012)", "TAIL PULLEY (CV-012)", "SNUB PULLEY (CV-012)", "TAIL DRUM (CV-017)", "SNUB&BEND PULLEY(CV-013)", "TAKE-UP PULLEY (CV-013)", "TAIL PULLEY(CV-013)", "HEAD(TRIPPER) PULLEY(CV-013)", "HEAD PULLEY(CV-013)"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}, "UT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["SHAFT"], "default_code": "KS D 0248 / SIS H 203 (2류) Rev.2"}}, "현성펌프": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["BFP Upper casing"], "default_code": "KS D 0213 / SIS H 301 (2급,2군)"}}, "현진산업": {"MT": {"target_type": "기계부품", "target_types": ["기계부품"], "items": ["화성 EVO 조립공장 로봇설치"], "default_code": ""}}};
+
+function getConfig() {
   var cfg = JSON.parse(JSON.stringify(APP_CONFIG));
-  cfg.companies = companies;
+  cfg.companies = getCompaniesList();
+  cfg.company_ndt_presets = COMPANY_NDT_PRESETS;
   return cfg;
 }
 
@@ -1216,9 +1360,11 @@ function saveRecord(req) {
   }
 
   sheet.appendRow(newRow);
+  ensureCompanyRegistered(rowMap['업체명']);
 
   return {
     status: 'success',
+    companies: getCompaniesList(),
     message: '구글 드라이브 클라우드에 성공적으로 저장되었습니다.'
   };
 }
@@ -1271,7 +1417,8 @@ function updateRecord(req) {
     rowValues.push(rowMap.hasOwnProperty(colName) ? rowMap[colName] : '');
   }
   sheet.getRange(targetRow, 1, 1, headerRow.length).setValues([rowValues]);
-  return { status: 'success', message: '성공적으로 수정되었습니다.' };
+  ensureCompanyRegistered(rowMap['업체명']);
+  return { status: 'success', companies: getCompaniesList(), message: '성공적으로 수정되었습니다.' };
 }
 
 /**

@@ -92,10 +92,16 @@
       <div>
         <div class="flex items-center justify-between mb-1">
           <label class="block text-xs font-bold text-slate-700">업체명 (거래처)</label>
-          <button type="button" id="btn-toggle-custom-co"
-            class="text-[11px] text-blue-600 font-semibold hover:underline">
-            ✏️ 직접 입력
-          </button>
+          <div class="flex items-center gap-2.5">
+            <button type="button" onclick="openCompanyManageModal()"
+              class="text-[11px] text-emerald-700 font-semibold hover:underline">
+              ⚙️ 관리
+            </button>
+            <button type="button" id="btn-toggle-custom-co"
+              class="text-[11px] text-blue-600 font-semibold hover:underline">
+              ✏️ 직접 입력
+            </button>
+          </div>
         </div>
         <select id="select-company"
           class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
@@ -233,9 +239,16 @@
 
       <div class="grid grid-cols-2 gap-2">
         <div><label for="inspection-target" class="block text-xs text-slate-500 mb-1">검사 대상</label>
-          <select id="inspection-target" class="w-full border rounded-xl px-3 py-2 text-sm"><option value="배관">배관</option><option value="배관 외">배관 외</option></select></div>
+          <select id="inspection-target" class="w-full border rounded-xl px-3 py-2 text-sm">
+            <option value="배관">배관</option>
+            <option value="배관 외">배관 외</option>
+          </select>
+          <p id="company-preset-hint" class="text-[11px] text-emerald-700 mt-1 hidden"></p>
+        </div>
         <div><label for="inspection-spec" class="block text-xs text-slate-500 mb-1">검사 규격</label>
-          <input id="inspection-spec" type="text" placeholder="두께 12 mm / 용접길이 300 mm" class="w-full border rounded-xl px-3 py-2 text-sm"></div>
+          <input id="inspection-spec" type="text" placeholder="두께 12 mm / 용접길이 300 mm"
+            class="w-full border rounded-xl px-3 py-2 text-sm">
+        </div>
       </div>
       <!-- 배관 관경 자동 계산 영역 -->
       <div id="pipe-calc-section" class="p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5">
@@ -257,19 +270,25 @@
         <div id="rt-joints-box" class="space-y-2 pt-0.5">
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5" id="label-ori-count">[ORI] 조인트 수</label>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5" id="label-ori-count">[ORI] 조인트
+                수</label>
               <input type="text" inputmode="decimal" data-numeric-input id="input-ori-joints" value="1" min="0" step="1"
                 class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
             <div>
-              <label class="block text-[11px] font-medium text-slate-500 mb-0.5" id="label-rep-count">[REP] 조인트 수</label>
+              <label class="block text-[11px] font-medium text-slate-500 mb-0.5" id="label-rep-count">[REP] 조인트
+                수</label>
               <input type="text" inputmode="decimal" data-numeric-input id="input-rep-joints" value="0" min="0" step="1"
                 class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
           </div>
           <div id="manual-rt-quantities" class="hidden grid grid-cols-2 gap-2">
-            <div><label for="input-ori-qty" class="block text-xs text-slate-500">[ORI] 촬영 매수</label><input id="input-ori-qty" type="text" inputmode="decimal" data-numeric-input min="0" step="1" value="0" class="w-full border rounded-xl px-3 py-2 text-sm"></div>
-            <div><label for="input-rep-qty" class="block text-xs text-slate-500">[REP] 촬영 매수</label><input id="input-rep-qty" type="text" inputmode="decimal" data-numeric-input min="0" step="1" value="0" class="w-full border rounded-xl px-3 py-2 text-sm"></div>
+            <div><label for="input-ori-qty" class="block text-xs text-slate-500">[ORI] 촬영 매수</label><input
+                id="input-ori-qty" type="text" inputmode="decimal" data-numeric-input min="0" step="1" value="0"
+                class="w-full border rounded-xl px-3 py-2 text-sm"></div>
+            <div><label for="input-rep-qty" class="block text-xs text-slate-500">[REP] 촬영 매수</label><input
+                id="input-rep-qty" type="text" inputmode="decimal" data-numeric-input min="0" step="1" value="0"
+                class="w-full border rounded-xl px-3 py-2 text-sm"></div>
           </div>
           <div>
             <label class="block text-[11px] font-medium text-slate-500 mb-0.5">불량 매수(REJ)</label>
@@ -315,7 +334,8 @@
       <div class="grid grid-cols-3 gap-2">
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
-          <input type="text" inputmode="decimal" data-numeric-input id="input-unit-price" value="25500" min="0" step="100"
+          <input type="text" inputmode="decimal" data-numeric-input id="input-unit-price" value="25500" min="0"
+            step="100"
             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800 focus:outline-none">
         </div>
         <div>
@@ -392,7 +412,8 @@
       <div class="grid grid-cols-3 gap-2">
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
-          <input type="text" inputmode="decimal" data-numeric-input id="rtk-center-miss" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-center-miss" min="0" step="1"
+            placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
@@ -402,7 +423,8 @@
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
-          <input type="text" inputmode="decimal" data-numeric-input id="rtk-marking-miss" min="0" step="1" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="rtk-marking-miss" min="0" step="1"
+            placeholder="0"
             class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
@@ -444,7 +466,8 @@
 
       <div>
         <label for="input-chemical-company" class="block text-xs text-slate-500 mb-1">약품회사 (제조사)</label>
-        <input type="text" id="input-chemical-company" placeholder="사용한 약품의 제조사명 입력" class="w-full border rounded-xl px-3 py-2 text-sm">
+        <input type="text" id="input-chemical-company" placeholder="사용한 약품의 제조사명 입력"
+          class="w-full border rounded-xl px-3 py-2 text-sm">
       </div>
       <div class="grid grid-cols-2 gap-2">
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
@@ -454,17 +477,20 @@
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
-          <input type="text" inputmode="decimal" data-numeric-input id="chem-black-mag" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-black-mag" min="0" step="0.5"
+            placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
-          <input type="text" inputmode="decimal" data-numeric-input id="chem-white-paint" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-white-paint" min="0" step="0.5"
+            placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
-          <input type="text" inputmode="decimal" data-numeric-input id="chem-penetrant" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-penetrant" min="0" step="0.5"
+            placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
@@ -474,7 +500,8 @@
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
-          <input type="text" inputmode="decimal" data-numeric-input id="chem-developer" min="0" step="0.5" placeholder="0"
+          <input type="text" inputmode="decimal" data-numeric-input id="chem-developer" min="0" step="0.5"
+            placeholder="0"
             class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="col-span-2 p-2 bg-slate-50 rounded-xl border border-slate-200/70 flex items-center justify-between">
@@ -645,6 +672,31 @@
     </div>
 
   </main>
+
+  <!-- Modal: 업체명(거래처) 등록/관리 다이얼로그 -->
+  <div id="company-manage-modal"
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-3 max-h-[82vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2 shrink-0">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+          <span>🏢</span> 업체명 (거래처) 등록 · 관리
+        </h3>
+        <button type="button" onclick="closeCompanyManageModal()"
+          class="text-slate-400 hover:text-slate-600 text-lg leading-none">&times;</button>
+      </div>
+      <div class="flex gap-1.5 shrink-0">
+        <input type="text" id="company-manage-new-name" placeholder="새 업체명 입력"
+          class="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <button type="button" id="btn-register-company" onclick="registerNewCompany()"
+          class="shrink-0 px-3.5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition">
+          + 등록
+        </button>
+      </div>
+      <input type="search" id="company-manage-search" placeholder="등록된 업체 검색..." oninput="renderCompanyManageList()"
+        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none shrink-0">
+      <div id="company-manage-list" class="flex-1 overflow-y-auto space-y-1.5 pr-0.5 min-h-[160px]"></div>
+    </div>
+  </div>
 
   <!-- Modal: 현장 작업 없음 / 내근 선택 다이얼로그 -->
   <div id="modal-no-work"
@@ -1001,6 +1053,83 @@
       if (!piping) isManualQty = true;
       if (recalculate && piping) { isManualQty = false; updatePipeCalc(); }
     }
+    let isRestoringRecord = false;
+
+    function getCompanyMethodPreset(company, method) {
+      const co = String(company || '').trim();
+      const companyMap = appConfig?.company_ndt_presets?.[co];
+      if (!companyMap) return { target_type: '', target_types: [], items: [], default_code: '' };
+      const m = String(method || '').trim().toUpperCase();
+      if (m && companyMap[m]) return companyMap[m];
+      if (m === 'PAUT' && companyMap['UT']) return companyMap['UT'];
+      const targetTypes = [];
+      const items = [];
+      let defaultCode = '';
+      Object.values(companyMap).forEach(entry => {
+        (entry.target_types || []).forEach(t => { if (t && !targetTypes.includes(t)) targetTypes.push(t); });
+        (entry.items || []).forEach(it => { if (it && !items.includes(it)) items.push(it); });
+        if (!defaultCode && entry.default_code) defaultCode = entry.default_code;
+      });
+      return { target_type: targetTypes[0] || '', target_types: targetTypes, items, default_code: defaultCode };
+    }
+
+    function refreshItemOptionsForCompanyMethod(company, method, autoSelectItem = false) {
+      const itemSelect = document.getElementById("select-item-name");
+      if (!itemSelect || !appConfig) return;
+      const preset = getCompanyMethodPreset(company, method);
+      const baseItems = Array.isArray(appConfig.test_items) ? appConfig.test_items : [];
+      const merged = [];
+      const seen = new Set();
+      [...(preset.items || []), ...baseItems].forEach(it => {
+        const clean = String(it || '').trim();
+        if (clean && !seen.has(clean)) { seen.add(clean); merged.push(clean); }
+      });
+      const prevVal = itemSelect.value;
+      itemSelect.replaceChildren(...merged.map(it => new Option(it, it)));
+      if (autoSelectItem && (preset.items || []).length > 0) {
+        itemSelect.value = preset.items[0];
+        const customInput = document.getElementById("input-custom-item");
+        if (customInput) { customInput.value = ""; customInput.classList.add("hidden"); }
+      } else if (prevVal && merged.includes(prevVal)) {
+        itemSelect.value = prevVal;
+      } else if (merged.includes('Piping')) {
+        itemSelect.value = 'Piping';
+      }
+    }
+
+    function applyCompanyMethodPreset({ autoSwitchTarget = true, autoSelectItem = true } = {}) {
+      const company = document.getElementById("select-company")?.value || "";
+      const preset = getCompanyMethodPreset(company, selectedMethod);
+      refreshItemOptionsForCompanyMethod(company, selectedMethod, autoSelectItem);
+      const hintEl = document.getElementById("company-preset-hint");
+      if (hintEl) {
+        if (preset.target_type) {
+          const itemNote = (preset.items || []).length ? ` · 품명 ${preset.items.length}건` : "";
+          hintEl.textContent = `추천 유형: ${preset.target_type}${itemNote}`;
+          hintEl.classList.remove("hidden");
+        } else {
+          hintEl.textContent = "";
+          hintEl.classList.add("hidden");
+        }
+      }
+      if (autoSwitchTarget && preset.target_type) {
+        const targetSelect = document.getElementById("inspection-target");
+        if (targetSelect) {
+          const nextTarget = preset.target_type === '배관' ? '배관' : '배관 외';
+          if (targetSelect.value !== nextTarget) {
+            targetSelect.value = nextTarget;
+            applyInspectionTarget(true);
+          }
+        }
+      }
+    }
+
+    document.getElementById("select-company")?.addEventListener("change", () => {
+      if (!isRestoringRecord && document.getElementById("select-company").value !== "직접 입력") {
+        applyCompanyMethodPreset({ autoSwitchTarget: true, autoSelectItem: true });
+      }
+    });
+
     document.getElementById('inspection-target').addEventListener('change', () => {
       document.getElementById('input-ori-qty').value = document.getElementById('input-qty').value;
       isPipeCalcOpen = true;
@@ -1031,12 +1160,16 @@
             google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getRecentRecords(payload);
           } else if (action === 'searchRecords') {
             google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).searchRecords(payload);
+          } else if (action === 'addCompany') {
+            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).addCompany(payload);
+          } else if (action === 'deleteCompany') {
+            google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).deleteCompany(payload);
           } else {
             reject(new Error("알 수 없는 API 액션: " + action));
           }
         } else {
           // Fallback to fetch if hosted separately
-          const isPost = (action === 'saveRecord' || action === 'updateRecord' || action === 'deleteRecord' || action === 'delete' || action === 'update' || action === 'searchRecords');
+          const isPost = (action === 'saveRecord' || action === 'updateRecord' || action === 'deleteRecord' || action === 'delete' || action === 'update' || action === 'searchRecords' || action === 'addCompany' || action === 'deleteCompany');
           const url = isPost ? '?api=' + action : `?api=${action}`;
           fetch(url, {
             method: isPost ? 'POST' : 'GET',
@@ -1050,6 +1183,126 @@
       });
     }
 
+    function refreshCompanyOptions(companies, preferredValue = null) {
+      const list = Array.isArray(companies) && companies.length ? companies : ['경인사무소'];
+      if (appConfig) appConfig.companies = list;
+      const compSelect = document.getElementById("select-company");
+      if (!compSelect) return;
+      const currentVal = preferredValue !== null ? String(preferredValue || '').trim() : compSelect.value;
+      compSelect.replaceChildren(...list.map(c => new Option(c, c)));
+      if (currentVal && list.includes(currentVal)) {
+        compSelect.value = currentVal;
+        const customCo = document.getElementById("input-custom-company");
+        if (customCo) { customCo.value = ""; customCo.classList.add("hidden"); }
+      }
+      renderCompanyManageList();
+    }
+
+    function openCompanyManageModal() {
+      const modal = document.getElementById("company-manage-modal");
+      const newInp = document.getElementById("company-manage-new-name");
+      const searchInp = document.getElementById("company-manage-search");
+      if (!modal) return;
+      if (newInp) newInp.value = "";
+      if (searchInp) searchInp.value = "";
+      renderCompanyManageList();
+      modal.classList.remove("hidden");
+      if (newInp) setTimeout(() => newInp.focus(), 100);
+    }
+
+    function closeCompanyManageModal() {
+      const modal = document.getElementById("company-manage-modal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function renderCompanyManageList() {
+      const container = document.getElementById("company-manage-list");
+      const searchEl = document.getElementById("company-manage-search");
+      if (!container) return;
+      const keyword = String(searchEl ? searchEl.value : "").trim().toLowerCase();
+      const companies = Array.isArray(appConfig?.companies) ? appConfig.companies : ['경인사무소'];
+      const filtered = companies.filter(name => !keyword || String(name).toLowerCase().includes(keyword));
+      if (!filtered.length) {
+        container.innerHTML = '<div class="text-center py-6 text-xs text-slate-400">일치하는 업체가 없습니다.</div>';
+        return;
+      }
+      container.innerHTML = filtered.map(name => {
+        const escaped = escapeRecentHtml(name);
+        const isDefault = name === '경인사무소';
+        return `
+          <div class="flex items-center justify-between gap-2 p-2 rounded-xl border border-slate-200 bg-slate-50">
+            <button type="button" data-company-select="${escaped}"
+              class="min-w-0 flex-1 text-left text-xs font-bold text-slate-800 truncate hover:text-emerald-700">${escaped}</button>
+            ${isDefault
+            ? '<span class="shrink-0 px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold">기본</span>'
+            : `<button type="button" data-company-delete="${escaped}"
+                  class="shrink-0 px-2 py-1 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 text-[10px] font-bold hover:bg-rose-100">삭제</button>`
+          }
+          </div>`;
+      }).join('');
+    }
+
+    async function registerNewCompany() {
+      const inp = document.getElementById("company-manage-new-name");
+      const btn = document.getElementById("btn-register-company");
+      const name = String(inp ? inp.value : "").trim();
+      if (!name) {
+        showToast("등록할 업체명을 입력해 주세요.", true);
+        if (inp) inp.focus();
+        return;
+      }
+      if (btn) btn.disabled = true;
+      try {
+        const res = await apiCall('addCompany', { company: name });
+        if (!res || res.status !== 'success') {
+          throw new Error((res && res.detail) || '업체 등록 실패');
+        }
+        refreshCompanyOptions(res.companies, name);
+        if (inp) inp.value = "";
+        showToast(res.message || `[${name}] 업체가 등록되었습니다.`);
+      } catch (e) {
+        showToast("업체 등록 오류: " + e.message, true);
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function removeCompanyFromMaster(name) {
+      if (!name || name === '경인사무소') return;
+      if (!confirm(`[${name}] 업체를 목록에서 삭제하시겠습니까?`)) return;
+      try {
+        const res = await apiCall('deleteCompany', { company: name });
+        if (!res || res.status !== 'success') {
+          throw new Error((res && res.detail) || '업체 삭제 실패');
+        }
+        const selected = document.getElementById("select-company")?.value === name ? '경인사무소' : null;
+        refreshCompanyOptions(res.companies, selected);
+        showToast(res.message || `[${name}] 삭제 완료`);
+      } catch (e) {
+        showToast("업체 삭제 오류: " + e.message, true);
+      }
+    }
+
+    document.getElementById("company-manage-new-name")?.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        registerNewCompany();
+      }
+    });
+
+    document.getElementById("company-manage-list")?.addEventListener("click", event => {
+      const delBtn = event.target.closest("[data-company-delete]");
+      if (delBtn) {
+        removeCompanyFromMaster(delBtn.dataset.companyDelete);
+        return;
+      }
+      const selBtn = event.target.closest("[data-company-select]");
+      if (selBtn) {
+        refreshCompanyOptions(appConfig?.companies, selBtn.dataset.companySelect);
+        closeCompanyManageModal();
+      }
+    });
+
     async function loadConfig() {
       try {
         appConfig = await apiCall('getConfig');
@@ -1057,6 +1310,7 @@
         // Companies
         const compSelect = document.getElementById("select-company");
         compSelect.innerHTML = appConfig.companies.map(c => `<option value="${c}">${c}</option>`).join("");
+        refreshCompanyOptions(appConfig.companies);
 
         // Inspection items
         const itemSelect = document.getElementById("select-item-name");
@@ -1298,6 +1552,9 @@
 
       applyInspectionTarget(false);
       if (methodChanged) applyMethodDefaults(method);
+      if (methodChanged && !isRestoringRecord && !["내근/대기", "휴무"].includes(method)) {
+        applyCompanyMethodPreset({ autoSwitchTarget: true, autoSelectItem: true });
+      }
       if (!isManualQty) {
         updatePipeCalc();
       } else {
@@ -1850,6 +2107,9 @@
 
         const res = await apiCall(actionName, payload);
         if (res && res.status === 'success') {
+          if (Array.isArray(res.companies)) {
+            refreshCompanyOptions(res.companies, isEditing ? null : company);
+          }
           if (isEditing) {
             showToast("작업일보가 성공적으로 수정되었습니다!");
             cancelEditMode();
@@ -2075,6 +2335,8 @@
     }
 
     function populateFormFromRecord(r, options = {}) {
+      isRestoringRecord = true;
+      try {
       const includeDate = Boolean(options.includeDate);
       if (includeDate && r.date && dateInput) dateInput.value = r.date;
       const siteInput = document.getElementById("input-site-name");
@@ -2084,6 +2346,7 @@
       setSelectOrCustomValue("select-loc-type", null, r.loc_type);
 
       if (r.method) switchMethod(r.method);
+      refreshItemOptionsForCompanyMethod(r.company, r.method || selectedMethod, false);
 
       if (setSelectOrCustomValue("select-item-name", "input-custom-item", r.item_name)) {
         document.getElementById("select-item-name").dispatchEvent(new Event('change'));
@@ -2160,6 +2423,9 @@
         initDefaultWorkers();
       }
       renderWorkers();
+      } finally {
+        isRestoringRecord = false;
+      }
     }
 
     // Start edit mode with full record population
