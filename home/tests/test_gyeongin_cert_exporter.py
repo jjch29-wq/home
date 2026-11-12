@@ -423,7 +423,7 @@ class GyeonginCertExporterTests(unittest.TestCase):
                         'item_name': 'SHAFT',
                         'code_procedure': 'KS',
                         'inspector': '주진철',
-                        'rows': [{'품목명': 'SHAFT', '재질': 'sm450', '수량': 1, '단위': 'EA'}],
+                        'rows': [{'품목명': 'SHAFT', '재질': 'sm450', '수량': 1, '단위': 'EA', '구간정보': 'ALL SURFACE', '결과': '합격'}],
                     },
                     out,
                 )
@@ -431,6 +431,12 @@ class GyeonginCertExporterTests(unittest.TestCase):
                     self.assertIn('xl/media/footer_sitco.png', zf.namelist())
                     self.assertIn(b'<legacyDrawingHF', zf.read('xl/worksheets/sheet1.xml'))
                 wb = openpyxl.load_workbook(out)
+                if method == 'MT':
+                    self.assertEqual(wb['MT(갑)']['L29'].value, '관련지시 없음')
+                elif method == 'PT':
+                    self.assertEqual(wb['PT(갑)']['H30'].value, '관련지시 없음')
+                elif method == 'UT':
+                    self.assertEqual(wb['UT(을)']['E10'].value, '관련지시 없음')
                 wb.close()
 
 

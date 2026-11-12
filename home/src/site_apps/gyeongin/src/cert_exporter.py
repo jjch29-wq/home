@@ -262,6 +262,17 @@ def is_rejected(result_text: str) -> bool:
     return any(tok in s for tok in ('불합격', 'REJ', 'FAIL', 'NG'))
 
 
+def row_interpretation(row: dict, default_interp: str) -> str:
+    """Return NDT interpretation/finding text (not inspection scope like ALL SURFACE)."""
+    explicit = _text(row.get('판정')) or _text(row.get('판정내용')) or _text(row.get('결함내용'))
+    if explicit:
+        return explicit
+    result_txt = _text(row.get('결과'))
+    if is_rejected(result_txt):
+        return result_txt
+    return default_interp
+
+
 def build_cert_batches(
     ndt_results: list[dict],
     target_date: str = '',
@@ -594,7 +605,7 @@ class CertificateExporter:
                     _write_cell(ws, f'F{r}', 'V')
                     _write_cell(ws, f'H{r}', '')
                 _write_cell(ws, f'K{r}', '1')
-                interp = _text(row.get('구간정보')) or _text(row.get('검사범위')) or default_interp
+                interp = row_interpretation(row, default_interp)
                 _write_cell(ws, f'L{r}', interp)
                 _write_cell(ws, f'U{r}', row_remarks(row))
 
@@ -660,7 +671,7 @@ class CertificateExporter:
                     _write_cell(ws, f'E{r}', 'V')
                     _write_cell(ws, f'F{r}', '')
                 _write_cell(ws, f'G{r}', '1')
-                interp = _text(row.get('구간정보')) or _text(row.get('검사범위')) or default_interp
+                interp = row_interpretation(row, default_interp)
                 _write_cell(ws, f'H{r}', interp)
                 _write_cell(ws, f'R{r}', row_remarks(row))
 
@@ -732,7 +743,7 @@ class CertificateExporter:
                 else:
                     _write_cell(ws_eul, f'C{r}', 'V')
                     _write_cell(ws_eul, f'D{r}', '')
-                interp = _text(row.get('구간정보')) or _text(row.get('검사범위')) or default_interp
+                interp = row_interpretation(row, default_interp)
                 _write_cell(ws_eul, f'E{r}', interp)
                 mat = row_material(row)
                 rem = row_remarks(row)
