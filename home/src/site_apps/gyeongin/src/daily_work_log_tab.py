@@ -1116,7 +1116,7 @@ class DailyWorkLogTab(ttk.Frame):
         choices = merge_company_items(
             company,
             method,
-            history_items=((current,) if current else ()) + tuple(saved),
+            history_items=(current,) if current else (),
             fallback_items=target_defaults,
         )
         row['검사품명'].configure(values=choices)

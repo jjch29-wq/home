@@ -152,6 +152,20 @@ def suggest_company_method_preset(company: str, method: str = "", presets: dict 
     }
 
 
+def _unique_nonempty(*sequences) -> list[str]:
+    merged = []
+    seen = set()
+    for seq in sequences:
+        if not seq:
+            continue
+        for raw in seq:
+            txt = str(raw or "").strip()
+            if txt and txt not in seen:
+                seen.add(txt)
+                merged.append(txt)
+    return merged
+
+
 def merge_company_items(
     company: str,
     method: str = "",
@@ -159,18 +173,12 @@ def merge_company_items(
     fallback_items=(),
     presets: dict | None = None,
 ) -> list[str]:
-    """Order dropdown item choices as: company×method presets -> saved history -> target defaults."""
+    """Return ONLY the company's items when the company has presets/history; else fallback."""
     preset = suggest_company_method_preset(company, method, presets=presets)
-    merged = []
-    seen = set()
-    for seq in (preset.get("items", ()), history_items or (), fallback_items or ()):
-        for raw in seq:
-            txt = str(raw or "").strip()
-            if not txt or txt in seen:
-                continue
-            seen.add(txt)
-            merged.append(txt)
-    return merged
+    company_items = preset.get("items", ())
+    if company_items or history_items:
+        return _unique_nonempty(company_items, history_items)
+    return _unique_nonempty(fallback_items)
 
 
 METHOD_REPORT_MATERIALS = {
@@ -255,10 +263,14 @@ def method_inspection_item_candidates(
     fallback_items=(),
     presets: dict | None = None,
 ) -> list[str]:
-    """Return inspection item candidates ordered: (company,method) -> method reports -> history -> defaults."""
+    """Return ONLY the company's items (for method or all company methods) when known; else method/defaults."""
     source = presets if presets is not None else load_company_ndt_presets()
     m = str(method or "").strip().upper()
     company_preset = suggest_company_method_preset(company, m, presets=source)
+    company_items = company_preset.get("items", ())
+
+    if company_items or history_items:
+        return _unique_nonempty(company_items, history_items)
 
     method_items = []
     if m:
@@ -271,13 +283,5 @@ def method_inspection_item_candidates(
                     if it:
                         method_items.append(it)
 
-    merged = []
-    seen = set()
-    for seq in (company_preset.get("items", ()), method_items, history_items or (), fallback_items or ()):
-        for raw in seq:
-            txt = str(raw or "").strip()
-            if txt and txt not in seen:
-                seen.add(txt)
-                merged.append(txt)
-    return merged
+    return _unique_nonempty(method_items, fallback_items)
 

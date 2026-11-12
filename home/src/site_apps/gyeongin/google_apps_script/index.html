@@ -1078,16 +1078,18 @@
       if (!itemSelect || !appConfig) return;
       const preset = getCompanyMethodPreset(company, method);
       const baseItems = Array.isArray(appConfig.test_items) ? appConfig.test_items : [];
+      const companyItems = Array.isArray(preset.items) ? preset.items : [];
+      const source = companyItems.length > 0 ? companyItems : baseItems;
       const merged = [];
       const seen = new Set();
-      [...(preset.items || []), ...baseItems].forEach(it => {
+      source.forEach(it => {
         const clean = String(it || '').trim();
         if (clean && !seen.has(clean)) { seen.add(clean); merged.push(clean); }
       });
       const prevVal = itemSelect.value;
       itemSelect.replaceChildren(...merged.map(it => new Option(it, it)));
-      if (autoSelectItem && (preset.items || []).length > 0) {
-        itemSelect.value = preset.items[0];
+      if (autoSelectItem && companyItems.length > 0) {
+        itemSelect.value = companyItems[0];
         const customInput = document.getElementById("input-custom-item");
         if (customInput) { customInput.value = ""; customInput.classList.add("hidden"); }
       } else if (prevVal && merged.includes(prevVal)) {

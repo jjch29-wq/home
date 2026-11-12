@@ -595,6 +595,11 @@ def setup_daily_usage_tab_impl(self):
                 self.ndt_rt_rej_row.pack(fill='x', pady=2)
             else:
                 self.ndt_rt_rej_row.pack_forget()
+        if hasattr(self, '_refresh_daily_method_dropdowns'):
+            try:
+                self._refresh_daily_method_dropdowns(auto_fill=True)
+            except Exception:
+                pass
 
         # 1. 하단 NDT 관경 및 물량 산출 프레임 제어 (RT, UT, PT, PAUT, MT)
         if method in ["RT", "UT", "PT", "PAUT", "MT"]:
@@ -667,14 +672,44 @@ def setup_daily_usage_tab_impl(self):
                 try: self.empty_guide_frame.grid_remove()
                 except Exception: pass
 
-    def _refresh_daily_method_dropdowns(*_args):
-        """Sync daily material and inspection-item dropdowns with active company & method."""
+    def _refresh_daily_method_dropdowns(*_args, auto_fill=True):
+        """Sync daily material & inspection-item dropdowns and auto-fill (company, method) defaults."""
+        from site_apps.gyeongin.src.company_master import suggest_company_method_preset
+
+        is_editing = getattr(self, '_daily_edit_source', None) is not None
+        company = self.cb_daily_company.get().strip() if hasattr(self, 'cb_daily_company') else ''
+        method = self.cb_daily_test_method.get().strip().upper() if hasattr(self, 'cb_daily_test_method') else ''
+
         if hasattr(self, 'cb_daily_material') and isinstance(self.cb_daily_material, ttk.Combobox):
             mat_vals = self._get_material_candidates(include_all=False)
             self.cb_daily_material['values'] = mat_vals
+            curr_mat = self.cb_daily_material.get().strip()
+            if auto_fill and not is_editing and mat_vals and (not curr_mat or (curr_mat not in mat_vals and method in ('RT', 'MT', 'PT', 'UT', 'PAUT', 'PMI'))):
+                self.cb_daily_material.set(mat_vals[0])
+
+        preset = suggest_company_method_preset(company, method)
         if hasattr(self, 'ent_daily_inspection_item') and isinstance(self.ent_daily_inspection_item, ttk.Combobox):
             item_vals = self._get_inspection_item_candidates()
             self.ent_daily_inspection_item['values'] = item_vals
+            curr_item = self.ent_daily_inspection_item.get().strip()
+            preset_items = preset.get('items', ())
+            if auto_fill and not is_editing and preset_items:
+                if not curr_item or curr_item == 'Piping' or curr_item not in preset_items:
+                    self.ent_daily_inspection_item.set(preset_items[0])
+
+        if auto_fill and not is_editing and preset.get('target_type') and hasattr(self, 'inspection_target_var'):
+            expected_target = '배관' if preset['target_type'] == '배관' else '배관 외'
+            if self.inspection_target_var.get().strip() != expected_target:
+                self.inspection_target_var.set(expected_target)
+                if hasattr(self, 'update_inspection_target'):
+                    self.update_inspection_target()
+
+        if auto_fill and not is_editing and preset.get('default_code') and hasattr(self, 'ent_daily_applied_code'):
+            code_hint = 'ASME' if 'ASME' in preset['default_code'].upper() else 'KS'
+            curr_code = self.ent_daily_applied_code.get().strip()
+            if not curr_code or curr_code in ('KS', 'ASME'):
+                self.ent_daily_applied_code.delete(0, tk.END)
+                self.ent_daily_applied_code.insert(0, code_hint)
 
     self._refresh_daily_method_dropdowns = _refresh_daily_method_dropdowns
     self.on_method_change_auto_unit_logic = on_method_change_auto_unit_logic
@@ -685,7 +720,7 @@ def setup_daily_usage_tab_impl(self):
     if hasattr(self, 'cb_daily_company'):
         self.cb_daily_company.bind('<<ComboboxSelected>>', _refresh_daily_method_dropdowns, add='+')
         self.cb_daily_company.bind('<FocusOut>', _refresh_daily_method_dropdowns, add='+')
-    _refresh_daily_method_dropdowns()
+    _refresh_daily_method_dropdowns(auto_fill=False)
     
     # [ROBUST_AUTOCOMPLETE] Use standardized suggest system for Entry Form
     self._bind_combobox_word_suggest(self.cb_daily_site, lambda: sorted(list(set(self.sites))))

@@ -2269,7 +2269,16 @@ class MaterialManager:
 
         hist_items = []
         if hasattr(self, 'daily_usage_df') and not self.daily_usage_df.empty and '검사품명' in self.daily_usage_df.columns:
-            hist_items = [str(h).strip() for h in self.daily_usage_df['검사품명'].dropna() if str(h).strip()]
+            df_src = self.daily_usage_df
+            co_norm = str(company or '').strip().casefold()
+            if co_norm and co_norm != '경인사무소' and '업체명' in df_src.columns:
+                df_src = df_src[df_src['업체명'].fillna('').astype(str).str.strip().str.casefold() == co_norm]
+            m_norm = str(method or '').strip().upper()
+            if m_norm and '검사방법' in df_src.columns:
+                df_method = df_src[df_src['검사방법'].fillna('').astype(str).str.strip().str.upper() == m_norm]
+                if not df_method.empty:
+                    df_src = df_method
+            hist_items = [str(h).strip() for h in df_src['검사품명'].dropna() if str(h).strip()]
         defaults = sorted(set(str(x).strip() for x in getattr(self, 'test_items', []) if str(x).strip()))
 
         from site_apps.gyeongin.src.company_master import method_inspection_item_candidates

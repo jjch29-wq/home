@@ -22,6 +22,9 @@ class DailyRecordSaveTests(unittest.TestCase):
             return len(plan['records_to_save'])
         self.app._commit_usage_plan = commit
         remember_source(self.app, 0)
+        push_patcher = patch('site_apps.gyeongin.src.sync_google_sheet.push_record_to_web_app')
+        self.mock_push = push_patcher.start()
+        self.addCleanup(push_patcher.stop)
 
     def test_loaded_edit_cannot_enter_new_batch_save(self):
         from site_apps.gyeongin.src.inspection_batch import InspectionBatch

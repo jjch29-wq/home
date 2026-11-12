@@ -311,8 +311,10 @@ class GyeonginCertExporterTests(unittest.TestCase):
         self.assertEqual(mt_preset['target_type'], '기계부품')
         self.assertIn('PINION', mt_preset['items'])
         ordered = merge_company_items('나라삼양감속기', 'MT', fallback_items=['OTHER'])
-        self.assertEqual(ordered[0], mt_preset['items'][0])
-        self.assertEqual(ordered[-1], 'OTHER')
+        self.assertEqual(ordered, mt_preset['items'])
+        self.assertNotIn('OTHER', ordered)
+        unknown_ordered = merge_company_items('신규미등록업체', 'MT', fallback_items=['OTHER'])
+        self.assertEqual(unknown_ordered, ['OTHER'])
 
         cfg = server.get_config()
         self.assertIn('company_ndt_presets', cfg)
@@ -360,8 +362,46 @@ class GyeonginCertExporterTests(unittest.TestCase):
 
         mt_items = method_inspection_item_candidates('나라삼양감속기', 'MT', fallback_items=['OTHER'])
         self.assertIn('PINION', mt_items)
-        self.assertIn('UNIVERSAL JOINT', mt_items)
-        self.assertEqual(mt_items[-1], 'OTHER')
+        self.assertNotIn('UNIVERSAL JOINT', mt_items)
+        self.assertNotIn('OTHER', mt_items)
+
+        ksmc_items = method_inspection_item_candidates('경성기공', 'MT', fallback_items=['Piping', 'Tank'])
+        self.assertEqual(ksmc_items, ['UNIVERSAL JOINT', 'SHAFT', 'SPINDLE', "YOKE ASS'Y", 'FM SPINDLE'])
+
+        unknown_items = method_inspection_item_candidates('신규미등록업체', 'MT', fallback_items=['OTHER'])
+        self.assertIn('OTHER', unknown_items)
+
+    def test_daily_usage_view_autofills_company_method_item_and_material(self):
+        import tkinter as tk
+        from unittest import mock
+        from site_apps.gyeongin.src import data_sync, sync_google_sheet
+        from site_apps.gyeongin.src.app import MaterialManager
+
+        with (
+            mock.patch.object(data_sync, '_configured_data_dir', lambda: None),
+            mock.patch.object(sync_google_sheet, 'sync_all_gyeongin_sources', return_value={'status': 'skipped', 'added_count': 0}),
+            mock.patch.object(MaterialManager, 'save_data', return_value=True),
+        ):
+            root = tk.Tk()
+            root.withdraw()
+            try:
+                app = MaterialManager(root)
+                app.cb_daily_company.set('경성기공')
+                app.cb_daily_test_method.set('MT')
+                app.on_method_change_auto_unit_logic()
+                self.assertEqual(app.ent_daily_inspection_item.get(), 'UNIVERSAL JOINT')
+                self.assertIn('SHAFT', list(app.ent_daily_inspection_item.cget('values')))
+                self.assertEqual(app.inspection_target_var.get(), '배관 외')
+                self.assertEqual(app.ent_daily_applied_code.get(), 'KS')
+                self.assertTrue(any('MT' in m or '자분' in m for m in app.cb_daily_material.cget('values')))
+
+                app.cb_daily_company.set('제일푸리')
+                app.cb_daily_test_method.set('UT')
+                app.on_method_change_auto_unit_logic()
+                self.assertEqual(app.ent_daily_inspection_item.get(), 'SHAFT')
+                self.assertEqual(app.ent_daily_applied_code.get(), 'ASME')
+            finally:
+                root.destroy()
 
 
 if __name__ == '__main__':
