@@ -1289,9 +1289,10 @@ class DailyWorkLogTab(ttk.Frame):
             values = {key: widget.get() for key, widget in row.items()}
             if any(str(value).strip() for value in values.values()):
                 metadata = dict(getattr(row.get('구간정보'), '_rt_retake_meta', {}))
-                remaining.append((values, metadata))
+                remaining.append((values, metadata, getattr(row.get('업체'), '_photo_row_id', '')))
         for index, row in enumerate(self.ndt_grid_entries):
-            values, metadata = remaining[index] if index < len(remaining) else ({}, {})
+            values, metadata, photo_id = remaining[index] if index < len(remaining) else ({}, {}, '')
+            row['업체']._photo_row_id = photo_id
             # Set the method before the detail widget chooses its layout.
             for key, widget in row.items():
                 if key == '구간정보':
@@ -1608,8 +1609,8 @@ class DailyWorkLogTab(ttk.Frame):
                 '알림', '공정사진은 PAUT, RT, MT, PT 검사만 등록할 수 있습니다.'
             )
             return
-        if not method or not joint:
-            messagebox.showwarning('알림', '선택 행의 검사방법과 Joint No.를 입력하세요.')
+        if not row['업체'].get().strip():
+            messagebox.showwarning('알림', '선택 행의 업체를 입력하세요.')
             return
 
         files = filedialog.askopenfilenames(
@@ -1628,35 +1629,55 @@ class DailyWorkLogTab(ttk.Frame):
         if description is None:
             return
 
+        row['업체']._photo_row_id = getattr(row['업체'], '_photo_row_id', '') or uuid.uuid4().hex
+        if self.save_current_history() is False:
+            return
+
         current_date = self.date_entry.get()
         target_dir = os.path.join(self.photo_root, current_date)
         os.makedirs(target_dir, exist_ok=True)
         history = self.load_history()
         day_data = history.setdefault(current_date, {})
         photos = day_data.setdefault('process_photos', [])
-        for source_path in files:
-            photo_id = uuid.uuid4().hex
-            extension = os.path.splitext(source_path)[1].lower() or '.jpg'
-            filename = f'{method}_{photo_id}{extension}'
-            target_path = os.path.join(target_dir, filename)
-            shutil.copy2(source_path, target_path)
-            photos.append({
-                'id': photo_id,
-                'process': method,
-                'date': current_date,
-                'section': row['구간'].get().strip(),
-                'line_no': row['라인번호'].get().strip(),
-                'joint_no': joint,
-                'welder': self._normalize_welder_id(row['용접사'].get()),
-                'location': (
-                    row['구간'].get().strip()
-                    or row['라인번호'].get().strip()
-                    or joint
-                ),
-                'description': description.strip(),
-                'file_path': os.path.relpath(target_path, os.path.dirname(self.history_path)),
-            })
-        self.save_history(history)
+        copied_paths = []
+        try:
+            from PIL import Image
+            for source_path in files:
+                with Image.open(source_path) as image:
+                    image.verify()
+            for source_path in files:
+                photo_id = uuid.uuid4().hex
+                extension = os.path.splitext(source_path)[1].lower() or '.jpg'
+                filename = f'{method}_{photo_id}{extension}'
+                target_path = os.path.join(target_dir, filename)
+                copied_paths.append(target_path)
+                shutil.copy2(source_path, target_path)
+                photos.append({
+                    'id': photo_id,
+                    'row_id': row['업체']._photo_row_id,
+                    'company': row['업체'].get().strip(),
+                    'include': True,
+                    'process': method,
+                    'date': current_date,
+                    'section': row['구간'].get().strip(),
+                    'line_no': row['라인번호'].get().strip(),
+                    'joint_no': joint,
+                    'welder': self._normalize_welder_id(row['용접사'].get()),
+                    'location': (
+                        row['구간'].get().strip()
+                        or row['라인번호'].get().strip()
+                        or joint or row['검사품명'].get().strip()
+                    ),
+                    'description': description.strip(),
+                    'file_path': os.path.relpath(target_path, os.path.dirname(self.history_path)),
+                })
+            self.save_history(history)
+        except (OSError, ValueError) as exc:
+            for copied_path in copied_paths:
+                if os.path.isfile(copied_path):
+                    os.remove(copied_path)
+            messagebox.showerror('사진 등록 실패', str(exc), parent=self)
+            return
         messagebox.showinfo('완료', f'공정사진 {len(files)}장을 등록했습니다.')
 
     def _rt_context(self):
@@ -1867,6 +1888,27 @@ class DailyWorkLogTab(ttk.Frame):
 
         button_bar = ttk.Frame(window)
         button_bar.pack(fill='x', padx=8, pady=(0, 8))
+        def edit_photos():
+            from copy import deepcopy
+            from site_apps.gyeongin.src.certificate_photos import edit_certificate_photos
+            items = deepcopy(photos)
+            for item in items:
+                item['file_path'] = os.path.abspath(os.path.join(os.path.dirname(self.history_path), item['file_path']))
+            def apply_photos(edited):
+                latest = self.load_history()
+                originals = {p['id']: p for p in latest[current_date]['process_photos']}
+                ordered = []
+                for item in edited:
+                    original = originals.pop(item['id'], None)
+                    if original is not None:
+                        original.update(description=item.get('description', ''), include=item.get('include', True))
+                        ordered.append(original)
+                latest[current_date]['process_photos'] = ordered + list(originals.values())
+                self.save_history(latest)
+            edit_certificate_photos(window, items, apply_photos)
+            window.destroy()
+            self.manage_process_photos()
+        ttk.Button(button_bar, text='미리보기·설명·순서', command=edit_photos).pack(side='left', padx=4)
         ttk.Button(button_bar, text='사진 열기', command=open_photo).pack(side='left', padx=4)
         ttk.Button(button_bar, text='선택 삭제', command=delete_photo).pack(side='left', padx=4)
         ttk.Button(button_bar, text='닫기', command=window.destroy).pack(side='right', padx=4)
@@ -1920,6 +1962,7 @@ class DailyWorkLogTab(ttk.Frame):
         for row_entries in self.ndt_grid_entries:
             row_dict = {col: ent.get() for col, ent in row_entries.items()}
             row_dict = merge_daily_context(row_dict, getattr(row_entries.get('업체'), '_daily_usage_meta', {}))
+            row_dict['photo_row_id'] = getattr(row_entries.get('업체'), '_photo_row_id', '')
             row_dict['용접사'] = self._normalize_welder_id(row_dict.get('용접사'))
             if any(val.strip() for val in row_dict.values()):
                 data['ndt_results'].append(row_dict)
@@ -1979,6 +2022,7 @@ class DailyWorkLogTab(ttk.Frame):
             row_dict = merge_daily_context(row_dict, getattr(row_entries.get('업체'), '_daily_usage_meta', {}))
             if sig in meta_map:
                 row_dict = merge_daily_context(row_dict, meta_map[sig])
+            row_dict['photo_row_id'] = getattr(row_entries.get('업체'), '_photo_row_id', '')
             all_rows.append(row_dict)
             if idx < len(self.ndt_selection_vars) and self.ndt_selection_vars[idx].get():
                 checked.append(row_dict)
@@ -2205,7 +2249,8 @@ class DailyWorkLogTab(ttk.Frame):
             classify_standard_family,
         )
 
-        self.save_current_history()
+        if self.save_current_history() is False:
+            return
         rows = self._current_ndt_rows_for_export()
         date_str = self._selected_date_key()
         batches = build_cert_batches(
@@ -2223,6 +2268,11 @@ class DailyWorkLogTab(ttk.Frame):
             return
 
         from pathlib import Path
+        from site_apps.gyeongin.src.certificate_photos import batch_photos, edit_certificate_photos
+        photo_history = self.load_history()
+        photo_rows = photo_history.get(date_str, {}).get('ndt_results', [])
+        for batch in batches:
+            batch['certificate_photos'] = batch_photos(photo_history, batch, Path(self.history_path).parent, photo_rows)
         from site_apps.gyeongin.src.pmi_criteria import (
             restore_report, save_report, state_key, edit_criteria_dialog,
             saved_projects, restore_project,
@@ -2589,6 +2639,25 @@ class DailyWorkLogTab(ttk.Frame):
         load_form(0)
         tree.bind('<<TreeviewSelect>>', lambda _e: tree.selection() and load_form(int(tree.selection()[0])))
 
+        photo_frame = ttk.Frame(body)
+        photo_frame.pack(fill='x', pady=4)
+        include_photos_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(photo_frame, text='MT·PT 사진 포함', variable=include_photos_var).pack(side='left')
+
+        def choose_photos():
+            batch = batches[selected_idx[0]]
+            if batch['method'] not in ('MT', 'PT'):
+                messagebox.showinfo('사진 첨부', 'MT·PT 성적서를 선택하세요.', parent=top)
+                return
+            if not batch['certificate_photos']:
+                messagebox.showinfo('사진 첨부', '작업일보에서 검사 행을 선택한 뒤 사진을 등록하세요.', parent=top)
+                return
+            def apply_photos(items):
+                batch['certificate_photos'] = items
+            edit_certificate_photos(top, batch['certificate_photos'], apply_photos)
+
+        ttk.Button(photo_frame, text='선택 성적서 사진 선택·편집', command=choose_photos).pack(side='left', padx=6)
+
         ledger_frame = ttk.Frame(body)
         ledger_frame.pack(fill='x', pady=(4, 8))
         append_ledger_var = tk.BooleanVar(value=False)
@@ -2615,6 +2684,7 @@ class DailyWorkLogTab(ttk.Frame):
             created = []
             try:
                 for b in batches:
+                    b['include_photos'] = include_photos_var.get()
                     if b.get('method') == 'PMI' and ('pmi_criteria' in b or 'pmi_elements' in b):
                         save_report(b, criteria_state_path, b.get('_pmi_state_key'))
                 if len(batches) == 1:
@@ -3210,6 +3280,7 @@ class DailyWorkLogTab(ttk.Frame):
                         val = self._normalize_welder_id(val)
                     row_dict[col] = str(val) if val else ""
             row_dict.update(getattr(row_entries.get('구간정보'), '_rt_retake_meta', {}))
+            row_dict['photo_row_id'] = getattr(row_entries.get('업체'), '_photo_row_id', '')
             row_dict = merge_daily_context(row_dict, getattr(row_entries.get('업체'), '_daily_usage_meta', {}))
             data['ndt_results'].append(row_dict)
             
@@ -3336,6 +3407,7 @@ class DailyWorkLogTab(ttk.Frame):
 
         for i, row_entries in enumerate(self.ndt_grid_entries):
             row_data = curr_ndt[i] if i < len(curr_ndt) else {}
+            row_entries['업체']._photo_row_id = row_data.get('photo_row_id', '')
             row_entries['업체']._daily_usage_meta = daily_certificate_context(row_data)
             normalized_spec, work_shift = split_legacy_spec(row_data)
             for col, ent in row_entries.items():

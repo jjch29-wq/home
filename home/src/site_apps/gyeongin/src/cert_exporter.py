@@ -594,6 +594,8 @@ class CertificateExporter:
             'PMI': self._populate_pmi,
         }
         dispatch[method](wb, batch)
+        from site_apps.gyeongin.src.certificate_photos import append_photo_pages
+        append_photo_pages(wb, batch, self.template_dir)
         _sync_footer_form_code(wb, method, _text(batch.get('code_procedure')))
 
         out = Path(output_path)
@@ -749,7 +751,7 @@ class CertificateExporter:
         default_interp = 'NO RECORDABLE INDICATION' if is_asme else '관련지시 없음'
 
         for page_idx, chunk in enumerate(chunks, start=1):
-            ws = base if page_idx == 1 else wb.copy_worksheet(base)
+            ws = base if page_idx == 1 else self._copy_report_sheet(wb, base)
             if page_idx > 1:
                 ws.title = f"MT(갑) ({page_idx})"
             _write_cell(ws, 'V3', str(page_idx))
@@ -1095,10 +1097,10 @@ class CertificateExporter:
         cover.page_setup.orientation = detail.page_setup.orientation
 
     @staticmethod
-    def _copy_pmi_eul(wb, source):
+    def _copy_report_sheet(wb, source):
         """Worksheet copying omits images, print area and header/footer settings."""
         target = wb.copy_worksheet(source)
-        target.print_area = 'A1:T39'
+        target.print_area = source.print_area
         target.HeaderFooter = deepcopy(source.HeaderFooter)
         for original in source._images:
             # Give every image its own stream: saving consumes the image data.
@@ -1168,7 +1170,7 @@ class CertificateExporter:
 
         for page_offset, chunk in enumerate(chunks):
             page_no = 2 + page_offset
-            ws_eul = base_eul if page_offset == 0 else self._copy_pmi_eul(wb, base_eul)
+            ws_eul = base_eul if page_offset == 0 else self._copy_report_sheet(wb, base_eul)
             if page_offset > 0:
                 ws_eul.title = f"PMI(을) ({page_offset + 1})"
             # Clear copied measurements, including the previous blank marker.
@@ -1233,7 +1235,7 @@ class CertificateExporter:
             # Create continuation covers before changing the original blank area.
             extra_pages = []
             for offset in range(4, len(criteria), 4):
-                page = self._copy_pmi_eul(wb, ws_gap)
+                page = self._copy_report_sheet(wb, ws_gap)
                 page.title = f'PMI(기준 {offset // 4 + 1})'
                 page.print_area = 'A1:T50'
                 extra_pages.append((page, offset))

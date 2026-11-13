@@ -739,6 +739,27 @@ class GyeonginCertExporterTests(unittest.TestCase):
             root.destroy()
 
 
+    def test_mt_pages_keep_transparent_seal_at_existing_header_position(self):
+        from io import BytesIO
+        from PIL import Image
+
+        batch = dict(method='MT', date='2026-11-13', customer='Test customer',
+                     rows=[{'검사품명': 'SHAFT'} for _ in range(8)])
+        with tempfile.TemporaryDirectory() as tmp:
+            out = CertificateExporter().export_certificate(batch, Path(tmp) / 'mt.xlsx')
+            wb = openpyxl.load_workbook(out)
+            self.assertEqual(len(wb.worksheets), 2)
+            for sheet in wb:
+                seals = [image for image in sheet._images if (image.width, image.height) == (201, 200)]
+                self.assertEqual(len(seals), 1)
+                seal = seals[0]
+                self.assertEqual((seal.anchor._from.col, seal.anchor._from.row), (11, 1))
+                self.assertEqual(seal.anchor._from.colOff, 314324 + 2 * 9525)
+                image = Image.open(BytesIO(seal._data()))
+                self.assertEqual(image.getchannel('A').getextrema(), (0, 255))
+                self.assertEqual(sheet['S4'].value, 'Test customer')
+            wb.close()
+
     def test_pmi_measurement_file_fills_element_columns(self):
         from site_apps.gyeongin.src.cert_exporter import read_pmi_measurements
 
