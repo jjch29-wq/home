@@ -1128,13 +1128,22 @@ class CertificateExporter:
         ws_gap.page_setup.scale = None
         self._format_pmi_eul(base_eul)
         self._align_pmi_page_frames(ws_gap, base_eul)
-        measurements = list(batch.get('pmi_measurements') or [])
+        all_measurements = list(batch.get('pmi_measurements') or [])
+        measurements = [row for row in all_measurements if row.get('include', True)]
+        if all_measurements and not measurements:
+            raise ValueError('출력할 PMI 측정행을 1개 이상 선택하세요.')
         element_cols = choose_pmi_element_columns(measurements, batch.get('pmi_elements')) if measurements or batch.get('pmi_elements') else []
         criteria = batch.get('pmi_criteria') or []
+        from site_apps.gyeongin.src.pmi_judgement import (
+            DEFAULT_TOLERANCE_PERCENT, judge_measurement, report_result,
+        )
+        tolerance = batch.get('pmi_tolerance_percent', DEFAULT_TOLERANCE_PERCENT)
         criteria_elements = choose_pmi_element_columns(measurements, batch.get('pmi_elements'))
         if criteria:
             from site_apps.gyeongin.src.pmi_criteria import validate_criteria
             validate_criteria(criteria, criteria_elements)
+        judgements = [judge_measurement(row, criteria, criteria_elements, tolerance) for row in measurements]
+        overall_result = report_result([verdict for verdict, _reason in judgements])
         source_rows = measurements if measurements else batch.get('rows', [])
         chunks = self._chunk_rows(source_rows, 20)
         criteria_pages = (max(0, len(criteria) - 4) + 3) // 4
@@ -1176,6 +1185,8 @@ class CertificateExporter:
             if element_cols:
                 for i, slot in enumerate(_PMI_ELEMENT_SLOTS):
                     _write_cell(ws_eul, f'{slot}17', element_cols[i] if i < len(element_cols) else '-')
+            if measurements or criteria:
+                _write_cell(ws_eul, 'N17', overall_result)
 
             for idx, row in enumerate(chunk):
                 r = 20 + idx
@@ -1183,7 +1194,7 @@ class CertificateExporter:
                     seq = page_offset * 20 + idx + 1
                     tag = row.get('tag') or batch.get('item_name', '')
                     comp_part = row.get('component') or f"Point-{seq}"
-                    judged_mat = row.get('alloy') or 'MATCH'
+                    judged_mat, reason = judgements[seq - 1]
                     _write_cell(ws_eul, f'A{r}', tag)
                     _write_cell(ws_eul, f'E{r}', comp_part)
                     _write_cell(ws_eul, f'G{r}', str(seq))
@@ -1191,12 +1202,19 @@ class CertificateExporter:
                     for slot, sym in zip(_PMI_ELEMENT_SLOTS, element_cols):
                         _write_cell(ws_eul, f'{slot}{r}', elems.get(sym, '') or '-')
                     _write_cell(ws_eul, f'N{r}', judged_mat)
+                    from openpyxl.comments import Comment
+                    ws_eul[f'N{r}'].comment = Comment(
+                        f'{reason}\n장비 합금명: {row.get("alloy", "")}\n허용오차: ±{tolerance}%'
+                        f'\n판정 원소: {", ".join(criteria_elements)}', 'PMI')
+                    _write_cell(ws_eul, f'T{r}', reason if judged_mat != 'PASS' else '')
                     _write_cell(ws_eul, f'O{r}', clean_worker_name(batch.get('inspector', '')) or '주진철')
                     _write_cell(ws_eul, f'P{r}', d)
                     continue
                 tag = _text(row.get('태그번호')) or _text(row.get('식별번호')) or batch.get('item_name', '')
                 comp_part = _text(row.get('구성부품')) or _text(row.get('검사품명')) or f"Point-{idx + 1}"
                 judged_mat = _text(row.get('판정재질')) or _text(row.get('재질')) or _text(row.get('결과')) or 'MATCH'
+                if criteria:
+                    judged_mat = 'HOLD'
                 _write_cell(ws_eul, f'A{r}', tag)
                 _write_cell(ws_eul, f'E{r}', comp_part)
                 _write_cell(ws_eul, f'G{r}', str(page_offset * 20 + idx + 1))
@@ -1219,11 +1237,12 @@ class CertificateExporter:
                 page.title = f'PMI(기준 {offset // 4 + 1})'
                 page.print_area = 'A1:T50'
                 extra_pages.append((page, offset))
-            render_criteria(ws_gap, criteria[:4], criteria_elements)
+            render_criteria(ws_gap, criteria[:4], criteria_elements, tolerance_percent=tolerance)
             for index, (page, offset) in enumerate(extra_pages, 1):
                 _write_cell(page, 'N3', f'Page        {1 + len(chunks) + index}       of       {total_pages}        .')
                 _write_cell(page, 'E21', 'ACCEPTANCE CRITERIA (CONTINUED)')
-                render_criteria(page, criteria[offset:offset + 4], criteria_elements, offset)
+                render_criteria(page, criteria[offset:offset + 4], criteria_elements, offset,
+                                tolerance_percent=tolerance)
 
 
 PMI_ELEMENT_SYMBOLS = (
@@ -1307,7 +1326,7 @@ def read_pmi_measurements(path: str | Path) -> list[dict]:
         def find_col(keys) -> int | None:
             for key in keys:
                 for col, head in enumerate(headers):
-                    low = head.lower()
+                    low = re.sub(r'[\s_]+', ' ', head.lower()).strip()
                     if col in element_cols.values() or not low:
                         continue
                     if key in low:
@@ -1317,6 +1336,10 @@ def read_pmi_measurements(path: str | Path) -> list[dict]:
         tag_col = find_col(_PMI_TAG_KEYS)
         alloy_col = find_col(_PMI_ALLOY_KEYS)
         comp_col = find_col(_PMI_COMPONENT_KEYS)
+        date_col = find_col(('date', '측정일', '측정 일', '검사일', '검사 일',
+                             '일자', '일시', '날짜', 'timestamp', 'time', '시간'))
+        reading_col = find_col(('reading no', 'reading number', 'reading #',
+                                '측정번호', '측정 번호', 'readingno'))
 
         results: list[dict] = []
         for idx in range(header_idx + 1, len(raw)):
@@ -1331,6 +1354,8 @@ def read_pmi_measurements(path: str | Path) -> list[dict]:
                 'tag': '' if cell(tag_col).lower() == 'nan' else cell(tag_col),
                 'component': '' if cell(comp_col).lower() == 'nan' else cell(comp_col),
                 'alloy': '' if cell(alloy_col).lower() == 'nan' else cell(alloy_col),
+                'measurement_date': '' if cell(date_col).lower() == 'nan' else cell(date_col),
+                'reading_no': '' if cell(reading_col).lower() == 'nan' else cell(reading_col),
                 'elements': elements,
             })
         if results:

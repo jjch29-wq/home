@@ -114,7 +114,7 @@ def normalize_ranges(ranges):
 REPORT_FIELDS = (
     'report_no', 'customer', 'project_name', 'code_procedure', 'standard_family',
     'inspector', 'equipment', 'aux_equipment', 'pmi_criteria', 'pmi_elements',
-    'pmi_measurements', 'pmi_source',
+    'pmi_measurements', 'pmi_source', 'pmi_tolerance_percent',
 )
 PROJECT_FIELDS = tuple(k for k in REPORT_FIELDS if k not in
                        ('report_no', 'pmi_measurements', 'pmi_source'))
@@ -205,6 +205,8 @@ def restore_project(batch, path, name=None):
 def save_report(batch, path, original_key=None):
     data = read_state(path)
     snapshot = {key: deepcopy(batch[key]) for key in REPORT_FIELDS if key in batch}
+    snapshot['_measurement_report_date'] = batch.get('date', '')
+    snapshot['_measurement_company'] = batch.get('company', '')
     data['reports'][state_key(batch)] = snapshot
     if original_key:
         data['reports'][original_key] = deepcopy(snapshot)
@@ -230,12 +232,14 @@ def validate_criteria(criteria, elements):
             raise ValueError(f'{item["label"]}: {", ".join(missing)} 기준을 입력하세요. 규정 없음은 -로 지정하세요.')
 
 
-def render_criteria(ws, criteria, elements, start_index=0):
+def render_criteria(ws, criteria, elements, start_index=0, tolerance_percent=10):
     """Replace only the cover's blank criteria region; keep its page frame."""
     from openpyxl.styles import Alignment, Border, Font, Side
     from openpyxl.cell.cell import MergedCell
     from openpyxl.utils import get_column_letter
     from copy import copy
+    outer_left = copy(ws.cell(23, 1).border.left)
+    outer_right = copy(ws.cell(23, 20).border.right)
     # Equal-height table rows, preserving the cover's overall printed height.
     heights = [ws.row_dimensions[r].height or ws.sheet_format.defaultRowHeight
                for r in range(24, 38)]
@@ -299,7 +303,6 @@ def render_criteria(ws, criteria, elements, start_index=0):
         title_row = 23 + (idx // 2) * panel_rows if dense else 24
         header_row = title_row + 3
         first_element_row = header_row + 1
-        panel_end = title_row + panel_rows - 1 if dense else 38
         widths = {c: ws.column_dimensions[get_column_letter(c)].width or 13
                   for c in range(first, last + 1)}
         half = sum(widths.values()) / 2
@@ -328,15 +331,17 @@ def render_criteria(ws, criteria, elements, start_index=0):
             block(rr, rr, first, split, ELEMENT_NAMES.get(symbol, symbol))
             block(rr, rr, split + 1, last, normalized[symbol])
         bottom = first_element_row + len(elements)
-        block(bottom, bottom, first, last, '* Tolerance ±10%')
-        source_text = item['source']
-        if item.get('user_modified'):
-            source_text += ' / 사용자 수정'
-        if item.get('notes'):
-            source_text += '\n' + item['notes']
-        block(bottom + 1, panel_end, first, last, source_text, size=8)
-        if item.get('source_url', '').startswith(('https://', 'http://')):
-            ws.cell(bottom + 1, first).hyperlink = item['source_url']
+        block(bottom, bottom, first, last, f'* Tolerance ±{tolerance_percent}%')
+
+    # Table blocks rewrite cell borders. Restore the page frame afterwards so
+    # its stroke also stays continuous through blank and expanded table rows.
+    for rr in range(23, end_region + 1):
+        left_border = copy(ws.cell(rr, 1).border)
+        left_border.left = outer_left
+        ws.cell(rr, 1).border = left_border
+        right_border = copy(ws.cell(rr, 20).border)
+        right_border.right = outer_right
+        ws.cell(rr, 20).border = right_border
 
 
 def edit_criteria_dialog(parent, batch, state_path):
@@ -382,7 +387,7 @@ def edit_criteria_dialog(parent, batch, state_path):
         ttk.Label(frm, text=f'{symbol} / {ELEMENT_NAMES.get(symbol, symbol)}').grid(row=7 + idx, column=0, sticky='w')
         ttk.Entry(frm, textvariable=fields[symbol], width=28).grid(row=7 + idx, column=1, sticky='w')
     row = 7 + len(elements)
-    material_status = tk.StringVar(value='재질을 선택하면 등록된 기준 원소를 표시합니다. ±10%는 문구만 출력.')
+    material_status = tk.StringVar(value='재질을 선택하면 등록된 기준 원소를 표시합니다. 허용오차는 한계값 대비 상대오차로 적용합니다.')
     ttk.Label(frm, textvariable=material_status, wraplength=680).grid(row=row, column=0, columnspan=3, sticky='w', pady=6)
     listing = tk.Listbox(frm, width=92, height=6, exportselection=False)
     listing.grid(row=row + 2, column=0, columnspan=3, sticky='ew', pady=6)

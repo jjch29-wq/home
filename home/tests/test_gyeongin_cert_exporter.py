@@ -774,9 +774,9 @@ class GyeonginCertExporterTests(unittest.TestCase):
             self.assertEqual(eul['E20'].value, 'ELBOW')
             self.assertEqual(eul['H20'].value, '10.05')
             self.assertEqual(eul['I20'].value, '17.12')
-            self.assertEqual(eul['N20'].value, 'SS316')
+            self.assertEqual(eul['N20'].value, 'HOLD')
             self.assertEqual(eul['J21'].value, 'ND')
-            self.assertEqual(eul['N21'].value, 'SS304')
+            self.assertEqual(eul['N21'].value, 'HOLD')
 
             batch['pmi_elements'] = ['Cr', 'Mn', 'Fe']
             out = CertificateExporter().export_certificate(batch, Path(tmp) / 'pmi_pick.xlsx')

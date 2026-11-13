@@ -345,6 +345,8 @@ if not hasattr(messagebox, 'showerror_orig'):
 class MaterialManager:
     def __init__(self, root):
         self.root = root
+        from site_apps.gyeongin.src.tk_lifecycle import install_root_timer_cleanup
+        install_root_timer_cleanup(root)
 
         # 공정별 관경에 따른 검사길이 (m) 룩업 테이블
         self.SIZE_LENGTH = {

@@ -192,7 +192,7 @@ class PmiCriteriaTests(unittest.TestCase):
         self.assertEqual(get('ASME SA-335', 'P11')['ranges']['Cr'], '1.00~1.50')
         self.assertNotIn('Ni', get('ASME SA-335', 'P11')['ranges'])
 
-    def test_public_reference_notes_and_links_survive_output_and_restore(self):
+    def test_public_reference_metadata_restores_but_is_omitted_from_output(self):
         item = next(i for i in material_catalogue() if i['standard'] == 'ASME SA-106' and i['grade'] == 'Gr.B')
         with tempfile.TemporaryDirectory() as tmp:
             batch = dict(method='PMI', date='2026-11-13', company='QA', report_no='ref',
@@ -204,8 +204,9 @@ class PmiCriteriaTests(unittest.TestCase):
             self.assertEqual(restored['pmi_criteria'][0], item)
             out = CertificateExporter().export_certificate(restored, Path(tmp) / 'ref.xlsx')
             wb = openpyxl.load_workbook(out)
-            self.assertIn('1.35%', wb['PMI(갑)']['A35'].value)
-            self.assertEqual(wb['PMI(갑)']['A35'].hyperlink.target, item['source_url'])
+            self.assertIsNone(wb['PMI(갑)']['A35'].value)
+            self.assertIsNone(wb['PMI(갑)']['A35'].hyperlink)
+            self.assertFalse(any(r.min_row == 35 for r in wb['PMI(갑)'].merged_cells.ranges))
             self.assertEqual(wb['PMI(갑)']['G28'].value, '0.29~1.06')
             wb.close()
 
@@ -278,7 +279,9 @@ class PmiCriteriaTests(unittest.TestCase):
                                        for r in range(1, last_row + 1)))
                     self.assertEqual(sheet.oddFooter.right.text, '&G')
                     self.assertIn(str(expected_pages), sheet['N3'].value)
-                    self.assertIsNotNone(sheet['A23'].border.left.style)
+                    for row in range(23, last_row + 1):
+                        self.assertEqual(sheet.cell(row, 1).border.left.style, 'medium')
+                        self.assertEqual(sheet.cell(row, 20).border.right.style, 'medium')
                     self.assertEqual(sheet.cell(first_row, 1).alignment.wrap_text, True)
                     if dense:
                         self.assertIn('Acceptance Criteria', sheet['A38'].value)
@@ -290,7 +293,7 @@ class PmiCriteriaTests(unittest.TestCase):
                     self.assertEqual(covers[0].cell(27 if count > 2 else 28, 15).value, '0.90~1.50')
                 self.assertIn('H 801-1', wb['PMI(갑)'].oddFooter.left.text)
                 self.assertIn('H 801-2', wb['PMI(을)'].oddFooter.left.text)
-                self.assertEqual(wb['PMI(을)']['N20'].value, 'Example')
+                self.assertEqual(wb['PMI(을)']['N20'].value, 'HOLD')
                 wb.close()
                 with zipfile.ZipFile(out) as package:
                     self.assertIn('xl/media/footer_sitco.png', package.namelist())

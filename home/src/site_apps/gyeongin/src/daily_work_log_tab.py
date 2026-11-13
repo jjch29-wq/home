@@ -170,6 +170,8 @@ LEGACY_WELDER_IDS = {
 class DailyWorkLogTab(ttk.Frame):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
+        from site_apps.gyeongin.src.tk_lifecycle import install_root_timer_cleanup
+        install_root_timer_cleanup(self)
         self.parent = parent
         self.history_path = get_history_path()
         self._migrate_legacy_welder_ids()
@@ -2363,32 +2365,8 @@ class DailyWorkLogTab(ttk.Frame):
         pmi_status_var = tk.StringVar(value='')
 
         def import_pmi_file():
-            from site_apps.gyeongin.src.cert_exporter import read_pmi_measurements
-            b = batches[selected_idx[0]]
-            path = filedialog.askopenfilename(
-                title='PMI 장비 측정파일 선택',
-                filetypes=[('Excel/CSV', '*.xlsx *.xls *.csv'), ('All files', '*.*')],
-                parent=top,
-            )
-            if not path:
-                return
-            try:
-                measurements = read_pmi_measurements(path)
-            except Exception as exc:
-                messagebox.showerror('PMI 측정파일', f'파일을 읽지 못했습니다.\n{exc}', parent=top)
-                return
-            if not measurements:
-                messagebox.showwarning(
-                    'PMI 측정파일',
-                    '원소 함량 열(Ni, Cr, Mo 등)을 찾지 못했습니다.\n장비에서 내보낸 원본 엑셀/CSV인지 확인하세요.',
-                    parent=top,
-                )
-                return
-            b['pmi_measurements'] = measurements
-            b['pmi_source'] = os.path.basename(path)
-            b.pop('pmi_elements', None)
-            save_form()
-            refresh_pmi_status()
+            from site_apps.gyeongin.src.pmi_measurement_editor import import_measurement_files
+            import_measurement_files(top, batches[selected_idx[0]], save_form, refresh_pmi_status)
 
         def clear_pmi_file():
             b = batches[selected_idx[0]]
@@ -2494,95 +2472,9 @@ class DailyWorkLogTab(ttk.Frame):
             ttk.Button(btns, text='취소', command=win.destroy).pack(side='right', padx=4)
 
         def edit_pmi_measurements():
-            b = batches[selected_idx[0]]
-            measurements = b.get('pmi_measurements') or []
-            if not measurements:
-                return
-            from site_apps.gyeongin.src.cert_exporter import choose_pmi_element_columns
-            elems = choose_pmi_element_columns(measurements, b.get('pmi_elements'))
-            win = tk.Toplevel(top)
-            win.title('PMI 측정값 편집 (더블클릭: 태그/부품/합금명 수정)')
-            win.transient(top)
-            win.grab_set()
-            frm = ttk.Frame(win, padding=10)
-            frm.pack(fill='both', expand=True)
-            cols = ('seq', 'tag', 'component', 'alloy') + tuple(elems)
-            editable = {'tag': '태그', 'component': '구성부품', 'alloy': '합금명(판정)'}
-            tv = ttk.Treeview(frm, columns=cols, show='headings', height=min(15, max(5, len(measurements))),
-                              selectmode='extended')
-            for col in cols:
-                tv.heading(col, text={'seq': 'No', **editable}.get(col, col))
-                tv.column(col, width=40 if col == 'seq' else (110 if col in editable else 60),
-                          anchor='center' if col not in ('tag', 'component') else 'w')
-
-            def row_values(i, m):
-                el = m.get('elements') or {}
-                return (i + 1, m.get('tag', ''), m.get('component', ''), m.get('alloy', '')) + tuple(
-                    el.get(s, '') for s in elems)
-
-            for i, m in enumerate(measurements):
-                tv.insert('', 'end', iid=str(i), values=row_values(i, m))
-            tv.pack(fill='both', expand=True)
-
-            def start_edit(event):
-                iid = tv.identify_row(event.y)
-                col_id = tv.identify_column(event.x)
-                if not iid or not col_id:
-                    return
-                col = cols[int(col_id[1:]) - 1]
-                if col not in editable:
-                    return
-                x, y, w, h = tv.bbox(iid, col_id)
-                var = tk.StringVar(value=measurements[int(iid)].get(col, ''))
-                ent = ttk.Entry(tv, textvariable=var)
-                ent.place(x=x, y=y, width=w, height=h)
-                ent.focus_set()
-                ent.select_range(0, 'end')
-
-                done = [False]
-
-                def commit(_e=None):
-                    if done[0]:
-                        return
-                    done[0] = True
-                    measurements[int(iid)][col] = var.get().strip()
-                    tv.item(iid, values=row_values(int(iid), measurements[int(iid)]))
-                    ent.destroy()
-
-                def cancel(_e=None):
-                    done[0] = True
-                    ent.destroy()
-
-                ent.bind('<Return>', commit)
-                ent.bind('<FocusOut>', commit)
-                ent.bind('<Escape>', cancel)
-
-            tv.bind('<Double-1>', start_edit)
-
-            bulk = ttk.Frame(frm)
-            bulk.pack(fill='x', pady=(8, 0))
-            ttk.Label(bulk, text='선택 행 합금명 일괄 변경:').pack(side='left')
-            alloy_var = tk.StringVar()
-            alloy_choices = sorted({m.get('alloy', '') for m in measurements if m.get('alloy')})
-            ttk.Combobox(bulk, textvariable=alloy_var, values=alloy_choices, width=16).pack(side='left', padx=6)
-
-            def apply_bulk():
-                value = alloy_var.get().strip()
-                targets = tv.selection() or tv.get_children()
-                for iid in targets:
-                    measurements[int(iid)]['alloy'] = value
-                    tv.item(iid, values=row_values(int(iid), measurements[int(iid)]))
-
-            ttk.Button(bulk, text='적용', command=apply_bulk).pack(side='left')
-            ttk.Label(bulk, text='(선택 없으면 전체)', foreground='#64748b').pack(side='left', padx=6)
-
-            def close():
-                save_form()
-                refresh_pmi_status()
-                win.destroy()
-
-            ttk.Button(bulk, text='닫기', command=close).pack(side='right')
-            win.protocol('WM_DELETE_WINDOW', close)
+            from site_apps.gyeongin.src.pmi_measurement_editor import open_measurement_editor
+            open_measurement_editor(top, batches[selected_idx[0]], criteria_state_path,
+                                    save_form, refresh_pmi_status)
 
         pmi_btn = ttk.Button(pmi_frame, text='📊 PMI 측정파일 불러오기', command=import_pmi_file)
         pmi_btn.pack(side='left')
@@ -2622,7 +2514,7 @@ class DailyWorkLogTab(ttk.Frame):
                  else '재질 선택 후 성분 범위를 입력·저장하면 갑지에 표시됩니다.') if is_pmi else '')
             pmi_btn.configure(state=state)
             pmi_clear_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
-            pmi_edit_btn.configure(state=state if b.get('pmi_measurements') else 'disabled')
+            pmi_edit_btn.configure(state=state)
             pmi_elem_btn.configure(state=state)
             if not is_pmi:
                 pmi_status_var.set('')
