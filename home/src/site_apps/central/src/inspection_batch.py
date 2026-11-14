@@ -292,10 +292,10 @@ class InspectionBatch(ttk.LabelFrame):
             # Resolve only known material IDs here; staging must never register or save stock.
             display = app.cb_daily_material.get().strip()
             mat_id = display
-            for _, row in app.materials_df.iterrows():
-                if app.get_material_display_name(row['MaterialID']) == display:
-                    mat_id = row['MaterialID']
-                    break
+            from site_apps.central.src.material_selection import resolve_daily_material
+            selected_material_id = resolve_daily_material(app, display)
+            if selected_material_id is not None:
+                mat_id = selected_material_id
             if display and mat_id == display and app._is_consumable_material(display, method):
                 raise ValueError('소모품은 품목 검색에서 등록된 자재를 선택하세요. 그래야 일괄 저장 시 재고가 차감됩니다.')
             plan = app._add_single_usage_record_logic(mat_id, app.ent_daily_date.get_date(), site,

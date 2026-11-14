@@ -2136,6 +2136,10 @@ class MaterialManager:
                 self.cb_trans_filter_vehicle.set("전체")
 
     def _get_material_candidates(self, include_all=False):
+        from site_apps.central.src.method_catalog import current_method, material_candidates
+        if current_method(self):
+            result = material_candidates(self)
+            return (['전체'] + result) if include_all else result
         vals = []
         if hasattr(self, 'materials_display_list'):
             vals.extend(getattr(self, 'materials_display_list', []) or [])
@@ -9862,116 +9866,9 @@ class MaterialManager:
         ttk.Button(main_frame, text="닫기", command=dlg.destroy).pack(pady=10)
 
     def open_equipment_search_dialog(self):
-        """Dialog to search equipment from master and select it for the form"""
-        dlg = tk.Toplevel(self.root)
-        dlg.title("장비 검색 및 선택")
-        dlg.geometry("700x600")
-        dlg.transient(self.root)
-        dlg.grab_set()
-
-        main_frame = ttk.Frame(dlg, padding=20)
-        main_frame.pack(fill='both', expand=True)
-
-        ttk.Label(main_frame, text="재고현황에서 장비 검색", font=('Malgun Gothic', 12, 'bold')).pack(pady=(0, 10))
-        
-        search_frame = ttk.Frame(main_frame)
-        search_frame.pack(fill='x', pady=5)
-        ttk.Label(search_frame, text="🔍 검색어:").pack(side='left', padx=5)
-        search_var = tk.StringVar()
-        search_ent = ttk.Entry(search_frame, textvariable=search_var)
-        search_ent.pack(side='left', fill='x', expand=True, padx=5)
-        search_ent.focus_set()
-
-        # Treeview for results
-        tree_frame = ttk.Frame(main_frame)
-        tree_frame.pack(fill='both', expand=True)
-        
-        columns = ('name', 'sn', 'model')
-        tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
-        tree.heading('name', text='장비명')
-        tree.heading('sn', text='SN')
-        tree.heading('model', text='모델명')
-        tree.column('name', width=200)
-        tree.column('sn', width=150)
-        tree.column('model', width=200)
-        
-        sb_y = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
-        sb_x = ttk.Scrollbar(main_frame, orient="horizontal", command=tree.xview)
-        tree.configure(yscrollcommand=sb_y.set, xscrollcommand=sb_x.set)
-        
-        tree.pack(side='left', fill='both', expand=True)
-        sb_y.pack(side='right', fill='y')
-        sb_x.pack(fill='x')
-
-        def refresh_list(*args):
-            query = search_var.get().strip().lower()
-            for item in tree.get_children():
-                tree.delete(item)
-            
-            if not self.materials_df.empty:
-                # [STRICT] Filter for Active and Non-Consumable (Equipment) items only
-                active_mask = pd.to_numeric(self.materials_df.get('Active', 1), errors='coerce').fillna(1) > 0.5
-                eq_df = self.materials_df[active_mask]
-                
-                # Further filter: Exclude consumables
-                equipment_df = eq_df[eq_df['품목명'].apply(lambda x: not self._is_consumable_material(str(x).strip(), ''))]
-                
-                unique_items = equipment_df[['품목명', 'SN', '모델명']].drop_duplicates()
-                for _, row in unique_items.iterrows():
-                    name = str(row.get('품목명', '')).strip()
-                    sn = str(row.get('SN', '')).strip()
-                    model = str(row.get('모델명', '')).strip()
-                    
-                    if name.lower() == 'nan': name = ''
-                    if sn.lower() == 'nan': sn = ''
-                    if model.lower() == 'nan': model = ''
-                    
-                    if name or sn or model:
-                        if not query or query in name.lower() or query in sn.lower() or query in model.lower():
-                            tree.insert('', tk.END, values=(name, sn, model))
-
-        def on_select(e=None):
-            selection = tree.selection()
-            if not selection: return
-            
-            vals = tree.item(selection[0])['values']
-            name, sn, model = str(vals[0]), str(vals[1]), str(vals[2])
-            
-            # Format: [Model] Name (SN)
-            display_parts = []
-            if model and model != 'None' and model != '': display_parts.append(model)
-            if name and name != model and name != 'None' and name != '': display_parts.append(name)
-            if sn and sn != 'None' and sn != '': display_parts.append(f"({sn})")
-            
-            display_name = " ".join(display_parts).strip()
-            
-            if display_name:
-                self.cb_daily_equip.delete(0, tk.END)
-                self.cb_daily_equip.insert(0, display_name)
-                dlg.destroy()
-
-        def on_direct_entry():
-            query = search_var.get().strip()
-            if not query:
-                messagebox.showwarning("입력 오류", "등록할 장비명을 입력해주세요.")
-                return
-            
-            # Use the query as the equipment name directly
-            if query not in self.equipments:
-                self.equipments.append(query)
-                self.refresh_ui_for_list_change('equipments')
-            dlg.destroy()
-
-        search_var.trace_add("write", refresh_list)
-        tree.bind('<Double-1>', on_select)
-        
-        refresh_list()
-
-        btn_frame = ttk.Frame(main_frame)
-        btn_frame.pack(pady=10)
-        ttk.Button(btn_frame, text="선택 완료", command=on_select, width=15).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="입력 명칭으로 신규 등록", command=on_direct_entry, width=22).pack(side='left', padx=5)
-        ttk.Button(btn_frame, text="취소", command=dlg.destroy, width=10).pack(side='left', padx=5)
+        """Select multiple central equipment units without losing serial numbers."""
+        from site_apps.central.src.aux_equipment import select_main
+        return select_main(self.root, self, self.cb_daily_equip)
 
     def open_material_search_dialog(self, target_form='transaction'):
         """Unified dialog to search materials, edit them, or select for forms"""
@@ -9986,6 +9883,11 @@ class MaterialManager:
 
         header_text = "전체 재고 자재 검색 및 수정" if target_form == 'registration' else "자재 검색 및 선택"
         ttk.Label(main_frame, text=header_text, font=('Malgun Gothic', 12, 'bold')).pack(pady=(0, 10))
+        include_unknown = tk.BooleanVar(master=dlg, value=False)
+        if target_form == 'daily_usage':
+            ttk.Label(main_frame, text='선택한 검사방법의 자재만 표시 · 기존 입력값은 유지됩니다.').pack(anchor='w')
+            ttk.Checkbutton(main_frame, text='미분류 포함', variable=include_unknown,
+                            command=lambda: refresh_list()).pack(anchor='w')
         
         search_frame = ttk.Frame(main_frame)
         search_frame.pack(fill='x', pady=5)
@@ -10038,6 +9940,10 @@ class MaterialManager:
                     
                     if not is_active:
                         continue
+                    if target_form == 'daily_usage':
+                        from site_apps.central.src.method_catalog import row_allowed, current_method
+                        if current_method(self) and not row_allowed(self, row, include_unknown=include_unknown.get()):
+                            continue
                     
                     name = str(row.get('품목명', '')).strip()
                     sn = str(row.get('SN', '')).strip()
@@ -10054,7 +9960,6 @@ class MaterialManager:
                     except:
                         mid = str(mid_raw)
                     
-                    if spec == "자동등록": continue
                     
                     # Clean nans
                     name = '' if name.lower() == 'nan' else name
@@ -10086,8 +9991,8 @@ class MaterialManager:
                 self.on_material_selected()
                 dlg.destroy()
             elif target_form == 'daily_usage':
-                self.cb_daily_material.delete(0, tk.END)
-                self.cb_daily_material.insert(0, name)
+                from site_apps.central.src.material_selection import choose_daily_material
+                choose_daily_material(self, vals[0])
                 dlg.destroy()
             else:
                 # Registration form
@@ -10307,7 +10212,7 @@ class MaterialManager:
                 if method in ["RT", "UT", "PT", "PAUT"]:
                     if hasattr(self, 'ndt_calc_frame'):
                         try:
-                            self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
+                            self.ndt_calc_frame.grid()
                             self.ndt_calc_frame.lift()
                         except: pass
                     if method == "RT":
@@ -10402,6 +10307,8 @@ class MaterialManager:
                 else:
                     self.cb_daily_material.delete(0, tk.END)
                     self.cb_daily_material.insert(0, disp_name)
+                from site_apps.central.src.material_selection import remember_selection
+                remember_selection(self, mat_id_val)
 
             # 4. Workers
             # First, clear existing workers if needed or just overwrite
@@ -10540,6 +10447,7 @@ class MaterialManager:
         """현장별 일일 사용량 입력 폼의 모든 필드를 초기화합니다."""
         # 1. 콤보박스 선택 해제
         self._daily_edit_source = None
+        self._daily_material_selection = None
         for cb in [self.cb_daily_company, self.cb_daily_site, 
                    self.cb_daily_test_method, self.cb_daily_unit]:
             cb.set('')
@@ -10704,17 +10612,14 @@ class MaterialManager:
                 # PAUT(길이검사) 및 MT(약품별도기입)는 MaterialID에 자재ID/장비명을 기입하지 않음
                 mat_id = ""
             elif mat_display:
-                for _, row in self.materials_df.iterrows():
-                    if self.get_material_display_name(row['MaterialID']) == mat_display:
-                        # Only assign consumable items to mat_id
-                        m_name = str(row.get('품목명', '')).strip()
-                        if self._is_consumable_material(m_name, current_method):
-                            mat_id = row['MaterialID']
-                            # 휴면 계정 자동 활성화
-                            if row.get('Active', 1) == 0:
-                                self.materials_df.loc[self.materials_df['MaterialID'] == mat_id, 'Active'] = 1
-                        break
-                
+                from site_apps.central.src.material_selection import resolve_daily_material
+                selected_material_id = resolve_daily_material(self, mat_display)
+                if selected_material_id is not None:
+                    selected_rows = self.materials_df[self.materials_df['MaterialID'].apply(self.normalize_id) == self.normalize_id(selected_material_id)]
+                    m_name = str(selected_rows.iloc[0].get('품목명', '')).strip()
+                    if self._is_consumable_material(m_name, current_method):
+                        mat_id = selected_material_id
+
                 # [FIX] Only auto-register if it's a CONSUMABLE (Drug/Film). Equipment should NOT be registered.
                 if not mat_id and mat_display:
                     if self._is_consumable_material(mat_display, self.cb_daily_test_method.get().strip()):
@@ -10978,6 +10883,7 @@ class MaterialManager:
     def _get_usage_session_data(self):
         """Helper to collect Site tab entry data"""
         from site_apps.central.src.aux_equipment import value as auxiliary_equipment_value
+        from site_apps.central.src.material_selection import selected_id
         data = {
             'date': str(self.ent_daily_date.get_date()),
             'site': self.cb_daily_site.get().strip(),
@@ -10987,6 +10893,7 @@ class MaterialManager:
             'equip': self.cb_daily_equip.get().strip(),
             'aux_equipment': auxiliary_equipment_value(self),
             'material': self.cb_daily_material.get().strip(),
+            'material_id': selected_id(self),
             'inspection_item': self.ent_daily_inspection_item.get().strip(),
             'method': self.cb_daily_test_method.get().strip(),
             'unit': self.cb_daily_unit.get().strip(),
@@ -11051,6 +10958,8 @@ class MaterialManager:
         else:
             self.cb_daily_material.delete(0, tk.END)
             self.cb_daily_material.insert(0, data.get('material', ''))
+        from site_apps.central.src.material_selection import remember_selection
+        remember_selection(self, data.get('material_id'))
         if 'inspection_item' in data:
             self.ent_daily_inspection_item.delete(0, tk.END)
             self.ent_daily_inspection_item.insert(0, data.get('inspection_item', ''))

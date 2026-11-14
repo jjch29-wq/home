@@ -144,7 +144,7 @@ def setup_daily_usage_tab_impl(self):
     
     def _on_entry_config(e):
         # Update canvas window width
-        target_w = max(1100, e.width)
+        target_w = e.width
         
         # Use winfo_reqheight() so the frame can naturally expand when new widgets (like NDT) appear.
         # If it's forced to a fixed height, bottom elements like the treeview will be hidden.
@@ -160,25 +160,27 @@ def setup_daily_usage_tab_impl(self):
     # [NOTE] Mousewheel scrolling is handled by the global handler in __init__
 
     
-    # Explicitly fix all possible grid rows to weight 0
-    for r in range(100):
-        self.entry_inner_frame.grid_rowconfigure(r, weight=0)
     self.entry_inner_frame.columnconfigure(0, weight=1)
-    
-    # 1. Unified Master Form Panel summerly
-    self.master_form_panel = ttk.LabelFrame(self.entry_inner_frame, text="일일 검사 및 사용량 기록")
+    self.entry_inner_frame.rowconfigure(0, weight=1)
+    self.master_form_panel = ttk.Frame(self.entry_inner_frame)
     self.master_form_panel.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
-
-    
-    # Configure columns inside the master panel (Reduced minsize)
-    self.master_form_panel.columnconfigure(0, weight=1, minsize=700)
-    self.master_form_panel.columnconfigure(1, weight=1, minsize=780)
-    
-            # Inner content for the basic form
-    form_content = ttk.Frame(self.master_form_panel, padding=10)
-    form_content.grid(row=0, column=0, rowspan=10, sticky='nw')
-    
-    for c in range(4): form_content.columnconfigure(c, weight=0)
+    self.daily_entry_notebook = ttk.Notebook(self.master_form_panel)
+    self.daily_entry_notebook.pack(fill='both', expand=True)
+    inspection_page = ttk.Frame(self.daily_entry_notebook)
+    self.daily_method_page = ttk.Frame(self.daily_entry_notebook)
+    workers_page = ttk.Frame(self.daily_entry_notebook)
+    self.daily_entry_notebook.add(inspection_page, text='검사 정보')
+    self.daily_entry_notebook.add(self.daily_method_page, text='검사방법 상세')
+    self.daily_entry_notebook.add(workers_page, text='작업자')
+    self.daily_method_page.columnconfigure(0, weight=1)
+    self.daily_method_page.columnconfigure(1, weight=1)
+    workers_page.columnconfigure(0, weight=1)
+    form_content = ttk.Frame(inspection_page, padding=10)
+    form_content.grid(row=0, column=0, sticky='nw')
+    inspection_page.columnconfigure(1, weight=1)
+    inspection_page.rowconfigure(0, weight=1)
+    for c in range(4):
+        form_content.columnconfigure(c, weight=0)
 
     # Row 0: 업체명, 현장명
     ttk.Label(common_frame, text="업체명:").grid(row=0, column=0, padx=(5, 0), pady=1, sticky='e')
@@ -213,7 +215,7 @@ def setup_daily_usage_tab_impl(self):
     equip_container = ttk.Frame(form_content)
     equip_container.grid(row=1, column=3, padx=(2, 5), pady=1, sticky='w')
     
-    self.ent_daily_equip = ttk.Entry(equip_container, width=15)
+    self.ent_daily_equip = ttk.Entry(equip_container, width=28)
     self.ent_daily_equip.pack(side='left', fill='x', expand=True)
     
     # Link to the old variable name to avoid breaking other parts of the code
@@ -229,10 +231,11 @@ def setup_daily_usage_tab_impl(self):
                              command=lambda: self.open_list_management_dialog('equipments', target_cb=self.ent_daily_equip))
     btn_equip_mgr.pack(side='left', padx=(2, 0))
 
-    from site_apps.central.src.aux_equipment import add_selector
+    from site_apps.central.src.aux_equipment import add_selector, bind_main_selector
+    bind_main_selector(equip_container, self, self.ent_daily_equip)
     self.daily_aux_equipment_var = tk.StringVar(value='')
     ttk.Label(form_content, text="보조장비:").grid(row=2, column=2, padx=(5, 0), pady=1, sticky='e')
-    add_selector(form_content, self, self.daily_aux_equipment_var, width=25).grid(
+    add_selector(form_content, self, self.daily_aux_equipment_var, width=28).grid(
         row=2, column=3, padx=(2, 5), pady=1, sticky='w')
 
     # Row 2: 품목명
@@ -257,6 +260,8 @@ def setup_daily_usage_tab_impl(self):
     ttk.Label(form_content, text="방법:").grid(row=2, column=0, padx=(5, 0), pady=1, sticky='e')
     self.cb_daily_test_method = ttk.Combobox(form_content, width=15, values=[' ', 'RT', 'PAUT', 'UT', 'MT', 'PT', 'ETC'])
     self.cb_daily_test_method.grid(row=2, column=1, padx=(2, 10), pady=1, sticky='w')
+    ttk.Label(form_content, text='방법별 선택 목록 · 방법 변경 시 기존 선택은 유지되므로 확인해주세요.',
+              foreground='#725500').grid(row=8, column=0, columnspan=4, sticky='w', padx=5, pady=6)
     
     ttk.Label(form_content, text="검사품명:").grid(row=3, column=2, padx=(5, 0), pady=1, sticky='e')
     insp_container = ttk.Frame(form_content)
@@ -322,8 +327,8 @@ def setup_daily_usage_tab_impl(self):
     self.ent_daily_test_fee.grid(row=7, column=1, padx=(2, 10), pady=1, sticky='w')
 
     # --- NDT 자동 산출 패널 ---
-    self.ndt_calc_frame = ttk.LabelFrame(form_content, text="NDT 상세 조건 및 자동 계산", padding=5)
-    self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
+    self.ndt_calc_frame = ttk.LabelFrame(self.daily_method_page, text="NDT 상세 조건 및 자동 계산", padding=5)
+    self.ndt_calc_frame.grid(row=0, column=0, sticky='new', padx=5, pady=5)
     self.ndt_calc_frame.grid_remove() # 기본 숨김
 
     self.ndt_work_time_var = tk.StringVar(value="일반")
@@ -607,6 +612,8 @@ def setup_daily_usage_tab_impl(self):
     
     def on_method_change_auto_unit_logic(e):
         method = self.cb_daily_test_method.get().strip()
+        # Refresh choices only: restored records and current input are never erased.
+        self.cb_daily_material.configure(values=self._get_material_candidates())
         print(f"[DEBUG] on_method_change_auto_unit_logic triggered. method='{method}'")
         unit_map = {'RT': '매', 'UT': 'P,M,I/D', 'MT': 'P,M,I/D', 'PT': 'P,M,I/D', 'PAUT': 'M,I/D'}
         if method in unit_map: self.cb_daily_unit.set(unit_map[method])
@@ -636,7 +643,7 @@ def setup_daily_usage_tab_impl(self):
         
         if method in ["RT", "UT", "PT", "PAUT", "MT"]:
             try:
-                self.ndt_calc_frame.grid(row=9, column=0, columnspan=4, sticky='ew', pady=(5,0))
+                self.ndt_calc_frame.grid(row=0, column=0, sticky='new', padx=5, pady=5)
                 self.ndt_calc_frame.lift()
                 self.root.after(50, self._ensure_canvas_scroll_region)
             except Exception as ex:
@@ -683,7 +690,8 @@ def setup_daily_usage_tab_impl(self):
     # [ROBUST_AUTOCOMPLETE] Use standardized suggest system for Entry Form
     self._bind_combobox_word_suggest(self.cb_daily_site, lambda: sorted(list(set(self.sites))))
     self._bind_combobox_word_suggest(self.cb_daily_material, lambda: self._get_material_candidates(include_all=False))
-    self._bind_combobox_word_suggest(self.cb_daily_equip, lambda: self._get_equipment_candidates(include_all=False))
+    from site_apps.central.src.aux_equipment import equipment_candidates
+    self._bind_combobox_word_suggest(self.cb_daily_equip, lambda: equipment_candidates(self, 'main'))
     self.cb_daily_equip._allow_multi = True
     self._bind_combobox_word_suggest(self.ent_daily_inspection_item, lambda: self._get_inspection_item_candidates())
     self._bind_combobox_word_suggest(self.ent_daily_applied_code, lambda: self._get_applied_code_candidates())
@@ -716,13 +724,13 @@ def setup_daily_usage_tab_impl(self):
 
     # Row 1: NDT with Multi-Company Support
     # NDT 자재 소모량 프레임 (버튼을 타이틀 위치로 이동)
-    lbl_frame = ttk.Frame(self.master_form_panel)
+    lbl_frame = ttk.Frame(self.daily_method_page)
     ttk.Label(lbl_frame, text="NDT 자재 소모량 (회사별)", font=('Arial', 9, 'bold')).pack(side='left', padx=(0, 10))
     ttk.Button(lbl_frame, text="+ 회사 추가", command=self.add_ndt_company_section, width=12).pack(side='left', padx=2)
     ttk.Button(lbl_frame, text="- 마지막 회사 삭제", command=self.remove_last_ndt_company, width=15).pack(side='left', padx=2)
     
-    self.ndt_frame = ttk.LabelFrame(self.master_form_panel, labelwidget=lbl_frame)
-    self.ndt_frame.grid(row=1, column=1, padx=5, pady=2, sticky='new')
+    self.ndt_frame = ttk.LabelFrame(self.daily_method_page, labelwidget=lbl_frame)
+    self.ndt_frame.grid(row=0, column=1, padx=5, pady=5, sticky='new')
     self.ndt_frame.grid_remove() # [NEW] Hide NDT frame by default
     
     # Container for company-specific NDT sections
@@ -740,8 +748,8 @@ def setup_daily_usage_tab_impl(self):
     # Removed draggable container logic
 
     # Row 2: RTK
-    self.rtk_grid = ttk.LabelFrame(self.master_form_panel, text="RTK 분류")
-    self.rtk_grid.grid(row=1, column=1, padx=5, pady=2, sticky='new')
+    self.rtk_grid = ttk.LabelFrame(self.daily_method_page, text="RTK 분류")
+    self.rtk_grid.grid(row=0, column=1, padx=5, pady=5, sticky='new')
     self.rtk_grid.grid_remove() # [NEW] Hide RTK by default
     
     for c in range(6): self.rtk_grid.columnconfigure(c, weight=1, uniform="ndt_rtk")
@@ -769,8 +777,8 @@ def setup_daily_usage_tab_impl(self):
     # Removed draggable container logic
 
     # [NEW] PAUT/UT 빈 공간 채우기용 통합 안내 패널
-    self.empty_guide_frame = ttk.LabelFrame(self.master_form_panel, text="PAUT / UT 검사 안내")
-    self.empty_guide_frame.grid(row=1, column=1, padx=5, pady=2, sticky='new')
+    self.empty_guide_frame = ttk.LabelFrame(self.daily_method_page, text="PAUT / UT 검사 안내")
+    self.empty_guide_frame.grid(row=0, column=1, padx=5, pady=5, sticky='new')
     self.empty_guide_frame.grid_remove() # Hide by default
     
     guide_lbl = ttk.Label(self.empty_guide_frame, text="💡 PAUT 및 UT 검사는 NDT 자재 및 RTK 입력이 필요하지 않습니다.\n(특이사항은 하단의 메모를 활용해 주세요.)", justify='center', padding=10)
@@ -783,8 +791,8 @@ def setup_daily_usage_tab_impl(self):
     self.worktimes = self._migrate_worktimes(self.worktimes if hasattr(self, 'worktimes') else [])
     
     # Create a single container for all workers inside the master panel summerly
-    workers_box_frame = ttk.Frame(self.master_form_panel)
-    workers_box_frame.grid(row=0, column=1, rowspan=1, sticky='nsew', padx=5, pady=5)
+    workers_box_frame = ttk.Frame(workers_page)
+    workers_box_frame.grid(row=0, column=0, sticky='nw', padx=5, pady=5)
     workers_box_frame.columnconfigure(0, weight=1)
     workers_box_frame.rowconfigure(2, weight=0)
     
@@ -798,20 +806,27 @@ def setup_daily_usage_tab_impl(self):
                command=lambda: self.open_list_management_dialog('users')).pack(side='right')
 
     # One row per worker. Keep headers and fields aligned with shared widths.
-    crew_columns = ((150, 1), (85, 0), (210, 0), (120, 0), (140, 0))
+    crew_columns = ((180, 1), (85, 0), (210, 0), (120, 0), (140, 0))
     crew_header = ttk.Frame(workers_box_frame)
     crew_header.grid(row=1, column=0, sticky='ew')
-    ttk.Label(crew_header, text='참여', width=6, anchor='center').pack(side='left')
-    titles = ttk.Frame(crew_header, padding=2)
-    titles.pack(side='left', fill='x', expand=True)
-    for column, (title, (width, weight)) in enumerate(zip(
-            ('작업자', '근무구분', '작업시간', 'OT 금액 (원)', '일비 (원)'), crew_columns)):
-        titles.columnconfigure(column, minsize=width, weight=weight)
-        ttk.Label(titles, text=title, anchor='center').grid(row=0, column=column, sticky='ew')
+    crew_header_blocks = []
+    for block_index in range(2):
+        block = ttk.Frame(crew_header)
+        block.grid(row=0, column=block_index, sticky='ew')
+        crew_header_blocks.append(block)
+        ttk.Label(block, text='참여', width=6, anchor='center').pack(side='left')
+        titles = ttk.Frame(block, padding=2)
+        titles.pack(side='left', fill='x', expand=True)
+        for column, (title, (width, weight)) in enumerate(zip(
+                ('작업자', '근무구분', '작업시간', 'OT 금액 (원)', '일비 (원)'), crew_columns)):
+            titles.columnconfigure(column, minsize=width, weight=weight)
+            ttk.Label(titles, text=title, anchor='center').grid(row=0, column=column, sticky='ew')
+    crew_header_blocks[1].grid_remove()
 
     crew_area = ttk.Frame(workers_box_frame)
     crew_area.grid(row=2, column=0, sticky='ew')
-    crew_canvas = tk.Canvas(crew_area, height=170, highlightthickness=0, bg=self.theme_bg)
+    crew_canvas = tk.Canvas(crew_area, width=sum(width for width, _ in crew_columns) + 80,
+                           height=170, highlightthickness=0, bg=self.theme_bg)
     crew_scroll = ttk.Scrollbar(crew_area, orient='vertical', command=crew_canvas.yview)
     crew_scroll.pack(side='right', fill='y')
     crew_canvas.pack(side='left', fill='x', expand=True)
@@ -822,7 +837,7 @@ def setup_daily_usage_tab_impl(self):
     crew_canvas.bind('<Configure>', lambda event: crew_canvas.itemconfigure(crew_window, width=event.width))
     workers_inner.bind('<Configure>', lambda event: crew_canvas.configure(scrollregion=crew_canvas.bbox('all')))
     # Reserve the scrollbar width beside the headers too.
-    ttk.Frame(crew_header, width=crew_scroll.winfo_reqwidth()).pack(side='right', fill='y')
+    ttk.Frame(crew_header, width=crew_scroll.winfo_reqwidth()).grid(row=0, column=2, sticky='ns')
 
     self.crew_summary = ttk.Label(workers_box_frame)
     self.crew_summary.grid(row=3, column=0, sticky='w', pady=3)
@@ -940,8 +955,43 @@ def setup_daily_usage_tab_impl(self):
         bind_crew_scroll(group_frame)
         return group_frame, group
 
-    # 5 rows x 2 cols = 10 workers rearranged inside workers_inner
-    for i in range(1, 11): setup_worker_group(i, i-1, 0)
+    crew_rows = [setup_worker_group(i, i - 1, 0)[0] for i in range(1, 11)]
+    crew_layout = None
+
+    def layout_workers(event=None):
+        nonlocal crew_layout
+        available = workers_page.winfo_width()
+        if available < 2:
+            return
+        row_width = max(sum(width for width, _ in crew_columns) + 70,
+                        max(row.winfo_reqwidth() for row in crew_rows))
+        scroll_width = crew_scroll.winfo_reqwidth()
+        columns = 2 if available >= row_width * 2 + 16 + scroll_width + 20 else 1
+        layout = (columns, row_width)
+        if layout == crew_layout:
+            return
+        crew_layout = layout
+        for index, row in enumerate(crew_rows):
+            column = index // 5 if columns == 2 else 0
+            row.grid_configure(row=index % 5 if columns == 2 else index, column=column,
+                               padx=(2, 18 if columns == 2 and column == 0 else 2))
+        for column in range(2):
+            active = column < columns
+            span = row_width + (16 if columns == 2 and column == 0 else 0) if active else 0
+            workers_inner.columnconfigure(column, minsize=span, weight=0)
+            crew_header.columnconfigure(column, minsize=span, weight=0)
+        crew_header_blocks[0].grid_configure(padx=(0, 16 if columns == 2 else 0))
+        if columns == 2:
+            crew_header_blocks[1].grid()
+        else:
+            crew_header_blocks[1].grid_remove()
+        crew_canvas.configure(width=row_width * columns + (16 if columns == 2 else 0))
+        crew_canvas.yview_moveto(0)
+        workers_inner.update_idletasks()
+        crew_canvas.configure(scrollregion=crew_canvas.bbox('all'))
+
+    workers_page.bind('<Configure>', layout_workers, add='+')
+    self.root.after_idle(layout_workers)
     update_crew_summary()
 
     # Removed draggable worker box logic
@@ -1147,6 +1197,9 @@ def setup_daily_usage_tab_impl(self):
             self.daily_work_split.paneconfigure(lower_panel, minsize=list_height)
             self.daily_work_split.sash_place(0, 0, max(220, height - list_height))
     self.root.after(100, initialize_split)
+
+    from site_apps.central.src.views.daily_input_summary import DailyInputSummary
+    self.daily_input_summary = DailyInputSummary(inspection_page, self, form_content)
 
     # No longer clamp entry_inner_frame height
     pass
