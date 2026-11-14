@@ -1,7 +1,7 @@
 {
-  "web_app_url": "https://script.google.com/macros/s/AKfycbzJWmpM4bAhFebNsY-seBDMo93WBsEIg1-AqVzQYfir3mquQd5aeSC1Omv_ZScRpW9dQQ/exec",
+  "web_app_url": "",
   "sheet_id": "",
-  "auto_sync_on_startup": true,
+  "auto_sync_on_startup": false,
   "sync_interval_seconds": 30,
-  "last_sync_time": "2026-11-15 00:06:55"
+  "last_sync_time": ""
 }
