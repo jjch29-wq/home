@@ -8,6 +8,14 @@ from datetime import datetime
 
 def load_data_impl(self):
     import re
+    import hashlib
+    self._inventory_load_failed = False
+    # Keep the version read by this editor; never silently overwrite a newer file.
+    try:
+        with open(self.db_path, 'rb') as stream:
+            self._inventory_version = (os.path.abspath(self.db_path), hashlib.sha256(stream.read()).hexdigest())
+    except FileNotFoundError:
+        self._inventory_version = (os.path.abspath(self.db_path), None)
     def normalize_cols(df):
         if df is not None and not df.empty:
             # 1. Standardize whitespace and handle numeric column names
@@ -43,6 +51,8 @@ def load_data_impl(self):
                 import shutil
                 try:
                     shutil.copy2(bundled_db, self.db_path)
+                    with open(self.db_path, 'rb') as stream:
+                        self._inventory_version = (os.path.abspath(self.db_path), hashlib.sha256(stream.read()).hexdigest())
                     print("DEBUG: Restored DB from bundle.")
                     # Also try to copy config if it exists in bundle but not in app_dir
                     config_basename = os.path.basename(self.config_path)
@@ -473,6 +483,7 @@ def load_data_impl(self):
                 if col in self.budget_df.columns:
                     self.budget_df[col] = pd.to_numeric(self.budget_df[col], errors='coerce').fillna(0).astype(float)
     except Exception as e:
+        self._inventory_load_failed = True
         import traceback
         traceback.print_exc()
         self.show_error_dialog("Error", f"데이터를 불러오는데 실패했습니다: {e}")
@@ -531,8 +542,21 @@ def load_data_impl(self):
 def save_data_impl(self, require_primary=True):
     """Serialize a complete workbook beside the original before replacing it."""
     import tempfile
+    import hashlib
+    def version(path):
+        try:
+            with open(path, 'rb') as stream:
+                return hashlib.sha256(stream.read()).hexdigest()
+        except FileNotFoundError:
+            return None
     temp_path = None
     try:
+        if getattr(self, '_inventory_load_failed', False):
+            raise RuntimeError('불러오기에 실패한 자료는 저장할 수 없습니다. 원본을 다시 불러와 주세요.')
+        target = os.path.abspath(self.db_path)
+        baseline = getattr(self, '_inventory_version', (target, version(target)))
+        if baseline != (target, version(target)):
+            raise RuntimeError('파일이 다른 앱 또는 동기화에서 변경되었습니다. 입력을 보존한 뒤 최신 자료를 다시 불러와 주세요.')
         frames = {}
         for sheet, attr in (('Materials', 'materials_df'), ('Transactions', 'transactions_df'),
                             ('MonthlyUsage', 'monthly_usage_df'), ('DailyUsage', 'daily_usage_df'),
@@ -560,8 +584,12 @@ def save_data_impl(self, require_primary=True):
                 frame.to_excel(writer, sheet_name=sheet, index=False)
         for attempt in range(3):
             try:
+                if baseline != (target, version(target)):
+                    raise RuntimeError('저장 준비 중 원본이 변경되어 덮어쓰기를 중단했습니다. 최신 자료를 다시 불러와 주세요.')
+                saved_version = version(temp_path)
                 os.replace(temp_path, target)
                 temp_path = None
+                self._inventory_version = (target, saved_version)
                 return True
             except PermissionError:
                 if attempt < 2:

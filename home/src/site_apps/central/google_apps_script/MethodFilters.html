@@ -1,0 +1,176 @@
+<script>
+function methodChoices(config, method) {
+  const catalog=(config.method_catalog||{})[method];
+  return catalog||{inventory:[],materials:[],main:[],aux:[]};
+}
+function matchingMaterialRows(config,method,label){
+  return methodChoices(config,method).inventory.filter(row=>row.role==='material'&&
+    [row.name,[row.name,row.model].filter(Boolean).join(' '),row.model?row.name+' ('+row.model+')':row.name].includes(label));
+}
+function selectedMaterialLabel(){
+  const custom=document.getElementById('input-custom-mat');
+  return custom&&!custom.classList.contains('hidden')?custom.value.trim():(document.getElementById('select-material')?.value||'');
+}
+function setMaterialPanelVisibility(visible,historical=false){
+  const wrapper=document.getElementById('material-input-wrap');
+  const notice=document.getElementById('material-history-notice');
+  if(wrapper)wrapper.classList.toggle('hidden',!visible);
+  if(notice)notice.classList.toggle('hidden',!historical);
+}
+function renderManualMaterialControls(){
+  const manual=document.getElementById('workspace-manual-link');
+  const fields=document.getElementById('workspace-manual-fields');
+  if(fields)fields.hidden=!(manual&&manual.checked);
+}
+function syncMaterialConnection(){
+  const link=document.getElementById('workspace-material-id');
+  if(!link)return '';
+  const manual=document.getElementById('workspace-manual-link');
+  const wrapper=document.getElementById('workspace-warehouse-wrap');
+  renderManualMaterialControls();
+  if(manual&&manual.checked){if(wrapper)wrapper.hidden=true;return link.value;}
+  const material=selectedMaterialLabel();
+  const rows=matchingMaterialRows(appConfig,selectedMethod,material);
+  const warehouse=document.getElementById('workspace-warehouse');
+  if(rows.length>1){
+    replaceMethodOptions(warehouse,rows.map(row=>({value:row.id,label:[row.warehouse,row.company,row.model].filter(Boolean).join(' / ')})),'창고·품목을 선택하세요');
+    if(wrapper)wrapper.hidden=false;
+    link.value=warehouse?warehouse.value:'';
+  }else{
+    if(wrapper)wrapper.hidden=true;
+    if(warehouse)warehouse.value='';
+    link.value=rows.length===1?rows[0].id:'';
+  }
+  return link.value;
+}
+function materialConnectionForSave(material){
+  const id=syncMaterialConnection();
+  const manual=document.getElementById('workspace-manual-link');
+  if(!(manual&&manual.checked)&&matchingMaterialRows(appConfig,selectedMethod,material).length>1&&!id){
+    throw new Error('같은 자재가 여러 창고에 있습니다. 창고·품목을 선택하세요.');
+  }
+  return id;
+}
+function restoreMaterialConnection(id,manualRequested=false){
+  const manual=document.getElementById('workspace-manual-link');
+  const material=selectedMaterialLabel();
+  const rows=matchingMaterialRows(appConfig,selectedMethod,material);
+  if(material)setMaterialPanelVisibility(true,methodChoices(appConfig,selectedMethod).materials.length===0);
+  if(manual)manual.checked=Boolean(manualRequested)||(Boolean(id)&&!rows.some(row=>row.id===String(id)));
+  if(id)workspaceSelectValue(document.getElementById('workspace-material-id'),id);
+  const warehouse=document.getElementById('workspace-warehouse');
+  if(warehouse&&rows.length>1){replaceMethodOptions(warehouse,rows.map(row=>({value:row.id,label:[row.warehouse,row.company,row.model].filter(Boolean).join(' / ')})),'창고·품목을 선택하세요');warehouse.value=id||'';}
+  syncMaterialConnection();
+}
+function replaceMethodOptions(field,choices,placeholder,preserve=true){
+  if(!field)return;
+  const current=selectedMethodValues(field);
+  field.replaceChildren(new Option(placeholder,''));
+  choices.forEach(choice=>field.add(new Option(choice.label,choice.value)));
+  if(preserve)setMethodValues(field,current.filter(value=>choices.some(choice=>choice.value===value)));
+}
+function selectedMethodValues(field){
+  if(!field)return [];
+  if(field.multiple&&field.selectedOptions)return Array.from(field.selectedOptions).map(option=>option.value).filter(Boolean);
+  return field.value?[field.value]:[];
+}
+function setMethodValues(field,values){
+  if(!field)return;
+  const wanted=new Set((Array.isArray(values)?values:String(values||'').split(';')).map(value=>String(value).trim()).filter(Boolean));
+  if(field.multiple)Array.from(field.options).forEach(option=>{option.selected=wanted.has(option.value);});
+  else field.value=Array.from(wanted)[0]||'';
+  if(typeof field._mobileMultiRefresh==='function')field._mobileMultiRefresh();
+}
+function collectMainEquipment(){return Array.from(new Set(selectedMethodValues(document.getElementById('select-equip')))).join('; ');}
+function pautAuxCategory(label){
+  const text=String(label||'').toUpperCase();
+  if(/SCANNER|스캐너|COBRA|MICROBE|BTG006/.test(text))return 'scanner';
+  if(/PAUT\s+PROBE\s*-\s*WEDGE|PAUT.*(?:웨지|웻지)|(?:WEDGE|웨지|웻지).*PAUT/.test(text))return 'wedge';
+  if(/PAUT\s+PROBE(?:\s*\(|$)|PAUT.*탐촉자/.test(text))return 'probe';
+  return '';
+}
+function refreshPautEquipmentChoices(method,auxChoices){
+  const panel=document.getElementById('paut-equipment-grid');
+  const mainWrap=document.getElementById('main-equipment-wrap');
+  const auxWrap=document.getElementById('aux-equipment-wrap');
+  const label=document.getElementById('aux-equipment-label');
+  const isPaut=method==='PAUT';
+  if(panel){panel.classList.toggle('hidden',!isPaut);panel.style.order=isPaut?'2':'';}
+  if(mainWrap)mainWrap.style.order=isPaut?'1':'';
+  if(auxWrap){auxWrap.style.order=isPaut?'3':'';auxWrap.classList.toggle('col-span-2',isPaut);}
+  if(label)label.textContent=isPaut?'기타 보조장비':'보조 장비/스캐너';
+  const groups={scanner:[],probe:[],wedge:[]};
+  auxChoices.forEach(value=>{const category=pautAuxCategory(value);if(category)groups[category].push({value,label:value});});
+  replaceMethodOptions(document.getElementById('select-paut-scanner'),groups.scanner,'스캐너 선택 안 함');
+  replaceMethodOptions(document.getElementById('select-paut-probe'),groups.probe,'탐촉자 선택 안 함');
+  replaceMethodOptions(document.getElementById('select-paut-wedge'),groups.wedge,'웻지 선택 안 함');
+  return isPaut?auxChoices.filter(value=>!pautAuxCategory(value)):auxChoices;
+}
+function collectAuxEquipment(){
+  const values=[];
+  if(selectedMethod==='PAUT'){
+    ['select-paut-scanner','select-paut-probe','select-paut-wedge'].forEach(id=>values.push(...selectedMethodValues(document.getElementById(id))));
+  }
+  const others=selectedMethodValues(document.getElementById('select-aux-equip'));
+  if(others.includes('✏️ 직접 입력...')){
+    const custom=document.getElementById('input-custom-aux')?.value.trim()||'';
+    if(custom)values.push(...custom.split(';').map(value=>value.trim()).filter(Boolean));
+  }
+  values.push(...others.filter(value=>value!=='✏️ 직접 입력...'&&value!=='없음'));
+  return Array.from(new Set(values)).join('; ');
+}
+function restoreAuxEquipment(text){
+  const values=String(text||'').split(';').map(value=>value.trim()).filter(Boolean);
+  const assigned=new Set();
+  if(selectedMethod==='PAUT'){
+    for(const [category,id] of [['scanner','select-paut-scanner'],['probe','select-paut-probe'],['wedge','select-paut-wedge']]){
+      const matches=values.filter(item=>!assigned.has(item)&&pautAuxCategory(item)===category);
+      if(matches.length){setMethodValues(document.getElementById(id),matches);matches.forEach(value=>assigned.add(value));}
+    }
+  }
+  const remaining=values.filter(value=>!assigned.has(value));
+  const aux=document.getElementById('select-aux-equip');
+  const custom=document.getElementById('input-custom-aux');
+  const known=remaining.filter(value=>aux&&Array.from(aux.options).some(option=>option.value===value));
+  const unknown=remaining.filter(value=>!known.includes(value));
+  if(aux)setMethodValues(aux,unknown.length?[...known,'✏️ 직접 입력...']:known);
+  if(custom){custom.value=unknown.join('; ');custom.classList.toggle('hidden',!unknown.length);}
+}
+function refreshMethodChoices(method){
+  const choices=methodChoices(appConfig,method);
+  replaceMethodOptions(document.getElementById('workspace-material-id'),
+    choices.inventory.map(r=>({value:r.id,label:[r.name,r.model,r.warehouse].filter(Boolean).join(' / ')})),
+    choices.inventory.length?'재고 연결 안 함':'관련 재고 품목 없음');
+  replaceMethodOptions(document.getElementById('select-material'),
+    choices.materials.map(value=>({value,label:value})),choices.materials.length?'자재 선택 안 함':'관련 소모품 없음');
+  setMaterialPanelVisibility(choices.materials.length>0,false);
+  if(!choices.materials.length){
+    const customMaterial=document.getElementById('input-custom-mat');
+    if(customMaterial){customMaterial.value='';customMaterial.classList.add('hidden');}
+  }
+  replaceMethodOptions(document.getElementById('select-equip'),
+    choices.main.map(value=>({value,label:value})),choices.main.length?'주 장비 선택':'등록된 관련 주 장비 없음');
+  const otherAux=refreshPautEquipmentChoices(method,choices.aux);
+  replaceMethodOptions(document.getElementById('select-aux-equip'),
+    otherAux.map(value=>({value,label:value})).concat([{value:'✏️ 직접 입력...',label:'✏️ 직접 입력...'}]),'보조장비 선택 안 함');
+  const custom=document.getElementById('input-custom-aux');
+  if(custom&&!selectedMethodValues(document.getElementById('select-aux-equip')).includes('✏️ 직접 입력...')){
+    custom.value='';custom.classList.add('hidden');
+  }
+  const manual=document.getElementById('workspace-manual-link');
+  if(manual)manual.checked=false;
+  syncMaterialConnection();
+}
+function applyMethodDefaults(method){
+  const defaults={PAUT:['PAUT MX2(OMNI2-103085)',''],RT:['Se-75','ADR, SURVEY, 콜리메타'],MT:['Yoke','자분살포기'],PT:['PT 약품','조도계'],UT:['','']};
+  const desired=defaults[method]||['',''];
+  ['select-equip','select-aux-equip'].forEach((id,i)=>{
+    const field=document.getElementById(id);
+    if(field&&!selectedMethodValues(field).length&&Array.from(field.options).some(o=>o.value===desired[i]))setMethodValues(field,[desired[i]]);
+  });
+  if(method==='PAUT'){
+    const scanner=document.getElementById('select-paut-scanner');
+    if(scanner&&!selectedMethodValues(scanner).length){const preferred=Array.from(scanner.options).find(option=>/PAUT SCANNER \(MANUAL\)/i.test(option.value));if(preferred)setMethodValues(scanner,[preferred.value]);}
+  }
+}
+</script>

@@ -1543,7 +1543,7 @@ class MaterialManager:
         vsb = ttk.Scrollbar(tree_frame, orient="vertical")
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal")
         
-        columns = ('No.', '회사코드', '분류', '제조사', '품목명', '모델명', 'S/N', '관리단위', '수량(현장)', '단위(현장)', '현재재고', '단가', '재고하한', '재고금액', '상태/위치', '관리품번')
+        columns = tuple(self.stock_tree['columns'])
         tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
         self.detached_windows['stock']['tree'] = tree
@@ -1558,8 +1558,9 @@ class MaterialManager:
             '단가': 90, '재고하한': 80, '재고금액': 120, '상태/위치': 100, '관리품번': 120
         }
         for col in columns:
-            tree.heading(col, text=("자재명" if col == "품목명" else col), command=lambda c=col: self.treeview_sort_column(tree, c, False))
-            tree.column(col, width=col_widths.get(col, 100), anchor='center', stretch=False)
+            tree.heading(col, text=self.stock_tree.heading(col, 'text'), command=lambda c=col: self.treeview_sort_column(tree, c, False))
+            tree.column(col, width=self.stock_tree.column(col, 'width'), anchor='center', stretch=False)
+        tree['displaycolumns'] = self.stock_tree['displaycolumns']
             
         tree.grid(row=0, column=0, sticky='nsew')
         vsb.grid(row=0, column=1, sticky='ns')
@@ -6144,6 +6145,8 @@ class MaterialManager:
         
         # [그룹 2: 레코드 편집 및 저장]
         btn_edit = ttk.Button(btn_row, text="✏️ 선택 항목 수정", command=self.open_edit_daily_usage_dialog)
+        ttk.Button(btn_row, text="입력 화면에 불러오기",
+                   command=lambda: self._on_daily_usage_select(None)).pack(side='left', padx=5)
         btn_edit.pack(side='left', padx=2)
 
         btn_delete = ttk.Button(btn_row, text="🗑️ 선택 항목 삭제", command=self.delete_daily_usage_entry)
@@ -6265,8 +6268,9 @@ class MaterialManager:
             
         self.daily_usage_tree.bind('<ButtonRelease-1>', save_column_widths)
 
-        # Keep loading the selected record into the entry form.
-        self.daily_usage_tree.bind('<<TreeviewSelect>>', self._on_daily_usage_select)
+        # Selection and context menus must not replace unfinished entry data.
+        # Loading is explicit; keep double-click available for the note viewer.
+        self.daily_usage_tree.bind('<Return>', self._on_daily_usage_select)
         
         # Optimize treeview scroll region to prevent unnecessary scrollbars
         def optimize_treeview_scroll_region():
@@ -11494,7 +11498,12 @@ class MaterialManager:
                 
             unique_companies = sorted(list([c for c in raw_companies if c and str(c).lower() != 'nan']))
             if hasattr(self, 'cb_daily_company'):
-                self.cb_daily_company['values'] = unique_companies
+                # New entries use the managed catalog; historical labels remain
+                # available only in inquiry filters and restored record values.
+                self.cb_daily_company['values'] = sorted({
+                    str(c).strip() for c in getattr(self, 'companies', [])
+                    if str(c).strip() and str(c).strip().lower() not in ('nan', 'none')
+                })
             if hasattr(self, 'cb_daily_filter_company'):
                 self.cb_daily_filter_company['values'] = ['전체'] + unique_companies
                 if not self.cb_daily_filter_company.get(): self.cb_daily_filter_company.set('전체')
@@ -14109,12 +14118,9 @@ class MaterialManager:
                 # Restore vehicles, equipments, and preferred materials
                 raw_vehicles = config.get('vehicles', [])
                 updated_vehicles = []
+                from site_apps.central.src.vehicle_catalog import vehicle_label
                 for v in raw_vehicles:
-                    base = v.split('(')[0].strip()
-                    if any(t in base for t in ['81두1580', '89보4028', '90너4889']):
-                        updated_vehicles.append(f"{base} (탑차)")
-                    else:
-                        updated_vehicles.append(f"{base} (스타렉스)")
+                    updated_vehicles.append(vehicle_label(v))
                 self.vehicles[:] = sorted(list(set(updated_vehicles)))
                 
                 self.equipments[:] = config.get('equipments', [])
@@ -14251,30 +14257,8 @@ class MaterialManager:
                     self.equipments = [str(e).strip() for e in self.equipments if str(e).strip()]
                 
                 # Vehicle list
-                self.vehicles[:] = config.get('vehicles', [])
-        
-                # 이미지에 제공된 기본 차량 목록 등록
-                default_vehicles = [
-                    "84저1259", "95가0200", "91주8839", "90서8616",
-                    "76마3422", "71고4405", "89보4028", "81두1580",
-                    "81루5100", "95가0175", "81도5958", "90너4889"
-                ]
-                
-                # Check based on base name to avoid duplicates
-                current_bases = [v.split('(')[0].strip() for v in self.vehicles]
-                for dv in default_vehicles:
-                    if dv not in current_bases:
-                        self.vehicles.append(dv)
-                
-                # [NEW] Force suffix application on all vehicles before UI update
-                final_vehicles = []
-                for v in self.vehicles:
-                    base = v.split('(')[0].strip()
-                    if any(t in base for t in ['81두1580', '89보4028', '90너4889']):
-                        final_vehicles.append(f"{base} (탑차)")
-                    else:
-                        final_vehicles.append(f"{base} (스타렉스)")
-                self.vehicles[:] = sorted(list(set(final_vehicles)))
+                from site_apps.central.src.vehicle_catalog import restore_vehicle_catalog
+                self.vehicles[:] = restore_vehicle_catalog(config)
                 # [FIX] Update combo box values after loading lists from config
                 # Update sites combo boxes
                 if hasattr(self, 'cb_trans_site'): 

@@ -14,6 +14,27 @@ TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 
 
 class QueryHistoryTests(unittest.TestCase):
+    def test_entry_companies_use_catalog_but_inquiry_keeps_history(self):
+        class Combo(dict):
+            def __init__(self, value=''):
+                super().__init__()
+                self.value=value
+            def get(self): return self.value
+            def set(self,value): self.value=value
+        fn=next(n for n in ast.walk(TREE) if isinstance(n,ast.FunctionDef)
+                and n.name=='refresh_inquiry_filters')
+        ns={'pd':pd,'MARKER_PATTERN':__import__('re').compile(r'\[.*?\]')}
+        exec(compile(ast.Module(body=[fn],type_ignores=[]),str(SOURCE),'exec'),ns)
+        app=SimpleNamespace(companies=['한국지역난방공사'],
+            daily_usage_df=pd.DataFrame({'업체명':['한국지역난방공사 중앙지사']}),
+            cb_daily_company=Combo('한국지역난방공사 중앙지사'),
+            cb_daily_filter_company=Combo())
+        ns['refresh_inquiry_filters'](app)
+        self.assertEqual(app.cb_daily_company['values'],['한국지역난방공사'])
+        self.assertEqual(app.cb_daily_filter_company['values'],
+                         ['전체','한국지역난방공사','한국지역난방공사 중앙지사'])
+        self.assertEqual(app.cb_daily_company.get(),'한국지역난방공사 중앙지사')
+
     def setUp(self):
         self.messages = Mock()
         ns = {'pd':pd,'messagebox':self.messages}

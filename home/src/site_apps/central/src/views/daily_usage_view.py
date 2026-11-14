@@ -1114,8 +1114,10 @@ def setup_daily_usage_tab_impl(self):
     self.tv_recent.column("joint_count", width=60, minwidth=60, stretch=False, anchor='center')
     self.tv_recent.column("rej_count", width=60, minwidth=60, stretch=False, anchor='center')
     
-    # Bind click to load record and delete
-    self.tv_recent.bind('<<TreeviewSelect>>', self.on_recent_record_click)
+    # Selection also changes when opening the context menu. Load only on an
+    # explicit action, so a right-click never replaces the current editor.
+    self.tv_recent.bind('<Double-1>', self.on_recent_record_click)
+    self.tv_recent.bind('<Return>', self.on_recent_record_click)
     self.tv_recent.bind('<Delete>', self.delete_recent_entry)
     self.tv_recent.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
     self.cb_daily_site.bind('<<ComboboxSelected>>',
@@ -1123,6 +1125,7 @@ def setup_daily_usage_tab_impl(self):
     
     # Right-click menu for deletion
     self.recent_menu = tk.Menu(self.tv_recent, tearoff=0)
+    self.recent_menu.add_command(label="불러오기", command=lambda: self.on_recent_record_click(None))
     self.recent_menu.add_command(label="삭제", command=self.delete_recent_entry)
     
     def show_recent_menu(event):
@@ -1202,8 +1205,44 @@ def setup_daily_usage_tab_impl(self):
     from site_apps.central.src.views.daily_input_summary import DailyInputSummary
     self.daily_input_summary = DailyInputSummary(inspection_page, self, form_content)
 
+    # Programmatic set()/record restore must refresh visibility too, without
+    # resetting restored calculation conditions or quantities.
+    self.daily_method_hint = ttk.Label(
+        self.daily_method_page,
+        text='검사 정보 탭에서 검사방법을 선택하면 상세 입력 항목이 표시됩니다.',
+        padding=15)
+    self.daily_method_hint.grid(row=1, column=0, columnspan=2, sticky='nw')
+    self.daily_method_var = tk.StringVar(value=self.cb_daily_test_method.get())
+    self.cb_daily_test_method.configure(textvariable=self.daily_method_var)
+    self.daily_method_var.trace_add('write', lambda *args: refresh_method_details(self))
+    self.daily_entry_notebook.bind(
+        '<<NotebookTabChanged>>', lambda event: refresh_method_details(self), add='+')
+    refresh_method_details(self)
+
     # No longer clamp entry_inner_frame height
     pass
+
+
+def refresh_method_details(self):
+    """Show method panels for both interactive selection and record restoration."""
+    method = self.daily_method_var.get().strip().upper()
+    supported = method in {'RT', 'UT', 'PAUT', 'MT', 'PT'}
+    for panel, visible in (
+            (self.ndt_calc_frame, supported),
+            (self.ndt_frame, method in {'MT', 'PT'}),
+            (self.rtk_grid, method == 'RT'),
+            (self.empty_guide_frame, method in {'UT', 'PAUT'}),
+            (self.daily_method_hint, not supported)):
+        if visible:
+            panel.grid()
+        else:
+            panel.grid_remove()
+    if not supported:
+        self.daily_method_hint.configure(text=(
+            '기타 검사는 검사 정보 탭에서 검사량·단가·메모를 입력하세요.'
+            if method == 'ETC' else
+            '검사 정보 탭에서 검사방법을 선택하면 상세 입력 항목이 표시됩니다.'))
+    self.root.after_idle(self._ensure_canvas_scroll_region)
 
 
 def update_daily_usage_view_impl(self):

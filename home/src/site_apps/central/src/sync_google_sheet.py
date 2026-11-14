@@ -133,6 +133,36 @@ def fetch_records_from_web_app(web_app_url: str) -> Tuple[List[str], List[Dict[s
     rows = data.get("rows", [])
     return headers, rows
 
+def _normalized_entry_time(value):
+    """Cloud timestamps omit Excel's fractional seconds for the same entry."""
+    if value is None or pd.isna(value):
+        return ''
+    text = str(value).strip()
+    if text.lower() in ('', 'nan', 'nat', 'none'):
+        return ''
+    try:
+        return pd.Timestamp(value).floor('s').strftime('%Y-%m-%d %H:%M:%S')
+    except (ValueError, TypeError):
+        return text
+
+
+def _sync_content_key(row):
+    """Compare work identity as well as time, with Excel/cloud numeric parity."""
+    def text(key):
+        v = row.get(key, '')
+        return '' if v is None or pd.isna(v) else str(v).strip()
+    def number(value):
+        try:
+            return format(float(str(value).replace(',', '')), '.12g')
+        except (ValueError, TypeError):
+            return ''
+    quantity = next((row.get(k) for k in ('Usage', '검사량', '수량')
+                     if number(row.get(k)) not in ('', '0', 'nan')), 0)
+    return repr((text('Date').split()[0], text('Site'), text('User'),
+                 text('검사방법').upper(), number(quantity), text('관경(Inch)'),
+                 text('장비명'), number(row.get('단가', 0))))
+
+
 def sync_records_to_excel(
     rows: List[Dict[str, Any]],
     inventory_path: Optional[Path] = None
@@ -161,7 +191,7 @@ def sync_records_to_excel(
     # 기존 행들의 고유 키 집합 생성 (중복 방지)
     existing_keys = set()
     for _, row in daily_df.iterrows():
-        entry_time = str(row.get("EntryTime", "")).strip()
+        entry_time = _normalized_entry_time(row.get("EntryTime", ""))
         date_str = str(row.get("Date", "")).split()[0].strip()
         user_str = str(row.get("User", "")).strip()
         method_str = str(row.get("검사방법", "")).strip()
@@ -169,32 +199,34 @@ def sync_records_to_excel(
         pipe_str = str(row.get("관경(Inch)", row.get("규격", ""))).strip()
 
         if entry_time and entry_time != "nan":
-            existing_keys.add(f"TIME:{entry_time}")
-        composite_key = f"COMP:{date_str}|{user_str}|{method_str}|{qty_str}|{pipe_str}"
-        existing_keys.add(composite_key)
+            existing_keys.add(f"TIME:{entry_time}|{_sync_content_key(row)}")
+        composite_key = f"COMP:{_sync_content_key(row)}"
+        if not entry_time:
+            existing_keys.add(composite_key)
 
     new_rows = []
     skipped_count = 0
 
     for r in rows:
-        entry_time = str(r.get("EntryTime", "")).strip()
+        entry_time = _normalized_entry_time(r.get("EntryTime", ""))
         date_str = str(r.get("Date", "")).split()[0].strip()
         user_str = str(r.get("User", "")).strip()
         method_str = str(r.get("검사방법", "")).strip()
         qty_str = str(r.get("수량", r.get("Usage", 0))).strip()
         pipe_str = str(r.get("관경(Inch)", r.get("규격", ""))).strip()
 
-        time_key = f"TIME:{entry_time}" if (entry_time and entry_time != "nan") else None
-        comp_key = f"COMP:{date_str}|{user_str}|{method_str}|{qty_str}|{pipe_str}"
+        time_key = f"TIME:{entry_time}|{_sync_content_key(r)}" if entry_time else None
+        comp_key = f"COMP:{_sync_content_key(r)}"
 
-        if (time_key and time_key in existing_keys) or (comp_key in existing_keys):
+        if (time_key in existing_keys if time_key else comp_key in existing_keys):
             skipped_count += 1
             continue
 
         new_rows.append(r)
         if time_key:
             existing_keys.add(time_key)
-        existing_keys.add(comp_key)
+        if not time_key:
+            existing_keys.add(comp_key)
 
     if not new_rows:
         return {
@@ -395,15 +427,41 @@ def two_way_reconcile_with_web_app(
         previous_cloud_times = set(_load_sync_state(target_path).get("cloud_entry_times", []))
 
         def get_keys(r):
-            entry_time = str(r.get("EntryTime", "")).split(".")[0].strip()
-            date_str = str(r.get("Date", "")).split()[0].strip()
-            user_str = str(r.get("User", "")).strip()
-            method_str = str(r.get("검사방법", "")).strip()
-            qty_str = str(r.get("수량", r.get("Usage", 0))).strip()
-            pipe_str = str(r.get("관경(Inch)", r.get("규격", ""))).strip()
-            time_key = f"TIME:{entry_time}" if (entry_time and entry_time != "nan") else None
-            comp_key = f"COMP:{date_str}|{user_str}|{method_str}|{qty_str}|{pipe_str}"
+            entry_time = _normalized_entry_time(r.get('EntryTime'))
+            time_key = f"TIME:{entry_time}" if entry_time else None
+            comp_key = f"COMP:{entry_time}|{_sync_content_key(r)}"
             return time_key, comp_key
+
+        def same_job(left, right):
+            # Quantity, price and notes may be edited. Different sites/methods
+            # must never be treated as edits merely because seconds coincide.
+            def identity(row):
+                return tuple('' if pd.isna(row.get(k)) else str(row.get(k, '')).strip()
+                             for k in ('Site', 'User', '검사방법')) + (str(row.get('Date', '')).split()[0],)
+            return identity(left) == identity(right)
+
+        def matching_record(record, candidates):
+            content = _sync_content_key(record)
+            exact = [row for row in candidates if _sync_content_key(row) == content]
+            if len(exact) == 1:
+                return exact[0]
+            matches = [row for row in candidates if same_job(row, record)]
+            key, _ = get_keys(record)
+            ambiguous = any(sum(same_job(row, record) for row in groups.get(key, [])) > 1
+                            for groups in (local_groups, cloud_groups))
+            return matches[0] if len(matches) == 1 and not ambiguous else None
+
+        def time_groups(records):
+            groups = {}
+            for row in records:
+                key, _ = get_keys(row)
+                if key:
+                    groups.setdefault(key, []).append(row)
+            return groups
+
+        local_groups = time_groups(local_rows)
+        cloud_groups = time_groups(cloud_rows)
+        sync_conflicts = 0
 
         local_keys = set()
         local_time_map = {}
@@ -437,7 +495,7 @@ def two_way_reconcile_with_web_app(
             retained_rows = []
             for row in local_rows:
                 entry_time = str(row.get("EntryTime", "")).split(".")[0].strip()
-                if entry_time not in mobile_deleted_times:
+                if entry_time not in mobile_deleted_times or len(local_groups.get(f'TIME:{entry_time}', [])) > 1:
                     retained_rows.append(row)
             if len(retained_rows) != len(local_rows):
                 mobile_deleted_count = len(local_rows) - len(retained_rows)
@@ -463,6 +521,7 @@ def two_way_reconcile_with_web_app(
         # A. 구글 시트의 변경사항 -> PC 엑셀로 동기화 (신규 추가: Pull / 수정 갱신: Pull-Update)
         to_pull = []
         excel_modified = False
+        updated_count = 0
 
         def _norm_val(val):
             if pd.isna(val) or val is None:
@@ -478,26 +537,43 @@ def two_way_reconcile_with_web_app(
 
         for cr in cloud_rows:
             tk, ck = get_keys(cr)
-            if tk and tk in local_time_map:
+            lr = matching_record(cr, local_groups.get(tk, [])) if tk else None
+            if lr is not None:
                 # 이미 존재하는 행: 클라우드에서 수정된 필드가 있으면 로컬 엑셀 행을 클라우드 값으로 업데이트
-                lr = local_time_map[tk]
                 row_changed = False
+                quantity_key = next((key for key in ('수량', '검사량', 'Usage')
+                                     if key in cr and _norm_val(cr[key]) != ''), None)
+                # Always use the same authoritative cloud column on every pass.
+                # A stale secondary alias is not a new quantity edit. Legacy
+                # schema-default zero remains untouched unless the primary
+                # column changed from a nonzero value (an explicit clear).
+                if (quantity_key == '수량' and _norm_val(cr['수량']) == '0'
+                        and _norm_val(lr.get('수량')) in ('', '0')
+                        and any(_norm_val(lr.get(k)) not in ('', '0')
+                                for k in ('검사량', 'Usage'))):
+                    quantity_key = None
                 for col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "규격", "출장비", "검사비", "핫태핑차수", "핫태핑개소", "핫태핑관경"]:
                     if col in cr and _norm_val(lr.get(col)) != _norm_val(cr.get(col)):
                         lr[col] = cr[col]
                         row_changed = True
+                if quantity_key is not None:
+                    quantity = cr[quantity_key]
+                    fields = ['수량', '검사량', 'Usage']
+                    if str(cr.get('검사방법', lr.get('검사방법', ''))).strip().upper() == 'RT':
+                        fields.append('FilmCount')
+                    for field in fields:
+                        if _norm_val(lr.get(field)) != _norm_val(quantity):
+                            lr[field] = quantity
+                            row_changed = True
                 if row_changed:
                     excel_modified = True
-            elif (tk and tk in local_keys) or (ck in local_keys):
+                    updated_count += 1
+            elif ck in local_keys:
                 continue
             else:
                 to_pull.append(cr)
 
         pulled_cnt = 0
-        if to_pull:
-            res_p = sync_records_to_excel(to_pull, inventory_path=target_path)
-            pulled_cnt = res_p.get("added_count", 0)
-
         if excel_modified:
             # 수정된 로컬 행들을 엑셀에 다시 저장
             with pd.ExcelFile(target_path) as ef:
@@ -506,6 +582,12 @@ def two_way_reconcile_with_web_app(
             with pd.ExcelWriter(target_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
                 all_sheets["DailyUsage"].to_excel(writer, sheet_name="DailyUsage", index=False)
             logger.info("모바일 수정 사항이 로컬 엑셀 행에 제자리 갱신되었습니다.")
+
+        # Append new jobs after in-place updates; otherwise replacing the old
+        # local snapshot would discard the newly pulled rows.
+        if to_pull:
+            res_p = sync_records_to_excel(to_pull, inventory_path=target_path)
+            pulled_cnt = res_p.get("added_count", 0)
 
         # B. PC에만 있는 행 -> 구글 시트로 밀어넣기 (Push)
         to_push_saves = []
@@ -522,15 +604,22 @@ def two_way_reconcile_with_web_app(
                 to_push_saves.append(r)
             else:
                 # 존재하는 행: 주요 필드 수정 여부 비교
-                cr = cloud_time_map.get(tk)
-                if cr:
+                cr = matching_record(r, cloud_groups.get(tk, []))
+                if cr is not None:
                     is_modified = False
                     for check_col in ["수량", "단가", "검사방법", "User", "검사품명", "Note", "DailyMemo", "Site", "업체명", "관경(Inch)", "규격", "출장비", "검사비", "핫태핑차수", "핫태핑개소", "핫태핑관경"]:
                         if _norm_val(r.get(check_col)) != _norm_val(cr.get(check_col)):
                             is_modified = True
                             break
                     if is_modified:
-                        to_push_updates.append(r)
+                        if len(cloud_groups.get(tk, [])) == 1:
+                            to_push_updates.append(r)
+                        else:
+                            sync_conflicts += 1
+                else:
+                    # The cloud API addresses updates by seconds only. Preserve
+                    # the PC row instead of overwriting a different cloud job.
+                    sync_conflicts += 1
 
         pushed_cnt = 0
         if to_push_saves or to_push_updates:
@@ -553,11 +642,13 @@ def two_way_reconcile_with_web_app(
             "pulled_count": pulled_cnt,
             "pushed_count": pushed_cnt,
             "deleted_count": mobile_deleted_count,
+            "updated_count": updated_count,
+            "conflict_count": sync_conflicts,
             "added_count": pulled_cnt,
             "message": (
                 "구글 스프레드시트 양방향 동기화 완료 "
                 f"(가져옴: {pulled_cnt}건, 밀어넣음: {pushed_cnt}건, "
-                f"모바일 삭제 반영: {mobile_deleted_count}건)"
+                f"수정: {updated_count}건, 모바일 삭제 반영: {mobile_deleted_count}건, 식별 충돌 보류: {sync_conflicts}건)"
             )
         }
     except Exception as e:
@@ -623,6 +714,9 @@ def sync_all_central_sources() -> Dict[str, Any]:
     total_added = 0
     pulled_count = 0
     pushed_count = 0
+    updated_count = 0
+    deleted_count = 0
+    conflict_count = 0
     messages = []
     errors = []
 
@@ -648,6 +742,9 @@ def sync_all_central_sources() -> Dict[str, Any]:
                     total_added += added
                     pulled_count += pulled
                     pushed_count += pushed
+                    updated_count += res_web.get('updated_count', 0)
+                    deleted_count += res_web.get('deleted_count', 0)
+                    conflict_count += res_web.get('conflict_count', 0)
                     if res_web.get("message"):
                         messages.append(res_web["message"])
                 else:
@@ -662,6 +759,9 @@ def sync_all_central_sources() -> Dict[str, Any]:
         "added_count": total_added,
         "pulled_count": pulled_count,
         "pushed_count": pushed_count,
+        "updated_count": updated_count,
+        "deleted_count": deleted_count,
+        "conflict_count": conflict_count,
         "errors": errors,
         "message": summary_msg
     }

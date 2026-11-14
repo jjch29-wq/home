@@ -2,9 +2,25 @@
 import pandas as pd
 import json
 
+CHEMICALS = ('세척제', '침투제', '현상제', '백색페인트', '흑색자분', '형광자분', '형광침투제', '자분페인트')
+
+
+class ChemicalUsage(dict):
+    """Totals for diagnostics, plus consumption assigned to an exact material."""
+    def __init__(self):
+        super().__init__()
+        self.by_material = {}
+        self.unassigned = []
+
+
+def chemical_key(name):
+    """Prefer the most specific chemical name, so fluorescent penetrant is distinct."""
+    text = str(name).replace(' ', '')
+    return next((key for key in sorted(CHEMICALS, key=len, reverse=True) if key in text), None)
+
 
 def build_stock_lookups(self):
-    ndt_name_lookup = {}
+    ndt_name_lookup = ChemicalUsage()
     # [OPTIMIZATION] Pre-calculate stock lookup to avoid O(N*M) performance hit
     stock_in_lookup = {}
     stock_out_lookup = {}
@@ -87,13 +103,26 @@ def build_stock_lookups(self):
             temp_consumable['NormName'].astype(str).str.strip().ne('') & 
             ~temp_consumable['NormName'].astype(str).str.lower().isin(['nan', 'none', 'null', '0', '0.0'])
         ]
-        daily_name_lookup = valid_name_consumables.groupby('NormName')['TotalUsage'].sum().to_dict()
+        # Name fallback is only for unassigned usage and an unambiguous master.
+        known_ids = {self.normalize_id(v) for v in self.materials_df['MaterialID']
+                     if self.normalize_id(v) and self.normalize_id(v).lower() not in ('nan', 'none', 'null')}
+        name_counts = self.materials_df['품목명'].map(self.clean_nan).value_counts()
+        unassigned = valid_name_consumables[
+            ~valid_name_consumables['NormID'].isin(known_ids) &
+            valid_name_consumables['NormName'].map(name_counts).eq(1)]
+        daily_name_lookup = unassigned.groupby('NormName')['TotalUsage'].sum().to_dict()
         print(f"DEBUG: Daily Consumable Lookup built: {daily_name_lookup}")
         
         # [NEW] Pre-calculate NDT chemical totals by name (Enhanced with fuzzy matching and JSON parsing)
-        ndt_name_lookup = {}
+        ndt_name_lookup = ChemicalUsage()
         ndt_keys = ['세척제', '침투제', '현상제', '백색페인트', '흑색자분', '형광자분', '형광침투제', '자분페인트']
         for k in ndt_keys: ndt_name_lookup[k] = 0.0
+        chemical_materials = {key: [] for key in ndt_keys}
+        for _, material in self.materials_df.iterrows():
+            key = chemical_key(self.clean_nan(material.get('품목명', '')) +
+                               self.clean_nan(material.get('모델명', '')))
+            if key:
+                chemical_materials[key].append(material)
 
         for _, row in temp_daily.iterrows():
             raw = row.get('ndt_data', row.get('ndtdata', ''))
@@ -105,18 +134,37 @@ def build_stock_lookups(self):
             for key in ndt_keys:
                 # Positive direct usage wins; schema-default zero may still have legacy JSON usage.
                 candidates = [f'NDT_{key}', key]
-                candidates += [col for col in temp_daily.columns if key in str(col) and col not in candidates]
+                candidates += [col for col in temp_daily.columns if chemical_key(col) == key and col not in candidates]
                 value = None
                 for col in candidates:
                     if col in row and not pd.isna(row[col]) and str(row[col]).strip():
                         value = _f(row[col])
                         break
                 if value is None or value == 0:
-                    value = sum(_f(amount) for name, amount in legacy.items() if key in str(name))
+                    value = sum(_f(amount) for name, amount in legacy.items() if chemical_key(name) == key)
                 ndt_name_lookup[key] += value
+                if value > 0:
+                    candidates = list(chemical_materials[key])
+                    row_id = self.normalize_id(row.get('MaterialID'))
+                    exact = [m for m in candidates if row_id and self.normalize_id(m.get('MaterialID')) == row_id]
+                    if exact:
+                        candidates = exact
+                    else:
+                        for field in ('창고', '회사코드'):
+                            selected = self.clean_nan(row.get(field, ''))
+                            if selected:
+                                candidates = [m for m in candidates if self.clean_nan(m.get(field, '')) == selected]
+                    if len(candidates) == 1:
+                        target = self.normalize_id(candidates[0].get('MaterialID'))
+                        if target:
+                            ndt_name_lookup.by_material[target] = ndt_name_lookup.by_material.get(target, 0) + value
+                            continue
+                    ndt_name_lookup.unassigned.append((key, value))
 
         # Filter out zero values for cleaner lookup
-        ndt_name_lookup = {k: v for k, v in ndt_name_lookup.items() if v > 0}
+        for k in list(ndt_name_lookup):
+            if ndt_name_lookup[k] <= 0:
+                del ndt_name_lookup[k]
         print(f"DEBUG: Daily Usage lookup built. NDT totals: {ndt_name_lookup}")
 
     return stock_in_lookup, stock_out_lookup, daily_usage_lookup, daily_name_lookup, ndt_name_lookup
@@ -133,9 +181,9 @@ def stock_breakdown(self, mat, lookups):
     out_qty = abs(stock_out_lookup.get(str_mat_id, 0.0)) if str_mat_id else 0.0
     daily_qty = daily_usage_lookup.get(str_mat_id, 0.0) if str_mat_id else 0.0
 
-    # Fallback to name-based lookup if ID lookup is 0 and name is valid
-    if daily_qty == 0 and mat_name_raw and mat_name_raw.lower() not in ['nan', 'none', ''] and 'daily_name_lookup' in locals():
-        daily_qty = daily_name_lookup.get(mat_name_raw, 0.0)
+    # The lookup contains only unassigned rows with a unique master match.
+    if mat_name_raw:
+        daily_qty += daily_name_lookup.get(mat_name_raw, 0.0)
 
     # [FINAL_STOCK_CALC] Current Stock = Master + In/Out - Site Usage
     ndt_usage = 0.0
@@ -143,8 +191,8 @@ def stock_breakdown(self, mat, lookups):
     if hasattr(self, 'ndt_name_lookup') or 'ndt_name_lookup' in locals():
         lookup_source = ndt_name_lookup if 'ndt_name_lookup' in locals() else self.ndt_name_lookup
         for ndt_key, ndt_val in lookup_source.items():
-            if ndt_key in combined_name:
-                ndt_usage = ndt_val
+            if ndt_key == chemical_key(combined_name):
+                ndt_usage = lookup_source.by_material.get(str_mat_id, 0)
                 # If we found a specific NDT chemical (e.g. via model name), 
                 # ensure we don't also subtract generic inspection quantity
                 daily_qty = 0.0 
@@ -186,7 +234,7 @@ def synchronize_legacy_chemicals(row, changes):
                 raise ValueError('구형 약품 사용량 형식을 확인해주세요.')
         for name, amount in edited.items():
             for key in list(legacy):
-                if name in str(key):
+                if chemical_key(key) == name:
                     del legacy[key]
             legacy[name] = float(amount or 0)
         updates[column] = json.dumps(legacy, ensure_ascii=False)

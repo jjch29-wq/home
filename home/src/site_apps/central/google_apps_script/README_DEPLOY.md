@@ -1,3 +1,7 @@
+> 최신 모바일 작업 목록 버전은 [MOBILE_UPGRADE.md](MOBILE_UPGRADE.md)를 따르세요.
+> 현재 소스는 모듈로 분리돼 있으므로 아래 구형 안내대로 Code.gs와 index.html 원본만 복사하면 동작하지 않습니다.
+> tools/package_central_mobile.py가 생성한 outputs/central-mobile-gas/의 두 합본 파일을 사용하세요.
+
 # 한국지역난방공사 중앙지사 24시간 모바일 클라우드 시스템 배포 가이드
 
 본 가이드는 **사무실 PC가 꺼져 있어도 스마트폰에서 24시간 365일 언제든 작업일보를 저장**할 수 있는 100% 무료 구글 클라우드(Google Apps Script + Google Sheets) 배포 방법입니다.

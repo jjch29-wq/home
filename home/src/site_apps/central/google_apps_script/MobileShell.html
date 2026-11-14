@@ -1,0 +1,780 @@
+<style>
+  :root {
+    --central-blue: #174a8b;
+  }
+
+  body {
+    background: #eef3f8;
+    padding-bottom: 90px !important;
+  }
+
+  main {
+    max-width: 1000px !important;
+  }
+
+  .workspace-panel {
+    display: none;
+    gap: 16px;
+  }
+
+  .workspace-panel.active {
+    display: grid;
+  }
+
+  #workspace-local-status {
+    grid-column: 1/-1;
+  }
+
+  .workspace-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    background: #fff;
+    border-top: 1px solid #cbd5e1;
+    display: flex;
+    padding: 10px 8px max(10px, env(safe-area-inset-bottom));
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .workspace-nav button {
+    flex: 1;
+    max-width: 180px;
+    min-height: 44px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+  }
+
+  .workspace-nav button[aria-selected=true] {
+    background: var(--central-blue);
+    color: white;
+  }
+
+  .workspace-card {
+    background: white;
+    border: 1px solid #dbe3ee;
+    padding: 18px;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px #122d4b08;
+  }
+
+  .workspace-card h2 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #17375b;
+    margin-bottom: 12px;
+  }
+
+  .workspace-card>summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 800;
+    color: #17375b;
+  }
+
+  .workspace-check {
+    display: flex !important;
+    grid-template-columns: auto 1fr !important;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0;
+    font-size: 13px !important;
+  }
+
+  .workspace-check input {
+    min-height: auto !important;
+    width: 18px;
+    height: 18px;
+  }
+
+  .workspace-card p {
+    font-size: 13px;
+    color: #475569;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .workspace-card button {
+    min-height: 44px;
+    padding: 8px 14px;
+    background: #eaf0f9;
+    color: #174a8b;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    margin: 6px 6px 0 0;
+  }
+
+  .workspace-card button.primary {
+    background: #174a8b;
+    color: white;
+  }
+
+  .workspace-card button:disabled {
+    opacity: .5;
+  }
+
+  .workspace-filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .workspace-filters label {
+    display: grid;
+    gap: 5px;
+    font-size: 12px;
+    color: #475569;
+  }
+
+  .workspace-filters input,
+  .workspace-filters select {
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 8px;
+    background: #f8fafc;
+  }
+
+  .workspace-status {
+    font-size: 12px;
+    background: #e8f0fa;
+    color: #174a8b;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+
+  .workspace-empty {
+    padding: 25px;
+    text-align: center;
+    color: #64748b;
+    font-size: 14px;
+  }
+
+  .progress-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .progress-kpi-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .progress-kpi-card h3 {
+    font-size: 12px;
+    font-weight: 800;
+    color: #475569;
+    margin-bottom: 4px;
+  }
+
+  .progress-kpi-card .kpi-num {
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.2;
+  }
+
+  .progress-kpi-card .kpi-sub {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .progress-bar-bg {
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  .progress-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 12px;
+    border-radius: 12px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+  }
+
+  .progress-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .progress-table th,
+  .progress-table td {
+    padding: 8px 6px;
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #f1f5f9;
+  }
+
+  .progress-table th {
+    background: #f1f5f9;
+    color: #334155;
+    font-weight: 800;
+    text-align: center;
+    position: sticky;
+    top: 0;
+  }
+
+  .progress-table td:nth-child(1),
+  .progress-table td:nth-child(2) {
+    text-align: left;
+    font-weight: 700;
+  }
+
+  .progress-table tr.subtotal {
+    background: #e8f0fe;
+    font-weight: 800;
+  }
+
+  @media(min-width:760px) {
+    #workspace-input {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+
+    #workspace-input>#edit-banner,
+    #workspace-input>div:last-child {
+      grid-column: 1/-1;
+    }
+
+    .workspace-filters {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .progress-kpi-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .progress-billing-card {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    padding: 14px;
+    margin: 14px 0;
+  }
+
+  .progress-billing-total {
+    font-size: 22px;
+    font-weight: 900;
+    color: #1e40af;
+    line-height: 1.2;
+  }
+
+  .billing-sub-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 10px 0;
+  }
+
+  .billing-sub-item {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+
+  .billing-sub-item .title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+  }
+
+  .billing-sub-item .amount {
+    font-size: 13px;
+    font-weight: 900;
+    color: #1e293b;
+    margin-top: 2px;
+  }
+
+  .billing-toggle-btn {
+    width: 100%;
+    padding: 10px 12px;
+    background: #e2e8f0;
+    color: #1e293b;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 12px;
+    text-align: center;
+    cursor: pointer;
+    border: none;
+    margin-top: 8px;
+  }
+
+  .billing-toggle-btn:active {
+    background: #cbd5e1;
+  }
+
+  @media(min-width:760px) {
+    #workspace-input {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+
+    #workspace-input>#edit-banner,
+    #workspace-input>div:last-child {
+      grid-column: 1/-1;
+    }
+
+    .workspace-filters {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .progress-kpi-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .billing-sub-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+</style>
+<script>
+  const WORKSPACE_STORAGE_KEY = 'central-mobile-workspace-v1';
+  let workspacePending = [], workspaceEditingId = null, workspaceSaving = false, workspacePage = 'input';
+  let workspaceStorageOK = true, workspaceDraft = null, workspaceTimer = null, workspaceSkipDraftCapture = false;
+  function workspaceId() { return window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2); }
+  function workspaceNode(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+  function workspaceButton(text, fn, primary = false) { const b = workspaceNode('button', text, primary ? 'primary' : ''); b.type = 'button'; b.addEventListener('click', fn); return b; }
+  function workspaceSelectValue(select, value) { if (!select) return; if (!Array.from(select.options).some(o => o.value === String(value))) select.add(new Option('(기존 저장값) ' + value, value)); select.value = value; }
+  function workspaceCapture() {
+    const fields = {}; document.querySelectorAll('#workspace-input input[id],#workspace-input select[id],#workspace-input textarea[id]').forEach(e => { fields[e.id] = e.type === 'checkbox' ? e.checked : (e.multiple ? Array.from(e.selectedOptions).map(o => o.value) : e.value); });
+    return { fields, method: selectedMethod, workers: JSON.parse(JSON.stringify(workerRows)), editing: currentEditingRecord, editingQueue: workspaceEditingId };
+  }
+  function workspaceRestore(draft) {
+    if (!draft) return;
+    if (draft.method) switchMethod(draft.method);
+    Object.entries(draft.fields || {}).forEach(([id, value]) => { const e = document.getElementById(id); if (!e) return; if (e.type === 'checkbox') e.checked = Boolean(value); else if (e.tagName === 'SELECT' && e.multiple) setMethodValues(e, Array.isArray(value) ? value : [value]); else if (e.tagName === 'SELECT') workspaceSelectValue(e, value); else e.value = value; });
+    if (draft.workers) { workerRows = JSON.parse(JSON.stringify(draft.workers)); renderWorkers(); }
+    workspaceEditingId = draft.editingQueue || null;
+    if (draft.editing) { currentEditingRecord = draft.editing; document.getElementById('edit-banner').classList.remove('hidden'); }
+    isManualQty = true;
+    restoreMaterialConnection(draft.fields?.['workspace-material-id'] || '', Boolean(draft.fields?.['workspace-manual-link']));
+  }
+  function workspacePersist() {
+    workspaceDraft = workspaceSkipDraftCapture ? null : workspaceCapture();
+    try { localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ pending: workspacePending, draft: workspaceDraft })); workspaceStorageOK = true; }
+    catch (error) { workspaceStorageOK = false; }
+    const status = document.getElementById('workspace-local-status');
+    if (status) status.textContent = workspaceStorageOK ? '이 기기에 임시저장됩니다. 클라우드 저장은 작업 목록에서 완료하세요.' : '기기 임시저장을 사용할 수 없습니다. 화면을 닫기 전에 클라우드에 저장하세요.';
+  }
+  function workspaceSwitch(page) {
+    workspacePage = page; document.querySelectorAll('.workspace-panel').forEach(p => p.classList.toggle('active', p.id === 'workspace-' + page));
+    document.querySelectorAll('.workspace-nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.page === page)));
+    if (page === 'pending') workspaceRenderPending();
+    if (page === 'progress') workspaceLoadProgress();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  async function workspaceCall(name, payload) {
+    if (typeof google === 'undefined' || !google.script || !google.script.run) throw new Error('24시간 웹앱 주소에서 접속하세요.');
+    const result = await new Promise((resolve, reject) => google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[name](payload));
+    return typeof result === 'string' ? JSON.parse(result) : result;
+  }
+  function workspaceValidate(payload) {
+    if (!payload.date || !payload.method) throw new Error('날짜와 검사방법을 확인하세요.');
+    for (const key of ['qty', 'unit_price', 'travel_cost', 'total_fee']) if (!Number.isFinite(Number(payload[key])) || Number(payload[key]) < 0) throw new Error('수량·금액을 확인하세요.');
+    if (payload.method === 'RT' && !Number.isInteger(Number(payload.qty))) throw new Error('RT 매수는 정수로 입력하세요.');
+    if (workspacePending.length >= 30 && !workspaceEditingId) throw new Error('작업 목록은 최대 30건입니다. 먼저 저장하세요.');
+  }
+  function workspaceQueueCurrent() {
+    if (workspaceSaving) return;
+    try {
+      workspaceSkipDraftCapture = false;
+      const p = JSON.parse(JSON.stringify(getFormData())); workspaceValidate(p);
+      p.material_id = materialConnectionForSave(p.material);
+      p.client_request_id = workspaceEditingId || workspaceId();
+      const index = workspacePending.findIndex(r => r.client_request_id === p.client_request_id);
+      if (index >= 0) workspacePending[index] = p; else workspacePending.push(p);
+      workspaceEditingId = null; workspacePersist(); workspaceRenderPending(); workspaceSwitch('pending'); showToast('작업 목록에 추가했습니다. 클라우드 저장을 눌러 완료하세요.');
+    } catch (error) { showToast(error.message, true); }
+  }
+  function workspaceRenderPending() {
+    const list = document.getElementById('workspace-pending-list'); if (!list) return; list.replaceChildren();
+    const total = workspacePending.reduce((sum, r) => sum + Number(r.total_fee || 0), 0);
+    document.getElementById('workspace-pending-summary').textContent = workspacePending.length + '건 · 검사금액 ' + total.toLocaleString() + '원';
+    if (!workspacePending.length) list.append(workspaceNode('p', '등록할 작업 목록이 비어 있습니다.', 'workspace-empty'));
+    workspacePending.forEach((r, index) => {
+      const card = workspaceNode('article', undefined, 'workspace-card'); card.append(workspaceNode('h2', (index + 1) + '. ' + r.date + ' · ' + r.method));
+      card.append(workspaceNode('p', r.company + ' · ' + r.loc_type + '\n' + r.qty + ' ' + r.unit + ' · ' + Number(r.total_fee || 0).toLocaleString() + '원\n작업자: ' + r.workers.map(w => w.user).join(', ')));
+      const edit = workspaceButton('수정', () => { startEditRecord({ ...r, worker_list: r.workers }); cancelEditMode(); workspaceEditingId = r.client_request_id; workspaceSkipDraftCapture = false; workspaceSwitch('input'); workspacePersist(); });
+      const remove = workspaceButton('목록에서 제외', () => { if (!confirm('이 작업을 대기 목록에서 제외할까요?')) return; workspacePending = workspacePending.filter(x => x.client_request_id !== r.client_request_id); workspacePersist(); workspaceRenderPending(); });
+      edit.disabled = remove.disabled = workspaceSaving; card.append(edit, remove); list.append(card);
+    });
+    const save = document.getElementById('workspace-save-batch'); save.disabled = workspaceSaving || !workspacePending.length;
+    save.textContent = workspaceSaving ? '클라우드 저장 중…' : '목록 ' + workspacePending.length + '건 클라우드 저장';
+  }
+  async function workspaceSavePending() {
+    if (workspaceSaving || !workspacePending.length) return;
+    workspaceSaving = true; workspacePersist(); workspaceRenderPending();
+    try {
+      const response = await workspaceCall('saveRecordsBatch', { records: workspacePending });
+      const saved = new Set((response.results || []).filter(r => r.status === 'success').map(r => r.request_id));
+      workspacePending = workspacePending.filter(r => !saved.has(r.client_request_id));
+      workspacePersist();
+      if (workspacePending.length) throw new Error(saved.size + '건 저장, ' + workspacePending.length + '건 대기. ' + ((response.results || []).find(r => r.status !== 'success') || {}).detail);
+      showToast(saved.size + '건을 클라우드에 저장했습니다.'); loadRecentRecords();
+    } catch (error) { showToast('목록을 보존했습니다. ' + error.message, true); }
+    finally { workspaceSaving = false; workspaceRenderPending(); }
+  }
+  function workspaceFilter(parent, id, label, type = 'text', choices) {
+    const wrapper = workspaceNode('label', label); const e = document.createElement(choices ? 'select' : 'input'); e.id = id;
+    if (choices) choices.forEach(([value, text]) => e.add(new Option(text, value))); else e.type = type;
+    wrapper.append(e); parent.append(wrapper); return e;
+  }
+  async function workspaceQuery(append = false) {
+    const area = document.getElementById('workspace-query-list'), status = document.getElementById('workspace-query-status');
+    const offset = append ? Number(area.dataset.offset || 0) : 0; status.textContent = '조회 중…';
+    try {
+      const response = await workspaceCall('queryRecords', { start: document.getElementById('workspace-query-start').value, end: document.getElementById('workspace-query-end').value, company: document.getElementById('workspace-query-company').value, method: document.getElementById('workspace-query-method').value, search: document.getElementById('workspace-query-search').value, offset });
+      if (!append) area.replaceChildren();
+      response.records.forEach(record => {
+        const card = workspaceNode('article', undefined, 'workspace-card'); card.append(workspaceNode('h2', record.date + ' · ' + record.method), workspaceNode('p', record.company + ' · ' + record.loc_type + '\n' + record.qty + ' ' + record.unit + ' · ' + Number(record.total_fee || 0).toLocaleString() + '원\n' + record.workers));
+        card.append(workspaceButton('입력 화면에 불러오기', () => { if (!confirm('현재 입력을 선택한 기록으로 교체할까요? 작업 대기 목록은 유지됩니다.')) return; startEditRecord(record); workspaceSwitch('input'); workspacePersist(); }));
+        const details = document.createElement('details'); details.append(workspaceNode('summary', '메모·차량 상세'), workspaceNode('p', '메모: ' + (record.note || '') + '\n차량: ' + (record.vehicle_no || '') + '\n주행거리: ' + (record.mileage || ''))); card.append(details); area.append(card);
+      });
+      area.dataset.offset = offset + response.records.length; status.textContent = '전체 ' + response.total + '건 · 표시 ' + area.children.length + '건';
+      document.getElementById('workspace-query-more').disabled = Number(area.dataset.offset) >= response.total;
+    } catch (error) { status.textContent = '조회 실패: ' + error.message; }
+  }
+  async function workspaceInventory(append = false) {
+    const area = document.getElementById('workspace-stock-list'), status = document.getElementById('workspace-stock-status');
+    const offset = append ? Number(area.dataset.offset || 0) : 0; status.textContent = '재고 조회 중…';
+    try {
+      const response = await workspaceCall('getInventory', { search: document.getElementById('workspace-stock-search').value, offset });
+      if (!append) area.replaceChildren();
+      response.records.forEach(row => { const card = workspaceNode('article', undefined, 'workspace-card'); card.append(workspaceNode('h2', row.name + (row.model ? ' · ' + row.model : '')), workspaceNode('p', row.company + ' / ' + row.warehouse + '\n입고 ' + row.incoming + ' · 사용 ' + row.used + ' · 재고 ' + row.stock + ' ' + row.unit + (row.sn ? '\nS/N ' + row.sn : ''))); area.append(card); });
+      area.dataset.offset = offset + response.records.length;
+      status.textContent = 'PC 기준 ' + (response.generated_at || '미게시') + ' · 전체 ' + response.total + '건. 실시간 재고가 아니며 모바일 저장 후 PC에서 재집계·게시해야 합니다.' + (response.unassigned_chemicals ? ' 약품 차감 보류 ' + response.unassigned_chemicals + '건 포함.' : '');
+      document.getElementById('workspace-stock-more').disabled = Number(area.dataset.offset) >= response.total;
+    } catch (error) { status.textContent = '조회 실패: ' + error.message; }
+  }
+  async function workspaceLoadProgress(targetDate) {
+    const dateInput = document.getElementById('workspace-progress-date');
+    if (!targetDate && dateInput) targetDate = dateInput.value;
+    if (!targetDate) {
+      targetDate = document.getElementById('input-date')?.value || new Date().toISOString().slice(0, 10);
+    }
+    if (dateInput) dateInput.value = targetDate;
+
+    const status = document.getElementById('workspace-progress-status');
+    const kpiArea = document.getElementById('workspace-progress-kpi');
+    const tableArea = document.getElementById('workspace-progress-table-wrap');
+    if (status) status.textContent = '공정 현황 집계 중…';
+
+    try {
+      const data = await workspaceCall('getProgressSummary', targetDate);
+      if (!data || data.status !== 'success') throw new Error((data && data.detail) || '조회 실패');
+
+      if (status) {
+        status.textContent = `기준일: ${data.date}${data.weather ? ' (' + data.weather + ')' : ''} · PC 작업/감독일보 '1. 작업 물량 및 누계 현황' 실시간 연동`;
+      }
+
+      const note = document.getElementById('workspace-progress-note');
+      if (note) {
+        if (data.remarks) {
+          note.textContent = '📝 비고/특이사항: ' + data.remarks;
+          note.hidden = false;
+        } else {
+          note.hidden = true;
+        }
+      }
+
+      if (kpiArea && data.kpi) {
+        kpiArea.innerHTML = `
+        <div class="progress-kpi-grid">
+          <div class="progress-kpi-card" style="border-left:4px solid #2563eb;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3>PAUT 공정률</h3>
+              <span style="font-size:11px;font-weight:900;color:#1d4ed8;background:#dbeafe;padding:2px 6px;border-radius:6px;">${data.kpi.paut_rate}%</span>
+            </div>
+            <div class="kpi-num" style="color:#1d4ed8;">${data.kpi.paut_total} <span style="font-size:12px;font-weight:normal;color:#64748b;">M</span></div>
+            <div class="kpi-sub">예상 ${data.kpi.paut_expected}M</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="background:#2563eb;width:${Math.min(100, Math.max(0, Number(data.kpi.paut_rate)))}%;"></div></div>
+          </div>
+          <div class="progress-kpi-card" style="border-left:4px solid #9333ea;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3>RT 공정률</h3>
+              <span style="font-size:11px;font-weight:900;color:#7e22ce;background:#f3e8ff;padding:2px 6px;border-radius:6px;">${data.kpi.rt_rate}%</span>
+            </div>
+            <div class="kpi-num" style="color:#7e22ce;">${data.kpi.rt_total} <span style="font-size:12px;font-weight:normal;color:#64748b;">매</span></div>
+            <div class="kpi-sub">예상 ${data.kpi.rt_expected}매</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="background:#9333ea;width:${Math.min(100, Math.max(0, Number(data.kpi.rt_rate)))}%;"></div></div>
+          </div>
+          <div class="progress-kpi-card" style="border-left:4px solid #059669;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3>MT 공정률</h3>
+              <span style="font-size:11px;font-weight:900;color:#047857;background:#d1fae5;padding:2px 6px;border-radius:6px;">${data.kpi.mt_rate}%</span>
+            </div>
+            <div class="kpi-num" style="color:#047857;">${data.kpi.mt_total} <span style="font-size:12px;font-weight:normal;color:#64748b;">P</span></div>
+            <div class="kpi-sub">예상 ${data.kpi.mt_expected}P</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="background:#059669;width:${Math.min(100, Math.max(0, Number(data.kpi.mt_rate)))}%;"></div></div>
+          </div>
+          <div class="progress-kpi-card" style="border-left:4px solid #d97706;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <h3>PT 공정률</h3>
+              <span style="font-size:11px;font-weight:900;color:#b45309;background:#fef3c7;padding:2px 6px;border-radius:6px;">${data.kpi.pt_rate}%</span>
+            </div>
+            <div class="kpi-num" style="color:#b45309;">${data.kpi.pt_total} <span style="font-size:12px;font-weight:normal;color:#64748b;">P</span></div>
+            <div class="kpi-sub">예상 ${data.kpi.pt_expected}P</div>
+            <div class="progress-bar-bg"><div class="progress-bar-fill" style="background:#d97706;width:${Math.min(100, Math.max(0, Number(data.kpi.pt_rate)))}%;"></div></div>
+          </div>
+        </div>
+      `;
+      }
+
+      // 2. 기성 정산 요약 및 일별 상세 목록 렌더링
+      const billingArea = document.getElementById('workspace-progress-billing');
+      if (billingArea && data.billing) {
+        const b = data.billing;
+        const allBillingRecords = data.billing_records || [];
+        window._currentBillingRecords = allBillingRecords;
+
+        // 시공업체 목록 추출
+        const companies = ['전체'];
+        allBillingRecords.forEach(r => { if (r.company && !companies.includes(r.company)) companies.push(r.company); });
+
+        billingArea.innerHTML = `
+        <div class="progress-billing-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <span style="font-size:12px;font-weight:800;color:#475569;">💳 누적 기성 공급가액 (NDT)</span>
+              <div class="progress-billing-total">${Number(b.total_amount || 0).toLocaleString()} <span style="font-size:14px;font-weight:700;color:#64748b;">원</span></div>
+            </div>
+            <span style="font-size:11px;font-weight:800;background:#dbeafe;color:#1e40af;padding:3px 8px;border-radius:8px;">PC 일보 연동</span>
+          </div>
+
+          <div class="billing-sub-grid">
+            <div class="billing-sub-item">
+              <div class="title">PAUT 기성 (${Number(b.paut_qty || 0).toFixed(4)}M)</div>
+              <div class="amount">${Number(b.paut_amount || 0).toLocaleString()}원</div>
+            </div>
+            <div class="billing-sub-item">
+              <div class="title">RT 기성 (${Number(b.rt_qty || 0)}매)</div>
+              <div class="amount">${Number(b.rt_amount || 0).toLocaleString()}원</div>
+            </div>
+            <div class="billing-sub-item">
+              <div class="title">MT 기성 (${Number(b.mt_qty || 0).toFixed(4)}M)</div>
+              <div class="amount">${Number(b.mt_amount || 0).toLocaleString()}원</div>
+            </div>
+            <div class="billing-sub-item">
+              <div class="title">PT 기성 (${Number(b.pt_qty || 0).toFixed(4)}M)</div>
+              <div class="amount">${Number(b.pt_amount || 0).toLocaleString()}원</div>
+            </div>
+          </div>
+
+          <button type="button" id="btn-toggle-billing-detail" class="billing-toggle-btn">
+            ▼ 일별 기성 정산 상세 목록 (${b.records_count}건) 펼치기
+          </button>
+
+          <div id="workspace-billing-detail-wrap" style="display:none;margin-top:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <label style="font-size:11px;font-weight:700;color:#475569;">
+                시공업체 필터:
+                <select id="select-billing-company-filter" style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:11px;font-weight:700;margin-left:4px;">
+                  ${companies.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+              </label>
+              <span id="billing-filter-count" style="font-size:11px;color:#64748b;">${allBillingRecords.length}건 표시</span>
+            </div>
+
+            <div class="progress-table-wrap" style="max-height:360px;overflow-y:auto;">
+              <table class="progress-table" id="billing-detail-table">
+                <thead>
+                  <tr>
+                    <th>일자</th>
+                    <th>업체명</th>
+                    <th>구간/위치</th>
+                    <th>종류</th>
+                    <th>형태</th>
+                    <th>자재</th>
+                    <th>실물량</th>
+                    <th>단위</th>
+                    <th>단가</th>
+                    <th>공급가액</th>
+                  </tr>
+                </thead>
+                <tbody id="billing-detail-tbody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+        function renderBillingTbody(filterComp) {
+          const tbody = document.getElementById('billing-detail-tbody');
+          if (!tbody) return;
+          const filtered = filterComp === '전체' ? allBillingRecords : allBillingRecords.filter(r => r.company === filterComp);
+          document.getElementById('billing-filter-count').textContent = filtered.length + '건 표시';
+          tbody.innerHTML = filtered.map(r => `
+          <tr>
+            <td>${r.date || '-'}</td>
+            <td>${r.company || '-'}</td>
+            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;" title="${r.loc || ''}">${r.loc || '-'}</td>
+            <td><strong>${r.ndt_type || '-'}</strong></td>
+            <td>${r.work_time || '-'}</td>
+            <td>${r.material_type || '-'}</td>
+            <td>${Number(r.qty || 0).toFixed(4)}</td>
+            <td>${r.unit || 'M'}</td>
+            <td>${Number(r.unit_price || 0).toLocaleString()}</td>
+            <td style="font-weight:bold;color:#1e3a8a;">${Number(r.subtotal || 0).toLocaleString()}</td>
+          </tr>
+        `).join('');
+        }
+
+        renderBillingTbody('전체');
+
+        const toggleBtn = document.getElementById('btn-toggle-billing-detail');
+        const detailWrap = document.getElementById('workspace-billing-detail-wrap');
+        if (toggleBtn && detailWrap) {
+          toggleBtn.addEventListener('click', () => {
+            const isHidden = detailWrap.style.display === 'none';
+            detailWrap.style.display = isHidden ? 'block' : 'none';
+            toggleBtn.textContent = isHidden ? `▲ 일별 기성 정산 상세 목록 (${b.records_count}건) 접기` : `▼ 일별 기성 정산 상세 목록 (${b.records_count}건) 펼치기`;
+          });
+        }
+
+        const compSelect = document.getElementById('select-billing-company-filter');
+        if (compSelect) {
+          compSelect.addEventListener('change', (e) => {
+            renderBillingTbody(e.target.value);
+          });
+        }
+      }
+
+      if (tableArea && data.rows) {
+        const rowsHtml = data.rows.map(r => {
+          const trClass = r.is_subtotal ? 'class="subtotal"' : '';
+          const rateBadge = r.rate ? (Number(r.rate) >= 100 ? `<span style="background:#dcfce7;color:#15803d;font-weight:bold;padding:2px 4px;border-radius:4px;">${r.rate}%</span>` : `<span style="font-weight:bold;color:#334155;">${r.rate}%</span>`) : '-';
+          const defectBadge = r.defects ? `<span style="color:#e11d48;font-weight:bold;">${r.defects}${r.reject_rate ? ' (' + r.reject_rate + '%)' : ''}</span>` : '-';
+          return `
+          <tr ${trClass}>
+            <td>${r.method}</td>
+            <td>${r.spec}</td>
+            <td>${r.expected || '-'}</td>
+            <td>${r.prev || '-'}</td>
+            <td style="${r.today ? 'color:#2563eb;font-weight:bold;' : ''}">${r.today || '-'}</td>
+            <td style="font-weight:bold;color:#0f172a;">${r.total || '-'}</td>
+            <td>${rateBadge}</td>
+            <td>${defectBadge}</td>
+          </tr>
+        `;
+        }).join('');
+
+        tableArea.innerHTML = `
+        <table class="progress-table">
+          <thead>
+            <tr>
+              <th>방법</th>
+              <th>규격</th>
+              <th>예상량</th>
+              <th>전일누계</th>
+              <th>금일작업</th>
+              <th>총누계</th>
+              <th>공정률</th>
+              <th>불량(%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      `;
+      }
+    } catch (err) {
+      if (status) status.textContent = '공정 현황 집계 오류: ' + err.message;
+    }
+  }
+  (function workspaceInit() {
+    const main = document.querySelector('main'), history = document.getElementById('recent-list').parentElement;
+    const input = workspaceNode('section', undefined, 'workspace-panel active'); input.id = 'workspace-input';
+    Array.from(main.children).filter(e => e !== history).forEach(e => input.append(e)); main.prepend(input);
+    const status = workspaceNode('p', undefined, 'workspace-status'); status.id = 'workspace-local-status'; input.prepend(status);
+    const warehouseWrap = workspaceNode('div', undefined, 'workspace-card'); warehouseWrap.id = 'workspace-warehouse-wrap'; warehouseWrap.hidden = true;
+    warehouseWrap.append(workspaceNode('h2', '동일 자재의 창고 선택'));
+    const warehouseFields = workspaceNode('div', undefined, 'workspace-filters'); warehouseWrap.append(warehouseFields);
+    workspaceFilter(warehouseFields, 'workspace-warehouse', '창고 · 품목', 'text', [['', '창고·품목을 선택하세요']]);
+    warehouseWrap.append(workspaceNode('p', '같은 자재가 여러 창고에 있어 출고 기준 품목을 선택해야 합니다.', 'workspace-status'));
+    input.insertBefore(warehouseWrap, input.lastElementChild);
+
+    const mapping = document.createElement('details'); mapping.className = 'workspace-card'; mapping.style.gridColumn = '1 / -1';
+    mapping.append(workspaceNode('summary', '고급 설정 · 재고 수동 연결'));
+    const manualLabel = workspaceNode('label', undefined, 'workspace-check');
+    const manual = document.createElement('input'); manual.type = 'checkbox'; manual.id = 'workspace-manual-link';
+    manualLabel.append(manual, workspaceNode('span', '자동 연결을 사용하지 않고 품목을 직접 지정'));
+    mapping.append(manualLabel);
+    const mappingFields = workspaceNode('div', undefined, 'workspace-filters'); mappingFields.id = 'workspace-manual-fields'; mappingFields.hidden = true; mapping.append(mappingFields);
+    workspaceFilter(mappingFields, 'workspace-material-id', '품목 · 모델 · 창고', 'text', [['', '연결 안 함']]);
+    mapping.append(workspaceNode('p', '일반 입력에서는 자재 선택에 따라 자동 연결됩니다. 기존 기록 복원이나 예외 품목에만 사용하세요.', 'workspace-status'));
+    input.insertBefore(mapping, input.lastElementChild);
+    refreshMethodChoices(selectedMethod);
+    const methodBar = document.querySelector('.method-btn').parentElement;
+    if (!document.querySelector('.method-btn[data-method="UT"]')) { const ut = workspaceButton('UT', () => switchMethod('UT')); ut.className = 'method-btn py-2 text-xs font-bold rounded-lg text-slate-600'; ut.dataset.method = 'UT'; methodBar.append(ut); } methodBar.style.gridTemplateColumns = 'repeat(5,minmax(0,1fr))';
+    const panels = { input }; for (const page of ['pending', 'records', 'progress', 'stock', 'more']) { const section = workspaceNode('section', undefined, 'workspace-panel'); section.id = 'workspace-' + page; main.append(section); panels[page] = section; }
+    panels.records.append(history);
+    const pending = workspaceNode('div', undefined, 'workspace-card'); pending.append(workspaceNode('h2', '등록할 작업 목록'));
+    const sum = workspaceNode('p'); sum.id = 'workspace-pending-summary'; pending.append(sum);
+    const batch = workspaceButton('클라우드 저장', workspaceSavePending, true); batch.id = 'workspace-save-batch'; pending.append(batch); panels.pending.append(pending);
+    const pendingList = workspaceNode('div'); pendingList.id = 'workspace-pending-list'; panels.pending.append(pendingList);
+    const query = workspaceNode('div', undefined, 'workspace-card'); query.append(workspaceNode('h2', '기간별 기록 조회')); const filters = workspaceNode('div', undefined, 'workspace-filters'); query.append(filters);
+    workspaceFilter(filters, 'workspace-query-start', '시작일', 'date'); workspaceFilter(filters, 'workspace-query-end', '종료일', 'date');
+    workspaceFilter(filters, 'workspace-query-company', '업체명', 'text', [['', '전체'], ...(appConfig.companies || []).map(x => [x, x])]);
+    workspaceCall('getHistoricalCompanies').then(companies => { const field = document.getElementById('workspace-query-company'); const value = field.value; field.replaceChildren(new Option('전체', '')); companies.forEach(c => field.add(new Option(c, c))); field.value = value; }).catch(() => { });
+    workspaceFilter(filters, 'workspace-query-method', '검사방법', 'text', [['', '전체'], ...['PAUT', 'RT', 'UT', 'MT', 'PT'].map(x => [x, x])]); workspaceFilter(filters, 'workspace-query-search', '검색어');
+    query.append(workspaceButton('조회', () => workspaceQuery(), true)); const qs = workspaceNode('p', undefined, 'workspace-status'); qs.id = 'workspace-query-status'; query.append(qs); panels.records.prepend(query);
+    const ql = workspaceNode('div'); ql.id = 'workspace-query-list'; panels.records.append(ql); const qm = workspaceButton('다음 50건', () => workspaceQuery(true)); qm.id = 'workspace-query-more'; qm.disabled = true; panels.records.append(qm);
+
+    const progCard = workspaceNode('div', undefined, 'workspace-card'); progCard.append(workspaceNode('h2', '작업 물량 및 공정률 누계 현황'));
+    const progFilters = workspaceNode('div', undefined, 'workspace-filters'); progCard.append(progFilters);
+    const progDateInput = workspaceFilter(progFilters, 'workspace-progress-date', '기준일자 (검사일)', 'date');
+    progDateInput.value = new Date().toISOString().slice(0, 10);
+    progDateInput.addEventListener('change', () => workspaceLoadProgress());
+    progCard.append(workspaceButton('현황 새로고침', () => workspaceLoadProgress(), true));
+    const progStatus = workspaceNode('p', undefined, 'workspace-status'); progStatus.id = 'workspace-progress-status'; progCard.append(progStatus);
+    const progNote = workspaceNode('p', undefined, 'workspace-status'); progNote.id = 'workspace-progress-note'; progNote.hidden = true; progCard.append(progNote);
+    const progKpi = workspaceNode('div'); progKpi.id = 'workspace-progress-kpi'; progCard.append(progKpi);
+    const progBilling = workspaceNode('div'); progBilling.id = 'workspace-progress-billing'; progCard.append(progBilling);
+    const progTableWrap = workspaceNode('div', undefined, 'progress-table-wrap'); progTableWrap.id = 'workspace-progress-table-wrap'; progCard.append(progTableWrap);
+    panels.progress.append(progCard);
+
+    const stock = workspaceNode('div', undefined, 'workspace-card'); stock.append(workspaceNode('h2', '현재 재고 조회')); const sf = workspaceNode('div', undefined, 'workspace-filters'); stock.append(sf); workspaceFilter(sf, 'workspace-stock-search', '자재·모델·창고 검색'); stock.append(workspaceButton('재고 조회', () => workspaceInventory(), true)); const ss = workspaceNode('p', 'PC에서 게시한 기준 시점의 재고를 조회합니다.', 'workspace-status'); ss.id = 'workspace-stock-status'; stock.append(ss); panels.stock.append(stock); const sl = workspaceNode('div'); sl.id = 'workspace-stock-list'; panels.stock.append(sl); const sm = workspaceButton('다음 50건', () => workspaceInventory(true)); sm.id = 'workspace-stock-more'; sm.disabled = true; panels.stock.append(sm);
+    const more = workspaceNode('div', undefined, 'workspace-card'); more.append(workspaceNode('h2', '임시저장·이용 안내'), workspaceNode('p', '입력 → 작업 목록 확인 → 클라우드 저장 순서로 사용하세요.\n작성 중 입력과 대기 목록은 이 기기의 브라우저에 보관됩니다. 통신 실패 후 같은 목록을 재저장해도 요청 식별자로 중복 저장을 방지합니다.\n여러 차량·사진 첨부, 입출고 처리, 기성·예산 편집은 PC에서 진행하세요.'));
+    more.append(workspaceButton('임시 입력 복원', () => { workspaceRestore(workspaceDraft); workspaceSwitch('input'); }), workspaceButton('임시 입력 비우기', () => { if (!confirm('현재 입력의 임시저장을 지울까요? 대기 목록은 유지됩니다.')) return; workspaceDraft = null; workspaceSkipDraftCapture = true; try { localStorage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ pending: workspacePending, draft: null })); } catch (e) { } showToast('임시 입력을 비웠습니다.'); })); panels.more.append(more);
+    const nav = workspaceNode('nav', undefined, 'workspace-nav'); nav.setAttribute('aria-label', '모바일 업무 메뉴');[['input', '입력'], ['pending', '작업 목록'], ['records', '기록 조회'], ['progress', '공정 현황'], ['stock', '재고'], ['more', '더보기']].forEach(([page, label]) => { const b = workspaceButton(label, () => workspaceSwitch(page)); b.dataset.page = page; b.setAttribute('aria-selected', String(page === 'input')); nav.append(b); }); document.body.append(nav);
+    let restoredOnLoad = false;
+    try { const saved = JSON.parse(localStorage.getItem(WORKSPACE_STORAGE_KEY) || 'null'); if (saved) { workspacePending = Array.isArray(saved.pending) ? saved.pending : []; workspaceDraft = saved.draft; if (workspaceDraft) { workspaceRestore(workspaceDraft); restoredOnLoad = true; showToast('임시 입력을 자동 복원했습니다.'); } } } catch (error) { workspaceStorageOK = false; }
+    const autoMaterial = () => { if (manual.checked) manual.checked = false; syncMaterialConnection(); workspaceSkipDraftCapture = false; workspacePersist(); };
+    document.getElementById('select-material')?.addEventListener('change', autoMaterial);
+    document.getElementById('input-custom-mat')?.addEventListener('input', autoMaterial);
+    document.getElementById('workspace-warehouse')?.addEventListener('change', () => { syncMaterialConnection(); workspaceSkipDraftCapture = false; workspacePersist(); });
+    manual.addEventListener('change', () => { syncMaterialConnection(); workspaceSkipDraftCapture = false; workspacePersist(); });
+    document.getElementById('workspace-material-id')?.addEventListener('change', () => { manual.checked = true; syncMaterialConnection(); workspaceSkipDraftCapture = false; workspacePersist(); });
+    input.addEventListener('input', () => { workspaceSkipDraftCapture = false; clearTimeout(workspaceTimer); workspaceTimer = setTimeout(workspacePersist, 350); }); input.addEventListener('change', () => { workspaceSkipDraftCapture = false; workspacePersist(); });
+    window.addEventListener('beforeunload', e => { workspacePersist(); if (workspacePending.length || !workspaceStorageOK) { e.preventDefault(); e.returnValue = ''; } });
+    window.addEventListener('online', () => showToast('통신이 연결되었습니다. 작업 목록에서 저장을 다시 눌러 주세요.'));
+    workspaceRenderPending(); status.textContent = workspaceStorageOK ? (restoredOnLoad ? '이 기기의 임시 입력을 자동 복원했습니다.' : '이 기기에 임시저장됩니다. 클라우드 저장은 작업 목록에서 완료하세요.') : '임시저장을 사용할 수 없습니다. 화면을 닫기 전에 클라우드에 저장하세요.';
+  })();
+</script>

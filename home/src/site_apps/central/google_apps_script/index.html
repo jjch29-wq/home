@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>한국지역난방공사 중앙지사 24시간 모바일 현장 입력</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,11 +15,36 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
-    input, select, button {
+
+    input,
+    select,
+    button {
       touch-action: manipulation;
+    }
+
+    .mobile-multi-native {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .mobile-multi-trigger {
+      min-height: 42px;
+      text-align: left;
+    }
+
+    .mobile-multi-dialog {
+      max-height: min(72vh, 620px);
     }
   </style>
 </head>
+
 <body class="bg-slate-100 text-slate-800 pb-28">
 
   <!-- Mobile Top App Bar (Central Blue Theme) -->
@@ -39,7 +66,8 @@
   <main class="max-w-md mx-auto p-4 space-y-4">
 
     <!-- Edit Mode Indicator Banner (Hidden by default) -->
-    <div id="edit-banner" class="hidden bg-amber-500 text-white rounded-2xl shadow-lg p-3.5 flex items-center justify-between border-2 border-amber-600 animate-pulse">
+    <div id="edit-banner"
+      class="hidden bg-amber-500 text-white rounded-2xl shadow-lg p-3.5 flex items-center justify-between border-2 border-amber-600 animate-pulse">
       <div class="flex items-center space-x-2">
         <i data-lucide="edit-3" class="w-5 h-5 text-amber-100"></i>
         <div>
@@ -47,7 +75,8 @@
           <p id="edit-banner-desc" class="text-xs text-amber-100 font-medium truncate max-w-[200px]"></p>
         </div>
       </div>
-      <button type="button" id="btn-cancel-edit" class="px-3 py-1.5 bg-white text-amber-800 rounded-xl text-xs font-black shadow hover:bg-amber-50 active:scale-95 transition">
+      <button type="button" id="btn-cancel-edit"
+        class="px-3 py-1.5 bg-white text-amber-800 rounded-xl text-xs font-black shadow hover:bg-amber-50 active:scale-95 transition">
         수정 취소
       </button>
     </div>
@@ -58,13 +87,15 @@
         <span class="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
           <i data-lucide="building-2" class="w-4 h-4"></i> 공사 구분 및 기본 정보
         </span>
-        <span id="weekday-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-medium text-slate-600">오늘</span>
+        <span id="weekday-badge"
+          class="text-xs px-2 py-0.5 rounded-full bg-slate-100 font-medium text-slate-600">오늘</span>
       </div>
 
       <!-- 업체명 / 발주처 -->
       <div>
         <label class="block text-xs font-bold text-slate-700 mb-1">업체명 (발주처)</label>
-        <select id="select-company" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="select-company"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="한국지역난방공사 중앙지사" selected>한국지역난방공사 중앙지사</option>
           <option value="한국지역난방공사">한국지역난방공사</option>
           <option value="중앙지사">중앙지사</option>
@@ -75,7 +106,8 @@
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">공사 구분</label>
-          <select id="select-loc-type" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="select-loc-type"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="열수송관" selected>열수송관</option>
             <option value="플랜트(관리소)">플랜트(관리소)</option>
             <option value="열배관">열배관</option>
@@ -84,7 +116,8 @@
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">검사 일자</label>
-          <input type="date" id="input-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="date" id="input-date"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
       </div>
 
@@ -96,18 +129,21 @@
         <div class="grid grid-cols-3 gap-1.5">
           <div>
             <label class="block text-[10px] text-slate-500 mb-0.5">핫태핑 차수</label>
-            <select id="hottap-stage" class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold">
+            <select id="hottap-stage"
+              class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold">
               <option value="1차">1차</option>
               <option value="2차">2차</option>
             </select>
           </div>
           <div>
             <label class="block text-[10px] text-slate-500 mb-0.5">핫태핑 개소</label>
-            <input type="number" id="hottap-joints" value="1" min="1" step="1" class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold text-center">
+            <input type="number" id="hottap-joints" value="1" min="1" step="1"
+              class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold text-center">
           </div>
           <div>
             <label class="block text-[10px] text-slate-500 mb-0.5">핫태핑 관경</label>
-            <input type="text" id="hottap-pipe" placeholder="예: 250A" class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold">
+            <input type="text" id="hottap-pipe" placeholder="예: 250A"
+              class="w-full bg-white border border-amber-300 rounded-lg p-1.5 text-xs font-bold">
           </div>
         </div>
       </div>
@@ -125,10 +161,14 @@
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1.5">검사 방법 (Method)</label>
         <div class="grid grid-cols-4 gap-1.5 p-1 bg-slate-100 rounded-xl" id="method-buttons">
-          <button type="button" data-method="PAUT" class="method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition">PAUT</button>
-          <button type="button" data-method="RT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">RT</button>
-          <button type="button" data-method="MT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
-          <button type="button" data-method="PT" class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
+          <button type="button" data-method="PAUT"
+            class="method-btn py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm transition">PAUT</button>
+          <button type="button" data-method="RT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">RT</button>
+          <button type="button" data-method="MT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">MT</button>
+          <button type="button" data-method="PT"
+            class="method-btn py-2 text-xs font-bold rounded-lg text-slate-600 hover:bg-white transition">PT</button>
         </div>
       </div>
 
@@ -136,11 +176,13 @@
       <div>
         <div class="flex items-center justify-between mb-1">
           <label class="block text-xs font-bold text-slate-700">검사품명 (Item Name)</label>
-          <button type="button" id="btn-toggle-custom-item" class="text-[11px] text-blue-600 font-semibold hover:underline">
+          <button type="button" id="btn-toggle-custom-item"
+            class="text-[11px] text-blue-600 font-semibold hover:underline">
             ✏️ 직접 입력
           </button>
         </div>
-        <select id="select-item-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="select-item-name"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="Pipe" selected>Pipe</option>
           <option value="Piping">Piping</option>
           <option value="Tank">Tank</option>
@@ -150,28 +192,34 @@
           <option value="Structure">Structure</option>
           <option value="기타">기타</option>
         </select>
-        <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
+        <input type="text" id="input-custom-item" placeholder="검사품명 직접 입력"
+          class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
       </div>
 
       <!-- 자재명 (RT 필름 / 약품) -->
-      <div>
+      <div id="material-input-wrap" class="hidden">
         <div class="flex items-center justify-between mb-1">
           <label class="block text-xs font-bold text-slate-700">자재명 (소모 필름 / 자재)</label>
-          <button type="button" id="btn-toggle-custom-mat" class="text-[11px] text-blue-600 font-semibold hover:underline">
+          <button type="button" id="btn-toggle-custom-mat"
+            class="text-[11px] text-blue-600 font-semibold hover:underline">
             ✏️ 직접 입력
           </button>
         </div>
-        <select id="select-material" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="select-material"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <!-- Populated via JS -->
         </select>
-        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800">
+        <input type="text" id="input-custom-mat" placeholder="자재명 직접 입력"
+          class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800">
+        <p id="material-history-notice" class="hidden mt-1.5 text-[10px] text-amber-700">과거 기록에 저장된 자재명을 보존하여 표시합니다.</p>
       </div>
 
       <!-- 적용코드 & 성적서번호 -->
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">적용코드 (Code)</label>
-          <select id="select-applied-code" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="select-applied-code"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="지역난방시방서" selected>지역난방시방서</option>
             <option value="KS">KS</option>
             <option value="ASME">ASME</option>
@@ -183,7 +231,8 @@
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">성적서번호</label>
-          <input type="text" id="input-report-no" placeholder="성적서번호 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="text" id="input-report-no" placeholder="성적서번호 기입"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
       </div>
     </div>
@@ -194,7 +243,8 @@
         <span class="text-xs font-bold uppercase tracking-wider text-blue-700 flex items-center gap-1">
           <i data-lucide="calculator" class="w-4 h-4"></i> 검사 물량 및 단가 산정
         </span>
-        <button type="button" id="btn-toggle-pipe-calc" class="text-xs font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition flex items-center gap-1">
+        <button type="button" id="btn-toggle-pipe-calc"
+          class="text-xs font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition flex items-center gap-1">
           <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
           <span id="pipe-calc-btn-text">배관 관경 계산기</span>
         </button>
@@ -211,7 +261,8 @@
 
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">배관 관경(Size)</label>
-          <select id="select-pipe" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="select-pipe"
+            class="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="1100A">1100A</option>
             <option value="1000A">1000A</option>
             <option value="900A">900A</option>
@@ -246,26 +297,31 @@
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[ORI] 조인트수</label>
-              <input type="number" id="input-ori-joints" value="1" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+              <input type="number" id="input-ori-joints" value="1" min="0" step="1"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
             </div>
             <div>
               <label class="block text-[11px] font-medium text-slate-500 mb-0.5">[REP] 조인트수</label>
-              <input type="number" id="input-rep-joints" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+              <input type="number" id="input-rep-joints" value="0" min="0" step="1"
+                class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
             </div>
           </div>
           <div>
             <label class="block text-[11px] font-medium text-slate-500 mb-0.5">당일 불량(REJ)수 (RT: 매)</label>
-            <input type="number" id="input-rej-qty" value="0" min="0" step="1" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+            <input type="number" id="input-rej-qty" value="0" min="0" step="1"
+              class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
           </div>
         </div>
 
         <div id="non-rt-joints-box">
           <label class="block text-[11px] font-medium text-slate-500 mb-0.5">조인트수 (개소)</label>
-          <input type="number" id="input-joints" value="1" min="0.1" step="0.5" class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+          <input type="number" id="input-joints" value="1" min="0.1" step="0.5"
+            class="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
         </div>
       </div>
 
-      <div id="non-pipe-banner" class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+      <div id="non-pipe-banner"
+        class="hidden p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
         <span class="font-bold">💡 비배관(탱크/용기/철골) 직접 입력 모드</span>
         <span class="text-[10px] text-blue-600">수량·단위·단가를 직접 기입하세요</span>
       </div>
@@ -274,11 +330,13 @@
       <div class="grid grid-cols-2 gap-2 pt-1">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">검사 수량 (물량)</label>
-          <input type="number" id="input-qty" value="0.8401" min="0" step="0.0001" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="number" id="input-qty" value="0.8401" min="0" step="0.0001"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-base font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">단위 (Unit)</label>
-          <select id="select-unit" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="select-unit"
+            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="M" selected>M</option>
             <option value="매">매</option>
             <option value="EA">EA</option>
@@ -296,44 +354,51 @@
       <div class="grid grid-cols-3 gap-2">
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">단가 (원)</label>
-          <input type="number" id="input-unit-price" value="325451" min="0" step="100" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
+          <input type="number" id="input-unit-price" value="325451" min="0" step="100"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
         </div>
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">출장비 (원)</label>
-          <input type="number" id="input-travel-cost" value="0" min="0" step="1000" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
+          <input type="number" id="input-travel-cost" value="0" min="0" step="1000"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
         </div>
         <div>
           <label class="block text-[11px] font-medium text-slate-500 mb-1">일식</label>
-          <input type="text" id="input-lump-sum" placeholder="식대/일식" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
+          <input type="text" id="input-lump-sum" placeholder="식대/일식"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800">
         </div>
       </div>
 
       <!-- Total Fee Box -->
-      <div class="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex items-center justify-between">
+      <div
+        class="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex items-center justify-between">
         <div>
           <p class="text-xs text-blue-800 font-bold">총 검사비 (수량×단가+출장비)</p>
           <p class="text-[10px] text-blue-600">제경비 110%, 기술료 20% 계약단가 기준</p>
         </div>
         <div class="flex items-center gap-1.5">
-          <input type="number" id="input-total-fee" value="273411" class="w-32 bg-white border border-blue-300 rounded-lg px-2 py-1 text-right text-base font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input type="number" id="input-total-fee" value="273411"
+            class="w-32 bg-white border border-blue-300 rounded-lg px-2 py-1 text-right text-base font-black text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <span class="text-xs font-bold text-blue-900">원</span>
         </div>
       </div>
 
       <!-- Equipments -->
       <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-        <div>
+        <div id="main-equipment-wrap">
           <label class="block text-[11px] font-medium text-slate-500 mb-1">주 장비</label>
-          <select id="select-equip" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+          <select id="select-equip" multiple
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
             <option value="PAUT MX2(OMNI2-103085)" selected>PAUT MX2(OMNI2-103085)</option>
             <option value="Se-75">Se-75</option>
             <option value="Yoke">Yoke</option>
             <option value="PT 약품">PT 약품</option>
           </select>
         </div>
-        <div>
-          <label class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
-          <select id="select-aux-equip" onchange="checkCustomAux()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
+        <div id="aux-equipment-wrap">
+          <label id="aux-equipment-label" class="block text-[11px] font-medium text-slate-500 mb-1">보조 장비/스캐너</label>
+          <select id="select-aux-equip" multiple onchange="checkCustomAux()"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none">
             <option value="PAUT SCANNER (MANUAL)" selected>PAUT SCANNER (MANUAL)</option>
             <option value="COBRA Manual Scanner">COBRA Manual Scanner</option>
             <option value="JIREH MICROBE BTG006">JIREH MICROBE BTG006</option>
@@ -350,7 +415,26 @@
             <option value="없음">없음</option>
             <option value="✏️ 직접 입력...">✏️ 직접 입력...</option>
           </select>
-          <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력" class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800">
+          <input type="text" id="input-custom-aux" placeholder="직접 보조장비 입력"
+            class="hidden mt-1.5 w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1 text-xs text-slate-800">
+        </div>
+        <div id="paut-equipment-grid"
+          class="hidden col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-blue-100">
+          <div>
+            <label class="block text-[11px] font-bold text-blue-700 mb-1">1. 스캐너</label>
+            <select id="select-paut-scanner" multiple
+              class="w-full bg-blue-50 border border-blue-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-blue-700 mb-1">2. 탐촉자</label>
+            <select id="select-paut-probe" multiple
+              class="w-full bg-blue-50 border border-blue-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none"></select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-blue-700 mb-1">3. 웻지</label>
+            <select id="select-paut-wedge" multiple
+              class="w-full bg-blue-50 border border-blue-200 rounded-xl px-2 py-1.5 text-xs text-slate-800 focus:outline-none"></select>
+          </div>
         </div>
       </div>
     </div>
@@ -367,35 +451,43 @@
       <div class="grid grid-cols-3 gap-2">
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">센터미스</label>
-          <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          <input type="number" id="rtk-center-miss" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">농도</label>
-          <input type="number" id="rtk-density" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          <input type="number" id="rtk-density" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">마킹미스</label>
-          <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          <input type="number" id="rtk-marking-miss" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">필름마크</label>
-          <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          <input type="number" id="rtk-film-mark" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">취급부주의</label>
-          <input type="number" id="rtk-handling" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          <input type="number" id="rtk-handling" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-slate-500 mb-0.5">고객불만</label>
-          <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          <input type="number" id="rtk-complaint" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div class="col-span-2">
           <label class="block text-[11px] text-slate-500 mb-0.5">기타 사유</label>
-          <input type="number" id="rtk-etc" min="0" step="1" placeholder="0" class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
+          <input type="number" id="rtk-etc" min="0" step="1" placeholder="0"
+            class="rtk-inp w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs font-bold text-center">
         </div>
         <div>
           <label class="block text-[11px] text-purple-600 font-bold mb-0.5">RTK 총계</label>
-          <input type="number" id="rtk-total" readonly value="0" class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
+          <input type="number" id="rtk-total" readonly value="0"
+            class="w-full bg-purple-50 border border-purple-200 rounded-lg p-1.5 text-xs font-black text-purple-900 text-center">
         </div>
       </div>
     </div>
@@ -412,31 +504,38 @@
       <div class="grid grid-cols-2 gap-2">
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">형광자분</span>
-          <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          <input type="number" id="chem-fl-mag" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">흑색자분</span>
-          <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          <input type="number" id="chem-black-mag" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">백색페인트</span>
-          <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          <input type="number" id="chem-white-paint" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">침투제</span>
-          <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          <input type="number" id="chem-penetrant" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">세척제</span>
-          <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          <input type="number" id="chem-cleaner" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">현상제</span>
-          <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          <input type="number" id="chem-developer" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
         <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/70">
           <span class="text-[11px] font-bold text-slate-700 block mb-1">형광침투제</span>
-          <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
+          <input type="number" id="chem-fl-pen" min="0" step="0.5" placeholder="0"
+            class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-center">
         </div>
       </div>
     </div>
@@ -460,10 +559,12 @@
           <i data-lucide="users" class="w-4 h-4"></i> 참여 작업자 (최대 10명)
         </span>
         <div class="flex items-center space-x-1.5">
-          <button type="button" id="btn-batch-apply" class="text-[11px] font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition">
+          <button type="button" id="btn-batch-apply"
+            class="text-[11px] font-bold px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition">
             1번 시간 일괄적용
           </button>
-          <button type="button" id="btn-add-worker" class="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center gap-0.5">
+          <button type="button" id="btn-add-worker"
+            class="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center gap-0.5">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i> 추가
           </button>
         </div>
@@ -477,7 +578,8 @@
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">성명</label>
-              <select onchange="updateWorkerField(0, 'user', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+              <select onchange="updateWorkerField(0, 'user', this.value)"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
                 <option value="부장 주진철" selected>부장 주진철</option>
                 <option value="부장 이병국">부장 이병국</option>
                 <option value="부장 박광복">부장 박광복</option>
@@ -493,7 +595,8 @@
             </div>
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">근무형태</label>
-              <select onchange="updateWorkerField(0, 'shift', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+              <select onchange="updateWorkerField(0, 'shift', this.value)"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
                 <option value="주간" selected>주간</option>
                 <option value="야간">야간</option>
                 <option value="휴일">휴일</option>
@@ -503,7 +606,8 @@
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">근무시간</label>
-              <select onchange="onWorkerTimeChange(0, this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
+              <select onchange="onWorkerTimeChange(0, this.value)"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
                 <option value="09:00~18:00" selected>09:00~18:00</option>
                 <option value="09:00~19:00">09:00~19:00</option>
                 <option value="09:00~20:00">09:00~20:00</option>
@@ -514,27 +618,64 @@
                 <option value="09:00~익일01:00">09:00~익일01:00</option>
                 <option value="09:00~익일02:00">09:00~익일02:00</option>
                 <option value="09:00~익일03:00">09:00~익일03:00</option>
+                <option value="09:00~익일04:00">09:00~익일04:00</option>
+                <option value="09:00~익일05:00">09:00~익일05:00</option>
+                <option value="09:00~익일06:00">09:00~익일06:00</option>
+                <option value="09:00~익일07:00">09:00~익일07:00</option>
+                <option value="09:00~익일08:00">09:00~익일08:00</option>
+                <option value="09:00~익일09:00">09:00~익일09:00</option>
+                <option value="10:00~17:00">10:00~17:00</option>
+                <option value="10:00~19:00">10:00~19:00</option>
+                <option value="12:00~익일08:00">12:00~익일08:00</option>
+                <option value="13:00~22:00">13:00~22:00</option>
+                <option value="13:00~익일02:00">13:00~익일02:00</option>
+                <option value="18:00~익일01:00">18:00~익일01:00</option>
                 <option value="18:00~익일02:00">18:00~익일02:00</option>
                 <option value="18:00~익일03:00">18:00~익일03:00</option>
+                <option value="18:00~익일04:00">18:00~익일04:00</option>
+                <option value="18:00~익일05:00">18:00~익일05:00</option>
+                <option value="18:00~익일06:00">18:00~익일06:00</option>
+                <option value="18:00~익일07:00">18:00~익일07:00</option>
+                <option value="18:00~익일08:00">18:00~익일08:00</option>
+                <option value="20:00~익일02:00">20:00~익일02:00</option>
+                <option value="20:00~익일04:00">20:00~익일04:00</option>
+                <option value="20:00~익일05:00">20:00~익일05:00</option>
+                <option value="20:00~익일06:00">20:00~익일06:00</option>
+                <option value="21:00~익일03:00">21:00~익일03:00</option>
+                <option value="21:00~익일05:00">21:00~익일05:00</option>
+                <option value="21:00~익일06:00">21:00~익일06:00</option>
+                <option value="21:00~익일07:00">21:00~익일07:00</option>
+                <option value="22:00~익일01:00">22:00~익일01:00</option>
+                <option value="22:00~익일02:00">22:00~익일02:00</option>
+                <option value="22:00~익일03:00">22:00~익일03:00</option>
+                <option value="22:00~익일04:00">22:00~익일04:00</option>
+                <option value="22:00~익일05:00">22:00~익일05:00</option>
+                <option value="22:00~익일06:00">22:00~익일06:00</option>
+                <option value="22:00~익일07:00">22:00~익일07:00</option>
+                <option value="22:00~익일08:00">22:00~익일08:00</option>
                 <option value="22:00~익일09:00">22:00~익일09:00</option>
                 <option value="12:00~익일08:00">12:00~익일08:00</option>
+                <option value="__custom__">✏️ 직접 입력...</option>
               </select>
             </div>
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">산출 수당 (원)</label>
-              <input type="text" value="0" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
+              <input type="text" value="0" readonly
+                class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
             </div>
           </div>
         </div>
         <div class="p-3 bg-slate-50 border border-slate-200/90 rounded-xl space-y-2 relative">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-slate-700">참여자 2</span>
-            <button type="button" onclick="removeWorker(1)" class="text-slate-400 hover:text-rose-500 p-0.5"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            <button type="button" onclick="removeWorker(1)" class="text-slate-400 hover:text-rose-500 p-0.5"><i
+                data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">성명</label>
-              <select onchange="updateWorkerField(1, 'user', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+              <select onchange="updateWorkerField(1, 'user', this.value)"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
                 <option value="부장 주진철">부장 주진철</option>
                 <option value="부장 이병국" selected>부장 이병국</option>
                 <option value="부장 박광복">부장 박광복</option>
@@ -550,7 +691,8 @@
             </div>
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">근무형태</label>
-              <select onchange="updateWorkerField(1, 'shift', this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
+              <select onchange="updateWorkerField(1, 'shift', this.value)"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-800">
                 <option value="주간" selected>주간</option>
                 <option value="야간">야간</option>
                 <option value="휴일">휴일</option>
@@ -560,7 +702,8 @@
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">근무시간</label>
-              <select onchange="onWorkerTimeChange(1, this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
+              <select onchange="onWorkerTimeChange(1, this.value)"
+                class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
                 <option value="09:00~18:00" selected>09:00~18:00</option>
                 <option value="09:00~19:00">09:00~19:00</option>
                 <option value="09:00~20:00">09:00~20:00</option>
@@ -571,15 +714,50 @@
                 <option value="09:00~익일01:00">09:00~익일01:00</option>
                 <option value="09:00~익일02:00">09:00~익일02:00</option>
                 <option value="09:00~익일03:00">09:00~익일03:00</option>
+                <option value="09:00~익일04:00">09:00~익일04:00</option>
+                <option value="09:00~익일05:00">09:00~익일05:00</option>
+                <option value="09:00~익일06:00">09:00~익일06:00</option>
+                <option value="09:00~익일07:00">09:00~익일07:00</option>
+                <option value="09:00~익일08:00">09:00~익일08:00</option>
+                <option value="09:00~익일09:00">09:00~익일09:00</option>
+                <option value="10:00~17:00">10:00~17:00</option>
+                <option value="10:00~19:00">10:00~19:00</option>
+                <option value="12:00~익일08:00">12:00~익일08:00</option>
+                <option value="13:00~22:00">13:00~22:00</option>
+                <option value="13:00~익일02:00">13:00~익일02:00</option>
+                <option value="18:00~익일01:00">18:00~익일01:00</option>
                 <option value="18:00~익일02:00">18:00~익일02:00</option>
                 <option value="18:00~익일03:00">18:00~익일03:00</option>
+                <option value="18:00~익일04:00">18:00~익일04:00</option>
+                <option value="18:00~익일05:00">18:00~익일05:00</option>
+                <option value="18:00~익일06:00">18:00~익일06:00</option>
+                <option value="18:00~익일07:00">18:00~익일07:00</option>
+                <option value="18:00~익일08:00">18:00~익일08:00</option>
+                <option value="20:00~익일02:00">20:00~익일02:00</option>
+                <option value="20:00~익일04:00">20:00~익일04:00</option>
+                <option value="20:00~익일05:00">20:00~익일05:00</option>
+                <option value="20:00~익일06:00">20:00~익일06:00</option>
+                <option value="21:00~익일03:00">21:00~익일03:00</option>
+                <option value="21:00~익일05:00">21:00~익일05:00</option>
+                <option value="21:00~익일06:00">21:00~익일06:00</option>
+                <option value="21:00~익일07:00">21:00~익일07:00</option>
+                <option value="22:00~익일01:00">22:00~익일01:00</option>
+                <option value="22:00~익일02:00">22:00~익일02:00</option>
+                <option value="22:00~익일03:00">22:00~익일03:00</option>
+                <option value="22:00~익일04:00">22:00~익일04:00</option>
+                <option value="22:00~익일05:00">22:00~익일05:00</option>
+                <option value="22:00~익일06:00">22:00~익일06:00</option>
+                <option value="22:00~익일07:00">22:00~익일07:00</option>
+                <option value="22:00~익일08:00">22:00~익일08:00</option>
                 <option value="22:00~익일09:00">22:00~익일09:00</option>
                 <option value="12:00~익일08:00">12:00~익일08:00</option>
+                <option value="__custom__">✏️ 직접 입력...</option>
               </select>
             </div>
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">산출 수당 (원)</label>
-              <input type="text" value="0" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
+              <input type="text" value="0" readonly
+                class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
             </div>
           </div>
         </div>
@@ -597,7 +775,8 @@
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">차량 번호</label>
-          <select id="select-vehicle" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
+          <select id="select-vehicle"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-semibold text-slate-800">
             <option value="81두1580 (탑차)" selected>81두1580 (탑차)</option>
             <option value="89보4028 (탑차)">89보4028 (탑차)</option>
             <option value="90너4889 (탑차)">90너4889 (탑차)</option>
@@ -617,7 +796,8 @@
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">주행거리 (km)</label>
-          <input type="number" id="input-mileage" placeholder="예: 70" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
+          <input type="number" id="input-mileage" placeholder="예: 70"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800">
         </div>
       </div>
 
@@ -628,21 +808,24 @@
         </div>
         <div class="flex justify-between items-center">
           <span>차량 비고</span>
-          <input type="text" id="input-vehicle-note" placeholder="차량 특이사항 기입" class="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs w-44">
+          <input type="text" id="input-vehicle-note" placeholder="차량 특이사항 기입"
+            class="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs w-44">
         </div>
       </div>
 
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">작업 특이사항 (비고 / Remark)</label>
-        <input type="text" id="input-note" placeholder="특이사항 기입" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
+        <input type="text" id="input-note" placeholder="특이사항 기입"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800">
       </div>
     </div>
 
     <!-- 9. Submit Button -->
     <div class="pt-2">
-      <button type="button" id="btn-submit" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-blue-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
+      <button type="button" id="btn-submit"
+        class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-blue-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
         <i data-lucide="send" class="w-5 h-5"></i>
-        <span>중앙지사 클라우드에 작업 저장</span>
+        <span>＋ 작업 목록에 추가</span>
       </button>
     </div>
 
@@ -652,7 +835,8 @@
         <span class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
           <i data-lucide="history" class="w-4 h-4"></i> 당일 저장된 최근 내역
         </span>
-        <button type="button" id="btn-refresh-history" class="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+        <button type="button" id="btn-refresh-history"
+          class="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
           <i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침
         </button>
       </div>
@@ -665,14 +849,16 @@
   </main>
 
   <!-- Notification Toast -->
-  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
+  <div id="toast"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl bg-slate-900 text-white text-xs font-semibold shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2">
     <i data-lucide="check-circle" class="w-4 h-4 text-blue-400"></i>
     <span id="toast-msg">저장되었습니다.</span>
   </div>
 
+  <?!= include('MethodFilters'); ?>
   <script>
     // Visual error diagnostics on mobile screens
-    window.onerror = function(msg, url, line, col, error) {
+    window.onerror = function (msg, url, line, col, error) {
       try {
         var b = document.getElementById("mobile-error-banner");
         if (!b) {
@@ -682,7 +868,7 @@
           document.body.prepend(b);
         }
         b.innerHTML = "⚠️ 모바일 스크립트 오류: " + msg + " (" + line + "줄)";
-      } catch (e) {}
+      } catch (e) { }
       return false;
     };
 
@@ -726,13 +912,13 @@
         "32A", "25A", "20A"
       ],
       size_lengths: {
-        '1100A': 3.511,  '1000A': 3.1919, '900A': 2.8727, '850A': 2.7131,
-        '800A':  2.5535, '750A':  2.3939, '700A': 2.2343, '650A': 2.0747,
-        '600A':  1.9151, '550A':  1.7555, '500A': 1.5959, '450A': 1.4363,
-        '400A':  1.2767, '350A':  1.1172, '300A': 1.0006, '250A': 0.8401,
-        '200A':  0.6795, '150A':  0.519,  '125A': 0.4392, '100A': 0.3591,
-        '80A':   0.2799, '65A':   0.2397, '50A':  0.1901, '40A':  0.1527,
-        '32A':   0.1341, '25A':   0.1068, '20A':  0.0855
+        '1100A': 3.511, '1000A': 3.1919, '900A': 2.8727, '850A': 2.7131,
+        '800A': 2.5535, '750A': 2.3939, '700A': 2.2343, '650A': 2.0747,
+        '600A': 1.9151, '550A': 1.7555, '500A': 1.5959, '450A': 1.4363,
+        '400A': 1.2767, '350A': 1.1172, '300A': 1.0006, '250A': 0.8401,
+        '200A': 0.6795, '150A': 0.519, '125A': 0.4392, '100A': 0.3591,
+        '80A': 0.2799, '65A': 0.2397, '50A': 0.1901, '40A': 0.1527,
+        '32A': 0.1341, '25A': 0.1068, '20A': 0.0855
       },
       base_prices: {
         "PAUT": 325451,
@@ -752,10 +938,14 @@
         'Carestream T200-10*12"', 'Carestream T200-14*17"'
       ],
       worktimes: [
-        "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00",
-        "09:00~22:00", "09:00~23:00", "09:00~24:00", "09:00~익일01:00",
-        "09:00~익일02:00", "09:00~익일03:00", "18:00~익일02:00",
-        "18:00~익일03:00", "22:00~익일09:00", "12:00~익일08:00"
+        "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00", "09:00~22:00",
+        "09:00~23:00", "09:00~24:00", "09:00~익일01:00", "09:00~익일02:00", "09:00~익일03:00",
+        "09:00~익일04:00", "09:00~익일05:00", "09:00~익일06:00", "09:00~익일07:00", "09:00~익일08:00", "09:00~익일09:00",
+        "10:00~17:00", "10:00~19:00", "12:00~익일08:00", "13:00~22:00", "13:00~익일02:00",
+        "18:00~익일01:00", "18:00~익일02:00", "18:00~익일03:00", "18:00~익일04:00", "18:00~익일05:00", "18:00~익일06:00", "18:00~익일07:00", "18:00~익일08:00",
+        "20:00~익일02:00", "20:00~익일04:00", "20:00~익일05:00", "20:00~익일06:00",
+        "21:00~익일03:00", "21:00~익일05:00", "21:00~익일06:00", "21:00~익일07:00",
+        "22:00~익일01:00", "22:00~익일02:00", "22:00~익일03:00", "22:00~익일04:00", "22:00~익일05:00", "22:00~익일06:00", "22:00~익일07:00", "22:00~익일08:00", "22:00~익일09:00"
       ]
     };
 
@@ -792,9 +982,9 @@
     });
 
     function checkCustomAux() {
-      const val = document.getElementById("select-aux-equip").value;
+      const val = selectedMethodValues(document.getElementById("select-aux-equip"));
       const inp = document.getElementById("input-custom-aux");
-      if (val === "✏️ 직접 입력...") {
+      if (val.includes("✏️ 직접 입력...")) {
         inp.classList.remove("hidden");
         inp.focus();
       } else {
@@ -802,8 +992,130 @@
       }
     }
 
+    function enhanceMobileMultiSelect(select, title) {
+      if (!select || select._mobileMultiRefresh) return;
+      select.classList.add("mobile-multi-native");
+      select.removeAttribute("size");
+
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "mobile-multi-trigger w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 shadow-sm";
+      const summary = document.createElement("span");
+      summary.className = "min-w-0 truncate";
+      const count = document.createElement("span");
+      count.className = "shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700";
+      trigger.append(summary, count);
+      select.insertAdjacentElement("afterend", trigger);
+
+      const refresh = () => {
+        const selected = Array.from(select.selectedOptions || []).filter(option => option.value);
+        const placeholder = Array.from(select.options || []).find(option => !option.value)?.text || `${title} 선택`;
+        summary.textContent = selected.length ? selected.map(option => option.text).join(", ") : placeholder;
+        count.textContent = selected.length ? `${selected.length}개` : "선택";
+        count.classList.toggle("bg-blue-100", selected.length > 0);
+        count.classList.toggle("text-blue-700", selected.length > 0);
+        count.classList.toggle("bg-slate-200", selected.length === 0);
+        count.classList.toggle("text-slate-600", selected.length === 0);
+        trigger.title = summary.textContent;
+      };
+      select._mobileMultiRefresh = refresh;
+
+      const openPicker = () => {
+        const overlay = document.createElement("div");
+        overlay.className = "fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/60 p-0 sm:items-center sm:p-4";
+        const panel = document.createElement("div");
+        panel.className = "mobile-multi-dialog flex w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl";
+        const header = document.createElement("div");
+        header.className = "flex items-center justify-between border-b border-slate-200 px-4 py-3";
+        const heading = document.createElement("strong");
+        heading.className = "text-sm text-slate-900";
+        heading.textContent = `${title} 복수선택`;
+        const doneTop = document.createElement("button");
+        doneTop.type = "button";
+        doneTop.className = "rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-bold text-white";
+        doneTop.textContent = "완료";
+        header.append(heading, doneTop);
+        const search = document.createElement("input");
+        search.type = "search";
+        search.placeholder = "목록 검색";
+        search.className = "m-3 mb-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-blue-500";
+        const list = document.createElement("div");
+        list.className = "min-h-0 flex-1 overflow-y-auto px-3 pb-3";
+        const footer = document.createElement("div");
+        footer.className = "flex items-center justify-between border-t border-slate-200 px-4 py-3";
+        const clear = document.createElement("button");
+        clear.type = "button";
+        clear.className = "text-xs font-semibold text-slate-500";
+        clear.textContent = "전체 해제";
+        const selectedCount = document.createElement("span");
+        selectedCount.className = "text-xs font-bold text-blue-700";
+        footer.append(clear, selectedCount);
+        panel.append(header, search, list, footer);
+        overlay.append(panel);
+        document.body.append(overlay);
+
+        const close = () => { refresh(); overlay.remove(); trigger.focus(); };
+        const updateCount = () => {
+          selectedCount.textContent = `${Array.from(select.selectedOptions || []).filter(option => option.value).length}개 선택`;
+        };
+        const render = () => {
+          const query = search.value.trim().toLowerCase();
+          list.replaceChildren();
+          Array.from(select.options || []).filter(option => option.value && (!query || option.text.toLowerCase().includes(query))).forEach(option => {
+            const row = document.createElement("label");
+            row.className = "flex cursor-pointer items-start gap-3 border-b border-slate-100 px-1 py-3 text-sm text-slate-800 last:border-0";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = option.selected;
+            checkbox.className = "mt-0.5 h-5 w-5 shrink-0 accent-blue-700";
+            const label = document.createElement("span");
+            label.className = "break-words leading-5";
+            label.textContent = option.text;
+            checkbox.addEventListener("change", () => {
+              option.selected = checkbox.checked;
+              select.dispatchEvent(new Event("change", { bubbles: true }));
+              updateCount();
+            });
+            row.append(checkbox, label);
+            list.append(row);
+          });
+          if (!list.children.length) {
+            const empty = document.createElement("p");
+            empty.className = "py-8 text-center text-xs text-slate-400";
+            empty.textContent = "검색 결과가 없습니다.";
+            list.append(empty);
+          }
+        };
+        search.addEventListener("input", render);
+        clear.addEventListener("click", () => {
+          Array.from(select.options || []).forEach(option => { option.selected = false; });
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          render();
+          updateCount();
+        });
+        doneTop.addEventListener("click", close);
+        overlay.addEventListener("click", event => { if (event.target === overlay) close(); });
+        render();
+        updateCount();
+        setTimeout(() => search.focus(), 50);
+      };
+
+      trigger.addEventListener("click", openPicker);
+      select.addEventListener("change", refresh);
+      if (typeof MutationObserver !== "undefined") new MutationObserver(refresh).observe(select, { childList: true, subtree: true });
+      refresh();
+    }
+
+    [
+      ["select-equip", "주 장비"],
+      ["select-aux-equip", "기타 보조장비"],
+      ["select-paut-scanner", "스캐너"],
+      ["select-paut-probe", "탐촉자"],
+      ["select-paut-wedge", "웻지"]
+    ].forEach(([id, title]) => enhanceMobileMultiSelect(document.getElementById(id), title));
+
     // Hot-tapping toggle
-    document.getElementById("select-loc-type").addEventListener("change", function() {
+    document.getElementById("select-loc-type").addEventListener("change", function () {
       const isHotTap = this.value === "핫태핑";
       const card = document.getElementById("hottap-card");
       if (isHotTap) {
@@ -832,7 +1144,7 @@
     }
 
     // Inspection item name change handler
-    document.getElementById("select-item-name").addEventListener("change", function() {
+    document.getElementById("select-item-name").addEventListener("change", function () {
       const item = this.value;
       const banner = document.getElementById("non-pipe-banner");
       const isPipe = item === "Piping" || item === "Pipe";
@@ -872,6 +1184,7 @@
     function initData(cfg, shouldLoadRecent = true) {
       if (!cfg) return;
       try {
+        const savedInput = window.workspaceCapture ? workspaceCapture() : null;
         const raw = (typeof cfg === 'string') ? JSON.parse(cfg) : cfg;
         appConfig = Object.assign({}, DEFAULT_CONFIG, raw);
 
@@ -905,6 +1218,8 @@
           initDefaultWorkers();
         }
         switchMethod(selectedMethod || "PAUT");
+        if (savedInput && window.workspaceRestore) workspaceRestore(savedInput);
+        renderWorkers();
         if (shouldLoadRecent) {
           loadRecentRecords();
         }
@@ -913,21 +1228,7 @@
       }
     }
 
-    function updateMaterialOptions(method) {
-      const matSelect = document.getElementById("select-material");
-      if (!appConfig) return;
-
-      if (method === "RT") {
-        matSelect.innerHTML = appConfig.materials.map(m => `<option value="${m}">${m}</option>`).join("");
-      } else {
-        matSelect.innerHTML = `
-          <option value="">해당없음 (자재소모 약품 별도 기입)</option>
-          <option value="PT 약품 세트">PT 약품 세트</option>
-          <option value="MT 자분/페인트">MT 자분/페인트</option>
-          <option value="기타 자재">기타 자재</option>
-        `;
-      }
-    }
+    function updateMaterialOptions(method) { refreshMethodChoices(method); }
 
     function initDefaultWorkers() {
       workerRows = [
@@ -970,10 +1271,14 @@
               <label class="block text-[10px] text-slate-400 mb-0.5">근무시간</label>
               <select onchange="onWorkerTimeChange(${idx}, this.value)" class="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800">
                 ${appConfig ? appConfig.worktimes.map(t => `<option value="${t}" ${t === w.time ? 'selected' : ''}>${t}</option>`).join("") : `<option>${w.time}</option>`}
+                ${appConfig && !appConfig.worktimes.includes(w.time) ? `<option value="${w.time}" selected>${w.time}</option>` : ''}
+                <option value="__custom__">✏️ 직접 입력...</option>
               </select>
             </div>
             <div>
               <label class="block text-[10px] text-slate-400 mb-0.5">산출 수당 (원)</label>
+              <label class="block text-[10px] text-slate-400">일비 (원)</label>
+              <input type="number" min="0" value="${Number(w.meal || 0)}" onchange="updateWorkerField(${idx}, 'meal', this.value)" class="w-full border rounded-lg p-1 text-xs">
               <input type="text" value="${w.ot}" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-black text-blue-800 text-right">
             </div>
           </div>
@@ -988,14 +1293,57 @@
     }
 
     function onWorkerTimeChange(idx, timeVal) {
+      if (timeVal === '__custom__') {
+        const custom = prompt('근무시간을 직접 입력하세요 (예: 09:00~익일05:00):');
+        if (custom && custom.trim()) {
+          timeVal = custom.trim();
+          if (appConfig && appConfig.worktimes && !appConfig.worktimes.includes(timeVal)) {
+            appConfig.worktimes.push(timeVal);
+          }
+        } else {
+          renderWorkers();
+          return;
+        }
+      }
       updateWorkerField(idx, 'time', timeVal);
       // Client-side quick calculation for OT
+      // Client-side accurate calculation for OT (supports overnight hours up to 익일09:00+)
       let ot = 0;
       if (timeVal.includes("20:00")) ot = 15000;
       else if (timeVal.includes("22:00")) ot = 30000;
       else if (timeVal.includes("24:00")) ot = 50000;
       else if (timeVal.includes("02:00")) ot = 75000;
       else if (timeVal.includes("03:00")) ot = 90000;
+      const m = timeVal.match(/(\d{1,2}):(\d{2})\s*[~−-]\s*(?:익일\s*)?(\d{1,2}):(\d{2})/);
+      if (m) {
+        let sh = parseInt(m[1], 10), sm = parseInt(m[2], 10);
+        let eh = parseInt(m[3], 10), em = parseInt(m[4], 10);
+        let start = sh + sm / 60;
+        let end = eh + em / 60;
+        if (end < start || (timeVal.includes('익일') && end <= start)) end += 24;
+
+        let dateInput = document.getElementById("input-date");
+        let dateVal = dateInput ? dateInput.value : "";
+        let d = dateVal ? new Date(dateVal) : new Date();
+        let dayOfWeek = d.getDay(); // 0: Sun, 5: Fri, 6: Sat
+        let isHoliday = timeVal.includes('휴일') || (workerRows[idx] && workerRows[idx].shift === '휴일') || dayOfWeek === 0 || dayOfWeek === 6;
+
+        if (isHoliday) {
+          ot = Math.round((end - start) * 7500);
+        } else {
+          let dayH = Math.max(0, Math.min(end, 22) - Math.max(start, 18));
+          let nightH = Math.max(0, Math.min(end, 24) - Math.max(start, 22));
+          let dawnH = Math.max(0, end - Math.max(start, 24));
+          let dawnRate = (dayOfWeek === 5) ? 7500 : 5000;
+          ot = Math.round((dayH * 4000) + (nightH * 5000) + (dawnH * dawnRate));
+        }
+      } else {
+        if (timeVal.includes("20:00")) ot = 15000;
+        else if (timeVal.includes("22:00")) ot = 30000;
+        else if (timeVal.includes("24:00")) ot = 50000;
+        else if (timeVal.includes("02:00")) ot = 75000;
+        else if (timeVal.includes("03:00")) ot = 90000;
+      }
       workerRows[idx].ot = ot.toLocaleString();
       renderWorkers();
     }
@@ -1052,7 +1400,7 @@
         rtJointsBox.classList.remove("hidden");
         nonRtJointsBox.classList.add("hidden");
         unitSelect.value = "매";
-        document.getElementById("input-unit-price").value = 205412;
+        document.getElementById("input-unit-price").value = appConfig.base_prices.RT;
       } else if (method === "PAUT") {
         rtkCard.classList.add("hidden");
         chemCard.classList.add("hidden");
@@ -1060,7 +1408,12 @@
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = "M";
-        document.getElementById("input-unit-price").value = 325451;
+        document.getElementById("input-unit-price").value = appConfig.base_prices.PAUT;
+      } else if (method === "UT") {
+        rtkCard.classList.add("hidden"); chemCard.classList.add("hidden");
+        pautCard.classList.remove("hidden"); rtJointsBox.classList.add("hidden");
+        nonRtJointsBox.classList.remove("hidden"); unitSelect.value = "M";
+        document.getElementById("input-unit-price").value = appConfig.base_prices.UT || 0;
       } else {
         rtkCard.classList.add("hidden");
         chemCard.classList.remove("hidden");
@@ -1068,7 +1421,7 @@
         rtJointsBox.classList.add("hidden");
         nonRtJointsBox.classList.remove("hidden");
         unitSelect.value = (method === "MT") ? "P,M,I/D" : "M";
-        document.getElementById("input-unit-price").value = 110000;
+        document.getElementById("input-unit-price").value = appConfig.base_prices[selectedMethod] || 0;
       }
 
       applyMethodDefaults(method);
@@ -1082,25 +1435,6 @@
     document.querySelectorAll(".method-btn").forEach(btn => {
       btn.addEventListener("click", () => switchMethod(btn.dataset.method));
     });
-
-    function applyMethodDefaults(method) {
-      const equipSelect = document.getElementById("select-equip");
-      const auxSelect = document.getElementById("select-aux-equip");
-
-      if (method === "PAUT") {
-        equipSelect.value = "PAUT MX2(OMNI2-103085)";
-        auxSelect.value = "PAUT SCANNER (MANUAL)";
-      } else if (method === "RT") {
-        equipSelect.value = "Se-75";
-        auxSelect.value = "ADR, SURVEY, 콜리메타";
-      } else if (method === "MT") {
-        equipSelect.value = "Yoke";
-        auxSelect.value = "자분살포기";
-      } else if (method === "PT") {
-        equipSelect.value = "PT 약품";
-        auxSelect.value = "조도계";
-      }
-    }
 
     // Calculation logic
     function updatePipeCalc() {
@@ -1141,7 +1475,7 @@
       const qty = parseFloat(document.getElementById("input-qty").value) || 0;
       const unitPrice = parseFloat(document.getElementById("input-unit-price").value) || 0;
       const travelCost = parseFloat(document.getElementById("input-travel-cost").value) || 0;
-      const total = Math.round((qty * unitPrice) + travelCost);
+      const total = Math.trunc((qty * unitPrice) + travelCost);
       document.getElementById("input-total-fee").value = total;
     }
 
@@ -1167,10 +1501,7 @@
       const isCustomMat = !document.getElementById("input-custom-mat").classList.contains("hidden");
       const material = isCustomMat ? document.getElementById("input-custom-mat").value.trim() : document.getElementById("select-material").value;
 
-      let aux = document.getElementById("select-aux-equip").value;
-      if (aux === "✏️ 직접 입력...") {
-        aux = document.getElementById("input-custom-aux").value.trim() || "없음";
-      }
+      const aux = collectAuxEquipment();
 
       return {
         date: document.getElementById("input-date").value,
@@ -1195,7 +1526,7 @@
         travel_cost: parseFloat(document.getElementById("input-travel-cost").value) || 0,
         lump_sum: document.getElementById("input-lump-sum").value.trim(),
         total_fee: parseFloat(document.getElementById("input-total-fee").value) || 0,
-        equip_main: document.getElementById("select-equip").value,
+        equip_main: collectMainEquipment(),
         equip_aux: aux,
         vehicle_no: document.getElementById("select-vehicle").value,
         mileage: document.getElementById("input-mileage").value.trim(),
@@ -1230,7 +1561,7 @@
             try {
               resolve(JSON.parse(res));
               return;
-            } catch (e) {}
+            } catch (e) { }
           }
           resolve(res || {});
         };
@@ -1266,9 +1597,9 @@
             headers: { 'Content-Type': 'application/json' },
             body: isPost ? JSON.stringify(payload) : undefined
           })
-          .then(res => res.json())
-          .then(resolve)
-          .catch(reject);
+            .then(res => res.json())
+            .then(resolve)
+            .catch(reject);
         }
       });
     }
@@ -1278,6 +1609,7 @@
 
     // Submit handler
     document.getElementById("btn-submit").addEventListener("click", async () => {
+      if (!currentEditingRecord) { workspaceQueueCurrent(); return; }
       const payload = getFormData();
       const btn = document.getElementById("btn-submit");
       btn.disabled = true;
@@ -1287,6 +1619,15 @@
       const actionName = isEditing ? 'updateRecord' : 'saveRecord';
       if (isEditing) {
         payload.id = currentEditingRecord.id;
+        payload.client_request_id = currentEditingRecord.client_request_id;
+        try {
+          payload.material_id = materialConnectionForSave(payload.material);
+        } catch (connectionError) {
+          showToast(connectionError.message, true);
+          btn.disabled = false;
+          btn.classList.remove("opacity-60");
+          return;
+        }
         payload.entry_time = currentEditingRecord.entry_time;
         payload.is_update = true;
       }
@@ -1310,7 +1651,7 @@
     });
 
     // Start edit mode with full record population
-    window.startEditRecord = function(r) {
+    window.startEditRecord = function (r) {
       if (!r) return;
       try {
         currentEditingRecord = r;
@@ -1322,7 +1663,7 @@
         if (bannerDesc) bannerDesc.textContent = `${r.date} [${r.company}] ${r.method} · ${r.item_name || 'Pipe'} (${r.qty} ${r.unit})`;
 
         if (r.date) document.getElementById("input-date").value = r.date;
-        if (r.company) document.getElementById("select-company").value = r.company;
+        if (r.company) workspaceSelectValue(document.getElementById("select-company"), r.company);
         if (r.loc_type) {
           const locSel = document.getElementById("select-loc-type");
           locSel.value = r.loc_type;
@@ -1387,28 +1728,15 @@
         if (r.lump_sum !== undefined) document.getElementById("input-lump-sum").value = r.lump_sum || '';
         if (r.total_fee !== undefined) document.getElementById("input-total-fee").value = r.total_fee;
 
-        if (r.equip_main) document.getElementById("select-equip").value = r.equip_main;
-        if (r.equip_aux) {
-          const auxSel = document.getElementById("select-aux-equip");
-          let foundAux = false;
-          for (let opt of auxSel.options) {
-            if (opt.value === r.equip_aux) { foundAux = true; break; }
-          }
-          if (foundAux) {
-            auxSel.value = r.equip_aux;
-            document.getElementById("input-custom-aux").classList.add("hidden");
-          } else {
-            auxSel.value = "✏️ 직접 입력...";
-            const customAux = document.getElementById("input-custom-aux");
-            customAux.value = r.equip_aux;
-            customAux.classList.remove("hidden");
-          }
-        }
+        setMethodValues(document.getElementById("select-equip"), String(r.equip_main || "").split(';'));
+        restoreAuxEquipment(r.equip_aux || '');
 
         if (r.vehicle_no) document.getElementById("select-vehicle").value = r.vehicle_no;
         if (r.mileage) document.getElementById("input-mileage").value = r.mileage;
         if (r.vehicle_note) document.getElementById("input-vehicle-note").value = r.vehicle_note;
         if (r.note) document.getElementById("input-note").value = r.note;
+
+        restoreMaterialConnection(r.material_id || '');
 
         // RTK
         const rtkFields = ['rtk-center-miss', 'rtk-density', 'rtk-marking-miss', 'rtk-film-mark', 'rtk-handling', 'rtk-complaint', 'rtk-etc', 'rtk-total'];
@@ -1450,17 +1778,17 @@
       }
     };
 
-    window.startEditRecordByIndex = function(idx) {
+    window.startEditRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.startEditRecord(window.recentRecordsList[idx]);
     };
 
-    window.copyRecordByIndex = function(idx) {
+    window.copyRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.copyRecordToForm(window.recentRecordsList[idx]);
     };
 
-    window.deleteRecordByIndex = function(idx) {
+    window.deleteRecordByIndex = function (idx) {
       if (!window.recentRecordsList || !window.recentRecordsList[idx]) return;
       window.deleteRecord(window.recentRecordsList[idx]);
     };
@@ -1473,7 +1801,7 @@
       const submitBtn = document.getElementById("btn-submit");
       if (submitBtn) {
         submitBtn.className = "w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-base rounded-2xl shadow-lg shadow-blue-500/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2";
-        submitBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5"></i><span>중앙지사 클라우드에 작업 저장</span>';
+        submitBtn.innerHTML = '<i data-lucide="send" class="w-5 h-5"></i><span>＋ 작업 목록에 추가</span>';
         safeCreateIcons();
       }
     }
@@ -1483,7 +1811,7 @@
       showToast("수정이 취소되었습니다.");
     });
 
-    window.deleteRecord = async function(r) {
+    window.deleteRecord = async function (r) {
       if (!r) return;
       const desc = `[${r.date} ${r.company} ${r.method} · ${r.item_name || 'Pipe'}]`;
       if (!confirm(`${desc}\n해당 작업일보 내역을 정말 삭제하시겠습니까?\n\n※ 삭제된 내역은 스프레드시트에서 즉시 제거됩니다.`)) {
@@ -1595,10 +1923,11 @@
     }
 
     // Initialize immediately with default central config (0ms instant render)
-    initData(DEFAULT_CONFIG, true);
+    initData(<?!= JSON.stringify(getConfig()).replace(/</g, '\\u003c'); ?>, true);
     loadConfig();
     safeCreateIcons();
   </script>
+  <?!= include('MobileShell'); ?>
 </body>
-</html>
 
+</html>

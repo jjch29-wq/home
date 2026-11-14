@@ -77,17 +77,11 @@ class CentralMaterialManager(MaterialManager):
                     messagebox.showerror("동기화 오류", res.get("message", "모바일 동기화에 실패했습니다."))
                 return
             added = res.get("added_count", 0)
-            if added > 0:
-                self.load_data()
-                if hasattr(self, 'update_daily_usage_view'):
-                    self.update_daily_usage_view()
-                if show_msg:
-                    from tkinter import messagebox
-                    messagebox.showinfo("모바일 동기화 완료", f"📱 모바일/클라우드에서 {added}건의 신규 작업이 동기화되었습니다.")
-            else:
-                if show_msg:
-                    from tkinter import messagebox
-                    messagebox.showinfo("동기화 확인", f"모든 모바일 데이터가 이미 최신 상태입니다.\n({res.get('message', '')})")
+            self._apply_sync_result(res)
+            if show_msg:
+                from tkinter import messagebox
+                notify = messagebox.showwarning if res.get('conflict_count', 0) else messagebox.showinfo
+                notify('모바일 동기화 결과', res.get('message', '동기화가 완료되었습니다.'))
         except Exception as ex:
             if show_msg:
                 from tkinter import messagebox
@@ -103,9 +97,8 @@ class CentralMaterialManager(MaterialManager):
                 res = sync_all_central_sources()
                 if res.get("status") != "success":
                     self.root.after(0, self._on_periodic_sync_error, res.get("message", "모바일 동기화 실패"))
-                elif res.get("added_count", 0) > 0:
-                    added = res["added_count"]
-                    self.root.after(0, self._on_periodic_sync_found, added)
+                else:
+                    self.root.after(0, self._apply_sync_result, res)
             except Exception:
                 pass
             finally:
@@ -121,6 +114,25 @@ class CentralMaterialManager(MaterialManager):
         if hasattr(self, 'daily_save_status') and self.daily_save_status:
             self.daily_save_status.config(text="📱 모바일 동기화 오류", foreground="red")
         print(f"[중앙지사 모바일] 백그라운드 동기화 오류: {message}")
+
+    def _apply_sync_result(self, result):
+        """Refresh changed ledgers without replacing the current entry form."""
+        added = result.get('added_count', 0)
+        updated = result.get('updated_count', 0)
+        deleted = result.get('deleted_count', 0)
+        conflicts = result.get('conflict_count', 0)
+        if added or updated or deleted:
+            self.load_data()
+            for name in ('update_daily_usage_view', 'update_recent_entries_view',
+                         'update_stock_view', 'update_transaction_view', 'update_monthly_usage_view'):
+                refresh = getattr(self, name, None)
+                if callable(refresh):
+                    refresh()
+        if hasattr(self, 'daily_save_status') and self.daily_save_status:
+            text = f'📱 동기화: 추가 {added} · 수정 {updated} · 삭제 {deleted}'
+            if conflicts:
+                text += f' · 식별 충돌 {conflicts}건 보류 (수동 확인 필요)'
+            self.daily_save_status.config(text=text, foreground='#A33A00' if conflicts else 'green')
 
     def _on_periodic_sync_found(self, count):
         """신규 모바일 데이터가 감지되었을 때 UI 자동 갱신"""

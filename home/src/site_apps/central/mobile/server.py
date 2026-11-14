@@ -84,6 +84,17 @@ VEHICLES = [
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "src" / "Material_Manager_Config.json"
 
+
+def get_people_vehicle_choices(key, fallback):
+    try:
+        data = json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+        values = data.get(key)
+        if isinstance(values, list) and all(isinstance(v, str) for v in values):
+            return list(dict.fromkeys(v.strip() for v in values if v.strip()))
+    except (OSError, ValueError):
+        pass
+    return list(fallback)
+
 def get_central_aux_equipments():
     items = []
     if CONFIG_PATH.exists():
@@ -154,10 +165,14 @@ METHOD_DEFAULTS = {
 }
 
 WORKTIMES = [
-    "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00",
-    "09:00~22:00", "09:00~23:00", "09:00~24:00", "09:00~익일01:00",
-    "09:00~익일02:00", "09:00~익일03:00", "18:00~익일02:00",
-    "18:00~익일03:00", "22:00~익일09:00", "12:00~익일08:00"
+    "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00", "09:00~22:00",
+    "09:00~23:00", "09:00~24:00", "09:00~익일01:00", "09:00~익일02:00", "09:00~익일03:00",
+    "09:00~익일04:00", "09:00~익일05:00", "09:00~익일06:00", "09:00~익일07:00", "09:00~익일08:00", "09:00~익일09:00",
+    "10:00~17:00", "10:00~19:00", "12:00~익일08:00", "13:00~22:00", "13:00~익일02:00",
+    "18:00~익일01:00", "18:00~익일02:00", "18:00~익일03:00", "18:00~익일04:00", "18:00~익일05:00", "18:00~익일06:00", "18:00~익일07:00", "18:00~익일08:00",
+    "20:00~익일02:00", "20:00~익일04:00", "20:00~익일05:00", "20:00~익일06:00",
+    "21:00~익일03:00", "21:00~익일05:00", "21:00~익일06:00", "21:00~익일07:00",
+    "22:00~익일01:00", "22:00~익일02:00", "22:00~익일03:00", "22:00~익일04:00", "22:00~익일05:00", "22:00~익일06:00", "22:00~익일07:00", "22:00~익일08:00", "22:00~익일09:00"
 ]
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -272,8 +287,8 @@ class RecordDeleteRequest(BaseModel):
 @app.get("/api/config")
 def get_config():
     return {
-        "users": USERS,
-        "vehicles": VEHICLES,
+        "users": get_people_vehicle_choices('users', USERS),
+        "vehicles": get_people_vehicle_choices('vehicles', VEHICLES),
         "equipments": EQUIPMENTS,
         "aux_equipments": get_central_aux_equipments(),
         "method_defaults": METHOD_DEFAULTS,

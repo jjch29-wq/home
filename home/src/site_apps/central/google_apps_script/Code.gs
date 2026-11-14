@@ -60,10 +60,14 @@ var APP_CONFIG = {
     'Carestream T200-10*12"', 'Carestream T200-14*17"'
   ],
   worktimes: [
-    "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00",
-    "09:00~22:00", "09:00~23:00", "09:00~24:00", "09:00~익일01:00",
-    "09:00~익일02:00", "09:00~익일03:00", "18:00~익일02:00",
-    "18:00~익일03:00", "22:00~익일09:00", "12:00~익일08:00"
+    "09:00~18:00", "09:00~19:00", "09:00~20:00", "09:00~21:00", "09:00~22:00",
+    "09:00~23:00", "09:00~24:00", "09:00~익일01:00", "09:00~익일02:00", "09:00~익일03:00",
+    "09:00~익일04:00", "09:00~익일05:00", "09:00~익일06:00", "09:00~익일07:00", "09:00~익일08:00", "09:00~익일09:00",
+    "10:00~17:00", "10:00~19:00", "12:00~익일08:00", "13:00~22:00", "13:00~익일02:00",
+    "18:00~익일01:00", "18:00~익일02:00", "18:00~익일03:00", "18:00~익일04:00", "18:00~익일05:00", "18:00~익일06:00", "18:00~익일07:00", "18:00~익일08:00",
+    "20:00~익일02:00", "20:00~익일04:00", "20:00~익일05:00", "20:00~익일06:00",
+    "21:00~익일03:00", "21:00~익일05:00", "21:00~익일06:00", "21:00~익일07:00",
+    "22:00~익일01:00", "22:00~익일02:00", "22:00~익일03:00", "22:00~익일04:00", "22:00~익일05:00", "22:00~익일06:00", "22:00~익일07:00", "22:00~익일08:00", "22:00~익일09:00"
   ]
 };
 
@@ -82,7 +86,7 @@ var HEADERS = [
   '조건1', '조건2', '제경비율', '기술료율', '보정계수', '환산물량', '재료비', '인건비', '제경비', '기술료',
   'Meal', 'Meal2', 'Meal3', 'Meal4', 'Meal5', 'Meal6', 'Meal7', 'Meal8', 'Meal9', 'Meal10',
   '검사구분', '조인트수', '불량수', '관경(Inch)', '구분', 'Remark', 'DailyMemo',
-  '핫태핑차수', '핫태핑개소', '핫태핑관경', '보조장비', '수량'
+  '핫태핑차수', '핫태핑개소', '핫태핑관경', '보조장비', '수량', 'ClientRequestID', 'ClientRequestHash'
 ];
 
 /**
@@ -96,16 +100,27 @@ function doGet(e) {
   } else if (api === 'recent') {
     var date = e.parameter.date || '';
     return createJsonResponse(getRecentRecords(date));
+  } else if (api === 'progress') {
+    var date = e.parameter.date || '';
+    return createJsonResponse(getProgressSummary(date));
   } else if (api === 'sync' || api === 'all_records') {
     return createJsonResponse(getAllRecords());
   }
 
-  var htmlOutput = HtmlService.createHtmlOutputFromFile('index')
+  var htmlOutput = HtmlService.createTemplateFromFile('index').evaluate()
     .setTitle('한국지역난방공사 중앙지사 모바일 현장 입력 (24시간 클라우드)')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 
   return htmlOutput;
+}
+
+function include(filename) {
+  try {
+    return HtmlService.createHtmlOutputFromFile(filename).getContent();
+  } catch (e) {
+    return "";
+  }
 }
 
 /**
@@ -162,6 +177,9 @@ function getDailyUsageSheet() {
       sheet.setFrozenRows(1);
     }
   }
+  var current=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  var missing=HEADERS.filter(function(name){return current.indexOf(name)<0;});
+  if(missing.length)sheet.getRange(1,current.length+1,1,missing.length).setValues([missing]);
   return sheet;
 }
 
@@ -169,7 +187,15 @@ function getDailyUsageSheet() {
  * 설정 데이터 획득
  */
 function getConfig() {
-  var companies = APP_CONFIG.companies.slice();
+  var managed = typeof CENTRAL_REFERENCE !== 'undefined' ? CENTRAL_REFERENCE.config : {};
+  var cfg = JSON.parse(JSON.stringify(APP_CONFIG));
+  Object.keys(managed).forEach(function(key) {cfg[key] = managed[key];});
+  return cfg;
+}
+
+// Historical company names are available to inquiry, not new-entry choices.
+function getHistoricalCompanies() {
+  var companies = getConfig().companies.slice();
   try {
     var sheet = getDailyUsageSheet();
     var lastRow = sheet.getLastRow();
@@ -190,16 +216,14 @@ function getConfig() {
     // fallback to default config if sheet read fails
   }
 
-  var cfg = JSON.parse(JSON.stringify(APP_CONFIG));
-  cfg.companies = companies;
-  return cfg;
+  return companies;
 }
 
 /**
  * 작업 레코드 맵 구성 (신규 및 수정 공용)
  */
 function buildRowMap(req, preserveEntryTime) {
-  var nowStr = preserveEntryTime || (req.entry_time ? String(req.entry_time) : Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"));
+  var nowStr = preserveEntryTime || (req.entry_time ? String(req.entry_time) : Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss.SSS"));
 
   // PC 프로그램에서 직접 보낸 row_data 맵이 있는 경우 그대로 매핑
   if (req.row_data && typeof req.row_data === 'object') {
@@ -216,7 +240,7 @@ function buildRowMap(req, preserveEntryTime) {
 
   var calculatedFee = Number(req.total_fee || 0);
   if (calculatedFee <= 0) {
-    calculatedFee = Math.round((Number(req.qty || 0) * Number(req.unit_price || 0)) + Number(req.travel_cost || 0));
+    calculatedFee = Math.trunc((Number(req.qty || 0) * Number(req.unit_price || 0)) + Number(req.travel_cost || 0));
   }
 
   var rowMap = {
@@ -232,7 +256,9 @@ function buildRowMap(req, preserveEntryTime) {
     '관경(Inch)': req.pipe || '',
     '검사품명': req.item_name || 'Pipe',
     '자재명': req.material || '',
-    'MaterialID': req.material || '',
+    'MaterialID': req.material_id || '',
+    'ClientRequestID': req.client_request_id || '',
+    'ClientRequestHash': req._request_hash || '',
     'Material': req.material || '',
     '품목명': req.material || '',
     '적용코드': req.applied_code || '지역난방시방서',
@@ -296,6 +322,7 @@ function buildRowMap(req, preserveEntryTime) {
     rowMap[uKey] = '';
     rowMap[wtKey] = '';
     rowMap[otKey] = 0;
+    rowMap['Meal' + (u === 1 ? '' : u)] = 0;
   }
 
   // 참여 작업자 할당 (1 ~ 10)
@@ -314,6 +341,7 @@ function buildRowMap(req, preserveEntryTime) {
       rowMap[uKey] = w.user || '';
       rowMap[wtKey] = (w.shift ? '(' + w.shift + ') ' : '') + (w.time || '');
       rowMap[otKey] = Number(String(w.ot || '0').replace(/,/g, ''));
+      rowMap['Meal' + (idx === 1 ? '' : idx)] = Number(String(w.meal || '0').replace(/,/g, ''));
       allWorkersDesc.push((w.user || '') + '(' + (w.time || '') + ')');
     }
     rowMap['(Full작업자)'] = allWorkersDesc.join(', ');
@@ -325,7 +353,7 @@ function buildRowMap(req, preserveEntryTime) {
 /**
  * 작업 레코드 시트에 저장
  */
-function saveRecord(req) {
+function saveRecordCore(req) {
   var sheet = getDailyUsageSheet();
   var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var rowMap = buildRowMap(req);
@@ -347,45 +375,29 @@ function saveRecord(req) {
 function formatCellTime(val) {
   if (!val) return '';
   if (val instanceof Date) {
-    return Utilities.formatDate(val, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+    return Utilities.formatDate(val, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss.SSS");
   }
-  return String(val).split('.')[0].trim();
+  return String(val).trim();
 }
 
 /**
  * 작업 레코드 수정
  */
-function updateRecord(req) {
+function updateRecordCore(req) {
   var sheet = getDailyUsageSheet();
   var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var entryTimeCol = headerRow.indexOf("EntryTime");
   var lastRow = sheet.getLastRow();
-  var targetRow = -1;
-
-  if (entryTimeCol !== -1 && req.entry_time && lastRow > 1) {
-    var reqTimeNorm = String(req.entry_time).split('.')[0].trim();
-    var timeValues = sheet.getRange(2, entryTimeCol + 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < timeValues.length; i++) {
-      var cellTimeNorm = formatCellTime(timeValues[i][0]);
-      if (cellTimeNorm === reqTimeNorm) {
-        targetRow = i + 2;
-        break;
-      }
-    }
-  }
-
-  if (targetRow === -1 && req.id !== undefined && req.id !== null) {
-    var rowNum = Number(req.id);
-    if (rowNum >= 2 && rowNum <= lastRow) {
-      targetRow = rowNum;
-    }
-  }
+  var targetRow = findMobileRow(sheet, headerRow, req);
 
   if (targetRow === -1) {
     return { status: 'error', detail: '수정할 일보 내역을 찾을 수 없습니다.' };
   }
 
-  var rowMap = buildRowMap(req, req.entry_time);
+  validateMobileRecord(req);
+  var oldRow = sheet.getRange(targetRow,1,1,headerRow.length).getValues()[0];
+  var rowMap = buildRowMap(req, formatCellTime(oldRow[entryTimeCol]));
+  rowMap.ClientRequestID = oldRow[headerRow.indexOf('ClientRequestID')] || req.client_request_id || '';
   var rowValues = [];
   for (var j = 0; j < headerRow.length; j++) {
     var colName = headerRow[j];
@@ -398,31 +410,12 @@ function updateRecord(req) {
 /**
  * 작업 레코드 삭제
  */
-function deleteRecord(req) {
+function deleteRecordCore(req) {
   var sheet = getDailyUsageSheet();
   var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var entryTimeCol = headerRow.indexOf("EntryTime");
   var lastRow = sheet.getLastRow();
-  var targetRow = -1;
-
-  if (entryTimeCol !== -1 && req.entry_time && lastRow > 1) {
-    var reqTimeNorm = String(req.entry_time).split('.')[0].trim();
-    var timeValues = sheet.getRange(2, entryTimeCol + 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < timeValues.length; i++) {
-      var cellTimeNorm = formatCellTime(timeValues[i][0]);
-      if (cellTimeNorm === reqTimeNorm) {
-        targetRow = i + 2;
-        break;
-      }
-    }
-  }
-
-  if (targetRow === -1 && req.id !== undefined && req.id !== null) {
-    var rowNum = Number(req.id);
-    if (rowNum >= 2 && rowNum <= lastRow) {
-      targetRow = rowNum;
-    }
-  }
+  var targetRow = findMobileRow(sheet, headerRow, req);
 
   if (targetRow === -1) {
     return { status: 'error', detail: '삭제할 일보 내역을 찾을 수 없습니다.' };
@@ -507,112 +500,12 @@ function getRecentRecords(targetDate) {
   var numRows = lastRow - startRow + 1;
   var data = sheet.getRange(startRow, 1, numRows, headerRow.length).getValues();
 
-  function parseRow(r, row) {
-    var item = {};
-    for (var c = 0; c < headerRow.length; c++) {
-      item[headerRow[c]] = row[c];
-    }
-
-    var rowDateStr = "";
-    if (item['Date'] instanceof Date) {
-      rowDateStr = Utilities.formatDate(item['Date'], "Asia/Seoul", "yyyy-MM-dd");
-    } else {
-      rowDateStr = String(item['Date'] || '').substring(0, 10);
-    }
-
-    var workersArr = [];
-    var workerList = [];
-    for (var u = 1; u <= 10; u++) {
-      var uName = item[(u === 1) ? 'User' : ('User' + u)];
-      if (uName && String(uName).trim()) {
-        var rawTime = String(item[(u === 1) ? 'WorkTime' : ('WorkTime' + u)] || '09:00~18:00');
-        var shiftMatch = rawTime.match(/^\((.*?)\)\s*(.*)$/);
-        var shiftVal = shiftMatch ? shiftMatch[1] : '주간';
-        var cleanTime = shiftMatch ? shiftMatch[2] : rawTime;
-        var otPay = safeNum(item[(u === 1) ? 'OT' : ('OT' + u)], 0);
-
-        workersArr.push(String(uName).trim() + " (" + otPay.toLocaleString() + "원)");
-        workerList.push({
-          user: String(uName).trim(),
-          shift: shiftVal,
-          time: cleanTime,
-          ot: String(otPay)
-        });
-      }
-    }
-
-    var chemList = [];
-    if (safeNum(item['NDT_형광자분']) > 0) chemList.push("형자:" + item['NDT_형광자분']);
-    if (safeNum(item['NDT_흑색자분']) > 0) chemList.push("흑자:" + item['NDT_흑색자분']);
-    if (safeNum(item['NDT_백색페인트']) > 0) chemList.push("백페:" + item['NDT_백색페인트']);
-    if (safeNum(item['NDT_침투제']) > 0) chemList.push("침투:" + item['NDT_침투제']);
-    if (safeNum(item['NDT_세척제']) > 0) chemList.push("세척:" + item['NDT_세척제']);
-    if (safeNum(item['NDT_현상제']) > 0) chemList.push("현상:" + item['NDT_현상제']);
-    if (safeNum(item['NDT_형광침투제']) > 0) chemList.push("형침:" + item['NDT_형광침투제']);
-
-    var rtkTotal = safeNum(item['RTK_총계'] || item['RTK_RTK총계'], 0);
-    if (rtkTotal > 0) chemList.push("RTK:" + rtkTotal);
-
-    var entryTimeVal = formatCellTime(item['EntryTime'] || item['입력시간']);
-
-    return {
-      id: startRow + r,
-      entry_time: entryTimeVal,
-      date: rowDateStr,
-      site: String(item['Site'] || '중앙지사'),
-      company: String(item['업체명'] || '한국지역난방공사 중앙지사'),
-      method: String(item['검사방법'] || ''),
-      item_name: String(item['검사품명'] || 'Pipe'),
-      material: String(item['자재명'] || item['MaterialID'] || item['품목명'] || ''),
-      loc_type: String(item['작업구분'] || item['구분'] || '열수송관'),
-      pipe: String(item['관경(Inch)'] || item['규격'] || ''),
-      hot_tap_stage: String(item['핫태핑차수'] || '1차'),
-      hot_tap_joints: safeNum(item['핫태핑개소'], 1),
-      hot_tap_pipe: String(item['핫태핑관경'] || ''),
-      joints: safeNum(item['조인트수'], 0),
-      ori_joints: safeNum(item['조인트수'], 0),
-      rep_joints: safeNum(item['rep_joints'], 0),
-      rej_qty: safeNum(item['불량수'], 0),
-      qty: safeNum(item['수량'] || item['Usage'] || item['검사량'], 0),
-      unit: String(item['Unit'] || item['단위'] || 'M'),
-      unit_price: safeNum(item['단가'], 0),
-      travel_cost: safeNum(item['출장비'], 0),
-      lump_sum: String(item['일식'] || ''),
-      total_fee: safeNum(item['검사비'], 0),
-      equip_main: String(item['장비명'] || ''),
-      equip_aux: String(item['보조장비'] || ''),
-      vehicle_no: String(item['차량번호'] || ''),
-      mileage: String(item['주행거리'] || ''),
-      vehicle_note: String(item['차량비고'] || ''),
-      note: String(item['Note'] || item['Remark'] || item['DailyMemo'] || ''),
-      applied_code: String(item['적용코드'] || ''),
-      report_no: String(item['성적서번호'] || ''),
-      rtk_center_miss: safeNum(item['RTK_센터미스'], 0),
-      rtk_density: safeNum(item['RTK_농도'], 0),
-      rtk_marking_miss: safeNum(item['RTK_마킹미스'], 0),
-      rtk_film_mark: safeNum(item['RTK_필름마크'], 0),
-      rtk_handling: safeNum(item['RTK_취급부주의'], 0),
-      rtk_complaint: safeNum(item['RTK_고객불만'], 0),
-      rtk_etc: safeNum(item['RTK_기타'], 0),
-      rtk_total: rtkTotal,
-      chem_fl_mag: safeNum(item['NDT_형광자분'], 0),
-      chem_black_mag: safeNum(item['NDT_흑색자분'], 0),
-      chem_white_paint: safeNum(item['NDT_백색페인트'], 0),
-      chem_penetrant: safeNum(item['NDT_침투제'], 0),
-      chem_cleaner: safeNum(item['NDT_세척제'], 0),
-      chem_developer: safeNum(item['NDT_현상제'], 0),
-      chem_fl_pen: safeNum(item['NDT_형광침투제'], 0),
-      extra: chemList.join(" "),
-      workers: workersArr.join(", "),
-      worker_list: workerList
-    };
-  }
 
   var matchedRecords = [];
   var allRecent = [];
 
   for (var r = 0; r < data.length; r++) {
-    var rec = parseRow(r, data[r]);
+    var rec = mobileRecordFromRow(headerRow, data[r], startRow + r);
     allRecent.push(rec);
     if (!targetDate || rec.date === targetDate) {
       matchedRecords.push(rec);
@@ -653,7 +546,7 @@ function getAllRecords() {
     for (var c = 0; c < headers.length; c++) {
       var val = data[r][c];
       if (val instanceof Date) {
-        val = Utilities.formatDate(val, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+        val = Utilities.formatDate(val, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss.SSS");
       }
       rowObj[headers[c]] = val;
     }

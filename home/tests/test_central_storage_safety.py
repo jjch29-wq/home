@@ -52,6 +52,37 @@ class StorageSafetyTests(unittest.TestCase):
             with pd.ExcelFile(path) as book:
                 self.assertEqual(set(book.sheet_names),{'Materials','Transactions','MonthlyUsage','DailyUsage','Budget'})
 
+    def test_external_change_blocks_stale_save_and_preserves_memory(self):
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as directory:
+            path=Path(directory)/'data.xlsx'
+            app=self.app(path)
+            save=self.saver()
+            self.assertTrue(save(app))
+            pd.DataFrame({'new_mobile_record':[99]}).to_excel(path,index=False)
+            newer=path.read_bytes()
+            self.assertFalse(save(app))
+            self.assertEqual(path.read_bytes(),newer)
+            self.assertEqual(app.materials_df.iloc[0,0],1)
+            app.show_error_dialog.assert_called_once()
+
+    def test_change_during_serialization_blocks_replace(self):
+        with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as directory:
+            path=Path(directory)/'data.xlsx'
+            app=self.app(path)
+            save=self.saver()
+            self.assertTrue(save(app))
+            original=pd.DataFrame.to_excel
+            newer=[]
+            def external_change(frame,*args,**kwargs):
+                result=original(frame,*args,**kwargs)
+                if not newer:
+                    path.write_bytes(b'external newer version')
+                    newer.append(path.read_bytes())
+                return result
+            with patch.object(pd.DataFrame,'to_excel',external_change):
+                self.assertFalse(save(app))
+            self.assertEqual(path.read_bytes(),newer[0])
+
     def test_locked_primary_keeps_original_and_returns_failure_with_backup(self):
         with tempfile.TemporaryDirectory(dir=ROOT/'tmp') as directory:
             path=Path(directory)/'data.xlsx'

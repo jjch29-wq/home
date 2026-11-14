@@ -25,6 +25,52 @@ def fixture(materials, transactions=(), daily=()):
 
 
 class StockCalculationTests(unittest.TestCase):
+    def test_chemical_usage_only_reduces_linked_warehouse(self):
+        app=fixture([{'MaterialID':'1','품목명':'세척제','창고':'중앙','수량':20},
+                     {'MaterialID':'2','품목명':'세척제','창고':'경인','수량':20}],daily=[
+                         {'MaterialID':'1','검사방법':'MT','NDT_세척제':3}])
+        lookups=build_stock_lookups(app)
+        self.assertEqual([stock_breakdown(app,r,lookups)['current_stock']
+                          for _,r in app.materials_df.iterrows()],[17,20])
+        for _,r in app.materials_df.iterrows():
+            summary,history=material_history(app,r)
+            self.assertEqual(20-sum(x['decrease'] for x in history),summary['current_stock'])
+
+    def test_ambiguous_chemical_usage_waits_for_material_assignment(self):
+        app=fixture([{'MaterialID':'1','품목명':'세척제','창고':'중앙','수량':20},
+                     {'MaterialID':'2','품목명':'세척제','창고':'경인','수량':20}],daily=[
+                         {'MaterialID':'','검사방법':'MT','NDT_세척제':3}])
+        lookups=build_stock_lookups(app)
+        self.assertEqual([stock_breakdown(app,r,lookups)['current_stock']
+                          for _,r in app.materials_df.iterrows()],[20,20])
+        self.assertEqual(lookups[4].unassigned,[('세척제',3)])
+        app.daily_usage_df['창고']='경인'
+        lookups=build_stock_lookups(app)
+        self.assertEqual([stock_breakdown(app,r,lookups)['current_stock']
+                          for _,r in app.materials_df.iterrows()],[20,17])
+
+    def test_same_name_other_model_is_not_consumed(self):
+        app = fixture([{'MaterialID':'1','품목명':'film','모델명':'A','수량':100},
+                       {'MaterialID':'2','품목명':'film','모델명':'B','수량':100}], daily=[
+                           {'MaterialID':'1','품목명':'film','검사방법':'RT','FilmCount':10}])
+        lookups = build_stock_lookups(app)
+        self.assertEqual([stock_breakdown(app,r,lookups)['current_stock']
+                          for _,r in app.materials_df.iterrows()], [90,100])
+
+    def test_fluorescent_penetrant_does_not_consume_plain_penetrant(self):
+        app = fixture([{'MaterialID':'1','품목명':'침투제','수량':20},
+                       {'MaterialID':'2','품목명':'형광침투제','수량':20}], daily=[
+                           {'MaterialID':'','검사방법':'PT','ndt_data':'{"형광침투제":3}'}])
+        lookups = build_stock_lookups(app)
+        self.assertEqual(lookups[4], {'형광침투제':3})
+        self.assertEqual([stock_breakdown(app,r,lookups)['current_stock']
+                          for _,r in app.materials_df.iterrows()], [20,17])
+
+    def test_unique_unassigned_usage_and_id_usage_are_both_preserved(self):
+        self.check_stock(fixture([{'MaterialID':'1','품목명':'film','수량':100}], daily=[
+            {'MaterialID':'1','품목명':'film','검사방법':'RT','FilmCount':10},
+            {'MaterialID':'','품목명':'film','검사방법':'RT','FilmCount':3}]),87)
+
     def check_stock(self, app, expected):
         before = [df.copy(deep=True) for df in (app.materials_df, app.transactions_df, app.daily_usage_df)]
         lookups = build_stock_lookups(app)

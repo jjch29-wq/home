@@ -10,7 +10,8 @@ def material_history(app, mat):
     target = app.normalize_id(mat['MaterialID'])
     name = app.clean_nan(mat.get('품목명', ''))
     combined = (name + app.clean_nan(mat.get('모델명', ''))).replace(' ', '')
-    chemical = next((key for key in lookups[4] if key in combined), None)
+    from site_apps.central.src.models.stock_calculation import chemical_key
+    chemical = chemical_key(combined)
     rows = []
     is_equipment = not app._is_consumable_material(combined, '')
     def norm(value):
@@ -67,11 +68,9 @@ def material_history(app, mat):
         single.daily_usage_df = daily.iloc[[position]].copy()
         one = build_stock_lookups(single)
         if chemical:
-            qty = one[4].get(chemical, 0)
-        elif target and lookups[2].get(target, 0):
-            qty = one[2].get(target, 0)
+            qty = stock_breakdown(single, mat, one)['ndt_usage']
         else:
-            qty = one[3].get(name, 0) if name else 0
+            qty = one[2].get(target, 0) + (one[3].get(name, 0) if name else 0)
         if qty:
             add(entry, '현장 사용', -qty)
     rows.sort(key=lambda row: row['date'], reverse=True)

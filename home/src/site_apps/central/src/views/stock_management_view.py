@@ -38,6 +38,8 @@ def setup_stock_tab_impl(self):
     
     btn_select_all = ttk.Button(action_row, text="전체 선택", command=self.select_all_stock)
     btn_select_all.pack(side='left', padx=5)
+    self.stock_allocation_notice = ttk.Label(control_frame, foreground='#A33A00')
+    self.stock_allocation_notice.pack(fill='x')
     
     # [NEW] Popout Button
     btn_popout_stock = ttk.Button(action_row, text="🔍 팝업창으로 열기", command=self.open_detached_stock_view)
@@ -212,6 +214,11 @@ def update_stock_view_impl(self):
     
     from site_apps.central.src.models.stock_calculation import build_stock_lookups, stock_breakdown
     stock_lookups = build_stock_lookups(self)
+    unassigned = stock_lookups[4].unassigned
+    if hasattr(self, 'stock_allocation_notice'):
+        self.stock_allocation_notice.configure(text=(
+            f'약품 사용 {len(unassigned)}건의 품목·창고를 특정할 수 없어 재고 차감을 보류했습니다. 입력 기록의 자재 연결·창고를 확인하세요.'
+            if unassigned else ''))
 
     # Calculate current stock
     stock_summary = []
