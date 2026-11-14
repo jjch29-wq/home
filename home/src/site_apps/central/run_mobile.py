@@ -82,6 +82,11 @@ def start_tunnel(port):
 
 def main():
     import uvicorn
+    from site_apps.central.src.runtime_profile import is_development
+    if is_development():
+        print('[개발용] http://127.0.0.1:8001 - 로컬 테스트 전용, 외부 터널 없음', flush=True)
+        uvicorn.run('site_apps.central.mobile.server:app', host='127.0.0.1', port=8001, reload=False)
+        return
     local_ip = get_local_ip()
     port = 8000
 

@@ -6,9 +6,14 @@ import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from site_apps.central.src.app import MaterialManager
+from site_apps.central.src.runtime_profile import is_development
 
 class CentralMaterialManager(MaterialManager):
     def __init__(self, root):
+        if is_development():
+            super().__init__(root)
+            self.root.title('[개발용 · 운영 동기화 차단] 중앙지사 자재관리')
+            return
         # 1. 앱 실행 시 모바일 및 구글 클라우드 내역 선제 자동 동기화
         try:
             from site_apps.central.src.sync_google_sheet import sync_all_central_sources
@@ -28,6 +33,9 @@ class CentralMaterialManager(MaterialManager):
 
     def open_google_sync_dialog(self):
         """구글 웹 앱 URL 설정 대화상자"""
+        if is_development():
+            self.trigger_mobile_sync()
+            return
         import tkinter.simpledialog as sd
         from tkinter import messagebox
         from site_apps.central.src.sync_google_sheet import load_sync_config, save_sync_config
@@ -48,6 +56,11 @@ class CentralMaterialManager(MaterialManager):
 
     def trigger_mobile_sync(self, show_msg=True):
         """사용자가 '📱 모바일 동기화' 버튼 클릭 시 즉시 수동 동기화 실행"""
+        if is_development():
+            if show_msg:
+                from tkinter import messagebox
+                messagebox.showinfo('개발용', '운영 클라우드 동기화가 차단되어 있습니다. 테스트 모바일은 http://127.0.0.1:8001 을 사용하세요.')
+            return
         try:
             from site_apps.central.src.sync_google_sheet import sync_all_central_sources, load_sync_config
             cfg = load_sync_config()
@@ -82,6 +95,8 @@ class CentralMaterialManager(MaterialManager):
 
     def _start_periodic_sync(self):
         """백그라운드 스레드에서 모바일 신규 저장 내역 감지"""
+        if is_development():
+            return
         def worker():
             try:
                 from site_apps.central.src.sync_google_sheet import sync_all_central_sources

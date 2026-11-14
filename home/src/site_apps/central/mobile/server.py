@@ -29,6 +29,7 @@ if str(HOME_SRC) not in sys.path:
 from site_apps.central.src.services.ot_calculator import ot_breakdown
 from site_apps.central.src.services.inspection_quantity import quantity_per_joint
 from site_apps.central.src.data_sync import get_business_data_dir
+from site_apps.central.src.runtime_profile import is_development
 
 app = FastAPI(title="중앙지사 모바일 현장 입력 시스템", version="1.0.0")
 
@@ -163,6 +164,9 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 def get_inventory_paths():
     """Return cloud and local inventory paths"""
+    if is_development():
+        local = Path(__file__).resolve().parents[1] / 'data' / 'Material_Inventory.xlsx'
+        return [str(local)] if local.exists() else []
     paths = []
     local_p = Path(__file__).resolve().parents[1] / "data" / "Material_Inventory.xlsx"
     if local_p.exists():

@@ -1,5 +1,6 @@
 import json
 import os
+from site_apps.central.src.runtime_profile import is_development
 
 
 class SharedDataUnavailableError(RuntimeError):
@@ -7,6 +8,8 @@ class SharedDataUnavailableError(RuntimeError):
 
 
 def _configured_data_dir():
+    if is_development():
+        return None
     base_dir = os.path.dirname(os.path.abspath(__file__))
     config_file = os.path.join(base_dir, "sync_config.json")
     if not os.path.exists(config_file):

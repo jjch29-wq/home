@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import tempfile
 import pandas as pd
 from pathlib import Path
@@ -11,6 +12,13 @@ from home.src.site_apps.central.src.sync_google_sheet import (
 )
 
 class TestCentralGoogleSync(unittest.TestCase):
+    def setUp(self):
+        # These tests exercise production reconciliation using mocked cloud APIs.
+        # Development network blocking is covered separately by isolation tests.
+        guard = patch('home.src.site_apps.central.src.sync_google_sheet.is_development', return_value=False)
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def test_sync_records_to_excel(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
             test_excel_path = Path(tmp_dir) / "Material_Inventory.xlsx"

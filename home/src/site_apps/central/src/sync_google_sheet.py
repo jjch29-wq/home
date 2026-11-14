@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
 import pandas as pd
+from .runtime_profile import is_development, disabled_sync_result
 
 logger = logging.getLogger("central_sync")
 
@@ -51,6 +52,8 @@ def _save_sync_state(inventory_path: Path, cloud_entry_times: set) -> None:
 
 def get_all_inventory_paths() -> List[Path]:
     """중앙지사의 모든 재고 DB 경로 탐색 (로컬 및 Google Drive)"""
+    if is_development():
+        return [DEFAULT_INVENTORY_PATH] if DEFAULT_INVENTORY_PATH.exists() else []
     paths = []
     if DEFAULT_INVENTORY_PATH.exists():
         paths.append(DEFAULT_INVENTORY_PATH)
@@ -79,6 +82,8 @@ def get_all_inventory_paths() -> List[Path]:
     return paths
 
 def load_sync_config() -> dict:
+    if is_development():
+        return {'web_app_url': '', 'sheet_id': '', 'auto_sync_on_startup': False, 'last_sync_time': ''}
     if CONFIG_PATH.exists():
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -104,6 +109,8 @@ def save_sync_config(cfg: dict) -> bool:
 
 def fetch_records_from_web_app(web_app_url: str) -> Tuple[List[str], List[Dict[str, Any]]]:
     """Google Apps Script 배포 URL (Web App)에서 전체 레코드 획득"""
+    if is_development():
+        raise RuntimeError(disabled_sync_result()['message'])
     if not web_app_url:
         raise ValueError("Google Apps Script 배포 웹 앱 URL이 지정되지 않았습니다.")
 
@@ -246,6 +253,8 @@ def push_record_to_web_app(
     """
     중앙지사 PC에서 작업 일보 수정/삭제/추가 내역을 Google Apps Script Web App에 실시간 Push
     """
+    if is_development():
+        return disabled_sync_result()
     try:
         import requests
     except ImportError:
@@ -297,6 +306,8 @@ def push_batch_to_web_app(
     Google Apps Script Web App에 일괄 동기화 요청
     (단건 표준 API를 순차 호출하여 모든 Apps Script 배포 버전과 100% 호환 보장)
     """
+    if is_development():
+        return disabled_sync_result()
     cfg = load_sync_config()
     target_url = web_app_url or cfg.get("web_app_url")
     if not target_url:
@@ -357,6 +368,8 @@ def two_way_reconcile_with_web_app(
     2. 구글 시트에서 수정된 행을 PC 엑셀에 제자리 반영 (Pull-Update)
     3. PC 엑셀에만 있는 행이나 수정된 행을 구글 시트로 밀어넣음 (Push)
     """
+    if is_development():
+        return disabled_sync_result()
     cfg = load_sync_config()
     target_url = web_app_url or cfg.get("web_app_url")
     if not target_url:
@@ -553,6 +566,8 @@ def two_way_reconcile_with_web_app(
 
 def run_sync(web_app_url: Optional[str] = None, inventory_path: Optional[Path] = None) -> Dict[str, Any]:
     """통합 동기화 실행 함수 (완전 양방향 지원)"""
+    if is_development():
+        return disabled_sync_result()
     cfg = load_sync_config()
     target_url = web_app_url or cfg.get("web_app_url")
     if not target_url:
@@ -565,6 +580,8 @@ def run_sync(web_app_url: Optional[str] = None, inventory_path: Optional[Path] =
 
 def sync_local_and_drive_files() -> Dict[str, Any]:
     """로컬 Material_Inventory.xlsx와 Google Drive의 파일 간 DailyUsage 양방향 무손실 동기화"""
+    if is_development():
+        return disabled_sync_result()
     paths = get_all_inventory_paths()
     if len(paths) < 2:
         return {
@@ -601,6 +618,8 @@ def sync_all_central_sources() -> Dict[str, Any]:
     중앙지사 전체 데이터 소스 (Google Apps Script Web App + Google Drive + Local) 자동 통합 동기화
     휴대폰에서 저장된 내역을 앱 실행 시 또는 백그라운드에서 자동으로 감지하여 엑셀에 반영합니다.
     """
+    if is_development():
+        return disabled_sync_result()
     total_added = 0
     pulled_count = 0
     pushed_count = 0
