@@ -74,7 +74,10 @@ class QueryHistoryTests(unittest.TestCase):
         self.app.update_stock_view.assert_not_called()
 
     def test_zero_chemical_edit_updates_legacy_and_restores_stock(self):
-        from test_central_stock_calculation import fixture
+        try:
+            from test_central_stock_calculation import fixture
+        except ImportError:
+            from home.tests.test_central_stock_calculation import fixture
         from site_apps.central.src.models.stock_calculation import build_stock_lookups, stock_breakdown
         reference=fixture([{'MaterialID':'3','품목명':'세척제','수량':20}])
         for name in ('materials_df','transactions_df','normalize_id','clean_nan','_is_consumable_material'):
