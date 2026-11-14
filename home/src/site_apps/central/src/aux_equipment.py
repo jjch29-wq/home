@@ -143,37 +143,63 @@ def set_selection(target, selected):
 
 def _bind_count_badge(target, label):
     def refresh(*_):
-        label.configure(text=f'{len(names(target.get()))}개 선택')
+        val = target.get() if hasattr(target, 'get') else ''
+        count = len(names(val))
+        if count == 0:
+            label.configure(text='0개 선택', foreground='#94A3B8', font=('Malgun Gothic', 8))
+        else:
+            label.configure(text=f'● {count}개 선택', foreground='#1D4ED8', font=('Malgun Gothic', 8, 'bold'))
     if isinstance(target, tk.Variable):
         target.trace_add('write', refresh)
     else:
-        variable = tk.StringVar(master=target, value=target.get())
-        target.configure(textvariable=variable)
+        variable = getattr(target, '_selection_variable', None)
+        if variable is None:
+            variable = tk.StringVar(master=target, value=target.get())
+            target.configure(textvariable=variable)
+            target._selection_variable = variable
         variable.trace_add('write', refresh)
-        target._selection_variable = variable
     refresh()
 
 
 def bind_main_selector(parent, app, target):
-    ttk.Button(parent, text='복수 선택', width=9,
-               command=lambda: select_main(parent, app, target)).pack(side='left', padx=3)
+    btn_select = tk.Button(parent, text='📋 복수선택', font=('Malgun Gothic', 8),
+                           bg='#F1F5F9', fg='#1E293B', activebackground='#E2E8F0',
+                           bd=1, relief='solid', cursor='hand2', padx=5, pady=0,
+                           command=lambda: select_main(parent, app, target))
+    btn_select.pack(side='left', padx=(4, 2))
     badge = ttk.Label(parent)
-    badge.pack(side='left', padx=3)
+    badge.pack(side='left', padx=2)
     _bind_count_badge(target, badge)
 
 
 def add_selector(parent, app, variable, width=25):
     frame = ttk.Frame(parent)
-    ttk.Entry(frame, textvariable=variable, width=width).pack(side='left', fill='x', expand=True)
-    ttk.Button(frame, text='복수 선택', width=9,
-               command=lambda: select(frame, app, variable)).pack(side='left', padx=3)
+    theme_bg = getattr(app, 'theme_bg', '#f0f0f0')
+    entry = ttk.Entry(frame, textvariable=variable, width=width)
+    entry.pack(side='left', fill='x', expand=True)
+
+    # 🔍 돋보기 버튼 Entry 내부에 배치 (보조장비 검색/복수선택 연동)
+    btn_search = tk.Button(entry, text="🔍", font=('Arial', 8), bd=0, bg='white', cursor='hand2',
+                           command=lambda: select(frame, app, variable))
+    btn_search.place(relx=1.0, x=-2, rely=0.5, anchor='e', width=18, height=18)
+
+    # 세련된 📋 복수선택 버튼
+    btn_select = tk.Button(frame, text='📋 복수선택', font=('Malgun Gothic', 8),
+                           bg='#F1F5F9', fg='#1E293B', activebackground='#E2E8F0',
+                           bd=1, relief='solid', cursor='hand2', padx=5, pady=0,
+                           command=lambda: select(frame, app, variable))
+    btn_select.pack(side='left', padx=(4, 2))
+
+    # 선택 개수 배지
     badge = ttk.Label(frame)
-    badge.pack(side='left', padx=3)
+    badge.pack(side='left', padx=2)
     _bind_count_badge(variable, badge)
+
+    # ⚙️ 관리 버튼
     if hasattr(app, 'open_list_management_dialog'):
-        tk.Button(frame, text='⚙️', font=('Malgun Gothic', 8), bd=0,
-                  bg=getattr(app, 'theme_bg', '#f0f0f0'), fg='blue', cursor='hand2',
-                  command=lambda: app.open_list_management_dialog('aux_equipments')).pack(side='left', padx=2)
+        tk.Button(frame, text='⚙️ 관리', font=('Malgun Gothic', 8), bd=0,
+                  bg=theme_bg, fg='blue', cursor='hand2',
+                  command=lambda: app.open_list_management_dialog('aux_equipments')).pack(side='left', padx=(2, 0))
     return frame
 
 

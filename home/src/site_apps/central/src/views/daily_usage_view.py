@@ -226,13 +226,14 @@ def setup_daily_usage_tab_impl(self):
                                 bd=0, bg='white', cursor='hand2',
                                 command=self.open_equipment_search_dialog)
     btn_equip_search.place(relx=1.0, x=-2, rely=0.5, anchor='e', width=18, height=18)
+
+    from site_apps.central.src.aux_equipment import add_selector, bind_main_selector
+    bind_main_selector(equip_container, self, self.ent_daily_equip)
     
     btn_equip_mgr = tk.Button(equip_container, text="⚙️ 관리", font=('Malgun Gothic', 8), bd=0, bg=self.theme_bg, fg='blue', cursor='hand2',
                              command=lambda: self.open_list_management_dialog('equipments', target_cb=self.ent_daily_equip))
     btn_equip_mgr.pack(side='left', padx=(2, 0))
 
-    from site_apps.central.src.aux_equipment import add_selector, bind_main_selector
-    bind_main_selector(equip_container, self, self.ent_daily_equip)
     self.daily_aux_equipment_var = tk.StringVar(value='')
     ttk.Label(form_content, text="보조장비:").grid(row=2, column=2, padx=(5, 0), pady=1, sticky='e')
     add_selector(form_content, self, self.daily_aux_equipment_var, width=28).grid(
