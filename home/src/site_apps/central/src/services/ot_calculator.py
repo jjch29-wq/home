@@ -14,7 +14,8 @@ def ot_breakdown(worktime, date, legacy_ot=''):
     weekday = parsed_date.weekday() if not pd.isna(parsed_date) else 0
     if match:
         sh, sm, eh, em = map(int, match.groups())
-        if sh > 23 or eh > 23 or sm > 59 or em > 59:
+        # 24:00 is a valid end-of-day boundary; other 24:xx times are not.
+        if sh > 23 or eh > 24 or sm > 59 or em > 59 or (eh == 24 and em != 0):
             raise ValueError('작업시간을 확인해주세요.')
         start, end = sh + sm / 60, eh + em / 60
         if end < start or ('익일' in text and end <= start): end += 24

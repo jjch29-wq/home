@@ -20,6 +20,20 @@ class Field:
 
 
 class CommonOtTests(unittest.TestCase):
+    def test_midnight_end_preserves_ot_rates(self):
+        for date, expected in (('2026-10-22', (2, 2, 0, 18000)),
+                               ('2026-10-23', (2, 2, 0, 18000)),
+                               ('2026-10-24', (0, 0, 4, 30000))):
+            with self.subTest(date=date):
+                result = ot_breakdown('20:00~24:00', date)
+                self.assertEqual((result['day'], result['night'], result['holiday'], result['amount']), expected)
+                self.assertEqual(result, ot_breakdown('20:00~익일00:00', date))
+
+    def test_invalid_times_remain_rejected(self):
+        for worktime in ('20:00~24:01', '20:00~25:00', '24:00~09:00', '20:60~24:00'):
+            with self.subTest(worktime=worktime), self.assertRaises(ValueError):
+                ot_breakdown(worktime, '2026-10-22')
+
     def test_overnight_ordinary_weekday_is_eleven_hours_without_rest_deduction(self):
         result=ot_breakdown('(야간) 22:00~익일09:00','2026-10-22')
         self.assertEqual((result['hours'],result['night'],result['amount']),(11,11,55000))
