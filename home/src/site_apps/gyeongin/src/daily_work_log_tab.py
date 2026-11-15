@@ -245,6 +245,15 @@ class DailyWorkLogTab(ttk.Frame):
         return f"{name} | {welder_id}" if name else welder_id
         
     def setup_ui(self):
+        self._left_pane_visible = True
+        self._left_pane_width = None
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill='x', padx=5, pady=(5, 0))
+        self.left_pane_toggle = ttk.Button(
+            toolbar, text='◀ 좌측 숨기기', command=self._toggle_left_pane,
+        )
+        self.left_pane_toggle.pack(side='left')
+        self._build_basic_info(self)
         # Create PanedWindow for Left/Right split
         self.paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         self.paned.pack(fill="both", expand=True)
@@ -322,19 +331,38 @@ class DailyWorkLogTab(ttk.Frame):
         try:
             self.update_idletasks()
             total_width = self.paned.winfo_width()
-            if total_width > 200:
+            if total_width > 200 and self._left_pane_visible:
                 self.paned.sashpos(0, total_width // 2)
         except (tk.TclError, AttributeError):
             pass
 
-    def _build_left_pane(self, parent):
-        # --- Top Section: General Info ---
-        top_frame = ttk.LabelFrame(parent, text="기본 정보", padding=10)
+    def _toggle_left_pane(self):
+        if self._left_pane_visible:
+            self._left_pane_width = self.paned.sashpos(0)
+            self.paned.forget(self.left_container)
+            self._left_pane_visible = False
+            self.left_pane_toggle.configure(text='▶ 좌측 보이기')
+        else:
+            self.paned.insert(0, self.left_container, weight=4)
+            self._left_pane_visible = True
+            self.paned.update_idletasks()
+            width = self.paned.winfo_width()
+            position = self._left_pane_width if self._left_pane_width is not None else width // 2
+            self.paned.sashpos(0, max(0, min(position, width - 1)))
+            self.left_pane_toggle.configure(text='◀ 좌측 숨기기')
+
+    def _build_basic_info(self, parent):
+        # --- Top Section: General Info & Reports Toolbar ---
+        top_frame = ttk.LabelFrame(parent, text="기본 정보 및 보고서 출력", padding=8)
         top_frame.pack(fill="x", padx=5, pady=5)
         
-        ttk.Label(top_frame, text="검사일자:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
-        self.date_entry = DateEntry(top_frame, width=15, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
-        self.date_entry.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        # 1. 좌측: 기본 정보 입력 및 저장
+        left_box = ttk.Frame(top_frame)
+        left_box.pack(side="left", fill="y", padx=(0, 10))
+        
+        ttk.Label(left_box, text="검사일자:").grid(row=0, column=0, padx=(0, 4), pady=3, sticky="e")
+        self.date_entry = DateEntry(left_box, width=13, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+        self.date_entry.grid(row=0, column=1, padx=(0, 8), pady=3, sticky="w")
         self.date_entry.bind("<<DateEntrySelected>>", self.on_date_change)
         self.date_entry.bind("<Return>", self.on_date_change)
         from site_apps.gyeongin.src.views.calendar_work_summary import CalendarWorkSummary
@@ -346,25 +374,51 @@ class DailyWorkLogTab(ttk.Frame):
         # self.date_entry.bind("<FocusOut>", self.on_date_change) # Removed to prevent accidental UI wipes
 
         self.date_status_label = tk.Label(
-            top_frame, text="○ 저장되지 않은 날짜", fg="#777777",
+            left_box, text="○ 저장되지 않은 날짜", fg="#777777",
             font=('맑은 고딕', 9, 'bold')
         )
-        self.date_status_label.grid(row=1, column=0, columnspan=2, padx=5, sticky="e")
+        self.date_status_label.grid(row=1, column=0, columnspan=2, padx=(0, 8), sticky="w")
         
-        ttk.Label(top_frame, text="날씨:").grid(row=0, column=2, padx=5, pady=5, sticky="e")
-        self.weather_entry = ttk.Entry(top_frame, width=15)
-        self.weather_entry.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+        ttk.Label(left_box, text="날씨:").grid(row=0, column=2, padx=(0, 4), pady=3, sticky="e")
+        self.weather_entry = ttk.Entry(left_box, width=10)
+        self.weather_entry.grid(row=0, column=3, padx=(0, 8), pady=3, sticky="w")
         
-        btn_calc = ttk.Button(top_frame, text="자동 집계 및 저장", command=self.auto_calculate_and_save)
-        btn_calc.grid(row=0, column=4, padx=5, pady=5)
+        btn_calc = ttk.Button(left_box, text="💾 자동 집계 및 저장", command=self.auto_calculate_and_save)
+        btn_calc.grid(row=0, column=4, padx=(0, 4), pady=3)
         
-        # [NEW] 삭제 버튼 추가
-        btn_delete = ttk.Button(top_frame, text="🗑️ 데이터 삭제", command=self.delete_current_date_data)
-        btn_delete.grid(row=0, column=5, padx=5, pady=5)
+        btn_delete = ttk.Button(left_box, text="🗑️ 데이터 삭제", command=self.delete_current_date_data)
+        btn_delete.grid(row=0, column=5, padx=0, pady=3)
         
-        btn_export = ttk.Button(top_frame, text="엑셀 출력 (일보 생성)", command=self.export_excel)
-        btn_export.grid(row=1, column=4, columnspan=2, padx=5, pady=(0, 3), sticky="e")
+        btn_export = ttk.Button(left_box, text="📊 엑셀 출력 (일보 생성)", command=self.export_excel)
+        btn_export.grid(row=1, column=4, columnspan=2, padx=0, pady=(2, 0), sticky="ew")
         
+        # 2. 세로 구분선
+        sep = ttk.Separator(top_frame, orient="vertical")
+        sep.pack(side="left", fill="y", padx=10, pady=2)
+        
+        # 3. 우측: 보고서 및 성적서 출력 (빈 공간 100% 활용)
+        right_box = ttk.LabelFrame(top_frame, text="보고서 및 성적서 발행", padding=(10, 4))
+        right_box.pack(side="left", fill="both", expand=True)
+        
+        btn_export_ndt = ttk.Button(right_box, text="📗 NDT 누계 대장 엑셀 출력", command=self.export_ndt_summary)
+        btn_export_ndt.grid(row=0, column=0, padx=5, pady=3, sticky="w")
+        
+        btn_export_monthly = ttk.Button(right_box, text="📈 월간진도보고서 출력", command=self.export_monthly_report)
+        btn_export_monthly.grid(row=0, column=1, padx=5, pady=3, sticky="w")
+        
+        btn_weekly_report = ttk.Button(right_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
+        btn_weekly_report.grid(row=0, column=2, padx=5, pady=3, sticky="w")
+        
+        btn_load_daily = ttk.Button(right_box, text="📥 일일기록 불러오기", command=self.load_from_daily_usage)
+        btn_load_daily.grid(row=1, column=0, padx=5, pady=3, sticky="w")
+        
+        btn_export_cert = ttk.Button(right_box, text="📄 시험성적서 출력", command=self.export_certificates)
+        btn_export_cert.grid(row=1, column=1, padx=5, pady=3, sticky="w")
+        
+        btn_ledger = ttk.Button(right_box, text="📒 성적서 발행대장", command=self.export_certificate_ledger)
+        btn_ledger.grid(row=1, column=2, padx=5, pady=3, sticky="w")
+        
+    def _build_left_pane(self, parent):
         # Saved inspection quantities are grouped by client, method and unit.
         mid_frame = ttk.LabelFrame(parent, text="1. 업체별 검사 실적", padding=10)
         mid_frame.pack(fill='both', expand=True, padx=5, pady=5)
@@ -593,32 +647,18 @@ class DailyWorkLogTab(ttk.Frame):
     def _build_right_pane(self, parent):
         # --- NDT Results Grid ---
         title_frame = ttk.Frame(parent)
-        title_frame.pack(fill="x", pady=5)
-        ttk.Label(title_frame, text="2. 비파괴검사결과서 (행 추가 가능)", font=("맑은 고딕", 12, "bold")).pack(side="left", padx=10)
+        title_frame.pack(fill="x", padx=5, pady=(4, 2))
+        ttk.Label(title_frame, text="2. 비파괴검사결과서", font=("맑은 고딕", 11, "bold")).pack(side="left", padx=(5, 10))
         
-        ttk.Button(title_frame, text="+ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).pack(side="left", padx=5)
-
-        btn_export_ndt = ttk.Button(title_frame, text="NDT 누계 대장 엑셀 출력", command=self.export_ndt_summary)
-        btn_export_ndt.pack(side="left", padx=10)
+        ttk.Button(title_frame, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).pack(side="left", padx=3)
+        ttk.Button(title_frame, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).pack(side="left", padx=3)
+        ttk.Button(title_frame, text="✏️ 라인번호 일괄 변경", command=self._edit_ndt_lines).pack(side="left", padx=3)
+        ttk.Button(title_frame, text="✏️ 구간 일괄 변경", command=self._edit_ndt_sections).pack(side="left", padx=3)
+        ttk.Button(title_frame, text="🔍 선택 행 상세정보", command=self._edit_ndt_details).pack(side="left", padx=3)
         
-        btn_export_monthly = ttk.Button(title_frame, text="월간진도보고서 출력", command=self.export_monthly_report)
-        btn_export_monthly.pack(side="left", padx=10)
-        
-        btn_weekly_report = ttk.Button(title_frame, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
-        btn_weekly_report.pack(side="left", padx=10)
-
-        line_bar = ttk.Frame(parent)
-        line_bar.pack(fill='x', padx=5, pady=(0, 4))
-        ttk.Button(line_bar, text='선택 행 삭제', command=self._delete_selected_ndt_row).pack(side='left', padx=(0, 8))
         self.ndt_selection_vars = []
         self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
-        ttk.Label(line_bar, textvariable=self.ndt_selection_text).pack(side='left', padx=(0, 8))
-        ttk.Button(line_bar, text='라인번호 일괄 변경', command=self._edit_ndt_lines).pack(side='left')
-        ttk.Button(line_bar, text='구간 일괄 변경', command=self._edit_ndt_sections).pack(side='left', padx=(8, 0))
-        ttk.Button(line_bar, text='선택 행 상세정보', command=self._edit_ndt_details).pack(side='left', padx=(8, 0))
-        ttk.Button(line_bar, text='📥 일일기록 불러오기', command=self.load_from_daily_usage).pack(side='left', padx=(10, 0))
-        ttk.Button(line_bar, text='📄 시험성적서 출력', command=self.export_certificates).pack(side='left', padx=(8, 0))
-        ttk.Button(line_bar, text='📒 성적서 발행대장', command=self.export_certificate_ledger).pack(side='left', padx=(8, 0))
+        ttk.Label(title_frame, textvariable=self.ndt_selection_text, foreground="#666666").pack(side="left", padx=(8, 0))
 
         view_bar = ttk.LabelFrame(parent, text='검사 대상 보기')
         view_bar.pack(fill='x', padx=5, pady=(0, 4))
