@@ -11680,7 +11680,8 @@ class PMIReportApp:
             stamp_data = self._get_photo_log_stamp()
             if stamp_data:
                 from mt_report_layout import apply_header_stamp
-                apply_header_stamp(ws0, stamp_data)
+                for sheet in wb.worksheets:
+                    apply_header_stamp(sheet, stamp_data)
             else:
                 self.log('⚠️ MT 직인 삽입 실패: PAUT 양식의 직인을 확인해 주세요.')
             wb.save(save_path)
