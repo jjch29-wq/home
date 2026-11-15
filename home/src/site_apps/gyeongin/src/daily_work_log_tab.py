@@ -352,17 +352,17 @@ class DailyWorkLogTab(ttk.Frame):
             self.left_pane_toggle.configure(text='◀ 좌측 숨기기')
 
     def _build_basic_info(self, parent):
-        # --- Top Section: General Info & Reports Toolbar ---
-        top_frame = ttk.LabelFrame(parent, text="기본 정보 및 보고서 출력", padding=8)
+        # --- Top Section: General Info & Unified Work Toolbar ---
+        top_frame = ttk.LabelFrame(parent, text="기본 정보 및 통합 작업 도구", padding=6)
         top_frame.pack(fill="x", padx=5, pady=5)
         
         # 1. 좌측: 기본 정보 입력 및 저장
-        left_box = ttk.Frame(top_frame)
-        left_box.pack(side="left", fill="y", padx=(0, 10))
+        left_box = ttk.LabelFrame(top_frame, text="기본 정보", padding=(6, 3))
+        left_box.pack(side="left", fill="y", padx=(0, 6))
         
-        ttk.Label(left_box, text="검사일자:").grid(row=0, column=0, padx=(0, 4), pady=3, sticky="e")
-        self.date_entry = DateEntry(left_box, width=13, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
-        self.date_entry.grid(row=0, column=1, padx=(0, 8), pady=3, sticky="w")
+        ttk.Label(left_box, text="검사일자:").grid(row=0, column=0, padx=(0, 4), pady=2, sticky="e")
+        self.date_entry = DateEntry(left_box, width=12, background='darkblue', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+        self.date_entry.grid(row=0, column=1, padx=(0, 6), pady=2, sticky="w")
         self.date_entry.bind("<<DateEntrySelected>>", self.on_date_change)
         self.date_entry.bind("<Return>", self.on_date_change)
         from site_apps.gyeongin.src.views.calendar_work_summary import CalendarWorkSummary
@@ -377,46 +377,57 @@ class DailyWorkLogTab(ttk.Frame):
             left_box, text="○ 저장되지 않은 날짜", fg="#777777",
             font=('맑은 고딕', 9, 'bold')
         )
-        self.date_status_label.grid(row=1, column=0, columnspan=2, padx=(0, 8), sticky="w")
+        self.date_status_label.grid(row=1, column=0, columnspan=2, padx=(0, 6), sticky="w")
         
-        ttk.Label(left_box, text="날씨:").grid(row=0, column=2, padx=(0, 4), pady=3, sticky="e")
-        self.weather_entry = ttk.Entry(left_box, width=10)
-        self.weather_entry.grid(row=0, column=3, padx=(0, 8), pady=3, sticky="w")
+        ttk.Label(left_box, text="날씨:").grid(row=0, column=2, padx=(0, 4), pady=2, sticky="e")
+        self.weather_entry = ttk.Entry(left_box, width=8)
+        self.weather_entry.grid(row=0, column=3, padx=(0, 6), pady=2, sticky="w")
         
-        btn_calc = ttk.Button(left_box, text="💾 자동 집계 및 저장", command=self.auto_calculate_and_save)
-        btn_calc.grid(row=0, column=4, padx=(0, 4), pady=3)
+        btn_calc = ttk.Button(left_box, text="💾 자동 집계/저장", command=self.auto_calculate_and_save)
+        btn_calc.grid(row=0, column=4, padx=(0, 3), pady=2)
         
-        btn_delete = ttk.Button(left_box, text="🗑️ 데이터 삭제", command=self.delete_current_date_data)
-        btn_delete.grid(row=0, column=5, padx=0, pady=3)
+        btn_delete = ttk.Button(left_box, text="🗑️ 삭제", command=self.delete_current_date_data)
+        btn_delete.grid(row=0, column=5, padx=0, pady=2)
         
-        btn_export = ttk.Button(left_box, text="📊 엑셀 출력 (일보 생성)", command=self.export_excel)
-        btn_export.grid(row=1, column=4, columnspan=2, padx=0, pady=(2, 0), sticky="ew")
+        btn_export = ttk.Button(left_box, text="📊 엑셀 출력 (일보)", command=self.export_excel)
+        btn_export.grid(row=1, column=4, columnspan=2, padx=0, pady=(1, 0), sticky="ew")
         
-        # 2. 세로 구분선
-        sep = ttk.Separator(top_frame, orient="vertical")
-        sep.pack(side="left", fill="y", padx=10, pady=2)
+        # 2. 중앙: 보고서 및 성적서 출력
+        mid_box = ttk.LabelFrame(top_frame, text="보고서 및 성적서 발행", padding=(6, 3))
+        mid_box.pack(side="left", fill="y", padx=(0, 6))
         
-        # 3. 우측: 보고서 및 성적서 출력 (빈 공간 100% 활용)
-        right_box = ttk.LabelFrame(top_frame, text="보고서 및 성적서 발행", padding=(10, 4))
+        btn_export_ndt = ttk.Button(mid_box, text="📗 NDT 누계대장", command=self.export_ndt_summary)
+        btn_export_ndt.grid(row=0, column=0, padx=3, pady=2, sticky="w")
+        
+        btn_export_monthly = ttk.Button(mid_box, text="📈 월간진도보고서", command=self.export_monthly_report)
+        btn_export_monthly.grid(row=0, column=1, padx=3, pady=2, sticky="w")
+        
+        btn_weekly_report = ttk.Button(mid_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
+        btn_weekly_report.grid(row=0, column=2, padx=3, pady=2, sticky="w")
+        
+        btn_load_daily = ttk.Button(mid_box, text="📥 일일기록 불러오기", command=self.load_from_daily_usage)
+        btn_load_daily.grid(row=1, column=0, padx=3, pady=2, sticky="w")
+        
+        btn_export_cert = ttk.Button(mid_box, text="📄 시험성적서 출력", command=self.export_certificates)
+        btn_export_cert.grid(row=1, column=1, padx=3, pady=2, sticky="w")
+        
+        btn_ledger = ttk.Button(mid_box, text="📒 성적서 발행대장", command=self.export_certificate_ledger)
+        btn_ledger.grid(row=1, column=2, padx=3, pady=2, sticky="w")
+
+        # 3. 우측: 비파괴검사결과서 편집 도구 (우측 빈 공간 100% 활용)
+        right_box = ttk.LabelFrame(top_frame, text="비파괴검사결과서 편집", padding=(6, 3))
         right_box.pack(side="left", fill="both", expand=True)
-        
-        btn_export_ndt = ttk.Button(right_box, text="📗 NDT 누계 대장 엑셀 출력", command=self.export_ndt_summary)
-        btn_export_ndt.grid(row=0, column=0, padx=5, pady=3, sticky="w")
-        
-        btn_export_monthly = ttk.Button(right_box, text="📈 월간진도보고서 출력", command=self.export_monthly_report)
-        btn_export_monthly.grid(row=0, column=1, padx=5, pady=3, sticky="w")
-        
-        btn_weekly_report = ttk.Button(right_box, text="🗓️ 주간업무보고", command=lambda: self.main_app.export_weekly_report() if hasattr(self, 'main_app') else None)
-        btn_weekly_report.grid(row=0, column=2, padx=5, pady=3, sticky="w")
-        
-        btn_load_daily = ttk.Button(right_box, text="📥 일일기록 불러오기", command=self.load_from_daily_usage)
-        btn_load_daily.grid(row=1, column=0, padx=5, pady=3, sticky="w")
-        
-        btn_export_cert = ttk.Button(right_box, text="📄 시험성적서 출력", command=self.export_certificates)
-        btn_export_cert.grid(row=1, column=1, padx=5, pady=3, sticky="w")
-        
-        btn_ledger = ttk.Button(right_box, text="📒 성적서 발행대장", command=self.export_certificate_ledger)
-        btn_ledger.grid(row=1, column=2, padx=5, pady=3, sticky="w")
+
+        ttk.Button(right_box, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).grid(row=0, column=0, padx=3, pady=2, sticky="w")
+        ttk.Button(right_box, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).grid(row=0, column=1, padx=3, pady=2, sticky="w")
+        ttk.Button(right_box, text="🔍 상세정보", command=self._edit_ndt_details).grid(row=0, column=2, padx=3, pady=2, sticky="w")
+
+        ttk.Button(right_box, text="✏️ 라인번호 일괄", command=self._edit_ndt_lines).grid(row=1, column=0, padx=3, pady=2, sticky="w")
+        ttk.Button(right_box, text="✏️ 구간 일괄", command=self._edit_ndt_sections).grid(row=1, column=1, padx=3, pady=2, sticky="w")
+
+        self.ndt_selection_vars = []
+        self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
+        ttk.Label(right_box, textvariable=self.ndt_selection_text, foreground="#666666").grid(row=1, column=2, padx=4, pady=2, sticky="w")
         
     def _build_left_pane(self, parent):
         # Saved inspection quantities are grouped by client, method and unit.
@@ -646,32 +657,19 @@ class DailyWorkLogTab(ttk.Frame):
 
     def _build_right_pane(self, parent):
         # --- NDT Results Grid ---
-        title_frame = ttk.Frame(parent)
-        title_frame.pack(fill="x", padx=5, pady=(4, 2))
-        ttk.Label(title_frame, text="2. 비파괴검사결과서", font=("맑은 고딕", 11, "bold")).pack(side="left", padx=(5, 10))
-        
-        ttk.Button(title_frame, text="➕ 10행 추가", command=lambda: self._append_ndt_rows(10, focus=True)).pack(side="left", padx=3)
-        ttk.Button(title_frame, text="🗑️ 선택 행 삭제", command=self._delete_selected_ndt_row).pack(side="left", padx=3)
-        ttk.Button(title_frame, text="✏️ 라인번호 일괄 변경", command=self._edit_ndt_lines).pack(side="left", padx=3)
-        ttk.Button(title_frame, text="✏️ 구간 일괄 변경", command=self._edit_ndt_sections).pack(side="left", padx=3)
-        ttk.Button(title_frame, text="🔍 선택 행 상세정보", command=self._edit_ndt_details).pack(side="left", padx=3)
-        
-        self.ndt_selection_vars = []
-        self.ndt_selection_text = tk.StringVar(value='왼쪽 체크박스로 여러 행 선택 가능')
-        ttk.Label(title_frame, textvariable=self.ndt_selection_text, foreground="#666666").pack(side="left", padx=(8, 0))
-
-        view_bar = ttk.LabelFrame(parent, text='검사 대상 보기')
-        view_bar.pack(fill='x', padx=5, pady=(0, 4))
+        view_bar = ttk.LabelFrame(parent, text="2. 비파괴검사결과서 (검사 대상 선택)", padding=(8, 3))
+        view_bar.pack(fill='x', padx=5, pady=(4, 3))
         self.ndt_view_var = tk.StringVar(value='배관')
         for target_type in NDT_TARGET_TYPES:
             ttk.Radiobutton(
                 view_bar, text=target_type, value=target_type,
                 variable=self.ndt_view_var, command=self._set_ndt_view,
                 style='Toolbutton',
-            ).pack(side='left', padx=6, pady=3)
+            ).pack(side='left', padx=5, pady=2)
         ttk.Label(
             view_bar,
-            text='공통정보는 유지하고 선택한 대상에 필요한 열만 표시합니다.',
+            text='※ 행 추가/삭제/일괄변경 등 편집 도구는 상단 툴바에 통합되어 있습니다.',
+            foreground="#666666"
         ).pack(side='left', padx=12)
         
         # Grid Container
