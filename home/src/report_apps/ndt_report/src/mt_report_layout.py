@@ -25,7 +25,7 @@ def apply_header_stamp(ws, png_data):
     image = Image(stream)
     image._pmi_source_stream = stream
     image.anchor = OneCellAnchor(
-        _from=AnchorMarker(col=11, row=3),
+        _from=AnchorMarker(col=11, colOff=pixels_to_EMU(24), row=3),
         ext=XDRPositiveSize2D(pixels_to_EMU(64), pixels_to_EMU(64)))
     ws.add_image(image)
 
