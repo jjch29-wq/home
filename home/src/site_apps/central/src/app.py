@@ -1887,7 +1887,26 @@ class MaterialManager:
         # [FIX] Select core columns including both 자재명 and 장비명 for initial display
         visible_cols = ('날짜', '현장', '구분', '품목명', '장비명', '수량', '세척제', '침투제', '현상제', '백색페인트', '흑색자분', '비고')
         self.inout_tree['displaycolumns'] = visible_cols
-        self.enable_tree_column_drag(self.inout_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.inout_tree))
+
+        def _show_inout_tree_context_menu(event):
+            region = self.inout_tree.identify_region(event.x, event.y)
+            if region == "heading":
+                self._show_generic_tree_heading_context_menu(event, self.inout_tree)
+                return
+            item = self.inout_tree.identify_row(event.y)
+            if item:
+                self.inout_tree.selection_set(item)
+                menu = tk.Menu(self.root, tearoff=0)
+                menu.add_command(label="🔄 내역 새로고침", command=self.refresh_inout_history)
+                menu.add_command(label="📊 엑셀 내보내기", command=self.export_transaction_history)
+                menu.add_separator()
+                menu.add_command(label="⚙️ 컬럼 관리(숨기기/보이기)...", command=self.show_column_visibility_dialog)
+                try:
+                    menu.tk_popup(event.x_root, event.y_root)
+                finally:
+                    menu.grab_release()
+
+        self.enable_tree_column_drag(self.inout_tree, context_menu_handler=_show_inout_tree_context_menu)
         self.inout_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config(), add='+')
         self.inout_tree.bind('<F5>', lambda e: (self.refresh_inout_history(), 'break')[1])
 
@@ -6260,8 +6279,30 @@ class MaterialManager:
         self.daily_usage_tree.bind("<Button-1>", lambda e: self.show_worker_popup(e, self.daily_usage_tree), add="+")
         self.daily_usage_tree.bind("<Double-1>", self._show_daily_usage_note)
         
-        # [NEW] Enable column reordering via drag & drop
-        self.enable_tree_column_drag(self.daily_usage_tree)
+        # [NEW] Enable column reordering via drag & drop and context menu
+        def _show_daily_usage_tree_context_menu(event):
+            region = self.daily_usage_tree.identify_region(event.x, event.y)
+            if region == "heading":
+                self._show_heading_context_menu(event, self.daily_usage_tree)
+                return
+            item = self.daily_usage_tree.identify_row(event.y)
+            if item:
+                self.daily_usage_tree.selection_set(item)
+                menu = tk.Menu(self.root, tearoff=0)
+                menu.add_command(label="📥 입력 화면에 불러오기", command=lambda: self._on_daily_usage_select(None))
+                menu.add_command(label="✏️ 선택 항목 수정...", command=self.open_edit_daily_usage_dialog)
+                menu.add_command(label="🗑️ 선택 항목 삭제", command=self.delete_daily_usage_entry)
+                menu.add_separator()
+                menu.add_command(label="🔍 조회 (새로고침)", command=self.update_daily_usage_view)
+                menu.add_command(label="📊 조회결과 엑셀 내보내기", command=self.export_daily_usage_history)
+                menu.add_separator()
+                menu.add_command(label="⚙️ 컬럼 관리(숨기기/보이기)...", command=self.show_column_visibility_dialog)
+                try:
+                    menu.tk_popup(event.x_root, event.y_root)
+                finally:
+                    menu.grab_release()
+
+        self.enable_tree_column_drag(self.daily_usage_tree, context_menu_handler=_show_daily_usage_tree_context_menu)
         
         def save_column_widths(event=None):
             self.save_tab_config()
