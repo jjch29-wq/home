@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -97,6 +98,73 @@ def normalize(record, method='', date='', source=''):
     for key in LINKS:
         row[key] = first(record, key + '경로', key + '파일')
     return row
+
+
+def sync_submission_deliverables(source_dir: str | Path, destination_dir: str | Path) -> dict:
+    """원본 착공 단가계약 폴더에서 제출 폴더로 보고서/PAUT DATA/RT영상화를 안전하게 증분 복사한다.
+
+    - 원본은 100% 읽기 전용 (보존)
+    - 파일 크기가 동일한 기존 파일은 고속 스킵하여 대용량(7GB) 환경에서도 수 초 내 완료
+    - 신규/변경된 파일은 임시 복사 후 SHA-256 검증을 거쳐 안전하게 안착
+    """
+    source = Path(source_dir).resolve()
+    destination = Path(destination_dir).resolve()
+    if not source.is_dir():
+        raise FileNotFoundError(f"원본 폴더를 찾을 수 없습니다: {source}")
+    if not destination.is_dir():
+        raise FileNotFoundError(f"제출 폴더를 찾을 수 없습니다: {destination}")
+
+    parts = [
+        ('보고서', '보고서'),
+        ('PAUT DATA', 'PAUT DATA'),
+        ('영상화장비사진/중앙지사/영상화_결과', 'RT영상화')
+    ]
+    stamp = dt.datetime.now().strftime('%Y%m%d_%H%M%S')
+    copied, skipped, updated = 0, 0, 0
+    copied_files = []
+
+    for src_part, dst_part in parts:
+        src_folder = source / src_part
+        dst_folder = destination / dst_part
+        if not src_folder.is_dir():
+            continue
+        for p in src_folder.rglob('*'):
+            if not p.is_file() or p.name.startswith('~$'):
+                continue
+            rel = p.relative_to(src_folder)
+            target = dst_folder / rel
+            if target.is_file() and target.stat().st_size == p.stat().st_size:
+                skipped += 1
+                continue
+            is_new = not target.exists()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            temp_target = target.with_name(target.name + f'.sync-{stamp}')
+            try:
+                shutil.copy2(p, temp_target)
+                with open(p, 'rb') as f1, open(temp_target, 'rb') as f2:
+                    h1 = hashlib.file_digest(f1, 'sha256').hexdigest()
+                    h2 = hashlib.file_digest(f2, 'sha256').hexdigest()
+                if h1 != h2:
+                    raise OSError(f"복사 검증 실패 (해시 불일치): {p}")
+                if target.exists():
+                    target.unlink()
+                temp_target.rename(target)
+                if is_new:
+                    copied += 1
+                else:
+                    updated += 1
+                copied_files.append(rel.as_posix())
+            finally:
+                if temp_target.exists():
+                    temp_target.unlink(missing_ok=True)
+
+    return {
+        'copied': copied,
+        'updated': updated,
+        'skipped': skipped,
+        'total': copied + updated + skipped,
+        'files': copied_files
+    }
 
 
 def identity(row):
@@ -1232,6 +1300,45 @@ def main():
         count = create_submission_folders(rows, root_var.get())
         messagebox.showinfo('폴더 생성 완료', f'{count}개 검사 기록의 제출 폴더를 만들었습니다.\n보고서·영상·데이터를 넣은 후 자동 연결을 누르세요. 기존 파일은 변경하지 않습니다.')
 
+    def sync_source():
+        if not root_var.get():
+            choose_root()
+        if not root_var.get():
+            return
+        candidate_sources = [
+            Path(r"G:\내 드라이브\01_업무_및_회사\Office\착공\2026년 중앙지사 열수송관 비파괴검사 단가계약"),
+            Path(r"F:\내 드라이브\01_업무_및_회사\Office\착공\2026년 중앙지사 열수송관 비파괴검사 단가계약"),
+        ]
+        default_source = next((p for p in candidate_sources if p.is_dir()), None)
+        if not default_source:
+            source_path = filedialog.askdirectory(title='원본 착공 단가계약 폴더 선택')
+            if not source_path:
+                return
+            default_source = Path(source_path)
+
+        if not messagebox.askyesno('원본자료 동기화', f'원본 폴더에서 최신 보고서 및 데이터를 제출 폴더로 안전 동기화할까요?\n\n'
+                                                 f'• 원본: {default_source.name}\n'
+                                                 f'• 대상: {Path(root_var.get()).name}\n\n'
+                                                 f'※ 원본 파일은 읽기만 하며 절대 수정/삭제되지 않습니다.'):
+            return
+
+        status.set('원본 자료 안전 동기화(증분 복사 및 해시 검증) 진행 중...')
+        window.update_idletasks()
+        try:
+            res = sync_submission_deliverables(default_source, root_var.get())
+            msg = f"동기화 완료!\n\n• 신규 복사: {res['copied']}건\n• 갱신 복사: {res['updated']}건\n• 기존 유지(스킵): {res['skipped']}건\n총 {res['total']}개 파일 검증 완료."
+            if res['copied'] or res['updated']:
+                msg += f"\n\n최신 파일이 반영되었으므로 '자료 자동 연결'을 실행합니다."
+                messagebox.showinfo('동기화 완료', msg)
+                connect_files()
+            else:
+                msg += "\n\n이미 모든 자료가 최신 상태로 일치합니다."
+                messagebox.showinfo('동기화 완료', msg)
+            status.set(f"동기화 완료: 신규/갱신 {res['copied'] + res['updated']}건, 유지 {res['skipped']}건")
+        except Exception as error:
+            messagebox.showerror('동기화 오류', str(error))
+            status.set(f"동기화 오류: {error}")
+
     def connect_files():
         if not root_var.get() or not state['rows']:
             return
@@ -1241,6 +1348,7 @@ def main():
 
     # 1. 핵심 데이터 로드 및 연결 작업
     ttk.Button(toolbar, text='중앙지사 이력 불러오기', command=lambda: run(load)).pack(side='left')
+    ttk.Button(toolbar, text='원본자료 동기화(가져오기)', command=lambda: run(sync_source)).pack(side='left', padx=4)
     ttk.Button(toolbar, text='자료 자동 연결', command=lambda: run(connect_files)).pack(side='left', padx=4)
     ttk.Button(toolbar, text='제출 폴더 틀 생성', command=lambda: run(make_folders)).pack(side='left', padx=4)
 

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from site_apps.central.src.attribute_export import (
     contained_path, export_workbook, issues, load_history, load_report_data,
     merge_rows, normalize, point_images, restore_connections, write_connections, read_connections,
-    create_submission_folders, auto_connect, submission_plan,
+    create_submission_folders, auto_connect, submission_plan, sync_submission_deliverables,
 )
 
 
@@ -336,6 +336,42 @@ class AttributeExportTests(unittest.TestCase):
             '검사일자': '2026-10-17', '검사방법': 'RT', '구간정보': 'N/1,N/1,N/1',
         })
         self.assertEqual(rec_clean['결함종류'], 'N/1')
+
+    def test_sync_submission_deliverables_incremental_and_verified(self):
+        source = self.root / 'source_contract'
+        destination = self.root / 'dest_submission'
+        (source / '보고서').mkdir(parents=True)
+        (source / 'PAUT DATA' / 'line1').mkdir(parents=True)
+        (source / '영상화장비사진' / '중앙지사' / '영상화_결과').mkdir(parents=True)
+
+        f_rep = source / '보고서' / 'rep1.xlsx'
+        f_rep.write_bytes(b'report_bytes')
+        f_paut = source / 'PAUT DATA' / 'line1' / 'data.opd'
+        f_paut.write_bytes(b'paut_bytes_1234')
+        f_rt = source / '영상화장비사진' / '중앙지사' / '영상화_결과' / 'film.jpg'
+        f_rt.write_bytes(b'film_image_data')
+
+        destination.mkdir(parents=True)
+        res1 = sync_submission_deliverables(source, destination)
+        self.assertEqual(res1['copied'], 3)
+        self.assertEqual(res1['skipped'], 0)
+        self.assertTrue((destination / '보고서' / 'rep1.xlsx').is_file())
+        self.assertTrue((destination / 'PAUT DATA' / 'line1' / 'data.opd').is_file())
+        self.assertTrue((destination / 'RT영상화' / 'film.jpg').is_file())
+        self.assertEqual((destination / 'RT영상화' / 'film.jpg').read_bytes(), b'film_image_data')
+
+        # 2nd run: identical files skipped
+        res2 = sync_submission_deliverables(source, destination)
+        self.assertEqual(res2['copied'], 0)
+        self.assertEqual(res2['skipped'], 3)
+
+        # 3rd run: new file added
+        f_rep2 = source / '보고서' / 'rep2.pdf'
+        f_rep2.write_bytes(b'report2_bytes')
+        res3 = sync_submission_deliverables(source, destination)
+        self.assertEqual(res3['copied'], 1)
+        self.assertEqual(res3['skipped'], 3)
+        self.assertTrue((destination / '보고서' / 'rep2.pdf').is_file())
 
 
 if __name__ == '__main__':
