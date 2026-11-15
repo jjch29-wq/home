@@ -112,8 +112,29 @@ def setup_monthly_usage_tab_impl(self):
         width = col_widths.get(col, 80)
         self.monthly_usage_tree.column(col, width=width, minwidth=20, stretch=False, anchor='center')
     
-    # [NEW] Enable column reordering via drag & drop
-    self.enable_tree_column_drag(self.monthly_usage_tree)
+    # [NEW] Enable column reordering via drag & drop and context menu
+    def _show_monthly_usage_context_menu(event):
+        region = self.monthly_usage_tree.identify_region(event.x, event.y)
+        if region == "heading":
+            self._show_heading_context_menu(event, self.monthly_usage_tree)
+            return
+        item = self.monthly_usage_tree.identify_row(event.y)
+        if item:
+            self.monthly_usage_tree.selection_set(item)
+            menu = tk.Menu(self.root, tearoff=0)
+            menu.add_command(label="👤 작업자 상세 내역 보기", command=lambda: self.show_worker_popup(event, self.monthly_usage_tree))
+            menu.add_separator()
+            menu.add_command(label="🔍 조회 (새로고침)", command=self.update_monthly_usage_view)
+            menu.add_command(label="📊 엑셀 내보내기", command=self.export_monthly_usage_history)
+            menu.add_command(label="🔍 팝업창으로 열기", command=self.open_detached_monthly_usage_view)
+            menu.add_separator()
+            menu.add_command(label="⚙️ 컬럼 관리(숨기기/보이기)...", command=self.show_column_visibility_dialog)
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+    self.enable_tree_column_drag(self.monthly_usage_tree, context_menu_handler=_show_monthly_usage_context_menu)
     
     
     # Grid layout
@@ -179,7 +200,23 @@ def setup_monthly_usage_tab_impl(self):
     
     # [NEW] Auto-save worker summary column widths
     self.worker_summary_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
-    self.enable_tree_column_drag(self.worker_summary_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.worker_summary_tree))
+
+    def _show_worker_summary_context_menu(event):
+        region = self.worker_summary_tree.identify_region(event.x, event.y)
+        if region == "heading":
+            self._show_generic_tree_heading_context_menu(event, self.worker_summary_tree)
+            return
+        item = self.worker_summary_tree.identify_row(event.y)
+        if item:
+            self.worker_summary_tree.selection_set(item)
+            menu = tk.Menu(self.root, tearoff=0)
+            menu.add_command(label="📋 사후원가 특별근무에 적용", command=self.apply_worker_shift_hours_to_budget)
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+    self.enable_tree_column_drag(self.worker_summary_tree, context_menu_handler=_show_worker_summary_context_menu)
         
     worker_vsb = ttk.Scrollbar(worker_frame, orient="vertical", command=self.worker_summary_tree.yview)
     self.worker_summary_tree.configure(yscrollcommand=worker_vsb.set)

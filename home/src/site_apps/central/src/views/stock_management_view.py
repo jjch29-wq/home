@@ -162,7 +162,28 @@ def setup_stock_tab_impl(self):
     
     # Auto-save column widths when user resizes columns
     self.stock_tree.bind('<ButtonRelease-1>', lambda e: self.save_tab_config())
-    self.enable_tree_column_drag(self.stock_tree, context_menu_handler=lambda e: self._show_generic_tree_heading_context_menu(e, self.stock_tree))
+
+    def _show_stock_tree_context_menu(event):
+        region = self.stock_tree.identify_region(event.x, event.y)
+        if region == "heading":
+            self._show_generic_tree_heading_context_menu(event, self.stock_tree)
+            return
+        item = self.stock_tree.identify_row(event.y)
+        if item:
+            self.stock_tree.selection_set(item)
+            menu = tk.Menu(self.root, tearoff=0)
+            menu.add_command(label="✏️ 품목 수정...", command=self.open_edit_material_dialog)
+            menu.add_command(label="📜 품목 이력 보기...", command=lambda: show_material_history(self))
+            menu.add_command(label="🗑️ 품목 삭제", command=self.delete_selected_material)
+            menu.add_separator()
+            menu.add_command(label="🔄 재고 새로고침", command=self.reload_and_update_stock_view)
+            menu.add_command(label="📊 엑셀 내보내기", command=self.export_stock_to_excel)
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+    self.enable_tree_column_drag(self.stock_tree, context_menu_handler=_show_stock_tree_context_menu)
     
     # Grid layout
     self.stock_tree.grid(row=0, column=0, sticky='nsew')

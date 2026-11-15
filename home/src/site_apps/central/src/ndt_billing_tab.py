@@ -765,6 +765,27 @@ class NDTCalculatorTab(ttk.Frame):
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
         self.tree.bind('<Delete>', self.delete_selected_records)
         self.tree.bind('<BackSpace>', self.delete_selected_records)
+
+        def _show_billing_tree_context_menu(event):
+            item = self.tree.identify_row(event.y)
+            if item:
+                if item not in self.tree.selection():
+                    self.tree.selection_set(item)
+                menu = tk.Menu(self, tearoff=0)
+                menu.add_command(label="🗑️ 선택 항목 삭제", command=self.delete_selected_records)
+                menu.add_command(label="선택 반전 / 전체 선택", command=self.select_all_records)
+                menu.add_separator()
+                menu.add_command(label="📥 작업/감독일보에서 연동", command=self.import_from_work_log)
+                menu.add_command(label="📊 구간/라인별 기성청구...", command=self.open_section_line_billing_dialog)
+                menu.add_command(label="📑 기성청구 엑셀 출력", command=self.export_to_excel)
+                menu.add_separator()
+                menu.add_command(label="⚙️ NDT 단가 설정...", command=self.open_settings)
+                try:
+                    menu.tk_popup(event.x_root, event.y_root)
+                finally:
+                    menu.grab_release()
+
+        self.tree.bind('<Button-3>', _show_billing_tree_context_menu)
         
         # 저장된 탭 영역(Sash) 너비 복원
         # 저장된 탭 영역(Sash) 너비 복원 (안정화 후 적용을 위한 타이머 방식)
