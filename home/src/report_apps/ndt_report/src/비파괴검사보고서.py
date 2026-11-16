@@ -1802,21 +1802,14 @@ class PMIReportApp:
         btn_daily.bind("<Enter>", lambda e: btn_daily.configure(bg="#e2e8f0"))
         btn_daily.bind("<Leave>", lambda e: btn_daily.configure(bg="#f8fafc"))
 
-        # 툴바와 미리보기 탭 사이 구분선
+        # 툴바와 데이터 화면 사이 구분선
         tk.Frame(right_container, height=1, background="#e2e8f0").pack(fill='x', pady=(0, 4))
         
-        if not hasattr(self, 'preview_notebooks'): self.preview_notebooks = {}
-        nb = ttk.Notebook(right_container)
-        nb.pack(fill='both', expand=True)
-        self.preview_notebooks["PMI"] = nb
-        
-        tab_data = tk.Frame(nb, background="#ffffff")
-        tab_gapji = tk.Frame(nb, background="#ffffff")
-        nb.add(tab_data, text=" 🔬 데이터 미리보기 ")
-        nb.add(tab_gapji, text=" 📄 갑지 미리보기 ")
+        # [DATA ONLY] 갑지 탭 제거 -> 100% 데이터 미리보기 전용 화면으로 쾌적화
+        tab_data = tk.Frame(right_container, background="#ffffff")
+        tab_data.pack(fill='both', expand=True)
         
         self._create_preview_ui(tab_data)
-        self._create_gapji_preview_ui(tab_gapji, "PMI")
         self._apply_sash_ratio("PMI")
         
         self.template_file_path.trace_add("write", lambda *a: self.load_template_specific_config("PMI"))
@@ -4605,10 +4598,11 @@ class PMIReportApp:
             exposure_entry.bind('<Return>', lambda e: [self.root.focus_set(), self.save_settings()])
             self.setting_vars['RT_EXPOSURE_TIME'] = self.rt_exposure_time
 
-        # Add a refresh button for preview
-        btn_f = tk.Frame(block, background="#ffffff")
-        btn_f.grid(row=6 if mode == "RT" else 5, column=0, columnspan=4, pady=5, sticky='ew')
-        ttk.Button(btn_f, text="✨ 갑지 미리보기 업데이트", command=self._update_gapji_preview_current).pack(side='top', fill='x', padx=5)
+        # Add a refresh button for preview (PMI는 데이터 단일 뷰이므로 미노출)
+        if mode != "PMI":
+            btn_f = tk.Frame(block, background="#ffffff")
+            btn_f.grid(row=6 if mode == "RT" else 5, column=0, columnspan=4, pady=5, sticky='ew')
+            ttk.Button(btn_f, text="✨ 갑지 미리보기 업데이트", command=self._update_gapji_preview_current).pack(side='top', fill='x', padx=5)
 
     def _update_gapji_preview_current(self, event=None):
         """통합된 RT 탭 및 서브 미리보기 구조에 맞춰 갑지 미리보기 갱신"""
