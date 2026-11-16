@@ -12,6 +12,28 @@ DOCREL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types'
 
 
+def _insert_in_schema_order(root, new_element):
+    """Insert element into worksheet root strictly following OpenXML XSD sequence."""
+    SCHEMA_ORDER = [
+        'sheetPr', 'dimension', 'sheetViews', 'sheetFormatPr', 'cols', 'sheetData',
+        'sheetCalcPr', 'sheetProtection', 'protectedRanges', 'scenarios', 'autoFilter',
+        'sortState', 'dataConsolidate', 'customSheetViews', 'mergeCells', 'phoneticPr',
+        'conditionalFormatting', 'dataValidations', 'hyperlinks', 'printOptions',
+        'pageMargins', 'pageSetup', 'headerFooter', 'rowBreaks', 'colBreaks',
+        'customProperties', 'cellWatches', 'ignoredErrors', 'smartTags', 'drawing',
+        'legacyDrawing', 'legacyDrawingHF', 'picture', 'oleObjects', 'drawingHF'
+    ]
+    new_tag = new_element.tag.split('}')[-1]
+    new_order = SCHEMA_ORDER.index(new_tag) if new_tag in SCHEMA_ORDER else 999
+    for i, child in enumerate(root):
+        c_tag = child.tag.split('}')[-1]
+        c_order = SCHEMA_ORDER.index(c_tag) if c_tag in SCHEMA_ORDER else 999
+        if c_order > new_order:
+            root.insert(i, new_element)
+            return
+    root.append(new_element)
+
+
 def resolve(part, target):
     return target.lstrip('/') if target.startswith('/') else posixpath.normpath(posixpath.join(posixpath.dirname(part), target))
 
@@ -72,9 +94,18 @@ def restore_mt_footer_pictures(template, output):
         if header_footer is None:
             import copy
             header_footer = copy.deepcopy(source_xml.find(f'{{{MAIN}}}headerFooter'))
-            target_xml.append(header_footer)
-        drawing = target_xml.find(f'{{{MAIN}}}drawing')
-        target_xml.insert(list(target_xml).index(drawing) + 1 if drawing is not None else list(target_xml).index(header_footer) + 1, new_ref)
+            _insert_in_schema_order(target_xml, header_footer)
+        else:
+            odd_footer = header_footer.find(f'{{{MAIN}}}oddFooter')
+            source_hf = source_xml.find(f'{{{MAIN}}}headerFooter')
+            source_odd = source_hf.find(f'{{{MAIN}}}oddFooter') if source_hf is not None else None
+            if odd_footer is not None and odd_footer.text:
+                if '&G' not in odd_footer.text and source_odd is not None and '&G' in (source_odd.text or ''):
+                    odd_footer.text += '&R&"바탕,굵게"&10 &G'
+            elif odd_footer is None and source_odd is not None:
+                import copy
+                header_footer.append(copy.deepcopy(source_odd))
+        _insert_in_schema_order(target_xml, new_ref)
         result[target_sheet] = ET.tostring(target_xml)
     result['[Content_Types].xml'] = ET.tostring(types)
     handle, temporary = tempfile.mkstemp(suffix='.xlsx', dir=os.path.dirname(os.path.abspath(output)))
@@ -87,3 +118,7 @@ def restore_mt_footer_pictures(template, output):
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+# Alias for general template footer restoration (PMI, MT, etc.)
+restore_template_footer_pictures = restore_mt_footer_pictures

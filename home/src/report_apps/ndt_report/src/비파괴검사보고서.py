@@ -1157,7 +1157,7 @@ class PMIReportApp:
 
             # [NEW] 탭별 전용 행 설정 강제 저장
             self.config["PMI_START_ROW"] = self.config.get("START_ROW", 19)
-            self.config["PMI_DATA_END_ROW"] = self.config.get("DATA_END_ROW", 45)
+            self.config["PMI_DATA_END_ROW"] = self.config.get("DATA_END_ROW", 47)
             self.config["PMI_PRINT_END_ROW"] = self.config.get("PRINT_END_ROW", 47)
 
             # [NEW] Window State Capture
@@ -5556,6 +5556,7 @@ class PMIReportApp:
         
         ttk.Button(sidebar, text="병합", width=12, command=lambda: self.merge_selected_iso(mode)).pack(pady=2, fill='x')
         ttk.Button(sidebar, text="일괄 변경", width=12, command=lambda: self.show_bulk_update_dialog(mode)).pack(pady=(2, 3), fill='x')
+        ttk.Button(sidebar, text="📥 요청서 매핑", width=12, command=lambda: self.import_request_mapping(mode)).pack(pady=(2, 3), fill='x')
 
         tk.Frame(sidebar, height=1, background="#e5e7eb").pack(fill='x', pady=5)
         ttk.Button(sidebar, text="▲ 위로", width=10, command=lambda: self.move_item(-1, mode)).pack(pady=5)
@@ -7895,6 +7896,222 @@ class PMIReportApp:
         ttk.Button(btn_frame, text="적용 (Apply)", command=apply_action).pack(side='right', padx=5)
         ttk.Button(btn_frame, text="취소 (Cancel)", command=dialog.destroy).pack(side='right')
 
+    def import_request_mapping(self, mode="PMI"):
+        """외부 검사 요청서/도면 리스트 엑셀 파일을 읽어와 현재 테이블의 Drawing No, Joint No, Location을 자동 매핑/업데이트"""
+        mode_info = self._get_mode_info(mode)
+        if not mode_info: return
+        tree, idx_map, target_data, _ = mode_info
+
+        if not target_data:
+            messagebox.showwarning("알림", f"{mode} 데이터가 없습니다. 먼저 PMI 데이터를 불러와주세요.")
+            return
+
+        from tkinter import filedialog
+        file_path = filedialog.askopenfilename(
+            title="검사 요청서 / 도면 리스트 엑셀 파일 선택",
+            filetypes=[("Excel Files", "*.xlsx;*.xlsm;*.xls"), ("All Files", "*.*")]
+        )
+        if not file_path:
+            return
+
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+        except Exception as e:
+            messagebox.showerror("오류", f"엑셀 파일을 열 수 없습니다:\n{e}")
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("검사 요청서(Drawing / Joint / Location) 매핑")
+        dialog.geometry("520x460")
+        dialog.configure(background="#f9fafb")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.geometry(f"+{self.root.winfo_x() + 80}+{self.root.winfo_y() + 60}")
+
+        main_frame = ttk.Frame(dialog, padding=20)
+        main_frame.pack(fill='both', expand=True)
+
+        ttk.Label(main_frame, text="📋 검사 요청서 데이터 매핑", font=("Malgun Gothic", 12, "bold")).pack(anchor='w', pady=(0, 5))
+        ttk.Label(main_frame, text=f"파일: {os.path.basename(file_path)}", font=("Malgun Gothic", 9), foreground="#6b7280").pack(anchor='w', pady=(0, 15))
+
+        # 시트 선택
+        sheet_frame = ttk.Frame(main_frame)
+        sheet_frame.pack(fill='x', pady=5)
+        ttk.Label(sheet_frame, text="시트 선택:", width=12).pack(side='left')
+        sheet_var = tk.StringVar(value=wb.sheetnames[0])
+        sheet_combo = ttk.Combobox(sheet_frame, textvariable=sheet_var, state='readonly', values=wb.sheetnames, width=28)
+        sheet_combo.pack(side='left', padx=5)
+
+        # 시작 행 선택
+        start_row_frame = ttk.Frame(main_frame)
+        start_row_frame.pack(fill='x', pady=5)
+        ttk.Label(start_row_frame, text="데이터 시작 행:", width=12).pack(side='left')
+        start_row_var = tk.IntVar(value=2)
+        start_row_spin = ttk.Spinbox(start_row_frame, from_=1, to=100, textvariable=start_row_var, width=10)
+        start_row_spin.pack(side='left', padx=5)
+        ttk.Label(start_row_frame, text="(헤더 제목 다음 행)", foreground="#6b7280").pack(side='left')
+
+        # 컬럼 선택 프레임
+        cols_frame = ttk.LabelFrame(main_frame, text=" 컬럼 매핑 설정 ", padding=10)
+        cols_frame.pack(fill='x', pady=10)
+
+        col_options_var = {"list": []}
+
+        def get_col_header_list(ws_cur, header_r=1):
+            opts = ["(미사용 / 매핑 안함)"]
+            max_c = min(ws_cur.max_column or 26, 30)
+            for c in range(1, max_c + 1):
+                col_letter = openpyxl.utils.get_column_letter(c)
+                v = ws_cur.cell(row=header_r, column=c).value
+                header_text = str(v).strip().replace('\n', ' ') if v is not None else ""
+                label = f"{col_letter}열: {header_text}" if header_text else f"{col_letter}열"
+                opts.append(label)
+            return opts
+
+        dwg_var = tk.StringVar()
+        joint_var = tk.StringVar()
+        loc_var = tk.StringVar()
+        no_var = tk.StringVar()
+
+        def update_sheet_columns(*args):
+            s_name = sheet_var.get()
+            if s_name not in wb.sheetnames: return
+            ws_cur = wb[s_name]
+
+            best_hr = 1
+            best_cnt = 0
+            for r in range(1, min(6, (ws_cur.max_row or 1) + 1)):
+                cnt = sum(1 for c in range(1, min(ws_cur.max_column or 26, 26) + 1) if ws_cur.cell(r, c).value is not None)
+                if cnt > best_cnt:
+                    best_cnt = cnt
+                    best_hr = r
+
+            start_row_var.set(best_hr + 1)
+            opts = get_col_header_list(ws_cur, header_r=best_hr)
+            col_options_var["list"] = opts
+
+            for cb in (dwg_combo, joint_combo, loc_combo, no_combo):
+                cb['values'] = opts
+
+            def match_col(keywords):
+                for opt in opts:
+                    opt_l = opt.lower()
+                    for kw in keywords:
+                        if kw in opt_l:
+                            return opt
+                return opts[0]
+
+            dwg_var.set(match_col(['도면', 'drawing', 'dwg', 'iso', 'line', '라인']))
+            joint_var.set(match_col(['joint', '조인트', 'j/n', 'weld', '용접']))
+            loc_var.set(match_col(['location', 'loc', '위치', '부위', '지점', 'point']))
+            no_var.set(match_col(['순번', '번호', 'no', 'seq']))
+
+        for r_i, (lbl_txt, v_target) in enumerate([
+            ("Drawing No. (도면):", dwg_var),
+            ("Joint No. (조인트):", joint_var),
+            ("Location (검사부위):", loc_var),
+            ("No (순번/비교용):", no_var),
+        ]):
+            f_row = ttk.Frame(cols_frame)
+            f_row.pack(fill='x', pady=3)
+            ttk.Label(f_row, text=lbl_txt, width=18).pack(side='left')
+            combo = ttk.Combobox(f_row, textvariable=v_target, state='readonly', width=30)
+            combo.pack(side='left', padx=5)
+            if r_i == 0: dwg_combo = combo
+            elif r_i == 1: joint_combo = combo
+            elif r_i == 2: loc_combo = combo
+            elif r_i == 3: no_combo = combo
+
+        sheet_combo.bind("<<ComboboxSelected>>", update_sheet_columns)
+        update_sheet_columns()
+
+        match_mode_var = tk.StringVar(value="ORDER")
+        mode_frame = ttk.Frame(main_frame)
+        mode_frame.pack(fill='x', pady=5)
+        ttk.Label(mode_frame, text="매핑 방식:", width=12).pack(side='left')
+        ttk.Radiobutton(mode_frame, text="행 순서대로 1:1 매핑 (추천)", variable=match_mode_var, value="ORDER").pack(side='left', padx=5)
+        ttk.Radiobutton(mode_frame, text="No 번호 일치 매핑", variable=match_mode_var, value="NO").pack(side='left', padx=5)
+
+        def apply_mapping():
+            s_name = sheet_var.get()
+            if s_name not in wb.sheetnames: return
+            ws_cur = wb[s_name]
+
+            def parse_col_letter(opt_str):
+                if not opt_str or "(미사용" in opt_str: return None
+                return opt_str.split("열")[0].strip()
+
+            c_dwg = parse_col_letter(dwg_var.get())
+            c_joint = parse_col_letter(joint_var.get())
+            c_loc = parse_col_letter(loc_var.get())
+            c_no = parse_col_letter(no_var.get())
+
+            if not any([c_dwg, c_joint, c_loc]):
+                messagebox.showwarning("알림", "최소 하나의 매핑 열(Drawing, Joint, Location 중)을 선택해주세요.")
+                return
+
+            col_dwg_idx = openpyxl.utils.column_index_from_string(c_dwg) if c_dwg else None
+            col_joint_idx = openpyxl.utils.column_index_from_string(c_joint) if c_joint else None
+            col_loc_idx = openpyxl.utils.column_index_from_string(c_loc) if c_loc else None
+            col_no_idx = openpyxl.utils.column_index_from_string(c_no) if c_no else None
+
+            start_r = max(1, start_row_var.get())
+            max_r = ws_cur.max_row or start_r
+
+            req_items = []
+            for r in range(start_r, max_r + 1):
+                d_val = ws_cur.cell(row=r, column=col_dwg_idx).value if col_dwg_idx else None
+                j_val = ws_cur.cell(row=r, column=col_joint_idx).value if col_joint_idx else None
+                l_val = ws_cur.cell(row=r, column=col_loc_idx).value if col_loc_idx else None
+                n_val = ws_cur.cell(row=r, column=col_no_idx).value if col_no_idx else None
+
+                if d_val is None and j_val is None and l_val is None and n_val is None:
+                    continue
+
+                req_items.append({
+                    'Dwg': str(d_val).strip() if d_val is not None else '',
+                    'Joint': str(j_val).strip() if j_val is not None else '',
+                    'Loc': str(l_val).strip() if l_val is not None else '',
+                    'No': str(n_val).strip() if n_val is not None else '',
+                })
+
+            if not req_items:
+                messagebox.showwarning("알림", "선택한 엑셀 시트에서 유효한 데이터를 찾지 못했습니다.")
+                return
+
+            m_mode = match_mode_var.get()
+            updated_count = 0
+
+            if m_mode == "NO" and col_no_idx:
+                req_map = {item['No']: item for item in req_items if item['No']}
+                for item in target_data:
+                    cur_no = str(item.get('No', '')).strip()
+                    if cur_no in req_map:
+                        matched = req_map[cur_no]
+                        if col_dwg_idx and matched['Dwg']: item['Dwg'] = matched['Dwg']
+                        if col_joint_idx and matched['Joint']: item['Joint'] = matched['Joint']
+                        if col_loc_idx and matched['Loc']: item['Loc'] = matched['Loc']
+                        updated_count += 1
+            else:
+                for i, req_row in enumerate(req_items):
+                    if i >= len(target_data): break
+                    item = target_data[i]
+                    if col_dwg_idx and req_row['Dwg']: item['Dwg'] = req_row['Dwg']
+                    if col_joint_idx and req_row['Joint']: item['Joint'] = req_row['Joint']
+                    if col_loc_idx and req_row['Loc']: item['Loc'] = req_row['Loc']
+                    updated_count += 1
+
+            self.populate_preview(target_data, switch_tab=False, mode=mode)
+            self.log(f"📥 {mode} 요청서 매핑 완료: 총 {updated_count}개 항목 업데이트됨 (파일: {os.path.basename(file_path)})")
+            messagebox.showinfo("매핑 완료", f"총 {updated_count}개 항목의 도면/Joint/위치 정보가 요청서로부터 성공적으로 업데이트되었습니다.")
+            dialog.destroy()
+
+        btn_box = ttk.Frame(main_frame)
+        btn_box.pack(fill='x', pady=(15, 0))
+        ttk.Button(btn_box, text="매핑 적용 (Apply)", command=apply_mapping).pack(side='right', padx=5)
+        ttk.Button(btn_box, text="취소 (Cancel)", command=dialog.destroy).pack(side='right')
+
     # --- Integrated Verification Logic ---
 
     def to_float(self, val):
@@ -8364,23 +8581,55 @@ class PMIReportApp:
                 self.place_image_freely(ws, p, seoul_anchor, seoul_w, seoul_h, seoul_x, seoul_y)
         
         # 3. FOOTER (우측 바닥글: SITCO 서울검사 주식회사 로고)
-        footer_keywords = ["바닥글 PMI", "PMI"] if mode == "PMI" else ["바닥글", "PMI"]
-        p = _get_effective_path("FOOTER", footer_keywords)
-        if p:
-            f_anchor = "P51" if (mode == "PMI" and is_cover) else _get_val("FOOTER", "_ANCHOR", "A1")
-            f_w = 125.0 if (mode == "PMI" and is_cover) else float(_get_val("FOOTER", "_W", 100))
-            f_h = 22.0 if (mode == "PMI" and is_cover) else float(_get_val("FOOTER", "_H", 50))
-            f_x = float(_get_val("FOOTER", "_X", 0))
-            f_y = float(_get_val("FOOTER", "_Y", 0))
-            self.place_image_freely(ws, p, f_anchor, f_w, f_h, f_x, f_y)
+        if mode == "PMI":
+            # [NOTICE] PMI 모드는 템플릿의 [페이지 설정] -> [머리글/바닥글] VML Drawing(&G)을 통해
+            # 인쇄 시 용지 최하단 여백 바닥글로 온전하게 복원(restore_template_footer_pictures)되므로,
+            # 셀(51행/46행) 위에 임의로 복사 배치하여 인쇄 영역 밖으로 밀려나거나 중복되는 것을 방지합니다.
+            self.log("   [INFO] PMI 모드: 템플릿 머리글/바닥글(VML &G) 규격을 사용하므로 셀 내 중복 삽입을 건너뜁니다.")
+        else:
+            footer_keywords = ["바닥글", "PMI"]
+            p = _get_effective_path("FOOTER", footer_keywords)
+            if p:
+                f_anchor = _get_val("FOOTER", "_ANCHOR", "A1")
+                f_w = float(_get_val("FOOTER", "_W", 100))
+                f_h = float(_get_val("FOOTER", "_H", 50))
+                f_x = float(_get_val("FOOTER", "_X", 0))
+                f_y = float(_get_val("FOOTER", "_Y", 0))
+                has_existing_footer_img = _has_image_near(f_anchor, row_tol=2, col_tol=4)
+                if not has_existing_footer_img:
+                    self.place_image_freely(ws, p, f_anchor, f_w, f_h, f_x, f_y)
 
         # 4. FOOTER_PT (Left: 좌측 바닥글 양식 번호)
         if mode == "PMI":
-            footer_left_keywords = ["바닥글 PMI갑"] if is_cover else ["바닥글 PMI-1"]
-            p = _get_effective_path("FOOTER_PT", footer_left_keywords)
-            if p:
-                f_pt_anchor = "A51" if is_cover else "A46"
-                self.place_image_freely(ws, p, f_pt_anchor, 92.0, 22.0, 0.0, 0.0)
+            f_pt_anchor = "A51" if is_cover else "A46"
+            # [PRESERVE TEMPLATE & PROCEDURE FOOTER]
+            # 1) 셀에 이미 텍스트(예: '양식 E 501-1', '양식 H 801-1' 등)가 존재하는지 확인
+            cell_has_text = False
+            for chk_r in ([50, 51, 52] if is_cover else [45, 46, 47]):
+                v = ws.cell(row=chk_r, column=1).value
+                if v and ('양식' in str(v) or '양 식' in str(v) or 'FORM' in str(v).upper()):
+                    cell_has_text = True
+                    break
+            # 2) oddFooter.left.text에 절차서 번호가 이미 있는지 확인
+            has_odd_footer = hasattr(ws, 'oddFooter') and ws.oddFooter and ws.oddFooter.left.text and ('양' in str(ws.oddFooter.left.text) or 'FORM' in str(ws.oddFooter.left.text).upper() or 'H ' in str(ws.oddFooter.left.text) or 'E ' in str(ws.oddFooter.left.text))
+            # 3) 기존 이미지가 이미 배치되어 있는지 확인
+            has_existing_pt_img = _has_image_near(f_pt_anchor, row_tol=2, col_tol=3)
+
+            is_triple_mode = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
+
+            if cell_has_text or has_odd_footer or has_existing_pt_img:
+                self.log(f"   [INFO] 'FOOTER_PT' 템플릿 절차서 원본 바닥글이 감지되어 기존 서식을 보존합니다.")
+            elif not is_triple_mode and not is_cover:
+                # [STANDARD MODE EULJI] 단일행 일반 모드 을지에는 플랜트용 '양식 H 802-2'('바닥글 PMI-1') 이미지를 강제 삽입하지 않음
+                self.log(f"   [INFO] 'FOOTER_PT' STANDARD 단일행 을지에는 플랜트 배관용 양식을 주입하지 않습니다.")
+            else:
+                footer_left_keywords = ["바닥글 PMI갑"] if is_cover else ["바닥글 PMI-1"]
+                p = _get_effective_path("FOOTER_PT", footer_left_keywords)
+                if p:
+                    self.place_image_freely(ws, p, f_pt_anchor, 92.0, 22.0, 0.0, 0.0)
+                    r_target = 51 if is_cover else 46
+                    if ws.row_dimensions[r_target].height is None or ws.row_dimensions[r_target].height < 24.0:
+                        ws.row_dimensions[r_target].height = 24.0
         else:
             footer_left_keywords = ["PMI갑", "PMI-1", "PT"]
             p = _get_effective_path("FOOTER_PT", footer_left_keywords)
@@ -8438,7 +8687,12 @@ class PMIReportApp:
                             ws.print_area = f'A1:S{end_r}'
                         elif mode == "PMI":
                             is_triple = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
-                            ws.print_area = f'A1:M{end_r}' if is_triple else f'A1:T{end_r}'
+                            if is_triple:
+                                ws.print_area = 'A1:M45'
+                            else:
+                                if ws.row_dimensions[46].height is None or ws.row_dimensions[46].height < 24.0:
+                                    ws.row_dimensions[46].height = 24.0
+                                ws.print_area = f'A1:T{end_r}'
                         else:
                             ws.print_area = f'A1:M{end_r}'
             
@@ -8478,16 +8732,11 @@ class PMIReportApp:
                 ws.page_setup.fitToHeight = None
                 ws.page_setup.scale = 87
             elif mode == "PMI" and context == "DATA":
-                # Apply the configured scale directly. One-page fitting shrinks
-                # the PMI table vertically and creates excessive blank space.
-                try:
-                    pmi_scale = max(10, min(400, int(float(scale_val))))
-                except (TypeError, ValueError):
-                    pmi_scale = 95
-                ws.sheet_properties.pageSetUpPr.fitToPage = False
-                ws.page_setup.fitToWidth = None
-                ws.page_setup.fitToHeight = None
-                ws.page_setup.scale = pmi_scale
+                # [PMI 1페이지 완벽 맞춤] 배관용 및 일반 모드 모두 1시트당 정확히 1페이지로 고정 (4페이지 분할 원천 차단)
+                ws.sheet_properties.pageSetUpPr.fitToPage = True
+                ws.page_setup.fitToWidth = 1
+                ws.page_setup.fitToHeight = 1
+                ws.page_setup.scale = None
             elif mode == "PT" and context == "DATA":
                 # PT의 S(Scale) 입력값을 실제 Excel 인쇄 배율로 적용한다.
                 # fitToPage가 켜져 있으면 scale 값이 무시되므로 함께 해제한다.
@@ -8506,7 +8755,7 @@ class PMIReportApp:
                 ws.page_setup.fitToHeight = (
                     0 if mode == "RT" and context == "COVER" else 1
                 )
-                if mode == "PT" and context == "COVER":
+                if mode in ("PT", "PMI") and context == "COVER":
                     ws.page_setup.scale = None
             
             def _margin(name, default):
@@ -8517,8 +8766,26 @@ class PMIReportApp:
                 )
             ws.page_margins.top    = _margin('TOP',    0.2)
             ws.page_margins.bottom = _margin('BOTTOM', 0.2)
-            ws.page_margins.left   = _margin('LEFT',   0.5)
-            ws.page_margins.right  = _margin('RIGHT',  0.3)
+            if mode == "PMI":
+                # [PMI 여백 표준화] 템플릿 원본 규격(0.25인치, 약 6.35mm / 5~7mm)으로 완전 복원하여
+                # 4페이지 분할을 원천 차단하고 갑지/을지 1장 맞춤 및 좌우 여백을 완벽 일치시킴
+                ws.page_margins.left  = 0.25
+                ws.page_margins.right = 0.25
+                ws.page_margins.top   = 0.25
+                ws.page_margins.bottom = 0.25
+                if hasattr(self, 'config'):
+                    self.config['MARGIN_PMI_COVER_LEFT'] = 0.25
+                    self.config['MARGIN_PMI_COVER_RIGHT'] = 0.25
+                    self.config['MARGIN_PMI_DATA_LEFT'] = 0.25
+                    self.config['MARGIN_PMI_DATA_RIGHT'] = 0.25
+                if hasattr(self, 'setting_vars'):
+                    for k in ['MARGIN_PMI_COVER_LEFT', 'MARGIN_PMI_COVER_RIGHT', 'MARGIN_PMI_DATA_LEFT', 'MARGIN_PMI_DATA_RIGHT']:
+                        if k in self.setting_vars:
+                            try: self.setting_vars[k].set("0.25")
+                            except: pass
+            else:
+                ws.page_margins.left   = _margin('LEFT',   0.5)
+                ws.page_margins.right  = _margin('RIGHT',  0.3)
             if mode == "PAUT":
                 # Keep the photo log unchanged; both PAUT sheets follow its
                 # current margin controls, including restored photo settings.
@@ -8573,18 +8840,19 @@ class PMIReportApp:
                 height = float(height_val)
                 self.log(f"!!! [SPY-HEIGHT] Sheet: {ws.title}, rows='{row_range_str}', h={height}")
                 self.log(f"[DEBUG] Applying row height {height} to rows {row_range_str} for context {full_context}")
+                import re
                 for part in row_range_str.split(','):
                     part = part.strip()
                     if not part: continue
-                    if '-' in part or '~' in part or ':' in part:
-                        if '-' in part: sep = '-'
-                        elif '~' in part: sep = '~'
-                        else: sep = ':'
-                        start, end = map(int, part.split(sep))
+                    # [SMART PARSE] 'A19:M45', '19-45', '19:45', '19~45' 등 모든 형식에서 행 번호 숫자만 자동 추출
+                    nums = [int(n) for n in re.findall(r'\d+', part)]
+                    if len(nums) >= 2:
+                        start, end = nums[0], nums[1]
+                        if start > end: start, end = end, start
                         for r in range(start, end + 1):
                             ws.row_dimensions[r].height = height
-                    else:
-                        ws.row_dimensions[int(part)].height = height
+                    elif len(nums) == 1:
+                        ws.row_dimensions[nums[0]].height = height
             
             # Column Adjustment
             col_range_str = (self.config.get(f"CUSTOM_COLS_{full_context}", "") or 
@@ -8594,14 +8862,23 @@ class PMIReportApp:
                              self.config.get(f"CUSTOM_COL_WIDTH_{context}", 10.0))
                 width = float(width_val)
                 for part in col_range_str.split(','):
-                    if '-' in part:
-                        bits = part.split('-')
+                    part = part.strip()
+                    if not part: continue
+                    sep = '-' if '-' in part else (':' if ':' in part else ('~' if '~' in part else None))
+                    if sep:
+                        bits = part.split(sep)
                         if len(bits) == 2:
-                            start_l, end_l = bits
-                            for c in range(column_index_from_string(start_l), column_index_from_string(end_l) + 1):
-                                ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = width
+                            import re
+                            start_l = re.sub(r'[^A-Z]', '', bits[0].strip().upper())
+                            end_l = re.sub(r'[^A-Z]', '', bits[1].strip().upper())
+                            if start_l and end_l:
+                                for c in range(column_index_from_string(start_l), column_index_from_string(end_l) + 1):
+                                    ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = width
                     else:
-                        ws.column_dimensions[part.strip().upper()].width = width
+                        import re
+                        c_clean = re.sub(r'[^A-Z]', '', part.upper())
+                        if c_clean:
+                            ws.column_dimensions[c_clean].width = width
         except Exception as e:
             print(f"[DEBUG] Custom dimension failed for {context}: {e}")
 
@@ -8629,7 +8906,7 @@ class PMIReportApp:
         except Exception: pass
 
     def safe_merge_cells(self, ws, start_row, start_column, end_row, end_column):
-        """[FIX] Prevent unmerging or conflicting merges on the cover sheet"""
+        """[FIX] Prevent unmerging or conflicting merges on the cover sheet and prevent overlapping merges"""
         try:
             # If it's the cover sheet, be extremely conservative with merging/unmerging
             if ws == ws.parent.worksheets[0]:
@@ -8637,6 +8914,18 @@ class PMIReportApp:
         except: pass
         
         try:
+            # 대상 범위와 겹치는 기존 병합 셀이 있으면 unmerge하여 OpenXML 손상(중복 병합 오류) 방지
+            for m in list(ws.merged_cells.ranges):
+                if not (m.max_row < start_row or m.min_row > end_row or
+                        m.max_col < start_column or m.min_col > end_column):
+                    if (m.min_row == start_row and m.max_row == end_row and
+                        m.min_col == start_column and m.max_col == end_column):
+                        return
+                    try:
+                        ws.unmerge_cells(str(m))
+                    except Exception:
+                        pass
+
             ws.merge_cells(start_row=start_row, start_column=start_column, end_row=end_row, end_column=end_column)
         except Exception as e:
             self.log(f"   ⚠️ 셀 병합 실패 ({start_row},{start_column}): {e}")
@@ -8686,9 +8975,282 @@ class PMIReportApp:
             target_l = ws.cell(row=r, column=13); dv_q.add(target_l) # 12 -> 13 (M)
             target_l.alignment = Alignment(wrap_text=True, horizontal='center', vertical='center'); target_l.font = Font(size=8.5)
     
-        # [NEW] K15에 하이픈 추가
-        self.safe_set_value(ws, 'K15', "-")
-        ws['K15'].alignment = Alignment(horizontal='center', vertical='center')
+        # [NEW] 플랜트 3단 모드에서만 K15에 하이픈 적용 (표준 20열 템플릿의 H15:M16 'Chemical Composition' 훼손 방지)
+        is_triple = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
+        if is_triple:
+            self.safe_set_value(ws, 'K15', "-")
+            ws['K15'].alignment = Alignment(horizontal='center', vertical='center')
+        else:
+            # 표준 20열 모드: H15:M16에 'Chemical Composition' 복원 및 보존
+            h15_val = str(ws['H15'].value or '').strip()
+            if not h15_val or h15_val == '-':
+                self.safe_set_value(ws, 'H15', "Chemical Composition")
+                ws['H15'].alignment = Alignment(horizontal='center', vertical='center')
+                ws['H15'].font = Font(name='바탕', size=9, bold=False)
+
+    def convert_pmi_eulji_to_plant_triple(self, sheet, ws0=None):
+        """일반 단일행 20열 PMI 을지 시트를 플랜트 배관용 13열 3단 구조(사진 3)로 동적 변환합니다.
+        
+        - 1~10행 상단 헤더: 제목(A1:M1, A2:M2), 고객사(K5:L7, M5:M7), 보고서번호(K8:L10, M8:M10) 재정렬
+        - 11~18행 검사 헤더: Drawing No(A11:E18), Joint No(F11:F18), Test Location(G11:G18),
+          Method(H11:L12), Analyzer(H13:L13), Chem Comp(H14:L14), 원소행(H15~L15),
+          규격치 3행(H16:L16 모재1, H17:L17 용접부, H18:L18 모재2), Type of Material(M11:M18)
+        - 14~20열(N~T열): 미사용 컬럼 내용/테두리 클리어
+        - 열 너비 및 인쇄영역: 13열 플랜트 배관용 규격(A1:M47)으로 최적화
+        """
+        medium_side = Side(style='medium')
+        thin_side = Side(style='thin')
+        from openpyxl.cell.cell import MergedCell
+        
+        # 1. 14열(N열) 이상에 걸쳐 있는 병합 및 1~18행 병합 완전 해제
+        for m in list(sheet.merged_cells.ranges):
+            if m.max_col >= 14 or m.max_row <= 18:
+                try: sheet.unmerge_cells(str(m))
+                except: pass
+
+        # 2. 열 너비 13열 최적화 (갑지 총합 91.7과 100% 일치시켜 좌우 여백 및 테두리 완벽 일치)
+        col_widths = {
+            'A': 4.5, 'B': 4.5, 'C': 3.0, 'D': 3.0,
+            'E': 5.5, 'F': 7.0, 'G': 8.5, 'H': 6.5, 'I': 7.5, 'J': 7.5,
+            'K': 7.5, 'L': 7.5, 'M': 19.2
+        }
+        for col_letter, w in col_widths.items():
+            sheet.column_dimensions[col_letter].width = w
+            sheet.column_dimensions[col_letter].hidden = False
+        for c_idx in range(14, 26):
+            col_l = openpyxl.utils.get_column_letter(c_idx)
+            sheet.column_dimensions[col_l].hidden = True
+            sheet.column_dimensions[col_l].width = 0
+
+        # 3. 1~10행 상단 헤더 재구성 (첫 번째 사진과 100% 동일한 구조와 외관)
+        self.safe_merge_cells(sheet, 1, 1, 1, 13)
+        self.safe_merge_cells(sheet, 2, 1, 2, 13)
+        self.safe_merge_cells(sheet, 3, 12, 3, 13)
+        
+        # A5:D10 (SITCO 로고 영역)
+        self.safe_merge_cells(sheet, 5, 1, 10, 4)
+        
+        # E8:J8, E9:J9, E10:J10 서울검사 정보 (첫 번째 사진과 완벽 일치: 좌측 정렬, 바탕 9pt)
+        co_info = [
+            (8, 'SEOUL INSPECTION & TESTING Co., Ltd.'),
+            (9, '서울특별시  서초구  바우뫼로  41길  54 (용진빌딩)'),
+            (10, 'TEL : (02) 552-1112      FAX : (02) 2058-0720')
+        ]
+        font_addr = Font(name='바탕', size=9, bold=False)
+        for r, txt in co_info:
+            self.safe_set_value(sheet, f'E{r}', txt, align='left')
+            sheet.cell(r, 5).font = font_addr
+            sheet.cell(r, 5).alignment = Alignment(horizontal='left', vertical='center')
+            self.safe_merge_cells(sheet, r, 5, r, 10)
+            
+        font_label = Font(name='바탕', size=9, bold=False)
+        # K5:L7, K8:L10 (주문주 / 보고서 번호 라벨: 2줄 wrap_text)
+        self.safe_set_value(sheet, 'K5', '주문주\nCustomer', align='center')
+        sheet.cell(5, 11).font = font_label
+        sheet.cell(5, 11).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        self.safe_merge_cells(sheet, 5, 11, 7, 12)
+
+        self.safe_set_value(sheet, 'K8', '보고서 번호\nReport No.', align='center')
+        sheet.cell(8, 11).font = font_label
+        sheet.cell(8, 11).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        self.safe_merge_cells(sheet, 8, 11, 10, 12)
+        
+        # M5:M7 (고객사명), M8:M10 (보고서 번호값)
+        cust = (self.gapji_customer.get().strip() if hasattr(self, 'gapji_customer') else '') or self.config.get('GAPJI_CUSTOMER', '')
+        if cust:
+            self.safe_set_value(sheet, 'M5', cust, align='center')
+        elif ws0 is not None:
+            self.safe_set_value(sheet, 'M5', f"='{ws0.title}'!N5", align='center')
+        sheet.cell(5, 13).font = font_label
+        sheet.cell(5, 13).alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+        self.safe_merge_cells(sheet, 5, 13, 7, 13)
+
+        rep = (self.gapji_report_no.get().strip() if hasattr(self, 'gapji_report_no') else '') or self.config.get('GAPJI_REPORT_NO', '')
+        if rep:
+            self.safe_set_value(sheet, 'M8', rep, align='center')
+        elif ws0 is not None:
+            self.safe_set_value(sheet, 'M8', f"=IF('{ws0.title}'!N8=\"\",\"\",'{ws0.title}'!N8)", align='center')
+        sheet.cell(8, 13).font = font_label
+        sheet.cell(8, 13).alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
+        self.safe_merge_cells(sheet, 8, 13, 10, 13)
+
+        # 5~10행 테두리: 첫 번째 사진과 100% 동일 (E~J 내부 가로선 일절 없음)
+        # A5:D10 (SITCO)
+        for r in range(5, 11):
+            for c in range(1, 5):
+                cell = sheet.cell(r, c)
+                l = medium_side if c == 1 else None
+                t = medium_side if r == 5 else None
+                b = medium_side if r == 10 else None
+                cell.border = Border(left=l, right=None, top=t, bottom=b)
+
+        # E5:J10 (서울검사 상호 + 주소: 내부 가로선 없음!)
+        for r in range(5, 11):
+            for c in range(5, 11):
+                cell = sheet.cell(r, c)
+                r_s = thin_side if c == 10 else None
+                t = medium_side if r == 5 else None
+                b = medium_side if r == 10 else None
+                cell.border = Border(left=None, right=r_s, top=t, bottom=b)
+
+        # K5:L10 (주문주/보고서번호 라벨)
+        for r in range(5, 11):
+            for c in [11, 12]:
+                cell = sheet.cell(r, c)
+                l = thin_side if c == 11 else None
+                r_s = thin_side if c == 12 else None
+                t = medium_side if r == 5 else (thin_side if r == 8 else None)
+                b = medium_side if r == 10 else (thin_side if r == 7 else None)
+                cell.border = Border(left=l, right=r_s, top=t, bottom=b)
+
+        # M5:M10 (고객사/보고서번호값)
+        for r in range(5, 11):
+            cell = sheet.cell(r, 13)
+            l = thin_side
+            r_s = medium_side
+            t = medium_side if r == 5 else (thin_side if r == 8 else None)
+            b = medium_side if r == 10 else (thin_side if r == 7 else None)
+            cell.border = Border(left=l, right=r_s, top=t, bottom=b)
+
+        # 4. 11~18행 헤더 변환 (세 번째 사진과 100% 일치)
+        for r in range(11, 19):
+            for c in range(1, 26):
+                cell = sheet.cell(row=r, column=c)
+                cell.value = None
+                cell.border = Border()
+
+        font_bold = Font(name='바탕', size=9, bold=True)
+        font_spec = Font(name='바탕', size=8, bold=False)
+
+        # A11:E18 Drawing No.
+        self.safe_set_value(sheet, 'A11', 'Drawing No.', align='center')
+        sheet.cell(11, 1).font = font_bold
+        self.safe_merge_cells(sheet, 11, 1, 18, 5)
+
+        # F11:F18 Joint No.
+        self.safe_set_value(sheet, 'F11', 'Joint No.', align='center')
+        sheet.cell(11, 6).font = font_bold
+        self.safe_merge_cells(sheet, 11, 6, 18, 6)
+
+        # G11:G18 Test Location
+        self.safe_set_value(sheet, 'G11', 'Test Location', align='center')
+        sheet.cell(11, 7).font = font_bold
+        sheet.cell(11, 7).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        self.safe_merge_cells(sheet, 11, 7, 18, 7)
+
+        # H11:L12 Alloy Verification Method / 합금분석시험방법
+        self.safe_set_value(sheet, 'H11', 'Alloy Verification Method\n합금분석시험방법', align='center')
+        sheet.cell(11, 8).font = font_bold
+        sheet.cell(11, 8).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        self.safe_merge_cells(sheet, 11, 8, 12, 12)
+
+        # H13:L13 Alloy Analyzer재질분석기
+        self.safe_set_value(sheet, 'H13', 'Alloy Analyzer재질분석기', align='center')
+        sheet.cell(13, 8).font = font_bold
+        self.safe_merge_cells(sheet, 13, 8, 13, 12)
+
+        # H14:L14 Chemical Composition
+        self.safe_set_value(sheet, 'H14', 'Chemical Composition', align='center')
+        sheet.cell(14, 8).font = font_bold
+        self.safe_merge_cells(sheet, 14, 8, 14, 12)
+
+        # 15행 원소기호 (H15~L15 개별 셀)
+        chem_elems = ["Ni", "Cr", "Mo", "-", "-"]
+        if hasattr(self, 'pmi_chem_elements') and self.pmi_chem_elements:
+            for idx, v in enumerate(self.pmi_chem_elements[:5]):
+                val = v.get().strip()
+                if val: chem_elems[idx] = val
+        for idx, el in enumerate(chem_elems):
+            c_target = 8 + idx
+            self.safe_set_value(sheet, sheet.cell(15, c_target).coordinate, el, align='center')
+            sheet.cell(15, c_target).font = font_bold
+
+        # 16~18행 규격치 3행 (H16:L16, H17:L17, H18:L18)
+        default_specs = [
+            "A312-L Ni:10.0 ~ 14.0%, Cr:16.0 ~ 18.0%, Mo:2.0 ~ 3.0%",
+            "ER-316L Ni:11.0 ~ 14.0%, Cr:18.0 ~ 20.0%, Mo:2.0 ~ 3.0%",
+            "A182-Ni: 10.0 ~ 14.0%, Cr: 16.0 ~ 18.0%, Mo:2.0 ~ 3.0%"
+        ]
+        if hasattr(self, 'pmi_chem_specs') and self.pmi_chem_specs:
+            for idx, v in enumerate(self.pmi_chem_specs[:3]):
+                val = v.get().strip()
+                if val: default_specs[idx] = val
+        for idx, sp in enumerate(default_specs):
+            r_target = 16 + idx
+            self.safe_set_value(sheet, f'H{r_target}', sp, align='center')
+            sheet.cell(r_target, 8).font = font_spec
+            self.safe_merge_cells(sheet, r_target, 8, r_target, 12)
+
+        # M11:M18 Type of Material
+        self.safe_set_value(sheet, 'M11', 'Type of Material', align='center')
+        sheet.cell(11, 13).font = font_bold
+        sheet.cell(11, 13).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        self.safe_merge_cells(sheet, 11, 13, 18, 13)
+
+        # 11~18행 테두리 및 행 높이 설정
+        for r in range(11, 19):
+            sheet.row_dimensions[r].height = 19.5
+            for c in range(1, 14):
+                cell = sheet.cell(row=r, column=c)
+                t_s = medium_side if r == 11 else thin_side
+                b_s = medium_side if r == 18 else thin_side
+                l_s = medium_side if c == 1 else thin_side
+                r_s = medium_side if c == 13 else thin_side
+                
+                # A~E (Drawing No) 내부 선 정리
+                if 1 <= c <= 5:
+                    if 1 < c < 5: l_s = None; r_s = None
+                    elif c == 1: r_s = None
+                    elif c == 5: l_s = None
+                    if 11 < r < 18: t_s = None; b_s = None
+                    elif r == 11: b_s = None
+                    elif r == 18: t_s = None
+                elif c == 6:
+                    if 11 < r < 18: t_s = None; b_s = None
+                    elif r == 11: b_s = None
+                    elif r == 18: t_s = None
+                elif c == 7:
+                    if 11 < r < 18: t_s = None; b_s = None
+                    elif r == 11: b_s = None
+                    elif r == 18: t_s = None
+                elif 8 <= c <= 12:
+                    if r in (11, 12):
+                        if 8 < c < 12: l_s = None; r_s = None
+                        elif c == 8: r_s = None
+                        elif c == 12: l_s = None
+                        if r == 11: b_s = None
+                        elif r == 12: t_s = None
+                    elif r in (13, 14, 16, 17, 18):
+                        if 8 < c < 12: l_s = None; r_s = None
+                        elif c == 8: r_s = None
+                        elif c == 12: l_s = None
+                elif c == 13:
+                    if 11 < r < 18: t_s = None; b_s = None
+                    elif r == 11: b_s = None
+                    elif r == 18: t_s = None
+                    
+                cell.border = Border(left=l_s, right=r_s, top=t_s, bottom=b_s)
+
+        # 5. 14~25열 잔여 셀 내용 및 테두리 클리어 (1~50행)
+        for r in range(1, 52):
+            for c in range(14, 26):
+                cell = sheet.cell(row=r, column=c)
+                if not isinstance(cell, MergedCell):
+                    cell.value = None
+                    cell.border = Border()
+
+        # 6. 인쇄 영역 및 인쇄 설정 최적화 (배관용 19~45행 27행 9조인트 규격: A1:M45)
+        sheet.print_area = "A1:M45"
+        sheet.page_setup.orientation = 'portrait'
+        sheet.page_setup.paperSize = 9
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.page_setup.fitToWidth = 1
+        sheet.page_setup.fitToHeight = 1
+        sheet.page_setup.scale = None
+        sheet.page_margins.left = 0.25
+        sheet.page_margins.right = 0.25
+        sheet.page_margins.top = 0.25
+        sheet.page_margins.bottom = 0.25
         
     def prepare_next_sheet(self, wb, source_sheet_idx, page_num, mode=None):
         source_sheet = wb.worksheets[source_sheet_idx]; new_sheet = wb.copy_worksheet(source_sheet) 
@@ -8823,6 +9385,26 @@ class PMIReportApp:
                     # PT 모드는 P4, P6에 텍스트를 직접 꽂아줌 (수식 오류로 0 표기 방지)
                     self.safe_set_value(new_sheet, 'P4', self.gapji_customer.get().strip())
                     self.safe_set_value(new_sheet, 'P6', self.gapji_report_no.get().strip())
+                elif current_mode == "PMI":
+                    is_triple_mode = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
+                    if is_triple_mode:
+                        self.safe_set_value(new_sheet, 'K5', f"='{ws0.title}'!L5")
+                        self.safe_set_value(new_sheet, 'M5', f"='{ws0.title}'!N5")
+                        self.safe_set_value(new_sheet, 'M8', f"='{ws0.title}'!N8")
+                        new_sheet.column_dimensions['M'].width = 18.0
+                    else:
+                        # 20열 표준 단일행 모드: K5 정리, M5/M8 라벨 보존, O5/O8 연동, 열 너비 보존
+                        self.safe_set_value(new_sheet, 'K5', None)
+                        self.safe_set_value(new_sheet, 'M5', '주문주\nCustomer')
+                        self.safe_set_value(new_sheet, 'O5', f"='{ws0.title}'!N5")
+                        self.safe_set_value(new_sheet, 'M8', '보고서 번호\nReport No.')
+                        self.safe_set_value(new_sheet, 'O8', f"=IF('{ws0.title}'!N8=\"\",\"\",'{ws0.title}'!N8)")
+                        pmi_20col_widths = {
+                            'H': 4.83, 'I': 4.83, 'J': 4.61, 'K': 4.61, 'L': 4.61, 'M': 4.61,
+                            'N': 11.00, 'O': 6.00
+                        }
+                        for col_l, col_w in pmi_20col_widths.items():
+                            new_sheet.column_dimensions[col_l].width = col_w
                 else:
                     # 엑셀 수식을 사용하여 갑지의 값이 바뀌면 자동으로 바뀌게 설정
                     self.safe_set_value(new_sheet, 'K5', f"='{ws0.title}'!L5")
@@ -8840,11 +9422,17 @@ class PMIReportApp:
                             cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
         except: pass
         
-        # [NEW] K15에 하이픈 추가
-        self.safe_set_value(new_sheet, 'K15', "-")
-        new_sheet['K15'].alignment = Alignment(horizontal='center', vertical='center')
-        
-        new_sheet.column_dimensions['M'].width = 18.0
+        # [NEW] 플랜트 3단 모드에서만 K15 하이픈 및 M열 18.0 적용
+        if current_mode == "PMI" and hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE":
+            self.safe_set_value(new_sheet, 'K15', "-")
+            new_sheet['K15'].alignment = Alignment(horizontal='center', vertical='center')
+            new_sheet.column_dimensions['M'].width = 18.0
+        elif current_mode == "PMI":
+            h15_val = str(new_sheet['H15'].value or '').strip()
+            if not h15_val or h15_val == '-':
+                self.safe_set_value(new_sheet, 'H15', "Chemical Composition")
+                new_sheet['H15'].alignment = Alignment(horizontal='center', vertical='center')
+                new_sheet['H15'].font = Font(name='바탕', size=9, bold=False)
         return new_sheet
 
     def inject_drawing_layer(self, template_path, target_path):
@@ -9085,10 +9673,6 @@ class PMIReportApp:
                                     tmpl_sheet = re.sub(
                                         r'(<pageSetup\b[^>]*/>)', r'\1' + rep_header,
                                         tmpl_sheet, count=1
-                                    )
-                                else:
-                                    tmpl_sheet = tmpl_sheet.replace(
-                                        '</sheetData>', '</sheetData>' + rep_header, 1
                                     )
                             # sheetData 주입 + 행 높이 보존
                             if fl_lower in processed_sheets:
@@ -10749,14 +11333,17 @@ class PMIReportApp:
             if ('PROJECT' in a11_val.upper() or '공사명' in a11_val) and ('CUSTOMER' in l5_val.upper() or '주문주' in l5_val):
                 # SITCO standard PMI layout (e.g. K1 / K3 / 롯데 / PROVIDENCE)
                 sitco_pmi_mapping = [
-                    ('GAPJI_PROJECT', 'E11'),
-                    ('GAPJI_CUSTOMER', 'N5'),
-                    ('GAPJI_REPORT_NO', 'N8'),
-                    ('GAPJI_ITEM', 'E13'),
-                    ('GAPJI_MATERIAL', 'E17'),
+                    ('GAPJI_PROJECT', 'E11', getattr(self, 'gapji_project', None)),
+                    ('GAPJI_CUSTOMER', 'N5', getattr(self, 'gapji_customer', None)),
+                    ('GAPJI_REPORT_NO', 'N8', getattr(self, 'gapji_report_no', None)),
+                    ('GAPJI_ITEM', 'E13', getattr(self, 'gapji_item', None)),
+                    ('GAPJI_MATERIAL', 'E17', getattr(self, 'gapji_material', None)),
                 ]
-                for cfg_key, coord in sitco_pmi_mapping:
-                    val = self.config.get(cfg_key, "")
+                for cfg_key, coord, ui_var in sitco_pmi_mapping:
+                    ui_val = ui_var.get().strip() if (ui_var and hasattr(ui_var, 'get')) else ''
+                    val = ui_val or self.config.get(cfg_key, "")
+                    if not val and cfg_key == 'GAPJI_REPORT_NO' and first_item:
+                        val = str(first_item.get('Report No', '') or first_item.get('Report No.', '')).strip()
                     if val:
                         self.safe_set_value(ws, self.config.get(f"{cfg_key}_CELL", coord), val)
 
@@ -10815,7 +11402,7 @@ class PMIReportApp:
         
         # [FIX] data_end_row 전역/설정으로 보강
         data_start_row = int(self.config.get('START_ROW', 17))
-        data_end_row = int(self.config.get('DATA_END_ROW', 45))
+        data_end_row = int(self.config.get('DATA_END_ROW', 47))
         
         try:
             # keep_vba=True forces openpyxl to write a macro-enabled workbook
@@ -10881,6 +11468,8 @@ class PMIReportApp:
 
                 # 바닥글(51행)의 좌측 양식 번호와 우측 로고까지 온전히 포함하는 공식 인쇄 영역
                 gapji_print_end = int(self.config.get('GAPJI_PRINT_END_ROW', 51))
+                if ws0.row_dimensions[gapji_print_end].height is None or ws0.row_dimensions[gapji_print_end].height < 24.0:
+                    ws0.row_dimensions[gapji_print_end].height = 24.0
                 ws0.print_area = f'A1:T{gapji_print_end}'
                 
                 ws0['I35'].border = Border() # [FIX] I35 셀 선 제거
@@ -10904,26 +11493,36 @@ class PMIReportApp:
                         r, c = marker.row, marker.col
                         aspect = img.width / max(img.height, 1)
 
-                        # 1. Company logo ("서울검사 주식회사") - Kept inside box and protected from clipping
+                        # 1. Company logo ("서울검사 주식회사") - 상단 외곽선(5행 윗선)을 가리지 않도록 rowOff를 5px(47,625 EMU) 아래로 안착
                         if 3 <= r <= 6 and 3 <= c <= 6 and 3.5 <= aspect <= 9.0:
                             if is_cover:
                                 img.width = 280
                                 img.height = 42
                                 img.anchor = TwoCellAnchor(
-                                    _from=AnchorMarker(col=4, colOff=pixels_to_EMU(2), row=4, rowOff=pixels_to_EMU(1)),
-                                    to=AnchorMarker(col=10, colOff=pixels_to_EMU(25), row=6, rowOff=pixels_to_EMU(13))
+                                    _from=AnchorMarker(col=4, colOff=pixels_to_EMU(2), row=4, rowOff=pixels_to_EMU(5)),
+                                    to=AnchorMarker(col=10, colOff=pixels_to_EMU(25), row=6, rowOff=pixels_to_EMU(15))
                                 )
                             else:
-                                img.width = 230
-                                img.height = 40
-                                img.anchor = TwoCellAnchor(
-                                    _from=AnchorMarker(col=4, colOff=pixels_to_EMU(2), row=4, rowOff=pixels_to_EMU(1)),
-                                    to=AnchorMarker(col=9, colOff=pixels_to_EMU(20), row=6, rowOff=pixels_to_EMU(13))
-                                )
+                                is_triple_mode = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
+                                if is_triple_mode:
+                                    img.width = 220
+                                    img.height = 38
+                                    img.anchor = TwoCellAnchor(
+                                        _from=AnchorMarker(col=4, colOff=pixels_to_EMU(2), row=4, rowOff=pixels_to_EMU(5)),
+                                        to=AnchorMarker(col=8, colOff=pixels_to_EMU(15), row=6, rowOff=pixels_to_EMU(15))
+                                    )
+                                else:
+                                    img.width = 230
+                                    img.height = 40
+                                    img.anchor = TwoCellAnchor(
+                                        _from=AnchorMarker(col=4, colOff=pixels_to_EMU(2), row=4, rowOff=pixels_to_EMU(5)),
+                                        to=AnchorMarker(col=9, colOff=pixels_to_EMU(20), row=6, rowOff=pixels_to_EMU(15))
+                                    )
 
                         # 2. Seal / stamp (rows 2~6, cols 7~12, aspect 0.65~1.35)
                         # [EXACT BOX ALIGNMENT] 5~10행 세로 높이(84px) 정밀 일치 및 우측 끝선 무오차 밀착 (84x84px)
                         elif 2 <= r <= 6 and 7 <= c <= 12 and 0.65 <= aspect <= 1.35:
+                            is_triple_mode = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
                             if is_cover:
                                 img.width = 84
                                 img.height = 84
@@ -10931,13 +11530,32 @@ class PMIReportApp:
                                     _from=AnchorMarker(col=8, colOff=179300, row=4, rowOff=0),
                                     ext=XDRPositiveSize2D(800100, 800100)
                                 )
-                            else:
+                            elif is_triple_mode:
                                 img.width = 84
                                 img.height = 84
                                 img.anchor = OneCellAnchor(
-                                    _from=AnchorMarker(col=7, colOff=194200, row=4, rowOff=0),
+                                    _from=AnchorMarker(col=8, colOff=140000, row=4, rowOff=0),
                                     ext=XDRPositiveSize2D(800100, 800100)
                                 )
+                            else:
+                                # 20열 단일행 표준 모드: 회사 정보 박스는 E~L열, M열부터 Customer
+                                # 상호명 "株式會社" 위에 정확히 날인되며, L열 우측(M열 Customer 경계선) 침범 없이 마감
+                                img.width = 84
+                                img.height = 84
+                                img.anchor = OneCellAnchor(
+                                    _from=AnchorMarker(col=9, colOff=161925, row=4, rowOff=0),
+                                    ext=XDRPositiveSize2D(800100, 800100)
+                                )
+
+                        # 3. SITCO logo (A5:D10 box, cols 0~3, rows 5~10)
+                        # [EXACT BOX CENTERING] A5:D10 박스(가로 약 99px, 세로 84px) 내 상하좌우 완벽한 정중앙 대칭 안착
+                        # - 상하: 5행(row 4) 8px 지점부터 10행(row 9) 6px 지점까지 (상하 여백 각 8px 균등)
+                        # - 좌우: A열(col 0) 6px 지점부터 D열(col 3) 12px 지점까지 (좌우 여백 각 6px 균등)
+                        elif c == 0 and 3 <= r <= 6 and 2.5 <= aspect <= 4.0:
+                            img.anchor = TwoCellAnchor(
+                                _from=AnchorMarker(col=0, colOff=pixels_to_EMU(6), row=4, rowOff=pixels_to_EMU(8)),
+                                to=AnchorMarker(col=3, colOff=pixels_to_EMU(12), row=9, rowOff=pixels_to_EMU(6))
+                            )
                 except Exception:
                     pass
 
@@ -10952,6 +11570,15 @@ class PMIReportApp:
             
             self.force_print_settings(ws, context="DATA"); self.set_eulji_headers(ws)
             # self.apply_custom_dimensions(ws, "DATA") # [MOVED] To the end of process
+            
+            # [NEW] 일반 단일행 템플릿(20열)에서 '플랜트 배관용' 모드 선택 시,
+            # 을지 헤더(11~18행) 및 상단 구조를 13열 3단 배관용 구조(사진 3)로 자동 변환
+            is_triple_mode = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
+            if is_triple_mode:
+                a11_val = str(ws.cell(11, 1).value or '').strip()
+                merges_str = [str(m) for m in ws.merged_cells.ranges]
+                if 'Item' in a11_val or ws.max_column > 13 or ws.cell(11, 15).value is not None or 'A11:D18' in merges_str:
+                    self.convert_pmi_eulji_to_plant_triple(ws, ws0=ws0)
             
             try:
                 if len(wb.worksheets) >= 2:
@@ -10973,7 +11600,18 @@ class PMIReportApp:
                         m8_val = ws.cell(8, 13).value
                         if not m8_val or 'SIS' in str(m8_val):
                             self.safe_set_value(ws, 'M8', '보고서 번호\nReport No.')
-                        self.safe_set_value(ws, 'O8', f"='{ws0.title}'!N8")
+                        rep_no = (self.gapji_report_no.get().strip() if hasattr(self, 'gapji_report_no') else '') or self.config.get('GAPJI_REPORT_NO', '')
+                        if rep_no:
+                            self.safe_set_value(ws, 'O8', rep_no)
+                        else:
+                            self.safe_set_value(ws, 'O8', f"=IF('{ws0.title}'!N8=\"\",\"\",'{ws0.title}'!N8)")
+
+                        pmi_20col_widths = {
+                            'H': 4.83, 'I': 4.83, 'J': 4.61, 'K': 4.61, 'L': 4.61, 'M': 4.61,
+                            'N': 11.00, 'O': 6.00
+                        }
+                        for col_l, col_w in pmi_20col_widths.items():
+                            ws.column_dimensions[col_l].width = col_w
 
                         for r_idx in range(5, 11):
                             for c_idx in (13, 15):
@@ -10998,6 +11636,7 @@ class PMIReportApp:
                         except: pass
 
             ws = wb.worksheets[data_sheet_id]
+            used_pmi_sheets = [ws0, ws] if ws0 is not None else [ws]
             def apply_pmi_variable_header(sheet):
                 """Apply PMI fields that repeat on every data-sheet page."""
                 is_triple = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
@@ -11024,33 +11663,44 @@ class PMIReportApp:
                         self.safe_set_value(sheet, 'O5', cust)
                     elif ws0 is not None:
                         self.safe_set_value(sheet, 'O5', f"='{ws0.title}'!N5")
-                    rep = self.gapji_report_no.get().strip()
+                    rep = (self.gapji_report_no.get().strip() if hasattr(self, 'gapji_report_no') else '') or self.config.get('GAPJI_REPORT_NO', '')
                     if rep:
                         self.safe_set_value(sheet, 'O8', rep)
                     elif ws0 is not None:
-                        self.safe_set_value(sheet, 'O8', f"='{ws0.title}'!N8")
+                        self.safe_set_value(sheet, 'O8', f"=IF('{ws0.title}'!N8=\"\",\"\",'{ws0.title}'!N8)")
 
                     # 일반 단일행: 템플릿의 기존 원소 및 기준란 형태를 유지하며 기입
-                    elem_row = 15
-                    for r_check in (15, 17):
-                        if str(sheet.cell(row=r_check, column=8).value or '').strip().upper() == 'NI':
+                    # 표준 20열 템플릿: 15행은 'Chemical Composition'(H15:M16), 17행이 원소 행(H17:Cr, I17:Ni)
+                    # 플랜트 3단 템플릿: 14행이 'Chemical Composition', 15행이 원소 행(H15:Ni, I15:Cr)
+                    elem_row = 17
+                    for r_check in (17, 15):
+                        row_vals = [str(sheet.cell(row=r_check, column=c).value or '').strip().upper() for c in (8, 9, 10)]
+                        if 'CR' in row_vals or 'NI' in row_vals:
                             elem_row = r_check
                             break
-                    for col_idx, var in enumerate(self.pmi_chem_elements, start=8):
-                        val = var.get().strip()
-                        if val:
-                            self.safe_set_value(sheet, sheet.cell(row=elem_row, column=col_idx).coordinate, val, align='center')
-                    spec_val = self.pmi_chem_specs[0].get().strip() if (hasattr(self, 'pmi_chem_specs') and self.pmi_chem_specs) else ""
-                    if spec_val:
-                        if sheet.cell(row=18, column=8).value is not None:
-                            self.safe_set_value(sheet, 'H18', spec_val)
-                        elif sheet.cell(row=16, column=8).value is not None:
-                            self.safe_set_value(sheet, 'H16', spec_val)
+
+                    # 15행이 원소 행이 아닐 때는 H15에 'Chemical Composition'을 확실히 유지 (덮어쓰기 방지)
+                    if elem_row != 15:
+                        h15_val = str(sheet.cell(15, 8).value or '').strip()
+                        if not h15_val or h15_val == '-':
+                            self.safe_set_value(sheet, 'H15', "Chemical Composition")
+                            sheet.cell(15, 8).alignment = Alignment(horizontal='center', vertical='center')
+                            sheet.cell(15, 8).font = Font(name='바탕', size=9, bold=False)
+
+                    if hasattr(self, 'pmi_chem_elements') and self.pmi_chem_elements:
+                        for col_idx, var in enumerate(self.pmi_chem_elements, start=8):
+                            val = var.get().strip()
+                            if val:
+                                coord = sheet.cell(row=elem_row, column=col_idx).coordinate
+                                self.safe_set_value(sheet, coord, val, align='center')
+                                sheet.cell(row=elem_row, column=col_idx).font = Font(name='바탕', size=9, bold=True)
+                                sheet.cell(row=elem_row, column=col_idx).alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
 
             apply_pmi_variable_header(ws)
             # Preserve a pristine copy of the PMI data-sheet header. Additional
             # pages must restore it after copying a populated worksheet.
-            pmi_start_row = int(self.config.get('START_ROW', 17))
+            is_triple = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
+            pmi_start_row = max(19, int(self.config.get('START_ROW', 17))) if is_triple else int(self.config.get('START_ROW', 17))
             header_end_row = max(1, pmi_start_row - 1)
             header_cells = {}
             for header_row in range(1, header_end_row + 1):
@@ -11075,9 +11725,8 @@ class PMIReportApp:
             # Snapshot the pristine second-sheet data area before writing page 2.
             # Later pages are copied from that sheet after it has been populated,
             # so the snapshot is required to remove copied page-2 values safely.
-            is_triple = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
             pmi_max_cols = 13 if is_triple else 20
-            pmi_data_end_row = int(self.config.get('DATA_END_ROW', 45))
+            pmi_data_end_row = 45 if is_triple else int(self.config.get('DATA_END_ROW', 47))
             data_cells = {}
             for data_row in range(pmi_start_row, pmi_data_end_row + 1):
                 for data_col in range(1, pmi_max_cols + 1):
@@ -11111,6 +11760,7 @@ class PMIReportApp:
                 if not is_triple:
                     sheet.cell(5, 13).value = '주문주\nCustomer'
                     sheet.cell(8, 13).value = '보고서 번호\nReport No.'
+                    sheet.cell(15, 8).value = 'Chemical Composition'
 
             def reset_pmi_data_area(sheet):
                 clear_merges_in_range(sheet, pmi_start_row, pmi_data_end_row)
@@ -11145,28 +11795,33 @@ class PMIReportApp:
             if len(custom_elements) > 1:
                 print_elements.append((custom_elements[1], 12))
 
-            current_row = int(self.config.get('START_ROW', 17))
+            current_row = pmi_start_row
             current_page = 1
             data_ptr = 0
             while data_ptr < len(all_extracted_data):
-                rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
+                rows_left = pmi_data_end_row - current_row + 1
                 if rows_left <= 0:
                     current_page += 1
                     ws = self.prepare_next_sheet(wb, data_sheet_id, current_page, mode="PMI")
+                    if ws not in used_pmi_sheets:
+                        used_pmi_sheets.append(ws)
                     restore_pmi_header(ws)
                     normalize_pmi_header_stamp(ws, is_cover=False)
                     reset_pmi_data_area(ws)
-                    current_row = int(self.config.get('START_ROW', 17))
+                    current_row = pmi_start_row
                     ws.add_data_validation(dv_q)
-                    rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
+                    rows_left = pmi_data_end_row - current_row + 1
 
                 # [NEW] Dynamically print headers for the new elements precisely on the first row of each sheet (플랜트 3단 전용)
-                if is_triple and current_row == int(self.config.get('START_ROW', 17)) and len(print_elements) > 3:
-                    h_row = int(self.config.get('START_ROW', 17)) - 1
-                    for r_i in range(max(1, int(self.config.get('START_ROW', 17)) - 5), int(self.config.get('START_ROW', 17))):
+                if is_triple and current_row == pmi_start_row and len(print_elements) > 3:
+                    h_row = pmi_start_row - 4
+                    for r_i in range(max(1, pmi_start_row - 5), pmi_start_row):
                         if str(ws.cell(row=r_i, column=8).value).strip().upper() == "NI":
                             h_row = r_i; break
                     for val_k, c_idx in print_elements[3:]:
+                        hdr_cell = ws.cell(row=h_row, column=c_idx)
+                        self.safe_set_value(ws, hdr_cell.coordinate, val_k, align='center')
+                        hdr_cell.font = Font(name=hdr_cell.font.name if hasattr(hdr_cell.font, 'name') else 'Arial', size=hdr_cell.font.size if hasattr(hdr_cell.font, 'size') else 9, bold=True)
                         hdr_cell = ws.cell(row=h_row, column=c_idx)
                         self.safe_set_value(ws, hdr_cell.coordinate, val_k, align='center')
                         hdr_cell.font = Font(name=hdr_cell.font.name if hasattr(hdr_cell.font, 'name') else 'Arial', size=hdr_cell.font.size if hasattr(hdr_cell.font, 'size') else 9, bold=True)
@@ -11208,8 +11863,8 @@ class PMIReportApp:
                         for c in range(1, 14):
                             cell = ws.cell(row=r, column=c)
                             l_s = thin_side; r_s = thin_side
-                            t_s = medium_side if r == int(self.config.get('START_ROW', 17)) else thin_side
-                            b_s = medium_side if r == int(self.config.get('DATA_END_ROW', 45)) else thin_side
+                            t_s = medium_side if r == pmi_start_row else thin_side
+                            b_s = medium_side if r == pmi_data_end_row else thin_side
                             
                             if c == 1: l_s = medium_side
                             if c == 13: r_s = medium_side
@@ -11256,6 +11911,8 @@ class PMIReportApp:
                             v = self.to_float(raw_v)
                             cell = ws.cell(row=r, column=col_idx)
                             self.safe_set_value(ws, cell.coordinate, v if v > 0 else "", align='center')
+                            cell.font = Font(name='바탕', size=9, bold=False)
+                            cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
                             if v > 0: cell.number_format = '0.00'
                         
                         res_col = self.col_to_num(self.config.get('PMI_COL_RES', '13'))
@@ -11270,8 +11927,8 @@ class PMIReportApp:
                         for c in range(1, 21):
                             cell = ws.cell(row=r, column=c)
                             l_s = thin_side; r_s = thin_side
-                            t_s = medium_side if r == int(self.config.get('START_ROW', 17)) else thin_side
-                            b_s = medium_side if r == int(self.config.get('DATA_END_ROW', 45)) else thin_side
+                            t_s = medium_side if r == pmi_start_row else thin_side
+                            b_s = medium_side if r == pmi_data_end_row else thin_side
                             
                             if c == 1: l_s = medium_side
                             if c == 20: r_s = medium_side
@@ -11316,6 +11973,8 @@ class PMIReportApp:
                             v = self.to_float(raw_v)
                             cell = ws.cell(row=r, column=col_idx)
                             self.safe_set_value(ws, cell.coordinate, v if v > 0 else "", align='center')
+                            cell.font = Font(name='바탕', size=9, bold=False)
+                            cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
                             if v > 0: cell.number_format = '0.00'
 
                         # N열(Result / ALL MATCH)
@@ -11348,7 +12007,7 @@ class PMIReportApp:
             if is_triple:
                 try:
                     last_data_r = (current_row - actual_block_rows) + len(batch)
-                    if last_data_r <= int(self.config.get('DATA_END_ROW', 45)):
+                    if last_data_r <= pmi_data_end_row:
                         self.safe_merge_cells(ws, start_row=last_data_r, start_column=8, end_row=last_data_r, end_column=12)
                         self.safe_set_value(ws, ws.cell(row=last_data_r, column=8).coordinate, "BLANK")
                         ws.cell(row=last_data_r, column=8).alignment = Alignment(horizontal='center', vertical='center')
@@ -11357,8 +12016,8 @@ class PMIReportApp:
 
                 # 빈 칸도 3개 행 블록 단위로 테두리/병합 적용
                 d_height = float(self.config.get('ROW_HEIGHT_DATA', 19.5))
-                while current_row <= int(self.config.get('DATA_END_ROW', 45)):
-                    rows_left = int(self.config.get('DATA_END_ROW', 45)) - current_row + 1
+                while current_row <= pmi_data_end_row:
+                    rows_left = pmi_data_end_row - current_row + 1
                     this_block_size = min(3, rows_left)
                     
                     for r_offset in range(this_block_size):
@@ -11367,8 +12026,8 @@ class PMIReportApp:
                         for c in range(1, 14):
                             cell = ws.cell(row=r, column=c)
                             l_s = thin_side; r_s = thin_side
-                            t_s = medium_side if r == int(self.config.get('START_ROW', 17)) else thin_side
-                            b_s = medium_side if r == int(self.config.get('DATA_END_ROW', 45)) else thin_side
+                            t_s = medium_side if r == pmi_start_row else thin_side
+                            b_s = medium_side if r == pmi_data_end_row else thin_side
                             
                             if c == 1: l_s = medium_side
                             if c == 13: r_s = medium_side
@@ -11388,7 +12047,7 @@ class PMIReportApp:
                 # 단일행 BLANK 표시 및 잔여 빈 행 서식 유지
                 try:
                     last_data_r = current_row
-                    if last_data_r <= int(self.config.get('DATA_END_ROW', 45)):
+                    if last_data_r <= int(self.config.get('DATA_END_ROW', 47)):
                         self.safe_merge_cells(ws, start_row=last_data_r, start_column=8, end_row=last_data_r, end_column=14)
                         self.safe_set_value(ws, ws.cell(row=last_data_r, column=8).coordinate, "BLANK")
                         ws.cell(row=last_data_r, column=8).alignment = Alignment(horizontal='center', vertical='center')
@@ -11396,14 +12055,14 @@ class PMIReportApp:
                 except: pass
 
                 d_height = float(self.config.get('ROW_HEIGHT_DATA', 19.5))
-                while current_row <= int(self.config.get('DATA_END_ROW', 45)):
+                while current_row <= int(self.config.get('DATA_END_ROW', 47)):
                     r = current_row
                     rd = ws.row_dimensions[r]; rd.height = d_height
                     for c in range(1, 21):
                         cell = ws.cell(row=r, column=c)
                         l_s = thin_side; r_s = thin_side
                         t_s = medium_side if r == int(self.config.get('START_ROW', 17)) else thin_side
-                        b_s = medium_side if r == int(self.config.get('DATA_END_ROW', 45)) else thin_side
+                        b_s = medium_side if r == int(self.config.get('DATA_END_ROW', 47)) else thin_side
                         
                         if c == 1: l_s = medium_side
                         if c == 20: r_s = medium_side
@@ -11427,6 +12086,9 @@ class PMIReportApp:
                     self.safe_merge_cells(ws, start_row=r, start_column=16, end_row=r, end_column=19)
                     current_row += 1
 
+            # [FIX] PMI 템플릿의 미사용 시트(28개 시트 중 초과분) 정리
+            remove_unused_report_sheets(wb, used_pmi_sheets)
+
             # [NEW] 서식 정리 도구
             def clear_borders_in_range(sheet, start_r, end_r, start_c=1, end_c=15):
                 for r_idx in range(start_r, end_r + 1):
@@ -11435,29 +12097,37 @@ class PMIReportApp:
                         except: pass
 
             # [FORCE] 모든 데이터 시트의 바닥선 및 하단 서식 정리
-            data_end_row = int(float(self.config.get('DATA_END_ROW', 45)))
+            data_end_row = int(float(self.config.get('DATA_END_ROW', 47)))
             for idx, s in enumerate(wb.worksheets):
-                # 데이터 영역 아래쪽(60행까지)의 불필요한 선 제거
-                # The first sheet is the PMI cover; rows 46-49 contain its
-                # signature table and must retain the template borders.
-                if idx > 0:
+                if idx > 0: # 을지 (데이터 시트)
+                    # 데이터 영역 아래쪽(60행까지)의 불필요한 선 제거
                     clear_borders_in_range(s, data_end_row + 1, data_end_row + 15, start_c=1, end_c=pmi_max_cols)
-                
-                if s.max_row >= data_end_row:
-                    for c in range(1, pmi_max_cols + 1):
-                        cell = s.cell(row=data_end_row, column=c)
-                        curr_border = cell.border
-                        l_s = curr_border.left; r_s = curr_border.right; t_s = curr_border.top
-                        
-                        if idx == 0: # 갑지
-                            if c in [1, 2, 3, 11, 12, 13]: # A, B, C, K, L, M 바닥선 제거
-                                b_s = Side(style=None)
-                            else: # D~J 는 약한선
-                                b_s = Side(style='thin')
-                        else: # 을지
-                            b_s = Side(style='medium')
-                            
-                        cell.border = Border(left=l_s, right=r_s, top=t_s, bottom=b_s)
+                    
+                    if s.max_row >= data_end_row:
+                        for c in range(1, pmi_max_cols + 1):
+                            cell = s.cell(row=data_end_row, column=c)
+                            curr_border = cell.border
+                            cell.border = Border(
+                                left=curr_border.left,
+                                right=curr_border.right,
+                                top=curr_border.top,
+                                bottom=Side(style='medium')
+                            )
+                else: # 갑지 (Cover 시트: 결재/서명란 40~50행 내부선 정돈 및 훼손 방지)
+                    # - 45행: D~I열(Examined by 서명 밑줄)과 K~T열(보고서 작성일자 구분선)만 thin 바닥선 유지
+                    # - 41~44행, 46~49행: 검사자/입회자/검토자 내부의 파편화된 바닥선(47행 잔여선 등) 완전 제거
+                    for r_sub in range(41, 50):
+                        for c in range(1, 21):
+                            cell = s.cell(row=r_sub, column=c)
+                            cb = cell.border
+                            if r_sub == 45:
+                                if (4 <= c <= 9) or (11 <= c <= 20):
+                                    b_side = Side(style='thin')
+                                else:
+                                    b_side = Side(style=None)
+                            else:
+                                b_side = Side(style=None)
+                            cell.border = Border(left=cb.left, right=cb.right, top=cb.top, bottom=b_side)
 
             # [FORCE] 을지 시트 상단 외곽 테두리 제거 (1행 Top 및 A1-A4 Left, T1-T4 Right)
             for idx, s in enumerate(wb.worksheets):
@@ -11485,9 +12155,13 @@ class PMIReportApp:
                         b_t = cell_t.border
                         cell_t.border = Border(left=b_t.left, right=Side(style=None), top=b_t.top, bottom=b_t.bottom)
                     
-                    # [NEW] L3, M3 (페이지 번호 구역) 모든 테두리 제거
-                    for c_idx in [12, 13]: # L, M
-                        s.cell(row=3, column=c_idx).border = Border()
+                    # [NEW] 페이지 번호 구역 모든 테두리 제거
+                    if is_triple:
+                        for c_idx in [12, 13]: # L, M
+                            s.cell(row=3, column=c_idx).border = Border()
+                    else:
+                        for c_idx in range(14, 21): # N~T
+                            s.cell(row=3, column=c_idx).border = Border()
                     
                     # [NEW] 5행 위쪽 선 진한선으로 (A~M/T열 범위)
                     for c_idx in range(1, pmi_max_cols + 1):
@@ -11510,23 +12184,39 @@ class PMIReportApp:
             total_p = len(wb.worksheets)
             for p_idx, s in enumerate(wb.worksheets):
                 page_num = p_idx + 1
-                # [NEW] 최종 저장 직전 사용자의 행/열 커스텀 설정을 모든 시트에 다시 한번 적용 (최우선순위)
+                # [NEW] 최종 저장 직전 사용자의 인쇄 설정 및 행/열 커스텀 설정을 모든 시트에 다시 한번 적용 (최우선순위)
                 ctx = "COVER" if p_idx == 0 else "DATA"
+                self.force_print_settings(s, context=ctx)
                 self.apply_custom_dimensions(s, ctx)
                 normalize_pmi_header_stamp(s, is_cover=(p_idx == 0))
                 # 원본 템플릿 상호 로고(E5:K7) 이미지 보존 (불필요한 텍스트 덮어쓰기 방지)
                 self.safe_set_value(s, 'E5', None)
                 
                 try:
+                    is_triple_mode = hasattr(self, 'pmi_layout_mode') and self.pmi_layout_mode.get() == "PLANT_TRIPLE"
                     if p_idx == 0: # Gapji (Cover)
                         self.safe_merge_cells(s, 3, 14, 3, 20) # N3:T3
                         cell = s["N3"]
                     else: # Eulji (Data)
-                        # [FIX] 을지 시트 페이지 번호 가독성 확보를 위해 L3:M3 병합 검토 (또는 M3 단독)
-                        try: self.safe_merge_cells(s, 3, 12, 3, 13) # L3:M3
-                        except: pass
-                        cell = s["L3"] if "L3" in s.merged_cells else s["M3"]
-                        self.safe_set_value(s, 'O3', None) # 템플릿 구버전 잔여 텍스트 정리
+                        if is_triple_mode:
+                            # [13열 플랜트 3단 모드] 우측 상단 L3:M3 병합
+                            try: self.safe_merge_cells(s, 3, 12, 3, 13) # L3:M3
+                            except: pass
+                            cell = s["L3"] if "L3" in s.merged_cells else s["M3"]
+                            self.safe_set_value(s, 'O3', None)
+                        else:
+                            # [20열 단일행 표준 모드] 우측 상단 N3:T3 병합 (정중앙 쏠림 해결 및 기존 중복 병합 해제)
+                            for m_rng in list(s.merged_cells.ranges):
+                                if m_rng.min_row <= 3 <= m_rng.max_row and m_rng.max_col >= 12 and m_rng.min_col <= 20:
+                                    try: s.unmerge_cells(str(m_rng))
+                                    except: pass
+                            self.safe_set_value(s, 'L3', None)
+                            self.safe_set_value(s, 'M3', None)
+                            self.safe_set_value(s, 'N3', None)
+                            self.safe_set_value(s, 'O3', None)
+                            try: self.safe_merge_cells(s, 3, 14, 3, 20) # N3:T3
+                            except: pass
+                            cell = s["N3"]
                     
                     cell.alignment = Alignment(horizontal='center', vertical='center', shrink_to_fit=True)
                     cell.font = Font(name='맑은 고딕', size=11, bold=True)
@@ -11542,6 +12232,16 @@ class PMIReportApp:
                 return
             output_name = os.path.basename(save_path)
             wb.save(save_path)
+            # [PRESERVE VML FOOTER] 템플릿의 [페이지 설정] -> [머리글/바닥글] 우측 로고(VML &G)를 모든 시트에 복원
+            try:
+                try:
+                    from mt_footer import restore_template_footer_pictures
+                except ImportError:
+                    from home.src.report_apps.ndt_report.src.mt_footer import restore_template_footer_pictures
+                restore_template_footer_pictures(template_path, save_path)
+                self.log("   [OK] 템플릿 머리글/바닥글 및 바닥글 로고(VML) 복원 완료")
+            except Exception as fe:
+                self.log(f"   [WARN] 바닥글 로고 복원 스킵 또는 오류: {fe}")
             self._record_report_issue('PMI', wb, save_path, final_list)
             self.progress['value'] = 100; self.log(f"✨ 완료! 저장됨: {output_name}")
             messagebox.showinfo("성공", f"통합 성적서 생성이 완료되었습니다.\n\n경로: {os.path.dirname(save_path)}\n파일명: {output_name}")
