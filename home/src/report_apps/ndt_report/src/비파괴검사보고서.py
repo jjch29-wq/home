@@ -4414,23 +4414,23 @@ class PMIReportApp:
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._apply_mt_item_selection())
             elif mode == 'PMI' and lbl == '품명:':
                 ent = ttk.Combobox(block, textvariable=var, width=15,
-                                   values=('PIPE', 'FLANGE', 'VALVE', 'FITTING', 'WELD', 'BEAM/COLUMN', 'HOT TAPPING'))
+                                   values=('PIPE', 'ELBOW', 'TEE', 'REDUCER', 'FLANGE', 'VALVE', 'FITTING', 'WELD', 'BEAM/COLUMN', 'HOT TAPPING'))
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._on_pmi_item_changed())
-                ent.bind('<FocusOut>', lambda _event: self._on_pmi_item_changed())
+                ent.bind('<FocusOut>', lambda _event: [self._on_pmi_item_changed(), self.save_settings()])
                 self.pmi_item_combobox = ent
             elif mode == 'PMI' and lbl == '재질:':
                 ent = ttk.Combobox(block, textvariable=var, width=15,
                                    values=list(self.PMI_MATERIAL_SPECS.keys()))
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._on_pmi_material_changed())
-                ent.bind('<FocusOut>', lambda _event: self._on_pmi_material_changed())
+                ent.bind('<FocusOut>', lambda _event: [self._on_pmi_material_changed(), self.save_settings()])
                 self.pmi_material_combobox = ent
             else:
                 ent = ttk.Entry(
                     block, textvariable=var, width=15,
                     state="readonly" if fixed_field else "normal"
                 )
+                ent.bind("<FocusOut>", lambda e: self.save_settings())
             ent.grid(row=r, column=c+1, sticky='ew', padx=2, pady=2)
-            ent.bind("<FocusOut>", lambda e: self.save_settings())
             ent.bind("<Return>", lambda e: [self.root.focus_set(), self.save_settings()])
             # Add to setting_vars for auto-save
             cfg_key = f"GAPJI_{lbl.replace(':', '').upper()}"
@@ -8396,6 +8396,17 @@ class PMIReportApp:
             ],
             "limits": {"Ni": (10.0, 14.0), "Cr": (16.0, 20.0), "Mo": (2.0, 3.0)}
         },
+        "A403-WP304L": {
+            "name": "A403-WP304L",
+            "title": "ASTM A403 WP304L (FITTINGS)",
+            "elements": ["Cr", "Ni", "Mo", "-", "-"],
+            "specs": [
+                "A403-WP304L (Fitting): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%",
+                "ER308L (Weld): Cr:19.50 ~ 22.00%, Ni:9.00 ~ 11.00%",
+                "A312-TP304L (Pipe): Cr:18.00 ~ 20.00%, Ni:9.00 ~ 13.00%"
+            ],
+            "limits": {"Cr": (18.0, 20.0), "Ni": (9.0, 13.0), "Mo": (0.0, 0.5)}
+        },
         "A182-F316L": {
             "name": "A182-F316L",
             "title": "ASTM A182 F316L (FLANGE)",
@@ -8492,7 +8503,9 @@ class PMIReportApp:
         "A36": "ASTM A36",
         "SS275": "SS275 (SS400)", "SS400": "SS275 (SS400)",
         "CF8M": "A351-CF8M", "CF3M": "A351-CF3M", "CF8": "A351-CF8", "CF3": "A351-CF8", "VALVE": "A351-CF8M", "351": "A351-CF8M",
-        "WP316L": "A403-WP316L", "WP316": "A403-WP316L", "WP304L": "A312-TP304L", "WP304": "A312-TP304", "FITTING": "A403-WP316L",
+        "WP316L": "A403-WP316L", "WP316": "A403-WP316L", "WP304L": "A403-WP304L", "WP304": "A403-WP304L", "FITTING": "A403-WP316L",
+        "ELBOW": "A403-WP316L", "TEE": "A403-WP316L", "REDUCER": "A403-WP316L",
+        "엘보": "A403-WP316L", "티": "A403-WP316L", "레듀샤": "A403-WP316L",
         "ER309L": "ER309L (이재질)", "309L": "ER309L (이재질)", "309": "ER309L (이재질)", "이재질": "ER309L (이재질)",
         "ER316L": "ER316L", "E316L": "ER316L", "316LWELD": "ER316L", "ER316": "ER316L",
         "ER308L": "ER308L", "E308L": "ER308L", "308L": "ER308L", "ER308": "ER308L",
@@ -8505,7 +8518,8 @@ class PMIReportApp:
     PMI_SPEC1_OPTIONS = [
         "A312-TP316L", "A312-TP304L", "A312-TP316", "A312-TP304",
         "A312-TP321", "A312-TP347", "DUPLEX (S31803)", "INCONEL 625",
-        "A182-F316L", "A182-F304L", "A351-CF8M", "A351-CF3M", "A351-CF8", "A403-WP316L",
+        "A182-F316L", "A182-F304L", "A351-CF8M", "A351-CF3M", "A351-CF8",
+        "A403-WP316L", "A403-WP304L",
         "ASTM A992", "ASTM A572 Gr.50", "SM355 (SM490)", "SN355", "ASTM A36", "SS275 (SS400)"
     ]
     PMI_SPEC2_OPTIONS = [
@@ -8513,7 +8527,8 @@ class PMIReportApp:
     ]
     PMI_SPEC3_OPTIONS = [
         "A182-F316L (플랜지)", "A182-F304L (플랜지)",
-        "A403-WP316L (피팅/엘보)", "A351-CF8M (주조 밸브)", "A351-CF3M (밸브)", "A351-CF8 (304 밸브)",
+        "A403-WP316L (피팅/엘보)", "A403-WP304L (피팅/엘보)",
+        "A351-CF8M (주조 밸브)", "A351-CF3M (밸브)", "A351-CF8 (304 밸브)",
         "A312-TP316L (파이프)", "A312-TP304L (파이프)",
         "ASTM A992", "SM355 (SM490)", "(해당없음 / 비움)"
     ]
@@ -8608,9 +8623,21 @@ class PMIReportApp:
             "default_material": "A351-CF8M",
             "materials": ["A351-CF8M", "A351-CF3M", "A351-CF8"]
         },
+        "ELBOW": {
+            "default_material": "A403-WP316L",
+            "materials": ["A403-WP316L", "A403-WP304L"]
+        },
+        "TEE": {
+            "default_material": "A403-WP316L",
+            "materials": ["A403-WP316L", "A403-WP304L"]
+        },
+        "REDUCER": {
+            "default_material": "A403-WP316L",
+            "materials": ["A403-WP316L", "A403-WP304L"]
+        },
         "FITTING": {
             "default_material": "A403-WP316L",
-            "materials": ["A403-WP316L"]
+            "materials": ["A403-WP316L", "A403-WP304L"]
         },
         "WELD": {
             "default_material": "ER316L",
@@ -8623,7 +8650,7 @@ class PMIReportApp:
     }
 
     def _on_pmi_item_changed(self, event=None):
-        """품명 변경 시 해당 품명 형태(파이프, 단조품, 주물, 피팅, 용접봉 등)에 맞는 재질 드롭다운 재정렬 및 기본 재질 자동 연동"""
+        """품명 변경 시 해당 품명 형태(파이프, 엘보, 티, 레듀샤, 단조품, 주물, 피팅, 용접봉 등)에 맞는 재질 드롭다운 재정렬 및 기본 재질 자동 연동"""
         if not hasattr(self, 'gapji_item') or not hasattr(self, 'gapji_material'):
             return
         raw_item = self.gapji_item.get().strip().upper()
@@ -8632,11 +8659,17 @@ class PMIReportApp:
         target_cat = None
         if any(k in raw_item for k in ["PIPE", "파이프", "배관", "TUBE"]):
             target_cat = "PIPE"
+        elif any(k in raw_item for k in ["ELBOW", "엘보"]):
+            target_cat = "ELBOW"
+        elif any(k in raw_item for k in ["TEE", "티"]):
+            target_cat = "TEE"
+        elif any(k in raw_item for k in ["REDUCER", "레듀샤", "레듀서"]):
+            target_cat = "REDUCER"
         elif any(k in raw_item for k in ["FLANGE", "플랜지", "단조", "FORG"]):
             target_cat = "FLANGE"
         elif any(k in raw_item for k in ["VALVE", "밸브", "주물", "주조", "CAST"]):
             target_cat = "VALVE"
-        elif any(k in raw_item for k in ["FITTING", "피팅", "이음쇠", "ELBOW", "엘보", "TEE", "티"]):
+        elif any(k in raw_item for k in ["FITTING", "피팅", "이음쇠"]):
             target_cat = "FITTING"
         elif any(k in raw_item for k in ["WELD", "용접", "용접봉", "와이어", "WIRE", "ELECTRODE"]):
             target_cat = "WELD"
@@ -8673,7 +8706,10 @@ class PMIReportApp:
             elif "A351" in m_name:
                 new_item = "VALVE"
             elif "A403" in m_name:
-                new_item = "FITTING"
+                if cur_item in ("ELBOW", "TEE", "REDUCER"):
+                    new_item = cur_item
+                else:
+                    new_item = "ELBOW"
             elif any(k in m_name for k in ["ER316L", "ER308L", "ER309L", "ER2209", "ER70S"]):
                 new_item = "WELD"
             elif any(k in m_name for k in ["A992", "A572", "SM355", "SN355", "A36", "SS275"]):
@@ -8681,7 +8717,7 @@ class PMIReportApp:
             elif "A312" in m_name:
                 new_item = "PIPE"
 
-            if new_item and (not cur_item or cur_item in ("PIPE", "FLANGE", "VALVE", "FITTING", "WELD", "H-BEAM", "BEAM", "HOT TAPPING")):
+            if new_item and (not cur_item or cur_item in ("PIPE", "FLANGE", "VALVE", "FITTING", "ELBOW", "TEE", "REDUCER", "WELD", "H-BEAM", "BEAM", "HOT TAPPING")):
                 self.gapji_item.set(new_item)
                 self.save_settings()
 

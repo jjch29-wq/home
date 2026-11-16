@@ -76,6 +76,25 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertIsNotNone(spec_wp316l)
         self.assertEqual(spec_wp316l["name"], "A403-WP316L")
 
+        # Fitting items (ELBOW, TEE, REDUCER) and A403-WP304L
+        spec_wp304l = self.app._lookup_pmi_material_spec("WP304L")
+        self.assertIsNotNone(spec_wp304l)
+        self.assertEqual(spec_wp304l["name"], "A403-WP304L")
+        self.assertEqual(spec_wp304l["limits"]["Cr"], (18.0, 20.0))
+        self.assertEqual(spec_wp304l["limits"]["Ni"], (9.0, 13.0))
+
+        spec_elbow = self.app._lookup_pmi_material_spec("ELBOW")
+        self.assertIsNotNone(spec_elbow)
+        self.assertEqual(spec_elbow["name"], "A403-WP316L")
+
+        spec_tee = self.app._lookup_pmi_material_spec("티")
+        self.assertIsNotNone(spec_tee)
+        self.assertEqual(spec_tee["name"], "A403-WP316L")
+
+        spec_reducer = self.app._lookup_pmi_material_spec("레듀샤")
+        self.assertIsNotNone(spec_reducer)
+        self.assertEqual(spec_reducer["name"], "A403-WP316L")
+
         spec_er309 = self.app._lookup_pmi_material_spec("ER309L")
         self.assertIsNotNone(spec_er309)
         self.assertEqual(spec_er309["name"], "ER309L (이재질)")
@@ -209,6 +228,32 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.app.gapji_item.set("FITTING")
         self.app._on_pmi_item_changed()
         self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+
+        # 3-1. Setting item to ELBOW updates material to A403-WP316L
+        self.app.gapji_item.set("ELBOW")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+
+        # 3-2. Setting item to TEE updates material to A403-WP316L
+        self.app.gapji_item.set("TEE")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+
+        # 3-3. Setting item to REDUCER updates material to A403-WP316L
+        self.app.gapji_item.set("REDUCER")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+
+        # 3-4. Setting material to A403-WP304L retains existing fitting item (e.g. REDUCER)
+        self.app.gapji_material.set("A403-WP304L")
+        self.app._on_pmi_material_changed()
+        self.assertEqual(self.app.gapji_item.get(), "REDUCER")
+
+        # 3-5. Setting material to A403-WP316L when item is PIPE defaults to ELBOW
+        self.app.gapji_item.set("PIPE")
+        self.app.gapji_material.set("A403-WP316L")
+        self.app._on_pmi_material_changed()
+        self.assertEqual(self.app.gapji_item.get(), "ELBOW")
 
         # 4. Setting material to ASTM A992 updates item to H-BEAM
         self.app.gapji_material.set("ASTM A992")
