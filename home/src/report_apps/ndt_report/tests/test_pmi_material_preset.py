@@ -190,6 +190,36 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         except Exception as e:
             self.fail(f"show_pmi_element_selector_dialog raised an exception: {e}")
 
+    def test_item_and_material_bidirectional_sync(self):
+        """Verify selecting item updates material and vice-versa."""
+        if not self.app:
+            self.skipTest("GUI not initialized")
+
+        # 1. Setting item to FLANGE updates material to A182-F316L
+        self.app.gapji_item.set("FLANGE")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.gapji_material.get(), "A182-F316L")
+
+        # 2. Setting item to VALVE updates material to A351-CF8M
+        self.app.gapji_item.set("VALVE")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.gapji_material.get(), "A351-CF8M")
+
+        # 3. Setting item to FITTING updates material to A403-WP316L
+        self.app.gapji_item.set("FITTING")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.gapji_material.get(), "A403-WP316L")
+
+        # 4. Setting material to ASTM A992 updates item to H-BEAM
+        self.app.gapji_material.set("ASTM A992")
+        self.app._on_pmi_material_changed()
+        self.assertEqual(self.app.gapji_item.get(), "H-BEAM")
+
+        # 5. Setting material to A312-TP316L updates item to PIPE
+        self.app.gapji_material.set("A312-TP316L")
+        self.app._on_pmi_material_changed()
+        self.assertEqual(self.app.gapji_item.get(), "PIPE")
+
 
 if __name__ == "__main__":
     unittest.main()

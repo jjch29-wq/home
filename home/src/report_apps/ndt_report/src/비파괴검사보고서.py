@@ -4402,18 +4402,25 @@ class PMIReportApp:
             tk.Label(block, text=lbl, background="#ffffff", font=("Malgun Gothic", 8)).grid(row=r, column=c, sticky='e', padx=2, pady=2)
             # PT cover metadata varies by report, so project, customer and
             # item-name fields must all allow direct editing.
-            fixed_field = (mode != "PT" and lbl == "품명:") or (
+            fixed_field = (mode not in ("PT", "PMI") and lbl == "품명:") or (
                 mode not in ("PMI", "PT") and lbl == "발주처:"
             )
             if mode == 'MT' and lbl == '품명:':
                 ent = ttk.Combobox(block, textvariable=var, width=15,
                                    values=('PIPE', 'HOT TAPPING'), state='readonly')
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._apply_mt_item_selection())
+            elif mode == 'PMI' and lbl == '품명:':
+                ent = ttk.Combobox(block, textvariable=var, width=15,
+                                   values=('PIPE', 'FLANGE', 'VALVE', 'FITTING', 'BEAM/COLUMN', 'HOT TAPPING'))
+                ent.bind('<<ComboboxSelected>>', lambda _event: self._on_pmi_item_changed())
+                ent.bind('<FocusOut>', lambda _event: self._on_pmi_item_changed())
+                self.pmi_item_combobox = ent
             elif mode == 'PMI' and lbl == '재질:':
                 ent = ttk.Combobox(block, textvariable=var, width=15,
                                    values=list(self.PMI_MATERIAL_SPECS.keys()))
                 ent.bind('<<ComboboxSelected>>', lambda _event: self._on_pmi_material_changed())
                 ent.bind('<FocusOut>', lambda _event: self._on_pmi_material_changed())
+                self.pmi_material_combobox = ent
             else:
                 ent = ttk.Entry(
                     block, textvariable=var, width=15,
@@ -8467,10 +8474,88 @@ class PMIReportApp:
             
         return True
 
+    # --- 품명(형태)별 추천 재질 및 기본 프리셋 매핑 ---
+    PMI_ITEM_PRESETS = {
+        "PIPE": {
+            "default_material": "A312-TP316L",
+            "materials": ["A312-TP316L", "A312-TP304L", "A312-TP316", "A312-TP304", "A312-TP321", "A312-TP347", "DUPLEX (S31803)", "INCONEL 625"]
+        },
+        "FLANGE": {
+            "default_material": "A182-F316L",
+            "materials": ["A182-F316L", "A182-F304L"]
+        },
+        "VALVE": {
+            "default_material": "A351-CF8M",
+            "materials": ["A351-CF8M", "A351-CF3M", "A351-CF8"]
+        },
+        "FITTING": {
+            "default_material": "A403-WP316L",
+            "materials": ["A403-WP316L"]
+        },
+        "BEAM/COLUMN": {
+            "default_material": "ASTM A992",
+            "materials": ["ASTM A992", "ASTM A572 Gr.50", "SM355 (SM490)", "SN355", "ASTM A36", "SS275 (SS400)"]
+        }
+    }
+
+    def _on_pmi_item_changed(self, event=None):
+        """품명 변경 시 해당 품명 형태(파이프, 단조품, 주물, 피팅 등)에 맞는 재질 드롭다운 재정렬 및 기본 재질 자동 연동"""
+        if not hasattr(self, 'gapji_item') or not hasattr(self, 'gapji_material'):
+            return
+        raw_item = self.gapji_item.get().strip().upper()
+        if not raw_item: return
+
+        target_cat = None
+        if any(k in raw_item for k in ["PIPE", "파이프", "배관", "TUBE"]):
+            target_cat = "PIPE"
+        elif any(k in raw_item for k in ["FLANGE", "플랜지", "단조", "FORG"]):
+            target_cat = "FLANGE"
+        elif any(k in raw_item for k in ["VALVE", "밸브", "주물", "주조", "CAST"]):
+            target_cat = "VALVE"
+        elif any(k in raw_item for k in ["FITTING", "피팅", "이음쇠", "ELBOW", "엘보", "TEE", "티"]):
+            target_cat = "FITTING"
+        elif any(k in raw_item for k in ["BEAM", "COLUMN", "GIRDER", "보", "기둥", "거더", "형강"]):
+            target_cat = "BEAM/COLUMN"
+
+        if target_cat and target_cat in self.PMI_ITEM_PRESETS:
+            preset = self.PMI_ITEM_PRESETS[target_cat]
+            rec_materials = preset["materials"]
+            other_materials = [m for m in self.PMI_MATERIAL_SPECS.keys() if m not in rec_materials]
+            new_values = rec_materials + other_materials
+            if hasattr(self, 'pmi_material_combobox') and self.pmi_material_combobox:
+                self.pmi_material_combobox['values'] = new_values
+
+            current_mat = self.gapji_material.get().strip()
+            if not current_mat or current_mat not in rec_materials:
+                self.gapji_material.set(preset["default_material"])
+                self.apply_pmi_material_preset(preset["default_material"])
+                self.log(f"🔄 품명({raw_item})에 맞추어 재질을 '{preset['default_material']}'로 자동 연동했습니다.")
+
     def _on_pmi_material_changed(self, event=None):
+        """재질 변경 시 기준/스펙 적용 및 품명 상호 연동"""
         mat = self.gapji_material.get().strip()
-        if mat:
-            self.apply_pmi_material_preset(mat)
+        if not mat: return
+        self.apply_pmi_material_preset(mat)
+
+        spec = self._lookup_pmi_material_spec(mat)
+        if spec and hasattr(self, 'gapji_item'):
+            cur_item = self.gapji_item.get().strip().upper()
+            m_name = spec['name']
+            new_item = None
+            if "A182" in m_name:
+                new_item = "FLANGE"
+            elif "A351" in m_name:
+                new_item = "VALVE"
+            elif "A403" in m_name:
+                new_item = "FITTING"
+            elif any(k in m_name for k in ["A992", "A572", "SM355", "SN355", "A36", "SS275"]):
+                new_item = "H-BEAM"
+            elif "A312" in m_name:
+                new_item = "PIPE"
+
+            if new_item and (not cur_item or cur_item in ("PIPE", "FLANGE", "VALVE", "FITTING", "H-BEAM", "BEAM", "HOT TAPPING")):
+                self.gapji_item.set(new_item)
+                self.save_settings()
 
     def evaluate_pmi_data_compliance(self, show_msg=True):
         """추출된 PMI 측정 데이터를 현재 재질 기준(또는 element_filters)과 비교하여 합/부(ALL MATCH / MISMATCH) 자동 판정"""
