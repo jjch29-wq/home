@@ -4652,7 +4652,12 @@ class PMIReportApp:
                 except: pass
             else:
                 # Manual trigger (Button)
-                if nb_inner: nb_inner.select(2) # Force select Gapji tab
+                if nb_inner:
+                    for t_idx, tab_id in enumerate(nb_inner.tabs()):
+                        if "갑지" in nb_inner.tab(tab_id, "text"):
+                            try: nb_inner.select(t_idx)
+                            except: pass
+                            break
                 self._update_gapji_preview(mode)
         except Exception as e:
             self.log(f"미리보기 업데이트 실패: {e}")
