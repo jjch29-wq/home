@@ -4452,6 +4452,7 @@ class PMIReportApp:
             elem_hdr.grid(row=0, column=0, columnspan=6, sticky='ew', pady=(0, 2))
             tk.Label(elem_hdr, text="원소명:", background="#ffffff", font=("Malgun Gothic", 8, "bold")).pack(side='left', padx=2)
             ttk.Button(elem_hdr, text="🔍 원소 선택", width=10, command=self.show_pmi_element_selector_dialog).pack(side='right', padx=2)
+            ttk.Button(elem_hdr, text="➕ 다음 기준에 추가", command=self.add_current_to_next_spec).pack(side='right', padx=(0, 4))
 
             for idx, var in enumerate(self.pmi_chem_elements, start=1):
                 ttk.Entry(chem_frame, textvariable=var, width=8).grid(
@@ -8750,44 +8751,49 @@ class PMIReportApp:
                 self.pmi_material_combobox['values'] = new_values
 
             current_mat = self.gapji_material.get().strip()
-            # 품명 변경 시: 이전 품명과 다른 새로운 품명의 추천 재질을 설정하고,
-            # 빈 슬롯(기준 1 -> 기준 2 -> 기준 3)에 순차적으로 자동 입력
+            # 품명 변경 시: 추천 재질 드롭다운만 갱신하고 기본 재질 힌트 세팅.
+            # 하단 기준 1, 2, 3은 사용자가 [입력] 또는 [➕ 다음 기준에 추가] 버튼을 누를 때 반영되도록 보존!
             if not current_mat or current_mat not in rec_materials:
                 new_mat = preset["default_material"]
                 self.gapji_material.set(new_mat)
-                self.apply_pmi_material_preset(new_mat)
             self._update_pmi_spec_labels()
 
     def _on_pmi_material_changed(self, event=None):
-        """재질 변경 시 기준/스펙 적용 및 품명 상호 연동"""
+        """재질 변경 시 품명 상호 연동 및 원소명 동기화 (하단 기준 슬롯은 [입력] 버튼으로 적용)"""
         mat = self.gapji_material.get().strip()
         if not mat: return
-        self.apply_pmi_material_preset(mat)
 
         spec = self._lookup_pmi_material_spec(mat)
-        if spec and hasattr(self, 'gapji_item'):
-            cur_item = self.gapji_item.get().strip().upper()
-            m_name = spec['name']
-            new_item = None
-            if "A182" in m_name:
-                new_item = "FLANGE"
-            elif "A351" in m_name:
-                new_item = "VALVE"
-            elif "A403" in m_name:
-                if cur_item in ("ELBOW", "TEE", "REDUCER"):
-                    new_item = cur_item
-                else:
-                    new_item = "ELBOW"
-            elif any(k in m_name for k in ["ER316L", "ER308L", "ER309L", "ER2209", "ER70S"]):
-                new_item = "WELD"
-            elif any(k in m_name for k in ["A992", "A572", "SM355", "SN355", "A36", "SS275"]):
-                new_item = "H-BEAM"
-            elif "A312" in m_name:
-                new_item = "PIPE"
+        if spec:
+            # 원소명(Ni, Cr, Mo...) 동기화
+            for idx, elem in enumerate(spec["elements"]):
+                if idx < len(self.pmi_chem_elements):
+                    self.pmi_chem_elements[idx].set(elem)
 
-            if new_item and (not cur_item or cur_item in ("PIPE", "FLANGE", "VALVE", "FITTING", "ELBOW", "TEE", "REDUCER", "WELD", "H-BEAM", "BEAM", "HOT TAPPING")):
-                self.gapji_item.set(new_item)
-                self.save_settings()
+            # 품명 역연동
+            if hasattr(self, 'gapji_item'):
+                cur_item = self.gapji_item.get().strip().upper()
+                m_name = spec['name']
+                new_item = None
+                if "A182" in m_name:
+                    new_item = "FLANGE"
+                elif "A351" in m_name:
+                    new_item = "VALVE"
+                elif "A403" in m_name:
+                    if cur_item in ("ELBOW", "TEE", "REDUCER"):
+                        new_item = cur_item
+                    else:
+                        new_item = "ELBOW"
+                elif any(k in m_name for k in ["ER316L", "ER308L", "ER309L", "ER2209", "ER70S"]):
+                    new_item = "WELD"
+                elif any(k in m_name for k in ["A992", "A572", "SM355", "SN355", "A36", "SS275"]):
+                    new_item = "H-BEAM"
+                elif "A312" in m_name:
+                    new_item = "PIPE"
+
+                if new_item and (not cur_item or cur_item in ("PIPE", "FLANGE", "VALVE", "FITTING", "ELBOW", "TEE", "REDUCER", "WELD", "H-BEAM", "BEAM", "HOT TAPPING")):
+                    self.gapji_item.set(new_item)
+                    self.save_settings()
 
     def _get_pmi_spec_item_title(self, slot_idx, mat_txt="", spec_txt=""):
         """기준 슬롯(1, 2, 3)의 재질 및 규격에 대응하는 품명(Item Name)을 도출"""
@@ -8856,6 +8862,44 @@ class PMIReportApp:
                 lbl.config(text=f"{prefix} ({item_title}):")
             else:
                 lbl.config(text=f"{prefix}:")
+
+    def add_current_to_next_spec(self):
+        """상단에서 선택된 품명 및 재질을 비어있는 다음 기준 슬롯(1 -> 2 -> 3)에 순차 입력"""
+        cur_mat = self.gapji_material.get().strip() if hasattr(self, 'gapji_material') else ""
+        cur_item = self.gapji_item.get().strip().upper() if hasattr(self, 'gapji_item') else ""
+        if not cur_mat:
+            if cur_item:
+                cur_mat = self._lookup_pmi_material_spec(cur_item)
+                if cur_mat: cur_mat = cur_mat["name"]
+        if not cur_mat:
+            messagebox.showinfo("알림", "상단에서 먼저 재질을 선택해주세요.")
+            return
+
+        spec = self._lookup_pmi_material_spec(cur_mat)
+        if not spec:
+            messagebox.showinfo("알림", f"선택한 재질({cur_mat})에 대한 표준 규격을 찾을 수 없습니다.")
+            return
+
+        # 빈 슬롯(1 -> 2 -> 3) 찾기
+        target_slot = None
+        for slot in (1, 2, 3):
+            idx = slot - 1
+            if idx < len(self.pmi_chem_specs):
+                val = self.pmi_chem_specs[idx].get().strip()
+                if not val or val == "-":
+                    target_slot = slot
+                    break
+
+        if target_slot is None:
+            messagebox.showinfo(
+                "알림",
+                "기준 1, 2, 3이 이미 모두 채워져 있습니다.\n"
+                "수정을 원하시는 기준 옆의 [▼입력] 버튼을 누르시면 해당 기준이 즉시 변경됩니다."
+            )
+            return
+
+        self.apply_current_to_spec(target_slot)
+        self.log(f"📋 기준 {target_slot}에 입력 완료: {cur_item} {spec['name']}")
 
     def apply_current_to_spec(self, slot_idx):
         """상단에서 선택된 품명 및 재질을 지정된 기준 슬롯(1, 2, 3)에 즉시 입력"""

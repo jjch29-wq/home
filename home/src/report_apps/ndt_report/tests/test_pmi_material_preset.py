@@ -427,7 +427,7 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
 
     def test_sequential_item_change_filling_next_slot(self):
-        """Verify selecting 1st item (PIPE) fills slot 1, then changing item to ELBOW fills slot 2 (or next empty slot) without overwriting slot 1."""
+        """Verify browsing items/materials does not mutate specs, clicking add_current_to_next_spec fills slots 1 -> 2 -> 3 sequentially, and apply_current_to_spec edits specific slot."""
         if not self.app:
             self.skipTest("GUI not initialized")
 
@@ -437,32 +437,50 @@ class TestPMIMaterialPresetAndCompliance(unittest.TestCase):
         self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
         self.assertEqual(self.app.pmi_chem_specs[2].get(), "")
 
-        # 2. 1st item: PIPE -> fills slot 1
+        # 2. Browsing multiple items/materials does NOT mutate specs automatically
         self.app.gapji_item.set("PIPE")
-        self.app.gapji_material.set("")
         self.app._on_pmi_item_changed()
-        self.assertIn("A312", self.app.pmi_chem_specs[0].get())
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "")
+
+        self.app.gapji_item.set("ELBOW")
+        self.app._on_pmi_item_changed()
+        self.assertEqual(self.app.pmi_chem_specs[0].get(), "")
+
+        # 3. Choose PIPE / A312-TP304 and click add_current_to_next_spec -> fills Slot 1
+        self.app.gapji_item.set("PIPE")
+        self.app.gapji_material.set("A312-TP304")
+        self.app.add_current_to_next_spec()
+        self.assertIn("A312-TP304", self.app.pmi_chem_specs[0].get())
         self.assertEqual(self.app.pmi_chem_specs[1].get(), "")
         self.assertEqual(self.app.pmi_spec1_lbl.cget("text"), "기준 1 (PIPE):")
 
-        # 3. 2nd item: ELBOW -> slot 1 remains PIPE, slot 2 is filled with ELBOW
+        # 4. Choose ELBOW / A403-WP316L and click add_current_to_next_spec -> fills Slot 2 (Slot 1 preserved!)
         self.app.gapji_item.set("ELBOW")
-        self.app._on_pmi_item_changed()
-        # Slot 1 must remain intact
-        self.assertIn("A312", self.app.pmi_chem_specs[0].get())
+        self.app.gapji_material.set("A403-WP316L")
+        self.app.add_current_to_next_spec()
+        # Slot 1 must remain intact with PIPE
+        self.assertIn("A312-TP304", self.app.pmi_chem_specs[0].get())
         self.assertEqual(self.app.pmi_spec1_lbl.cget("text"), "기준 1 (PIPE):")
-        # Slot 2 must be populated with ELBOW preset
-        self.assertIn("A403", self.app.pmi_chem_specs[1].get())
+        # Slot 2 must be populated with ELBOW
+        self.assertIn("A403-WP316L", self.app.pmi_chem_specs[1].get())
         self.assertEqual(self.app.pmi_spec2_lbl.cget("text"), "기준 2 (ELBOW):")
 
-        # 4. 3rd item: WELD (or welding wire) -> fills slot 3 (or updates slot 2/3)
+        # 5. Choose WELD / ER308L and click add_current_to_next_spec -> fills Slot 3
         self.app.gapji_item.set("WELD")
-        self.app._on_pmi_item_changed()
-        # Slot 1 still PIPE
-        self.assertIn("A312", self.app.pmi_chem_specs[0].get())
-        # Slot 3 gets filled or slot 2/3 has welding spec
-        specs_combined = " ".join([self.app.pmi_chem_specs[i].get() for i in range(3)])
-        self.assertIn("ER316", specs_combined)
+        self.app.gapji_material.set("ER308L")
+        self.app.add_current_to_next_spec()
+        self.assertIn("ER308L", self.app.pmi_chem_specs[2].get())
+        self.assertEqual(self.app.pmi_spec3_lbl.cget("text"), "기준 3 (용접봉):")
+
+        # 6. Re-editing: Choose FLANGE / A182-F304L and edit Slot 1 using apply_current_to_spec(1)
+        self.app.gapji_item.set("FLANGE")
+        self.app.gapji_material.set("A182-F304L")
+        self.app.apply_current_to_spec(1)
+        # Slot 1 is now overwritten with FLANGE, while Slot 2 and Slot 3 remain intact
+        self.assertIn("A182-F304L", self.app.pmi_chem_specs[0].get())
+        self.assertEqual(self.app.pmi_spec1_lbl.cget("text"), "기준 1 (FLANGE):")
+        self.assertIn("A403-WP316L", self.app.pmi_chem_specs[1].get())
+        self.assertIn("ER308L", self.app.pmi_chem_specs[2].get())
 
 
 if __name__ == "__main__":
